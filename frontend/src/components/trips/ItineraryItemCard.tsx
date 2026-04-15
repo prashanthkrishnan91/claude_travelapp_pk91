@@ -17,6 +17,7 @@ import {
   Coins,
   Scale,
   Ticket,
+  Zap,
 } from "lucide-react";
 import { ItineraryItem, ItemType } from "@/types";
 import { BookingChecklistModal } from "./BookingChecklistModal";
@@ -97,10 +98,10 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative flex items-start gap-2 p-2.5 rounded-xl border bg-white transition-all ${
+      className={`group relative flex items-start gap-2 p-2.5 rounded-xl border bg-white transition-all duration-150 ${
         isDragging
           ? "opacity-50 shadow-xl scale-95 border-sky-300"
-          : `border-slate-200 hover:border-slate-300 hover:shadow-sm`
+          : "border-slate-200 hover:border-slate-300 hover:shadow-md hover:-translate-y-px"
       }`}
     >
       {/* Drag handle */}
@@ -178,16 +179,28 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
             </span>
           )}
           {item.cashPrice !== undefined && (
-            <span className="flex items-center gap-0.5 text-xs font-medium text-emerald-600">
+            <span className={`flex items-center gap-0.5 text-xs font-medium ${
+              item.bestOption === "cash" ? "text-emerald-700 font-semibold" : "text-emerald-600"
+            }`}>
               <DollarSign className="w-3 h-3" />
               {item.cashPrice.toLocaleString()}{" "}
               {item.cashCurrency ?? "USD"}
             </span>
           )}
           {item.pointsPrice !== undefined && (
-            <span className="flex items-center gap-0.5 text-xs font-medium text-violet-600">
+            <span className={`flex items-center gap-0.5 text-xs font-medium ${
+              item.bestOption === "points" ? "text-violet-700 font-semibold" : "text-violet-600"
+            }`}>
               <Coins className="w-3 h-3" />
               {item.pointsPrice.toLocaleString()} pts
+            </span>
+          )}
+          {item.bestOption && (
+            <span className={`badge text-[10px] px-1.5 py-0.5 gap-0.5 ${
+              item.bestOption === "points" ? "badge-gold" : "badge-saved"
+            }`}>
+              <Zap className="w-2.5 h-2.5" />
+              Best: {item.bestOption === "points" ? "Points" : "Cash"}
             </span>
           )}
         </div>

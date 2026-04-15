@@ -7,10 +7,18 @@ interface DealsFeedProps {
 }
 
 function ScoreBadge({ score }: { score: number }) {
+  if (score >= 90) {
+    return (
+      <span className="badge badge-gold text-xs gap-1">
+        <TrendingUp className="w-3 h-3" />
+        {score}
+      </span>
+    );
+  }
   const color =
-    score >= 85
+    score >= 75
       ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-      : score >= 70
+      : score >= 60
       ? "bg-sky-50 text-sky-700 border-sky-200"
       : "bg-slate-50 text-slate-600 border-slate-200";
 
@@ -26,7 +34,7 @@ function ScoreBadge({ score }: { score: number }) {
 
 function DealCard({ deal }: { deal: DealItem }) {
   return (
-    <div className="flex items-start gap-4 px-6 py-4 hover:bg-slate-50 transition group">
+    <div className="flex items-start gap-4 px-6 py-4 hover:bg-slate-50 transition-all duration-150 group border-l-2 border-transparent hover:border-sky-400">
       <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-50 text-amber-600 shrink-0 mt-0.5">
         <Tag className="w-4 h-4" />
       </div>

@@ -15,6 +15,7 @@ import {
   Clock,
   Scale,
   ExternalLink,
+  Zap,
 } from "lucide-react";
 import { ResearchResult, ResearchCategory } from "@/types";
 
@@ -84,8 +85,8 @@ export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }
     <div
       ref={setNodeRef}
       style={style}
-      className={`card p-3 select-none transition-shadow ${
-        isDragging ? "opacity-50 shadow-lg" : "hover:shadow-md"
+      className={`card card-lift p-3 select-none ${
+        isDragging ? "opacity-50 shadow-lg scale-95" : ""
       }`}
     >
       <div className="flex items-start gap-2">
@@ -109,9 +110,17 @@ export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-1">
-            <h4 className="text-sm font-semibold text-slate-800 leading-tight line-clamp-1">
-              {result.title}
-            </h4>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h4 className="text-sm font-semibold text-slate-800 leading-tight line-clamp-1">
+                {result.title}
+              </h4>
+              {result.rating !== undefined && result.rating >= 4.5 && (
+                <span className="badge badge-gold shrink-0 text-[10px] px-1.5 py-0.5 gap-0.5">
+                  <Zap className="w-2.5 h-2.5" />
+                  Top Pick
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-1 flex-shrink-0">
               {onToggleCompare && (
                 <button
@@ -174,7 +183,7 @@ export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }
               </span>
             )}
             {result.priceDisplay && (
-              <span className="text-xs font-semibold text-emerald-600 ml-auto">
+              <span className="badge badge-value text-[10px] px-1.5 py-0.5 ml-auto">
                 {result.priceDisplay}
               </span>
             )}

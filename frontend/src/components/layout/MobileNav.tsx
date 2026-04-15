@@ -92,7 +92,7 @@ export function MobileNav() {
       </div>
 
       {/* ── Bottom tab bar (Apple-style) ─────────────────────── */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 glass border-t border-slate-200/70 flex items-stretch">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 glass border-t border-slate-200/70 flex items-stretch pb-safe">
         {tabLinks.map(({ label, href, icon: Icon }) => {
           const active = isActive(href);
           const isNew = href === "/trips/new";

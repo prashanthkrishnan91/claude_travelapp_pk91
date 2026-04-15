@@ -46,7 +46,7 @@ export function RecentTrips({ trips }: RecentTripsProps) {
             <li key={trip.id}>
               <Link
                 href={`/trips/${trip.id}`}
-                className="flex items-start gap-4 px-6 py-4 hover:bg-slate-50 transition group"
+                className="flex items-start gap-4 px-6 py-4 hover:bg-slate-50 transition-all duration-150 group border-l-2 border-transparent hover:border-sky-400"
               >
                 {/* Destination icon */}
                 <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-sky-50 text-sky-600 shrink-0 mt-0.5">
