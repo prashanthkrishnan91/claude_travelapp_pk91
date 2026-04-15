@@ -115,6 +115,7 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
         description: result.description,
         location: result.location,
         position: targetDay.items.length,
+        bookingOptions: result.bookingOptions,
       });
       setDays((prev) =>
         prev.map((d) =>
@@ -355,6 +356,7 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
           description: result.description,
           location: result.location,
           position: targetDay.items.length,
+          bookingOptions: result.bookingOptions,
         })
           .then((newItem) => {
             setDays((prev) =>

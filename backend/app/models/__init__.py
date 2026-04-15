@@ -25,6 +25,7 @@ from .preferences import (
     TransferBonusCreate,
 )
 from .search import (
+    BookingOption,
     SearchResult,
     FlightSearchRequest,
     FlightResult,
@@ -59,6 +60,7 @@ __all__ = [
     "BestOption",
     "ResearchCache",
     "ResearchCacheCreate",
+    "BookingOption",
     "SearchResult",
     "FlightSearchRequest",
     "FlightResult",

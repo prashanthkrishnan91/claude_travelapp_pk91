@@ -5,6 +5,7 @@ from fastapi import APIRouter, status
 
 from app.core.deps import DB
 from app.models import (
+    BookingOption,
     ItineraryDay,
     ItineraryDayCreate,
     ItineraryDayUpdate,
@@ -13,6 +14,7 @@ from app.models import (
     ItineraryItemUpdate,
 )
 from app.services import ItineraryService
+from app.services.booking import generate_booking_links
 
 router = APIRouter(prefix="/itinerary", tags=["itinerary"])
 
@@ -101,3 +103,23 @@ def update_item(
 def delete_item(item_id: UUID, db: DB) -> None:
     """Remove an itinerary item."""
     ItineraryService(db).delete_item(item_id)
+
+
+@router.get("/items/{item_id}/booking-links", response_model=List[BookingOption])
+def get_booking_links(item_id: UUID, db: DB) -> List[BookingOption]:
+    """Generate booking deep-links for an itinerary item.
+
+    Returns provider-labelled URLs pre-filled with the item's type, title,
+    location, and dates.  Existing booking options stored on the item are
+    returned first, followed by any additional generated links.
+    """
+    item = ItineraryService(db).get_item(item_id)
+    stored: List[BookingOption] = []
+    if item.details and "booking_options" in item.details:
+        stored = [BookingOption(**opt) for opt in item.details["booking_options"]]
+
+    generated = generate_booking_links(item)
+    # Merge: stored options first, then generated ones not already present
+    seen_providers = {opt.provider for opt in stored}
+    merged = stored + [opt for opt in generated if opt.provider not in seen_providers]
+    return merged
