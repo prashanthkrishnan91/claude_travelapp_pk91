@@ -17,6 +17,16 @@ from .itinerary import (
     BestOption,
 )
 from .research_cache import ResearchCache, ResearchCacheCreate
+from .search import (
+    SearchResult,
+    FlightSearchRequest,
+    FlightResult,
+    HotelSearchRequest,
+    HotelResult,
+    AttractionSearchRequest,
+    AttractionResult,
+    SearchCacheEntry,
+)
 
 __all__ = [
     "User",
@@ -42,4 +52,12 @@ __all__ = [
     "BestOption",
     "ResearchCache",
     "ResearchCacheCreate",
+    "SearchResult",
+    "FlightSearchRequest",
+    "FlightResult",
+    "HotelSearchRequest",
+    "HotelResult",
+    "AttractionSearchRequest",
+    "AttractionResult",
+    "SearchCacheEntry",
 ]
