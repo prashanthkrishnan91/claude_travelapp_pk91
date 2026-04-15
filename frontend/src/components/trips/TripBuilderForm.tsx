@@ -385,6 +385,7 @@ export function TripBuilderForm() {
   const [step,  setStep]  = useState(1);
   const [data,  setData]  = useState<TripBuilderFormData>(DEFAULT_DATA);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const totalSteps = STEPS.length + 1; // +1 for review
   const isReview   = step === totalSteps;
@@ -398,13 +399,17 @@ export function TripBuilderForm() {
     return true;
   }
 
-  function handleSave() {
+  async function handleSave() {
     setSaving(true);
-    // No data integration yet — simulate brief delay then redirect
-    setTimeout(() => {
+    setSaveError(null);
+    try {
+      const { createTrip } = await import("@/lib/api");
+      const trip = await createTrip(data);
+      router.push(`/trips/${trip.id}`);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save trip. Please try again.");
       setSaving(false);
-      router.push("/trips");
-    }, 800);
+    }
   }
 
   const currentStep = STEPS[step - 1];
@@ -443,6 +448,13 @@ export function TripBuilderForm() {
           {step === 5 && <NotesStep       data={data} onChange={patch} />}
           {isReview   && <ReviewSummary   data={data}                  />}
         </div>
+
+        {/* Save error */}
+        {saveError && (
+          <div className="mt-6 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            {saveError}
+          </div>
+        )}
 
         {/* Navigation */}
         <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-100">
