@@ -1,43 +1,54 @@
-"""Value scoring endpoints — /value/score and /value/score/batch."""
+"""Value scoring endpoints — /value/score (V2) and /value/score/batch (V1)."""
 
 from fastapi import APIRouter
 
 from app.models.value_score import (
     BatchValueScoreRequest,
     BatchValueScoreResponse,
-    ValueScoreRequest,
-    ValueScoreResult,
+    ValueEngineV2Request,
+    ValueEngineV2Result,
 )
 from app.services.value_engine import ValueEngine
+from app.services.value_engine_v2 import ValueEngineV2
 
 router = APIRouter(prefix="/value", tags=["value"])
 
-_engine = ValueEngine()
+_engine_v1 = ValueEngine()
+_engine_v2 = ValueEngineV2()
 
 
-@router.post("/score", response_model=ValueScoreResult)
-def score_item(payload: ValueScoreRequest) -> ValueScoreResult:
-    """Compute CPP, value_score, and tags for a single travel option.
+@router.post("/score", response_model=ValueEngineV2Result)
+def score_item(payload: ValueEngineV2Request) -> ValueEngineV2Result:
+    """Compute personalized CPP, adjusted CPP, value_score, tags, and recommendation reason.
 
     **Inputs**
-    - `cash_price` — cash cost in USD
-    - `points_estimate` — estimated points required
-    - `transfer_partners` — number of transfer partners available (default 0)
-    - `rating` — 0–5 quality rating (optional)
-    - `location` — human-readable location string (optional, reserved for future geo-scoring)
+    - `item` — flight or hotel with cash price, points cost, rating, layovers, seat/hotel class
+    - `user_cards` — the user's cards (issuer + points balance); used to match transfer bonuses
+    - `user_preferences` — preferred airlines/hotels, max layovers, seat class, hotel class, CPP baseline
+    - `transfer_bonuses` — active issuer → partner bonuses (sourced from `transfer_bonuses` table)
+
+    **Scoring logic**
+    1. Base CPP = `cash_price × 100 / points_cost`
+    2. Adjusted CPP = base CPP × `(1 + best_bonus_percent / 100)`
+    3. CPP component (60 %): `min(100, adjusted_cpp / cpp_baseline × 100)`
+    4. Rating component (25 %): `rating / 5 × 100` (neutral 50 when unknown)
+    5. Preference component (15 %): 100 if preferred airline/hotel, else 50
+    6. Layover penalty: −10 per layover exceeding `max_layovers`
 
     **Outputs**
-    - `cpp` — cents-per-point (`cash_price × 100 / points_estimate`); `null` when `points_estimate` is 0
-    - `value_score` — composite score 0–100 (weighted: CPP 60 %, rating 25 %, partners 15 %)
-    - `tags` — applicable labels: `"Best Value"`, `"Best Points"`, `"Luxury Pick"`
+    - `cpp` — base cents-per-point before bonuses
+    - `adjusted_cpp` — CPP after best available transfer bonus
+    - `value_score` — composite score 0–100
+    - `tags` — e.g. `"Best Value"`, `"Best Points"`, `"Preferred Airline"`, `"+25% Transfer Bonus"`
+    - `recommendation_reason` — human-readable explanation
     """
-    return _engine.score(payload)
+    return _engine_v2.score(payload)
 
 
 @router.post("/score/batch", response_model=BatchValueScoreResponse)
 def score_batch(payload: BatchValueScoreRequest) -> BatchValueScoreResponse:
-    """Score up to 50 travel options in a single request.
+    """Score up to 50 travel options in a single request (V1 — basic CPP scoring).
 
     Results are returned in the same order as the input `items` list.
     """
-    return BatchValueScoreResponse(results=_engine.score_batch(payload.items))
+    return BatchValueScoreResponse(results=_engine_v1.score_batch(payload.items))

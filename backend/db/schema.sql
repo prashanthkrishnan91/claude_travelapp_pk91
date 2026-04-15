@@ -201,3 +201,47 @@ create table if not exists public.research_cache (
 
 create index if not exists research_cache_source_idx on public.research_cache (source);
 create index if not exists research_cache_expires_idx on public.research_cache (expires_at);
+
+-- =============================================================
+-- USER PREFERENCES
+-- Per-user travel preferences used by Value Engine V2 scoring.
+-- =============================================================
+create table if not exists public.user_preferences (
+  user_id            uuid primary key references public.users(id) on delete cascade,
+  preferred_airlines jsonb not null default '[]'::jsonb,
+  preferred_hotels   jsonb not null default '[]'::jsonb,
+  max_layovers       integer not null default 2,
+  seat_class         text not null default 'economy',
+  hotel_class        integer not null default 3 check (hotel_class between 1 and 5),
+  cpp_baseline       float not null default 1.8,
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
+);
+
+create trigger user_preferences_set_updated_at
+before update on public.user_preferences
+for each row execute function public.set_updated_at();
+
+-- =============================================================
+-- TRANSFER BONUSES
+-- Time-bounded bonus percentages for issuer → loyalty partner transfers.
+-- =============================================================
+create table if not exists public.transfer_bonuses (
+  id              uuid primary key default gen_random_uuid(),
+  issuer          text not null,            -- e.g. 'American Express'
+  partner         text not null,            -- e.g. 'Air Canada Aeroplan'
+  bonus_percent   integer not null check (bonus_percent >= 0),
+  start_date      date not null,
+  end_date        date not null,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  constraint transfer_bonuses_date_order check (end_date >= start_date)
+);
+
+create index if not exists transfer_bonuses_issuer_idx on public.transfer_bonuses (issuer);
+create index if not exists transfer_bonuses_partner_idx on public.transfer_bonuses (partner);
+create index if not exists transfer_bonuses_dates_idx on public.transfer_bonuses (start_date, end_date);
+
+create trigger transfer_bonuses_set_updated_at
+before update on public.transfer_bonuses
+for each row execute function public.set_updated_at();
