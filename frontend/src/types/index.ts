@@ -132,6 +132,16 @@ export interface CompareResult {
   recommendationReason: string;
 }
 
+// ─── Deals Feed ───────────────────────────────────────────────────────────────
+
+export interface DealItem {
+  itemId: string;
+  title: string;
+  description: string;
+  valueScore: number;
+  tags: string[];
+}
+
 // ─── Trip Builder Form ────────────────────────────────────────────────────────
 
 export interface TripBuilderFormData {

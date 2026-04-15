@@ -6,7 +6,8 @@ import { StatCard } from "@/components/ui/StatCard";
 import { RecentTrips } from "@/components/dashboard/RecentTrips";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { PointsSummary } from "@/components/dashboard/PointsSummary";
-import { fetchTrips, fetchCards } from "@/lib/api";
+import { DealsFeed } from "@/components/dashboard/DealsFeed";
+import { fetchTrips, fetchCards, fetchDealsFeed } from "@/lib/api";
 import type { Trip } from "@/types";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -28,7 +29,7 @@ function nextTripLabel(trips: Trip[]): string | undefined {
 }
 
 export default async function DashboardPage() {
-  const [trips, cards] = await Promise.all([fetchTrips(), fetchCards()]);
+  const [trips, cards, deals] = await Promise.all([fetchTrips(), fetchCards(), fetchDealsFeed()]);
 
   const totalTrips    = trips.length;
   const upcomingCount = trips.filter(isUpcoming).length;
@@ -105,6 +106,7 @@ export default async function DashboardPage() {
         {/* Right column */}
         <div className="space-y-6">
           <PointsSummary cards={cards} />
+          <DealsFeed deals={deals} />
         </div>
       </div>
     </>
