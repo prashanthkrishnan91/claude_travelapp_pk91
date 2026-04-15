@@ -13,6 +13,8 @@ interface ItineraryDayColumnProps {
   day: ItineraryDay;
   onRemoveItem: (itemId: string, dayId: string) => void;
   onAddItem: (dayId: string) => void;
+  onToggleCompare?: (item: ItineraryItem) => void;
+  compareSet?: Set<string>;
 }
 
 function formatDate(dateStr: string): string {
@@ -28,6 +30,8 @@ export function ItineraryDayColumn({
   day,
   onRemoveItem,
   onAddItem,
+  onToggleCompare,
+  compareSet,
 }: ItineraryDayColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `day-${day.id}`,
@@ -86,6 +90,8 @@ export function ItineraryDayColumn({
               key={item.id}
               item={item}
               onRemove={(itemId) => onRemoveItem(itemId, day.id)}
+              onToggleCompare={onToggleCompare}
+              isComparing={compareSet?.has(item.id)}
             />
           ))}
         </SortableContext>

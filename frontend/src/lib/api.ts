@@ -15,6 +15,8 @@ import type {
   ResearchResult,
   ResearchCategory,
   TripBuilderFormData,
+  CompareItemInput,
+  CompareResult,
 } from "@/types";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -312,6 +314,17 @@ export async function searchAttractions(
   } catch {
     return [];
   }
+}
+
+// ─── Compare ─────────────────────────────────────────────────────────────────
+
+export async function compareItems(items: CompareItemInput[]): Promise<CompareResult[]> {
+  const payload = toSnake({ items });
+  const response = await apiFetch<{ results: CompareResult[] }>("/compare", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return response.results;
 }
 
 // ─── Travel Cards ─────────────────────────────────────────────────────────────

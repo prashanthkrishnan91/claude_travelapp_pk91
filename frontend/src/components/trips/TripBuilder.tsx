@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -28,17 +28,22 @@ import {
   Search,
   CalendarPlus,
   Sparkles,
+  Scale,
+  Loader2,
+  BarChart2,
 } from "lucide-react";
-import type { ItineraryDay, ItineraryItem, ResearchResult, ResearchCategory, ItemType } from "@/types";
+import type { ItineraryDay, ItineraryItem, ResearchResult, ResearchCategory, ItemType, CompareResult } from "@/types";
 import {
   createDay,
   deleteItem,
   createItem,
   updateItem,
+  compareItems,
 } from "@/lib/api";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
 import { ItineraryItemCard } from "./ItineraryItemCard";
+import { CompareModal } from "./CompareModal";
 
 // ─── Category filter config ───────────────────────────────────────────────────
 
@@ -72,6 +77,14 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
   const [activeFilter,  setActiveFilter] = useState<ResearchCategory | "all">("all");
   const [searchQuery,   setSearchQuery]  = useState("");
   const [activeId,      setActiveId]     = useState<UniqueIdentifier | null>(null);
+
+  // ── Compare state ───────────────────────────────────────────────────────────
+  const [compareSet,     setCompareSet]     = useState<Set<string>>(new Set());
+  const [compareOpen,    setCompareOpen]    = useState(false);
+  const [compareResults, setCompareResults] = useState<CompareResult[]>([]);
+  const [compareLoading, setCompareLoading] = useState(false);
+  // Stores full item data for items in the compare set (keyed by id)
+  const compareDataRef = useRef<Map<string, { name: string; itemType: string; cashPrice: number; pointsCost: number; rating?: number }>>(new Map());
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -172,6 +185,69 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
       // silently ignore
     }
   }, [days.length, tripId]);
+
+  // ── Compare: toggle an item in/out of the compare set ───────────────────────
+
+  const handleToggleCompareResult = useCallback((result: ResearchResult) => {
+    const price = result.priceDisplay
+      ? parseFloat(result.priceDisplay.replace(/[^0-9.]/g, "")) || 0
+      : 0;
+    setCompareSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(result.id)) {
+        next.delete(result.id);
+        compareDataRef.current.delete(result.id);
+      } else {
+        next.add(result.id);
+        compareDataRef.current.set(result.id, {
+          name: result.title,
+          itemType: result.category,
+          cashPrice: price,
+          pointsCost: 0,
+          rating: result.rating,
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleCompareItem = useCallback((item: ItineraryItem) => {
+    setCompareSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(item.id)) {
+        next.delete(item.id);
+        compareDataRef.current.delete(item.id);
+      } else {
+        next.add(item.id);
+        compareDataRef.current.set(item.id, {
+          name: item.title,
+          itemType: item.itemType,
+          cashPrice: item.cashPrice ?? 0,
+          pointsCost: item.pointsPrice ?? 0,
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  const handleCompare = useCallback(async () => {
+    const items = Array.from(compareSet).map((id) => {
+      const data = compareDataRef.current.get(id)!;
+      return { id, ...data };
+    });
+    if (items.length < 2) return;
+
+    setCompareLoading(true);
+    try {
+      const results = await compareItems(items);
+      setCompareResults(results);
+      setCompareOpen(true);
+    } catch {
+      // silently ignore — user can retry
+    } finally {
+      setCompareLoading(false);
+    }
+  }, [compareSet]);
 
   // ── DnD: drag start ─────────────────────────────────────────────────────────
 
@@ -364,6 +440,7 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
   // ─────────────────────────────────────────────────────────────────────────────
 
   return (
+    <>
     <DndContext
       sensors={sensors}
       collisionDetection={closestCorners}
@@ -422,6 +499,8 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
                   key={result.id}
                   result={result}
                   onAdd={handleAddResult}
+                  onToggleCompare={handleToggleCompareResult}
+                  isComparing={compareSet.has(result.id)}
                 />
               ))
             ) : (
@@ -460,6 +539,8 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
                   day={day}
                   onRemoveItem={handleRemoveItem}
                   onAddItem={handleAddToDay}
+                  onToggleCompare={handleToggleCompareItem}
+                  compareSet={compareSet}
                 />
               ))}
             </SortableContext>
@@ -476,6 +557,34 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
           </div>
         </div>
       </div>
+
+      {/* ── Compare bar ──────────────────────────────────────────────────────── */}
+      {compareSet.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 bg-slate-900 text-white rounded-2xl shadow-2xl">
+          <Scale className="w-4 h-4 text-violet-400" />
+          <span className="text-sm font-medium">
+            {compareSet.size} item{compareSet.size !== 1 ? "s" : ""} selected
+          </span>
+          <button
+            onClick={handleCompare}
+            disabled={compareSet.size < 2 || compareLoading}
+            className="ml-1 px-4 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold transition-colors flex items-center gap-1.5"
+          >
+            {compareLoading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <BarChart2 className="w-3.5 h-3.5" />
+            )}
+            Compare Now
+          </button>
+          <button
+            onClick={() => { setCompareSet(new Set()); compareDataRef.current.clear(); }}
+            className="text-slate-400 hover:text-white text-xs transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {/* ── Drag Overlay ─────────────────────────────────────────────────────── */}
       <DragOverlay>
@@ -497,5 +606,14 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
         )}
       </DragOverlay>
     </DndContext>
+
+    {/* ── Compare Modal ──────────────────────────────────────────────────────── */}
+    {compareOpen && compareResults.length > 0 && (
+      <CompareModal
+        results={compareResults}
+        onClose={() => setCompareOpen(false)}
+      />
+    )}
+    </>
   );
 }

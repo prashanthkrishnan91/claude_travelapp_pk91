@@ -93,6 +93,30 @@ export interface ResearchResult {
   tags?: string[];
 }
 
+// ─── Compare ──────────────────────────────────────────────────────────────────
+
+export interface CompareItemInput {
+  id: string;
+  name: string;
+  itemType: string;
+  cashPrice: number;
+  pointsCost: number;
+  rating?: number;
+  layovers?: number;
+}
+
+export interface CompareResult {
+  id: string;
+  name: string;
+  type: string;
+  price: number;
+  points: number;
+  cpp: number | null;
+  valueScore: number;
+  tags: string[];
+  recommendationReason: string;
+}
+
 // ─── Trip Builder Form ────────────────────────────────────────────────────────
 
 export interface TripBuilderFormData {

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.routes import cards_router, itinerary_router, search_router, trips_router, value_router
+from app.routes import cards_router, compare_router, itinerary_router, search_router, trips_router, value_router
 
 settings = get_settings()
 
@@ -37,6 +37,7 @@ app.add_middleware(
 app.include_router(trips_router)
 app.include_router(itinerary_router)
 app.include_router(cards_router)
+app.include_router(compare_router)
 app.include_router(search_router)
 app.include_router(value_router)
 
