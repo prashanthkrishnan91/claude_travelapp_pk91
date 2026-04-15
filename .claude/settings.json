@@ -2,7 +2,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Edit|Write|Bash",
         "hooks": [
           {
             "type": "command",
@@ -18,8 +18,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "code-review-graph update --skip-flows",
-            "timeout": 30
+            "command": "code-review-graph update --skip-flows && code-review-graph wiki 2>/dev/null || true",
+            "timeout": 60
           }
         ]
       }
