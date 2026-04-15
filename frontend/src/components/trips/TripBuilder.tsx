@@ -29,210 +29,16 @@ import {
   CalendarPlus,
   Sparkles,
 } from "lucide-react";
-import { ItineraryDay, ItineraryItem, ResearchResult, ResearchCategory, ItemType } from "@/types";
+import type { ItineraryDay, ItineraryItem, ResearchResult, ResearchCategory, ItemType } from "@/types";
+import {
+  createDay,
+  deleteItem,
+  createItem,
+  updateItem,
+} from "@/lib/api";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
 import { ItineraryItemCard } from "./ItineraryItemCard";
-
-// ─── Mock research results ────────────────────────────────────────────────────
-
-const MOCK_RESULTS: ResearchResult[] = [
-  {
-    id: "r1",
-    category: "flight",
-    title: "JFK → CDG — Air France AF007",
-    description: "Nonstop, 7h 20m. Business class award available.",
-    duration: "7h 20m",
-    priceDisplay: "60k pts",
-    rating: 4.5,
-    tags: ["Nonstop", "Business"],
-  },
-  {
-    id: "r2",
-    category: "hotel",
-    title: "Hôtel Le Marais Boutique",
-    description: "4-star hotel in the heart of Le Marais district.",
-    location: "Le Marais, Paris",
-    duration: "Per night",
-    priceDisplay: "$220/night",
-    rating: 4.7,
-    tags: ["Breakfast", "Free Wi-Fi"],
-  },
-  {
-    id: "r3",
-    category: "activity",
-    title: "Skip-the-Line Louvre Tour",
-    description: "Guided 3h tour of the Louvre's highlights.",
-    location: "Louvre, Paris",
-    duration: "3 hours",
-    priceDisplay: "$65/person",
-    rating: 4.8,
-    tags: ["Guided", "Skip-the-line"],
-  },
-  {
-    id: "r4",
-    category: "meal",
-    title: "Dinner at Septime",
-    description: "Award-winning bistro with seasonal tasting menus.",
-    location: "11th arrondissement",
-    duration: "2 hours",
-    priceDisplay: "$90/person",
-    rating: 4.9,
-    tags: ["Fine dining", "Reservations required"],
-  },
-  {
-    id: "r5",
-    category: "transit",
-    title: "CDG Airport → City (RER B)",
-    description: "Direct train from Charles de Gaulle to central Paris.",
-    duration: "35 min",
-    priceDisplay: "$12",
-    tags: ["Train", "Direct"],
-  },
-  {
-    id: "r6",
-    category: "activity",
-    title: "Eiffel Tower Evening Visit",
-    description: "Timed-entry tickets for the summit at sunset.",
-    location: "Champ de Mars, Paris",
-    duration: "2 hours",
-    priceDisplay: "$35/person",
-    rating: 4.6,
-    tags: ["Landmark", "Timed entry"],
-  },
-  {
-    id: "r7",
-    category: "hotel",
-    title: "Novotel Paris Eiffel Tower",
-    description: "Modern hotel with Eiffel Tower views, near Champ de Mars.",
-    location: "7th arrondissement",
-    duration: "Per night",
-    priceDisplay: "$180/night",
-    rating: 4.3,
-    tags: ["Pool", "Gym"],
-  },
-  {
-    id: "r8",
-    category: "meal",
-    title: "Café de Flore Breakfast",
-    description: "Iconic Saint-Germain café with classic French breakfast.",
-    location: "Saint-Germain-des-Prés",
-    duration: "1 hour",
-    priceDisplay: "$25/person",
-    rating: 4.2,
-    tags: ["Iconic", "Historic"],
-  },
-  {
-    id: "r9",
-    category: "activity",
-    title: "Seine River Cruise",
-    description: "1-hour scenic cruise past Notre-Dame and the Louvre.",
-    location: "Pont de l'Alma",
-    duration: "1 hour",
-    priceDisplay: "$18/person",
-    rating: 4.4,
-    tags: ["Scenic", "Family-friendly"],
-  },
-  {
-    id: "r10",
-    category: "flight",
-    title: "CDG → JFK — Delta DL264",
-    description: "Return flight, 8h 45m. Economy award space available.",
-    duration: "8h 45m",
-    priceDisplay: "35k pts",
-    rating: 4.1,
-    tags: ["Nonstop", "Economy"],
-  },
-];
-
-// ─── Mock itinerary days ──────────────────────────────────────────────────────
-
-const MOCK_DAYS: ItineraryDay[] = [
-  {
-    id: "day-1",
-    tripId: "trip-1",
-    dayNumber: 1,
-    date: "2025-06-14",
-    title: "Arrival Day",
-    summary: "Arrive in Paris, check in, first impressions.",
-    items: [
-      {
-        id: "item-1",
-        dayId: "day-1",
-        tripId: "trip-1",
-        itemType: "flight",
-        title: "JFK → CDG — Air France AF007",
-        description: "Nonstop business class",
-        startTime: "18:30",
-        endTime: "08:50+1",
-        position: 0,
-      },
-      {
-        id: "item-2",
-        dayId: "day-1",
-        tripId: "trip-1",
-        itemType: "transit",
-        title: "CDG → City Centre (RER B)",
-        startTime: "10:00",
-        endTime: "10:35",
-        position: 1,
-      },
-      {
-        id: "item-3",
-        dayId: "day-1",
-        tripId: "trip-1",
-        itemType: "hotel",
-        title: "Check in — Hôtel Le Marais Boutique",
-        location: "Le Marais, Paris",
-        startTime: "15:00",
-        position: 2,
-      },
-    ],
-  },
-  {
-    id: "day-2",
-    tripId: "trip-1",
-    dayNumber: 2,
-    date: "2025-06-15",
-    title: "Museums & Culture",
-    summary: "Visit the Louvre and explore Saint-Germain.",
-    items: [
-      {
-        id: "item-4",
-        dayId: "day-2",
-        tripId: "trip-1",
-        itemType: "meal",
-        title: "Café de Flore Breakfast",
-        location: "Saint-Germain-des-Prés",
-        startTime: "09:00",
-        endTime: "10:00",
-        position: 0,
-      },
-      {
-        id: "item-5",
-        dayId: "day-2",
-        tripId: "trip-1",
-        itemType: "activity",
-        title: "Skip-the-Line Louvre Tour",
-        location: "Louvre, Paris",
-        startTime: "11:00",
-        endTime: "14:00",
-        cashPrice: 65,
-        cashCurrency: "USD",
-        position: 1,
-      },
-    ],
-  },
-  {
-    id: "day-3",
-    tripId: "trip-1",
-    dayNumber: 3,
-    date: "2025-06-16",
-    title: "Eiffel Tower & Fine Dining",
-    summary: "Iconic Paris sights and a special dinner.",
-    items: [],
-  },
-];
 
 // ─── Category filter config ───────────────────────────────────────────────────
 
@@ -241,42 +47,31 @@ const CATEGORY_FILTERS: {
   label: string;
   icon: React.ReactNode;
 }[] = [
-  { value: "all", label: "All", icon: <Sparkles className="w-3.5 h-3.5" /> },
-  { value: "flight", label: "Flights", icon: <Plane className="w-3.5 h-3.5" /> },
-  { value: "hotel", label: "Hotels", icon: <Hotel className="w-3.5 h-3.5" /> },
-  { value: "activity", label: "Activities", icon: <MapPin className="w-3.5 h-3.5" /> },
-  { value: "meal", label: "Meals", icon: <Utensils className="w-3.5 h-3.5" /> },
-  { value: "transit", label: "Transit", icon: <Train className="w-3.5 h-3.5" /> },
-  { value: "note", label: "Notes", icon: <FileText className="w-3.5 h-3.5" /> },
+  { value: "all",      label: "All",        icon: <Sparkles className="w-3.5 h-3.5" /> },
+  { value: "flight",   label: "Flights",    icon: <Plane    className="w-3.5 h-3.5" /> },
+  { value: "hotel",    label: "Hotels",     icon: <Hotel    className="w-3.5 h-3.5" /> },
+  { value: "activity", label: "Activities", icon: <MapPin   className="w-3.5 h-3.5" /> },
+  { value: "meal",     label: "Meals",      icon: <Utensils className="w-3.5 h-3.5" /> },
+  { value: "transit",  label: "Transit",    icon: <Train    className="w-3.5 h-3.5" /> },
+  { value: "note",     label: "Notes",      icon: <FileText className="w-3.5 h-3.5" /> },
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Props ────────────────────────────────────────────────────────────────────
 
-function categoryToItemType(cat: ResearchCategory): ItemType {
-  return cat as ItemType;
-}
-
-function resultToItem(result: ResearchResult, dayId: string, position: number): ItineraryItem {
-  return {
-    id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    dayId,
-    tripId: "trip-1",
-    itemType: categoryToItemType(result.category),
-    title: result.title,
-    description: result.description,
-    location: result.location,
-    position,
-  };
+interface TripBuilderProps {
+  tripId: string;
+  initialDays: ItineraryDay[];
+  initialResults: ResearchResult[];
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TripBuilder() {
-  const [days, setDays] = useState<ItineraryDay[]>(MOCK_DAYS);
-  const [results] = useState<ResearchResult[]>(MOCK_RESULTS);
-  const [activeFilter, setActiveFilter] = useState<ResearchCategory | "all">("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
+export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilderProps) {
+  const [days,          setDays]         = useState<ItineraryDay[]>(initialDays);
+  const [results]                        = useState<ResearchResult[]>(initialResults);
+  const [activeFilter,  setActiveFilter] = useState<ResearchCategory | "all">("all");
+  const [searchQuery,   setSearchQuery]  = useState("");
+  const [activeId,      setActiveId]     = useState<UniqueIdentifier | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -294,22 +89,34 @@ export function TripBuilder() {
     return matchesFilter && matchesSearch;
   });
 
-  // ── Add result by clicking "+" ───────────────────────────────────────────────
+  // ── Add research result by clicking "+" ──────────────────────────────────────
 
-  const handleAddResult = useCallback((result: ResearchResult) => {
-    setDays((prev) => {
-      const targetDay = prev[0]; // default to first day
-      if (!targetDay) return prev;
-      const newItem = resultToItem(result, targetDay.id, targetDay.items.length);
-      return prev.map((d) =>
-        d.id === targetDay.id ? { ...d, items: [...d.items, newItem] } : d
+  const handleAddResult = useCallback(async (result: ResearchResult) => {
+    const targetDay = days[0];
+    if (!targetDay) return;
+
+    try {
+      const newItem = await createItem(tripId, targetDay.id, {
+        itemType: result.category as ItemType,
+        title: result.title,
+        description: result.description,
+        location: result.location,
+        position: targetDay.items.length,
+      });
+      setDays((prev) =>
+        prev.map((d) =>
+          d.id === targetDay.id ? { ...d, items: [...d.items, newItem] } : d
+        )
       );
-    });
-  }, []);
+    } catch {
+      // silently ignore — user can retry
+    }
+  }, [days, tripId]);
 
   // ── Remove item from a day ──────────────────────────────────────────────────
 
-  const handleRemoveItem = useCallback((itemId: string, dayId: string) => {
+  const handleRemoveItem = useCallback(async (itemId: string, dayId: string) => {
+    // Optimistic update
     setDays((prev) =>
       prev.map((d) =>
         d.id === dayId
@@ -322,48 +129,49 @@ export function TripBuilder() {
           : d
       )
     );
+    try {
+      await deleteItem(itemId);
+    } catch {
+      // silently ignore — state remains updated
+    }
   }, []);
 
-  // ── Add empty item to a day (placeholder) ──────────────────────────────────
+  // ── Add empty note item to a day ────────────────────────────────────────────
 
-  const handleAddToDay = useCallback((dayId: string) => {
-    setDays((prev) =>
-      prev.map((d) =>
-        d.id === dayId
-          ? {
-              ...d,
-              items: [
-                ...d.items,
-                {
-                  id: `item-${Date.now()}`,
-                  dayId,
-                  tripId: "trip-1",
-                  itemType: "note" as ItemType,
-                  title: "New item",
-                  position: d.items.length,
-                },
-              ],
-            }
-          : d
-      )
-    );
-  }, []);
+  const handleAddToDay = useCallback(async (dayId: string) => {
+    const day = days.find((d) => d.id === dayId);
+    if (!day) return;
+
+    try {
+      const newItem = await createItem(tripId, dayId, {
+        itemType: "note" as ItemType,
+        title: "New item",
+        position: day.items.length,
+      });
+      setDays((prev) =>
+        prev.map((d) =>
+          d.id === dayId ? { ...d, items: [...d.items, newItem] } : d
+        )
+      );
+    } catch {
+      // silently ignore
+    }
+  }, [days, tripId]);
 
   // ── Add new day ─────────────────────────────────────────────────────────────
 
-  const handleAddDay = useCallback(() => {
-    setDays((prev) => {
-      const nextNum = prev.length + 1;
-      const newDay: ItineraryDay = {
-        id: `day-${Date.now()}`,
-        tripId: "trip-1",
+  const handleAddDay = useCallback(async () => {
+    const nextNum = days.length + 1;
+    try {
+      const newDay = await createDay(tripId, {
         dayNumber: nextNum,
         title: `Day ${nextNum}`,
-        items: [],
-      };
-      return [...prev, newDay];
-    });
-  }, []);
+      });
+      setDays((prev) => [...prev, newDay]);
+    } catch {
+      // silently ignore
+    }
+  }, [days.length, tripId]);
 
   // ── DnD: drag start ─────────────────────────────────────────────────────────
 
@@ -371,7 +179,7 @@ export function TripBuilder() {
     setActiveId(event.active.id);
   }, []);
 
-  // ── DnD: drag over (cross-day reorder preview) ──────────────────────────────
+  // ── DnD: drag over (cross-day live preview) ─────────────────────────────────
 
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
@@ -379,14 +187,11 @@ export function TripBuilder() {
       if (!over) return;
 
       const activeData = active.data.current;
-      const overData = over.data.current;
+      const overData   = over.data.current;
 
       if (!activeData) return;
+      if (activeData.type === "result") return; // handled on dragEnd
 
-      // Dragging a research result — no preview needed, handled on dragEnd
-      if (activeData.type === "result") return;
-
-      // Dragging an itinerary item over another item or a day
       if (activeData.type === "itinerary-item") {
         const sourceItem: ItineraryItem = activeData.item;
         const sourceDayId = sourceItem.dayId;
@@ -398,16 +203,12 @@ export function TripBuilder() {
         } else if (overData?.type === "day") {
           targetDayId = overData.dayId;
         } else {
-          // over.id might be `day-${id}`
           const idStr = String(over.id);
-          if (idStr.startsWith("day-")) {
-            targetDayId = idStr.replace("day-", "");
-          }
+          if (idStr.startsWith("day-")) targetDayId = idStr.replace("day-", "");
         }
 
         if (!targetDayId || targetDayId === sourceDayId) return;
 
-        // Move item to new day for live preview
         setDays((prev) => {
           const sourceDay = prev.find((d) => d.id === sourceDayId);
           const targetDay = prev.find((d) => d.id === targetDayId);
@@ -450,7 +251,7 @@ export function TripBuilder() {
       if (!over) return;
 
       const activeData = active.data.current;
-      const overData = over.data.current;
+      const overData   = over.data.current;
 
       // ── Drop research result onto a day ──
       if (activeData?.type === "result") {
@@ -463,20 +264,33 @@ export function TripBuilder() {
           targetDayId = overData.item.dayId;
         } else {
           const idStr = String(over.id);
-          if (idStr.startsWith("day-")) {
-            targetDayId = idStr.replace("day-", "");
-          }
+          if (idStr.startsWith("day-")) targetDayId = idStr.replace("day-", "");
         }
 
         if (!targetDayId) return;
 
-        setDays((prev) =>
-          prev.map((d) => {
-            if (d.id !== targetDayId) return d;
-            const newItem = resultToItem(result, d.id, d.items.length);
-            return { ...d, items: [...d.items, newItem] };
+        const targetDay = days.find((d) => d.id === targetDayId);
+        if (!targetDay) return;
+
+        // Create on server then add to state with real ID
+        createItem(tripId, targetDayId, {
+          itemType: result.category as ItemType,
+          title: result.title,
+          description: result.description,
+          location: result.location,
+          position: targetDay.items.length,
+        })
+          .then((newItem) => {
+            setDays((prev) =>
+              prev.map((d) =>
+                d.id !== targetDayId ? d : { ...d, items: [...d.items, newItem] }
+              )
+            );
           })
-        );
+          .catch(() => {
+            // silently ignore
+          });
+
         return;
       }
 
@@ -497,8 +311,8 @@ export function TripBuilder() {
 
         if (!targetDayId) return;
 
-        // If same day, reorder
         if (targetDayId === sourceItem.dayId) {
+          // Same-day reorder
           setDays((prev) =>
             prev.map((d) => {
               if (d.id !== targetDayId) return d;
@@ -509,14 +323,23 @@ export function TripBuilder() {
               const reordered = arrayMove(d.items, oldIndex, newIndex).map(
                 (i, idx) => ({ ...i, position: idx })
               );
+
+              // Persist updated positions in background
+              reordered.forEach((item) => {
+                updateItem(item.id, { position: item.position }).catch(() => {});
+              });
+
               return { ...d, items: reordered };
             })
           );
+        } else {
+          // Cross-day move: preview was applied in dragOver; now persist
+          // Update the moved item's dayId on the server
+          updateItem(sourceItem.id, { dayId: targetDayId as unknown as string } as Partial<ItineraryItem>).catch(() => {});
         }
-        // Cross-day move was already handled by dragOver
       }
     },
-    []
+    [days, tripId]
   );
 
   // ── Active drag overlay item ────────────────────────────────────────────────
@@ -536,8 +359,7 @@ export function TripBuilder() {
   })();
 
   const isResultDrag =
-    activeDragItem !== null &&
-    "category" in activeDragItem;
+    activeDragItem !== null && "category" in activeDragItem;
 
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -588,7 +410,13 @@ export function TripBuilder() {
 
           {/* Result cards list */}
           <div className="flex-1 overflow-y-auto flex flex-col gap-2 pr-0.5">
-            {filteredResults.length > 0 ? (
+            {results.length === 0 ? (
+              <div className="card p-6 text-center text-slate-400">
+                <Sparkles className="w-6 h-6 mx-auto mb-2 text-slate-300" />
+                <p className="text-xs font-medium text-slate-500">No research results yet</p>
+                <p className="text-xs mt-1">Search results will appear here once the AI concierge runs.</p>
+              </div>
+            ) : filteredResults.length > 0 ? (
               filteredResults.map((result) => (
                 <SearchResultCard
                   key={result.id}
@@ -614,10 +442,7 @@ export function TripBuilder() {
                 {days.length} days
               </span>
             </h2>
-            <button
-              onClick={handleAddDay}
-              className="btn-ghost py-1.5 text-xs"
-            >
+            <button onClick={handleAddDay} className="btn-ghost py-1.5 text-xs">
               <CalendarPlus className="w-3.5 h-3.5" />
               Add Day
             </button>
@@ -643,7 +468,9 @@ export function TripBuilder() {
               <div className="card p-8 text-center text-slate-400">
                 <CalendarPlus className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                 <p className="text-sm font-medium text-slate-500">No days yet</p>
-                <p className="text-xs mt-1">Click &ldquo;Add Day&rdquo; to start building your itinerary.</p>
+                <p className="text-xs mt-1">
+                  Click &ldquo;Add Day&rdquo; to start building your itinerary.
+                </p>
               </div>
             )}
           </div>
