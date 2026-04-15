@@ -65,7 +65,10 @@ _WEIGHT_PREFERENCE = 0.10
 _WEIGHT_CONVENIENCE = 0.10
 
 _LAYOVER_CONVENIENCE_PENALTY = 30  # component points deducted per excess layover (0–100 scale)
-_DECISION_THRESHOLD = 0.05         # relative difference to declare a clear winner
+_DECISION_THRESHOLD = 0.15         # 15 % relative advantage required to declare a clear winner
+_SWEET_SPOT_CPP_MULTIPLIER = 2.0   # adjusted_cpp must exceed baseline × this to earn "Sweet Spot"
+_SWEET_SPOT_CONFIDENCE_BOOST = 15  # bonus added to confidence when "Sweet Spot" fires
+_POOR_REDEMPTION_RATING_FLOOR = 3.5  # rating below this surfaces a "lower rating" tradeoff
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +192,86 @@ def _determine_decision(
     return "Either"
 
 
+def _rel_diff(effective_cash_cost: float, opportunity_cost: float, points_cost: int) -> float:
+    """Signed relative difference: positive means points are cheaper, negative means cash is cheaper."""
+    if points_cost == 0:
+        return -1.0
+    denom = max(effective_cash_cost, opportunity_cost)
+    if denom <= 0:
+        return 0.0
+    return (effective_cash_cost - opportunity_cost) / denom
+
+
+def _compute_confidence(
+    diff: float,
+    adjusted_cpp: Optional[float],
+    baseline: float,
+) -> int:
+    """0–100 confidence in the recommendation.
+
+    Two signals blended 60/40:
+    1. Decisiveness (|rel_diff|): ≥30 % → 100, 15–30 % → 60–99, <15 % → 0–59
+    2. CPP strength:              ≥1.5× baseline → 100, at baseline → 50, below → 0–49
+    """
+    abs_diff = abs(diff)
+    cpp_ratio = (adjusted_cpp / baseline) if adjusted_cpp is not None else 1.0
+
+    if abs_diff >= 0.30:
+        decisiveness = 100
+    elif abs_diff >= _DECISION_THRESHOLD:
+        decisiveness = round(60 + (abs_diff - _DECISION_THRESHOLD) / (_DECISION_THRESHOLD) * 39)
+    else:
+        decisiveness = round(abs_diff / _DECISION_THRESHOLD * 59)
+
+    if cpp_ratio >= 1.5:
+        cpp_signal = 100
+    elif cpp_ratio >= 1.0:
+        cpp_signal = round(50 + (cpp_ratio - 1.0) / 0.5 * 50)
+    else:
+        cpp_signal = round(max(0.0, cpp_ratio * 50))
+
+    return max(0, min(100, round(decisiveness * 0.6 + cpp_signal * 0.4)))
+
+
+def _compute_tradeoffs(
+    item: ItemV2,
+    prefs: UserPreferencesV2,
+    adjusted_cpp: Optional[float],
+    opportunity_cost: Optional[float],
+    effective_cash_cost: Optional[float],
+    excess_layovers: int,
+    is_flight: bool,
+) -> List[str]:
+    """Build a list of 'why not' strings surfacing notable downsides."""
+    tradeoffs: List[str] = []
+
+    # Excess layovers
+    if excess_layovers > 0 and is_flight:
+        pref_label = "nonstop" if prefs.max_layovers == 0 else f"{prefs.max_layovers} layover(s)"
+        tradeoffs.append(
+            f"Requires {item.layovers} layover(s) vs your preference for {pref_label}"
+        )
+
+    # Below-par rating
+    if item.rating is not None and item.rating < _POOR_REDEMPTION_RATING_FLOOR:
+        tradeoffs.append(f"Lower rating ({item.rating}/5) than alternatives")
+
+    # High opportunity cost (points cost more than the equivalent cash after rewards)
+    if (
+        opportunity_cost is not None
+        and effective_cash_cost is not None
+        and effective_cash_cost > 0
+        and opportunity_cost > effective_cash_cost * 1.3
+    ):
+        tradeoffs.append("High opportunity cost for points usage")
+
+    # Poor redemption: CPP below user baseline while redeeming points
+    if adjusted_cpp is not None and adjusted_cpp < prefs.cpp_baseline and item.points_cost > 0:
+        tradeoffs.append("Points value below your baseline")
+
+    return tradeoffs
+
+
 def _build_reason(
     item: ItemV2,
     prefs: UserPreferencesV2,
@@ -289,10 +372,11 @@ class ValueEngineV2:
         if item.points_cost > 0:
             opportunity_cost = round(item.points_cost * prefs.cpp_baseline / 100, 4)
 
-        # 4. Decision
+        # 4. Decision (15 % threshold — prevents flip-flopping)
         eff_cash = effective_cash_cost if effective_cash_cost is not None else item.cash_price
         opp_cost = opportunity_cost if opportunity_cost is not None else 0.0
         decision = _determine_decision(eff_cash, opp_cost, item.points_cost)
+        diff = _rel_diff(eff_cash, opp_cost, item.points_cost)
 
         # 5. Preference match
         preferred_list = (
@@ -353,7 +437,36 @@ class ValueEngineV2:
         ):
             tags.append("High Opportunity Cost")
 
-        # 9. Recommendation reason
+        # Poor Redemption: points redeemed below user's CPP baseline
+        if adjusted_cpp is not None and adjusted_cpp < prefs.cpp_baseline and item.points_cost > 0:
+            tags.append("Poor Redemption")
+
+        # Sweet Spot: CPP > 2× baseline AND item matches user preference
+        sweet_spot = (
+            adjusted_cpp is not None
+            and adjusted_cpp > prefs.cpp_baseline * _SWEET_SPOT_CPP_MULTIPLIER
+            and preferred
+        )
+        if sweet_spot:
+            tags.append("Sweet Spot")
+
+        # 9. Confidence
+        confidence = _compute_confidence(diff, adjusted_cpp, prefs.cpp_baseline)
+        if sweet_spot:
+            confidence = min(100, confidence + _SWEET_SPOT_CONFIDENCE_BOOST)
+
+        # 10. Tradeoffs
+        tradeoffs = _compute_tradeoffs(
+            item=item,
+            prefs=prefs,
+            adjusted_cpp=adjusted_cpp,
+            opportunity_cost=opportunity_cost,
+            effective_cash_cost=effective_cash_cost,
+            excess_layovers=excess_layovers,
+            is_flight=is_flight,
+        )
+
+        # 11. Recommendation reason
         reason = _build_reason(
             item=item,
             prefs=prefs,
@@ -372,9 +485,11 @@ class ValueEngineV2:
             cpp=cpp,
             adjusted_cpp=adjusted_cpp,
             value_score=value_score,
+            decision=decision,
+            confidence=confidence,
             tags=tags,
             recommendation_reason=reason,
-            decision=decision,
+            tradeoffs=tradeoffs,
             effective_cash_cost=effective_cash_cost,
             opportunity_cost=opportunity_cost,
         )
