@@ -13,12 +13,15 @@ import {
   GripVertical,
   Plus,
   Clock,
+  Scale,
 } from "lucide-react";
 import { ResearchResult, ResearchCategory } from "@/types";
 
 interface SearchResultCardProps {
   result: ResearchResult;
   onAdd: (result: ResearchResult) => void;
+  onToggleCompare?: (result: ResearchResult) => void;
+  isComparing?: boolean;
 }
 
 const categoryConfig: Record<
@@ -63,7 +66,7 @@ const categoryConfig: Record<
   },
 };
 
-export function SearchResultCard({ result, onAdd }: SearchResultCardProps) {
+export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }: SearchResultCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
       id: `result-${result.id}`,
@@ -108,13 +111,28 @@ export function SearchResultCard({ result, onAdd }: SearchResultCardProps) {
             <h4 className="text-sm font-semibold text-slate-800 leading-tight line-clamp-1">
               {result.title}
             </h4>
-            <button
-              onClick={() => onAdd(result)}
-              className="flex-shrink-0 w-6 h-6 rounded-full bg-sky-600 hover:bg-sky-700 text-white flex items-center justify-center transition-colors"
-              aria-label={`Add ${result.title} to itinerary`}
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {onToggleCompare && (
+                <button
+                  onClick={() => onToggleCompare(result)}
+                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                    isComparing
+                      ? "bg-violet-600 text-white"
+                      : "bg-slate-100 hover:bg-violet-100 text-slate-400 hover:text-violet-600"
+                  }`}
+                  aria-label={isComparing ? `Remove ${result.title} from compare` : `Add ${result.title} to compare`}
+                >
+                  <Scale className="w-3 h-3" />
+                </button>
+              )}
+              <button
+                onClick={() => onAdd(result)}
+                className="w-6 h-6 rounded-full bg-sky-600 hover:bg-sky-700 text-white flex items-center justify-center transition-colors"
+                aria-label={`Add ${result.title} to itinerary`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           {result.description && (

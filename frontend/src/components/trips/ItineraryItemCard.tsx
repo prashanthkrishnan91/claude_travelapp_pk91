@@ -14,12 +14,15 @@ import {
   Clock,
   DollarSign,
   Coins,
+  Scale,
 } from "lucide-react";
 import { ItineraryItem, ItemType } from "@/types";
 
 interface ItineraryItemCardProps {
   item: ItineraryItem;
   onRemove: (itemId: string) => void;
+  onToggleCompare?: (item: ItineraryItem) => void;
+  isComparing?: boolean;
 }
 
 const typeConfig: Record<
@@ -64,7 +67,7 @@ const typeConfig: Record<
   },
 };
 
-export function ItineraryItemCard({ item, onRemove }: ItineraryItemCardProps) {
+export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing }: ItineraryItemCardProps) {
   const {
     attributes,
     listeners,
@@ -117,13 +120,28 @@ export function ItineraryItemCard({ item, onRemove }: ItineraryItemCardProps) {
           <span className="text-sm font-medium text-slate-800 leading-tight line-clamp-1">
             {item.title}
           </span>
-          <button
-            onClick={() => onRemove(item.id)}
-            className="flex-shrink-0 w-5 h-5 rounded-full opacity-0 group-hover:opacity-100 bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-500 flex items-center justify-center transition-all"
-            aria-label={`Remove ${item.title}`}
-          >
-            <X className="w-3 h-3" />
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {onToggleCompare && (
+              <button
+                onClick={() => onToggleCompare(item)}
+                className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                  isComparing
+                    ? "opacity-100 bg-violet-600 text-white"
+                    : "opacity-0 group-hover:opacity-100 bg-slate-100 hover:bg-violet-100 text-slate-400 hover:text-violet-600"
+                }`}
+                aria-label={isComparing ? `Remove ${item.title} from compare` : `Add ${item.title} to compare`}
+              >
+                <Scale className="w-3 h-3" />
+              </button>
+            )}
+            <button
+              onClick={() => onRemove(item.id)}
+              className="flex-shrink-0 w-5 h-5 rounded-full opacity-0 group-hover:opacity-100 bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-500 flex items-center justify-center transition-all"
+              aria-label={`Remove ${item.title}`}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
         </div>
 
         {item.description && (

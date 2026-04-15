@@ -113,3 +113,46 @@ class ValueEngineV2Result(BaseModel):
     value_score: int = Field(..., ge=0, le=100, description="Composite value score 0–100")
     tags: List[str] = Field(default_factory=list, description="Applicable quality labels")
     recommendation_reason: str = Field(..., description="Human-readable explanation of the score")
+
+
+# ---------------------------------------------------------------------------
+# Compare models — POST /compare
+# ---------------------------------------------------------------------------
+
+class CompareItemInput(BaseModel):
+    """A single item submitted for side-by-side comparison."""
+
+    id: str = Field(..., description="Client-side ID for correlating results")
+    name: str = Field(..., description="Display name of the item")
+    item_type: str = Field(..., description="Item type: flight, hotel, activity, etc.")
+    cash_price: float = Field(0, ge=0, description="Cash price in USD")
+    points_cost: int = Field(0, ge=0, description="Points cost for redemption")
+    rating: Optional[float] = Field(None, ge=0, le=5, description="Quality rating 0–5")
+    layovers: Optional[int] = Field(None, ge=0, description="Number of layovers (flights only)")
+
+
+class CompareRequest(BaseModel):
+    """Request body for POST /compare."""
+
+    items: List[CompareItemInput] = Field(..., min_length=2, max_length=10)
+    user_preferences: UserPreferencesV2 = Field(default_factory=UserPreferencesV2)
+
+
+class CompareResult(BaseModel):
+    """Scored result for a single compared item."""
+
+    id: str
+    name: str
+    type: str
+    price: float
+    points: int
+    cpp: Optional[float]
+    value_score: int
+    tags: List[str]
+    recommendation_reason: str
+
+
+class CompareResponse(BaseModel):
+    """Response body for POST /compare."""
+
+    results: List[CompareResult]
