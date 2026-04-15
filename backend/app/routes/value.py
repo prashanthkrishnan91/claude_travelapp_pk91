@@ -30,17 +30,21 @@ def score_item(payload: ValueEngineV2Request) -> ValueEngineV2Result:
     **Scoring logic**
     1. Base CPP = `cash_price × 100 / points_cost`
     2. Adjusted CPP = base CPP × `(1 + best_bonus_percent / 100)`
-    3. CPP component (60 %): `min(100, adjusted_cpp / cpp_baseline × 100)`
-    4. Rating component (25 %): `rating / 5 × 100` (neutral 50 when unknown)
-    5. Preference component (15 %): 100 if preferred airline/hotel, else 50
-    6. Layover penalty: −10 per layover exceeding `max_layovers`
+    3. CPP component (40 %): nonlinear curve — penalises below baseline, rapidly rewards above, capped at 2×
+    4. Cash/points advantage (25 %): effective cash cost vs points opportunity cost
+    5. Rating component (15 %): `rating / 5 × 100` (neutral 50 when unknown)
+    6. Preference component (10 %): 100 if preferred airline/hotel, else 50
+    7. Convenience component (10 %): layover score; −30 per excess layover
 
     **Outputs**
     - `cpp` — base cents-per-point before bonuses
     - `adjusted_cpp` — CPP after best available transfer bonus
     - `value_score` — composite score 0–100
-    - `tags` — e.g. `"Best Value"`, `"Best Points"`, `"Preferred Airline"`, `"+25% Transfer Bonus"`
-    - `recommendation_reason` — human-readable explanation
+    - `tags` — e.g. `"Best Value"`, `"Points Better"`, `"Cash Better"`, `"+25% Transfer Bonus"`
+    - `recommendation_reason` — structured explanation with CPP, bonus, cash vs points, preference match
+    - `decision` — `"Use Points"`, `"Pay Cash"`, or `"Either"`
+    - `effective_cash_cost` — cash price after rewards earned (USD)
+    - `opportunity_cost` — value of points if kept (points × cpp_baseline, USD)
     """
     return _engine_v2.score(payload)
 
