@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft, Pencil, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { TripBuilder } from "@/components/trips/TripBuilder";
 
-export const metadata: Metadata = { title: "Trip Details" };
+export const metadata: Metadata = { title: "Trip Builder" };
 
 export default async function TripDetailPage({
   params,
@@ -24,7 +25,7 @@ export default async function TripDetailPage({
       </div>
 
       <PageHeader
-        title="Trip Details"
+        title="Paris — June 2025"
         description={`Trip ID: ${id}`}
         action={
           <div className="flex items-center gap-2">
@@ -40,9 +41,7 @@ export default async function TripDetailPage({
         }
       />
 
-      <div className="card p-8 text-center text-slate-400">
-        <p className="text-sm">Itinerary view coming in the next step.</p>
-      </div>
+      <TripBuilder />
     </>
   );
 }

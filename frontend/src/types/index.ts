@@ -77,6 +77,22 @@ export interface DashboardStats {
   totalPoints: number;
 }
 
+// ─── Research Results (Trip Builder left panel) ───────────────────────────────
+
+export type ResearchCategory = "flight" | "hotel" | "activity" | "meal" | "transit" | "note";
+
+export interface ResearchResult {
+  id: string;
+  category: ResearchCategory;
+  title: string;
+  description?: string;
+  location?: string;
+  duration?: string;
+  priceDisplay?: string;
+  rating?: number;
+  tags?: string[];
+}
+
 // ─── Trip Builder Form ────────────────────────────────────────────────────────
 
 export interface TripBuilderFormData {
