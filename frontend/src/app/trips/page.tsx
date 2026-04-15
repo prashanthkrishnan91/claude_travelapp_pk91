@@ -81,7 +81,7 @@ export default async function TripsPage() {
                     <Link
                       key={trip.id}
                       href={`/trips/${trip.id}`}
-                      className="card p-5 flex flex-col gap-3 hover:shadow-md hover:border-slate-300 transition group"
+                      className="card card-lift p-5 flex flex-col gap-3 group"
                     >
                       {/* Header */}
                       <div className="flex items-start justify-between gap-2">
