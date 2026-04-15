@@ -38,7 +38,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="hidden lg:flex lg:flex-col w-64 bg-white border-r border-slate-200 min-h-screen">
+    <aside className="hidden lg:flex lg:flex-col w-64 glass border-r border-slate-200/70 min-h-screen shadow-[1px_0_0_0_rgb(0_0_0/0.04)]">
       {/* Brand */}
       <div className="flex items-center gap-2.5 px-5 py-5 border-b border-slate-100">
         <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-sky-600 text-white">

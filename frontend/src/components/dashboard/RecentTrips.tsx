@@ -77,7 +77,7 @@ export function RecentTrips({ trips }: RecentTripsProps) {
                 </div>
 
                 {trip.budgetCash && (
-                  <div className="shrink-0 text-right">
+                  <div className="shrink-0 text-right space-y-1">
                     <p className="text-sm font-semibold text-slate-800">
                       {new Intl.NumberFormat("en-US", {
                         style: "currency",
@@ -85,7 +85,16 @@ export function RecentTrips({ trips }: RecentTripsProps) {
                         maximumFractionDigits: 0,
                       }).format(Number(trip.budgetCash))}
                     </p>
-                    <p className="text-xs text-slate-400 mt-0.5">budget</p>
+                    {trip.travelers > 1 && (
+                      <span className="badge badge-value text-[10px] px-1.5 py-0.5">
+                        {new Intl.NumberFormat("en-US", {
+                          style: "currency",
+                          currency: trip.budgetCurrency,
+                          maximumFractionDigits: 0,
+                        }).format(Number(trip.budgetCash) / trip.travelers)}
+                        /pp
+                      </span>
+                    )}
                   </div>
                 )}
               </Link>

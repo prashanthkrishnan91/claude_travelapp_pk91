@@ -54,15 +54,15 @@ export function PointsSummary({ cards }: PointsSummaryProps) {
               {totalPoints.toLocaleString()}
             </p>
             {estimatedValue > 0 && (
-              <p className="text-sm text-emerald-600 font-medium mt-1">
+              <span className="badge badge-value mt-2">
                 ≈{" "}
                 {new Intl.NumberFormat("en-US", {
                   style: "currency",
                   currency: "USD",
                   maximumFractionDigits: 0,
                 }).format(estimatedValue)}{" "}
-                in travel value
-              </p>
+                value
+              </span>
             )}
           </div>
 
@@ -81,14 +81,14 @@ export function PointsSummary({ cards }: PointsSummaryProps) {
                   </p>
                   <p className="text-xs text-slate-400">{card.issuer}</p>
                 </div>
-                <div className="text-right shrink-0">
+                <div className="text-right shrink-0 space-y-1">
                   <p className="text-sm font-semibold text-slate-800">
                     {(card.pointsBalance ?? 0).toLocaleString()}
                   </p>
                   {card.pointValueCpp && (
-                    <p className="text-xs text-slate-400">
+                    <span className="badge badge-savings text-[10px] px-1.5 py-0.5">
                       {card.pointValueCpp}¢/pt
-                    </p>
+                    </span>
                   )}
                 </div>
               </li>
