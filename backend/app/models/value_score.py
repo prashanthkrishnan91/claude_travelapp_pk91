@@ -44,3 +44,72 @@ class BatchValueScoreResponse(BaseModel):
     """Scored results returned in the same order as the input items."""
 
     results: List[ValueScoreResult]
+
+
+# ---------------------------------------------------------------------------
+# Value Engine V2 — personalized scoring models
+# ---------------------------------------------------------------------------
+
+class ItemV2(BaseModel):
+    """A flight or hotel to be scored by Value Engine V2."""
+
+    item_type: str = Field(..., description="'flight' or 'hotel'")
+    name: str = Field(..., description="Airline or hotel brand name")
+    cash_price: float = Field(..., ge=0, description="Cash price in USD")
+    points_cost: int = Field(..., ge=0, description="Points required for this redemption")
+    layovers: Optional[int] = Field(None, ge=0, description="Number of layovers (flights only)")
+    rating: Optional[float] = Field(None, ge=0, le=5, description="Quality rating 0–5")
+    seat_class: Optional[str] = Field(None, description="Seat class: economy/business/first (flights only)")
+    hotel_class: Optional[int] = Field(None, ge=1, le=5, description="Star rating 1–5 (hotels only)")
+
+
+class UserCardV2(BaseModel):
+    """A user's card provided as scoring context."""
+
+    card_key: str
+    issuer: str
+    points_balance: int = Field(..., ge=0)
+    point_value_cpp: Optional[float] = Field(None, ge=0, description="User's CPP valuation for this card")
+
+
+class UserPreferencesV2(BaseModel):
+    """User travel preferences for V2 scoring context."""
+
+    preferred_airlines: List[str] = Field(default_factory=list)
+    preferred_hotels: List[str] = Field(default_factory=list)
+    max_layovers: int = Field(2, ge=0, description="Maximum acceptable layovers")
+    seat_class: str = Field("economy", description="Preferred seat class")
+    hotel_class: int = Field(3, ge=1, le=5, description="Preferred hotel star rating")
+    cpp_baseline: float = Field(1.8, gt=0, description="User's CPP baseline for value comparison")
+
+
+class TransferBonusV2(BaseModel):
+    """An active transfer bonus between an issuer and a loyalty partner."""
+
+    issuer: str
+    partner: str
+    bonus_percent: int = Field(..., ge=0, description="Bonus percentage, e.g. 25 for +25%")
+
+
+class ValueEngineV2Request(BaseModel):
+    """Full context for Value Engine V2 scoring."""
+
+    item: ItemV2
+    user_cards: List[UserCardV2] = Field(default_factory=list)
+    user_preferences: UserPreferencesV2 = Field(default_factory=UserPreferencesV2)
+    transfer_bonuses: List[TransferBonusV2] = Field(
+        default_factory=list,
+        description="Active transfer bonuses (sourced from transfer_bonuses table)",
+    )
+
+
+class ValueEngineV2Result(BaseModel):
+    """V2 scoring result with adjusted CPP, value score, tags, and recommendation reason."""
+
+    cpp: Optional[float] = Field(None, description="Base cents-per-point before any bonus")
+    adjusted_cpp: Optional[float] = Field(
+        None, description="CPP after applying best available transfer bonus"
+    )
+    value_score: int = Field(..., ge=0, le=100, description="Composite value score 0–100")
+    tags: List[str] = Field(default_factory=list, description="Applicable quality labels")
+    recommendation_reason: str = Field(..., description="Human-readable explanation of the score")

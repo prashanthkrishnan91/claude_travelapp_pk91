@@ -17,6 +17,13 @@ from .itinerary import (
     BestOption,
 )
 from .research_cache import ResearchCache, ResearchCacheCreate
+from .preferences import (
+    UserPreferences,
+    UserPreferencesCreate,
+    UserPreferencesUpdate,
+    TransferBonus,
+    TransferBonusCreate,
+)
 from .search import (
     SearchResult,
     FlightSearchRequest,
@@ -60,4 +67,9 @@ __all__ = [
     "AttractionSearchRequest",
     "AttractionResult",
     "SearchCacheEntry",
+    "UserPreferences",
+    "UserPreferencesCreate",
+    "UserPreferencesUpdate",
+    "TransferBonus",
+    "TransferBonusCreate",
 ]
