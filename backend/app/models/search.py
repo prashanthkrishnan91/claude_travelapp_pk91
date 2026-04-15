@@ -1,0 +1,107 @@
+"""Search request and normalized result models for flights, hotels, and attractions."""
+
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional
+from uuid import UUID
+
+from pydantic import BaseModel, Field
+
+from .base import ORMBase
+
+
+# ------------------------------------------------------------------
+# Normalized result — every search type maps into this shape
+# ------------------------------------------------------------------
+
+class SearchResult(BaseModel):
+    """Normalized result returned for every search type."""
+
+    id: str = Field(..., description="Provider-supplied or synthetic identifier")
+    price: Optional[float] = Field(None, description="Cash price in USD")
+    points_estimate: Optional[int] = Field(None, description="Estimated points cost")
+    rating: Optional[float] = Field(None, ge=0, le=5, description="Rating on a 0–5 scale")
+    location: str = Field(..., description="Human-readable location string")
+    booking_url: str = Field(..., description="Deep-link URL to complete the booking")
+    source: str = Field(..., description="Data provider: mock | amadeus | google_flights | booking_com | viator")
+
+
+# ------------------------------------------------------------------
+# Flight models
+# ------------------------------------------------------------------
+
+class FlightSearchRequest(BaseModel):
+    origin: str = Field(..., min_length=3, max_length=3, description="IATA origin airport code")
+    destination: str = Field(..., min_length=3, max_length=3, description="IATA destination airport code")
+    departure_date: date
+    return_date: Optional[date] = None
+    passengers: int = Field(1, ge=1, le=9)
+    cabin_class: str = Field("economy", pattern="^(economy|premium_economy|business|first)$")
+
+
+class FlightResult(SearchResult):
+    airline: str
+    flight_number: str
+    origin: str
+    destination: str
+    departure_time: datetime
+    arrival_time: datetime
+    duration_minutes: int
+    stops: int = 0
+    cabin_class: str
+
+
+# ------------------------------------------------------------------
+# Hotel models
+# ------------------------------------------------------------------
+
+class HotelSearchRequest(BaseModel):
+    location: str = Field(..., min_length=2, description="City, region, or address")
+    check_in: date
+    check_out: date
+    guests: int = Field(1, ge=1, le=20)
+    max_price: Optional[float] = Field(None, gt=0, description="Maximum nightly rate in USD")
+
+
+class HotelResult(SearchResult):
+    name: str
+    check_in: date
+    check_out: date
+    nights: int
+    stars: Optional[float] = Field(None, ge=1, le=5)
+    amenities: List[str] = Field(default_factory=list)
+    price_per_night: float
+
+
+# ------------------------------------------------------------------
+# Attraction models
+# ------------------------------------------------------------------
+
+class AttractionSearchRequest(BaseModel):
+    location: str = Field(..., min_length=2, description="City or region to search in")
+    category: Optional[str] = Field(
+        None,
+        description="Filter by category: museums | outdoor | food | nightlife | tours | shopping",
+    )
+    date: Optional[date] = None
+
+
+class AttractionResult(SearchResult):
+    name: str
+    category: str
+    description: str
+    duration_minutes: Optional[int] = None
+    address: str
+
+
+# ------------------------------------------------------------------
+# Generic cache wrapper stored in research_cache
+# ------------------------------------------------------------------
+
+class SearchCacheEntry(ORMBase):
+    id: UUID
+    cache_key: str
+    source: str
+    query: Dict[str, Any]
+    payload: Dict[str, Any]
+    expires_at: Optional[datetime] = None
+    created_at: datetime

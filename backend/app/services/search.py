@@ -1,0 +1,307 @@
+"""SearchService — fetch (or generate mock) results and cache them in Supabase.
+
+Architecture
+------------
+1. Build a deterministic cache_key from the serialised query.
+2. Check research_cache for a live hit (not expired).
+3. On miss: call the appropriate _fetch_* method (currently returns realistic
+   mock data; swap in real provider clients when API keys are available).
+4. Persist the result set to research_cache with a configurable TTL.
+5. Return the normalised result list to the route handler.
+"""
+
+import hashlib
+import json
+import random
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
+from uuid import uuid4
+
+from supabase import Client
+
+from app.models.search import (
+    AttractionResult,
+    AttractionSearchRequest,
+    FlightResult,
+    FlightSearchRequest,
+    HotelResult,
+    HotelSearchRequest,
+)
+
+CACHE_TABLE = "research_cache"
+CACHE_TTL_HOURS = 1
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _cache_key(namespace: str, query: Dict[str, Any]) -> str:
+    """Return a stable SHA-256 fingerprint for a search query."""
+    canonical = json.dumps({"ns": namespace, **query}, sort_keys=True, default=str)
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def _now_utc() -> datetime:
+    return datetime.now(tz=timezone.utc)
+
+
+# ---------------------------------------------------------------------------
+# Mock data generators
+# ---------------------------------------------------------------------------
+
+def _mock_flights(req: FlightSearchRequest) -> List[FlightResult]:
+    """Generate realistic-looking flight options for the requested route."""
+    airlines = [
+        ("AA", "American Airlines"),
+        ("UA", "United Airlines"),
+        ("DL", "Delta Air Lines"),
+        ("B6", "JetBlue"),
+        ("AS", "Alaska Airlines"),
+    ]
+    cabin_multipliers = {
+        "economy": 1.0,
+        "premium_economy": 1.9,
+        "business": 4.5,
+        "first": 7.0,
+    }
+    cabin_mul = cabin_multipliers.get(req.cabin_class, 1.0)
+    base_price = random.uniform(180, 650) * req.passengers * cabin_mul
+
+    results: List[FlightResult] = []
+    for i, (code, name) in enumerate(random.sample(airlines, k=min(4, len(airlines)))):
+        dep_hour = random.randint(5, 21)
+        duration = random.randint(90, 480)
+        dep_dt = datetime.combine(req.departure_date, __import__("datetime").time(dep_hour, random.choice([0, 15, 30, 45])), tzinfo=timezone.utc)
+        arr_dt = dep_dt + timedelta(minutes=duration)
+        price = round(base_price * random.uniform(0.85, 1.25), 2)
+        points = int(price * random.uniform(70, 130))  # ~100 pts/USD
+
+        results.append(
+            FlightResult(
+                id=f"{code}-{uuid4().hex[:8].upper()}",
+                price=price,
+                points_estimate=points,
+                rating=round(random.uniform(3.2, 4.9), 1),
+                location=f"{req.origin} → {req.destination}",
+                booking_url=f"https://book.example.com/flights/{code.lower()}/{req.origin.lower()}/{req.destination.lower()}",
+                source="mock",
+                airline=name,
+                flight_number=f"{code}{random.randint(100, 9999)}",
+                origin=req.origin.upper(),
+                destination=req.destination.upper(),
+                departure_time=dep_dt,
+                arrival_time=arr_dt,
+                duration_minutes=duration,
+                stops=random.choices([0, 1, 2], weights=[55, 35, 10])[0],
+                cabin_class=req.cabin_class,
+            )
+        )
+
+    results.sort(key=lambda r: r.price or 0)
+    return results
+
+
+def _mock_hotels(req: HotelSearchRequest) -> List[HotelResult]:
+    """Generate realistic hotel options for the requested location and dates."""
+    nights = (req.check_out - req.check_in).days or 1
+    hotel_templates = [
+        ("Grand Hyatt {loc}", 5, ["pool", "spa", "gym", "restaurant", "concierge"]),
+        ("Marriott {loc} Downtown", 4, ["gym", "restaurant", "business center", "parking"]),
+        ("Hilton {loc} Garden Inn", 3, ["gym", "free breakfast", "free parking", "wifi"]),
+        ("Airbnb Entire Apt · {loc}", None, ["kitchen", "washer", "wifi", "self check-in"]),
+        ("citizenM {loc}", 4, ["rooftop bar", "gym", "canteen", "24h check-in"]),
+        ("Aloft {loc}", 3, ["pool", "gym", "bar", "bike rentals"]),
+    ]
+    city = req.location.split(",")[0].strip().title()
+
+    results: List[HotelResult] = []
+    for tpl_name, stars, amenities in random.sample(hotel_templates, k=min(5, len(hotel_templates))):
+        name = tpl_name.format(loc=city)
+        nightly = round(random.uniform(80, 550), 2)
+        if req.max_price:
+            nightly = min(nightly, req.max_price)
+        total = round(nightly * nights, 2)
+        points = int(total * random.uniform(80, 120))
+
+        results.append(
+            HotelResult(
+                id=f"htl-{uuid4().hex[:10]}",
+                price=total,
+                points_estimate=points,
+                rating=round(random.uniform(3.0, 5.0), 1),
+                location=req.location,
+                booking_url=f"https://book.example.com/hotels/{name.lower().replace(' ', '-').replace('·', '').replace('  ', '-')}",
+                source="mock",
+                name=name,
+                check_in=req.check_in,
+                check_out=req.check_out,
+                nights=nights,
+                stars=float(stars) if stars else None,
+                amenities=amenities,
+                price_per_night=nightly,
+            )
+        )
+
+    results.sort(key=lambda r: r.price or 0)
+    return results
+
+
+def _mock_attractions(req: AttractionSearchRequest) -> List[AttractionResult]:
+    """Generate attraction options for the requested location."""
+    category_pool = {
+        "museums": [
+            ("National Museum of Art", "Explore world-class permanent and rotating collections.", 120),
+            ("History & Culture Center", "Immersive exhibits on local heritage and traditions.", 90),
+            ("Science & Tech Museum", "Interactive science exhibits for all ages.", 150),
+        ],
+        "outdoor": [
+            ("City Botanical Gardens", "Wander through 50+ acres of curated gardens.", 90),
+            ("Waterfront Trail", "Scenic 5 km walking and cycling path along the bay.", 60),
+            ("Summit Viewpoint Hike", "Moderate 3-hour hike with panoramic city views.", 180),
+        ],
+        "food": [
+            ("Local Food Market Tour", "Guided 2-hour tour of the city's best street food stalls.", 120),
+            ("Farm-to-Table Cooking Class", "Learn regional recipes with a professional chef.", 180),
+            ("Wine & Tapas Evening", "Curated tasting of local wines paired with small plates.", 150),
+        ],
+        "tours": [
+            ("Historic Walking Tour", "2-hour guided walk through the old town district.", 120),
+            ("Hop-On Hop-Off Bus", "Full-day pass covering 20+ top attractions.", 480),
+            ("Sunset Boat Cruise", "90-minute evening cruise with drinks included.", 90),
+        ],
+        "nightlife": [
+            ("Jazz & Cocktail Bar", "Live jazz nightly from 9 PM with craft cocktails.", None),
+            ("Rooftop Lounge", "City views and DJ sets at one of the top rooftop bars.", None),
+        ],
+        "shopping": [
+            ("Old Town Market", "Open-air market with local crafts and souvenirs.", 60),
+            ("Designer District Walk", "Self-guided tour of boutique and high-end shops.", 90),
+        ],
+    }
+
+    chosen_categories = (
+        [req.category] if req.category and req.category in category_pool
+        else list(category_pool.keys())
+    )
+
+    pool: List[tuple] = []
+    for cat in chosen_categories:
+        for name, desc, dur in category_pool[cat]:
+            pool.append((cat, name, desc, dur))
+
+    sample = random.sample(pool, k=min(6, len(pool)))
+    city = req.location.split(",")[0].strip().title()
+    results: List[AttractionResult] = []
+
+    for cat, name, desc, dur in sample:
+        price = round(random.uniform(0, 120), 2)
+        points = int(price * random.uniform(80, 130)) if price > 0 else 0
+
+        results.append(
+            AttractionResult(
+                id=f"att-{uuid4().hex[:10]}",
+                price=price if price > 0 else None,
+                points_estimate=points if points > 0 else None,
+                rating=round(random.uniform(3.5, 5.0), 1),
+                location=req.location,
+                booking_url=f"https://book.example.com/attractions/{name.lower().replace(' ', '-').replace('&', 'and')}",
+                source="mock",
+                name=f"{name} — {city}",
+                category=cat,
+                description=desc,
+                duration_minutes=dur,
+                address=f"{random.randint(1, 999)} {random.choice(['Main St', 'Market Ave', 'Park Blvd', 'Harbor Dr'])}, {city}",
+            )
+        )
+
+    results.sort(key=lambda r: r.rating or 0, reverse=True)
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Service class
+# ---------------------------------------------------------------------------
+
+class SearchService:
+    def __init__(self, db: Client) -> None:
+        self.db = db
+
+    # ------------------------------------------------------------------
+    # Public search methods
+    # ------------------------------------------------------------------
+
+    def search_flights(self, req: FlightSearchRequest) -> List[FlightResult]:
+        query = req.model_dump(mode="json")
+        key = _cache_key("flights", query)
+        cached = self._get_cache(key)
+        if cached:
+            return [FlightResult(**item) for item in cached]
+
+        results = _mock_flights(req)
+        self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
+        return results
+
+    def search_hotels(self, req: HotelSearchRequest) -> List[HotelResult]:
+        query = req.model_dump(mode="json")
+        key = _cache_key("hotels", query)
+        cached = self._get_cache(key)
+        if cached:
+            return [HotelResult(**item) for item in cached]
+
+        results = _mock_hotels(req)
+        self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
+        return results
+
+    def search_attractions(self, req: AttractionSearchRequest) -> List[AttractionResult]:
+        query = req.model_dump(mode="json")
+        key = _cache_key("attractions", query)
+        cached = self._get_cache(key)
+        if cached:
+            return [AttractionResult(**item) for item in cached]
+
+        results = _mock_attractions(req)
+        self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
+        return results
+
+    # ------------------------------------------------------------------
+    # Cache helpers
+    # ------------------------------------------------------------------
+
+    def _get_cache(self, key: str) -> Optional[List[Dict[str, Any]]]:
+        """Return cached payload if it exists and has not expired."""
+        now = _now_utc().isoformat()
+        result = (
+            self.db.table(CACHE_TABLE)
+            .select("payload, expires_at")
+            .eq("cache_key", key)
+            .limit(1)
+            .execute()
+        )
+        if not result.data:
+            return None
+        row = result.data[0]
+        expires_at = row.get("expires_at")
+        if expires_at and expires_at < now:
+            return None
+        payload = row["payload"]
+        return payload.get("results")
+
+    def _set_cache(
+        self,
+        key: str,
+        source: str,
+        query: Dict[str, Any],
+        results: List[Dict[str, Any]],
+    ) -> None:
+        """Upsert a cache entry; overwrites any existing row with the same key."""
+        expires_at = (_now_utc() + timedelta(hours=CACHE_TTL_HOURS)).isoformat()
+        record = {
+            "cache_key": key,
+            "source": source,
+            "query": query,
+            "payload": {"results": results},
+            "expires_at": expires_at,
+        }
+        # Upsert: insert or update on conflict of cache_key
+        self.db.table(CACHE_TABLE).upsert(record, on_conflict="cache_key").execute()
