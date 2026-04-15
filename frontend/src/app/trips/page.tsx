@@ -112,15 +112,27 @@ export default async function TripsPage() {
 
                       {/* Budget */}
                       {trip.budgetCash && (
-                        <div className="pt-2 mt-auto border-t border-slate-100 flex items-center justify-between">
+                        <div className="pt-2 mt-auto border-t border-slate-100 flex items-center justify-between gap-2">
                           <span className="text-xs text-slate-400">Budget</span>
-                          <span className="text-sm font-semibold text-slate-800">
-                            {new Intl.NumberFormat("en-US", {
-                              style: "currency",
-                              currency: trip.budgetCurrency,
-                              maximumFractionDigits: 0,
-                            }).format(Number(trip.budgetCash))}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {trip.travelers > 1 && (
+                              <span className="badge badge-value text-[10px] px-1.5 py-0.5">
+                                {new Intl.NumberFormat("en-US", {
+                                  style: "currency",
+                                  currency: trip.budgetCurrency,
+                                  maximumFractionDigits: 0,
+                                }).format(Number(trip.budgetCash) / trip.travelers)}
+                                /pp
+                              </span>
+                            )}
+                            <span className="text-sm font-semibold text-slate-800">
+                              {new Intl.NumberFormat("en-US", {
+                                style: "currency",
+                                currency: trip.budgetCurrency,
+                                maximumFractionDigits: 0,
+                              }).format(Number(trip.budgetCash))}
+                            </span>
+                          </div>
                         </div>
                       )}
                     </Link>

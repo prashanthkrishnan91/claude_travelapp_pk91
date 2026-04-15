@@ -189,6 +189,34 @@
   .badge-active   { background-color: var(--color-amber-100); color: var(--color-amber-600); }
   .badge-archived { background-color: var(--color-slate-100); color: var(--color-slate-500); }
 
+  /* ── Skeleton loading ────────────────────────────────────────── */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-slate-100) 25%,
+      var(--color-slate-200) 50%,
+      var(--color-slate-100) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  }
+
+  @keyframes skeleton-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* ── Glass surface ───────────────────────────────────────────── */
+  .glass {
+    background-color: rgba(255, 255, 255, 0.85) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* ── Value badge ─────────────────────────────────────────────── */
+  .badge-value   { background-color: var(--color-emerald-100); color: var(--color-emerald-600); }
+  .badge-savings { background-color: var(--color-violet-100);  color: var(--color-violet-600); }
+
   /* ── Sidebar nav items ──────────────────────────────────────── */
   .nav-item {
     display: flex;
