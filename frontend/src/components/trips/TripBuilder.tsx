@@ -562,26 +562,39 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
 
       {/* ── Compare bar ──────────────────────────────────────────────────────── */}
       {compareSet.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 bg-slate-900 text-white rounded-2xl shadow-2xl">
-          <Scale className="w-4 h-4 text-violet-400" />
-          <span className="text-sm font-medium">
-            {compareSet.size} item{compareSet.size !== 1 ? "s" : ""} selected
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 bg-slate-900 text-white rounded-2xl shadow-2xl ring-1 ring-white/10">
+          <Scale className="w-4 h-4 text-violet-400 flex-shrink-0" />
+          {/* Dot indicators for each selected item */}
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.min(compareSet.size, 10) }).map((_, i) => (
+              <div
+                key={i}
+                className="w-2 h-2 rounded-full bg-violet-400"
+              />
+            ))}
+          </div>
+          <span className="text-sm font-medium text-slate-200">
+            {compareSet.size} item{compareSet.size !== 1 ? "s" : ""}
+            {compareSet.size < 2 && (
+              <span className="text-slate-400 text-xs ml-1">(need 2+)</span>
+            )}
           </span>
+          <div className="w-px h-4 bg-slate-700" />
           <button
             onClick={handleCompare}
             disabled={compareSet.size < 2 || compareLoading}
-            className="ml-1 px-4 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold transition-colors flex items-center gap-1.5"
+            className="px-4 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold transition-colors flex items-center gap-1.5"
           >
             {compareLoading ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
               <BarChart2 className="w-3.5 h-3.5" />
             )}
-            Compare Now
+            Compare
           </button>
           <button
             onClick={() => { setCompareSet(new Set()); compareDataRef.current.clear(); }}
-            className="text-slate-400 hover:text-white text-xs transition-colors"
+            className="text-slate-500 hover:text-slate-200 text-xs transition-colors"
           >
             Clear
           </button>
