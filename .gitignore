@@ -11,3 +11,5 @@ node_modules/
 *.tsbuildinfo
 # Added by code-review-graph
 .code-review-graph/
+# Claude Flow runtime data
+.claude-flow/
