@@ -70,6 +70,9 @@ class UserCardV2(BaseModel):
     issuer: str
     points_balance: int = Field(..., ge=0)
     point_value_cpp: Optional[float] = Field(None, ge=0, description="User's CPP valuation for this card")
+    earn_rate: Optional[float] = Field(
+        None, ge=0, description="Category earn multiplier (e.g. 3.0 for 3x, 5.0 for 5x)"
+    )
 
 
 class UserPreferencesV2(BaseModel):
@@ -104,7 +107,7 @@ class ValueEngineV2Request(BaseModel):
 
 
 class ValueEngineV2Result(BaseModel):
-    """V2 scoring result with adjusted CPP, value score, tags, and recommendation reason."""
+    """V2 scoring result with adjusted CPP, value score, tags, recommendation reason, and decision."""
 
     cpp: Optional[float] = Field(None, description="Base cents-per-point before any bonus")
     adjusted_cpp: Optional[float] = Field(
@@ -112,7 +115,16 @@ class ValueEngineV2Result(BaseModel):
     )
     value_score: int = Field(..., ge=0, le=100, description="Composite value score 0–100")
     tags: List[str] = Field(default_factory=list, description="Applicable quality labels")
-    recommendation_reason: str = Field(..., description="Human-readable explanation of the score")
+    recommendation_reason: str = Field(..., description="Structured explanation of the score")
+    decision: str = Field(
+        ..., description="Payment recommendation: 'Use Points', 'Pay Cash', or 'Either'"
+    )
+    effective_cash_cost: Optional[float] = Field(
+        None, description="Cash price after accounting for rewards earned (USD)"
+    )
+    opportunity_cost: Optional[float] = Field(
+        None, description="Value of points if not redeemed (points × cpp_baseline, in USD)"
+    )
 
 
 # ---------------------------------------------------------------------------
