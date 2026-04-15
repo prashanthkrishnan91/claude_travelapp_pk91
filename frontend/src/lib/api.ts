@@ -12,6 +12,7 @@ import type {
   ItineraryItem,
   ItemType,
   TravelCard,
+  DealItem,
   ResearchResult,
   ResearchCategory,
   TripBuilderFormData,
@@ -349,6 +350,17 @@ export async function compareItems(items: CompareItemInput[]): Promise<CompareRe
     body: JSON.stringify(payload),
   });
   return response.results;
+}
+
+// ─── Deals Feed ───────────────────────────────────────────────────────────────
+
+export async function fetchDealsFeed(): Promise<DealItem[]> {
+  try {
+    const response = await apiFetch<{ deals: DealItem[] }>("/deals/feed");
+    return response.deals;
+  } catch {
+    return [];
+  }
 }
 
 // ─── Travel Cards ─────────────────────────────────────────────────────────────
