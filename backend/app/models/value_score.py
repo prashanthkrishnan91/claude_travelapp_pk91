@@ -114,10 +114,18 @@ class ValueEngineV2Result(BaseModel):
         None, description="CPP after applying best available transfer bonus"
     )
     value_score: int = Field(..., ge=0, le=100, description="Composite value score 0–100")
-    tags: List[str] = Field(default_factory=list, description="Applicable quality labels")
-    recommendation_reason: str = Field(..., description="Structured explanation of the score")
     decision: str = Field(
         ..., description="Payment recommendation: 'Use Points', 'Pay Cash', or 'Either'"
+    )
+    confidence: int = Field(
+        ..., ge=0, le=100,
+        description="Confidence in the recommendation (0–100): high ≥70, medium 40–69, low <40",
+    )
+    tags: List[str] = Field(default_factory=list, description="Applicable quality labels")
+    recommendation_reason: str = Field(..., description="Structured explanation of the score")
+    tradeoffs: List[str] = Field(
+        default_factory=list,
+        description="'Why not' tradeoffs — layover penalties, poor CPP, high opportunity cost, etc.",
     )
     effective_cash_cost: Optional[float] = Field(
         None, description="Cash price after accounting for rewards earned (USD)"
