@@ -24,6 +24,15 @@ export interface Trip {
   updatedAt: string;
 }
 
+// ─── Booking ──────────────────────────────────────────────────────────────────
+
+export interface BookingOption {
+  /** Provider identifier, e.g. "booking_com", "chase_portal", "viator" */
+  provider: string;
+  /** Deep-link URL to complete the booking */
+  url: string;
+}
+
 // ─── Itinerary ────────────────────────────────────────────────────────────────
 
 export type ItemType = "flight" | "hotel" | "activity" | "transit" | "meal" | "note";
@@ -44,6 +53,10 @@ export interface ItineraryItem {
   pointsCardKey?: string;
   bestOption?: "cash" | "points";
   position: number;
+  details?: {
+    bookingOptions?: BookingOption[];
+    [key: string]: unknown;
+  };
 }
 
 export interface ItineraryDay {
@@ -91,6 +104,8 @@ export interface ResearchResult {
   priceDisplay?: string;
   rating?: number;
   tags?: string[];
+  bookingUrl?: string;
+  bookingOptions?: BookingOption[];
 }
 
 // ─── Compare ──────────────────────────────────────────────────────────────────

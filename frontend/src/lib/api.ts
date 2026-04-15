@@ -17,6 +17,7 @@ import type {
   TripBuilderFormData,
   CompareItemInput,
   CompareResult,
+  BookingOption,
 } from "@/types";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -197,9 +198,16 @@ export async function createItem(
     description?: string;
     location?: string;
     position: number;
+    bookingOptions?: BookingOption[];
   }
 ): Promise<ItineraryItem> {
-  const payload = toSnake({ ...data, tripId, dayId });
+  const { bookingOptions, ...rest } = data;
+  const payload = toSnake({
+    ...rest,
+    tripId,
+    dayId,
+    ...(bookingOptions?.length ? { details: { bookingOptions } } : {}),
+  });
   return apiFetch<ItineraryItem>(
     `/itinerary/${tripId}/days/${dayId}/items`,
     {
@@ -207,6 +215,14 @@ export async function createItem(
       body: JSON.stringify(payload),
     }
   );
+}
+
+export async function fetchBookingLinks(itemId: string): Promise<BookingOption[]> {
+  try {
+    return await apiFetch<BookingOption[]>(`/itinerary/items/${itemId}/booking-links`);
+  } catch {
+    return [];
+  }
 }
 
 export async function updateItem(
@@ -236,6 +252,8 @@ interface RawAttractionResult {
   rating?: number;
   location: string;
   address: string;
+  bookingUrl?: string;
+  bookingOptions?: BookingOption[];
 }
 
 interface RawHotelResult {
@@ -246,6 +264,8 @@ interface RawHotelResult {
   location: string;
   amenities: string[];
   stars?: number;
+  bookingUrl?: string;
+  bookingOptions?: BookingOption[];
 }
 
 function mapAttractionToResult(a: RawAttractionResult): ResearchResult {
@@ -261,6 +281,8 @@ function mapAttractionToResult(a: RawAttractionResult): ResearchResult {
     priceDisplay: a.price ? `$${a.price}/person` : undefined,
     rating: a.rating,
     tags: [a.category].filter(Boolean),
+    bookingUrl: a.bookingUrl,
+    bookingOptions: a.bookingOptions,
   };
 }
 
@@ -274,6 +296,8 @@ function mapHotelToResult(h: RawHotelResult): ResearchResult {
     priceDisplay: h.pricePerNight ? `$${h.pricePerNight}/night` : undefined,
     rating: h.rating,
     tags: (h.amenities ?? []).slice(0, 3),
+    bookingUrl: h.bookingUrl,
+    bookingOptions: h.bookingOptions,
   };
 }
 

@@ -14,6 +14,7 @@ import {
   Plus,
   Clock,
   Scale,
+  ExternalLink,
 } from "lucide-react";
 import { ResearchResult, ResearchCategory } from "@/types";
 
@@ -124,6 +125,18 @@ export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }
                 >
                   <Scale className="w-3 h-3" />
                 </button>
+              )}
+              {result.bookingUrl && (
+                <a
+                  href={result.bookingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-6 h-6 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-600 flex items-center justify-center transition-colors"
+                  aria-label={`Book ${result.title}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               )}
               <button
                 onClick={() => onAdd(result)}

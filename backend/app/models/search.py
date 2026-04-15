@@ -10,6 +10,17 @@ from .base import ORMBase
 
 
 # ------------------------------------------------------------------
+# Booking option — one provider link attached to a result or item
+# ------------------------------------------------------------------
+
+class BookingOption(BaseModel):
+    """A single bookable link with provider label and deep-link URL."""
+
+    provider: str = Field(..., description="Provider identifier, e.g. booking_com, chase_portal")
+    url: str = Field(..., description="Deep-link URL to complete the booking")
+
+
+# ------------------------------------------------------------------
 # Normalized result — every search type maps into this shape
 # ------------------------------------------------------------------
 
@@ -21,8 +32,9 @@ class SearchResult(BaseModel):
     points_estimate: Optional[int] = Field(None, description="Estimated points cost")
     rating: Optional[float] = Field(None, ge=0, le=5, description="Rating on a 0–5 scale")
     location: str = Field(..., description="Human-readable location string")
-    booking_url: str = Field(..., description="Deep-link URL to complete the booking")
+    booking_url: str = Field(..., description="Primary deep-link URL (first booking option)")
     source: str = Field(..., description="Data provider: mock | amadeus | google_flights | booking_com | viator")
+    booking_options: List[BookingOption] = Field(default_factory=list, description="All available booking options with provider labels")
 
 
 # ------------------------------------------------------------------

@@ -22,6 +22,7 @@ from supabase import Client
 from app.models.search import (
     AttractionResult,
     AttractionSearchRequest,
+    BookingOption,
     FlightResult,
     FlightSearchRequest,
     HotelResult,
@@ -77,6 +78,14 @@ def _mock_flights(req: FlightSearchRequest) -> List[FlightResult]:
         price = round(base_price * random.uniform(0.85, 1.25), 2)
         points = int(price * random.uniform(70, 130))  # ~100 pts/USD
 
+        direct_url = f"https://book.example.com/flights/{code.lower()}/{req.origin.lower()}/{req.destination.lower()}"
+        flight_options = [
+            BookingOption(provider="airline_direct", url=direct_url),
+            BookingOption(provider="google_flights", url=f"https://book.example.com/flights/google/{req.origin.lower()}-{req.destination.lower()}"),
+            BookingOption(provider="kayak", url=f"https://book.example.com/flights/kayak/{req.origin.lower()}-{req.destination.lower()}"),
+            BookingOption(provider="chase_portal", url=f"https://book.example.com/flights/chase/{req.origin.lower()}-{req.destination.lower()}"),
+            BookingOption(provider="amex_travel", url=f"https://book.example.com/flights/amex/{req.origin.lower()}-{req.destination.lower()}"),
+        ]
         results.append(
             FlightResult(
                 id=f"{code}-{uuid4().hex[:8].upper()}",
@@ -84,8 +93,9 @@ def _mock_flights(req: FlightSearchRequest) -> List[FlightResult]:
                 points_estimate=points,
                 rating=round(random.uniform(3.2, 4.9), 1),
                 location=f"{req.origin} → {req.destination}",
-                booking_url=f"https://book.example.com/flights/{code.lower()}/{req.origin.lower()}/{req.destination.lower()}",
+                booking_url=direct_url,
                 source="mock",
+                booking_options=flight_options,
                 airline=name,
                 flight_number=f"{code}{random.randint(100, 9999)}",
                 origin=req.origin.upper(),
@@ -124,6 +134,16 @@ def _mock_hotels(req: HotelSearchRequest) -> List[HotelResult]:
         total = round(nightly * nights, 2)
         points = int(total * random.uniform(80, 120))
 
+        name_slug = name.lower().replace(" ", "-").replace("·", "").replace("  ", "-")
+        loc_slug = req.location.lower().replace(" ", "-").replace(",", "")
+        direct_url = f"https://book.example.com/hotels/{name_slug}"
+        hotel_options = [
+            BookingOption(provider="booking_com", url=f"https://book.example.com/hotels/booking/{name_slug}"),
+            BookingOption(provider="expedia", url=f"https://book.example.com/hotels/expedia/{name_slug}"),
+            BookingOption(provider="hotels_com", url=f"https://book.example.com/hotels/hotels-com/{name_slug}"),
+            BookingOption(provider="chase_portal", url=f"https://book.example.com/hotels/chase/{loc_slug}"),
+            BookingOption(provider="amex_travel", url=f"https://book.example.com/hotels/amex/{loc_slug}"),
+        ]
         results.append(
             HotelResult(
                 id=f"htl-{uuid4().hex[:10]}",
@@ -131,8 +151,9 @@ def _mock_hotels(req: HotelSearchRequest) -> List[HotelResult]:
                 points_estimate=points,
                 rating=round(random.uniform(3.0, 5.0), 1),
                 location=req.location,
-                booking_url=f"https://book.example.com/hotels/{name.lower().replace(' ', '-').replace('·', '').replace('  ', '-')}",
+                booking_url=direct_url,
                 source="mock",
+                booking_options=hotel_options,
                 name=name,
                 check_in=req.check_in,
                 check_out=req.check_out,
@@ -198,6 +219,14 @@ def _mock_attractions(req: AttractionSearchRequest) -> List[AttractionResult]:
         price = round(random.uniform(0, 120), 2)
         points = int(price * random.uniform(80, 130)) if price > 0 else 0
 
+        name_slug = name.lower().replace(" ", "-").replace("&", "and")
+        loc_slug = req.location.lower().replace(" ", "-").replace(",", "")
+        direct_url = f"https://book.example.com/attractions/{name_slug}"
+        attraction_options = [
+            BookingOption(provider="viator", url=f"https://book.example.com/attractions/viator/{name_slug}"),
+            BookingOption(provider="getyourguide", url=f"https://book.example.com/attractions/gyg/{name_slug}"),
+            BookingOption(provider="klook", url=f"https://book.example.com/attractions/klook/{loc_slug}"),
+        ]
         results.append(
             AttractionResult(
                 id=f"att-{uuid4().hex[:10]}",
@@ -205,8 +234,9 @@ def _mock_attractions(req: AttractionSearchRequest) -> List[AttractionResult]:
                 points_estimate=points if points > 0 else None,
                 rating=round(random.uniform(3.5, 5.0), 1),
                 location=req.location,
-                booking_url=f"https://book.example.com/attractions/{name.lower().replace(' ', '-').replace('&', 'and')}",
+                booking_url=direct_url,
                 source="mock",
+                booking_options=attraction_options,
                 name=f"{name} — {city}",
                 category=cat,
                 description=desc,

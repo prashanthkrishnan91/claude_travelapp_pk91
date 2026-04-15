@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
@@ -15,8 +16,10 @@ import {
   DollarSign,
   Coins,
   Scale,
+  Ticket,
 } from "lucide-react";
 import { ItineraryItem, ItemType } from "@/types";
+import { BookingChecklistModal } from "./BookingChecklistModal";
 
 interface ItineraryItemCardProps {
   item: ItineraryItem;
@@ -68,6 +71,8 @@ const typeConfig: Record<
 };
 
 export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing }: ItineraryItemCardProps) {
+  const [bookingOpen, setBookingOpen] = useState(false);
+
   const {
     attributes,
     listeners,
@@ -88,6 +93,7 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
   const config = typeConfig[item.itemType];
 
   return (
+    <>
     <div
       ref={setNodeRef}
       style={style}
@@ -135,6 +141,13 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
               </button>
             )}
             <button
+              onClick={() => setBookingOpen(true)}
+              className="flex-shrink-0 w-5 h-5 rounded-full opacity-0 group-hover:opacity-100 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 flex items-center justify-center transition-all"
+              aria-label={`Book ${item.title}`}
+            >
+              <Ticket className="w-3 h-3" />
+            </button>
+            <button
               onClick={() => onRemove(item.id)}
               className="flex-shrink-0 w-5 h-5 rounded-full opacity-0 group-hover:opacity-100 bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-500 flex items-center justify-center transition-all"
               aria-label={`Remove ${item.title}`}
@@ -180,5 +193,10 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
         </div>
       </div>
     </div>
+
+      {bookingOpen && (
+        <BookingChecklistModal item={item} onClose={() => setBookingOpen(false)} />
+      )}
+    </>
   );
 }
