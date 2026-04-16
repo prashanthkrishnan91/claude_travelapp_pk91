@@ -172,6 +172,28 @@ export async function createTrip(formData: TripBuilderFormData): Promise<Trip> {
   });
 }
 
+export async function createTripWithSearch(data: {
+  originCity: string;
+  originAirports: string[];
+  destinationCity: string;
+  destinationAirports: string[];
+  startDate: string;
+  endDate: string;
+}): Promise<Trip> {
+  const payload = {
+    origin_city: data.originCity,
+    origin_airports: data.originAirports,
+    destination_city: data.destinationCity,
+    destination_airports: data.destinationAirports,
+    start_date: data.startDate,
+    end_date: data.endDate,
+  };
+  return apiFetch<Trip>("/trips/create-with-search", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function updateTrip(
   id: string,
   patch: Partial<Trip>
