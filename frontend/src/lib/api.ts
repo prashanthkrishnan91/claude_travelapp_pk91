@@ -31,8 +31,24 @@ console.log("API URL:", process.env.NEXT_PUBLIC_API_URL);
 
 async function getAuthHeader(): Promise<Record<string, string>> {
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return {};
-  return { Authorization: `Bearer ${session.access_token}` };
+
+  console.log("[auth] session:", session);
+
+  if (!session) {
+    throw new Error("[auth] No active session — request blocked. User must be signed in.");
+  }
+
+  const token = session.access_token;
+  if (!token) {
+    console.error("[auth] Session exists but access_token is null/undefined — request blocked.");
+    throw new Error("[auth] Missing access_token in session.");
+  }
+
+  console.log("[auth] access_token:", token.slice(0, 20) + "…");
+
+  const header = { Authorization: `Bearer ${token}` };
+  console.log("[auth] Authorization header attached:", header.Authorization.slice(0, 30) + "…");
+  return header;
 }
 
 // ─── Case transformers ────────────────────────────────────────────────────────
@@ -81,13 +97,17 @@ async function apiFetch<T>(
 
   const authHeader = await getAuthHeader();
 
+  const finalHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...authHeader,
+    ...(options.headers as Record<string, string>),
+  };
+
+  console.log("[apiFetch] final request headers:", finalHeaders);
+
   const res = await fetch(url, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeader,
-      ...(options.headers as Record<string, string>),
-    },
+    headers: finalHeaders,
     // Don't cache on the server so data is always fresh
     cache: "no-store",
   });
