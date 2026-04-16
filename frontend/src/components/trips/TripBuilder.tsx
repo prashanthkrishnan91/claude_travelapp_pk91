@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -31,14 +31,22 @@ import {
   Scale,
   Loader2,
   BarChart2,
+  ChevronDown,
+  ChevronUp,
+  CheckCircle2,
+  Clock,
+  X,
 } from "lucide-react";
-import type { ItineraryDay, ItineraryItem, ResearchResult, ResearchCategory, ItemType, CompareResult } from "@/types";
+import type { ItineraryDay, ItineraryItem, ResearchResult, ResearchCategory, ItemType, CompareResult, FlightSearchResult } from "@/types";
 import {
   createDay,
   deleteItem,
   createItem,
   updateItem,
   compareItems,
+  searchFlights,
+  addFlightToTrip,
+  fetchTripItems,
 } from "@/lib/api";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
@@ -67,16 +75,29 @@ interface TripBuilderProps {
   tripId: string;
   initialDays: ItineraryDay[];
   initialResults: ResearchResult[];
+  tripOrigin?: string;
+  tripDestination?: string;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilderProps) {
+export function TripBuilder({ tripId, initialDays, initialResults, tripOrigin = "", tripDestination = "" }: TripBuilderProps) {
   const [days,          setDays]         = useState<ItineraryDay[]>(initialDays);
   const [results]                        = useState<ResearchResult[]>(initialResults);
   const [activeFilter,  setActiveFilter] = useState<ResearchCategory | "all">("all");
   const [searchQuery,   setSearchQuery]  = useState("");
   const [activeId,      setActiveId]     = useState<UniqueIdentifier | null>(null);
+
+  // ── Flight search state ─────────────────────────────────────────────────────
+  const [flightPanelOpen,   setFlightPanelOpen]   = useState(false);
+  const [flightOrigin,      setFlightOrigin]      = useState(tripOrigin);
+  const [flightDest,        setFlightDest]        = useState(tripDestination);
+  const [flightDate,        setFlightDate]        = useState("");
+  const [flightResults,     setFlightResults]     = useState<FlightSearchResult[]>([]);
+  const [flightLoading,     setFlightLoading]     = useState(false);
+  const [savedFlights,      setSavedFlights]      = useState<ItineraryItem[]>([]);
+  const [addingFlight,      setAddingFlight]      = useState<string | null>(null);
+  const [toast,             setToast]             = useState<string | null>(null);
 
   // ── Compare state ───────────────────────────────────────────────────────────
   const [compareSet,     setCompareSet]     = useState<Set<string>>(new Set());
@@ -89,6 +110,45 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
+
+  // Fetch saved flights on mount
+  useEffect(() => {
+    fetchTripItems(tripId).then((items) =>
+      setSavedFlights(items.filter((i) => i.itemType === "flight"))
+    );
+  }, [tripId]);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const handleFlightSearch = useCallback(async () => {
+    if (!flightOrigin || !flightDest || !flightDate) return;
+    setFlightLoading(true);
+    setFlightResults([]);
+    try {
+      const results = await searchFlights(flightOrigin, flightDest, flightDate);
+      setFlightResults(results);
+    } catch {
+      // silently ignore
+    } finally {
+      setFlightLoading(false);
+    }
+  }, [flightOrigin, flightDest, flightDate]);
+
+  const handleAddFlightToTrip = useCallback(async (flight: FlightSearchResult) => {
+    setAddingFlight(flight.id);
+    try {
+      const saved = await addFlightToTrip(tripId, flight);
+      setSavedFlights((prev) => [...prev, saved]);
+      showToast("Flight added to trip");
+    } catch {
+      showToast("Failed to add flight — please try again");
+    } finally {
+      setAddingFlight(null);
+    }
+  }, [tripId, showToast]);
 
   // ── Filtered results ────────────────────────────────────────────────────────
 
@@ -453,6 +513,97 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
       <div className="flex gap-4 h-[calc(100vh-220px)] min-h-[500px]">
         {/* ── Left Panel: Research Results ──────────────────────────────────── */}
         <div className="w-80 flex-shrink-0 flex flex-col gap-3 overflow-hidden">
+
+          {/* Flight Search Panel */}
+          <div className="card p-3 flex flex-col gap-2">
+            <button
+              onClick={() => setFlightPanelOpen((v) => !v)}
+              className="flex items-center justify-between w-full text-sm font-semibold text-slate-700"
+            >
+              <span className="flex items-center gap-1.5">
+                <Plane className="w-3.5 h-3.5 text-sky-500" />
+                Search Flights
+              </span>
+              {flightPanelOpen ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+            </button>
+
+            {flightPanelOpen && (
+              <div className="flex flex-col gap-2 pt-1">
+                <input
+                  type="text"
+                  placeholder="Origin (e.g. JFK)"
+                  value={flightOrigin}
+                  onChange={(e) => setFlightOrigin(e.target.value.toUpperCase())}
+                  className="input py-1.5 text-xs"
+                  maxLength={3}
+                />
+                <input
+                  type="text"
+                  placeholder="Destination (e.g. LAX)"
+                  value={flightDest}
+                  onChange={(e) => setFlightDest(e.target.value.toUpperCase())}
+                  className="input py-1.5 text-xs"
+                  maxLength={3}
+                />
+                <input
+                  type="date"
+                  value={flightDate}
+                  onChange={(e) => setFlightDate(e.target.value)}
+                  className="input py-1.5 text-xs"
+                />
+                <button
+                  onClick={handleFlightSearch}
+                  disabled={!flightOrigin || !flightDest || !flightDate || flightLoading}
+                  className="btn-primary py-1.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {flightLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                  {flightLoading ? "Searching…" : "Search Flights"}
+                </button>
+
+                {flightResults.length > 0 && (
+                  <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pt-1">
+                    {flightResults.map((flight) => (
+                      <div key={flight.id} className="border border-slate-200 rounded-lg p-2.5 bg-white flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-slate-700">{flight.airline}</span>
+                          <span className="text-xs text-slate-400">{flight.flightNumber}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-slate-500">
+                          <span className="font-medium">{flight.origin}</span>
+                          <span>→</span>
+                          <span className="font-medium">{flight.destination}</span>
+                          <span className="ml-auto">{flight.stops === 0 ? "Nonstop" : `${flight.stops} stop`}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-slate-400">
+                          <Clock className="w-3 h-3" />
+                          <span>{new Date(flight.departureTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                          <span>·</span>
+                          <span>{Math.floor(flight.durationMinutes / 60)}h {flight.durationMinutes % 60}m</span>
+                        </div>
+                        <div className="flex items-center justify-between pt-0.5">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-semibold text-slate-800">${flight.price}</span>
+                            {flight.pointsCost > 0 && (
+                              <span className="text-xs text-violet-600">{flight.pointsCost.toLocaleString()} pts</span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleAddFlightToTrip(flight)}
+                            disabled={addingFlight === flight.id}
+                            className="px-2.5 py-1 rounded-md bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                          >
+                            {addingFlight === flight.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plane className="w-3 h-3" />}
+                            Add to Trip
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="card p-3 flex flex-col gap-2">
             <h2 className="text-sm font-semibold text-slate-700">Research Results</h2>
 
@@ -556,6 +707,50 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
                 </p>
               </div>
             )}
+
+            {/* Saved Flights Section */}
+            {savedFlights.length > 0 && (
+              <div className="card p-3 flex flex-col gap-2">
+                <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Plane className="w-3.5 h-3.5 text-sky-500" />
+                  Saved Flights
+                  <span className="ml-1 text-xs font-normal text-slate-400">({savedFlights.length})</span>
+                </h3>
+                <div className="flex flex-col gap-2">
+                  {savedFlights.map((flight) => {
+                    const d = (flight.details ?? {}) as Record<string, unknown>;
+                    const origin      = (d.origin      as string) ?? "";
+                    const destination = (d.destination as string) ?? "";
+                    const depTime     = (d.departureTime as string) ?? flight.startTime ?? "";
+                    const airline     = (d.airline     as string) ?? "";
+                    const flightNum   = (d.flightNumber as string) ?? "";
+                    const stops       = (d.stops       as number) ?? 0;
+                    return (
+                      <div key={flight.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-sky-50 px-3 py-2">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-semibold text-slate-700">
+                            {airline} {flightNum}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {origin} → {destination}
+                            {depTime && (
+                              <span className="ml-1.5 text-slate-400">
+                                {new Date(depTime).toLocaleDateString([], { month: "short", day: "numeric" })}
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-xs text-slate-400">
+                            {stops === 0 ? "Nonstop" : `${stops} stop`}
+                            {flight.cashPrice && <span className="ml-2 font-medium text-slate-600">${flight.cashPrice}</span>}
+                          </span>
+                        </div>
+                        <CheckCircle2 className="w-4 h-4 text-sky-500 flex-shrink-0" />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -628,6 +823,17 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
         results={compareResults}
         onClose={() => setCompareOpen(false)}
       />
+    )}
+
+    {/* ── Toast notification ───────────────────────────────────────────────── */}
+    {toast && (
+      <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 bg-slate-900 text-white rounded-xl shadow-2xl ring-1 ring-white/10 text-sm font-medium animate-in fade-in slide-in-from-bottom-2">
+        <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+        {toast}
+        <button onClick={() => setToast(null)} className="ml-1 text-slate-400 hover:text-slate-200">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
     )}
     </>
   );

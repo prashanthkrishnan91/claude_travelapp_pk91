@@ -11,6 +11,7 @@ from app.models import (
     ItineraryDayUpdate,
     ItineraryItem,
     ItineraryItemCreate,
+    ItineraryItemDirectCreate,
     ItineraryItemUpdate,
 )
 from app.services import ItineraryService
@@ -83,6 +84,16 @@ def create_item(
 ) -> ItineraryItem:
     """Add an item (flight, hotel, activity…) to an itinerary day."""
     return ItineraryService(db).create_item(payload)
+
+
+@router.post(
+    "/items",
+    response_model=ItineraryItem,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_trip_item(payload: ItineraryItemDirectCreate, db: DB) -> ItineraryItem:
+    """Add a trip-level item (e.g. a saved flight) without requiring a specific day."""
+    return ItineraryService(db).create_trip_item(payload)
 
 
 @router.get("/items/{item_id}", response_model=ItineraryItem)
