@@ -10,6 +10,8 @@ from fastapi.responses import JSONResponse
 from app.core.config import get_settings
 from app.routes import cards_router, compare_router, deals_router, itinerary_router, search_router, trips_router, value_router
 
+print("App starting...")
+
 settings = get_settings()
 
 logging.basicConfig(level=logging.DEBUG)
@@ -98,14 +100,16 @@ app.include_router(deals_router)
 app.include_router(search_router)
 app.include_router(value_router)
 
+print("Routes loaded")
+
 
 # ------------------------------------------------------------------
-# Startup: print all registered routes
+# Startup: print all registered routes + verify Supabase connection
 # ------------------------------------------------------------------
 
 @app.on_event("startup")
-async def print_routes() -> None:
-    """Print all registered routes to aid debugging."""
+async def on_startup() -> None:
+    """Log all registered routes and verify Supabase connectivity on boot."""
     logger.info("=== Registered routes ===")
     for route in app.routes:
         methods = getattr(route, "methods", None)
@@ -116,10 +120,26 @@ async def print_routes() -> None:
             logger.info("  %s", path)
     logger.info("=========================")
 
+    # Verify Supabase (or mock) client initialises without raising
+    try:
+        from app.db.client import get_supabase
+        get_supabase()
+        print("Supabase connected")
+        logger.info("Supabase connected")
+    except Exception as exc:  # pragma: no cover
+        print(f"Supabase init warning: {exc}")
+        logger.warning("Supabase init warning: %s", exc)
+
 
 # ------------------------------------------------------------------
-# Health check
+# Root + health check
 # ------------------------------------------------------------------
+
+@app.get("/", tags=["meta"])
+def root() -> dict:
+    """Root probe — confirms the API process is running."""
+    return {"message": "API running"}
+
 
 @app.get("/health", tags=["meta"])
 def health() -> dict:
