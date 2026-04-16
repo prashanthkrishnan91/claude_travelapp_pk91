@@ -19,6 +19,7 @@ import type {
   CompareItemInput,
   CompareResult,
   BookingOption,
+  FlightSearchResult,
 } from "@/types";
 import { supabase } from "./supabase";
 
@@ -276,6 +277,26 @@ export async function updateItem(
 
 export async function deleteItem(itemId: string): Promise<void> {
   await apiFetch<void>(`/itinerary/items/${itemId}`, { method: "DELETE" });
+}
+
+// ─── Flight Search ────────────────────────────────────────────────────────────
+
+export async function searchFlights(
+  origin: string,
+  destination: string,
+  departureDate: string
+): Promise<FlightSearchResult[]> {
+  const payload = toSnake({
+    origin: origin.toUpperCase(),
+    destination: destination.toUpperCase(),
+    departureDate,
+    passengers: 1,
+    cabinClass: "economy",
+  });
+  return apiFetch<FlightSearchResult[]>("/search/flights", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 // ─── Search / Research ────────────────────────────────────────────────────────
