@@ -56,6 +56,12 @@ async function proxy(
 
     clearTimeout(timer);
 
+    // 204 No Content must not have a body — return immediately to avoid
+    // "Response constructor: Invalid response status code 204" from NextResponse.
+    if (upstream.status === 204) {
+      return new NextResponse(null, { status: 204 });
+    }
+
     const data = await upstream.text();
 
     // Ensure the response body is valid JSON when Content-Type is application/json
