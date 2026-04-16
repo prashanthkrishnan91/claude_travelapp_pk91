@@ -1,4 +1,7 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, Pencil, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -9,41 +12,75 @@ import {
   searchHotels,
   searchAttractions,
 } from "@/lib/api";
+import type { Trip, ItineraryDay, ResearchResult } from "@/types";
 
-export const metadata: Metadata = { title: "Trip Builder" };
+export default function TripDetailPage() {
+  const params = useParams();
+  const id = params.id as string;
 
-export default async function TripDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
+  const [trip, setTrip] = useState<Trip | null>(null);
+  const [itineraryDays, setItineraryDays] = useState<ItineraryDay[]>([]);
+  const [initialResults, setInitialResults] = useState<ResearchResult[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Fetch trip and itinerary in parallel
-  const [trip, itineraryDays] = await Promise.all([
-    fetchTrip(id),
-    fetchItinerary(id),
-  ]);
+  useEffect(() => {
+    if (!id) return;
 
-  // Fetch research results (hotels + attractions) if we have a destination
-  const destination = trip?.destination ?? "";
-  const checkIn  = trip?.startDate  ?? new Date().toISOString().slice(0, 10);
-  const checkOut = trip?.endDate    ?? new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
-  const guests   = trip?.travelers  ?? 1;
+    async function load() {
+      console.log(`[TripDetailPage] Fetching trip ${id} via GET /trips/${id}…`);
+      const [tripData, days] = await Promise.all([
+        fetchTrip(id),
+        fetchItinerary(id),
+      ]);
+      console.log(`[TripDetailPage] GET /trips/${id} response:`, tripData);
+      console.log(`[TripDetailPage] Itinerary days:`, days);
 
-  const [hotels, attractions] = destination
-    ? await Promise.all([
-        searchHotels(destination, checkIn, checkOut, guests),
-        searchAttractions(destination, checkIn),
-      ])
-    : [[], []];
+      setTrip(tripData);
+      setItineraryDays(days);
 
-  const initialResults = [...hotels, ...attractions];
+      const destination = tripData?.destination ?? "";
+      if (destination) {
+        const checkIn  = tripData?.startDate  ?? new Date().toISOString().slice(0, 10);
+        const checkOut = tripData?.endDate    ?? new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+        const guests   = tripData?.travelers  ?? 1;
 
-  const pageTitle  = trip?.title       ?? "Trip Builder";
+        const [hotels, attractions] = await Promise.all([
+          searchHotels(destination, checkIn, checkOut, guests),
+          searchAttractions(destination, checkIn),
+        ]);
+        setInitialResults([...hotels, ...attractions]);
+      }
+
+      setLoading(false);
+    }
+
+    load();
+  }, [id]);
+
+  const pageTitle    = trip?.title       ?? "Trip Builder";
   const pageSubtitle = trip?.destination
     ? `${trip.destination}${trip.startDate ? ` · ${trip.startDate}` : ""}`
     : `Trip ID: ${id}`;
+
+  if (loading) {
+    return (
+      <>
+        <div className="mb-6">
+          <Link
+            href="/trips"
+            className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            My Trips
+          </Link>
+        </div>
+        <PageHeader title="Loading…" description={`Trip ID: ${id}`} />
+        <div className="card p-8 text-center text-slate-400 text-sm">
+          Loading trip details…
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

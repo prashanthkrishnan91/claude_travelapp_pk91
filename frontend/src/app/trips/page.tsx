@@ -1,4 +1,6 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   PlusCircle,
@@ -12,8 +14,6 @@ import { TripStatusBadge } from "@/components/ui/TripStatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { fetchTrips } from "@/lib/api";
 import type { Trip, TripStatus } from "@/types";
-
-export const metadata: Metadata = { title: "My Trips" };
 
 function formatDateRange(start?: string, end?: string) {
   if (!start) return "Dates TBD";
@@ -31,8 +31,20 @@ const STATUS_GROUPS: { label: string; statuses: TripStatus[] }[] = [
   { label: "Past",   statuses: ["completed", "archived"] },
 ];
 
-export default async function TripsPage() {
-  const trips = await fetchTrips();
+export default function TripsPage() {
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      console.log("[TripsPage] Fetching trips via GET /trips…");
+      const result = await fetchTrips();
+      console.log("[TripsPage] GET /trips response:", result);
+      setTrips(result);
+      setLoading(false);
+    }
+    load();
+  }, []);
 
   const groupedTrips = STATUS_GROUPS.map(({ label, statuses }) => ({
     label,
@@ -40,6 +52,26 @@ export default async function TripsPage() {
   }));
 
   const hasAny = trips.length > 0;
+
+  if (loading) {
+    return (
+      <>
+        <PageHeader
+          title="My Trips"
+          description="Loading…"
+          action={
+            <Link href="/trips/new" className="btn-primary">
+              <PlusCircle className="w-4 h-4" />
+              New Trip
+            </Link>
+          }
+        />
+        <div className="card p-8 text-center text-slate-400 text-sm">
+          Loading your trips…
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
