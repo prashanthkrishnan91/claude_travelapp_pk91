@@ -1,63 +1,48 @@
 """FastAPI dependency providers used across all routes."""
 
+import logging
 from typing import Annotated
 from uuid import UUID
 
-import jwt
 from fastapi import Depends, Header, HTTPException, status
 from supabase import Client
 
-from app.core.config import get_settings
+from app.core.auth import verify_token
 from app.db.client import get_supabase
+
+logger = logging.getLogger(__name__)
 
 
 def get_current_user_id(authorization: Annotated[str, Header()] = "") -> UUID:
-    """Validate Supabase JWT from Authorization header and extract user ID.
+    """Validate Supabase JWT (ES256/JWKS) and return the caller's user ID.
 
     Expects:
         Authorization: Bearer <supabase_access_token>
     """
     if not authorization.startswith("Bearer "):
+        logger.warning("Auth failed: missing or malformed Authorization header")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing or invalid Authorization header",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
     token = authorization[7:]
-    settings = get_settings()
+    # verify_token raises HTTPException on any failure and logs the outcome.
+    payload = verify_token(token)
 
-    if not settings.supabase_jwt_secret:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Server auth not configured: missing SUPABASE_JWT_SECRET",
-        )
-
-    try:
-        payload = jwt.decode(
-            token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
-            options={"verify_aud": False},
-        )
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token missing user ID",
-            )
-        return UUID(user_id)
-    except jwt.ExpiredSignatureError:
+    user_id_str = payload.get("sub")
+    if not user_id_str:
+        logger.warning("Auth failed: token payload missing 'sub' claim")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired",
+            detail="Token missing user ID",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except jwt.InvalidTokenError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token: {exc}",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+
+    user_id = UUID(user_id_str)
+    logger.info("Request authenticated — user_id=%s", user_id)
+    return user_id
 
 
 # Convenient type aliases for route signatures
