@@ -1,18 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* Proxy API calls to FastAPI backend during development */
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination:
-          process.env.NEXT_PUBLIC_API_URL
-            ? `${process.env.NEXT_PUBLIC_API_URL}/:path*`
-            : "http://localhost:8000/:path*",
-      },
-    ];
-  },
+  // API calls go through the catch-all Route Handler at
+  // src/app/api/[...path]/route.ts which proxies to the FastAPI backend.
+  // No rewrites needed — the Route Handler is the proxy.
 };
 
 export default nextConfig;
