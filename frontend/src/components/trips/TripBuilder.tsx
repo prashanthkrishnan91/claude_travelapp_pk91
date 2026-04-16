@@ -90,8 +90,8 @@ export function TripBuilder({ tripId, initialDays, initialResults, tripOrigin = 
 
   // ── Flight search state ─────────────────────────────────────────────────────
   const [flightPanelOpen,   setFlightPanelOpen]   = useState(false);
-  const [flightOrigin,      setFlightOrigin]      = useState(tripOrigin);
-  const [flightDest,        setFlightDest]        = useState(tripDestination);
+  const [flightOrigin,      setFlightOrigin]      = useState("");
+  const [flightDest,        setFlightDest]        = useState("");
   const [flightDate,        setFlightDate]        = useState("");
   const [flightResults,     setFlightResults]     = useState<FlightSearchResult[]>([]);
   const [flightLoading,     setFlightLoading]     = useState(false);

@@ -1,5 +1,6 @@
 """Search endpoints — /search/flights, /search/hotels, /search/attractions."""
 
+import logging
 from typing import List
 
 from fastapi import APIRouter
@@ -15,6 +16,8 @@ from app.models.search import (
 )
 from app.services.search import SearchService
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/search", tags=["search"])
 
 
@@ -26,6 +29,14 @@ def search_flights(payload: FlightSearchRequest, db: DB) -> List[FlightResult]:
     (price, points_estimate, rating, location, booking_url, source) plus
     flight-specific fields. Results are cached in Supabase for 1 hour.
     """
+    logger.info(
+        "[search_flights] received request: origin=%s destination=%s departure_date=%s passengers=%d cabin_class=%s",
+        payload.origin,
+        payload.destination,
+        payload.departure_date,
+        payload.passengers,
+        payload.cabin_class,
+    )
     return SearchService(db).search_flights(payload)
 
 
