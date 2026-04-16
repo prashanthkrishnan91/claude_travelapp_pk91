@@ -1,6 +1,7 @@
 """Travel Concierge — FastAPI application entry point."""
 
 import logging
+import time
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -54,7 +55,7 @@ else:
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log every incoming request: method, path, and body."""
+    """Log every incoming request: method, path, body, and elapsed time."""
     body = b""
     try:
         body = await request.body()
@@ -62,15 +63,15 @@ async def log_requests(request: Request, call_next):
         pass
 
     body_text = body.decode("utf-8", errors="replace") if body else ""
-    logger.debug(
-        "[REQUEST] %s %s  body=%s",
-        request.method,
-        request.url.path,
-        body_text or "<empty>",
-    )
+    print(f"[REQ] {request.method} {request.url.path}  body={body_text or '<empty>'}")
+    logger.debug("[REQUEST] %s %s  body=%s", request.method, request.url.path, body_text or "<empty>")
 
+    start = time.time()
     response = await call_next(request)
-    logger.debug("[RESPONSE] %s %s → %s", request.method, request.url.path, response.status_code)
+    elapsed = round((time.time() - start) * 1000)
+
+    print(f"[RES] {request.method} {request.url.path} → {response.status_code} ({elapsed}ms)")
+    logger.debug("[RESPONSE] %s %s → %s (%dms)", request.method, request.url.path, response.status_code, elapsed)
     return response
 
 
