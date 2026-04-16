@@ -60,6 +60,9 @@ class FlightResult(SearchResult):
     duration_minutes: int
     stops: int = 0
     cabin_class: str
+    points_cost: int = Field(0, description="Points required to book via award redemption")
+    cpp: float = Field(0.0, description="Cents per point redemption value")
+    recommendation_tag: str = Field("Better with Cash", description="Value recommendation tag")
 
 
 # ------------------------------------------------------------------

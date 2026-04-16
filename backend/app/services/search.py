@@ -76,7 +76,13 @@ def _mock_flights(req: FlightSearchRequest) -> List[FlightResult]:
         dep_dt = datetime.combine(req.departure_date, __import__("datetime").time(dep_hour, random.choice([0, 15, 30, 45])), tzinfo=timezone.utc)
         arr_dt = dep_dt + timedelta(minutes=duration)
         price = round(base_price * random.uniform(0.85, 1.25), 2)
-        points = int(price * random.uniform(70, 130))  # ~100 pts/USD
+        points_estimate = int(price * random.uniform(70, 130))  # ~100 pts/USD earned
+
+        # Award redemption cost — varies 40–100 pts/USD so cpp spans ~1.0–2.5
+        pts_per_dollar = random.uniform(40, 100)
+        points_cost = int(price * pts_per_dollar)
+        cpp = round((price * 100) / points_cost, 2) if points_cost > 0 else 0.0
+        recommendation_tag = "Good Points Value" if cpp >= 2.0 else "Better with Cash"
 
         direct_url = f"https://book.example.com/flights/{code.lower()}/{req.origin.lower()}/{req.destination.lower()}"
         flight_options = [
@@ -90,7 +96,7 @@ def _mock_flights(req: FlightSearchRequest) -> List[FlightResult]:
             FlightResult(
                 id=f"{code}-{uuid4().hex[:8].upper()}",
                 price=price,
-                points_estimate=points,
+                points_estimate=points_estimate,
                 rating=round(random.uniform(3.2, 4.9), 1),
                 location=f"{req.origin} → {req.destination}",
                 booking_url=direct_url,
@@ -105,6 +111,9 @@ def _mock_flights(req: FlightSearchRequest) -> List[FlightResult]:
                 duration_minutes=duration,
                 stops=random.choices([0, 1, 2], weights=[55, 35, 10])[0],
                 cabin_class=req.cabin_class,
+                points_cost=points_cost,
+                cpp=cpp,
+                recommendation_tag=recommendation_tag,
             )
         )
 

@@ -90,6 +90,29 @@ export interface DashboardStats {
   totalPoints: number;
 }
 
+// ─── Flight Search ────────────────────────────────────────────────────────────
+
+export interface FlightSearchResult {
+  id: string;
+  airline: string;
+  flightNumber: string;
+  origin: string;
+  destination: string;
+  departureTime: string;
+  arrivalTime: string;
+  durationMinutes: number;
+  stops: number;
+  cabinClass: string;
+  price: number;
+  pointsEstimate: number;
+  pointsCost: number;
+  cpp: number;
+  recommendationTag: string;
+  rating?: number;
+  bookingUrl: string;
+  bookingOptions?: BookingOption[];
+}
+
 // ─── Research Results (Trip Builder left panel) ───────────────────────────────
 
 export type ResearchCategory = "flight" | "hotel" | "activity" | "meal" | "transit" | "note";
