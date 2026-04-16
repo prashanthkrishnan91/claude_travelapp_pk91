@@ -36,6 +36,8 @@ import {
   CheckCircle2,
   Clock,
   X,
+  AlertCircle,
+  Zap,
 } from "lucide-react";
 import type { ItineraryDay, ItineraryItem, ResearchResult, ResearchCategory, ItemType, CompareResult, FlightSearchResult } from "@/types";
 import {
@@ -82,7 +84,7 @@ interface TripBuilderProps {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilderProps) {
+export function TripBuilder({ tripId, initialDays, initialResults, tripOrigin = "", tripDestination = "" }: TripBuilderProps) {
   const [days,          setDays]         = useState<ItineraryDay[]>(initialDays);
   const [results]                        = useState<ResearchResult[]>(initialResults);
   const [activeFilter,  setActiveFilter] = useState<ResearchCategory | "all">("all");
@@ -90,7 +92,7 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
   const [activeId,      setActiveId]     = useState<UniqueIdentifier | null>(null);
 
   // ── Flight search state ─────────────────────────────────────────────────────
-  const [flightPanelOpen,   setFlightPanelOpen]   = useState(false);
+  const [flightPanelOpen,   setFlightPanelOpen]   = useState(true);
   const [flightOrigin,      setFlightOrigin]      = useState("");
   const [flightDest,        setFlightDest]        = useState("");
   const [flightDate,        setFlightDate]        = useState("");
@@ -99,6 +101,8 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
   const [savedFlights,      setSavedFlights]      = useState<ItineraryItem[]>([]);
   const [savedHotels,       setSavedHotels]       = useState<ItineraryItem[]>([]);
   const [addingFlight,      setAddingFlight]      = useState<string | null>(null);
+  const [flightError,       setFlightError]       = useState<string | null>(null);
+  const [flightSearched,    setFlightSearched]    = useState(false);
   const [toast,             setToast]             = useState<string | null>(null);
 
   // ── Compare state ───────────────────────────────────────────────────────────
@@ -122,6 +126,12 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
     });
   }, [tripId]);
 
+  // Pre-fill flight inputs from trip props (only valid 3-letter IATA codes)
+  useEffect(() => {
+    if (/^[A-Za-z]{3}$/.test(tripOrigin)) setFlightOrigin(tripOrigin.toUpperCase());
+    if (/^[A-Za-z]{3}$/.test(tripDestination)) setFlightDest(tripDestination.toUpperCase());
+  }, [tripOrigin, tripDestination]);
+
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
@@ -131,11 +141,14 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
     if (!flightOrigin || !flightDest || !flightDate) return;
     setFlightLoading(true);
     setFlightResults([]);
+    setFlightError(null);
+    setFlightSearched(false);
     try {
       const results = await searchFlights(flightOrigin, flightDest, flightDate);
       setFlightResults(results);
-    } catch {
-      // silently ignore
+      setFlightSearched(true);
+    } catch (err) {
+      setFlightError(err instanceof Error ? err.message : "Search failed — please try again");
     } finally {
       setFlightLoading(false);
     }
@@ -578,19 +591,46 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
                   {flightLoading ? "Searching…" : "Search Flights"}
                 </button>
 
+                {/* Error state */}
+                {flightError && (
+                  <div className="flex items-start gap-1.5 p-2.5 rounded-lg bg-rose-50 text-rose-700 text-xs">
+                    <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                    {flightError}
+                  </div>
+                )}
+
+                {/* Empty state after a completed search */}
+                {flightSearched && !flightLoading && !flightError && flightResults.length === 0 && (
+                  <div className="py-4 text-center text-slate-400">
+                    <Plane className="w-5 h-5 mx-auto mb-1 opacity-40" />
+                    <p className="text-xs">No flights found for this route.</p>
+                  </div>
+                )}
+
+                {/* Flight result cards */}
                 {flightResults.length > 0 && (
-                  <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pt-1">
+                  <div className="flex flex-col gap-2 max-h-96 overflow-y-auto pt-1">
                     {flightResults.map((flight) => (
                       <div key={flight.id} className="border border-slate-200 rounded-lg p-2.5 bg-white flex flex-col gap-1.5">
+                        {/* Header: airline + value badge */}
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-slate-700">{flight.airline}</span>
-                          <span className="text-xs text-slate-400">{flight.flightNumber}</span>
+                          <div>
+                            <span className="text-xs font-semibold text-slate-700">{flight.airline}</span>
+                            <span className="ml-1.5 text-xs text-slate-400">{flight.flightNumber}</span>
+                          </div>
+                          {flight.recommendationTag && (
+                            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold ${flight.recommendationTag === "Good Points Value" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                              {flight.recommendationTag === "Good Points Value" && <Zap className="w-2.5 h-2.5" />}
+                              {flight.recommendationTag}
+                            </span>
+                          )}
                         </div>
+                        {/* Route + timing */}
                         <div className="flex items-center gap-1 text-xs text-slate-500">
                           <span className="font-medium">{flight.origin}</span>
                           <span>→</span>
                           <span className="font-medium">{flight.destination}</span>
-                          <span className="ml-auto">{flight.stops === 0 ? "Nonstop" : `${flight.stops} stop`}</span>
+                          <span className="ml-auto">{flight.stops === 0 ? "Nonstop" : `${flight.stops} stop${flight.stops > 1 ? "s" : ""}`}</span>
                         </div>
                         <div className="flex items-center gap-1 text-xs text-slate-400">
                           <Clock className="w-3 h-3" />
@@ -598,11 +638,24 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
                           <span>·</span>
                           <span>{Math.floor(flight.durationMinutes / 60)}h {flight.durationMinutes % 60}m</span>
                         </div>
-                        <div className="flex items-center justify-between pt-0.5">
-                          <div className="flex flex-col">
-                            <span className="text-xs font-semibold text-slate-800">${flight.price}</span>
+                        {/* Pricing row: cash / points / CPP */}
+                        <div className="flex items-center justify-between pt-0.5 border-t border-slate-100">
+                          <div className="flex items-center gap-2.5">
+                            <div>
+                              <p className="text-xs text-slate-400">Cash</p>
+                              <p className="text-xs font-semibold text-slate-800">${flight.price}</p>
+                            </div>
                             {flight.pointsCost > 0 && (
-                              <span className="text-xs text-violet-600">{flight.pointsCost.toLocaleString()} pts</span>
+                              <div>
+                                <p className="text-xs text-slate-400">Points</p>
+                                <p className="text-xs font-semibold text-violet-700">{flight.pointsCost.toLocaleString()} pts</p>
+                              </div>
+                            )}
+                            {flight.cpp > 0 && (
+                              <div>
+                                <p className="text-xs text-slate-400">CPP</p>
+                                <p className={`text-xs font-semibold ${flight.cpp >= 2 ? "text-emerald-600" : "text-slate-700"}`}>{flight.cpp.toFixed(2)}¢</p>
+                              </div>
                             )}
                           </div>
                           <button
