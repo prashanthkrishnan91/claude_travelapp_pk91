@@ -97,6 +97,7 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
   const [flightResults,     setFlightResults]     = useState<FlightSearchResult[]>([]);
   const [flightLoading,     setFlightLoading]     = useState(false);
   const [savedFlights,      setSavedFlights]      = useState<ItineraryItem[]>([]);
+  const [savedHotels,       setSavedHotels]       = useState<ItineraryItem[]>([]);
   const [addingFlight,      setAddingFlight]      = useState<string | null>(null);
   const [toast,             setToast]             = useState<string | null>(null);
 
@@ -112,11 +113,13 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
-  // Fetch saved flights on mount
+  // Fetch saved flights and hotels on mount
   useEffect(() => {
-    fetchTripItems(tripId).then((items) =>
-      setSavedFlights(items.filter((i) => i.itemType === "flight"))
-    );
+    fetchTripItems(tripId).then((items) => {
+      console.log("[TripBuilder] fetched trip items:", items);
+      setSavedFlights(items.filter((i) => i.itemType === "flight"));
+      setSavedHotels(items.filter((i) => i.itemType === "hotel"));
+    });
   }, [tripId]);
 
   const showToast = useCallback((msg: string) => {
@@ -170,6 +173,10 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
       try {
         await addHotelToTrip(tripId, result);
         showToast("Hotel added to trip");
+        // Refetch all trip items to update the saved hotels list
+        const items = await fetchTripItems(tripId);
+        console.log("[TripBuilder] refetched trip items after hotel add:", items);
+        setSavedHotels(items.filter((i) => i.itemType === "hotel"));
       } catch {
         showToast("Failed to add hotel — please try again");
       }
@@ -587,7 +594,7 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
                         </div>
                         <div className="flex items-center gap-1 text-xs text-slate-400">
                           <Clock className="w-3 h-3" />
-                          <span>{new Date(flight.departureTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                          <span>{flight.departureTime ? new Date(flight.departureTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "N/A"}</span>
                           <span>·</span>
                           <span>{Math.floor(flight.durationMinutes / 60)}h {flight.durationMinutes % 60}m</span>
                         </div>
@@ -697,6 +704,11 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
               items={days.map((d) => d.id)}
               strategy={verticalListSortingStrategy}
             >
+              {(() => {
+                const allItems = days.flatMap((d) => d.items);
+                console.log("[TripBuilder] rendering itinerary days:", days.length, "total items:", allItems.length, allItems);
+                return null;
+              })()}
               {days.map((day) => (
                 <ItineraryDayColumn
                   key={day.id}
@@ -716,6 +728,42 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
                 <p className="text-xs mt-1">
                   Click &ldquo;Add Day&rdquo; to start building your itinerary.
                 </p>
+              </div>
+            )}
+
+            {/* Saved Hotels Section */}
+            {savedHotels.length > 0 && (
+              <div className="card p-3 flex flex-col gap-2">
+                <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Hotel className="w-3.5 h-3.5 text-violet-500" />
+                  Saved Hotels
+                  <span className="ml-1 text-xs font-normal text-slate-400">({savedHotels.length})</span>
+                </h3>
+                <div className="flex flex-col gap-2">
+                  {savedHotels.map((hotel) => {
+                    const d = (hotel.details ?? {}) as Record<string, unknown>;
+                    const name     = (d.name     as string) ?? hotel.title;
+                    const location = (d.location as string) ?? hotel.location ?? "";
+                    const price    = (d.pricePerNight as number) ?? hotel.cashPrice ?? null;
+                    const rating   = (d.rating   as number) ?? null;
+                    console.log("[TripBuilder] rendering hotel item:", hotel.id, { name, location, price, rating });
+                    return (
+                      <div key={hotel.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-violet-50 px-3 py-2">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-semibold text-slate-700">{name}</span>
+                          {location && (
+                            <span className="text-xs text-slate-500">{location}</span>
+                          )}
+                          <span className="text-xs text-slate-400">
+                            {rating != null && <span className="mr-2">★ {rating}</span>}
+                            {price != null && <span className="font-medium text-slate-600">${price}/night</span>}
+                          </span>
+                        </div>
+                        <CheckCircle2 className="w-4 h-4 text-violet-500 flex-shrink-0" />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
