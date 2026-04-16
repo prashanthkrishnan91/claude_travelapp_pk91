@@ -3,7 +3,7 @@
  *
  * - All responses are transformed from snake_case → camelCase.
  * - All request bodies are transformed from camelCase → snake_case.
- * - Auth is a placeholder X-User-ID header until Supabase Auth is wired up.
+ * - Auth via Supabase JWT: Authorization: Bearer <access_token>
  */
 
 import type {
@@ -20,6 +20,7 @@ import type {
   CompareResult,
   BookingOption,
 } from "@/types";
+import { supabase } from "./supabase";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -28,8 +29,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
 console.log("API URL:", process.env.NEXT_PUBLIC_API_URL);
 
-/** Placeholder user ID until real auth exists. */
-export const DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000001";
+async function getAuthHeader(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return {};
+  return { Authorization: `Bearer ${session.access_token}` };
+}
 
 // ─── Case transformers ────────────────────────────────────────────────────────
 
@@ -75,11 +79,13 @@ async function apiFetch<T>(
     console.log(`[apiFetch] body:`, options.body);
   }
 
+  const authHeader = await getAuthHeader();
+
   const res = await fetch(url, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      "X-User-ID": DEFAULT_USER_ID,
+      ...authHeader,
       ...(options.headers as Record<string, string>),
     },
     // Don't cache on the server so data is always fresh
@@ -137,7 +143,6 @@ export async function createTrip(formData: TripBuilderFormData): Promise<Trip> {
     budgetCurrency: formData.budgetCurrency,
     notes: formData.notes || null,
     status: "draft",
-    userId: DEFAULT_USER_ID,
   });
 
   return apiFetch<Trip>("/trips", {
@@ -397,7 +402,6 @@ export interface CreateCardData {
 export async function createCard(data: CreateCardData): Promise<TravelCard> {
   const payload = toSnake({
     ...data,
-    userId: DEFAULT_USER_ID,
     currency: "USD",
     pointsBalance: data.pointsBalance ?? 0,
     isPrimary: data.isPrimary ?? false,

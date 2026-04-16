@@ -39,7 +39,7 @@ class TripBase(ORMBase):
 
 
 class TripCreate(TripBase):
-    user_id: UUID
+    user_id: Optional[UUID] = None
 
 
 class TripUpdate(ORMBase):

@@ -17,9 +17,9 @@ def list_trips(db: DB, user_id: CurrentUserID) -> List[Trip]:
 
 
 @router.post("", response_model=Trip, status_code=status.HTTP_201_CREATED)
-def create_trip(payload: TripCreate, db: DB) -> Trip:
-    """Create a new trip."""
-    return TripsService(db).create_trip(payload)
+def create_trip(payload: TripCreate, db: DB, user_id: CurrentUserID) -> Trip:
+    """Create a new trip. user_id is always taken from the JWT."""
+    return TripsService(db).create_trip(payload.model_copy(update={"user_id": user_id}))
 
 
 @router.get("/{trip_id}", response_model=Trip)
