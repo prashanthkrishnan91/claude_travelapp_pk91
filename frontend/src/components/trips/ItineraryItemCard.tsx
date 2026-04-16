@@ -178,7 +178,7 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
               {item.location}
             </span>
           )}
-          {item.cashPrice !== undefined && (
+          {item.cashPrice != null && (
             <span className={`flex items-center gap-0.5 text-xs font-medium ${
               item.bestOption === "cash" ? "text-emerald-700 font-semibold" : "text-emerald-600"
             }`}>
@@ -187,7 +187,7 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
               {item.cashCurrency ?? "USD"}
             </span>
           )}
-          {item.pointsPrice !== undefined && (
+          {item.pointsPrice != null && (
             <span className={`flex items-center gap-0.5 text-xs font-medium ${
               item.bestOption === "points" ? "text-violet-700 font-semibold" : "text-violet-600"
             }`}>
