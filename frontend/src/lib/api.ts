@@ -24,7 +24,9 @@ import type {
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 /** Direct connection to FastAPI backend — no proxy, no rewrites. */
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+
+console.log("API URL:", process.env.NEXT_PUBLIC_API_URL);
 
 /** Placeholder user ID until real auth exists. */
 export const DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000001";

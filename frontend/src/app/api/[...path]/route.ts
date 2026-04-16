@@ -1,5 +1,5 @@
 /**
- * Proxy removed — frontend calls FastAPI backend directly at http://127.0.0.1:8000
+ * Proxy removed — frontend calls FastAPI backend directly via NEXT_PUBLIC_API_URL.
  * This file is intentionally left as a stub so Next.js doesn't error on import.
  */
 import { NextResponse } from "next/server";
