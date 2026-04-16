@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -47,6 +47,7 @@ import {
   updateItem,
   compareItems,
   searchFlights,
+  searchHotels,
   addFlightToTrip,
   addHotelToTrip,
   fetchTripItems,
@@ -106,6 +107,22 @@ export function TripBuilder({ tripId, initialDays, initialResults, tripOrigin = 
   const [flightError,       setFlightError]       = useState<string | null>(null);
   const [flightSearched,    setFlightSearched]    = useState(false);
   const [toast,             setToast]             = useState<string | null>(null);
+
+  // ── Hotel search state ───────────────────────────────────────────────────────
+  const [hotelPanelOpen,    setHotelPanelOpen]    = useState(true);
+  const [hotelDestination,  setHotelDestination]  = useState("");
+  const [hotelCheckIn,      setHotelCheckIn]      = useState("");
+  const [hotelCheckOut,     setHotelCheckOut]     = useState("");
+  const [hotelGuests,       setHotelGuests]       = useState(1);
+  const [hotelResults,      setHotelResults]      = useState<ResearchResult[]>([]);
+  const [hotelLoading,      setHotelLoading]      = useState(false);
+  const [hotelError,        setHotelError]        = useState<string | null>(null);
+  const [hotelSearched,     setHotelSearched]     = useState(false);
+  const [addingHotel,       setAddingHotel]       = useState<string | null>(null);
+
+  // ── Sort state ───────────────────────────────────────────────────────────────
+  const [flightSortKey,     setFlightSortKey]     = useState<"price" | "cpp" | "duration">("price");
+  const [hotelSortKey,      setHotelSortKey]      = useState<"price" | "rating" | "value">("price");
 
   // ── Compare state ───────────────────────────────────────────────────────────
   const [compareSet,     setCompareSet]     = useState<Set<string>>(new Set());
@@ -176,6 +193,62 @@ export function TripBuilder({ tripId, initialDays, initialResults, tripOrigin = 
       setAddingFlight(null);
     }
   }, [tripId, showToast]);
+
+  const handleHotelSearch = useCallback(async () => {
+    if (!hotelDestination || !hotelCheckIn || !hotelCheckOut) return;
+    setHotelLoading(true);
+    setHotelResults([]);
+    setHotelError(null);
+    setHotelSearched(false);
+    try {
+      const results = await searchHotels(hotelDestination, hotelCheckIn, hotelCheckOut, hotelGuests);
+      setHotelResults(results);
+      setHotelSearched(true);
+    } catch (err) {
+      setHotelError(err instanceof Error ? err.message : "Search failed — please try again");
+    } finally {
+      setHotelLoading(false);
+    }
+  }, [hotelDestination, hotelCheckIn, hotelCheckOut, hotelGuests]);
+
+  const handleAddHotelFromSearch = useCallback(async (hotel: ResearchResult) => {
+    setAddingHotel(hotel.id);
+    try {
+      await addHotelToTrip(tripId, hotel);
+      showToast("Hotel added to trip");
+      const items = await fetchTripItems(tripId);
+      setSavedHotels(items.filter((i) => i.itemType === "hotel"));
+    } catch {
+      showToast("Failed to add hotel — please try again");
+    } finally {
+      setAddingHotel(null);
+    }
+  }, [tripId, showToast]);
+
+  // ── Sorted results ───────────────────────────────────────────────────────────
+
+  const sortedFlightResults = useMemo(() => {
+    const arr = [...flightResults];
+    if (flightSortKey === "price")    arr.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
+    if (flightSortKey === "cpp")      arr.sort((a, b) => (b.cpp ?? 0) - (a.cpp ?? 0));
+    if (flightSortKey === "duration") arr.sort((a, b) => (a.durationMinutes ?? 0) - (b.durationMinutes ?? 0));
+    return arr;
+  }, [flightResults, flightSortKey]);
+
+  const sortedHotelResults = useMemo(() => {
+    const arr = [...hotelResults];
+    if (hotelSortKey === "price") {
+      arr.sort((a, b) => ((a.metadata?.pricePerNight as number) ?? 0) - ((b.metadata?.pricePerNight as number) ?? 0));
+    }
+    if (hotelSortKey === "rating") {
+      arr.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+    }
+    if (hotelSortKey === "value") {
+      const score = (r: ResearchResult) => (r.rating ?? 0) * 100 / (((r.metadata?.pricePerNight as number) ?? 0) || 100);
+      arr.sort((a, b) => score(b) - score(a));
+    }
+    return arr;
+  }, [hotelResults, hotelSortKey]);
 
   // ── Filtered results ────────────────────────────────────────────────────────
 
@@ -624,10 +697,26 @@ export function TripBuilder({ tripId, initialDays, initialResults, tripOrigin = 
                   </div>
                 )}
 
-                {/* Flight result cards */}
+                {/* Flight sort controls */}
                 {flightResults.length > 0 && (
-                  <div className="flex flex-col gap-2 max-h-96 overflow-y-auto pt-1">
-                    {flightResults.map((flight) => (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-xs text-slate-400 mr-0.5">Sort:</span>
+                    {(["price", "cpp", "duration"] as const).map((key) => (
+                      <button
+                        key={key}
+                        onClick={() => setFlightSortKey(key)}
+                        className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${flightSortKey === key ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                      >
+                        {key === "price" ? "Lowest Price" : key === "cpp" ? "Best CPP" : "Shortest"}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Flight result cards */}
+                {sortedFlightResults.length > 0 && (
+                  <div className="flex flex-col gap-2 max-h-[480px] overflow-y-auto pt-1">
+                    {sortedFlightResults.map((flight) => (
                       <div key={flight.id} className="border border-slate-200 rounded-lg p-2.5 bg-white flex flex-col gap-1.5">
                         {/* Header: airline + value badge */}
                         <div className="flex items-center justify-between">
@@ -686,6 +775,166 @@ export function TripBuilder({ tripId, initialDays, initialResults, tripOrigin = 
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Hotel Search Panel */}
+          <div className="card p-3 flex flex-col gap-2">
+            <button
+              onClick={() => setHotelPanelOpen((v) => !v)}
+              className="flex items-center justify-between w-full text-sm font-semibold text-slate-700"
+            >
+              <span className="flex items-center gap-1.5">
+                <Hotel className="w-3.5 h-3.5 text-violet-500" />
+                Search Hotels
+              </span>
+              {hotelPanelOpen ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+            </button>
+
+            {hotelPanelOpen && (
+              <div className="flex flex-col gap-2 pt-1">
+                <input
+                  type="text"
+                  placeholder="Destination city…"
+                  value={hotelDestination}
+                  onChange={(e) => setHotelDestination(e.target.value)}
+                  className="input py-1.5 text-xs"
+                />
+                <div className="flex gap-1.5">
+                  <div className="flex-1">
+                    <label className="text-xs text-slate-400 mb-0.5 block">Check-in</label>
+                    <input
+                      type="date"
+                      value={hotelCheckIn}
+                      onChange={(e) => setHotelCheckIn(e.target.value)}
+                      className="input py-1.5 text-xs w-full"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-xs text-slate-400 mb-0.5 block">Check-out</label>
+                    <input
+                      type="date"
+                      value={hotelCheckOut}
+                      onChange={(e) => setHotelCheckOut(e.target.value)}
+                      className="input py-1.5 text-xs w-full"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-slate-500">Guests:</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={hotelGuests}
+                    onChange={(e) => setHotelGuests(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="input py-1.5 text-xs w-20"
+                  />
+                </div>
+                <button
+                  onClick={handleHotelSearch}
+                  disabled={!hotelDestination || !hotelCheckIn || !hotelCheckOut || hotelLoading}
+                  className="btn-primary py-1.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {hotelLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                  {hotelLoading ? "Searching…" : "Search Hotels"}
+                </button>
+
+                {hotelError && (
+                  <div className="flex items-start gap-1.5 p-2.5 rounded-lg bg-rose-50 text-rose-700 text-xs">
+                    <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                    {hotelError}
+                  </div>
+                )}
+
+                {hotelSearched && !hotelLoading && !hotelError && hotelResults.length === 0 && (
+                  <div className="py-4 text-center text-slate-400">
+                    <Hotel className="w-5 h-5 mx-auto mb-1 opacity-40" />
+                    <p className="text-xs">No hotels found for this destination.</p>
+                  </div>
+                )}
+
+                {/* Hotel sort controls */}
+                {hotelResults.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-xs text-slate-400 mr-0.5">Sort:</span>
+                    {(["price", "rating", "value"] as const).map((key) => (
+                      <button
+                        key={key}
+                        onClick={() => setHotelSortKey(key)}
+                        className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${hotelSortKey === key ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                      >
+                        {key === "price" ? "Price" : key === "rating" ? "Rating" : "Value"}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Hotel result cards */}
+                {sortedHotelResults.length > 0 && (
+                  <div className="flex flex-col gap-2 max-h-[480px] overflow-y-auto pt-1">
+                    {sortedHotelResults.map((hotel) => {
+                      const pricePerNight = hotel.metadata?.pricePerNight as number | undefined;
+                      const stars = hotel.metadata?.stars as number | undefined;
+                      const amenities = hotel.metadata?.amenities as string[] | undefined;
+                      const valueScore = (hotel.rating ?? 0) > 0 && pricePerNight
+                        ? ((hotel.rating! * 100) / pricePerNight).toFixed(2)
+                        : null;
+                      return (
+                        <div key={hotel.id} className="border border-slate-200 rounded-lg p-2.5 bg-white flex flex-col gap-1.5">
+                          <div className="flex items-start justify-between gap-1">
+                            <span className="text-xs font-semibold text-slate-700 leading-tight">{hotel.title}</span>
+                            {stars != null && (
+                              <span className="text-xs text-amber-500 flex-shrink-0">{"★".repeat(Math.round(stars))}</span>
+                            )}
+                          </div>
+                          {hotel.location && (
+                            <div className="flex items-center gap-1 text-xs text-slate-500">
+                              <MapPin className="w-3 h-3 flex-shrink-0" />
+                              <span>{hotel.location}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2.5 pt-0.5 border-t border-slate-100">
+                            {pricePerNight != null && (
+                              <div>
+                                <p className="text-xs text-slate-400">Price/night</p>
+                                <p className="text-xs font-semibold text-slate-800">${pricePerNight}</p>
+                              </div>
+                            )}
+                            {hotel.rating != null && (
+                              <div>
+                                <p className="text-xs text-slate-400">Rating</p>
+                                <p className="text-xs font-semibold text-slate-700">★ {hotel.rating}</p>
+                              </div>
+                            )}
+                            {valueScore && (
+                              <div>
+                                <p className="text-xs text-slate-400">Value</p>
+                                <p className="text-xs font-semibold text-emerald-600">{valueScore}</p>
+                              </div>
+                            )}
+                          </div>
+                          {amenities && amenities.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {amenities.slice(0, 3).map((a) => (
+                                <span key={a} className="px-1.5 py-0.5 bg-slate-100 rounded text-xs text-slate-500">{a}</span>
+                              ))}
+                            </div>
+                          )}
+                          <button
+                            onClick={() => handleAddHotelFromSearch(hotel)}
+                            disabled={addingHotel === hotel.id}
+                            className="mt-0.5 px-2.5 py-1 rounded-md bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 self-end"
+                          >
+                            {addingHotel === hotel.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Hotel className="w-3 h-3" />}
+                            Add to Trip
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

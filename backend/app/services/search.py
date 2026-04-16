@@ -70,7 +70,7 @@ def _mock_flights(req: FlightSearchRequest) -> List[FlightResult]:
     base_price = random.uniform(180, 650) * req.passengers * cabin_mul
 
     results: List[FlightResult] = []
-    for i, (code, name) in enumerate(random.sample(airlines, k=min(4, len(airlines)))):
+    for i, (code, name) in enumerate(random.sample(airlines, k=len(airlines))):
         dep_hour = random.randint(5, 21)
         duration = random.randint(90, 480)
         dep_dt = datetime.combine(req.departure_date, __import__("datetime").time(dep_hour, random.choice([0, 15, 30, 45])), tzinfo=timezone.utc)
@@ -135,7 +135,7 @@ def _mock_hotels(req: HotelSearchRequest) -> List[HotelResult]:
     city = req.location.split(",")[0].strip().title()
 
     results: List[HotelResult] = []
-    for tpl_name, stars, amenities in random.sample(hotel_templates, k=min(5, len(hotel_templates))):
+    for tpl_name, stars, amenities in random.sample(hotel_templates, k=len(hotel_templates)):
         name = tpl_name.format(loc=city)
         nightly = round(random.uniform(80, 550), 2)
         if req.max_price:
