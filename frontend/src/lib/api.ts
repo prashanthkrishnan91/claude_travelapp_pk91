@@ -23,7 +23,7 @@ import type {
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 /** Placeholder user ID until real auth exists. */
 export const DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000001";
@@ -67,6 +67,11 @@ async function apiFetch<T>(
 ): Promise<T> {
   const url = `${API_URL}${path}`;
 
+  console.log(`[apiFetch] → ${options.method ?? "GET"} ${url}`);
+  if (options.body) {
+    console.log(`[apiFetch] body:`, options.body);
+  }
+
   const res = await fetch(url, {
     ...options,
     headers: {
@@ -78,12 +83,15 @@ async function apiFetch<T>(
     cache: "no-store",
   });
 
+  console.log(`[apiFetch] ← ${res.status} ${res.statusText} (${url})`);
+
   if (res.status === 204) return null as T;
 
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`;
     try {
       const body = await res.json();
+      console.error(`[apiFetch] error body:`, body);
       detail = body?.detail ?? detail;
     } catch {
       // ignore parse errors
@@ -92,6 +100,7 @@ async function apiFetch<T>(
   }
 
   const json = await res.json();
+  console.log(`[apiFetch] response body:`, json);
   return toCamel<T>(json);
 }
 
@@ -356,7 +365,7 @@ export async function compareItems(items: CompareItemInput[]): Promise<CompareRe
 
 export async function fetchDealsFeed(): Promise<DealItem[]> {
   try {
-    const response = await apiFetch<{ deals: DealItem[] }>("/deals/feed");
+    const response = await apiFetch<{ deals: DealItem[] }>("/deals");
     return response.deals;
   } catch {
     return [];
