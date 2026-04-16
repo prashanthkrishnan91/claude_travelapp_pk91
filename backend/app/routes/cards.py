@@ -20,9 +20,9 @@ def list_cards(db: DB, user_id: CurrentUserID) -> List[TravelCard]:
 
 
 @router.post("", response_model=TravelCard, status_code=status.HTTP_201_CREATED)
-def create_card(payload: TravelCardCreate, db: DB) -> TravelCard:
-    """Register a new travel card for a user."""
-    return CardsService(db).create_card(payload)
+def create_card(payload: TravelCardCreate, db: DB, user_id: CurrentUserID) -> TravelCard:
+    """Register a new travel card for a user. user_id is always taken from the JWT."""
+    return CardsService(db).create_card(payload.model_copy(update={"user_id": user_id}))
 
 
 @router.get("/{card_id}", response_model=TravelCard)

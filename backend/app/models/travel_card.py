@@ -19,7 +19,7 @@ class TravelCardBase(ORMBase):
 
 
 class TravelCardCreate(TravelCardBase):
-    user_id: UUID
+    user_id: Optional[UUID] = None
 
 
 class TravelCardUpdate(ORMBase):
