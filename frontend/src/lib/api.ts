@@ -321,6 +321,41 @@ export async function addFlightToTrip(
   });
 }
 
+export async function addHotelToTrip(
+  tripId: string,
+  hotel: ResearchResult
+): Promise<ItineraryItem> {
+  const meta = (hotel.metadata ?? {}) as Record<string, unknown>;
+  const pricePerNight = typeof meta.pricePerNight === "number" ? meta.pricePerNight : null;
+  const details: Record<string, unknown> = {
+    name: hotel.title,
+    location: hotel.location ?? null,
+    price_per_night: pricePerNight,
+    rating: hotel.rating ?? null,
+    amenities: Array.isArray(meta.amenities) ? meta.amenities : [],
+    stars: typeof meta.stars === "number" ? meta.stars : null,
+    booking_url: hotel.bookingUrl ?? null,
+  };
+  // Remove null entries to keep metadata flat and clean
+  const cleanDetails = Object.fromEntries(
+    Object.entries(details).filter(([, v]) => v !== null)
+  );
+  const payload: Record<string, unknown> = {
+    trip_id: tripId,
+    item_type: "hotel",
+    title: hotel.title,
+  };
+  if (hotel.location) payload.location = hotel.location;
+  if (pricePerNight !== null) payload.cash_price = pricePerNight;
+  if (Object.keys(cleanDetails).length > 0) payload.details = cleanDetails;
+
+  console.log("[addHotelToTrip] payload:", JSON.stringify(payload));
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 // ─── Flight Search ────────────────────────────────────────────────────────────
 
 export async function searchFlights(
@@ -415,6 +450,11 @@ function mapHotelToResult(h: RawHotelResult): ResearchResult {
     tags: (h.amenities ?? []).slice(0, 3),
     bookingUrl: h.bookingUrl,
     bookingOptions: h.bookingOptions,
+    metadata: {
+      pricePerNight: h.pricePerNight,
+      amenities: h.amenities ?? [],
+      stars: h.stars,
+    },
   };
 }
 
