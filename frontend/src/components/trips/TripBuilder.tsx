@@ -46,6 +46,7 @@ import {
   compareItems,
   searchFlights,
   addFlightToTrip,
+  addHotelToTrip,
   fetchTripItems,
 } from "@/lib/api";
 import { SearchResultCard } from "./SearchResultCard";
@@ -165,6 +166,16 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
   // ── Add research result by clicking "+" ──────────────────────────────────────
 
   const handleAddResult = useCallback(async (result: ResearchResult) => {
+    if (result.category === "hotel") {
+      try {
+        await addHotelToTrip(tripId, result);
+        showToast("Hotel added to trip");
+      } catch {
+        showToast("Failed to add hotel — please try again");
+      }
+      return;
+    }
+
     const targetDay = days[0];
     if (!targetDay) return;
 
@@ -185,7 +196,7 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
     } catch {
       // silently ignore — user can retry
     }
-  }, [days, tripId]);
+  }, [days, tripId, showToast]);
 
   // ── Remove item from a day ──────────────────────────────────────────────────
 

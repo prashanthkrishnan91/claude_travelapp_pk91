@@ -129,6 +129,7 @@ export interface ResearchResult {
   tags?: string[];
   bookingUrl?: string;
   bookingOptions?: BookingOption[];
+  metadata?: Record<string, unknown>;
 }
 
 // ─── Compare ──────────────────────────────────────────────────────────────────

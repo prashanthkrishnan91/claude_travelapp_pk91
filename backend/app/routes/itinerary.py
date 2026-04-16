@@ -1,7 +1,10 @@
+import logging
 from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, status
+
+logger = logging.getLogger(__name__)
 
 from app.core.deps import DB
 from app.models import (
@@ -93,6 +96,7 @@ def create_item(
 )
 def create_trip_item(payload: ItineraryItemDirectCreate, db: DB) -> ItineraryItem:
     """Add a trip-level item (e.g. a saved flight) without requiring a specific day."""
+    logger.info("[create_trip_item] body: %s", payload.model_dump(mode="json"))
     return ItineraryService(db).create_trip_item(payload)
 
 
