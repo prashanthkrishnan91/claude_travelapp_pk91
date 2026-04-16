@@ -328,13 +328,29 @@ export async function searchFlights(
   destination: string,
   departureDate: string
 ): Promise<FlightSearchResult[]> {
-  const payload = toSnake({
-    origin: origin.toUpperCase(),
-    destination: destination.toUpperCase(),
-    departureDate,
+  const normalizedOrigin = origin.trim().toUpperCase();
+  const normalizedDestination = destination.trim().toUpperCase();
+
+  if (!/^[A-Z]{3}$/.test(normalizedOrigin)) {
+    throw new Error(`Invalid origin: "${origin}" — must be a 3-letter IATA code (e.g. JFK)`);
+  }
+  if (!/^[A-Z]{3}$/.test(normalizedDestination)) {
+    throw new Error(`Invalid destination: "${destination}" — must be a 3-letter IATA code (e.g. LAX)`);
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(departureDate)) {
+    throw new Error(`Invalid departure_date: "${departureDate}" — must be YYYY-MM-DD`);
+  }
+
+  const payload = {
+    origin: normalizedOrigin,
+    destination: normalizedDestination,
+    departure_date: departureDate,
     passengers: 1,
-    cabinClass: "economy",
-  });
+    cabin_class: "economy",
+  };
+
+  console.log("[searchFlights] payload:", JSON.stringify(payload));
+
   return apiFetch<FlightSearchResult[]>("/search/flights", {
     method: "POST",
     body: JSON.stringify(payload),
