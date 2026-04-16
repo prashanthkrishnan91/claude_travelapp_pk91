@@ -372,3 +372,26 @@ export async function fetchCards(): Promise<TravelCard[]> {
     return [];
   }
 }
+
+export interface CreateCardData {
+  cardKey: string;
+  displayName: string;
+  issuer: string;
+  pointsBalance?: number;
+  pointValueCpp?: number;
+  isPrimary?: boolean;
+}
+
+export async function createCard(data: CreateCardData): Promise<TravelCard> {
+  const payload = toSnake({
+    ...data,
+    userId: DEFAULT_USER_ID,
+    currency: "USD",
+    pointsBalance: data.pointsBalance ?? 0,
+    isPrimary: data.isPrimary ?? false,
+  });
+  return apiFetch<TravelCard>("/cards", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
