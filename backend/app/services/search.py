@@ -271,15 +271,65 @@ class SearchService:
     # ------------------------------------------------------------------
 
     def search_flights(self, req: FlightSearchRequest) -> List[FlightResult]:
-        query = req.model_dump(mode="json")
-        key = _cache_key("flights", query)
-        cached = self._get_cache(key)
-        if cached:
-            return [FlightResult(**item) for item in cached]
+        origins = req.all_origins
+        destinations = req.all_destinations
 
-        results = _mock_flights(req)
-        self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
-        return results
+        if not origins or not destinations:
+            return []
+
+        if len(origins) == 1 and len(destinations) == 1:
+            # Fast path: single airport pair with cache
+            sub_req = FlightSearchRequest(
+                origin=origins[0],
+                destination=destinations[0],
+                departure_date=req.departure_date,
+                return_date=req.return_date,
+                passengers=req.passengers,
+                cabin_class=req.cabin_class,
+            )
+            query = sub_req.model_dump(mode="json")
+            key = _cache_key("flights", query)
+            cached = self._get_cache(key)
+            if cached:
+                return [FlightResult(**item) for item in cached]
+            results = _mock_flights(sub_req)
+            self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
+            return results
+
+        # Multi-airport: cartesian product of all origin × destination pairs
+        all_results: List[FlightResult] = []
+        for origin in origins:
+            for destination in destinations:
+                sub_req = FlightSearchRequest(
+                    origin=origin,
+                    destination=destination,
+                    departure_date=req.departure_date,
+                    return_date=req.return_date,
+                    passengers=req.passengers,
+                    cabin_class=req.cabin_class,
+                )
+                query = sub_req.model_dump(mode="json")
+                key = _cache_key("flights", query)
+                cached = self._get_cache(key)
+                if cached:
+                    all_results.extend([FlightResult(**item) for item in cached])
+                else:
+                    results = _mock_flights(sub_req)
+                    self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
+                    all_results.extend(results)
+
+        # Deduplicate by (airline, rounded price, duration)
+        seen: set = set()
+        deduped: List[FlightResult] = []
+        for r in all_results:
+            dedup_key = (r.airline, round(r.price or 0, 0), r.duration_minutes, r.origin, r.destination)
+            if dedup_key not in seen:
+                seen.add(dedup_key)
+                deduped.append(r)
+
+        # Sort by price asc, then cpp desc
+        deduped.sort(key=lambda r: (r.price or 0, -(r.cpp or 0)))
+        return deduped
 
     def search_hotels(self, req: HotelSearchRequest) -> List[HotelResult]:
         query = req.model_dump(mode="json")
