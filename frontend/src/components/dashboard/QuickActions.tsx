@@ -11,8 +11,8 @@ const actions = [
   },
   {
     label: "Search Flights",
-    description: "Find the best routes and fares",
-    href: "/search",
+    description: "Search flights inside any trip",
+    href: "/trips",
     icon: Search,
     colorClass: "bg-violet-50 text-violet-600",
   },
