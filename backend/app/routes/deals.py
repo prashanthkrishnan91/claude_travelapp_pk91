@@ -92,36 +92,41 @@ def get_deals_feed(db: DB, user_id: CurrentUserID) -> DealsFeedResponse:
     Results are sorted by value_score descending, capped at 20 items.
     """
     # 1. Load user preferences (graceful fallback to defaults)
-    prefs_row = (
-        db.table("user_preferences")
-        .select("*")
-        .eq("user_id", str(user_id))
-        .limit(1)
-        .execute()
-    )
-
-    if prefs_row.data:
-        row = prefs_row.data[0]
-        prefs = UserPreferencesV2(
-            preferred_airlines=row.get("preferred_airlines") or [],
-            preferred_hotels=row.get("preferred_hotels") or [],
-            max_layovers=row.get("max_layovers", 2),
-            seat_class=row.get("seat_class", "economy"),
-            hotel_class=row.get("hotel_class", 3),
-            cpp_baseline=row.get("cpp_baseline", 1.8),
+    try:
+        prefs_row = (
+            db.table("user_preferences")
+            .select("*")
+            .eq("user_id", str(user_id))
+            .limit(1)
+            .execute()
         )
-    else:
+        if prefs_row.data:
+            row = prefs_row.data[0]
+            prefs = UserPreferencesV2(
+                preferred_airlines=row.get("preferred_airlines") or [],
+                preferred_hotels=row.get("preferred_hotels") or [],
+                max_layovers=row.get("max_layovers", 2),
+                seat_class=row.get("seat_class", "economy"),
+                hotel_class=row.get("hotel_class", 3),
+                cpp_baseline=row.get("cpp_baseline", 1.8),
+            )
+        else:
+            prefs = UserPreferencesV2()
+    except Exception:
         prefs = UserPreferencesV2()
 
     # 2. Fetch unexpired research cache entries
-    now_iso = datetime.now(timezone.utc).isoformat()
-    cache_rows = (
-        db.table("research_cache")
-        .select("id, source, payload")
-        .or_(f"expires_at.is.null,expires_at.gt.{now_iso}")
-        .limit(200)
-        .execute()
-    )
+    try:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        cache_rows = (
+            db.table("research_cache")
+            .select("id, source, payload")
+            .or_(f"expires_at.is.null,expires_at.gt.{now_iso}")
+            .limit(200)
+            .execute()
+        )
+    except Exception:
+        return DealsFeedResponse(deals=[])
 
     # 3. Score and filter
     deals: List[DealFeedItem] = []

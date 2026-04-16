@@ -300,22 +300,26 @@ class SearchService:
 
     def _get_cache(self, key: str) -> Optional[List[Dict[str, Any]]]:
         """Return cached payload if it exists and has not expired."""
-        now = _now_utc().isoformat()
-        result = (
-            self.db.table(CACHE_TABLE)
-            .select("payload, expires_at")
-            .eq("cache_key", key)
-            .limit(1)
-            .execute()
-        )
-        if not result.data:
+        try:
+            now = _now_utc().isoformat()
+            result = (
+                self.db.table(CACHE_TABLE)
+                .select("payload, expires_at")
+                .eq("cache_key", key)
+                .limit(1)
+                .execute()
+            )
+            if not result.data:
+                return None
+            row = result.data[0]
+            expires_at = row.get("expires_at")
+            if expires_at and expires_at < now:
+                return None
+            payload = row["payload"]
+            return payload.get("results")
+        except Exception:
+            # Cache miss on any error — regenerate fresh results
             return None
-        row = result.data[0]
-        expires_at = row.get("expires_at")
-        if expires_at and expires_at < now:
-            return None
-        payload = row["payload"]
-        return payload.get("results")
 
     def _set_cache(
         self,
@@ -325,13 +329,17 @@ class SearchService:
         results: List[Dict[str, Any]],
     ) -> None:
         """Upsert a cache entry; overwrites any existing row with the same key."""
-        expires_at = (_now_utc() + timedelta(hours=CACHE_TTL_HOURS)).isoformat()
-        record = {
-            "cache_key": key,
-            "source": source,
-            "query": query,
-            "payload": {"results": results},
-            "expires_at": expires_at,
-        }
-        # Upsert: insert or update on conflict of cache_key
-        self.db.table(CACHE_TABLE).upsert(record, on_conflict="cache_key").execute()
+        try:
+            expires_at = (_now_utc() + timedelta(hours=CACHE_TTL_HOURS)).isoformat()
+            record = {
+                "cache_key": key,
+                "source": source,
+                "query": query,
+                "payload": {"results": results},
+                "expires_at": expires_at,
+            }
+            # Upsert: insert or update on conflict of cache_key
+            self.db.table(CACHE_TABLE).upsert(record, on_conflict="cache_key").execute()
+        except Exception:
+            # Cache write failure is non-fatal — results are already returned
+            pass
