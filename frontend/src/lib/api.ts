@@ -67,6 +67,8 @@ async function apiFetch<T>(
 ): Promise<T> {
   const url = `${API_URL}${path}`;
 
+  console.log(`[API] ${options.method ?? "GET"} ${url}`);
+
   const res = await fetch(url, {
     ...options,
     headers: {
@@ -88,10 +90,12 @@ async function apiFetch<T>(
     } catch {
       // ignore parse errors
     }
+    console.error(`[API] error ${res.status} ${url} — ${detail}`);
     throw new Error(`API error: ${detail}`);
   }
 
   const json = await res.json();
+  console.log(`[API] ${res.status} ${url}`, json);
   return toCamel<T>(json);
 }
 

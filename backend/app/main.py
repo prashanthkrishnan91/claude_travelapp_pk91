@@ -1,6 +1,8 @@
 """Travel Concierge — FastAPI application entry point."""
 
-from fastapi import FastAPI
+import time
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
@@ -42,6 +44,19 @@ else:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+# ------------------------------------------------------------------
+# Request logging middleware
+# ------------------------------------------------------------------
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.time()
+    print(f"[REQ] {request.method} {request.url}")
+    response = await call_next(request)
+    elapsed = round((time.time() - start) * 1000)
+    print(f"[RES] {request.method} {request.url} → {response.status_code} ({elapsed}ms)")
+    return response
 
 # ------------------------------------------------------------------
 # Routers
