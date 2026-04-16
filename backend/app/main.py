@@ -4,6 +4,7 @@ import logging
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
 from app.routes import cards_router, compare_router, deals_router, itinerary_router, search_router, trips_router, value_router
@@ -49,6 +50,31 @@ else:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+    )
+
+
+# ------------------------------------------------------------------
+# Exception handlers — ensure all errors return JSON, not plain text
+# ------------------------------------------------------------------
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Catch-all handler: return a JSON body instead of FastAPI's default plain-text 500."""
+    exc_name = type(exc).__name__
+
+    # Connection / network errors (Supabase unreachable, DNS failure, etc.)
+    if exc_name in ("ConnectError", "ConnectTimeout", "ReadTimeout", "NetworkError",
+                    "RemoteProtocolError", "PoolTimeout"):
+        logger.warning("[503] %s %s — DB/network unreachable: %s", request.method, request.url.path, exc)
+        return JSONResponse(
+            status_code=503,
+            content={"detail": f"Database temporarily unavailable ({exc_name}). Please try again."},
+        )
+
+    logger.exception("[500] Unhandled error in %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {exc_name}"},
     )
 
 

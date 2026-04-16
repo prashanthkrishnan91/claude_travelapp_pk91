@@ -16,6 +16,9 @@ import { type NextRequest, NextResponse } from "next/server";
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
 
+/** Proxy request timeout in milliseconds (30 s). */
+const PROXY_TIMEOUT_MS = 30_000;
+
 const FORWARDED_HEADERS = ["content-type", "x-user-id", "authorization"];
 
 async function proxy(
@@ -38,6 +41,9 @@ async function proxy(
       ? await req.text()
       : undefined;
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
+
   try {
     const upstream = await fetch(target, {
       method: req.method,
@@ -45,19 +51,56 @@ async function proxy(
       body,
       // Always fetch fresh from the backend
       cache: "no-store",
+      signal: controller.signal,
     });
 
+    clearTimeout(timer);
+
     const data = await upstream.text();
-    return new NextResponse(data, {
+
+    // Ensure the response body is valid JSON when Content-Type is application/json
+    // (some FastAPI error responses return plain text with wrong content-type)
+    const contentType = upstream.headers.get("Content-Type") ?? "application/json";
+    let finalData = data;
+    if (contentType.includes("application/json") || contentType.includes("text/plain")) {
+      // Wrap plain-text error bodies in JSON so apiFetch can parse them
+      try {
+        JSON.parse(data); // check if already valid JSON
+      } catch {
+        finalData = JSON.stringify({ detail: data.trim() || `HTTP ${upstream.status}` });
+      }
+    }
+
+    return new NextResponse(finalData, {
       status: upstream.status,
       headers: {
-        "Content-Type":
-          upstream.headers.get("Content-Type") ?? "application/json",
+        "Content-Type": "application/json",
       },
     });
-  } catch {
+  } catch (err: unknown) {
+    clearTimeout(timer);
+
+    const isTimeout =
+      err instanceof Error &&
+      (err.name === "AbortError" || err.message.includes("abort"));
+
+    if (isTimeout) {
+      return NextResponse.json(
+        { detail: "Backend request timed out after 30 seconds" },
+        { status: 504 }
+      );
+    }
+
+    const message =
+      err instanceof Error ? err.message : "Unknown connection error";
+
+    console.error(`[proxy] Failed to reach backend at ${target}: ${message}`);
+
     return NextResponse.json(
-      { detail: "Backend service unreachable" },
+      {
+        detail: "Backend service unreachable",
+        hint: `Could not connect to ${BACKEND_URL}. Ensure BACKEND_URL is set and the backend is running.`,
+      },
       { status: 502 }
     );
   }
