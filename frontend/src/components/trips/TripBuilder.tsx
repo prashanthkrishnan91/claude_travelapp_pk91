@@ -144,7 +144,7 @@ function FlightCandidateCard({
   const stops       = (d.stops        as number) ?? 0;
   const price       = (d.price        as number) ?? item.cashPrice ?? 0;
   const points      = (d.pointsCost   as number) ?? item.pointsPrice ?? 0;
-  const cpp         = (d.cpp          as number) ?? item.cppValue ?? 0;
+  const cpp         = (d.cpp          as number) ?? 0;
   const aiScore     = (d.aiScore      as number) ?? 0;
   const recTag      = (d.recommendationTag as string) ?? "";
 
