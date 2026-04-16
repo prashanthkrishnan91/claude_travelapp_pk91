@@ -23,34 +23,8 @@ import type {
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-/**
- * Resolve the API base URL depending on execution environment.
- *
- * All requests are routed through the Next.js catch-all Route Handler at
- * /api/[...path] which proxies them to the FastAPI backend. This avoids
- * 502s caused by server components trying to reach an external host that
- * isn't configured or reachable on Vercel serverless.
- *
- * - Browser (client components): relative "/api" — works on any domain.
- * - Vercel serverless (server components): absolute "https://<VERCEL_URL>/api".
- * - Local dev server-side: "http://localhost:3000/api".
- */
-function resolveApiUrl(): string {
-  // Client-side: use a relative path — always correct regardless of domain.
-  if (typeof window !== "undefined") return "/api";
-
-  // Server-side on Vercel: VERCEL_URL is injected automatically.
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}/api`;
-
-  // Local dev or custom deployment: honour an explicit override.
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return `${process.env.NEXT_PUBLIC_APP_URL}/api`;
-  }
-
-  return "http://localhost:3000/api";
-}
-
-const API_URL = resolveApiUrl();
+/** Direct connection to FastAPI backend — no proxy, no rewrites. */
+const API_URL = "http://127.0.0.1:8000";
 
 /** Placeholder user ID until real auth exists. */
 export const DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000001";
