@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   PlusCircle,
@@ -8,11 +9,14 @@ import {
   Calendar,
   Users,
   Map,
+  Pencil,
+  Trash2,
+  X,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TripStatusBadge } from "@/components/ui/TripStatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { fetchTrips } from "@/lib/api";
+import { fetchTrips, updateTrip, deleteTrip } from "@/lib/api";
 import type { Trip, TripStatus } from "@/types";
 
 function formatDateRange(start?: string, end?: string) {
@@ -31,9 +35,21 @@ const STATUS_GROUPS: { label: string; statuses: TripStatus[] }[] = [
   { label: "Past",   statuses: ["completed", "archived"] },
 ];
 
+interface EditForm {
+  title: string;
+  startDate: string;
+  endDate: string;
+}
+
 export default function TripsPage() {
+  const router = useRouter();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const [editForm, setEditForm] = useState<EditForm>({ title: "", startDate: "", endDate: "" });
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -45,6 +61,44 @@ export default function TripsPage() {
     }
     load();
   }, []);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  function openEdit(trip: Trip) {
+    setEditingTrip(trip);
+    setEditForm({
+      title: trip.title,
+      startDate: trip.startDate ?? "",
+      endDate: trip.endDate ?? "",
+    });
+  }
+
+  async function handleUpdate() {
+    if (!editingTrip) return;
+    setSaving(true);
+    try {
+      const updated = await updateTrip(editingTrip.id, {
+        title: editForm.title || undefined,
+        startDate: editForm.startDate || undefined,
+        endDate: editForm.endDate || undefined,
+      });
+      setTrips((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      setEditingTrip(null);
+      showToast("Trip updated");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(tripId: string) {
+    await deleteTrip(tripId);
+    setTrips((prev) => prev.filter((t) => t.id !== tripId));
+    setConfirmDeleteId(null);
+    showToast("Trip deleted");
+  }
 
   const groupedTrips = STATUS_GROUPS.map(({ label, statuses }) => ({
     label,
@@ -75,6 +129,93 @@ export default function TripsPage() {
 
   return (
     <>
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-50 bg-slate-800 text-white text-sm px-4 py-2 rounded-lg shadow-lg animate-fade-in">
+          {toast}
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingTrip && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-slate-900">Edit Trip</h2>
+              <button
+                onClick={() => setEditingTrip(null)}
+                className="p-1 rounded hover:bg-slate-100 text-slate-400"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Trip Name</label>
+                <input
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  value={editForm.startDate}
+                  onChange={(e) => setEditForm((f) => ({ ...f, startDate: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">End Date</label>
+                <input
+                  type="date"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  value={editForm.endDate}
+                  onChange={(e) => setEditForm((f) => ({ ...f, endDate: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setEditingTrip(null)} className="btn-ghost">
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdate}
+                disabled={saving || !editForm.title.trim()}
+                className="btn-primary"
+              >
+                {saving ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
+            <h2 className="text-base font-semibold text-slate-900 mb-2">Delete Trip</h2>
+            <p className="text-sm text-slate-500 mb-6">
+              This will permanently delete the trip and all its itinerary items. This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmDeleteId(null)} className="btn-ghost">
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(confirmDeleteId)}
+                className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+              >
+                Delete Trip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <PageHeader
         title="My Trips"
         description={`${trips.length} trip${trips.length !== 1 ? "s" : ""} in total`}
@@ -110,17 +251,33 @@ export default function TripsPage() {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {groupTrips.map((trip: Trip) => (
-                    <Link
+                    <div
                       key={trip.id}
-                      href={`/trips/${trip.id}`}
-                      className="card card-lift p-5 flex flex-col gap-3 group"
+                      className="card card-lift p-5 flex flex-col gap-3 group cursor-pointer"
+                      onClick={() => router.push(`/trips/${trip.id}`)}
                     >
                       {/* Header */}
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="text-sm font-semibold text-slate-900 group-hover:text-sky-700 transition leading-snug">
                           {trip.title}
                         </h3>
-                        <TripStatusBadge status={trip.status} />
+                        <div className="flex items-center gap-1">
+                          <TripStatusBadge status={trip.status} />
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openEdit(trip); }}
+                            className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
+                            title="Edit trip"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(trip.id); }}
+                            className="p-1 rounded hover:bg-red-50 text-slate-400 hover:text-red-500 transition"
+                            title="Delete trip"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
 
                       {/* Destination */}
@@ -167,7 +324,7 @@ export default function TripsPage() {
                           </div>
                         </div>
                       )}
-                    </Link>
+                    </div>
                   ))}
                 </div>
               </section>

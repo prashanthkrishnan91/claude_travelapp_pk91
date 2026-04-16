@@ -183,6 +183,10 @@ export async function updateTrip(
   });
 }
 
+export async function deleteTrip(id: string): Promise<void> {
+  await apiFetch<void>(`/trips/${id}`, { method: "DELETE" });
+}
+
 // ─── Itinerary ────────────────────────────────────────────────────────────────
 
 /** Fetch all days for a trip, each with their items. */
