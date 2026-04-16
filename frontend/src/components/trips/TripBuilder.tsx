@@ -81,7 +81,7 @@ interface TripBuilderProps {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TripBuilder({ tripId, initialDays, initialResults, tripOrigin = "", tripDestination = "" }: TripBuilderProps) {
+export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilderProps) {
   const [days,          setDays]         = useState<ItineraryDay[]>(initialDays);
   const [results]                        = useState<ResearchResult[]>(initialResults);
   const [activeFilter,  setActiveFilter] = useState<ResearchCategory | "all">("all");
