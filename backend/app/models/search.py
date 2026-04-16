@@ -79,6 +79,7 @@ class FlightResult(SearchResult):
     points_cost: int = Field(0, description="Points required to book via award redemption")
     cpp: float = Field(0.0, description="Cents per point redemption value")
     recommendation_tag: str = Field("Better with Cash", description="Value recommendation tag")
+    ai_score: Optional[float] = Field(None, description="AI-computed value score 0–100")
 
 
 # ------------------------------------------------------------------
@@ -101,6 +102,8 @@ class HotelResult(SearchResult):
     stars: Optional[float] = Field(None, ge=1, le=5)
     amenities: List[str] = Field(default_factory=list)
     price_per_night: float
+    ai_score: Optional[float] = Field(None, description="AI-computed value score 0–100")
+    recommendation_tag: str = Field("Consider", description="Value recommendation tag")
 
 
 # ------------------------------------------------------------------
