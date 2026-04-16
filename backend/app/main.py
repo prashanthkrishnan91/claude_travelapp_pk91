@@ -29,29 +29,14 @@ app = FastAPI(
 # Middleware
 # ------------------------------------------------------------------
 
-# CORS — wide-open for local development.
-# When CORS_ALLOW_ALL=false, restrict to specific origins + Vercel regex.
-if settings.cors_allow_all:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,  # must be False when allow_origins=["*"]
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-else:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins
-        or [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-        ],
-        allow_origin_regex=r"https://[a-zA-Z0-9\-]+\.vercel\.app",
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# CORS — allow all origins so the frontend at http://127.0.0.1:3000 can call directly.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,  # must be False when allow_origins=["*"]
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ------------------------------------------------------------------
