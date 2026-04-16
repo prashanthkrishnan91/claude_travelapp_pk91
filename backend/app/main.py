@@ -1,12 +1,17 @@
 """Travel Concierge — FastAPI application entry point."""
 
-from fastapi import FastAPI
+import logging
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.routes import cards_router, compare_router, deals_router, itinerary_router, search_router, trips_router, value_router
 
 settings = get_settings()
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger("travel_concierge")
 
 app = FastAPI(
     title=settings.app_name,
@@ -22,26 +27,52 @@ app = FastAPI(
 # Middleware
 # ------------------------------------------------------------------
 
-# CORS — allow_credentials cannot be True when allow_origins=["*"]
-# allow_origin_regex covers all Vercel preview & production deployments
-# without needing to enumerate individual URLs in env vars.
+# CORS — wide-open for local development.
+# When CORS_ALLOW_ALL=false, restrict to specific origins + Vercel regex.
 if settings.cors_allow_all:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_credentials=False,
+        allow_credentials=False,  # must be False when allow_origins=["*"]
         allow_methods=["*"],
         allow_headers=["*"],
     )
 else:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=settings.cors_origins
+        or [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ],
         allow_origin_regex=r"https://[a-zA-Z0-9\-]+\.vercel\.app",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log every incoming request: method, path, and body."""
+    body = b""
+    try:
+        body = await request.body()
+    except Exception:
+        pass
+
+    body_text = body.decode("utf-8", errors="replace") if body else ""
+    logger.debug(
+        "[REQUEST] %s %s  body=%s",
+        request.method,
+        request.url.path,
+        body_text or "<empty>",
+    )
+
+    response = await call_next(request)
+    logger.debug("[RESPONSE] %s %s → %s", request.method, request.url.path, response.status_code)
+    return response
+
 
 # ------------------------------------------------------------------
 # Routers
@@ -54,6 +85,25 @@ app.include_router(compare_router)
 app.include_router(deals_router)
 app.include_router(search_router)
 app.include_router(value_router)
+
+
+# ------------------------------------------------------------------
+# Startup: print all registered routes
+# ------------------------------------------------------------------
+
+@app.on_event("startup")
+async def print_routes() -> None:
+    """Print all registered routes to aid debugging."""
+    logger.info("=== Registered routes ===")
+    for route in app.routes:
+        methods = getattr(route, "methods", None)
+        path = getattr(route, "path", str(route))
+        if methods:
+            logger.info("  %-30s %s", path, sorted(methods))
+        else:
+            logger.info("  %s", path)
+    logger.info("=========================")
+
 
 # ------------------------------------------------------------------
 # Health check
