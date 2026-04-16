@@ -404,7 +404,9 @@ export function TripBuilderForm() {
     setSaveError(null);
     try {
       const { createTrip } = await import("@/lib/api");
+      console.log("[TripBuilderForm] Submitting POST /trips with data:", data);
       const trip = await createTrip(data);
+      console.log("[TripBuilderForm] POST /trips response:", trip);
       router.push(`/trips/${trip.id}`);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Failed to save trip. Please try again.");

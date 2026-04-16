@@ -23,18 +23,18 @@ def create_trip(payload: TripCreate, db: DB, user_id: CurrentUserID) -> Trip:
 
 
 @router.get("/{trip_id}", response_model=Trip)
-def get_trip(trip_id: UUID, db: DB) -> Trip:
-    """Fetch a single trip by ID."""
-    return TripsService(db).get_trip(trip_id)
+def get_trip(trip_id: UUID, db: DB, user_id: CurrentUserID) -> Trip:
+    """Fetch a single trip by ID — must belong to the authenticated user."""
+    return TripsService(db).get_trip(trip_id, user_id)
 
 
 @router.patch("/{trip_id}", response_model=Trip)
-def update_trip(trip_id: UUID, payload: TripUpdate, db: DB) -> Trip:
-    """Partially update a trip."""
-    return TripsService(db).update_trip(trip_id, payload)
+def update_trip(trip_id: UUID, payload: TripUpdate, db: DB, user_id: CurrentUserID) -> Trip:
+    """Partially update a trip — must belong to the authenticated user."""
+    return TripsService(db).update_trip(trip_id, payload, user_id)
 
 
 @router.delete("/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_trip(trip_id: UUID, db: DB) -> None:
+def delete_trip(trip_id: UUID, db: DB, user_id: CurrentUserID) -> None:
     """Delete a trip and all its itinerary data (cascades via DB)."""
-    TripsService(db).delete_trip(trip_id)
+    TripsService(db).delete_trip(trip_id, user_id)
