@@ -51,6 +51,8 @@ import {
   addHotelToTrip,
   fetchTripItems,
 } from "@/lib/api";
+import { CityAutocomplete } from "@/components/ui/CityAutocomplete";
+import type { AirportSelection } from "@/components/ui/CityAutocomplete";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
 import { ItineraryItemCard } from "./ItineraryItemCard";
@@ -93,8 +95,8 @@ export function TripBuilder({ tripId, initialDays, initialResults, tripOrigin = 
 
   // ── Flight search state ─────────────────────────────────────────────────────
   const [flightPanelOpen,   setFlightPanelOpen]   = useState(true);
-  const [flightOrigin,      setFlightOrigin]      = useState("");
-  const [flightDest,        setFlightDest]        = useState("");
+  const [flightOriginSel,   setFlightOriginSel]   = useState<AirportSelection | null>(null);
+  const [flightDestSel,     setFlightDestSel]     = useState<AirportSelection | null>(null);
   const [flightDate,        setFlightDate]        = useState("");
   const [flightResults,     setFlightResults]     = useState<FlightSearchResult[]>([]);
   const [flightLoading,     setFlightLoading]     = useState(false);
@@ -126,10 +128,14 @@ export function TripBuilder({ tripId, initialDays, initialResults, tripOrigin = 
     });
   }, [tripId]);
 
-  // Pre-fill flight inputs from trip props (only valid 3-letter IATA codes)
+  // Pre-fill flight selections from trip props when they are valid IATA codes
   useEffect(() => {
-    if (/^[A-Za-z]{3}$/.test(tripOrigin)) setFlightOrigin(tripOrigin.toUpperCase());
-    if (/^[A-Za-z]{3}$/.test(tripDestination)) setFlightDest(tripDestination.toUpperCase());
+    if (/^[A-Za-z]{3}$/.test(tripOrigin)) {
+      setFlightOriginSel({ city: tripOrigin.toUpperCase(), country: "", airports: [tripOrigin.toUpperCase()] });
+    }
+    if (/^[A-Za-z]{3}$/.test(tripDestination)) {
+      setFlightDestSel({ city: tripDestination.toUpperCase(), country: "", airports: [tripDestination.toUpperCase()] });
+    }
   }, [tripOrigin, tripDestination]);
 
   const showToast = useCallback((msg: string) => {
@@ -138,21 +144,25 @@ export function TripBuilder({ tripId, initialDays, initialResults, tripOrigin = 
   }, []);
 
   const handleFlightSearch = useCallback(async () => {
-    if (!flightOrigin || !flightDest || !flightDate) return;
+    if (!flightOriginSel || !flightDestSel || !flightDate) return;
+    const totalRoutes = flightOriginSel.airports.length * flightDestSel.airports.length;
     setFlightLoading(true);
     setFlightResults([]);
     setFlightError(null);
     setFlightSearched(false);
     try {
-      const results = await searchFlights(flightOrigin, flightDest, flightDate);
+      const results = await searchFlights(flightOriginSel.airports, flightDestSel.airports, flightDate);
       setFlightResults(results);
       setFlightSearched(true);
+      if (totalRoutes > 1) {
+        showToast(`Searched ${totalRoutes} routes — ${results.length} flights found`);
+      }
     } catch (err) {
       setFlightError(err instanceof Error ? err.message : "Search failed — please try again");
     } finally {
       setFlightLoading(false);
     }
-  }, [flightOrigin, flightDest, flightDate]);
+  }, [flightOriginSel, flightDestSel, flightDate, showToast]);
 
   const handleAddFlightToTrip = useCallback(async (flight: FlightSearchResult) => {
     setAddingFlight(flight.id);
@@ -560,21 +570,17 @@ export function TripBuilder({ tripId, initialDays, initialResults, tripOrigin = 
 
             {flightPanelOpen && (
               <div className="flex flex-col gap-2 pt-1">
-                <input
-                  type="text"
-                  placeholder="Origin (e.g. JFK)"
-                  value={flightOrigin}
-                  onChange={(e) => setFlightOrigin(e.target.value.toUpperCase())}
-                  className="input py-1.5 text-xs"
-                  maxLength={3}
+                <CityAutocomplete
+                  placeholder="From city or airport…"
+                  value={flightOriginSel}
+                  onChange={setFlightOriginSel}
+                  inputClassName="py-1.5 text-xs"
                 />
-                <input
-                  type="text"
-                  placeholder="Destination (e.g. LAX)"
-                  value={flightDest}
-                  onChange={(e) => setFlightDest(e.target.value.toUpperCase())}
-                  className="input py-1.5 text-xs"
-                  maxLength={3}
+                <CityAutocomplete
+                  placeholder="To city or airport…"
+                  value={flightDestSel}
+                  onChange={setFlightDestSel}
+                  inputClassName="py-1.5 text-xs"
                 />
                 <input
                   type="date"
@@ -582,13 +588,24 @@ export function TripBuilder({ tripId, initialDays, initialResults, tripOrigin = 
                   onChange={(e) => setFlightDate(e.target.value)}
                   className="input py-1.5 text-xs"
                 />
+                {flightOriginSel && flightDestSel &&
+                  (flightOriginSel.airports.length > 1 || flightDestSel.airports.length > 1) && (
+                  <p className="text-xs text-sky-600 flex items-center gap-1">
+                    <Plane className="w-3 h-3" />
+                    {`Searching ${flightOriginSel.airports.length * flightDestSel.airports.length} routes`}
+                  </p>
+                )}
                 <button
                   onClick={handleFlightSearch}
-                  disabled={!flightOrigin || !flightDest || !flightDate || flightLoading}
+                  disabled={!flightOriginSel || !flightDestSel || !flightDate || flightLoading}
                   className="btn-primary py-1.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {flightLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-                  {flightLoading ? "Searching…" : "Search Flights"}
+                  {flightLoading
+                    ? (flightOriginSel && flightDestSel && flightOriginSel.airports.length * flightDestSel.airports.length > 1)
+                      ? `Searching ${flightOriginSel.airports.length * flightDestSel.airports.length} routes…`
+                      : "Searching…"
+                    : "Search Flights"}
                 </button>
 
                 {/* Error state */}

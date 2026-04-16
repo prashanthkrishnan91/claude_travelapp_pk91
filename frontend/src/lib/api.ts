@@ -360,33 +360,61 @@ export async function addHotelToTrip(
   });
 }
 
+// ─── Airport Resolver ────────────────────────────────────────────────────────
+
+export interface AirportMatch {
+  city: string;
+  country: string;
+  airports: string[];
+}
+
+export interface AirportResolveResponse {
+  matches: AirportMatch[];
+}
+
+export async function resolveAirports(query: string): Promise<AirportResolveResponse> {
+  return apiFetch<AirportResolveResponse>("/resolve/airports", {
+    method: "POST",
+    body: JSON.stringify({ query }),
+  });
+}
+
 // ─── Flight Search ────────────────────────────────────────────────────────────
 
 export async function searchFlights(
-  origin: string,
-  destination: string,
+  origin: string | string[],
+  destination: string | string[],
   departureDate: string
 ): Promise<FlightSearchResult[]> {
-  const normalizedOrigin = origin.trim().toUpperCase();
-  const normalizedDestination = destination.trim().toUpperCase();
-
-  if (!/^[A-Z]{3}$/.test(normalizedOrigin)) {
-    throw new Error(`Invalid origin: "${origin}" — must be a 3-letter IATA code (e.g. JFK)`);
-  }
-  if (!/^[A-Z]{3}$/.test(normalizedDestination)) {
-    throw new Error(`Invalid destination: "${destination}" — must be a 3-letter IATA code (e.g. LAX)`);
-  }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(departureDate)) {
     throw new Error(`Invalid departure_date: "${departureDate}" — must be YYYY-MM-DD`);
   }
 
-  const payload = {
-    origin: normalizedOrigin,
-    destination: normalizedDestination,
-    departure_date: departureDate,
-    passengers: 1,
-    cabin_class: "economy",
-  };
+  const originCodes = (Array.isArray(origin) ? origin : [origin.trim().toUpperCase()]).map((c) => c.trim().toUpperCase());
+  const destCodes = (Array.isArray(destination) ? destination : [destination.trim().toUpperCase()]).map((c) => c.trim().toUpperCase());
+
+  for (const code of [...originCodes, ...destCodes]) {
+    if (!/^[A-Z]{3}$/.test(code)) {
+      throw new Error(`Invalid airport code: "${code}" — must be a 3-letter IATA code`);
+    }
+  }
+
+  const payload =
+    originCodes.length === 1 && destCodes.length === 1
+      ? {
+          origin: originCodes[0],
+          destination: destCodes[0],
+          departure_date: departureDate,
+          passengers: 1,
+          cabin_class: "economy",
+        }
+      : {
+          origin_airports: originCodes,
+          destination_airports: destCodes,
+          departure_date: departureDate,
+          passengers: 1,
+          cabin_class: "economy",
+        };
 
   console.log("[searchFlights] payload:", JSON.stringify(payload));
 

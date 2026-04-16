@@ -13,6 +13,8 @@ import {
   CircleDollarSign,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { CityAutocomplete } from "@/components/ui/CityAutocomplete";
+import type { AirportSelection } from "@/components/ui/CityAutocomplete";
 import { searchFlights } from "@/lib/api";
 import type { FlightSearchResult } from "@/types";
 
@@ -141,21 +143,29 @@ function FlightCard({ flight }: { flight: FlightSearchResult }) {
 }
 
 export default function SearchPage() {
-  const [origin, setOrigin] = useState("");
-  const [destination, setDestination] = useState("");
+  const [originSel, setOriginSel] = useState<AirportSelection | null>(null);
+  const [destSel, setDestSel] = useState<AirportSelection | null>(null);
   const [date, setDate] = useState("");
   const [results, setResults] = useState<FlightSearchResult[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const multiOrigin = (originSel?.airports.length ?? 0) > 1;
+  const multiDest = (destSel?.airports.length ?? 0) > 1;
+  const searchLabel = loading
+    ? multiOrigin || multiDest
+      ? `Searching flights from ${(originSel?.airports.length ?? 1) * (destSel?.airports.length ?? 1)} routes…`
+      : "Searching…"
+    : "Search Flights";
+
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    if (!origin || !destination || !date) return;
+    if (!originSel || !destSel || !date) return;
     setLoading(true);
     setError(null);
     setResults(null);
     try {
-      const data = await searchFlights(origin, destination, date);
+      const data = await searchFlights(originSel.airports, destSel.airports, date);
       setResults(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed");
@@ -180,28 +190,20 @@ export default function SearchPage() {
             <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
               From
             </label>
-            <input
-              type="text"
-              placeholder="JFK"
-              value={origin}
-              onChange={(e) => setOrigin(e.target.value.toUpperCase().slice(0, 3))}
-              maxLength={3}
-              required
-              className="input uppercase"
+            <CityAutocomplete
+              placeholder="e.g. New York, Seattle…"
+              value={originSel}
+              onChange={setOriginSel}
             />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
               To
             </label>
-            <input
-              type="text"
-              placeholder="LAX"
-              value={destination}
-              onChange={(e) => setDestination(e.target.value.toUpperCase().slice(0, 3))}
-              maxLength={3}
-              required
-              className="input uppercase"
+            <CityAutocomplete
+              placeholder="e.g. Tokyo, London…"
+              value={destSel}
+              onChange={setDestSel}
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -217,9 +219,17 @@ export default function SearchPage() {
             />
           </div>
         </div>
+        {(multiOrigin || multiDest) && (
+          <p className="mt-2 text-xs text-sky-600 flex items-center gap-1">
+            <Plane className="w-3 h-3" />
+            Searching{multiOrigin ? ` ${originSel!.airports.length} origin airports` : ""}
+            {multiOrigin && multiDest ? " × " : ""}
+            {multiDest ? ` ${destSel!.airports.length} destination airports` : ""} — results merged and deduplicated
+          </p>
+        )}
         <button
           type="submit"
-          disabled={loading || !origin || !destination || !date}
+          disabled={loading || !originSel || !destSel || !date}
           className="btn btn-primary mt-4 w-full sm:w-auto flex items-center gap-2"
         >
           {loading ? (
@@ -227,7 +237,7 @@ export default function SearchPage() {
           ) : (
             <Search className="w-4 h-4" />
           )}
-          {loading ? "Searching…" : "Search Flights"}
+          {searchLabel}
         </button>
       </form>
 

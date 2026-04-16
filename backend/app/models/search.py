@@ -1,7 +1,7 @@
 """Search request and normalized result models for flights, hotels, and attractions."""
 
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -42,12 +42,28 @@ class SearchResult(BaseModel):
 # ------------------------------------------------------------------
 
 class FlightSearchRequest(BaseModel):
-    origin: str = Field(..., min_length=3, max_length=3, description="IATA origin airport code")
-    destination: str = Field(..., min_length=3, max_length=3, description="IATA destination airport code")
+    # Single-airport form (legacy / direct IATA input)
+    origin: Optional[str] = Field(None, min_length=3, max_length=3, description="IATA origin airport code")
+    destination: Optional[str] = Field(None, min_length=3, max_length=3, description="IATA destination airport code")
+    # Multi-airport form (city autocomplete resolves to a list)
+    origin_airports: Optional[List[str]] = Field(None, description="Multiple origin IATA codes")
+    destination_airports: Optional[List[str]] = Field(None, description="Multiple destination IATA codes")
     departure_date: date
     return_date: Optional[date] = None
     passengers: int = Field(1, ge=1, le=9)
     cabin_class: str = Field("economy", pattern="^(economy|premium_economy|business|first)$")
+
+    @property
+    def all_origins(self) -> List[str]:
+        if self.origin_airports:
+            return [c.upper() for c in self.origin_airports]
+        return [self.origin.upper()] if self.origin else []
+
+    @property
+    def all_destinations(self) -> List[str]:
+        if self.destination_airports:
+            return [c.upper() for c in self.destination_airports]
+        return [self.destination.upper()] if self.destination else []
 
 
 class FlightResult(SearchResult):
