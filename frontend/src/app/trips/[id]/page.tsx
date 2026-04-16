@@ -115,6 +115,8 @@ export default function TripDetailPage() {
         tripId={id}
         initialDays={itineraryDays}
         initialResults={initialResults}
+        tripOrigin={trip?.origin ?? ""}
+        tripDestination={trip?.destination ?? ""}
       />
     </>
   );

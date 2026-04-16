@@ -39,7 +39,7 @@ export type ItemType = "flight" | "hotel" | "activity" | "transit" | "meal" | "n
 
 export interface ItineraryItem {
   id: string;
-  dayId: string;
+  dayId?: string;
   tripId: string;
   itemType: ItemType;
   title: string;

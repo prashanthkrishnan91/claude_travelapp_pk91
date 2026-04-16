@@ -4,8 +4,9 @@ from uuid import UUID
 from fastapi import APIRouter, status
 
 from app.core.deps import DB, CurrentUserID
-from app.models import Trip, TripCreate, TripUpdate
+from app.models import Trip, TripCreate, TripUpdate, ItineraryItem
 from app.services import TripsService
+from app.services.itinerary import ItineraryService
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
@@ -38,3 +39,9 @@ def update_trip(trip_id: UUID, payload: TripUpdate, db: DB, user_id: CurrentUser
 def delete_trip(trip_id: UUID, db: DB, user_id: CurrentUserID) -> None:
     """Delete a trip and all its itinerary data (cascades via DB)."""
     TripsService(db).delete_trip(trip_id, user_id)
+
+
+@router.get("/{trip_id}/items", response_model=List[ItineraryItem])
+def list_trip_items(trip_id: UUID, db: DB, user_id: CurrentUserID) -> List[ItineraryItem]:
+    """Return all itinerary items for a trip regardless of day assignment."""
+    return ItineraryService(db).list_items_by_trip(trip_id)

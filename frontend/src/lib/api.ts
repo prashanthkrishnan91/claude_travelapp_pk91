@@ -279,6 +279,48 @@ export async function deleteItem(itemId: string): Promise<void> {
   await apiFetch<void>(`/itinerary/items/${itemId}`, { method: "DELETE" });
 }
 
+export async function fetchTripItems(tripId: string): Promise<ItineraryItem[]> {
+  try {
+    return await apiFetch<ItineraryItem[]>(`/trips/${tripId}/items`);
+  } catch {
+    return [];
+  }
+}
+
+export async function addFlightToTrip(
+  tripId: string,
+  flight: FlightSearchResult
+): Promise<ItineraryItem> {
+  const payload = toSnake({
+    tripId,
+    itemType: "flight",
+    title: `${flight.airline} ${flight.flightNumber}`,
+    startTime: flight.departureTime,
+    endTime: flight.arrivalTime,
+    cashPrice: flight.price,
+    pointsPrice: flight.pointsCost,
+    cppValue: flight.cpp,
+    details: {
+      airline: flight.airline,
+      flightNumber: flight.flightNumber,
+      origin: flight.origin,
+      destination: flight.destination,
+      departureTime: flight.departureTime,
+      arrivalTime: flight.arrivalTime,
+      durationMinutes: flight.durationMinutes,
+      stops: flight.stops,
+      cabinClass: flight.cabinClass,
+      price: flight.price,
+      pointsCost: flight.pointsCost,
+      cpp: flight.cpp,
+    },
+  });
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 // ─── Flight Search ────────────────────────────────────────────────────────────
 
 export async function searchFlights(

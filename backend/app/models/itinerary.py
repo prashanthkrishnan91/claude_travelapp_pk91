@@ -73,6 +73,12 @@ class ItineraryItemCreate(ItineraryItemBase):
     trip_id: UUID
 
 
+class ItineraryItemDirectCreate(ItineraryItemBase):
+    """Create a trip-level item without requiring a specific day (e.g. saved flights)."""
+    trip_id: UUID
+    day_id: Optional[UUID] = None
+
+
 class ItineraryItemUpdate(ORMBase):
     item_type: Optional[ItineraryItemType] = None
     title: Optional[str] = None
@@ -92,5 +98,5 @@ class ItineraryItemUpdate(ORMBase):
 
 
 class ItineraryItem(ItineraryItemBase, TimestampedBase):
-    day_id: UUID
+    day_id: Optional[UUID] = None
     trip_id: UUID

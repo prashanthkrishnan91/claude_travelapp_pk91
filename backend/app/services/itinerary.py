@@ -10,6 +10,7 @@ from app.models import (
     ItineraryDayUpdate,
     ItineraryItem,
     ItineraryItemCreate,
+    ItineraryItemDirectCreate,
     ItineraryItemUpdate,
 )
 
@@ -82,6 +83,16 @@ class ItineraryService:
     # Items
     # ------------------------------------------------------------------
 
+    def list_items_by_trip(self, trip_id: UUID) -> List[ItineraryItem]:
+        result = (
+            self.db.table(ITEMS_TABLE)
+            .select("*")
+            .eq("trip_id", str(trip_id))
+            .order("position")
+            .execute()
+        )
+        return [ItineraryItem(**row) for row in result.data]
+
     def list_items(self, day_id: UUID) -> List[ItineraryItem]:
         result = (
             self.db.table(ITEMS_TABLE)
@@ -111,6 +122,15 @@ class ItineraryService:
         result = (
             self.db.table(ITEMS_TABLE)
             .insert(payload.model_dump(mode="json"))
+            .execute()
+        )
+        return ItineraryItem(**result.data[0])
+
+    def create_trip_item(self, payload: ItineraryItemDirectCreate) -> ItineraryItem:
+        data = payload.model_dump(mode="json", exclude_none=True)
+        result = (
+            self.db.table(ITEMS_TABLE)
+            .insert(data)
             .execute()
         )
         return ItineraryItem(**result.data[0])
