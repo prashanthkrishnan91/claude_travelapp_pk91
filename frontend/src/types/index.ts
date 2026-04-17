@@ -200,6 +200,17 @@ export interface AttractionSearchResult {
   bookingOptions?: BookingOption[];
 }
 
+// ─── Day Plan ─────────────────────────────────────────────────────────────────
+
+export interface DayPlan {
+  tripId: string;
+  dayNumber: number;
+  destination: string;
+  attractions: AttractionSearchResult[];
+  lunch: RestaurantSearchResult;
+  dinner: RestaurantSearchResult;
+}
+
 // ─── Compare ──────────────────────────────────────────────────────────────────
 
 export interface CompareItemInput {

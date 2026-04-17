@@ -5,7 +5,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CalendarDays, Plus } from "lucide-react";
+import { CalendarDays, Loader2, Plus, Sparkles } from "lucide-react";
 import { ItineraryDay, ItineraryItem } from "@/types";
 import { ItineraryItemCard } from "./ItineraryItemCard";
 
@@ -15,6 +15,8 @@ interface ItineraryDayColumnProps {
   onAddItem: (dayId: string) => void;
   onToggleCompare?: (item: ItineraryItem) => void;
   compareSet?: Set<string>;
+  onPlanDay?: (dayId: string, dayNumber: number) => void;
+  planDayLoading?: boolean;
 }
 
 function formatDate(dateStr: string): string {
@@ -34,6 +36,8 @@ export function ItineraryDayColumn({
   onAddItem,
   onToggleCompare,
   compareSet,
+  onPlanDay,
+  planDayLoading,
 }: ItineraryDayColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `day-${day.id}`,
@@ -66,6 +70,21 @@ export function ItineraryDayColumn({
           <span className="text-xs text-slate-400">
             {day.items.length} {day.items.length === 1 ? "item" : "items"}
           </span>
+          {onPlanDay && (
+            <button
+              onClick={() => onPlanDay(day.id, day.dayNumber)}
+              disabled={planDayLoading}
+              title="Generate AI day plan"
+              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 text-xs font-medium transition-colors disabled:opacity-50"
+            >
+              {planDayLoading ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Sparkles className="w-3 h-3" />
+              )}
+              Plan My Day
+            </button>
+          )}
           <button
             onClick={() => onAddItem(day.id)}
             className="w-6 h-6 rounded-full bg-slate-100 hover:bg-sky-50 hover:text-sky-600 text-slate-400 flex items-center justify-center transition-colors"

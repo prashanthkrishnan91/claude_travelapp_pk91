@@ -23,6 +23,7 @@ import type {
   FlightSearchResult,
   AttractionSearchResult,
   RestaurantSearchResult,
+  DayPlan,
 } from "@/types";
 import { supabase } from "./supabase";
 
@@ -682,6 +683,80 @@ export async function addRestaurantToTrip(
 ): Promise<ItineraryItem> {
   const payload = {
     trip_id: tripId,
+    item_type: "meal",
+    title: restaurant.name,
+    location: restaurant.address || restaurant.location,
+    details: {
+      name: restaurant.name,
+      cuisine: restaurant.cuisine,
+      location: restaurant.location,
+      address: restaurant.address,
+      rating: restaurant.rating ?? null,
+      num_reviews: restaurant.numReviews ?? null,
+      ai_score: restaurant.aiScore ?? null,
+      tags: restaurant.tags,
+      price_level: restaurant.priceLevel ?? null,
+      opening_hours: restaurant.openingHours ?? null,
+      booking_url: restaurant.bookingUrl ?? null,
+    },
+  };
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Fetch a smart day plan (2–3 attractions + lunch + dinner) for a specific trip day. */
+export async function fetchDayPlan(tripId: string, dayNumber: number): Promise<DayPlan> {
+  const payload = toSnake({ tripId, dayNumber });
+  return apiFetch<DayPlan>("/plan/day", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Add an attraction to a specific itinerary day with full metadata. */
+export async function addAttractionToDay(
+  tripId: string,
+  dayId: string,
+  attraction: AttractionSearchResult
+): Promise<ItineraryItem> {
+  const payload = {
+    trip_id: tripId,
+    day_id: dayId,
+    item_type: "activity",
+    title: attraction.name,
+    location: attraction.address || attraction.location,
+    details: {
+      name: attraction.name,
+      location: attraction.location,
+      address: attraction.address,
+      rating: attraction.rating ?? null,
+      num_reviews: attraction.numReviews ?? null,
+      ai_score: attraction.aiScore ?? null,
+      tags: attraction.tags,
+      category: attraction.category,
+      description: attraction.description,
+      opening_hours: attraction.openingHours ?? null,
+      price_level: attraction.priceLevel ?? null,
+      booking_url: attraction.bookingUrl ?? null,
+    },
+  };
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Add a restaurant to a specific itinerary day with full metadata. */
+export async function addRestaurantToDay(
+  tripId: string,
+  dayId: string,
+  restaurant: RestaurantSearchResult
+): Promise<ItineraryItem> {
+  const payload = {
+    trip_id: tripId,
+    day_id: dayId,
     item_type: "meal",
     title: restaurant.name,
     location: restaurant.address || restaurant.location,
