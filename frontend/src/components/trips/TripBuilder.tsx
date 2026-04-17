@@ -84,14 +84,23 @@ function formatTime(iso: string): string {
 
 function RecTag({ tag }: { tag: string }) {
   const style =
-    tag === "Points Better" ? "bg-violet-100 text-violet-700" :
-    tag === "Best Value"    ? "bg-emerald-100 text-emerald-700" :
-    tag === "Great Rating"  ? "bg-amber-100 text-amber-700" :
-    tag === "Budget Pick"   ? "bg-teal-100 text-teal-700" :
+    tag === "Points Better"   ? "bg-violet-100 text-violet-700" :
+    tag === "Best Value"      ? "bg-emerald-100 text-emerald-700" :
+    tag === "Great Rating"    ? "bg-amber-100 text-amber-700" :
+    tag === "Budget Pick"     ? "bg-teal-100 text-teal-700" :
+    tag === "High CPP"        ? "bg-purple-100 text-purple-700" :
+    tag === "Non-stop"        ? "bg-sky-100 text-sky-700" :
+    tag === "Cheapest"        ? "bg-green-100 text-green-700" :
+    tag === "Luxury Pick"     ? "bg-rose-100 text-rose-700" :
+    tag === "Budget Friendly" ? "bg-teal-100 text-teal-700" :
+    tag === "Top Rated"       ? "bg-amber-100 text-amber-700" :
+    tag === "Cash Better"     ? "bg-slate-100 text-slate-500" :
     "bg-slate-100 text-slate-500";
   const icon =
-    tag === "Points Better" ? <Zap className="w-2.5 h-2.5" /> :
-    tag === "Best Value"    ? <Star className="w-2.5 h-2.5" /> :
+    tag === "Points Better"   ? <Zap className="w-2.5 h-2.5" /> :
+    tag === "Best Value"      ? <Star className="w-2.5 h-2.5" /> :
+    tag === "High CPP"        ? <Zap className="w-2.5 h-2.5" /> :
+    tag === "Top Rated"       ? <Star className="w-2.5 h-2.5" /> :
     null;
   return (
     <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold ${style}`}>
@@ -100,17 +109,17 @@ function RecTag({ tag }: { tag: string }) {
   );
 }
 
-// ─── AI score ring ────────────────────────────────────────────────────────────
+// ─── AI score badge ───────────────────────────────────────────────────────────
 
 function AiScoreBadge({ score }: { score: number }) {
-  const color =
-    score >= 70 ? "text-emerald-600" :
-    score >= 50 ? "text-amber-600" :
-    "text-slate-500";
+  const { bg, text, ring } =
+    score >= 70 ? { bg: "bg-emerald-50", text: "text-emerald-700", ring: "ring-emerald-300" } :
+    score >= 50 ? { bg: "bg-amber-50",   text: "text-amber-700",   ring: "ring-amber-300"   } :
+                  { bg: "bg-slate-50",   text: "text-slate-500",   ring: "ring-slate-200"   };
   return (
-    <div className={`text-center ${color}`}>
-      <p className="text-xs text-slate-400">AI Score</p>
-      <p className="text-xs font-bold">{Math.round(score)}</p>
+    <div className={`flex flex-col items-center justify-center w-10 h-10 rounded-full ring-2 ${ring} ${bg} flex-shrink-0`}>
+      <p className={`text-xs font-bold leading-none ${text}`}>{Math.round(score)}</p>
+      <p className="text-[9px] text-slate-400 leading-none mt-0.5">score</p>
     </div>
   );
 }
@@ -121,35 +130,58 @@ function FlightCandidateCard({
   item,
   onAddToItinerary,
   adding,
+  isTopPick,
+  isLowScore,
 }: {
   item: ItineraryItem;
   onAddToItinerary: (item: ItineraryItem) => void;
   adding: boolean;
+  isTopPick?: boolean;
+  isLowScore?: boolean;
 }) {
   const d = (item.details ?? {}) as Record<string, unknown>;
-  const airline     = (d.airline      as string) ?? "";
-  const flightNum   = (d.flightNumber as string) ?? item.title;
-  const origin      = (d.origin       as string) ?? "";
-  const destination = (d.destination  as string) ?? "";
-  const depTime     = (d.departureTime as string) ?? "";
-  const duration    = (d.durationMinutes as number) ?? 0;
-  const stops       = (d.stops        as number) ?? 0;
-  const price       = (d.price        as number) ?? item.cashPrice ?? 0;
-  const points      = (d.pointsCost   as number) ?? item.pointsPrice ?? 0;
-  const cpp         = (d.cpp          as number) ?? 0;
-  const aiScore     = (d.aiScore      as number) ?? 0;
-  const recTag      = (d.recommendationTag as string) ?? "";
+  const airline     = (d.airline          as string)   ?? "";
+  const flightNum   = (d.flightNumber     as string)   ?? item.title;
+  const origin      = (d.origin           as string)   ?? "";
+  const destination = (d.destination      as string)   ?? "";
+  const depTime     = (d.departureTime    as string)   ?? "";
+  const duration    = (d.durationMinutes  as number)   ?? 0;
+  const stops       = (d.stops            as number)   ?? 0;
+  const price       = (d.price            as number)   ?? item.cashPrice ?? 0;
+  const points      = (d.pointsCost       as number)   ?? item.pointsPrice ?? 0;
+  const cpp         = (d.cpp              as number)   ?? 0;
+  const aiScore     = (d.aiScore          as number)   ?? 0;
+  const tags        = (d.tags             as string[]) ?? [];
+  const explanation = (d.explanation      as string)   ?? "";
+
+  const borderClass = isTopPick
+    ? "border-emerald-300 shadow-[0_0_0_1px_rgba(52,211,153,0.4)] bg-emerald-50/30"
+    : isLowScore
+    ? "border-slate-200 opacity-60"
+    : "border-slate-200 bg-white";
 
   return (
-    <div className="border border-slate-200 rounded-xl p-3 bg-white flex flex-col gap-2 hover:border-slate-300 transition-colors">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-1">
-        <div>
-          <p className="text-xs font-semibold text-slate-800">{airline}</p>
+    <div className={`border rounded-xl p-3 flex flex-col gap-2 hover:border-slate-300 transition-all ${borderClass}`}>
+      {/* Header: airline + AI score */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold text-slate-800 leading-tight">{airline}</p>
           <p className="text-xs text-slate-400">{flightNum}</p>
         </div>
-        <RecTag tag={recTag} />
+        <AiScoreBadge score={aiScore} />
       </div>
+
+      {/* Tags row */}
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {tags.slice(0, 2).map((tag) => <RecTag key={tag} tag={tag} />)}
+        </div>
+      )}
+
+      {/* Explanation */}
+      {explanation && (
+        <p className="text-[11px] text-slate-500 leading-tight">{explanation}</p>
+      )}
 
       {/* Route + time */}
       {origin && destination && (
@@ -195,7 +227,6 @@ function FlightCandidateCard({
               </p>
             </div>
           )}
-          <AiScoreBadge score={aiScore} />
         </div>
         <button
           onClick={() => onAddToItinerary(item)}
@@ -216,34 +247,57 @@ function HotelCandidateCard({
   item,
   onAddToItinerary,
   adding,
+  isTopPick,
+  isLowScore,
 }: {
   item: ItineraryItem;
   onAddToItinerary: (item: ItineraryItem) => void;
   adding: boolean;
+  isTopPick?: boolean;
+  isLowScore?: boolean;
 }) {
   const d = (item.details ?? {}) as Record<string, unknown>;
-  const name         = (d.name         as string) ?? item.title;
-  const location     = (d.location     as string) ?? item.location ?? "";
-  const pricePerNight = (d.pricePerNight as number) ?? item.cashPrice ?? 0;
-  const rating       = (d.rating       as number) ?? null;
-  const stars        = (d.stars        as number) ?? null;
-  const amenities    = (d.amenities    as string[]) ?? [];
-  const aiScore      = (d.aiScore      as number) ?? 0;
-  const recTag       = (d.recommendationTag as string) ?? "";
-  const nights       = (d.nights       as number) ?? 1;
+  const name          = (d.name            as string)   ?? item.title;
+  const location      = (d.location        as string)   ?? item.location ?? "";
+  const pricePerNight = (d.pricePerNight   as number)   ?? item.cashPrice ?? 0;
+  const rating        = (d.rating          as number)   ?? null;
+  const stars         = (d.stars           as number)   ?? null;
+  const amenities     = (d.amenities       as string[]) ?? [];
+  const aiScore       = (d.aiScore         as number)   ?? 0;
+  const tags          = (d.tags            as string[]) ?? [];
+  const explanation   = (d.explanation     as string)   ?? "";
+  const nights        = (d.nights          as number)   ?? 1;
+
+  const borderClass = isTopPick
+    ? "border-violet-300 shadow-[0_0_0_1px_rgba(167,139,250,0.4)] bg-violet-50/30"
+    : isLowScore
+    ? "border-slate-200 opacity-60"
+    : "border-slate-200 bg-white";
 
   return (
-    <div className="border border-slate-200 rounded-xl p-3 bg-white flex flex-col gap-2 hover:border-slate-300 transition-colors">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-1">
-        <div className="min-w-0">
+    <div className={`border rounded-xl p-3 flex flex-col gap-2 hover:border-slate-300 transition-all ${borderClass}`}>
+      {/* Header: name + AI score */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold text-slate-800 leading-tight truncate">{name}</p>
           {stars != null && (
             <p className="text-xs text-amber-400">{"★".repeat(Math.round(stars))}</p>
           )}
         </div>
-        <RecTag tag={recTag} />
+        <AiScoreBadge score={aiScore} />
       </div>
+
+      {/* Tags row */}
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {tags.slice(0, 2).map((tag) => <RecTag key={tag} tag={tag} />)}
+        </div>
+      )}
+
+      {/* Explanation */}
+      {explanation && (
+        <p className="text-[11px] text-slate-500 leading-tight">{explanation}</p>
+      )}
 
       {location && (
         <div className="flex items-center gap-1 text-xs text-slate-500">
@@ -252,7 +306,7 @@ function HotelCandidateCard({
         </div>
       )}
 
-      {/* Pricing + rating */}
+      {/* Pricing + rating + add */}
       <div className="flex items-center gap-3 pt-1.5 border-t border-slate-100">
         {pricePerNight > 0 && (
           <div>
@@ -272,7 +326,6 @@ function HotelCandidateCard({
             <p className="text-xs font-bold text-slate-700">★ {rating.toFixed(1)}</p>
           </div>
         )}
-        <AiScoreBadge score={aiScore} />
         <button
           onClick={() => onAddToItinerary(item)}
           disabled={adding}
@@ -652,14 +705,22 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
               open={flightPanelOpen}
               onToggle={() => setFlightPanelOpen((v) => !v)}
             >
-              {candidateFlights.map((item) => (
-                <FlightCandidateCard
-                  key={item.id}
-                  item={item}
-                  onAddToItinerary={handleAddCandidateToItinerary}
-                  adding={addingId === item.id}
-                />
-              ))}
+              {(() => {
+                const top20 = Math.max(1, Math.ceil(candidateFlights.length * 0.2));
+                const bot20 = candidateFlights.length > 2
+                  ? Math.max(1, Math.ceil(candidateFlights.length * 0.2))
+                  : 0;
+                return candidateFlights.map((item, idx) => (
+                  <FlightCandidateCard
+                    key={item.id}
+                    item={item}
+                    onAddToItinerary={handleAddCandidateToItinerary}
+                    adding={addingId === item.id}
+                    isTopPick={idx < top20}
+                    isLowScore={bot20 > 0 && idx >= candidateFlights.length - bot20}
+                  />
+                ));
+              })()}
             </CandidatePanel>
 
             {/* Hotels section */}
@@ -671,14 +732,22 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
               open={hotelPanelOpen}
               onToggle={() => setHotelPanelOpen((v) => !v)}
             >
-              {candidateHotels.map((item) => (
-                <HotelCandidateCard
-                  key={item.id}
-                  item={item}
-                  onAddToItinerary={handleAddCandidateToItinerary}
-                  adding={addingId === item.id}
-                />
-              ))}
+              {(() => {
+                const top20 = Math.max(1, Math.ceil(candidateHotels.length * 0.2));
+                const bot20 = candidateHotels.length > 2
+                  ? Math.max(1, Math.ceil(candidateHotels.length * 0.2))
+                  : 0;
+                return candidateHotels.map((item, idx) => (
+                  <HotelCandidateCard
+                    key={item.id}
+                    item={item}
+                    onAddToItinerary={handleAddCandidateToItinerary}
+                    adding={addingId === item.id}
+                    isTopPick={idx < top20}
+                    isLowScore={bot20 > 0 && idx >= candidateHotels.length - bot20}
+                  />
+                ));
+              })()}
             </CandidatePanel>
 
             {/* Activities / research results */}

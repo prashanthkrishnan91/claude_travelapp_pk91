@@ -210,6 +210,116 @@ def _hotel_recommendation_tag(hotel: HotelResult, ai_score: float) -> str:
     return "Consider"
 
 
+def _enrich_flights_with_intelligence(flights: List[FlightResult]) -> None:
+    """Dataset-aware decision intelligence: tags, decision, savings_vs_best, explanation."""
+    if not flights:
+        return
+
+    prices = [float(f.price or 0.0) for f in flights]
+    cpps = [float(f.cpp or 0.0) for f in flights]
+    scores = [float(f.ai_score or 0.0) for f in flights]
+
+    min_price = min(prices)
+    avg_price = sum(prices) / len(prices)
+    avg_cpp = sum(cpps) / len(cpps) if any(c > 0 for c in cpps) else 0.0
+    top20_threshold = sorted(scores, reverse=True)[max(0, int(len(scores) * 0.2) - 1)]
+    cheapest_nonstop = min((f.price or 0.0 for f in flights if f.stops == 0), default=None)
+
+    for flight in flights:
+        price = float(flight.price or 0.0)
+        cpp = float(flight.cpp or 0.0)
+        ai_score = float(flight.ai_score or 0.0)
+        stops = flight.stops or 0
+
+        flight.decision = "Points Better" if cpp >= 2.0 else "Cash Better"
+
+        tags: List[str] = []
+        if len(flights) > 1 and ai_score >= top20_threshold:
+            tags.append("Best Value")
+        if cpp >= 2.0:
+            tags.append("High CPP")
+        if stops == 0:
+            tags.append("Non-stop")
+        if price <= min_price * 1.02:
+            tags.append("Cheapest")
+        flight.tags = tags[:3]
+
+        flight.savings_vs_best = round(price - min_price, 2)
+
+        savings_vs_avg = round(avg_price - price)
+        if price <= min_price * 1.02:
+            flight.explanation = "Cheapest option available"
+        elif cheapest_nonstop is not None and stops == 0 and price <= cheapest_nonstop * 1.02:
+            flight.explanation = "Cheapest non-stop option"
+        elif cpp >= 2.0 and avg_cpp > 0:
+            pct = round(((cpp - avg_cpp) / avg_cpp) * 100)
+            flight.explanation = f"{cpp:.1f} CPP — {pct}% better than average"
+        elif savings_vs_avg >= 50:
+            flight.explanation = f"Saves ${savings_vs_avg} vs similar flights"
+        elif price > avg_price * 1.2:
+            flight.explanation = f"${round(price - min_price)} more than cheapest option"
+        else:
+            stop_str = "Non-stop" if stops == 0 else f"{stops} stop{'s' if stops > 1 else ''}"
+            flight.explanation = f"{stop_str} · ${round(price)}"
+
+
+def _enrich_hotels_with_intelligence(hotels: List[HotelResult]) -> None:
+    """Dataset-aware decision intelligence: tags, savings_vs_best, explanation."""
+    if not hotels:
+        return
+
+    prices = [float(h.price_per_night or 0.0) for h in hotels]
+    ratings = [float(h.rating or 0.0) for h in hotels]
+    scores = [float(h.ai_score or 0.0) for h in hotels]
+
+    avg_price = sum(prices) / len(prices)
+    min_price = min(prices)
+    top_rating = max(ratings) if ratings else 0.0
+    top20_threshold = sorted(scores, reverse=True)[max(0, int(len(scores) * 0.2) - 1)]
+
+    value_scores = [
+        (float(h.rating or 0.0)) / max(float(h.price_per_night or 1.0), 1.0)
+        for h in hotels
+    ]
+    max_value_score = max(value_scores) if value_scores else 0.0
+
+    for i, hotel in enumerate(hotels):
+        price = float(hotel.price_per_night or 0.0)
+        rating = float(hotel.rating or 0.0)
+        ai_score = float(hotel.ai_score or 0.0)
+        stars = float(hotel.stars or 0.0)
+        v_score = value_scores[i]
+
+        tags: List[str] = []
+        if max_value_score > 0 and v_score >= max_value_score * 0.9:
+            tags.append("Best Value")
+        if stars >= 4.0 and price >= avg_price * 1.2:
+            tags.append("Luxury Pick")
+        if price <= avg_price * 0.75:
+            tags.append("Budget Friendly")
+        if top_rating > 0 and rating >= top_rating * 0.97:
+            tags.append("Top Rated")
+        if len(hotels) > 1 and ai_score >= top20_threshold and "Best Value" not in tags:
+            tags.append("Best Value")
+        hotel.tags = tags[:3]
+
+        hotel.savings_vs_best = round(price - min_price, 2)
+
+        savings_vs_avg = round(avg_price - price)
+        if "Luxury Pick" in tags:
+            hotel.explanation = "Luxury feel at mid-range price" if price <= avg_price * 1.5 else "Premium stay with top amenities"
+        elif "Best Value" in tags and max_value_score > 0 and v_score >= max_value_score * 0.9:
+            hotel.explanation = "Best value hotel in area"
+        elif "Top Rated" in tags:
+            hotel.explanation = "Top-rated for this price range"
+        elif savings_vs_avg >= 30:
+            hotel.explanation = f"Saves ${savings_vs_avg}/night vs average"
+        elif price > avg_price * 1.2:
+            hotel.explanation = f"${round(price - min_price)} more per night than cheapest"
+        else:
+            hotel.explanation = f"${round(price)}/night · ★{rating:.1f}"
+
+
 # ---------------------------------------------------------------------------
 # Request / response models for create-with-search
 # ---------------------------------------------------------------------------
@@ -310,7 +420,7 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
     except Exception:
         hotels = []
 
-    # Step 4: AI scoring — compute scores and update tags, then sort
+    # Step 4: AI scoring — individual scores first, then dataset-aware intelligence
     for flight in flights:
         flight.ai_score = _compute_flight_ai_score(flight)
         flight.recommendation_tag = _flight_recommendation_tag(flight.cpp or 0.0, flight.ai_score)
@@ -318,6 +428,9 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
     for hotel in hotels:
         hotel.ai_score = _compute_hotel_ai_score(hotel)
         hotel.recommendation_tag = _hotel_recommendation_tag(hotel, hotel.ai_score)
+
+    _enrich_flights_with_intelligence(flights)
+    _enrich_hotels_with_intelligence(hotels)
 
     flights_sorted = sorted(flights, key=lambda f: f.ai_score or 0.0, reverse=True)
     hotels_sorted = sorted(hotels, key=lambda h: h.ai_score or 0.0, reverse=True)
@@ -365,6 +478,10 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
                     "cpp": float(flight.cpp or 0),
                     "ai_score": float(flight.ai_score or 0),
                     "recommendation_tag": flight.recommendation_tag,
+                    "decision": flight.decision,
+                    "tags": flight.tags,
+                    "savings_vs_best": flight.savings_vs_best,
+                    "explanation": flight.explanation,
                     "booking_url": flight.booking_url,
                     "booking_options": [
                         {"provider": o.provider, "url": o.url}
@@ -397,6 +514,9 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
                     "nights": hotel.nights,
                     "ai_score": float(hotel.ai_score or 0),
                     "recommendation_tag": hotel.recommendation_tag,
+                    "tags": hotel.tags,
+                    "savings_vs_best": hotel.savings_vs_best,
+                    "explanation": hotel.explanation,
                     "booking_url": hotel.booking_url,
                     "booking_options": [
                         {"provider": o.provider, "url": o.url}

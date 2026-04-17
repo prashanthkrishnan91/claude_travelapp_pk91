@@ -80,6 +80,10 @@ class FlightResult(SearchResult):
     cpp: float = Field(0.0, description="Cents per point redemption value")
     recommendation_tag: str = Field("Better with Cash", description="Value recommendation tag")
     ai_score: Optional[float] = Field(None, description="AI-computed value score 0–100")
+    decision: str = Field("Cash Better", description="Points Better | Cash Better")
+    tags: List[str] = Field(default_factory=list, description="Multi-tag classification e.g. Best Value, Non-stop, Cheapest")
+    savings_vs_best: Optional[float] = Field(None, description="Price delta vs cheapest option in dataset (positive = costs more)")
+    explanation: str = Field("", description="One-line decision context shown to user")
 
 
 # ------------------------------------------------------------------
@@ -104,6 +108,9 @@ class HotelResult(SearchResult):
     price_per_night: float
     ai_score: Optional[float] = Field(None, description="AI-computed value score 0–100")
     recommendation_tag: str = Field("Consider", description="Value recommendation tag")
+    tags: List[str] = Field(default_factory=list, description="Multi-tag classification e.g. Best Value, Luxury Pick, Budget Friendly")
+    savings_vs_best: Optional[float] = Field(None, description="Price/night delta vs cheapest option in dataset")
+    explanation: str = Field("", description="One-line decision context shown to user")
 
 
 # ------------------------------------------------------------------
