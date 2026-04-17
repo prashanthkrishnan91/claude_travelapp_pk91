@@ -263,6 +263,23 @@
     -webkit-backdrop-filter: blur(12px);
   }
 
+  /* ── Premium candidate cards ──────────────────────────────────── */
+  .candidate-card {
+    will-change: transform, opacity;
+  }
+
+  /* ── AI score ring animation ──────────────────────────────────── */
+  @keyframes score-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0.3); }
+    50%       { box-shadow: 0 0 0 4px rgba(52,211,153,0); }
+  }
+
+  /* ── Card fade-up (CSS fallback when GSAP not loaded) ─────────── */
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0);    }
+  }
+
   /* ── Value badge ─────────────────────────────────────────────── */
   .badge-value   { background-color: var(--color-emerald-100); color: var(--color-emerald-600); }
   .badge-savings { background-color: var(--color-violet-100);  color: var(--color-violet-600); }
