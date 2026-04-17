@@ -159,6 +159,26 @@ export interface ResearchResult {
   metadata?: Record<string, unknown>;
 }
 
+// ─── Restaurant Search Result ─────────────────────────────────────────────────
+
+export interface RestaurantSearchResult {
+  id: string;
+  name: string;
+  cuisine: string;
+  location: string;
+  address: string;
+  rating?: number;
+  numReviews?: number;
+  price?: number;
+  priceLevel?: number;
+  openingHours?: string;
+  aiScore?: number;
+  sentiment?: number;
+  tags: string[];
+  bookingUrl?: string;
+  bookingOptions?: BookingOption[];
+}
+
 // ─── Attraction Search Result ─────────────────────────────────────────────────
 
 export interface AttractionSearchResult {

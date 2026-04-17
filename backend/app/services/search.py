@@ -28,6 +28,8 @@ from app.models.search import (
     FlightSearchRequest,
     HotelResult,
     HotelSearchRequest,
+    RestaurantResult,
+    RestaurantSearchRequest,
     RoundTripFlightPair,
 )
 
@@ -312,6 +314,130 @@ def _mock_attractions(req: AttractionSearchRequest) -> List[AttractionResult]:
     return results
 
 
+def _compute_restaurant_ai_score(
+    rating: float,
+    num_reviews: int,
+    price_level: int,
+    sentiment: Optional[float] = None,
+) -> float:
+    """Compute AI value score 0–100 from rating, review volume, price level, and optional sentiment."""
+    rating_score = (rating / 5.0) * 100
+    review_score = min(100.0, (math.log1p(num_reviews) / math.log1p(500_000)) * 100)
+    price_value = max(0.0, (4 - price_level) / 4.0 * 100)
+    if sentiment is not None:
+        raw = rating_score * 0.40 + review_score * 0.30 + price_value * 0.15 + sentiment * 100 * 0.15
+    else:
+        raw = rating_score * 0.45 + review_score * 0.35 + price_value * 0.20
+    return round(min(100.0, max(0.0, raw)), 1)
+
+
+def _compute_restaurant_tags(
+    ai_score: float,
+    rating: float,
+    num_reviews: int,
+    price_level: int,
+) -> list:
+    """Assign human-readable tags based on score, rating, popularity, and price level."""
+    tags: list = []
+    if ai_score >= 80:
+        tags.append("Must Try")
+    if price_level >= 3 and rating >= 4.5:
+        tags.append("Fine Dining")
+    if num_reviews >= 20_000 and price_level <= 2:
+        tags.append("Local Favorite")
+    if price_level <= 1 and rating >= 4.0:
+        tags.append("Budget Friendly")
+    return tags
+
+
+def _mock_restaurants(req: RestaurantSearchRequest) -> List[RestaurantResult]:
+    """Generate realistic restaurant options simulating Google Places data."""
+    # (cuisine, name_template, description, price_level, reviews_range)
+    RESTAURANT_POOL: List[tuple] = [
+        ("Italian", "La Trattoria", "Authentic Neapolitan pizza and housemade pastas in a warm, family-run setting.", 2, (8_000, 60_000)),
+        ("Japanese", "Sakura Sushi", "Omakase and à la carte sushi crafted with daily-sourced fish and aged rice.", 3, (12_000, 80_000)),
+        ("Mexican", "El Mercado", "Vibrant cantina serving street-style tacos, mezcal cocktails, and mole negro.", 1, (15_000, 90_000)),
+        ("French", "Bistro Le Marais", "Classic Parisian bistro with steak-frites, onion soup, and a curated wine list.", 3, (6_000, 40_000)),
+        ("Indian", "Spice Route", "Regional Indian curries, tandoor grills, and house-made paneer from a family kitchen.", 1, (10_000, 55_000)),
+        ("Mediterranean", "Olive & Sea", "Sun-drenched terrace dining with mezze platters, fresh seafood, and citrus desserts.", 2, (9_000, 50_000)),
+        ("American", "The Smokehouse", "Slow-smoked BBQ ribs, pulled pork sandwiches, and craft beer on tap.", 1, (20_000, 120_000)),
+        ("Thai", "Bangkok Garden", "Fragrant Thai curries, pad see ew, and refreshing mango sticky rice.", 1, (14_000, 75_000)),
+        ("Steakhouse", "Prime Cut", "USDA Prime dry-aged steaks, lobster bisque, and classic sides in an upscale setting.", 4, (5_000, 35_000)),
+        ("Seafood", "The Pier Kitchen", "Waterfront restaurant serving the morning's catch grilled simply with local produce.", 3, (7_000, 45_000)),
+        ("Café", "Corner Brew Café", "Specialty single-origin coffee, avocado toasts, and freshly baked sourdough.", 1, (18_000, 100_000)),
+        ("Vegetarian", "Garden Table", "Inventive plant-based dishes celebrating seasonal vegetables and global spices.", 2, (8_000, 45_000)),
+    ]
+
+    OPENING_HOURS = [
+        "Daily 11:00 AM – 10:00 PM",
+        "Mon–Sat 12:00 PM – 11:00 PM",
+        "Daily 7:00 AM – 3:00 PM",
+        "Tue–Sun 5:00 PM – 11:00 PM",
+        "Daily 8:00 AM – 9:00 PM",
+        "Wed–Mon 11:30 AM – 10:30 PM",
+        "Daily 6:00 PM – 12:00 AM",
+        "Mon–Fri 11:00 AM – 2:30 PM, 5:00 PM – 10:00 PM",
+    ]
+
+    STREET_NAMES = ["Main St", "Market Ave", "Harbour Dr", "Old Town Sq", "Vine St", "Bay Blvd", "Canal Walk", "High St"]
+
+    city = req.location.split(",")[0].strip().title()
+    loc_slug = req.location.lower().replace(" ", "-").replace(",", "")
+
+    # Filter by cuisine if provided
+    if req.cuisine:
+        pool = [t for t in RESTAURANT_POOL if t[0].lower() == req.cuisine.lower()]
+        if not pool:
+            pool = list(RESTAURANT_POOL)
+    else:
+        pool = list(RESTAURANT_POOL)
+
+    results: List[RestaurantResult] = []
+    for cuisine, name_tpl, desc, price_level, reviews_range in pool:
+        name = f"{name_tpl} {city}"
+        rating = round(random.uniform(3.8, 4.95), 1)
+        num_reviews = random.randint(*reviews_range)
+        sentiment = round(random.uniform(0.70, 0.98), 2)
+        price = round(random.uniform(10, 120), 2) if price_level > 0 else 0.0
+
+        ai_score = _compute_restaurant_ai_score(rating, num_reviews, price_level, sentiment)
+        tags = _compute_restaurant_tags(ai_score, rating, num_reviews, price_level)
+        opening_hours = random.choice(OPENING_HOURS)
+        address = f"{random.randint(1, 999)} {random.choice(STREET_NAMES)}, {city}"
+
+        name_slug = name_tpl.lower().replace(" ", "-").replace("'", "").replace("&", "and")
+        direct_url = f"https://maps.example.com/restaurants/{name_slug}-{loc_slug}"
+        restaurant_options = [
+            BookingOption(provider="google_maps", url=f"https://maps.example.com/restaurants/{name_slug}"),
+            BookingOption(provider="opentable", url=f"https://book.example.com/restaurants/opentable/{name_slug}"),
+            BookingOption(provider="yelp", url=f"https://book.example.com/restaurants/yelp/{name_slug}"),
+        ]
+        results.append(
+            RestaurantResult(
+                id=f"rst-{uuid4().hex[:10]}",
+                price=price if price > 0 else None,
+                points_estimate=None,
+                rating=rating,
+                location=req.location,
+                booking_url=direct_url,
+                source="mock",
+                booking_options=restaurant_options,
+                name=name,
+                cuisine=cuisine,
+                address=address,
+                ai_score=ai_score,
+                tags=tags,
+                num_reviews=num_reviews,
+                opening_hours=opening_hours,
+                price_level=price_level,
+                sentiment=sentiment,
+            )
+        )
+
+    results.sort(key=lambda r: r.ai_score or 0, reverse=True)
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Service class
 # ---------------------------------------------------------------------------
@@ -446,6 +572,17 @@ class SearchService:
             return [AttractionResult(**item) for item in cached]
 
         results = _mock_attractions(req)
+        self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
+        return results
+
+    def search_restaurants(self, req: RestaurantSearchRequest) -> List[RestaurantResult]:
+        query = req.model_dump(mode="json")
+        key = _cache_key("restaurants", query)
+        cached = self._get_cache(key)
+        if cached:
+            return [RestaurantResult(**item) for item in cached]
+
+        results = _mock_restaurants(req)
         self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
         return results
 
