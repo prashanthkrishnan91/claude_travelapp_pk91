@@ -80,6 +80,7 @@ class ItineraryItemDirectCreate(ItineraryItemBase):
 
 
 class ItineraryItemUpdate(ORMBase):
+    day_id: Optional[UUID] = None
     item_type: Optional[ItineraryItemType] = None
     title: Optional[str] = None
     description: Optional[str] = None
