@@ -52,6 +52,7 @@ import type {
   AttractionSearchResult,
   RestaurantSearchResult,
   LocationCluster,
+  PlaceInCluster,
   DayPlan,
 } from "@/types";
 import {
@@ -1118,6 +1119,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
   const [activeMarkerId,       setActiveMarkerId]       = useState<string | null>(null);
   const [candidateClusters,    setCandidateClusters]    = useState<LocationCluster[]>([]);
   const [clustersLoading,      setClustersLoading]      = useState(false);
+  const [planningClusterId,    setPlanningClusterId]    = useState<string | null>(null);
 
   // ── Day plan state ───────────────────────────────────────────────────────────
   const [dayPlan,            setDayPlan]            = useState<DayPlan | null>(null);
@@ -1307,6 +1309,79 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
       setAddingId(null);
     }
   }, [days, tripId, showToast]);
+
+  // ── Plan an entire cluster area into a single day ───────────────────────────
+
+  const handlePlanCluster = useCallback(async (cluster: LocationCluster) => {
+    const byScore = (a: PlaceInCluster, b: PlaceInCluster) =>
+      (b.aiScore ?? b.rating ?? 0) - (a.aiScore ?? a.rating ?? 0);
+
+    const attractions = cluster.places
+      .filter((p) => p.placeType === "attraction")
+      .sort(byScore)
+      .slice(0, 3);
+
+    const restaurants = cluster.places
+      .filter((p) => p.placeType === "restaurant")
+      .sort(byScore)
+      .slice(0, 2);
+
+    setPlanningClusterId(cluster.clusterId);
+    try {
+      let targetDay = days[0];
+      if (!targetDay) {
+        targetDay = await createDay(tripId, { dayNumber: 1, title: "Day 1" });
+        setDays([targetDay]);
+      }
+
+      const newItems: ItineraryItem[] = [];
+
+      for (const place of attractions) {
+        const full = sortedAttractions.find((a) => a.id === place.id) ?? {
+          id: place.id,
+          name: place.name,
+          category: place.category,
+          description: "",
+          location: cluster.areaName,
+          address: place.address,
+          rating: place.rating,
+          aiScore: place.aiScore,
+          tags: place.tags,
+          lat: place.lat,
+          lng: place.lng,
+        };
+        const item = await addAttractionToDay(tripId, targetDay.id, full as AttractionSearchResult);
+        newItems.push(item);
+      }
+
+      for (const place of restaurants) {
+        const full = sortedRestaurants.find((r) => r.id === place.id) ?? {
+          id: place.id,
+          name: place.name,
+          cuisine: place.category,
+          location: cluster.areaName,
+          address: place.address,
+          rating: place.rating,
+          aiScore: place.aiScore,
+          tags: place.tags,
+        };
+        const item = await addRestaurantToDay(tripId, targetDay.id, full as RestaurantSearchResult);
+        newItems.push(item);
+      }
+
+      setDays((prev) =>
+        prev.map((d) =>
+          d.id === targetDay.id ? { ...d, items: [...d.items, ...newItems] } : d
+        )
+      );
+      const total = attractions.length + restaurants.length;
+      showToast(`${total} place${total !== 1 ? "s" : ""} from ${cluster.areaName} added`);
+    } catch {
+      showToast("Failed to plan area — please try again");
+    } finally {
+      setPlanningClusterId(null);
+    }
+  }, [days, tripId, sortedAttractions, sortedRestaurants, showToast]);
 
   // ── Add round-trip pair: outbound to day 1, return to last day ──────────────
 
@@ -1818,13 +1893,27 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
                           {cluster.label}
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-400">
-                        {cluster.places.length} place{cluster.places.length !== 1 ? "s" : ""} ·{" "}
-                        {cluster.places.filter((p) => p.placeType === "attraction").length} attraction
-                        {cluster.places.filter((p) => p.placeType === "attraction").length !== 1 ? "s" : ""} ·{" "}
-                        {cluster.places.filter((p) => p.placeType === "restaurant").length} restaurant
-                        {cluster.places.filter((p) => p.placeType === "restaurant").length !== 1 ? "s" : ""}
-                      </p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] text-slate-400">
+                          {cluster.places.length} place{cluster.places.length !== 1 ? "s" : ""} ·{" "}
+                          {cluster.places.filter((p) => p.placeType === "attraction").length} attraction
+                          {cluster.places.filter((p) => p.placeType === "attraction").length !== 1 ? "s" : ""} ·{" "}
+                          {cluster.places.filter((p) => p.placeType === "restaurant").length} restaurant
+                          {cluster.places.filter((p) => p.placeType === "restaurant").length !== 1 ? "s" : ""}
+                        </p>
+                        <button
+                          onClick={() => handlePlanCluster(cluster)}
+                          disabled={planningClusterId === cluster.clusterId}
+                          className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-semibold transition-all disabled:opacity-50"
+                        >
+                          {planningClusterId === cluster.clusterId ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Zap className="w-3 h-3" />
+                          )}
+                          Plan this area
+                        </button>
+                      </div>
                       {/* Places list */}
                       <div className="flex flex-col gap-1.5 mt-1">
                         {cluster.places.map((place) => (
