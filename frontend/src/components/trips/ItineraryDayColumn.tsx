@@ -79,8 +79,8 @@ export function ItineraryDayColumn({
       {/* Drop zone */}
       <div
         ref={setNodeRef}
-        className={`p-3 min-h-[80px] flex flex-col gap-2 transition-colors ${
-          isOver ? "bg-sky-50" : "bg-white"
+        className={`p-3 min-h-[80px] flex flex-col gap-2 transition-colors duration-150 ${
+          isOver ? "bg-sky-50/60" : "bg-white"
         }`}
       >
         <SortableContext
@@ -98,9 +98,9 @@ export function ItineraryDayColumn({
           ))}
         </SortableContext>
 
-        {day.items.length === 0 && (
+        {day.items.length === 0 ? (
           <div
-            className={`flex-1 flex items-center justify-center border-2 border-dashed rounded-xl py-4 transition-colors ${
+            className={`flex-1 flex items-center justify-center border-2 border-dashed rounded-xl py-4 transition-colors duration-150 ${
               isOver
                 ? "border-sky-400 bg-sky-50 text-sky-500"
                 : "border-slate-200 text-slate-300"
@@ -109,6 +109,10 @@ export function ItineraryDayColumn({
             <p className="text-xs text-center">
               {isOver ? "Drop here" : "Drag items here"}
             </p>
+          </div>
+        ) : isOver && (
+          <div className="border-2 border-dashed border-sky-400 rounded-xl py-2 flex items-center justify-center transition-colors duration-150 bg-sky-50">
+            <p className="text-xs text-sky-500 font-medium">Drop here</p>
           </div>
         )}
       </div>

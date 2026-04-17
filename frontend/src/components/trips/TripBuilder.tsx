@@ -1045,7 +1045,21 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
     if (overData?.type === "itinerary-item") targetDayId = overData.item.dayId;
     else if (overData?.type === "day") targetDayId = overData.dayId;
     else { const s = String(over.id); if (s.startsWith("day-")) targetDayId = s.replace("day-", ""); }
-    if (!targetDayId || targetDayId === sourceDayId) return;
+    if (!targetDayId) return;
+
+    if (targetDayId === sourceDayId) {
+      // Same-day: reorder via arrayMove for smooth visual feedback
+      if (overData?.type !== "itinerary-item") return;
+      const overId = String(over.id);
+      setDays((prev) => prev.map((d) => {
+        if (d.id !== sourceDayId) return d;
+        const oldIdx = d.items.findIndex((i) => i.id === sourceItem.id);
+        const newIdx = d.items.findIndex((i) => i.id === overId);
+        if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return d;
+        return { ...d, items: arrayMove(d.items, oldIdx, newIdx).map((i, idx) => ({ ...i, position: idx })) };
+      }));
+      return;
+    }
 
     setDays((prev) => {
       const sourceDay = prev.find((d) => d.id === sourceDayId);
@@ -1098,18 +1112,22 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
         overId.startsWith("day-") ? overId.replace("day-", "") : null;
       if (!targetDayId) return;
       if (targetDayId === sourceItem.dayId) {
-        setDays((prev) => prev.map((d) => {
-          if (d.id !== targetDayId) return d;
-          const oldIdx = d.items.findIndex((i) => i.id === sourceItem.id);
-          const newIdx = d.items.findIndex((i) => i.id === String(over.id));
-          if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return d;
-          const reordered = arrayMove(d.items, oldIdx, newIdx).map((i, idx) => ({ ...i, position: idx }));
-          reordered.forEach((item) => updateItem(item.id, { position: item.position }).catch(() => {}));
-          return { ...d, items: reordered };
-        }));
+        // State already updated in handleDragOver — persist current positions to backend
+        const day = days.find((d) => d.id === targetDayId);
+        if (day) {
+          day.items.forEach((item) => updateItem(item.id, { position: item.position }).catch(() => {}));
+        }
       } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        updateItem(sourceItem.id, { dayId: targetDayId } as any).catch(() => {});
+        // Cross-day move — persist new day_id and position to backend
+        const targetDay = days.find((d) => d.id === targetDayId);
+        const movedPosition = targetDay?.items.find((i) => i.id === sourceItem.id)?.position
+          ?? (targetDay?.items.length ?? 1) - 1;
+        updateItem(sourceItem.id, { dayId: targetDayId, position: movedPosition }).catch(() => {});
+        // Persist updated positions for source day items
+        const sourceDay = days.find((d) => d.id === sourceItem.dayId);
+        if (sourceDay) {
+          sourceDay.items.forEach((item) => updateItem(item.id, { position: item.position }).catch(() => {}));
+        }
       }
     }
   }, [days, tripId]);
