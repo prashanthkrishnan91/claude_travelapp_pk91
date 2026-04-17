@@ -356,6 +356,56 @@ export async function addFlightToTrip(
   });
 }
 
+export async function addRoundTripOutboundToDay(
+  tripId: string,
+  dayId: string,
+  outbound: Record<string, unknown>,
+  position: number
+): Promise<ItineraryItem> {
+  const payload = toSnake({
+    tripId,
+    dayId,
+    itemType: "flight",
+    title: `${outbound.airline ?? ""} ${outbound.flight_number ?? ""} (Outbound)`.trim(),
+    startTime: outbound.departure_time,
+    endTime: outbound.arrival_time,
+    cashPrice: outbound.price,
+    pointsPrice: outbound.points_cost,
+    cppValue: outbound.cpp,
+    position,
+    details: { ...outbound, leg: "outbound" },
+  });
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function addRoundTripReturnToDay(
+  tripId: string,
+  dayId: string,
+  returnFlight: Record<string, unknown>,
+  position: number
+): Promise<ItineraryItem> {
+  const payload = toSnake({
+    tripId,
+    dayId,
+    itemType: "flight",
+    title: `${returnFlight.airline ?? ""} ${returnFlight.flight_number ?? ""} (Return)`.trim(),
+    startTime: returnFlight.departure_time,
+    endTime: returnFlight.arrival_time,
+    cashPrice: returnFlight.price,
+    pointsPrice: returnFlight.points_cost,
+    cppValue: returnFlight.cpp,
+    position,
+    details: { ...returnFlight, leg: "return" },
+  });
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function addHotelToTrip(
   tripId: string,
   hotel: ResearchResult

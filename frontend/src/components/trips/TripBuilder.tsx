@@ -51,6 +51,8 @@ import {
   updateItem,
   compareItems,
   fetchTripItems,
+  addRoundTripOutboundToDay,
+  addRoundTripReturnToDay,
 } from "@/lib/api";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
@@ -69,9 +71,23 @@ function sortFlights(items: ItineraryItem[], key: SortKey): ItineraryItem[] {
   return [...items].sort((a, b) => {
     const da = (a.details ?? {}) as Record<string, unknown>;
     const db = (b.details ?? {}) as Record<string, unknown>;
-    if (key === "price") return ((da.price as number) ?? a.cashPrice ?? 0) - ((db.price as number) ?? b.cashPrice ?? 0);
-    if (key === "cpp")   return ((db.cpp as number) ?? 0) - ((da.cpp as number) ?? 0);
-    if (key === "duration") return ((da.durationMinutes as number) ?? 0) - ((db.durationMinutes as number) ?? 0);
+    const isRtA = !!da.is_round_trip;
+    const isRtB = !!db.is_round_trip;
+    if (key === "price") {
+      const pa = isRtA ? ((da.total_price as number) ?? 0) : ((da.price as number) ?? a.cashPrice ?? 0);
+      const pb = isRtB ? ((db.total_price as number) ?? 0) : ((db.price as number) ?? b.cashPrice ?? 0);
+      return pa - pb;
+    }
+    if (key === "cpp") {
+      const ca = isRtA ? ((da.combined_cpp as number) ?? 0) : ((da.cpp as number) ?? 0);
+      const cb = isRtB ? ((db.combined_cpp as number) ?? 0) : ((db.cpp as number) ?? 0);
+      return cb - ca;
+    }
+    if (key === "duration") {
+      const dura = isRtA ? ((da.total_duration_minutes as number) ?? 0) : ((da.durationMinutes as number) ?? 0);
+      const durb = isRtB ? ((db.total_duration_minutes as number) ?? 0) : ((db.durationMinutes as number) ?? 0);
+      return dura - durb;
+    }
     return ((db.aiScore as number) ?? 0) - ((da.aiScore as number) ?? 0);
   });
 }
@@ -191,20 +207,26 @@ function SummaryBar({
   if (!topFlight && !topHotel) return null;
   const fd = (topFlight?.details ?? {}) as Record<string, unknown>;
   const hd = (topHotel?.details ?? {}) as Record<string, unknown>;
+  const isRoundTrip = !!fd.is_round_trip;
+  const outFd = (fd.outbound ?? {}) as Record<string, unknown>;
+  const topAirline  = isRoundTrip ? (outFd.airline as string) : (fd.airline as string);
+  const topOrigin   = isRoundTrip ? (outFd.origin as string) : (fd.origin as string);
+  const topDest     = isRoundTrip ? (outFd.destination as string) : (fd.destination as string);
+  const topPrice    = isRoundTrip ? (fd.total_price as number) : (fd.price as number);
   return (
     <div className="glass border border-white/60 rounded-2xl p-3 flex gap-3 shadow-sm">
       {topFlight && (
         <div className="flex-1 min-w-0">
           <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
-            <Plane className="w-3 h-3 text-sky-500" /> Best Flight
+            <Plane className="w-3 h-3 text-sky-500" /> {isRoundTrip ? "Best Round-Trip" : "Best Flight"}
           </p>
           <p className="text-xs font-bold text-slate-800 truncate">
-            {(fd.airline as string) ?? topFlight.title}
+            {topAirline ?? topFlight.title}
           </p>
           <p className="text-xs text-slate-500">
-            {(fd.origin as string) ?? ""}
-            {fd.destination ? ` → ${fd.destination as string}` : ""}
-            {fd.price ? ` · $${Math.round(fd.price as number)}` : ""}
+            {topOrigin ?? ""}
+            {topDest ? ` → ${topDest}` : ""}
+            {topPrice ? ` · $${Math.round(topPrice)}` : ""}
           </p>
         </div>
       )}
@@ -391,6 +413,157 @@ function FlightCandidateCard({
           Add
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─── Round-trip flight leg row ────────────────────────────────────────────────
+
+function FlightLegRow({
+  leg,
+  label,
+}: {
+  leg: Record<string, unknown>;
+  label: string;
+}) {
+  const airline   = (leg.airline        as string) ?? "";
+  const flightNum = (leg.flight_number  as string) ?? "";
+  const origin    = (leg.origin         as string) ?? "";
+  const dest      = (leg.destination    as string) ?? "";
+  const depTime   = (leg.departure_time as string) ?? "";
+  const arrTime   = (leg.arrival_time   as string) ?? "";
+  const duration  = (leg.duration_minutes as number) ?? 0;
+  const stops     = (leg.stops          as number) ?? 0;
+  const price     = (leg.price          as number) ?? 0;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+        <span className="text-xs text-slate-500">{airline} <span className="text-slate-300">{flightNum}</span></span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="text-center min-w-[36px]">
+          <p className="text-sm font-bold text-slate-900">{origin}</p>
+          {depTime && <p className="text-[10px] text-slate-400">{formatTime(depTime)}</p>}
+        </div>
+        <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
+          <div className="flex items-center gap-1 w-full">
+            <div className="flex-1 h-px bg-slate-200" />
+            <Plane className="w-3 h-3 text-sky-400" />
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
+          <p className="text-[10px] text-slate-400">
+            {duration > 0 ? formatDuration(duration) : ""}
+            {duration > 0 && " · "}
+            {stops === 0 ? "Nonstop" : `${stops} stop${stops > 1 ? "s" : ""}`}
+          </p>
+        </div>
+        <div className="text-center min-w-[36px]">
+          <p className="text-sm font-bold text-slate-900">{dest}</p>
+          {arrTime && <p className="text-[10px] text-slate-400">{formatTime(arrTime)}</p>}
+        </div>
+        {price > 0 && (
+          <p className="text-xs font-semibold text-slate-600 ml-1">${Math.round(price)}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Round-trip flight candidate card ────────────────────────────────────────
+
+function RoundTripFlightCard({
+  item,
+  onAddToItinerary,
+  adding,
+  isTopPick,
+  isLowScore,
+}: {
+  item: ItineraryItem;
+  onAddToItinerary: (item: ItineraryItem) => void;
+  adding: boolean;
+  isTopPick?: boolean;
+  isLowScore?: boolean;
+}) {
+  const d           = (item.details ?? {}) as Record<string, unknown>;
+  const outbound    = (d.outbound          as Record<string, unknown>) ?? {};
+  const returnFlight = (d.return_flight    as Record<string, unknown>) ?? {};
+  const totalPrice  = (d.total_price       as number) ?? 0;
+  const totalPoints = (d.total_points      as number) ?? 0;
+  const combinedCpp = (d.combined_cpp      as number) ?? 0;
+  const aiScore     = (d.ai_score          as number) ?? 0;
+
+  const containerClass = isTopPick
+    ? "border-emerald-300/70 bg-gradient-to-br from-emerald-50/60 to-white"
+    : isLowScore
+    ? "border-slate-200/60 opacity-55"
+    : "border-slate-200/80 bg-white";
+
+  return (
+    <div className={`candidate-card relative border rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 hover:shadow-md hover:border-slate-300 shadow-sm ${containerClass}`}>
+      {isTopPick && (
+        <div className="absolute -top-2.5 left-3">
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
+            <Zap className="w-2.5 h-2.5" />
+            Best Pair
+          </span>
+        </div>
+      )}
+
+      {/* Header: round-trip label + AI score */}
+      <div className="flex items-start justify-between gap-2 pt-0.5">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-slate-900 leading-tight">Round-Trip</p>
+          <p className="text-xs text-slate-400 mt-0.5">Outbound + Return pair</p>
+        </div>
+        <AiScoreBadge score={aiScore} />
+      </div>
+
+      {/* Outbound leg */}
+      <div className="rounded-xl bg-sky-50/60 px-3 py-2.5">
+        <FlightLegRow leg={outbound} label="Outbound" />
+      </div>
+
+      {/* Return leg */}
+      <div className="rounded-xl bg-violet-50/60 px-3 py-2.5">
+        <FlightLegRow leg={returnFlight} label="Return" />
+      </div>
+
+      {/* Combined pricing */}
+      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+        {totalPrice > 0 && (
+          <div className="text-center">
+            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Total Cash</p>
+            <p className="text-sm font-bold text-slate-900">${Math.round(totalPrice)}</p>
+          </div>
+        )}
+        {totalPoints > 0 && (
+          <div className="text-center">
+            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Total Pts</p>
+            <p className="text-sm font-bold text-violet-700">
+              {totalPoints >= 1000 ? `${(totalPoints / 1000).toFixed(0)}k` : totalPoints}
+            </p>
+          </div>
+        )}
+        {combinedCpp > 0 && (
+          <div className="text-center">
+            <p className="text-[10px] text-slate-400 uppercase tracking-wide">CPP</p>
+            <p className={`text-sm font-bold ${combinedCpp >= 2 ? "text-emerald-600" : "text-slate-700"}`}>
+              {combinedCpp.toFixed(2)}¢
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Add button */}
+      <button
+        onClick={() => onAddToItinerary(item)}
+        disabled={adding}
+        className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-all disabled:opacity-50 shadow-sm w-full"
+      >
+        {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+        Add Both Flights to Itinerary
+      </button>
     </div>
   );
 }
@@ -705,6 +878,58 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
     }
   }, [days, tripId, showToast]);
 
+  // ── Add round-trip pair: outbound to day 1, return to last day ──────────────
+
+  const handleAddRoundTripToItinerary = useCallback(async (item: ItineraryItem) => {
+    setAddingId(item.id);
+    try {
+      const d = (item.details ?? {}) as Record<string, unknown>;
+      const outbound = (d.outbound as Record<string, unknown>) ?? {};
+      const ret = (d.return_flight as Record<string, unknown>) ?? {};
+
+      let currentDays = days;
+
+      // Ensure day 1 exists
+      let firstDay = currentDays[0];
+      if (!firstDay) {
+        firstDay = await createDay(tripId, { dayNumber: 1, title: "Day 1" });
+        currentDays = [firstDay];
+        setDays(currentDays);
+      }
+
+      // Ensure a last day distinct from day 1 exists
+      let lastDay = currentDays.length > 1 ? currentDays[currentDays.length - 1] : null;
+      if (!lastDay) {
+        lastDay = await createDay(tripId, { dayNumber: currentDays.length + 1, title: `Day ${currentDays.length + 1}` });
+        currentDays = [...currentDays, lastDay];
+        setDays(currentDays);
+      }
+
+      const outboundItem = await addRoundTripOutboundToDay(
+        tripId, firstDay.id, outbound, firstDay.items.length
+      );
+      const returnItem = await addRoundTripReturnToDay(
+        tripId, lastDay.id, ret, (currentDays.find((d) => d.id === lastDay!.id)?.items.length ?? 0)
+      );
+
+      setDays((prev) =>
+        prev.map((d) => {
+          if (d.id === firstDay.id && d.id === lastDay!.id) {
+            return { ...d, items: [...d.items, outboundItem, returnItem] };
+          }
+          if (d.id === firstDay.id) return { ...d, items: [...d.items, outboundItem] };
+          if (d.id === lastDay!.id) return { ...d, items: [...d.items, returnItem] };
+          return d;
+        })
+      );
+      showToast("Round-trip flights added — outbound on Day 1, return on last day");
+    } catch {
+      showToast("Failed to add — please try again");
+    } finally {
+      setAddingId(null);
+    }
+  }, [days, tripId, showToast]);
+
   // ── Remove item from a day ───────────────────────────────────────────────────
 
   const handleRemoveItem = useCallback(async (itemId: string, dayId: string) => {
@@ -956,18 +1181,33 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
                 const bot20 = sortedFlights.length > 2
                   ? Math.max(1, Math.ceil(sortedFlights.length * 0.2))
                   : 0;
-                return sortedFlights.map((item, idx) => (
-                  <FlightCandidateCard
-                    key={item.id}
-                    item={item}
-                    onAddToItinerary={handleAddCandidateToItinerary}
-                    onToggleCompare={handleToggleCompareItem}
-                    adding={addingId === item.id}
-                    isTopPick={flightSort === "ai" && idx < top20}
-                    isLowScore={flightSort === "ai" && bot20 > 0 && idx >= sortedFlights.length - bot20}
-                    isComparing={compareSet.has(item.id)}
-                  />
-                ));
+                return sortedFlights.map((item, idx) => {
+                  const d = (item.details ?? {}) as Record<string, unknown>;
+                  if (d.is_round_trip) {
+                    return (
+                      <RoundTripFlightCard
+                        key={item.id}
+                        item={item}
+                        onAddToItinerary={handleAddRoundTripToItinerary}
+                        adding={addingId === item.id}
+                        isTopPick={flightSort === "ai" && idx < top20}
+                        isLowScore={flightSort === "ai" && bot20 > 0 && idx >= sortedFlights.length - bot20}
+                      />
+                    );
+                  }
+                  return (
+                    <FlightCandidateCard
+                      key={item.id}
+                      item={item}
+                      onAddToItinerary={handleAddCandidateToItinerary}
+                      onToggleCompare={handleToggleCompareItem}
+                      adding={addingId === item.id}
+                      isTopPick={flightSort === "ai" && idx < top20}
+                      isLowScore={flightSort === "ai" && bot20 > 0 && idx >= sortedFlights.length - bot20}
+                      isComparing={compareSet.has(item.id)}
+                    />
+                  );
+                });
               })()}
             </CandidatePanel>
 

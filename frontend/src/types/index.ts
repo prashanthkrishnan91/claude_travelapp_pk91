@@ -128,6 +128,18 @@ export interface FlightSearchResult {
   explanation?: string;
 }
 
+// ─── Round-Trip Flight Pair ───────────────────────────────────────────────────
+
+export interface RoundTripFlightPair {
+  id: string;
+  outbound: FlightSearchResult;
+  returnFlight: FlightSearchResult;
+  totalPrice: number;
+  totalPoints: number;
+  combinedCpp: number;
+  totalDurationMinutes: number;
+}
+
 // ─── Research Results (Trip Builder left panel) ───────────────────────────────
 
 export type ResearchCategory = "flight" | "hotel" | "activity" | "meal" | "transit" | "note";
