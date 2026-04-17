@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from app.core.deps import DB, CurrentUserID
 from app.models import Trip, TripCreate, TripUpdate, ItineraryItem
 from app.models.itinerary import ItineraryItemDirectCreate
-from app.models.search import FlightResult, FlightSearchRequest, HotelResult, HotelSearchRequest
+from app.models.search import FlightResult, FlightSearchRequest, HotelResult, HotelSearchRequest, RoundTripFlightPair
 from app.services import TripsService
 from app.services.itinerary import ItineraryService
 from app.services.search import SearchService
@@ -338,6 +338,7 @@ class TripWithResults(Trip):
     """Trip creation response with AI-scored flight + hotel candidates."""
     flights: List[FlightResult] = []
     hotels: List[HotelResult] = []
+    round_trip_pairs: List[RoundTripFlightPair] = []
 
 
 @router.get("", response_model=List[Trip])
@@ -407,7 +408,25 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
         except Exception:
             flights = []
 
-    # Step 3: Search hotels
+    # Step 3: Search round-trip flight pairs (outbound + return)
+    round_trip_pairs: List[RoundTripFlightPair] = []
+    if origin_airports:
+        try:
+            rt_req = FlightSearchRequest(
+                origin_airports=origin_airports if len(origin_airports) > 1 else None,
+                origin=origin_airports[0] if len(origin_airports) == 1 else None,
+                destination_airports=dest_airports if len(dest_airports) > 1 else None,
+                destination=dest_airports[0] if len(dest_airports) == 1 else None,
+                departure_date=payload.start_date,
+                return_date=payload.end_date,
+                passengers=1,
+                cabin_class="economy",
+            )
+            round_trip_pairs = search_svc.search_round_trip_flights(rt_req)
+        except Exception:
+            round_trip_pairs = []
+
+    # Step 3b: Search hotels
     hotels: List[HotelResult] = []
     try:
         hotel_req = HotelSearchRequest(
@@ -527,8 +546,65 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
         except Exception:
             pass
 
+    # Step 7: Persist top round-trip pairs as trip-level itinerary items
+    for idx, pair in enumerate(round_trip_pairs[:5]):
+        try:
+            outbound_ai = _compute_flight_ai_score(pair.outbound)
+            itinerary_svc.create_trip_item(ItineraryItemDirectCreate(
+                trip_id=trip.id,
+                item_type="flight",
+                title=f"{pair.outbound.airline} {pair.outbound.flight_number} + {pair.return_flight.airline} {pair.return_flight.flight_number}",
+                start_time=pair.outbound.departure_time,
+                end_time=pair.return_flight.arrival_time,
+                cash_price=pair.total_price,
+                points_price=pair.total_points,
+                cpp_value=pair.combined_cpp,
+                position=1000 + idx,
+                details={
+                    "is_round_trip": True,
+                    "pair_id": pair.id,
+                    "cabin_class": pair.outbound.cabin_class,
+                    "total_price": pair.total_price,
+                    "total_points": pair.total_points,
+                    "combined_cpp": pair.combined_cpp,
+                    "total_duration_minutes": pair.total_duration_minutes,
+                    "ai_score": float(outbound_ai),
+                    "outbound": {
+                        "airline": pair.outbound.airline,
+                        "flight_number": pair.outbound.flight_number,
+                        "origin": pair.outbound.origin,
+                        "destination": pair.outbound.destination,
+                        "departure_time": pair.outbound.departure_time.isoformat(),
+                        "arrival_time": pair.outbound.arrival_time.isoformat(),
+                        "duration_minutes": pair.outbound.duration_minutes,
+                        "stops": pair.outbound.stops,
+                        "price": float(pair.outbound.price or 0),
+                        "points_cost": pair.outbound.points_cost,
+                        "cpp": float(pair.outbound.cpp or 0),
+                        "booking_url": pair.outbound.booking_url,
+                    },
+                    "return_flight": {
+                        "airline": pair.return_flight.airline,
+                        "flight_number": pair.return_flight.flight_number,
+                        "origin": pair.return_flight.origin,
+                        "destination": pair.return_flight.destination,
+                        "departure_time": pair.return_flight.departure_time.isoformat(),
+                        "arrival_time": pair.return_flight.arrival_time.isoformat(),
+                        "duration_minutes": pair.return_flight.duration_minutes,
+                        "stops": pair.return_flight.stops,
+                        "price": float(pair.return_flight.price or 0),
+                        "points_cost": pair.return_flight.points_cost,
+                        "cpp": float(pair.return_flight.cpp or 0),
+                        "booking_url": pair.return_flight.booking_url,
+                    },
+                },
+            ))
+        except Exception:
+            pass
+
     return TripWithResults(
         **trip.model_dump(),
         flights=flights_sorted,
         hotels=hotels_sorted,
+        round_trip_pairs=round_trip_pairs[:5],
     )

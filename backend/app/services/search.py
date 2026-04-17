@@ -27,6 +27,7 @@ from app.models.search import (
     FlightSearchRequest,
     HotelResult,
     HotelSearchRequest,
+    RoundTripFlightPair,
 )
 
 CACHE_TABLE = "research_cache"
@@ -330,6 +331,48 @@ class SearchService:
         # Sort by price asc, then cpp desc
         deduped.sort(key=lambda r: (r.price or 0, -(r.cpp or 0)))
         return deduped
+
+    def search_round_trip_flights(self, req: FlightSearchRequest) -> List[RoundTripFlightPair]:
+        """Fetch outbound + return flights and return ranked pairs.
+
+        Requires ``req.return_date`` to be set. Swaps origin/destination for the
+        return leg and uses ``return_date`` as the departure date.
+        """
+        if not req.return_date:
+            return []
+
+        outbound_flights = self.search_flights(req)
+
+        return_req = FlightSearchRequest(
+            origin_airports=req.destination_airports,
+            origin=req.destination,
+            destination_airports=req.origin_airports,
+            destination=req.origin,
+            departure_date=req.return_date,
+            passengers=req.passengers,
+            cabin_class=req.cabin_class,
+        )
+        return_flights = self.search_flights(return_req)
+
+        pairs: List[RoundTripFlightPair] = []
+        for outbound in outbound_flights:
+            for ret in return_flights:
+                total_price = (outbound.price or 0.0) + (ret.price or 0.0)
+                total_points = (outbound.points_cost or 0) + (ret.points_cost or 0)
+                combined_cpp = round((total_price * 100) / total_points, 2) if total_points > 0 else 0.0
+                pairs.append(RoundTripFlightPair(
+                    id=f"rt-{outbound.id}-{ret.id}",
+                    outbound=outbound,
+                    return_flight=ret,
+                    total_price=round(total_price, 2),
+                    total_points=total_points,
+                    combined_cpp=combined_cpp,
+                    total_duration_minutes=outbound.duration_minutes + ret.duration_minutes,
+                ))
+
+        # Rank: combined CPP desc, total price asc, total duration asc
+        pairs.sort(key=lambda p: (-p.combined_cpp, p.total_price, p.total_duration_minutes))
+        return pairs
 
     def search_hotels(self, req: HotelSearchRequest) -> List[HotelResult]:
         query = req.model_dump(mode="json")

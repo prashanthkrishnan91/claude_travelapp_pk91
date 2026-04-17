@@ -13,6 +13,7 @@ from app.models.search import (
     FlightSearchRequest,
     HotelResult,
     HotelSearchRequest,
+    RoundTripFlightPair,
 )
 from app.services.search import SearchService
 
@@ -38,6 +39,23 @@ def search_flights(payload: FlightSearchRequest, db: DB) -> List[FlightResult]:
         payload.cabin_class,
     )
     return SearchService(db).search_flights(payload)
+
+
+@router.post("/round-trip-flights", response_model=List[RoundTripFlightPair])
+def search_round_trip_flights(payload: FlightSearchRequest, db: DB) -> List[RoundTripFlightPair]:
+    """Search for round-trip flight pairs.
+
+    Requires ``return_date`` in the payload. Returns pairs ranked by combined
+    CPP (desc), total price (asc), and total duration (asc).
+    """
+    logger.info(
+        "[search_round_trip_flights] origin=%s destination=%s departure=%s return=%s",
+        payload.origin,
+        payload.destination,
+        payload.departure_date,
+        payload.return_date,
+    )
+    return SearchService(db).search_round_trip_flights(payload)
 
 
 @router.post("/hotels", response_model=List[HotelResult])

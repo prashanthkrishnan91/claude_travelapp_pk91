@@ -86,6 +86,18 @@ class FlightResult(SearchResult):
     explanation: str = Field("", description="One-line decision context shown to user")
 
 
+class RoundTripFlightPair(BaseModel):
+    """A paired outbound + return flight combination with combined pricing."""
+
+    id: str
+    outbound: FlightResult
+    return_flight: FlightResult
+    total_price: float = Field(..., description="Sum of outbound + return cash prices in USD")
+    total_points: int = Field(..., description="Sum of outbound + return points costs")
+    combined_cpp: float = Field(..., description="Cents per point for the combined pair")
+    total_duration_minutes: int = Field(..., description="Sum of outbound + return flight durations")
+
+
 # ------------------------------------------------------------------
 # Hotel models
 # ------------------------------------------------------------------
