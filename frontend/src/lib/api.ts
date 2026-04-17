@@ -571,6 +571,25 @@ export async function compareItems(items: CompareItemInput[]): Promise<CompareRe
   return response.results;
 }
 
+// ─── Dashboard Summary ────────────────────────────────────────────────────────
+
+export interface DashboardSummary {
+  tripCount: number;
+  cardCount: number;
+  itineraryCount: number;
+}
+
+export async function fetchDashboardSummary(): Promise<DashboardSummary> {
+  try {
+    const data = await apiFetch<DashboardSummary>("/dashboard/summary");
+    console.log("[dashboard] summary response:", data);
+    return data;
+  } catch (err) {
+    console.error("[dashboard] failed to fetch summary:", err);
+    return { tripCount: 0, cardCount: 0, itineraryCount: 0 };
+  }
+}
+
 // ─── Deals Feed ───────────────────────────────────────────────────────────────
 
 export async function fetchDealsFeed(): Promise<DealItem[]> {
