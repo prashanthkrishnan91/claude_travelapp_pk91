@@ -37,6 +37,7 @@ import {
   Plus,
   Clock,
   DollarSign,
+  UtensilsCrossed,
 } from "lucide-react";
 import gsap from "gsap";
 import type {
@@ -46,6 +47,7 @@ import type {
   ItemType,
   CompareResult,
   AttractionSearchResult,
+  RestaurantSearchResult,
 } from "@/types";
 import {
   createDay,
@@ -58,6 +60,8 @@ import {
   addRoundTripReturnToDay,
   searchAttractions,
   addAttractionToTrip,
+  searchRestaurants,
+  addRestaurantToTrip,
 } from "@/lib/api";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
@@ -110,6 +114,14 @@ function sortHotels(items: ItineraryItem[], key: SortKey): ItineraryItem[] {
 function sortAttractions(items: AttractionSearchResult[], key: SortKey): AttractionSearchResult[] {
   return [...items].sort((a, b) => {
     if (key === "rating") return (b.rating ?? 0) - (a.rating ?? 0);
+    return (b.aiScore ?? 0) - (a.aiScore ?? 0);
+  });
+}
+
+function sortRestaurants(items: RestaurantSearchResult[], key: SortKey): RestaurantSearchResult[] {
+  return [...items].sort((a, b) => {
+    if (key === "rating") return (b.rating ?? 0) - (a.rating ?? 0);
+    if (key === "price")  return (a.priceLevel ?? 0) - (b.priceLevel ?? 0);
     return (b.aiScore ?? 0) - (a.aiScore ?? 0);
   });
 }
@@ -883,6 +895,128 @@ function AttractionCandidateCard({
   );
 }
 
+// ─── Restaurant tag badge ──────────────────────────────────────────────────────
+
+function RestaurantTag({ tag }: { tag: string }) {
+  const style =
+    tag === "Must Try"       ? "bg-rose-100 text-rose-700" :
+    tag === "Local Favorite" ? "bg-amber-100 text-amber-700" :
+    tag === "Fine Dining"    ? "bg-violet-100 text-violet-700" :
+    tag === "Budget Friendly"? "bg-green-100 text-green-700" :
+                               "bg-slate-100 text-slate-600";
+  return <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${style}`}>{tag}</span>;
+}
+
+// ─── Restaurant candidate card ─────────────────────────────────────────────────
+
+function RestaurantCandidateCard({
+  restaurant,
+  onAddToTrip,
+  adding,
+  isTopPick,
+}: {
+  restaurant: RestaurantSearchResult;
+  onAddToTrip: (r: RestaurantSearchResult) => void;
+  adding: boolean;
+  isTopPick?: boolean;
+}) {
+  const aiScore    = restaurant.aiScore ?? 0;
+  const rating     = restaurant.rating;
+  const numReviews = restaurant.numReviews;
+  const mapsUrl    = `https://www.google.com/maps/search/${encodeURIComponent(restaurant.name + " " + restaurant.location)}`;
+
+  const containerClass = isTopPick
+    ? "candidate-card relative flex flex-col gap-2 p-3 rounded-2xl border border-rose-200 bg-rose-50/40 shadow-sm"
+    : "candidate-card relative flex flex-col gap-2 p-3 rounded-2xl border border-slate-100 bg-white shadow-sm";
+
+  const scoreColor =
+    aiScore >= 70 ? "bg-rose-500 text-white" :
+    aiScore >= 50 ? "bg-amber-400 text-white" :
+                    "bg-slate-200 text-slate-600";
+
+  return (
+    <div className={containerClass}>
+      {isTopPick && (
+        <span className="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wide text-rose-500 bg-rose-100 px-1.5 py-0.5 rounded-full">
+          Top Pick
+        </span>
+      )}
+
+      <div className="flex items-start justify-between gap-2 pt-0.5">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-slate-900 leading-tight">{restaurant.name}</p>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <span className="text-[10px] text-slate-400 font-medium">{restaurant.cuisine}</span>
+            {rating != null && (
+              <span className="flex items-center gap-0.5 text-xs text-amber-500 font-semibold">
+                <Star className="w-3 h-3 fill-amber-400 stroke-amber-400" />
+                {rating.toFixed(1)}
+                {numReviews != null && (
+                  <span className="text-slate-400 font-normal ml-0.5">
+                    ({numReviews >= 1000 ? `${(numReviews / 1000).toFixed(0)}k` : numReviews})
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${scoreColor}`}>
+          {Math.round(aiScore)}
+        </div>
+      </div>
+
+      {/* Tags */}
+      {restaurant.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {restaurant.tags.map((tag) => <RestaurantTag key={tag} tag={tag} />)}
+        </div>
+      )}
+
+      {/* Meta row */}
+      <div className="flex flex-col gap-1">
+        {restaurant.address && (
+          <div className="flex items-center gap-1 text-xs text-slate-400">
+            <MapPin className="w-3 h-3 flex-shrink-0" />
+            <span className="truncate">{restaurant.address}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-3 flex-wrap">
+          {restaurant.openingHours && (
+            <div className="flex items-center gap-1 text-xs text-slate-400">
+              <Clock className="w-3 h-3 flex-shrink-0" />
+              <span>{restaurant.openingHours}</span>
+            </div>
+          )}
+          {restaurant.priceLevel != null && (
+            <PriceLevelDots level={restaurant.priceLevel} />
+          )}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-2 mt-1">
+        <a
+          href={mapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 text-xs font-medium transition-all"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          Maps
+        </a>
+        <button
+          onClick={() => onAddToTrip(restaurant)}
+          disabled={adding}
+          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-all disabled:opacity-50 shadow-sm"
+        >
+          {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+          Add to Trip
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Collapsible panel wrapper ────────────────────────────────────────────────
 
 function CandidatePanel({
@@ -955,20 +1089,25 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
   const [candidateFlights,     setCandidateFlights]     = useState<ItineraryItem[]>([]);
   const [candidateHotels,      setCandidateHotels]      = useState<ItineraryItem[]>([]);
   const [candidateAttractions, setCandidateAttractions] = useState<AttractionSearchResult[]>([]);
+  const [candidateRestaurants, setCandidateRestaurants] = useState<RestaurantSearchResult[]>([]);
   const [attractionsLoading,   setAttractionsLoading]   = useState(false);
+  const [restaurantsLoading,   setRestaurantsLoading]   = useState(false);
   const [flightPanelOpen,      setFlightPanelOpen]      = useState(true);
   const [hotelPanelOpen,       setHotelPanelOpen]       = useState(true);
   const [attractionPanelOpen,  setAttractionPanelOpen]  = useState(true);
+  const [restaurantPanelOpen,  setRestaurantPanelOpen]  = useState(true);
   const [flightSort,           setFlightSort]           = useState<SortKey>("ai");
   const [hotelSort,            setHotelSort]            = useState<SortKey>("ai");
   const [attractionSort,       setAttractionSort]       = useState<SortKey>("ai");
+  const [restaurantSort,       setRestaurantSort]       = useState<SortKey>("ai");
   const [addingId,             setAddingId]             = useState<string | null>(null);
   const [toast,                setToast]                = useState<string | null>(null);
   const [activeId,             setActiveId]             = useState<UniqueIdentifier | null>(null);
 
-  const flightListRef     = useRef<HTMLDivElement>(null);
-  const hotelListRef      = useRef<HTMLDivElement>(null);
-  const attractionListRef = useRef<HTMLDivElement>(null);
+  const flightListRef      = useRef<HTMLDivElement>(null);
+  const hotelListRef       = useRef<HTMLDivElement>(null);
+  const attractionListRef  = useRef<HTMLDivElement>(null);
+  const restaurantListRef  = useRef<HTMLDivElement>(null);
 
   // ── Compare state ────────────────────────────────────────────────────────────
   const [compareSet,     setCompareSet]     = useState<Set<string>>(new Set());
@@ -1024,6 +1163,22 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
     const cards = attractionListRef.current.querySelectorAll(".candidate-card");
     gsap.from(cards, { y: 24, opacity: 0, duration: 0.45, stagger: 0.05, ease: "power2.out", clearProps: "all" });
   }, [candidateAttractions.length]);
+
+  // Auto-load restaurants for the trip destination
+  useEffect(() => {
+    if (!destination) return;
+    setRestaurantsLoading(true);
+    searchRestaurants(destination).then((restaurants) => {
+      setCandidateRestaurants(restaurants);
+    }).finally(() => setRestaurantsLoading(false));
+  }, [destination]);
+
+  // GSAP entrance animations for restaurant cards
+  useEffect(() => {
+    if (!restaurantListRef.current || candidateRestaurants.length === 0) return;
+    const cards = restaurantListRef.current.querySelectorAll(".candidate-card");
+    gsap.from(cards, { y: 24, opacity: 0, duration: 0.45, stagger: 0.05, ease: "power2.out", clearProps: "all" });
+  }, [candidateRestaurants.length]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -1081,6 +1236,32 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
         )
       );
       showToast(`${attraction.name.split(" —")[0]} added to itinerary`);
+    } catch {
+      showToast("Failed to add — please try again");
+    } finally {
+      setAddingId(null);
+    }
+  }, [days, tripId, showToast]);
+
+  // ── Add restaurant to first itinerary day ───────────────────────────────────
+
+  const handleAddRestaurantToItinerary = useCallback(async (restaurant: RestaurantSearchResult) => {
+    setAddingId(restaurant.id);
+    try {
+      let targetDay = days[0];
+      if (!targetDay) {
+        targetDay = await createDay(tripId, { dayNumber: 1, title: "Day 1" });
+        setDays([targetDay]);
+      }
+
+      const newItem = await addRestaurantToTrip(tripId, restaurant);
+
+      setDays((prev) =>
+        prev.map((d) =>
+          d.id === targetDay.id ? { ...d, items: [...d.items, newItem] } : d
+        )
+      );
+      showToast(`${restaurant.name} added to itinerary`);
     } catch {
       showToast("Failed to add — please try again");
     } finally {
@@ -1363,6 +1544,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
   const sortedFlights     = sortFlights(candidateFlights, flightSort);
   const sortedHotels      = sortHotels(candidateHotels, hotelSort);
   const sortedAttractions = sortAttractions(candidateAttractions, attractionSort);
+  const sortedRestaurants = sortRestaurants(candidateRestaurants, restaurantSort);
   const topFlight = sortedFlights[0] ?? null;
   const topHotel  = sortedHotels[0] ?? null;
 
@@ -1516,6 +1698,48 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
                       onAddToTrip={handleAddAttractionToItinerary}
                       adding={addingId === attraction.id}
                       isTopPick={attractionSort === "ai" && idx < top20}
+                    />
+                  ));
+                })()
+              )}
+            </CandidatePanel>
+
+            {/* Restaurants section */}
+            <CandidatePanel
+              title="Restaurants"
+              icon={<UtensilsCrossed className="w-3.5 h-3.5 text-rose-500" />}
+              count={sortedRestaurants.length}
+              accentColor="text-rose-500"
+              open={restaurantPanelOpen}
+              onToggle={() => setRestaurantPanelOpen((v) => !v)}
+              sortControls={
+                <SortBar
+                  options={[
+                    { key: "ai",     label: "Best Value" },
+                    { key: "rating", label: "Rating"     },
+                    { key: "price",  label: "Price"      },
+                  ]}
+                  current={restaurantSort}
+                  onChange={setRestaurantSort}
+                />
+              }
+              listRef={restaurantListRef}
+            >
+              {restaurantsLoading ? (
+                <div className="flex items-center justify-center py-6 gap-2 text-slate-400 text-xs">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Discovering restaurants…
+                </div>
+              ) : (
+                (() => {
+                  const top20 = Math.max(1, Math.ceil(sortedRestaurants.length * 0.2));
+                  return sortedRestaurants.map((restaurant, idx) => (
+                    <RestaurantCandidateCard
+                      key={restaurant.id}
+                      restaurant={restaurant}
+                      onAddToTrip={handleAddRestaurantToItinerary}
+                      adding={addingId === restaurant.id}
+                      isTopPick={restaurantSort === "ai" && idx < top20}
                     />
                   ));
                 })()

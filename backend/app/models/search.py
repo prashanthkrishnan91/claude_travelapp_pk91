@@ -152,6 +152,28 @@ class AttractionResult(SearchResult):
 
 
 # ------------------------------------------------------------------
+# Restaurant models
+# ------------------------------------------------------------------
+
+class RestaurantSearchRequest(BaseModel):
+    location: str = Field(..., min_length=2, description="City or region to search in")
+    cuisine: Optional[str] = Field(None, description="Filter by cuisine type")
+    date: Optional[date] = None
+
+
+class RestaurantResult(SearchResult):
+    name: str
+    cuisine: str
+    address: str
+    ai_score: Optional[float] = Field(None, description="AI-computed value score 0–100")
+    tags: List[str] = Field(default_factory=list, description="Tags: Local Favorite, Fine Dining, Budget Friendly, Must Try")
+    num_reviews: Optional[int] = Field(None, description="Number of user reviews")
+    opening_hours: Optional[str] = Field(None, description="Opening hours summary")
+    price_level: Optional[int] = Field(None, ge=0, le=4, description="Price level 0=free, 1=inexpensive, 2=moderate, 3=expensive, 4=very expensive")
+    sentiment: Optional[float] = Field(None, ge=0, le=1, description="Sentiment score 0–1 derived from review analysis")
+
+
+# ------------------------------------------------------------------
 # Generic cache wrapper stored in research_cache
 # ------------------------------------------------------------------
 

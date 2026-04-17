@@ -22,6 +22,7 @@ import type {
   BookingOption,
   FlightSearchResult,
   AttractionSearchResult,
+  RestaurantSearchResult,
 } from "@/types";
 import { supabase } from "./supabase";
 
@@ -617,6 +618,91 @@ export async function searchAttractions(
   } catch {
     return [];
   }
+}
+
+interface RawRestaurantResult {
+  id: string;
+  name: string;
+  cuisine: string;
+  location: string;
+  address: string;
+  rating?: number;
+  numReviews?: number;
+  price?: number;
+  priceLevel?: number;
+  openingHours?: string;
+  aiScore?: number;
+  sentiment?: number;
+  tags?: string[];
+  bookingUrl?: string;
+  bookingOptions?: BookingOption[];
+}
+
+function mapRestaurantToResult(r: RawRestaurantResult): RestaurantSearchResult {
+  return {
+    id: r.id,
+    name: r.name,
+    cuisine: r.cuisine,
+    location: r.location,
+    address: r.address,
+    rating: r.rating,
+    numReviews: r.numReviews,
+    price: r.price,
+    priceLevel: r.priceLevel,
+    openingHours: r.openingHours,
+    aiScore: r.aiScore,
+    sentiment: r.sentiment,
+    tags: r.tags ?? [],
+    bookingUrl: r.bookingUrl,
+    bookingOptions: r.bookingOptions,
+  };
+}
+
+/** Fetch restaurants and dining options for a location, sorted by AI score DESC. */
+export async function searchRestaurants(
+  location: string,
+  date?: string
+): Promise<RestaurantSearchResult[]> {
+  try {
+    const payload = toSnake({ location, date: date ?? null });
+    const results = await apiFetch<RawRestaurantResult[]>("/search/restaurants", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return results.map(mapRestaurantToResult);
+  } catch {
+    return [];
+  }
+}
+
+/** Add a restaurant to the itinerary as a trip-level meal item. */
+export async function addRestaurantToTrip(
+  tripId: string,
+  restaurant: RestaurantSearchResult
+): Promise<ItineraryItem> {
+  const payload = {
+    trip_id: tripId,
+    item_type: "meal",
+    title: restaurant.name,
+    location: restaurant.address || restaurant.location,
+    details: {
+      name: restaurant.name,
+      cuisine: restaurant.cuisine,
+      location: restaurant.location,
+      address: restaurant.address,
+      rating: restaurant.rating ?? null,
+      num_reviews: restaurant.numReviews ?? null,
+      ai_score: restaurant.aiScore ?? null,
+      tags: restaurant.tags,
+      price_level: restaurant.priceLevel ?? null,
+      opening_hours: restaurant.openingHours ?? null,
+      booking_url: restaurant.bookingUrl ?? null,
+    },
+  };
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 /** Add an attraction to the itinerary as a trip-level activity item. */

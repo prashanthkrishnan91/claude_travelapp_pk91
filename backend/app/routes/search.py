@@ -13,6 +13,8 @@ from app.models.search import (
     FlightSearchRequest,
     HotelResult,
     HotelSearchRequest,
+    RestaurantResult,
+    RestaurantSearchRequest,
     RoundTripFlightPair,
 )
 from app.services.search import SearchService
@@ -78,3 +80,15 @@ def search_attractions(payload: AttractionSearchRequest, db: DB) -> List[Attract
     Results are cached in Supabase for 1 hour.
     """
     return SearchService(db).search_attractions(payload)
+
+
+@router.post("/restaurants", response_model=List[RestaurantResult])
+def search_restaurants(payload: RestaurantSearchRequest, db: DB) -> List[RestaurantResult]:
+    """Search for restaurants, cafes, and local dining options.
+
+    Returns a list of dining options sorted by AI score (rating, review count,
+    price level, sentiment). Covers restaurants, cafes, and local dining.
+    Results are cached in Supabase for 1 hour.
+    """
+    logger.info("[search_restaurants] location=%s cuisine=%s", payload.location, payload.cuisine)
+    return SearchService(db).search_restaurants(payload)
