@@ -38,6 +38,8 @@ import {
   Clock,
   DollarSign,
   UtensilsCrossed,
+  Map as MapIcon,
+  LayoutList,
 } from "lucide-react";
 import gsap from "gsap";
 import type {
@@ -72,6 +74,7 @@ import { ItineraryDayColumn } from "./ItineraryDayColumn";
 import { ItineraryItemCard } from "./ItineraryItemCard";
 import { CompareModal } from "./CompareModal";
 import { DayPlanModal } from "./DayPlanModal";
+import { TripMapView } from "./TripMapView";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1108,6 +1111,8 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
   const [addingId,             setAddingId]             = useState<string | null>(null);
   const [toast,                setToast]                = useState<string | null>(null);
   const [activeId,             setActiveId]             = useState<UniqueIdentifier | null>(null);
+  const [viewMode,             setViewMode]             = useState<"list" | "map">("list");
+  const [activeMarkerId,       setActiveMarkerId]       = useState<string | null>(null);
 
   // ── Day plan state ───────────────────────────────────────────────────────────
   const [dayPlan,            setDayPlan]            = useState<DayPlan | null>(null);
@@ -1118,6 +1123,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
   const hotelListRef       = useRef<HTMLDivElement>(null);
   const attractionListRef  = useRef<HTMLDivElement>(null);
   const restaurantListRef  = useRef<HTMLDivElement>(null);
+  const prevViewModeRef    = useRef<"list" | "map">("list");
 
   // ── Compare state ────────────────────────────────────────────────────────────
   const [compareSet,     setCompareSet]     = useState<Set<string>>(new Set());
@@ -1189,6 +1195,17 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
     const cards = restaurantListRef.current.querySelectorAll(".candidate-card");
     gsap.from(cards, { y: 24, opacity: 0, duration: 0.45, stagger: 0.05, ease: "power2.out", clearProps: "all" });
   }, [candidateRestaurants.length]);
+
+  // Scroll to highlighted list item when switching from map → list view
+  useEffect(() => {
+    if (prevViewModeRef.current === "map" && viewMode === "list" && activeMarkerId) {
+      setTimeout(() => {
+        const el = document.querySelector(`[data-marker-id="${activeMarkerId}"]`);
+        el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 120);
+    }
+    prevViewModeRef.current = viewMode;
+  }, [viewMode, activeMarkerId]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -1704,88 +1721,157 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
               })()}
             </CandidatePanel>
 
-            {/* Attractions section */}
-            <CandidatePanel
-              title="Attractions"
-              icon={<Sparkles className="w-3.5 h-3.5 text-emerald-500" />}
-              count={sortedAttractions.length}
-              accentColor="text-emerald-500"
-              open={attractionPanelOpen}
-              onToggle={() => setAttractionPanelOpen((v) => !v)}
-              sortControls={
-                <SortControl
-                  keys={[
-                    { key: "ai",     label: "AI Score" },
-                    { key: "rating", label: "Rating"   },
-                  ]}
-                  current={attractionSort}
-                  onChange={setAttractionSort}
-                />
-              }
-              listRef={attractionListRef}
-            >
-              {attractionsLoading ? (
-                <div className="flex items-center justify-center py-6 gap-2 text-slate-400 text-xs">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Discovering attractions…
-                </div>
-              ) : (
-                (() => {
-                  const top20 = Math.max(1, Math.ceil(sortedAttractions.length * 0.2));
-                  return sortedAttractions.map((attraction, idx) => (
-                    <AttractionCandidateCard
-                      key={attraction.id}
-                      attraction={attraction}
-                      onAddToTrip={handleAddAttractionToItinerary}
-                      adding={addingId === attraction.id}
-                      isTopPick={attractionSort === "ai" && idx < top20}
-                    />
-                  ));
-                })()
-              )}
-            </CandidatePanel>
+            {/* ── Explore: List / Map toggle ─────────────────────────────── */}
+            <div className="flex items-center justify-between px-1 pt-0.5">
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Explore</span>
+              <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                    viewMode === "list"
+                      ? "bg-white text-slate-700 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  <LayoutList className="w-3 h-3" />
+                  List
+                </button>
+                <button
+                  onClick={() => setViewMode("map")}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                    viewMode === "map"
+                      ? "bg-white text-slate-700 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  <MapIcon className="w-3 h-3" />
+                  Map
+                </button>
+              </div>
+            </div>
 
-            {/* Restaurants section */}
-            <CandidatePanel
-              title="Restaurants"
-              icon={<UtensilsCrossed className="w-3.5 h-3.5 text-rose-500" />}
-              count={sortedRestaurants.length}
-              accentColor="text-rose-500"
-              open={restaurantPanelOpen}
-              onToggle={() => setRestaurantPanelOpen((v) => !v)}
-              sortControls={
-                <SortControl
-                  keys={[
-                    { key: "ai",     label: "Best Value" },
-                    { key: "rating", label: "Rating"     },
-                    { key: "price",  label: "Price"      },
-                  ]}
-                  current={restaurantSort}
-                  onChange={setRestaurantSort}
+            {viewMode === "map" ? (
+              /* ── Map view ──────────────────────────────────────────────── */
+              <div className="flex-1" style={{ minHeight: 520 }}>
+                <TripMapView
+                  destination={destination}
+                  attractions={sortedAttractions}
+                  restaurants={sortedRestaurants}
+                  activeMarkerId={activeMarkerId}
+                  onMarkerClick={(id) => setActiveMarkerId(id)}
+                  onAddAttraction={handleAddAttractionToItinerary}
+                  onAddRestaurant={handleAddRestaurantToItinerary}
                 />
-              }
-              listRef={restaurantListRef}
-            >
-              {restaurantsLoading ? (
-                <div className="flex items-center justify-center py-6 gap-2 text-slate-400 text-xs">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Discovering restaurants…
-                </div>
-              ) : (
-                (() => {
-                  const top20 = Math.max(1, Math.ceil(sortedRestaurants.length * 0.2));
-                  return sortedRestaurants.map((restaurant, idx) => (
-                    <RestaurantCandidateCard
-                      key={restaurant.id}
-                      restaurant={restaurant}
-                      onAddToTrip={handleAddRestaurantToItinerary}
-                      adding={addingId === restaurant.id}
-                      isTopPick={restaurantSort === "ai" && idx < top20}
+              </div>
+            ) : (
+              /* ── List view ─────────────────────────────────────────────── */
+              <>
+                {/* Attractions section */}
+                <CandidatePanel
+                  title="Attractions"
+                  icon={<Sparkles className="w-3.5 h-3.5 text-emerald-500" />}
+                  count={sortedAttractions.length}
+                  accentColor="text-emerald-500"
+                  open={attractionPanelOpen}
+                  onToggle={() => setAttractionPanelOpen((v) => !v)}
+                  sortControls={
+                    <SortControl
+                      keys={[
+                        { key: "ai",     label: "AI Score" },
+                        { key: "rating", label: "Rating"   },
+                      ]}
+                      current={attractionSort}
+                      onChange={setAttractionSort}
                     />
-                  ));
-                })()
-              )}
-            </CandidatePanel>
+                  }
+                  listRef={attractionListRef}
+                >
+                  {attractionsLoading ? (
+                    <div className="flex items-center justify-center py-6 gap-2 text-slate-400 text-xs">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Discovering attractions…
+                    </div>
+                  ) : (
+                    (() => {
+                      const top20 = Math.max(1, Math.ceil(sortedAttractions.length * 0.2));
+                      return sortedAttractions.map((attraction, idx) => (
+                        <div
+                          key={attraction.id}
+                          data-marker-id={attraction.id}
+                          onMouseEnter={() => setActiveMarkerId(attraction.id)}
+                          onMouseLeave={() => setActiveMarkerId(null)}
+                          className={`rounded-2xl transition-all ${
+                            activeMarkerId === attraction.id
+                              ? "ring-2 ring-sky-400 ring-offset-1"
+                              : ""
+                          }`}
+                        >
+                          <AttractionCandidateCard
+                            attraction={attraction}
+                            onAddToTrip={handleAddAttractionToItinerary}
+                            adding={addingId === attraction.id}
+                            isTopPick={attractionSort === "ai" && idx < top20}
+                          />
+                        </div>
+                      ));
+                    })()
+                  )}
+                </CandidatePanel>
+
+                {/* Restaurants section */}
+                <CandidatePanel
+                  title="Restaurants"
+                  icon={<UtensilsCrossed className="w-3.5 h-3.5 text-rose-500" />}
+                  count={sortedRestaurants.length}
+                  accentColor="text-rose-500"
+                  open={restaurantPanelOpen}
+                  onToggle={() => setRestaurantPanelOpen((v) => !v)}
+                  sortControls={
+                    <SortControl
+                      keys={[
+                        { key: "ai",     label: "Best Value" },
+                        { key: "rating", label: "Rating"     },
+                        { key: "price",  label: "Price"      },
+                      ]}
+                      current={restaurantSort}
+                      onChange={setRestaurantSort}
+                    />
+                  }
+                  listRef={restaurantListRef}
+                >
+                  {restaurantsLoading ? (
+                    <div className="flex items-center justify-center py-6 gap-2 text-slate-400 text-xs">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Discovering restaurants…
+                    </div>
+                  ) : (
+                    (() => {
+                      const top20 = Math.max(1, Math.ceil(sortedRestaurants.length * 0.2));
+                      return sortedRestaurants.map((restaurant, idx) => (
+                        <div
+                          key={restaurant.id}
+                          data-marker-id={restaurant.id}
+                          onMouseEnter={() => setActiveMarkerId(restaurant.id)}
+                          onMouseLeave={() => setActiveMarkerId(null)}
+                          className={`rounded-2xl transition-all ${
+                            activeMarkerId === restaurant.id
+                              ? "ring-2 ring-orange-400 ring-offset-1"
+                              : ""
+                          }`}
+                        >
+                          <RestaurantCandidateCard
+                            restaurant={restaurant}
+                            onAddToTrip={handleAddRestaurantToItinerary}
+                            adding={addingId === restaurant.id}
+                            isTopPick={restaurantSort === "ai" && idx < top20}
+                          />
+                        </div>
+                      ));
+                    })()
+                  )}
+                </CandidatePanel>
+              </>
+            )}
 
             {/* Activities / research results */}
             {results.length > 0 && (
