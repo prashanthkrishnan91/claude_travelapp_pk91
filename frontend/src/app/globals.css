@@ -72,14 +72,14 @@
   /* ── Card shell ──────────────────────────────────────────────── */
   .card {
     border-radius: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.72);
-    background: rgba(255, 255, 255, 0.62);
-    backdrop-filter: blur(16px) saturate(1.6);
-    -webkit-backdrop-filter: blur(16px) saturate(1.6);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.70);
+    backdrop-filter: blur(20px) saturate(1.8);
+    -webkit-backdrop-filter: blur(20px) saturate(1.8);
     box-shadow:
-      0 4px 20px 0 rgb(0 0 0 / 0.07),
-      0 1px 3px 0 rgb(0 0 0 / 0.04),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.8);
+      0 8px 32px 0 rgb(0 0 0 / 0.10),
+      0 2px 8px 0 rgb(0 0 0 / 0.06),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.85);
   }
 
   /* ── Buttons ─────────────────────────────────────────────────── */
@@ -249,19 +249,20 @@
 
   /* ── Card lift (interactive card hover) ─────────────────────── */
   .card-lift {
-    transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.2s ease;
+    transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
   }
   .card-lift:hover {
-    transform: scale(1.02);
+    transform: translateY(-4px);
     box-shadow:
-      0 12px 40px 0 rgb(0 0 0 / 0.11),
-      0 3px 10px 0 rgb(0 0 0 / 0.06),
-      inset 0 1px 0 rgba(255, 255, 255, 0.9);
-    border-color: rgba(255, 255, 255, 0.88);
+      0 20px 60px 0 rgb(0 0 0 / 0.14),
+      0 8px 20px 0 rgb(0 0 0 / 0.08),
+      0 0 0 1px rgba(255, 255, 255, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    border-color: rgba(255, 255, 255, 0.65);
   }
   .card-lift:active {
-    transform: scale(0.99);
-    box-shadow: 0 2px 8px 0 rgb(0 0 0 / 0.06);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px 0 rgb(0 0 0 / 0.08);
   }
 
   /* ── Mobile safe-area padding ────────────────────────────────── */

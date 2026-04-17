@@ -41,8 +41,7 @@ export function QuickActions() {
           <Link
             key={href}
             href={href}
-            className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200
-                       hover:border-slate-300 hover:bg-slate-50 transition group"
+            className="flex items-center gap-3 p-3.5 rounded-xl border border-white/40 bg-white/55 backdrop-blur-[16px] shadow-[0_4px_16px_0_rgb(0_0_0/0.07)] transition-all duration-200 group hover:bg-white/75 hover:border-white/60 hover:shadow-[0_10px_32px_0_rgb(0_0_0/0.11)] hover:-translate-y-1"
           >
             <div className={`flex items-center justify-center w-9 h-9 rounded-lg shrink-0 ${colorClass}`}>
               <Icon className="w-4 h-4" />

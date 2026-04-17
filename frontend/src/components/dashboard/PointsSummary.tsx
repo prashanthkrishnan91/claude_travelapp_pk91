@@ -48,7 +48,7 @@ export function PointsSummary({ cards }: PointsSummaryProps) {
       ) : (
         <>
           {/* Total */}
-          <div className="rounded-xl bg-slate-50 border border-slate-100 p-4 mb-4">
+          <div className="rounded-xl bg-white/55 backdrop-blur-[16px] border border-white/40 shadow-[0_4px_16px_0_rgb(0_0_0/0.07)] p-4 mb-4">
             <p className="text-xs text-slate-500 font-medium">Total Points</p>
             <p className="text-3xl font-bold text-slate-900 mt-0.5">
               {totalPoints.toLocaleString()}

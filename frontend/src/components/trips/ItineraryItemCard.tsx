@@ -98,10 +98,10 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative flex items-start gap-2 p-2.5 rounded-xl border bg-white transition-all duration-150 ${
+      className={`group relative flex items-start gap-2 p-2.5 rounded-xl border transition-all duration-200 ${
         isDragging
-          ? "opacity-50 shadow-xl scale-95 border-sky-300"
-          : "border-slate-200 hover:border-slate-300 hover:shadow-md hover:-translate-y-px"
+          ? "opacity-50 shadow-xl scale-95 border-sky-300 bg-white/60 backdrop-blur-md"
+          : "bg-white/60 backdrop-blur-[16px] border-white/40 shadow-[0_4px_16px_0_rgb(0_0_0/0.08)] hover:bg-white/75 hover:border-white/60 hover:shadow-[0_12px_36px_0_rgb(0_0_0/0.12)] hover:-translate-y-1"
       }`}
     >
       {/* Drag handle */}
