@@ -24,10 +24,13 @@ from app.models.search import (
     AttractionResult,
     AttractionSearchRequest,
     BookingOption,
+    ClusterSearchRequest,
     FlightResult,
     FlightSearchRequest,
     HotelResult,
     HotelSearchRequest,
+    LocationCluster,
+    PlaceInCluster,
     RestaurantResult,
     RestaurantSearchRequest,
     RoundTripFlightPair,
@@ -35,6 +38,53 @@ from app.models.search import (
 
 CACHE_TABLE = "research_cache"
 CACHE_TTL_HOURS = 1
+
+# Known city centres for coordinate generation
+_CITY_CENTERS: Dict[str, tuple] = {
+    "honolulu": (21.3069, -157.8583),
+    "waikiki": (21.2814, -157.8369),
+    "new york": (40.7128, -74.0060),
+    "paris": (48.8566, 2.3522),
+    "london": (51.5074, -0.1278),
+    "tokyo": (35.6762, 139.6503),
+    "sydney": (-33.8688, 151.2093),
+    "los angeles": (34.0522, -118.2437),
+    "miami": (25.7617, -80.1918),
+    "chicago": (41.8781, -87.6298),
+    "san francisco": (37.7749, -122.4194),
+    "barcelona": (41.3851, 2.1734),
+    "rome": (41.9028, 12.4964),
+    "amsterdam": (52.3676, 4.9041),
+    "dubai": (25.2048, 55.2708),
+    "singapore": (1.3521, 103.8198),
+    "bali": (-8.4095, 115.1889),
+    "cancun": (21.1619, -86.8515),
+    "bangkok": (13.7563, 100.5018),
+    "istanbul": (41.0082, 28.9784),
+    "prague": (50.0755, 14.4378),
+    "vienna": (48.2082, 16.3738),
+    "berlin": (52.5200, 13.4050),
+    "madrid": (40.4168, -3.7038),
+    "lisbon": (38.7223, -9.1393),
+    "athens": (37.9838, 23.7275),
+    "cairo": (30.0444, 31.2357),
+    "cape town": (-33.9249, 18.4241),
+    "mexico city": (19.4326, -99.1332),
+    "toronto": (43.6532, -79.3832),
+    "vancouver": (49.2827, -123.1207),
+    "seoul": (37.5665, 126.9780),
+    "beijing": (39.9042, 116.4074),
+    "shanghai": (31.2304, 121.4737),
+    "mumbai": (19.0760, 72.8777),
+}
+
+_AREA_NAMES = [
+    "Central District", "Waterfront Area", "Old Town Quarter",
+    "Market District", "Harbour Side", "Heritage Zone",
+    "Arts Quarter", "Garden District", "Royal Mile Area",
+    "Bay Area", "Cultural Zone", "Riverside Quarter",
+    "Hilltop Area", "Beachfront Strip", "Historic Core",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -49,6 +99,74 @@ def _cache_key(namespace: str, query: Dict[str, Any]) -> str:
 
 def _now_utc() -> datetime:
     return datetime.now(tz=timezone.utc)
+
+
+# ---------------------------------------------------------------------------
+# Proximity clustering helpers
+# ---------------------------------------------------------------------------
+
+def _get_city_center(location: str) -> tuple:
+    city = location.split(",")[0].strip().lower()
+    for key, coords in _CITY_CENTERS.items():
+        if key in city or city in key:
+            return coords
+    h = hashlib.md5(city.encode()).digest()
+    lat = 35.0 + (h[0] - 128) / 20.0
+    lng = -80.0 + (h[1] - 128) / 5.0
+    return lat, lng
+
+
+def _spread_coordinates(center_lat: float, center_lng: float, index: int, total: int, max_radius_km: float = 2.5) -> tuple:
+    golden_angle = 2.399963  # ~137.5° in radians
+    radius_km = max_radius_km * math.sqrt((index + 0.5) / max(total, 1))
+    angle = index * golden_angle
+    lat_offset = (radius_km / 111.0) * math.cos(angle)
+    lng_offset = (radius_km / (111.0 * math.cos(math.radians(center_lat)))) * math.sin(angle)
+    return round(center_lat + lat_offset, 6), round(center_lng + lng_offset, 6)
+
+
+def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2
+    return R * 2 * math.asin(math.sqrt(max(0.0, min(1.0, a))))
+
+
+def _cluster_places(places: List[Dict[str, Any]], radius_km: float) -> List[List[Dict[str, Any]]]:
+    """Greedy radius-based clustering: seed on first unassigned, pull in neighbours within radius."""
+    unassigned = list(range(len(places)))
+    clusters: List[List[int]] = []
+    while unassigned:
+        seed_idx = unassigned[0]
+        seed = places[seed_idx]
+        cluster_indices = [seed_idx]
+        remaining: List[int] = []
+        for i in unassigned[1:]:
+            p = places[i]
+            if _haversine_km(seed["lat"], seed["lng"], p["lat"], p["lng"]) <= radius_km:
+                cluster_indices.append(i)
+            else:
+                remaining.append(i)
+        clusters.append(cluster_indices)
+        unassigned = remaining
+    return [[places[i] for i in cluster] for cluster in clusters]
+
+
+def _walkability_label(cluster: List[Dict[str, Any]]) -> str:
+    if len(cluster) < 2:
+        return "Solo stop"
+    max_dist = 0.0
+    for i in range(len(cluster)):
+        for j in range(i + 1, len(cluster)):
+            d = _haversine_km(cluster[i]["lat"], cluster[i]["lng"], cluster[j]["lat"], cluster[j]["lng"])
+            if d > max_dist:
+                max_dist = d
+    if max_dist <= 0.5:
+        return "Walkable cluster"
+    if max_dist <= 1.0:
+        return "5 min apart"
+    return "10 min apart"
 
 
 # ---------------------------------------------------------------------------
@@ -585,6 +703,70 @@ class SearchService:
         results = _mock_restaurants(req)
         self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
         return results
+
+    def search_clusters(self, req: ClusterSearchRequest) -> List[LocationCluster]:
+        """Fetch all attractions + restaurants for a location and group them by proximity."""
+        center_lat, center_lng = _get_city_center(req.location)
+
+        attractions = self.search_attractions(AttractionSearchRequest(location=req.location))
+        restaurants = self.search_restaurants(RestaurantSearchRequest(location=req.location))
+
+        total = len(attractions) + len(restaurants)
+        all_places: List[Dict[str, Any]] = []
+
+        for i, a in enumerate(attractions):
+            lat, lng = _spread_coordinates(center_lat, center_lng, i, total)
+            all_places.append({
+                "id": a.id,
+                "name": a.name,
+                "place_type": "attraction",
+                "category": a.category,
+                "address": a.address,
+                "rating": a.rating,
+                "ai_score": a.ai_score,
+                "tags": a.tags,
+                "lat": lat,
+                "lng": lng,
+                "booking_url": a.booking_url,
+                "booking_options": [o.model_dump() for o in a.booking_options],
+            })
+
+        for i, r in enumerate(restaurants):
+            lat, lng = _spread_coordinates(center_lat, center_lng, len(attractions) + i, total)
+            all_places.append({
+                "id": r.id,
+                "name": r.name,
+                "place_type": "restaurant",
+                "category": r.cuisine,
+                "address": r.address,
+                "rating": r.rating,
+                "ai_score": r.ai_score,
+                "tags": r.tags,
+                "lat": lat,
+                "lng": lng,
+                "booking_url": r.booking_url,
+                "booking_options": [o.model_dump() for o in r.booking_options],
+            })
+
+        raw_clusters = _cluster_places(all_places, req.radius_km)
+
+        result: List[LocationCluster] = []
+        for idx, cluster in enumerate(raw_clusters):
+            c_lat = sum(p["lat"] for p in cluster) / len(cluster)
+            c_lng = sum(p["lng"] for p in cluster) / len(cluster)
+            area_name = _AREA_NAMES[idx % len(_AREA_NAMES)]
+            label = _walkability_label(cluster)
+            places = [PlaceInCluster(**p) for p in cluster]
+            result.append(LocationCluster(
+                cluster_id=f"cluster-{idx}",
+                area_name=area_name,
+                label=label,
+                center_lat=round(c_lat, 6),
+                center_lng=round(c_lng, 6),
+                places=places,
+            ))
+
+        return result
 
     # ------------------------------------------------------------------
     # Cache helpers

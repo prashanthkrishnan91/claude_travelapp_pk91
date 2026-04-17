@@ -149,6 +149,8 @@ class AttractionResult(SearchResult):
     num_reviews: Optional[int] = Field(None, description="Number of user reviews")
     opening_hours: Optional[str] = Field(None, description="Opening hours summary")
     price_level: Optional[int] = Field(None, ge=0, le=4, description="Price level 0=free, 1=inexpensive, 2=moderate, 3=expensive, 4=very expensive")
+    lat: Optional[float] = Field(None, description="Latitude coordinate")
+    lng: Optional[float] = Field(None, description="Longitude coordinate")
 
 
 # ------------------------------------------------------------------
@@ -171,6 +173,41 @@ class RestaurantResult(SearchResult):
     opening_hours: Optional[str] = Field(None, description="Opening hours summary")
     price_level: Optional[int] = Field(None, ge=0, le=4, description="Price level 0=free, 1=inexpensive, 2=moderate, 3=expensive, 4=very expensive")
     sentiment: Optional[float] = Field(None, ge=0, le=1, description="Sentiment score 0–1 derived from review analysis")
+    lat: Optional[float] = Field(None, description="Latitude coordinate")
+    lng: Optional[float] = Field(None, description="Longitude coordinate")
+
+
+# ------------------------------------------------------------------
+# Proximity cluster models
+# ------------------------------------------------------------------
+
+class ClusterSearchRequest(BaseModel):
+    location: str = Field(..., min_length=2, description="City or region to cluster places for")
+    radius_km: float = Field(1.5, ge=0.5, le=5.0, description="Cluster radius in kilometres")
+
+
+class PlaceInCluster(BaseModel):
+    id: str
+    name: str
+    place_type: str = Field(..., description="attraction | restaurant")
+    category: str
+    address: str
+    rating: Optional[float] = None
+    ai_score: Optional[float] = None
+    tags: List[str] = Field(default_factory=list)
+    lat: float
+    lng: float
+    booking_url: str
+    booking_options: List[BookingOption] = Field(default_factory=list)
+
+
+class LocationCluster(BaseModel):
+    cluster_id: str
+    area_name: str
+    label: str = Field(..., description="Walkable cluster | 5 min apart | 10 min apart")
+    center_lat: float
+    center_lng: float
+    places: List[PlaceInCluster]
 
 
 # ------------------------------------------------------------------

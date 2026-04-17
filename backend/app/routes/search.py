@@ -9,10 +9,12 @@ from app.core.deps import DB
 from app.models.search import (
     AttractionResult,
     AttractionSearchRequest,
+    ClusterSearchRequest,
     FlightResult,
     FlightSearchRequest,
     HotelResult,
     HotelSearchRequest,
+    LocationCluster,
     RestaurantResult,
     RestaurantSearchRequest,
     RoundTripFlightPair,
@@ -92,3 +94,15 @@ def search_restaurants(payload: RestaurantSearchRequest, db: DB) -> List[Restaur
     """
     logger.info("[search_restaurants] location=%s cuisine=%s", payload.location, payload.cuisine)
     return SearchService(db).search_restaurants(payload)
+
+
+@router.post("/clusters", response_model=List[LocationCluster])
+def search_clusters(payload: ClusterSearchRequest, db: DB) -> List[LocationCluster]:
+    """Group attractions and restaurants by proximity.
+
+    Returns location clusters where each cluster contains nearby attractions
+    and restaurants. Each cluster includes an area name and a walkability label
+    (e.g. 'Walkable cluster', '5 min apart').
+    """
+    logger.info("[search_clusters] location=%s radius_km=%.1f", payload.location, payload.radius_km)
+    return SearchService(db).search_clusters(payload)

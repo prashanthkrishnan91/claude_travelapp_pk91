@@ -23,6 +23,8 @@ import type {
   FlightSearchResult,
   AttractionSearchResult,
   RestaurantSearchResult,
+  LocationCluster,
+  PlaceInCluster,
   DayPlan,
 } from "@/types";
 import { supabase } from "./supabase";
@@ -671,6 +673,45 @@ export async function searchRestaurants(
       body: JSON.stringify(payload),
     });
     return results.map(mapRestaurantToResult);
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch attractions and restaurants grouped into proximity clusters. */
+export async function searchClusters(
+  location: string,
+  radiusKm: number = 1.5
+): Promise<LocationCluster[]> {
+  try {
+    const payload = { location, radius_km: radiusKm };
+    const raw = await apiFetch<Record<string, unknown>[]>("/search/clusters", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return raw.map((c) => ({
+      clusterId: c.cluster_id as string,
+      areaName: c.area_name as string,
+      label: c.label as string,
+      centerLat: c.center_lat as number,
+      centerLng: c.center_lng as number,
+      places: (c.places as Record<string, unknown>[]).map(
+        (p): PlaceInCluster => ({
+          id: p.id as string,
+          name: p.name as string,
+          placeType: p.place_type as "attraction" | "restaurant",
+          category: p.category as string,
+          address: p.address as string,
+          rating: p.rating as number | undefined,
+          aiScore: p.ai_score as number | undefined,
+          tags: (p.tags as string[]) ?? [],
+          lat: p.lat as number,
+          lng: p.lng as number,
+          bookingUrl: p.booking_url as string,
+          bookingOptions: p.booking_options as BookingOption[] | undefined,
+        })
+      ),
+    }));
   } catch {
     return [];
   }

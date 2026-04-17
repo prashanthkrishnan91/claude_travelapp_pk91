@@ -177,6 +177,8 @@ export interface RestaurantSearchResult {
   tags: string[];
   bookingUrl?: string;
   bookingOptions?: BookingOption[];
+  lat?: number;
+  lng?: number;
 }
 
 // ─── Attraction Search Result ─────────────────────────────────────────────────
@@ -198,6 +200,34 @@ export interface AttractionSearchResult {
   tags: string[];
   bookingUrl?: string;
   bookingOptions?: BookingOption[];
+  lat?: number;
+  lng?: number;
+}
+
+// ─── Proximity Cluster ────────────────────────────────────────────────────────
+
+export interface PlaceInCluster {
+  id: string;
+  name: string;
+  placeType: "attraction" | "restaurant";
+  category: string;
+  address: string;
+  rating?: number;
+  aiScore?: number;
+  tags: string[];
+  lat: number;
+  lng: number;
+  bookingUrl: string;
+  bookingOptions?: BookingOption[];
+}
+
+export interface LocationCluster {
+  clusterId: string;
+  areaName: string;
+  label: string;
+  centerLat: number;
+  centerLng: number;
+  places: PlaceInCluster[];
 }
 
 // ─── Day Plan ─────────────────────────────────────────────────────────────────
