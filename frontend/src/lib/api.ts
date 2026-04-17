@@ -8,6 +8,7 @@
 
 import type {
   Trip,
+  TripContext,
   ItineraryDay,
   ItineraryItem,
   ItemType,
@@ -207,6 +208,14 @@ export async function updateTrip(
 
 export async function deleteTrip(id: string): Promise<void> {
   await apiFetch<void>(`/trips/${id}`, { method: "DELETE" });
+}
+
+export async function fetchTripContext(tripId: string): Promise<TripContext | null> {
+  try {
+    return await apiFetch<TripContext>(`/context/trip/${tripId}`);
+  } catch {
+    return null;
+  }
 }
 
 // ─── Itinerary ────────────────────────────────────────────────────────────────
