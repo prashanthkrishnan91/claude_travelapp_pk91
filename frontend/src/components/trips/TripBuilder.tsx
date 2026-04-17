@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -22,9 +22,6 @@ import {
   Plane,
   Hotel,
   MapPin,
-  Utensils,
-  Train,
-  FileText,
   CalendarPlus,
   Sparkles,
   Scale,
@@ -43,7 +40,6 @@ import type {
   ItineraryDay,
   ItineraryItem,
   ResearchResult,
-  ResearchCategory,
   ItemType,
   CompareResult,
 } from "@/types";
@@ -64,10 +60,6 @@ import { CompareModal } from "./CompareModal";
 
 function aiScoreOf(item: ItineraryItem): number {
   return ((item.details as Record<string, unknown>)?.aiScore as number) ?? 0;
-}
-
-function recTagOf(item: ItineraryItem): string {
-  return ((item.details as Record<string, unknown>)?.recommendationTag as string) ?? "";
 }
 
 function formatDuration(minutes: number): string {
