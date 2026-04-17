@@ -48,6 +48,7 @@ import type {
   CompareResult,
   AttractionSearchResult,
   RestaurantSearchResult,
+  DayPlan,
 } from "@/types";
 import {
   createDay,
@@ -62,11 +63,15 @@ import {
   addAttractionToTrip,
   searchRestaurants,
   addRestaurantToTrip,
+  fetchDayPlan,
+  addAttractionToDay,
+  addRestaurantToDay,
 } from "@/lib/api";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
 import { ItineraryItemCard } from "./ItineraryItemCard";
 import { CompareModal } from "./CompareModal";
+import { DayPlanModal } from "./DayPlanModal";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1104,6 +1109,11 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
   const [toast,                setToast]                = useState<string | null>(null);
   const [activeId,             setActiveId]             = useState<UniqueIdentifier | null>(null);
 
+  // ── Day plan state ───────────────────────────────────────────────────────────
+  const [dayPlan,            setDayPlan]            = useState<DayPlan | null>(null);
+  const [dayPlanLoading,     setDayPlanLoading]     = useState(false);
+  const [dayPlanTargetDayId, setDayPlanTargetDayId] = useState<string | null>(null);
+
   const flightListRef      = useRef<HTMLDivElement>(null);
   const hotelListRef       = useRef<HTMLDivElement>(null);
   const attractionListRef  = useRef<HTMLDivElement>(null);
@@ -1360,6 +1370,37 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
       setDays((prev) => [...prev, newDay]);
     } catch { /* silently ignore */ }
   }, [days.length, tripId]);
+
+  // ── Day plan: fetch suggestions and add items to a specific day ─────────────
+
+  const handlePlanDay = useCallback(async (dayId: string, dayNumber: number) => {
+    setDayPlanTargetDayId(dayId);
+    setDayPlanLoading(true);
+    try {
+      const plan = await fetchDayPlan(tripId, dayNumber);
+      setDayPlan(plan);
+    } catch {
+      showToast("Failed to generate day plan — please try again");
+    } finally {
+      setDayPlanLoading(false);
+    }
+  }, [tripId, showToast]);
+
+  const handlePlanAddAttraction = useCallback(async (attraction: AttractionSearchResult) => {
+    if (!dayPlanTargetDayId) return;
+    const newItem = await addAttractionToDay(tripId, dayPlanTargetDayId, attraction);
+    setDays((prev) =>
+      prev.map((d) => d.id === dayPlanTargetDayId ? { ...d, items: [...d.items, newItem] } : d)
+    );
+  }, [dayPlanTargetDayId, tripId]);
+
+  const handlePlanAddRestaurant = useCallback(async (restaurant: RestaurantSearchResult) => {
+    if (!dayPlanTargetDayId) return;
+    const newItem = await addRestaurantToDay(tripId, dayPlanTargetDayId, restaurant);
+    setDays((prev) =>
+      prev.map((d) => d.id === dayPlanTargetDayId ? { ...d, items: [...d.items, newItem] } : d)
+    );
+  }, [dayPlanTargetDayId, tripId]);
 
   // ── Add research result by clicking "+" ─────────────────────────────────────
 
@@ -1791,6 +1832,8 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
                     onAddItem={handleAddToDay}
                     onToggleCompare={handleToggleCompareItem}
                     compareSet={compareSet}
+                    onPlanDay={handlePlanDay}
+                    planDayLoading={dayPlanLoading && dayPlanTargetDayId === day.id}
                   />
                 ))}
               </SortableContext>
@@ -1855,6 +1898,16 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
       {/* ── Compare Modal ──────────────────────────────────────────────────── */}
       {compareOpen && compareResults.length > 0 && (
         <CompareModal results={compareResults} onClose={() => setCompareOpen(false)} />
+      )}
+
+      {/* ── Day Plan Modal ───────────────────────────────────────────────────── */}
+      {dayPlan && (
+        <DayPlanModal
+          plan={dayPlan}
+          onClose={() => setDayPlan(null)}
+          onAddAttraction={handlePlanAddAttraction}
+          onAddRestaurant={handlePlanAddRestaurant}
+        />
       )}
 
       {/* ── Toast ────────────────────────────────────────────────────────────── */}
