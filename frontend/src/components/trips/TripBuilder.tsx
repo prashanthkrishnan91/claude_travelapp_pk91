@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -135,6 +135,35 @@ function sortRestaurants(items: RestaurantSearchResult[], key: SortKey): Restaur
     if (key === "rating") return (b.rating ?? 0) - (a.rating ?? 0);
     if (key === "price")  return (a.priceLevel ?? 0) - (b.priceLevel ?? 0);
     return (b.aiScore ?? 0) - (a.aiScore ?? 0);
+  });
+}
+
+function filterAttractions(
+  items: AttractionSearchResult[],
+  ratingMin: number | null,
+  type: string | null,
+): AttractionSearchResult[] {
+  return items.filter((a) => {
+    if (ratingMin !== null && (a.rating ?? 0) < ratingMin) return false;
+    if (type !== null) {
+      const cat = a.category?.toLowerCase() ?? "";
+      if (type === "landmarks" ? (cat !== "landmarks" && cat !== "top_attractions") : cat !== type) return false;
+    }
+    return true;
+  });
+}
+
+function filterRestaurants(
+  items: RestaurantSearchResult[],
+  cuisine: string | null,
+  priceLevel: number | null,
+  ratingMin: number | null,
+): RestaurantSearchResult[] {
+  return items.filter((r) => {
+    if (cuisine !== null && r.cuisine?.toLowerCase() !== cuisine.toLowerCase()) return false;
+    if (priceLevel !== null && r.priceLevel !== priceLevel) return false;
+    if (ratingMin !== null && (r.rating ?? 0) < ratingMin) return false;
+    return true;
   });
 }
 
@@ -1029,12 +1058,48 @@ function RestaurantCandidateCard({
   );
 }
 
+// ─── Filter pills ─────────────────────────────────────────────────────────────
+
+function FilterPills({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { label: string; value: string | number | null }[];
+  value: string | number | null;
+  onChange: (v: string | number | null) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">{label}</span>
+      <div className="flex flex-wrap gap-1">
+        {options.map((opt) => (
+          <button
+            key={String(opt.value ?? "all")}
+            onClick={() => onChange(opt.value === value ? null : opt.value)}
+            className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-all border ${
+              opt.value === value
+                ? "bg-slate-700 text-white border-slate-700"
+                : "bg-transparent text-slate-500 border-slate-200 hover:border-slate-400 hover:text-slate-700"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Collapsible panel wrapper ────────────────────────────────────────────────
 
 function CandidatePanel({
   title,
   icon,
   count,
+  totalCount,
   accentColor,
   open,
   onToggle,
@@ -1045,6 +1110,7 @@ function CandidatePanel({
   title: string;
   icon: React.ReactNode;
   count: number;
+  totalCount?: number;
   accentColor: string;
   open: boolean;
   onToggle: () => void;
@@ -1052,6 +1118,7 @@ function CandidatePanel({
   listRef?: React.Ref<HTMLDivElement>;
   children: React.ReactNode;
 }) {
+  const hasData = (totalCount ?? count) > 0;
   return (
     <div className="card p-3 flex flex-col gap-2">
       <button
@@ -1061,19 +1128,21 @@ function CandidatePanel({
         <span className="flex items-center gap-1.5">
           {icon}
           {title}
-          <span className={`text-xs font-normal ${accentColor}`}>({count})</span>
+          <span className={`text-xs font-normal ${accentColor}`}>
+            ({totalCount !== undefined && totalCount !== count ? `${count}/${totalCount}` : count})
+          </span>
         </span>
         {open
           ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
           : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
       </button>
       {open && sortControls && <div className="pt-0.5">{sortControls}</div>}
-      {open && count === 0 && (
+      {open && !hasData && (
         <p className="text-xs text-slate-400 py-2 text-center">
           No candidates yet — create a new trip to auto-populate.
         </p>
       )}
-      {open && count > 0 && (
+      {open && hasData && (
         <div ref={listRef} className="flex flex-col gap-3 max-h-[540px] overflow-y-auto py-1 px-0.5">
           {children}
         </div>
@@ -1112,6 +1181,11 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
   const [hotelSort,            setHotelSort]            = useState<SortKey>("ai");
   const [attractionSort,       setAttractionSort]       = useState<SortKey>("ai");
   const [restaurantSort,       setRestaurantSort]       = useState<SortKey>("ai");
+  const [attractionRatingFilter,    setAttractionRatingFilter]    = useState<number | null>(null);
+  const [attractionTypeFilter,      setAttractionTypeFilter]      = useState<string | null>(null);
+  const [restaurantCuisineFilter,   setRestaurantCuisineFilter]   = useState<string | null>(null);
+  const [restaurantPriceLevelFilter, setRestaurantPriceLevelFilter] = useState<number | null>(null);
+  const [restaurantRatingFilter,    setRestaurantRatingFilter]    = useState<number | null>(null);
   const [addingId,             setAddingId]             = useState<string | null>(null);
   const [toast,                setToast]                = useState<string | null>(null);
   const [activeId,             setActiveId]             = useState<UniqueIdentifier | null>(null);
@@ -1690,6 +1764,14 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
   const sortedHotels      = sortHotels(candidateHotels, hotelSort);
   const sortedAttractions = sortAttractions(candidateAttractions, attractionSort);
   const sortedRestaurants = sortRestaurants(candidateRestaurants, restaurantSort);
+
+  const availableCuisines = useMemo(
+    () => [...new Set(candidateRestaurants.map((r) => r.cuisine).filter(Boolean))].sort() as string[],
+    [candidateRestaurants],
+  );
+  const filteredAttractions = filterAttractions(sortedAttractions, attractionRatingFilter, attractionTypeFilter);
+  const filteredRestaurants = filterRestaurants(sortedRestaurants, restaurantCuisineFilter, restaurantPriceLevelFilter, restaurantRatingFilter);
+
   const topFlight = sortedFlights[0] ?? null;
   const topHotel  = sortedHotels[0] ?? null;
 
@@ -1853,8 +1935,8 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
               <div className="flex-1" style={{ minHeight: 520 }}>
                 <TripMapView
                   destination={destination}
-                  attractions={sortedAttractions}
-                  restaurants={sortedRestaurants}
+                  attractions={filteredAttractions}
+                  restaurants={filteredRestaurants}
                   activeMarkerId={activeMarkerId}
                   onMarkerClick={(id) => setActiveMarkerId(id)}
                   onAddAttraction={handleAddAttractionToItinerary}
@@ -1968,19 +2050,47 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
                 <CandidatePanel
                   title="Attractions"
                   icon={<Sparkles className="w-3.5 h-3.5 text-emerald-500" />}
-                  count={sortedAttractions.length}
+                  count={filteredAttractions.length}
+                  totalCount={candidateAttractions.length}
                   accentColor="text-emerald-500"
                   open={attractionPanelOpen}
                   onToggle={() => setAttractionPanelOpen((v) => !v)}
                   sortControls={
-                    <SortControl
-                      keys={[
-                        { key: "ai",     label: "AI Score" },
-                        { key: "rating", label: "Rating"   },
-                      ]}
-                      current={attractionSort}
-                      onChange={setAttractionSort}
-                    />
+                    <div className="flex flex-col gap-2">
+                      <SortControl
+                        keys={[
+                          { key: "ai",     label: "AI Score" },
+                          { key: "rating", label: "Rating"   },
+                        ]}
+                        current={attractionSort}
+                        onChange={setAttractionSort}
+                      />
+                      <FilterPills
+                        label="Rating"
+                        options={[
+                          { label: "All",  value: null },
+                          { label: "3.5+", value: 3.5  },
+                          { label: "4.0+", value: 4.0  },
+                          { label: "4.5+", value: 4.5  },
+                        ]}
+                        value={attractionRatingFilter}
+                        onChange={setAttractionRatingFilter}
+                      />
+                      <FilterPills
+                        label="Type"
+                        options={[
+                          { label: "All",       value: null        },
+                          { label: "Nature",    value: "outdoor"   },
+                          { label: "Museum",    value: "museums"   },
+                          { label: "Landmark",  value: "landmarks" },
+                          { label: "Tours",     value: "tours"     },
+                          { label: "Shopping",  value: "shopping"  },
+                          { label: "Nightlife", value: "nightlife" },
+                        ]}
+                        value={attractionTypeFilter}
+                        onChange={setAttractionTypeFilter}
+                      />
+                    </div>
                   }
                   listRef={attractionListRef}
                 >
@@ -1989,10 +2099,12 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Discovering attractions…
                     </div>
+                  ) : filteredAttractions.length === 0 ? (
+                    <p className="text-xs text-slate-400 py-4 text-center">No attractions match the selected filters.</p>
                   ) : (
                     (() => {
-                      const top20 = Math.max(1, Math.ceil(sortedAttractions.length * 0.2));
-                      return sortedAttractions.map((attraction, idx) => (
+                      const top20 = Math.max(1, Math.ceil(filteredAttractions.length * 0.2));
+                      return filteredAttractions.map((attraction, idx) => (
                         <div
                           key={attraction.id}
                           data-marker-id={attraction.id}
@@ -2020,20 +2132,57 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
                 <CandidatePanel
                   title="Restaurants"
                   icon={<UtensilsCrossed className="w-3.5 h-3.5 text-rose-500" />}
-                  count={sortedRestaurants.length}
+                  count={filteredRestaurants.length}
+                  totalCount={candidateRestaurants.length}
                   accentColor="text-rose-500"
                   open={restaurantPanelOpen}
                   onToggle={() => setRestaurantPanelOpen((v) => !v)}
                   sortControls={
-                    <SortControl
-                      keys={[
-                        { key: "ai",     label: "Best Value" },
-                        { key: "rating", label: "Rating"     },
-                        { key: "price",  label: "Price"      },
-                      ]}
-                      current={restaurantSort}
-                      onChange={setRestaurantSort}
-                    />
+                    <div className="flex flex-col gap-2">
+                      <SortControl
+                        keys={[
+                          { key: "ai",     label: "Best Value" },
+                          { key: "rating", label: "Rating"     },
+                          { key: "price",  label: "Price"      },
+                        ]}
+                        current={restaurantSort}
+                        onChange={setRestaurantSort}
+                      />
+                      <FilterPills
+                        label="Rating"
+                        options={[
+                          { label: "All",  value: null },
+                          { label: "3.5+", value: 3.5  },
+                          { label: "4.0+", value: 4.0  },
+                          { label: "4.5+", value: 4.5  },
+                        ]}
+                        value={restaurantRatingFilter}
+                        onChange={setRestaurantRatingFilter}
+                      />
+                      <FilterPills
+                        label="Price"
+                        options={[
+                          { label: "All",  value: null },
+                          { label: "$",    value: 1    },
+                          { label: "$$",   value: 2    },
+                          { label: "$$$",  value: 3    },
+                          { label: "$$$$", value: 4    },
+                        ]}
+                        value={restaurantPriceLevelFilter}
+                        onChange={setRestaurantPriceLevelFilter}
+                      />
+                      {availableCuisines.length > 0 && (
+                        <FilterPills
+                          label="Cuisine"
+                          options={[
+                            { label: "All", value: null },
+                            ...availableCuisines.map((c) => ({ label: c, value: c.toLowerCase() })),
+                          ]}
+                          value={restaurantCuisineFilter}
+                          onChange={setRestaurantCuisineFilter}
+                        />
+                      )}
+                    </div>
                   }
                   listRef={restaurantListRef}
                 >
@@ -2042,10 +2191,12 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Discovering restaurants…
                     </div>
+                  ) : filteredRestaurants.length === 0 ? (
+                    <p className="text-xs text-slate-400 py-4 text-center">No restaurants match the selected filters.</p>
                   ) : (
                     (() => {
-                      const top20 = Math.max(1, Math.ceil(sortedRestaurants.length * 0.2));
-                      return sortedRestaurants.map((restaurant, idx) => (
+                      const top20 = Math.max(1, Math.ceil(filteredRestaurants.length * 0.2));
+                      return filteredRestaurants.map((restaurant, idx) => (
                         <div
                           key={restaurant.id}
                           data-marker-id={restaurant.id}
