@@ -1754,8 +1754,8 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
               open={restaurantPanelOpen}
               onToggle={() => setRestaurantPanelOpen((v) => !v)}
               sortControls={
-                <SortBar
-                  options={[
+                <SortControl
+                  keys={[
                     { key: "ai",     label: "Best Value" },
                     { key: "rating", label: "Rating"     },
                     { key: "price",  label: "Price"      },
