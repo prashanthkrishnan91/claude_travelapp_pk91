@@ -111,6 +111,11 @@ export interface FlightSearchResult {
   rating?: number;
   bookingUrl: string;
   bookingOptions?: BookingOption[];
+  aiScore?: number;
+  decision?: string;
+  tags?: string[];
+  savingsVsBest?: number;
+  explanation?: string;
 }
 
 // ─── Research Results (Trip Builder left panel) ───────────────────────────────
