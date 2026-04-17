@@ -300,6 +300,74 @@
   .badge-value   { background-color: var(--color-emerald-100); color: var(--color-emerald-600); }
   .badge-savings { background-color: var(--color-violet-100);  color: var(--color-violet-600); }
 
+  /* ── Destination background layer ───────────────────────────────── */
+  .destination-bg {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: -9;
+    filter: blur(60px) brightness(0.85);
+    opacity: 0.08;
+    transition: background 1.2s ease;
+  }
+
+  /* ── Destination readability overlay ────────────────────────────── */
+  .destination-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: -8;
+    background: linear-gradient(
+      170deg,
+      rgba(248, 250, 252, 0.78) 0%,
+      rgba(240, 244, 255, 0.65) 50%,
+      rgba(250, 247, 242, 0.72) 100%
+    );
+  }
+
+  /* ── Login luxury background ─────────────────────────────────────── */
+  .login-bg-wrap {
+    position: absolute;
+    inset: -10%;
+    overflow: hidden;
+    z-index: 0;
+  }
+
+  .login-bg {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      145deg,
+      #0c1445 0%,
+      #1a3a6e 18%,
+      #0e6ba8 35%,
+      #0a9396 50%,
+      #94d2bd 65%,
+      #e9d8a6 80%,
+      #ee9b00 100%
+    );
+    filter: blur(12px) brightness(0.75);
+    animation: luxury-zoom 28s ease-in-out infinite alternate;
+    will-change: transform;
+  }
+
+  @keyframes luxury-zoom {
+    from { transform: scale(1); }
+    to   { transform: scale(1.14); }
+  }
+
+  .login-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: linear-gradient(
+      to bottom,
+      rgba(15, 23, 42, 0.45) 0%,
+      rgba(15, 23, 42, 0.20) 40%,
+      rgba(15, 23, 42, 0.30) 100%
+    );
+  }
+
   /* ── Sidebar nav items ──────────────────────────────────────── */
   .nav-item {
     display: flex;

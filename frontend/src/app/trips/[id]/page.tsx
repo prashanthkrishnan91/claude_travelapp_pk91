@@ -9,6 +9,31 @@ import { TripBuilder } from "@/components/trips/TripBuilder";
 import { fetchTrip, fetchItinerary, updateTrip, deleteTrip } from "@/lib/api";
 import type { Trip, ItineraryDay } from "@/types";
 
+const DESTINATION_GRADIENTS: Array<{ keywords: string[]; gradient: string }> = [
+  { keywords: ["honolulu","hawaii","maui","oahu","waikiki","pacific"],          gradient: "linear-gradient(160deg,#0077b6 0%,#00b4d8 40%,#90e0ef 75%,#caf0f8 100%)" },
+  { keywords: ["maldives","caribbean","bahamas","cancun","aruba","turks"],      gradient: "linear-gradient(160deg,#06b6d4 0%,#22d3ee 40%,#67e8f9 75%,#a5f3fc 100%)" },
+  { keywords: ["tokyo","japan","osaka","kyoto","shibuya","shinjuku"],           gradient: "linear-gradient(160deg,#0f0c29 0%,#302b63 40%,#4c1d95 75%,#6d28d9 100%)" },
+  { keywords: ["new york","nyc","manhattan","chicago","london","hong kong","las vegas","singapore"], gradient: "linear-gradient(160deg,#1c1c2e 0%,#374151 40%,#6b7280 75%,#9ca3af 100%)" },
+  { keywords: ["paris","france","nice","lyon","bordeaux","provence"],           gradient: "linear-gradient(160deg,#c9a96e 0%,#d4a853 40%,#e8d5b0 75%,#fef3c7 100%)" },
+  { keywords: ["rome","italy","florence","venice","tuscany","amalfi","sicily"], gradient: "linear-gradient(160deg,#9c4221 0%,#dd6b20 40%,#f6ad55 75%,#fef3c7 100%)" },
+  { keywords: ["santorini","greece","athens","mykonos","crete","mediterranean"],gradient: "linear-gradient(160deg,#1d4ed8 0%,#3b82f6 40%,#93c5fd 75%,#dbeafe 100%)" },
+  { keywords: ["bali","indonesia","thailand","phuket","bangkok","lombok"],      gradient: "linear-gradient(160deg,#1a472a 0%,#52b788 40%,#b7e4c7 75%,#ffd166 100%)" },
+  { keywords: ["dubai","abu dhabi","morocco","marrakech","sahara","desert"],    gradient: "linear-gradient(160deg,#e76f51 0%,#f4a261 40%,#e9c46a 75%,#ffd166 100%)" },
+  { keywords: ["swiss","switzerland","alps","nepal","himalaya","mountain","colorado","rockies","norway"], gradient: "linear-gradient(160deg,#264653 0%,#2a9d8f 40%,#a8dadc 75%,#e9f5f5 100%)" },
+  { keywords: ["barcelona","spain","madrid","lisbon","portugal","seville"],     gradient: "linear-gradient(160deg,#b5179e 0%,#f72585 40%,#ff9a3c 75%,#ffd166 100%)" },
+  { keywords: ["sydney","australia","melbourne","queensland","great barrier"],  gradient: "linear-gradient(160deg,#0077b6 0%,#0096c7 40%,#48cae4 75%,#ade8f4 100%)" },
+];
+
+const DEFAULT_GRADIENT = "linear-gradient(160deg,#0ea5e9 0%,#38bdf8 40%,#7dd3fc 75%,#e0f2fe 100%)";
+
+function getDestinationGradient(destination: string): string {
+  const lower = destination.toLowerCase();
+  for (const theme of DESTINATION_GRADIENTS) {
+    if (theme.keywords.some((kw) => lower.includes(kw))) return theme.gradient;
+  }
+  return DEFAULT_GRADIENT;
+}
+
 interface EditForm {
   title: string;
   startDate: string;
@@ -95,6 +120,18 @@ export default function TripDetailPage() {
 
   return (
     <>
+      {/* Destination-aware background */}
+      {trip?.destination && (
+        <>
+          <div
+            aria-hidden="true"
+            className="destination-bg"
+            style={{ background: getDestinationGradient(trip.destination) }}
+          />
+          <div aria-hidden="true" className="destination-overlay" />
+        </>
+      )}
+
       {toast && (
         <div className="fixed bottom-4 right-4 z-50 bg-slate-800 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
           {toast}

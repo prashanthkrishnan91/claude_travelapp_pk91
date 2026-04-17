@@ -32,18 +32,24 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2 text-center">
+    <div className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
+      {/* Luxury travel background with slow zoom */}
+      <div className="login-bg-wrap" aria-hidden="true">
+        <div className="login-bg" />
+      </div>
+      <div className="login-overlay" aria-hidden="true" />
+
+      <div className="relative z-10 w-full max-w-md">
+        <h1 className="text-2xl font-bold text-white mb-2 text-center" style={{ textShadow: "0 2px 12px rgba(0,0,0,0.4)" }}>
           Travel Concierge
         </h1>
-        <p className="text-sm text-gray-500 text-center mb-8">
+        <p className="text-sm text-white/75 text-center mb-8">
           Sign in to your account
         </p>
 
         <form
           onSubmit={handleSubmit}
-          className="bg-white shadow rounded-lg p-8 space-y-5"
+          className="bg-white/90 backdrop-blur-xl shadow-2xl rounded-2xl p-8 space-y-5 border border-white/60"
         >
           {error && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
@@ -98,4 +104,5 @@ export default function LoginPage() {
       </div>
     </div>
   );
+
 }
