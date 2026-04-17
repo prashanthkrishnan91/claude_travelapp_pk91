@@ -24,6 +24,16 @@ export interface Trip {
   updatedAt: string;
 }
 
+// ─── Trip Context ─────────────────────────────────────────────────────────────
+
+export interface TripContext {
+  city: string;
+  temp?: number;
+  condition?: string;
+  vibe: string;
+  dateRange?: string;
+}
+
 // ─── Booking ──────────────────────────────────────────────────────────────────
 
 export interface BookingOption {

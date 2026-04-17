@@ -6,8 +6,8 @@ import Link from "next/link";
 import { ChevronLeft, Pencil, Sparkles, Trash2, X } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TripBuilder } from "@/components/trips/TripBuilder";
-import { fetchTrip, fetchItinerary, updateTrip, deleteTrip } from "@/lib/api";
-import type { Trip, ItineraryDay } from "@/types";
+import { fetchTrip, fetchItinerary, fetchTripContext, updateTrip, deleteTrip } from "@/lib/api";
+import type { Trip, TripContext, ItineraryDay } from "@/types";
 
 const DESTINATION_GRADIENTS: Array<{ keywords: string[]; gradient: string }> = [
   { keywords: ["honolulu","hawaii","maui","oahu","waikiki","pacific"],          gradient: "linear-gradient(160deg,#0077b6 0%,#00b4d8 40%,#90e0ef 75%,#caf0f8 100%)" },
@@ -25,6 +25,18 @@ const DESTINATION_GRADIENTS: Array<{ keywords: string[]; gradient: string }> = [
 ];
 
 const DEFAULT_GRADIENT = "linear-gradient(160deg,#0ea5e9 0%,#38bdf8 40%,#7dd3fc 75%,#e0f2fe 100%)";
+
+const BEACH_KW  = ["honolulu","hawaii","maui","maldives","caribbean","bahamas","cancun","aruba","bali","phuket","lombok","fiji","tahiti","barbados"];
+const COLD_KW   = ["swiss","switzerland","alps","himalaya","mountain","colorado","rockies","norway","iceland","alaska","anchorage","aspen","vail"];
+const CITY_KW   = ["new york","nyc","chicago","london","tokyo","paris","rome","dubai","singapore","hong kong","las vegas","berlin","sydney","melbourne"];
+
+function getDestinationEmoji(destination: string): string {
+  const lower = destination.toLowerCase();
+  if (BEACH_KW.some((k) => lower.includes(k))) return "🌴";
+  if (COLD_KW.some((k) => lower.includes(k))) return "❄️";
+  if (CITY_KW.some((k) => lower.includes(k))) return "🏙";
+  return "✈️";
+}
 
 function getDestinationGradient(destination: string): string {
   const lower = destination.toLowerCase();
@@ -47,6 +59,8 @@ export default function TripDetailPage() {
 
   const [trip,          setTrip]          = useState<Trip | null>(null);
   const [itineraryDays, setItineraryDays] = useState<ItineraryDay[]>([]);
+  const [tripContext,   setTripContext]   = useState<TripContext | null>(null);
+  const [contextLoading, setContextLoading] = useState(false);
   const [loading,       setLoading]       = useState(true);
   const [editOpen,      setEditOpen]      = useState(false);
   const [editForm,      setEditForm]      = useState<EditForm>({ title: "", startDate: "", endDate: "" });
@@ -61,6 +75,14 @@ export default function TripDetailPage() {
       setTrip(tripData);
       setItineraryDays(days);
       setLoading(false);
+
+      if (tripData) {
+        setContextLoading(true);
+        fetchTripContext(id).then((ctx) => {
+          setTripContext(ctx);
+          setContextLoading(false);
+        });
+      }
     }
     load();
   }, [id]);
@@ -210,6 +232,26 @@ export default function TripDetailPage() {
           My Trips
         </Link>
       </div>
+
+      {/* Trip context header */}
+      {(contextLoading || tripContext) && (
+        <div className="mb-4 flex items-center gap-2">
+          {contextLoading ? (
+            <p className="text-sm text-slate-400 italic">Fetching destination vibe…</p>
+          ) : tripContext ? (
+            <>
+              <span className="text-xl leading-none" aria-hidden="true">
+                {getDestinationEmoji(trip?.destination ?? "")}
+              </span>
+              <p className="text-sm font-medium text-slate-500 tracking-wide">
+                {tripContext.dateRange
+                  ? `${tripContext.vibe} • ${tripContext.dateRange}`
+                  : tripContext.vibe}
+              </p>
+            </>
+          ) : null}
+        </div>
+      )}
 
       <PageHeader
         title={pageTitle}
