@@ -276,6 +276,7 @@ export default function TripDetailPage() {
 
       <TripBuilder
         tripId={id}
+        destination={trip?.destination ?? ""}
         initialDays={itineraryDays}
         initialResults={[]}
       />

@@ -35,6 +35,8 @@ import {
   ChevronUp,
   ExternalLink,
   Plus,
+  Clock,
+  DollarSign,
 } from "lucide-react";
 import gsap from "gsap";
 import type {
@@ -43,6 +45,7 @@ import type {
   ResearchResult,
   ItemType,
   CompareResult,
+  AttractionSearchResult,
 } from "@/types";
 import {
   createDay,
@@ -53,6 +56,8 @@ import {
   fetchTripItems,
   addRoundTripOutboundToDay,
   addRoundTripReturnToDay,
+  searchAttractions,
+  addAttractionToTrip,
 } from "@/lib/api";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
@@ -99,6 +104,13 @@ function sortHotels(items: ItineraryItem[], key: SortKey): ItineraryItem[] {
     if (key === "price")  return ((da.pricePerNight as number) ?? a.cashPrice ?? 0) - ((db.pricePerNight as number) ?? b.cashPrice ?? 0);
     if (key === "rating") return ((db.rating as number) ?? 0) - ((da.rating as number) ?? 0);
     return ((db.aiScore as number) ?? 0) - ((da.aiScore as number) ?? 0);
+  });
+}
+
+function sortAttractions(items: AttractionSearchResult[], key: SortKey): AttractionSearchResult[] {
+  return [...items].sort((a, b) => {
+    if (key === "rating") return (b.rating ?? 0) - (a.rating ?? 0);
+    return (b.aiScore ?? 0) - (a.aiScore ?? 0);
   });
 }
 
@@ -721,6 +733,156 @@ function HotelCandidateCard({
   );
 }
 
+// ─── Attraction tag badge ──────────────────────────────────────────────────────
+
+function AttractionTag({ tag }: { tag: string }) {
+  const style =
+    tag === "Must Visit"       ? "bg-emerald-100 text-emerald-700" :
+    tag === "Highly Rated"     ? "bg-amber-100 text-amber-700" :
+    tag === "Top Rated"        ? "bg-amber-100 text-amber-600" :
+    tag === "Tourist Favorite" ? "bg-sky-100 text-sky-700" :
+    tag === "Hidden Gem"       ? "bg-violet-100 text-violet-700" :
+    "bg-slate-100 text-slate-500";
+  const icon =
+    tag === "Must Visit"       ? <Zap className="w-2.5 h-2.5" /> :
+    tag === "Highly Rated"     ? <Star className="w-2.5 h-2.5" /> :
+    tag === "Hidden Gem"       ? <Sparkles className="w-2.5 h-2.5" /> :
+    null;
+  return (
+    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold ${style}`}>
+      {icon}{tag}
+    </span>
+  );
+}
+
+// ─── Price level indicator ─────────────────────────────────────────────────────
+
+function PriceLevelDots({ level }: { level: number }) {
+  return (
+    <span className="flex items-center gap-px" title={["Free", "Inexpensive", "Moderate", "Expensive", "Very Expensive"][level] ?? ""}>
+      {[0, 1, 2, 3].map((i) => (
+        <DollarSign
+          key={i}
+          className={`w-2.5 h-2.5 ${i < level ? "text-slate-600" : "text-slate-200"}`}
+        />
+      ))}
+    </span>
+  );
+}
+
+// ─── Attraction candidate card ─────────────────────────────────────────────────
+
+function AttractionCandidateCard({
+  attraction,
+  onAddToTrip,
+  adding,
+  isTopPick,
+}: {
+  attraction: AttractionSearchResult;
+  onAddToTrip: (a: AttractionSearchResult) => void;
+  adding: boolean;
+  isTopPick?: boolean;
+}) {
+  const aiScore       = attraction.aiScore ?? 0;
+  const rating        = attraction.rating;
+  const numReviews    = attraction.numReviews;
+  const mapsUrl       = `https://www.google.com/maps/search/${encodeURIComponent(attraction.name + " " + attraction.location)}`;
+
+  const containerClass = isTopPick
+    ? "border-emerald-300/70 bg-gradient-to-br from-emerald-50/60 to-white"
+    : "border-slate-200/80 bg-white";
+
+  return (
+    <div className={`candidate-card relative border rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 hover:shadow-md hover:border-slate-300 shadow-sm ${containerClass}`}>
+      {isTopPick && (
+        <div className="absolute -top-2.5 left-3">
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
+            <Zap className="w-2.5 h-2.5" />
+            Top Pick
+          </span>
+        </div>
+      )}
+
+      {/* Header: name + AI score */}
+      <div className="flex items-start justify-between gap-2 pt-0.5">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-slate-900 leading-tight">{attraction.name}</p>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {rating != null && (
+              <span className="text-xs text-amber-500 font-semibold">★ {rating.toFixed(1)}</span>
+            )}
+            {numReviews != null && (
+              <span className="text-xs text-slate-400">
+                {numReviews >= 1000 ? `${(numReviews / 1000).toFixed(0)}k` : numReviews} reviews
+              </span>
+            )}
+          </div>
+        </div>
+        <AiScoreBadge score={aiScore} />
+      </div>
+
+      {/* Description */}
+      {attraction.description && (
+        <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">{attraction.description}</p>
+      )}
+
+      {/* Tags */}
+      {attraction.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {attraction.tags.map((tag) => <AttractionTag key={tag} tag={tag} />)}
+        </div>
+      )}
+
+      {/* Meta row: address, hours, duration, price */}
+      <div className="flex flex-col gap-1">
+        {attraction.address && (
+          <div className="flex items-center gap-1 text-xs text-slate-400">
+            <MapPin className="w-3 h-3 flex-shrink-0" />
+            <span className="truncate">{attraction.address}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-3 flex-wrap">
+          {attraction.openingHours && (
+            <div className="flex items-center gap-1 text-xs text-slate-400">
+              <Clock className="w-3 h-3 flex-shrink-0" />
+              <span>{attraction.openingHours}</span>
+            </div>
+          )}
+          {attraction.durationMinutes != null && (
+            <span className="text-xs text-slate-400">
+              {formatDuration(attraction.durationMinutes)}
+            </span>
+          )}
+          {attraction.priceLevel != null && (
+            <PriceLevelDots level={attraction.priceLevel} />
+          )}
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex items-center gap-1.5 pt-1">
+        <a
+          href={mapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 text-xs font-medium transition-all"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          View
+        </a>
+        <button
+          onClick={() => onAddToTrip(attraction)}
+          disabled={adding}
+          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-all disabled:opacity-50 shadow-sm"
+        >
+          {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+          Add to Trip
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Collapsible panel wrapper ────────────────────────────────────────────────
 
 function CandidatePanel({
@@ -778,29 +940,35 @@ function CandidatePanel({
 
 interface TripBuilderProps {
   tripId: string;
+  destination: string;
   initialDays: ItineraryDay[];
   initialResults: ResearchResult[];
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilderProps) {
+export function TripBuilder({ tripId, destination, initialDays, initialResults }: TripBuilderProps) {
   const [days,        setDays]       = useState<ItineraryDay[]>(initialDays);
   const [results]                    = useState<ResearchResult[]>(initialResults);
 
   // ── Flight / hotel candidates (trip-level items, AI pre-populated) ───────────
-  const [candidateFlights, setCandidateFlights] = useState<ItineraryItem[]>([]);
-  const [candidateHotels,  setCandidateHotels]  = useState<ItineraryItem[]>([]);
-  const [flightPanelOpen,  setFlightPanelOpen]  = useState(true);
-  const [hotelPanelOpen,   setHotelPanelOpen]   = useState(true);
-  const [flightSort,       setFlightSort]       = useState<SortKey>("ai");
-  const [hotelSort,        setHotelSort]        = useState<SortKey>("ai");
-  const [addingId,         setAddingId]         = useState<string | null>(null);
-  const [toast,            setToast]            = useState<string | null>(null);
-  const [activeId,         setActiveId]         = useState<UniqueIdentifier | null>(null);
+  const [candidateFlights,     setCandidateFlights]     = useState<ItineraryItem[]>([]);
+  const [candidateHotels,      setCandidateHotels]      = useState<ItineraryItem[]>([]);
+  const [candidateAttractions, setCandidateAttractions] = useState<AttractionSearchResult[]>([]);
+  const [attractionsLoading,   setAttractionsLoading]   = useState(false);
+  const [flightPanelOpen,      setFlightPanelOpen]      = useState(true);
+  const [hotelPanelOpen,       setHotelPanelOpen]       = useState(true);
+  const [attractionPanelOpen,  setAttractionPanelOpen]  = useState(true);
+  const [flightSort,           setFlightSort]           = useState<SortKey>("ai");
+  const [hotelSort,            setHotelSort]            = useState<SortKey>("ai");
+  const [attractionSort,       setAttractionSort]       = useState<SortKey>("ai");
+  const [addingId,             setAddingId]             = useState<string | null>(null);
+  const [toast,                setToast]                = useState<string | null>(null);
+  const [activeId,             setActiveId]             = useState<UniqueIdentifier | null>(null);
 
-  const flightListRef = useRef<HTMLDivElement>(null);
-  const hotelListRef  = useRef<HTMLDivElement>(null);
+  const flightListRef     = useRef<HTMLDivElement>(null);
+  const hotelListRef      = useRef<HTMLDivElement>(null);
+  const attractionListRef = useRef<HTMLDivElement>(null);
 
   // ── Compare state ────────────────────────────────────────────────────────────
   const [compareSet,     setCompareSet]     = useState<Set<string>>(new Set());
@@ -841,6 +1009,22 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
     gsap.from(cards, { y: 24, opacity: 0, duration: 0.45, stagger: 0.07, ease: "power2.out", clearProps: "all" });
   }, [candidateHotels.length]);
 
+  // Auto-load attractions for the trip destination
+  useEffect(() => {
+    if (!destination) return;
+    setAttractionsLoading(true);
+    searchAttractions(destination).then((attractions) => {
+      setCandidateAttractions(attractions);
+    }).finally(() => setAttractionsLoading(false));
+  }, [destination]);
+
+  // GSAP entrance animations for attraction cards
+  useEffect(() => {
+    if (!attractionListRef.current || candidateAttractions.length === 0) return;
+    const cards = attractionListRef.current.querySelectorAll(".candidate-card");
+    gsap.from(cards, { y: 24, opacity: 0, duration: 0.45, stagger: 0.05, ease: "power2.out", clearProps: "all" });
+  }, [candidateAttractions.length]);
+
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
@@ -871,6 +1055,32 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
         )
       );
       showToast(`${item.itemType === "flight" ? "Flight" : "Hotel"} added to itinerary`);
+    } catch {
+      showToast("Failed to add — please try again");
+    } finally {
+      setAddingId(null);
+    }
+  }, [days, tripId, showToast]);
+
+  // ── Add attraction to first itinerary day ────────────────────────────────────
+
+  const handleAddAttractionToItinerary = useCallback(async (attraction: AttractionSearchResult) => {
+    setAddingId(attraction.id);
+    try {
+      let targetDay = days[0];
+      if (!targetDay) {
+        targetDay = await createDay(tripId, { dayNumber: 1, title: "Day 1" });
+        setDays([targetDay]);
+      }
+
+      const newItem = await addAttractionToTrip(tripId, attraction);
+
+      setDays((prev) =>
+        prev.map((d) =>
+          d.id === targetDay.id ? { ...d, items: [...d.items, newItem] } : d
+        )
+      );
+      showToast(`${attraction.name.split(" —")[0]} added to itinerary`);
     } catch {
       showToast("Failed to add — please try again");
     } finally {
@@ -1150,8 +1360,9 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
 
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const sortedFlights = sortFlights(candidateFlights, flightSort);
-  const sortedHotels  = sortHotels(candidateHotels, hotelSort);
+  const sortedFlights     = sortFlights(candidateFlights, flightSort);
+  const sortedHotels      = sortHotels(candidateHotels, hotelSort);
+  const sortedAttractions = sortAttractions(candidateAttractions, attractionSort);
   const topFlight = sortedFlights[0] ?? null;
   const topHotel  = sortedHotels[0] ?? null;
 
@@ -1268,6 +1479,47 @@ export function TripBuilder({ tripId, initialDays, initialResults }: TripBuilder
                   />
                 ));
               })()}
+            </CandidatePanel>
+
+            {/* Attractions section */}
+            <CandidatePanel
+              title="Attractions"
+              icon={<Sparkles className="w-3.5 h-3.5 text-emerald-500" />}
+              count={sortedAttractions.length}
+              accentColor="text-emerald-500"
+              open={attractionPanelOpen}
+              onToggle={() => setAttractionPanelOpen((v) => !v)}
+              sortControls={
+                <SortControl
+                  keys={[
+                    { key: "ai",     label: "AI Score" },
+                    { key: "rating", label: "Rating"   },
+                  ]}
+                  current={attractionSort}
+                  onChange={setAttractionSort}
+                />
+              }
+              listRef={attractionListRef}
+            >
+              {attractionsLoading ? (
+                <div className="flex items-center justify-center py-6 gap-2 text-slate-400 text-xs">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Discovering attractions…
+                </div>
+              ) : (
+                (() => {
+                  const top20 = Math.max(1, Math.ceil(sortedAttractions.length * 0.2));
+                  return sortedAttractions.map((attraction, idx) => (
+                    <AttractionCandidateCard
+                      key={attraction.id}
+                      attraction={attraction}
+                      onAddToTrip={handleAddAttractionToItinerary}
+                      adding={addingId === attraction.id}
+                      isTopPick={attractionSort === "ai" && idx < top20}
+                    />
+                  ));
+                })()
+              )}
             </CandidatePanel>
 
             {/* Activities / research results */}

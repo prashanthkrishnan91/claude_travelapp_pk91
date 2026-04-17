@@ -21,6 +21,7 @@ import type {
   CompareResult,
   BookingOption,
   FlightSearchResult,
+  AttractionSearchResult,
 } from "@/types";
 import { supabase } from "./supabase";
 
@@ -519,6 +520,11 @@ interface RawAttractionResult {
   address: string;
   bookingUrl?: string;
   bookingOptions?: BookingOption[];
+  aiScore?: number;
+  tags?: string[];
+  numReviews?: number;
+  openingHours?: string;
+  priceLevel?: number;
 }
 
 interface RawHotelResult {
@@ -533,19 +539,22 @@ interface RawHotelResult {
   bookingOptions?: BookingOption[];
 }
 
-function mapAttractionToResult(a: RawAttractionResult): ResearchResult {
+function mapAttractionToResult(a: RawAttractionResult): AttractionSearchResult {
   return {
     id: a.id,
-    category: "activity" as ResearchCategory,
-    title: a.name,
+    name: a.name,
+    category: a.category,
     description: a.description,
-    location: a.location || a.address,
-    duration: a.durationMinutes
-      ? `${Math.round((a.durationMinutes / 60) * 10) / 10}h`
-      : undefined,
-    priceDisplay: a.price ? `$${a.price}/person` : undefined,
+    location: a.location,
+    address: a.address,
     rating: a.rating,
-    tags: [a.category].filter(Boolean),
+    numReviews: a.numReviews,
+    price: a.price,
+    priceLevel: a.priceLevel,
+    openingHours: a.openingHours,
+    durationMinutes: a.durationMinutes,
+    aiScore: a.aiScore,
+    tags: a.tags ?? [],
     bookingUrl: a.bookingUrl,
     bookingOptions: a.bookingOptions,
   };
@@ -590,11 +599,11 @@ export async function searchHotels(
   }
 }
 
-/** Fetch attractions/activities for a location. */
+/** Fetch attractions/activities for a location, sorted by AI score DESC. */
 export async function searchAttractions(
   location: string,
   date?: string
-): Promise<ResearchResult[]> {
+): Promise<AttractionSearchResult[]> {
   try {
     const payload = toSnake({ location, date: date ?? null });
     const results = await apiFetch<RawAttractionResult[]>(
@@ -608,6 +617,37 @@ export async function searchAttractions(
   } catch {
     return [];
   }
+}
+
+/** Add an attraction to the itinerary as a trip-level activity item. */
+export async function addAttractionToTrip(
+  tripId: string,
+  attraction: AttractionSearchResult
+): Promise<ItineraryItem> {
+  const payload = {
+    trip_id: tripId,
+    item_type: "activity",
+    title: attraction.name,
+    location: attraction.address || attraction.location,
+    details: {
+      name: attraction.name,
+      location: attraction.location,
+      address: attraction.address,
+      rating: attraction.rating ?? null,
+      num_reviews: attraction.numReviews ?? null,
+      ai_score: attraction.aiScore ?? null,
+      tags: attraction.tags,
+      category: attraction.category,
+      description: attraction.description,
+      opening_hours: attraction.openingHours ?? null,
+      price_level: attraction.priceLevel ?? null,
+      booking_url: attraction.bookingUrl ?? null,
+    },
+  };
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 // ─── Compare ─────────────────────────────────────────────────────────────────

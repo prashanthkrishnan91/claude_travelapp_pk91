@@ -144,6 +144,11 @@ class AttractionResult(SearchResult):
     description: str
     duration_minutes: Optional[int] = None
     address: str
+    ai_score: Optional[float] = Field(None, description="AI-computed relevance score 0–100")
+    tags: List[str] = Field(default_factory=list, description="Tags: Must Visit, Highly Rated, Hidden Gem, Tourist Favorite")
+    num_reviews: Optional[int] = Field(None, description="Number of user reviews")
+    opening_hours: Optional[str] = Field(None, description="Opening hours summary")
+    price_level: Optional[int] = Field(None, ge=0, le=4, description="Price level 0=free, 1=inexpensive, 2=moderate, 3=expensive, 4=very expensive")
 
 
 # ------------------------------------------------------------------

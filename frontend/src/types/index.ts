@@ -159,6 +159,27 @@ export interface ResearchResult {
   metadata?: Record<string, unknown>;
 }
 
+// ─── Attraction Search Result ─────────────────────────────────────────────────
+
+export interface AttractionSearchResult {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  location: string;
+  address: string;
+  rating?: number;
+  numReviews?: number;
+  price?: number;
+  priceLevel?: number;
+  openingHours?: string;
+  durationMinutes?: number;
+  aiScore?: number;
+  tags: string[];
+  bookingUrl?: string;
+  bookingOptions?: BookingOption[];
+}
+
 // ─── Compare ──────────────────────────────────────────────────────────────────
 
 export interface CompareItemInput {

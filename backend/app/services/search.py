@@ -12,6 +12,7 @@ Architecture
 
 import hashlib
 import json
+import math
 import random
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -178,59 +179,106 @@ def _mock_hotels(req: HotelSearchRequest) -> List[HotelResult]:
     return results
 
 
+def _compute_attraction_ai_score(rating: float, num_reviews: int, category: str) -> float:
+    """Compute AI relevance score 0–100 based on rating, review volume, and category."""
+    rating_score = (rating / 5.0) * 100
+    review_score = min(100.0, (math.log1p(num_reviews) / math.log1p(500_000)) * 100)
+    popularity = rating_score * 0.6 + review_score * 0.4
+    uniqueness_bonus = 8.0 if category in ("hidden_gems", "local_favorites") else 0.0
+    raw = popularity * 0.9 + uniqueness_bonus * 0.1
+    return round(min(100.0, max(0.0, raw)), 1)
+
+
+def _compute_attraction_tags(ai_score: float, rating: float, num_reviews: int) -> List[str]:
+    """Assign human-readable tags based on score, rating, and popularity."""
+    tags: List[str] = []
+    if ai_score >= 80:
+        tags.append("Must Visit")
+    if rating >= 4.7:
+        tags.append("Highly Rated")
+    elif rating >= 4.5 and "Must Visit" not in tags:
+        tags.append("Top Rated")
+    if num_reviews >= 50_000:
+        tags.append("Tourist Favorite")
+    elif num_reviews < 5_000 and ai_score >= 55:
+        tags.append("Hidden Gem")
+    return tags
+
+
 def _mock_attractions(req: AttractionSearchRequest) -> List[AttractionResult]:
-    """Generate attraction options for the requested location."""
-    category_pool = {
-        "museums": [
-            ("National Museum of Art", "Explore world-class permanent and rotating collections.", 120),
-            ("History & Culture Center", "Immersive exhibits on local heritage and traditions.", 90),
-            ("Science & Tech Museum", "Interactive science exhibits for all ages.", 150),
-        ],
-        "outdoor": [
-            ("City Botanical Gardens", "Wander through 50+ acres of curated gardens.", 90),
-            ("Waterfront Trail", "Scenic 5 km walking and cycling path along the bay.", 60),
-            ("Summit Viewpoint Hike", "Moderate 3-hour hike with panoramic city views.", 180),
-        ],
-        "food": [
-            ("Local Food Market Tour", "Guided 2-hour tour of the city's best street food stalls.", 120),
-            ("Farm-to-Table Cooking Class", "Learn regional recipes with a professional chef.", 180),
-            ("Wine & Tapas Evening", "Curated tasting of local wines paired with small plates.", 150),
-        ],
-        "tours": [
-            ("Historic Walking Tour", "2-hour guided walk through the old town district.", 120),
-            ("Hop-On Hop-Off Bus", "Full-day pass covering 20+ top attractions.", 480),
-            ("Sunset Boat Cruise", "90-minute evening cruise with drinks included.", 90),
-        ],
-        "nightlife": [
-            ("Jazz & Cocktail Bar", "Live jazz nightly from 9 PM with craft cocktails.", None),
-            ("Rooftop Lounge", "City views and DJ sets at one of the top rooftop bars.", None),
-        ],
-        "shopping": [
-            ("Old Town Market", "Open-air market with local crafts and souvenirs.", 60),
-            ("Designer District Walk", "Self-guided tour of boutique and high-end shops.", 90),
-        ],
-    }
+    """Generate realistic attraction options simulating Google Places data."""
+    # (category, name_template, description, duration_min, base_reviews_range, price_level)
+    ATTRACTION_POOL: List[tuple] = [
+        # Top attractions / landmarks
+        ("landmarks", "City Heritage Museum", "Discover the rich history and culture of the city through immersive exhibits and rare artefacts.", 120, (80_000, 400_000), 1),
+        ("landmarks", "Grand Central Viewpoint", "Panoramic observation deck offering stunning 360° views of the skyline and harbour.", 60, (120_000, 500_000), 2),
+        ("landmarks", "Historic Old Town District", "Stroll through cobblestone streets lined with centuries-old architecture and artisan shops.", 180, (200_000, 480_000), 0),
+        ("landmarks", "National Cathedral", "Magnificent Gothic cathedral with intricate stained glass windows and guided tower climbs.", 90, (150_000, 400_000), 0),
+        ("landmarks", "Royal Palace Gardens", "Sprawling royal gardens open to the public, featuring seasonal floral displays.", 120, (100_000, 350_000), 1),
+        # Top attractions
+        ("top_attractions", "Sunset Harbour Cruise", "90-minute evening boat cruise with panoramic views and complimentary drinks.", 90, (30_000, 150_000), 2),
+        ("top_attractions", "Hop-On Hop-Off City Bus Tour", "Full-day pass covering 25+ must-see sites with live commentary in 10 languages.", 480, (60_000, 300_000), 2),
+        ("top_attractions", "Underground City Caves Tour", "Expert-guided descent into ancient limestone caves with dramatic light shows.", 120, (20_000, 100_000), 2),
+        ("top_attractions", "Street Food Night Market", "Authentic local street food stalls serving regional specialties from dusk till midnight.", 120, (40_000, 200_000), 1),
+        ("top_attractions", "Sky Bridge Walk", "Walk across a glass-floored sky bridge suspended 200 m above the city centre.", 45, (50_000, 250_000), 3),
+        # Nature / outdoor
+        ("outdoor", "City Botanical Gardens", "Wander through 80 acres of curated gardens showcasing 5,000+ plant species.", 90, (70_000, 280_000), 1),
+        ("outdoor", "Coastal Cliffs Hike", "Moderate 4-hour hike along dramatic sea cliffs with spectacular ocean vistas.", 240, (15_000, 80_000), 0),
+        ("outdoor", "Sunrise Mountain Trek", "Early-morning guided trek rewarded with an unforgettable sunrise over the valley.", 300, (10_000, 60_000), 0),
+        ("outdoor", "Waterfront Cycling Trail", "Scenic 10 km cycling path along the bay, bike rentals available at the trailhead.", 120, (25_000, 120_000), 1),
+        # Museums
+        ("museums", "Contemporary Art Gallery", "Award-winning gallery housing rotating exhibitions from world-renowned artists.", 120, (40_000, 200_000), 1),
+        ("museums", "Science & Discovery Museum", "Interactive exhibits on space, technology, and the natural world — great for all ages.", 150, (55_000, 220_000), 2),
+        ("museums", "Maritime Heritage Museum", "Explore centuries of seafaring history with restored ships and immersive dioramas.", 90, (20_000, 90_000), 1),
+        # Food & culture
+        ("food", "Culinary Walking Food Tour", "Expert-led 3-hour food tour sampling 10+ local dishes across vibrant neighbourhoods.", 180, (18_000, 85_000), 2),
+        ("food", "Farm-to-Table Cooking Class", "Learn regional recipes hands-on with a professional chef using market-fresh ingredients.", 180, (8_000, 40_000), 3),
+        ("food", "Rooftop Wine & Tapas Evening", "Curated sunset tasting of local wines paired with artisan small plates, city views included.", 150, (12_000, 60_000), 3),
+        # Hidden gems / local favourites
+        ("hidden_gems", "Secret Courtyard Art Walk", "Self-guided tour through hidden courtyards adorned with murals by local street artists.", 90, (2_000, 9_000), 0),
+        ("hidden_gems", "Underground Jazz Speakeasy", "Intimate live jazz sessions in a vintage underground bar — reservation required.", 120, (3_000, 12_000), 2),
+        ("local_favorites", "Morning Fishermen's Market", "Join locals at dawn for the freshest catch, prepared on-site by harbour-side vendors.", 60, (4_000, 18_000), 1),
+        ("local_favorites", "Neighbourhood Artisan Fair", "Weekly craft market where local makers sell pottery, textiles, and handmade jewellery.", 90, (5_000, 20_000), 0),
+    ]
 
-    chosen_categories = (
-        [req.category] if req.category and req.category in category_pool
-        else list(category_pool.keys())
-    )
+    OPENING_HOURS = [
+        "Daily 9:00 AM – 6:00 PM",
+        "Mon–Sat 8:00 AM – 8:00 PM",
+        "Daily 10:00 AM – 10:00 PM",
+        "Tue–Sun 9:00 AM – 5:00 PM",
+        "Daily 7:00 AM – 11:00 PM",
+        "Wed–Mon 10:00 AM – 6:00 PM",
+        "Daily (24 hours)",
+        "Fri–Sun 6:00 PM – 2:00 AM",
+    ]
 
-    pool: List[tuple] = []
-    for cat in chosen_categories:
-        for name, desc, dur in category_pool[cat]:
-            pool.append((cat, name, desc, dur))
+    STREET_NAMES = ["Main St", "Market Ave", "Park Blvd", "Harbour Dr", "Cathedral Sq", "Heritage Lane", "Royal Walk", "Old Town Rd"]
 
-    sample = random.sample(pool, k=min(6, len(pool)))
     city = req.location.split(",")[0].strip().title()
+
+    # Filter by category if provided
+    valid_cats = {t[0] for t in ATTRACTION_POOL}
+    if req.category and req.category in valid_cats:
+        pool = [t for t in ATTRACTION_POOL if t[0] == req.category]
+    else:
+        pool = list(ATTRACTION_POOL)
+
+    loc_slug = req.location.lower().replace(" ", "-").replace(",", "")
     results: List[AttractionResult] = []
 
-    for cat, name, desc, dur in sample:
-        price = round(random.uniform(0, 120), 2)
+    for cat, name_tpl, desc, dur, reviews_range, price_level in pool:
+        name = f"{name_tpl} — {city}"
+        rating = round(random.uniform(3.8, 4.95), 1)
+        num_reviews = random.randint(*reviews_range)
+        price = round(random.uniform(0, 80), 2) if price_level > 0 else 0.0
         points = int(price * random.uniform(80, 130)) if price > 0 else 0
 
-        name_slug = name.lower().replace(" ", "-").replace("&", "and")
-        loc_slug = req.location.lower().replace(" ", "-").replace(",", "")
+        ai_score = _compute_attraction_ai_score(rating, num_reviews, cat)
+        tags = _compute_attraction_tags(ai_score, rating, num_reviews)
+        opening_hours = random.choice(OPENING_HOURS)
+        address = f"{random.randint(1, 999)} {random.choice(STREET_NAMES)}, {city}"
+
+        name_slug = name_tpl.lower().replace(" ", "-").replace("'", "").replace("&", "and")
         direct_url = f"https://book.example.com/attractions/{name_slug}"
         attraction_options = [
             BookingOption(provider="viator", url=f"https://book.example.com/attractions/viator/{name_slug}"),
@@ -242,20 +290,25 @@ def _mock_attractions(req: AttractionSearchRequest) -> List[AttractionResult]:
                 id=f"att-{uuid4().hex[:10]}",
                 price=price if price > 0 else None,
                 points_estimate=points if points > 0 else None,
-                rating=round(random.uniform(3.5, 5.0), 1),
+                rating=rating,
                 location=req.location,
                 booking_url=direct_url,
                 source="mock",
                 booking_options=attraction_options,
-                name=f"{name} — {city}",
+                name=name,
                 category=cat,
                 description=desc,
                 duration_minutes=dur,
-                address=f"{random.randint(1, 999)} {random.choice(['Main St', 'Market Ave', 'Park Blvd', 'Harbor Dr'])}, {city}",
+                address=address,
+                ai_score=ai_score,
+                tags=tags,
+                num_reviews=num_reviews,
+                opening_hours=opening_hours,
+                price_level=price_level,
             )
         )
 
-    results.sort(key=lambda r: r.rating or 0, reverse=True)
+    results.sort(key=lambda r: r.ai_score or 0, reverse=True)
     return results
 
 
