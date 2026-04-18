@@ -1411,7 +1411,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
       const newItems: ItineraryItem[] = [];
 
       for (const place of attractions) {
-        const full = sortedAttractions.find((a) => a.id === place.id) ?? {
+        const full = candidateAttractions.find((a) => a.id === place.id) ?? {
           id: place.id,
           name: place.name,
           category: place.category,
@@ -1429,7 +1429,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
       }
 
       for (const place of restaurants) {
-        const full = sortedRestaurants.find((r) => r.id === place.id) ?? {
+        const full = candidateRestaurants.find((r) => r.id === place.id) ?? {
           id: place.id,
           name: place.name,
           cuisine: place.category,
@@ -1455,7 +1455,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
     } finally {
       setPlanningClusterId(null);
     }
-  }, [days, tripId, sortedAttractions, sortedRestaurants, showToast]);
+  }, [days, tripId, candidateAttractions, candidateRestaurants, showToast]);
 
   // ── Add round-trip pair: outbound to day 1, return to last day ──────────────
 
@@ -2074,7 +2074,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
                           { label: "4.5+", value: 4.5  },
                         ]}
                         value={attractionRatingFilter}
-                        onChange={setAttractionRatingFilter}
+                        onChange={(v) => setAttractionRatingFilter(v as number | null)}
                       />
                       <FilterPills
                         label="Type"
@@ -2088,7 +2088,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
                           { label: "Nightlife", value: "nightlife" },
                         ]}
                         value={attractionTypeFilter}
-                        onChange={setAttractionTypeFilter}
+                        onChange={(v) => setAttractionTypeFilter(v as string | null)}
                       />
                     </div>
                   }
@@ -2157,7 +2157,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
                           { label: "4.5+", value: 4.5  },
                         ]}
                         value={restaurantRatingFilter}
-                        onChange={setRestaurantRatingFilter}
+                        onChange={(v) => setRestaurantRatingFilter(v as number | null)}
                       />
                       <FilterPills
                         label="Price"
@@ -2169,7 +2169,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
                           { label: "$$$$", value: 4    },
                         ]}
                         value={restaurantPriceLevelFilter}
-                        onChange={setRestaurantPriceLevelFilter}
+                        onChange={(v) => setRestaurantPriceLevelFilter(v as number | null)}
                       />
                       {availableCuisines.length > 0 && (
                         <FilterPills
@@ -2179,7 +2179,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
                             ...availableCuisines.map((c) => ({ label: c, value: c.toLowerCase() })),
                           ]}
                           value={restaurantCuisineFilter}
-                          onChange={setRestaurantCuisineFilter}
+                          onChange={(v) => setRestaurantCuisineFilter(v as string | null)}
                         />
                       )}
                     </div>
