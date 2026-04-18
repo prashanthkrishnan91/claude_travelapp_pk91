@@ -155,6 +155,40 @@ def _cluster_places(places: List[Dict[str, Any]], radius_km: float) -> List[List
     return [[places[i] for i in cluster] for cluster in clusters]
 
 
+def _compute_hotel_location_intelligence(
+    hotel_lat: float,
+    hotel_lng: float,
+    center_lat: float,
+    center_lng: float,
+    num_attractions: int = 8,
+) -> tuple:
+    """Return (location_score, proximity_label, area_label) for a hotel.
+
+    Simulates proximity to the top N attractions spread around the city center.
+    """
+    total_dist_km = 0.0
+    for i in range(num_attractions):
+        att_lat, att_lng = _spread_coordinates(center_lat, center_lng, i, num_attractions, max_radius_km=1.5)
+        total_dist_km += _haversine_km(hotel_lat, hotel_lng, att_lat, att_lng)
+    avg_km = total_dist_km / num_attractions
+
+    # Walking speed ~4 km/h → 15 min/km
+    avg_minutes = avg_km * 15.0
+    location_score = round(max(0.0, min(100.0, 100.0 - avg_km * 25.0)), 1)
+
+    mins_rounded = max(1, round(avg_minutes))
+    proximity_label = f"{mins_rounded} min from top attractions"
+
+    if location_score >= 78:
+        area_label = "In best area"
+    elif location_score >= 55:
+        area_label = "Near top attractions"
+    else:
+        area_label = "Farther from center"
+
+    return location_score, proximity_label, area_label
+
+
 def _walkability_label(cluster: List[Dict[str, Any]]) -> str:
     if len(cluster) < 2:
         return "Solo stop"
@@ -257,15 +291,25 @@ def _mock_hotels(req: HotelSearchRequest) -> List[HotelResult]:
         ("Aloft {loc}", 3, ["pool", "gym", "bar", "bike rentals"]),
     ]
     city = req.location.split(",")[0].strip().title()
+    center_lat, center_lng = _get_city_center(req.location)
+    total_hotels = len(hotel_templates)
 
     results: List[HotelResult] = []
-    for tpl_name, stars, amenities in random.sample(hotel_templates, k=len(hotel_templates)):
+    for idx, (tpl_name, stars, amenities) in enumerate(random.sample(hotel_templates, k=total_hotels)):
         name = tpl_name.format(loc=city)
         nightly = round(random.uniform(80, 550), 2)
         if req.max_price:
             nightly = min(nightly, req.max_price)
         total = round(nightly * nights, 2)
         points = int(total * random.uniform(80, 120))
+
+        # Assign coordinates: spread hotels around the city center at varying distances
+        hotel_lat, hotel_lng = _spread_coordinates(center_lat, center_lng, idx, total_hotels, max_radius_km=3.0)
+
+        # Compute location intelligence relative to top attractions cluster
+        location_score, proximity_label, area_label = _compute_hotel_location_intelligence(
+            hotel_lat, hotel_lng, center_lat, center_lng
+        )
 
         name_slug = name.lower().replace(" ", "-").replace("·", "").replace("  ", "-")
         loc_slug = req.location.lower().replace(" ", "-").replace(",", "")
@@ -294,6 +338,11 @@ def _mock_hotels(req: HotelSearchRequest) -> List[HotelResult]:
                 stars=float(stars) if stars else None,
                 amenities=amenities,
                 price_per_night=nightly,
+                lat=hotel_lat,
+                lng=hotel_lng,
+                location_score=location_score,
+                proximity_label=proximity_label,
+                area_label=area_label,
             )
         )
 

@@ -90,7 +90,7 @@ function aiScoreOf(item: ItineraryItem): number {
   return ((item.details as Record<string, unknown>)?.aiScore as number) ?? 0;
 }
 
-type SortKey = "ai" | "price" | "cpp" | "duration" | "rating";
+type SortKey = "ai" | "price" | "cpp" | "duration" | "rating" | "location";
 
 function sortFlights(items: ItineraryItem[], key: SortKey): ItineraryItem[] {
   return [...items].sort((a, b) => {
@@ -121,9 +121,10 @@ function sortHotels(items: ItineraryItem[], key: SortKey): ItineraryItem[] {
   return [...items].sort((a, b) => {
     const da = (a.details ?? {}) as Record<string, unknown>;
     const db = (b.details ?? {}) as Record<string, unknown>;
-    if (key === "price")  return ((da.pricePerNight as number) ?? a.cashPrice ?? 0) - ((db.pricePerNight as number) ?? b.cashPrice ?? 0);
-    if (key === "rating") return ((db.rating as number) ?? 0) - ((da.rating as number) ?? 0);
-    return ((db.aiScore as number) ?? 0) - ((da.aiScore as number) ?? 0);
+    if (key === "price")    return ((da.price_per_night as number) ?? (da.pricePerNight as number) ?? a.cashPrice ?? 0) - ((db.price_per_night as number) ?? (db.pricePerNight as number) ?? b.cashPrice ?? 0);
+    if (key === "rating")   return ((db.rating as number) ?? 0) - ((da.rating as number) ?? 0);
+    if (key === "location") return ((db.location_score as number) ?? 0) - ((da.location_score as number) ?? 0);
+    return ((db.ai_score as number) ?? (db.aiScore as number) ?? 0) - ((da.ai_score as number) ?? (da.aiScore as number) ?? 0);
   });
 }
 
@@ -659,15 +660,18 @@ function HotelCandidateCard({
   const d = (item.details ?? {}) as Record<string, unknown>;
   const name          = (d.name            as string)   ?? item.title;
   const location      = (d.location        as string)   ?? item.location ?? "";
-  const pricePerNight = (d.pricePerNight   as number)   ?? item.cashPrice ?? 0;
+  const pricePerNight = (d.price_per_night as number)   ?? (d.pricePerNight as number) ?? item.cashPrice ?? 0;
   const rating        = (d.rating          as number)   ?? null;
   const stars         = (d.stars           as number)   ?? null;
   const amenities     = (d.amenities       as string[]) ?? [];
-  const aiScore       = (d.aiScore         as number)   ?? 0;
+  const aiScore       = (d.ai_score        as number)   ?? (d.aiScore as number) ?? 0;
   const tags          = (d.tags            as string[]) ?? [];
   const explanation   = (d.explanation     as string)   ?? "";
   const nights        = (d.nights          as number)   ?? 1;
-  const bookingUrl    = (d.bookingUrl      as string)   ?? "";
+  const bookingUrl    = (d.booking_url     as string)   ?? (d.bookingUrl as string) ?? "";
+  const locationScore   = (d.location_score  as number) ?? null;
+  const proximityLabel  = (d.proximity_label as string) ?? null;
+  const areaLabel       = (d.area_label      as string) ?? null;
 
   const containerClass = isTopPick
     ? "border-violet-300/70 bg-gradient-to-br from-violet-50/60 to-white"
@@ -704,6 +708,32 @@ function HotelCandidateCard({
         </div>
         <AiScoreBadge score={aiScore} />
       </div>
+
+      {/* Location intelligence badges */}
+      {(proximityLabel || areaLabel) && (
+        <div className="flex flex-wrap gap-1.5">
+          {proximityLabel && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <MapPin className="w-2.5 h-2.5" />
+              {proximityLabel}
+            </span>
+          )}
+          {areaLabel && areaLabel !== "Farther from center" && (
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+              areaLabel === "In best area"
+                ? "bg-violet-50 text-violet-700 border-violet-200"
+                : "bg-sky-50 text-sky-700 border-sky-200"
+            }`}>
+              {areaLabel === "In best area" ? "★ " : ""}{areaLabel}
+            </span>
+          )}
+          {locationScore !== null && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-50 text-slate-500 border border-slate-200">
+              Location {Math.round(locationScore)}/100
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Tags */}
       {tags.length > 0 && (
@@ -1886,9 +1916,10 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
               sortControls={
                 <SortControl
                   keys={[
-                    { key: "ai",     label: "AI Score" },
-                    { key: "price",  label: "Price"    },
-                    { key: "rating", label: "Rating"   },
+                    { key: "ai",       label: "AI Score" },
+                    { key: "price",    label: "Price"    },
+                    { key: "rating",   label: "Rating"   },
+                    { key: "location", label: "Location" },
                   ]}
                   current={hotelSort}
                   onChange={setHotelSort}

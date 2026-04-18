@@ -123,6 +123,11 @@ class HotelResult(SearchResult):
     tags: List[str] = Field(default_factory=list, description="Multi-tag classification e.g. Best Value, Luxury Pick, Budget Friendly")
     savings_vs_best: Optional[float] = Field(None, description="Price/night delta vs cheapest option in dataset")
     explanation: str = Field("", description="One-line decision context shown to user")
+    lat: Optional[float] = Field(None, description="Hotel latitude coordinate")
+    lng: Optional[float] = Field(None, description="Hotel longitude coordinate")
+    location_score: Optional[float] = Field(None, ge=0, le=100, description="Location quality score 0–100 based on proximity to top attractions")
+    proximity_label: Optional[str] = Field(None, description="Human-readable proximity summary e.g. '8 min from top attractions'")
+    area_label: Optional[str] = Field(None, description="Area quality label e.g. 'In best area'")
 
 
 # ------------------------------------------------------------------
