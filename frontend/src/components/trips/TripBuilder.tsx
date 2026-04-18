@@ -55,7 +55,6 @@ import type {
   BestAreaRecommendation,
   RestaurantSearchResult,
   LocationCluster,
-  PlaceInCluster,
   DayPlan,
 } from "@/types";
 import {
