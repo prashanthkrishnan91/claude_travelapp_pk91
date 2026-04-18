@@ -43,6 +43,24 @@ export interface BookingOption {
   url: string;
 }
 
+// ─── Rewards Intelligence ─────────────────────────────────────────────────────
+
+export interface RewardsBreakdown {
+  earnRate?: string;
+  opportunityCost?: string;
+  transferPartner?: string;
+}
+
+export interface RewardsIntelligence {
+  decision: "points" | "cash";
+  cpp: number;
+  adjustedCpp: number;
+  effectiveCost: number;
+  effectiveCurrency?: string;
+  explanation: string;
+  breakdown?: RewardsBreakdown;
+}
+
 // ─── Itinerary ────────────────────────────────────────────────────────────────
 
 export type ItemType = "flight" | "hotel" | "activity" | "transit" | "meal" | "note";
@@ -62,6 +80,7 @@ export interface ItineraryItem {
   pointsPrice?: number;
   pointsCardKey?: string;
   bestOption?: "cash" | "points";
+  rewardsIntelligence?: RewardsIntelligence;
   position: number;
   details?: {
     bookingOptions?: BookingOption[];

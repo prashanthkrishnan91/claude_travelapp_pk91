@@ -17,7 +17,8 @@ import {
   ExternalLink,
   Zap,
 } from "lucide-react";
-import { ResearchResult, ResearchCategory } from "@/types";
+import { ResearchResult, ResearchCategory, RewardsIntelligence } from "@/types";
+import { RewardsIntelligencePanel } from "./RewardsIntelligencePanel";
 
 interface SearchResultCardProps {
   result: ResearchResult;
@@ -233,6 +234,13 @@ export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }
               ))}
             </div>
           )}
+
+          {(result.category === "flight" || result.category === "hotel") &&
+            result.metadata?.rewardsIntelligence && (
+              <RewardsIntelligencePanel
+                rewards={result.metadata.rewardsIntelligence as RewardsIntelligence}
+              />
+            )}
         </div>
       </div>
     </div>
