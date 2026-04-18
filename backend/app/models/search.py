@@ -127,7 +127,8 @@ class HotelResult(SearchResult):
     lng: Optional[float] = Field(None, description="Hotel longitude coordinate")
     location_score: Optional[float] = Field(None, ge=0, le=100, description="Location quality score 0–100 based on proximity to top attractions")
     proximity_label: Optional[str] = Field(None, description="Human-readable proximity summary e.g. '8 min from top attractions'")
-    area_label: Optional[str] = Field(None, description="Area quality label e.g. 'In best area'")
+    area_label: Optional[str] = Field(None, description="Area quality label e.g. 'In Best Area'")
+    distance_to_best_area: Optional[float] = Field(None, description="Average distance in km to top attractions cluster")
 
 
 # ------------------------------------------------------------------

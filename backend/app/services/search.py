@@ -181,13 +181,13 @@ def _compute_hotel_location_intelligence(
     proximity_label = f"{mins_rounded} min from top attractions"
 
     if location_score >= 78:
-        area_label = "In best area"
+        area_label = "In Best Area"
     elif location_score >= 55:
-        area_label = "Near top attractions"
+        area_label = "Close to Best Area"
     else:
-        area_label = "Farther from center"
+        area_label = "Far from action"
 
-    return location_score, proximity_label, area_label
+    return location_score, proximity_label, area_label, round(avg_km, 2)
 
 
 def _avg_distance_label(cluster: List[Dict[str, Any]]) -> str:
@@ -327,7 +327,7 @@ def _mock_hotels(req: HotelSearchRequest) -> List[HotelResult]:
         hotel_lat, hotel_lng = _spread_coordinates(center_lat, center_lng, idx, total_hotels, max_radius_km=3.0)
 
         # Compute location intelligence relative to top attractions cluster
-        location_score, proximity_label, area_label = _compute_hotel_location_intelligence(
+        location_score, proximity_label, area_label, distance_to_best_area = _compute_hotel_location_intelligence(
             hotel_lat, hotel_lng, center_lat, center_lng
         )
 
@@ -363,6 +363,7 @@ def _mock_hotels(req: HotelSearchRequest) -> List[HotelResult]:
                 location_score=location_score,
                 proximity_label=proximity_label,
                 area_label=area_label,
+                distance_to_best_area=distance_to_best_area,
             )
         )
 
