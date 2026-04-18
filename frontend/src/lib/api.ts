@@ -701,33 +701,11 @@ export async function searchClusters(
 ): Promise<LocationCluster[]> {
   try {
     const payload = { location, radius_km: radiusKm };
-    const raw = await apiFetch<Record<string, unknown>[]>("/search/clusters", {
+    // apiFetch already applies toCamel — return directly so keys match LocationCluster
+    return await apiFetch<LocationCluster[]>("/search/clusters", {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    return raw.map((c) => ({
-      clusterId: c.cluster_id as string,
-      areaName: c.area_name as string,
-      label: c.label as string,
-      centerLat: c.center_lat as number,
-      centerLng: c.center_lng as number,
-      places: (c.places as Record<string, unknown>[]).map(
-        (p): PlaceInCluster => ({
-          id: p.id as string,
-          name: p.name as string,
-          placeType: p.place_type as "attraction" | "restaurant",
-          category: p.category as string,
-          address: p.address as string,
-          rating: p.rating as number | undefined,
-          aiScore: p.ai_score as number | undefined,
-          tags: (p.tags as string[]) ?? [],
-          lat: p.lat as number,
-          lng: p.lng as number,
-          bookingUrl: p.booking_url as string,
-          bookingOptions: p.booking_options as BookingOption[] | undefined,
-        })
-      ),
-    }));
   } catch {
     return [];
   }
@@ -794,6 +772,36 @@ export async function addRestaurantToTrip(
 /** Fetch a smart day plan (2–3 attractions + lunch + dinner) for a specific trip day. */
 export async function fetchDayPlan(tripId: string, dayNumber: number): Promise<DayPlan> {
   const payload = toSnake({ tripId, dayNumber });
+  return apiFetch<DayPlan>("/plan/day", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Generate a day plan from a specific cluster's places. */
+export async function planClusterDay(
+  tripId: string,
+  clusterId: string,
+  places: PlaceInCluster[]
+): Promise<DayPlan> {
+  const payload = {
+    trip_id: tripId,
+    day_number: 1,
+    cluster_id: clusterId,
+    places: places.map((p) => ({
+      id: p.id,
+      name: p.name,
+      place_type: p.placeType,
+      category: p.category,
+      address: p.address,
+      rating: p.rating ?? null,
+      ai_score: p.aiScore ?? null,
+      tags: p.tags,
+      lat: p.lat,
+      lng: p.lng,
+      booking_url: p.bookingUrl,
+    })),
+  };
   return apiFetch<DayPlan>("/plan/day", {
     method: "POST",
     body: JSON.stringify(payload),

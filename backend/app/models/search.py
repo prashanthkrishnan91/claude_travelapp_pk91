@@ -206,6 +206,11 @@ class PlaceInCluster(BaseModel):
     booking_options: List[BookingOption] = Field(default_factory=list)
 
 
+class ClusterCounts(BaseModel):
+    attractions: int = 0
+    restaurants: int = 0
+
+
 class LocationCluster(BaseModel):
     cluster_id: str
     area_name: str
@@ -213,6 +218,8 @@ class LocationCluster(BaseModel):
     center_lat: float
     center_lng: float
     places: List[PlaceInCluster]
+    counts: ClusterCounts = Field(default_factory=ClusterCounts)
+    avg_distance: str = ""
 
 
 # ------------------------------------------------------------------

@@ -4,9 +4,25 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
+class ClusterPlaceInput(BaseModel):
+    id: str
+    name: str
+    place_type: str  # "attraction" | "restaurant"
+    category: str
+    address: str
+    rating: Optional[float] = None
+    ai_score: Optional[float] = None
+    tags: List[str] = []
+    lat: float = 0.0
+    lng: float = 0.0
+    booking_url: str = ""
+
+
 class DayPlanRequest(BaseModel):
     trip_id: UUID
     day_number: int
+    cluster_id: Optional[str] = None
+    places: Optional[List[ClusterPlaceInput]] = None
 
 
 class PlannedAttraction(BaseModel):

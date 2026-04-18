@@ -26,6 +26,7 @@ from app.models.search import (
     BestAreaRecommendation,
     BestAreaRequest,
     BookingOption,
+    ClusterCounts,
     ClusterSearchRequest,
     FlightResult,
     FlightSearchRequest,
@@ -187,6 +188,25 @@ def _compute_hotel_location_intelligence(
         area_label = "Farther from center"
 
     return location_score, proximity_label, area_label
+
+
+def _avg_distance_label(cluster: List[Dict[str, Any]]) -> str:
+    """Return average pairwise walking-time label for a cluster."""
+    if len(cluster) < 2:
+        return "Solo stop"
+    total_dist = 0.0
+    pairs = 0
+    for i in range(len(cluster)):
+        for j in range(i + 1, len(cluster)):
+            total_dist += _haversine_km(cluster[i]["lat"], cluster[i]["lng"], cluster[j]["lat"], cluster[j]["lng"])
+            pairs += 1
+    avg_km = total_dist / pairs
+    avg_min = round(avg_km * 15.0)  # walking ~4 km/h
+    if avg_min <= 5:
+        return "5 min apart"
+    if avg_min <= 10:
+        return "10 min apart"
+    return f"{avg_min} min apart"
 
 
 def _walkability_label(cluster: List[Dict[str, Any]]) -> str:
@@ -807,6 +827,9 @@ class SearchService:
             c_lng = sum(p["lng"] for p in cluster) / len(cluster)
             area_name = _AREA_NAMES[idx % len(_AREA_NAMES)]
             label = _walkability_label(cluster)
+            avg_distance = _avg_distance_label(cluster)
+            attraction_count = sum(1 for p in cluster if p["place_type"] == "attraction")
+            restaurant_count = sum(1 for p in cluster if p["place_type"] == "restaurant")
             places = [PlaceInCluster(**p) for p in cluster]
             result.append(LocationCluster(
                 cluster_id=f"cluster-{idx}",
@@ -815,6 +838,8 @@ class SearchService:
                 center_lat=round(c_lat, 6),
                 center_lng=round(c_lng, 6),
                 places=places,
+                counts=ClusterCounts(attractions=attraction_count, restaurants=restaurant_count),
+                avg_distance=avg_distance,
             ))
 
         return result
