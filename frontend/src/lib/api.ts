@@ -718,20 +718,10 @@ export async function fetchBestArea(
 ): Promise<BestAreaRecommendation | null> {
   try {
     const payload = { location, radius_km: radiusKm };
-    const raw = await apiFetch<Record<string, unknown> | null>("/search/best-area", {
+    return await apiFetch<BestAreaRecommendation | null>("/search/best-area", {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    if (!raw) return null;
-    return {
-      areaName: raw.area_name as string,
-      reason: raw.reason as string,
-      score: raw.score as number,
-      centerLat: raw.center_lat as number,
-      centerLng: raw.center_lng as number,
-      radiusKm: raw.radius_km as number,
-      clusterId: raw.cluster_id as string,
-    };
   } catch {
     return null;
   }
