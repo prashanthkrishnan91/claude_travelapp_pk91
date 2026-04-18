@@ -236,7 +236,7 @@ export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }
           )}
 
           {(result.category === "flight" || result.category === "hotel") &&
-            result.metadata?.rewardsIntelligence && (
+            !!result.metadata?.rewardsIntelligence && (
               <RewardsIntelligencePanel
                 rewards={result.metadata.rewardsIntelligence as RewardsIntelligence}
               />
