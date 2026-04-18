@@ -766,6 +766,8 @@ export async function addRestaurantToTrip(
       price_level: restaurant.priceLevel ?? null,
       opening_hours: restaurant.openingHours ?? null,
       booking_url: restaurant.bookingUrl ?? null,
+      lat: restaurant.lat ?? null,
+      lng: restaurant.lng ?? null,
     },
   };
   return apiFetch<ItineraryItem>("/itinerary/items", {
@@ -808,6 +810,8 @@ export async function addAttractionToDay(
       opening_hours: attraction.openingHours ?? null,
       price_level: attraction.priceLevel ?? null,
       booking_url: attraction.bookingUrl ?? null,
+      lat: attraction.lat ?? null,
+      lng: attraction.lng ?? null,
     },
   };
   return apiFetch<ItineraryItem>("/itinerary/items", {
@@ -840,6 +844,8 @@ export async function addRestaurantToDay(
       price_level: restaurant.priceLevel ?? null,
       opening_hours: restaurant.openingHours ?? null,
       booking_url: restaurant.bookingUrl ?? null,
+      lat: restaurant.lat ?? null,
+      lng: restaurant.lng ?? null,
     },
   };
   return apiFetch<ItineraryItem>("/itinerary/items", {
@@ -871,6 +877,8 @@ export async function addAttractionToTrip(
       opening_hours: attraction.openingHours ?? null,
       price_level: attraction.priceLevel ?? null,
       booking_url: attraction.bookingUrl ?? null,
+      lat: attraction.lat ?? null,
+      lng: attraction.lng ?? null,
     },
   };
   return apiFetch<ItineraryItem>("/itinerary/items", {

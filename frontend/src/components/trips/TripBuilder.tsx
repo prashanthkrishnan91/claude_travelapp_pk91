@@ -41,7 +41,9 @@ import {
   Map as MapIcon,
   LayoutList,
   Layers,
+  Navigation,
 } from "lucide-react";
+import { estimateTravel, sumRoute } from "@/lib/travelTime";
 import gsap from "gsap";
 import type {
   ItineraryDay,
@@ -1214,7 +1216,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
   const [compareOpen,    setCompareOpen]    = useState(false);
   const [compareResults, setCompareResults] = useState<CompareResult[]>([]);
   const [compareLoading, setCompareLoading] = useState(false);
-  const compareDataRef = useRef<Map<string, { name: string; itemType: string; cashPrice: number; pointsCost: number; rating?: number }>>(new Map());
+  const compareDataRef = useRef<Map<string, { name: string; itemType: string; cashPrice: number; pointsCost: number; rating?: number; lat?: number; lng?: number }>>(new Map());
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -1624,6 +1626,8 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
           itemType: item.itemType,
           cashPrice: item.cashPrice ?? 0,
           pointsCost: item.pointsPrice ?? 0,
+          lat: (item.details as Record<string, unknown>)?.lat as number | undefined,
+          lng: (item.details as Record<string, unknown>)?.lng as number | undefined,
         });
       }
       return next;
@@ -1643,6 +1647,19 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
       setCompareOpen(true);
     } catch { /* silently ignore */ }
     finally { setCompareLoading(false); }
+  }, [compareSet]);
+
+  // ── Route summary for selected items that have coordinates ───────────────────
+  const compareRouteSummary = useMemo(() => {
+    const geoPoints = Array.from(compareSet)
+      .map((id) => compareDataRef.current.get(id))
+      .filter((d): d is NonNullable<typeof d> => d != null && d.lat != null && d.lng != null);
+    if (geoPoints.length < 2) return null;
+    const estimates = [];
+    for (let i = 0; i < geoPoints.length - 1; i++) {
+      estimates.push(estimateTravel(geoPoints[i].lat!, geoPoints[i].lng!, geoPoints[i + 1].lat!, geoPoints[i + 1].lng!));
+    }
+    return sumRoute(estimates);
   }, [compareSet]);
 
   // ── DnD ──────────────────────────────────────────────────────────────────────
@@ -2307,6 +2324,15 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
               {compareSet.size} item{compareSet.size !== 1 ? "s" : ""}
               {compareSet.size < 2 && <span className="text-slate-400 text-xs ml-1">(need 2+)</span>}
             </span>
+            {compareRouteSummary && (
+              <>
+                <div className="w-px h-4 bg-slate-700" />
+                <span className="flex items-center gap-1 text-xs text-emerald-400">
+                  <Navigation className="w-3 h-3" />
+                  {compareRouteSummary.totalKm} km · ~{compareRouteSummary.totalDriveMin} min drive
+                </span>
+              </>
+            )}
             <div className="w-px h-4 bg-slate-700" />
             <button
               onClick={handleCompare}
