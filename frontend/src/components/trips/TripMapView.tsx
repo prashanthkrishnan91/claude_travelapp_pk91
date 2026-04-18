@@ -1,13 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Loader2, Plus, Star, X } from "lucide-react";
+import { Loader2, Plus, Star, X, MapPin, Layers } from "lucide-react";
 import type { Map as LeafletMap, Marker as LeafletMarker } from "leaflet";
 import type { AttractionSearchResult, RestaurantSearchResult } from "@/types";
 
 type PopupItem =
   | { type: "attraction"; item: AttractionSearchResult }
   | { type: "restaurant"; item: RestaurantSearchResult };
+
+type MapMode = "pins" | "heatmap";
+
+interface HeatLayer {
+  addTo(map: LeafletMap): this;
+  remove(): void;
+}
 
 interface TripMapViewProps {
   destination: string;
@@ -28,14 +35,24 @@ async function geocodeCity(city: string): Promise<[number, number]> {
     const data = await res.json();
     if (data?.[0]) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
   } catch { /* silently fall back */ }
-  return [40.7128, -74.006]; // fallback: NYC
+  return [40.7128, -74.006];
 }
 
-// Deterministic golden-angle spiral spread for items without coordinates
 function goldenSpread(index: number): [number, number] {
   const angle = (index * 137.508 * Math.PI) / 180;
   const radius = 0.006 * Math.sqrt(index + 1);
   return [Math.sin(angle) * radius, Math.cos(angle) * radius];
+}
+
+// Weight: 40% rating, 30% review volume (log-scaled), 30% AI score
+function computeWeight(item: AttractionSearchResult | RestaurantSearchResult): number {
+  const rating = item.rating ?? 3;
+  const reviews = item.numReviews ?? 100;
+  const aiScore = item.aiScore ?? 50;
+  const ratingScore = rating / 5;
+  const reviewScore = Math.min(1, Math.log(Math.max(1, reviews)) / Math.log(500_000));
+  const aiNorm = aiScore / 100;
+  return ratingScore * 0.4 + reviewScore * 0.3 + aiNorm * 0.3;
 }
 
 export function TripMapView({
@@ -50,11 +67,19 @@ export function TripMapView({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<Map<string, LeafletMarker>>(new Map());
+  const heatLayerRef = useRef<HeatLayer | null>(null);
+  const mapModeRef = useRef<MapMode>("pins");
+
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [geocoding, setGeocoding] = useState(true);
   const [popup, setPopup] = useState<PopupItem | null>(null);
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [mapMode, setMapMode] = useState<MapMode>("pins");
+  const [heatScriptLoaded, setHeatScriptLoaded] = useState(false);
+
+  // Keep ref in sync for use inside async callbacks
+  useEffect(() => { mapModeRef.current = mapMode; }, [mapMode]);
 
   // Inject Leaflet CSS once
   useEffect(() => {
@@ -65,6 +90,22 @@ export function TripMapView({
     link.rel = "stylesheet";
     link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
     document.head.appendChild(link);
+  }, []);
+
+  // Inject leaflet.heat plugin once; it will extend the global window.L
+  useEffect(() => {
+    const SCRIPT_ID = "leaflet-heat-js";
+    if (document.getElementById(SCRIPT_ID)) {
+      // Script already in DOM — check if it already patched window.L
+      type WinWithL = Record<string, unknown> & { L?: { heatLayer?: unknown } };
+      if ((window as unknown as WinWithL).L?.heatLayer) setHeatScriptLoaded(true);
+      return;
+    }
+    const script = document.createElement("script");
+    script.id = SCRIPT_ID;
+    script.src = "https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js";
+    script.onload = () => setHeatScriptLoaded(true);
+    document.head.appendChild(script);
   }, []);
 
   // Geocode destination city
@@ -79,12 +120,14 @@ export function TripMapView({
   // Initialize Leaflet map once center is known
   useEffect(() => {
     if (!center || !mapContainerRef.current) return;
-
     let cancelled = false;
 
     import("leaflet").then((mod) => {
       if (cancelled || !mapContainerRef.current || mapInstanceRef.current) return;
       const L = mod.default ?? mod;
+
+      // Expose L globally so the leaflet.heat CDN script can extend it
+      (window as unknown as Record<string, unknown>).L = L;
 
       const map = L.map(mapContainerRef.current, {
         zoomControl: true,
@@ -107,13 +150,28 @@ export function TripMapView({
         mapInstanceRef.current = null;
       }
       markersRef.current.clear();
+      heatLayerRef.current = null;
       setMapReady(false);
     };
   // center changes only when destination changes — intentional single-init
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [center]);
 
-  // Build / rebuild markers whenever map or data changes
+  // Toggle pins / heatmap visibility
+  const applyMode = useCallback((mode: MapMode) => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    markersRef.current.forEach((marker) => {
+      if (mode === "pins") marker.addTo(map);
+      else marker.remove();
+    });
+    if (heatLayerRef.current) {
+      if (mode === "heatmap") heatLayerRef.current.addTo(map);
+      else heatLayerRef.current.remove();
+    }
+  }, []);
+
+  // Build / rebuild markers and heatmap whenever map, data, or heat script readiness changes
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current || !center) return;
     let cancelled = false;
@@ -125,6 +183,10 @@ export function TripMapView({
 
       markersRef.current.forEach((m) => m.remove());
       markersRef.current.clear();
+      if (heatLayerRef.current) {
+        heatLayerRef.current.remove();
+        heatLayerRef.current = null;
+      }
 
       const makeIcon = (color: string) =>
         L.divIcon({
@@ -136,11 +198,13 @@ export function TripMapView({
 
       const blueIcon = makeIcon("#2563eb");
       const orangeIcon = makeIcon("#ea580c");
+      const heatPoints: [number, number, number][] = [];
 
       attractions.forEach((a, i) => {
         const [dLat, dLng] = goldenSpread(i);
         const lat = (a as AttractionSearchResult & { lat?: number }).lat ?? center[0] + dLat;
         const lng = (a as AttractionSearchResult & { lng?: number }).lng ?? center[1] + dLng;
+        heatPoints.push([lat, lng, computeWeight(a)]);
         const marker = L.marker([lat, lng], { icon: blueIcon });
         marker.on("click", () => {
           onMarkerClick?.(a.id);
@@ -154,6 +218,7 @@ export function TripMapView({
         const [dLat, dLng] = goldenSpread(i + attractions.length);
         const lat = (r as RestaurantSearchResult & { lat?: number }).lat ?? center[0] + dLat;
         const lng = (r as RestaurantSearchResult & { lng?: number }).lng ?? center[1] + dLng;
+        heatPoints.push([lat, lng, computeWeight(r)]);
         const marker = L.marker([lat, lng], { icon: orangeIcon });
         marker.on("click", () => {
           onMarkerClick?.(r.id);
@@ -162,10 +227,34 @@ export function TripMapView({
         marker.addTo(map);
         markersRef.current.set(r.id, marker);
       });
+
+      // Build heat layer using window.L extended by the leaflet.heat CDN script
+      type LeafletWithHeat = typeof L & {
+        heatLayer?: (pts: [number, number, number][], opts: unknown) => HeatLayer;
+      };
+      const gL = (window as unknown as Record<string, unknown>).L as LeafletWithHeat | undefined;
+      if (heatPoints.length > 0 && heatScriptLoaded && gL?.heatLayer) {
+        heatLayerRef.current = gL.heatLayer(heatPoints, {
+          radius: 35,
+          blur: 25,
+          maxZoom: 15,
+          max: 1.0,
+          // blue (low) → amber (mid) → red → violet (peak density)
+          gradient: { 0.2: "#60a5fa", 0.5: "#f59e0b", 0.8: "#ef4444", 1.0: "#7c3aed" },
+        });
+      }
+
+      applyMode(mapModeRef.current);
     });
 
     return () => { cancelled = true; };
-  }, [mapReady, center, attractions, restaurants, onMarkerClick]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady, center, attractions, restaurants, onMarkerClick, heatScriptLoaded, applyMode]);
+
+  // Re-apply visibility whenever the user flips the toggle
+  useEffect(() => {
+    applyMode(mapMode);
+  }, [mapMode, applyMode]);
 
   // Pan to active marker when it changes
   useEffect(() => {
@@ -256,7 +345,7 @@ export function TripMapView({
         </div>
       )}
 
-      {/* Legend */}
+      {/* Legend + Pins/Heatmap toggle */}
       <div className="flex items-center gap-4 px-3 py-2 bg-white rounded-lg border border-slate-100 shadow-sm text-xs text-slate-500">
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-600 flex-shrink-0" />
@@ -266,7 +355,31 @@ export function TripMapView({
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-orange-600 flex-shrink-0" />
           {restaurants.length} Restaurants
         </span>
-        <span className="ml-auto text-[10px] text-slate-300">Click a pin to explore</span>
+
+        <div className="ml-auto flex rounded-lg overflow-hidden border border-slate-200">
+          <button
+            onClick={() => setMapMode("pins")}
+            className={`flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium transition-colors ${
+              mapMode === "pins"
+                ? "bg-sky-600 text-white"
+                : "bg-white text-slate-500 hover:bg-slate-50"
+            }`}
+          >
+            <MapPin className="w-3 h-3" />
+            Pins
+          </button>
+          <button
+            onClick={() => setMapMode("heatmap")}
+            className={`flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium transition-colors border-l border-slate-200 ${
+              mapMode === "heatmap"
+                ? "bg-orange-500 text-white"
+                : "bg-white text-slate-500 hover:bg-slate-50"
+            }`}
+          >
+            <Layers className="w-3 h-3" />
+            Heatmap
+          </button>
+        </div>
       </div>
     </div>
   );
