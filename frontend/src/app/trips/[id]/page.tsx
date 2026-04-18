@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Pencil, Sparkles, Trash2, X } from "lucide-react";
+import { ChevronLeft, Pencil, Sparkles, Trash2, X, Zap } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TripBuilder } from "@/components/trips/TripBuilder";
+import { OptimizeTripModal } from "@/components/trips/OptimizeTripModal";
 import { fetchTrip, fetchItinerary, fetchTripContext, updateTrip, deleteTrip } from "@/lib/api";
 import type { Trip, TripContext, ItineraryDay } from "@/types";
 
@@ -67,6 +68,8 @@ export default function TripDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [saving,        setSaving]        = useState(false);
   const [toast,         setToast]         = useState<string | null>(null);
+  const [optimizeOpen,  setOptimizeOpen]  = useState(false);
+  const [tripBuilderKey, setTripBuilderKey] = useState(0);
 
   useEffect(() => {
     if (!id) return;
@@ -120,6 +123,14 @@ export default function TripDetailPage() {
     router.push("/trips");
   }
 
+  async function handlePlanSelected() {
+    const days = await fetchItinerary(id);
+    setItineraryDays(days);
+    setTripBuilderKey((k) => k + 1);
+    setOptimizeOpen(false);
+    showToast("Plan added to your itinerary!");
+  }
+
   const pageTitle    = trip?.title ?? "Trip Builder";
   const pageSubtitle = trip?.destination
     ? `${trip.destination}${trip.startDate ? ` · ${trip.startDate}` : ""}`
@@ -158,6 +169,16 @@ export default function TripDetailPage() {
         <div className="fixed bottom-4 right-4 z-50 bg-slate-800 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
           {toast}
         </div>
+      )}
+
+      {/* Optimize My Trip Modal */}
+      {optimizeOpen && trip && (
+        <OptimizeTripModal
+          trip={trip}
+          itineraryDays={itineraryDays}
+          onClose={() => setOptimizeOpen(false)}
+          onPlanSelected={handlePlanSelected}
+        />
       )}
 
       {/* Edit Modal */}
@@ -266,6 +287,10 @@ export default function TripDetailPage() {
               <Pencil className="w-4 h-4" />
               Edit
             </button>
+            <button onClick={() => setOptimizeOpen(true)} className="btn-ghost">
+              <Zap className="w-4 h-4" />
+              Optimize My Trip
+            </button>
             <button className="btn-primary">
               <Sparkles className="w-4 h-4" />
               AI Concierge
@@ -275,6 +300,7 @@ export default function TripDetailPage() {
       />
 
       <TripBuilder
+        key={tripBuilderKey}
         tripId={id}
         destination={trip?.destination ?? ""}
         initialDays={itineraryDays}

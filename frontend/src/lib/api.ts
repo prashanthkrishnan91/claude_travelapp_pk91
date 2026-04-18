@@ -27,6 +27,9 @@ import type {
   PlaceInCluster,
   BestAreaRecommendation,
   DayPlan,
+  OptimizeFlightInput,
+  OptimizeHotelInput,
+  TripOptimizationResponse,
 } from "@/types";
 import { supabase } from "./supabase";
 
@@ -970,6 +973,78 @@ export async function createCard(data: CreateCardData): Promise<TravelCard> {
     isPrimary: data.isPrimary ?? false,
   });
   return apiFetch<TravelCard>("/cards", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+// ─── Trip Optimization ────────────────────────────────────────────────────────
+
+export async function optimizeTrip(
+  flights: OptimizeFlightInput[],
+  hotels: OptimizeHotelInput[]
+): Promise<TripOptimizationResponse> {
+  const payload = toSnake({ flights, hotels });
+  return apiFetch<TripOptimizationResponse>("/optimize/trip", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function addOptimizedFlightToDay(
+  tripId: string,
+  dayId: string,
+  flight: OptimizeFlightInput
+): Promise<ItineraryItem> {
+  const payload = toSnake({
+    tripId,
+    dayId,
+    itemType: "flight" as ItemType,
+    title: `${flight.airline} ${flight.flightNumber}`,
+    cashPrice: flight.price,
+    pointsPrice: flight.pointsCost,
+    position: 0,
+    details: {
+      airline: flight.airline,
+      flightNumber: flight.flightNumber,
+      durationMinutes: flight.durationMinutes,
+      stops: flight.stops,
+      cabinClass: flight.cabinClass,
+      price: flight.price,
+      pointsCost: flight.pointsCost,
+      cpp: flight.cpp,
+      decision: flight.decision,
+      tags: flight.tags,
+    },
+  });
+  return apiFetch<ItineraryItem>(`/itinerary/${tripId}/days/${dayId}/items`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function addOptimizedHotelToTrip(
+  tripId: string,
+  hotel: OptimizeHotelInput
+): Promise<ItineraryItem> {
+  const payload: Record<string, unknown> = {
+    trip_id: tripId,
+    item_type: "hotel",
+    title: hotel.name,
+    cash_price: hotel.pricePerNight,
+    ...(hotel.pointsEstimate > 0 ? { points_price: hotel.pointsEstimate } : {}),
+    details: {
+      name: hotel.name,
+      price: hotel.price,
+      price_per_night: hotel.pricePerNight,
+      nights: hotel.nights,
+      rating: hotel.rating ?? null,
+      stars: hotel.stars ?? null,
+      location_score: hotel.locationScore ?? null,
+      area_label: hotel.areaLabel ?? null,
+    },
+  };
+  return apiFetch<ItineraryItem>("/itinerary/items", {
     method: "POST",
     body: JSON.stringify(payload),
   });
