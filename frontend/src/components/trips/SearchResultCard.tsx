@@ -189,6 +189,30 @@ export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }
             )}
           </div>
 
+          {result.category === "hotel" && result.metadata?.areaLabel && (
+            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+              <span
+                className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full ${
+                  result.metadata.areaLabel === "In Best Area"
+                    ? "bg-emerald-100 text-emerald-700"
+                    : result.metadata.areaLabel === "Close to Best Area"
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                {result.metadata.areaLabel as string}
+              </span>
+              {result.metadata.distanceToBestArea != null && (
+                <span className="flex items-center gap-0.5 text-xs text-slate-400">
+                  <MapPin className="w-3 h-3" />
+                  {(result.metadata.distanceToBestArea as number) < 1
+                    ? `${Math.round((result.metadata.distanceToBestArea as number) * 1000)} m to best area`
+                    : `${(result.metadata.distanceToBestArea as number).toFixed(1)} km to best area`}
+                </span>
+              )}
+            </div>
+          )}
+
           {result.tags && result.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5">
               {result.tags.map((tag) => (

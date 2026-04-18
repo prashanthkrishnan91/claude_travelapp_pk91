@@ -552,6 +552,7 @@ interface RawHotelResult {
   locationScore?: number;
   proximityLabel?: string;
   areaLabel?: string;
+  distanceToBestArea?: number;
 }
 
 function mapAttractionToResult(a: RawAttractionResult): AttractionSearchResult {
@@ -596,6 +597,7 @@ function mapHotelToResult(h: RawHotelResult): ResearchResult {
       locationScore: h.locationScore,
       proximityLabel: h.proximityLabel,
       areaLabel: h.areaLabel,
+      distanceToBestArea: h.distanceToBestArea,
     },
   };
 }
