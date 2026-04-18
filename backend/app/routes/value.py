@@ -38,13 +38,15 @@ def score_item(payload: ValueEngineV2Request) -> ValueEngineV2Result:
 
     **Outputs**
     - `cpp` — base cents-per-point before bonuses
-    - `adjusted_cpp` — CPP after best available transfer bonus
+    - `adjusted_cpp` — CPP after best available transfer bonus (via adjusted_points = points / (1 + bonus%))
     - `value_score` — composite score 0–100
     - `tags` — e.g. `"Best Value"`, `"Points Better"`, `"Cash Better"`, `"+25% Transfer Bonus"`
-    - `recommendation_reason` — structured explanation with CPP, bonus, cash vs points, preference match
-    - `decision` — `"Use Points"`, `"Pay Cash"`, or `"Either"`
-    - `effective_cash_cost` — cash price after rewards earned (USD)
-    - `opportunity_cost` — value of points if kept (points × cpp_baseline, USD)
+    - `recommendation_reason` — e.g. "2.4 CPP with 20% transfer bonus — strong redemption"
+    - `decision` — `"Points Better"` or `"Cash Better"` (CPP vs user baseline)
+    - `effective_cash_cost` — cash price minus earn-back rewards (USD)
+    - `opportunity_cost` — earn value lost by using points instead of cash (USD)
+    - `best_card` — card key giving best value for the recommended decision
+    - `transfer_partner` — partner name for best bonus, or null
     """
     return _engine_v2.score(payload)
 
