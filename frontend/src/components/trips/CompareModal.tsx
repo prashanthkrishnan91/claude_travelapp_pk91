@@ -83,6 +83,17 @@ export function CompareModal({ results, onClose }: CompareModalProps) {
   const minCash = Math.min(...ranked.filter((r) => r.price > 0).map((r) => r.price));
   const minPoints = Math.min(...ranked.filter((r) => r.points > 0).map((r) => r.points));
 
+  const nextBest = ranked[1] ?? null;
+  const savingsVsNext =
+    nextBest && winner.price > 0 && nextBest.price > 0
+      ? Math.round(nextBest.price - winner.price)
+      : 0;
+  const cppEntries = ranked.filter((r) => r.cpp != null);
+  const avgCpp =
+    cppEntries.length ? cppEntries.reduce((s, r) => s + r.cpp!, 0) / cppEntries.length : null;
+  const winnerCppVsAvg =
+    winner.cpp != null && avgCpp != null ? winner.cpp - avgCpp : null;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
@@ -136,7 +147,7 @@ export function CompareModal({ results, onClose }: CompareModalProps) {
                   key={r.id}
                   className={`flex-1 min-w-[200px] rounded-xl border p-4 flex flex-col gap-3 ${
                     isWinner
-                      ? "border-sky-200 bg-gradient-to-b from-sky-50/60 to-white shadow-sm ring-1 ring-sky-200"
+                      ? "border-sky-300 bg-gradient-to-b from-sky-50/70 to-white shadow-md shadow-sky-200/50 ring-1 ring-sky-200"
                       : "border-slate-200 bg-white"
                   }`}
                 >
@@ -176,6 +187,28 @@ export function CompareModal({ results, onClose }: CompareModalProps) {
                     <p className="text-sm font-semibold text-slate-800 leading-snug">{r.name}</p>
                     <p className="text-xs text-slate-400 capitalize mt-0.5">{r.type}</p>
                   </div>
+
+                  {/* Savings vs next best / CPP advantage (winner only) */}
+                  {isWinner && (savingsVsNext > 0 || (winnerCppVsAvg != null && winnerCppVsAvg > 0)) && (
+                    <div className="flex flex-col gap-1">
+                      {savingsVsNext > 0 && (
+                        <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
+                          <span className="text-xs text-slate-400">vs next best</span>
+                          <span className="text-xs font-semibold text-emerald-600">
+                            Save ${savingsVsNext.toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      {winnerCppVsAvg != null && winnerCppVsAvg > 0 && (
+                        <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-sky-50 border border-sky-100">
+                          <span className="text-xs text-slate-400">CPP vs avg</span>
+                          <span className="text-xs font-semibold text-sky-600">
+                            +{winnerCppVsAvg.toFixed(1)}¢
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Pricing block */}
                   <div className="flex flex-col gap-1.5">
