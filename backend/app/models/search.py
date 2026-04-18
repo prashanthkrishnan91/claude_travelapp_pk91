@@ -211,6 +211,25 @@ class LocationCluster(BaseModel):
 
 
 # ------------------------------------------------------------------
+# Best area recommendation
+# ------------------------------------------------------------------
+
+class BestAreaRequest(BaseModel):
+    location: str = Field(..., min_length=2, description="City or region to recommend area for")
+    radius_km: float = Field(1.5, ge=0.5, le=5.0, description="Cluster radius in kilometres")
+
+
+class BestAreaRecommendation(BaseModel):
+    area_name: str = Field(..., description="Name of the recommended area")
+    reason: str = Field(..., description="Human-readable justification for the recommendation")
+    score: float = Field(..., description="Composite score 0–100")
+    center_lat: float
+    center_lng: float
+    radius_km: float = Field(..., description="Visual highlight radius in km")
+    cluster_id: str
+
+
+# ------------------------------------------------------------------
 # Generic cache wrapper stored in research_cache
 # ------------------------------------------------------------------
 

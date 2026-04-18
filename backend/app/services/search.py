@@ -23,6 +23,8 @@ from supabase import Client
 from app.models.search import (
     AttractionResult,
     AttractionSearchRequest,
+    BestAreaRecommendation,
+    BestAreaRequest,
     BookingOption,
     ClusterSearchRequest,
     FlightResult,
@@ -767,6 +769,57 @@ class SearchService:
             ))
 
         return result
+
+    def get_best_area(self, req: BestAreaRequest) -> Optional[BestAreaRecommendation]:
+        """Identify the best neighborhood to stay based on cluster density, rating, and centrality."""
+        clusters = self.search_clusters(ClusterSearchRequest(location=req.location, radius_km=req.radius_km))
+        if not clusters:
+            return None
+
+        center_lat, center_lng = _get_city_center(req.location)
+        max_places = max(len(c.places) for c in clusters)
+
+        scored = []
+        for cluster in clusters:
+            density = len(cluster.places) / max(max_places, 1)
+
+            ratings = [p.rating for p in cluster.places if p.rating is not None]
+            avg_rating = (sum(ratings) / len(ratings) / 5.0) if ratings else 0.5
+
+            dist_from_center = _haversine_km(center_lat, center_lng, cluster.center_lat, cluster.center_lng)
+            centrality = max(0.0, 1.0 - dist_from_center / 3.0)
+
+            score = density * 0.40 + avg_rating * 0.35 + centrality * 0.25
+            scored.append((score, cluster))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        best_score, best = scored[0]
+
+        ratings = [p.rating for p in best.places if p.rating is not None]
+        avg_r = sum(ratings) / len(ratings) if ratings else None
+        restaurant_count = sum(1 for p in best.places if p.place_type == "restaurant")
+
+        parts = []
+        if best.label == "Walkable cluster":
+            parts.append("Most attractions within walking distance")
+        elif best.label == "5 min apart":
+            parts.append("Compact area, 5 min between spots")
+        else:
+            parts.append(f"{len(best.places)} nearby places")
+        if avg_r is not None:
+            parts.append(f"avg rating {avg_r:.1f}★")
+        if restaurant_count > 0:
+            parts.append("top-rated dining")
+
+        return BestAreaRecommendation(
+            area_name=best.area_name,
+            reason=" + ".join(parts),
+            score=round(best_score * 100, 1),
+            center_lat=best.center_lat,
+            center_lng=best.center_lng,
+            radius_km=req.radius_km,
+            cluster_id=best.cluster_id,
+        )
 
     # ------------------------------------------------------------------
     # Cache helpers

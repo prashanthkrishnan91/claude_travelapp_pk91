@@ -50,6 +50,7 @@ import type {
   ItemType,
   CompareResult,
   AttractionSearchResult,
+  BestAreaRecommendation,
   RestaurantSearchResult,
   LocationCluster,
   PlaceInCluster,
@@ -69,6 +70,7 @@ import {
   searchRestaurants,
   addRestaurantToTrip,
   searchClusters,
+  fetchBestArea,
   fetchDayPlan,
   addAttractionToDay,
   addRestaurantToDay,
@@ -1194,6 +1196,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
   const [candidateClusters,    setCandidateClusters]    = useState<LocationCluster[]>([]);
   const [clustersLoading,      setClustersLoading]      = useState(false);
   const [planningClusterId,    setPlanningClusterId]    = useState<string | null>(null);
+  const [bestArea,             setBestArea]             = useState<BestAreaRecommendation | null>(null);
 
   // ── Day plan state ───────────────────────────────────────────────────────────
   const [dayPlan,            setDayPlan]            = useState<DayPlan | null>(null);
@@ -1283,6 +1286,12 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
     setClustersLoading(true);
     searchClusters(destination).then(setCandidateClusters).finally(() => setClustersLoading(false));
   }, [viewMode, destination, candidateClusters.length]);
+
+  // Fetch best area recommendation once destination is known
+  useEffect(() => {
+    if (!destination) return;
+    fetchBestArea(destination).then(setBestArea);
+  }, [destination]);
 
   // Scroll to highlighted list item when switching from map → list view
   useEffect(() => {
@@ -1938,6 +1947,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
                   attractions={filteredAttractions}
                   restaurants={filteredRestaurants}
                   activeMarkerId={activeMarkerId}
+                  bestArea={bestArea}
                   onMarkerClick={(id) => setActiveMarkerId(id)}
                   onAddAttraction={handleAddAttractionToItinerary}
                   onAddRestaurant={handleAddRestaurantToItinerary}

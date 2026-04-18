@@ -25,6 +25,7 @@ import type {
   RestaurantSearchResult,
   LocationCluster,
   PlaceInCluster,
+  BestAreaRecommendation,
   DayPlan,
 } from "@/types";
 import { supabase } from "./supabase";
@@ -714,6 +715,32 @@ export async function searchClusters(
     }));
   } catch {
     return [];
+  }
+}
+
+/** Fetch the best area recommendation for a destination. */
+export async function fetchBestArea(
+  location: string,
+  radiusKm: number = 1.5
+): Promise<BestAreaRecommendation | null> {
+  try {
+    const payload = { location, radius_km: radiusKm };
+    const raw = await apiFetch<Record<string, unknown> | null>("/search/best-area", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!raw) return null;
+    return {
+      areaName: raw.area_name as string,
+      reason: raw.reason as string,
+      score: raw.score as number,
+      centerLat: raw.center_lat as number,
+      centerLng: raw.center_lng as number,
+      radiusKm: raw.radius_km as number,
+      clusterId: raw.cluster_id as string,
+    };
+  } catch {
+    return null;
   }
 }
 
