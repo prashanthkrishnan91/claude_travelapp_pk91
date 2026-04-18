@@ -319,6 +319,24 @@ function SummaryBar({
   );
 }
 
+// ─── Best Area card ───────────────────────────────────────────────────────────
+
+function BestAreaCard({ bestArea }: { bestArea: BestAreaRecommendation }) {
+  return (
+    <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50 p-3 shadow-sm flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5">
+        <span className="text-base leading-none">📍</span>
+        <span className="text-[10px] font-bold text-violet-500 uppercase tracking-wider">Best Area to Stay</span>
+        <span className="ml-auto text-[10px] font-bold text-violet-400 bg-violet-100 px-1.5 py-0.5 rounded-full">
+          {bestArea.score.toFixed(0)}/100
+        </span>
+      </div>
+      <p className="text-sm font-extrabold text-violet-900 leading-tight">{bestArea.areaName}</p>
+      <p className="text-xs text-violet-600 leading-snug">{bestArea.reason}</p>
+    </div>
+  );
+}
+
 // ─── Flight candidate card ────────────────────────────────────────────────────
 
 function FlightCandidateCard({
@@ -1815,6 +1833,9 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
 
             {/* Summary bar */}
             <SummaryBar topFlight={topFlight} topHotel={topHotel} />
+
+            {/* Best area recommendation */}
+            {bestArea && <BestAreaCard bestArea={bestArea} />}
 
             {/* Flights section */}
             <CandidatePanel

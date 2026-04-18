@@ -845,33 +845,55 @@ class SearchService:
         return result
 
     def get_best_area(self, req: BestAreaRequest) -> Optional[BestAreaRecommendation]:
-        """Identify the best neighborhood to stay based on cluster density, rating, and centrality."""
+        """Score clusters by density, avg rating, walkability, and variety to find the best area."""
         clusters = self.search_clusters(ClusterSearchRequest(location=req.location, radius_km=req.radius_km))
         if not clusters:
             return None
 
-        center_lat, center_lng = _get_city_center(req.location)
         max_places = max(len(c.places) for c in clusters)
 
+        # Pre-compute avg pairwise distances for walkability normalisation
+        def _avg_pairwise_km(places: list) -> float:
+            if len(places) < 2:
+                return 0.0
+            total, pairs = 0.0, 0
+            for i in range(len(places)):
+                for j in range(i + 1, len(places)):
+                    total += _haversine_km(places[i].lat, places[i].lng, places[j].lat, places[j].lng)
+                    pairs += 1
+            return total / pairs
+
+        avg_distances = [_avg_pairwise_km(c.places) for c in clusters]
+        max_avg_dist = max(avg_distances) if avg_distances else 1.0
+
         scored = []
-        for cluster in clusters:
+        for cluster, avg_dist_km in zip(clusters, avg_distances):
+            # 35%: how many places relative to densest cluster
             density = len(cluster.places) / max(max_places, 1)
 
+            # 30%: average rating normalised to 0-1
             ratings = [p.rating for p in cluster.places if p.rating is not None]
             avg_rating = (sum(ratings) / len(ratings) / 5.0) if ratings else 0.5
 
-            dist_from_center = _haversine_km(center_lat, center_lng, cluster.center_lat, cluster.center_lng)
-            centrality = max(0.0, 1.0 - dist_from_center / 3.0)
+            # 20%: walkability — lower avg distance = more walkable
+            walkability = 1.0 - (avg_dist_km / max(max_avg_dist, 0.001))
 
-            score = density * 0.40 + avg_rating * 0.35 + centrality * 0.25
-            scored.append((score, cluster))
+            # 15%: variety — balanced mix of attractions and restaurants
+            att = sum(1 for p in cluster.places if p.place_type == "attraction")
+            rest = sum(1 for p in cluster.places if p.place_type == "restaurant")
+            total = att + rest
+            variety = (2 * min(att, rest) / total) if total > 0 else 0.0
+
+            score = density * 0.35 + avg_rating * 0.30 + walkability * 0.20 + variety * 0.15
+            scored.append((score, cluster, avg_dist_km))
 
         scored.sort(key=lambda x: x[0], reverse=True)
-        best_score, best = scored[0]
+        best_score, best, best_avg_dist = scored[0]
 
         ratings = [p.rating for p in best.places if p.rating is not None]
         avg_r = sum(ratings) / len(ratings) if ratings else None
-        restaurant_count = sum(1 for p in best.places if p.place_type == "restaurant")
+        att_count = sum(1 for p in best.places if p.place_type == "attraction")
+        rest_count = sum(1 for p in best.places if p.place_type == "restaurant")
 
         parts = []
         if best.label == "Walkable cluster":
@@ -879,15 +901,20 @@ class SearchService:
         elif best.label == "5 min apart":
             parts.append("Compact area, 5 min between spots")
         else:
-            parts.append(f"{len(best.places)} nearby places")
-        if avg_r is not None:
+            avg_walk_min = round(best_avg_dist * 15.0)
+            parts.append(f"Places ~{avg_walk_min} min apart")
+        if avg_r is not None and avg_r >= 4.0:
+            parts.append(f"top-rated ({avg_r:.1f}★)")
+        elif avg_r is not None:
             parts.append(f"avg rating {avg_r:.1f}★")
-        if restaurant_count > 0:
+        if att_count > 0 and rest_count > 0:
+            parts.append("best mix of sightseeing and dining")
+        elif rest_count > 0:
             parts.append("top-rated dining")
 
         return BestAreaRecommendation(
             area_name=best.area_name,
-            reason=" + ".join(parts),
+            reason=" · ".join(parts),
             score=round(best_score * 100, 1),
             center_lat=best.center_lat,
             center_lng=best.center_lng,
