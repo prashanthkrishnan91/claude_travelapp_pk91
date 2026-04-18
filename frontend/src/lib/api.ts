@@ -426,6 +426,11 @@ export async function addHotelToTrip(
     amenities: Array.isArray(meta.amenities) ? meta.amenities : [],
     stars: typeof meta.stars === "number" ? meta.stars : null,
     booking_url: hotel.bookingUrl ?? null,
+    lat: typeof meta.lat === "number" ? meta.lat : null,
+    lng: typeof meta.lng === "number" ? meta.lng : null,
+    location_score: typeof meta.locationScore === "number" ? meta.locationScore : null,
+    proximity_label: typeof meta.proximityLabel === "string" ? meta.proximityLabel : null,
+    area_label: typeof meta.areaLabel === "string" ? meta.areaLabel : null,
   };
   // Remove null entries to keep metadata flat and clean
   const cleanDetails = Object.fromEntries(
@@ -542,6 +547,11 @@ interface RawHotelResult {
   stars?: number;
   bookingUrl?: string;
   bookingOptions?: BookingOption[];
+  lat?: number;
+  lng?: number;
+  locationScore?: number;
+  proximityLabel?: string;
+  areaLabel?: string;
 }
 
 function mapAttractionToResult(a: RawAttractionResult): AttractionSearchResult {
@@ -581,6 +591,11 @@ function mapHotelToResult(h: RawHotelResult): ResearchResult {
       pricePerNight: h.pricePerNight,
       amenities: h.amenities ?? [],
       stars: h.stars,
+      lat: h.lat,
+      lng: h.lng,
+      locationScore: h.locationScore,
+      proximityLabel: h.proximityLabel,
+      areaLabel: h.areaLabel,
     },
   };
 }

@@ -541,6 +541,11 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
                         {"provider": o.provider, "url": o.url}
                         for o in hotel.booking_options
                     ],
+                    "lat": hotel.lat,
+                    "lng": hotel.lng,
+                    "location_score": hotel.location_score,
+                    "proximity_label": hotel.proximity_label,
+                    "area_label": hotel.area_label,
                 },
             ))
         except Exception:
