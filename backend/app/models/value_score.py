@@ -115,7 +115,7 @@ class ValueEngineV2Result(BaseModel):
     )
     value_score: int = Field(..., ge=0, le=100, description="Composite value score 0–100")
     decision: str = Field(
-        ..., description="Payment recommendation: 'Use Points', 'Pay Cash', or 'Either'"
+        ..., description="Payment recommendation: 'Points Better' or 'Cash Better'"
     )
     confidence: int = Field(
         ..., ge=0, le=100,
@@ -131,7 +131,13 @@ class ValueEngineV2Result(BaseModel):
         None, description="Cash price after accounting for rewards earned (USD)"
     )
     opportunity_cost: Optional[float] = Field(
-        None, description="Value of points if not redeemed (points × cpp_baseline, in USD)"
+        None, description="Dollar value of points you'd earn by paying cash instead (earn loss when using points)"
+    )
+    best_card: Optional[str] = Field(
+        None, description="Card key giving best value for the recommended decision"
+    )
+    transfer_partner: Optional[str] = Field(
+        None, description="Transfer partner name used for the best bonus, or null if none applicable"
     )
 
 

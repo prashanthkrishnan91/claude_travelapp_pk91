@@ -6,18 +6,24 @@ Base CPP:
     cpp = (cash_price × 100) / points_cost
 
 Adjusted CPP (best available transfer bonus applied):
-    bonus_multiplier = 1 + (best_bonus_percent / 100)
-    adjusted_cpp = cpp × bonus_multiplier
+    adjusted_points = points_cost / (1 + bonus_percent / 100)
+    adjusted_cpp    = (cash_price × 100) / adjusted_points
 
-Cash vs Points:
-    earn_back_fraction = best_earn_rate × cpp_baseline / 100
-    effective_cash_cost = cash_price × (1 − earn_back_fraction)
-    opportunity_cost = points_cost × cpp_baseline / 100
+Cash scenario:
+    earn_value           = cash_price × earn_rate          (points earned if paying cash)
+    effective_cash_cost  = cash_price − (earn_value × cpp_baseline / 100)
+
+Opportunity cost (earn loss when using points instead of cash):
+    opportunity_cost = cash_price × earn_rate × cpp_baseline / 100
+
+Decision (CPP-based):
+    adjusted_cpp > cpp_baseline  → "Points Better"
+    adjusted_cpp ≤ cpp_baseline  → "Cash Better"
 
 value_score (0–100) — weighted composite:
     • CPP component         (40 %): nonlinear curve — penalises below baseline,
                                     rapidly rewards above, capped at 2× baseline
-    • Cash/points advantage (25 %): effective_cash_cost vs opportunity_cost
+    • Cash/points advantage (25 %): effective_cash_cost vs redemption_value
     • Rating component      (15 %): rating / 5.0 × 100  (neutral 50 when unknown)
     • Preference component  (10 %): 100 if preferred airline/hotel, else 50 (neutral)
     • Convenience component (10 %): layover score; −30 per excess layover
@@ -29,14 +35,13 @@ Tags (multiple can fire simultaneously):
     • "Preferred Airline"   → flight name matches preferred_airlines
     • "Preferred Hotel"     → hotel name matches preferred_hotels
     • "+N% Transfer Bonus"  → active bonus was applied
-    • "Points Better"       → decision == "Use Points"
-    • "Cash Better"         → decision == "Pay Cash"
-    • "High Opportunity Cost" → opportunity_cost exceeds effective_cash_cost by 30%+
+    • "Points Better"       → decision == "Points Better"
+    • "Cash Better"         → decision == "Cash Better"
+    • "High Opportunity Cost" → redemption_value exceeds effective_cash_cost by 30%+
 
-Decision:
-    "Use Points"  → points opportunity cost is ≥ 5% cheaper than effective cash cost
-    "Pay Cash"    → effective cash cost is ≥ 5% cheaper than opportunity cost
-    "Either"      → within 5% of each other
+Output fields:
+    decision, cpp, adjusted_cpp, effective_cash_cost, opportunity_cost,
+    best_card, transfer_partner, recommendation_reason
 """
 
 from typing import List, Optional
@@ -94,6 +99,57 @@ def _best_bonus_pct(
         if bonus.issuer.lower() in issuers and bonus.partner.lower() == item_name.lower():
             best = max(best, bonus.bonus_percent)
     return best
+
+
+def _best_card_for_points(
+    user_cards: List[UserCardV2],
+    item_name: str,
+    transfer_bonuses: List[TransferBonusV2],
+) -> Optional[str]:
+    """Return card_key with the best transfer bonus for this item; fall back to highest earn rate."""
+    best_bonus = 0
+    best_card: Optional[str] = None
+    for card in user_cards:
+        for bonus in transfer_bonuses:
+            if (
+                bonus.issuer.lower() == card.issuer.lower()
+                and bonus.partner.lower() == item_name.lower()
+                and bonus.bonus_percent > best_bonus
+            ):
+                best_bonus = bonus.bonus_percent
+                best_card = card.card_key
+    if best_card:
+        return best_card
+    if user_cards:
+        return max(user_cards, key=lambda c: c.earn_rate or 0).card_key
+    return None
+
+
+def _best_card_for_cash(user_cards: List[UserCardV2]) -> Optional[str]:
+    """Return card_key with the highest earn rate for cash spending."""
+    if not user_cards:
+        return None
+    return max(user_cards, key=lambda c: c.earn_rate or 0).card_key
+
+
+def _best_transfer_partner_name(
+    user_cards: List[UserCardV2],
+    item_name: str,
+    transfer_bonuses: List[TransferBonusV2],
+) -> Optional[str]:
+    """Return the partner name with the best active bonus for this item, or None."""
+    issuers = {c.issuer.lower() for c in user_cards}
+    best_bonus = 0
+    best_partner: Optional[str] = None
+    for bonus in transfer_bonuses:
+        if (
+            bonus.issuer.lower() in issuers
+            and bonus.partner.lower() == item_name.lower()
+            and bonus.bonus_percent > best_bonus
+        ):
+            best_bonus = bonus.bonus_percent
+            best_partner = bonus.partner
+    return best_partner
 
 
 def _best_earn_rate(user_cards: List[UserCardV2]) -> float:
@@ -169,57 +225,30 @@ def _convenience_component(excess_layovers: int) -> float:
     return max(0.0, 100.0 - excess_layovers * _LAYOVER_CONVENIENCE_PENALTY)
 
 
-def _determine_decision(
-    effective_cash_cost: float,
-    opportunity_cost: float,
-    points_cost: int,
-) -> str:
-    """Return 'Use Points', 'Pay Cash', or 'Either'.
-
-    Compares effective cash cost vs points opportunity cost.
-    A ≥5% relative difference declares a clear winner.
-    """
-    if points_cost == 0:
-        return "Pay Cash"
-    denom = max(effective_cash_cost, opportunity_cost)
-    if denom <= 0:
-        return "Either"
-    rel_diff = (effective_cash_cost - opportunity_cost) / denom
-    if rel_diff >= _DECISION_THRESHOLD:
-        return "Use Points"
-    if rel_diff <= -_DECISION_THRESHOLD:
-        return "Pay Cash"
-    return "Either"
-
-
-def _rel_diff(effective_cash_cost: float, opportunity_cost: float, points_cost: int) -> float:
-    """Signed relative difference: positive means points are cheaper, negative means cash is cheaper."""
-    if points_cost == 0:
-        return -1.0
-    denom = max(effective_cash_cost, opportunity_cost)
-    if denom <= 0:
-        return 0.0
-    return (effective_cash_cost - opportunity_cost) / denom
+def _determine_decision(adjusted_cpp: Optional[float], baseline: float, points_cost: int) -> str:
+    """Return 'Points Better' or 'Cash Better' based on adjusted CPP vs user's baseline."""
+    if points_cost == 0 or adjusted_cpp is None:
+        return "Cash Better"
+    return "Points Better" if adjusted_cpp > baseline else "Cash Better"
 
 
 def _compute_confidence(
-    diff: float,
     adjusted_cpp: Optional[float],
     baseline: float,
 ) -> int:
     """0–100 confidence in the recommendation.
 
     Two signals blended 60/40:
-    1. Decisiveness (|rel_diff|): ≥30 % → 100, 15–30 % → 60–99, <15 % → 0–59
-    2. CPP strength:              ≥1.5× baseline → 100, at baseline → 50, below → 0–49
+    1. Decisiveness (|cpp_ratio − 1|): ≥30 % → 100, 15–30 % → 60–99, <15 % → 0–59
+    2. CPP strength:                   ≥1.5× baseline → 100, at baseline → 50, below → 0–49
     """
-    abs_diff = abs(diff)
     cpp_ratio = (adjusted_cpp / baseline) if adjusted_cpp is not None else 1.0
+    abs_diff = abs(cpp_ratio - 1.0)
 
     if abs_diff >= 0.30:
         decisiveness = 100
     elif abs_diff >= _DECISION_THRESHOLD:
-        decisiveness = round(60 + (abs_diff - _DECISION_THRESHOLD) / (_DECISION_THRESHOLD) * 39)
+        decisiveness = round(60 + (abs_diff - _DECISION_THRESHOLD) / _DECISION_THRESHOLD * 39)
     else:
         decisiveness = round(abs_diff / _DECISION_THRESHOLD * 59)
 
@@ -237,7 +266,7 @@ def _compute_tradeoffs(
     item: ItemV2,
     prefs: UserPreferencesV2,
     adjusted_cpp: Optional[float],
-    opportunity_cost: Optional[float],
+    redemption_value: Optional[float],
     effective_cash_cost: Optional[float],
     excess_layovers: int,
     is_flight: bool,
@@ -256,12 +285,12 @@ def _compute_tradeoffs(
     if item.rating is not None and item.rating < _POOR_REDEMPTION_RATING_FLOOR:
         tradeoffs.append(f"Lower rating ({item.rating}/5) than alternatives")
 
-    # High opportunity cost (points cost more than the equivalent cash after rewards)
+    # High redemption cost (points worth more than effective cash price)
     if (
-        opportunity_cost is not None
+        redemption_value is not None
         and effective_cash_cost is not None
         and effective_cash_cost > 0
-        and opportunity_cost > effective_cash_cost * 1.3
+        and redemption_value > effective_cash_cost * 1.3
     ):
         tradeoffs.append("High opportunity cost for points usage")
 
@@ -275,9 +304,9 @@ def _compute_tradeoffs(
 def _build_reason(
     item: ItemV2,
     prefs: UserPreferencesV2,
-    cpp: Optional[float],
     adjusted_cpp: Optional[float],
     bonus_pct: int,
+    best_earn: float,
     preferred: bool,
     excess_layovers: int,
     is_flight: bool,
@@ -285,35 +314,30 @@ def _build_reason(
     effective_cash_cost: Optional[float],
     opportunity_cost: Optional[float],
 ) -> str:
-    """Compose a structured, specific explanation of the score."""
+    """Compose a specific, actionable explanation matching the task reason examples."""
     parts: List[str] = []
 
-    # CPP vs baseline
-    if adjusted_cpp is not None:
-        vs_baseline = "above" if adjusted_cpp >= prefs.cpp_baseline else "below"
-        parts.append(
-            f"{adjusted_cpp:.2f}¢/pt vs your {prefs.cpp_baseline:.1f}¢ baseline ({vs_baseline})"
-        )
-        if bonus_pct > 0 and cpp is not None:
-            parts.append(f"+{bonus_pct}% transfer bonus active (base {cpp:.2f}¢/pt)")
-
-    # Cash vs points outcome
-    if effective_cash_cost is not None and opportunity_cost is not None:
-        if decision == "Use Points":
-            parts.append(
-                f"Points outperform cash after accounting for rewards earning "
-                f"(${opportunity_cost:.2f} opportunity cost vs ${effective_cash_cost:.2f} effective cash)"
-            )
-        elif decision == "Pay Cash":
-            parts.append(
-                f"Cash is more efficient — effective cost ${effective_cash_cost:.2f} "
-                f"vs ${opportunity_cost:.2f} points opportunity cost"
-            )
-        else:
-            parts.append(
-                f"Points and cash offer comparable value "
-                f"(${opportunity_cost:.2f} vs ${effective_cash_cost:.2f})"
-            )
+    if decision == "Points Better":
+        if adjusted_cpp is not None:
+            if bonus_pct > 0:
+                # e.g. "2.4 CPP with 20% transfer bonus — strong redemption"
+                parts.append(
+                    f"{adjusted_cpp:.1f} CPP with {bonus_pct}% transfer bonus — strong redemption"
+                )
+            else:
+                vs = "above" if adjusted_cpp >= prefs.cpp_baseline else "below"
+                parts.append(
+                    f"{adjusted_cpp:.2f}¢/pt vs your {prefs.cpp_baseline:.1f}¢ baseline ({vs})"
+                )
+        # Earn loss note — e.g. "Using points loses $90 in potential rewards"
+        if opportunity_cost is not None and opportunity_cost >= 1.0:
+            parts.append(f"Using points loses ${opportunity_cost:.0f} in potential rewards")
+    else:  # Cash Better
+        # e.g. "Better to pay cash and earn 3x points"
+        earn_label = f"{int(best_earn)}x" if best_earn == int(best_earn) else f"{best_earn}x"
+        parts.append(f"Better to pay cash and earn {earn_label} points")
+        if effective_cash_cost is not None and item.cash_price > 0:
+            parts.append(f"Effective cost ${effective_cash_cost:.2f} after rewards")
 
     # Preference match
     if preferred:
@@ -322,9 +346,7 @@ def _build_reason(
 
     # Layover note
     if excess_layovers > 0:
-        parts.append(
-            f"{item.layovers} layover(s) exceeds your max of {prefs.max_layovers}"
-        )
+        parts.append(f"{item.layovers} layover(s) exceeds your max of {prefs.max_layovers}")
 
     # Rating highlight
     if item.rating is not None:
@@ -356,27 +378,35 @@ class ValueEngineV2:
         # 1. Base CPP
         cpp = _base_cpp(item.cash_price, item.points_cost)
 
-        # 2. Best matching transfer bonus → adjusted CPP
+        # 2. Best matching transfer bonus → adjusted CPP via adjusted_points
         bonus_pct = _best_bonus_pct(req.user_cards, item.name, req.transfer_bonuses)
         adjusted_cpp: Optional[float] = None
-        if cpp is not None:
-            adjusted_cpp = round(cpp * (1 + bonus_pct / 100), 4)
+        if cpp is not None and item.points_cost > 0:
+            adjusted_points = item.points_cost / (1 + bonus_pct / 100)
+            adjusted_cpp = round((item.cash_price * 100) / adjusted_points, 4)
 
         # 3. Cash vs points economics
         best_earn = _best_earn_rate(req.user_cards)
         earn_back_fraction = best_earn * prefs.cpp_baseline / 100
         effective_cash_cost: Optional[float] = None
-        opportunity_cost: Optional[float] = None
+        opportunity_cost: Optional[float] = None   # earn loss when using points
+        redemption_value: Optional[float] = None   # value of points redeemed (internal)
         if item.cash_price > 0:
             effective_cash_cost = round(item.cash_price * (1.0 - earn_back_fraction), 4)
-        if item.points_cost > 0:
-            opportunity_cost = round(item.points_cost * prefs.cpp_baseline / 100, 4)
+        if item.points_cost > 0 and item.cash_price > 0:
+            opportunity_cost = round(item.cash_price * best_earn * prefs.cpp_baseline / 100, 4)
+            redemption_value = round(item.points_cost * prefs.cpp_baseline / 100, 4)
 
-        # 4. Decision (15 % threshold — prevents flip-flopping)
-        eff_cash = effective_cash_cost if effective_cash_cost is not None else item.cash_price
-        opp_cost = opportunity_cost if opportunity_cost is not None else 0.0
-        decision = _determine_decision(eff_cash, opp_cost, item.points_cost)
-        diff = _rel_diff(eff_cash, opp_cost, item.points_cost)
+        # 4. Decision: CPP vs user baseline
+        decision = _determine_decision(adjusted_cpp, prefs.cpp_baseline, item.points_cost)
+
+        # Best card and transfer partner for this decision
+        if decision == "Points Better":
+            best_card = _best_card_for_points(req.user_cards, item.name, req.transfer_bonuses)
+            transfer_partner = _best_transfer_partner_name(req.user_cards, item.name, req.transfer_bonuses)
+        else:
+            best_card = _best_card_for_cash(req.user_cards)
+            transfer_partner = None
 
         # 5. Preference match
         preferred_list = (
@@ -393,8 +423,10 @@ class ValueEngineV2:
 
         # 7. Weighted component scores
         cpp_comp = _cpp_component(adjusted_cpp, prefs.cpp_baseline)
+        eff_cash_for_score = effective_cash_cost if effective_cash_cost is not None else item.cash_price
+        rdem_val_for_score = redemption_value if redemption_value is not None else 0.0
         cash_adv_comp = (
-            _cash_vs_points_component(eff_cash, opp_cost, item.cash_price)
+            _cash_vs_points_component(eff_cash_for_score, rdem_val_for_score, item.cash_price)
             if item.points_cost > 0
             else 50.0  # neutral when no points redemption available
         )
@@ -425,15 +457,12 @@ class ValueEngineV2:
             tags.append("Preferred Hotel")
         if bonus_pct > 0:
             tags.append(f"+{bonus_pct}% Transfer Bonus")
-        if decision == "Use Points":
-            tags.append("Points Better")
-        elif decision == "Pay Cash":
-            tags.append("Cash Better")
+        tags.append(decision)  # "Points Better" or "Cash Better"
         if (
-            opportunity_cost is not None
+            redemption_value is not None
             and effective_cash_cost is not None
             and effective_cash_cost > 0
-            and opportunity_cost > effective_cash_cost * 1.3
+            and redemption_value > effective_cash_cost * 1.3
         ):
             tags.append("High Opportunity Cost")
 
@@ -451,7 +480,7 @@ class ValueEngineV2:
             tags.append("Sweet Spot")
 
         # 9. Confidence
-        confidence = _compute_confidence(diff, adjusted_cpp, prefs.cpp_baseline)
+        confidence = _compute_confidence(adjusted_cpp, prefs.cpp_baseline)
         if sweet_spot:
             confidence = min(100, confidence + _SWEET_SPOT_CONFIDENCE_BOOST)
 
@@ -460,7 +489,7 @@ class ValueEngineV2:
             item=item,
             prefs=prefs,
             adjusted_cpp=adjusted_cpp,
-            opportunity_cost=opportunity_cost,
+            redemption_value=redemption_value,
             effective_cash_cost=effective_cash_cost,
             excess_layovers=excess_layovers,
             is_flight=is_flight,
@@ -470,9 +499,9 @@ class ValueEngineV2:
         reason = _build_reason(
             item=item,
             prefs=prefs,
-            cpp=cpp,
             adjusted_cpp=adjusted_cpp,
             bonus_pct=bonus_pct,
+            best_earn=best_earn,
             preferred=preferred,
             excess_layovers=excess_layovers,
             is_flight=is_flight,
@@ -492,6 +521,8 @@ class ValueEngineV2:
             tradeoffs=tradeoffs,
             effective_cash_cost=effective_cash_cost,
             opportunity_cost=opportunity_cost,
+            best_card=best_card,
+            transfer_partner=transfer_partner,
         )
 
     def score_batch(self, requests: List[ValueEngineV2Request]) -> List[ValueEngineV2Result]:
