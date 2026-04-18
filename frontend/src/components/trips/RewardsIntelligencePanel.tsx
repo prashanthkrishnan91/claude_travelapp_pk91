@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Zap } from "lucide-react";
+import { ChevronDown, ChevronUp, CreditCard, Zap } from "lucide-react";
 import { RewardsIntelligence } from "@/types";
 
 interface RewardsIntelligencePanelProps {
@@ -12,12 +12,23 @@ export function RewardsIntelligencePanel({ rewards }: RewardsIntelligencePanelPr
   const [expanded, setExpanded] = useState(false);
   const isPoints = rewards.decision === "points";
   const currency = rewards.effectiveCurrency ?? "USD";
-  const { breakdown } = rewards;
+  const { breakdown, bestCard } = rewards;
   const hasBreakdown =
     breakdown && (breakdown.earnRate || breakdown.opportunityCost || breakdown.transferPartner);
 
+  const earnRateLabel = bestCard ? `${bestCard.earnRate}x` : null;
+
   return (
     <div className="mt-1.5 rounded-lg border border-slate-100 bg-slate-50/60 overflow-hidden">
+      {bestCard && (
+        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-emerald-50 border-b border-emerald-100">
+          <CreditCard className="w-3 h-3 text-emerald-600 shrink-0" />
+          <p className="text-[10px] font-semibold text-emerald-700 leading-tight">
+            Use {bestCard.displayName} — earn {earnRateLabel} points (${bestCard.expectedValueUsd.toFixed(0)} value)
+          </p>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 px-2 pt-2 pb-1 flex-wrap">
         <span
           className={`badge text-[10px] px-2 py-0.5 shrink-0 gap-1 ${

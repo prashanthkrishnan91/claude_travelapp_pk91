@@ -51,6 +51,14 @@ export interface RewardsBreakdown {
   transferPartner?: string;
 }
 
+export interface BestCardRecommendation {
+  cardKey: string;
+  displayName: string;
+  earnRate: number;
+  expectedPoints: number;
+  expectedValueUsd: number;
+}
+
 export interface RewardsIntelligence {
   decision: "points" | "cash";
   cpp: number;
@@ -59,6 +67,7 @@ export interface RewardsIntelligence {
   effectiveCurrency?: string;
   explanation: string;
   breakdown?: RewardsBreakdown;
+  bestCard?: BestCardRecommendation;
 }
 
 // ─── Itinerary ────────────────────────────────────────────────────────────────
