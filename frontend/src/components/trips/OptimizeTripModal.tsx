@@ -12,6 +12,7 @@ import {
   Loader2,
   AlertCircle,
   Check,
+  Crown,
 } from "lucide-react";
 import {
   resolveAirports,
@@ -44,11 +45,16 @@ const RANK_BADGE = [
   "bg-amber-100 text-amber-700",
 ];
 const RANK_BORDER = [
-  "border-emerald-300",
+  "border-emerald-400",
   "border-sky-300",
   "border-amber-300",
 ];
 const RANK_BANNER = ["bg-emerald-50", "bg-sky-50", "bg-amber-50"];
+const RANK_GLOW = [
+  "shadow-lg shadow-emerald-200/60 ring-1 ring-emerald-300/50",
+  "shadow-sm",
+  "shadow-sm",
+];
 
 function scoreColor(s: number): string {
   if (s >= 70) return "text-emerald-600";
@@ -231,13 +237,36 @@ export function OptimizeTripModal({ trip, itineraryDays, onClose, onPlanSelected
           )}
 
           {/* Results */}
-          {phase === "results" && options.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {phase === "results" && options.length > 0 && (() => {
+            const avgCost = options.reduce((s, o) => s + o.totalCost, 0) / options.length;
+            const bestSavings = options[0] ? Math.round(avgCost - options[0].totalCost) : 0;
+            const cppVals = options.map(o => o.flight.cpp).filter((c): c is number => c != null);
+            const avgCpp = cppVals.length ? cppVals.reduce((s, c) => s + c, 0) / cppVals.length : null;
+
+            return (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
               {options.map((opt, idx) => (
                 <div
                   key={opt.rank}
-                  className={`rounded-xl border-2 ${RANK_BORDER[idx]} overflow-hidden flex flex-col`}
+                  className={`rounded-xl border-2 ${RANK_BORDER[idx]} ${RANK_GLOW[idx]} overflow-hidden flex flex-col transition-shadow`}
                 >
+                  {/* Primary Recommendation crown banner */}
+                  {idx === 0 && (
+                    <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-1.5 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Crown className="w-3 h-3 text-white/90" />
+                        <span className="text-[11px] font-semibold text-white uppercase tracking-wider">
+                          Primary Recommendation
+                        </span>
+                      </div>
+                      {bestSavings > 0 && (
+                        <span className="text-[10px] font-medium text-emerald-100">
+                          Save ${bestSavings.toLocaleString()} vs avg
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   {/* Rank banner */}
                   <div className={`px-4 py-3 flex items-center justify-between ${RANK_BANNER[idx]}`}>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${RANK_BADGE[idx]}`}>
@@ -249,7 +278,7 @@ export function OptimizeTripModal({ trip, itineraryDays, onClose, onPlanSelected
                     </span>
                   </div>
 
-                  <div className="p-4 flex flex-col gap-3 flex-1">
+                  <div className={`${idx === 0 ? "p-5" : "p-4"} flex flex-col gap-3 flex-1`}>
                     {/* Flight */}
                     <div>
                       <div className="flex items-center gap-1.5 mb-1">
@@ -340,7 +369,7 @@ export function OptimizeTripModal({ trip, itineraryDays, onClose, onPlanSelected
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-slate-400">Total cost</span>
-                        <span className="text-sm font-bold text-slate-900">
+                        <span className={`font-bold ${idx === 0 ? "text-base text-slate-900" : "text-sm text-slate-900"}`}>
                           ${opt.totalCost.toLocaleString()}
                         </span>
                       </div>
@@ -349,6 +378,19 @@ export function OptimizeTripModal({ trip, itineraryDays, onClose, onPlanSelected
                           <span className="text-xs text-slate-400">Points used</span>
                           <span className="text-xs font-semibold text-sky-600">
                             {opt.totalPoints.toLocaleString()} pts
+                          </span>
+                        </div>
+                      )}
+                      {opt.flight.cpp != null && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-400">CPP</span>
+                          <span className="text-xs font-semibold text-sky-600">
+                            {opt.flight.cpp.toFixed(2)}¢
+                            {idx === 0 && avgCpp != null && opt.flight.cpp > avgCpp && (
+                              <span className="ml-1 font-normal text-emerald-500">
+                                +{(opt.flight.cpp - avgCpp).toFixed(1)}¢ vs avg
+                              </span>
+                            )}
                           </span>
                         </div>
                       )}
@@ -403,7 +445,8 @@ export function OptimizeTripModal({ trip, itineraryDays, onClose, onPlanSelected
                 </div>
               ))}
             </div>
-          )}
+            );
+          })()}
         </div>
       </div>
     </div>
