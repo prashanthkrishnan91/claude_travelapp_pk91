@@ -228,6 +228,8 @@ export interface LocationCluster {
   centerLat: number;
   centerLng: number;
   places: PlaceInCluster[];
+  counts: { attractions: number; restaurants: number };
+  avgDistance: string;
 }
 
 // ─── Best Area Recommendation ─────────────────────────────────────────────────

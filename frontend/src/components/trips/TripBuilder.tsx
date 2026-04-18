@@ -55,7 +55,6 @@ import type {
   BestAreaRecommendation,
   RestaurantSearchResult,
   LocationCluster,
-  PlaceInCluster,
   DayPlan,
 } from "@/types";
 import {
@@ -74,6 +73,7 @@ import {
   searchClusters,
   fetchBestArea,
   fetchDayPlan,
+  planClusterDay,
   addAttractionToDay,
   addRestaurantToDay,
 } from "@/lib/api";
@@ -1428,19 +1428,6 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
   // ── Plan an entire cluster area into a single day ───────────────────────────
 
   const handlePlanCluster = useCallback(async (cluster: LocationCluster) => {
-    const byScore = (a: PlaceInCluster, b: PlaceInCluster) =>
-      (b.aiScore ?? b.rating ?? 0) - (a.aiScore ?? a.rating ?? 0);
-
-    const attractions = cluster.places
-      .filter((p) => p.placeType === "attraction")
-      .sort(byScore)
-      .slice(0, 3);
-
-    const restaurants = cluster.places
-      .filter((p) => p.placeType === "restaurant")
-      .sort(byScore)
-      .slice(0, 2);
-
     setPlanningClusterId(cluster.clusterId);
     try {
       let targetDay = days[0];
@@ -1449,38 +1436,19 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
         setDays([targetDay]);
       }
 
-      const newItems: ItineraryItem[] = [];
+      const plan = await planClusterDay(tripId, cluster.clusterId, cluster.places);
 
-      for (const place of attractions) {
-        const full = candidateAttractions.find((a) => a.id === place.id) ?? {
-          id: place.id,
-          name: place.name,
-          category: place.category,
-          description: "",
-          location: cluster.areaName,
-          address: place.address,
-          rating: place.rating,
-          aiScore: place.aiScore,
-          tags: place.tags,
-          lat: place.lat,
-          lng: place.lng,
-        };
-        const item = await addAttractionToDay(tripId, targetDay.id, full as AttractionSearchResult);
+      const newItems: ItineraryItem[] = [];
+      for (const attraction of plan.attractions) {
+        const item = await addAttractionToDay(tripId, targetDay.id, attraction);
         newItems.push(item);
       }
-
-      for (const place of restaurants) {
-        const full = candidateRestaurants.find((r) => r.id === place.id) ?? {
-          id: place.id,
-          name: place.name,
-          cuisine: place.category,
-          location: cluster.areaName,
-          address: place.address,
-          rating: place.rating,
-          aiScore: place.aiScore,
-          tags: place.tags,
-        };
-        const item = await addRestaurantToDay(tripId, targetDay.id, full as RestaurantSearchResult);
+      if (plan.lunch) {
+        const item = await addRestaurantToDay(tripId, targetDay.id, plan.lunch);
+        newItems.push(item);
+      }
+      if (plan.dinner) {
+        const item = await addRestaurantToDay(tripId, targetDay.id, plan.dinner);
         newItems.push(item);
       }
 
@@ -1489,14 +1457,14 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
           d.id === targetDay.id ? { ...d, items: [...d.items, ...newItems] } : d
         )
       );
-      const total = attractions.length + restaurants.length;
-      showToast(`${total} place${total !== 1 ? "s" : ""} from ${cluster.areaName} added`);
+      const total = newItems.length;
+      showToast(`${total} place${total !== 1 ? "s" : ""} from ${cluster.areaName || "Popular Area"} added`);
     } catch {
       showToast("Failed to plan area — please try again");
     } finally {
       setPlanningClusterId(null);
     }
-  }, [days, tripId, candidateAttractions, candidateRestaurants, showToast]);
+  }, [days, tripId, showToast]);
 
   // ── Add round-trip pair: outbound to day 1, return to last day ──────────────
 
@@ -2018,7 +1986,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <MapPin className="w-3.5 h-3.5 text-sky-500 flex-shrink-0" />
-                          <span className="text-sm font-bold text-slate-800">{cluster.areaName}</span>
+                          <span className="text-sm font-bold text-slate-800">{cluster.areaName || "Popular Area"}</span>
                         </div>
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
@@ -2036,10 +2004,10 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-[10px] text-slate-400">
                           {cluster.places.length} place{cluster.places.length !== 1 ? "s" : ""} ·{" "}
-                          {cluster.places.filter((p) => p.placeType === "attraction").length} attraction
-                          {cluster.places.filter((p) => p.placeType === "attraction").length !== 1 ? "s" : ""} ·{" "}
-                          {cluster.places.filter((p) => p.placeType === "restaurant").length} restaurant
-                          {cluster.places.filter((p) => p.placeType === "restaurant").length !== 1 ? "s" : ""}
+                          {cluster.counts.attractions} attraction
+                          {cluster.counts.attractions !== 1 ? "s" : ""} ·{" "}
+                          {cluster.counts.restaurants} restaurant
+                          {cluster.counts.restaurants !== 1 ? "s" : ""}
                         </p>
                         <button
                           onClick={() => handlePlanCluster(cluster)}
