@@ -317,6 +317,56 @@ export interface DealItem {
   tags: string[];
 }
 
+// ─── Trip Optimization ────────────────────────────────────────────────────────
+
+export interface OptimizeFlightInput {
+  id: string;
+  airline: string;
+  flightNumber: string;
+  price: number;
+  pointsCost: number;
+  cpp: number;
+  durationMinutes: number;
+  stops: number;
+  cabinClass: string;
+  rating?: number;
+  decision: string;
+  tags: string[];
+  explanation: string;
+}
+
+export interface OptimizeHotelInput {
+  id: string;
+  name: string;
+  price: number;
+  pricePerNight: number;
+  nights: number;
+  pointsEstimate: number;
+  rating?: number;
+  stars?: number;
+  locationScore?: number;
+  areaLabel?: string;
+  tags: string[];
+  explanation: string;
+}
+
+export interface TripOption {
+  rank: number;
+  flight: OptimizeFlightInput;
+  hotel: OptimizeHotelInput;
+  totalCost: number;
+  totalPoints: number;
+  flightScore: number;
+  hotelScore: number;
+  rewardsEfficiency: number;
+  totalValueScore: number;
+  summary: string;
+}
+
+export interface TripOptimizationResponse {
+  bestOptions: TripOption[];
+}
+
 // ─── Trip Builder Form ────────────────────────────────────────────────────────
 
 export interface TripBuilderFormData {
