@@ -1411,7 +1411,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
       const newItems: ItineraryItem[] = [];
 
       for (const place of attractions) {
-        const full = sortedAttractions.find((a) => a.id === place.id) ?? {
+        const full = candidateAttractions.find((a) => a.id === place.id) ?? {
           id: place.id,
           name: place.name,
           category: place.category,
@@ -1429,7 +1429,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
       }
 
       for (const place of restaurants) {
-        const full = sortedRestaurants.find((r) => r.id === place.id) ?? {
+        const full = candidateRestaurants.find((r) => r.id === place.id) ?? {
           id: place.id,
           name: place.name,
           cuisine: place.category,
@@ -1455,7 +1455,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
     } finally {
       setPlanningClusterId(null);
     }
-  }, [days, tripId, sortedAttractions, sortedRestaurants, showToast]);
+  }, [days, tripId, candidateAttractions, candidateRestaurants, showToast]);
 
   // ── Add round-trip pair: outbound to day 1, return to last day ──────────────
 
