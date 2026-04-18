@@ -1204,7 +1204,7 @@ export function TripBuilder({ tripId, destination, initialDays, initialResults }
   const hotelListRef       = useRef<HTMLDivElement>(null);
   const attractionListRef  = useRef<HTMLDivElement>(null);
   const restaurantListRef  = useRef<HTMLDivElement>(null);
-  const prevViewModeRef    = useRef<"list" | "map">("list");
+  const prevViewModeRef    = useRef<"list" | "map" | "grouped">("list");
 
   // ── Compare state ────────────────────────────────────────────────────────────
   const [compareSet,     setCompareSet]     = useState<Set<string>>(new Set());
