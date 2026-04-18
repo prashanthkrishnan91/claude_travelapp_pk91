@@ -47,6 +47,7 @@ Output fields:
 from typing import List, Optional
 
 from app.models.value_score import (
+    BestCardRecommendation,
     ItemV2,
     TransferBonusV2,
     UserCardV2,
@@ -87,6 +88,23 @@ def _base_cpp(cash_price: float, points_cost: int) -> Optional[float]:
     return round((cash_price * 100) / points_cost, 4)
 
 
+def _item_category(item_type: str) -> str:
+    """Map item type to earn category for card selection."""
+    t = item_type.lower()
+    if t in ("flight", "hotel"):
+        return "travel"
+    if t in ("meal", "dining", "restaurant"):
+        return "dining"
+    return "other"
+
+
+def _card_earn_rate_for_category(card: UserCardV2, category: str) -> float:
+    """Return category-specific earn rate, falling back to the card's default earn_rate."""
+    if card.category_earn_rates and category in card.category_earn_rates:
+        return card.category_earn_rates[category]
+    return card.earn_rate or 1.0
+
+
 def _best_bonus_pct(
     user_cards: List[UserCardV2],
     item_name: str,
@@ -101,14 +119,39 @@ def _best_bonus_pct(
     return best
 
 
-def _best_card_for_points(
+def _best_card_recommendation_for_cash(
+    user_cards: List[UserCardV2],
+    category: str,
+    cash_price: float,
+    cpp_baseline: float,
+) -> Optional[BestCardRecommendation]:
+    """Select card with highest category earn rate and return full recommendation."""
+    if not user_cards:
+        return None
+    best = max(user_cards, key=lambda c: _card_earn_rate_for_category(c, category))
+    earn_rate = _card_earn_rate_for_category(best, category)
+    expected_points = int(cash_price * earn_rate)
+    expected_value_usd = round(expected_points * cpp_baseline / 100, 2)
+    return BestCardRecommendation(
+        card_key=best.card_key,
+        display_name=best.display_name or best.card_key,
+        earn_rate=earn_rate,
+        expected_points=expected_points,
+        expected_value_usd=expected_value_usd,
+    )
+
+
+def _best_card_recommendation_for_points(
     user_cards: List[UserCardV2],
     item_name: str,
     transfer_bonuses: List[TransferBonusV2],
-) -> Optional[str]:
-    """Return card_key with the best transfer bonus for this item; fall back to highest earn rate."""
+    category: str,
+    cash_price: float,
+    cpp_baseline: float,
+) -> Optional[BestCardRecommendation]:
+    """Select card with best transfer bonus (fallback: highest category earn rate)."""
     best_bonus = 0
-    best_card: Optional[str] = None
+    best_card_obj: Optional[UserCardV2] = None
     for card in user_cards:
         for bonus in transfer_bonuses:
             if (
@@ -117,19 +160,21 @@ def _best_card_for_points(
                 and bonus.bonus_percent > best_bonus
             ):
                 best_bonus = bonus.bonus_percent
-                best_card = card.card_key
-    if best_card:
-        return best_card
-    if user_cards:
-        return max(user_cards, key=lambda c: c.earn_rate or 0).card_key
-    return None
-
-
-def _best_card_for_cash(user_cards: List[UserCardV2]) -> Optional[str]:
-    """Return card_key with the highest earn rate for cash spending."""
-    if not user_cards:
+                best_card_obj = card
+    if best_card_obj is None and user_cards:
+        best_card_obj = max(user_cards, key=lambda c: _card_earn_rate_for_category(c, category))
+    if best_card_obj is None:
         return None
-    return max(user_cards, key=lambda c: c.earn_rate or 0).card_key
+    earn_rate = _card_earn_rate_for_category(best_card_obj, category)
+    expected_points = int(cash_price * earn_rate)
+    expected_value_usd = round(expected_points * cpp_baseline / 100, 2)
+    return BestCardRecommendation(
+        card_key=best_card_obj.card_key,
+        display_name=best_card_obj.display_name or best_card_obj.card_key,
+        earn_rate=earn_rate,
+        expected_points=expected_points,
+        expected_value_usd=expected_value_usd,
+    )
 
 
 def _best_transfer_partner_name(
@@ -152,9 +197,9 @@ def _best_transfer_partner_name(
     return best_partner
 
 
-def _best_earn_rate(user_cards: List[UserCardV2]) -> float:
-    """Return the highest earn_rate multiplier across user cards (defaults to 1.0 if none set)."""
-    rates = [c.earn_rate for c in user_cards if c.earn_rate is not None]
+def _best_earn_rate(user_cards: List[UserCardV2], category: str = "other") -> float:
+    """Return the highest earn rate for the given category across user cards."""
+    rates = [_card_earn_rate_for_category(c, category) for c in user_cards]
     return max(rates) if rates else 1.0
 
 
@@ -374,6 +419,7 @@ class ValueEngineV2:
         prefs = req.user_preferences
         is_flight = item.item_type.lower() == "flight"
         is_hotel = item.item_type.lower() == "hotel"
+        category = _item_category(item.item_type)
 
         # 1. Base CPP
         cpp = _base_cpp(item.cash_price, item.points_cost)
@@ -386,7 +432,7 @@ class ValueEngineV2:
             adjusted_cpp = round((item.cash_price * 100) / adjusted_points, 4)
 
         # 3. Cash vs points economics
-        best_earn = _best_earn_rate(req.user_cards)
+        best_earn = _best_earn_rate(req.user_cards, category)
         earn_back_fraction = best_earn * prefs.cpp_baseline / 100
         effective_cash_cost: Optional[float] = None
         opportunity_cost: Optional[float] = None   # earn loss when using points
@@ -402,10 +448,15 @@ class ValueEngineV2:
 
         # Best card and transfer partner for this decision
         if decision == "Points Better":
-            best_card = _best_card_for_points(req.user_cards, item.name, req.transfer_bonuses)
+            best_card = _best_card_recommendation_for_points(
+                req.user_cards, item.name, req.transfer_bonuses, category,
+                item.cash_price, prefs.cpp_baseline,
+            )
             transfer_partner = _best_transfer_partner_name(req.user_cards, item.name, req.transfer_bonuses)
         else:
-            best_card = _best_card_for_cash(req.user_cards)
+            best_card = _best_card_recommendation_for_cash(
+                req.user_cards, category, item.cash_price, prefs.cpp_baseline,
+            )
             transfer_partner = None
 
         # 5. Preference match

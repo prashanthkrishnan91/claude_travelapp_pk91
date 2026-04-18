@@ -1,6 +1,6 @@
 """Models for the Value Engine — inputs and outputs for scoring travel options."""
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -68,10 +68,14 @@ class UserCardV2(BaseModel):
 
     card_key: str
     issuer: str
+    display_name: Optional[str] = Field(None, description="Human-readable card name for display")
     points_balance: int = Field(..., ge=0)
     point_value_cpp: Optional[float] = Field(None, ge=0, description="User's CPP valuation for this card")
     earn_rate: Optional[float] = Field(
-        None, ge=0, description="Category earn multiplier (e.g. 3.0 for 3x, 5.0 for 5x)"
+        None, ge=0, description="Default earn multiplier (e.g. 3.0 for 3x, 5.0 for 5x)"
+    )
+    category_earn_rates: Optional[Dict[str, float]] = Field(
+        None, description="Per-category earn rates keyed by 'travel', 'dining', 'other'"
     )
 
 
@@ -92,6 +96,18 @@ class TransferBonusV2(BaseModel):
     issuer: str
     partner: str
     bonus_percent: int = Field(..., ge=0, description="Bonus percentage, e.g. 25 for +25%")
+
+
+class BestCardRecommendation(BaseModel):
+    """Card recommendation with category-specific earn rate and expected reward value."""
+
+    card_key: str
+    display_name: str
+    earn_rate: float = Field(..., description="Category earn multiplier (e.g. 5.0 for 5x)")
+    expected_points: int = Field(..., description="Expected points earned on this purchase")
+    expected_value_usd: float = Field(
+        ..., description="Dollar value of expected points at user's CPP baseline"
+    )
 
 
 class ValueEngineV2Request(BaseModel):
@@ -133,8 +149,8 @@ class ValueEngineV2Result(BaseModel):
     opportunity_cost: Optional[float] = Field(
         None, description="Dollar value of points you'd earn by paying cash instead (earn loss when using points)"
     )
-    best_card: Optional[str] = Field(
-        None, description="Card key giving best value for the recommended decision"
+    best_card: Optional[BestCardRecommendation] = Field(
+        None, description="Best card recommendation with earn rate and expected reward value"
     )
     transfer_partner: Optional[str] = Field(
         None, description="Transfer partner name used for the best bonus, or null if none applicable"
