@@ -230,6 +230,18 @@ export interface LocationCluster {
   places: PlaceInCluster[];
 }
 
+// ─── Best Area Recommendation ─────────────────────────────────────────────────
+
+export interface BestAreaRecommendation {
+  areaName: string;
+  reason: string;
+  score: number;
+  centerLat: number;
+  centerLng: number;
+  radiusKm: number;
+  clusterId: string;
+}
+
 // ─── Day Plan ─────────────────────────────────────────────────────────────────
 
 export interface DayPlan {

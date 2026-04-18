@@ -9,6 +9,8 @@ from app.core.deps import DB
 from app.models.search import (
     AttractionResult,
     AttractionSearchRequest,
+    BestAreaRecommendation,
+    BestAreaRequest,
     ClusterSearchRequest,
     FlightResult,
     FlightSearchRequest,
@@ -19,6 +21,8 @@ from app.models.search import (
     RestaurantSearchRequest,
     RoundTripFlightPair,
 )
+from typing import Optional
+
 from app.services.search import SearchService
 
 logger = logging.getLogger(__name__)
@@ -106,3 +110,14 @@ def search_clusters(payload: ClusterSearchRequest, db: DB) -> List[LocationClust
     """
     logger.info("[search_clusters] location=%s radius_km=%.1f", payload.location, payload.radius_km)
     return SearchService(db).search_clusters(payload)
+
+
+@router.post("/best-area", response_model=Optional[BestAreaRecommendation])
+def get_best_area(payload: BestAreaRequest, db: DB) -> Optional[BestAreaRecommendation]:
+    """Recommend the best neighborhood to stay for a destination.
+
+    Scores clusters by density (40%), average rating (35%), and centrality (25%).
+    Returns the top-scored cluster with a human-readable reason and composite score.
+    """
+    logger.info("[get_best_area] location=%s radius_km=%.1f", payload.location, payload.radius_km)
+    return SearchService(db).get_best_area(payload)

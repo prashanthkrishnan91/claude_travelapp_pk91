@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Loader2, Plus, Star, X, MapPin, Layers } from "lucide-react";
-import type { Map as LeafletMap, Marker as LeafletMarker } from "leaflet";
-import type { AttractionSearchResult, RestaurantSearchResult } from "@/types";
+import type { Map as LeafletMap, Marker as LeafletMarker, Circle as LeafletCircle } from "leaflet";
+import type { AttractionSearchResult, BestAreaRecommendation, RestaurantSearchResult } from "@/types";
 
 type PopupItem =
   | { type: "attraction"; item: AttractionSearchResult }
@@ -21,6 +21,7 @@ interface TripMapViewProps {
   attractions: AttractionSearchResult[];
   restaurants: RestaurantSearchResult[];
   activeMarkerId?: string | null;
+  bestArea?: BestAreaRecommendation | null;
   onMarkerClick?: (id: string) => void;
   onAddAttraction?: (a: AttractionSearchResult) => void;
   onAddRestaurant?: (r: RestaurantSearchResult) => void;
@@ -60,6 +61,7 @@ export function TripMapView({
   attractions,
   restaurants,
   activeMarkerId,
+  bestArea,
   onMarkerClick,
   onAddAttraction,
   onAddRestaurant,
@@ -68,6 +70,7 @@ export function TripMapView({
   const mapInstanceRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<Map<string, LeafletMarker>>(new Map());
   const heatLayerRef = useRef<HeatLayer | null>(null);
+  const bestAreaCircleRef = useRef<LeafletCircle | null>(null);
   const mapModeRef = useRef<MapMode>("pins");
 
   const [center, setCenter] = useState<[number, number] | null>(null);
@@ -263,6 +266,38 @@ export function TripMapView({
     if (marker) mapInstanceRef.current.panTo(marker.getLatLng(), { animate: true });
   }, [activeMarkerId]);
 
+  // Draw / remove best area highlight circle
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current) return;
+    let cancelled = false;
+
+    if (bestAreaCircleRef.current) {
+      bestAreaCircleRef.current.remove();
+      bestAreaCircleRef.current = null;
+    }
+
+    if (!bestArea) return;
+
+    import("leaflet").then((mod) => {
+      if (cancelled || !mapInstanceRef.current) return;
+      const L = mod.default ?? mod;
+      const radiusM = bestArea.radiusKm * 1000;
+      const circle = L.circle([bestArea.centerLat, bestArea.centerLng], {
+        radius: radiusM,
+        color: "#7c3aed",
+        weight: 2,
+        opacity: 0.7,
+        fillColor: "#7c3aed",
+        fillOpacity: 0.08,
+        dashArray: "6 4",
+        className: "best-area-circle",
+      }).addTo(mapInstanceRef.current);
+      bestAreaCircleRef.current = circle;
+    });
+
+    return () => { cancelled = true; };
+  }, [mapReady, bestArea]);
+
   const handleAddFromPopup = useCallback(async () => {
     if (!popup) return;
     setAddingId(popup.item.id);
@@ -282,6 +317,22 @@ export function TripMapView({
         <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-slate-50/90">
           <Loader2 className="w-5 h-5 animate-spin text-sky-500" />
           <span className="ml-2 text-sm text-slate-400">Locating {destination}…</span>
+        </div>
+      )}
+
+      {/* Best area badge */}
+      {bestArea && (
+        <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-violet-50 border border-violet-200 shadow-sm">
+          <span className="text-base leading-none mt-0.5">📍</span>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-violet-900 leading-tight">
+              Best Area: {bestArea.areaName}
+            </p>
+            <p className="text-xs text-violet-600 mt-0.5 leading-snug">{bestArea.reason}</p>
+          </div>
+          <span className="ml-auto flex-shrink-0 text-[10px] font-bold text-violet-500 bg-violet-100 px-1.5 py-0.5 rounded-full">
+            {bestArea.score.toFixed(0)}
+          </span>
         </div>
       )}
 
