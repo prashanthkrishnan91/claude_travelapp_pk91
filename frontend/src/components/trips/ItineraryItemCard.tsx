@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { ItineraryItem, ItemType } from "@/types";
 import { BookingChecklistModal } from "./BookingChecklistModal";
+import { RewardsIntelligencePanel } from "./RewardsIntelligencePanel";
 
 interface ItineraryItemCardProps {
   item: ItineraryItem;
@@ -195,7 +196,7 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
               {item.pointsPrice.toLocaleString()} pts
             </span>
           )}
-          {item.bestOption && (
+          {item.bestOption && !item.rewardsIntelligence && (
             <span className={`badge text-[10px] px-1.5 py-0.5 gap-0.5 ${
               item.bestOption === "points" ? "badge-gold" : "badge-saved"
             }`}>
@@ -204,6 +205,11 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
             </span>
           )}
         </div>
+
+        {(item.itemType === "flight" || item.itemType === "hotel") &&
+          item.rewardsIntelligence && (
+            <RewardsIntelligencePanel rewards={item.rewardsIntelligence} />
+          )}
       </div>
     </div>
 
