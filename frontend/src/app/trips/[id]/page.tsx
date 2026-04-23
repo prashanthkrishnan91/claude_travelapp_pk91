@@ -7,6 +7,7 @@ import { ChevronLeft, Pencil, Sparkles, Trash2, X, Zap } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TripBuilder } from "@/components/trips/TripBuilder";
 import { OptimizeTripModal } from "@/components/trips/OptimizeTripModal";
+import { AIConciergePanel } from "@/components/trips/AIConciergePanel";
 import { fetchTrip, fetchItinerary, fetchTripContext, updateTrip, deleteTrip } from "@/lib/api";
 import type { Trip, TripContext, ItineraryDay } from "@/types";
 
@@ -69,6 +70,7 @@ export default function TripDetailPage() {
   const [saving,        setSaving]        = useState(false);
   const [toast,         setToast]         = useState<string | null>(null);
   const [optimizeOpen,  setOptimizeOpen]  = useState(false);
+  const [conciergeOpen, setConciergeOpen] = useState(false);
   const [tripBuilderKey, setTripBuilderKey] = useState(0);
 
   useEffect(() => {
@@ -291,7 +293,7 @@ export default function TripDetailPage() {
               <Zap className="w-4 h-4" />
               Optimize My Trip
             </button>
-            <button className="btn-primary">
+            <button onClick={() => setConciergeOpen(true)} className="btn-primary">
               <Sparkles className="w-4 h-4" />
               AI Concierge
             </button>
@@ -305,6 +307,20 @@ export default function TripDetailPage() {
         destination={trip?.destination ?? ""}
         initialDays={itineraryDays}
         initialResults={[]}
+      />
+
+      <AIConciergePanel
+        tripId={id}
+        destination={trip?.destination ?? ""}
+        isOpen={conciergeOpen}
+        onClose={() => setConciergeOpen(false)}
+        onItemAdded={() => {
+          fetchItinerary(id).then((days) => {
+            setItineraryDays(days);
+            setTripBuilderKey((k) => k + 1);
+            showToast("Added to your itinerary!");
+          });
+        }}
       />
     </>
   );

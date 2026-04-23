@@ -1049,3 +1049,42 @@ export async function addOptimizedHotelToTrip(
     body: JSON.stringify(payload),
   });
 }
+
+// ─── AI Concierge ─────────────────────────────────────────────────────────────
+
+export interface ConciergeSuggestion {
+  type: "attraction" | "restaurant";
+  name: string;
+  reason: string;
+}
+
+export interface ConciergeResult {
+  response: string;
+  suggestions: ConciergeSuggestion[];
+}
+
+export async function callConcierge(
+  tripId: string,
+  userQuery: string
+): Promise<ConciergeResult> {
+  return apiFetch<ConciergeResult>("/ai/concierge", {
+    method: "POST",
+    body: JSON.stringify({ trip_id: tripId, user_query: userQuery }),
+  });
+}
+
+export async function addConciergeItemToTrip(
+  tripId: string,
+  suggestion: ConciergeSuggestion
+): Promise<ItineraryItem> {
+  const payload = {
+    trip_id: tripId,
+    item_type: suggestion.type === "restaurant" ? "meal" : "activity",
+    title: suggestion.name,
+    details: { reason: suggestion.reason },
+  };
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
