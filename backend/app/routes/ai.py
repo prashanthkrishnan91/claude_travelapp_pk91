@@ -16,4 +16,4 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 @router.post("/concierge", response_model=ConciergeResponse)
 def concierge(payload: ConciergeRequest, db: DB, user_id: CurrentUserID) -> ConciergeResponse:
     """Generate contextual travel recommendations for a trip using Claude."""
-    return ConciergeService(db).answer(payload.trip_id, payload.user_query, user_id)
+    return ConciergeService(db).answer(payload.trip_id, payload.user_query, user_id, payload.day_number)
