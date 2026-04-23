@@ -1063,11 +1063,43 @@ export interface ConciergeResult {
   suggestions: ConciergeSuggestion[];
 }
 
+export interface UnifiedRestaurantResult {
+  name: string;
+  source: string;
+  michelinStatus?: string;
+  cuisine: string;
+  neighborhood?: string;
+  rating?: number;
+  reviewCount?: number;
+  summary?: string;
+  bookingLink?: string;
+  mapsLink?: string;
+  aiScore?: number;
+  tags: string[];
+}
+
+export interface ConciergeSearchResult {
+  response: string;
+  intent: string;
+  restaurants: UnifiedRestaurantResult[];
+  suggestions: ConciergeSuggestion[];
+}
+
 export async function callConcierge(
   tripId: string,
   userQuery: string
 ): Promise<ConciergeResult> {
   return apiFetch<ConciergeResult>("/ai/concierge", {
+    method: "POST",
+    body: JSON.stringify({ trip_id: tripId, user_query: userQuery }),
+  });
+}
+
+export async function callConciergeSearch(
+  tripId: string,
+  userQuery: string
+): Promise<ConciergeSearchResult> {
+  return apiFetch<ConciergeSearchResult>("/ai/concierge/search", {
     method: "POST",
     body: JSON.stringify({ trip_id: tripId, user_query: userQuery }),
   });
@@ -1082,6 +1114,36 @@ export async function addConciergeItemToTrip(
     item_type: suggestion.type === "restaurant" ? "meal" : "activity",
     title: suggestion.name,
     details: { reason: suggestion.reason },
+  };
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function addMichelinRestaurantToTrip(
+  tripId: string,
+  restaurant: UnifiedRestaurantResult
+): Promise<ItineraryItem> {
+  const payload = {
+    trip_id: tripId,
+    item_type: "meal",
+    title: restaurant.name,
+    location: restaurant.neighborhood || restaurant.name,
+    details: {
+      name: restaurant.name,
+      cuisine: restaurant.cuisine,
+      neighborhood: restaurant.neighborhood ?? null,
+      rating: restaurant.rating ?? null,
+      num_reviews: restaurant.reviewCount ?? null,
+      michelin_status: restaurant.michelinStatus ?? null,
+      source: restaurant.source,
+      summary: restaurant.summary ?? null,
+      ai_score: restaurant.aiScore ?? null,
+      tags: restaurant.tags,
+      booking_url: restaurant.bookingLink ?? null,
+      maps_link: restaurant.mapsLink ?? null,
+    },
   };
   return apiFetch<ItineraryItem>("/itinerary/items", {
     method: "POST",
