@@ -3,6 +3,8 @@
 ## Stack
 Vercel (serverless) · Supabase (DB) · Python/JS frontend
 
+## MOST IMPORTANT: Be as token efficient as possible when reading files, running commands and in conversations. Your focus is to build and deploy code, save tokens everywhere else.
+
 ## Code Graph
 Auto-loaded — never re-read raw source for structural questions; graph is rebuilt automatically after code edits.
 @graphify-out/GRAPH_REPORT.md
