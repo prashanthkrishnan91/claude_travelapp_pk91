@@ -42,8 +42,11 @@ _RETRIEVAL_SYSTEM_PROMPT = (
     "Never tell the user to go search another site if current retrieved results already answer the request. "
     'Respond ONLY with valid JSON matching exactly: '
     '{"response": "<string>", "suggestions": [{"type": "attraction" or "restaurant", "name": "<string>", "reason": "<string>"}]}. '
-    "When restaurant results are provided in context, write a concise 1-2 sentence intro then reference the specific restaurants by name. "
-    "No markdown, no extra keys."
+    "When restaurant results are provided, the 'response' field MUST follow this structure: "
+    "(1) Opening line: 'Here are the top Michelin options in [CITY]' — use the actual destination city name. "
+    "(2) For each restaurant (3-8): '[Name] ([Michelin tier]) — [cuisine], [neighborhood]. [One sentence: why it fits — e.g. tasting menu, romantic setting, best value, near [area], special experience].' "
+    "(3) Close with: 'Best overall: [name]. Best value: [name (Bib Gourmand or lowest tier)].' "
+    "Never say 'check Michelin Guide' when results are already provided. No markdown inside JSON strings, no extra keys."
 )
 
 _RESTAURANT_INTENTS = {INTENT_MICHELIN_RESTAURANTS, INTENT_RESTAURANTS}
@@ -324,8 +327,12 @@ class ConciergeService:
         parts.append(f"User request: {user_query}\n")
         if restaurants:
             parts.append(
-                "\nWrite a concise 1-2 sentence intro, then reference the retrieved restaurants by name "
-                "with brief reasoning for each recommendation."
+                f"\nFormat the 'response' field exactly as instructed in the system prompt: "
+                f"open with 'Here are the top Michelin options in {city}', "
+                "list each restaurant with its Michelin tier and one sentence on why it fits "
+                "(tasting menu / romantic / best value / near best area / unique experience), "
+                "then end with 'Best overall: [name]. Best value: [name].' "
+                "Use the specific restaurants retrieved above — no generic placeholders."
             )
         else:
             parts.append("\nProvide clear, specific recommendations with concise reasoning.")
