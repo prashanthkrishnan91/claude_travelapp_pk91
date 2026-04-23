@@ -2,6 +2,7 @@
 
 import json
 import logging
+from datetime import date, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -38,13 +39,13 @@ class ConciergeService:
     # ------------------------------------------------------------------
 
     def _load_context(self, trip_id: UUID, user_id: UUID) -> dict:
-        trip = self._fetch_trip(trip_id)
+        trip = self._fetch_trip(trip_id, user_id)
         items = self._fetch_itinerary_items(trip_id)
         destination = trip.get("destination", "")
         search = SearchService(self._db)
         attractions = search.search_attractions(AttractionSearchRequest(location=destination))
         restaurants = search.search_restaurants(RestaurantSearchRequest(location=destination))
-        best_area = self._derive_best_area(search, destination)
+        best_area = self._derive_best_area(search, destination, trip)
         preferences = self._fetch_preferences(user_id)
         return {
             "trip": trip,
@@ -55,8 +56,14 @@ class ConciergeService:
             "preferences": preferences,
         }
 
-    def _fetch_trip(self, trip_id: UUID) -> dict:
-        res = self._db.table("trips").select("id,destination,start_date,end_date,title").eq("id", str(trip_id)).execute()
+    def _fetch_trip(self, trip_id: UUID, user_id: UUID) -> dict:
+        res = (
+            self._db.table("trips")
+            .select("id,destination,start_date,end_date,title,user_id")
+            .eq("id", str(trip_id))
+            .eq("user_id", str(user_id))
+            .execute()
+        )
         if not res.data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
         return res.data[0]
@@ -69,9 +76,14 @@ class ConciergeService:
         items_res = self._db.table("itinerary_items").select("title,item_type,description,location,start_time").in_("day_id", day_ids).execute()
         return items_res.data or []
 
-    def _derive_best_area(self, search: SearchService, destination: str) -> str:
+    def _derive_best_area(self, search: SearchService, destination: str, trip: dict) -> str:
         from app.models.search import HotelSearchRequest
-        hotels = search.search_hotels(HotelSearchRequest(origin="", destination=destination, check_in="", check_out="", travelers=1))
+        try:
+            check_in = date.fromisoformat(trip["start_date"]) if trip.get("start_date") else date.today()
+        except (ValueError, TypeError):
+            check_in = date.today()
+        check_out = check_in + timedelta(days=1)
+        hotels = search.search_hotels(HotelSearchRequest(location=destination, check_in=check_in, check_out=check_out, guests=1))
         labels = [h.area_label for h in hotels if h.area_label]
         if not labels:
             return destination
