@@ -134,7 +134,7 @@ const handlers = {
   },
 
   'pre-bash': () => {
-    const cmd = (hookInput.command || prompt).toLowerCase();
+    const cmd = String(hookInput.command || toolInput.command || prompt || '').toLowerCase();
     const dangerous = ['rm -rf /', 'format c:', 'del /s /q c:\\', ':(){:|:&};:'];
     for (const d of dangerous) {
       if (cmd.includes(d)) {
