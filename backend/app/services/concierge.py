@@ -2,15 +2,29 @@
 
 import json
 import logging
+import re
 from datetime import date, timedelta
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from supabase import Client
 
 from app.core.config import get_settings
-from app.models.concierge import ConciergeResponse, Suggestion
+from app.models.concierge import (
+    INTENT_AREA_ADVICE,
+    INTENT_ATTRACTIONS,
+    INTENT_GENERAL,
+    INTENT_HOTELS,
+    INTENT_ITINERARY_HELP,
+    INTENT_MICHELIN_RESTAURANTS,
+    INTENT_RESTAURANTS,
+    INTENT_REWARDS_HELP,
+    ConciergeResponse,
+    ConciergeSearchResponse,
+    Suggestion,
+    UnifiedRestaurantResult,
+)
 from app.models.search import AttractionSearchRequest, RestaurantSearchRequest
 from app.services.search import SearchService
 
@@ -23,17 +37,116 @@ _SYSTEM_PROMPT = (
     "Keep recommendations concise and actionable. No markdown, no extra keys."
 )
 
+_RETRIEVAL_SYSTEM_PROMPT = (
+    "You are a premium travel concierge. Always answer from retrieved live results when available. "
+    "Never tell the user to go search another site if current retrieved results already answer the request. "
+    'Respond ONLY with valid JSON matching exactly: '
+    '{"response": "<string>", "suggestions": [{"type": "attraction" or "restaurant", "name": "<string>", "reason": "<string>"}]}. '
+    "When restaurant results are provided in context, write a concise 1-2 sentence intro then reference the specific restaurants by name. "
+    "No markdown, no extra keys."
+)
+
+_RESTAURANT_INTENTS = {INTENT_MICHELIN_RESTAURANTS, INTENT_RESTAURANTS}
+
+
+def _kw_pattern(*keywords: str) -> re.Pattern:
+    """Compile keyword alternatives with word boundaries to prevent false substring matches."""
+    parts = sorted(keywords, key=len, reverse=True)  # longest-first for greedy matching
+    return re.compile(
+        r"\b(?:" + "|".join(re.escape(kw) for kw in parts) + r")\b",
+        re.IGNORECASE,
+    )
+
+
+_MICHELIN_PAT = _kw_pattern(
+    "michelin", "bib gourmand", "starred", "star restaurant", "star dining", "fine dining",
+)
+_RESTAURANT_PAT = _kw_pattern(
+    "restaurant", "dining", "dinner", "lunch", "breakfast", "brunch", "cuisine",
+    "where to eat", "best places to eat", "romantic dinner", "best near hotel",
+    "tasting menu", "omakase", "hidden gem restaurant",
+)
+_ATTRACTION_PAT = _kw_pattern(
+    "attraction", "museum", "tour", "sightseeing", "things to do",
+    "activity", "activities", "visit",
+)
+_HOTEL_PAT = _kw_pattern(
+    "hotel", "accommodation", "where to stay", "hostel", "resort",
+)
+_ITINERARY_PAT = _kw_pattern(
+    "itinerary", "plan my day", "schedule", "day trip", "day plan", "what should i do",
+)
+_AREA_PAT = _kw_pattern(
+    "neighborhood", "neighbourhood", "area", "district", "quarter", "best area",
+)
+_REWARDS_PAT = _kw_pattern(
+    "points", "miles", "reward", "credit card", "loyalty", "cpp",
+)
+
 
 class ConciergeService:
     def __init__(self, db: Client) -> None:
         self._db = db
         self._settings = get_settings()
 
+    # ------------------------------------------------------------------
+    # Original answer() — unchanged for backward compatibility
+    # ------------------------------------------------------------------
+
     def answer(self, trip_id: UUID, user_query: str, user_id: UUID, day_number: Optional[int] = None) -> ConciergeResponse:
         context = self._load_context(trip_id, user_id, day_number)
         prompt = self._build_prompt(context, user_query)
         raw = self._call_claude(prompt)
         return self._parse_response(raw)
+
+    # ------------------------------------------------------------------
+    # Retrieval-first search()
+    # ------------------------------------------------------------------
+
+    def search(self, trip_id: UUID, user_query: str, user_id: UUID) -> ConciergeSearchResponse:
+        trip = self._fetch_trip(trip_id, user_id)
+        destination = trip.get("destination", "")
+
+        intent = self._detect_intent(user_query)
+
+        restaurants: List[UnifiedRestaurantResult] = []
+        if intent in _RESTAURANT_INTENTS:
+            from app.services.michelin_retriever import MichelinRetriever
+            restaurants = MichelinRetriever().fetch(destination, user_query)
+
+        prompt = self._build_search_prompt(trip, user_query, intent, restaurants)
+        raw = self._call_claude(prompt, system_prompt=_RETRIEVAL_SYSTEM_PROMPT)
+        base = self._parse_response(raw)
+
+        return ConciergeSearchResponse(
+            response=base.response,
+            intent=intent,
+            restaurants=restaurants,
+            suggestions=base.suggestions,
+        )
+
+    # ------------------------------------------------------------------
+    # Intent detection
+    # ------------------------------------------------------------------
+
+    def _detect_intent(self, user_query: str) -> str:
+        q = user_query.lower()
+
+        if _MICHELIN_PAT.search(q):
+            return INTENT_MICHELIN_RESTAURANTS
+        if _RESTAURANT_PAT.search(q):
+            return INTENT_RESTAURANTS
+        if _ATTRACTION_PAT.search(q):
+            return INTENT_ATTRACTIONS
+        if _HOTEL_PAT.search(q):
+            return INTENT_HOTELS
+        if _ITINERARY_PAT.search(q):
+            return INTENT_ITINERARY_HELP
+        if _AREA_PAT.search(q):
+            return INTENT_AREA_ADVICE
+        if _REWARDS_PAT.search(q):
+            return INTENT_REWARDS_HELP
+        return INTENT_GENERAL
 
     # ------------------------------------------------------------------
     # Context loading
@@ -177,11 +290,53 @@ class ConciergeService:
             "Respond with clear recommendations, a structured plan if relevant, and concise reasoning."
         )
 
+    def _build_search_prompt(
+        self,
+        trip: dict,
+        user_query: str,
+        intent: str,
+        restaurants: List[UnifiedRestaurantResult],
+    ) -> str:
+        city = trip.get("destination", "Unknown")
+        start = trip.get("start_date", "")
+        end = trip.get("end_date", "")
+        dates = f"{start} to {end}" if start and end else start or "TBD"
+
+        parts = [f"Destination: {city} | Dates: {dates}\n\n"]
+
+        if restaurants:
+            parts.append(f"Retrieved {len(restaurants)} results from Michelin Guide for {city}:\n")
+            for i, r in enumerate(restaurants[:8], 1):
+                status_badge = f"[{r.michelin_status}]" if r.michelin_status else ""
+                rating_str = f"Rating: {r.rating}/10" if r.rating else ""
+                parts.append(
+                    f"{i}. {r.name} {status_badge} — {r.cuisine}, {r.neighborhood or 'City Center'} | {rating_str}\n"
+                    f"   {r.summary or ''}\n"
+                )
+            parts.append(
+                "\nIMPORTANT: These restaurants were already retrieved from Michelin Guide. "
+                "DO NOT tell the user to 'check Michelin Guide' — the results are here. "
+                "Reference the specific restaurant names above in your response.\n\n"
+            )
+        elif intent in _RESTAURANT_INTENTS:
+            parts.append("No Michelin Guide results found for this destination. Offer general dining advice.\n\n")
+
+        parts.append(f"User request: {user_query}\n")
+        if restaurants:
+            parts.append(
+                "\nWrite a concise 1-2 sentence intro, then reference the retrieved restaurants by name "
+                "with brief reasoning for each recommendation."
+            )
+        else:
+            parts.append("\nProvide clear, specific recommendations with concise reasoning.")
+
+        return "".join(parts)
+
     # ------------------------------------------------------------------
     # Claude API call
     # ------------------------------------------------------------------
 
-    def _call_claude(self, prompt: str) -> str:
+    def _call_claude(self, prompt: str, system_prompt: Optional[str] = None) -> str:
         api_key = self._settings.anthropic_api_key
         if not api_key:
             raise HTTPException(
@@ -194,7 +349,7 @@ class ConciergeService:
             message = client.messages.create(
                 model="claude-sonnet-4-6",
                 max_tokens=1024,
-                system=_SYSTEM_PROMPT,
+                system=system_prompt or _SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": prompt}],
             )
             return message.content[0].text

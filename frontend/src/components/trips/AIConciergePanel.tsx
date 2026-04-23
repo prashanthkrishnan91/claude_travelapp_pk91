@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { X, Send, Sparkles, Plus, Loader2, UtensilsCrossed, MapPin } from "lucide-react";
-import { callConcierge, addConciergeItemToTrip } from "@/lib/api";
-import type { ConciergeSuggestion } from "@/lib/api";
+import { X, Send, Sparkles, Plus, Loader2, UtensilsCrossed, MapPin, Star, ExternalLink } from "lucide-react";
+import { callConciergeSearch, addConciergeItemToTrip, addMichelinRestaurantToTrip } from "@/lib/api";
+import type { ConciergeSuggestion, UnifiedRestaurantResult } from "@/lib/api";
 
 interface Message {
   role: "user" | "assistant";
   text: string;
   suggestions?: ConciergeSuggestion[];
+  restaurants?: UnifiedRestaurantResult[];
+  intent?: string;
 }
 
 interface Props {
@@ -19,11 +21,176 @@ interface Props {
   onItemAdded?: () => void;
 }
 
+// ── Michelin badge helpers ────────────────────────────────────────────────────
+
+function michelinStarIcons(status: string): string {
+  if (status === "3 Stars") return "⭐⭐⭐";
+  if (status === "2 Stars") return "⭐⭐";
+  if (status === "1 Star") return "⭐";
+  if (status === "Bib Gourmand") return "🍽️";
+  return "";
+}
+
+function michelinBadgeClass(status: string): string {
+  if (status.includes("Star")) return "bg-red-50 text-red-700 border-red-200";
+  if (status === "Bib Gourmand") return "bg-orange-50 text-orange-700 border-orange-200";
+  return "bg-slate-50 text-slate-600 border-slate-200";
+}
+
+// ── Restaurant card ───────────────────────────────────────────────────────────
+
+function RestaurantCard({
+  restaurant,
+  tripId,
+  onAdded,
+}: {
+  restaurant: UnifiedRestaurantResult;
+  tripId: string;
+  onAdded?: () => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState(false);
+
+  async function handleAdd() {
+    if (adding || added) return;
+    setAdding(true);
+    try {
+      await addMichelinRestaurantToTrip(tripId, restaurant);
+      setAdded(true);
+      onAdded?.();
+    } catch {
+      // silent fail — user can retry
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  return (
+    <div className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm">
+      {/* Name + Michelin badge */}
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-sm font-semibold text-slate-800">{restaurant.name}</p>
+            {restaurant.michelinStatus && (
+              <span
+                className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-bold ${michelinBadgeClass(restaurant.michelinStatus)}`}
+              >
+                {michelinStarIcons(restaurant.michelinStatus)}{" "}
+                {restaurant.michelinStatus}
+              </span>
+            )}
+          </div>
+
+          {/* Cuisine · neighborhood · rating */}
+          <div className="flex items-center gap-1.5 mt-0.5 text-xs text-slate-500 flex-wrap">
+            <span>{restaurant.cuisine}</span>
+            {restaurant.neighborhood && (
+              <>
+                <span className="text-slate-300">·</span>
+                <span>{restaurant.neighborhood}</span>
+              </>
+            )}
+            {restaurant.rating != null && (
+              <>
+                <span className="text-slate-300">·</span>
+                <span className="flex items-center gap-0.5 text-amber-600 font-medium">
+                  <Star className="w-3 h-3 fill-amber-400 stroke-amber-500" />
+                  {restaurant.rating}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Summary */}
+          {restaurant.summary && (
+            <p className="text-xs text-slate-500 mt-1 line-clamp-2">{restaurant.summary}</p>
+          )}
+
+          {/* Tags */}
+          {restaurant.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {restaurant.tags.slice(0, 3).map((tag) => (
+                <span
+                  key={tag}
+                  className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px]"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-2 mt-2">
+        <button
+          onClick={handleAdd}
+          disabled={adding || added}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+            added
+              ? "bg-emerald-50 text-emerald-600 cursor-default"
+              : "bg-sky-50 text-sky-600 hover:bg-sky-100 active:scale-95"
+          }`}
+        >
+          {adding ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : added ? (
+            "✓ Added to Trip"
+          ) : (
+            <>
+              <Plus className="w-3 h-3" />
+              Add to Trip
+            </>
+          )}
+        </button>
+
+        {restaurant.mapsLink && (
+          <a
+            href={restaurant.mapsLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-50 text-slate-600 hover:bg-slate-100 transition"
+          >
+            <MapPin className="w-3 h-3" />
+            Map
+          </a>
+        )}
+
+        {restaurant.bookingLink && (
+          <a
+            href={restaurant.bookingLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-violet-50 text-violet-600 hover:bg-violet-100 transition"
+          >
+            <ExternalLink className="w-3 h-3" />
+            Book
+          </a>
+        )}
+      </div>
+
+      {/* Source + review count */}
+      <div className="flex items-center justify-between mt-1.5">
+        <span className="text-[10px] text-slate-400">Source: {restaurant.source}</span>
+        {restaurant.reviewCount != null && (
+          <span className="text-[10px] text-slate-400">
+            {restaurant.reviewCount.toLocaleString()} reviews
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main panel ────────────────────────────────────────────────────────────────
+
 export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemAdded }: Props) {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      text: `Hi! I'm your AI Concierge for ${destination || "your trip"}. Ask me anything — local tips, what to do, where to eat, hidden gems…`,
+      text: `Hi! I'm your AI Concierge for ${destination || "your trip"}. Ask me anything — Michelin restaurants, hidden gems, romantic dinners, what to do…`,
     },
   ]);
   const [input, setInput] = useState("");
@@ -43,11 +210,13 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
+  const dest = destination || "this destination";
   const QUICK_ACTIONS = [
-    { label: "Plan my day", query: "Plan my day in " + (destination || "this destination") },
-    { label: "Best restaurants", query: "What are the best restaurants in " + (destination || "this area") + "?" },
-    { label: "Romantic ideas", query: "Give me romantic ideas and experiences in " + (destination || "this destination") },
-    { label: "Hidden gems", query: "What are the hidden gems and off-the-beaten-path spots in " + (destination || "this destination") + "?" },
+    { label: "⭐ Michelin restaurants", query: `Michelin starred restaurants in ${dest}` },
+    { label: "🍽️ Bib Gourmand", query: `Bib Gourmand restaurants in ${dest}` },
+    { label: "💑 Romantic dinner", query: `Romantic dinner restaurants in ${dest}` },
+    { label: "📍 Best near hotel", query: `Best restaurants near my hotel in ${dest}` },
+    { label: "💎 Hidden gems", query: `Hidden gem restaurants in ${dest}` },
   ];
 
   async function sendQuery(query: string) {
@@ -56,10 +225,16 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
     setMessages((prev) => [...prev, { role: "user", text: query }]);
     setLoading(true);
     try {
-      const result = await callConcierge(tripId, query);
+      const result = await callConciergeSearch(tripId, query);
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: result.response, suggestions: result.suggestions },
+        {
+          role: "assistant",
+          text: result.response,
+          suggestions: result.suggestions,
+          restaurants: result.restaurants,
+          intent: result.intent,
+        },
       ]);
     } catch {
       setMessages((prev) => [
@@ -136,8 +311,20 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
                 </div>
               </div>
 
-              {/* Suggestion cards */}
-              {msg.suggestions && msg.suggestions.length > 0 && (
+              {/* Michelin restaurant result cards */}
+              {msg.restaurants && msg.restaurants.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide px-1">
+                    Michelin Guide Results · {destination}
+                  </p>
+                  {msg.restaurants.map((r, ri) => (
+                    <RestaurantCard key={ri} restaurant={r} tripId={tripId} onAdded={onItemAdded} />
+                  ))}
+                </div>
+              )}
+
+              {/* Fallback suggestion cards (for non-restaurant intents) */}
+              {msg.suggestions && msg.suggestions.length > 0 && (!msg.restaurants || msg.restaurants.length === 0) && (
                 <div className="mt-3 space-y-2">
                   {msg.suggestions.map((s, si) => {
                     const added = addedItems.has(s.name);
@@ -207,7 +394,7 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
             <div className="flex justify-start">
               <div className="bg-slate-100 rounded-2xl rounded-bl-sm px-3 py-2 flex items-center gap-2">
                 <Loader2 className="w-3 h-3 text-slate-400 animate-spin" />
-                <span className="text-xs text-slate-500">Thinking…</span>
+                <span className="text-xs text-slate-500">Retrieving results…</span>
               </div>
             </div>
           )}
@@ -224,7 +411,7 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-              placeholder="Ask about restaurants, activities, tips…"
+              placeholder="Michelin restaurants, romantic dinner, hidden gems…"
               disabled={loading}
               className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60"
             />
