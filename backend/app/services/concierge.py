@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from datetime import date, timedelta
 from typing import List, Optional
 from uuid import UUID
@@ -47,13 +48,40 @@ _RETRIEVAL_SYSTEM_PROMPT = (
 
 _RESTAURANT_INTENTS = {INTENT_MICHELIN_RESTAURANTS, INTENT_RESTAURANTS}
 
-_MICHELIN_KEYWORDS = {"michelin", "bib gourmand", "starred", "star restaurant", "star dining", "fine dining"}
-_RESTAURANT_KEYWORDS = {"restaurant", "eat", "eating", "dining", "dinner", "lunch", "breakfast", "brunch", "cuisine", "where to eat", "best places to eat", "romantic dinner", "best near hotel", "tasting menu", "omakase", "hidden gem restaurant"}
-_ATTRACTION_KEYWORDS = {"attraction", "museum", "tour", "sightseeing", "things to do", "activity", "see", "explore", "visit"}
-_HOTEL_KEYWORDS = {"hotel", "stay", "accommodation", "where to stay", "hostel", "resort"}
-_ITINERARY_KEYWORDS = {"itinerary", "plan my day", "schedule", "day trip", "day plan", "what should i do"}
-_AREA_KEYWORDS = {"neighborhood", "area", "district", "quarter", "best area"}
-_REWARDS_KEYWORDS = {"points", "miles", "reward", "credit card", "loyalty", "cpp"}
+
+def _kw_pattern(*keywords: str) -> re.Pattern:
+    """Compile keyword alternatives with word boundaries to prevent false substring matches."""
+    parts = sorted(keywords, key=len, reverse=True)  # longest-first for greedy matching
+    return re.compile(
+        r"\b(?:" + "|".join(re.escape(kw) for kw in parts) + r")\b",
+        re.IGNORECASE,
+    )
+
+
+_MICHELIN_PAT = _kw_pattern(
+    "michelin", "bib gourmand", "starred", "star restaurant", "star dining", "fine dining",
+)
+_RESTAURANT_PAT = _kw_pattern(
+    "restaurant", "dining", "dinner", "lunch", "breakfast", "brunch", "cuisine",
+    "where to eat", "best places to eat", "romantic dinner", "best near hotel",
+    "tasting menu", "omakase", "hidden gem restaurant",
+)
+_ATTRACTION_PAT = _kw_pattern(
+    "attraction", "museum", "tour", "sightseeing", "things to do",
+    "activity", "activities", "visit",
+)
+_HOTEL_PAT = _kw_pattern(
+    "hotel", "accommodation", "where to stay", "hostel", "resort",
+)
+_ITINERARY_PAT = _kw_pattern(
+    "itinerary", "plan my day", "schedule", "day trip", "day plan", "what should i do",
+)
+_AREA_PAT = _kw_pattern(
+    "neighborhood", "neighbourhood", "area", "district", "quarter", "best area",
+)
+_REWARDS_PAT = _kw_pattern(
+    "points", "miles", "reward", "credit card", "loyalty", "cpp",
+)
 
 
 class ConciergeService:
@@ -104,19 +132,19 @@ class ConciergeService:
     def _detect_intent(self, user_query: str) -> str:
         q = user_query.lower()
 
-        if any(kw in q for kw in _MICHELIN_KEYWORDS):
+        if _MICHELIN_PAT.search(q):
             return INTENT_MICHELIN_RESTAURANTS
-        if any(kw in q for kw in _RESTAURANT_KEYWORDS):
+        if _RESTAURANT_PAT.search(q):
             return INTENT_RESTAURANTS
-        if any(kw in q for kw in _ATTRACTION_KEYWORDS):
+        if _ATTRACTION_PAT.search(q):
             return INTENT_ATTRACTIONS
-        if any(kw in q for kw in _HOTEL_KEYWORDS):
+        if _HOTEL_PAT.search(q):
             return INTENT_HOTELS
-        if any(kw in q for kw in _ITINERARY_KEYWORDS):
+        if _ITINERARY_PAT.search(q):
             return INTENT_ITINERARY_HELP
-        if any(kw in q for kw in _AREA_KEYWORDS):
+        if _AREA_PAT.search(q):
             return INTENT_AREA_ADVICE
-        if any(kw in q for kw in _REWARDS_KEYWORDS):
+        if _REWARDS_PAT.search(q):
             return INTENT_REWARDS_HELP
         return INTENT_GENERAL
 
@@ -294,10 +322,13 @@ class ConciergeService:
             parts.append("No Michelin Guide results found for this destination. Offer general dining advice.\n\n")
 
         parts.append(f"User request: {user_query}\n")
-        parts.append(
-            "\nWrite a concise 1-2 sentence intro, then reference the retrieved restaurants by name "
-            "with brief reasoning for each recommendation."
-        )
+        if restaurants:
+            parts.append(
+                "\nWrite a concise 1-2 sentence intro, then reference the retrieved restaurants by name "
+                "with brief reasoning for each recommendation."
+            )
+        else:
+            parts.append("\nProvide clear, specific recommendations with concise reasoning.")
 
         return "".join(parts)
 
