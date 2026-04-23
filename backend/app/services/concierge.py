@@ -3,6 +3,7 @@
 import json
 import logging
 from datetime import date, timedelta
+from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -28,8 +29,8 @@ class ConciergeService:
         self._db = db
         self._settings = get_settings()
 
-    def answer(self, trip_id: UUID, user_query: str, user_id: UUID) -> ConciergeResponse:
-        context = self._load_context(trip_id, user_id)
+    def answer(self, trip_id: UUID, user_query: str, user_id: UUID, day_number: Optional[int] = None) -> ConciergeResponse:
+        context = self._load_context(trip_id, user_id, day_number)
         prompt = self._build_prompt(context, user_query)
         raw = self._call_claude(prompt)
         return self._parse_response(raw)
@@ -38,9 +39,9 @@ class ConciergeService:
     # Context loading
     # ------------------------------------------------------------------
 
-    def _load_context(self, trip_id: UUID, user_id: UUID) -> dict:
+    def _load_context(self, trip_id: UUID, user_id: UUID, day_number: Optional[int] = None) -> dict:
         trip = self._fetch_trip(trip_id, user_id)
-        items = self._fetch_itinerary_items(trip_id)
+        items = self._fetch_itinerary_items(trip_id, day_number)
         destination = trip.get("destination", "")
         search = SearchService(self._db)
         attractions = search.search_attractions(AttractionSearchRequest(location=destination))
@@ -54,6 +55,7 @@ class ConciergeService:
             "restaurants": restaurants[:5],
             "best_area": best_area,
             "preferences": preferences,
+            "day_number": day_number,
         }
 
     def _fetch_trip(self, trip_id: UUID, user_id: UUID) -> dict:
@@ -68,12 +70,20 @@ class ConciergeService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
         return res.data[0]
 
-    def _fetch_itinerary_items(self, trip_id: UUID) -> list:
-        days_res = self._db.table("itinerary_days").select("id").eq("trip_id", str(trip_id)).execute()
+    def _fetch_itinerary_items(self, trip_id: UUID, day_number: Optional[int] = None) -> list:
+        query = self._db.table("itinerary_days").select("id,day_number").eq("trip_id", str(trip_id))
+        if day_number is not None:
+            query = query.eq("day_number", day_number)
+        days_res = query.execute()
         if not days_res.data:
             return []
         day_ids = [d["id"] for d in days_res.data]
-        items_res = self._db.table("itinerary_items").select("title,item_type,description,location,start_time").in_("day_id", day_ids).execute()
+        items_res = (
+            self._db.table("itinerary_items")
+            .select("title,item_type,description,location,start_time")
+            .in_("day_id", day_ids)
+            .execute()
+        )
         return items_res.data or []
 
     def _derive_best_area(self, search: SearchService, destination: str, trip: dict) -> str:
@@ -139,11 +149,27 @@ class ConciergeService:
                 prefs_section = "User preferences:\n" + "\n".join(parts) + "\n"
 
         best_area = ctx["best_area"]
+        day_number = ctx.get("day_number")
+
+        if day_number is not None:
+            day_header = f"Planning scope: Day {day_number} only.\n"
+            already_planned = (
+                f"Already planned for Day {day_number}:\n{items_text}\n\n"
+                "Rules:\n"
+                "- Do NOT suggest anything already listed above.\n"
+                "- Prioritise places close to existing locations to minimise travel.\n"
+                "- Fit suggestions into logical gaps in the schedule.\n\n"
+            )
+        else:
+            day_header = ""
+            already_planned = f"Current itinerary:\n{items_text}\n\n"
+
         return (
             "You are a premium travel concierge.\n\n"
             f"Trip:\n  Destination: {city}\n  Dates: {dates}\n\n"
-            f"Itinerary:\n{items_text}\n\n"
-            f"Top attractions:\n{attractions_text}\n\n"
+            + day_header
+            + already_planned
+            + f"Top attractions:\n{attractions_text}\n\n"
             f"Top restaurants:\n{restaurants_text}\n\n"
             f"Best area: {best_area}\n"
             + prefs_section
