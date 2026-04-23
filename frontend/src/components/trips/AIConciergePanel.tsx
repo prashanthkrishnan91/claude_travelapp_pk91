@@ -28,7 +28,7 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [addingItem, setAddingItem] = useState<string | null>(null);
+  const [addingItems, setAddingItems] = useState<Set<string>>(new Set());
   const [addedItems, setAddedItems] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -66,8 +66,8 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
   }
 
   async function handleAddToTrip(suggestion: ConciergeSuggestion) {
-    if (addingItem === suggestion.name) return;
-    setAddingItem(suggestion.name);
+    if (addingItems.has(suggestion.name) || addedItems.has(suggestion.name)) return;
+    setAddingItems((prev) => new Set(prev).add(suggestion.name));
     try {
       await addConciergeItemToTrip(tripId, suggestion);
       setAddedItems((prev) => new Set(prev).add(suggestion.name));
@@ -75,7 +75,11 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
     } catch {
       // silently fail — user can retry
     } finally {
-      setAddingItem(null);
+      setAddingItems((prev) => {
+        const next = new Set(prev);
+        next.delete(suggestion.name);
+        return next;
+      });
     }
   }
 
@@ -127,7 +131,7 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
                 <div className="mt-3 space-y-2">
                   {msg.suggestions.map((s, si) => {
                     const added = addedItems.has(s.name);
-                    const adding = addingItem === s.name;
+                    const adding = addingItems.has(s.name);
                     return (
                       <div
                         key={si}

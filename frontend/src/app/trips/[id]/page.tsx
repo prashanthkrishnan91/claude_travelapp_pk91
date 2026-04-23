@@ -309,19 +309,21 @@ export default function TripDetailPage() {
         initialResults={[]}
       />
 
-      <AIConciergePanel
-        tripId={id}
-        destination={trip?.destination ?? ""}
-        isOpen={conciergeOpen}
-        onClose={() => setConciergeOpen(false)}
-        onItemAdded={() => {
-          fetchItinerary(id).then((days) => {
-            setItineraryDays(days);
-            setTripBuilderKey((k) => k + 1);
-            showToast("Added to your itinerary!");
-          });
-        }}
-      />
+      {conciergeOpen && (
+        <AIConciergePanel
+          tripId={id}
+          destination={trip?.destination ?? ""}
+          isOpen={conciergeOpen}
+          onClose={() => setConciergeOpen(false)}
+          onItemAdded={() => {
+            fetchItinerary(id).then((days) => {
+              setItineraryDays(days);
+              setTripBuilderKey((k) => k + 1);
+              showToast("Added to your itinerary!");
+            });
+          }}
+        />
+      )}
     </>
   );
 }
