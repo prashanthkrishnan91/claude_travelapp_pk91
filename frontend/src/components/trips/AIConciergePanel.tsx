@@ -43,8 +43,14 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  async function handleSend() {
-    const query = input.trim();
+  const QUICK_ACTIONS = [
+    { label: "Plan my day", query: "Plan my day in " + (destination || "this destination") },
+    { label: "Best restaurants", query: "What are the best restaurants in " + (destination || "this area") + "?" },
+    { label: "Romantic ideas", query: "Give me romantic ideas and experiences in " + (destination || "this destination") },
+    { label: "Hidden gems", query: "What are the hidden gems and off-the-beaten-path spots in " + (destination || "this destination") + "?" },
+  ];
+
+  async function sendQuery(query: string) {
     if (!query || loading) return;
     setInput("");
     setMessages((prev) => [...prev, { role: "user", text: query }]);
@@ -63,6 +69,10 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSend() {
+    await sendQuery(input.trim());
   }
 
   async function handleAddToTrip(suggestion: ConciergeSuggestion) {
@@ -177,6 +187,21 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
               )}
             </div>
           ))}
+
+          {/* Quick action buttons — shown only before conversation starts */}
+          {messages.length === 1 && !loading && (
+            <div className="flex flex-wrap gap-2 mt-1">
+              {QUICK_ACTIONS.map((action) => (
+                <button
+                  key={action.label}
+                  onClick={() => sendQuery(action.query)}
+                  className="px-3 py-1.5 rounded-full border border-violet-200 bg-violet-50 text-violet-700 text-xs font-medium hover:bg-violet-100 active:scale-95 transition"
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {loading && (
             <div className="flex justify-start">
