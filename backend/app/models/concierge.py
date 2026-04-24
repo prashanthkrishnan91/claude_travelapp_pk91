@@ -50,6 +50,8 @@ INTENT_AREA_ADVICE = INTENT_BEST_AREA
 SOURCE_CONFIRMED_MICHELIN = "confirmed_michelin"
 SOURCE_CURATED_STATIC = "curated_static"
 SOURCE_LIVE_SEARCH = "live_search"
+SOURCE_APP_DATABASE = "app_database"
+SOURCE_SAMPLE_DATA = "sample_data"
 SOURCE_UNAVAILABLE = "unavailable"
 SOURCE_NONE = "none"
 

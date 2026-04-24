@@ -83,7 +83,7 @@ _CITY_CENTERS: Dict[str, tuple] = {
 
 _AREA_NAMES = [
     "Central District", "Waterfront Area", "Old Town Quarter",
-    "Market District", "Harbour Side", "Heritage Zone",
+    "Market District", "Riverfront Side", "Heritage Zone",
     "Arts Quarter", "Garden District", "Royal Mile Area",
     "Bay Area", "Cultural Zone", "Riverside Quarter",
     "Hilltop Area", "Beachfront Strip", "Historic Core",
@@ -403,12 +403,12 @@ def _mock_attractions(req: AttractionSearchRequest) -> List[AttractionResult]:
     ATTRACTION_POOL: List[tuple] = [
         # Top attractions / landmarks
         ("landmarks", "City Heritage Museum", "Discover the rich history and culture of the city through immersive exhibits and rare artefacts.", 120, (80_000, 400_000), 1),
-        ("landmarks", "Grand Central Viewpoint", "Panoramic observation deck offering stunning 360° views of the skyline and harbour.", 60, (120_000, 500_000), 2),
+        ("landmarks", "Grand Central Viewpoint", "Panoramic observation deck offering wide skyline views.", 60, (120_000, 500_000), 2),
         ("landmarks", "Historic Old Town District", "Stroll through cobblestone streets lined with centuries-old architecture and artisan shops.", 180, (200_000, 480_000), 0),
         ("landmarks", "National Cathedral", "Magnificent Gothic cathedral with intricate stained glass windows and guided tower climbs.", 90, (150_000, 400_000), 0),
         ("landmarks", "Royal Palace Gardens", "Sprawling royal gardens open to the public, featuring seasonal floral displays.", 120, (100_000, 350_000), 1),
         # Top attractions
-        ("top_attractions", "Sunset Harbour Cruise", "90-minute evening boat cruise with panoramic views and complimentary drinks.", 90, (30_000, 150_000), 2),
+        ("top_attractions", "Sunset River Cruise", "90-minute evening boat cruise with skyline views and complimentary drinks.", 90, (30_000, 150_000), 2),
         ("top_attractions", "Hop-On Hop-Off City Bus Tour", "Full-day pass covering 25+ must-see sites with live commentary in 10 languages.", 480, (60_000, 300_000), 2),
         ("top_attractions", "Underground City Caves Tour", "Expert-guided descent into ancient limestone caves with dramatic light shows.", 120, (20_000, 100_000), 2),
         ("top_attractions", "Street Food Night Market", "Authentic local street food stalls serving regional specialties from dusk till midnight.", 120, (40_000, 200_000), 1),
@@ -429,7 +429,7 @@ def _mock_attractions(req: AttractionSearchRequest) -> List[AttractionResult]:
         # Hidden gems / local favourites
         ("hidden_gems", "Secret Courtyard Art Walk", "Self-guided tour through hidden courtyards adorned with murals by local street artists.", 90, (2_000, 9_000), 0),
         ("hidden_gems", "Underground Jazz Speakeasy", "Intimate live jazz sessions in a vintage underground bar — reservation required.", 120, (3_000, 12_000), 2),
-        ("local_favorites", "Morning Fishermen's Market", "Join locals at dawn for the freshest catch, prepared on-site by harbour-side vendors.", 60, (4_000, 18_000), 1),
+        ("local_favorites", "Morning Fishermen's Market", "Join locals at dawn for the freshest catch, prepared on-site by market vendors.", 60, (4_000, 18_000), 1),
         ("local_favorites", "Neighbourhood Artisan Fair", "Weekly craft market where local makers sell pottery, textiles, and handmade jewellery.", 90, (5_000, 20_000), 0),
     ]
 
@@ -444,16 +444,29 @@ def _mock_attractions(req: AttractionSearchRequest) -> List[AttractionResult]:
         "Fri–Sun 6:00 PM – 2:00 AM",
     ]
 
-    STREET_NAMES = ["Main St", "Market Ave", "Park Blvd", "Harbour Dr", "Cathedral Sq", "Heritage Lane", "Royal Walk", "Old Town Rd"]
+    STREET_NAMES = ["Main St", "Market Ave", "Park Blvd", "Riverfront Dr", "Cathedral Sq", "Heritage Lane", "Royal Walk", "Old Town Rd"]
 
     city = req.location.split(",")[0].strip().title()
 
+    chicago_attractions: List[tuple] = [
+        ("landmarks", "Millennium Park", "Public park known for Cloud Gate, skyline views, and easy downtown access.", 90, (180_000, 650_000), 0),
+        ("landmarks", "Art Institute of Chicago", "World-class museum with major Impressionist and modern collections.", 150, (160_000, 600_000), 2),
+        ("landmarks", "Navy Pier", "Lake Michigan pier with rides, waterfront walks, and evening views.", 120, (140_000, 500_000), 1),
+        ("top_attractions", "Chicago River Architecture Cruise", "Boat tour focused on landmark architecture along the Chicago River.", 90, (110_000, 420_000), 2),
+        ("museums", "Field Museum", "Major natural history museum with iconic dinosaur and global collections.", 150, (90_000, 350_000), 2),
+        ("museums", "Shedd Aquarium", "Large aquarium with lakefront setting and strong family-friendly exhibits.", 120, (100_000, 380_000), 2),
+        ("outdoor", "Lakefront Trail", "Scenic trail along Lake Michigan for flexible walking or cycling stops.", 90, (70_000, 300_000), 0),
+        ("local_favorites", "Chicago Riverwalk", "Central riverwalk area with cafes and easy access to nearby landmarks.", 75, (80_000, 320_000), 0),
+    ]
+
     # Filter by category if provided
     valid_cats = {t[0] for t in ATTRACTION_POOL}
+    city_slug = req.location.split(",")[0].strip().lower()
+    base_pool = chicago_attractions if city_slug == "chicago" else ATTRACTION_POOL
     if req.category and req.category in valid_cats:
-        pool = [t for t in ATTRACTION_POOL if t[0] == req.category]
+        pool = [t for t in base_pool if t[0] == req.category]
     else:
-        pool = list(ATTRACTION_POOL)
+        pool = list(base_pool)
 
     loc_slug = req.location.lower().replace(" ", "-").replace(",", "")
     results: List[AttractionResult] = []
@@ -569,7 +582,7 @@ def _mock_restaurants(req: RestaurantSearchRequest) -> List[RestaurantResult]:
         "Mon–Fri 11:00 AM – 2:30 PM, 5:00 PM – 10:00 PM",
     ]
 
-    STREET_NAMES = ["Main St", "Market Ave", "Harbour Dr", "Old Town Sq", "Vine St", "Bay Blvd", "Canal Walk", "High St"]
+    STREET_NAMES = ["Main St", "Market Ave", "Riverfront Dr", "Old Town Sq", "Vine St", "Bay Blvd", "Canal Walk", "High St"]
 
     city = req.location.split(",")[0].strip().title()
     loc_slug = req.location.lower().replace(" ", "-").replace(",", "")

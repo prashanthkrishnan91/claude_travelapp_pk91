@@ -36,6 +36,7 @@ interface Message {
   attractions?: UnifiedAttractionResult[];
   hotels?: UnifiedHotelResult[];
   intent?: string;
+  retrievalUsed?: boolean;
   sourceStatus?: string;
   warnings?: string[];
 }
@@ -51,12 +52,13 @@ interface Props {
 
 function sourceLabel(status: string, intent?: string): string | null {
   if (status === "confirmed_michelin") return "Confirmed Michelin data";
-  if (status === "curated_static") return "Curated reference data";
-  if (status === "live_search") {
-    if (intent === "hotels") return "Based on available hotel database · verify rates before booking";
-    if (intent === "michelin_restaurants") return "Michelin Guide reference data";
-    return "Live search results · limited source coverage";
-  }
+  if (status === "curated_static") return intent === "michelin_restaurants"
+    ? "Based on curated Michelin reference data"
+    : "Based on available app database";
+  if (status === "live_search") return "Live search results";
+  if (status === "app_database") return "Based on available app database";
+  if (status === "sample_data") return "Sample research data · verify before booking";
+  if (status === "unavailable") return "Limited source coverage — verify names, hours, and booking details.";
   return null;
 }
 
@@ -177,6 +179,7 @@ function fromSearchResult(result: ConciergeSearchResult): Message {
     attractions: result.attractions,
     hotels: result.hotels,
     intent: result.intent,
+    retrievalUsed: result.retrievalUsed,
     sourceStatus: result.sourceStatus,
     warnings: result.warnings,
   };
@@ -518,7 +521,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                     </div>
                   )}
 
-                  {msg.sourceStatus && sourceLabel(msg.sourceStatus, msg.intent) && (
+                  {msg.retrievalUsed && msg.sourceStatus && sourceLabel(msg.sourceStatus, msg.intent) && (
                     <div className="flex items-center gap-1 text-[10px] text-slate-400">
                       <Info className="h-3 w-3" />
                       <span>{sourceLabel(msg.sourceStatus, msg.intent)}</span>

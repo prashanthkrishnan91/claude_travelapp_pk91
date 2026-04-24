@@ -29,8 +29,10 @@ from app.models.concierge import (
     INTENT_REWARDS_HELP,
     INTENT_ROMANTIC,
     SOURCE_CURATED_STATIC,
+    SOURCE_APP_DATABASE,
     SOURCE_LIVE_SEARCH,
     SOURCE_NONE,
+    SOURCE_SAMPLE_DATA,
     SOURCE_UNAVAILABLE,
     ConciergeResponse,
     ConciergeMessage,
@@ -120,6 +122,7 @@ _PLAN_DAY_PAT = _kw_pattern(
     "itinerary", "plan my day", "schedule", "day trip", "day plan",
     "what should i do", "full day", "plan a day",
 )
+_DAY_NUMBER_PAT = re.compile(r"\bday\s*\d+\b", re.IGNORECASE)
 _COMPARE_PAT = _kw_pattern(
     "compare", "versus", " vs ", "which is better", "which should i",
 )
@@ -179,10 +182,12 @@ class ConciergeService:
                     f"Michelin Guide data is not available for {destination}. "
                     "Showing general dining recommendations based on local search."
                 )
-                # Fall back to general search so the user still gets useful results
                 raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
-                restaurants = [self._to_unified_restaurant(r) for r in raw_rest[:6]]
-                source_status = SOURCE_LIVE_SEARCH
+                source_status = self._infer_source_status(raw_rest)
+                restaurants = [
+                    self._to_unified_restaurant(r, intent=intent, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
+                    for r in raw_rest[:6]
+                ]
                 sources.append("Local restaurant database")
             else:
                 sources.append("Michelin Guide (curated reference data)")
@@ -191,21 +196,35 @@ class ConciergeService:
         elif intent in {INTENT_RESTAURANTS, INTENT_HIDDEN_GEMS, INTENT_LUXURY_VALUE,
                         INTENT_ROMANTIC, INTENT_FAMILY_FRIENDLY}:
             raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
-            restaurants = [self._to_unified_restaurant(r) for r in raw_rest[:6]]
-            source_status = SOURCE_LIVE_SEARCH
+            source_status = self._infer_source_status(raw_rest)
+            restaurants = [
+                self._to_unified_restaurant(r, intent=intent, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
+                for r in raw_rest[:6]
+            ]
             sources.append("Restaurant search database")
             retrieval_used = True
 
         elif intent in _ATTRACTION_INTENTS:
             raw_attr = search_svc.search_attractions(AttractionSearchRequest(location=destination))
-            attractions = [self._to_unified_attraction(a) for a in raw_attr[:6]]
-            source_status = SOURCE_LIVE_SEARCH
+            source_status = self._infer_source_status(raw_attr)
+            is_day_request = intent == INTENT_PLAN_DAY or bool(_DAY_NUMBER_PAT.search(user_query))
+            attractions = [
+                self._to_unified_attraction(
+                    a,
+                    destination=destination,
+                    limited_coverage=source_status == SOURCE_SAMPLE_DATA,
+                    is_day_request=is_day_request,
+                )
+                for a in raw_attr[:6]
+            ]
             sources.append("Attraction search database")
             retrieval_used = True
             if intent == INTENT_PLAN_DAY:
-                # Full-day planning benefits from restaurant options too
                 raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
-                restaurants = [self._to_unified_restaurant(r) for r in raw_rest[:4]]
+                restaurants = [
+                    self._to_unified_restaurant(r, intent=INTENT_RESTAURANTS, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
+                    for r in raw_rest[:4]
+                ]
 
         elif intent == INTENT_HOTELS:
             try:
@@ -216,8 +235,8 @@ class ConciergeService:
             raw_hotels = search_svc.search_hotels(
                 HotelSearchRequest(location=destination, check_in=check_in, check_out=check_out, guests=1)
             )
-            hotels = [self._to_unified_hotel(h) for h in raw_hotels[:6]]
-            source_status = SOURCE_LIVE_SEARCH
+            source_status = self._infer_source_status(raw_hotels)
+            hotels = [self._to_unified_hotel(h, limited_coverage=source_status == SOURCE_SAMPLE_DATA) for h in raw_hotels[:6]]
             sources.append("Hotel search database")
             retrieval_used = bool(hotels)
 
@@ -228,25 +247,37 @@ class ConciergeService:
             raw_attr = search_svc.search_attractions(AttractionSearchRequest(location=destination))
             extra = list({a.location for a in raw_attr[:10] if a.location and a.location != best})
             areas += extra[:4]
-            source_status = SOURCE_LIVE_SEARCH
+            source_status = self._infer_source_status(raw_attr)
             sources.append("Neighborhood analysis")
             retrieval_used = bool(areas)
 
         elif intent == INTENT_COMPARE:
             raw_attr = search_svc.search_attractions(AttractionSearchRequest(location=destination))
             raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
-            attractions = [self._to_unified_attraction(a) for a in raw_attr[:4]]
-            restaurants = [self._to_unified_restaurant(r) for r in raw_rest[:4]]
-            source_status = SOURCE_LIVE_SEARCH
+            source_status = self._infer_source_status([*raw_attr, *raw_rest])
+            attractions = [
+                self._to_unified_attraction(a, destination=destination, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
+                for a in raw_attr[:4]
+            ]
+            restaurants = [
+                self._to_unified_restaurant(r, intent=INTENT_RESTAURANTS, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
+                for r in raw_rest[:4]
+            ]
             sources.append("Search database")
             retrieval_used = True
 
         elif intent == INTENT_GENERAL_DESTINATION:
             raw_attr = search_svc.search_attractions(AttractionSearchRequest(location=destination))
             raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
-            attractions = [self._to_unified_attraction(a) for a in raw_attr[:4]]
-            restaurants = [self._to_unified_restaurant(r) for r in raw_rest[:3]]
-            source_status = SOURCE_LIVE_SEARCH
+            source_status = self._infer_source_status([*raw_attr, *raw_rest])
+            attractions = [
+                self._to_unified_attraction(a, destination=destination, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
+                for a in raw_attr[:4]
+            ]
+            restaurants = [
+                self._to_unified_restaurant(r, intent=INTENT_RESTAURANTS, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
+                for r in raw_rest[:3]
+            ]
             sources.append("Destination research database")
             retrieval_used = True
 
@@ -298,6 +329,8 @@ class ConciergeService:
     def _detect_intent(self, user_query: str) -> str:
         q = user_query.lower()
 
+        if _PLAN_DAY_PAT.search(q) or _DAY_NUMBER_PAT.search(q):
+            return INTENT_PLAN_DAY
         if _MICHELIN_PAT.search(q):
             return INTENT_MICHELIN_RESTAURANTS
         if _HIDDEN_GEMS_PAT.search(q):
@@ -316,8 +349,6 @@ class ConciergeService:
             return INTENT_BEST_AREA
         if _HOTEL_PAT.search(q):
             return INTENT_HOTELS
-        if _PLAN_DAY_PAT.search(q):
-            return INTENT_PLAN_DAY
         if _COMPARE_PAT.search(q):
             return INTENT_COMPARE
         if _REWARDS_PAT.search(q):
@@ -328,38 +359,68 @@ class ConciergeService:
     # Result converters
     # ------------------------------------------------------------------
 
-    def _to_unified_restaurant(self, r) -> UnifiedRestaurantResult:
+    def _infer_source_status(self, records: List[object]) -> str:
+        if not records:
+            return SOURCE_NONE
+        sources = [str(getattr(item, "source", "")).lower() for item in records]
+        if sources and all(src == "mock" for src in sources):
+            return SOURCE_SAMPLE_DATA
+        if any(src in {"live", "live_search", "api", "provider"} for src in sources):
+            return SOURCE_LIVE_SEARCH
+        return SOURCE_APP_DATABASE
+
+    def _to_unified_restaurant(self, r, intent: str = INTENT_RESTAURANTS, limited_coverage: bool = False) -> UnifiedRestaurantResult:
         maps_query = (r.name + " " + r.location).replace(" ", "+")
         rating_10 = round(r.rating * 2, 1) if r.rating is not None else None
         num_reviews = getattr(r, "num_reviews", None)
         price_level = getattr(r, "price_level", None)
         sentiment = getattr(r, "sentiment", None)
 
-        summary_parts = []
-        if r.location:
-            summary_parts.append(f"in {r.location}")
-        if rating_10 is not None:
-            if rating_10 >= 9.0:
-                summary_parts.append("outstanding reviews")
-            elif rating_10 >= 8.0:
-                summary_parts.append(f"highly rated ({rating_10}/10)")
-            elif rating_10 >= 7.0:
-                summary_parts.append(f"solid reviews ({rating_10}/10)")
-        if num_reviews and num_reviews > 10000:
-            summary_parts.append("very popular spot")
-        elif num_reviews and num_reviews > 3000:
-            summary_parts.append("popular with locals")
+        price_text = None
         if price_level is not None:
             if price_level <= 1:
-                summary_parts.append("budget-friendly")
+                price_text = "budget-friendly"
             elif price_level == 2:
-                summary_parts.append("mid-range pricing")
-            elif price_level >= 3:
-                summary_parts.append("upscale/splurge")
-        if sentiment and sentiment > 0.88 and "outstanding" not in " ".join(summary_parts):
-            summary_parts.append("overwhelmingly positive feedback")
+                price_text = "mid-range"
+            else:
+                price_text = "splurge-level"
 
-        summary = "; ".join(summary_parts) if summary_parts else None
+        review_signal = ""
+        if rating_10 is not None:
+            review_signal = f"{rating_10}/10 rating"
+            if num_reviews:
+                review_signal += f" across {num_reviews:,} reviews"
+        elif num_reviews:
+            review_signal = f"{num_reviews:,} reviews"
+
+        occasion_fit = None
+        if intent in {INTENT_ROMANTIC, INTENT_LUXURY_VALUE}:
+            occasion_fit = "well suited for a special dinner"
+        elif intent == INTENT_FAMILY_FRIENDLY:
+            occasion_fit = "a practical pick for a relaxed group meal"
+        elif intent == INTENT_HIDDEN_GEMS:
+            occasion_fit = "a stronger local-style option than tourist-heavy picks"
+        elif r.tags:
+            occasion_fit = f"best if you want {r.tags[0].lower()}"
+
+        summary_parts = [f"{r.name} is a strong {r.cuisine} option"]
+        if r.location:
+            summary_parts.append(f"in {r.location}")
+        if review_signal:
+            summary_parts.append(f"with a {review_signal}")
+        if price_text:
+            summary_parts.append(f"at a {price_text} price point")
+        if r.michelin_status:
+            summary_parts.append(f"and Michelin status ({r.michelin_status})")
+        summary = " ".join(summary_parts).strip()
+        if occasion_fit:
+            summary += f"; {occasion_fit}"
+        if sentiment and sentiment > 0.9 and "reviews" not in summary:
+            summary += "; guest sentiment is very positive"
+        if limited_coverage:
+            summary += ", though source coverage is limited so verify hours and reservation links."
+        else:
+            summary += "."
 
         # Use first non-maps booking option URL
         booking_link = None
@@ -385,7 +446,13 @@ class ConciergeService:
             tags=r.tags[:4] if r.tags else [],
         )
 
-    def _to_unified_attraction(self, a) -> UnifiedAttractionResult:
+    def _to_unified_attraction(
+        self,
+        a,
+        destination: str = "",
+        limited_coverage: bool = False,
+        is_day_request: bool = False,
+    ) -> UnifiedAttractionResult:
         maps_query = (a.name + " " + a.location).replace(" ", "+")
         rating_10 = round(a.rating * 2, 1) if a.rating is not None else None
         description = getattr(a, "description", None)
@@ -417,11 +484,30 @@ class ConciergeService:
                 desc_parts.append("low-cost entry")
             description = " · ".join(desc_parts) if desc_parts else None
 
+        city_lower = (destination or "").lower()
+        if city_lower.startswith("chicago"):
+            description = (description or "").replace("harbour", "riverfront").replace("Harbour", "Riverfront")
+
+        reason_parts = [f"{a.name} fits as a {a.category.replace('_', ' ')} stop"]
+        if is_day_request:
+            reason_parts.append("for Day 2-style pacing")
+        if getattr(a, "location", None):
+            reason_parts.append(f"around {a.location}")
+        if rating_10 is not None:
+            reason_parts.append(f"with a {rating_10}/10 rating")
+        if getattr(a, "duration_minutes", None):
+            reason_parts.append(f"and about {getattr(a, 'duration_minutes')} minutes on site")
+        reason = " ".join(reason_parts).strip()
+        if limited_coverage:
+            reason += "; source coverage is limited, so verify name, hours, and booking details."
+        elif reason:
+            reason += "."
+
         return UnifiedAttractionResult(
             name=a.name,
             source="Attraction database",
             category=a.category,
-            description=description,
+            description=reason or description,
             neighborhood=a.location,
             rating=rating_10,
             review_count=getattr(a, "num_reviews", None),
@@ -431,7 +517,7 @@ class ConciergeService:
             tags=a.tags[:4] if a.tags else [],
         )
 
-    def _to_unified_hotel(self, h) -> UnifiedHotelResult:
+    def _to_unified_hotel(self, h, limited_coverage: bool = False) -> UnifiedHotelResult:
         maps_query = (h.name + " " + h.location).replace(" ", "+")
         area = getattr(h, "area_label", None)
         stars = getattr(h, "stars", None)
@@ -485,6 +571,8 @@ class ConciergeService:
         reason = "; ".join(reason_parts) if reason_parts else None
         if reason:
             reason = reason[0].upper() + reason[1:]
+            if limited_coverage:
+                reason += "; limited source coverage, verify amenities and live rates."
 
         # Booking URL — use a non-maps URL different from the map link
         booking_url = None
@@ -782,8 +870,8 @@ class ConciergeService:
         if not cleaned:
             return "I found strong options that match your request."
         sentences = re.split(r"(?<=[.!?])\s+", cleaned)
-        # Comparison and area queries benefit from more context
-        limit = 6 if intent in (INTENT_COMPARE, INTENT_BEST_AREA, INTENT_AREA_ADVICE) else 3
+        # Keep summaries compact; cards carry detail.
+        limit = 2
         short = " ".join(sentences[:limit]).strip()
         return short if short else cleaned[:400]
 

@@ -28,7 +28,7 @@ from app.models.concierge import (
     INTENT_REWARDS_HELP,
     INTENT_ROMANTIC,
     SOURCE_CURATED_STATIC,
-    SOURCE_LIVE_SEARCH,
+    SOURCE_NONE,
     SOURCE_UNAVAILABLE,
 )
 from app.services.concierge import ConciergeService
@@ -222,7 +222,7 @@ class TestConciergeSearch:
             result = svc.search(FAKE_TRIP_ID, "Michelin restaurants in Reykjavik", FAKE_USER_ID)
         assert len(result.warnings) > 0
         assert "Michelin" in result.warnings[0]
-        assert result.source_status == SOURCE_LIVE_SEARCH
+        assert result.source_status == SOURCE_NONE
 
     def test_restaurants_query_uses_retrieval(self):
         svc = self._svc("Berlin")
@@ -233,7 +233,7 @@ class TestConciergeSearch:
             result = svc.search(FAKE_TRIP_ID, "best restaurants in Berlin", FAKE_USER_ID)
         assert result.retrieval_used is True
         assert result.intent == INTENT_RESTAURANTS
-        assert result.source_status == SOURCE_LIVE_SEARCH
+        assert result.source_status == SOURCE_NONE
         mock_svc.search_restaurants.assert_called_once()
 
     def test_attractions_query_uses_retrieval(self):
@@ -245,7 +245,7 @@ class TestConciergeSearch:
             result = svc.search(FAKE_TRIP_ID, "best attractions in Rome", FAKE_USER_ID)
         assert result.retrieval_used is True
         assert result.intent == INTENT_ATTRACTIONS
-        assert result.source_status == SOURCE_LIVE_SEARCH
+        assert result.source_status == SOURCE_NONE
         mock_svc.search_attractions.assert_called_once()
 
     def test_response_has_all_required_fields(self):
@@ -269,5 +269,5 @@ class TestConciergeSearch:
         svc = self._svc("Paris")
         with patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
             result = svc.search(FAKE_TRIP_ID, "Michelin restaurants in Paris", FAKE_USER_ID)
-        assert result.source_status != SOURCE_LIVE_SEARCH
+        assert result.source_status != "live_search"
         assert result.source_status == SOURCE_CURATED_STATIC
