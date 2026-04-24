@@ -140,7 +140,7 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-1">
-          <span className="text-xs font-semibold text-slate-800 leading-tight line-clamp-1">
+          <span className="text-xs font-semibold text-slate-800 leading-tight line-clamp-1" title={item.title}>
             {item.title}
           </span>
           <div className="flex items-center gap-1 flex-shrink-0">
@@ -196,15 +196,19 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
           return (
             <div className="mt-0.5 text-[11px] text-slate-600 space-y-0.5">
               {(origin || destination) && (
-                <span className="flex items-center gap-1 font-medium text-slate-700">
+                <span className="flex items-center gap-1 font-medium text-slate-700 min-w-0">
                   <Plane className="w-3 h-3 text-sky-500 flex-shrink-0" />
-                  {origin ?? "?"} → {destination ?? "?"}
+                  <span className="truncate" title={`${origin ?? "?"} → ${destination ?? "?"}`}>
+                    {origin ?? "?"} → {destination ?? "?"}
+                  </span>
                   {leg && <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${leg === "outbound" ? "bg-sky-100 text-sky-700" : "bg-indigo-100 text-indigo-700"}`}>{leg}</span>}
                 </span>
               )}
               {(airline || flightNum || dep) && (
-                <span className="flex items-center gap-1 text-slate-500">
-                  {airline}{flightNum ? ` ${flightNum}` : ""}
+                <span className="flex items-center gap-1 text-slate-500 min-w-0">
+                  <span className="truncate" title={`${airline}${flightNum ? ` ${flightNum}` : ""}`}>
+                    {airline}{flightNum ? ` ${flightNum}` : ""}
+                  </span>
                   {dep && <>{" · "}{dep}{arr ? ` – ${arr}` : ""}</>}
                 </span>
               )}
@@ -221,10 +225,10 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
           const location = (d.location as string | undefined) ?? item.location ?? undefined;
           if (!checkIn && !checkOut && !rating && !location) return null;
           return (
-            <div className="mt-0.5 flex items-center gap-1 text-[11px] text-violet-700 font-medium flex-wrap">
+            <div className="mt-0.5 flex items-center gap-1 text-[11px] text-violet-700 font-medium min-w-0">
               <Hotel className="w-3 h-3 flex-shrink-0" />
-              {checkIn || checkOut ? <>Stay: {checkIn ?? "?"} → {checkOut ?? "?"}</> : null}
-              {location ? <span className="text-slate-500 font-normal">· {location}</span> : null}
+              {checkIn || checkOut ? <span className="shrink-0">Stay: {checkIn ?? "?"} → {checkOut ?? "?"}</span> : null}
+              {location ? <span className="text-slate-500 font-normal truncate" title={location}>· {location}</span> : null}
               {rating ? <span className="text-amber-600 font-semibold">· ★ {rating.toFixed(1)}</span> : null}
             </div>
           );
@@ -239,9 +243,9 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
             </span>
           )}
           {item.location && (
-            <span className="flex items-center gap-1 text-xs text-slate-400">
+            <span className="flex items-center gap-1 text-xs text-slate-400 min-w-0">
               <MapPin className="w-3 h-3" />
-              {item.location}
+              <span className="truncate" title={item.location}>{item.location}</span>
             </span>
           )}
           {item.cashPrice != null && (

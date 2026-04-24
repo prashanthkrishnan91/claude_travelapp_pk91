@@ -60,7 +60,7 @@ export function ItineraryDayColumn({
     <div className={`card overflow-hidden transition-all ${isSelected ? "ring-2 ring-sky-500 ring-offset-1" : ""}`}>
       {/* Day header — click to set as the target day for left-panel additions */}
       <div
-        className={`flex items-center justify-between px-3 py-2 border-b border-slate-100 transition-colors cursor-pointer ${
+        className={`shrink-0 flex items-center justify-between px-3 py-2 border-b border-slate-100 transition-colors cursor-pointer ${
           isSelected ? "bg-sky-50" : "bg-slate-50 hover:bg-slate-100"
         }`}
         onClick={() => onSelect?.(day.id)}
@@ -109,10 +109,10 @@ export function ItineraryDayColumn({
         </div>
       </div>
 
-      {/* Drop zone */}
+      {/* Scrollable drop zone */}
       <div
         ref={setNodeRef}
-        className={`p-2.5 min-h-[68px] flex flex-col gap-1.5 transition-colors duration-150 ${
+        className={`p-2.5 min-h-[68px] max-h-[55vh] sm:max-h-[420px] overflow-y-auto overflow-x-hidden space-y-1.5 border-t border-slate-100 transition-colors duration-150 ${
           isOver ? "bg-sky-50/60" : "bg-white"
         }`}
       >
