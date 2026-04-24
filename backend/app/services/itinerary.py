@@ -1,3 +1,5 @@
+import logging
+from datetime import date, timedelta
 from typing import List
 from uuid import UUID
 
@@ -16,6 +18,7 @@ from app.models import (
 
 DAYS_TABLE = "itinerary_days"
 ITEMS_TABLE = "itinerary_items"
+logger = logging.getLogger(__name__)
 
 
 class ItineraryService:
@@ -78,6 +81,58 @@ class ItineraryService:
 
     def delete_day(self, day_id: UUID) -> None:
         self.db.table(DAYS_TABLE).delete().eq("id", str(day_id)).execute()
+
+    def ensure_trip_days(
+        self,
+        trip_id: UUID,
+        start_date: date,
+        end_date: date,
+    ) -> List[ItineraryDay]:
+        if end_date < start_date:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="end_date must be on or after start_date",
+            )
+
+        expected_count = (end_date - start_date).days + 1
+        expected_numbers = set(range(1, expected_count + 1))
+        logger.info("[trip-days] ensure start trip_id=%s expected=%s", trip_id, expected_count)
+
+        existing_days = self.list_days(trip_id)
+        existing_by_number = {day.day_number: day for day in existing_days}
+        existing_numbers = sorted(existing_by_number.keys())
+        logger.info("[trip-days] existing day_numbers=%s", existing_numbers)
+
+        created_numbers: List[int] = []
+        for day_number in range(1, expected_count + 1):
+            if day_number in existing_by_number:
+                continue
+            day_date = start_date + timedelta(days=day_number - 1)
+            self.create_day(
+                ItineraryDayCreate(
+                    trip_id=trip_id,
+                    day_number=day_number,
+                    title=f"Day {day_number}",
+                    date=day_date,
+                )
+            )
+            created_numbers.append(day_number)
+        if created_numbers:
+            logger.info("[trip-days] created missing day_numbers=%s", created_numbers)
+        else:
+            logger.info("[trip-days] created missing day_numbers=[]")
+
+        # Keep extra days only when they contain items; delete empty extras safely.
+        for day in existing_days:
+            if day.day_number in expected_numbers:
+                continue
+            items = self.list_items(day.id)
+            if not items:
+                self.delete_day(day.id)
+
+        complete_days = self.list_days(trip_id)
+        logger.info("[trip-days] complete count=%s", len(complete_days))
+        return complete_days
 
     # ------------------------------------------------------------------
     # Items

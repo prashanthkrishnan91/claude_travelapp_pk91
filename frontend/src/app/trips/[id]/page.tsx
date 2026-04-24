@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { TripBuilder } from "@/components/trips/TripBuilder";
 import { OptimizeTripModal } from "@/components/trips/OptimizeTripModal";
 import { AIConciergePanel } from "@/components/trips/AIConciergePanel";
-import { fetchTrip, fetchItinerary, fetchTripContext, updateTrip, deleteTrip } from "@/lib/api";
+import { fetchTrip, ensureTripDays, fetchTripContext, updateTrip, deleteTrip } from "@/lib/api";
 import type { Trip, TripContext, ItineraryDay } from "@/types";
 
 const DESTINATION_GRADIENTS: Array<{ keywords: string[]; gradient: string }> = [
@@ -76,7 +76,12 @@ export default function TripDetailPage() {
   useEffect(() => {
     if (!id) return;
     async function load() {
-      const [tripData, days] = await Promise.all([fetchTrip(id), fetchItinerary(id)]);
+      const tripData = await fetchTrip(id);
+      const startDate = (tripData as (Trip & { start_date?: string }) | null)?.startDate
+        ?? (tripData as (Trip & { start_date?: string }) | null)?.start_date;
+      const endDate = (tripData as (Trip & { end_date?: string }) | null)?.endDate
+        ?? (tripData as (Trip & { end_date?: string }) | null)?.end_date;
+      const days = await ensureTripDays(id, startDate, endDate);
       setTrip(tripData);
       setItineraryDays(days);
       setLoading(false);
@@ -126,7 +131,11 @@ export default function TripDetailPage() {
   }
 
   async function handlePlanSelected() {
-    const days = await fetchItinerary(id);
+    const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
+      ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;
+    const endDate = (trip as (Trip & { end_date?: string }) | null)?.endDate
+      ?? (trip as (Trip & { end_date?: string }) | null)?.end_date;
+    const days = await ensureTripDays(id, startDate, endDate);
     setItineraryDays(days);
     setTripBuilderKey((k) => k + 1);
     setOptimizeOpen(false);
@@ -318,7 +327,11 @@ export default function TripDetailPage() {
           isOpen={conciergeOpen}
           onClose={() => setConciergeOpen(false)}
           onItemAdded={() => {
-            fetchItinerary(id).then((days) => {
+            const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
+              ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;
+            const endDate = (trip as (Trip & { end_date?: string }) | null)?.endDate
+              ?? (trip as (Trip & { end_date?: string }) | null)?.end_date;
+            ensureTripDays(id, startDate, endDate).then((days) => {
               setItineraryDays(days);
               setTripBuilderKey((k) => k + 1);
               showToast("Added to your itinerary!");

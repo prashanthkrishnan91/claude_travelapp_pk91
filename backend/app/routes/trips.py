@@ -350,7 +350,10 @@ def list_trips(db: DB, user_id: CurrentUserID) -> List[Trip]:
 @router.post("", response_model=Trip, status_code=status.HTTP_201_CREATED)
 def create_trip(payload: TripCreate, db: DB, user_id: CurrentUserID) -> Trip:
     """Create a new trip. user_id is always taken from the JWT."""
-    return TripsService(db).create_trip(payload.model_copy(update={"user_id": user_id}))
+    trip = TripsService(db).create_trip(payload.model_copy(update={"user_id": user_id}))
+    if trip.start_date and trip.end_date:
+        ItineraryService(db).ensure_trip_days(trip.id, trip.start_date, trip.end_date)
+    return trip
 
 
 @router.get("/{trip_id}", response_model=Trip)
@@ -362,7 +365,10 @@ def get_trip(trip_id: UUID, db: DB, user_id: CurrentUserID) -> Trip:
 @router.patch("/{trip_id}", response_model=Trip)
 def update_trip(trip_id: UUID, payload: TripUpdate, db: DB, user_id: CurrentUserID) -> Trip:
     """Partially update a trip — must belong to the authenticated user."""
-    return TripsService(db).update_trip(trip_id, payload, user_id)
+    trip = TripsService(db).update_trip(trip_id, payload, user_id)
+    if trip.start_date and trip.end_date:
+        ItineraryService(db).ensure_trip_days(trip.id, trip.start_date, trip.end_date)
+    return trip
 
 
 @router.delete("/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -467,9 +473,11 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
             status="planned",
         ).model_copy(update={"user_id": user_id})
     )
+    itinerary_svc = ItineraryService(db)
+    if trip.start_date and trip.end_date:
+        itinerary_svc.ensure_trip_days(trip.id, trip.start_date, trip.end_date)
 
     # Step 6: Persist flight + hotel candidates as trip-level itinerary items
-    itinerary_svc = ItineraryService(db)
     for idx, flight in enumerate(flights_sorted[:10]):
         try:
             itinerary_svc.create_trip_item(ItineraryItemDirectCreate(

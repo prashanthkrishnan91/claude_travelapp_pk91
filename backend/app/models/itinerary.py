@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date as date_type, datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Dict, Optional
@@ -27,7 +27,7 @@ class BestOption(str, Enum):
 
 class ItineraryDayBase(ORMBase):
     day_number: int = Field(..., ge=1)
-    date: Optional[date] = None
+    date: Optional[date_type] = None
     title: Optional[str] = None
     summary: Optional[str] = None
 
@@ -38,7 +38,7 @@ class ItineraryDayCreate(ItineraryDayBase):
 
 class ItineraryDayUpdate(ORMBase):
     day_number: Optional[int] = Field(None, ge=1)
-    date: Optional[date] = None
+    date: Optional[date_type] = None
     title: Optional[str] = None
     summary: Optional[str] = None
 
