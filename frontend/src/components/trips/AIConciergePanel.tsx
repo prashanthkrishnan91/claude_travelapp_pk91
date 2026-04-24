@@ -1,16 +1,20 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { X, Send, Sparkles, Plus, Loader2, UtensilsCrossed, MapPin, Star, ExternalLink } from "lucide-react";
+import { X, Send, Sparkles, Plus, Loader2, UtensilsCrossed, MapPin, Star, ExternalLink, AlertTriangle, Info } from "lucide-react";
 import { callConciergeSearch, addConciergeItemToTrip, addMichelinRestaurantToTrip } from "@/lib/api";
-import type { ConciergeSuggestion, UnifiedRestaurantResult } from "@/lib/api";
+import type { ConciergeSuggestion, UnifiedRestaurantResult, UnifiedAttractionResult, UnifiedHotelResult } from "@/lib/api";
 
 interface Message {
   role: "user" | "assistant";
   text: string;
   suggestions?: ConciergeSuggestion[];
   restaurants?: UnifiedRestaurantResult[];
+  attractions?: UnifiedAttractionResult[];
+  hotels?: UnifiedHotelResult[];
   intent?: string;
+  sourceStatus?: string;
+  warnings?: string[];
 }
 
 interface Props {
@@ -35,6 +39,13 @@ function michelinBadgeClass(status: string): string {
   if (status.includes("Star")) return "bg-red-50 text-red-700 border-red-200";
   if (status === "Bib Gourmand") return "bg-orange-50 text-orange-700 border-orange-200";
   return "bg-slate-50 text-slate-600 border-slate-200";
+}
+
+function sourceLabel(status: string): string | null {
+  if (status === "curated_static") return "Curated reference data";
+  if (status === "live_search") return "Live search results";
+  if (status === "confirmed_michelin") return "Confirmed Michelin data";
+  return null;
 }
 
 // ── Restaurant card ───────────────────────────────────────────────────────────
@@ -184,6 +195,121 @@ function RestaurantCard({
   );
 }
 
+// ── Attraction card ───────────────────────────────────────────────────────────
+
+function AttractionCard({ attraction }: { attraction: UnifiedAttractionResult }) {
+  return (
+    <div className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm">
+      <div className="flex items-start gap-2">
+        <MapPin className="w-4 h-4 text-violet-500 mt-0.5 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-sm font-semibold text-slate-800">{attraction.name}</p>
+            <span className="px-1.5 py-0.5 rounded bg-violet-50 text-violet-600 border border-violet-200 text-[10px] font-medium">
+              {attraction.category}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 mt-0.5 text-xs text-slate-500 flex-wrap">
+            {attraction.neighborhood && <span>{attraction.neighborhood}</span>}
+            {attraction.rating != null && (
+              <>
+                {attraction.neighborhood && <span className="text-slate-300">·</span>}
+                <span className="flex items-center gap-0.5 text-amber-600 font-medium">
+                  <Star className="w-3 h-3 fill-amber-400 stroke-amber-500" />
+                  {attraction.rating}
+                </span>
+              </>
+            )}
+          </div>
+          {attraction.description && (
+            <p className="text-xs text-slate-500 mt-1 line-clamp-2">{attraction.description}</p>
+          )}
+          {attraction.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {attraction.tags.slice(0, 3).map((tag) => (
+                <span key={tag} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px]">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      {attraction.mapsLink && (
+        <div className="mt-2">
+          <a
+            href={attraction.mapsLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-50 text-slate-600 hover:bg-slate-100 transition"
+          >
+            <MapPin className="w-3 h-3" />
+            View on Map
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Hotel card ────────────────────────────────────────────────────────────────
+
+function HotelCard({ hotel }: { hotel: UnifiedHotelResult }) {
+  const stars = hotel.stars ? "★".repeat(Math.round(hotel.stars)) : null;
+  return (
+    <div className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-sm font-semibold text-slate-800">{hotel.name}</p>
+            {stars && <span className="text-amber-500 text-xs">{stars}</span>}
+          </div>
+          <div className="flex items-center gap-1.5 mt-0.5 text-xs text-slate-500 flex-wrap">
+            {hotel.areaLabel && <span>{hotel.areaLabel}</span>}
+            {hotel.rating != null && (
+              <>
+                {hotel.areaLabel && <span className="text-slate-300">·</span>}
+                <span className="flex items-center gap-0.5 text-amber-600 font-medium">
+                  <Star className="w-3 h-3 fill-amber-400 stroke-amber-500" />
+                  {hotel.rating}
+                </span>
+              </>
+            )}
+          </div>
+          {hotel.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {hotel.tags.slice(0, 3).map((tag) => (
+                <span key={tag} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px]">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        {hotel.pricePerNight != null && (
+          <div className="text-right flex-shrink-0">
+            <p className="text-sm font-semibold text-slate-800">${Math.round(hotel.pricePerNight)}</p>
+            <p className="text-[10px] text-slate-400">/night</p>
+          </div>
+        )}
+      </div>
+      {hotel.mapsLink && (
+        <div className="mt-2">
+          <a
+            href={hotel.mapsLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-50 text-slate-600 hover:bg-slate-100 transition"
+          >
+            <MapPin className="w-3 h-3" />
+            View on Map
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemAdded }: Props) {
@@ -233,7 +359,11 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
           text: result.response,
           suggestions: result.suggestions,
           restaurants: result.restaurants,
+          attractions: result.attractions,
+          hotels: result.hotels,
           intent: result.intent,
+          sourceStatus: result.sourceStatus,
+          warnings: result.warnings,
         },
       ]);
     } catch {
@@ -311,11 +441,33 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
                 </div>
               </div>
 
-              {/* Michelin restaurant result cards */}
+              {/* Warnings — shown below AI bubble */}
+              {msg.warnings && msg.warnings.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {msg.warnings.map((w, wi) => (
+                    <div key={wi} className="flex items-start gap-1.5 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
+                      <p className="text-xs text-amber-700">{w}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Source note */}
+              {msg.sourceStatus && sourceLabel(msg.sourceStatus) && (
+                <div className="flex items-center gap-1 mt-1.5 px-1">
+                  <Info className="w-3 h-3 text-slate-400" />
+                  <span className="text-[10px] text-slate-400">{sourceLabel(msg.sourceStatus)}</span>
+                </div>
+              )}
+
+              {/* Restaurant result cards */}
               {msg.restaurants && msg.restaurants.length > 0 && (
                 <div className="mt-3 space-y-2">
                   <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide px-1">
-                    Michelin Guide Results · {destination}
+                    {msg.intent === "michelin_restaurants"
+                      ? `Michelin Guide Results · ${destination}`
+                      : `Restaurant Results · ${destination}`}
                   </p>
                   {msg.restaurants.map((r, ri) => (
                     <RestaurantCard key={ri} restaurant={r} tripId={tripId} onAdded={onItemAdded} />
@@ -323,8 +475,35 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
                 </div>
               )}
 
-              {/* Fallback suggestion cards (for non-restaurant intents) */}
-              {msg.suggestions && msg.suggestions.length > 0 && (!msg.restaurants || msg.restaurants.length === 0) && (
+              {/* Attraction cards */}
+              {msg.attractions && msg.attractions.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide px-1">
+                    Top Attractions · {destination}
+                  </p>
+                  {msg.attractions.map((a, ai) => (
+                    <AttractionCard key={ai} attraction={a} />
+                  ))}
+                </div>
+              )}
+
+              {/* Hotel cards */}
+              {msg.hotels && msg.hotels.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide px-1">
+                    Hotel Options · {destination}
+                  </p>
+                  {msg.hotels.map((h, hi) => (
+                    <HotelCard key={hi} hotel={h} />
+                  ))}
+                </div>
+              )}
+
+              {/* Fallback suggestion cards (for non-restaurant intents without specific cards) */}
+              {msg.suggestions && msg.suggestions.length > 0 &&
+                (!msg.restaurants || msg.restaurants.length === 0) &&
+                (!msg.attractions || msg.attractions.length === 0) &&
+                (!msg.hotels || msg.hotels.length === 0) && (
                 <div className="mt-3 space-y-2">
                   {msg.suggestions.map((s, si) => {
                     const added = addedItems.has(s.name);

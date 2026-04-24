@@ -1,12 +1,16 @@
 """Michelin Guide retrieval adapter — curated structured data per destination.
 
 Returns Michelin-backed restaurant results when no live Michelin API is available.
-Sorted by Michelin tier, then by rating.
+Results are sorted by Michelin tier, then by rating.
+
+source_status values:
+  "curated_static"  — destination is in the curated database (reference data, not live)
+  "unavailable"     — destination has no Michelin data; returns empty list
 """
 
-from typing import List
+from typing import List, Tuple
 
-from app.models.concierge import UnifiedRestaurantResult
+from app.models.concierge import SOURCE_CURATED_STATIC, SOURCE_UNAVAILABLE, UnifiedRestaurantResult
 
 _MICHELIN_STAR_RANK = {
     "3 Stars": 5,
@@ -109,18 +113,15 @@ _MICHELIN_DB: dict[str, list[dict]] = {
     ],
 }
 
-_FALLBACK_DATA: list[dict] = [
-    {"name": "The Grand Table", "michelin_status": "1 Star", "cuisine": "Contemporary European", "neighborhood": "City Center", "rating": 8.8, "review_count": 1200, "summary": "Refined seasonal tasting menu with local produce and an exceptional wine program.", "tags": ["Fine Dining", "Tasting Menu", "Seasonal"]},
-    {"name": "Maison Classique", "michelin_status": "Bib Gourmand", "cuisine": "French Bistro", "neighborhood": "Historic Quarter", "rating": 8.5, "review_count": 1800, "summary": "Classic French bistro techniques with local ingredients. Exceptional value.", "tags": ["Value", "French", "Classic"]},
-    {"name": "Ember & Oak", "michelin_status": "1 Star", "cuisine": "Modern Grill", "neighborhood": "Waterfront", "rating": 8.7, "review_count": 2100, "summary": "Wood-fired cooking with exceptional seasonal meats and vegetables.", "tags": ["Wood Fire", "Grill", "Seasonal"]},
-    {"name": "Trattoria del Mercato", "michelin_status": "Bib Gourmand", "cuisine": "Italian", "neighborhood": "Market District", "rating": 8.4, "review_count": 1600, "summary": "Market-fresh Italian cooking with handmade pasta. A beloved local institution.", "tags": ["Italian", "Pasta", "Value"]},
-]
-
 
 class MichelinRetriever:
-    """Fetches structured Michelin Guide data for a destination, filtered and ranked by query."""
+    """Fetches curated Michelin Guide data for a destination.
 
-    def fetch(self, destination: str, query: str = "") -> List[UnifiedRestaurantResult]:
+    Returns a (results, source_status) tuple.
+    Destinations not in the database return ([], SOURCE_UNAVAILABLE) — never fake results.
+    """
+
+    def fetch(self, destination: str, query: str = "") -> Tuple[List[UnifiedRestaurantResult], str]:
         dest_lower = destination.lower()
         data: list[dict] | None = None
 
@@ -130,7 +131,7 @@ class MichelinRetriever:
                 break
 
         if data is None:
-            data = list(_FALLBACK_DATA)
+            return [], SOURCE_UNAVAILABLE
 
         filtered = self._filter_by_query(data, query)
         if not filtered:
@@ -144,7 +145,8 @@ class MichelinRetriever:
             reverse=True,
         )
 
-        return [self._to_result(r, destination) for r in filtered]
+        results = [self._to_result(r, destination) for r in filtered]
+        return results, SOURCE_CURATED_STATIC
 
     def _filter_by_query(self, data: list[dict], query: str) -> list[dict]:
         q = query.lower()

@@ -1078,11 +1078,44 @@ export interface UnifiedRestaurantResult {
   tags: string[];
 }
 
+export interface UnifiedAttractionResult {
+  name: string;
+  source: string;
+  category: string;
+  description?: string;
+  neighborhood?: string;
+  rating?: number;
+  reviewCount?: number;
+  address?: string;
+  mapsLink?: string;
+  aiScore?: number;
+  tags: string[];
+}
+
+export interface UnifiedHotelResult {
+  name: string;
+  source: string;
+  areaLabel?: string;
+  stars?: number;
+  rating?: number;
+  pricePerNight?: number;
+  mapsLink?: string;
+  aiScore?: number;
+  tags: string[];
+}
+
 export interface ConciergeSearchResult {
   response: string;
   intent: string;
+  retrievalUsed: boolean;
+  sourceStatus: string;
   restaurants: UnifiedRestaurantResult[];
+  attractions: UnifiedAttractionResult[];
+  hotels: UnifiedHotelResult[];
+  areas: string[];
   suggestions: ConciergeSuggestion[];
+  sources: string[];
+  warnings: string[];
 }
 
 export async function callConcierge(
