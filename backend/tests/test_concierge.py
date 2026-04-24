@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import json
 from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
@@ -271,3 +272,89 @@ class TestConciergeSearch:
             result = svc.search(FAKE_TRIP_ID, "Michelin restaurants in Paris", FAKE_USER_ID)
         assert result.source_status != "live_search"
         assert result.source_status == SOURCE_CURATED_STATIC
+
+    def test_restaurant_converter_handles_missing_optional_fields(self):
+        svc = self._svc("Chicago")
+        raw = SimpleNamespace(
+            name="Lou's",
+            cuisine="Pizza",
+            location="River North",
+            rating=4.6,
+            ai_score=88.0,
+            booking_url="https://book.example/lous",
+            tags=["Local Favorite"],
+            num_reviews=1200,
+        )
+        converted = svc._to_unified_restaurant(raw)
+        assert converted.name == "Lou's"
+        assert converted.cuisine == "Pizza"
+        assert converted.michelin_status is None
+        assert converted.booking_link == "https://book.example/lous"
+        assert "Michelin status" not in (converted.summary or "")
+
+    def test_best_restaurants_near_hotel_returns_structured_restaurants(self):
+        svc = self._svc("Chicago")
+        with patch("app.services.concierge.SearchService") as MockSearch, \
+             patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            mock_svc = self._mock_search_svc()
+            mock_svc.search_restaurants.return_value = [
+                SimpleNamespace(
+                    name="Boka",
+                    cuisine="American",
+                    location="Lincoln Park",
+                    rating=4.7,
+                    ai_score=90.0,
+                    booking_url="https://book.example/boka",
+                    tags=["Fine Dining"],
+                    num_reviews=2100,
+                )
+            ]
+            MockSearch.return_value = mock_svc
+            result = svc.search(FAKE_TRIP_ID, "Best restaurants near my hotel in Chicago", FAKE_USER_ID)
+        assert result.intent == INTENT_RESTAURANTS
+        assert result.restaurants
+        assert result.restaurants[0].name == "Boka"
+        assert result.source_status in {"sample_data", "app_database", "none"}
+
+    @pytest.mark.parametrize(
+        "query,expected_intent",
+        [
+            ("Compare neighborhoods", INTENT_COMPARE),
+            ("Attractions for Day 2", INTENT_PLAN_DAY),
+            ("Best restaurants near my hotel", INTENT_RESTAURANTS),
+        ],
+    )
+    def test_chip_prompts_do_not_500(self, query, expected_intent):
+        svc = self._svc("Chicago")
+        with patch("app.services.concierge.SearchService") as MockSearch, \
+             patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            mock_svc = self._mock_search_svc()
+            mock_svc.search_restaurants.return_value = [
+                SimpleNamespace(
+                    name="Test Restaurant",
+                    cuisine="American",
+                    location="Loop",
+                    rating=4.4,
+                    ai_score=82.0,
+                    booking_url="https://book.example/test",
+                    tags=["Local Favorite"],
+                    num_reviews=500,
+                )
+            ]
+            mock_svc.search_attractions.return_value = [
+                SimpleNamespace(
+                    name="Millennium Park",
+                    category="landmark",
+                    location="The Loop",
+                    rating=4.7,
+                    ai_score=89.0,
+                    num_reviews=15000,
+                    tags=["Must Visit"],
+                    description="Iconic downtown park.",
+                    duration_minutes=90,
+                )
+            ]
+            MockSearch.return_value = mock_svc
+            result = svc.search(FAKE_TRIP_ID, query, FAKE_USER_ID)
+        assert result.intent == expected_intent
+        assert isinstance(result.response, str)

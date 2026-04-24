@@ -370,8 +370,15 @@ class ConciergeService:
         return SOURCE_APP_DATABASE
 
     def _to_unified_restaurant(self, r, intent: str = INTENT_RESTAURANTS, limited_coverage: bool = False) -> UnifiedRestaurantResult:
-        maps_query = (r.name + " " + r.location).replace(" ", "+")
-        rating_10 = round(r.rating * 2, 1) if r.rating is not None else None
+        name = getattr(r, "name", "Restaurant")
+        location = getattr(r, "location", "") or ""
+        cuisine = getattr(r, "cuisine", "Restaurant")
+        tags = list(getattr(r, "tags", []) or [])
+        ai_score = getattr(r, "ai_score", None)
+        michelin_status = getattr(r, "michelin_status", None)
+        maps_query = f"{name} {location}".strip().replace(" ", "+")
+        rating = getattr(r, "rating", None)
+        rating_10 = round(rating * 2, 1) if rating is not None else None
         num_reviews = getattr(r, "num_reviews", None)
         price_level = getattr(r, "price_level", None)
         sentiment = getattr(r, "sentiment", None)
@@ -400,18 +407,18 @@ class ConciergeService:
             occasion_fit = "a practical pick for a relaxed group meal"
         elif intent == INTENT_HIDDEN_GEMS:
             occasion_fit = "a stronger local-style option than tourist-heavy picks"
-        elif r.tags:
-            occasion_fit = f"best if you want {r.tags[0].lower()}"
+        elif tags:
+            occasion_fit = f"best if you want {tags[0].lower()}"
 
-        summary_parts = [f"{r.name} is a strong {r.cuisine} option"]
-        if r.location:
-            summary_parts.append(f"in {r.location}")
+        summary_parts = [f"{name} is a strong {cuisine} option"]
+        if location:
+            summary_parts.append(f"in {location}")
         if review_signal:
             summary_parts.append(f"with a {review_signal}")
         if price_text:
             summary_parts.append(f"at a {price_text} price point")
-        if r.michelin_status:
-            summary_parts.append(f"and Michelin status ({r.michelin_status})")
+        if michelin_status:
+            summary_parts.append(f"and Michelin status ({michelin_status})")
         summary = " ".join(summary_parts).strip()
         if occasion_fit:
             summary += f"; {occasion_fit}"
@@ -424,26 +431,33 @@ class ConciergeService:
 
         # Use first non-maps booking option URL
         booking_link = None
-        if hasattr(r, "booking_options") and r.booking_options:
-            for opt in r.booking_options:
-                if "maps" not in opt.url:
-                    booking_link = opt.url
+        booking_options = getattr(r, "booking_options", None) or []
+        if booking_options:
+            for opt in booking_options:
+                url = getattr(opt, "url", None)
+                if url and "maps" not in url:
+                    booking_link = url
                     break
-        elif hasattr(r, "booking_url") and r.booking_url and "maps" not in r.booking_url:
-            booking_link = r.booking_url
+        else:
+            for candidate in ("booking_url", "source_url", "url"):
+                candidate_url = getattr(r, candidate, None)
+                if candidate_url and "maps" not in candidate_url:
+                    booking_link = candidate_url
+                    break
 
         return UnifiedRestaurantResult(
-            name=r.name,
+            name=name,
             source="Restaurant database",
-            cuisine=r.cuisine,
-            neighborhood=r.location,
+            michelin_status=michelin_status,
+            cuisine=cuisine,
+            neighborhood=location,
             rating=rating_10,
             review_count=num_reviews,
             summary=summary,
             maps_link=f"https://maps.google.com/?q={maps_query}",
             booking_link=booking_link,
-            ai_score=r.ai_score,
-            tags=r.tags[:4] if r.tags else [],
+            ai_score=ai_score,
+            tags=tags[:4],
         )
 
     def _to_unified_attraction(
@@ -453,8 +467,14 @@ class ConciergeService:
         limited_coverage: bool = False,
         is_day_request: bool = False,
     ) -> UnifiedAttractionResult:
-        maps_query = (a.name + " " + a.location).replace(" ", "+")
-        rating_10 = round(a.rating * 2, 1) if a.rating is not None else None
+        name = getattr(a, "name", "Attraction")
+        location = getattr(a, "location", "") or ""
+        category = getattr(a, "category", "attraction")
+        tags = list(getattr(a, "tags", []) or [])
+        ai_score = getattr(a, "ai_score", None)
+        rating = getattr(a, "rating", None)
+        maps_query = f"{name} {location}".strip().replace(" ", "+")
+        rating_10 = round(rating * 2, 1) if rating is not None else None
         description = getattr(a, "description", None)
         duration = getattr(a, "duration_minutes", None)
         price_level = getattr(a, "price_level", None)
@@ -488,15 +508,15 @@ class ConciergeService:
         if city_lower.startswith("chicago"):
             description = (description or "").replace("harbour", "riverfront").replace("Harbour", "Riverfront")
 
-        reason_parts = [f"{a.name} fits as a {a.category.replace('_', ' ')} stop"]
+        reason_parts = [f"{name} fits as a {category.replace('_', ' ')} stop"]
         if is_day_request:
             reason_parts.append("for Day 2-style pacing")
-        if getattr(a, "location", None):
-            reason_parts.append(f"around {a.location}")
+        if location:
+            reason_parts.append(f"around {location}")
         if rating_10 is not None:
             reason_parts.append(f"with a {rating_10}/10 rating")
-        if getattr(a, "duration_minutes", None):
-            reason_parts.append(f"and about {getattr(a, 'duration_minutes')} minutes on site")
+        if duration:
+            reason_parts.append(f"and about {duration} minutes on site")
         reason = " ".join(reason_parts).strip()
         if limited_coverage:
             reason += "; source coverage is limited, so verify name, hours, and booking details."
@@ -504,28 +524,33 @@ class ConciergeService:
             reason += "."
 
         return UnifiedAttractionResult(
-            name=a.name,
+            name=name,
             source="Attraction database",
-            category=a.category,
+            category=category,
             description=reason or description,
-            neighborhood=a.location,
+            neighborhood=location,
             rating=rating_10,
             review_count=getattr(a, "num_reviews", None),
             address=getattr(a, "address", None),
             maps_link=f"https://maps.google.com/?q={maps_query}",
-            ai_score=a.ai_score,
-            tags=a.tags[:4] if a.tags else [],
+            ai_score=ai_score,
+            tags=tags[:4],
         )
 
     def _to_unified_hotel(self, h, limited_coverage: bool = False) -> UnifiedHotelResult:
-        maps_query = (h.name + " " + h.location).replace(" ", "+")
+        name = getattr(h, "name", "Hotel")
+        location = getattr(h, "location", "") or ""
+        tags = list(getattr(h, "tags", []) or [])
+        ai_score = getattr(h, "ai_score", None)
+        maps_query = f"{name} {location}".strip().replace(" ", "+")
         area = getattr(h, "area_label", None)
         stars = getattr(h, "stars", None)
         price = getattr(h, "price_per_night", None)
-        rating_10 = round(h.rating * 2, 1) if h.rating is not None else None
+        rating = getattr(h, "rating", None)
+        rating_10 = round(rating * 2, 1) if rating is not None else None
         proximity_label = getattr(h, "proximity_label", None)
         savings = getattr(h, "savings_vs_best", None)
-        tags = h.tags[:4] if h.tags else []
+        tags = tags[:4]
 
         reason_parts = []
         # Location signal
@@ -576,16 +601,22 @@ class ConciergeService:
 
         # Booking URL — use a non-maps URL different from the map link
         booking_url = None
-        if hasattr(h, "booking_options") and h.booking_options:
-            for opt in h.booking_options:
-                if "maps" not in opt.url:
-                    booking_url = opt.url
+        booking_options = getattr(h, "booking_options", None) or []
+        if booking_options:
+            for opt in booking_options:
+                url = getattr(opt, "url", None)
+                if url and "maps" not in url:
+                    booking_url = url
                     break
-        elif hasattr(h, "booking_url") and h.booking_url and "maps" not in h.booking_url:
-            booking_url = h.booking_url
+        else:
+            for candidate in ("booking_url", "source_url", "url"):
+                candidate_url = getattr(h, candidate, None)
+                if candidate_url and "maps" not in candidate_url:
+                    booking_url = candidate_url
+                    break
 
         return UnifiedHotelResult(
-            name=h.name,
+            name=name,
             source="Hotel search",
             area_label=area,
             stars=stars,
@@ -594,7 +625,7 @@ class ConciergeService:
             maps_link=f"https://maps.google.com/?q={maps_query}",
             booking_url=booking_url,
             reason=reason,
-            ai_score=h.ai_score,
+            ai_score=ai_score,
             tags=tags,
         )
 
