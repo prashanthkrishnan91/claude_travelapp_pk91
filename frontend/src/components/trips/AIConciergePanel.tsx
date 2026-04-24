@@ -196,6 +196,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
   const [addingItems, setAddingItems] = useState<Set<string>>(new Set());
   const [addedItems, setAddedItems] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [historyWarning, setHistoryWarning] = useState<string | null>(null);
   const loadedTripRef = useRef<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -211,6 +212,20 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
     ];
   }, [destination]);
 
+  const followUpActions = useMemo(() => {
+    const lastAssistantIntent = [...messages].reverse().find((msg) => msg.role === "assistant")?.intent;
+    if (lastAssistantIntent && ["michelin_restaurants", "restaurants", "hidden_gems", "romantic", "family_friendly", "luxury_value"].includes(lastAssistantIntent)) {
+      return ["Michelin / tasting menus", "Best value dinner", "Add nearby drinks"];
+    }
+    if (lastAssistantIntent === "hotels") {
+      return ["Compare areas", "Luxury with value", "Points vs cash ideas"];
+    }
+    if (lastAssistantIntent && ["attractions", "plan_day"].includes(lastAssistantIntent)) {
+      return ["Rainy day plan", "Kid-friendly options", "Nearby restaurants"];
+    }
+    return ["Best restaurants near my hotel", "Attractions for Day 2", "Compare neighborhoods"];
+  }, [messages]);
+
   useEffect(() => {
     if (!isOpen) return;
     setTimeout(() => inputRef.current?.focus(), 100);
@@ -223,6 +238,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
   const loadState = useCallback(async () => {
     setLoadingHistory(true);
     setError(null);
+    setHistoryWarning(null);
     const [historyResult, itineraryResult] = await Promise.allSettled([
       fetchConciergeMessages(tripId),
       tripDaysProp.length > 0 ? Promise.resolve(tripDaysProp) : fetchItinerary(tripId),
@@ -240,8 +256,25 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
       : [];
 
     if (historyResult.status === "rejected") {
+      const detail = historyResult.reason instanceof Error ? historyResult.reason.message : String(historyResult.reason ?? "");
+      const lowered = detail.toLowerCase();
+      const isExpectedEmptyStateFailure =
+        lowered.includes("404")
+        || lowered.includes("not found")
+        || lowered.includes("relation")
+        || lowered.includes("does not exist")
+        || lowered.includes("permission denied")
+        || lowered.includes("row-level security")
+        || lowered.includes("rls");
+
       console.error("[concierge] failed to load persisted history", historyResult.reason);
-      setError("Could not load previous concierge history.");
+
+      if (!isExpectedEmptyStateFailure) {
+        const hadConversation = messages.filter((msg) => msg.role === "user").length > 0;
+        if (hadConversation) {
+          setHistoryWarning("We couldn’t refresh older chat history right now.");
+        }
+      }
     }
 
     if (historyMessages.length === 0) {
@@ -265,7 +298,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
     });
     loadedTripRef.current = tripId;
     setLoadingHistory(false);
-  }, [destination, tripDaysProp, tripId]);
+  }, [destination, messages, tripDaysProp, tripId]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -282,6 +315,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
     setAddedItems(new Set());
     setAddingItems(new Set());
     setError(null);
+    setHistoryWarning(null);
   }, [tripId]);
 
   useEffect(() => {
@@ -413,6 +447,12 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
           {error && (
             <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>
+          )}
+
+          {historyWarning && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              {historyWarning}
+            </div>
           )}
 
           {messages.map((msg, idx) => (
@@ -559,6 +599,19 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
         </div>
 
         <div className="border-t border-slate-100 bg-white px-4 py-3">
+          {messages.length > 1 && !loadingHistory && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {followUpActions.map((prompt) => (
+                <button
+                  key={prompt}
+                  onClick={() => sendQuery(prompt)}
+                  className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-100"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <input
               ref={inputRef}
