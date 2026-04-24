@@ -165,8 +165,52 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
           </p>
         )}
 
+        {/* Flight leg details: route + times extracted from stored details */}
+        {item.itemType === "flight" && (() => {
+          const d = (item.details ?? {}) as Record<string, unknown>;
+          const origin      = d.origin      as string | undefined;
+          const destination = d.destination as string | undefined;
+          const airline     = (d.airline     as string | undefined) ?? "";
+          const flightNum   = (d.flight_number as string | undefined) ?? (d.flightNumber as string | undefined) ?? "";
+          const dep         = (d.departure_time as string | undefined) ?? (d.departureTime as string | undefined) ?? item.startTime;
+          const arr         = (d.arrival_time  as string | undefined) ?? (d.arrivalTime  as string | undefined) ?? item.endTime;
+          const leg         = d.leg as string | undefined;
+          if (!origin && !destination) return null;
+          return (
+            <div className="mt-1 text-xs text-slate-500 space-y-0.5">
+              {(origin || destination) && (
+                <span className="flex items-center gap-1 font-medium text-slate-700">
+                  <Plane className="w-3 h-3 text-sky-500 flex-shrink-0" />
+                  {origin ?? "?"} → {destination ?? "?"}
+                  {leg && <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${leg === "outbound" ? "bg-sky-100 text-sky-700" : "bg-indigo-100 text-indigo-700"}`}>{leg}</span>}
+                </span>
+              )}
+              {(airline || flightNum || dep) && (
+                <span className="flex items-center gap-1 text-slate-400">
+                  {airline}{flightNum ? ` ${flightNum}` : ""}
+                  {dep && <>{" · "}{dep}{arr ? ` – ${arr}` : ""}</>}
+                </span>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Hotel stay span: show check-in/out dates when available */}
+        {item.itemType === "hotel" && (() => {
+          const d = (item.details ?? {}) as Record<string, unknown>;
+          const checkIn  = (d.check_in_date  as string | undefined) ?? (d.checkInDate  as string | undefined);
+          const checkOut = (d.check_out_date as string | undefined) ?? (d.checkOutDate as string | undefined);
+          if (!checkIn && !checkOut) return null;
+          return (
+            <div className="mt-1 flex items-center gap-1 text-xs text-violet-600 font-medium">
+              <Hotel className="w-3 h-3 flex-shrink-0" />
+              Stay: {checkIn ?? "?"} → {checkOut ?? "?"}
+            </div>
+          );
+        })()}
+
         <div className="flex items-center gap-3 mt-1 flex-wrap">
-          {(item.startTime || item.endTime) && (
+          {item.itemType !== "flight" && (item.startTime || item.endTime) && (
             <span className="flex items-center gap-1 text-xs text-slate-400">
               <Clock className="w-3 h-3" />
               {item.startTime}

@@ -305,6 +305,8 @@ export default function TripDetailPage() {
         key={tripBuilderKey}
         tripId={id}
         destination={trip?.destination ?? ""}
+        startDate={trip?.startDate}
+        endDate={trip?.endDate}
         initialDays={itineraryDays}
         initialResults={[]}
       />

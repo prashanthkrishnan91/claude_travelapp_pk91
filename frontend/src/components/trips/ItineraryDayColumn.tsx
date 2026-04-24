@@ -12,6 +12,10 @@ import { estimateTravel, formatTravelBadge } from "@/lib/travelTime";
 
 interface ItineraryDayColumnProps {
   day: ItineraryDay;
+  /** True when this day is the current target for left-panel "+" additions. */
+  isSelected?: boolean;
+  /** Called when the user clicks this day header to make it the target day. */
+  onSelect?: (dayId: string) => void;
   onRemoveItem: (itemId: string, dayId: string) => void;
   onAddItem: (dayId: string) => void;
   onToggleCompare?: (item: ItineraryItem) => void;
@@ -33,6 +37,8 @@ function formatDate(dateStr: string): string {
 
 export function ItineraryDayColumn({
   day,
+  isSelected,
+  onSelect,
   onRemoveItem,
   onAddItem,
   onToggleCompare,
@@ -48,11 +54,17 @@ export function ItineraryDayColumn({
   const itemIds = day.items.map((item: ItineraryItem) => item.id);
 
   return (
-    <div className="card overflow-hidden">
-      {/* Day header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
+    <div className={`card overflow-hidden transition-all ${isSelected ? "ring-2 ring-sky-500 ring-offset-1" : ""}`}>
+      {/* Day header — click to set as the target day for left-panel additions */}
+      <div
+        className={`flex items-center justify-between px-4 py-3 border-b border-slate-100 transition-colors cursor-pointer ${
+          isSelected ? "bg-sky-50" : "bg-slate-50 hover:bg-slate-100"
+        }`}
+        onClick={() => onSelect?.(day.id)}
+        title={isSelected ? "Currently adding to this day" : "Click to add items to this day"}
+      >
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-sky-600 text-white flex items-center justify-center text-xs font-bold">
+          <div className={`w-7 h-7 rounded-lg text-white flex items-center justify-center text-xs font-bold ${isSelected ? "bg-sky-600" : "bg-slate-400"}`}>
             {day.dayNumber}
           </div>
           <div>
@@ -146,15 +158,20 @@ export function ItineraryDayColumn({
 
         {day.items.length === 0 ? (
           <div
-            className={`flex-1 flex items-center justify-center border-2 border-dashed rounded-xl py-4 transition-colors duration-150 ${
+            className={`flex-1 flex flex-col items-center justify-center border-2 border-dashed rounded-xl py-4 gap-1 transition-colors duration-150 ${
               isOver
                 ? "border-sky-400 bg-sky-50 text-sky-500"
                 : "border-slate-200 text-slate-300"
             }`}
           >
             <p className="text-xs text-center">
-              {isOver ? "Drop here" : "Drag items here"}
+              {isOver ? "Drop here" : "No plans yet for Day " + day.dayNumber}
             </p>
+            {!isOver && (
+              <p className="text-[10px] text-center text-slate-200">
+                Drag items here or select this day and click + in the left panel
+              </p>
+            )}
           </div>
         ) : isOver && (
           <div className="border-2 border-dashed border-sky-400 rounded-xl py-2 flex items-center justify-center transition-colors duration-150 bg-sky-50">
