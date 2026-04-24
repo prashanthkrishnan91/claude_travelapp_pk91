@@ -32,6 +32,12 @@ import type {
   TripOptimizationResponse,
 } from "@/types";
 import { supabase } from "./supabase";
+import {
+  computeExpectedTripDayCount,
+  expectedDayNumbers,
+  missingDayNumbers,
+  parseIsoDate,
+} from "./tripDays";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -232,7 +238,8 @@ export async function fetchTripContext(tripId: string): Promise<TripContext | nu
 /** Fetch all days for a trip, each with their items. */
 export async function fetchItinerary(tripId: string): Promise<ItineraryDay[]> {
   try {
-    const days = await apiFetch<ItineraryDay[]>(`/itinerary/${tripId}/days`);
+    const days = (await apiFetch<ItineraryDay[]>(`/itinerary/${tripId}/days`))
+      .sort((a, b) => a.dayNumber - b.dayNumber);
 
     // Fetch items for every day in parallel
     const daysWithItems = await Promise.all(
@@ -252,6 +259,35 @@ export async function fetchItinerary(tripId: string): Promise<ItineraryDay[]> {
   } catch {
     return [];
   }
+}
+
+export async function ensureTripDays(
+  tripId: string,
+  startDate?: string,
+  endDate?: string
+): Promise<ItineraryDay[]> {
+  if (!startDate || !endDate) return fetchItinerary(tripId);
+
+  const expectedCount = computeExpectedTripDayCount(startDate, endDate);
+  if (expectedCount <= 0 || expectedCount > 90) return fetchItinerary(tripId);
+
+  const days = await fetchItinerary(tripId);
+  const expectedNumbers = expectedDayNumbers(startDate, endDate);
+  const actualNumbers = days.map((d) => d.dayNumber);
+  const missingNumbers = missingDayNumbers(expectedNumbers, actualNumbers);
+
+  for (const dayNumber of missingNumbers) {
+    const dayDate = parseIsoDate(startDate);
+    dayDate.setDate(dayDate.getDate() + dayNumber - 1);
+    const date = dayDate.toISOString().split("T")[0];
+    try {
+      await createDay(tripId, { dayNumber, title: `Day ${dayNumber}`, date });
+    } catch {
+      // backend uniqueness/idempotency keeps this safe under concurrent callers
+    }
+  }
+
+  return fetchItinerary(tripId);
 }
 
 export async function createDay(

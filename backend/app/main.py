@@ -14,8 +14,11 @@ print("App starting...")
 
 settings = get_settings()
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("travel_concierge")
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("hpack").setLevel(logging.WARNING)
 
 app = FastAPI(
     title=settings.app_name,
