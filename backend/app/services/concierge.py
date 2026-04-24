@@ -611,14 +611,62 @@ class ConciergeService:
     # ------------------------------------------------------------------
 
     def _parse_response(self, raw: str) -> ConciergeResponse:
+        def _normalize_response_text(value) -> str:
+            if isinstance(value, str):
+                return value.strip()
+            if value is None:
+                return ""
+            return str(value).strip()
+
+        def _coerce_payload(payload) -> Optional[dict]:
+            if isinstance(payload, dict):
+                return payload
+            if isinstance(payload, str):
+                text = payload.strip()
+                if not text:
+                    return None
+                # Common model output format: fenced JSON block.
+                fenced = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.IGNORECASE)
+                candidate = fenced.group(1).strip() if fenced else text
+                try:
+                    decoded = json.loads(candidate)
+                    if isinstance(decoded, dict):
+                        return decoded
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                # Fallback: extract the first object-like region.
+                start = candidate.find("{")
+                end = candidate.rfind("}")
+                if start != -1 and end != -1 and start < end:
+                    try:
+                        decoded = json.loads(candidate[start : end + 1])
+                        if isinstance(decoded, dict):
+                            return decoded
+                    except (json.JSONDecodeError, TypeError):
+                        return None
+            return None
+
         try:
-            data = json.loads(raw)
+            data = _coerce_payload(raw)
+            if not data:
+                raise json.JSONDecodeError("invalid-json", raw, 0)
+
+            response_text = _normalize_response_text(data.get("response", ""))
+
+            # Guard against nested/stringified JSON in "response".
+            nested = _coerce_payload(response_text)
+            if nested and "response" in nested:
+                data = nested
+                response_text = _normalize_response_text(data.get("response", ""))
+
             suggestions = [
                 Suggestion(type=s["type"], name=s["name"], reason=s["reason"])
                 for s in data.get("suggestions", [])
                 if s.get("type") in ("attraction", "restaurant")
             ]
-            return ConciergeResponse(response=data.get("response", raw), suggestions=suggestions)
+            if not response_text:
+                response_text = "I found results that match your request."
+            return ConciergeResponse(response=response_text, suggestions=suggestions)
         except (json.JSONDecodeError, KeyError, TypeError):
             logger.warning("Claude response was not valid JSON — returning raw text")
-            return ConciergeResponse(response=raw, suggestions=[])
+            return ConciergeResponse(response=raw.strip(), suggestions=[])
