@@ -371,15 +371,20 @@ export async function addRoundTripOutboundToDay(
   outbound: Record<string, unknown>,
   position: number
 ): Promise<ItineraryItem> {
+  // Leg data arrives camelCase (after toCamel transform); fall back to snake_case for old data
+  const flightNum  = (outbound.flightNumber  ?? outbound.flight_number)  as string | undefined;
+  const depTime    = (outbound.departureTime ?? outbound.departure_time) as string | undefined;
+  const arrTime    = (outbound.arrivalTime   ?? outbound.arrival_time)   as string | undefined;
+  const pointsCost = (outbound.pointsCost    ?? outbound.points_cost)    as number | undefined;
   const payload = toSnake({
     tripId,
     dayId,
     itemType: "flight",
-    title: `${outbound.airline ?? ""} ${outbound.flight_number ?? ""} (Outbound)`.trim(),
-    startTime: outbound.departure_time,
-    endTime: outbound.arrival_time,
+    title: `${outbound.airline ?? ""} ${flightNum ?? ""} (Outbound)`.trim(),
+    startTime: depTime,
+    endTime: arrTime,
     cashPrice: outbound.price,
-    pointsPrice: outbound.points_cost,
+    pointsPrice: pointsCost,
     cppValue: outbound.cpp,
     position,
     details: { ...outbound, leg: "outbound" },
@@ -396,15 +401,20 @@ export async function addRoundTripReturnToDay(
   returnFlight: Record<string, unknown>,
   position: number
 ): Promise<ItineraryItem> {
+  // Leg data arrives camelCase (after toCamel transform); fall back to snake_case for old data
+  const flightNum  = (returnFlight.flightNumber  ?? returnFlight.flight_number)  as string | undefined;
+  const depTime    = (returnFlight.departureTime ?? returnFlight.departure_time) as string | undefined;
+  const arrTime    = (returnFlight.arrivalTime   ?? returnFlight.arrival_time)   as string | undefined;
+  const pointsCost = (returnFlight.pointsCost    ?? returnFlight.points_cost)    as number | undefined;
   const payload = toSnake({
     tripId,
     dayId,
     itemType: "flight",
-    title: `${returnFlight.airline ?? ""} ${returnFlight.flight_number ?? ""} (Return)`.trim(),
-    startTime: returnFlight.departure_time,
-    endTime: returnFlight.arrival_time,
+    title: `${returnFlight.airline ?? ""} ${flightNum ?? ""} (Return)`.trim(),
+    startTime: depTime,
+    endTime: arrTime,
     cashPrice: returnFlight.price,
-    pointsPrice: returnFlight.points_cost,
+    pointsPrice: pointsCost,
     cppValue: returnFlight.cpp,
     position,
     details: { ...returnFlight, leg: "return" },
