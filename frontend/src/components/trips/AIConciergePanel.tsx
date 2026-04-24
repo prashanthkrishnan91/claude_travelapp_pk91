@@ -43,6 +43,7 @@ interface Message {
 interface Props {
   tripId: string;
   destination: string;
+  tripDays?: ItineraryDay[];
   isOpen: boolean;
   onClose: () => void;
   onItemAdded?: () => void;
@@ -177,7 +178,7 @@ function fromSearchResult(result: ConciergeSearchResult): Message {
   };
 }
 
-export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemAdded }: Props) {
+export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp = [], isOpen, onClose, onItemAdded }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -215,39 +216,49 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
   const loadState = useCallback(async () => {
     setLoadingHistory(true);
     setError(null);
-    try {
-      const [history, itinerary] = await Promise.all([
-        fetchConciergeMessages(tripId),
-        fetchItinerary(tripId),
-      ]);
+    const [historyResult, itineraryResult] = await Promise.allSettled([
+      fetchConciergeMessages(tripId),
+      tripDaysProp.length > 0 ? Promise.resolve(tripDaysProp) : fetchItinerary(tripId),
+    ]);
 
-      const historyMessages: Message[] = history
-        .filter((m) => m.role === "assistant" || m.role === "user")
-        .map((m) => {
-          if (m.role === "assistant" && m.structuredResults) {
-            return fromSearchResult(m.structuredResults);
-          }
-          return { role: m.role as MessageRole, text: m.content };
-        });
+    const historyMessages: Message[] = historyResult.status === "fulfilled"
+      ? historyResult.value
+          .filter((m) => m.role === "assistant" || m.role === "user")
+          .map((m) => {
+            if (m.role === "assistant" && m.structuredResults) {
+              return fromSearchResult(m.structuredResults);
+            }
+            return { role: m.role as MessageRole, text: m.content };
+          })
+      : [];
 
-      if (historyMessages.length === 0) {
-        historyMessages.push({
-          role: "assistant",
-          text: `Tell me what you need for ${destination || "your trip"} and I'll return concise picks with action cards.`,
-        });
-      }
-      setMessages(historyMessages);
-      setTripDays(itinerary);
-      setItineraryItems(itinerary.flatMap((day) => day.items ?? []));
-      setSelectedDayId((prev) => prev || itinerary[0]?.id || "");
-      loadedTripRef.current = tripId;
-    } catch (err) {
-      console.error("[concierge] failed to load persisted history", err);
+    if (historyResult.status === "rejected") {
+      console.error("[concierge] failed to load persisted history", historyResult.reason);
       setError("Could not load previous concierge history.");
-    } finally {
-      setLoadingHistory(false);
     }
-  }, [destination, tripId]);
+
+    if (historyMessages.length === 0) {
+      historyMessages.push({
+        role: "assistant",
+        text: `Tell me what you need for ${destination || "your trip"} and I'll return concise picks with action cards.`,
+      });
+    }
+
+    const itinerary = itineraryResult.status === "fulfilled" ? itineraryResult.value : [];
+    if (itineraryResult.status === "rejected") {
+      console.error("[concierge] failed to load itinerary days", itineraryResult.reason);
+    }
+
+    setMessages(historyMessages);
+    setTripDays(itinerary);
+    setItineraryItems(itinerary.flatMap((day) => day.items ?? []));
+    setSelectedDayId((prev) => {
+      if (prev && itinerary.some((day) => day.id === prev)) return prev;
+      return itinerary[0]?.id || "";
+    });
+    loadedTripRef.current = tripId;
+    setLoadingHistory(false);
+  }, [destination, tripDaysProp, tripId]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -265,6 +276,16 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
     setAddingItems(new Set());
     setError(null);
   }, [tripId]);
+
+  useEffect(() => {
+    if (tripDaysProp.length === 0) return;
+    setTripDays(tripDaysProp);
+    setItineraryItems(tripDaysProp.flatMap((day) => day.items ?? []));
+    setSelectedDayId((prev) => {
+      if (prev && tripDaysProp.some((day) => day.id === prev)) return prev;
+      return tripDaysProp[0]?.id || "";
+    });
+  }, [tripDaysProp]);
 
   async function sendQuery(query: string) {
     if (!query || loading) return;
@@ -321,6 +342,13 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
       });
       setAddedItems((prev) => new Set(prev).add(key));
       setItineraryItems((prev) => [...prev, added]);
+      setTripDays((prev) =>
+        prev.map((day) =>
+          day.id === selectedDayId
+            ? { ...day, items: [...(day.items ?? []), added] }
+            : day
+        )
+      );
       onItemAdded?.();
     } catch (err) {
       console.error("[concierge] add item failed", err);

@@ -326,6 +326,7 @@ export default function TripDetailPage() {
       <AIConciergePanel
         tripId={id}
         destination={trip?.destination ?? ""}
+        tripDays={itineraryDays}
         isOpen={conciergeOpen}
         onClose={() => setConciergeOpen(false)}
         onItemAdded={() => {
