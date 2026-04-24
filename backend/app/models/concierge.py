@@ -101,6 +101,7 @@ class UnifiedHotelResult(BaseModel):
 class ConciergeSearchRequest(BaseModel):
     trip_id: UUID
     user_query: str
+    client_message_id: Optional[str] = None
 
 
 class ConciergeSearchResponse(BaseModel):
@@ -120,6 +121,7 @@ class ConciergeSearchResponse(BaseModel):
 class ConciergeMessage(BaseModel):
     id: UUID
     trip_id: UUID
+    client_message_id: Optional[str] = None
     role: Literal["user", "assistant", "system", "tool"]
     content: str
     structured_results: Optional[Dict[str, Any]] = None

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
@@ -188,6 +188,7 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
   const [addingItems, setAddingItems] = useState<Set<string>>(new Set());
   const [addedItems, setAddedItems] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const loadedTripRef = useRef<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -211,56 +212,71 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
+  const loadState = useCallback(async () => {
+    setLoadingHistory(true);
+    setError(null);
+    try {
+      const [history, itinerary] = await Promise.all([
+        fetchConciergeMessages(tripId),
+        fetchItinerary(tripId),
+      ]);
+
+      const historyMessages: Message[] = history
+        .filter((m) => m.role === "assistant" || m.role === "user")
+        .map((m) => {
+          if (m.role === "assistant" && m.structuredResults) {
+            return fromSearchResult(m.structuredResults);
+          }
+          return { role: m.role as MessageRole, text: m.content };
+        });
+
+      if (historyMessages.length === 0) {
+        historyMessages.push({
+          role: "assistant",
+          text: `Tell me what you need for ${destination || "your trip"} and I'll return concise picks with action cards.`,
+        });
+      }
+      setMessages(historyMessages);
+      setTripDays(itinerary);
+      setItineraryItems(itinerary.flatMap((day) => day.items ?? []));
+      setSelectedDayId((prev) => prev || itinerary[0]?.id || "");
+      loadedTripRef.current = tripId;
+    } catch (err) {
+      console.error("[concierge] failed to load persisted history", err);
+      setError("Could not load previous concierge history.");
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, [destination, tripId]);
+
   useEffect(() => {
     if (!isOpen) return;
+    if (loadedTripRef.current === tripId && messages.length > 0) return;
+    void loadState();
+  }, [isOpen, tripId, messages.length, loadState]);
 
-    async function loadState() {
-      setLoadingHistory(true);
-      setError(null);
-      try {
-        const [history, itinerary] = await Promise.all([
-          fetchConciergeMessages(tripId),
-          fetchItinerary(tripId),
-        ]);
-
-        const historyMessages: Message[] = history
-          .filter((m) => m.role === "assistant" || m.role === "user")
-          .map((m) => {
-            if (m.role === "assistant" && m.structuredResults) {
-              return fromSearchResult(m.structuredResults);
-            }
-            return { role: m.role as MessageRole, text: m.content };
-          });
-
-        if (historyMessages.length === 0) {
-          historyMessages.push({
-            role: "assistant",
-            text: `Tell me what you need for ${destination || "your trip"} and I'll return concise picks with action cards.`,
-          });
-        }
-        setMessages(historyMessages);
-        setTripDays(itinerary);
-        setItineraryItems(itinerary.flatMap((day) => day.items ?? []));
-        setSelectedDayId((prev) => prev || itinerary[0]?.id || "");
-      } catch (err) {
-        console.error("[concierge] failed to load persisted history", err);
-        setError("Could not load previous concierge history.");
-      } finally {
-        setLoadingHistory(false);
-      }
-    }
-
-    loadState();
-  }, [isOpen, tripId, destination]);
+  useEffect(() => {
+    if (loadedTripRef.current === tripId) return;
+    setMessages([]);
+    setTripDays([]);
+    setItineraryItems([]);
+    setSelectedDayId("");
+    setAddedItems(new Set());
+    setAddingItems(new Set());
+    setError(null);
+  }, [tripId]);
 
   async function sendQuery(query: string) {
     if (!query || loading) return;
+    const requestId = typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     setInput("");
     setError(null);
     setMessages((prev) => [...prev, { role: "user", text: query }]);
     setLoading(true);
     try {
-      const result = await callConciergeSearch(tripId, query);
+      const result = await callConciergeSearch(tripId, query, requestId);
       setMessages((prev) => [...prev, fromSearchResult(result)]);
     } catch (err) {
       console.error("[concierge] send failed", err);
@@ -277,6 +293,10 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
     item: UnifiedRestaurantResult | UnifiedAttractionResult | UnifiedHotelResult,
     reason?: string,
   ) {
+    if (!selectedDayId) {
+      setError("Select a day before adding this item.");
+      return;
+    }
     const key = cardKey(name, selectedDayId || undefined);
     if (addingItems.has(key) || addedItems.has(key)) return;
 
@@ -338,7 +358,7 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
             onChange={(e) => setSelectedDayId(e.target.value)}
             className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"
           >
-            <option value="">Trip bucket (unscheduled)</option>
+            {tripDays.length === 0 && <option value="">No days yet</option>}
             {tripDays.map((day) => (
               <option key={day.id} value={day.id}>
                 Day {day.dayNumber}{day.date ? ` · ${day.date}` : ""}
@@ -348,7 +368,11 @@ export function AIConciergePanel({ tripId, destination, isOpen, onClose, onItemA
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-          {(loadingHistory || loading) && messages.length === 0 && (
+          {loadingHistory && (
+            <div className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-500">Loading previous chat…</div>
+          )}
+
+          {loading && messages.length === 0 && (
             <div className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-500">Loading concierge…</div>
           )}
 

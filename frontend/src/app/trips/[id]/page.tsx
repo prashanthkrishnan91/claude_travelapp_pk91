@@ -323,25 +323,23 @@ export default function TripDetailPage() {
         initialResults={[]}
       />
 
-      {conciergeOpen && (
-        <AIConciergePanel
-          tripId={id}
-          destination={trip?.destination ?? ""}
-          isOpen={conciergeOpen}
-          onClose={() => setConciergeOpen(false)}
-          onItemAdded={() => {
-            const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
-              ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;
-            const endDate = (trip as (Trip & { end_date?: string }) | null)?.endDate
-              ?? (trip as (Trip & { end_date?: string }) | null)?.end_date;
-            ensureTripDays(id, startDate, endDate).then((days) => {
-              setItineraryDays(days);
-              setTripBuilderKey((k) => k + 1);
-              showToast("Added to your itinerary!");
-            });
-          }}
-        />
-      )}
+      <AIConciergePanel
+        tripId={id}
+        destination={trip?.destination ?? ""}
+        isOpen={conciergeOpen}
+        onClose={() => setConciergeOpen(false)}
+        onItemAdded={() => {
+          const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
+            ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;
+          const endDate = (trip as (Trip & { end_date?: string }) | null)?.endDate
+            ?? (trip as (Trip & { end_date?: string }) | null)?.end_date;
+          ensureTripDays(id, startDate, endDate).then((days) => {
+            setItineraryDays(days);
+            setTripBuilderKey((k) => k + 1);
+            showToast("Added to your itinerary!");
+          });
+        }}
+      />
     </>
   );
 }
