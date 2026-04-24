@@ -104,16 +104,26 @@ class ItineraryService:
         logger.info("[trip-days] existing day_numbers=%s", existing_numbers)
 
         created_numbers: List[int] = []
+        updated_numbers: List[int] = []
         for day_number in range(1, expected_count + 1):
+            expected_date = start_date + timedelta(days=day_number - 1)
             if day_number in existing_by_number:
+                existing_day = existing_by_number[day_number]
+                updates = {}
+                if existing_day.date != expected_date:
+                    updates["date"] = expected_date
+                if not existing_day.title:
+                    updates["title"] = f"Day {day_number}"
+                if updates:
+                    self.update_day(existing_day.id, ItineraryDayUpdate(**updates))
+                    updated_numbers.append(day_number)
                 continue
-            day_date = start_date + timedelta(days=day_number - 1)
             self.create_day(
                 ItineraryDayCreate(
                     trip_id=trip_id,
                     day_number=day_number,
                     title=f"Day {day_number}",
-                    date=day_date,
+                    date=expected_date,
                 )
             )
             created_numbers.append(day_number)
@@ -121,6 +131,10 @@ class ItineraryService:
             logger.info("[trip-days] created missing day_numbers=%s", created_numbers)
         else:
             logger.info("[trip-days] created missing day_numbers=[]")
+        if updated_numbers:
+            logger.info("[trip-days] reconciled day dates=%s", updated_numbers)
+        else:
+            logger.info("[trip-days] reconciled day dates=[]")
 
         # Keep extra days only when they contain items; delete empty extras safely.
         for day in existing_days:

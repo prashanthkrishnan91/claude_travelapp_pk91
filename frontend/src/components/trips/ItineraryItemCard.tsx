@@ -72,6 +72,23 @@ const typeConfig: Record<
   },
 };
 
+function formatClock(value?: string): string | null {
+  if (!value) return null;
+  const hhmm = value.match(/T(\d{2}):(\d{2})/);
+  if (hhmm) {
+    const hour24 = Number(hhmm[1]);
+    const minute = hhmm[2];
+    const hour12 = ((hour24 + 11) % 12) + 1;
+    const ampm = hour24 >= 12 ? "PM" : "AM";
+    return `${hour12}:${minute} ${ampm}`;
+  }
+  const d = new Date(value);
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+  return value;
+}
+
 export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing }: ItineraryItemCardProps) {
   const [bookingOpen, setBookingOpen] = useState(false);
 
@@ -99,10 +116,10 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative flex items-start gap-2 p-2.5 rounded-xl border transition-all duration-200 ${
+      className={`group relative flex items-start gap-2 p-2 rounded-lg border transition-all duration-200 ${
         isDragging
           ? "opacity-50 shadow-xl scale-95 border-sky-300 bg-white/60 backdrop-blur-md"
-          : "bg-white/60 backdrop-blur-[16px] border-white/40 shadow-[0_4px_16px_0_rgb(0_0_0/0.08)] hover:bg-white/75 hover:border-white/60 hover:shadow-[0_12px_36px_0_rgb(0_0_0/0.12)] hover:-translate-y-1"
+          : "bg-white border-slate-200 shadow-sm hover:border-slate-300 hover:shadow-md"
       }`}
     >
       {/* Drag handle */}
@@ -116,23 +133,21 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
       </button>
 
       {/* Type icon */}
-      <div
-        className={`flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center ${config.bgClass} ${config.colorClass}`}
-      >
+      <div className={`flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center ${config.bgClass} ${config.colorClass}`}>
         {config.icon}
       </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-1">
-          <span className="text-sm font-medium text-slate-800 leading-tight line-clamp-1">
+          <span className="text-xs font-semibold text-slate-800 leading-tight line-clamp-1">
             {item.title}
           </span>
           <div className="flex items-center gap-1 flex-shrink-0">
             {onToggleCompare && (
               <button
                 onClick={() => onToggleCompare(item)}
-                className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
                   isComparing
                     ? "opacity-100 bg-violet-600 text-white"
                     : "opacity-0 group-hover:opacity-100 bg-slate-100 hover:bg-violet-100 text-slate-400 hover:text-violet-600"
@@ -144,14 +159,14 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
             )}
             <button
               onClick={() => setBookingOpen(true)}
-              className="flex-shrink-0 w-5 h-5 rounded-full opacity-0 group-hover:opacity-100 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 flex items-center justify-center transition-all"
+              className="flex-shrink-0 w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 flex items-center justify-center transition-all"
               aria-label={`Book ${item.title}`}
             >
               <Ticket className="w-3 h-3" />
             </button>
             <button
               onClick={() => onRemove(item.id)}
-              className="flex-shrink-0 w-5 h-5 rounded-full opacity-0 group-hover:opacity-100 bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-500 flex items-center justify-center transition-all"
+              className="flex-shrink-0 w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-500 flex items-center justify-center transition-all"
               aria-label={`Remove ${item.title}`}
             >
               <X className="w-3 h-3" />
@@ -160,7 +175,7 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
         </div>
 
         {item.description && (
-          <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
+          <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
             {item.description}
           </p>
         )}
@@ -172,12 +187,14 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
           const destination = d.destination as string | undefined;
           const airline     = (d.airline     as string | undefined) ?? "";
           const flightNum   = (d.flight_number as string | undefined) ?? (d.flightNumber as string | undefined) ?? "";
-          const dep         = (d.departure_time as string | undefined) ?? (d.departureTime as string | undefined) ?? item.startTime;
-          const arr         = (d.arrival_time  as string | undefined) ?? (d.arrivalTime  as string | undefined) ?? item.endTime;
+          const depRaw      = (d.departure_time as string | undefined) ?? (d.departureTime as string | undefined) ?? item.startTime;
+          const arrRaw      = (d.arrival_time  as string | undefined) ?? (d.arrivalTime  as string | undefined) ?? item.endTime;
+          const dep         = formatClock(depRaw ?? undefined);
+          const arr         = formatClock(arrRaw ?? undefined);
           const leg         = d.leg as string | undefined;
           if (!origin && !destination) return null;
           return (
-            <div className="mt-1 text-xs text-slate-500 space-y-0.5">
+            <div className="mt-0.5 text-[11px] text-slate-600 space-y-0.5">
               {(origin || destination) && (
                 <span className="flex items-center gap-1 font-medium text-slate-700">
                   <Plane className="w-3 h-3 text-sky-500 flex-shrink-0" />
@@ -186,7 +203,7 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
                 </span>
               )}
               {(airline || flightNum || dep) && (
-                <span className="flex items-center gap-1 text-slate-400">
+                <span className="flex items-center gap-1 text-slate-500">
                   {airline}{flightNum ? ` ${flightNum}` : ""}
                   {dep && <>{" · "}{dep}{arr ? ` – ${arr}` : ""}</>}
                 </span>
@@ -200,16 +217,20 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
           const d = (item.details ?? {}) as Record<string, unknown>;
           const checkIn  = (d.check_in_date  as string | undefined) ?? (d.checkInDate  as string | undefined);
           const checkOut = (d.check_out_date as string | undefined) ?? (d.checkOutDate as string | undefined);
-          if (!checkIn && !checkOut) return null;
+          const rating = (d.rating as number | undefined) ?? undefined;
+          const location = (d.location as string | undefined) ?? item.location ?? undefined;
+          if (!checkIn && !checkOut && !rating && !location) return null;
           return (
-            <div className="mt-1 flex items-center gap-1 text-xs text-violet-600 font-medium">
+            <div className="mt-0.5 flex items-center gap-1 text-[11px] text-violet-700 font-medium flex-wrap">
               <Hotel className="w-3 h-3 flex-shrink-0" />
-              Stay: {checkIn ?? "?"} → {checkOut ?? "?"}
+              {checkIn || checkOut ? <>Stay: {checkIn ?? "?"} → {checkOut ?? "?"}</> : null}
+              {location ? <span className="text-slate-500 font-normal">· {location}</span> : null}
+              {rating ? <span className="text-amber-600 font-semibold">· ★ {rating.toFixed(1)}</span> : null}
             </div>
           );
         })()}
 
-        <div className="flex items-center gap-3 mt-1 flex-wrap">
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
           {item.itemType !== "flight" && (item.startTime || item.endTime) && (
             <span className="flex items-center gap-1 text-xs text-slate-400">
               <Clock className="w-3 h-3" />

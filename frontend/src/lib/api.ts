@@ -33,10 +33,11 @@ import type {
 } from "@/types";
 import { supabase } from "./supabase";
 import {
+  addDaysToIsoDate,
   computeExpectedTripDayCount,
   expectedDayNumbers,
   missingDayNumbers,
-  parseIsoDate,
+  normalizeIsoDate,
 } from "./tripDays";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -266,24 +267,43 @@ export async function ensureTripDays(
   startDate?: string,
   endDate?: string
 ): Promise<ItineraryDay[]> {
-  if (!startDate || !endDate) return fetchItinerary(tripId);
+  const canonicalStart = normalizeIsoDate(startDate);
+  const canonicalEnd = normalizeIsoDate(endDate);
+  if (!canonicalStart || !canonicalEnd) return fetchItinerary(tripId);
 
-  const expectedCount = computeExpectedTripDayCount(startDate, endDate);
+  const expectedCount = computeExpectedTripDayCount(canonicalStart, canonicalEnd);
   if (expectedCount <= 0 || expectedCount > 90) return fetchItinerary(tripId);
 
   const days = await fetchItinerary(tripId);
-  const expectedNumbers = expectedDayNumbers(startDate, endDate);
+  const expectedNumbers = expectedDayNumbers(canonicalStart, canonicalEnd);
   const actualNumbers = days.map((d) => d.dayNumber);
   const missingNumbers = missingDayNumbers(expectedNumbers, actualNumbers);
 
   for (const dayNumber of missingNumbers) {
-    const dayDate = parseIsoDate(startDate);
-    dayDate.setDate(dayDate.getDate() + dayNumber - 1);
-    const date = dayDate.toISOString().split("T")[0];
+    const date = addDaysToIsoDate(canonicalStart, dayNumber - 1);
     try {
       await createDay(tripId, { dayNumber, title: `Day ${dayNumber}`, date });
     } catch {
       // backend uniqueness/idempotency keeps this safe under concurrent callers
+    }
+  }
+
+  for (const day of days) {
+    if (!expectedNumbers.includes(day.dayNumber)) continue;
+    const expectedDate = addDaysToIsoDate(canonicalStart, day.dayNumber - 1);
+    if (normalizeIsoDate(day.date) === expectedDate) continue;
+    try {
+      await apiFetch<ItineraryDay>(`/itinerary/${tripId}/days/${day.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(
+          toSnake({
+            date: expectedDate,
+            title: day.title ?? `Day ${day.dayNumber}`,
+          })
+        ),
+      });
+    } catch {
+      // fallback: server-side reconciliation still runs on trip updates
     }
   }
 
