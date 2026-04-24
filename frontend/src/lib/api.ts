@@ -1166,6 +1166,8 @@ export interface UnifiedHotelResult {
   rating?: number;
   pricePerNight?: number;
   mapsLink?: string;
+  bookingUrl?: string;
+  reason?: string;
   aiScore?: number;
   tags: string[];
 }

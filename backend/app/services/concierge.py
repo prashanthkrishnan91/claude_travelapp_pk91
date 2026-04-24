@@ -256,7 +256,7 @@ class ConciergeService:
         )
         raw = self._call_claude(prompt, system_prompt=system_prompt)
         base = self._parse_response(raw)
-        concise_response = self._concise_response(base.response)
+        concise_response = self._concise_response(base.response, intent)
 
         response = ConciergeSearchResponse(
             response=concise_response,
@@ -330,27 +330,100 @@ class ConciergeService:
 
     def _to_unified_restaurant(self, r) -> UnifiedRestaurantResult:
         maps_query = (r.name + " " + r.location).replace(" ", "+")
+        rating_10 = round(r.rating * 2, 1) if r.rating is not None else None
+        num_reviews = getattr(r, "num_reviews", None)
+        price_level = getattr(r, "price_level", None)
+        sentiment = getattr(r, "sentiment", None)
+
+        summary_parts = []
+        if r.location:
+            summary_parts.append(f"in {r.location}")
+        if rating_10 is not None:
+            if rating_10 >= 9.0:
+                summary_parts.append("outstanding reviews")
+            elif rating_10 >= 8.0:
+                summary_parts.append(f"highly rated ({rating_10}/10)")
+            elif rating_10 >= 7.0:
+                summary_parts.append(f"solid reviews ({rating_10}/10)")
+        if num_reviews and num_reviews > 10000:
+            summary_parts.append("very popular spot")
+        elif num_reviews and num_reviews > 3000:
+            summary_parts.append("popular with locals")
+        if price_level is not None:
+            if price_level <= 1:
+                summary_parts.append("budget-friendly")
+            elif price_level == 2:
+                summary_parts.append("mid-range pricing")
+            elif price_level >= 3:
+                summary_parts.append("upscale/splurge")
+        if sentiment and sentiment > 0.88 and "outstanding" not in " ".join(summary_parts):
+            summary_parts.append("overwhelmingly positive feedback")
+
+        summary = "; ".join(summary_parts) if summary_parts else None
+
+        # Use first non-maps booking option URL
+        booking_link = None
+        if hasattr(r, "booking_options") and r.booking_options:
+            for opt in r.booking_options:
+                if "maps" not in opt.url:
+                    booking_link = opt.url
+                    break
+        elif hasattr(r, "booking_url") and r.booking_url and "maps" not in r.booking_url:
+            booking_link = r.booking_url
+
         return UnifiedRestaurantResult(
             name=r.name,
             source="Restaurant database",
             cuisine=r.cuisine,
             neighborhood=r.location,
-            rating=round(r.rating * 2, 1) if r.rating is not None else None,
-            review_count=getattr(r, "num_reviews", None),
+            rating=rating_10,
+            review_count=num_reviews,
+            summary=summary,
             maps_link=f"https://maps.google.com/?q={maps_query}",
+            booking_link=booking_link,
             ai_score=r.ai_score,
             tags=r.tags[:4] if r.tags else [],
         )
 
     def _to_unified_attraction(self, a) -> UnifiedAttractionResult:
         maps_query = (a.name + " " + a.location).replace(" ", "+")
+        rating_10 = round(a.rating * 2, 1) if a.rating is not None else None
+        description = getattr(a, "description", None)
+        duration = getattr(a, "duration_minutes", None)
+        price_level = getattr(a, "price_level", None)
+
+        if description:
+            extra = []
+            if duration:
+                h, m = divmod(duration, 60)
+                extra.append(f"~{h}h visit" if h >= 1 else f"~{m} min visit")
+            if price_level == 0:
+                extra.append("free entry")
+            if extra:
+                description = description.rstrip(".") + ". " + " · ".join(extra)
+        else:
+            desc_parts = []
+            if rating_10 is not None:
+                if rating_10 >= 8.5:
+                    desc_parts.append("highly rated attraction")
+                elif rating_10 >= 7.0:
+                    desc_parts.append(f"well-reviewed ({rating_10}/10)")
+            if duration:
+                h, m = divmod(duration, 60)
+                desc_parts.append(f"plan ~{h}h" if h >= 1 else f"~{m} min visit")
+            if price_level == 0:
+                desc_parts.append("free entry")
+            elif price_level == 1:
+                desc_parts.append("low-cost entry")
+            description = " · ".join(desc_parts) if desc_parts else None
+
         return UnifiedAttractionResult(
             name=a.name,
             source="Attraction database",
             category=a.category,
-            description=getattr(a, "description", None),
+            description=description,
             neighborhood=a.location,
-            rating=round(a.rating * 2, 1) if a.rating is not None else None,
+            rating=rating_10,
             review_count=getattr(a, "num_reviews", None),
             address=getattr(a, "address", None),
             maps_link=f"https://maps.google.com/?q={maps_query}",
@@ -360,16 +433,81 @@ class ConciergeService:
 
     def _to_unified_hotel(self, h) -> UnifiedHotelResult:
         maps_query = (h.name + " " + h.location).replace(" ", "+")
+        area = getattr(h, "area_label", None)
+        stars = getattr(h, "stars", None)
+        price = getattr(h, "price_per_night", None)
+        rating_10 = round(h.rating * 2, 1) if h.rating is not None else None
+        proximity_label = getattr(h, "proximity_label", None)
+        savings = getattr(h, "savings_vs_best", None)
+        tags = h.tags[:4] if h.tags else []
+
+        reason_parts = []
+        # Location signal
+        if area and "best" in area.lower():
+            reason_parts.append("centrally located near top attractions")
+        elif proximity_label:
+            reason_parts.append(proximity_label.lower())
+        elif area and area not in ("City", "Unknown", ""):
+            reason_parts.append(f"located in {area}")
+        # Star class signal
+        if stars:
+            s = int(round(stars))
+            if s >= 5:
+                reason_parts.append("5-star luxury class")
+            elif s == 4:
+                reason_parts.append("4-star upscale property")
+            elif s == 3:
+                reason_parts.append("3-star comfortable stay")
+        # Price/value signal
+        if price:
+            if savings is not None and savings < -40:
+                reason_parts.append(f"great value at ${int(price)}/night (below avg)")
+            elif "Best Value" in tags or "Budget Friendly" in tags:
+                reason_parts.append(f"strong value at ${int(price)}/night")
+            elif price < 150:
+                reason_parts.append(f"budget-friendly at ${int(price)}/night")
+            elif price < 300:
+                reason_parts.append(f"mid-range at ${int(price)}/night")
+            else:
+                reason_parts.append(f"premium at ${int(price)}/night")
+        # Rating signal
+        if rating_10 is not None:
+            if rating_10 >= 9.0:
+                reason_parts.append("outstanding guest reviews")
+            elif rating_10 >= 8.0:
+                reason_parts.append(f"highly rated ({rating_10}/10)")
+            elif rating_10 >= 7.0:
+                reason_parts.append(f"solid guest rating ({rating_10}/10)")
+        # Tradeoff caveat from tags
+        if "Far from action" in (area or ""):
+            reason_parts.append("note: farther from city center")
+
+        reason = "; ".join(reason_parts) if reason_parts else None
+        if reason:
+            reason = reason[0].upper() + reason[1:]
+
+        # Booking URL — use a non-maps URL different from the map link
+        booking_url = None
+        if hasattr(h, "booking_options") and h.booking_options:
+            for opt in h.booking_options:
+                if "maps" not in opt.url:
+                    booking_url = opt.url
+                    break
+        elif hasattr(h, "booking_url") and h.booking_url and "maps" not in h.booking_url:
+            booking_url = h.booking_url
+
         return UnifiedHotelResult(
             name=h.name,
             source="Hotel search",
-            area_label=getattr(h, "area_label", None),
-            stars=getattr(h, "stars", None),
-            rating=round(h.rating * 2, 1) if h.rating is not None else None,
-            price_per_night=getattr(h, "price_per_night", None),
+            area_label=area,
+            stars=stars,
+            rating=rating_10,
+            price_per_night=price,
             maps_link=f"https://maps.google.com/?q={maps_query}",
+            booking_url=booking_url,
+            reason=reason,
             ai_score=h.ai_score,
-            tags=h.tags[:4] if h.tags else [],
+            tags=tags,
         )
 
     # ------------------------------------------------------------------
@@ -591,11 +729,27 @@ class ConciergeService:
                 "close with 'Best overall: [name]. Best value: [name].' "
                 "Use the exact restaurant names retrieved above."
             )
+        elif intent == INTENT_COMPARE:
+            parts.append(
+                "\nIn 'response': structure as a direct side-by-side comparison. "
+                "Extract the two things being compared from the user query. "
+                "Format: '[Option A]: [2-3 key signals — vibe, best for, tradeoff]. "
+                "[Option B]: [2-3 key signals]. "
+                "Verdict: [one clear recommendation with who it suits best].' "
+                "Be specific and decision-focused. Max 5 sentences total. No markdown."
+            )
+        elif intent == INTENT_HOTELS:
+            parts.append(
+                "\nIn 'response': open with a concise summary (1 sentence). "
+                "Call out best value pick and best luxury/location pick by name. "
+                "Note any relevant tradeoffs (location vs price). "
+                "Max 2 sentences. Cards carry the detail — keep response brief."
+            )
         else:
             parts.append(
-                "\nIn 'response': start with a concise recommendation summary, "
-                "explain why top picks fit the query, call out best overall / best value / luxury splurge, "
-                "mention any data limitations honestly."
+                "\nIn 'response': start with a concise 1-sentence recommendation summary. "
+                "Optionally add a second sentence for best overall / best value / top splurge. "
+                "Keep it under 2 sentences — cards carry the detail."
             )
 
         return "".join(parts)
@@ -623,13 +777,15 @@ class ConciergeService:
         except Exception as exc:
             logger.warning("Failed to persist concierge message: %s", exc)
 
-    def _concise_response(self, text: str) -> str:
+    def _concise_response(self, text: str, intent: str = "") -> str:
         cleaned = re.sub(r"\s+", " ", (text or "").strip())
         if not cleaned:
             return "I found strong options that match your request."
         sentences = re.split(r"(?<=[.!?])\s+", cleaned)
-        short = " ".join(sentences[:3]).strip()
-        return short if short else cleaned[:280]
+        # Comparison and area queries benefit from more context
+        limit = 6 if intent in (INTENT_COMPARE, INTENT_BEST_AREA, INTENT_AREA_ADVICE) else 3
+        short = " ".join(sentences[:limit]).strip()
+        return short if short else cleaned[:400]
 
     # ------------------------------------------------------------------
     # Claude API call
