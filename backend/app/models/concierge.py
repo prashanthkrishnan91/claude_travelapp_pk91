@@ -23,17 +23,36 @@ class ConciergeResponse(BaseModel):
     suggestions: List[Suggestion]
 
 
-# ── Retrieval-first models ────────────────────────────────────────────────────
+# ── Intent constants ──────────────────────────────────────────────────────────
 
 INTENT_MICHELIN_RESTAURANTS = "michelin_restaurants"
 INTENT_RESTAURANTS = "restaurants"
+INTENT_HIDDEN_GEMS = "hidden_gems"
+INTENT_LUXURY_VALUE = "luxury_value"
+INTENT_ROMANTIC = "romantic"
+INTENT_FAMILY_FRIENDLY = "family_friendly"
 INTENT_ATTRACTIONS = "attractions"
 INTENT_HOTELS = "hotels"
-INTENT_ITINERARY_HELP = "itinerary_help"
-INTENT_AREA_ADVICE = "area_advice"
-INTENT_REWARDS_HELP = "rewards_help"
+INTENT_BEST_AREA = "best_area"
+INTENT_PLAN_DAY = "plan_day"
+INTENT_COMPARE = "compare"
+INTENT_REWARDS_HELP = "rewards"
+INTENT_GENERAL_DESTINATION = "general_destination_research"
 INTENT_GENERAL = "general"
 
+# Legacy aliases kept for backward compatibility
+INTENT_ITINERARY_HELP = INTENT_PLAN_DAY
+INTENT_AREA_ADVICE = INTENT_BEST_AREA
+
+# ── Source status constants ───────────────────────────────────────────────────
+
+SOURCE_CONFIRMED_MICHELIN = "confirmed_michelin"
+SOURCE_CURATED_STATIC = "curated_static"
+SOURCE_LIVE_SEARCH = "live_search"
+SOURCE_UNAVAILABLE = "unavailable"
+SOURCE_NONE = "none"
+
+# ── Retrieval-first result models ─────────────────────────────────────────────
 
 class UnifiedRestaurantResult(BaseModel):
     name: str
@@ -50,6 +69,34 @@ class UnifiedRestaurantResult(BaseModel):
     tags: List[str] = []
 
 
+class UnifiedAttractionResult(BaseModel):
+    name: str
+    source: str = "Search"
+    category: str
+    description: Optional[str] = None
+    neighborhood: Optional[str] = None
+    rating: Optional[float] = None
+    review_count: Optional[int] = None
+    address: Optional[str] = None
+    maps_link: Optional[str] = None
+    ai_score: Optional[float] = None
+    tags: List[str] = []
+
+
+class UnifiedHotelResult(BaseModel):
+    name: str
+    source: str = "Search"
+    area_label: Optional[str] = None
+    stars: Optional[float] = None
+    rating: Optional[float] = None
+    price_per_night: Optional[float] = None
+    maps_link: Optional[str] = None
+    ai_score: Optional[float] = None
+    tags: List[str] = []
+
+
+# ── Request / Response ────────────────────────────────────────────────────────
+
 class ConciergeSearchRequest(BaseModel):
     trip_id: UUID
     user_query: str
@@ -58,5 +105,12 @@ class ConciergeSearchRequest(BaseModel):
 class ConciergeSearchResponse(BaseModel):
     response: str
     intent: str
+    retrieval_used: bool = False
+    source_status: str = SOURCE_NONE
     restaurants: List[UnifiedRestaurantResult] = []
+    attractions: List[UnifiedAttractionResult] = []
+    hotels: List[UnifiedHotelResult] = []
+    areas: List[str] = []
     suggestions: List[Suggestion] = []
+    sources: List[str] = []
+    warnings: List[str] = []

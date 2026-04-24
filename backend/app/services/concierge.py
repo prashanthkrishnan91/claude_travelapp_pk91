@@ -14,18 +14,35 @@ from app.core.config import get_settings
 from app.models.concierge import (
     INTENT_AREA_ADVICE,
     INTENT_ATTRACTIONS,
+    INTENT_BEST_AREA,
+    INTENT_COMPARE,
+    INTENT_FAMILY_FRIENDLY,
     INTENT_GENERAL,
+    INTENT_GENERAL_DESTINATION,
+    INTENT_HIDDEN_GEMS,
     INTENT_HOTELS,
-    INTENT_ITINERARY_HELP,
+    INTENT_LUXURY_VALUE,
     INTENT_MICHELIN_RESTAURANTS,
+    INTENT_PLAN_DAY,
     INTENT_RESTAURANTS,
     INTENT_REWARDS_HELP,
+    INTENT_ROMANTIC,
+    SOURCE_CURATED_STATIC,
+    SOURCE_LIVE_SEARCH,
+    SOURCE_NONE,
+    SOURCE_UNAVAILABLE,
     ConciergeResponse,
     ConciergeSearchResponse,
     Suggestion,
+    UnifiedAttractionResult,
+    UnifiedHotelResult,
     UnifiedRestaurantResult,
 )
-from app.models.search import AttractionSearchRequest, RestaurantSearchRequest
+from app.models.search import (
+    AttractionSearchRequest,
+    HotelSearchRequest,
+    RestaurantSearchRequest,
+)
 from app.services.search import SearchService
 
 logger = logging.getLogger(__name__)
@@ -38,23 +55,32 @@ _SYSTEM_PROMPT = (
 )
 
 _RETRIEVAL_SYSTEM_PROMPT = (
-    "You are a premium travel concierge. Always answer from retrieved live results when available. "
-    "Never tell the user to go search another site if current retrieved results already answer the request. "
+    "You are a premium travel concierge and luxury researcher. "
+    "Answer from retrieved results when available. "
+    "Never tell the user to go search another site if retrieved results already answer the request. "
     'Respond ONLY with valid JSON matching exactly: '
     '{"response": "<string>", "suggestions": [{"type": "attraction" or "restaurant", "name": "<string>", "reason": "<string>"}]}. '
-    "When restaurant results are provided, the 'response' field MUST follow this structure: "
-    "(1) Opening line: 'Here are the top Michelin options in [CITY]' — use the actual destination city name. "
-    "(2) For each restaurant (3-8): '[Name] ([Michelin tier]) — [cuisine], [neighborhood]. [One sentence: why it fits — e.g. tasting menu, romantic setting, best value, near [area], special experience].' "
-    "(3) Close with: 'Best overall: [name]. Best value: [name (Bib Gourmand or lowest tier)].' "
-    "Never say 'check Michelin Guide' when results are already provided. No markdown inside JSON strings, no extra keys."
+    "Response style: open with a concise recommendation summary, explain why each top pick fits the query, "
+    "call out best overall / best value / luxury splurge when relevant, "
+    "mention source limitations honestly. "
+    "When Michelin restaurant results are provided, follow this structure in 'response': "
+    "(1) Opening: 'Here are the top Michelin options in [CITY]'. "
+    "(2) For each restaurant: '[Name] ([Michelin tier]) — [cuisine], [neighborhood]. [Why it fits].' "
+    "(3) Close: 'Best overall: [name]. Best value: [name (Bib Gourmand or lowest tier)].' "
+    "No markdown inside JSON strings, no extra keys."
 )
 
-_RESTAURANT_INTENTS = {INTENT_MICHELIN_RESTAURANTS, INTENT_RESTAURANTS}
+# Intent sets for routing logic
+_RESTAURANT_INTENTS = {
+    INTENT_MICHELIN_RESTAURANTS, INTENT_RESTAURANTS, INTENT_HIDDEN_GEMS,
+    INTENT_LUXURY_VALUE, INTENT_ROMANTIC, INTENT_FAMILY_FRIENDLY,
+}
+_ATTRACTION_INTENTS = {INTENT_ATTRACTIONS, INTENT_PLAN_DAY}
 
 
 def _kw_pattern(*keywords: str) -> re.Pattern:
-    """Compile keyword alternatives with word boundaries to prevent false substring matches."""
-    parts = sorted(keywords, key=len, reverse=True)  # longest-first for greedy matching
+    """Compile keyword alternatives with word boundaries."""
+    parts = sorted(keywords, key=len, reverse=True)
     return re.compile(
         r"\b(?:" + "|".join(re.escape(kw) for kw in parts) + r")\b",
         re.IGNORECASE,
@@ -64,23 +90,39 @@ def _kw_pattern(*keywords: str) -> re.Pattern:
 _MICHELIN_PAT = _kw_pattern(
     "michelin", "bib gourmand", "starred", "star restaurant", "star dining", "fine dining",
 )
+_HIDDEN_GEMS_PAT = _kw_pattern(
+    "hidden gem", "hidden gems", "off the beaten", "local secret", "undiscovered", "under the radar",
+)
+_LUXURY_PAT = _kw_pattern(
+    "luxury", "splurge", "high-end", "upscale", "best value", "value dining", "affordable fine",
+)
+_ROMANTIC_PAT = _kw_pattern(
+    "romantic", "date night", "anniversary", "couple", "honeymoon", "special occasion",
+)
+_FAMILY_PAT = _kw_pattern(
+    "family", "kids", "children", "child-friendly", "family-friendly",
+)
 _RESTAURANT_PAT = _kw_pattern(
-    "restaurant", "dining", "dinner", "lunch", "breakfast", "brunch", "cuisine",
-    "where to eat", "best places to eat", "romantic dinner", "best near hotel",
-    "tasting menu", "omakase", "hidden gem restaurant",
+    "restaurants", "restaurant", "dining", "dinner", "lunch", "breakfast", "brunch",
+    "cuisine", "where to eat", "best places to eat", "tasting menu", "omakase", "eat",
 )
 _ATTRACTION_PAT = _kw_pattern(
-    "attraction", "museum", "tour", "sightseeing", "things to do",
-    "activity", "activities", "visit",
+    "attractions", "attraction", "museum", "museums", "tour", "sightseeing",
+    "things to do", "activity", "activities", "visit", "see", "landmark", "landmarks",
 )
 _HOTEL_PAT = _kw_pattern(
-    "hotel", "accommodation", "where to stay", "hostel", "resort",
+    "hotels", "hotel", "accommodation", "where to stay", "hostel", "resort",
 )
-_ITINERARY_PAT = _kw_pattern(
-    "itinerary", "plan my day", "schedule", "day trip", "day plan", "what should i do",
+_PLAN_DAY_PAT = _kw_pattern(
+    "itinerary", "plan my day", "schedule", "day trip", "day plan",
+    "what should i do", "full day", "plan a day",
+)
+_COMPARE_PAT = _kw_pattern(
+    "compare", "versus", " vs ", "which is better", "which should i",
 )
 _AREA_PAT = _kw_pattern(
-    "neighborhood", "neighbourhood", "area", "district", "quarter", "best area",
+    "neighborhood", "neighbourhood", "area", "district", "quarter",
+    "best area", "best place to stay", "where to base",
 )
 _REWARDS_PAT = _kw_pattern(
     "points", "miles", "reward", "credit card", "loyalty", "cpp",
@@ -109,23 +151,117 @@ class ConciergeService:
     def search(self, trip_id: UUID, user_query: str, user_id: UUID) -> ConciergeSearchResponse:
         trip = self._fetch_trip(trip_id, user_id)
         destination = trip.get("destination", "")
-
         intent = self._detect_intent(user_query)
 
         restaurants: List[UnifiedRestaurantResult] = []
-        if intent in _RESTAURANT_INTENTS:
-            from app.services.michelin_retriever import MichelinRetriever
-            restaurants = MichelinRetriever().fetch(destination, user_query)
+        attractions: List[UnifiedAttractionResult] = []
+        hotels: List[UnifiedHotelResult] = []
+        areas: List[str] = []
+        source_status = SOURCE_NONE
+        sources: List[str] = []
+        warnings: List[str] = []
+        retrieval_used = False
 
-        prompt = self._build_search_prompt(trip, user_query, intent, restaurants)
-        raw = self._call_claude(prompt, system_prompt=_RETRIEVAL_SYSTEM_PROMPT)
+        search_svc = SearchService(self._db)
+
+        if intent == INTENT_MICHELIN_RESTAURANTS:
+            from app.services.michelin_retriever import MichelinRetriever
+            restaurants, source_status = MichelinRetriever().fetch(destination, user_query)
+            if source_status == SOURCE_UNAVAILABLE:
+                warnings.append(
+                    f"Michelin Guide data is not available for {destination}. "
+                    "Showing general dining recommendations based on local search."
+                )
+                # Fall back to general search so the user still gets useful results
+                raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
+                restaurants = [self._to_unified_restaurant(r) for r in raw_rest[:6]]
+                source_status = SOURCE_LIVE_SEARCH
+                sources.append("Local restaurant database")
+            else:
+                sources.append("Michelin Guide (curated reference data)")
+            retrieval_used = True
+
+        elif intent in {INTENT_RESTAURANTS, INTENT_HIDDEN_GEMS, INTENT_LUXURY_VALUE,
+                        INTENT_ROMANTIC, INTENT_FAMILY_FRIENDLY}:
+            raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
+            restaurants = [self._to_unified_restaurant(r) for r in raw_rest[:6]]
+            source_status = SOURCE_LIVE_SEARCH
+            sources.append("Restaurant search database")
+            retrieval_used = True
+
+        elif intent in _ATTRACTION_INTENTS:
+            raw_attr = search_svc.search_attractions(AttractionSearchRequest(location=destination))
+            attractions = [self._to_unified_attraction(a) for a in raw_attr[:6]]
+            source_status = SOURCE_LIVE_SEARCH
+            sources.append("Attraction search database")
+            retrieval_used = True
+            if intent == INTENT_PLAN_DAY:
+                # Full-day planning benefits from restaurant options too
+                raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
+                restaurants = [self._to_unified_restaurant(r) for r in raw_rest[:4]]
+
+        elif intent == INTENT_HOTELS:
+            try:
+                check_in = date.fromisoformat(trip.get("start_date", "")) if trip.get("start_date") else date.today()
+            except (ValueError, TypeError):
+                check_in = date.today()
+            check_out = check_in + timedelta(days=1)
+            raw_hotels = search_svc.search_hotels(
+                HotelSearchRequest(location=destination, check_in=check_in, check_out=check_out, guests=1)
+            )
+            hotels = [self._to_unified_hotel(h) for h in raw_hotels[:6]]
+            source_status = SOURCE_LIVE_SEARCH
+            sources.append("Hotel search database")
+            retrieval_used = bool(hotels)
+
+        elif intent in {INTENT_BEST_AREA, INTENT_AREA_ADVICE}:
+            best = self._derive_best_area(search_svc, destination, trip)
+            if best:
+                areas = [best]
+            raw_attr = search_svc.search_attractions(AttractionSearchRequest(location=destination))
+            extra = list({a.location for a in raw_attr[:10] if a.location and a.location != best})
+            areas += extra[:4]
+            source_status = SOURCE_LIVE_SEARCH
+            sources.append("Neighborhood analysis")
+            retrieval_used = bool(areas)
+
+        elif intent == INTENT_COMPARE:
+            raw_attr = search_svc.search_attractions(AttractionSearchRequest(location=destination))
+            raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
+            attractions = [self._to_unified_attraction(a) for a in raw_attr[:4]]
+            restaurants = [self._to_unified_restaurant(r) for r in raw_rest[:4]]
+            source_status = SOURCE_LIVE_SEARCH
+            sources.append("Search database")
+            retrieval_used = True
+
+        elif intent == INTENT_GENERAL_DESTINATION:
+            raw_attr = search_svc.search_attractions(AttractionSearchRequest(location=destination))
+            raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
+            attractions = [self._to_unified_attraction(a) for a in raw_attr[:4]]
+            restaurants = [self._to_unified_restaurant(r) for r in raw_rest[:3]]
+            source_status = SOURCE_LIVE_SEARCH
+            sources.append("Destination research database")
+            retrieval_used = True
+
+        system_prompt = _RETRIEVAL_SYSTEM_PROMPT if retrieval_used else _SYSTEM_PROMPT
+        prompt = self._build_search_prompt(
+            trip, user_query, intent, restaurants, attractions, hotels, areas, warnings
+        )
+        raw = self._call_claude(prompt, system_prompt=system_prompt)
         base = self._parse_response(raw)
 
         return ConciergeSearchResponse(
             response=base.response,
             intent=intent,
+            retrieval_used=retrieval_used,
+            source_status=source_status,
             restaurants=restaurants,
+            attractions=attractions,
+            hotels=hotels,
+            areas=areas,
             suggestions=base.suggestions,
+            sources=sources,
+            warnings=warnings,
         )
 
     # ------------------------------------------------------------------
@@ -137,19 +273,77 @@ class ConciergeService:
 
         if _MICHELIN_PAT.search(q):
             return INTENT_MICHELIN_RESTAURANTS
+        if _HIDDEN_GEMS_PAT.search(q):
+            return INTENT_HIDDEN_GEMS
+        if _ROMANTIC_PAT.search(q):
+            return INTENT_ROMANTIC
+        if _FAMILY_PAT.search(q):
+            return INTENT_FAMILY_FRIENDLY
+        if _LUXURY_PAT.search(q):
+            return INTENT_LUXURY_VALUE
         if _RESTAURANT_PAT.search(q):
             return INTENT_RESTAURANTS
         if _ATTRACTION_PAT.search(q):
             return INTENT_ATTRACTIONS
+        if _AREA_PAT.search(q):
+            return INTENT_BEST_AREA
         if _HOTEL_PAT.search(q):
             return INTENT_HOTELS
-        if _ITINERARY_PAT.search(q):
-            return INTENT_ITINERARY_HELP
-        if _AREA_PAT.search(q):
-            return INTENT_AREA_ADVICE
+        if _PLAN_DAY_PAT.search(q):
+            return INTENT_PLAN_DAY
+        if _COMPARE_PAT.search(q):
+            return INTENT_COMPARE
         if _REWARDS_PAT.search(q):
             return INTENT_REWARDS_HELP
         return INTENT_GENERAL
+
+    # ------------------------------------------------------------------
+    # Result converters
+    # ------------------------------------------------------------------
+
+    def _to_unified_restaurant(self, r) -> UnifiedRestaurantResult:
+        maps_query = (r.name + " " + r.location).replace(" ", "+")
+        return UnifiedRestaurantResult(
+            name=r.name,
+            source="Restaurant database",
+            cuisine=r.cuisine,
+            neighborhood=r.location,
+            rating=round(r.rating * 2, 1) if r.rating is not None else None,
+            review_count=getattr(r, "num_reviews", None),
+            maps_link=f"https://maps.google.com/?q={maps_query}",
+            ai_score=r.ai_score,
+            tags=r.tags[:4] if r.tags else [],
+        )
+
+    def _to_unified_attraction(self, a) -> UnifiedAttractionResult:
+        maps_query = (a.name + " " + a.location).replace(" ", "+")
+        return UnifiedAttractionResult(
+            name=a.name,
+            source="Attraction database",
+            category=a.category,
+            description=getattr(a, "description", None),
+            neighborhood=a.location,
+            rating=round(a.rating * 2, 1) if a.rating is not None else None,
+            review_count=getattr(a, "num_reviews", None),
+            address=getattr(a, "address", None),
+            maps_link=f"https://maps.google.com/?q={maps_query}",
+            ai_score=a.ai_score,
+            tags=a.tags[:4] if a.tags else [],
+        )
+
+    def _to_unified_hotel(self, h) -> UnifiedHotelResult:
+        maps_query = (h.name + " " + h.location).replace(" ", "+")
+        return UnifiedHotelResult(
+            name=h.name,
+            source="Hotel search",
+            area_label=getattr(h, "area_label", None),
+            stars=getattr(h, "stars", None),
+            rating=round(h.rating * 2, 1) if h.rating is not None else None,
+            price_per_night=getattr(h, "price_per_night", None),
+            maps_link=f"https://maps.google.com/?q={maps_query}",
+            ai_score=h.ai_score,
+            tags=h.tags[:4] if h.tags else [],
+        )
 
     # ------------------------------------------------------------------
     # Context loading
@@ -203,13 +397,14 @@ class ConciergeService:
         return items_res.data or []
 
     def _derive_best_area(self, search: SearchService, destination: str, trip: dict) -> str:
-        from app.models.search import HotelSearchRequest
         try:
             check_in = date.fromisoformat(trip["start_date"]) if trip.get("start_date") else date.today()
         except (ValueError, TypeError):
             check_in = date.today()
         check_out = check_in + timedelta(days=1)
-        hotels = search.search_hotels(HotelSearchRequest(location=destination, check_in=check_in, check_out=check_out, guests=1))
+        hotels = search.search_hotels(
+            HotelSearchRequest(location=destination, check_in=check_in, check_out=check_out, guests=1)
+        )
         labels = [h.area_label for h in hotels if h.area_label]
         if not labels:
             return destination
@@ -299,6 +494,10 @@ class ConciergeService:
         user_query: str,
         intent: str,
         restaurants: List[UnifiedRestaurantResult],
+        attractions: List[UnifiedAttractionResult] = None,
+        hotels: List[UnifiedHotelResult] = None,
+        areas: List[str] = None,
+        warnings: List[str] = None,
     ) -> str:
         city = trip.get("destination", "Unknown")
         start = trip.get("start_date", "")
@@ -307,8 +506,14 @@ class ConciergeService:
 
         parts = [f"Destination: {city} | Dates: {dates}\n\n"]
 
+        if warnings:
+            for w in warnings:
+                parts.append(f"NOTE: {w}\n")
+            parts.append("\n")
+
         if restaurants:
-            parts.append(f"Retrieved {len(restaurants)} results from Michelin Guide for {city}:\n")
+            source_label = "Michelin Guide" if intent == INTENT_MICHELIN_RESTAURANTS else "restaurant database"
+            parts.append(f"Retrieved {len(restaurants)} restaurants from {source_label} for {city}:\n")
             for i, r in enumerate(restaurants[:8], 1):
                 status_badge = f"[{r.michelin_status}]" if r.michelin_status else ""
                 rating_str = f"Rating: {r.rating}/10" if r.rating else ""
@@ -316,26 +521,55 @@ class ConciergeService:
                     f"{i}. {r.name} {status_badge} — {r.cuisine}, {r.neighborhood or 'City Center'} | {rating_str}\n"
                     f"   {r.summary or ''}\n"
                 )
-            parts.append(
-                "\nIMPORTANT: These restaurants were already retrieved from Michelin Guide. "
-                "DO NOT tell the user to 'check Michelin Guide' — the results are here. "
-                "Reference the specific restaurant names above in your response.\n\n"
-            )
-        elif intent in _RESTAURANT_INTENTS:
-            parts.append("No Michelin Guide results found for this destination. Offer general dining advice.\n\n")
+            if intent == INTENT_MICHELIN_RESTAURANTS:
+                parts.append(
+                    "\nIMPORTANT: These are already retrieved — DO NOT tell the user to 'check Michelin Guide'.\n\n"
+                )
+            else:
+                parts.append("\nIMPORTANT: These results are already retrieved — reference specific names.\n\n")
+
+        if attractions:
+            parts.append(f"Retrieved {len(attractions)} attractions in {city}:\n")
+            for i, a in enumerate(attractions[:8], 1):
+                rating_str = f"Rating: {a.rating}/10" if a.rating else ""
+                parts.append(
+                    f"{i}. {a.name} ({a.category}) | {rating_str}\n"
+                    f"   {a.description or ''}\n"
+                )
+            parts.append("\n")
+
+        if hotels:
+            parts.append(f"Retrieved {len(hotels)} hotels in {city}:\n")
+            for i, h in enumerate(hotels[:6], 1):
+                price_str = f"${h.price_per_night:.0f}/night" if h.price_per_night else ""
+                stars_str = f"{'★' * int(h.stars or 0)}" if h.stars else ""
+                parts.append(
+                    f"{i}. {h.name} {stars_str} | {price_str} | Area: {h.area_label or 'City'}\n"
+                )
+            parts.append("\n")
+
+        if areas:
+            parts.append(f"Top neighborhoods/areas in {city}: {', '.join(areas)}\n\n")
+
+        has_data = any([restaurants, attractions, hotels, areas])
+        if not has_data:
+            parts.append(f"No specific results were retrieved. Provide general travel advice for {city}.\n\n")
 
         parts.append(f"User request: {user_query}\n")
-        if restaurants:
+
+        if intent == INTENT_MICHELIN_RESTAURANTS and restaurants:
             parts.append(
-                f"\nFormat the 'response' field exactly as instructed in the system prompt: "
-                f"open with 'Here are the top Michelin options in {city}', "
-                "list each restaurant with its Michelin tier and one sentence on why it fits "
-                "(tasting menu / romantic / best value / near best area / unique experience), "
-                "then end with 'Best overall: [name]. Best value: [name].' "
-                "Use the specific restaurants retrieved above — no generic placeholders."
+                f"\nIn 'response': open with 'Here are the top Michelin options in {city}', "
+                "list each with Michelin tier and why it fits, "
+                "close with 'Best overall: [name]. Best value: [name].' "
+                "Use the exact restaurant names retrieved above."
             )
         else:
-            parts.append("\nProvide clear, specific recommendations with concise reasoning.")
+            parts.append(
+                "\nIn 'response': start with a concise recommendation summary, "
+                "explain why top picks fit the query, call out best overall / best value / luxury splurge, "
+                "mention any data limitations honestly."
+            )
 
         return "".join(parts)
 
@@ -355,7 +589,7 @@ class ConciergeService:
             client = anthropic.Anthropic(api_key=api_key)
             message = client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=1024,
+                max_tokens=1500,
                 system=system_prompt or _SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": prompt}],
             )
