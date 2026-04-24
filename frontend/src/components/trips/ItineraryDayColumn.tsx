@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -53,12 +54,26 @@ export function ItineraryDayColumn({
   onPlanDay,
   planDayLoading,
 }: ItineraryDayColumnProps) {
+  const [showAllItems, setShowAllItems] = useState(false);
+
+  useEffect(() => {
+    if (!isExpanded) {
+      setShowAllItems(false);
+    }
+  }, [isExpanded, day.id]);
+
   const { setNodeRef, isOver } = useDroppable({
     id: `day-${day.id}`,
     data: { type: "day", dayId: day.id },
   });
 
   const itemIds = day.items.map((item: ItineraryItem) => item.id);
+  const visibleItems = useMemo(
+    () => (showAllItems ? day.items : day.items.slice(0, 4)),
+    [day.items, showAllItems]
+  );
+  const showItemsToggle = day.items.length > 4;
+  const isTruncated = showItemsToggle && !showAllItems;
   const hiddenItemsCount = Math.max(day.items.length - 1, 0);
   const firstItem = day.items[0];
   const itemTypeCounts = day.items.reduce<Record<string, number>>((acc, item) => {
@@ -172,41 +187,49 @@ export function ItineraryDayColumn({
           items={itemIds}
           strategy={verticalListSortingStrategy}
         >
-          {day.items.flatMap((item: ItineraryItem, idx: number) => {
-            const card = (
-              <ItineraryItemCard
-                key={item.id}
-                item={item}
-                onRemove={(itemId) => onRemoveItem(itemId, day.id)}
-                onToggleCompare={onToggleCompare}
-                isComparing={compareSet?.has(item.id)}
-              />
-            );
-            if (idx >= day.items.length - 1) return [card];
-            const next = day.items[idx + 1];
-            const d = item.details as Record<string, unknown> | undefined;
-            const nd = next.details as Record<string, unknown> | undefined;
-            const lat1 = d?.lat as number | null | undefined;
-            const lng1 = d?.lng as number | null | undefined;
-            const lat2 = nd?.lat as number | null | undefined;
-            const lng2 = nd?.lng as number | null | undefined;
-            if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return [card];
-            const est = estimateTravel(lat1, lng1, lat2, lng2);
-            const { label, mode } = formatTravelBadge(est);
-            const connector = (
-              <div key={`travel-${item.id}`} className="flex items-center gap-1.5 px-3 -my-0.5">
-                <div className="w-px h-3 bg-slate-200 ml-[17px] flex-shrink-0" />
-                {mode === "walk" ? (
-                  <Footprints className="w-3 h-3 text-slate-300 flex-shrink-0" />
-                ) : (
-                  <Car className="w-3 h-3 text-slate-300 flex-shrink-0" />
-                )}
-                <span className="text-[10px] text-slate-300 leading-none">{label}</span>
-                <span className="text-[10px] text-slate-200 leading-none">· {est.distanceKm} km</span>
-              </div>
-            );
-            return [card, connector];
-          })}
+          <div className="relative">
+            <div className="space-y-2">
+              {visibleItems.flatMap((item: ItineraryItem, idx: number) => {
+                const card = (
+                  <ItineraryItemCard
+                    key={item.id}
+                    item={item}
+                    onRemove={(itemId) => onRemoveItem(itemId, day.id)}
+                    onToggleCompare={onToggleCompare}
+                    isComparing={compareSet?.has(item.id)}
+                  />
+                );
+                if (idx >= visibleItems.length - 1) return [card];
+                const next = visibleItems[idx + 1];
+                const d = item.details as Record<string, unknown> | undefined;
+                const nd = next.details as Record<string, unknown> | undefined;
+                const lat1 = d?.lat as number | null | undefined;
+                const lng1 = d?.lng as number | null | undefined;
+                const lat2 = nd?.lat as number | null | undefined;
+                const lng2 = nd?.lng as number | null | undefined;
+                if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return [card];
+                const est = estimateTravel(lat1, lng1, lat2, lng2);
+                const { label, mode } = formatTravelBadge(est);
+                const connector = (
+                  <div key={`travel-${item.id}`} className="flex items-center gap-1.5 px-3 -my-0.5">
+                    <div className="w-px h-3 bg-slate-200 ml-[17px] flex-shrink-0" />
+                    {mode === "walk" ? (
+                      <Footprints className="w-3 h-3 text-slate-300 flex-shrink-0" />
+                    ) : (
+                      <Car className="w-3 h-3 text-slate-300 flex-shrink-0" />
+                    )}
+                    <span className="text-[10px] text-slate-300 leading-none">{label}</span>
+                    <span className="text-[10px] text-slate-200 leading-none">· {est.distanceKm} km</span>
+                  </div>
+                );
+                return [card, connector];
+              })}
+            </div>
+
+            {isTruncated && (
+              <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-b from-transparent to-white" />
+            )}
+          </div>
         </SortableContext>
 
         {day.items.length === 0 ? (
@@ -232,13 +255,13 @@ export function ItineraryDayColumn({
           </div>
         )}
 
-        {day.items.length > 4 && (
-          <div className="pt-1 flex justify-center">
+        {showItemsToggle && (
+          <div className="mt-3 pt-2 border-t border-slate-100 flex justify-center">
             <button
-              onClick={() => onToggleExpanded?.(day.dayNumber)}
-              className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors"
+              onClick={() => setShowAllItems((prev) => !prev)}
+              className="text-[11px] text-slate-500 hover:text-slate-700 transition-colors font-medium"
             >
-              Collapse day
+              {showAllItems ? "Show less ↑" : `Show all ${day.items.length} items ↓`}
             </button>
           </div>
         )}
