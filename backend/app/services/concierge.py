@@ -51,6 +51,10 @@ from app.services.search import SearchService
 
 logger = logging.getLogger(__name__)
 MESSAGES_TABLE = "concierge_messages"
+_MISSING_MESSAGES_TABLE_HINT = (
+    "concierge_messages table missing; apply migration 002_concierge_messages.sql "
+    "and reload Supabase schema cache."
+)
 
 _SYSTEM_PROMPT = (
     "You are a premium travel concierge. "
@@ -110,6 +114,8 @@ _FAMILY_PAT = _kw_pattern(
 _RESTAURANT_PAT = _kw_pattern(
     "restaurants", "restaurant", "dining", "dinner", "lunch", "breakfast", "brunch",
     "cuisine", "where to eat", "best places to eat", "tasting menu", "omakase", "eat",
+    "drinks", "cocktail", "cocktails", "bar", "bars", "wine bar", "brewery", "rooftop bar",
+    "speakeasy", "nightlife",
 )
 _ATTRACTION_PAT = _kw_pattern(
     "attractions", "attraction", "museum", "museums", "tour", "sightseeing",
@@ -313,14 +319,21 @@ class ConciergeService:
 
     def list_messages(self, trip_id: UUID, user_id: UUID) -> List[ConciergeMessage]:
         self._fetch_trip(trip_id, user_id)
-        rows = (
-            self._db.table(MESSAGES_TABLE)
-            .select("id,trip_id,client_message_id,role,content,structured_results,created_at")
-            .eq("trip_id", str(trip_id))
-            .order("created_at")
-            .execute()
-        )
-        return [ConciergeMessage(**row) for row in (rows.data or [])]
+        try:
+            rows = (
+                self._db.table(MESSAGES_TABLE)
+                .select("id,trip_id,client_message_id,role,content,structured_results,created_at")
+                .eq("trip_id", str(trip_id))
+                .order("created_at")
+                .execute()
+            )
+            return [ConciergeMessage(**row) for row in (rows.data or [])]
+        except Exception as exc:
+            if self._is_missing_messages_table_error(exc):
+                logger.warning(_MISSING_MESSAGES_TABLE_HINT)
+                return []
+            logger.exception("Failed to load concierge message history")
+            raise
 
     # ------------------------------------------------------------------
     # Intent detection
@@ -894,7 +907,23 @@ class ConciergeService:
             else:
                 self._db.table(MESSAGES_TABLE).insert(payload).execute()
         except Exception as exc:
-            logger.warning("Failed to persist concierge message: %s", exc)
+            if self._is_missing_messages_table_error(exc):
+                logger.warning(_MISSING_MESSAGES_TABLE_HINT)
+                return
+            logger.exception("Failed to persist concierge message")
+
+    def _is_missing_messages_table_error(self, exc: Exception) -> bool:
+        code = str(getattr(exc, "code", "") or "").upper()
+        if code == "PGRST205":
+            return True
+        text = str(exc).lower()
+        return (
+            "pgrst205" in text
+            or "schema cache" in text
+            or "could not find the table" in text
+            or "concierge_messages" in text and "not found" in text
+            or "relation" in text and "concierge_messages" in text and "does not exist" in text
+        )
 
     def _concise_response(self, text: str, intent: str = "") -> str:
         cleaned = re.sub(r"\s+", " ", (text or "").strip())

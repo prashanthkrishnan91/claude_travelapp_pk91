@@ -137,6 +137,10 @@ class TestIntentDetection:
         svc = self._svc()
         assert svc._detect_intent("best restaurants in Berlin") == INTENT_RESTAURANTS
 
+    def test_nearby_drinks_intent_routes_to_restaurants(self):
+        svc = self._svc()
+        assert svc._detect_intent("Add nearby drinks") == INTENT_RESTAURANTS
+
     def test_attractions_intent(self):
         svc = self._svc()
         assert svc._detect_intent("best attractions in Rome") == INTENT_ATTRACTIONS
@@ -316,6 +320,58 @@ class TestConciergeSearch:
         assert result.restaurants[0].name == "Boka"
         assert result.source_status in {"sample_data", "app_database", "none"}
 
+    def test_add_nearby_drinks_returns_structured_cards(self):
+        svc = self._svc("Chicago")
+        with patch("app.services.concierge.SearchService") as MockSearch, \
+             patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            mock_svc = self._mock_search_svc()
+            mock_svc.search_restaurants.return_value = [
+                SimpleNamespace(
+                    name="The Violet Hour",
+                    cuisine="Cocktail Bar",
+                    location="Wicker Park",
+                    rating=4.8,
+                    ai_score=91.0,
+                    booking_url="https://example.com/violethour",
+                    tags=["Cocktails", "Nightlife"],
+                    num_reviews=2200,
+                )
+            ]
+            MockSearch.return_value = mock_svc
+            result = svc.search(FAKE_TRIP_ID, "Add nearby drinks", FAKE_USER_ID)
+        assert result.intent == INTENT_RESTAURANTS
+        assert result.retrieval_used is True
+        assert len(result.restaurants) == 1
+        assert result.restaurants[0].name == "The Violet Hour"
+        assert result.restaurants[0].summary
+
+    def test_search_does_not_crash_when_messages_table_missing(self):
+        db = _make_mock_db("Chicago")
+        messages_query = MagicMock()
+        missing_table_error = Exception(
+            "PGRST205: Could not find the table 'public.concierge_messages' in the schema cache"
+        )
+        missing_table_error.code = "PGRST205"
+        messages_query.upsert.return_value.execute.side_effect = missing_table_error
+
+        def table_side_effect(name):
+            if name == "concierge_messages":
+                return messages_query
+            return db.table.return_value
+
+        db.table.side_effect = table_side_effect
+        svc = ConciergeService(db)
+        with patch("app.services.concierge.SearchService") as MockSearch, \
+             patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            mock_svc = self._mock_search_svc()
+            mock_svc.search_restaurants.return_value = [
+                SimpleNamespace(name="Test Bar", cuisine="Bar", location="Loop", rating=4.3, ai_score=80.0, tags=[])
+            ]
+            MockSearch.return_value = mock_svc
+            result = svc.search(FAKE_TRIP_ID, "Add nearby drinks", FAKE_USER_ID)
+        assert result.intent == INTENT_RESTAURANTS
+        assert result.restaurants
+
     @pytest.mark.parametrize(
         "query,expected_intent",
         [
@@ -358,3 +414,58 @@ class TestConciergeSearch:
             result = svc.search(FAKE_TRIP_ID, query, FAKE_USER_ID)
         assert result.intent == expected_intent
         assert isinstance(result.response, str)
+
+
+class _FakeMessagesQuery:
+    def select(self, *_args, **_kwargs):
+        return self
+
+    def eq(self, *_args, **_kwargs):
+        return self
+
+    def order(self, *_args, **_kwargs):
+        return self
+
+    def execute(self):
+        exc = Exception(
+            "Could not find the table 'public.concierge_messages' in the schema cache"
+        )
+        exc.code = "PGRST205"
+        raise exc
+
+
+class _FakeTripsQuery:
+    def select(self, *_args, **_kwargs):
+        return self
+
+    def eq(self, *_args, **_kwargs):
+        return self
+
+    def execute(self):
+        return SimpleNamespace(
+            data=[
+                {
+                    "id": str(FAKE_TRIP_ID),
+                    "destination": "Paris",
+                    "start_date": "2026-06-01",
+                    "end_date": "2026-06-07",
+                    "title": "Test Trip",
+                    "user_id": str(FAKE_USER_ID),
+                }
+            ]
+        )
+
+
+class _FakeDBForMissingMessages:
+    def table(self, name: str):
+        if name == "trips":
+            return _FakeTripsQuery()
+        if name == "concierge_messages":
+            return _FakeMessagesQuery()
+        raise AssertionError(f"Unexpected table requested: {name}")
+
+
+def test_list_messages_returns_empty_when_messages_table_missing():
+    svc = ConciergeService(_FakeDBForMissingMessages())
+    rows = svc.list_messages(FAKE_TRIP_ID, FAKE_USER_ID)
+    assert rows == []
