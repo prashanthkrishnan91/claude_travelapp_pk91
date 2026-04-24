@@ -116,7 +116,10 @@ export default function TripDetailPage() {
         startDate: editForm.startDate || undefined,
         endDate: editForm.endDate || undefined,
       });
+      const days = await ensureTripDays(trip.id, updated.startDate, updated.endDate);
       setTrip(updated);
+      setItineraryDays(days);
+      setTripBuilderKey((k) => k + 1);
       setEditOpen(false);
       showToast("Trip updated");
     } finally {

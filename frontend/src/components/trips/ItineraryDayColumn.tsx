@@ -26,12 +26,15 @@ interface ItineraryDayColumnProps {
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return "";
-  const d = new Date(dateStr);
+  const [year, month, day] = dateStr.split("-").map(Number);
+  if (!year || !month || !day) return "";
+  const d = new Date(Date.UTC(year, month - 1, day));
   if (isNaN(d.getTime())) return "";
   return d.toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
+    timeZone: "UTC",
   });
 }
 
@@ -57,30 +60,28 @@ export function ItineraryDayColumn({
     <div className={`card overflow-hidden transition-all ${isSelected ? "ring-2 ring-sky-500 ring-offset-1" : ""}`}>
       {/* Day header — click to set as the target day for left-panel additions */}
       <div
-        className={`flex items-center justify-between px-4 py-3 border-b border-slate-100 transition-colors cursor-pointer ${
+        className={`flex items-center justify-between px-3 py-2 border-b border-slate-100 transition-colors cursor-pointer ${
           isSelected ? "bg-sky-50" : "bg-slate-50 hover:bg-slate-100"
         }`}
         onClick={() => onSelect?.(day.id)}
         title={isSelected ? "Currently adding to this day" : "Click to add items to this day"}
       >
-        <div className="flex items-center gap-2">
-          <div className={`w-7 h-7 rounded-lg text-white flex items-center justify-center text-xs font-bold ${isSelected ? "bg-sky-600" : "bg-slate-400"}`}>
+        <div className="flex items-center gap-2 min-w-0">
+          <div className={`w-6 h-6 rounded-md text-white flex items-center justify-center text-[11px] font-bold ${isSelected ? "bg-sky-600" : "bg-slate-400"}`}>
             {day.dayNumber}
           </div>
-          <div>
-            <h3 className="text-sm font-semibold text-slate-800">
-              {day.title ?? `Day ${day.dayNumber}`}
-            </h3>
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-slate-800 truncate">{`Day ${day.dayNumber}`}</h3>
             {day.date && (
-              <p className="text-xs text-slate-400 flex items-center gap-1">
+              <p className="text-[11px] text-slate-500 flex items-center gap-1">
                 <CalendarDays className="w-3 h-3" />
                 {formatDate(day.date)}
               </p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400">
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-[11px] text-slate-500 bg-white border border-slate-200 rounded-full px-2 py-0.5">
             {day.items.length} {day.items.length === 1 ? "item" : "items"}
           </span>
           {onPlanDay && (
@@ -88,7 +89,7 @@ export function ItineraryDayColumn({
               onClick={() => onPlanDay(day.id, day.dayNumber)}
               disabled={planDayLoading}
               title="Generate AI day plan"
-              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 text-xs font-medium transition-colors disabled:opacity-50"
+              className="flex items-center gap-1 px-2 py-1 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-700 text-[11px] font-medium transition-colors disabled:opacity-50"
             >
               {planDayLoading ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -100,7 +101,7 @@ export function ItineraryDayColumn({
           )}
           <button
             onClick={() => onAddItem(day.id)}
-            className="w-6 h-6 rounded-full bg-slate-100 hover:bg-sky-50 hover:text-sky-600 text-slate-400 flex items-center justify-center transition-colors"
+            className="w-6 h-6 rounded-md bg-slate-100 hover:bg-sky-50 hover:text-sky-600 text-slate-500 flex items-center justify-center transition-colors"
             aria-label={`Add item to Day ${day.dayNumber}`}
           >
             <Plus className="w-3.5 h-3.5" />
@@ -111,7 +112,7 @@ export function ItineraryDayColumn({
       {/* Drop zone */}
       <div
         ref={setNodeRef}
-        className={`p-3 min-h-[80px] flex flex-col gap-2 transition-colors duration-150 ${
+        className={`p-2.5 min-h-[68px] flex flex-col gap-1.5 transition-colors duration-150 ${
           isOver ? "bg-sky-50/60" : "bg-white"
         }`}
       >
@@ -158,18 +159,18 @@ export function ItineraryDayColumn({
 
         {day.items.length === 0 ? (
           <div
-            className={`flex-1 flex flex-col items-center justify-center border-2 border-dashed rounded-xl py-4 gap-1 transition-colors duration-150 ${
+            className={`flex-1 flex flex-col items-center justify-center border border-dashed rounded-lg py-2.5 px-2 gap-0.5 transition-colors duration-150 ${
               isOver
                 ? "border-sky-400 bg-sky-50 text-sky-500"
                 : "border-slate-200 text-slate-300"
             }`}
           >
-            <p className="text-xs text-center">
+            <p className="text-[11px] text-center">
               {isOver ? "Drop here" : "No plans yet for Day " + day.dayNumber}
             </p>
             {!isOver && (
-              <p className="text-[10px] text-center text-slate-200">
-                Drag items here or select this day and click + in the left panel
+              <p className="text-[10px] text-center text-slate-300">
+                Drag items here or use +
               </p>
             )}
           </div>

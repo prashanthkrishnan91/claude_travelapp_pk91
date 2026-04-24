@@ -44,6 +44,7 @@ import {
   Navigation,
 } from "lucide-react";
 import { estimateTravel, sumRoute } from "@/lib/travelTime";
+import { addDaysToIsoDate, normalizeIsoDate } from "@/lib/tripDays";
 import gsap from "gsap";
 import type {
   ItineraryDay,
@@ -1281,6 +1282,22 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
+  useEffect(() => {
+    setDays([...initialDays].sort((a, b) => a.dayNumber - b.dayNumber));
+  }, [initialDays]);
+
+  const canonicalStartDate = normalizeIsoDate(startDate);
+  const displayDays = useMemo(
+    () =>
+      days.map((day) => ({
+        ...day,
+        date: canonicalStartDate
+          ? addDaysToIsoDate(canonicalStartDate, day.dayNumber - 1)
+          : normalizeIsoDate(day.date),
+      })),
+    [days, canonicalStartDate]
+  );
+
   // Load trip-level items on mount, sort by AI score
   useEffect(() => {
     fetchTripItems(tripId).then((items) => {
@@ -2340,7 +2357,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                       onChange={(e) => setSelectedDayId(e.target.value || null)}
                       className="text-xs font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-sky-400"
                     >
-                      {days.map((d) => (
+                      {displayDays.map((d) => (
                         <option key={d.id} value={d.id}>
                           Day {d.dayNumber}{d.date ? ` · ${d.date}` : ""}
                         </option>
@@ -2360,7 +2377,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
             <div className="flex-1 overflow-y-auto flex flex-col gap-3 pr-0.5">
               <SortableContext items={days.map((d) => d.id)} strategy={verticalListSortingStrategy}>
-                {days.map((day) => (
+                {displayDays.map((day) => (
                   <ItineraryDayColumn
                     key={day.id}
                     day={day}
