@@ -215,7 +215,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
   const followUpActions = useMemo(() => {
     const lastAssistantIntent = [...messages].reverse().find((msg) => msg.role === "assistant")?.intent;
     if (lastAssistantIntent && ["michelin_restaurants", "restaurants", "hidden_gems", "romantic", "family_friendly", "luxury_value"].includes(lastAssistantIntent)) {
-      return ["Michelin / tasting menus", "Best value dinner", "Add nearby drinks"];
+      return ["Michelin / tasting menus", "Best value dinner", "Nearby cocktail bars"];
     }
     if (lastAssistantIntent === "hotels") {
       return ["Compare areas", "Luxury with value", "Points vs cash ideas"];
