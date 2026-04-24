@@ -1,6 +1,6 @@
 import logging
 from datetime import date, timedelta
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -197,6 +197,14 @@ class ItineraryService:
 
     def create_trip_item(self, payload: ItineraryItemDirectCreate) -> ItineraryItem:
         data = payload.model_dump(mode="json", exclude_none=True)
+        duplicate = self._find_duplicate_item(
+            trip_id=payload.trip_id,
+            title=payload.title,
+            item_type=payload.item_type.value,
+            day_id=payload.day_id,
+        )
+        if duplicate:
+            return ItineraryItem(**duplicate)
         result = (
             self.db.table(ITEMS_TABLE)
             .insert(data)
@@ -223,3 +231,22 @@ class ItineraryService:
 
     def delete_item(self, item_id: UUID) -> None:
         self.db.table(ITEMS_TABLE).delete().eq("id", str(item_id)).execute()
+
+    def _find_duplicate_item(self, trip_id: UUID, title: str, item_type: str, day_id: Optional[UUID]) -> Optional[dict]:
+        query = (
+            self.db.table(ITEMS_TABLE)
+            .select("*")
+            .eq("trip_id", str(trip_id))
+            .eq("item_type", item_type)
+            .limit(25)
+        )
+        if day_id:
+            query = query.eq("day_id", str(day_id))
+        else:
+            query = query.is_("day_id", "null")
+        existing = query.execute().data or []
+        normalized_title = title.strip().lower()
+        for row in existing:
+            if (row.get("title") or "").strip().lower() == normalized_title:
+                return row
+        return None

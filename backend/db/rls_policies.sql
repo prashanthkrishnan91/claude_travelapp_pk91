@@ -115,3 +115,29 @@ create policy "itinerary_items: delete via trip"
         and trips.user_id = auth.uid()
     )
   );
+
+-- =============================================================
+-- CONCIERGE MESSAGES
+-- Access is scoped through trip ownership.
+-- =============================================================
+alter table public.concierge_messages enable row level security;
+
+create policy "concierge_messages: select via trip"
+  on public.concierge_messages for select
+  using (
+    exists (
+      select 1 from public.trips
+      where trips.id = concierge_messages.trip_id
+        and trips.user_id = auth.uid()
+    )
+  );
+
+create policy "concierge_messages: insert via trip"
+  on public.concierge_messages for insert
+  with check (
+    exists (
+      select 1 from public.trips
+      where trips.id = concierge_messages.trip_id
+        and trips.user_id = auth.uid()
+    )
+  );
