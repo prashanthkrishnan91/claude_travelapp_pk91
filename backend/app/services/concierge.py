@@ -32,6 +32,7 @@ from app.models.concierge import (
     SOURCE_NONE,
     SOURCE_UNAVAILABLE,
     ConciergeResponse,
+    ConciergeMessage,
     ConciergeSearchResponse,
     Suggestion,
     UnifiedAttractionResult,
@@ -46,6 +47,7 @@ from app.models.search import (
 from app.services.search import SearchService
 
 logger = logging.getLogger(__name__)
+MESSAGES_TABLE = "concierge_messages"
 
 _SYSTEM_PROMPT = (
     "You are a premium travel concierge. "
@@ -150,6 +152,7 @@ class ConciergeService:
 
     def search(self, trip_id: UUID, user_query: str, user_id: UUID) -> ConciergeSearchResponse:
         trip = self._fetch_trip(trip_id, user_id)
+        self._save_message(trip_id, "user", user_query)
         destination = trip.get("destination", "")
         intent = self._detect_intent(user_query)
 
@@ -249,9 +252,10 @@ class ConciergeService:
         )
         raw = self._call_claude(prompt, system_prompt=system_prompt)
         base = self._parse_response(raw)
+        concise_response = self._concise_response(base.response)
 
-        return ConciergeSearchResponse(
-            response=base.response,
+        response = ConciergeSearchResponse(
+            response=concise_response,
             intent=intent,
             retrieval_used=retrieval_used,
             source_status=source_status,
@@ -263,6 +267,24 @@ class ConciergeService:
             sources=sources,
             warnings=warnings,
         )
+        self._save_message(
+            trip_id,
+            "assistant",
+            response.response,
+            structured_results=response.model_dump(mode="json"),
+        )
+        return response
+
+    def list_messages(self, trip_id: UUID, user_id: UUID) -> List[ConciergeMessage]:
+        self._fetch_trip(trip_id, user_id)
+        rows = (
+            self._db.table(MESSAGES_TABLE)
+            .select("id,trip_id,role,content,structured_results,created_at")
+            .eq("trip_id", str(trip_id))
+            .order("created_at")
+            .execute()
+        )
+        return [ConciergeMessage(**row) for row in (rows.data or [])]
 
     # ------------------------------------------------------------------
     # Intent detection
@@ -572,6 +594,32 @@ class ConciergeService:
             )
 
         return "".join(parts)
+
+    def _save_message(
+        self,
+        trip_id: UUID,
+        role: str,
+        content: str,
+        structured_results: Optional[dict] = None,
+    ) -> None:
+        try:
+            payload = {
+                "trip_id": str(trip_id),
+                "role": role,
+                "content": content.strip(),
+                "structured_results": structured_results,
+            }
+            self._db.table(MESSAGES_TABLE).insert(payload).execute()
+        except Exception as exc:
+            logger.warning("Failed to persist concierge message: %s", exc)
+
+    def _concise_response(self, text: str) -> str:
+        cleaned = re.sub(r"\s+", " ", (text or "").strip())
+        if not cleaned:
+            return "I found strong options that match your request."
+        sentences = re.split(r"(?<=[.!?])\s+", cleaned)
+        short = " ".join(sentences[:3]).strip()
+        return short if short else cleaned[:280]
 
     # ------------------------------------------------------------------
     # Claude API call

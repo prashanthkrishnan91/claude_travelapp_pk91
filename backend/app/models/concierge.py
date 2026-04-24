@@ -1,6 +1,7 @@
 """Pydantic models for the AI concierge endpoint."""
 
-from typing import List, Literal, Optional
+from datetime import datetime
+from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -114,3 +115,12 @@ class ConciergeSearchResponse(BaseModel):
     suggestions: List[Suggestion] = []
     sources: List[str] = []
     warnings: List[str] = []
+
+
+class ConciergeMessage(BaseModel):
+    id: UUID
+    trip_id: UUID
+    role: Literal["user", "assistant", "system", "tool"]
+    content: str
+    structured_results: Optional[Dict[str, Any]] = None
+    created_at: datetime
