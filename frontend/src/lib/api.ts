@@ -1187,6 +1187,7 @@ export interface ConciergeSearchResult {
 export interface ConciergeMessage {
   id: string;
   tripId: string;
+  clientMessageId?: string | null;
   role: "user" | "assistant" | "system" | "tool";
   content: string;
   structuredResults?: ConciergeSearchResult | null;
@@ -1205,20 +1206,21 @@ export async function callConcierge(
 
 export async function callConciergeSearch(
   tripId: string,
-  userQuery: string
+  userQuery: string,
+  clientMessageId?: string
 ): Promise<ConciergeSearchResult> {
   return apiFetch<ConciergeSearchResult>("/ai/concierge/search", {
     method: "POST",
-    body: JSON.stringify({ trip_id: tripId, user_query: userQuery }),
+    body: JSON.stringify({
+      trip_id: tripId,
+      user_query: userQuery,
+      ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
+    }),
   });
 }
 
 export async function fetchConciergeMessages(tripId: string): Promise<ConciergeMessage[]> {
-  try {
-    return await apiFetch<ConciergeMessage[]>(`/ai/concierge/${tripId}/messages`);
-  } catch {
-    return [];
-  }
+  return apiFetch<ConciergeMessage[]>(`/ai/concierge/${tripId}/messages`);
 }
 
 type ConciergeStructuredItem = UnifiedRestaurantResult | UnifiedAttractionResult | UnifiedHotelResult;

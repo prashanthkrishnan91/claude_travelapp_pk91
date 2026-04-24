@@ -192,6 +192,7 @@ for each row execute function public.set_updated_at();
 create table if not exists public.concierge_messages (
   id                 uuid primary key default gen_random_uuid(),
   trip_id            uuid not null references public.trips(id) on delete cascade,
+  client_message_id  text,
   role               text not null check (role in ('user','assistant','system','tool')),
   content            text not null,
   structured_results jsonb,
@@ -200,6 +201,9 @@ create table if not exists public.concierge_messages (
 
 create index if not exists concierge_messages_trip_idx
   on public.concierge_messages (trip_id, created_at);
+create unique index if not exists concierge_messages_client_message_id_uidx
+  on public.concierge_messages (client_message_id)
+  where client_message_id is not null;
 
 -- =============================================================
 -- RESEARCH CACHE

@@ -30,7 +30,7 @@ def concierge(payload: ConciergeRequest, db: DB, user_id: CurrentUserID) -> Conc
 @router.post("/concierge/search", response_model=ConciergeSearchResponse)
 def concierge_search(payload: ConciergeSearchRequest, db: DB, user_id: CurrentUserID) -> ConciergeSearchResponse:
     """Retrieval-first concierge: fetches live Michelin/restaurant data before generating a response."""
-    return ConciergeService(db).search(payload.trip_id, payload.user_query, user_id)
+    return ConciergeService(db).search(payload.trip_id, payload.user_query, user_id, payload.client_message_id)
 
 
 @router.get("/concierge/{trip_id}/messages", response_model=List[ConciergeMessage])

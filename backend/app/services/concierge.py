@@ -6,6 +6,7 @@ import re
 from datetime import date, timedelta
 from typing import List, Optional
 from uuid import UUID
+from uuid import uuid4
 
 from fastapi import HTTPException, status
 from supabase import Client
@@ -150,9 +151,12 @@ class ConciergeService:
     # Retrieval-first search()
     # ------------------------------------------------------------------
 
-    def search(self, trip_id: UUID, user_query: str, user_id: UUID) -> ConciergeSearchResponse:
+    def search(
+        self, trip_id: UUID, user_query: str, user_id: UUID, client_message_id: Optional[str] = None
+    ) -> ConciergeSearchResponse:
         trip = self._fetch_trip(trip_id, user_id)
-        self._save_message(trip_id, "user", user_query)
+        request_id = (client_message_id or "").strip() or str(uuid4())
+        self._save_message(trip_id, "user", user_query, client_message_id=request_id)
         destination = trip.get("destination", "")
         intent = self._detect_intent(user_query)
 
@@ -272,6 +276,7 @@ class ConciergeService:
             "assistant",
             response.response,
             structured_results=response.model_dump(mode="json"),
+            client_message_id=f"{request_id}:assistant",
         )
         return response
 
@@ -279,7 +284,7 @@ class ConciergeService:
         self._fetch_trip(trip_id, user_id)
         rows = (
             self._db.table(MESSAGES_TABLE)
-            .select("id,trip_id,role,content,structured_results,created_at")
+            .select("id,trip_id,client_message_id,role,content,structured_results,created_at")
             .eq("trip_id", str(trip_id))
             .order("created_at")
             .execute()
@@ -601,15 +606,20 @@ class ConciergeService:
         role: str,
         content: str,
         structured_results: Optional[dict] = None,
+        client_message_id: Optional[str] = None,
     ) -> None:
         try:
             payload = {
                 "trip_id": str(trip_id),
+                "client_message_id": client_message_id,
                 "role": role,
                 "content": content.strip(),
                 "structured_results": structured_results,
             }
-            self._db.table(MESSAGES_TABLE).insert(payload).execute()
+            if client_message_id:
+                self._db.table(MESSAGES_TABLE).upsert(payload, on_conflict="client_message_id").execute()
+            else:
+                self._db.table(MESSAGES_TABLE).insert(payload).execute()
         except Exception as exc:
             logger.warning("Failed to persist concierge message: %s", exc)
 
