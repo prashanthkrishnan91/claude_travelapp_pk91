@@ -1405,13 +1405,11 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   }, [days]);
 
   useEffect(() => {
-    const selectedDay = days.find((day) => day.id === selectedDayId);
-    if (selectedDay) {
-      setExpandedDayNumber(selectedDay.dayNumber);
-      return;
-    }
-    setExpandedDayNumber((prev) => prev ?? days[0]?.dayNumber ?? null);
-  }, [days, selectedDayId]);
+    setExpandedDayNumber((prev) => {
+      if (prev != null && days.some((day) => day.dayNumber === prev)) return prev;
+      return days[0]?.dayNumber ?? null;
+    });
+  }, [days]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -1742,6 +1740,19 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     setActiveId(event.active.id);
   }, []);
 
+  const resolveTargetDayId = useCallback((overId: UniqueIdentifier, overData?: Record<string, unknown>) => {
+    if (overData?.type === "itinerary-item") {
+      const overItem = overData.item as ItineraryItem | undefined;
+      return overItem?.dayId ?? null;
+    }
+    if (overData?.type === "day") {
+      const dayId = overData.dayId;
+      return typeof dayId === "string" ? dayId : null;
+    }
+    const overIdStr = String(overId);
+    return overIdStr.startsWith("day-") ? overIdStr.replace("day-", "") : null;
+  }, []);
+
   const handleDragOver = useCallback((event: DragOverEvent) => {
     const { active, over } = event;
     if (!over) return;
@@ -1751,10 +1762,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
     const sourceItem: ItineraryItem = activeData.item;
     const sourceDayId = sourceItem.dayId;
-    let targetDayId: string | null = null;
-    if (overData?.type === "itinerary-item") targetDayId = overData.item.dayId;
-    else if (overData?.type === "day") targetDayId = overData.dayId;
-    else { const s = String(over.id); if (s.startsWith("day-")) targetDayId = s.replace("day-", ""); }
+    const targetDayId = resolveTargetDayId(over.id, overData as Record<string, unknown> | undefined);
     if (!targetDayId) return;
 
     if (targetDayId === sourceDayId) {
@@ -1775,13 +1783,28 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       const sourceDay = prev.find((d) => d.id === sourceDayId);
       const targetDay = prev.find((d) => d.id === targetDayId);
       if (!sourceDay || !targetDay) return prev;
+      const sourceItemCurrent = sourceDay.items.find((item) => item.id === sourceItem.id);
+      if (!sourceItemCurrent) return prev;
+
+      const targetInsertIndex = overData?.type === "itinerary-item"
+        ? targetDay.items.findIndex((item) => item.id === String(over.id))
+        : targetDay.items.length;
+      const boundedInsertIndex = Math.max(0, Math.min(
+        targetInsertIndex === -1 ? targetDay.items.length : targetInsertIndex,
+        targetDay.items.length
+      ));
+
       return prev.map((d) => {
         if (d.id === sourceDayId) return { ...d, items: d.items.filter((i) => i.id !== sourceItem.id).map((i, idx) => ({ ...i, position: idx })) };
-        if (d.id === targetDayId) return { ...d, items: [...d.items, { ...sourceItem, dayId: targetDayId! }].map((i, idx) => ({ ...i, position: idx })) };
+        if (d.id === targetDayId) {
+          const nextItems = [...d.items];
+          nextItems.splice(boundedInsertIndex, 0, { ...sourceItemCurrent, dayId: targetDayId });
+          return { ...d, items: nextItems.map((i, idx) => ({ ...i, position: idx })) };
+        }
         return d;
       });
     });
-  }, []);
+  }, [resolveTargetDayId]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     setActiveId(null);
@@ -1814,33 +1837,67 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
     if (activeData?.type === "itinerary-item") {
       const sourceItem: ItineraryItem = activeData.item;
-      if (!overData) return;
-      const overId = String(over.id);
-      const targetDayId =
-        overData.type === "itinerary-item" ? overData.item.dayId :
-        overData.type === "day" ? overData.dayId :
-        overId.startsWith("day-") ? overId.replace("day-", "") : null;
+      const targetDayId = resolveTargetDayId(over.id, overData as Record<string, unknown> | undefined);
       if (!targetDayId) return;
-      if (targetDayId === sourceItem.dayId) {
-        // State already updated in handleDragOver — persist current positions to backend
-        const day = days.find((d) => d.id === targetDayId);
-        if (day) {
-          day.items.forEach((item) => updateItem(item.id, { position: item.position }).catch(() => {}));
+
+      const updates: Array<{ itemId: string; patch: Partial<ItineraryItem> }> = [];
+      setDays((prev) => {
+        const sourceDay = prev.find((day) => day.items.some((item) => item.id === sourceItem.id));
+        const destinationDay = prev.find((day) => day.id === targetDayId);
+        if (!sourceDay || !destinationDay) return prev;
+
+        const sourceIndex = sourceDay.items.findIndex((item) => item.id === sourceItem.id);
+        if (sourceIndex === -1) return prev;
+        const overItemId = overData?.type === "itinerary-item" ? String(over.id) : null;
+
+        if (sourceDay.id === destinationDay.id) {
+          if (!overItemId) return prev;
+          const destinationIndex = sourceDay.items.findIndex((item) => item.id === overItemId);
+          if (destinationIndex === -1 || destinationIndex === sourceIndex) return prev;
+          const nextDays = prev.map((day) => (
+            day.id === sourceDay.id
+              ? { ...day, items: arrayMove(day.items, sourceIndex, destinationIndex).map((item, idx) => ({ ...item, position: idx })) }
+              : day
+          ));
+          const persistedDay = nextDays.find((day) => day.id === sourceDay.id);
+          persistedDay?.items.forEach((item) => updates.push({ itemId: item.id, patch: { position: item.position } }));
+          return nextDays;
         }
-      } else {
-        // Cross-day move — persist new day_id and position to backend
-        const targetDay = days.find((d) => d.id === targetDayId);
-        const movedPosition = targetDay?.items.find((i) => i.id === sourceItem.id)?.position
-          ?? (targetDay?.items.length ?? 1) - 1;
-        updateItem(sourceItem.id, { dayId: targetDayId, position: movedPosition }).catch(() => {});
-        // Persist updated positions for source day items
-        const sourceDay = days.find((d) => d.id === sourceItem.dayId);
-        if (sourceDay) {
-          sourceDay.items.forEach((item) => updateItem(item.id, { position: item.position }).catch(() => {}));
-        }
-      }
+
+        const movedItem = sourceDay.items[sourceIndex];
+        const sourceItems = sourceDay.items.filter((item) => item.id !== sourceItem.id);
+        const destinationItems = [...destinationDay.items.filter((item) => item.id !== sourceItem.id)];
+        const insertIndex = overItemId
+          ? destinationItems.findIndex((item) => item.id === overItemId)
+          : destinationItems.length;
+        const boundedInsertIndex = Math.max(0, Math.min(insertIndex === -1 ? destinationItems.length : insertIndex, destinationItems.length));
+        destinationItems.splice(boundedInsertIndex, 0, { ...movedItem, dayId: destinationDay.id });
+
+        const nextDays = prev.map((day) => {
+          if (day.id === sourceDay.id) {
+            return { ...day, items: sourceItems.map((item, idx) => ({ ...item, position: idx })) };
+          }
+          if (day.id === destinationDay.id) {
+            return { ...day, items: destinationItems.map((item, idx) => ({ ...item, position: idx })) };
+          }
+          return day;
+        });
+        const persistedSourceDay = nextDays.find((day) => day.id === sourceDay.id);
+        const persistedDestinationDay = nextDays.find((day) => day.id === destinationDay.id);
+        persistedSourceDay?.items.forEach((item) => updates.push({ itemId: item.id, patch: { position: item.position } }));
+        persistedDestinationDay?.items.forEach((item) => {
+          if (item.id === sourceItem.id) {
+            updates.push({ itemId: item.id, patch: { dayId: destinationDay.id, position: item.position } });
+            return;
+          }
+          updates.push({ itemId: item.id, patch: { position: item.position } });
+        });
+        return nextDays;
+      });
+
+      updates.forEach(({ itemId, patch }) => updateItem(itemId, patch).catch(() => {}));
     }
-  }, [days, tripId]);
+  }, [days, tripId, resolveTargetDayId]);
 
   // ── Drag overlay source item ─────────────────────────────────────────────────
 

@@ -72,13 +72,13 @@ export function ItineraryDayColumn({
     data: { type: "day", dayId: day.id },
   });
 
-  const itemIds = day.items.map((item: ItineraryItem) => item.id);
   const showAllItems = expandedItemDays[day.dayNumber] ?? false;
   const hasHiddenItems = day.items.length > PREVIEW_ITEM_LIMIT;
   const visibleItems = useMemo(
     () => (showAllItems ? day.items : day.items.slice(0, PREVIEW_ITEM_LIMIT)),
     [day.items, showAllItems]
   );
+  const itemIds = visibleItems.map((item: ItineraryItem) => item.id);
   const hiddenItemsCount = Math.max(day.items.length - 1, 0);
   const firstItem = day.items[0];
   const itemTypeCounts = day.items.reduce<Record<string, number>>((acc, item) => {
