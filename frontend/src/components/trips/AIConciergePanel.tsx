@@ -49,10 +49,14 @@ interface Props {
   onItemAdded?: () => void;
 }
 
-function sourceLabel(status: string): string | null {
-  if (status === "curated_static") return "Curated reference data";
-  if (status === "live_search") return "Live search results";
+function sourceLabel(status: string, intent?: string): string | null {
   if (status === "confirmed_michelin") return "Confirmed Michelin data";
+  if (status === "curated_static") return "Curated reference data";
+  if (status === "live_search") {
+    if (intent === "hotels") return "Based on available hotel database · verify rates before booking";
+    if (intent === "michelin_restaurants") return "Michelin Guide reference data";
+    return "Live search results · limited source coverage";
+  }
   return null;
 }
 
@@ -151,12 +155,12 @@ function ConciergeCard({
           {adding ? <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" /> : added ? <span className="inline-flex items-center gap-1"><Check className="h-3 w-3" /> Added</span> : actionLabel ?? "Add to Trip"}
         </button>
         {mapLink && (
-          <a href={mapLink} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-slate-100 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-200">
+          <a href={mapLink} target="_blank" rel="noopener noreferrer" title="View on map" aria-label="View on map" className="rounded-lg bg-slate-100 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-200">
             <MapPin className="h-3.5 w-3.5" />
           </a>
         )}
-        {sourceLink && (
-          <a href={sourceLink} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-violet-50 px-2 py-1.5 text-xs text-violet-700 hover:bg-violet-100">
+        {sourceLink && sourceLink !== mapLink && (
+          <a href={sourceLink} target="_blank" rel="noopener noreferrer" title="View source / book" aria-label="View source or book" className="rounded-lg bg-violet-50 px-2 py-1.5 text-xs text-violet-700 hover:bg-violet-100">
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
         )}
@@ -411,9 +415,18 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
           {messages.map((msg, idx) => (
             <div key={idx} className="space-y-2">
               <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${msg.role === "user" ? "rounded-br-sm bg-sky-500 text-white" : "rounded-bl-sm bg-slate-100 text-slate-800"}`}>
-                  {msg.text}
-                </div>
+                {msg.role === "assistant" && msg.intent === "compare" ? (
+                  <div className="w-full rounded-xl border border-indigo-200 bg-indigo-50 p-3">
+                    <div className="mb-1.5 flex items-center gap-1.5">
+                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">Comparison</span>
+                    </div>
+                    <p className="text-xs leading-relaxed text-slate-700">{msg.text}</p>
+                  </div>
+                ) : (
+                  <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${msg.role === "user" ? "rounded-br-sm bg-sky-500 text-white" : "rounded-bl-sm bg-slate-100 text-slate-800"}`}>
+                    {msg.text}
+                  </div>
+                )}
               </div>
 
               {msg.role === "assistant" && (
@@ -454,12 +467,12 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                             meta={[
                               a.neighborhood || a.address || "",
                               a.rating ? `★ ${a.rating}` : "",
-                              a.reviewCount ? `${a.reviewCount} reviews` : "",
+                              a.reviewCount ? `${a.reviewCount.toLocaleString()} reviews` : "",
                             ].filter(Boolean)}
                             tags={a.tags ?? []}
                             reason={a.description}
                             mapLink={a.mapsLink}
-                            sourceLink={a.mapsLink}
+                            sourceLink={undefined}
                             added={addedItems.has(key)}
                             adding={addingItems.has(key)}
                             onAdd={() => addItem(a.name, "attraction", a, a.description)}
@@ -469,7 +482,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
                       {msg.hotels?.map((h) => {
                         const key = cardKey(h.name, selectedDayId || undefined);
-                        const reason = h.pricePerNight ? `Around $${Math.round(h.pricePerNight)}/night.` : undefined;
+                        const reason = h.reason ?? (h.pricePerNight ? `~$${Math.round(h.pricePerNight)}/night` : undefined);
                         return (
                           <ConciergeCard
                             key={`${h.name}-${key}`}
@@ -479,11 +492,12 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                               h.areaLabel || "",
                               h.stars ? `${Math.round(h.stars)}★` : "",
                               h.rating ? `★ ${h.rating}` : "",
+                              h.pricePerNight ? `~$${Math.round(h.pricePerNight)}/night` : "",
                             ].filter(Boolean)}
                             tags={h.tags ?? []}
                             reason={reason}
                             mapLink={h.mapsLink}
-                            sourceLink={h.mapsLink}
+                            sourceLink={h.bookingUrl}
                             added={addedItems.has(key)}
                             adding={addingItems.has(key)}
                             onAdd={() => addItem(h.name, "hotel", h, reason)}
@@ -504,10 +518,10 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                     </div>
                   )}
 
-                  {msg.sourceStatus && sourceLabel(msg.sourceStatus) && (
+                  {msg.sourceStatus && sourceLabel(msg.sourceStatus, msg.intent) && (
                     <div className="flex items-center gap-1 text-[10px] text-slate-400">
                       <Info className="h-3 w-3" />
-                      <span>{sourceLabel(msg.sourceStatus)}</span>
+                      <span>{sourceLabel(msg.sourceStatus, msg.intent)}</span>
                     </div>
                   )}
                 </>

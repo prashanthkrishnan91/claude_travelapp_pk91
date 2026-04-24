@@ -92,6 +92,8 @@ class UnifiedHotelResult(BaseModel):
     rating: Optional[float] = None
     price_per_night: Optional[float] = None
     maps_link: Optional[str] = None
+    booking_url: Optional[str] = None
+    reason: Optional[str] = None
     ai_score: Optional[float] = None
     tags: List[str] = []
 
