@@ -24,6 +24,7 @@ from app.models.concierge import (
     INTENT_HOTELS,
     INTENT_LUXURY_VALUE,
     INTENT_MICHELIN_RESTAURANTS,
+    INTENT_NIGHTLIFE,
     INTENT_PLAN_DAY,
     INTENT_RESTAURANTS,
     INTENT_REWARDS_HELP,
@@ -82,7 +83,7 @@ _RETRIEVAL_SYSTEM_PROMPT = (
 # Intent sets for routing logic
 _RESTAURANT_INTENTS = {
     INTENT_MICHELIN_RESTAURANTS, INTENT_RESTAURANTS, INTENT_HIDDEN_GEMS,
-    INTENT_LUXURY_VALUE, INTENT_ROMANTIC, INTENT_FAMILY_FRIENDLY,
+    INTENT_LUXURY_VALUE, INTENT_ROMANTIC, INTENT_FAMILY_FRIENDLY, INTENT_NIGHTLIFE,
 }
 _ATTRACTION_INTENTS = {INTENT_ATTRACTIONS, INTENT_PLAN_DAY}
 
@@ -114,8 +115,11 @@ _FAMILY_PAT = _kw_pattern(
 _RESTAURANT_PAT = _kw_pattern(
     "restaurants", "restaurant", "dining", "dinner", "lunch", "breakfast", "brunch",
     "cuisine", "where to eat", "best places to eat", "tasting menu", "omakase", "eat",
-    "drinks", "cocktail", "cocktails", "bar", "bars", "wine bar", "brewery", "rooftop bar",
-    "speakeasy", "nightlife",
+    "drinks",
+)
+_NIGHTLIFE_PAT = _kw_pattern(
+    "cocktail", "cocktails", "bar", "bars", "wine bar", "brewery", "rooftop bar",
+    "speakeasy", "nightlife", "nearby drinks", "after dinner drinks", "night out",
 )
 _ATTRACTION_PAT = _kw_pattern(
     "attractions", "attraction", "museum", "museums", "tour", "sightseeing",
@@ -209,6 +213,21 @@ class ConciergeService:
             ]
             sources.append("Restaurant search database")
             retrieval_used = True
+
+        elif intent == INTENT_NIGHTLIFE:
+            restaurants = self._sample_nightlife_results(destination)
+            if restaurants:
+                source_status = SOURCE_SAMPLE_DATA
+                sources.append("Sample bar research data · verify before booking")
+                retrieval_used = True
+            else:
+                source_status = SOURCE_UNAVAILABLE
+                warnings.append(
+                    f"No bar/nightlife cards are available yet for {destination}. "
+                    "Try specific neighborhoods, hotel concierge recommendations, or recent local roundups."
+                )
+                sources.append("Nightlife data unavailable")
+                retrieval_used = False
 
         elif intent in _ATTRACTION_INTENTS:
             raw_attr = search_svc.search_attractions(AttractionSearchRequest(location=destination))
@@ -348,6 +367,8 @@ class ConciergeService:
             return INTENT_MICHELIN_RESTAURANTS
         if _HIDDEN_GEMS_PAT.search(q):
             return INTENT_HIDDEN_GEMS
+        if _NIGHTLIFE_PAT.search(q):
+            return INTENT_NIGHTLIFE
         if _ROMANTIC_PAT.search(q):
             return INTENT_ROMANTIC
         if _FAMILY_PAT.search(q):
@@ -367,6 +388,77 @@ class ConciergeService:
         if _REWARDS_PAT.search(q):
             return INTENT_REWARDS_HELP
         return INTENT_GENERAL
+
+    def _sample_nightlife_results(self, destination: str) -> List[UnifiedRestaurantResult]:
+        city = (destination or "").lower()
+        if not city.startswith("chicago"):
+            return []
+        picks = [
+            {
+                "name": "The Violet Hour",
+                "category": "Cocktail Bar",
+                "area": "Wicker Park",
+                "rating": 9.0,
+                "tags": ["Cocktails", "Date Night", "Classic"],
+                "why": "Known for polished classic cocktails and a calm, conversation-friendly vibe.",
+            },
+            {
+                "name": "Kumiko",
+                "category": "Speakeasy",
+                "area": "West Loop",
+                "rating": 9.2,
+                "tags": ["Japanese-inspired", "Cocktails", "Reservations"],
+                "why": "Precision cocktails and thoughtful tasting menus make this a top splurge pick.",
+            },
+            {
+                "name": "Cindy's Rooftop",
+                "category": "Rooftop Bar",
+                "area": "Loop",
+                "rating": 8.7,
+                "tags": ["Rooftop", "Views", "Group Friendly"],
+                "why": "Panoramic skyline and lake views; easy option for pre- or post-dinner drinks.",
+            },
+            {
+                "name": "Three Dots and a Dash",
+                "category": "Bar",
+                "area": "River North",
+                "rating": 8.8,
+                "tags": ["Tiki", "Nightlife", "Late Night"],
+                "why": "Lively underground tiki bar with strong group energy and creative rum drinks.",
+            },
+            {
+                "name": "Webster's Wine Bar",
+                "category": "Wine Bar",
+                "area": "Logan Square",
+                "rating": 8.6,
+                "tags": ["Wine", "Cozy", "Neighborhood Favorite"],
+                "why": "Excellent by-the-glass list for a lower-key night focused on wine and conversation.",
+            },
+            {
+                "name": "Revolution Brewing Taproom",
+                "category": "Brewery",
+                "area": "Logan Square",
+                "rating": 8.4,
+                "tags": ["Craft Beer", "Casual", "Group Friendly"],
+                "why": "Best for local craft beer flights and relaxed hangouts after dinner.",
+            },
+        ]
+        cards: List[UnifiedRestaurantResult] = []
+        for pick in picks:
+            maps_query = f"{pick['name']} {pick['area']} Chicago".replace(" ", "+")
+            cards.append(
+                UnifiedRestaurantResult(
+                    name=pick["name"],
+                    source="Sample bar research data · verify before booking",
+                    cuisine=pick["category"],
+                    neighborhood=pick["area"],
+                    rating=pick["rating"],
+                    summary=f"{pick['why']} Sample bar research data · verify before booking.",
+                    maps_link=f"https://maps.google.com/?q={maps_query}",
+                    tags=pick["tags"],
+                )
+            )
+        return cards
 
     # ------------------------------------------------------------------
     # Result converters
@@ -809,7 +901,12 @@ class ConciergeService:
             parts.append("\n")
 
         if restaurants:
-            source_label = "Michelin Guide" if intent == INTENT_MICHELIN_RESTAURANTS else "restaurant database"
+            if intent == INTENT_MICHELIN_RESTAURANTS:
+                source_label = "Michelin Guide"
+            elif intent == INTENT_NIGHTLIFE:
+                source_label = "sample nightlife data"
+            else:
+                source_label = "restaurant database"
             parts.append(f"Retrieved {len(restaurants)} restaurants from {source_label} for {city}:\n")
             for i, r in enumerate(restaurants[:8], 1):
                 status_badge = f"[{r.michelin_status}]" if r.michelin_status else ""
@@ -821,6 +918,10 @@ class ConciergeService:
             if intent == INTENT_MICHELIN_RESTAURANTS:
                 parts.append(
                     "\nIMPORTANT: These are already retrieved — DO NOT tell the user to 'check Michelin Guide'.\n\n"
+                )
+            elif intent == INTENT_NIGHTLIFE:
+                parts.append(
+                    "\nIMPORTANT: These nightlife cards are already retrieved — do not say nightlife data was unavailable.\n\n"
                 )
             else:
                 parts.append("\nIMPORTANT: These results are already retrieved — reference specific names.\n\n")
@@ -903,14 +1004,34 @@ class ConciergeService:
                 "structured_results": structured_results,
             }
             if client_message_id:
-                self._db.table(MESSAGES_TABLE).upsert(payload, on_conflict="client_message_id").execute()
+                existing = (
+                    self._db.table(MESSAGES_TABLE)
+                    .select("id")
+                    .eq("client_message_id", client_message_id)
+                    .limit(1)
+                    .execute()
+                )
+                if existing.data:
+                    self._db.table(MESSAGES_TABLE).update(payload).eq("id", existing.data[0]["id"]).execute()
+                    return
+                self._db.table(MESSAGES_TABLE).insert(payload).execute()
             else:
                 self._db.table(MESSAGES_TABLE).insert(payload).execute()
         except Exception as exc:
             if self._is_missing_messages_table_error(exc):
                 logger.warning(_MISSING_MESSAGES_TABLE_HINT)
                 return
-            logger.exception("Failed to persist concierge message")
+            if self._is_duplicate_message_error(exc):
+                logger.info("Ignoring duplicate concierge message for client_message_id=%s", client_message_id)
+                return
+            logger.warning("Failed to persist concierge message: %s", exc)
+
+    def _is_duplicate_message_error(self, exc: Exception) -> bool:
+        code = str(getattr(exc, "code", "") or "").upper()
+        if code in {"23505", "409"}:
+            return True
+        text = str(exc).lower()
+        return "duplicate key value" in text or "unique constraint" in text
 
     def _is_missing_messages_table_error(self, exc: Exception) -> bool:
         code = str(getattr(exc, "code", "") or "").upper()

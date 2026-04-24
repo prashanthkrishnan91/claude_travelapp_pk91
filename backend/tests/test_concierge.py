@@ -24,12 +24,14 @@ from app.models.concierge import (
     INTENT_HOTELS,
     INTENT_LUXURY_VALUE,
     INTENT_MICHELIN_RESTAURANTS,
+    INTENT_NIGHTLIFE,
     INTENT_PLAN_DAY,
     INTENT_RESTAURANTS,
     INTENT_REWARDS_HELP,
     INTENT_ROMANTIC,
     SOURCE_CURATED_STATIC,
     SOURCE_NONE,
+    SOURCE_SAMPLE_DATA,
     SOURCE_UNAVAILABLE,
 )
 from app.services.concierge import ConciergeService
@@ -139,7 +141,21 @@ class TestIntentDetection:
 
     def test_nearby_drinks_intent_routes_to_restaurants(self):
         svc = self._svc()
-        assert svc._detect_intent("Add nearby drinks") == INTENT_RESTAURANTS
+        assert svc._detect_intent("Add nearby drinks") == INTENT_NIGHTLIFE
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "Nearby cocktail bars",
+            "Best rooftop bars",
+            "Wine bars near dinner",
+            "Speakeasy recommendations",
+            "Nightlife after dinner",
+        ],
+    )
+    def test_nightlife_queries_route_to_nightlife_intent(self, query):
+        svc = self._svc()
+        assert svc._detect_intent(query) == INTENT_NIGHTLIFE
 
     def test_attractions_intent(self):
         svc = self._svc()
@@ -324,25 +340,16 @@ class TestConciergeSearch:
         svc = self._svc("Chicago")
         with patch("app.services.concierge.SearchService") as MockSearch, \
              patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
-            mock_svc = self._mock_search_svc()
-            mock_svc.search_restaurants.return_value = [
-                SimpleNamespace(
-                    name="The Violet Hour",
-                    cuisine="Cocktail Bar",
-                    location="Wicker Park",
-                    rating=4.8,
-                    ai_score=91.0,
-                    booking_url="https://example.com/violethour",
-                    tags=["Cocktails", "Nightlife"],
-                    num_reviews=2200,
-                )
-            ]
-            MockSearch.return_value = mock_svc
+            MockSearch.return_value = self._mock_search_svc()
             result = svc.search(FAKE_TRIP_ID, "Add nearby drinks", FAKE_USER_ID)
-        assert result.intent == INTENT_RESTAURANTS
+        assert result.intent == INTENT_NIGHTLIFE
         assert result.retrieval_used is True
-        assert len(result.restaurants) == 1
-        assert result.restaurants[0].name == "The Violet Hour"
+        assert len(result.restaurants) >= 4
+        assert result.restaurants[0].cuisine in {
+            "Bar", "Cocktail Bar", "Rooftop Bar", "Speakeasy", "Wine Bar", "Brewery"
+        }
+        assert all("verify before booking" in (r.summary or "").lower() for r in result.restaurants)
+        assert result.source_status == SOURCE_SAMPLE_DATA
         assert result.restaurants[0].summary
 
     def test_search_does_not_crash_when_messages_table_missing(self):
@@ -352,7 +359,7 @@ class TestConciergeSearch:
             "PGRST205: Could not find the table 'public.concierge_messages' in the schema cache"
         )
         missing_table_error.code = "PGRST205"
-        messages_query.upsert.return_value.execute.side_effect = missing_table_error
+        messages_query.select.return_value.eq.return_value.limit.return_value.execute.side_effect = missing_table_error
 
         def table_side_effect(name):
             if name == "concierge_messages":
@@ -369,8 +376,28 @@ class TestConciergeSearch:
             ]
             MockSearch.return_value = mock_svc
             result = svc.search(FAKE_TRIP_ID, "Add nearby drinks", FAKE_USER_ID)
-        assert result.intent == INTENT_RESTAURANTS
+        assert result.intent == INTENT_NIGHTLIFE
         assert result.restaurants
+
+    def test_search_continues_when_message_persistence_insert_fails(self):
+        db = _make_mock_db("Chicago")
+        messages_query = MagicMock()
+        messages_query.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = []
+        messages_query.insert.return_value.execute.side_effect = Exception("network hiccup")
+
+        def table_side_effect(name):
+            if name == "concierge_messages":
+                return messages_query
+            return db.table.return_value
+
+        db.table.side_effect = table_side_effect
+        svc = ConciergeService(db)
+        with patch("app.services.concierge.SearchService") as MockSearch, \
+             patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            MockSearch.return_value = self._mock_search_svc()
+            result = svc.search(FAKE_TRIP_ID, "Nearby cocktail bars", FAKE_USER_ID)
+        assert result.intent == INTENT_NIGHTLIFE
+        assert result.retrieval_used is True
 
     @pytest.mark.parametrize(
         "query,expected_intent",
@@ -414,6 +441,17 @@ class TestConciergeSearch:
             result = svc.search(FAKE_TRIP_ID, query, FAKE_USER_ID)
         assert result.intent == expected_intent
         assert isinstance(result.response, str)
+
+    def test_nightlife_non_supported_city_returns_clear_note_not_restaurants(self):
+        svc = self._svc("Paris")
+        with patch("app.services.concierge.SearchService") as MockSearch, \
+             patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            MockSearch.return_value = self._mock_search_svc()
+            result = svc.search(FAKE_TRIP_ID, "Nearby cocktail bars", FAKE_USER_ID)
+        assert result.intent == INTENT_NIGHTLIFE
+        assert result.restaurants == []
+        assert result.source_status == SOURCE_UNAVAILABLE
+        assert result.warnings
 
 
 class _FakeMessagesQuery:
@@ -469,3 +507,92 @@ def test_list_messages_returns_empty_when_messages_table_missing():
     svc = ConciergeService(_FakeDBForMissingMessages())
     rows = svc.list_messages(FAKE_TRIP_ID, FAKE_USER_ID)
     assert rows == []
+
+
+class _SaveMessageQuery:
+    def __init__(self, db):
+        self.db = db
+        self._mode = None
+        self._eq_value = None
+        self._payload = None
+
+    def select(self, *_args, **_kwargs):
+        self._mode = "select"
+        return self
+
+    def eq(self, _field, value):
+        self._eq_value = value
+        return self
+
+    def limit(self, *_args, **_kwargs):
+        return self
+
+    def insert(self, payload):
+        self._mode = "insert"
+        self._payload = payload
+        return self
+
+    def update(self, payload):
+        self._mode = "update"
+        self._payload = payload
+        return self
+
+    def upsert(self, *_args, **_kwargs):
+        raise AssertionError("_save_message should not call upsert")
+
+    def execute(self):
+        if self._mode == "select":
+            if self._eq_value in self.db.messages_by_client_id:
+                row = self.db.messages_by_client_id[self._eq_value]
+                return SimpleNamespace(data=[{"id": row["id"]}])
+            return SimpleNamespace(data=[])
+        if self._mode == "insert":
+            client_id = self._payload.get("client_message_id")
+            if client_id and client_id in self.db.messages_by_client_id:
+                exc = Exception("duplicate key value violates unique constraint")
+                exc.code = "23505"
+                raise exc
+            row_id = f"row-{len(self.db.messages_by_client_id) + 1}"
+            if client_id:
+                self.db.messages_by_client_id[client_id] = {"id": row_id, **self._payload}
+            self.db.insert_calls += 1
+            return SimpleNamespace(data=[{"id": row_id}])
+        if self._mode == "update":
+            self.db.update_calls += 1
+            return SimpleNamespace(data=[])
+        raise AssertionError(f"Unsupported mode {self._mode}")
+
+
+class _SaveMessageDB:
+    def __init__(self):
+        self.messages_by_client_id = {}
+        self.insert_calls = 0
+        self.update_calls = 0
+
+    def table(self, name: str):
+        if name != "concierge_messages":
+            raise AssertionError(f"Unexpected table requested: {name}")
+        return _SaveMessageQuery(self)
+
+
+def test_save_message_dedupes_without_upsert():
+    svc = object.__new__(ConciergeService)
+    svc._db = _SaveMessageDB()
+    svc._settings = None
+
+    svc._save_message(FAKE_TRIP_ID, "user", "hello", client_message_id="abc")
+    svc._save_message(FAKE_TRIP_ID, "user", "hello again", client_message_id="abc")
+
+    assert svc._db.insert_calls == 1
+    assert svc._db.update_calls == 1
+
+
+def test_save_message_duplicate_race_is_ignored():
+    svc = object.__new__(ConciergeService)
+    db = _SaveMessageDB()
+    svc._db = db
+    svc._settings = None
+
+    db.messages_by_client_id["abc"] = {"id": "existing-row", "client_message_id": "abc"}
+    svc._save_message(FAKE_TRIP_ID, "user", "hello", client_message_id="abc")
+    assert db.update_calls == 1
