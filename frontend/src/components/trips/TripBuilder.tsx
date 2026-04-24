@@ -1228,6 +1228,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const [results]                          = useState<ResearchResult[]>(initialResults);
   // Single source of truth for which day receives left-panel "+" additions.
   const [selectedDayId,  setSelectedDayId] = useState<string | null>(initialDays[0]?.id ?? null);
+  const [expandedDayNumber, setExpandedDayNumber] = useState<number | null>(initialDays[0]?.dayNumber ?? null);
   const ensuredSignatureRef                = useRef<string | null>(null);
 
   // ── Flight / hotel candidates (trip-level items, AI pre-populated) ───────────
@@ -1402,6 +1403,15 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       return days[0]?.id ?? null;
     });
   }, [days]);
+
+  useEffect(() => {
+    const selectedDay = days.find((day) => day.id === selectedDayId);
+    if (selectedDay) {
+      setExpandedDayNumber(selectedDay.dayNumber);
+      return;
+    }
+    setExpandedDayNumber((prev) => prev ?? days[0]?.dayNumber ?? null);
+  }, [days, selectedDayId]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -2382,7 +2392,11 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                     key={day.id}
                     day={day}
                     isSelected={day.id === selectedDayId}
+                    isExpanded={expandedDayNumber === day.dayNumber}
                     onSelect={setSelectedDayId}
+                    onToggleExpanded={(dayNumber) =>
+                      setExpandedDayNumber((prev) => (prev === dayNumber ? null : dayNumber))
+                    }
                     onRemoveItem={handleRemoveItem}
                     onAddItem={handleAddToDay}
                     onToggleCompare={handleToggleCompareItem}
