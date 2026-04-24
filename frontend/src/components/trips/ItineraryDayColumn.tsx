@@ -11,6 +11,8 @@ import { ItineraryDay, ItineraryItem } from "@/types";
 import { ItineraryItemCard } from "./ItineraryItemCard";
 import { estimateTravel, formatTravelBadge } from "@/lib/travelTime";
 
+const PREVIEW_ITEM_LIMIT = 4;
+
 interface ItineraryDayColumnProps {
   day: ItineraryDay;
   /** True when this day is the current target for left-panel "+" additions. */
@@ -54,13 +56,16 @@ export function ItineraryDayColumn({
   onPlanDay,
   planDayLoading,
 }: ItineraryDayColumnProps) {
-  const [showAllItems, setShowAllItems] = useState(false);
+  const [expandedItemDays, setExpandedItemDays] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (!isExpanded) {
-      setShowAllItems(false);
+      setExpandedItemDays((prev) => ({
+        ...prev,
+        [day.dayNumber]: false,
+      }));
     }
-  }, [isExpanded, day.id]);
+  }, [day.dayNumber, isExpanded]);
 
   const { setNodeRef, isOver } = useDroppable({
     id: `day-${day.id}`,
@@ -68,12 +73,12 @@ export function ItineraryDayColumn({
   });
 
   const itemIds = day.items.map((item: ItineraryItem) => item.id);
+  const showAllItems = expandedItemDays[day.dayNumber] ?? false;
+  const hasHiddenItems = day.items.length > PREVIEW_ITEM_LIMIT;
   const visibleItems = useMemo(
-    () => (showAllItems ? day.items : day.items.slice(0, 4)),
+    () => (showAllItems ? day.items : day.items.slice(0, PREVIEW_ITEM_LIMIT)),
     [day.items, showAllItems]
   );
-  const showItemsToggle = day.items.length > 4;
-  const isTruncated = showItemsToggle && !showAllItems;
   const hiddenItemsCount = Math.max(day.items.length - 1, 0);
   const firstItem = day.items[0];
   const itemTypeCounts = day.items.reduce<Record<string, number>>((acc, item) => {
@@ -187,8 +192,7 @@ export function ItineraryDayColumn({
           items={itemIds}
           strategy={verticalListSortingStrategy}
         >
-          <div className="relative">
-            <div className="space-y-2">
+          <div className="relative space-y-2">
               {visibleItems.flatMap((item: ItineraryItem, idx: number) => {
                 const card = (
                   <ItineraryItemCard
@@ -224,10 +228,8 @@ export function ItineraryDayColumn({
                 );
                 return [card, connector];
               })}
-            </div>
-
-            {isTruncated && (
-              <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-b from-transparent to-white" />
+            {!showAllItems && hasHiddenItems && (
+              <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-14 bg-gradient-to-b from-transparent to-white" />
             )}
           </div>
         </SortableContext>
@@ -255,11 +257,18 @@ export function ItineraryDayColumn({
           </div>
         )}
 
-        {showItemsToggle && (
-          <div className="mt-3 pt-2 border-t border-slate-100 flex justify-center">
+        {hasHiddenItems && (
+          <div className="mt-3 flex justify-center border-t border-slate-100 pt-3">
             <button
-              onClick={() => setShowAllItems((prev) => !prev)}
-              className="text-[11px] text-slate-500 hover:text-slate-700 transition-colors font-medium"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpandedItemDays((prev) => ({
+                  ...prev,
+                  [day.dayNumber]: !showAllItems,
+                }));
+              }}
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50"
             >
               {showAllItems ? "Show less ↑" : `Show all ${day.items.length} items ↓`}
             </button>
