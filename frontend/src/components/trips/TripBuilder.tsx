@@ -1884,7 +1884,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-4 h-[calc(100vh-220px)] min-h-[500px]">
+        <div className="flex items-start gap-4 min-h-[500px]">
 
           {/* ── Left Panel: AI-ranked candidates ──────────────────────────── */}
           <div className="w-80 flex-shrink-0 flex flex-col gap-3 overflow-y-auto pr-0.5">
@@ -2349,7 +2349,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
           </div>
 
           {/* ── Right Panel: Itinerary Timeline ───────────────────────────── */}
-          <div className="flex-1 flex flex-col gap-3 overflow-hidden">
+          <div className="flex-1 flex flex-col gap-3 overflow-visible">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <h2 className="text-sm font-semibold text-slate-700">
                 Itinerary
@@ -2385,7 +2385,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto flex flex-col gap-3 pr-0.5">
+            <div className="flex flex-col gap-3 pr-0.5 overflow-visible">
               <SortableContext items={days.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                 {displayDays.map((day) => (
                   <ItineraryDayColumn

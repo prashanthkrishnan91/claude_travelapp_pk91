@@ -90,7 +90,7 @@ export function ItineraryDayColumn({
     .join(" · ");
 
   return (
-    <div className={`card overflow-hidden transition-all ${isSelected ? "ring-2 ring-sky-500 ring-offset-1" : ""}`}>
+    <div className={`card overflow-visible transition-all ${isSelected ? "ring-2 ring-sky-500 ring-offset-1" : ""}`}>
       {/* Day header — click to set as the target day for left-panel additions */}
       <div
         className={`shrink-0 flex items-center justify-between px-3 py-2 border-b border-slate-100 transition-colors cursor-pointer ${
@@ -184,7 +184,7 @@ export function ItineraryDayColumn({
       ) : (
       <div
         ref={setNodeRef}
-        className={`p-2.5 min-h-[68px] overflow-x-hidden space-y-1.5 border-t border-slate-100 transition-colors duration-150 ${
+        className={`p-2.5 min-h-[68px] h-auto overflow-visible space-y-1.5 border-t border-slate-100 transition-colors duration-150 ${
           isOver ? "bg-sky-50/60" : "bg-white"
         }`}
       >
@@ -192,7 +192,7 @@ export function ItineraryDayColumn({
           items={itemIds}
           strategy={verticalListSortingStrategy}
         >
-          <div className="relative space-y-2">
+          <div className="relative space-y-2 overflow-visible">
               {visibleItems.flatMap((item: ItineraryItem, idx: number) => {
                 const card = (
                   <ItineraryItemCard
