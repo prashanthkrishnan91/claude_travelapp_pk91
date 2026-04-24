@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   DndContext,
+  DragCancelEvent,
   DragEndEvent,
   DragOverEvent,
   DragStartEvent,
@@ -1740,6 +1741,10 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     setActiveId(event.active.id);
   }, []);
 
+  const handleDragCancel = useCallback(({}: DragCancelEvent) => {
+    setActiveId(null);
+  }, []);
+
   const resolveTargetDayId = useCallback((overId: UniqueIdentifier, overData?: Record<string, unknown>) => {
     if (overData?.type === "itinerary-item") {
       const overItem = overData.item as ItineraryItem | undefined;
@@ -1757,54 +1762,10 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     const { active, over } = event;
     if (!over) return;
     const activeData = active.data.current;
-    const overData   = over.data.current;
     if (!activeData || activeData.type !== "itinerary-item") return;
-
-    const sourceItem: ItineraryItem = activeData.item;
-    const sourceDayId = sourceItem.dayId;
-    const targetDayId = resolveTargetDayId(over.id, overData as Record<string, unknown> | undefined);
-    if (!targetDayId) return;
-
-    if (targetDayId === sourceDayId) {
-      // Same-day: reorder via arrayMove for smooth visual feedback
-      if (overData?.type !== "itinerary-item") return;
-      const overId = String(over.id);
-      setDays((prev) => prev.map((d) => {
-        if (d.id !== sourceDayId) return d;
-        const oldIdx = d.items.findIndex((i) => i.id === sourceItem.id);
-        const newIdx = d.items.findIndex((i) => i.id === overId);
-        if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return d;
-        return { ...d, items: arrayMove(d.items, oldIdx, newIdx).map((i, idx) => ({ ...i, position: idx })) };
-      }));
-      return;
-    }
-
-    setDays((prev) => {
-      const sourceDay = prev.find((d) => d.id === sourceDayId);
-      const targetDay = prev.find((d) => d.id === targetDayId);
-      if (!sourceDay || !targetDay) return prev;
-      const sourceItemCurrent = sourceDay.items.find((item) => item.id === sourceItem.id);
-      if (!sourceItemCurrent) return prev;
-
-      const targetInsertIndex = overData?.type === "itinerary-item"
-        ? targetDay.items.findIndex((item) => item.id === String(over.id))
-        : targetDay.items.length;
-      const boundedInsertIndex = Math.max(0, Math.min(
-        targetInsertIndex === -1 ? targetDay.items.length : targetInsertIndex,
-        targetDay.items.length
-      ));
-
-      return prev.map((d) => {
-        if (d.id === sourceDayId) return { ...d, items: d.items.filter((i) => i.id !== sourceItem.id).map((i, idx) => ({ ...i, position: idx })) };
-        if (d.id === targetDayId) {
-          const nextItems = [...d.items];
-          nextItems.splice(boundedInsertIndex, 0, { ...sourceItemCurrent, dayId: targetDayId });
-          return { ...d, items: nextItems.map((i, idx) => ({ ...i, position: idx })) };
-        }
-        return d;
-      });
-    });
-  }, [resolveTargetDayId]);
+    // Keep hover behavior as visual-only (useDroppable isOver styles in day columns).
+    // Do not mutate committed itinerary state until onDragEnd.
+  }, []);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     setActiveId(null);
@@ -1938,6 +1899,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
+        onDragCancel={handleDragCancel}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
