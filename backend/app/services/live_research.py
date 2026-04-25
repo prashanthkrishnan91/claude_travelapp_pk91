@@ -116,6 +116,19 @@ _LOW_QUALITY_MARKERS = (
 _NEUTRAL_RESEARCH_REASON = (
     "This source may contain relevant background, but it is not a confirmed venue."
 )
+_NOISY_TITLE_SUFFIX_PAT = re.compile(r"\(?\bupdated\s+\d{4}\b\)?", re.IGNORECASE)
+_TOP_LISTICLE_TITLE_PAT = re.compile(r"\b(the\s+)?\d{1,3}\s+best\b", re.IGNORECASE)
+_SOURCE_HOST_STRIP_PAT = re.compile(r"^www\.", re.IGNORECASE)
+_HIGH_AUTHORITY_EDITORIAL_HOSTS = (
+    "michelin.com",
+    "guide.michelin.com",
+    "eater.com",
+    "theinfatuation.com",
+    "timeout.com",
+    "cntraveler.com",
+)
+_RESTAURANT_PLATFORM_HOSTS = ("resy.com", "opentable.com")
+_CORROBORATION_ONLY_HOSTS = ("tripadvisor.", "yelp.", "google.", "maps.google", "foursquare.com")
 
 
 def _looks_closed(text: str) -> bool:
@@ -578,6 +591,60 @@ def _strip_publisher(title: str) -> str:
     return title.strip()
 
 
+def _normalize_source_title(title: str) -> str:
+    cleaned = _strip_publisher(title or "")
+    cleaned = _NOISY_TITLE_SUFFIX_PAT.sub("", cleaned).strip(" -–—|:;,()")
+    if not cleaned:
+        return ""
+    letters = [ch for ch in cleaned if ch.isalpha()]
+    if letters:
+        uppercase_ratio = sum(1 for ch in letters if ch.isupper()) / max(1, len(letters))
+        if uppercase_ratio >= 0.7:
+            cleaned = cleaned.title()
+    cleaned = _WHITESPACE_PAT.sub(" ", cleaned).strip()
+    return cleaned
+
+
+def _source_quality_tier(url: str, title: str, snippet: str, classification: str) -> str:
+    host = _SOURCE_HOST_STRIP_PAT.sub("", (urlparse(url).netloc or "").lower())
+    lower_title = (title or "").lower()
+    lower_snippet = (snippet or "").lower()
+    text = f"{lower_title}\n{lower_snippet}"
+
+    if classification == "venue_place" and host:
+        if any(marker in host for marker in _CORROBORATION_ONLY_HOSTS):
+            return "corroboration"
+        if any(host == h or host.endswith(f".{h}") for h in _HIGH_AUTHORITY_EDITORIAL_HOSTS):
+            return "editorial"
+        if any(host == h or host.endswith(f".{h}") for h in _RESTAURANT_PLATFORM_HOSTS):
+            return "platform"
+        # For direct venue pages on non-directory hosts, treat as primary.
+        return "official"
+
+    if any(host == h or host.endswith(f".{h}") for h in _HIGH_AUTHORITY_EDITORIAL_HOSTS):
+        return "editorial"
+    if any(host == h or host.endswith(f".{h}") for h in _RESTAURANT_PLATFORM_HOSTS):
+        return "platform"
+    if any(marker in host for marker in _CORROBORATION_ONLY_HOSTS):
+        return "corroboration"
+    if _TOP_LISTICLE_TITLE_PAT.search(lower_title) or any(tok in text for tok in ("top 10", "best of", "directory")):
+        return "weak"
+    if len(lower_snippet.strip()) < 70:
+        return "weak"
+    return "standard"
+
+
+def _quality_weight(tier: str) -> float:
+    return {
+        "official": 1.0,
+        "editorial": 0.94,
+        "platform": 0.88,
+        "standard": 0.8,
+        "corroboration": 0.72,
+        "weak": 0.58,
+    }.get(tier, 0.75)
+
+
 def _extract_neighborhood(text: str, destination: str) -> Optional[str]:
     if not text:
         return None
@@ -857,15 +924,43 @@ def _build_extracted_reason(
     intent: str,
     neighborhood: Optional[str],
     snippet: str,
+    quality_tier: str,
 ) -> str:
     category = _result_category_label(intent)
-    reason = f'Featured in "{source_title}" as a relevant {category} option for this search.'
+    match_phrase = {
+        INTENT_NIGHTLIFE: "a nightlife-focused search",
+        INTENT_HIDDEN_GEMS: "a hidden-gem style search",
+        INTENT_LUXURY_VALUE: "a luxury-value search",
+        INTENT_ROMANTIC: "a romantic outing",
+        INTENT_MICHELIN_RESTAURANTS: "a fine-dining/Michelin search",
+        INTENT_ATTRACTIONS: "a sightseeing plan",
+        INTENT_PLAN_DAY: "a day itinerary",
+        INTENT_HOTELS: "a stay-focused search",
+    }.get(intent, "this search")
+    reason = f"Worth considering for {match_phrase}"
     type_hint = _context_type_hint(snippet)
     if type_hint:
-        reason = f"{reason} Mentioned as a {type_hint}."
+        reason = f"{reason}; it is described as a {type_hint} {category}."
+    else:
+        reason = f"{reason}; it appears to be a {category}."
     if neighborhood:
         reason = f"{reason} Located around {neighborhood}."
+    if source_title:
+        reason = f"{reason} Supported by coverage in {source_title}."
+    if quality_tier == "weak":
+        reason = f"{reason} Source context is limited, so verify key details before booking."
     return reason
+
+
+def _extracted_ai_score(quality_tier: str) -> float:
+    return {
+        "editorial": 0.9,
+        "official": 0.88,
+        "platform": 0.84,
+        "standard": 0.78,
+        "corroboration": 0.72,
+        "weak": 0.62,
+    }.get(quality_tier, 0.75)
 
 
 def _recover_candidate_name(raw: str) -> Optional[str]:
@@ -1037,7 +1132,7 @@ def normalize_hits(
         if _looks_closed(combined):
             continue
 
-        title = _strip_publisher(hit.title)
+        title = _normalize_source_title(hit.title)
         if not title:
             continue
         neighborhood = _extract_neighborhood(combined, destination)
@@ -1090,12 +1185,15 @@ def normalize_hits(
                     if _looks_closed(normalized_candidate):
                         continue
                     cand_neighborhood = _extract_neighborhood(hit.snippet, destination)
+                    quality_tier = _source_quality_tier(hit.url, title, hit.snippet, classification)
                     cand_summary = _build_extracted_reason(
                         source_title=title,
                         intent=intent,
                         neighborhood=cand_neighborhood,
                         snippet=hit.snippet,
+                        quality_tier=quality_tier,
                     )
+                    extracted_ai_score = _extracted_ai_score(quality_tier)
                     if is_restaurant_intent and len(restaurants) < max_per_kind:
                         cand_cuisine = "Cocktail Bar" if intent == INTENT_NIGHTLIFE else "Restaurant"
                         cand_tags: List[str] = []
@@ -1119,7 +1217,7 @@ def normalize_hits(
                                 last_verified_at=hit.fetched_at,
                                 confidence=confidence,
                                 tags=cand_tags,
-                                ai_score=0.75,
+                                ai_score=extracted_ai_score,
                             )
                         )
                     elif is_attraction_intent and len(attractions) < max_per_kind:
@@ -1133,7 +1231,7 @@ def normalize_hits(
                                 source_url=hit.url,
                                 last_verified_at=hit.fetched_at,
                                 confidence=confidence,
-                                ai_score=0.75,
+                                ai_score=extracted_ai_score,
                             )
                         )
                     elif is_hotel_intent and len(hotels) < max_per_kind:
@@ -1147,7 +1245,7 @@ def normalize_hits(
                                 source_url=hit.url,
                                 last_verified_at=hit.fetched_at,
                                 confidence=confidence,
-                                ai_score=0.75,
+                                ai_score=extracted_ai_score,
                             )
                         )
 
@@ -1237,10 +1335,14 @@ def normalize_hits(
                 )
             )
 
-    # Sort venues: direct hits (ai_score=1.0) before article-extracted ones (ai_score=0.7).
+    # Sort venues: direct hits (ai_score=1.0) before lower-confidence extracted venues.
     restaurants.sort(key=lambda r: r.ai_score or 0.0, reverse=True)
     attractions.sort(key=lambda a: a.ai_score or 0.0, reverse=True)
     hotels.sort(key=lambda h: h.ai_score or 0.0, reverse=True)
+    research_sources.sort(
+        key=lambda s: _quality_weight(_source_quality_tier(s.source_url or "", s.title or "", s.summary or "", s.source_type)),
+        reverse=True,
+    )
     restaurants = _dedupe_overlapping_venues(restaurants)[:max_per_kind]
     attractions = _dedupe_overlapping_venues(attractions)[:max_per_kind]
     hotels = _dedupe_overlapping_venues(hotels)[:max_per_kind]

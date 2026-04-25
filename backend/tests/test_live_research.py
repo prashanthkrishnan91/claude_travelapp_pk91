@@ -345,7 +345,7 @@ class TestNormalization:
         names = [r.name for r in out["restaurants"]]
         assert "Gus' Sip & Dip" in names
         assert "Kumiko" in names
-        # Direct hit (ai_score=1.0) should sort before extracted hit (ai_score=0.7)
+        # Direct hit (ai_score=1.0) should sort before extracted hits.
         gus_idx = names.index("Gus' Sip & Dip")
         kumiko_idx = names.index("Kumiko")
         assert gus_idx < kumiko_idx
@@ -389,7 +389,8 @@ class TestNormalization:
         kumiko = next((r for r in out["restaurants"] if r.name == "Kumiko"), None)
         assert kumiko is not None
         assert "Best Bars in Chicago" in (kumiko.summary or "")
-        assert "Featured in" in (kumiko.summary or "")
+        assert "Worth considering" in (kumiko.summary or "")
+        assert "Featured in" not in (kumiko.summary or "")
         forbidden = [
             "venue-like proper noun",
             "category signal",
@@ -420,6 +421,71 @@ class TestNormalization:
         for r in out["restaurants"]:
             summary = (r.summary or "").lower()
             assert not any(term in summary for term in forbidden)
+
+    def test_source_title_cleanup_normalizes_all_caps_and_updated_suffix(self):
+        hits = [
+            _hit(
+                "THE 10 BEST FINE DINING RESTAURANTS IN CHICAGO (UPDATED 2026)",
+                "https://example.com/best-fine-dining",
+                "Roundup of fine dining options in Chicago.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_RESTAURANTS, destination="Chicago", user_query="fine dining")
+        assert out["research_sources"]
+        assert out["research_sources"][0].title == "The 10 Best Fine Dining Restaurants In Chicago"
+
+    def test_extracted_editorial_source_ranks_above_generic_top_list(self):
+        hits = [
+            _hit(
+                "Top 10 Chicago Cocktail Bars",
+                "https://example.com/top-10-cocktail-bars",
+                "1. Kumiko — cocktail bar in West Loop, Chicago.",
+            ),
+            _hit(
+                "Best Bars in Chicago",
+                "https://www.eater.com/chicago/best-bars",
+                "1. Meadowlark — cocktail bar in Logan Square, Chicago.",
+            ),
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars")
+        cards = {r.name: r for r in out["restaurants"]}
+        assert cards["Meadowlark"].ai_score > cards["Kumiko"].ai_score
+
+    def test_weak_extracted_source_gets_lower_score_and_verify_caveat(self):
+        hits = [
+            _hit(
+                "Top 10 Chicago Cocktail Bars",
+                "https://example.com/top-10-cocktail-bars",
+                "1. Kumiko — cocktail bar.",
+            ),
+            _hit(
+                "Best Chicago Bars",
+                "https://www.theinfatuation.com/chicago/guides/best-bars",
+                "1. Meadowlark — cocktail bar in Logan Square, Chicago.",
+            ),
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        cards = {r.name: r for r in out["restaurants"]}
+        assert cards["Kumiko"].ai_score < cards["Meadowlark"].ai_score
+        assert "verify key details" in (cards["Kumiko"].summary or "").lower()
+
+    def test_fine_dining_intent_creates_fine_dining_reasoning(self):
+        hits = [
+            _hit(
+                "MICHELIN Chicago Picks",
+                "https://guide.michelin.com/us/en/illinois/chicago/restaurants",
+                "1. Smyth — Michelin dining in West Loop, Chicago.",
+            )
+        ]
+        out = normalize_hits(
+            hits,
+            intent=INTENT_MICHELIN_RESTAURANTS,
+            destination="Chicago",
+            user_query="fine dining chicago",
+        )
+        smyth = next((r for r in out["restaurants"] if r.name == "Smyth"), None)
+        assert smyth is not None
+        assert "fine-dining/michelin search" in (smyth.summary or "").lower()
 
     def test_research_source_cards_secondary_when_venues_present(self):
         hits = [
