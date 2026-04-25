@@ -82,8 +82,12 @@ logger = logging.getLogger(__name__)
 _CLOSED_KEYWORDS = (
     "permanently closed",
     "closed permanently",
+    "closed for good",
+    "closed for the final time",
     "now closed",
     "is closed",
+    "closing permanently",
+    "closed after",
     "shut down",
     "shuttered",
     "out of business",
@@ -98,6 +102,9 @@ _FRESHNESS_MEDIUM_DAYS = 365
 _MARKDOWN_HEADING_PAT = re.compile(r"^\s{0,3}#{1,6}\s*")
 _SYMBOL_RUN_PAT = re.compile(r"([!?.\-_*~])\1{2,}")
 _WHITESPACE_PAT = re.compile(r"\s+")
+_DANGLING_YEAR_PAREN_PAT = re.compile(r"\(\s*\d{4}\.?\s*$")
+_LEADING_LIST_NUMBER_PAT = re.compile(r"^\s*(?:\d{1,3}[.)]|[-*])\s+")
+_BROKEN_MARKDOWN_TOKENS_PAT = re.compile(r"(?:^|\s)#{1,6}\s*")
 
 # ── Verify-before-add constants ──────────────────────────────────────────────
 
@@ -175,6 +182,20 @@ def _looks_closed(text: str) -> bool:
         return False
     lower = text.lower()
     return any(kw in lower for kw in _CLOSED_KEYWORDS)
+
+
+def _closed_research_summary(title: str) -> str:
+    safe_title = (title or "This place").strip()
+    return f"{safe_title} appears closed in current source text; keep as research context only."
+
+
+def _candidate_mentions_closed(candidate: str, text: str) -> bool:
+    if not candidate or not text:
+        return False
+    for chunk in re.split(r"(?<=[.!?])\s+|\n+", text):
+        if candidate.lower() in chunk.lower() and _looks_closed(chunk):
+            return True
+    return False
 
 
 # ── Hit dataclass ────────────────────────────────────────────────────────────
@@ -742,6 +763,37 @@ def _extract_neighborhood(text: str, destination: str) -> Optional[str]:
     return candidate
 
 
+def _extract_candidate_neighborhood(candidate: str, text: str, destination: str) -> Optional[str]:
+    """Extract neighborhood signal near the specific candidate mention."""
+    if not text:
+        return None
+    if not candidate:
+        return _extract_neighborhood(text, destination)
+    low_text = text.lower()
+    idx = low_text.find(candidate.lower())
+    if idx < 0:
+        return None
+    window = text[max(0, idx - 100) : idx + len(candidate) + 140]
+    return _extract_neighborhood(window, destination)
+
+
+def _clean_reason_text(text: str) -> str:
+    clean = (text or "").strip()
+    if not clean:
+        return ""
+    clean = _BROKEN_MARKDOWN_TOKENS_PAT.sub(" ", clean)
+    clean = _LEADING_LIST_NUMBER_PAT.sub("", clean)
+    clean = _WHITESPACE_PAT.sub(" ", clean).strip(" -–—|:,;")
+    clean = _DANGLING_YEAR_PAREN_PAT.sub("", clean).strip(" -–—|:,;()")
+    if not clean:
+        return ""
+    if clean.lower().startswith("why this pick"):
+        clean = clean.split(":", 1)[-1].strip()
+    if len(clean) <= 2 or re.fullmatch(r"\d+[.)]?", clean):
+        return ""
+    return clean
+
+
 def _build_summary(snippet: str, fallback: str = "") -> str:
     s = (snippet or "").strip()
     if not s:
@@ -761,7 +813,8 @@ def _build_summary(snippet: str, fallback: str = "") -> str:
     if len(s) > 320:
         s = s[:317].rsplit(" ", 1)[0].rstrip() + "…"
 
-    return s or fallback
+    final_text = _clean_reason_text(s or fallback)
+    return final_text or fallback
 
 
 def _is_article_like(title: str, snippet: str, url: str) -> bool:
@@ -975,6 +1028,38 @@ def _dedupe_overlapping_venues(items: List[Any]) -> List[Any]:
     return deduped
 
 
+def _final_hard_filter_closed_venues(
+    venues: List[Any],
+    *,
+    kind_label: str,
+    research_sources: List[UnifiedResearchSourceResult],
+) -> List[Any]:
+    """Final guard: never return closed-signal items as addable venues."""
+    filtered: List[Any] = []
+    for venue in venues:
+        text_blob = "\n".join(
+            str(getattr(venue, attr, "") or "")
+            for attr in ("name", "summary", "description", "reason", "source", "source_url")
+        )
+        if _looks_closed(text_blob):
+            research_sources.append(
+                UnifiedResearchSourceResult(
+                    title=getattr(venue, "name", f"Closed {kind_label}"),
+                    source=getattr(venue, "source", "Live search"),
+                    source_type="generic_info_source",
+                    summary=_closed_research_summary(getattr(venue, "name", "")),
+                    source_url=getattr(venue, "source_url", None),
+                    neighborhood=getattr(venue, "neighborhood", None) or getattr(venue, "area_label", None),
+                    last_verified_at=getattr(venue, "last_verified_at", None),
+                    confidence=getattr(venue, "confidence", None),
+                    trip_addable=False,
+                )
+            )
+            continue
+        filtered.append(venue)
+    return filtered
+
+
 def _result_category_label(intent: str) -> str:
     if intent == INTENT_HOTELS:
         return "hotel"
@@ -1075,6 +1160,8 @@ def _build_extracted_reason(
         cleaned_neighborhood = ""
     has_specific_detail = bool(has_cuisine_or_vibe or cleaned_neighborhood or price_or_value or award_signal or intent_match_signal)
     if not has_specific_detail:
+        if intent == INTENT_NIGHTLIFE:
+            return "Mentioned in current nightlife research, but details need confirmation."
         return None
 
     if intent == INTENT_LUXURY_VALUE and not (price_or_value or award_signal or luxury_signal or quality_tier == "editorial"):
@@ -1094,10 +1181,15 @@ def _build_extracted_reason(
         reason = f"{reason} and recognized by Michelin/awards"
     reason = f"{reason}."
     if source_title:
-        reason = f"{reason} Backed by coverage in {source_title}."
+        safe_source_title = _clean_reason_text(source_title)
+        if safe_source_title:
+            reason = f"{reason} Backed by coverage in {safe_source_title}."
     if quality_tier == "weak":
-        reason = f"{reason} Verify current reviews and value before booking."
-    return reason
+        if intent == INTENT_NIGHTLIFE:
+            reason = "Mentioned in current nightlife research, but details need confirmation."
+        else:
+            reason = f"{reason} Verify current reviews and value before booking."
+    return _clean_reason_text(reason)
 
 
 def _extracted_ai_score(quality_tier: str) -> float:
@@ -1358,15 +1450,9 @@ def normalize_hits(
 
     for hit in hits:
         combined = f"{hit.title}\n{hit.snippet}"
-        if _looks_closed(combined):
-            continue
-
         title = _normalize_source_title(hit.title)
         if not title:
             continue
-        neighborhood = _extract_neighborhood(combined, destination)
-        confidence = _confidence_from_age(hit.fetched_at)
-        provider_label = hit.provider or "Live search"
         classification = _classify_hit(
             title,
             hit.snippet,
@@ -1374,6 +1460,24 @@ def normalize_hits(
             intent=intent,
             destination=destination,
         )
+        if _looks_closed(combined) and classification == "venue_place":
+            research_sources.append(
+                UnifiedResearchSourceResult(
+                    title=title,
+                    source=f"Live search · {hit.provider or 'Live search'}",
+                    source_type="generic_info_source",
+                    summary=_closed_research_summary(title),
+                    source_url=hit.url,
+                    neighborhood=_extract_neighborhood(combined, destination),
+                    last_verified_at=hit.fetched_at,
+                    confidence=_confidence_from_age(hit.fetched_at),
+                    trip_addable=False,
+                )
+            )
+            continue
+        neighborhood = _extract_neighborhood(combined, destination)
+        confidence = _confidence_from_age(hit.fetched_at)
+        provider_label = hit.provider or "Live search"
         # Track corroboration count across article extractions.
         # (Only used for article-extracted candidates.)
         # We recompute lazily from all hits for determinism and minimal state coupling.
@@ -1411,7 +1515,7 @@ def normalize_hits(
                     )
                     if not is_valid:
                         continue
-                    if _looks_closed(normalized_candidate):
+                    if _candidate_mentions_closed(normalized_candidate, combined):
                         continue
                     # Verify-before-add gate: only promote candidates confirmed
                     # by a second focused search when verified_candidates is set.
@@ -1421,12 +1525,12 @@ def normalize_hits(
                             continue
                         cand_neighborhood = (
                             _vr.neighborhood
-                            or _extract_neighborhood(hit.snippet, destination)
+                            or _extract_candidate_neighborhood(normalized_candidate, hit.snippet, destination)
                         )
                         cand_source_url = _vr.source_url or hit.url
                         cand_verified: Optional[bool] = True
                     else:
-                        cand_neighborhood = _extract_neighborhood(hit.snippet, destination)
+                        cand_neighborhood = _extract_candidate_neighborhood(normalized_candidate, hit.snippet, destination)
                         cand_source_url = hit.url
                         cand_verified = None
                     quality_tier = _source_quality_tier(hit.url, title, hit.snippet, classification)
@@ -1601,6 +1705,9 @@ def normalize_hits(
     restaurants = _dedupe_overlapping_venues(restaurants)[:max_per_kind]
     attractions = _dedupe_overlapping_venues(attractions)[:max_per_kind]
     hotels = _dedupe_overlapping_venues(hotels)[:max_per_kind]
+    restaurants = _final_hard_filter_closed_venues(restaurants, kind_label="venue", research_sources=research_sources)
+    attractions = _final_hard_filter_closed_venues(attractions, kind_label="attraction", research_sources=research_sources)
+    hotels = _final_hard_filter_closed_venues(hotels, kind_label="hotel", research_sources=research_sources)
 
     venue_count = len(restaurants) + len(attractions) + len(hotels)
     # Hide research-source cards when ≥3 venues exist; keep at most 2 otherwise.

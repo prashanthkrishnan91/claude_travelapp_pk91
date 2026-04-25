@@ -151,6 +151,21 @@ class TestNormalization:
         assert "Grace" not in names
         assert "Three Dots and a Dash" in names
 
+    def test_violet_hour_closed_for_final_time_is_not_addable(self):
+        hits = [
+            _hit(
+                "Chicago Cocktail News",
+                "https://example.com/chicago-cocktail-news",
+                "The Violet Hour closed for the final time after a decade run in Wicker Park.",
+            ),
+            _hit("Kumiko", "https://example.com/kumiko", "Cocktail bar at 630 W Lake St, Chicago."),
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars")
+        names = [r.name for r in out["restaurants"]]
+        assert "The Violet Hour" not in names
+        assert "Kumiko" in names
+        assert any("appears closed" in (s.summary or "").lower() for s in out["research_sources"])
+
     def test_freshness_confidence_high_for_recent(self):
         recent = datetime.now(timezone.utc).isoformat(timespec="seconds")
         old = (datetime.now(timezone.utc) - timedelta(days=720)).isoformat(timespec="seconds")
@@ -183,6 +198,52 @@ class TestNormalization:
         assert len(out["research_sources"]) == 1
         assert out["research_sources"][0].source_type == "article_listicle_blog_directory"
         assert out["research_sources"][0].trip_addable is False
+
+    def test_timeout_listicle_stays_research_source_not_trip_addable(self):
+        hits = [
+            _hit(
+                "Time Out Chicago",
+                "https://www.timeout.com/chicago/bars/best-bars-in-chicago",
+                "Best bars in Chicago: The Violet Hour, Broken Shaker, and more.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="nightlife")
+        assert out["restaurants"] == []
+        assert out["research_sources"]
+        assert out["research_sources"][0].source_type == "article_listicle_blog_directory"
+        assert out["research_sources"][0].trip_addable is False
+
+    def test_broken_shaker_at_robey_can_be_addable_without_violet_robey_mixup(self):
+        hits = [
+            _hit(
+                "Best Bars in Chicago",
+                "https://example.com/nightlife-guide",
+                (
+                    "1. Broken Shaker — at The Robey in Wicker Park with rooftop cocktails. "
+                    "2. The Violet Hour — in Wicker Park closed for the final time in 2024."
+                ),
+            )
+        ]
+        verified = {
+            "broken shaker": VerificationResult(
+                verified=True,
+                source_url="https://example.com/broken-shaker",
+                neighborhood="The Robey",
+            ),
+            "the violet hour": VerificationResult(verified=False),
+        }
+        out = normalize_hits(
+            hits,
+            intent=INTENT_NIGHTLIFE,
+            destination="Chicago",
+            user_query="cocktail bars",
+            verified_candidates=verified,
+        )
+        names = [r.name for r in out["restaurants"]]
+        assert "Broken Shaker" in names
+        assert "The Violet Hour" not in names
+        shaker = next(r for r in out["restaurants"] if r.name == "Broken Shaker")
+        assert (shaker.neighborhood or "").lower() == "the robey"
 
     def test_real_venue_with_location_signal_remains_trip_addable(self):
         hits = [
@@ -394,8 +455,7 @@ class TestNormalization:
         out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
         kumiko = next((r for r in out["restaurants"] if r.name == "Kumiko"), None)
         assert kumiko is not None
-        assert "Best Bars in Chicago" in (kumiko.summary or "")
-        assert "stands out" in (kumiko.summary or "").lower() or "noted as" in (kumiko.summary or "").lower()
+        assert (kumiko.summary or "") == "Mentioned in current nightlife research, but details need confirmation."
         assert "Featured in" not in (kumiko.summary or "")
         forbidden = [
             "venue-like proper noun",
@@ -473,7 +533,7 @@ class TestNormalization:
         out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
         cards = {r.name: r for r in out["restaurants"]}
         assert cards["Kumiko"].ai_score < cards["Meadowlark"].ai_score
-        assert "verify current reviews and value" in (cards["Kumiko"].summary or "").lower()
+        assert (cards["Kumiko"].summary or "").lower().startswith("mentioned in current nightlife research")
 
     def test_generic_extracted_reason_never_mentions_appears_to_be_restaurant(self):
         hits = [
@@ -1245,3 +1305,13 @@ class TestVerifyBeforeAdd:
         )
         assert result.restaurants == []
         assert result.research_sources  # Article still appears as background source
+
+
+class TestFrontendResearchSourceCard:
+    def test_research_source_cards_do_not_offer_add_to_trip(self):
+        root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        panel_path = os.path.join(root, "frontend", "src", "components", "trips", "AIConciergePanel.tsx")
+        with open(panel_path, "r", encoding="utf-8") as f:
+            src = f.read()
+        assert "category=\"Research source\"" in src
+        assert "canAdd={false}" in src
