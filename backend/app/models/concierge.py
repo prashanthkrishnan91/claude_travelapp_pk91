@@ -59,6 +59,25 @@ SOURCE_NONE = "none"
 
 # ── Retrieval-first result models ─────────────────────────────────────────────
 
+class GoogleVerification(BaseModel):
+    """Normalized Google Places verification record attached to addable cards."""
+
+    provider: Literal["google_places"] = "google_places"
+    provider_place_id: Optional[str] = None
+    name: Optional[str] = None
+    formatted_address: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    business_status: Optional[str] = None
+    google_maps_uri: Optional[str] = None
+    website_uri: Optional[str] = None
+    rating: Optional[float] = None
+    user_rating_count: Optional[int] = None
+    types: List[str] = []
+    confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
+    failure_reason: Optional[str] = None
+
+
 class UnifiedRestaurantResult(BaseModel):
     name: str
     source: str = "Michelin Guide"
@@ -76,6 +95,7 @@ class UnifiedRestaurantResult(BaseModel):
     ai_score: Optional[float] = None
     tags: List[str] = []
     verified_place: Optional[bool] = None
+    google_verification: Optional[GoogleVerification] = None
 
 
 class UnifiedAttractionResult(BaseModel):
@@ -94,6 +114,7 @@ class UnifiedAttractionResult(BaseModel):
     ai_score: Optional[float] = None
     tags: List[str] = []
     verified_place: Optional[bool] = None
+    google_verification: Optional[GoogleVerification] = None
 
 
 class UnifiedHotelResult(BaseModel):
@@ -112,6 +133,7 @@ class UnifiedHotelResult(BaseModel):
     ai_score: Optional[float] = None
     tags: List[str] = []
     verified_place: Optional[bool] = None
+    google_verification: Optional[GoogleVerification] = None
 
 
 class UnifiedResearchSourceResult(BaseModel):
