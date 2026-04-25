@@ -613,3 +613,58 @@ def test_save_message_duplicate_race_is_ignored():
     db.messages_by_client_id["abc"] = {"id": "existing-row", "client_message_id": "abc"}
     svc._save_message(FAKE_TRIP_ID, "user", "hello", client_message_id="abc")
     assert db.update_calls == 1
+
+
+class _ClearCacheMessagesQuery:
+    def __init__(self, db):
+        self.db = db
+        self._trip_id = None
+
+    def delete(self):
+        return self
+
+    def eq(self, field, value):
+        assert field == "trip_id"
+        self._trip_id = value
+        return self
+
+    def execute(self):
+        self.db.deleted_trip_ids.append(self._trip_id)
+        return SimpleNamespace(data=[])
+
+
+class _ClearCacheDB:
+    def __init__(self):
+        self.deleted_trip_ids = []
+
+    def table(self, name: str):
+        if name != "concierge_messages":
+            raise AssertionError(f"Unexpected table requested: {name}")
+        return _ClearCacheMessagesQuery(self)
+
+
+class _StubLiveResearch:
+    def __init__(self):
+        self.calls = []
+
+    def clear_cache_for_context(self, destination: str, dates: str):
+        self.calls.append((destination, dates))
+        return 3
+
+
+def test_clear_cache_removes_persisted_messages_and_invalidates_live_cache():
+    svc = object.__new__(ConciergeService)
+    svc._db = _ClearCacheDB()
+    svc._settings = None
+    live = _StubLiveResearch()
+    svc._get_live_research = lambda: live
+    svc._fetch_trip = lambda _trip_id, _user_id: {
+        "destination": "Chicago",
+        "start_date": "2026-06-01",
+        "end_date": "2026-06-04",
+    }
+
+    svc.clear_cache(FAKE_TRIP_ID, FAKE_USER_ID)
+
+    assert svc._db.deleted_trip_ids == [str(FAKE_TRIP_ID)]
+    assert live.calls == [("Chicago", "2026-06-01|2026-06-04")]
