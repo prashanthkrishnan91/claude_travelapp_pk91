@@ -165,7 +165,7 @@ class TestNormalization:
         names = [r.name for r in out["restaurants"]]
         assert "The Violet Hour" not in names
         assert "Kumiko" in names
-        assert any("appears closed" in (s.summary or "").lower() for s in out["research_sources"])
+        assert any("not added as a trip option" in (s.summary or "").lower() for s in out["research_sources"])
 
     def test_violet_hour_closed_signal_in_raw_text_never_returns_live_addable_card(self):
         research_sources = []
@@ -263,6 +263,40 @@ class TestNormalization:
         assert "The Violet Hour" not in names
         shaker = next(r for r in out["restaurants"] if r.name == "Broken Shaker")
         assert (shaker.neighborhood or "").lower() == "the robey"
+
+    def test_june_2025_closure_article_marks_violet_hour_closed_from_source_text(self):
+        article_hit = LiveSearchHit(
+            title="The Violet Hour closes permanently after final service in June 2025",
+            url="https://example.com/chicago-nightlife-june-2025",
+            snippet="Chicago nightlife update: The Violet Hour in Wicker Park has closed its doors.",
+            provider="Tavily",
+            raw={
+                "content": (
+                    "June 2025 update: The Violet Hour closed permanently and won't reopen. "
+                    "Other bars in the area remain open."
+                ),
+                "sourceText": "The Violet Hour closed for the final time in June 2025.",
+            },
+            fetched_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        )
+        verified = {
+            "the violet hour": VerificationResult(
+                verified=True,
+                source_url="https://example.com/listing/the-violet-hour",
+                neighborhood="Wicker Park",
+            )
+        }
+        out = normalize_hits(
+            [article_hit],
+            intent=INTENT_NIGHTLIFE,
+            destination="Chicago",
+            user_query="cocktail bars",
+            verified_candidates=verified,
+        )
+        names = [r.name for r in out["restaurants"]]
+        assert "The Violet Hour" not in names
+        assert all((r.name or "").lower() != "the violet hour" for r in out["attractions"])
+        assert all((r.name or "").lower() != "the violet hour" for r in out["hotels"])
 
     def test_real_venue_with_location_signal_remains_trip_addable(self):
         hits = [
@@ -1104,6 +1138,17 @@ class TestCheckVerificationHits:
         # A listicle URL and no address = not enough for verification
         hits = [
             _hit("Best Bars in Chicago", "https://example.com/best-bars", "Kumiko is a great bar.")
+        ]
+        vr = _check_verification_hits("Kumiko", "Chicago", hits)
+        assert vr.verified is False
+
+    def test_2025_article_does_not_verify_open_status_in_2026(self):
+        hits = [
+            _hit(
+                "Best Bars in Chicago (June 2025)",
+                "https://example.com/chicago-bars-guide",
+                "June 2025 guide: Kumiko at 630 W Lake St, Chicago, IL.",
+            )
         ]
         vr = _check_verification_hits("Kumiko", "Chicago", hits)
         assert vr.verified is False
