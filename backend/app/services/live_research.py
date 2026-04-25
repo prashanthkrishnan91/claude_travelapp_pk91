@@ -550,6 +550,7 @@ _DIRECT_PLACE_SOURCE_HINT = re.compile(
 )
 _TRAILING_CONTEXT_WORDS = {"music", "food", "drink", "drinks", "dancing", "brunch", "nightlife"}
 _CLEAN_LIST_NAME_TMPL = r"(?<![A-Za-z0-9])(?:\d{{1,2}}[.)]\s+|[-•]\s+){name}(?=\s*[–—:\-]|\s*$)"
+_NAME_LINKER_WORDS = {"in", "near", "around", "with", "featuring", "including", "from", "for"}
 
 
 def _confidence_from_age(fetched_at: str) -> str:
@@ -734,6 +735,139 @@ def _extract_venue_names_from_text(text: str) -> List[str]:
     return candidates
 
 
+def _split_words(name: str) -> List[str]:
+    return [w for w in re.split(r"\s+", (name or "").strip()) if w]
+
+
+def _looks_phrase_like_candidate(name: str) -> bool:
+    words = _split_words(name)
+    if not words:
+        return True
+    lowered = [w.lower() for w in words]
+    if len(words) > 6:
+        return True
+    if any(w in _NAME_LINKER_WORDS for w in lowered):
+        return True
+    return False
+
+
+def _looks_like_glued_candidate(name: str) -> bool:
+    words = _split_words(name)
+    if len(words) < 3:
+        return False
+    # Common bad pattern: one venue-like token followed by another title-cased phrase.
+    if len(words) == 3 and words[1].lower() == "the" and words[0][:1].isupper() and words[2][:1].isupper():
+        return True
+    # "… Restaurant Bub City" style joins.
+    for idx in range(1, len(words) - 1):
+        if words[idx].lower() in {"restaurant", "bar", "hotel", "inn", "tavern"} and words[idx + 1][:1].isupper():
+            return True
+    # Long all-titlecase runs are often two names glued together.
+    capitalized = sum(1 for w in words if w[:1].isupper() or w in {"&"})
+    if len(words) >= 4 and capitalized >= len(words) - 1 and _looks_phrase_like_candidate(name):
+        return True
+    return False
+
+
+def _overlap_contains(a: str, b: str) -> bool:
+    low_a = f" {a.lower()} "
+    low_b = f" {b.lower()} "
+    return low_a in low_b or low_b in low_a
+
+
+def _name_cleanliness_score(name: str) -> int:
+    score = 100
+    words = _split_words(name)
+    if len(words) <= 3:
+        score += 8
+    if len(words) >= 6:
+        score -= 10
+    if _looks_phrase_like_candidate(name):
+        score -= 12
+    if _looks_like_glued_candidate(name):
+        score -= 25
+    return score
+
+
+def _prefer_cleaner_overlap(existing_name: str, candidate_name: str) -> str:
+    existing_score = _name_cleanliness_score(existing_name)
+    candidate_score = _name_cleanliness_score(candidate_name)
+    if candidate_score > existing_score:
+        return candidate_name
+    if existing_score > candidate_score:
+        return existing_name
+    return min((existing_name, candidate_name), key=lambda n: len(n))
+
+
+def _dedupe_overlapping_venues(items: List[Any]) -> List[Any]:
+    deduped: List[Any] = []
+    for item in items:
+        name = getattr(item, "name", "").strip()
+        if not name:
+            continue
+        replaced = False
+        for idx, kept in enumerate(deduped):
+            kept_name = getattr(kept, "name", "").strip()
+            if not kept_name:
+                continue
+            if name.lower() == kept_name.lower():
+                replaced = True
+                break
+            if _overlap_contains(name, kept_name):
+                preferred = _prefer_cleaner_overlap(kept_name, name)
+                if preferred.lower() == name.lower():
+                    deduped[idx] = item
+                replaced = True
+                break
+        if not replaced:
+            deduped.append(item)
+    return deduped
+
+
+def _result_category_label(intent: str) -> str:
+    if intent == INTENT_HOTELS:
+        return "hotel"
+    if intent in {INTENT_ATTRACTIONS, INTENT_PLAN_DAY}:
+        return "attraction"
+    if intent == INTENT_NIGHTLIFE:
+        return "nightlife"
+    return "restaurant"
+
+
+def _context_type_hint(snippet: str) -> Optional[str]:
+    low = (snippet or "").lower()
+    if "speakeasy" in low:
+        return "speakeasy"
+    if "cocktail bar" in low:
+        return "cocktail bar"
+    if "jazz bar" in low or "jazz club" in low:
+        return "jazz spot"
+    if "michelin" in low:
+        return "Michelin dining"
+    if "hotel" in low:
+        return "hotel"
+    if "restaurant" in low:
+        return "restaurant"
+    return None
+
+
+def _build_extracted_reason(
+    *,
+    source_title: str,
+    intent: str,
+    neighborhood: Optional[str],
+    snippet: str,
+) -> str:
+    category = _result_category_label(intent)
+    reason = f'Featured in "{source_title}" as a relevant {category} option for this search.'
+    type_hint = _context_type_hint(snippet)
+    if type_hint:
+        reason = f"{reason} Mentioned as a {type_hint}."
+    if neighborhood:
+        reason = f"{reason} Located around {neighborhood}."
+    return reason
+
+
 def _recover_candidate_name(raw: str) -> Optional[str]:
     candidate = (raw or "").strip(" \t.,;:\"'“”‘’")
     if not candidate:
@@ -824,6 +958,8 @@ def _validate_venue_candidate(
     if words and words[0].lower() in _CONTEXT_START_WORDS:
         return False, "", evidence
     if not _is_venue_like_proper_noun(normalized):
+        return False, "", evidence
+    if _looks_phrase_like_candidate(normalized) or _looks_like_glued_candidate(normalized):
         return False, "", evidence
     has_proper = True
     has_cat = _candidate_has_category_nearby(normalized, context, intent)
@@ -937,7 +1073,7 @@ def normalize_hits(
             if classification == "article_listicle_blog_directory":
                 extracted = _extract_venue_names_from_text(hit.snippet)
                 for candidate in extracted:
-                    is_valid, normalized_candidate, evidence = _validate_venue_candidate(
+                    is_valid, normalized_candidate, _evidence = _validate_venue_candidate(
                         candidate,
                         combined,
                         intent=intent,
@@ -953,12 +1089,13 @@ def normalize_hits(
                         continue
                     if _looks_closed(normalized_candidate):
                         continue
-                    article_snippet = _build_summary(hit.snippet, fallback="")
-                    evidence_summary = ", ".join(evidence[:3]) if evidence else "article extraction context"
-                    cand_summary = f"Corroborated from \"{title}\" ({evidence_summary})."
-                    if article_snippet:
-                        cand_summary = f"{cand_summary} {article_snippet}".rstrip(". ")
                     cand_neighborhood = _extract_neighborhood(hit.snippet, destination)
+                    cand_summary = _build_extracted_reason(
+                        source_title=title,
+                        intent=intent,
+                        neighborhood=cand_neighborhood,
+                        snippet=hit.snippet,
+                    )
                     if is_restaurant_intent and len(restaurants) < max_per_kind:
                         cand_cuisine = "Cocktail Bar" if intent == INTENT_NIGHTLIFE else "Restaurant"
                         cand_tags: List[str] = []
@@ -1104,6 +1241,9 @@ def normalize_hits(
     restaurants.sort(key=lambda r: r.ai_score or 0.0, reverse=True)
     attractions.sort(key=lambda a: a.ai_score or 0.0, reverse=True)
     hotels.sort(key=lambda h: h.ai_score or 0.0, reverse=True)
+    restaurants = _dedupe_overlapping_venues(restaurants)[:max_per_kind]
+    attractions = _dedupe_overlapping_venues(attractions)[:max_per_kind]
+    hotels = _dedupe_overlapping_venues(hotels)[:max_per_kind]
 
     venue_count = len(restaurants) + len(attractions) + len(hotels)
     # Hide research-source cards when ≥3 venues exist; keep at most 2 otherwise.

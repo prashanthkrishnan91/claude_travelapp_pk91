@@ -389,7 +389,37 @@ class TestNormalization:
         kumiko = next((r for r in out["restaurants"] if r.name == "Kumiko"), None)
         assert kumiko is not None
         assert "Best Bars in Chicago" in (kumiko.summary or "")
-        assert "category signal" in (kumiko.summary or "")
+        assert "Featured in" in (kumiko.summary or "")
+        forbidden = [
+            "venue-like proper noun",
+            "category signal",
+            "location signal",
+            "neighborhood signal",
+            "corroborated",
+        ]
+        assert not any(term in (kumiko.summary or "").lower() for term in forbidden)
+
+    def test_user_facing_extracted_reason_omits_internal_validation_terms(self):
+        hits = [
+            _hit(
+                "Chicago Cocktail Guide",
+                "https://example.com/cocktails",
+                "1. Billy Sunday — cocktail bar in Logan Square, Chicago.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        forbidden = [
+            "venue-like proper noun",
+            "category signal",
+            "location signal",
+            "neighborhood signal",
+            "corroborated",
+            "trusted source signal",
+            "clean list pattern",
+        ]
+        for r in out["restaurants"]:
+            summary = (r.summary or "").lower()
+            assert not any(term in summary for term in forbidden)
 
     def test_research_source_cards_secondary_when_venues_present(self):
         hits = [
@@ -428,6 +458,43 @@ class TestNormalization:
         out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
         assert [r.name for r in out["restaurants"]] == ["Green Mill"]
         assert out["restaurants"][0].ai_score == 1.0
+
+    def test_glued_candidate_is_not_shown_as_single_venue(self):
+        hits = [
+            _hit(
+                "Chicago Restaurants",
+                "https://example.com/chicago-restaurants",
+                "1. Gaylord India Restaurant Bub City — restaurant picks in Chicago.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_RESTAURANTS, destination="Chicago", user_query="restaurants")
+        assert "Gaylord India Restaurant Bub City" not in [r.name for r in out["restaurants"]]
+
+    def test_when_short_clean_candidate_exists_keep_it_over_glued_long_candidate(self):
+        hits = [
+            _hit(
+                "Best Restaurants in Chicago",
+                "https://example.com/chicago-restaurants",
+                "1. Gaylord India Restaurant Bub City — restaurant picks in Chicago. 2. Bub City — bbq bar in River North, Chicago.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_RESTAURANTS, destination="Chicago", user_query="restaurants")
+        names = [r.name for r in out["restaurants"]]
+        assert "Bub City" in names
+        assert "Gaylord India Restaurant Bub City" not in names
+
+    def test_overlap_prefers_cleaner_shorter_name(self):
+        hits = [
+            _hit(
+                "Chicago Nightlife Guide",
+                "https://example.com/nightlife",
+                "1. Kumiko The Aviary — cocktail bars in Chicago. 2. The Aviary — cocktail bar in West Loop, Chicago.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        names = [r.name for r in out["restaurants"]]
+        assert "The Aviary" in names
+        assert "Kumiko The Aviary" not in names
 
 
 # ── LiveResearchService behavior ────────────────────────────────────────────
