@@ -469,11 +469,21 @@ class _TTLCache:
         with self._lock:
             self._store.clear()
 
+    def clear_matching(self, predicate) -> int:
+        removed = 0
+        with self._lock:
+            keys = [k for k in self._store.keys() if predicate(k)]
+            for key in keys:
+                self._store.pop(key, None)
+                removed += 1
+        return removed
+
 
 # Module-level cache so multiple ConciergeService instances share results.
 _GLOBAL_CACHE = _TTLCache(ttl_seconds=1800)
 # Separate cache for candidate verification results.
 _VERIFICATION_CACHE = _TTLCache(ttl_seconds=1800)
+CONCIERGE_CACHE_VERSION = 2
 
 
 def _make_cache_key(intent: str, destination: str, query: str, dates: Optional[str] = None) -> str:
@@ -1787,8 +1797,9 @@ class LiveResearchService:
         cached = self._cache.get(cache_key)
         if cached is not None:
             payload = self._payload_to_result(cached)
-            payload.cached = True
-            return payload
+            if payload is not None:
+                payload.cached = True
+                return payload
 
         if not self._provider.available or isinstance(self._provider, _NoopProvider):
             return LiveResearchResult()
@@ -1897,9 +1908,28 @@ class LiveResearchService:
         self._cache.set(cache_key, self._result_to_payload(result))
         return result
 
+    def clear_cache_for_context(self, destination: str, dates: Optional[str] = None) -> int:
+        normalized_destination = (destination or "").strip().lower()
+        normalized_dates = (dates or "").strip()
+
+        def _matches(key: str) -> bool:
+            parts = key.split("::")
+            if len(parts) < 4:
+                return False
+            key_destination = parts[1].strip().lower()
+            key_dates = "::".join(parts[3:]).strip()
+            if key_destination != normalized_destination:
+                return False
+            if normalized_dates and key_dates != normalized_dates:
+                return False
+            return True
+
+        return self._cache.clear_matching(_matches)
+
     @staticmethod
     def _result_to_payload(result: LiveResearchResult) -> Dict[str, Any]:
         return {
+            "cache_version": CONCIERGE_CACHE_VERSION,
             "restaurants": [r.model_dump(mode="json") for r in result.restaurants],
             "attractions": [a.model_dump(mode="json") for a in result.attractions],
             "hotels": [h.model_dump(mode="json") for h in result.hotels],
@@ -1910,7 +1940,9 @@ class LiveResearchService:
         }
 
     @staticmethod
-    def _payload_to_result(payload: Dict[str, Any]) -> LiveResearchResult:
+    def _payload_to_result(payload: Dict[str, Any]) -> Optional[LiveResearchResult]:
+        if payload.get("cache_version") != CONCIERGE_CACHE_VERSION:
+            return None
         return LiveResearchResult(
             restaurants=[UnifiedRestaurantResult(**r) for r in payload.get("restaurants", [])],
             attractions=[UnifiedAttractionResult(**a) for a in payload.get("attractions", [])],

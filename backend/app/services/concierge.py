@@ -417,6 +417,17 @@ class ConciergeService:
             logger.exception("Failed to load concierge message history")
             raise
 
+    def clear_cache(self, trip_id: UUID, user_id: UUID, destination: Optional[str] = None) -> None:
+        trip = self._fetch_trip(trip_id, user_id)
+        resolved_destination = (destination or trip.get("destination") or "").strip()
+        dates = ""
+        start = trip.get("start_date") or ""
+        end = trip.get("end_date") or ""
+        if start or end:
+            dates = f"{start}|{end}"
+        if resolved_destination:
+            self._get_live_research().clear_cache_for_context(resolved_destination, dates)
+
     # ------------------------------------------------------------------
     # Intent detection
     # ------------------------------------------------------------------

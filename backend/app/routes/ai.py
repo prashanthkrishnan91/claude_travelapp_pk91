@@ -8,6 +8,8 @@ from fastapi import APIRouter
 
 from app.core.deps import DB, CurrentUserID
 from app.models.concierge import (
+    ConciergeCacheClearRequest,
+    ConciergeCacheClearResponse,
     ConciergeMessage,
     ConciergeRequest,
     ConciergeResponse,
@@ -37,3 +39,10 @@ def concierge_search(payload: ConciergeSearchRequest, db: DB, user_id: CurrentUs
 def concierge_messages(trip_id: UUID, db: DB, user_id: CurrentUserID) -> List[ConciergeMessage]:
     """Load persisted AI concierge messages for a trip, ordered by created_at."""
     return ConciergeService(db).list_messages(trip_id, user_id)
+
+
+@router.delete("/concierge/cache", response_model=ConciergeCacheClearResponse)
+def clear_concierge_cache(payload: ConciergeCacheClearRequest, db: DB, user_id: CurrentUserID) -> ConciergeCacheClearResponse:
+    """Clear concierge cache for the authenticated user's trip context."""
+    ConciergeService(db).clear_cache(payload.trip_id, user_id, payload.destination)
+    return ConciergeCacheClearResponse(cleared=True)
