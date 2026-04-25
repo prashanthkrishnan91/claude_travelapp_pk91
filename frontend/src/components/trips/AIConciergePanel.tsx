@@ -44,6 +44,7 @@ interface Message {
   sourceStatus?: string;
   cached?: boolean;
   liveProvider?: string | null;
+  sources?: string[];
   warnings?: string[];
 }
 
@@ -65,10 +66,42 @@ function sourceLabel(status: string, intent?: string, liveProvider?: string | nu
     const provider = liveProvider ? `Live · ${liveProvider}` : "Live search results";
     return cached ? `${provider} (cached)` : provider;
   }
+  if (status === "mixed") {
+    const provider = liveProvider ? `Live research (${liveProvider}) + fallback sources` : "Live research + fallback sources";
+    return cached ? `${provider} (cached)` : provider;
+  }
   if (status === "app_database") return "Based on available app database";
   if (status === "sample_data") return "Sample bar research data · verify hours and current status before booking.";
   if (status === "unavailable") return "Limited source coverage — verify names, hours, and booking details.";
   return null;
+}
+
+function isLiveSource(source?: string | null): boolean {
+  return (source ?? "").toLowerCase().includes("live search");
+}
+
+function footerSourceLabel(msg: Message): string | null {
+  const venueCards = [...(msg.restaurants ?? []), ...(msg.attractions ?? []), ...(msg.hotels ?? [])];
+  const allCards = [...venueCards, ...(msg.researchSources ?? [])];
+  const hasLive = allCards.some((card) => isLiveSource(card.source));
+  const hasSample = allCards.some((card) => (card.source ?? "").toLowerCase().includes("sample"));
+  const hasDbLike = venueCards.some((card) => {
+    const source = (card.source ?? "").toLowerCase();
+    return source.includes("database") || source === "search" || source.includes("michelin guide");
+  });
+
+  if (hasLive && (hasSample || hasDbLike)) {
+    const provider = msg.liveProvider ? `Live research (${msg.liveProvider}) + fallback sources` : "Live research + fallback sources";
+    return msg.cached ? `${provider} (cached)` : provider;
+  }
+  if (hasLive) {
+    const provider = msg.liveProvider ? `Live · ${msg.liveProvider}` : "Live search results";
+    return msg.cached ? `${provider} (cached)` : provider;
+  }
+  if (hasSample) {
+    return "Sample bar research data · verify hours and current status before booking.";
+  }
+  return sourceLabel(msg.sourceStatus ?? "", msg.intent, msg.liveProvider, msg.cached);
 }
 
 function formatVerifiedAt(iso?: string): string | null {
@@ -232,6 +265,7 @@ function fromSearchResult(result: ConciergeSearchResult): Message {
     sourceStatus: result.sourceStatus,
     cached: result.cached,
     liveProvider: result.liveProvider ?? null,
+    sources: result.sources,
     warnings: result.warnings,
   };
 }
@@ -573,7 +607,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                       {msg.restaurants?.map((r) => {
                         const key = cardKey(r.name, selectedDayId || undefined);
                         const reason = r.summary;
-                        const isLive = msg.sourceStatus === "live_search" && Boolean(r.sourceUrl);
+                        const isLive = isLiveSource(r.source) && Boolean(r.sourceUrl);
                         return (
                           <ConciergeCard
                             key={`${r.name}-${key}`}
@@ -598,7 +632,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
                       {msg.attractions?.map((a) => {
                         const key = cardKey(a.name, selectedDayId || undefined);
-                        const isLive = msg.sourceStatus === "live_search" && Boolean(a.sourceUrl);
+                        const isLive = isLiveSource(a.source) && Boolean(a.sourceUrl);
                         return (
                           <ConciergeCard
                             key={`${a.name}-${key}`}
@@ -625,7 +659,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                       {msg.hotels?.map((h) => {
                         const key = cardKey(h.name, selectedDayId || undefined);
                         const reason = h.reason ?? (h.pricePerNight ? `~$${Math.round(h.pricePerNight)}/night` : undefined);
-                        const isLive = msg.sourceStatus === "live_search" && Boolean(h.sourceUrl);
+                        const isLive = isLiveSource(h.source) && Boolean(h.sourceUrl);
                         return (
                           <ConciergeCard
                             key={`${h.name}-${key}`}
@@ -662,7 +696,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                           tags={[]}
                           reason={s.summary}
                           sourceLink={s.sourceUrl}
-                          isLive={msg.sourceStatus === "live_search" && Boolean(s.sourceUrl)}
+                          isLive={isLiveSource(s.source) && Boolean(s.sourceUrl)}
                           verifiedAt={formatVerifiedAt(s.lastVerifiedAt)}
                           added={false}
                           adding={false}
@@ -684,10 +718,10 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                     </div>
                   )}
 
-                  {msg.retrievalUsed && msg.sourceStatus && sourceLabel(msg.sourceStatus, msg.intent, msg.liveProvider, msg.cached) && (
+                  {msg.retrievalUsed && footerSourceLabel(msg) && (
                     <div className="flex items-center gap-1 text-[10px] text-slate-400">
                       <Info className="h-3 w-3" />
-                      <span>{sourceLabel(msg.sourceStatus, msg.intent, msg.liveProvider, msg.cached)}</span>
+                      <span>{footerSourceLabel(msg)}</span>
                     </div>
                   )}
                 </>

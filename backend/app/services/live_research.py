@@ -93,6 +93,27 @@ _CLOSED_KEYWORDS = (
 
 _FRESHNESS_HIGH_DAYS = 90
 _FRESHNESS_MEDIUM_DAYS = 365
+_MARKDOWN_HEADING_PAT = re.compile(r"^\s{0,3}#{1,6}\s*")
+_SYMBOL_RUN_PAT = re.compile(r"([!?.\-_*~])\1{2,}")
+_WHITESPACE_PAT = re.compile(r"\s+")
+_BOILERPLATE_PATTERNS = [
+    re.compile(r"\b(advertising|advertisement|sponsored)\b", re.IGNORECASE),
+    re.compile(r"\b(subscribe|sign in|sign up|newsletter)\b", re.IGNORECASE),
+    re.compile(r"\b(sorry[, ]+you\b|we are sorry|page not found)\b", re.IGNORECASE),
+    re.compile(r"\bcookie(s)?\b", re.IGNORECASE),
+]
+_LOW_QUALITY_MARKERS = (
+    "advertising",
+    "subscribe",
+    "newsletter",
+    "sign in",
+    "sign up",
+    "cookie policy",
+    "page not found",
+)
+_NEUTRAL_RESEARCH_REASON = (
+    "This source may contain relevant background, but it is not a confirmed venue."
+)
 
 
 def _looks_closed(text: str) -> bool:
@@ -512,8 +533,23 @@ def _extract_neighborhood(text: str, destination: str) -> Optional[str]:
 
 def _build_summary(snippet: str, fallback: str = "") -> str:
     s = (snippet or "").strip()
+    if not s:
+        return fallback
+
+    s = _MARKDOWN_HEADING_PAT.sub("", s)
+    s = s.replace("`", " ").replace("|", " ")
+    s = _SYMBOL_RUN_PAT.sub(r"\1\1", s)
+    s = _WHITESPACE_PAT.sub(" ", s).strip(" -–—|:;,.")
+
+    lowered = s.lower()
+    if any(p.search(s) for p in _BOILERPLATE_PATTERNS):
+        s = ""
+    elif any(marker in lowered for marker in _LOW_QUALITY_MARKERS):
+        s = ""
+
     if len(s) > 320:
-        s = s[:317].rstrip() + "…"
+        s = s[:317].rsplit(" ", 1)[0].rstrip() + "…"
+
     return s or fallback
 
 
@@ -665,15 +701,16 @@ def normalize_hits(
         )
 
         if classification != "venue_place":
+            summary = _build_summary(
+                hit.snippet,
+                fallback=_NEUTRAL_RESEARCH_REASON,
+            )
             research_sources.append(
                 UnifiedResearchSourceResult(
                     title=title,
                     source=f"Live search · {provider_label}",
                     source_type=classification if classification != "venue_place" else "generic_info_source",
-                    summary=_build_summary(
-                        hit.snippet,
-                        fallback=f"Research source discovered via {provider_label}.",
-                    ),
+                    summary=summary,
                     source_url=hit.url,
                     neighborhood=neighborhood,
                     last_verified_at=hit.fetched_at,
@@ -747,11 +784,13 @@ def normalize_hits(
                 )
             )
 
+    venue_count = len(restaurants) + len(attractions) + len(hotels)
+    research_cap = 2 if venue_count > 0 else max_per_kind
     return {
         "restaurants": restaurants,
         "attractions": attractions,
         "hotels": hotels,
-        "research_sources": research_sources[:max_per_kind],
+        "research_sources": research_sources[:research_cap],
     }
 
 

@@ -53,6 +53,7 @@ SOURCE_CURATED_STATIC = "curated_static"
 SOURCE_LIVE_SEARCH = "live_search"
 SOURCE_APP_DATABASE = "app_database"
 SOURCE_SAMPLE_DATA = "sample_data"
+SOURCE_MIXED = "mixed"
 SOURCE_UNAVAILABLE = "unavailable"
 SOURCE_NONE = "none"
 
