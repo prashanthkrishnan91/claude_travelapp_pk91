@@ -17,6 +17,7 @@ from app.models.concierge import (
     INTENT_ATTRACTIONS,
     INTENT_HIDDEN_GEMS,
     INTENT_HOTELS,
+    INTENT_LUXURY_VALUE,
     INTENT_MICHELIN_RESTAURANTS,
     INTENT_NIGHTLIFE,
     INTENT_RESTAURANTS,
@@ -389,7 +390,7 @@ class TestNormalization:
         kumiko = next((r for r in out["restaurants"] if r.name == "Kumiko"), None)
         assert kumiko is not None
         assert "Best Bars in Chicago" in (kumiko.summary or "")
-        assert "Worth considering" in (kumiko.summary or "")
+        assert "stands out" in (kumiko.summary or "").lower() or "noted as" in (kumiko.summary or "").lower()
         assert "Featured in" not in (kumiko.summary or "")
         forbidden = [
             "venue-like proper noun",
@@ -467,7 +468,69 @@ class TestNormalization:
         out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
         cards = {r.name: r for r in out["restaurants"]}
         assert cards["Kumiko"].ai_score < cards["Meadowlark"].ai_score
-        assert "verify key details" in (cards["Kumiko"].summary or "").lower()
+        assert "verify current reviews and value" in (cards["Kumiko"].summary or "").lower()
+
+    def test_generic_extracted_reason_never_mentions_appears_to_be_restaurant(self):
+        hits = [
+            _hit(
+                "Best Dining in Chicago",
+                "https://example.com/chicago-dining",
+                "1. La Grande Boucherie — restaurant in Chicago.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_RESTAURANTS, destination="Chicago", user_query="restaurants")
+        summaries = [r.summary or "" for r in out["restaurants"]]
+        assert all("appears to be a restaurant" not in summary.lower() for summary in summaries)
+
+    def test_weak_extracted_venue_without_specific_detail_is_not_addable(self):
+        hits = [
+            _hit(
+                "Best Restaurants in Chicago",
+                "https://example.com/list",
+                "1. La Grande Boucherie — restaurant in Chicago.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_RESTAURANTS, destination="Chicago", user_query="restaurants")
+        assert "La Grande Boucherie" not in [r.name for r in out["restaurants"]]
+
+    def test_luxury_value_extracted_requires_price_luxury_or_editorial_signal(self):
+        hits = [
+            _hit(
+                "Top Luxury Value Dining Chicago",
+                "https://example.com/luxury",
+                "1. The Capital Grille — steakhouse in Chicago.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_LUXURY_VALUE, destination="Chicago", user_query="luxury value dining")
+        assert out["restaurants"] == []
+
+    def test_maman_zari_price_tasting_menu_remains_addable_with_strong_reason(self):
+        hits = [
+            _hit(
+                "Best Value Tasting Menus in Chicago",
+                "https://www.theinfatuation.com/chicago/guides/value-tasting-menus",
+                "1. Maman Zari — in Albany Park, a tasting menu around $90 with strong value for an 8-course experience.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_LUXURY_VALUE, destination="Chicago", user_query="luxury value dining")
+        maman = next((r for r in out["restaurants"] if r.name == "Maman Zari"), None)
+        assert maman is not None
+        assert "value or pricing context" in (maman.summary or "").lower()
+        assert "albany park" in (maman.summary or "").lower()
+
+    def test_chain_restaurant_ranked_below_distinctive_local_pick(self):
+        hits = [
+            _hit(
+                "Best Luxury Value Restaurants in Chicago",
+                "https://www.theinfatuation.com/chicago/guides/luxury-value-restaurants",
+                "1. Maman Zari — Albany Park tasting menu around $90 and strong value. 2. The Capital Grille — steakhouse in Chicago Loop.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_LUXURY_VALUE, destination="Chicago", user_query="luxury value dining")
+        names = [r.name for r in out["restaurants"]]
+        assert "Maman Zari" in names
+        assert "The Capital Grille" in names
+        assert names.index("Maman Zari") < names.index("The Capital Grille")
 
     def test_fine_dining_intent_creates_fine_dining_reasoning(self):
         hits = [
@@ -485,7 +548,7 @@ class TestNormalization:
         )
         smyth = next((r for r in out["restaurants"] if r.name == "Smyth"), None)
         assert smyth is not None
-        assert "fine-dining/michelin search" in (smyth.summary or "").lower()
+        assert "michelin" in (smyth.summary or "").lower()
 
     def test_research_source_cards_secondary_when_venues_present(self):
         hits = [
