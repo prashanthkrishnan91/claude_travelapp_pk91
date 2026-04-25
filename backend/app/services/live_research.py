@@ -81,11 +81,14 @@ logger = logging.getLogger(__name__)
 
 _CLOSED_KEYWORDS = (
     "permanently closed",
+    "closes permanently",
     "closed permanently",
     "closed for good",
     "closed for the final time",
+    "closed its doors",
     "now closed",
     "is closed",
+    "closing after",
     "closing permanently",
     "closed after",
     "shut down",
@@ -98,6 +101,18 @@ _CLOSED_KEYWORDS = (
     "won't reopen",
     "will not reopen",
 )
+_CLOSED_PROXIMITY_CHARS = 300
+_MONTH_YEAR_HINT = re.compile(
+    r"\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|"
+    r"aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{4}\b",
+    re.IGNORECASE,
+)
+_ARTICLE_CONTEXT_HINT = re.compile(
+    r"\b(article|news|guide|best|top|things to|where to|list|roundup|directory|review)\b",
+    re.IGNORECASE,
+)
+_YEAR_HINT = re.compile(r"\b(19|20)\d{2}\b")
+_LIST_ITEM_BOUNDARY_HINT = re.compile(r"\b\d{1,2}[.)]\s+\w", re.IGNORECASE)
 
 _FRESHNESS_HIGH_DAYS = 90
 _FRESHNESS_MEDIUM_DAYS = 365
@@ -187,17 +202,98 @@ def _looks_closed(text: str) -> bool:
 
 
 def _closed_research_summary(title: str) -> str:
-    safe_title = (title or "This place").strip()
-    return f"{safe_title} appears closed in current source text; keep as research context only."
+    return "This appears closed and was not added as a trip option."
 
 
-def _candidate_mentions_closed(candidate: str, text: str) -> bool:
-    if not candidate or not text:
+def _iter_hit_source_fragments(hit: LiveSearchHit) -> List[str]:
+    raw = hit.raw if isinstance(hit.raw, dict) else {}
+    fragments: List[str] = [hit.title or "", hit.snippet or ""]
+    for key in (
+        "content",
+        "raw_content",
+        "rawContent",
+        "text",
+        "source_text",
+        "sourceText",
+        "description",
+        "snippet",
+        "title",
+    ):
+        val = raw.get(key)
+        if isinstance(val, str) and val.strip():
+            fragments.append(val.strip())
+    if raw:
+        try:
+            fragments.append(json.dumps(raw, ensure_ascii=False))
+        except Exception:
+            pass
+    return fragments
+
+
+def _candidate_mentions_closed(candidate: str, text: str, *, proximity_chars: int = _CLOSED_PROXIMITY_CHARS) -> bool:
+    if not candidate or not text or not _looks_closed(text):
         return False
     for chunk in re.split(r"(?<=[.!?])\s+|\n+", text):
         if candidate.lower() in chunk.lower() and _looks_closed(chunk):
             return True
+    low_text = text.lower()
+    low_candidate = candidate.lower()
+    start = 0
+    while True:
+        idx = low_text.find(low_candidate, start)
+        if idx < 0:
+            break
+        window = low_text[max(0, idx - proximity_chars) : idx + len(low_candidate) + proximity_chars]
+        if _looks_closed(window):
+            nearest_closed_idx = -1
+            nearest_distance = proximity_chars + 1
+            for kw in _CLOSED_KEYWORDS:
+                kw_idx = window.find(kw)
+                if kw_idx < 0:
+                    continue
+                # candidate index inside this window
+                candidate_window_idx = idx - max(0, idx - proximity_chars)
+                dist = abs(kw_idx - candidate_window_idx)
+                if dist < nearest_distance:
+                    nearest_distance = dist
+                    nearest_closed_idx = kw_idx
+            if nearest_closed_idx >= 0:
+                candidate_window_idx = idx - max(0, idx - proximity_chars)
+                lo, hi = sorted((candidate_window_idx, nearest_closed_idx))
+                between = window[lo:hi]
+                if not _LIST_ITEM_BOUNDARY_HINT.search(between):
+                    return True
+        start = idx + len(low_candidate)
     return False
+
+
+def _candidate_closed_from_source(candidate: str, *, source_title: str, source_text: str) -> bool:
+    if not candidate:
+        return False
+    lower_title = (source_title or "").lower()
+    lower_candidate = candidate.lower()
+    title_targets_candidate = lower_candidate in lower_title and _looks_closed(lower_title)
+    return title_targets_candidate or _candidate_mentions_closed(candidate, source_text)
+
+
+def _extract_latest_year(text: str) -> Optional[int]:
+    years = [int(m.group(0)) for m in _YEAR_HINT.finditer(text or "")]
+    if not years:
+        return None
+    return max(years)
+
+
+def _is_stale_operating_status_signal(text: str, url: str) -> bool:
+    if not text:
+        return False
+    latest_year = _extract_latest_year(text)
+    if latest_year is None or latest_year >= datetime.now(timezone.utc).year:
+        return False
+    lower_text = text.lower()
+    lower_url = (url or "").lower()
+    article_like = bool(_MONTH_YEAR_HINT.search(text)) or bool(_ARTICLE_CONTEXT_HINT.search(text))
+    article_like = article_like or any(marker in lower_url for marker in ("/news", "/blog", "/guide", "/best-", "/top-"))
+    return article_like
 
 
 # ── Hit dataclass ────────────────────────────────────────────────────────────
@@ -1431,6 +1527,8 @@ def _check_verification_hits(
         location_hit = bool(
             destination and destination.lower() in low_combined
         ) or bool(_NEIGHBORHOOD_HINT.search(combined))
+        if not platform_hit and _is_stale_operating_status_signal(combined, url):
+            continue
         if platform_hit or (address_hit and location_hit):
             neighborhood = _extract_neighborhood(combined, destination)
             return VerificationResult(
@@ -1529,6 +1627,7 @@ def normalize_hits(
             # For article/listicle hits attempt to extract real venue names first.
             if classification == "article_listicle_blog_directory":
                 extracted = _extract_venue_names_from_text(hit.snippet)
+                source_text = "\n".join(_iter_hit_source_fragments(hit))
                 for candidate in extracted:
                     is_valid, normalized_candidate, _evidence = _validate_venue_candidate(
                         candidate,
@@ -1544,7 +1643,11 @@ def normalize_hits(
                     )
                     if not is_valid:
                         continue
-                    if _candidate_mentions_closed(normalized_candidate, combined):
+                    if _candidate_closed_from_source(
+                        normalized_candidate,
+                        source_title=title,
+                        source_text=source_text,
+                    ):
                         continue
                     # Verify-before-add gate: only promote candidates confirmed
                     # by a second focused search when verified_candidates is set.
