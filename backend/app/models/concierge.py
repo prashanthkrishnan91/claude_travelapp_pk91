@@ -69,6 +69,9 @@ class UnifiedRestaurantResult(BaseModel):
     summary: Optional[str] = None
     booking_link: Optional[str] = None
     maps_link: Optional[str] = None
+    source_url: Optional[str] = None
+    last_verified_at: Optional[str] = None
+    confidence: Optional[Literal["high", "medium", "low", "unknown"]] = None
     ai_score: Optional[float] = None
     tags: List[str] = []
 
@@ -83,6 +86,9 @@ class UnifiedAttractionResult(BaseModel):
     review_count: Optional[int] = None
     address: Optional[str] = None
     maps_link: Optional[str] = None
+    source_url: Optional[str] = None
+    last_verified_at: Optional[str] = None
+    confidence: Optional[Literal["high", "medium", "low", "unknown"]] = None
     ai_score: Optional[float] = None
     tags: List[str] = []
 
@@ -96,6 +102,9 @@ class UnifiedHotelResult(BaseModel):
     price_per_night: Optional[float] = None
     maps_link: Optional[str] = None
     booking_url: Optional[str] = None
+    source_url: Optional[str] = None
+    last_verified_at: Optional[str] = None
+    confidence: Optional[Literal["high", "medium", "low", "unknown"]] = None
     reason: Optional[str] = None
     ai_score: Optional[float] = None
     tags: List[str] = []
@@ -110,6 +119,8 @@ class UnifiedAreaComparisonResult(BaseModel):
     logistics: str
     value_signal: str
     recommendation: str
+    source_url: Optional[str] = None
+    last_verified_at: Optional[str] = None
 
 
 # ── Request / Response ────────────────────────────────────────────────────────
@@ -125,6 +136,8 @@ class ConciergeSearchResponse(BaseModel):
     intent: str
     retrieval_used: bool = False
     source_status: str = SOURCE_NONE
+    cached: bool = False
+    live_provider: Optional[str] = None
     restaurants: List[UnifiedRestaurantResult] = []
     attractions: List[UnifiedAttractionResult] = []
     hotels: List[UnifiedHotelResult] = []

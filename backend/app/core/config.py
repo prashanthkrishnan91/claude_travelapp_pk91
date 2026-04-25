@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     # OpenWeather
     openweather_api_key: str = ""
 
+    # Live Research providers (used by concierge live-research layer)
+    tavily_api_key: str = ""
+    brave_search_api_key: str = ""
+    serper_api_key: str = ""
+    live_research_enabled: bool = True
+    live_research_cache_ttl_seconds: int = 1800
+    live_research_timeout_seconds: float = 6.0
+
     # CORS
     cors_allow_all: bool = True
     cors_origins: List[str] = []
