@@ -101,6 +101,17 @@ class UnifiedHotelResult(BaseModel):
     tags: List[str] = []
 
 
+class UnifiedAreaComparisonResult(BaseModel):
+    area: str
+    vibe: str
+    best_for: str
+    pros: List[str] = []
+    cons: List[str] = []
+    logistics: str
+    value_signal: str
+    recommendation: str
+
+
 # ── Request / Response ────────────────────────────────────────────────────────
 
 class ConciergeSearchRequest(BaseModel):
@@ -118,6 +129,7 @@ class ConciergeSearchResponse(BaseModel):
     attractions: List[UnifiedAttractionResult] = []
     hotels: List[UnifiedHotelResult] = []
     areas: List[str] = []
+    area_comparisons: List[UnifiedAreaComparisonResult] = []
     suggestions: List[Suggestion] = []
     sources: List[str] = []
     warnings: List[str] = []

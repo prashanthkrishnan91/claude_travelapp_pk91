@@ -40,6 +40,7 @@ from app.models.concierge import (
     ConciergeSearchResponse,
     Suggestion,
     UnifiedAttractionResult,
+    UnifiedAreaComparisonResult,
     UnifiedHotelResult,
     UnifiedRestaurantResult,
 )
@@ -143,6 +144,7 @@ _AREA_PAT = _kw_pattern(
 _REWARDS_PAT = _kw_pattern(
     "points", "miles", "reward", "credit card", "loyalty", "cpp",
 )
+_COMPARE_SPLIT_PAT = re.compile(r"\b(?:vs\.?|versus)\b", re.IGNORECASE)
 
 
 class ConciergeService:
@@ -177,6 +179,7 @@ class ConciergeService:
         attractions: List[UnifiedAttractionResult] = []
         hotels: List[UnifiedHotelResult] = []
         areas: List[str] = []
+        area_comparisons: List[UnifiedAreaComparisonResult] = []
         source_status = SOURCE_NONE
         sources: List[str] = []
         warnings: List[str] = []
@@ -218,7 +221,7 @@ class ConciergeService:
             restaurants = self._sample_nightlife_results(destination)
             if restaurants:
                 source_status = SOURCE_SAMPLE_DATA
-                sources.append("Sample bar research data · verify before booking")
+                sources.append("Sample bar research data · verify hours and current status before booking.")
                 retrieval_used = True
             else:
                 source_status = SOURCE_UNAVAILABLE
@@ -277,18 +280,13 @@ class ConciergeService:
             retrieval_used = bool(areas)
 
         elif intent == INTENT_COMPARE:
-            raw_attr = search_svc.search_attractions(AttractionSearchRequest(location=destination))
-            raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
-            source_status = self._infer_source_status([*raw_attr, *raw_rest])
-            attractions = [
-                self._to_unified_attraction(a, destination=destination, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
-                for a in raw_attr[:4]
-            ]
-            restaurants = [
-                self._to_unified_restaurant(r, intent=INTENT_RESTAURANTS, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
-                for r in raw_rest[:4]
-            ]
-            sources.append("Search database")
+            compare_areas = self._extract_compared_areas(user_query)
+            if not compare_areas:
+                compare_areas = self._default_compare_areas(destination)
+            area_comparisons = self._build_area_comparisons(destination, compare_areas)
+            areas = [item.area for item in area_comparisons]
+            source_status = SOURCE_CURATED_STATIC if area_comparisons else SOURCE_NONE
+            sources.append("Neighborhood comparison reference data")
             retrieval_used = True
 
         elif intent == INTENT_GENERAL_DESTINATION:
@@ -308,7 +306,7 @@ class ConciergeService:
 
         system_prompt = _RETRIEVAL_SYSTEM_PROMPT if retrieval_used else _SYSTEM_PROMPT
         prompt = self._build_search_prompt(
-            trip, user_query, intent, restaurants, attractions, hotels, areas, warnings
+            trip, user_query, intent, restaurants, attractions, hotels, areas, warnings, area_comparisons
         )
         raw = self._call_claude(prompt, system_prompt=system_prompt)
         base = self._parse_response(raw)
@@ -323,6 +321,7 @@ class ConciergeService:
             attractions=attractions,
             hotels=hotels,
             areas=areas,
+            area_comparisons=area_comparisons,
             suggestions=base.suggestions,
             sources=sources,
             warnings=warnings,
@@ -401,6 +400,9 @@ class ConciergeService:
                 "rating": 9.0,
                 "tags": ["Cocktails", "Date Night", "Classic"],
                 "why": "Known for polished classic cocktails and a calm, conversation-friendly vibe.",
+                "status": "closed",
+                "last_verified_at": "2026-04-20",
+                "verification_note": "Known closures should not be recommended in sample/static mode.",
             },
             {
                 "name": "Kumiko",
@@ -409,6 +411,9 @@ class ConciergeService:
                 "rating": 9.2,
                 "tags": ["Japanese-inspired", "Cocktails", "Reservations"],
                 "why": "Precision cocktails and thoughtful tasting menus make this a top splurge pick.",
+                "status": "open",
+                "last_verified_at": None,
+                "verification_note": "Static sample profile; verify current hours and status.",
             },
             {
                 "name": "Cindy's Rooftop",
@@ -417,14 +422,20 @@ class ConciergeService:
                 "rating": 8.7,
                 "tags": ["Rooftop", "Views", "Group Friendly"],
                 "why": "Panoramic skyline and lake views; easy option for pre- or post-dinner drinks.",
+                "status": "unknown",
+                "last_verified_at": None,
+                "verification_note": "Static sample profile; verify current hours and status.",
             },
             {
                 "name": "Three Dots and a Dash",
-                "category": "Bar",
+                "category": "Cocktail Bar",
                 "area": "River North",
                 "rating": 8.8,
                 "tags": ["Tiki", "Nightlife", "Late Night"],
                 "why": "Lively underground tiki bar with strong group energy and creative rum drinks.",
+                "status": "unknown",
+                "last_verified_at": None,
+                "verification_note": "Static sample profile; verify current hours and status.",
             },
             {
                 "name": "Webster's Wine Bar",
@@ -433,6 +444,9 @@ class ConciergeService:
                 "rating": 8.6,
                 "tags": ["Wine", "Cozy", "Neighborhood Favorite"],
                 "why": "Excellent by-the-glass list for a lower-key night focused on wine and conversation.",
+                "status": "unknown",
+                "last_verified_at": None,
+                "verification_note": "Static sample profile; verify current hours and status.",
             },
             {
                 "name": "Revolution Brewing Taproom",
@@ -441,24 +455,105 @@ class ConciergeService:
                 "rating": 8.4,
                 "tags": ["Craft Beer", "Casual", "Group Friendly"],
                 "why": "Best for local craft beer flights and relaxed hangouts after dinner.",
+                "status": "unknown",
+                "last_verified_at": None,
+                "verification_note": "Static sample profile; verify current hours and status.",
             },
         ]
         cards: List[UnifiedRestaurantResult] = []
         for pick in picks:
+            if pick.get("status") == "closed":
+                continue
             maps_query = f"{pick['name']} {pick['area']} Chicago".replace(" ", "+")
+            last_verified = pick.get("last_verified_at")
+            verification_bits = []
+            if last_verified:
+                verification_bits.append(f"Last reviewed {last_verified}")
+            if pick.get("verification_note"):
+                verification_bits.append(str(pick["verification_note"]))
             cards.append(
                 UnifiedRestaurantResult(
                     name=pick["name"],
-                    source="Sample bar research data · verify before booking",
+                    source="Sample bar research data · verify hours and current status before booking.",
                     cuisine=pick["category"],
                     neighborhood=pick["area"],
                     rating=pick["rating"],
-                    summary=f"{pick['why']} Sample bar research data · verify before booking.",
+                    summary=(
+                        f"{pick['why']} "
+                        "Sample bar research data · verify hours and current status before booking."
+                        + (f" {' '.join(verification_bits)}." if verification_bits else "")
+                    ),
                     maps_link=f"https://maps.google.com/?q={maps_query}",
                     tags=pick["tags"],
                 )
             )
         return cards
+
+    def _extract_compared_areas(self, user_query: str) -> List[str]:
+        q = (user_query or "").strip()
+        if not q:
+            return []
+        if "compare" in q.lower():
+            cleaned = re.sub(r"^\s*compare\s+", "", q, flags=re.IGNORECASE).strip()
+            parts = [p.strip(" .?!,") for p in _COMPARE_SPLIT_PAT.split(cleaned) if p.strip()]
+            if len(parts) >= 2:
+                return parts[:2]
+        parts = [p.strip(" .?!,") for p in _COMPARE_SPLIT_PAT.split(q) if p.strip()]
+        if len(parts) >= 2:
+            return parts[:2]
+        return []
+
+    def _default_compare_areas(self, destination: str) -> List[str]:
+        city = (destination or "").lower()
+        if city.startswith("chicago"):
+            return ["River North", "West Loop"]
+        if destination:
+            return [f"{destination} City Center", f"{destination} Old Town"]
+        return ["Area A", "Area B"]
+
+    def _build_area_comparisons(self, destination: str, areas: List[str]) -> List[UnifiedAreaComparisonResult]:
+        city = (destination or "").lower()
+        chicago_profiles = {
+            "river north": UnifiedAreaComparisonResult(
+                area="River North",
+                vibe="Energetic downtown core with nightlife, riverfront access, and polished high-rise feel.",
+                best_for="First-time visitors wanting walkable dining and late-night options.",
+                pros=["Largest concentration of bars and restaurants", "Easy rides to Loop and Magnificent Mile"],
+                cons=["Can feel crowded and louder at night", "Hotels and drinks often price at a premium"],
+                logistics="10–20 minutes to major sights by foot or short rides; strong transit coverage.",
+                value_signal="Higher nightly rates and cocktail pricing than most neighborhoods.",
+                recommendation="Best if nightlife and convenience matter more than quiet streets or budget."
+            ),
+            "west loop": UnifiedAreaComparisonResult(
+                area="West Loop",
+                vibe="Trend-forward dining district with converted warehouse blocks and design-heavy venues.",
+                best_for="Food-focused travelers who want destination restaurants and a stylish base.",
+                pros=["Exceptional restaurant density", "Great access to Fulton Market dining scene"],
+                cons=["Fewer classic tourist landmarks in immediate walking range", "Peak dinner hours can be hectic"],
+                logistics="Fast ride to Loop attractions; very walkable for restaurants and bars.",
+                value_signal="Mid-to-high pricing, but often better value than River North luxury corridors.",
+                recommendation="Best if top-tier dining is your priority and you do not need tourist sights at your doorstep."
+            ),
+        }
+        results: List[UnifiedAreaComparisonResult] = []
+        for area in areas[:2]:
+            key = area.lower()
+            if city.startswith("chicago") and key in chicago_profiles:
+                results.append(chicago_profiles[key])
+                continue
+            results.append(
+                UnifiedAreaComparisonResult(
+                    area=area,
+                    vibe=f"Distinct local area within {destination or 'the city'}; verify current block-by-block feel.",
+                    best_for="Travelers choosing between location convenience and neighborhood character.",
+                    pros=["Can reduce commute time if aligned to your itinerary", "Often offers a unique local atmosphere"],
+                    cons=["Tradeoffs vary by exact block and time of day", "Pricing and transit convenience can vary a lot"],
+                    logistics="Compare transit lines and walk times to your must-do spots before booking.",
+                    value_signal="Check live hotel/short-stay rates because value shifts by season and events.",
+                    recommendation="Choose the area that best matches your nightly plans and morning logistics."
+                )
+            )
+        return results
 
     # ------------------------------------------------------------------
     # Result converters
@@ -887,6 +982,7 @@ class ConciergeService:
         hotels: List[UnifiedHotelResult] = None,
         areas: List[str] = None,
         warnings: List[str] = None,
+        area_comparisons: List[UnifiedAreaComparisonResult] = None,
     ) -> str:
         city = trip.get("destination", "Unknown")
         start = trip.get("start_date", "")
@@ -948,8 +1044,17 @@ class ConciergeService:
 
         if areas:
             parts.append(f"Top neighborhoods/areas in {city}: {', '.join(areas)}\n\n")
+        if area_comparisons:
+            parts.append("Structured neighborhood comparison data:\n")
+            for item in area_comparisons[:4]:
+                parts.append(
+                    f"- {item.area}: vibe={item.vibe} | best_for={item.best_for} | "
+                    f"pros={'; '.join(item.pros)} | cons={'; '.join(item.cons)} | "
+                    f"logistics={item.logistics} | value={item.value_signal} | verdict={item.recommendation}\n"
+                )
+            parts.append("\n")
 
-        has_data = any([restaurants, attractions, hotels, areas])
+        has_data = any([restaurants, attractions, hotels, areas, area_comparisons])
         if not has_data:
             parts.append(f"No specific results were retrieved. Provide general travel advice for {city}.\n\n")
 
@@ -969,7 +1074,8 @@ class ConciergeService:
                 "Format: '[Option A]: [2-3 key signals — vibe, best for, tradeoff]. "
                 "[Option B]: [2-3 key signals]. "
                 "Verdict: [one clear recommendation with who it suits best].' "
-                "Be specific and decision-focused. Max 5 sentences total. No markdown."
+                "Be specific and decision-focused. Max 5 sentences total. No markdown. "
+                "Do not reference restaurant cards unless the user explicitly asks for places."
             )
         elif intent == INTENT_HOTELS:
             parts.append(

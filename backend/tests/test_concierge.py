@@ -345,10 +345,11 @@ class TestConciergeSearch:
         assert result.intent == INTENT_NIGHTLIFE
         assert result.retrieval_used is True
         assert len(result.restaurants) >= 4
+        assert all(r.name != "The Violet Hour" for r in result.restaurants)
         assert result.restaurants[0].cuisine in {
             "Bar", "Cocktail Bar", "Rooftop Bar", "Speakeasy", "Wine Bar", "Brewery"
         }
-        assert all("verify before booking" in (r.summary or "").lower() for r in result.restaurants)
+        assert all("verify hours and current status before booking" in (r.summary or "").lower() for r in result.restaurants)
         assert result.source_status == SOURCE_SAMPLE_DATA
         assert result.restaurants[0].summary
 
@@ -441,6 +442,22 @@ class TestConciergeSearch:
             result = svc.search(FAKE_TRIP_ID, query, FAKE_USER_ID)
         assert result.intent == expected_intent
         assert isinstance(result.response, str)
+        if expected_intent == INTENT_COMPARE:
+            assert result.restaurants == []
+            assert result.attractions == []
+            assert len(result.area_comparisons) >= 2
+
+    def test_compare_specific_neighborhoods_returns_comparison_data(self):
+        svc = self._svc("Chicago")
+        with patch("app.services.concierge.SearchService") as MockSearch, \
+             patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            MockSearch.return_value = self._mock_search_svc()
+            result = svc.search(FAKE_TRIP_ID, "Compare River North vs West Loop", FAKE_USER_ID)
+        assert result.intent == INTENT_COMPARE
+        assert result.restaurants == []
+        assert result.attractions == []
+        names = [item.area for item in result.area_comparisons]
+        assert names == ["River North", "West Loop"]
 
     def test_nightlife_non_supported_city_returns_clear_note_not_restaurants(self):
         svc = self._svc("Paris")

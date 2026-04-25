@@ -1172,6 +1172,17 @@ export interface UnifiedHotelResult {
   tags: string[];
 }
 
+export interface UnifiedAreaComparisonResult {
+  area: string;
+  vibe: string;
+  bestFor: string;
+  pros: string[];
+  cons: string[];
+  logistics: string;
+  valueSignal: string;
+  recommendation: string;
+}
+
 export interface ConciergeSearchResult {
   response: string;
   intent: string;
@@ -1181,6 +1192,7 @@ export interface ConciergeSearchResult {
   attractions: UnifiedAttractionResult[];
   hotels: UnifiedHotelResult[];
   areas: string[];
+  areaComparisons: UnifiedAreaComparisonResult[];
   suggestions: ConciergeSuggestion[];
   sources: string[];
   warnings: string[];
