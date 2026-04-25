@@ -20,6 +20,7 @@ import {
   fetchItinerary,
 } from "@/lib/api";
 import type {
+  UnifiedAreaComparisonResult,
   ConciergeSearchResult,
   UnifiedAttractionResult,
   UnifiedHotelResult,
@@ -35,6 +36,7 @@ interface Message {
   restaurants?: UnifiedRestaurantResult[];
   attractions?: UnifiedAttractionResult[];
   hotels?: UnifiedHotelResult[];
+  areaComparisons?: UnifiedAreaComparisonResult[];
   intent?: string;
   retrievalUsed?: boolean;
   sourceStatus?: string;
@@ -57,7 +59,7 @@ function sourceLabel(status: string, intent?: string): string | null {
     : "Based on available app database";
   if (status === "live_search") return "Live search results";
   if (status === "app_database") return "Based on available app database";
-  if (status === "sample_data") return "Sample research data · verify before booking";
+  if (status === "sample_data") return "Sample bar research data · verify hours and current status before booking.";
   if (status === "unavailable") return "Limited source coverage — verify names, hours, and booking details.";
   return null;
 }
@@ -178,6 +180,7 @@ function fromSearchResult(result: ConciergeSearchResult): Message {
     restaurants: result.restaurants,
     attractions: result.attractions,
     hotels: result.hotels,
+    areaComparisons: result.areaComparisons,
     intent: result.intent,
     retrievalUsed: result.retrievalUsed,
     sourceStatus: result.sourceStatus,
@@ -474,7 +477,50 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
               {msg.role === "assistant" && (
                 <>
-                  {(msg.restaurants?.length || msg.attractions?.length || msg.hotels?.length) ? (
+                  {msg.intent === "compare" && (msg.areaComparisons?.length ?? 0) > 0 && (
+                    <>
+                      <div className="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white md:block">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-50 text-slate-600">
+                            <tr>
+                              <th className="px-2 py-2 font-semibold">Area</th>
+                              <th className="px-2 py-2 font-semibold">Vibe</th>
+                              <th className="px-2 py-2 font-semibold">Best for</th>
+                              <th className="px-2 py-2 font-semibold">Logistics</th>
+                              <th className="px-2 py-2 font-semibold">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {msg.areaComparisons?.map((area) => (
+                              <tr key={area.area} className="border-t border-slate-100 align-top">
+                                <td className="px-2 py-2 font-medium text-slate-900">{area.area}</td>
+                                <td className="px-2 py-2 text-slate-700">{area.vibe}</td>
+                                <td className="px-2 py-2 text-slate-700">{area.bestFor}</td>
+                                <td className="px-2 py-2 text-slate-700">{area.logistics}</td>
+                                <td className="px-2 py-2 text-slate-700">{area.valueSignal}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="space-y-2 md:hidden">
+                        {msg.areaComparisons?.map((area) => (
+                          <div key={area.area} className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
+                            <p className="font-semibold text-slate-900">{area.area}</p>
+                            <p className="mt-1 text-slate-700">{area.vibe}</p>
+                            <p className="mt-1 text-slate-600"><span className="font-medium">Best for:</span> {area.bestFor}</p>
+                            <p className="mt-1 text-slate-600"><span className="font-medium">Pros:</span> {area.pros.join(" · ")}</p>
+                            <p className="mt-1 text-slate-600"><span className="font-medium">Cons:</span> {area.cons.join(" · ")}</p>
+                            <p className="mt-1 text-slate-600"><span className="font-medium">Logistics:</span> {area.logistics}</p>
+                            <p className="mt-1 text-slate-600"><span className="font-medium">Value:</span> {area.valueSignal}</p>
+                            <p className="mt-1 text-slate-700"><span className="font-medium">Verdict:</span> {area.recommendation}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {msg.intent !== "compare" && (msg.restaurants?.length || msg.attractions?.length || msg.hotels?.length) ? (
                     <div className="space-y-2">
                       {msg.restaurants?.map((r) => {
                         const key = cardKey(r.name, selectedDayId || undefined);
@@ -483,9 +529,8 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                           <ConciergeCard
                             key={`${r.name}-${key}`}
                             title={r.name}
-                            category="Restaurant"
+                            category={r.cuisine || "Restaurant"}
                             meta={[
-                              r.cuisine,
                               r.neighborhood || "",
                               r.rating ? `★ ${r.rating}` : "",
                             ].filter(Boolean)}
