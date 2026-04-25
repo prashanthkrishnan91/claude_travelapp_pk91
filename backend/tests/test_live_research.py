@@ -21,6 +21,7 @@ from app.models.concierge import (
     INTENT_NIGHTLIFE,
     INTENT_RESTAURANTS,
     SOURCE_LIVE_SEARCH,
+    SOURCE_MIXED,
     SOURCE_NONE,
     SOURCE_SAMPLE_DATA,
     SOURCE_UNAVAILABLE,
@@ -187,6 +188,31 @@ class TestNormalization:
         assert len(out["restaurants"]) == 1
         assert out["restaurants"][0].name == "Gus' Sip & Dip"
         assert out["research_sources"] == []
+
+    def test_research_snippet_markdown_and_boilerplate_are_sanitized(self):
+        hits = [
+            _hit(
+                "Best Restaurants in Chicago",
+                "https://example.com/listicle",
+                "##### Gaylord India Restaurant ... Subscribe now!!! Advertising",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_RESTAURANTS, destination="Chicago", user_query="restaurants")
+        assert out["research_sources"]
+        assert out["research_sources"][0].summary == (
+            "This source may contain relevant background, but it is not a confirmed venue."
+        )
+
+    def test_research_sources_are_capped_when_venues_exist(self):
+        hits = [
+            _hit("Avec", "https://example.com/avec", "Restaurant in Chicago."),
+            _hit("Top 10 Bars", "https://example.com/top-bars", "Guide to bars."),
+            _hit("Neighborhood Guide", "https://example.com/hoods", "Where to stay and eat."),
+            _hit("Best Rooftops", "https://example.com/rooftops", "Listicle roundup."),
+        ]
+        out = normalize_hits(hits, intent=INTENT_RESTAURANTS, destination="Chicago", user_query="restaurants")
+        assert len(out["restaurants"]) == 1
+        assert len(out["research_sources"]) == 2
 
 
 # ── LiveResearchService behavior ────────────────────────────────────────────
@@ -449,6 +475,27 @@ class TestConciergeWithLiveResearch:
         assert result.source_status == SOURCE_SAMPLE_DATA
         assert result.live_provider is None
         assert result.cached is False
+
+    def test_live_research_sources_only_do_not_report_sample_fallback(self):
+        live_hits = [
+            _hit("Best Cocktail Bars in Chicago", "https://ex.com/listicle", "Top picks and guide.")
+        ]
+        svc = self._make_concierge("Chicago", live_hits)
+        with patch("app.services.concierge.SearchService") as MockSearch, \
+             patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            MockSearch.return_value = MagicMock()
+            result = svc.search(FAKE_TRIP_ID, "Nearby cocktail bars", FAKE_USER_ID)
+        assert result.research_sources
+        assert result.source_status == SOURCE_MIXED
+        assert result.live_provider == "stub"
+
+    def test_sample_fallback_status_only_when_sample_is_used(self):
+        svc = self._make_concierge("Chicago", hits=[])
+        with patch("app.services.concierge.SearchService") as MockSearch, \
+             patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            MockSearch.return_value = MagicMock()
+            result = svc.search(FAKE_TRIP_ID, "Nearby cocktail bars", FAKE_USER_ID)
+        assert result.source_status == SOURCE_SAMPLE_DATA
 
 
 # ── Cache TTL behavior ───────────────────────────────────────────────────────

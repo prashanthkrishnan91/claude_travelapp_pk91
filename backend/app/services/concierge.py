@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from datetime import date, timedelta
-from typing import List, Optional
+from typing import List, Optional, Sequence
 from uuid import UUID
 from uuid import uuid4
 
@@ -32,6 +32,7 @@ from app.models.concierge import (
     SOURCE_CURATED_STATIC,
     SOURCE_APP_DATABASE,
     SOURCE_LIVE_SEARCH,
+    SOURCE_MIXED,
     SOURCE_NONE,
     SOURCE_SAMPLE_DATA,
     SOURCE_UNAVAILABLE,
@@ -202,6 +203,7 @@ class ConciergeService:
 
         live_result = self._fetch_live_research(intent, destination, user_query, trip)
         research_sources = list(live_result.research_sources)
+        live_provider_name = live_result.provider_name
 
         if intent == INTENT_MICHELIN_RESTAURANTS:
             from app.services.michelin_retriever import MichelinRetriever
@@ -212,7 +214,6 @@ class ConciergeService:
                     restaurants = live_result.restaurants
                     source_status = SOURCE_LIVE_SEARCH
                     cached_response = live_result.cached
-                    live_provider_name = live_result.provider_name
                     sources.append(f"Live search · {live_result.provider_name}")
                 else:
                     warnings.append(
@@ -236,7 +237,6 @@ class ConciergeService:
                 restaurants = live_result.restaurants
                 source_status = SOURCE_LIVE_SEARCH
                 cached_response = live_result.cached
-                live_provider_name = live_result.provider_name
                 sources.append(f"Live search · {live_result.provider_name}")
             else:
                 raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
@@ -253,7 +253,6 @@ class ConciergeService:
                 restaurants = live_result.restaurants
                 source_status = SOURCE_LIVE_SEARCH
                 cached_response = live_result.cached
-                live_provider_name = live_result.provider_name
                 sources.append(f"Live search · {live_result.provider_name}")
                 retrieval_used = True
             else:
@@ -276,7 +275,6 @@ class ConciergeService:
                 attractions = live_result.attractions
                 source_status = SOURCE_LIVE_SEARCH
                 cached_response = live_result.cached
-                live_provider_name = live_result.provider_name
                 sources.append(f"Live search · {live_result.provider_name}")
             else:
                 raw_attr = search_svc.search_attractions(AttractionSearchRequest(location=destination))
@@ -305,7 +303,6 @@ class ConciergeService:
                 hotels = live_result.hotels
                 source_status = SOURCE_LIVE_SEARCH
                 cached_response = live_result.cached
-                live_provider_name = live_result.provider_name
                 sources.append(f"Live search · {live_result.provider_name}")
                 retrieval_used = True
             else:
@@ -365,6 +362,16 @@ class ConciergeService:
         raw = self._call_claude(prompt, system_prompt=system_prompt)
         base = self._parse_response(raw)
         concise_response = self._concise_response(base.response, intent)
+
+        source_status = self._derive_response_source_status(
+            initial_status=source_status,
+            restaurants=restaurants,
+            attractions=attractions,
+            hotels=hotels,
+            research_sources=research_sources,
+        )
+        if source_status not in {SOURCE_LIVE_SEARCH, SOURCE_MIXED}:
+            live_provider_name = None
 
         response = ConciergeSearchResponse(
             response=concise_response,
@@ -660,6 +667,31 @@ class ConciergeService:
         if any(src in {"live", "live_search", "api", "provider"} for src in sources):
             return SOURCE_LIVE_SEARCH
         return SOURCE_APP_DATABASE
+
+    def _derive_response_source_status(
+        self,
+        *,
+        initial_status: str,
+        restaurants: Sequence[UnifiedRestaurantResult],
+        attractions: Sequence[UnifiedAttractionResult],
+        hotels: Sequence[UnifiedHotelResult],
+        research_sources: Sequence[UnifiedResearchSourceResult],
+    ) -> str:
+        all_cards: List[object] = [*restaurants, *attractions, *hotels, *research_sources]
+        has_live_cards = any("live search" in str(getattr(card, "source", "")).lower() for card in all_cards)
+        has_sample_cards = any("sample" in str(getattr(card, "source", "")).lower() for card in all_cards)
+        has_app_cards = any(
+            any(token in str(getattr(card, "source", "")).lower() for token in ("database", "search", "michelin"))
+            for card in [*restaurants, *attractions, *hotels]
+        )
+
+        if has_live_cards and (has_sample_cards or (has_app_cards and initial_status != SOURCE_LIVE_SEARCH)):
+            return SOURCE_MIXED
+        if has_live_cards:
+            return SOURCE_LIVE_SEARCH
+        if has_sample_cards:
+            return SOURCE_SAMPLE_DATA
+        return initial_status
 
     def _to_unified_restaurant(self, r, intent: str = INTENT_RESTAURANTS, limited_coverage: bool = False) -> UnifiedRestaurantResult:
         name = getattr(r, "name", "Restaurant")
