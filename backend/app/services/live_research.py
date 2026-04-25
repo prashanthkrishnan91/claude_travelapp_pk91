@@ -95,6 +95,8 @@ _CLOSED_KEYWORDS = (
     "no longer in operation",
     "no longer open",
     "has closed",
+    "won't reopen",
+    "will not reopen",
 )
 
 _FRESHNESS_HIGH_DAYS = 90
@@ -1045,23 +1047,40 @@ def _final_hard_filter_closed_venues(
     research_sources: List[UnifiedResearchSourceResult],
 ) -> List[Any]:
     """Final guard: never return closed-signal items as addable venues."""
+    def _read_field(record: Any, field: str, fallback: Any = "") -> Any:
+        if isinstance(record, dict):
+            return record.get(field, fallback)
+        return getattr(record, field, fallback)
+
     filtered: List[Any] = []
     for venue in venues:
-        text_blob = "\n".join(
-            str(getattr(venue, attr, "") or "")
-            for attr in ("name", "summary", "description", "reason", "source", "source_url")
-        )
+        text_blob = "\n".join([
+            str(_read_field(venue, "name", "") or ""),
+            str(_read_field(venue, "title", "") or ""),
+            str(_read_field(venue, "summary", "") or ""),
+            str(_read_field(venue, "description", "") or ""),
+            str(_read_field(venue, "snippet", "") or ""),
+            str(_read_field(venue, "reason", "") or ""),
+            str(_read_field(venue, "source", "") or ""),
+            str(_read_field(venue, "source_text", "") or ""),
+            str(_read_field(venue, "sourceText", "") or ""),
+            str(_read_field(venue, "raw_text", "") or ""),
+            str(_read_field(venue, "url", "") or ""),
+            str(_read_field(venue, "source_url", "") or ""),
+            str(_read_field(venue, "sourceUrl", "") or ""),
+            str(_read_field(venue, "raw", "") or ""),
+        ])
         if _looks_closed(text_blob):
             research_sources.append(
                 UnifiedResearchSourceResult(
-                    title=getattr(venue, "name", f"Closed {kind_label}"),
-                    source=getattr(venue, "source", "Live search"),
+                    title=str(_read_field(venue, "name", f"Closed {kind_label}") or f"Closed {kind_label}"),
+                    source=str(_read_field(venue, "source", "Live search") or "Live search"),
                     source_type="generic_info_source",
-                    summary=_closed_research_summary(getattr(venue, "name", "")),
-                    source_url=getattr(venue, "source_url", None),
-                    neighborhood=getattr(venue, "neighborhood", None) or getattr(venue, "area_label", None),
-                    last_verified_at=getattr(venue, "last_verified_at", None),
-                    confidence=getattr(venue, "confidence", None),
+                    summary=_closed_research_summary(str(_read_field(venue, "name", "") or "")),
+                    source_url=_read_field(venue, "source_url", None) or _read_field(venue, "sourceUrl", None),
+                    neighborhood=_read_field(venue, "neighborhood", None) or _read_field(venue, "area_label", None),
+                    last_verified_at=_read_field(venue, "last_verified_at", None) or _read_field(venue, "lastVerifiedAt", None),
+                    confidence=_read_field(venue, "confidence", None),
                     trip_addable=False,
                 )
             )
@@ -1924,7 +1943,11 @@ class LiveResearchService:
                 return False
             return True
 
-        return self._cache.clear_matching(_matches)
+        cleared_results = self._cache.clear_matching(_matches)
+        cleared_verifications = self._verification_cache.clear_matching(
+            lambda key: key.startswith(f"verify::{normalized_destination}::")
+        )
+        return cleared_results + cleared_verifications
 
     @staticmethod
     def _result_to_payload(result: LiveResearchResult) -> Dict[str, Any]:

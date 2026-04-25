@@ -419,6 +419,18 @@ class ConciergeService:
 
     def clear_cache(self, trip_id: UUID, user_id: UUID, destination: Optional[str] = None) -> None:
         trip = self._fetch_trip(trip_id, user_id)
+        try:
+            (
+                self._db.table(MESSAGES_TABLE)
+                .delete()
+                .eq("trip_id", str(trip_id))
+                .execute()
+            )
+        except Exception as exc:
+            if self._is_missing_messages_table_error(exc):
+                logger.warning(_MISSING_MESSAGES_TABLE_HINT)
+            else:
+                logger.warning("Failed to clear concierge message history: %s", exc)
         resolved_destination = (destination or trip.get("destination") or "").strip()
         dates = ""
         start = trip.get("start_date") or ""

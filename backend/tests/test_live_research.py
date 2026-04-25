@@ -40,6 +40,7 @@ from app.services.live_research import (
     _build_verification_query,
     _check_verification_hits,
     _extract_venue_names_from_text,
+    _final_hard_filter_closed_venues,
     _is_obvious_non_venue,
     _validate_venue_candidate,
     normalize_hits,
@@ -165,6 +166,24 @@ class TestNormalization:
         assert "The Violet Hour" not in names
         assert "Kumiko" in names
         assert any("appears closed" in (s.summary or "").lower() for s in out["research_sources"])
+
+    def test_violet_hour_closed_signal_in_raw_text_never_returns_live_addable_card(self):
+        research_sources = []
+        venues = [{
+            "name": "The Violet Hour",
+            "source": "Live search · Tavily",
+            "sourceText": "The Violet Hour has closed for good and won't reopen.",
+            "sourceUrl": "https://example.com/violet-hour-update",
+            "confidence": "high",
+        }]
+        filtered = _final_hard_filter_closed_venues(
+            venues,
+            kind_label="venue",
+            research_sources=research_sources,
+        )
+        assert filtered == []
+        assert len(research_sources) == 1
+        assert research_sources[0].trip_addable is False
 
     def test_freshness_confidence_high_for_recent(self):
         recent = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -1315,3 +1334,17 @@ class TestFrontendResearchSourceCard:
             src = f.read()
         assert "category=\"Research source\"" in src
         assert "canAdd={false}" in src
+
+
+class TestFrontendConciergeClearChat:
+    def test_clear_chat_uses_reload_guard_and_keeps_itinerary_state(self):
+        root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        panel_path = os.path.join(root, "frontend", "src", "components", "trips", "AIConciergePanel.tsx")
+        with open(panel_path, "r", encoding="utf-8") as f:
+            src = f.read()
+        assert "const skipReloadRef = useRef(false);" in src
+        assert "if (skipReloadRef.current) return;" in src
+        assert "skipReloadRef.current = true;" in src
+        handle_clear_block = src.split("async function handleClearChat() {", 1)[1].split("}", 1)[0]
+        assert "setTripDays([]);" not in handle_clear_block
+        assert "setItineraryItems([]);" not in handle_clear_block

@@ -59,6 +59,18 @@ interface Props {
 }
 
 const CONCIERGE_CACHE_VERSION = 2;
+const CLOSED_SIGNAL_PATTERNS = [
+  "permanently closed",
+  "closed permanently",
+  "closed for good",
+  "closed for the final time",
+  "has closed",
+  "is closed",
+  "shut down",
+  "no longer open",
+  "won't reopen",
+  "will not reopen",
+];
 
 interface ConciergeClientCacheEntry {
   version: number;
@@ -99,7 +111,19 @@ function writeConciergeClientCache(tripId: string, destination: string, messages
 
 function clearConciergeClientCache(tripId: string, destination: string): void {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(conciergeCacheKey(tripId, destination));
+  const specificKey = conciergeCacheKey(tripId, destination);
+  const tripPrefix = `concierge_cache::${tripId}::`;
+  for (const storage of [window.localStorage, window.sessionStorage]) {
+    const keysToDelete: string[] = [];
+    for (let i = 0; i < storage.length; i += 1) {
+      const key = storage.key(i);
+      if (!key) continue;
+      if (key === specificKey || key.startsWith(tripPrefix)) {
+        keysToDelete.push(key);
+      }
+    }
+    keysToDelete.forEach((key) => storage.removeItem(key));
+  }
 }
 
 function sourceLabel(status: string, intent?: string, liveProvider?: string | null, cached?: boolean): string | null {
@@ -154,12 +178,12 @@ function formatVerifiedAt(iso?: string): string | null {
   const dt = new Date(iso);
   if (Number.isNaN(dt.getTime())) return null;
   const days = Math.max(0, Math.round((Date.now() - dt.getTime()) / (24 * 60 * 60 * 1000)));
-  if (days === 0) return "verified today";
-  if (days === 1) return "verified 1 day ago";
-  if (days < 30) return `verified ${days} days ago`;
+  if (days === 0) return "source checked today";
+  if (days === 1) return "source checked 1 day ago";
+  if (days < 30) return `source checked ${days} days ago`;
   const months = Math.round(days / 30);
-  if (months < 12) return `verified ${months} mo ago`;
-  return `verified ${Math.round(months / 12)} yr ago`;
+  if (months < 12) return `source checked ${months} mo ago`;
+  return `source checked ${Math.round(months / 12)} yr ago`;
 }
 
 function cardKey(name: string, dayId?: string): string {
@@ -199,6 +223,7 @@ function canShowLiveBadge(card: {
   confidence?: string | null;
   lastVerifiedAt?: string | null;
 }): boolean {
+  if (hasClosedSignal(card)) return false;
   const confidence = (card.confidence ?? "").toLowerCase();
   const confidenceOk = confidence === "high" || confidence === "medium";
   return isLiveSource(card.source)
@@ -206,6 +231,26 @@ function canShowLiveBadge(card: {
     && card.verifiedPlace === true
     && confidenceOk
     && isFreshlyVerified(card.lastVerifiedAt);
+}
+
+function hasClosedSignal(card: Record<string, unknown>): boolean {
+  const textBlob = [
+    card.name,
+    card.title,
+    card.summary,
+    card.description,
+    card.reason,
+    card.source,
+    card.sourceText,
+    card.rawText,
+    card.url,
+    card.sourceUrl,
+    card.snippet,
+    card.raw,
+  ]
+    .map((value) => String(value ?? "").toLowerCase())
+    .join("\n");
+  return CLOSED_SIGNAL_PATTERNS.some((signal) => textBlob.includes(signal));
 }
 
 function ConciergeCard({
@@ -357,6 +402,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
   const [historyWarning, setHistoryWarning] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const loadedTripRef = useRef<string | null>(null);
+  const skipReloadRef = useRef(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -469,6 +515,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
   useEffect(() => {
     if (!isOpen) return;
+    if (skipReloadRef.current) return;
     if (loadedTripRef.current === tripId && messages.length > 0) return;
     void loadState();
   }, [isOpen, tripId, messages.length, loadState]);
@@ -487,12 +534,16 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
   }, [destination, tripId]);
 
   async function handleClearChat() {
+    skipReloadRef.current = true;
+    loadedTripRef.current = tripId;
     setLoading(false);
     setLoadingHistory(false);
     setError(null);
     setHistoryWarning(null);
     setInput("");
     setMessages([]);
+    setAddedItems(new Set());
+    setAddingItems(new Set());
     clearConciergeClientCache(tripId, destination);
 
     try {
@@ -516,6 +567,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
   async function sendQuery(query: string) {
     if (!query || loading) return;
+    skipReloadRef.current = false;
     const requestId = typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -716,7 +768,8 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                       {msg.restaurants?.map((r) => {
                         const key = cardKey(r.name, selectedDayId || undefined);
                         const reason = r.summary;
-                        const isLive = canShowLiveBadge(r);
+                        const isClosed = hasClosedSignal(r as Record<string, unknown>);
+                        const isLive = !isClosed && canShowLiveBadge(r);
                         return (
                           <ConciergeCard
                             key={`${r.name}-${key}`}
@@ -734,6 +787,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                             verifiedAt={formatVerifiedAt(r.lastVerifiedAt)}
                             added={addedItems.has(key)}
                             adding={addingItems.has(key)}
+                            canAdd={!isClosed}
                             onAdd={() => addItem(r.name, "restaurant", r, reason)}
                           />
                         );
@@ -741,7 +795,8 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
                       {msg.attractions?.map((a) => {
                         const key = cardKey(a.name, selectedDayId || undefined);
-                        const isLive = canShowLiveBadge(a);
+                        const isClosed = hasClosedSignal(a as Record<string, unknown>);
+                        const isLive = !isClosed && canShowLiveBadge(a);
                         return (
                           <ConciergeCard
                             key={`${a.name}-${key}`}
@@ -760,6 +815,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                             verifiedAt={formatVerifiedAt(a.lastVerifiedAt)}
                             added={addedItems.has(key)}
                             adding={addingItems.has(key)}
+                            canAdd={!isClosed}
                             onAdd={() => addItem(a.name, "attraction", a, a.description)}
                           />
                         );
@@ -768,7 +824,8 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                       {msg.hotels?.map((h) => {
                         const key = cardKey(h.name, selectedDayId || undefined);
                         const reason = h.reason ?? (h.pricePerNight ? `~$${Math.round(h.pricePerNight)}/night` : undefined);
-                        const isLive = canShowLiveBadge(h);
+                        const isClosed = hasClosedSignal(h as Record<string, unknown>);
+                        const isLive = !isClosed && canShowLiveBadge(h);
                         return (
                           <ConciergeCard
                             key={`${h.name}-${key}`}
@@ -788,6 +845,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                             verifiedAt={formatVerifiedAt(h.lastVerifiedAt)}
                             added={addedItems.has(key)}
                             adding={addingItems.has(key)}
+                            canAdd={!isClosed}
                             onAdd={() => addItem(h.name, "hotel", h, reason)}
                           />
                         );
