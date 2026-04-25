@@ -1129,6 +1129,8 @@ export interface ConciergeResult {
   suggestions: ConciergeSuggestion[];
 }
 
+export type SourceConfidence = "high" | "medium" | "low" | "unknown";
+
 export interface UnifiedRestaurantResult {
   name: string;
   source: string;
@@ -1140,6 +1142,9 @@ export interface UnifiedRestaurantResult {
   summary?: string;
   bookingLink?: string;
   mapsLink?: string;
+  sourceUrl?: string;
+  lastVerifiedAt?: string;
+  confidence?: SourceConfidence;
   aiScore?: number;
   tags: string[];
 }
@@ -1154,6 +1159,9 @@ export interface UnifiedAttractionResult {
   reviewCount?: number;
   address?: string;
   mapsLink?: string;
+  sourceUrl?: string;
+  lastVerifiedAt?: string;
+  confidence?: SourceConfidence;
   aiScore?: number;
   tags: string[];
 }
@@ -1167,6 +1175,9 @@ export interface UnifiedHotelResult {
   pricePerNight?: number;
   mapsLink?: string;
   bookingUrl?: string;
+  sourceUrl?: string;
+  lastVerifiedAt?: string;
+  confidence?: SourceConfidence;
   reason?: string;
   aiScore?: number;
   tags: string[];
@@ -1181,6 +1192,8 @@ export interface UnifiedAreaComparisonResult {
   logistics: string;
   valueSignal: string;
   recommendation: string;
+  sourceUrl?: string;
+  lastVerifiedAt?: string;
 }
 
 export interface ConciergeSearchResult {
@@ -1188,6 +1201,8 @@ export interface ConciergeSearchResult {
   intent: string;
   retrievalUsed: boolean;
   sourceStatus: string;
+  cached?: boolean;
+  liveProvider?: string | null;
   restaurants: UnifiedRestaurantResult[];
   attractions: UnifiedAttractionResult[];
   hotels: UnifiedHotelResult[];

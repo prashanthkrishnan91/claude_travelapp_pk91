@@ -49,6 +49,7 @@ from app.models.search import (
     HotelSearchRequest,
     RestaurantSearchRequest,
 )
+from app.services.live_research import LiveResearchResult, LiveResearchService
 from app.services.search import SearchService
 
 logger = logging.getLogger(__name__)
@@ -148,9 +149,17 @@ _COMPARE_SPLIT_PAT = re.compile(r"\b(?:vs\.?|versus)\b", re.IGNORECASE)
 
 
 class ConciergeService:
-    def __init__(self, db: Client) -> None:
+    def __init__(self, db: Client, live_research: Optional[LiveResearchService] = None) -> None:
         self._db = db
         self._settings = get_settings()
+        self._live_research = live_research
+
+    def _get_live_research(self) -> LiveResearchService:
+        if self._live_research is None:
+            settings = self._settings
+            enabled = bool(getattr(settings, "live_research_enabled", True))
+            self._live_research = LiveResearchService(enabled=enabled)
+        return self._live_research
 
     # ------------------------------------------------------------------
     # Original answer() — unchanged for backward compatibility
@@ -184,68 +193,102 @@ class ConciergeService:
         sources: List[str] = []
         warnings: List[str] = []
         retrieval_used = False
+        cached_response = False
+        live_provider_name: Optional[str] = None
 
         search_svc = SearchService(self._db)
+
+        live_result = self._fetch_live_research(intent, destination, user_query, trip)
 
         if intent == INTENT_MICHELIN_RESTAURANTS:
             from app.services.michelin_retriever import MichelinRetriever
             restaurants, source_status = MichelinRetriever().fetch(destination, user_query)
             if source_status == SOURCE_UNAVAILABLE:
-                warnings.append(
-                    f"Michelin Guide data is not available for {destination}. "
-                    "Showing general dining recommendations based on local search."
-                )
-                raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
-                source_status = self._infer_source_status(raw_rest)
-                restaurants = [
-                    self._to_unified_restaurant(r, intent=intent, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
-                    for r in raw_rest[:6]
-                ]
-                sources.append("Local restaurant database")
+                # No curated Michelin data for this city — prefer live results if available.
+                if live_result.restaurants:
+                    restaurants = live_result.restaurants
+                    source_status = SOURCE_LIVE_SEARCH
+                    cached_response = live_result.cached
+                    live_provider_name = live_result.provider_name
+                    sources.append(f"Live search · {live_result.provider_name}")
+                else:
+                    warnings.append(
+                        f"Michelin Guide data is not available for {destination}. "
+                        "Showing general dining recommendations based on local search."
+                    )
+                    raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
+                    source_status = self._infer_source_status(raw_rest)
+                    restaurants = [
+                        self._to_unified_restaurant(r, intent=intent, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
+                        for r in raw_rest[:6]
+                    ]
+                    sources.append("Local restaurant database")
             else:
                 sources.append("Michelin Guide (curated reference data)")
             retrieval_used = True
 
         elif intent in {INTENT_RESTAURANTS, INTENT_HIDDEN_GEMS, INTENT_LUXURY_VALUE,
                         INTENT_ROMANTIC, INTENT_FAMILY_FRIENDLY}:
-            raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
-            source_status = self._infer_source_status(raw_rest)
-            restaurants = [
-                self._to_unified_restaurant(r, intent=intent, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
-                for r in raw_rest[:6]
-            ]
-            sources.append("Restaurant search database")
+            if live_result.restaurants:
+                restaurants = live_result.restaurants
+                source_status = SOURCE_LIVE_SEARCH
+                cached_response = live_result.cached
+                live_provider_name = live_result.provider_name
+                sources.append(f"Live search · {live_result.provider_name}")
+            else:
+                raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
+                source_status = self._infer_source_status(raw_rest)
+                restaurants = [
+                    self._to_unified_restaurant(r, intent=intent, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
+                    for r in raw_rest[:6]
+                ]
+                sources.append("Restaurant search database")
             retrieval_used = True
 
         elif intent == INTENT_NIGHTLIFE:
-            restaurants = self._sample_nightlife_results(destination)
-            if restaurants:
-                source_status = SOURCE_SAMPLE_DATA
-                sources.append("Sample bar research data · verify hours and current status before booking.")
+            if live_result.restaurants:
+                restaurants = live_result.restaurants
+                source_status = SOURCE_LIVE_SEARCH
+                cached_response = live_result.cached
+                live_provider_name = live_result.provider_name
+                sources.append(f"Live search · {live_result.provider_name}")
                 retrieval_used = True
             else:
-                source_status = SOURCE_UNAVAILABLE
-                warnings.append(
-                    f"No bar/nightlife cards are available yet for {destination}. "
-                    "Try specific neighborhoods, hotel concierge recommendations, or recent local roundups."
-                )
-                sources.append("Nightlife data unavailable")
-                retrieval_used = False
+                restaurants = self._sample_nightlife_results(destination)
+                if restaurants:
+                    source_status = SOURCE_SAMPLE_DATA
+                    sources.append("Sample bar research data · verify hours and current status before booking.")
+                    retrieval_used = True
+                else:
+                    source_status = SOURCE_UNAVAILABLE
+                    warnings.append(
+                        f"No bar/nightlife cards are available yet for {destination}. "
+                        "Try specific neighborhoods, hotel concierge recommendations, or recent local roundups."
+                    )
+                    sources.append("Nightlife data unavailable")
+                    retrieval_used = False
 
         elif intent in _ATTRACTION_INTENTS:
-            raw_attr = search_svc.search_attractions(AttractionSearchRequest(location=destination))
-            source_status = self._infer_source_status(raw_attr)
-            is_day_request = intent == INTENT_PLAN_DAY or bool(_DAY_NUMBER_PAT.search(user_query))
-            attractions = [
-                self._to_unified_attraction(
-                    a,
-                    destination=destination,
-                    limited_coverage=source_status == SOURCE_SAMPLE_DATA,
-                    is_day_request=is_day_request,
-                )
-                for a in raw_attr[:6]
-            ]
-            sources.append("Attraction search database")
+            if live_result.attractions:
+                attractions = live_result.attractions
+                source_status = SOURCE_LIVE_SEARCH
+                cached_response = live_result.cached
+                live_provider_name = live_result.provider_name
+                sources.append(f"Live search · {live_result.provider_name}")
+            else:
+                raw_attr = search_svc.search_attractions(AttractionSearchRequest(location=destination))
+                source_status = self._infer_source_status(raw_attr)
+                is_day_request = intent == INTENT_PLAN_DAY or bool(_DAY_NUMBER_PAT.search(user_query))
+                attractions = [
+                    self._to_unified_attraction(
+                        a,
+                        destination=destination,
+                        limited_coverage=source_status == SOURCE_SAMPLE_DATA,
+                        is_day_request=is_day_request,
+                    )
+                    for a in raw_attr[:6]
+                ]
+                sources.append("Attraction search database")
             retrieval_used = True
             if intent == INTENT_PLAN_DAY:
                 raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
@@ -255,18 +298,26 @@ class ConciergeService:
                 ]
 
         elif intent == INTENT_HOTELS:
-            try:
-                check_in = date.fromisoformat(trip.get("start_date", "")) if trip.get("start_date") else date.today()
-            except (ValueError, TypeError):
-                check_in = date.today()
-            check_out = check_in + timedelta(days=1)
-            raw_hotels = search_svc.search_hotels(
-                HotelSearchRequest(location=destination, check_in=check_in, check_out=check_out, guests=1)
-            )
-            source_status = self._infer_source_status(raw_hotels)
-            hotels = [self._to_unified_hotel(h, limited_coverage=source_status == SOURCE_SAMPLE_DATA) for h in raw_hotels[:6]]
-            sources.append("Hotel search database")
-            retrieval_used = bool(hotels)
+            if live_result.hotels:
+                hotels = live_result.hotels
+                source_status = SOURCE_LIVE_SEARCH
+                cached_response = live_result.cached
+                live_provider_name = live_result.provider_name
+                sources.append(f"Live search · {live_result.provider_name}")
+                retrieval_used = True
+            else:
+                try:
+                    check_in = date.fromisoformat(trip.get("start_date", "")) if trip.get("start_date") else date.today()
+                except (ValueError, TypeError):
+                    check_in = date.today()
+                check_out = check_in + timedelta(days=1)
+                raw_hotels = search_svc.search_hotels(
+                    HotelSearchRequest(location=destination, check_in=check_in, check_out=check_out, guests=1)
+                )
+                source_status = self._infer_source_status(raw_hotels)
+                hotels = [self._to_unified_hotel(h, limited_coverage=source_status == SOURCE_SAMPLE_DATA) for h in raw_hotels[:6]]
+                sources.append("Hotel search database")
+                retrieval_used = bool(hotels)
 
         elif intent in {INTENT_BEST_AREA, INTENT_AREA_ADVICE}:
             best = self._derive_best_area(search_svc, destination, trip)
@@ -317,6 +368,8 @@ class ConciergeService:
             intent=intent,
             retrieval_used=retrieval_used,
             source_status=source_status,
+            cached=cached_response,
+            live_provider=live_provider_name,
             restaurants=restaurants,
             attractions=attractions,
             hotels=hotels,
@@ -356,6 +409,41 @@ class ConciergeService:
     # ------------------------------------------------------------------
     # Intent detection
     # ------------------------------------------------------------------
+
+    def _fetch_live_research(
+        self,
+        intent: str,
+        destination: str,
+        user_query: str,
+        trip: dict,
+    ) -> LiveResearchResult:
+        """Run live research and return normalized results, never raising.
+
+        A failed live-research call must NOT break the concierge flow — fall
+        back to existing curated/app-database/sample paths instead.
+        """
+        try:
+            svc = self._get_live_research()
+        except Exception as exc:
+            logger.warning("Live research service init failed: %s", exc)
+            return LiveResearchResult()
+        if not svc.is_live_capable:
+            return LiveResearchResult()
+        dates = ""
+        start = trip.get("start_date") or ""
+        end = trip.get("end_date") or ""
+        if start or end:
+            dates = f"{start}|{end}"
+        try:
+            return svc.fetch(
+                intent=intent,
+                destination=destination,
+                user_query=user_query,
+                dates=dates,
+            )
+        except Exception as exc:
+            logger.warning("Live research fetch failed: %s", exc)
+            return LiveResearchResult()
 
     def _detect_intent(self, user_query: str) -> str:
         q = user_query.lower()

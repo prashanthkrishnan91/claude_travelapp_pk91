@@ -40,6 +40,8 @@ interface Message {
   intent?: string;
   retrievalUsed?: boolean;
   sourceStatus?: string;
+  cached?: boolean;
+  liveProvider?: string | null;
   warnings?: string[];
 }
 
@@ -52,16 +54,32 @@ interface Props {
   onItemAdded?: () => void;
 }
 
-function sourceLabel(status: string, intent?: string): string | null {
+function sourceLabel(status: string, intent?: string, liveProvider?: string | null, cached?: boolean): string | null {
   if (status === "confirmed_michelin") return "Confirmed Michelin data";
   if (status === "curated_static") return intent === "michelin_restaurants"
     ? "Based on curated Michelin reference data"
     : "Based on available app database";
-  if (status === "live_search") return "Live search results";
+  if (status === "live_search") {
+    const provider = liveProvider ? `Live · ${liveProvider}` : "Live search results";
+    return cached ? `${provider} (cached)` : provider;
+  }
   if (status === "app_database") return "Based on available app database";
   if (status === "sample_data") return "Sample bar research data · verify hours and current status before booking.";
   if (status === "unavailable") return "Limited source coverage — verify names, hours, and booking details.";
   return null;
+}
+
+function formatVerifiedAt(iso?: string): string | null {
+  if (!iso) return null;
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return null;
+  const days = Math.max(0, Math.round((Date.now() - dt.getTime()) / (24 * 60 * 60 * 1000)));
+  if (days === 0) return "verified today";
+  if (days === 1) return "verified 1 day ago";
+  if (days < 30) return `verified ${days} days ago`;
+  const months = Math.round(days / 30);
+  if (months < 12) return `verified ${months} mo ago`;
+  return `verified ${Math.round(months / 12)} yr ago`;
 }
 
 function cardKey(name: string, dayId?: string): string {
@@ -93,6 +111,8 @@ function ConciergeCard({
   actionLabel,
   added,
   adding,
+  isLive,
+  verifiedAt,
   onAdd,
 }: {
   title: string;
@@ -105,6 +125,8 @@ function ConciergeCard({
   actionLabel?: string;
   added: boolean;
   adding: boolean;
+  isLive?: boolean;
+  verifiedAt?: string | null;
   onAdd: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -114,9 +136,22 @@ function ConciergeCard({
     <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-slate-900">{title}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="truncate text-sm font-semibold text-slate-900">{title}</p>
+            {isLive && (
+              <span
+                className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700"
+                title={verifiedAt ?? "Live source"}
+              >
+                Live
+              </span>
+            )}
+          </div>
           <p className="mt-0.5 text-xs text-slate-500">{category}</p>
           {meta.length > 0 && <p className="mt-0.5 text-xs text-slate-500">{meta.join(" · ")}</p>}
+          {isLive && verifiedAt && (
+            <p className="mt-0.5 text-[10px] text-slate-400">{verifiedAt}</p>
+          )}
         </div>
       </div>
 
@@ -184,6 +219,8 @@ function fromSearchResult(result: ConciergeSearchResult): Message {
     intent: result.intent,
     retrievalUsed: result.retrievalUsed,
     sourceStatus: result.sourceStatus,
+    cached: result.cached,
+    liveProvider: result.liveProvider ?? null,
     warnings: result.warnings,
   };
 }
@@ -525,6 +562,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                       {msg.restaurants?.map((r) => {
                         const key = cardKey(r.name, selectedDayId || undefined);
                         const reason = r.summary;
+                        const isLive = msg.sourceStatus === "live_search" && Boolean(r.sourceUrl);
                         return (
                           <ConciergeCard
                             key={`${r.name}-${key}`}
@@ -537,7 +575,9 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                             tags={r.tags ?? []}
                             reason={reason}
                             mapLink={r.mapsLink}
-                            sourceLink={r.bookingLink}
+                            sourceLink={r.bookingLink ?? r.sourceUrl}
+                            isLive={isLive}
+                            verifiedAt={formatVerifiedAt(r.lastVerifiedAt)}
                             added={addedItems.has(key)}
                             adding={addingItems.has(key)}
                             onAdd={() => addItem(r.name, "restaurant", r, reason)}
@@ -547,6 +587,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
                       {msg.attractions?.map((a) => {
                         const key = cardKey(a.name, selectedDayId || undefined);
+                        const isLive = msg.sourceStatus === "live_search" && Boolean(a.sourceUrl);
                         return (
                           <ConciergeCard
                             key={`${a.name}-${key}`}
@@ -560,7 +601,9 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                             tags={a.tags ?? []}
                             reason={a.description}
                             mapLink={a.mapsLink}
-                            sourceLink={undefined}
+                            sourceLink={a.sourceUrl}
+                            isLive={isLive}
+                            verifiedAt={formatVerifiedAt(a.lastVerifiedAt)}
                             added={addedItems.has(key)}
                             adding={addingItems.has(key)}
                             onAdd={() => addItem(a.name, "attraction", a, a.description)}
@@ -571,6 +614,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                       {msg.hotels?.map((h) => {
                         const key = cardKey(h.name, selectedDayId || undefined);
                         const reason = h.reason ?? (h.pricePerNight ? `~$${Math.round(h.pricePerNight)}/night` : undefined);
+                        const isLive = msg.sourceStatus === "live_search" && Boolean(h.sourceUrl);
                         return (
                           <ConciergeCard
                             key={`${h.name}-${key}`}
@@ -585,7 +629,9 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                             tags={h.tags ?? []}
                             reason={reason}
                             mapLink={h.mapsLink}
-                            sourceLink={h.bookingUrl}
+                            sourceLink={h.bookingUrl ?? h.sourceUrl}
+                            isLive={isLive}
+                            verifiedAt={formatVerifiedAt(h.lastVerifiedAt)}
                             added={addedItems.has(key)}
                             adding={addingItems.has(key)}
                             onAdd={() => addItem(h.name, "hotel", h, reason)}
@@ -606,10 +652,10 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                     </div>
                   )}
 
-                  {msg.retrievalUsed && msg.sourceStatus && sourceLabel(msg.sourceStatus, msg.intent) && (
+                  {msg.retrievalUsed && msg.sourceStatus && sourceLabel(msg.sourceStatus, msg.intent, msg.liveProvider, msg.cached) && (
                     <div className="flex items-center gap-1 text-[10px] text-slate-400">
                       <Info className="h-3 w-3" />
-                      <span>{sourceLabel(msg.sourceStatus, msg.intent)}</span>
+                      <span>{sourceLabel(msg.sourceStatus, msg.intent, msg.liveProvider, msg.cached)}</span>
                     </div>
                   )}
                 </>
