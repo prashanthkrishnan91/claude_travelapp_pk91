@@ -193,7 +193,9 @@ function formatVerifiedAt(iso?: string): string | null {
   const dt = new Date(iso);
   if (Number.isNaN(dt.getTime())) return null;
   const days = Math.max(0, Math.round((Date.now() - dt.getTime()) / (24 * 60 * 60 * 1000)));
-  if (days === 0) return "source checked today";
+  // Tavily / Brave / Serper sources only show "source checked …" — never a
+  // same-day freshness claim, which is reserved for Google Places.
+  if (days < 1) return "source checked";
   if (days === 1) return "source checked 1 day ago";
   if (days < 30) return `source checked ${days} days ago`;
   const months = Math.round(days / 30);
@@ -223,29 +225,30 @@ function splitReason(text?: string): { short: string; detail?: string } {
   };
 }
 
-function isFreshlyVerified(iso?: string | null): boolean {
-  if (!iso) return false;
-  const dt = new Date(iso);
-  if (Number.isNaN(dt.getTime())) return false;
-  const days = (Date.now() - dt.getTime()) / (24 * 60 * 60 * 1000);
-  return days >= 0 && days <= 14;
-}
-
-function canShowLiveBadge(card: {
+interface OperationalBadgeCard {
   source?: string | null;
   sourceUrl?: string | null;
   verifiedPlace?: boolean | null;
   confidence?: string | null;
   lastVerifiedAt?: string | null;
-}): boolean {
+  googleVerification?: {
+    businessStatus?: string | null;
+    confidence?: string | null;
+    providerPlaceId?: string | null;
+  } | null;
+}
+
+// Only Google-verified OPERATIONAL venues get the "Google verified" badge.
+// Tavily/Serper/Brave alone — even with a source URL — never qualify.
+function canShowGoogleVerifiedBadge(card: OperationalBadgeCard): boolean {
   if (hasClosedSignal(card)) return false;
-  const confidence = (card.confidence ?? "").toLowerCase();
-  const confidenceOk = confidence === "high" || confidence === "medium";
-  return isLiveSource(card.source)
-    && Boolean(card.sourceUrl)
-    && card.verifiedPlace === true
-    && confidenceOk
-    && isFreshlyVerified(card.lastVerifiedAt);
+  const gv = card.googleVerification;
+  if (!gv) return false;
+  if (gv.businessStatus !== "OPERATIONAL") return false;
+  const gvConfidence = (gv.confidence ?? "").toLowerCase();
+  if (gvConfidence !== "high" && gvConfidence !== "medium") return false;
+  if (!gv.providerPlaceId) return false;
+  return true;
 }
 
 function hasClosedSignal(card: ClosedSignalCard): boolean {
@@ -279,7 +282,7 @@ function ConciergeCard({
   actionLabel,
   added,
   adding,
-  isLive,
+  isOperational,
   verifiedAt,
   onAdd,
   canAdd = true,
@@ -294,7 +297,7 @@ function ConciergeCard({
   actionLabel?: string;
   added: boolean;
   adding: boolean;
-  isLive?: boolean;
+  isOperational?: boolean;
   verifiedAt?: string | null;
   onAdd: () => void;
   canAdd?: boolean;
@@ -308,18 +311,18 @@ function ConciergeCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <p className="truncate text-sm font-semibold text-slate-900">{title}</p>
-            {isLive && (
+            {isOperational && (
               <span
                 className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700"
-                title={verifiedAt ?? "Live source"}
+                title={verifiedAt ?? "Verified by Google Places"}
               >
-                Live
+                Google verified
               </span>
             )}
           </div>
           <p className="mt-0.5 text-xs text-slate-500">{category}</p>
           {meta.length > 0 && <p className="mt-0.5 text-xs text-slate-500">{meta.join(" · ")}</p>}
-          {isLive && verifiedAt && (
+          {isOperational && verifiedAt && (
             <p className="mt-0.5 text-[10px] text-slate-400">{verifiedAt}</p>
           )}
         </div>
@@ -784,7 +787,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                         const key = cardKey(r.name, selectedDayId || undefined);
                         const reason = r.summary;
                         const isClosed = hasClosedSignal(r);
-                        const isLive = !isClosed && canShowLiveBadge(r);
+                        const isOperational = !isClosed && canShowGoogleVerifiedBadge(r);
                         return (
                           <ConciergeCard
                             key={`${r.name}-${key}`}
@@ -798,7 +801,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                             reason={reason}
                             mapLink={r.mapsLink}
                             sourceLink={r.bookingLink ?? r.sourceUrl}
-                            isLive={isLive}
+                            isOperational={isOperational}
                             verifiedAt={formatVerifiedAt(r.lastVerifiedAt)}
                             added={addedItems.has(key)}
                             adding={addingItems.has(key)}
@@ -811,7 +814,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                       {msg.attractions?.map((a) => {
                         const key = cardKey(a.name, selectedDayId || undefined);
                         const isClosed = hasClosedSignal(a);
-                        const isLive = !isClosed && canShowLiveBadge(a);
+                        const isOperational = !isClosed && canShowGoogleVerifiedBadge(a);
                         return (
                           <ConciergeCard
                             key={`${a.name}-${key}`}
@@ -826,7 +829,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                             reason={a.description}
                             mapLink={a.mapsLink}
                             sourceLink={a.sourceUrl}
-                            isLive={isLive}
+                            isOperational={isOperational}
                             verifiedAt={formatVerifiedAt(a.lastVerifiedAt)}
                             added={addedItems.has(key)}
                             adding={addingItems.has(key)}
@@ -840,7 +843,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                         const key = cardKey(h.name, selectedDayId || undefined);
                         const reason = h.reason ?? (h.pricePerNight ? `~$${Math.round(h.pricePerNight)}/night` : undefined);
                         const isClosed = hasClosedSignal(h);
-                        const isLive = !isClosed && canShowLiveBadge(h);
+                        const isOperational = !isClosed && canShowGoogleVerifiedBadge(h);
                         return (
                           <ConciergeCard
                             key={`${h.name}-${key}`}
@@ -856,7 +859,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                             reason={reason}
                             mapLink={h.mapsLink}
                             sourceLink={h.bookingUrl ?? h.sourceUrl}
-                            isLive={isLive}
+                            isOperational={isOperational}
                             verifiedAt={formatVerifiedAt(h.lastVerifiedAt)}
                             added={addedItems.has(key)}
                             adding={addingItems.has(key)}
@@ -878,7 +881,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                           tags={[]}
                           reason={s.summary}
                           sourceLink={s.sourceUrl}
-                          isLive={false}
+                          isOperational={false}
                           verifiedAt={formatVerifiedAt(s.lastVerifiedAt)}
                           added={false}
                           adding={false}

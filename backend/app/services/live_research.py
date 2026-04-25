@@ -66,12 +66,18 @@ from app.models.concierge import (
     INTENT_RESTAURANTS,
     INTENT_REWARDS_HELP,
     INTENT_ROMANTIC,
+    GoogleVerification,
     SOURCE_LIVE_SEARCH,
     SOURCE_NONE,
     UnifiedAttractionResult,
     UnifiedHotelResult,
     UnifiedResearchSourceResult,
     UnifiedRestaurantResult,
+)
+from app.services.google_places import (
+    GooglePlaceVerification,
+    GooglePlacesService,
+    is_addable as _google_is_addable,
 )
 
 logger = logging.getLogger(__name__)
@@ -581,7 +587,9 @@ class _TTLCache:
 _GLOBAL_CACHE = _TTLCache(ttl_seconds=1800)
 # Separate cache for candidate verification results.
 _VERIFICATION_CACHE = _TTLCache(ttl_seconds=1800)
-CONCIERGE_CACHE_VERSION = 2
+# Bumped to 3 alongside Google Places verification — invalidates older payloads
+# that pre-date the verification gate so addable cards are always re-resolved.
+CONCIERGE_CACHE_VERSION = 3
 
 
 def _make_cache_key(intent: str, destination: str, query: str, dates: Optional[str] = None) -> str:
@@ -1542,6 +1550,120 @@ def _check_verification_hits(
     return VerificationResult(verified=False)
 
 
+def _google_verification_for(
+    name: str,
+    google_verifications: Optional[Dict[str, GooglePlaceVerification]],
+) -> Optional[GooglePlaceVerification]:
+    if not google_verifications or not name:
+        return None
+    return google_verifications.get(name.lower())
+
+
+def _apply_google_gate(
+    venues: List[Any],
+    *,
+    google_verifications: Dict[str, GooglePlaceVerification],
+    research_sources: List[UnifiedResearchSourceResult],
+    kind_label: str,
+    provider_label_default: str,
+) -> List[Any]:
+    """Drop venues that don't pass Google Places verification — anything that
+    isn't matched + OPERATIONAL with high/medium confidence is demoted to
+    research_sources only.
+
+    Cards that pass have ``google_verification`` attached, ``verified_place``
+    forced to True, and richer fields (maps URI / website) populated from the
+    Google match when the source didn't already provide them.
+    """
+    kept: List[Any] = []
+    for venue in venues:
+        verification = _google_verification_for(getattr(venue, "name", ""), google_verifications)
+        if _google_is_addable(verification):
+            assert verification is not None  # for type checkers
+            pyd = _to_pydantic_google_verification(verification)
+            try:
+                venue.google_verification = pyd
+            except Exception:
+                pass
+            try:
+                venue.verified_place = True
+            except Exception:
+                pass
+            # Prefer Google's first-party links when the article didn't have one.
+            if verification.google_maps_uri and not getattr(venue, "maps_link", None):
+                try:
+                    venue.maps_link = verification.google_maps_uri
+                except Exception:
+                    pass
+            if verification.website_uri:
+                if hasattr(venue, "booking_link") and not getattr(venue, "booking_link", None):
+                    try:
+                        venue.booking_link = verification.website_uri
+                    except Exception:
+                        pass
+                elif hasattr(venue, "booking_url") and not getattr(venue, "booking_url", None):
+                    try:
+                        venue.booking_url = verification.website_uri
+                    except Exception:
+                        pass
+            kept.append(venue)
+            continue
+
+        # Failed Google Places gate → demote to research source so the user
+        # can still see the candidate as background research, but it is not
+        # addable and never carries the LIVE/Operational badge.
+        reason = (
+            verification.failure_reason
+            if verification is not None
+            else "google_match_unavailable"
+        )
+        if verification is not None and verification.is_closed:
+            summary = "Marked as closed by Google Places — not addable."
+        elif verification is None or not verification.matched:
+            summary = "Not yet verified by Google Places — research only."
+        else:
+            summary = f"Google Places match was below confidence threshold ({reason})."
+
+        source = str(getattr(venue, "source", provider_label_default) or provider_label_default)
+        research_sources.append(
+            UnifiedResearchSourceResult(
+                title=str(getattr(venue, "name", f"Unverified {kind_label}") or f"Unverified {kind_label}"),
+                source=source,
+                source_type="generic_info_source",
+                summary=summary,
+                source_url=getattr(venue, "source_url", None),
+                neighborhood=getattr(venue, "neighborhood", None) or getattr(venue, "area_label", None),
+                last_verified_at=getattr(venue, "last_verified_at", None),
+                confidence=getattr(venue, "confidence", None),
+                trip_addable=False,
+            )
+        )
+    return kept
+
+
+def _to_pydantic_google_verification(
+    verification: Optional[GooglePlaceVerification],
+) -> Optional[GoogleVerification]:
+    if verification is None:
+        return None
+    return GoogleVerification(
+        provider=verification.provider,  # type: ignore[arg-type]
+        provider_place_id=verification.provider_place_id,
+        name=verification.name,
+        formatted_address=verification.formatted_address,
+        lat=verification.lat,
+        lng=verification.lng,
+        business_status=verification.business_status,
+        google_maps_uri=verification.google_maps_uri,
+        website_uri=verification.website_uri,
+        rating=verification.rating,
+        user_rating_count=verification.user_rating_count,
+        types=list(verification.types or []),
+        confidence=verification.confidence,  # type: ignore[arg-type]
+        failure_reason=verification.failure_reason,
+    )
+
+
 def normalize_hits(
     hits: List[LiveSearchHit],
     *,
@@ -1550,6 +1672,7 @@ def normalize_hits(
     user_query: str,
     max_per_kind: int = 6,
     verified_candidates: Optional[Dict[str, VerificationResult]] = None,
+    google_verifications: Optional[Dict[str, GooglePlaceVerification]] = None,
 ) -> Dict[str, List[Any]]:
     """Convert raw provider hits into Concierge Unified result lists.
 
@@ -1841,6 +1964,34 @@ def normalize_hits(
     attractions = _final_hard_filter_closed_venues(attractions, kind_label="attraction", research_sources=research_sources)
     hotels = _final_hard_filter_closed_venues(hotels, kind_label="hotel", research_sources=research_sources)
 
+    # ── Google Places gate ─────────────────────────────────────────────────
+    # Article search alone never produces an addable card. When Google
+    # verifications are supplied, every card must clear ``is_addable`` to
+    # remain in restaurants/attractions/hotels. Anything else gets demoted
+    # to research_sources.
+    if google_verifications is not None:
+        restaurants = _apply_google_gate(
+            restaurants,
+            google_verifications=google_verifications,
+            research_sources=research_sources,
+            kind_label="restaurant",
+            provider_label_default="Live search",
+        )
+        attractions = _apply_google_gate(
+            attractions,
+            google_verifications=google_verifications,
+            research_sources=research_sources,
+            kind_label="attraction",
+            provider_label_default="Live search",
+        )
+        hotels = _apply_google_gate(
+            hotels,
+            google_verifications=google_verifications,
+            research_sources=research_sources,
+            kind_label="hotel",
+            provider_label_default="Live search",
+        )
+
     venue_count = len(restaurants) + len(attractions) + len(hotels)
     # Hide research-source cards when ≥3 venues exist; keep at most 2 otherwise.
     if venue_count >= 3:
@@ -1887,6 +2038,7 @@ class LiveResearchService:
         enabled: bool = True,
         max_results: int = 10,
         verification_cache: Optional[_TTLCache] = None,
+        place_verifier: Optional[GooglePlacesService] = None,
     ) -> None:
         self._provider = provider or select_default_provider()
         self._cache = cache if cache is not None else _GLOBAL_CACHE
@@ -1895,6 +2047,7 @@ class LiveResearchService:
         )
         self._enabled = enabled
         self._max_results = max_results
+        self._place_verifier = place_verifier if place_verifier is not None else GooglePlacesService()
 
     @property
     def provider_name(self) -> str:
@@ -1940,6 +2093,7 @@ class LiveResearchService:
         verified_candidates: Dict[str, VerificationResult] = {}
         candidate_names: List[str] = []
         seen_lower: set = set()
+        candidate_neighborhoods: Dict[str, Optional[str]] = {}
         for h in hits:
             if _classify_hit(
                 _strip_publisher(h.title),
@@ -1962,6 +2116,9 @@ class LiveResearchService:
                     continue
                 seen_lower.add(low)
                 candidate_names.append(norm)
+                candidate_neighborhoods[low] = _extract_candidate_neighborhood(
+                    norm, h.snippet, destination
+                )
                 if len(candidate_names) >= MAX_VERIFICATION_CANDIDATES:
                     break
             if len(candidate_names) >= MAX_VERIFICATION_CANDIDATES:
@@ -1991,12 +2148,87 @@ class LiveResearchService:
             verified_candidates[low] = vr
         # ── /Phase 2 ──────────────────────────────────────────────────────────
 
+        # ── Phase 3: Google Places verification gate ──────────────────────────
+        # Article extraction + Tavily/Brave/Serper "verification" do not prove
+        # a venue is currently open. Every candidate (article-extracted AND
+        # direct venue_place hits) is now resolved against Google Places. Only
+        # OPERATIONAL matches with high/medium confidence are addable.
+        #
+        # When the Google Places provider is unavailable (no API key in env),
+        # we pass ``google_verifications=None`` so normalize_hits keeps the
+        # legacy Tavily-only behavior — required for local dev without keys.
+        # In production the API key is configured and the gate is enforced.
+        google_verifications: Optional[Dict[str, GooglePlaceVerification]] = None
+        place_verifier_available = bool(getattr(self._place_verifier, "available", False))
+        if place_verifier_available:
+            google_verifications = {}
+            display_for_low: Dict[str, str] = {n.lower(): n for n in candidate_names}
+
+            # Direct venue_place hits also need Google verification before
+            # becoming LIVE/addable cards.
+            for h in hits:
+                cls = _classify_hit(
+                    _strip_publisher(h.title),
+                    h.snippet,
+                    h.url,
+                    intent=intent,
+                    destination=destination,
+                )
+                if cls != "venue_place":
+                    continue
+                direct_name = _normalize_source_title(h.title)
+                if not direct_name:
+                    continue
+                low = direct_name.lower()
+                if low in candidate_neighborhoods:
+                    continue
+                if _is_obvious_non_venue(direct_name, destination):
+                    continue
+                candidate_neighborhoods[low] = _extract_neighborhood(
+                    f"{h.title}\n{h.snippet}", destination
+                )
+                display_for_low.setdefault(low, direct_name)
+
+            for low, neighborhood in candidate_neighborhoods.items():
+                display_name = display_for_low.get(low, low)
+                try:
+                    gv = self._place_verifier.verify(
+                        display_name,
+                        destination,
+                        neighborhood=neighborhood,
+                        intent=intent,
+                    )
+                except Exception as exc:  # pragma: no cover — defensive
+                    logger.warning(
+                        "Google Places verification raised for %r: %s", display_name, exc
+                    )
+                    gv = GooglePlaceVerification(
+                        confidence="unknown",
+                        failure_reason=f"provider_error:{type(exc).__name__}",
+                    )
+                google_verifications[low] = gv
+
+            # Google is authoritative — when it says OPERATIONAL with
+            # high/medium confidence, the candidate is allowed past the
+            # Tavily phase-2 gate so the Google gate can have the final say.
+            for low, gv in google_verifications.items():
+                if _google_is_addable(gv):
+                    verified_candidates[low] = VerificationResult(
+                        verified=True,
+                        source_url=gv.google_maps_uri,
+                        category=None,
+                        neighborhood=gv.formatted_address,
+                        reason="Google Places operational match",
+                    )
+        # ── /Phase 3 ──────────────────────────────────────────────────────────
+
         normalized = normalize_hits(
             hits,
             intent=intent,
             destination=destination,
             user_query=user_query,
             verified_candidates=verified_candidates,
+            google_verifications=google_verifications,
         )
 
         if not (
@@ -2050,7 +2282,12 @@ class LiveResearchService:
         cleared_verifications = self._verification_cache.clear_matching(
             lambda key: key.startswith(f"verify::{normalized_destination}::")
         )
-        return cleared_results + cleared_verifications
+        cleared_google = 0
+        try:
+            cleared_google = self._place_verifier.clear_cache_for_destination(destination)
+        except Exception as exc:  # pragma: no cover — defensive
+            logger.warning("Google Places cache clear failed: %s", exc)
+        return cleared_results + cleared_verifications + cleared_google
 
     @staticmethod
     def _result_to_payload(result: LiveResearchResult) -> Dict[str, Any]:
@@ -2084,3 +2321,6 @@ def reset_global_cache() -> None:
     """Test helper — clear the module-level caches."""
     _GLOBAL_CACHE.clear()
     _VERIFICATION_CACHE.clear()
+    # Also reset the Google Places verification cache so tests start clean.
+    from app.services.google_places import reset_global_place_cache
+    reset_global_place_cache()

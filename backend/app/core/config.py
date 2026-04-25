@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     live_research_cache_ttl_seconds: int = 1800
     live_research_timeout_seconds: float = 6.0
 
+    # Google Places — required gate for promoting article-research candidates
+    # to addable concierge cards. Without this key, candidates remain as
+    # research_source only.
+    google_places_api_key: str = ""
+
     # CORS
     cors_allow_all: bool = True
     cors_origins: List[str] = []
