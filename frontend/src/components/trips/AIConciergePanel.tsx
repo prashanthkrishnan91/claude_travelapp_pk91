@@ -24,6 +24,7 @@ import type {
   ConciergeSearchResult,
   UnifiedAttractionResult,
   UnifiedHotelResult,
+  UnifiedResearchSourceResult,
   UnifiedRestaurantResult,
 } from "@/lib/api";
 import type { ItineraryDay, ItineraryItem } from "@/types";
@@ -36,6 +37,7 @@ interface Message {
   restaurants?: UnifiedRestaurantResult[];
   attractions?: UnifiedAttractionResult[];
   hotels?: UnifiedHotelResult[];
+  researchSources?: UnifiedResearchSourceResult[];
   areaComparisons?: UnifiedAreaComparisonResult[];
   intent?: string;
   retrievalUsed?: boolean;
@@ -114,6 +116,7 @@ function ConciergeCard({
   isLive,
   verifiedAt,
   onAdd,
+  canAdd = true,
 }: {
   title: string;
   category: string;
@@ -128,6 +131,7 @@ function ConciergeCard({
   isLive?: boolean;
   verifiedAt?: string | null;
   onAdd: () => void;
+  canAdd?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const reasonParts = splitReason(reason);
@@ -182,17 +186,23 @@ function ConciergeCard({
       </div>
 
       <div className="mt-2 flex items-center gap-2">
-        <button
-          onClick={onAdd}
-          disabled={adding || added}
-          className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-            added
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-sky-50 text-sky-700 hover:bg-sky-100"
-          }`}
-        >
-          {adding ? <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" /> : added ? <span className="inline-flex items-center gap-1"><Check className="h-3 w-3" /> Added</span> : actionLabel ?? "Add to Trip"}
-        </button>
+        {canAdd ? (
+          <button
+            onClick={onAdd}
+            disabled={adding || added}
+            className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              added
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-sky-50 text-sky-700 hover:bg-sky-100"
+            }`}
+          >
+            {adding ? <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" /> : added ? <span className="inline-flex items-center gap-1"><Check className="h-3 w-3" /> Added</span> : actionLabel ?? "Add to Trip"}
+          </button>
+        ) : (
+          <span className="flex-1 rounded-lg bg-slate-100 px-3 py-1.5 text-center text-xs font-medium text-slate-500">
+            Research source
+          </span>
+        )}
         {mapLink && (
           <a href={mapLink} target="_blank" rel="noopener noreferrer" title="View on map" aria-label="View on map" className="rounded-lg bg-slate-100 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-200">
             <MapPin className="h-3.5 w-3.5" />
@@ -215,6 +225,7 @@ function fromSearchResult(result: ConciergeSearchResult): Message {
     restaurants: result.restaurants,
     attractions: result.attractions,
     hotels: result.hotels,
+    researchSources: result.researchSources,
     areaComparisons: result.areaComparisons,
     intent: result.intent,
     retrievalUsed: result.retrievalUsed,
@@ -557,7 +568,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                     </>
                   )}
 
-                  {msg.intent !== "compare" && (msg.restaurants?.length || msg.attractions?.length || msg.hotels?.length) ? (
+                  {msg.intent !== "compare" && (msg.restaurants?.length || msg.attractions?.length || msg.hotels?.length || msg.researchSources?.length) ? (
                     <div className="space-y-2">
                       {msg.restaurants?.map((r) => {
                         const key = cardKey(r.name, selectedDayId || undefined);
@@ -638,6 +649,27 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                           />
                         );
                       })}
+
+                      {msg.researchSources?.map((s) => (
+                        <ConciergeCard
+                          key={`${s.title}-${s.sourceUrl ?? "source"}`}
+                          title={s.title}
+                          category="Research source"
+                          meta={[
+                            s.neighborhood || "",
+                            s.sourceType.replaceAll("_", " "),
+                          ].filter(Boolean)}
+                          tags={[]}
+                          reason={s.summary}
+                          sourceLink={s.sourceUrl}
+                          isLive={msg.sourceStatus === "live_search" && Boolean(s.sourceUrl)}
+                          verifiedAt={formatVerifiedAt(s.lastVerifiedAt)}
+                          added={false}
+                          adding={false}
+                          canAdd={false}
+                          onAdd={() => undefined}
+                        />
+                      ))}
                     </div>
                   ) : null}
 

@@ -1196,6 +1196,18 @@ export interface UnifiedAreaComparisonResult {
   lastVerifiedAt?: string;
 }
 
+export interface UnifiedResearchSourceResult {
+  title: string;
+  source: string;
+  sourceType: "article_listicle_blog_directory" | "neighborhood_area" | "generic_info_source";
+  summary?: string;
+  sourceUrl?: string;
+  neighborhood?: string;
+  lastVerifiedAt?: string;
+  confidence?: SourceConfidence;
+  tripAddable: boolean;
+}
+
 export interface ConciergeSearchResult {
   response: string;
   intent: string;
@@ -1206,6 +1218,7 @@ export interface ConciergeSearchResult {
   restaurants: UnifiedRestaurantResult[];
   attractions: UnifiedAttractionResult[];
   hotels: UnifiedHotelResult[];
+  researchSources: UnifiedResearchSourceResult[];
   areas: string[];
   areaComparisons: UnifiedAreaComparisonResult[];
   suggestions: ConciergeSuggestion[];

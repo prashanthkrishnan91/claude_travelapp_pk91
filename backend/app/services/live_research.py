@@ -68,6 +68,7 @@ from app.models.concierge import (
     SOURCE_NONE,
     UnifiedAttractionResult,
     UnifiedHotelResult,
+    UnifiedResearchSourceResult,
     UnifiedRestaurantResult,
 )
 
@@ -453,8 +454,22 @@ def _build_search_query(intent: str, destination: str, user_query: str) -> str:
 _NEIGHBORHOOD_HINT = re.compile(
     r"\b(in|at)\s+([A-Z][A-Za-z'\-\.]+(?:\s+[A-Z][A-Za-z'\-\.]+){0,2})"
 )
+_ADDRESS_HINT = re.compile(
+    r"\b\d{1,5}\s+[A-Za-z0-9'\.\-\s]{2,40}\s(?:st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|ct|court|pl|place)\b",
+    re.IGNORECASE,
+)
 _PRICE_HINT = re.compile(r"\$\s?\d{1,4}(?:[\.,]\d{1,2})?")
 _RATING_HINT = re.compile(r"(\d(?:\.\d)?)\s*/\s*5")
+_ARTICLE_PREFIX_HINT = re.compile(
+    r"^\s*(best|top|guide to|where to|things to|ultimate guide|what to do|"
+    r"\d+\s+best|\d+\s+top)\b",
+    re.IGNORECASE,
+)
+_ARTICLE_HINT = re.compile(
+    r"\b(best|top|guide|list|listicle|blog|directory|things to do|where to|"
+    r"ultimate guide|itinerary|neighborhood guide)\b",
+    re.IGNORECASE,
+)
 
 
 def _confidence_from_age(fetched_at: str) -> str:
@@ -502,6 +517,102 @@ def _build_summary(snippet: str, fallback: str = "") -> str:
     return s or fallback
 
 
+def _is_article_like(title: str, snippet: str, url: str) -> bool:
+    text = f"{title}\n{snippet}"
+    lower_url = (url or "").lower()
+    if _ARTICLE_PREFIX_HINT.match(title or ""):
+        return True
+    if _ARTICLE_HINT.search(text):
+        return True
+    return any(
+        token in lower_url
+        for token in ("/blog", "/guide", "/guides", "/best-", "/top-", "/things-to-do", "/directory")
+    )
+
+
+def _looks_like_neighborhood_source(title: str, snippet: str) -> bool:
+    text = f"{title}\n{snippet}".lower()
+    return any(kw in text for kw in ("neighborhood", "neighbourhood", "district", "area", "where to stay"))
+
+
+def _category_signal(intent: str, text: str) -> bool:
+    lower = (text or "").lower()
+    if intent == INTENT_HOTELS:
+        return any(kw in lower for kw in ("hotel", "resort", "inn", "suite", "stay"))
+    if intent in {INTENT_ATTRACTIONS, INTENT_PLAN_DAY}:
+        return any(kw in lower for kw in ("museum", "park", "gallery", "attraction", "landmark", "tour"))
+    if intent in {
+        INTENT_RESTAURANTS,
+        INTENT_HIDDEN_GEMS,
+        INTENT_LUXURY_VALUE,
+        INTENT_ROMANTIC,
+        INTENT_FAMILY_FRIENDLY,
+        INTENT_NIGHTLIFE,
+        INTENT_MICHELIN_RESTAURANTS,
+    }:
+        return any(
+            kw in lower
+            for kw in (
+                "restaurant",
+                "dining",
+                "bistro",
+                "bar",
+                "cocktail",
+                "nightclub",
+                "tavern",
+                "speakeasy",
+                "michelin",
+                "eatery",
+            )
+        )
+    return False
+
+
+def _title_looks_like_venue_name(title: str) -> bool:
+    if not title:
+        return False
+    if ":" in title:
+        return False
+    words = [w for w in re.split(r"\s+", title.strip()) if w]
+    if not words or len(words) > 9:
+        return False
+    lower = title.lower()
+    return not any(
+        phrase in lower
+        for phrase in ("best ", "top ", "guide", "things to", "where to", "ultimate guide", "directory", "list")
+    )
+
+
+def _has_location_signal(combined: str, neighborhood: Optional[str], destination: str) -> bool:
+    if neighborhood:
+        return True
+    if _ADDRESS_HINT.search(combined or ""):
+        return True
+    return bool(destination and destination.lower() in (combined or "").lower())
+
+
+def _classify_hit(title: str, snippet: str, url: str, *, intent: str, destination: str) -> str:
+    combined = f"{title}\n{snippet}"
+    if _is_article_like(title, snippet, url):
+        return "article_listicle_blog_directory"
+    if _looks_like_neighborhood_source(title, snippet):
+        return "neighborhood_area"
+    neighborhood = _extract_neighborhood(combined, destination)
+    signals = 0
+    title_is_venue_like = _title_looks_like_venue_name(title)
+    if title_is_venue_like:
+        signals += 1
+    if _has_location_signal(combined, neighborhood, destination):
+        signals += 1
+    if _category_signal(intent, combined):
+        signals += 1
+    if title_is_venue_like:
+        return "venue_place"
+    if signals >= 2:
+        return "venue_place"
+    return "generic_info_source"
+
+
 def normalize_hits(
     hits: List[LiveSearchHit],
     *,
@@ -520,6 +631,7 @@ def normalize_hits(
     restaurants: List[UnifiedRestaurantResult] = []
     attractions: List[UnifiedAttractionResult] = []
     hotels: List[UnifiedHotelResult] = []
+    research_sources: List[UnifiedResearchSourceResult] = []
 
     is_restaurant_intent = intent in {
         INTENT_RESTAURANTS,
@@ -544,6 +656,32 @@ def normalize_hits(
         neighborhood = _extract_neighborhood(combined, destination)
         confidence = _confidence_from_age(hit.fetched_at)
         provider_label = hit.provider or "Live search"
+        classification = _classify_hit(
+            title,
+            hit.snippet,
+            hit.url,
+            intent=intent,
+            destination=destination,
+        )
+
+        if classification != "venue_place":
+            research_sources.append(
+                UnifiedResearchSourceResult(
+                    title=title,
+                    source=f"Live search · {provider_label}",
+                    source_type=classification if classification != "venue_place" else "generic_info_source",
+                    summary=_build_summary(
+                        hit.snippet,
+                        fallback=f"Research source discovered via {provider_label}.",
+                    ),
+                    source_url=hit.url,
+                    neighborhood=neighborhood,
+                    last_verified_at=hit.fetched_at,
+                    confidence=confidence,
+                    trip_addable=False,
+                )
+            )
+            continue
 
         if is_restaurant_intent and len(restaurants) < max_per_kind:
             cuisine = "Cocktail Bar" if intent == INTENT_NIGHTLIFE else "Restaurant"
@@ -609,7 +747,12 @@ def normalize_hits(
                 )
             )
 
-    return {"restaurants": restaurants, "attractions": attractions, "hotels": hotels}
+    return {
+        "restaurants": restaurants,
+        "attractions": attractions,
+        "hotels": hotels,
+        "research_sources": research_sources[:max_per_kind],
+    }
 
 
 # ── Service ──────────────────────────────────────────────────────────────────
@@ -621,13 +764,14 @@ class LiveResearchResult:
     restaurants: List[UnifiedRestaurantResult] = field(default_factory=list)
     attractions: List[UnifiedAttractionResult] = field(default_factory=list)
     hotels: List[UnifiedHotelResult] = field(default_factory=list)
+    research_sources: List[UnifiedResearchSourceResult] = field(default_factory=list)
     source_status: str = SOURCE_NONE
     cached: bool = False
     provider_name: Optional[str] = None
     source_url: Optional[str] = None  # representative URL (first hit)
 
     def has_data(self) -> bool:
-        return bool(self.restaurants or self.attractions or self.hotels)
+        return bool(self.restaurants or self.attractions or self.hotels or self.research_sources)
 
 
 class LiveResearchService:
@@ -692,7 +836,12 @@ class LiveResearchService:
             user_query=user_query,
         )
 
-        if not (normalized["restaurants"] or normalized["attractions"] or normalized["hotels"]):
+        if not (
+            normalized["restaurants"]
+            or normalized["attractions"]
+            or normalized["hotels"]
+            or normalized["research_sources"]
+        ):
             return LiveResearchResult(provider_name=self._provider.name)
 
         first_url = next(
@@ -709,6 +858,7 @@ class LiveResearchService:
             restaurants=normalized["restaurants"],
             attractions=normalized["attractions"],
             hotels=normalized["hotels"],
+            research_sources=normalized["research_sources"],
             source_status=SOURCE_LIVE_SEARCH,
             cached=False,
             provider_name=self._provider.name,
@@ -723,6 +873,7 @@ class LiveResearchService:
             "restaurants": [r.model_dump(mode="json") for r in result.restaurants],
             "attractions": [a.model_dump(mode="json") for a in result.attractions],
             "hotels": [h.model_dump(mode="json") for h in result.hotels],
+            "research_sources": [s.model_dump(mode="json") for s in result.research_sources],
             "source_status": result.source_status,
             "provider_name": result.provider_name,
             "source_url": result.source_url,
@@ -734,6 +885,7 @@ class LiveResearchService:
             restaurants=[UnifiedRestaurantResult(**r) for r in payload.get("restaurants", [])],
             attractions=[UnifiedAttractionResult(**a) for a in payload.get("attractions", [])],
             hotels=[UnifiedHotelResult(**h) for h in payload.get("hotels", [])],
+            research_sources=[UnifiedResearchSourceResult(**s) for s in payload.get("research_sources", [])],
             source_status=payload.get("source_status", SOURCE_LIVE_SEARCH),
             provider_name=payload.get("provider_name"),
             source_url=payload.get("source_url"),
