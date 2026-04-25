@@ -42,6 +42,7 @@ from app.models.concierge import (
     UnifiedAttractionResult,
     UnifiedAreaComparisonResult,
     UnifiedHotelResult,
+    UnifiedResearchSourceResult,
     UnifiedRestaurantResult,
 )
 from app.models.search import (
@@ -187,6 +188,7 @@ class ConciergeService:
         restaurants: List[UnifiedRestaurantResult] = []
         attractions: List[UnifiedAttractionResult] = []
         hotels: List[UnifiedHotelResult] = []
+        research_sources: List[UnifiedResearchSourceResult] = []
         areas: List[str] = []
         area_comparisons: List[UnifiedAreaComparisonResult] = []
         source_status = SOURCE_NONE
@@ -199,6 +201,7 @@ class ConciergeService:
         search_svc = SearchService(self._db)
 
         live_result = self._fetch_live_research(intent, destination, user_query, trip)
+        research_sources = list(live_result.research_sources)
 
         if intent == INTENT_MICHELIN_RESTAURANTS:
             from app.services.michelin_retriever import MichelinRetriever
@@ -373,6 +376,7 @@ class ConciergeService:
             restaurants=restaurants,
             attractions=attractions,
             hotels=hotels,
+            research_sources=research_sources,
             areas=areas,
             area_comparisons=area_comparisons,
             suggestions=base.suggestions,

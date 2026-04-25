@@ -110,6 +110,18 @@ class UnifiedHotelResult(BaseModel):
     tags: List[str] = []
 
 
+class UnifiedResearchSourceResult(BaseModel):
+    title: str
+    source: str = "Live search"
+    source_type: Literal["article_listicle_blog_directory", "neighborhood_area", "generic_info_source"] = "generic_info_source"
+    summary: Optional[str] = None
+    source_url: Optional[str] = None
+    neighborhood: Optional[str] = None
+    last_verified_at: Optional[str] = None
+    confidence: Optional[Literal["high", "medium", "low", "unknown"]] = None
+    trip_addable: bool = False
+
+
 class UnifiedAreaComparisonResult(BaseModel):
     area: str
     vibe: str
@@ -141,6 +153,7 @@ class ConciergeSearchResponse(BaseModel):
     restaurants: List[UnifiedRestaurantResult] = []
     attractions: List[UnifiedAttractionResult] = []
     hotels: List[UnifiedHotelResult] = []
+    research_sources: List[UnifiedResearchSourceResult] = []
     areas: List[str] = []
     area_comparisons: List[UnifiedAreaComparisonResult] = []
     suggestions: List[Suggestion] = []

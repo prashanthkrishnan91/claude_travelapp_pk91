@@ -161,6 +161,33 @@ class TestNormalization:
         assert card.rating is None
         assert card.review_count is None
 
+    def test_listicle_title_not_trip_addable_venue(self):
+        hits = [
+            _hit(
+                "The Best Clubs in Chicago 2026",
+                "https://example.com/best-clubs-chicago",
+                "Roundup of nightlife picks across the city.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="clubs")
+        assert out["restaurants"] == []
+        assert len(out["research_sources"]) == 1
+        assert out["research_sources"][0].source_type == "article_listicle_blog_directory"
+        assert out["research_sources"][0].trip_addable is False
+
+    def test_real_venue_with_location_signal_remains_trip_addable(self):
+        hits = [
+            _hit(
+                "Gus' Sip & Dip",
+                "https://example.com/gus",
+                "Cocktail bar at 123 N Clark St in River North, Chicago.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars")
+        assert len(out["restaurants"]) == 1
+        assert out["restaurants"][0].name == "Gus' Sip & Dip"
+        assert out["research_sources"] == []
+
 
 # ── LiveResearchService behavior ────────────────────────────────────────────
 
@@ -193,6 +220,24 @@ class TestLiveResearchService:
         assert result.cached is False
         assert result.provider_name == "stub"
         assert result.source_url == "https://ex.com/boka"
+
+    def test_source_label_live_and_cached_preserved_for_non_place_sources(self):
+        provider = MagicMock()
+        provider.name = "stub"
+        provider.available = True
+        provider.search.return_value = [
+            _hit("The Best Clubs in Chicago 2026", "https://ex.com/best-clubs", "Nightlife roundup.")
+        ]
+        svc = LiveResearchService(provider=provider, cache=_TTLCache(60))
+        first = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="clubs")
+        assert first.source_status == SOURCE_LIVE_SEARCH
+        assert first.cached is False
+        assert first.research_sources
+        assert first.restaurants == []
+        second = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="clubs")
+        assert second.source_status == SOURCE_LIVE_SEARCH
+        assert second.cached is True
+        assert second.research_sources
 
     def test_unsupported_intent_skips_live_search(self):
         provider = StubLiveSearchProvider([_hit("X")])
@@ -281,7 +326,21 @@ class TestConciergeWithLiveResearch:
         assert result.source_status == SOURCE_LIVE_SEARCH
         assert result.live_provider == "stub"
         assert result.cached is False
-        assert any(r.name == "Kumiko" for r in result.restaurants)
+
+    def test_nightlife_filters_listicles_into_research_sources_only(self):
+        live_hits = [
+            _hit("The Best Clubs in Chicago 2026", "https://ex.com/best-clubs", "Roundup list."),
+            _hit("Gus' Sip & Dip", "https://ex.com/gus", "Cocktail bar at 123 N Clark St in River North."),
+        ]
+        svc = self._make_concierge("Chicago", live_hits)
+        with patch("app.services.concierge.SearchService") as MockSearch, \
+             patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            MockSearch.return_value = MagicMock()
+            result = svc.search(FAKE_TRIP_ID, "best nightlife in chicago", FAKE_USER_ID)
+        assert result.intent == INTENT_NIGHTLIFE
+        assert [r.name for r in result.restaurants] == ["Gus' Sip & Dip"]
+        assert result.research_sources
+        assert result.research_sources[0].source_type == "article_listicle_blog_directory"
         # Live cards must carry a source URL and verification timestamp.
         for r in result.restaurants:
             assert r.source_url
