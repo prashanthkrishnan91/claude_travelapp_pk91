@@ -492,6 +492,28 @@ _ARTICLE_HINT = re.compile(
     re.IGNORECASE,
 )
 
+# ── Venue extraction patterns ────────────────────────────────────────────────
+
+# "1. Kumiko — ...", "2. The Aviary — ..."
+_NUMBERED_ITEM_PAT = re.compile(
+    r"(?<![A-Za-z])\d{1,2}[.)]\s+([A-Z][A-Za-z'\-\.& ]{2,50}?)"
+    r"(?=\s*[–—\-]|\s*[\n:]|\s*\d{1,2}[.)]|\s*$)"
+)
+# "Kumiko — West Loop", "The Aviary — Avant-garde"
+_PROPER_NOUN_DASH_PAT = re.compile(
+    r"([A-Z][A-Za-z'\-\.&]+(?:\s+(?:&|[Tt]he|[Oo]f|[A-Z][A-Za-z'\-\.]+)){0,4})"
+    r"\s*[–—]\s"
+)
+# "Kumiko", "The Violet Hour" in quotes
+_QUOTED_VENUE_PAT = re.compile(r'["“]([A-Z][A-Za-z\'\-\.& ]{2,40}?)["”]')
+# Candidates that start with generic/article-like words → reject
+_GENERIC_CANDIDATE_PAT = re.compile(
+    r"^\s*(?:best|top|great|amazing|new|list|guide|things?|where|what|why|how|"
+    r"food|drink|dining|nightlife|travel|visit|explore|"
+    r"neighborhood|district|city|cities|places?|spots?|options?)\b",
+    re.IGNORECASE,
+)
+
 
 def _confidence_from_age(fetched_at: str) -> str:
     try:
@@ -612,6 +634,8 @@ def _title_looks_like_venue_name(title: str) -> bool:
     words = [w for w in re.split(r"\s+", title.strip()) if w]
     if not words or len(words) > 9:
         return False
+    if _GENERIC_CANDIDATE_PAT.match(title):
+        return False
     lower = title.lower()
     return not any(
         phrase in lower
@@ -647,6 +671,49 @@ def _classify_hit(title: str, snippet: str, url: str, *, intent: str, destinatio
     if signals >= 2:
         return "venue_place"
     return "generic_info_source"
+
+
+def _extract_venue_names_from_text(text: str) -> List[str]:
+    """Extract candidate venue names from article/listicle snippet text."""
+    if not text:
+        return []
+    candidates: List[str] = []
+    seen: set = set()
+
+    def _add(raw: str) -> None:
+        name = raw.strip(" \t.,;:\"'“”‘’")
+        low = name.lower()
+        if 2 < len(name) <= 60 and low not in seen:
+            seen.add(low)
+            candidates.append(name)
+
+    for m in _NUMBERED_ITEM_PAT.finditer(text):
+        _add(m.group(1))
+    for m in _PROPER_NOUN_DASH_PAT.finditer(text):
+        _add(m.group(1))
+    for m in _QUOTED_VENUE_PAT.finditer(text):
+        _add(m.group(1))
+
+    return candidates
+
+
+def _validate_venue_candidate(
+    name: str, context: str, *, intent: str, destination: str
+) -> bool:
+    """Return True if *name* is a plausible addable venue, not a generic article phrase."""
+    if not name or len(name.strip()) < 3:
+        return False
+    if _GENERIC_CANDIDATE_PAT.match(name):
+        return False
+    if not _title_looks_like_venue_name(name):
+        return False
+    has_cat = _category_signal(intent, context)
+    has_loc = bool(
+        _ADDRESS_HINT.search(context)
+        or (destination and destination.lower() in context.lower())
+        or _NEIGHBORHOOD_HINT.search(context)
+    )
+    return has_cat or has_loc
 
 
 def normalize_hits(
@@ -701,6 +768,78 @@ def normalize_hits(
         )
 
         if classification != "venue_place":
+            # For article/listicle hits attempt to extract real venue names first.
+            if classification == "article_listicle_blog_directory":
+                extracted = _extract_venue_names_from_text(hit.snippet)
+                for candidate in extracted:
+                    if not _validate_venue_candidate(
+                        candidate, combined, intent=intent, destination=destination
+                    ):
+                        continue
+                    if _looks_closed(candidate):
+                        continue
+                    article_snippet = _build_summary(hit.snippet, fallback="")
+                    cand_summary = (
+                        f"Featured in \"{title}\". {article_snippet}".rstrip(". ")
+                        if article_snippet
+                        else f"Featured in \"{title}\"."
+                    )
+                    cand_neighborhood = _extract_neighborhood(hit.snippet, destination)
+                    if is_restaurant_intent and len(restaurants) < max_per_kind:
+                        cand_cuisine = "Cocktail Bar" if intent == INTENT_NIGHTLIFE else "Restaurant"
+                        cand_tags: List[str] = []
+                        if intent == INTENT_NIGHTLIFE:
+                            cand_tags.append("Nightlife")
+                        if intent == INTENT_HIDDEN_GEMS:
+                            cand_tags.append("Hidden Gem")
+                        if intent == INTENT_LUXURY_VALUE:
+                            cand_tags.append("Luxury Value")
+                        if intent == INTENT_ROMANTIC:
+                            cand_tags.append("Romantic")
+                        restaurants.append(
+                            UnifiedRestaurantResult(
+                                name=candidate,
+                                source=f"Live search · {provider_label}",
+                                cuisine=cand_cuisine,
+                                neighborhood=cand_neighborhood,
+                                summary=cand_summary,
+                                booking_link=hit.url,
+                                source_url=hit.url,
+                                last_verified_at=hit.fetched_at,
+                                confidence=confidence,
+                                tags=cand_tags,
+                                ai_score=0.7,
+                            )
+                        )
+                    elif is_attraction_intent and len(attractions) < max_per_kind:
+                        attractions.append(
+                            UnifiedAttractionResult(
+                                name=candidate,
+                                source=f"Live search · {provider_label}",
+                                category="attraction",
+                                description=cand_summary,
+                                neighborhood=cand_neighborhood,
+                                source_url=hit.url,
+                                last_verified_at=hit.fetched_at,
+                                confidence=confidence,
+                                ai_score=0.7,
+                            )
+                        )
+                    elif is_hotel_intent and len(hotels) < max_per_kind:
+                        hotels.append(
+                            UnifiedHotelResult(
+                                name=candidate,
+                                source=f"Live search · {provider_label}",
+                                area_label=cand_neighborhood,
+                                reason=cand_summary,
+                                booking_url=hit.url,
+                                source_url=hit.url,
+                                last_verified_at=hit.fetched_at,
+                                confidence=confidence,
+                                ai_score=0.7,
+                            )
+                        )
+
             summary = _build_summary(
                 hit.snippet,
                 fallback=_NEUTRAL_RESEARCH_REASON,
@@ -709,7 +848,7 @@ def normalize_hits(
                 UnifiedResearchSourceResult(
                     title=title,
                     source=f"Live search · {provider_label}",
-                    source_type=classification if classification != "venue_place" else "generic_info_source",
+                    source_type=classification,
                     summary=summary,
                     source_url=hit.url,
                     neighborhood=neighborhood,
@@ -747,6 +886,7 @@ def normalize_hits(
                     last_verified_at=hit.fetched_at,
                     confidence=confidence,
                     tags=tags,
+                    ai_score=1.0,
                 )
             )
         elif is_attraction_intent and len(attractions) < max_per_kind:
@@ -764,6 +904,7 @@ def normalize_hits(
                     source_url=hit.url,
                     last_verified_at=hit.fetched_at,
                     confidence=confidence,
+                    ai_score=1.0,
                 )
             )
         elif is_hotel_intent and len(hotels) < max_per_kind:
@@ -781,11 +922,23 @@ def normalize_hits(
                     source_url=hit.url,
                     last_verified_at=hit.fetched_at,
                     confidence=confidence,
+                    ai_score=1.0,
                 )
             )
 
+    # Sort venues: direct hits (ai_score=1.0) before article-extracted ones (ai_score=0.7).
+    restaurants.sort(key=lambda r: r.ai_score or 0.0, reverse=True)
+    attractions.sort(key=lambda a: a.ai_score or 0.0, reverse=True)
+    hotels.sort(key=lambda h: h.ai_score or 0.0, reverse=True)
+
     venue_count = len(restaurants) + len(attractions) + len(hotels)
-    research_cap = 2 if venue_count > 0 else max_per_kind
+    # Hide research-source cards when ≥3 venues exist; keep at most 2 otherwise.
+    if venue_count >= 3:
+        research_cap = 0
+    elif venue_count > 0:
+        research_cap = 2
+    else:
+        research_cap = max_per_kind
     return {
         "restaurants": restaurants,
         "attractions": attractions,

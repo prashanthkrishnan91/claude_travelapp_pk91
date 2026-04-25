@@ -34,6 +34,8 @@ from app.services.live_research import (
     StubLiveSearchProvider,
     _NoopProvider,
     _TTLCache,
+    _extract_venue_names_from_text,
+    _validate_venue_candidate,
     normalize_hits,
     reset_global_cache,
     select_default_provider,
@@ -213,6 +215,142 @@ class TestNormalization:
         out = normalize_hits(hits, intent=INTENT_RESTAURANTS, destination="Chicago", user_query="restaurants")
         assert len(out["restaurants"]) == 1
         assert len(out["research_sources"]) == 2
+
+    # ── Venue extraction from listicles ───────────────────────────────────────
+
+    def test_extract_venue_names_numbered_list(self):
+        text = "1. Kumiko — West Loop speakeasy. 2. The Aviary — Avant-garde cocktails. 3. Billy Sunday — Logan Square."
+        names = _extract_venue_names_from_text(text)
+        assert "Kumiko" in names
+        assert "The Aviary" in names
+        assert "Billy Sunday" in names
+
+    def test_extract_venue_names_deduplicates(self):
+        text = "1. Kumiko — West Loop. Kumiko — great bar."
+        names = _extract_venue_names_from_text(text)
+        assert names.count("Kumiko") == 1
+
+    def test_validate_venue_candidate_accepts_real_venue(self):
+        context = "Kumiko is a speakeasy cocktail bar in Chicago West Loop."
+        assert _validate_venue_candidate("Kumiko", context, intent=INTENT_NIGHTLIFE, destination="Chicago") is True
+
+    def test_validate_venue_candidate_rejects_generic_phrase(self):
+        context = "Best bars in Chicago guide."
+        assert _validate_venue_candidate("Best Bars", context, intent=INTENT_NIGHTLIFE, destination="Chicago") is False
+        assert _validate_venue_candidate("Food & Drink", context, intent=INTENT_RESTAURANTS, destination="Chicago") is False
+        assert _validate_venue_candidate("Nightlife Guide", context, intent=INTENT_NIGHTLIFE, destination="Chicago") is False
+
+    def test_validate_venue_candidate_rejects_article_like_name(self):
+        context = "Guide to restaurants in Chicago."
+        assert _validate_venue_candidate("Guide to Chicago Eats", context, intent=INTENT_RESTAURANTS, destination="Chicago") is False
+
+    def test_validate_venue_candidate_requires_category_or_location(self):
+        # No category signal, no location — should fail
+        assert _validate_venue_candidate("Mystery Spot", "Random text here.", intent=INTENT_NIGHTLIFE, destination="") is False
+        # Has destination in context — should pass
+        assert _validate_venue_candidate("Mystery Spot", "Mystery Spot in Chicago.", intent=INTENT_NIGHTLIFE, destination="Chicago") is True
+
+    def test_listicle_with_numbered_venues_extracts_candidates(self):
+        hits = [
+            _hit(
+                "Best Cocktail Bars in Chicago 2026",
+                "https://example.com/best-bars",
+                "1. Kumiko — West Loop speakeasy. 2. The Aviary — Avant-garde cocktails. 3. Billy Sunday — Logan Square.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars")
+        names = [r.name for r in out["restaurants"]]
+        assert "Kumiko" in names
+        assert "The Aviary" in names
+        # Article becomes research_source (secondary)
+        assert any(s.source_type == "article_listicle_blog_directory" for s in out["research_sources"]) or len(out["restaurants"]) >= 3
+
+    def test_generic_article_titles_not_addable(self):
+        hits = [
+            _hit("Food & Drink", "https://example.com/fd", "Dining roundup with no specific venues."),
+            _hit("Best Restaurants in Chicago", "https://example.com/best", "Top picks list overview."),
+        ]
+        out = normalize_hits(hits, intent=INTENT_RESTAURANTS, destination="Chicago", user_query="restaurants")
+        assert out["restaurants"] == []
+        for rs in out["research_sources"]:
+            assert rs.trip_addable is False
+
+    def test_direct_venue_ranks_before_extracted_venue(self):
+        hits = [
+            _hit(
+                "Top Bars Chicago",
+                "https://ex.com/guide",
+                "1. Kumiko — West Loop speakeasy bar in Chicago.",
+            ),
+            _hit("Gus' Sip & Dip", "https://ex.com/gus", "Cocktail bar at 123 N Clark St in Chicago."),
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        names = [r.name for r in out["restaurants"]]
+        assert "Gus' Sip & Dip" in names
+        assert "Kumiko" in names
+        # Direct hit (ai_score=1.0) should sort before extracted hit (ai_score=0.7)
+        gus_idx = names.index("Gus' Sip & Dip")
+        kumiko_idx = names.index("Kumiko")
+        assert gus_idx < kumiko_idx
+
+    def test_research_sources_hidden_when_three_or_more_venues(self):
+        hits = [
+            _hit(
+                "Top Cocktail Bars Chicago",
+                "https://ex.com/guide",
+                "1. Kumiko — West Loop speakeasy. 2. The Aviary — Avant-garde cocktails. 3. Billy Sunday — Logan Square.",
+            ),
+            _hit("More Bar Picks", "https://ex.com/g2", "Another nightlife guide roundup article."),
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        assert len(out["restaurants"]) >= 3
+        assert out["research_sources"] == []
+
+    def test_extracted_venue_card_is_trip_addable(self):
+        hits = [
+            _hit(
+                "Best Cocktail Bars in Chicago 2026",
+                "https://example.com/best-bars",
+                "1. Kumiko — West Loop speakeasy bar in Chicago. 2. Three Dots — Tiki bar in River North.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars")
+        for r in out["restaurants"]:
+            # Venue cards are addable (they're restaurant/attraction/hotel, not research_source)
+            assert r.source_url is not None
+            assert r.last_verified_at is not None
+
+    def test_extracted_venue_summary_references_source_article(self):
+        hits = [
+            _hit(
+                "Best Bars in Chicago",
+                "https://example.com/best-bars",
+                "1. Kumiko — West Loop speakeasy bar in Chicago.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        kumiko = next((r for r in out["restaurants"] if r.name == "Kumiko"), None)
+        assert kumiko is not None
+        assert "Best Bars in Chicago" in (kumiko.summary or "")
+
+    def test_research_source_cards_secondary_when_venues_present(self):
+        hits = [
+            _hit("Gus' Sip & Dip", "https://ex.com/gus", "Cocktail bar on Clark St in Chicago."),
+            _hit("Best Bars List", "https://ex.com/list", "Guide to nightlife in Chicago."),
+            _hit("Chicago Nightlife Guide", "https://ex.com/guide", "Article about Chicago bar scene."),
+            _hit("Top Spots Roundup", "https://ex.com/roundup", "Listicle covering bars and clubs."),
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        assert len(out["restaurants"]) >= 1
+        assert len(out["research_sources"]) <= 2
+
+    def test_hybrid_research_source_type_is_article_listicle(self):
+        hits = [
+            _hit("Gus' Sip & Dip", "https://ex.com/gus", "Cocktail bar in Chicago River North."),
+            _hit("Best Bars in Chicago", "https://ex.com/list", "A roundup guide of bars."),
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        assert any(s.source_type == "article_listicle_blog_directory" for s in out["research_sources"])
 
 
 # ── LiveResearchService behavior ────────────────────────────────────────────
