@@ -16,6 +16,7 @@ import {
 import {
   addStructuredConciergeItemToTrip,
   callConciergeSearch,
+  clearConciergeCache,
   fetchConciergeMessages,
   fetchItinerary,
 } from "@/lib/api";
@@ -55,6 +56,50 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onItemAdded?: () => void;
+}
+
+const CONCIERGE_CACHE_VERSION = 2;
+
+interface ConciergeClientCacheEntry {
+  version: number;
+  tripId: string;
+  destination: string;
+  messages: Message[];
+}
+
+function conciergeCacheKey(tripId: string, destination: string): string {
+  return `concierge_cache::${tripId}::${destination.trim().toLowerCase()}`;
+}
+
+function readConciergeClientCache(tripId: string, destination: string): Message[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(conciergeCacheKey(tripId, destination));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ConciergeClientCacheEntry;
+    if (parsed.version !== CONCIERGE_CACHE_VERSION) return null;
+    if (parsed.tripId !== tripId) return null;
+    if ((parsed.destination || "").trim().toLowerCase() !== destination.trim().toLowerCase()) return null;
+    return Array.isArray(parsed.messages) ? parsed.messages : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeConciergeClientCache(tripId: string, destination: string, messages: Message[]): void {
+  if (typeof window === "undefined") return;
+  const payload: ConciergeClientCacheEntry = {
+    version: CONCIERGE_CACHE_VERSION,
+    tripId,
+    destination,
+    messages,
+  };
+  window.localStorage.setItem(conciergeCacheKey(tripId, destination), JSON.stringify(payload));
+}
+
+function clearConciergeClientCache(tripId: string, destination: string): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(conciergeCacheKey(tripId, destination));
 }
 
 function sourceLabel(status: string, intent?: string, liveProvider?: string | null, cached?: boolean): string | null {
@@ -310,6 +355,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
   const [addedItems, setAddedItems] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [historyWarning, setHistoryWarning] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const loadedTripRef = useRef<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -368,6 +414,9 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
           })
       : [];
 
+    const cachedMessages = readConciergeClientCache(tripId, destination);
+    const initialMessages = cachedMessages && cachedMessages.length > 0 ? cachedMessages : historyMessages;
+
     if (historyResult.status === "rejected") {
       const detail = historyResult.reason instanceof Error ? historyResult.reason.message : String(historyResult.reason ?? "");
       const lowered = detail.toLowerCase();
@@ -390,8 +439,8 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
       }
     }
 
-    if (historyMessages.length === 0) {
-      historyMessages.push({
+    if (initialMessages.length === 0) {
+      initialMessages.push({
         role: "assistant",
         text: `Tell me what you need for ${destination || "your trip"} and I'll return concise picks with action cards.`,
       });
@@ -402,7 +451,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
       console.error("[concierge] failed to load itinerary days", itineraryResult.reason);
     }
 
-    setMessages(historyMessages);
+    setMessages(initialMessages);
     setTripDays(itinerary);
     setItineraryItems(itinerary.flatMap((day) => day.items ?? []));
     setSelectedDayId((prev) => {
@@ -412,6 +461,11 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
     loadedTripRef.current = tripId;
     setLoadingHistory(false);
   }, [destination, messages, tripDaysProp, tripId]);
+
+  useEffect(() => {
+    if (messages.length === 0) return;
+    writeConciergeClientCache(tripId, destination, messages);
+  }, [destination, messages, tripId]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -429,7 +483,26 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
     setAddingItems(new Set());
     setError(null);
     setHistoryWarning(null);
-  }, [tripId]);
+    clearConciergeClientCache(tripId, destination);
+  }, [destination, tripId]);
+
+  async function handleClearChat() {
+    setLoading(false);
+    setLoadingHistory(false);
+    setError(null);
+    setHistoryWarning(null);
+    setInput("");
+    setMessages([]);
+    clearConciergeClientCache(tripId, destination);
+
+    try {
+      await clearConciergeCache(tripId, destination);
+      setToast("Concierge chat cleared.");
+    } catch (err) {
+      console.error("[concierge] clear cache failed", err);
+      setError("Could not clear concierge cache.");
+    }
+  }
 
   useEffect(() => {
     if (tripDaysProp.length === 0) return;
@@ -528,9 +601,17 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
             <span className="text-sm font-semibold">AI Concierge</span>
             {destination && <span className="text-xs text-white/80">· {destination}</span>}
           </div>
-          <button onClick={onClose} className="rounded p-1 text-white/80 hover:bg-white/20" aria-label="Close">
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleClearChat}
+              className="rounded bg-white/15 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-white/25"
+            >
+              Clear chat
+            </button>
+            <button onClick={onClose} className="rounded p-1 text-white/80 hover:bg-white/20" aria-label="Close">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className="border-b border-slate-100 bg-slate-50 px-4 py-2">
@@ -784,6 +865,11 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
         </div>
 
         <div className="border-t border-slate-100 bg-white px-4 py-3">
+          {toast && (
+            <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+              {toast}
+            </div>
+          )}
           {messages.length > 1 && !loadingHistory && (
             <div className="mb-2 flex flex-wrap gap-1.5">
               {followUpActions.map((prompt) => (

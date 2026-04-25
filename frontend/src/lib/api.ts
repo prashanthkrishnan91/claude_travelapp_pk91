@@ -1265,6 +1265,19 @@ export async function fetchConciergeMessages(tripId: string): Promise<ConciergeM
   return apiFetch<ConciergeMessage[]>(`/ai/concierge/${tripId}/messages`);
 }
 
+export async function clearConciergeCache(
+  tripId: string,
+  destination?: string | null
+): Promise<void> {
+  await apiFetch<void>("/ai/concierge/cache", {
+    method: "DELETE",
+    body: JSON.stringify({
+      trip_id: tripId,
+      ...(destination ? { destination } : {}),
+    }),
+  });
+}
+
 type ConciergeStructuredItem = UnifiedRestaurantResult | UnifiedAttractionResult | UnifiedHotelResult;
 
 export async function addStructuredConciergeItemToTrip(

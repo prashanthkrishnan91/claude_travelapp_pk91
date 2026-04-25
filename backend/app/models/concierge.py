@@ -147,6 +147,15 @@ class ConciergeSearchRequest(BaseModel):
     client_message_id: Optional[str] = None
 
 
+class ConciergeCacheClearRequest(BaseModel):
+    trip_id: UUID
+    destination: Optional[str] = None
+
+
+class ConciergeCacheClearResponse(BaseModel):
+    cleared: bool = True
+
+
 class ConciergeSearchResponse(BaseModel):
     response: str
     intent: str
