@@ -232,23 +232,80 @@ class TestNormalization:
 
     def test_validate_venue_candidate_accepts_real_venue(self):
         context = "Kumiko is a speakeasy cocktail bar in Chicago West Loop."
-        assert _validate_venue_candidate("Kumiko", context, intent=INTENT_NIGHTLIFE, destination="Chicago") is True
+        is_valid, normalized, _ = _validate_venue_candidate(
+            "Kumiko",
+            context,
+            intent=INTENT_NIGHTLIFE,
+            destination="Chicago",
+            title="Best Cocktail Bars in Chicago",
+            url="https://www.timeout.com/chicago/bars/best-bars-in-chicago",
+            snippet="1. Kumiko — West Loop speakeasy cocktail bar in Chicago.",
+        )
+        assert is_valid is True
+        assert normalized == "Kumiko"
 
     def test_validate_venue_candidate_rejects_generic_phrase(self):
         context = "Best bars in Chicago guide."
-        assert _validate_venue_candidate("Best Bars", context, intent=INTENT_NIGHTLIFE, destination="Chicago") is False
-        assert _validate_venue_candidate("Food & Drink", context, intent=INTENT_RESTAURANTS, destination="Chicago") is False
-        assert _validate_venue_candidate("Nightlife Guide", context, intent=INTENT_NIGHTLIFE, destination="Chicago") is False
+        assert _validate_venue_candidate("Best Bars", context, intent=INTENT_NIGHTLIFE, destination="Chicago")[0] is False
+        assert _validate_venue_candidate("Food & Drink", context, intent=INTENT_RESTAURANTS, destination="Chicago")[0] is False
+        assert _validate_venue_candidate("Nightlife Guide", context, intent=INTENT_NIGHTLIFE, destination="Chicago")[0] is False
 
     def test_validate_venue_candidate_rejects_article_like_name(self):
         context = "Guide to restaurants in Chicago."
-        assert _validate_venue_candidate("Guide to Chicago Eats", context, intent=INTENT_RESTAURANTS, destination="Chicago") is False
+        assert _validate_venue_candidate("Guide to Chicago Eats", context, intent=INTENT_RESTAURANTS, destination="Chicago")[0] is False
 
     def test_validate_venue_candidate_requires_category_or_location(self):
         # No category signal, no location — should fail
-        assert _validate_venue_candidate("Mystery Spot", "Random text here.", intent=INTENT_NIGHTLIFE, destination="") is False
-        # Has destination in context — should pass
-        assert _validate_venue_candidate("Mystery Spot", "Mystery Spot in Chicago.", intent=INTENT_NIGHTLIFE, destination="Chicago") is True
+        assert _validate_venue_candidate("Mystery Spot", "Random text here.", intent=INTENT_NIGHTLIFE, destination="")[0] is False
+        # Venue-like name + destination context (2 strong signals) — should pass
+        assert (
+            _validate_venue_candidate(
+                "Mystery Spot",
+                "Mystery Spot in Chicago with no nightlife category context.",
+                intent=INTENT_NIGHTLIFE,
+                destination="Chicago",
+                title="Chicago Places",
+                url="https://example.com/guide",
+                snippet="Mystery Spot in Chicago.",
+            )[0]
+            is True
+        )
+
+    def test_for_music_green_mill_phrase_not_promoted(self):
+        hits = [
+            _hit(
+                "Travel Guide To Nightlife In Chicago (2026)",
+                "https://example.com/nightlife-guide",
+                "1. For Music Green Mill — Uptown jazz cocktail bar in Chicago.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="nightlife")
+        names = [r.name for r in out["restaurants"]]
+        assert "For Music Green Mill" not in names
+
+    def test_for_music_green_mill_recovery_promotes_green_mill_with_context(self):
+        hits = [
+            _hit(
+                "Best Jazz Bars in Chicago",
+                "https://www.timeout.com/chicago/bars/best-jazz-bars",
+                "1. For Music Green Mill — Uptown jazz cocktail bar in Chicago.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="jazz bars")
+        names = [r.name for r in out["restaurants"]]
+        assert "Green Mill" in names
+        assert "For Music Green Mill" not in names
+
+    def test_single_word_lime_rejected_without_strong_corroboration(self):
+        hits = [
+            _hit(
+                "Travel Guide To Nightlife In Chicago (2026)",
+                "https://example.com/nightlife-guide",
+                "1. Lime — Featured in this nightlife guide and roundup.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="nightlife")
+        assert "Lime" not in [r.name for r in out["restaurants"]]
 
     def test_listicle_with_numbered_venues_extracts_candidates(self):
         hits = [
@@ -332,6 +389,7 @@ class TestNormalization:
         kumiko = next((r for r in out["restaurants"] if r.name == "Kumiko"), None)
         assert kumiko is not None
         assert "Best Bars in Chicago" in (kumiko.summary or "")
+        assert "category signal" in (kumiko.summary or "")
 
     def test_research_source_cards_secondary_when_venues_present(self):
         hits = [
@@ -351,6 +409,25 @@ class TestNormalization:
         ]
         out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
         assert any(s.source_type == "article_listicle_blog_directory" for s in out["research_sources"])
+
+    def test_weak_extracted_candidates_do_not_create_trip_addable_cards(self):
+        hits = [
+            _hit(
+                "Nightlife Roundup",
+                "https://example.com/nightlife-roundup",
+                "For music, Green Mill is iconic. With vibes, Lime can be fun.",
+            )
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        assert out["restaurants"] == []
+
+    def test_direct_venue_hits_still_pass(self):
+        hits = [
+            _hit("Green Mill", "https://example.com/green-mill", "Cocktail bar in Uptown Chicago."),
+        ]
+        out = normalize_hits(hits, intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        assert [r.name for r in out["restaurants"]] == ["Green Mill"]
+        assert out["restaurants"][0].ai_score == 1.0
 
 
 # ── LiveResearchService behavior ────────────────────────────────────────────
