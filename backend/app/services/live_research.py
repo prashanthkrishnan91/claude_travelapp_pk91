@@ -44,10 +44,12 @@ import os
 import re
 import threading
 import time
+from collections import Counter
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 from app.models.concierge import (
     INTENT_ATTRACTIONS,
@@ -513,6 +515,41 @@ _GENERIC_CANDIDATE_PAT = re.compile(
     r"neighborhood|district|city|cities|places?|spots?|options?)\b",
     re.IGNORECASE,
 )
+_CONTEXT_START_WORDS = {
+    "for",
+    "with",
+    "near",
+    "around",
+    "including",
+    "featuring",
+    "from",
+    "at",
+    "in",
+    "on",
+}
+_AMBIGUOUS_SINGLE_WORD_CANDIDATES = {
+    "lime",
+    "olive",
+    "violet",
+    "green",
+    "gold",
+    "red",
+    "blue",
+    "velvet",
+    "union",
+    "loop",
+    "district",
+}
+_TRUSTED_EDITORIAL_SOURCE_HINT = re.compile(
+    r"(timeout|tripadvisor|infatuation|eater|cntraveler|lonelyplanet|michelin|opentable|resy|thrillist|fodor)",
+    re.IGNORECASE,
+)
+_DIRECT_PLACE_SOURCE_HINT = re.compile(
+    r"(google\.[^/]+/maps|maps\.google|yelp\.|opentable|resy|tripadvisor|foursquare)",
+    re.IGNORECASE,
+)
+_TRAILING_CONTEXT_WORDS = {"music", "food", "drink", "drinks", "dancing", "brunch", "nightlife"}
+_CLEAN_LIST_NAME_TMPL = r"(?<![A-Za-z0-9])(?:\d{{1,2}}[.)]\s+|[-•]\s+){name}(?=\s*[–—:\-]|\s*$)"
 
 
 def _confidence_from_age(fetched_at: str) -> str:
@@ -697,23 +734,134 @@ def _extract_venue_names_from_text(text: str) -> List[str]:
     return candidates
 
 
-def _validate_venue_candidate(
-    name: str, context: str, *, intent: str, destination: str
-) -> bool:
-    """Return True if *name* is a plausible addable venue, not a generic article phrase."""
-    if not name or len(name.strip()) < 3:
-        return False
-    if _GENERIC_CANDIDATE_PAT.match(name):
-        return False
+def _recover_candidate_name(raw: str) -> Optional[str]:
+    candidate = (raw or "").strip(" \t.,;:\"'“”‘’")
+    if not candidate:
+        return None
+    words = [w for w in re.split(r"\s+", candidate) if w]
+    if not words:
+        return None
+    if words[0].lower() in _CONTEXT_START_WORDS:
+        tail = " ".join(words[1:]).strip()
+        if not tail:
+            return None
+        tail_words = [w for w in re.split(r"\s+", tail) if w]
+        while tail_words and tail_words[0].lower() in _TRAILING_CONTEXT_WORDS:
+            tail_words = tail_words[1:]
+        tail = " ".join(tail_words).strip()
+        if not tail:
+            return None
+        match = re.search(
+            r"([A-Z][A-Za-z'\-&\.]+(?:\s+(?:[A-Z][A-Za-z'\-&\.]+|&|of|the)){0,4})$",
+            tail,
+        )
+        if not match:
+            return None
+        return match.group(1).strip()
+    return candidate
+
+
+def _is_venue_like_proper_noun(name: str) -> bool:
     if not _title_looks_like_venue_name(name):
         return False
-    has_cat = _category_signal(intent, context)
+    words = [w for w in re.split(r"\s+", (name or "").strip()) if w]
+    if not words:
+        return False
+    content_words = [w for w in words if w.lower() not in {"the", "of", "&", "and"}]
+    return bool(content_words) and any(w[:1].isupper() for w in content_words)
+
+
+def _candidate_has_category_nearby(candidate: str, context: str, intent: str) -> bool:
+    if not candidate or not context:
+        return False
+    low_context = context.lower()
+    idx = low_context.find(candidate.lower())
+    if idx < 0:
+        return _category_signal(intent, context)
+    window = context[max(0, idx - 120) : idx + len(candidate) + 120]
+    return _category_signal(intent, window)
+
+
+def _trusted_source_signal(url: str, title: str, snippet: str) -> bool:
+    host = (urlparse(url).netloc or "").lower()
+    text = f"{host} {title} {snippet}"
+    return bool(_TRUSTED_EDITORIAL_SOURCE_HINT.search(text))
+
+
+def _direct_place_source_signal(url: str, snippet: str) -> bool:
+    if _DIRECT_PLACE_SOURCE_HINT.search(url or ""):
+        return True
+    return bool(_ADDRESS_HINT.search(snippet or ""))
+
+
+def _appears_in_clean_list(candidate: str, snippet: str) -> bool:
+    if not candidate or not snippet:
+        return False
+    pat = re.compile(_CLEAN_LIST_NAME_TMPL.format(name=re.escape(candidate)))
+    return bool(pat.search(snippet))
+
+
+def _validate_venue_candidate(
+    name: str,
+    context: str,
+    *,
+    intent: str,
+    destination: str,
+    title: str = "",
+    url: str = "",
+    snippet: str = "",
+    corroborating_hits: int = 1,
+) -> Tuple[bool, str, List[str]]:
+    """Return (is_valid, normalized_name, evidence_reasons)."""
+    normalized = _recover_candidate_name(name) or ""
+    evidence: List[str] = []
+    if not normalized or len(normalized.strip()) < 3:
+        return False, "", evidence
+    if _GENERIC_CANDIDATE_PAT.match(normalized):
+        return False, "", evidence
+
+    words = [w for w in re.split(r"\s+", normalized.strip()) if w]
+    if words and words[0].lower() in _CONTEXT_START_WORDS:
+        return False, "", evidence
+    if not _is_venue_like_proper_noun(normalized):
+        return False, "", evidence
+    has_proper = True
+    has_cat = _candidate_has_category_nearby(normalized, context, intent)
     has_loc = bool(
         _ADDRESS_HINT.search(context)
         or (destination and destination.lower() in context.lower())
         or _NEIGHBORHOOD_HINT.search(context)
     )
-    return has_cat or has_loc
+    has_trusted_source = _trusted_source_signal(url, title, snippet)
+    in_clean_list = _appears_in_clean_list(normalized, snippet) or _appears_in_clean_list(normalized, context)
+    has_direct_place = _direct_place_source_signal(url, context)
+
+    if has_proper:
+        evidence.append("venue-like proper noun name")
+    if has_cat:
+        evidence.append("category signal near candidate")
+    if has_loc:
+        evidence.append("location or neighborhood signal")
+    if has_trusted_source:
+        evidence.append("trusted source signal")
+    if in_clean_list:
+        evidence.append("clean list pattern")
+    if corroborating_hits > 1:
+        evidence.append("multiple corroborating hits")
+
+    strong_signal_count = sum((has_proper, has_cat, has_loc, has_trusted_source, in_clean_list))
+    if strong_signal_count < 2:
+        return False, normalized, evidence
+
+    if len(words) == 1:
+        low = words[0].lower()
+        if low in _AMBIGUOUS_SINGLE_WORD_CANDIDATES:
+            if not (has_direct_place or corroborating_hits > 1):
+                return False, normalized, evidence
+        elif strong_signal_count < 3 and not (has_direct_place or corroborating_hits > 1):
+            return False, normalized, evidence
+
+    return True, normalized, evidence
 
 
 def normalize_hits(
@@ -766,24 +914,50 @@ def normalize_hits(
             intent=intent,
             destination=destination,
         )
+        # Track corroboration count across article extractions.
+        # (Only used for article-extracted candidates.)
+        # We recompute lazily from all hits for determinism and minimal state coupling.
+        corroboration_counter: Counter = Counter()
+        for article_hit in hits:
+            if _classify_hit(
+                _strip_publisher(article_hit.title),
+                article_hit.snippet,
+                article_hit.url,
+                intent=intent,
+                destination=destination,
+            ) != "article_listicle_blog_directory":
+                continue
+            for raw_name in _extract_venue_names_from_text(article_hit.snippet):
+                normalized_name = _recover_candidate_name(raw_name)
+                if normalized_name:
+                    corroboration_counter[normalized_name.lower()] += 1
 
         if classification != "venue_place":
             # For article/listicle hits attempt to extract real venue names first.
             if classification == "article_listicle_blog_directory":
                 extracted = _extract_venue_names_from_text(hit.snippet)
                 for candidate in extracted:
-                    if not _validate_venue_candidate(
-                        candidate, combined, intent=intent, destination=destination
-                    ):
+                    is_valid, normalized_candidate, evidence = _validate_venue_candidate(
+                        candidate,
+                        combined,
+                        intent=intent,
+                        destination=destination,
+                        title=title,
+                        url=hit.url,
+                        snippet=hit.snippet,
+                        corroborating_hits=corroboration_counter.get(
+                            (_recover_candidate_name(candidate) or "").lower(), 1
+                        ),
+                    )
+                    if not is_valid:
                         continue
-                    if _looks_closed(candidate):
+                    if _looks_closed(normalized_candidate):
                         continue
                     article_snippet = _build_summary(hit.snippet, fallback="")
-                    cand_summary = (
-                        f"Featured in \"{title}\". {article_snippet}".rstrip(". ")
-                        if article_snippet
-                        else f"Featured in \"{title}\"."
-                    )
+                    evidence_summary = ", ".join(evidence[:3]) if evidence else "article extraction context"
+                    cand_summary = f"Corroborated from \"{title}\" ({evidence_summary})."
+                    if article_snippet:
+                        cand_summary = f"{cand_summary} {article_snippet}".rstrip(". ")
                     cand_neighborhood = _extract_neighborhood(hit.snippet, destination)
                     if is_restaurant_intent and len(restaurants) < max_per_kind:
                         cand_cuisine = "Cocktail Bar" if intent == INTENT_NIGHTLIFE else "Restaurant"
@@ -798,7 +972,7 @@ def normalize_hits(
                             cand_tags.append("Romantic")
                         restaurants.append(
                             UnifiedRestaurantResult(
-                                name=candidate,
+                                name=normalized_candidate,
                                 source=f"Live search · {provider_label}",
                                 cuisine=cand_cuisine,
                                 neighborhood=cand_neighborhood,
@@ -808,13 +982,13 @@ def normalize_hits(
                                 last_verified_at=hit.fetched_at,
                                 confidence=confidence,
                                 tags=cand_tags,
-                                ai_score=0.7,
+                                ai_score=0.75,
                             )
                         )
                     elif is_attraction_intent and len(attractions) < max_per_kind:
                         attractions.append(
                             UnifiedAttractionResult(
-                                name=candidate,
+                                name=normalized_candidate,
                                 source=f"Live search · {provider_label}",
                                 category="attraction",
                                 description=cand_summary,
@@ -822,13 +996,13 @@ def normalize_hits(
                                 source_url=hit.url,
                                 last_verified_at=hit.fetched_at,
                                 confidence=confidence,
-                                ai_score=0.7,
+                                ai_score=0.75,
                             )
                         )
                     elif is_hotel_intent and len(hotels) < max_per_kind:
                         hotels.append(
                             UnifiedHotelResult(
-                                name=candidate,
+                                name=normalized_candidate,
                                 source=f"Live search · {provider_label}",
                                 area_label=cand_neighborhood,
                                 reason=cand_summary,
@@ -836,7 +1010,7 @@ def normalize_hits(
                                 source_url=hit.url,
                                 last_verified_at=hit.fetched_at,
                                 confidence=confidence,
-                                ai_score=0.7,
+                                ai_score=0.75,
                             )
                         )
 
