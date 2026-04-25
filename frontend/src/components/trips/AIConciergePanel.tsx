@@ -126,13 +126,41 @@ function normalizeTitle(value: string): string {
 }
 
 function splitReason(text?: string): { short: string; detail?: string } {
-  const clean = (text ?? "").trim();
+  const clean = (text ?? "")
+    .replace(/#{1,6}\s*/g, " ")
+    .replace(/^\s*(?:\d{1,3}[.)]|[-*])\s+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!clean) return { short: "Great fit for this trip." };
   const parts = clean.split(/(?<=[.!?])\s+/);
   return {
     short: parts.slice(0, 1).join(" "),
     detail: parts.length > 1 ? parts.slice(1).join(" ") : undefined,
   };
+}
+
+function isFreshlyVerified(iso?: string | null): boolean {
+  if (!iso) return false;
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return false;
+  const days = (Date.now() - dt.getTime()) / (24 * 60 * 60 * 1000);
+  return days >= 0 && days <= 14;
+}
+
+function canShowLiveBadge(card: {
+  source?: string | null;
+  sourceUrl?: string | null;
+  verifiedPlace?: boolean | null;
+  confidence?: string | null;
+  lastVerifiedAt?: string | null;
+}): boolean {
+  const confidence = (card.confidence ?? "").toLowerCase();
+  const confidenceOk = confidence === "high" || confidence === "medium";
+  return isLiveSource(card.source)
+    && Boolean(card.sourceUrl)
+    && card.verifiedPlace === true
+    && confidenceOk
+    && isFreshlyVerified(card.lastVerifiedAt);
 }
 
 function ConciergeCard({
@@ -607,7 +635,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                       {msg.restaurants?.map((r) => {
                         const key = cardKey(r.name, selectedDayId || undefined);
                         const reason = r.summary;
-                        const isLive = isLiveSource(r.source) && Boolean(r.sourceUrl);
+                        const isLive = canShowLiveBadge(r);
                         return (
                           <ConciergeCard
                             key={`${r.name}-${key}`}
@@ -632,7 +660,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
                       {msg.attractions?.map((a) => {
                         const key = cardKey(a.name, selectedDayId || undefined);
-                        const isLive = isLiveSource(a.source) && Boolean(a.sourceUrl);
+                        const isLive = canShowLiveBadge(a);
                         return (
                           <ConciergeCard
                             key={`${a.name}-${key}`}
@@ -659,7 +687,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                       {msg.hotels?.map((h) => {
                         const key = cardKey(h.name, selectedDayId || undefined);
                         const reason = h.reason ?? (h.pricePerNight ? `~$${Math.round(h.pricePerNight)}/night` : undefined);
-                        const isLive = isLiveSource(h.source) && Boolean(h.sourceUrl);
+                        const isLive = canShowLiveBadge(h);
                         return (
                           <ConciergeCard
                             key={`${h.name}-${key}`}
@@ -696,7 +724,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                           tags={[]}
                           reason={s.summary}
                           sourceLink={s.sourceUrl}
-                          isLive={isLiveSource(s.source) && Boolean(s.sourceUrl)}
+                          isLive={false}
                           verifiedAt={formatVerifiedAt(s.lastVerifiedAt)}
                           added={false}
                           adding={false}
