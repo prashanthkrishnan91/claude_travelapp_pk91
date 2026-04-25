@@ -79,6 +79,21 @@ interface ConciergeClientCacheEntry {
   messages: Message[];
 }
 
+type ClosedSignalCard = Partial<{
+  name: string | null;
+  title: string | null;
+  summary: string | null;
+  description: string | null;
+  reason: string | null;
+  source: string | null;
+  sourceText: string | null;
+  rawText: string | null;
+  url: string | null;
+  sourceUrl: string | null;
+  snippet: string | null;
+  raw: unknown;
+}>;
+
 function conciergeCacheKey(tripId: string, destination: string): string {
   return `concierge_cache::${tripId}::${destination.trim().toLowerCase()}`;
 }
@@ -233,7 +248,7 @@ function canShowLiveBadge(card: {
     && isFreshlyVerified(card.lastVerifiedAt);
 }
 
-function hasClosedSignal(card: Record<string, unknown>): boolean {
+function hasClosedSignal(card: ClosedSignalCard): boolean {
   const textBlob = [
     card.name,
     card.title,
@@ -768,7 +783,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                       {msg.restaurants?.map((r) => {
                         const key = cardKey(r.name, selectedDayId || undefined);
                         const reason = r.summary;
-                        const isClosed = hasClosedSignal(r as Record<string, unknown>);
+                        const isClosed = hasClosedSignal(r);
                         const isLive = !isClosed && canShowLiveBadge(r);
                         return (
                           <ConciergeCard
@@ -795,7 +810,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
                       {msg.attractions?.map((a) => {
                         const key = cardKey(a.name, selectedDayId || undefined);
-                        const isClosed = hasClosedSignal(a as Record<string, unknown>);
+                        const isClosed = hasClosedSignal(a);
                         const isLive = !isClosed && canShowLiveBadge(a);
                         return (
                           <ConciergeCard
@@ -824,7 +839,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                       {msg.hotels?.map((h) => {
                         const key = cardKey(h.name, selectedDayId || undefined);
                         const reason = h.reason ?? (h.pricePerNight ? `~$${Math.round(h.pricePerNight)}/night` : undefined);
-                        const isClosed = hasClosedSignal(h as Record<string, unknown>);
+                        const isClosed = hasClosedSignal(h);
                         const isLive = !isClosed && canShowLiveBadge(h);
                         return (
                           <ConciergeCard
