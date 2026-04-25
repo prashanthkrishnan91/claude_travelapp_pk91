@@ -98,6 +98,45 @@ _FRESHNESS_MEDIUM_DAYS = 365
 _MARKDOWN_HEADING_PAT = re.compile(r"^\s{0,3}#{1,6}\s*")
 _SYMBOL_RUN_PAT = re.compile(r"([!?.\-_*~])\1{2,}")
 _WHITESPACE_PAT = re.compile(r"\s+")
+
+# ── Verify-before-add constants ──────────────────────────────────────────────
+
+_OBVIOUS_NON_VENUE_LOWER: frozenset = frozenset({
+    "united states",
+    "united states of america",
+    "united kingdom",
+    "great britain",
+    "united arab emirates",
+    "north america",
+    "south america",
+    "latin america",
+    "central america",
+    "western europe",
+    "eastern europe",
+    "southeast asia",
+    "east asia",
+    "the middle east",
+    "middle east",
+})
+
+_NON_VENUE_SUFFIX_WORDS: frozenset = frozenset({
+    "special", "specials", "launch", "promotion", "promotions",
+    "explore", "exploration", "discovery", "guide", "guides",
+    "overview", "roundup", "roundups", "review", "reviews",
+    "update", "updates", "edition", "editions", "award", "awards",
+    "deal", "deals", "offer", "offers", "sale", "newsletter",
+    "blog", "list", "listing", "listings", "directory",
+})
+
+_PLACE_PLATFORM_HINT = re.compile(
+    r"(yelp\.com|tripadvisor\.|opentable\.com|resy\.com|"
+    r"guide\.michelin|michelin\.com|google\.[^/\s]+/maps|"
+    r"maps\.google|foursquare\.com|zomato\.com)",
+    re.IGNORECASE,
+)
+
+MAX_VERIFICATION_CANDIDATES: int = 8
+
 _BOILERPLATE_PATTERNS = [
     re.compile(r"\b(advertising|advertisement|sponsored)\b", re.IGNORECASE),
     re.compile(r"\b(subscribe|sign in|sign up|newsletter)\b", re.IGNORECASE),
@@ -152,6 +191,17 @@ class LiveSearchHit:
         default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds")
     )
     raw: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class VerificationResult:
+    """Outcome of a second-pass focused search for a single candidate venue."""
+
+    verified: bool = False
+    source_url: Optional[str] = None
+    category: Optional[str] = None
+    neighborhood: Optional[str] = None
+    reason: Optional[str] = None
 
 
 # ── Provider abstraction ─────────────────────────────────────────────────────
@@ -401,6 +451,8 @@ class _TTLCache:
 
 # Module-level cache so multiple ConciergeService instances share results.
 _GLOBAL_CACHE = _TTLCache(ttl_seconds=1800)
+# Separate cache for candidate verification results.
+_VERIFICATION_CACHE = _TTLCache(ttl_seconds=1800)
 
 
 def _make_cache_key(intent: str, destination: str, query: str, dates: Optional[str] = None) -> str:
@@ -1191,6 +1243,86 @@ def _validate_venue_candidate(
     return True, normalized, evidence
 
 
+# ── Verify-before-add helpers ────────────────────────────────────────────────
+
+def _is_obvious_non_venue(name: str, destination: str) -> bool:
+    """Return True for candidates that are clearly not venue names.
+
+    Catches geographic names, promotional phrases, and '{destination} {generic}'
+    patterns before they waste a verification API call.
+    """
+    if not name:
+        return True
+    low = name.lower().strip()
+    if low in _OBVIOUS_NON_VENUE_LOWER:
+        return True
+    if destination and low == destination.lower():
+        return True
+    words = low.split()
+    if not words:
+        return True
+    # "{Destination} {non-venue-word}" e.g. "Chicago Explore", "Chicago Guide"
+    if len(words) >= 2 and destination:
+        dest_words = destination.lower().split()
+        if words[: len(dest_words)] == dest_words and words[-1] in _NON_VENUE_SUFFIX_WORDS:
+            return True
+    # Ends with a promotional/article word e.g. "Launch Special", "Summer Guide"
+    if words[-1] in _NON_VENUE_SUFFIX_WORDS:
+        return True
+    return False
+
+
+def _build_verification_query(candidate: str, destination: str, intent: str) -> str:
+    """Build a focused second-pass query to verify a single candidate place."""
+    if intent == INTENT_HOTELS:
+        kind = "hotel"
+    elif intent in {INTENT_ATTRACTIONS, INTENT_PLAN_DAY}:
+        kind = "attraction"
+    elif intent == INTENT_NIGHTLIFE:
+        kind = "bar"
+    else:
+        kind = "restaurant"
+    return f'"{candidate}" {destination} {kind}'
+
+
+def _check_verification_hits(
+    candidate: str,
+    destination: str,
+    hits: List[LiveSearchHit],
+) -> VerificationResult:
+    """Return VerificationResult from focused verification-search hits.
+
+    A candidate is verified if any hit mentions the candidate name AND either:
+    - the hit URL is from a known place platform (Yelp, TripAdvisor, etc.), or
+    - the snippet contains a street address plus a location reference.
+    """
+    low_candidate = (candidate or "").lower()
+    for hit in hits:
+        combined = f"{hit.title}\n{hit.snippet}"
+        low_combined = combined.lower()
+        if low_candidate not in low_combined:
+            continue
+        url = hit.url or ""
+        platform_hit = bool(
+            _PLACE_PLATFORM_HINT.search(url) or _DIRECT_PLACE_SOURCE_HINT.search(url)
+        )
+        address_hit = bool(_ADDRESS_HINT.search(combined))
+        location_hit = bool(
+            destination and destination.lower() in low_combined
+        ) or bool(_NEIGHBORHOOD_HINT.search(combined))
+        if platform_hit or (address_hit and location_hit):
+            neighborhood = _extract_neighborhood(combined, destination)
+            return VerificationResult(
+                verified=True,
+                source_url=url or None,
+                category=_context_type_hint(hit.snippet),
+                neighborhood=neighborhood,
+                reason=_build_summary(hit.snippet)
+                or f"Verified as a real place in {destination}.",
+            )
+    return VerificationResult(verified=False)
+
+
 def normalize_hits(
     hits: List[LiveSearchHit],
     *,
@@ -1198,6 +1330,7 @@ def normalize_hits(
     destination: str,
     user_query: str,
     max_per_kind: int = 6,
+    verified_candidates: Optional[Dict[str, VerificationResult]] = None,
 ) -> Dict[str, List[Any]]:
     """Convert raw provider hits into Concierge Unified result lists.
 
@@ -1280,7 +1413,22 @@ def normalize_hits(
                         continue
                     if _looks_closed(normalized_candidate):
                         continue
-                    cand_neighborhood = _extract_neighborhood(hit.snippet, destination)
+                    # Verify-before-add gate: only promote candidates confirmed
+                    # by a second focused search when verified_candidates is set.
+                    if verified_candidates is not None:
+                        _vr = verified_candidates.get(normalized_candidate.lower())
+                        if _vr is None or not _vr.verified:
+                            continue
+                        cand_neighborhood = (
+                            _vr.neighborhood
+                            or _extract_neighborhood(hit.snippet, destination)
+                        )
+                        cand_source_url = _vr.source_url or hit.url
+                        cand_verified: Optional[bool] = True
+                    else:
+                        cand_neighborhood = _extract_neighborhood(hit.snippet, destination)
+                        cand_source_url = hit.url
+                        cand_verified = None
                     quality_tier = _source_quality_tier(hit.url, title, hit.snippet, classification)
                     cand_summary = _build_extracted_reason(
                         candidate_name=normalized_candidate,
@@ -1313,12 +1461,13 @@ def normalize_hits(
                                 cuisine=cand_cuisine,
                                 neighborhood=cand_neighborhood,
                                 summary=cand_summary,
-                                booking_link=hit.url,
-                                source_url=hit.url,
+                                booking_link=cand_source_url,
+                                source_url=cand_source_url,
                                 last_verified_at=hit.fetched_at,
                                 confidence=confidence,
                                 tags=cand_tags,
                                 ai_score=extracted_ai_score,
+                                verified_place=cand_verified,
                             )
                         )
                     elif is_attraction_intent and len(attractions) < max_per_kind:
@@ -1329,10 +1478,11 @@ def normalize_hits(
                                 category="attraction",
                                 description=cand_summary,
                                 neighborhood=cand_neighborhood,
-                                source_url=hit.url,
+                                source_url=cand_source_url,
                                 last_verified_at=hit.fetched_at,
                                 confidence=confidence,
                                 ai_score=extracted_ai_score,
+                                verified_place=cand_verified,
                             )
                         )
                     elif is_hotel_intent and len(hotels) < max_per_kind:
@@ -1342,11 +1492,12 @@ def normalize_hits(
                                 source=f"Live search · {provider_label}",
                                 area_label=cand_neighborhood,
                                 reason=cand_summary,
-                                booking_url=hit.url,
-                                source_url=hit.url,
+                                booking_url=cand_source_url,
+                                source_url=cand_source_url,
                                 last_verified_at=hit.fetched_at,
                                 confidence=confidence,
                                 ai_score=extracted_ai_score,
+                                verified_place=cand_verified,
                             )
                         )
 
@@ -1397,6 +1548,7 @@ def normalize_hits(
                     confidence=confidence,
                     tags=tags,
                     ai_score=max(0.0, 1.0 - _chain_penalty(title, user_query)),
+                    verified_place=True,
                 )
             )
         elif is_attraction_intent and len(attractions) < max_per_kind:
@@ -1415,6 +1567,7 @@ def normalize_hits(
                     last_verified_at=hit.fetched_at,
                     confidence=confidence,
                     ai_score=1.0,
+                    verified_place=True,
                 )
             )
         elif is_hotel_intent and len(hotels) < max_per_kind:
@@ -1433,6 +1586,7 @@ def normalize_hits(
                     last_verified_at=hit.fetched_at,
                     confidence=confidence,
                     ai_score=1.0,
+                    verified_place=True,
                 )
             )
 
@@ -1493,9 +1647,13 @@ class LiveResearchService:
         *,
         enabled: bool = True,
         max_results: int = 10,
+        verification_cache: Optional[_TTLCache] = None,
     ) -> None:
         self._provider = provider or select_default_provider()
         self._cache = cache if cache is not None else _GLOBAL_CACHE
+        self._verification_cache = (
+            verification_cache if verification_cache is not None else _VERIFICATION_CACHE
+        )
         self._enabled = enabled
         self._max_results = max_results
 
@@ -1538,11 +1696,67 @@ class LiveResearchService:
         if not hits:
             return LiveResearchResult(provider_name=self._provider.name)
 
+        # ── Phase 2: extract candidates from articles and verify each ─────────
+        verified_candidates: Dict[str, VerificationResult] = {}
+        candidate_names: List[str] = []
+        seen_lower: set = set()
+        for h in hits:
+            if _classify_hit(
+                _strip_publisher(h.title),
+                h.snippet,
+                h.url,
+                intent=intent,
+                destination=destination,
+            ) != "article_listicle_blog_directory":
+                continue
+            for raw_name in _extract_venue_names_from_text(h.snippet):
+                norm = _recover_candidate_name(raw_name)
+                if not norm:
+                    continue
+                low = norm.lower()
+                if low in seen_lower:
+                    continue
+                if _is_obvious_non_venue(norm, destination):
+                    continue
+                if not _is_venue_like_proper_noun(norm):
+                    continue
+                seen_lower.add(low)
+                candidate_names.append(norm)
+                if len(candidate_names) >= MAX_VERIFICATION_CANDIDATES:
+                    break
+            if len(candidate_names) >= MAX_VERIFICATION_CANDIDATES:
+                break
+
+        for norm in candidate_names:
+            low = norm.lower()
+            vkey = f"verify::{destination.lower()}::{low}::{intent}"
+            cached_vr = self._verification_cache.get(vkey)
+            if cached_vr is not None:
+                vr = VerificationResult(**cached_vr)
+            else:
+                vq = _build_verification_query(norm, destination, intent)
+                try:
+                    vhits = self._provider.search(vq, max_results=5)
+                except Exception as exc:
+                    logger.warning("Verification search failed for %r: %s", norm, exc)
+                    vhits = []
+                vr = _check_verification_hits(norm, destination, vhits)
+                self._verification_cache.set(vkey, {
+                    "verified": vr.verified,
+                    "source_url": vr.source_url,
+                    "category": vr.category,
+                    "neighborhood": vr.neighborhood,
+                    "reason": vr.reason,
+                })
+            verified_candidates[low] = vr
+        # ── /Phase 2 ──────────────────────────────────────────────────────────
+
         normalized = normalize_hits(
             hits,
             intent=intent,
             destination=destination,
             user_query=user_query,
+            verified_candidates=verified_candidates,
         )
 
         if not (
@@ -1602,5 +1816,6 @@ class LiveResearchService:
 
 
 def reset_global_cache() -> None:
-    """Test helper — clear the module-level cache."""
+    """Test helper — clear the module-level caches."""
     _GLOBAL_CACHE.clear()
+    _VERIFICATION_CACHE.clear()
