@@ -564,6 +564,38 @@ _DIRECT_PLACE_SOURCE_HINT = re.compile(
 _TRAILING_CONTEXT_WORDS = {"music", "food", "drink", "drinks", "dancing", "brunch", "nightlife"}
 _CLEAN_LIST_NAME_TMPL = r"(?<![A-Za-z0-9])(?:\d{{1,2}}[.)]\s+|[-•]\s+){name}(?=\s*[–—:\-]|\s*$)"
 _NAME_LINKER_WORDS = {"in", "near", "around", "with", "featuring", "including", "from", "for"}
+_CHAIN_RESTAURANT_NAMES = (
+    "the capital grille",
+    "ruth's chris",
+    "ruths chris",
+    "morton's",
+    "mortons",
+    "fogo de chão",
+    "fogo de chao",
+    "benihana",
+    "cheesecake factory",
+)
+_CUISINE_OR_VIBE_HINTS = (
+    "brasserie",
+    "tasting menu",
+    "omakase",
+    "bbq",
+    "barbecue",
+    "cocktail bar",
+    "wine bar",
+    "jazz club",
+    "jazz bar",
+    "speakeasy",
+    "bistro",
+    "steakhouse",
+    "rooftop bar",
+)
+_PRICE_VALUE_HINT = re.compile(
+    r"(\$\s?\d{2,3}|under\s+\$\s?\d{2,3}|prix fixe|value|good value|affordable|splurge|budget|under\s+\d{2,3})",
+    re.IGNORECASE,
+)
+_AWARD_HINT = re.compile(r"(michelin|james beard|award-winning|award winning|starred)", re.IGNORECASE)
+_LUXURY_HINT = re.compile(r"(luxury|fine dining|chef'?s tasting|degustation)", re.IGNORECASE)
 
 
 def _confidence_from_age(fetched_at: str) -> str:
@@ -908,47 +940,111 @@ def _context_type_hint(snippet: str) -> Optional[str]:
     if "cocktail bar" in low:
         return "cocktail bar"
     if "jazz bar" in low or "jazz club" in low:
-        return "jazz spot"
+        return "jazz club"
+    if "brasserie" in low:
+        return "French brasserie"
+    if "tasting menu" in low:
+        return "tasting-menu destination"
+    if "omakase" in low:
+        return "omakase restaurant"
     if "michelin" in low:
         return "Michelin dining"
     if "hotel" in low:
         return "hotel"
-    if "restaurant" in low:
-        return "restaurant"
     return None
+
+
+def _query_explicitly_requests_chains(user_query: str) -> bool:
+    low = (user_query or "").lower()
+    if "chain" in low:
+        return True
+    return any(name in low for name in _CHAIN_RESTAURANT_NAMES)
+
+
+def _is_common_chain_venue(name: str) -> bool:
+    low = (name or "").lower()
+    return any(chain in low for chain in _CHAIN_RESTAURANT_NAMES)
+
+
+def _chain_penalty(name: str, user_query: str) -> float:
+    if _query_explicitly_requests_chains(user_query):
+        return 0.0
+    if _is_common_chain_venue(name):
+        return 0.18
+    return 0.0
 
 
 def _build_extracted_reason(
     *,
+    candidate_name: str,
     source_title: str,
     intent: str,
+    destination: str,
     neighborhood: Optional[str],
     snippet: str,
     quality_tier: str,
-) -> str:
-    category = _result_category_label(intent)
-    match_phrase = {
-        INTENT_NIGHTLIFE: "a nightlife-focused search",
-        INTENT_HIDDEN_GEMS: "a hidden-gem style search",
-        INTENT_LUXURY_VALUE: "a luxury-value search",
-        INTENT_ROMANTIC: "a romantic outing",
-        INTENT_MICHELIN_RESTAURANTS: "a fine-dining/Michelin search",
-        INTENT_ATTRACTIONS: "a sightseeing plan",
-        INTENT_PLAN_DAY: "a day itinerary",
-        INTENT_HOTELS: "a stay-focused search",
-    }.get(intent, "this search")
-    reason = f"Worth considering for {match_phrase}"
+) -> Optional[str]:
+    low_snippet = (snippet or "").lower()
+    pieces: List[str] = []
+
     type_hint = _context_type_hint(snippet)
+    has_cuisine_or_vibe = False
     if type_hint:
-        reason = f"{reason}; it is described as a {type_hint} {category}."
+        pieces.append(type_hint)
+        has_cuisine_or_vibe = True
     else:
-        reason = f"{reason}; it appears to be a {category}."
-    if neighborhood:
-        reason = f"{reason} Located around {neighborhood}."
+        vibe_hint = next((kw for kw in _CUISINE_OR_VIBE_HINTS if kw in low_snippet), None)
+        if vibe_hint:
+            pieces.append(vibe_hint)
+            has_cuisine_or_vibe = True
+
+    price_or_value = bool(_PRICE_VALUE_HINT.search(snippet or ""))
+    if price_or_value:
+        pieces.append("price/value detail")
+
+    award_signal = bool(_AWARD_HINT.search(snippet or ""))
+    if award_signal:
+        pieces.append("award-level recognition")
+
+    luxury_signal = bool(_LUXURY_HINT.search(snippet or ""))
+    if luxury_signal and intent in {INTENT_LUXURY_VALUE, INTENT_MICHELIN_RESTAURANTS, INTENT_ROMANTIC}:
+        pieces.append("fine-dining signal")
+
+    intent_match_signal = False
+    if intent == INTENT_NIGHTLIFE and any(kw in low_snippet for kw in ("cocktail", "nightlife", "bar", "jazz", "club")):
+        intent_match_signal = True
+    if intent in {INTENT_LUXURY_VALUE, INTENT_MICHELIN_RESTAURANTS} and (
+        price_or_value or award_signal or luxury_signal
+    ):
+        intent_match_signal = True
+
+    cleaned_neighborhood = (neighborhood or "").strip(" .,-")
+    if destination and cleaned_neighborhood and cleaned_neighborhood.lower() == destination.lower():
+        cleaned_neighborhood = ""
+    has_specific_detail = bool(has_cuisine_or_vibe or cleaned_neighborhood or price_or_value or award_signal or intent_match_signal)
+    if not has_specific_detail:
+        return None
+
+    if intent == INTENT_LUXURY_VALUE and not (price_or_value or award_signal or luxury_signal or quality_tier == "editorial"):
+        return None
+    if intent == INTENT_MICHELIN_RESTAURANTS and not (award_signal or luxury_signal or quality_tier == "editorial"):
+        return None
+
+    lead = f"{candidate_name} stands out"
+    if type_hint:
+        lead = f"{candidate_name} is noted as a {type_hint}"
+    reason = lead
+    if cleaned_neighborhood:
+        reason = f"{reason} in {cleaned_neighborhood}"
+    if price_or_value:
+        reason = f"{reason} with clear value or pricing context"
+    if award_signal:
+        reason = f"{reason} and recognized by Michelin/awards"
+    reason = f"{reason}."
     if source_title:
-        reason = f"{reason} Supported by coverage in {source_title}."
+        reason = f"{reason} Backed by coverage in {source_title}."
     if quality_tier == "weak":
-        reason = f"{reason} Source context is limited, so verify key details before booking."
+        reason = f"{reason} Verify current reviews and value before booking."
     return reason
 
 
@@ -1187,13 +1283,18 @@ def normalize_hits(
                     cand_neighborhood = _extract_neighborhood(hit.snippet, destination)
                     quality_tier = _source_quality_tier(hit.url, title, hit.snippet, classification)
                     cand_summary = _build_extracted_reason(
+                        candidate_name=normalized_candidate,
                         source_title=title,
                         intent=intent,
+                        destination=destination,
                         neighborhood=cand_neighborhood,
                         snippet=hit.snippet,
                         quality_tier=quality_tier,
                     )
+                    if not cand_summary:
+                        continue
                     extracted_ai_score = _extracted_ai_score(quality_tier)
+                    extracted_ai_score = max(0.0, extracted_ai_score - _chain_penalty(normalized_candidate, user_query))
                     if is_restaurant_intent and len(restaurants) < max_per_kind:
                         cand_cuisine = "Cocktail Bar" if intent == INTENT_NIGHTLIFE else "Restaurant"
                         cand_tags: List[str] = []
@@ -1295,7 +1396,7 @@ def normalize_hits(
                     last_verified_at=hit.fetched_at,
                     confidence=confidence,
                     tags=tags,
-                    ai_score=1.0,
+                    ai_score=max(0.0, 1.0 - _chain_penalty(title, user_query)),
                 )
             )
         elif is_attraction_intent and len(attractions) < max_per_kind:
