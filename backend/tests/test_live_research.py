@@ -33,9 +33,14 @@ from app.services.live_research import (
     LiveResearchService,
     LiveSearchHit,
     StubLiveSearchProvider,
+    VerificationResult,
     _NoopProvider,
     _TTLCache,
+    _VERIFICATION_CACHE,
+    _build_verification_query,
+    _check_verification_hits,
     _extract_venue_names_from_text,
+    _is_obvious_non_venue,
     _validate_venue_candidate,
     normalize_hits,
     reset_global_cache,
@@ -926,3 +931,317 @@ class TestTTLCache:
         assert cache.get("k") == "v"
         clock[0] = 1061.0
         assert cache.get("k") is None
+
+
+# ── Verify-before-add pipeline ───────────────────────────────────────────────
+
+def _make_verifying_provider(
+    initial_hits: list,
+    verified_by_name: dict,  # {"CandidateName": LiveSearchHit or None}
+) -> MagicMock:
+    """Provider that returns initial_hits for broad queries and targeted hits
+    for verification queries (which contain the candidate name in quotes)."""
+    provider = MagicMock()
+    provider.name = "verifying-stub"
+    provider.available = True
+
+    def _search(query: str, *, max_results: int = 10) -> list:
+        for name, hit in verified_by_name.items():
+            if f'"{name}"' in query:
+                return [hit] if hit else []
+        return initial_hits
+
+    provider.search.side_effect = _search
+    return provider
+
+
+class TestIsObviousNonVenue:
+    def test_rejects_united_states(self):
+        assert _is_obvious_non_venue("United States", "Chicago") is True
+
+    def test_rejects_north_america(self):
+        assert _is_obvious_non_venue("North America", "Chicago") is True
+
+    def test_rejects_launch_special(self):
+        assert _is_obvious_non_venue("Launch Special", "Chicago") is True
+
+    def test_rejects_summer_guide(self):
+        assert _is_obvious_non_venue("Summer Guide", "Chicago") is True
+
+    def test_rejects_destination_explore_pattern(self):
+        assert _is_obvious_non_venue("Chicago Explore", "Chicago") is True
+
+    def test_rejects_destination_guide_pattern(self):
+        assert _is_obvious_non_venue("Chicago Guide", "Chicago") is True
+
+    def test_rejects_name_equal_to_destination(self):
+        assert _is_obvious_non_venue("Chicago", "Chicago") is True
+
+    def test_allows_real_venue_names(self):
+        assert _is_obvious_non_venue("Kumiko", "Chicago") is False
+        assert _is_obvious_non_venue("The Aviary", "Chicago") is False
+        assert _is_obvious_non_venue("Green Mill", "Chicago") is False
+        assert _is_obvious_non_venue("Billy Sunday", "Chicago") is False
+
+    def test_empty_name_rejected(self):
+        assert _is_obvious_non_venue("", "Chicago") is True
+
+
+class TestCheckVerificationHits:
+    def test_yelp_url_verifies_candidate(self):
+        hits = [
+            _hit("Kumiko", "https://www.yelp.com/biz/kumiko-chicago", "Cocktail bar at 630 W Lake St, Chicago, IL.")
+        ]
+        vr = _check_verification_hits("Kumiko", "Chicago", hits)
+        assert vr.verified is True
+        assert vr.source_url == "https://www.yelp.com/biz/kumiko-chicago"
+
+    def test_tripadvisor_url_verifies_candidate(self):
+        hits = [
+            _hit("The Aviary", "https://www.tripadvisor.com/restaurant-aviary", "Bar in West Loop, Chicago.")
+        ]
+        vr = _check_verification_hits("The Aviary", "Chicago", hits)
+        assert vr.verified is True
+
+    def test_address_plus_city_verifies_candidate(self):
+        hits = [
+            _hit("Billy Sunday", "https://example.com/billy-sunday", "Bar at 3143 W Logan Blvd, Chicago, IL.")
+        ]
+        vr = _check_verification_hits("Billy Sunday", "Chicago", hits)
+        assert vr.verified is True
+
+    def test_no_match_for_candidate_name_not_verified(self):
+        hits = [
+            _hit("Unrelated Spot", "https://yelp.com/unrelated", "A bar in Chicago.")
+        ]
+        vr = _check_verification_hits("Kumiko", "Chicago", hits)
+        assert vr.verified is False
+
+    def test_empty_hits_not_verified(self):
+        vr = _check_verification_hits("Kumiko", "Chicago", [])
+        assert vr.verified is False
+
+    def test_article_url_without_address_not_verified(self):
+        # A listicle URL and no address = not enough for verification
+        hits = [
+            _hit("Best Bars in Chicago", "https://example.com/best-bars", "Kumiko is a great bar.")
+        ]
+        vr = _check_verification_hits("Kumiko", "Chicago", hits)
+        assert vr.verified is False
+
+
+class TestVerifyBeforeAdd:
+    """Tests for the full verify-before-add pipeline via LiveResearchService."""
+
+    def setup_method(self):
+        reset_global_cache()
+
+    def _svc(self, provider) -> LiveResearchService:
+        return LiveResearchService(
+            provider=provider,
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+        )
+
+    def test_obvious_non_venue_names_never_become_cards(self):
+        """United States / Launch Special / Chicago Explore are pre-filtered."""
+        article_hit = _hit(
+            "Chicago Nightlife 2026",
+            "https://example.com/guide",
+            "1. United States — national overview. 2. Launch Special — promotion. "
+            "3. Chicago Explore — discover the city.",
+        )
+        provider = _make_verifying_provider([article_hit], {})
+        result = self._svc(provider).fetch(
+            intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars"
+        )
+        names = [r.name for r in result.restaurants]
+        assert "United States" not in names
+        assert "Launch Special" not in names
+        assert "Chicago Explore" not in names
+        # Article still appears as research source
+        assert len(result.research_sources) >= 1
+
+    def test_article_alone_does_not_create_addable_card(self):
+        """Candidate extracted from article is NOT addable when verification fails."""
+        article_hit = _hit(
+            "Best Cocktail Bars in Chicago 2026",
+            "https://example.com/best-bars",
+            "1. Kumiko — West Loop speakeasy bar in Chicago.",
+        )
+        # Verification search returns nothing useful
+        provider = _make_verifying_provider([article_hit], {"Kumiko": None})
+        result = self._svc(provider).fetch(
+            intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars"
+        )
+        assert result.restaurants == []
+        # Article still appears as research source
+        assert len(result.research_sources) >= 1
+
+    def test_candidate_only_becomes_addable_after_verification_hit(self):
+        """Same candidate: unverified → no card; verified → card present."""
+        article_hit = _hit(
+            "Best Bars in Chicago",
+            "https://example.com/bars",
+            "1. Kumiko — West Loop speakeasy bar in Chicago.",
+        )
+        verify_hit = _hit(
+            "Kumiko",
+            "https://www.yelp.com/biz/kumiko-chicago",
+            "Cocktail bar at 630 W Lake St, Chicago, IL.",
+        )
+
+        # Without verification
+        no_verify_provider = _make_verifying_provider([article_hit], {"Kumiko": None})
+        result_no = self._svc(no_verify_provider).fetch(
+            intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars"
+        )
+        assert result_no.restaurants == []
+
+        # With verification
+        yes_verify_provider = _make_verifying_provider([article_hit], {"Kumiko": verify_hit})
+        result_yes = self._svc(yes_verify_provider).fetch(
+            intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars"
+        )
+        assert any(r.name == "Kumiko" for r in result_yes.restaurants)
+
+    def test_verified_venue_has_source_url_and_reason(self):
+        """Verified card carries the verification source URL and a summary."""
+        article_hit = _hit(
+            "Best Bars in Chicago",
+            "https://example.com/bars",
+            "1. Kumiko — West Loop speakeasy bar in Chicago.",
+        )
+        verify_hit = _hit(
+            "Kumiko",
+            "https://www.yelp.com/biz/kumiko-chicago",
+            "Cocktail bar at 630 W Lake St, Chicago, IL.",
+        )
+        provider = _make_verifying_provider([article_hit], {"Kumiko": verify_hit})
+        result = self._svc(provider).fetch(
+            intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars"
+        )
+        card = next((r for r in result.restaurants if r.name == "Kumiko"), None)
+        assert card is not None
+        assert card.source_url is not None
+        assert card.summary is not None
+        assert card.verified_place is True
+
+    def test_unverified_candidate_not_in_venue_cards(self):
+        """Candidates whose verification returns no useful hits are excluded."""
+        article_hit = _hit(
+            "Top Chicago Bars",
+            "https://example.com/top-bars",
+            "1. Meadowlark — Logan Square cocktail bar in Chicago.",
+        )
+        # No useful verification hit → empty list
+        provider = _make_verifying_provider([article_hit], {"Meadowlark": None})
+        result = self._svc(provider).fetch(
+            intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars"
+        )
+        assert all(r.name != "Meadowlark" for r in result.restaurants)
+
+    def test_kumiko_aviary_green_mill_pass_after_verification(self):
+        """Established venues still become addable cards when verification succeeds."""
+        article_hit = _hit(
+            "Best Cocktail Bars in Chicago 2026",
+            "https://example.com/best-bars",
+            "1. Kumiko — West Loop speakeasy. "
+            "2. The Aviary — Avant-garde cocktails. "
+            "3. Green Mill — jazz bar in Uptown.",
+        )
+        verified_names = {
+            "Kumiko": _hit("Kumiko", "https://www.yelp.com/biz/kumiko", "Cocktail bar at 630 W Lake St, Chicago, IL."),
+            "The Aviary": _hit("The Aviary", "https://www.tripadvisor.com/aviary", "Bar in West Loop, Chicago."),
+            "Green Mill": _hit("Green Mill Cocktail Lounge", "https://www.yelp.com/biz/green-mill", "Jazz club at 4802 N Broadway Ave, Chicago, IL."),
+        }
+        provider = _make_verifying_provider([article_hit], verified_names)
+        result = self._svc(provider).fetch(
+            intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars"
+        )
+        names = [r.name for r in result.restaurants]
+        assert "Kumiko" in names
+        assert "The Aviary" in names
+        assert "Green Mill" in names
+        for r in result.restaurants:
+            assert r.verified_place is True
+
+    def test_verified_venue_uses_verification_source_url_not_article_url(self):
+        """Card source_url should point to the verification hit, not the article."""
+        article_hit = _hit(
+            "Best Bars Chicago",
+            "https://example.com/article",
+            "1. Kumiko — West Loop speakeasy bar in Chicago.",
+        )
+        verify_hit = _hit(
+            "Kumiko",
+            "https://www.yelp.com/biz/kumiko-chicago",
+            "Cocktail bar at 630 W Lake St, Chicago, IL.",
+        )
+        provider = _make_verifying_provider([article_hit], {"Kumiko": verify_hit})
+        result = self._svc(provider).fetch(
+            intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars"
+        )
+        card = next((r for r in result.restaurants if r.name == "Kumiko"), None)
+        assert card is not None
+        assert card.source_url == "https://www.yelp.com/biz/kumiko-chicago"
+
+    def test_verification_results_cached(self):
+        """Second fetch with same params uses result cache; provider not called again."""
+        article_hit = _hit(
+            "Best Bars Chicago",
+            "https://example.com/bars",
+            "1. Kumiko — West Loop speakeasy bar in Chicago.",
+        )
+        verify_hit = _hit(
+            "Kumiko",
+            "https://www.yelp.com/biz/kumiko-chicago",
+            "Cocktail bar at 630 W Lake St, Chicago, IL.",
+        )
+        provider = _make_verifying_provider([article_hit], {"Kumiko": verify_hit})
+        svc = LiveResearchService(
+            provider=provider,
+            cache=_TTLCache(ttl_seconds=1800),       # result cache enabled
+            verification_cache=_TTLCache(ttl_seconds=1800),
+            enabled=True,
+        )
+        # First fetch — populates both result and verification caches.
+        r1 = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        assert r1.cached is False
+        call_count_after_first = provider.search.call_count
+        assert call_count_after_first >= 2  # initial + verification query
+
+        # Second fetch with identical params — must hit the result cache.
+        r2 = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        assert r2.cached is True
+        assert provider.search.call_count == call_count_after_first  # no new calls
+
+    def test_direct_venue_hit_is_trip_addable_without_verification(self):
+        """A direct venue_place hit is always addable (verified_place=True)."""
+        direct_hit = _hit(
+            "Gus' Sip & Dip",
+            "https://ex.com/gus",
+            "Cocktail bar at 123 N Clark St in River North, Chicago.",
+        )
+        provider = _make_verifying_provider([direct_hit], {})
+        result = self._svc(provider).fetch(
+            intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars"
+        )
+        assert len(result.restaurants) == 1
+        assert result.restaurants[0].name == "Gus' Sip & Dip"
+        assert result.restaurants[0].verified_place is True
+
+    def test_fallback_to_research_sources_when_no_verified_venues(self):
+        """When no candidates verify, only research_sources are returned."""
+        article_hit = _hit(
+            "Chicago Bar Guide 2026",
+            "https://example.com/guide",
+            "1. Meadowlark — Logan Square cocktail bar in Chicago.",
+        )
+        provider = _make_verifying_provider([article_hit], {"Meadowlark": None})
+        result = self._svc(provider).fetch(
+            intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars"
+        )
+        assert result.restaurants == []
+        assert result.research_sources  # Article still appears as background source

@@ -75,6 +75,7 @@ class UnifiedRestaurantResult(BaseModel):
     confidence: Optional[Literal["high", "medium", "low", "unknown"]] = None
     ai_score: Optional[float] = None
     tags: List[str] = []
+    verified_place: Optional[bool] = None
 
 
 class UnifiedAttractionResult(BaseModel):
@@ -92,6 +93,7 @@ class UnifiedAttractionResult(BaseModel):
     confidence: Optional[Literal["high", "medium", "low", "unknown"]] = None
     ai_score: Optional[float] = None
     tags: List[str] = []
+    verified_place: Optional[bool] = None
 
 
 class UnifiedHotelResult(BaseModel):
@@ -109,6 +111,7 @@ class UnifiedHotelResult(BaseModel):
     reason: Optional[str] = None
     ai_score: Optional[float] = None
     tags: List[str] = []
+    verified_place: Optional[bool] = None
 
 
 class UnifiedResearchSourceResult(BaseModel):
