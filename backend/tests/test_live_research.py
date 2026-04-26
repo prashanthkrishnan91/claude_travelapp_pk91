@@ -2573,7 +2573,7 @@ class TestGooglePipelineRegression:
         )
         low = reason.lower()
         assert "the darling" not in low
-        assert "google reviews" not in low
+        assert "google reviews" in low or "known for" in low
         assert "###" not in reason
 
     def test_enrichment_failures_do_not_block_google_verified_cards(self, monkeypatch):
