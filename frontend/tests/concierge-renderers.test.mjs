@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const conciergeResponse = readFileSync(new URL('../src/components/concierge/ConciergeResponse.tsx', import.meta.url), 'utf8');
+const conciergeTypes = readFileSync(new URL('../src/lib/concierge/types.ts', import.meta.url), 'utf8');
 const tripAdviceView = readFileSync(new URL('../src/components/concierge/TripAdviceView.tsx', import.meta.url), 'utf8');
 const placeRecommendationsView = readFileSync(new URL('../src/components/concierge/PlaceRecommendationsView.tsx', import.meta.url), 'utf8');
 
 test('ConciergeResponse dispatches by response_type/responseType and has unsupported fallback', () => {
-  assert.match(conciergeResponse, /response_type/);
-  assert.match(conciergeResponse, /responseType/);
+  assert.match(conciergeTypes, /response_type/);
+  assert.match(conciergeTypes, /responseType/);
+  assert.match(conciergeTypes, /normalizeConciergeResponse/);
   assert.match(conciergeResponse, /PlaceRecommendationsView/);
   assert.match(conciergeResponse, /TripAdviceView/);
   assert.match(conciergeResponse, /UnsupportedView/);
