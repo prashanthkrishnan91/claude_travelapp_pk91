@@ -188,21 +188,6 @@ function footerSourceLabel(msg: Message): string | null {
   return sourceLabel(msg.sourceStatus ?? "", msg.intent, msg.liveProvider, msg.cached);
 }
 
-function formatVerifiedAt(iso?: string): string | null {
-  if (!iso) return null;
-  const dt = new Date(iso);
-  if (Number.isNaN(dt.getTime())) return null;
-  const days = Math.max(0, Math.round((Date.now() - dt.getTime()) / (24 * 60 * 60 * 1000)));
-  // Tavily / Brave / Serper sources only show "source checked …" — never a
-  // same-day freshness claim, which is reserved for Google Places.
-  if (days < 1) return "source checked";
-  if (days === 1) return "source checked 1 day ago";
-  if (days < 30) return `source checked ${days} days ago`;
-  const months = Math.round(days / 30);
-  if (months < 12) return `source checked ${months} mo ago`;
-  return `source checked ${Math.round(months / 12)} yr ago`;
-}
-
 function cardKey(name: string, dayId?: string): string {
   return `${name.trim().toLowerCase()}::${dayId ?? "trip"}`;
 }
@@ -226,20 +211,6 @@ function splitReason(text?: string): { short: string } {
   return {
     short: first || "Great fit for this trip.",
   };
-}
-
-function dedupeTagsCaseInsensitive(tags: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  tags.forEach((tag) => {
-    const clean = tag.trim().replace(/\s+/g, " ");
-    if (!clean) return;
-    const key = clean.toLowerCase();
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push(clean);
-  });
-  return out;
 }
 
 function containsAddressSignal(text: string): boolean {
@@ -268,31 +239,56 @@ function sanitizeWhyPick(
   return reason;
 }
 
-function pickCardReason(
-  card: { primaryReason?: string | null; summary?: string; description?: string; reason?: string; evidence?: string[]; sourceEvidence?: { sourceReason?: string | null; sourceEvidence?: string | null; mentionCount?: number } | null },
-): string | undefined {
-  return card.primaryReason ?? "Strong fit for this trip based on trusted place signals.";
+type DisplayCard = {
+  primaryReason?: string | null;
+  rating?: number;
+  reviewCount?: number;
+  neighborhood?: string;
+  address?: string;
+  supportingDetails?: {
+    rating?: string | null;
+    reviewCount?: number | null;
+    address?: string | null;
+    metaLine?: string | null;
+    whyPick?: string | null;
+    conciergeNote?: string | null;
+    categoryLabel?: string | null;
+  } | null;
+};
+
+// Pick the user-facing "Why this pick" sentence. Backend already produces a
+// clean, category-aware reason; we only fall back if it's missing entirely.
+function pickCardReason(card: DisplayCard): string | undefined {
+  return (
+    card.supportingDetails?.whyPick
+    ?? card.primaryReason
+    ?? "A strong pick based on guest feedback, location, and relevance to this request."
+  );
 }
 
-function pickCardDetail(
-  card: { rating?: number; reviewCount?: number; neighborhood?: string; address?: string; evidenceCount?: number; bestForTags?: string[]; supportingDetails?: { rating?: string | null; reviewCount?: number | null; address?: string | null; editorialMentions?: number | null; tags?: string[] } | null },
-): string[] {
+// Compose the subheader/meta line: `★ 4.8 (9,483 reviews) · Address`.
+// Address is intentionally *included* here so the card has one consolidated
+// info line and the expanded view doesn't need to repeat it.
+function pickCardMeta(card: DisplayCard): string[] {
   const details = card.supportingDetails;
-  const rows: string[] = [];
+  if (details?.metaLine) return [details.metaLine];
   const rating = details?.rating ?? (typeof card.rating === "number" ? card.rating.toFixed(1) : undefined);
   const reviewCount = details?.reviewCount ?? card.reviewCount;
-  if (rating) {
-    rows.push(`Rating: ${rating}${reviewCount ? ` · ${Number(reviewCount).toLocaleString()} Google reviews` : ""}`);
-  }
   const address = details?.address ?? card.address ?? card.neighborhood;
-  if (address) rows.push(`Address: ${address}`);
-  const mentions = details?.editorialMentions ?? card.evidenceCount;
-  if (typeof mentions === "number" && mentions > 0) {
-    rows.push(`Evidence: Mentioned in ${mentions} editorial source${mentions === 1 ? "" : "s"}`);
+  const parts: string[] = [];
+  if (rating) {
+    parts.push(reviewCount ? `★ ${rating} (${Number(reviewCount).toLocaleString()} reviews)` : `★ ${rating}`);
   }
-  const tags = dedupeTagsCaseInsensitive((details?.tags ?? card.bestForTags ?? []).filter(Boolean));
-  if (tags.length > 0) rows.push(`Source fit: ${tags.slice(0, 3).join(" · ")}`);
-  return rows;
+  if (address) parts.push(address);
+  return parts.length > 0 ? [parts.join(" · ")] : [];
+}
+
+// Expanded view: only show the optional concierge note. Backend metadata
+// (evidence counts, source badges, provider names, verification scores) is
+// never surfaced on the card.
+function pickCardDetail(card: DisplayCard): string[] {
+  const note = card.supportingDetails?.conciergeNote;
+  return note ? [note] : [];
 }
 
 interface OperationalBadgeCard {
@@ -886,29 +882,22 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                           const extraDetail = pickCardDetail(place);
                           const isClosed = hasClosedSignal(place);
                           const isOperational = !isClosed && canShowGoogleVerifiedBadge(place);
-                          const sourceChecked = formatVerifiedAt(place.lastVerifiedAt);
-                          const reviewCount = place.supportingDetails?.reviewCount
-                            ?? ("reviewCount" in place ? place.reviewCount : undefined);
-                          const meta = [
-                            place.rating ? `★ ${place.rating}` : "",
-                            reviewCount ? `${Number(reviewCount).toLocaleString()} reviews` : "",
-                            typeof place.evidenceCount === "number" && place.evidenceCount > 0 ? `${place.evidenceCount} editorial mention${place.evidenceCount === 1 ? "" : "s"}` : "",
-                            sourceChecked ?? "",
-                          ].filter(Boolean);
+                          const meta = pickCardMeta(place);
+                          const displayCategory = place.supportingDetails?.categoryLabel ?? category;
 
                           return (
                             <ConciergeCard
                               key={`${place.name}-${key}`}
                               title={place.name}
-                              category={category}
+                              category={displayCategory}
                               meta={meta}
-                              tags={dedupeTagsCaseInsensitive([...(place.tags ?? []), ...(place.bestForTags ?? []), ...(place.sourceBadges ?? [])])}
+                              tags={[]}
                               reason={reason}
                               extraDetail={extraDetail}
                               mapLink={place.mapsLink}
                               sourceLink={sourceLink}
                               isOperational={isOperational}
-                              verifiedAt={sourceChecked}
+                              verifiedAt={null}
                               added={addedItems.has(key)}
                               adding={addingItems.has(key)}
                               canAdd={!isClosed}
@@ -939,7 +928,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                                 reason={s.summary}
                                 sourceLink={s.sourceUrl}
                                 isOperational={false}
-                                verifiedAt={formatVerifiedAt(s.lastVerifiedAt)}
+                                verifiedAt={null}
                                 added={false}
                                 adding={false}
                                 canAdd={false}

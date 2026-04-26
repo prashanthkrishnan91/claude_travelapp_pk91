@@ -1204,6 +1204,10 @@ export interface UnifiedRestaurantResult {
     address?: string | null;
     editorialMentions?: number | null;
     tags?: string[];
+    metaLine?: string | null;
+    whyPick?: string | null;
+    conciergeNote?: string | null;
+    categoryLabel?: string | null;
   } | null;
 }
 
@@ -1239,6 +1243,10 @@ export interface UnifiedAttractionResult {
     address?: string | null;
     editorialMentions?: number | null;
     tags?: string[];
+    metaLine?: string | null;
+    whyPick?: string | null;
+    conciergeNote?: string | null;
+    categoryLabel?: string | null;
   } | null;
 }
 
@@ -1274,6 +1282,10 @@ export interface UnifiedHotelResult {
     address?: string | null;
     editorialMentions?: number | null;
     tags?: string[];
+    metaLine?: string | null;
+    whyPick?: string | null;
+    conciergeNote?: string | null;
+    categoryLabel?: string | null;
   } | null;
 }
 
