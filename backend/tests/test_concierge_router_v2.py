@@ -97,7 +97,11 @@ def test_contract_round_trip_for_all_variants():
         sources=[],
         warnings=[],
     )
-    advice_payload = TripAdviceResponse(response="Use points when cpp is higher than your cash benchmark.")
+    advice_payload = TripAdviceResponse(
+        response="Use points when cpp is higher than your cash benchmark.",
+        advice_sections=[{"heading": "Framework", "body_markdown": "Use CPP math."}],
+        citations=[{"label": "Guide", "url": "https://example.com"}],
+    )
     unsupported_payload = UnsupportedResponse(code="low_confidence", message="Needs clarification")
 
     for payload in (place_payload, advice_payload, unsupported_payload):
@@ -135,9 +139,44 @@ def test_concierge_search_integration_returns_typed_response(prompt: str, expect
     mock_service = MagicMock()
     mock_service.search.return_value = fake_search_response
 
-    with patch("app.routes.ai.get_settings", return_value=SimpleNamespace(concierge_router_v2=True, concierge_router_v2_confidence_threshold=0.55)), patch(
+    with patch("app.routes.ai.get_settings", return_value=SimpleNamespace(concierge_router_v2=True, concierge_router_v2_confidence_threshold=0.55, trip_advice_builder_enabled=True)), patch(
         "app.routes.ai.ConciergeService", return_value=mock_service
     ):
         result = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
 
     assert result.response_type == expected
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "points vs cash ideas",
+        "should I use miles or cash for business class to Tokyo",
+        "compare points transfer partners",
+        "card strategy for award flights using miles",
+        "booking timing for award flights with points",
+    ],
+)
+def test_trip_advice_prompts_return_structured_sections(prompt: str):
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query=prompt)
+    mock_service = MagicMock()
+
+    with patch("app.routes.ai.get_settings", return_value=SimpleNamespace(concierge_router_v2=True, concierge_router_v2_confidence_threshold=0.55, trip_advice_builder_enabled=True)):
+        result = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+
+    assert result.response_type == "trip_advice"
+    assert len(result.advice_sections) >= 2
+    assert len(result.advice_sections) <= 4
+    assert all(section.heading.strip() for section in result.advice_sections)
+    assert all(section.body_markdown.strip() for section in result.advice_sections)
+
+
+def test_trip_advice_disabled_flag_returns_unsupported():
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="points vs cash ideas")
+    mock_service = MagicMock()
+
+    with patch("app.routes.ai.get_settings", return_value=SimpleNamespace(concierge_router_v2=True, concierge_router_v2_confidence_threshold=0.55, trip_advice_builder_enabled=False)):
+        result = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+
+    assert result.response_type == "unsupported"
+    assert result.code == "trip_advice_disabled"

@@ -11,9 +11,23 @@ class PlaceRecommendationsResponse(ConciergeSearchResponse):
     response_type: Literal["place_recommendations"] = "place_recommendations"
 
 
+
+
+class AdviceSection(BaseModel):
+    heading: str
+    body_markdown: str
+
+
+class AdviceCitation(BaseModel):
+    label: str
+    url: str
+
+
 class TripAdviceResponse(BaseModel):
     response_type: Literal["trip_advice"] = "trip_advice"
     response: str
+    advice_sections: List[AdviceSection] = Field(default_factory=list)
+    citations: List[AdviceCitation] = Field(default_factory=list)
     suggestions: List[Suggestion] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 

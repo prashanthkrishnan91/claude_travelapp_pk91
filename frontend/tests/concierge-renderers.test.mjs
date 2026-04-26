@@ -29,3 +29,12 @@ test('Snapshot markers for all three dedicated views are present', () => {
   const unsupportedView = readFileSync(new URL('../src/components/concierge/UnsupportedView.tsx', import.meta.url), 'utf8');
   assert.match(unsupportedView, /aria-label="unsupported response"/);
 });
+
+
+test('TripAdviceView renders markdown sections, tables, and citations footer', () => {
+  assert.match(tripAdviceView, /parseMarkdown/);
+  assert.match(tripAdviceView, /<table/);
+  assert.match(tripAdviceView, /response\.adviceSections/);
+  assert.match(tripAdviceView, /response\.citations/);
+  assert.doesNotMatch(tripAdviceView, /Add to Trip/);
+});

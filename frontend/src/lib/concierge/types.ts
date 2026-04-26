@@ -31,9 +31,23 @@ export interface PlaceRecommendationsResponse {
   warnings: string[];
 }
 
+
+
+export interface AdviceSection {
+  heading: string;
+  bodyMarkdown: string;
+}
+
+export interface AdviceCitation {
+  label: string;
+  url: string;
+}
+
 export interface TripAdviceResponse {
   responseType: "trip_advice";
   response: string;
+  adviceSections: AdviceSection[];
+  citations: AdviceCitation[];
   suggestions: ConciergeSuggestion[];
   metadata: Record<string, unknown>;
 }
