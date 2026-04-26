@@ -44,7 +44,10 @@ from app.services.live_research import (
     _extract_venue_names_from_text,
     _final_hard_filter_closed_venues,
     _is_obvious_non_venue,
+    _reason_guard,
+    _sanitize_reason_evidence_text,
     _validate_venue_candidate,
+    build_place_reason,
     normalize_hits,
     reset_global_cache,
     select_default_provider,
@@ -916,6 +919,19 @@ class TestConciergeWithLiveResearch:
         assert result.restaurants  # sample bars
         assert all("verify hours" in (r.summary or "").lower() for r in result.restaurants)
 
+    def test_nightlife_with_require_google_does_not_fallback_to_sample(self, monkeypatch):
+        svc = self._make_concierge("Chicago", hits=[])
+        monkeypatch.setattr(svc._settings, "research_engine_require_google_verification", True)
+        with patch("app.services.concierge.SearchService") as MockSearch, \
+             patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            mock_search = MagicMock()
+            MockSearch.return_value = mock_search
+            result = svc.search(FAKE_TRIP_ID, "Nearby cocktail bars", FAKE_USER_ID)
+        assert result.source_status == SOURCE_UNAVAILABLE
+        assert result.restaurants == []
+        assert any("google verification" in (w or "").lower() for w in result.warnings)
+        mock_search.search_restaurants.assert_not_called()
+
     def test_unsupported_city_nightlife_with_no_live_returns_unavailable(self):
         svc = self._make_concierge("Paris", hits=[])  # sample only supports Chicago
         with patch("app.services.concierge.SearchService") as MockSearch, \
@@ -1442,7 +1458,7 @@ class TestVerifyBeforeAdd:
         assert len(result.restaurants) == 1
         card = result.restaurants[0]
         assert card.summary and "Hotel lounge" not in card.summary
-        assert "Google rating" in card.summary
+        assert "Google 4.7★" in card.summary
         assert card.maps_link == "https://maps.google.com/?cid=gp-kumiko"
         assert card.type == "verified_place"
 
@@ -1949,8 +1965,8 @@ class TestSourceEvidenceInSerializedJSON:
         json_str = card.model_dump_json()
         assert '"source_evidence"' in json_str
 
-    def test_source_reason_from_article_text_becomes_card_summary(self):
-        """source_evidence.source_reason must appear in the card summary when present."""
+    def test_source_reason_from_article_text_stays_sanitized(self):
+        """source evidence remains structured while summary stays deterministic and clean."""
         article = _hit(
             "Best Bars in Chicago",
             "https://example.com/bars",
@@ -1974,9 +1990,11 @@ class TestSourceEvidenceInSerializedJSON:
         card = next((r for r in result.restaurants if r.name == "Kumiko"), None)
         assert card is not None
         ev = card.source_evidence
+        assert "####" not in (card.summary or "")
+        assert "[...]" not in (card.summary or "")
         if ev and ev.source_reason:
-            # When source_reason was extracted, the card summary should embed it.
-            assert ev.source_reason.lower()[:15] in (card.summary or "").lower()
+            assert "speakeasy" in ev.source_reason.lower()
+        assert all("http" not in (entry or "").lower() for entry in (card.evidence or []))
 
 
 class TestBannedGenericPhrases:
@@ -2320,11 +2338,252 @@ class TestGooglePipelineRegression:
         assert all("22 best cocktail bars" not in (r.name or "").lower() for r in result.restaurants)
         assert any("22 best cocktail bars" in (s.title or "").lower() for s in result.research_sources)
 
+    def test_fail_closed_when_google_required_and_unavailable(self, monkeypatch):
+        monkeypatch.setenv("RESEARCH_ENGINE_REQUIRE_GOOGLE_VERIFICATION", "true")
+        provider = StubLiveSearchProvider(
+            [_hit("Kumiko", "https://example.com/kumiko", "Cocktail bar in West Loop, Chicago.")]
+        )
+        svc = LiveResearchService(
+            provider=provider,
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+        )
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars")
+        assert result.restaurants == []
+        assert result.attractions == []
+        assert result.hotels == []
+        assert result.research_sources
+        assert all(src.trip_addable is False for src in result.research_sources)
+
+    def test_yelp_and_foursquare_never_introduce_new_places(self, monkeypatch):
+        monkeypatch.setenv("YELP_API_KEY", "fake-key")
+        monkeypatch.setenv("FOURSQUARE_API_KEY", "fake-key")
+        provider = StubLiveSearchProvider(
+            [_hit("Kumiko", "https://example.com/kumiko", "Cocktail bar in West Loop, Chicago.")]
+        )
+        google_map = {
+            "kumiko": GooglePlaceVerification(
+                provider_place_id="gp-kumiko",
+                name="Kumiko",
+                formatted_address="630 W Lake St, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                types=["bar"],
+            ),
+            "aviary": GooglePlaceVerification(
+                provider_place_id="gp-aviary",
+                name="The Aviary",
+                formatted_address="955 W Fulton Market, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                types=["bar"],
+            ),
+        }
+        svc = LiveResearchService(
+            provider=provider,
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars")
+        names = [r.name for r in result.restaurants]
+        assert "Kumiko" in names
+        # Google-only truth: enrichment cannot create this card because it was never in candidates.
+        assert "The Aviary" not in names
+
+    def test_reason_guard_rejects_markdown_bullets_urls_and_option_phrase(self):
+        known = ["Kumiko", "The Aviary"]
+        bad_reasons = [
+            "### Kumiko is amazing",
+            "1. Kumiko is a bar in Chicago",
+            "- Kumiko is a bar",
+            "Kumiko is a bar option in West Loop.",
+            "Read more at https://example.com/kumiko",
+            "Kumiko matches your request.",
+            "Kumiko is great. Also try The Aviary.",
+        ]
+        for reason in bad_reasons:
+            assert _reason_guard(reason, "Kumiko", known) is False
+
+    def test_build_place_reason_contains_match_trust_and_best_for_without_raw_fragments(self):
+        candidate = SimpleNamespace(
+            cuisine="Cocktail Bar",
+            source_evidence=SourceEvidence(source_reason="seasonal cocktail program"),
+            tags=["Date Night", "Cocktails"],
+        )
+        verification = GooglePlaceVerification(
+            provider_place_id="gp-kumiko",
+            name="Kumiko",
+            formatted_address="630 W Lake St, Chicago, IL",
+            business_status="OPERATIONAL",
+            rating=4.7,
+            user_rating_count=1200,
+            confidence="high",
+            types=["bar"],
+        )
+        reason = build_place_reason(
+            candidate_name="Kumiko",
+            user_query="cocktail bars near West Loop Chicago",
+            intent=INTENT_NIGHTLIFE,
+            candidate=candidate,
+            verified_place=verification,
+            known_candidate_names=["kumiko", "the aviary"],
+        )
+        low = reason.lower()
+        assert "kumiko: verified bar" in low
+        assert "for cocktail and nightlife plans" in low
+        assert "google 4.7★" in low
+        assert "best for" in low
+        assert "###" not in reason
+        assert "http" not in low
+        assert "option in" not in low
+        assert len(reason) <= 180
+
+    def test_sanitize_reason_evidence_rejects_polluted_examples(self):
+        known = ["Green Mill", "Hubbard Inn", "Maria's", "The Darling", "Chicago Athletic Association"]
+        assert _sanitize_reason_evidence_text(
+            "xt day. [...] #### For Music Green Mill – legendary jazz room",
+            own_name="Green Mill",
+            known_candidate_names=known,
+        ) is None
+        assert _sanitize_reason_evidence_text(
+            "The Darling – The Darling is a bar and restaurant with cocktails.",
+            own_name="Hubbard Inn",
+            known_candidate_names=known,
+        ) is None
+        assert _sanitize_reason_evidence_text(
+            "#### For Something Fancy Chicago Athletic Association rooftop lounge",
+            own_name="Maria's",
+            known_candidate_names=known,
+        ) is None
+        cleaned = _sanitize_reason_evidence_text(
+            "nightlife nightlife cocktails",
+            own_name="Green Mill",
+            known_candidate_names=known,
+        )
+        assert cleaned == "nightlife cocktails"
+
+    def test_build_place_reason_rejects_other_venue_leak_and_uses_google_fallback(self):
+        candidate = SimpleNamespace(
+            source_evidence=SourceEvidence(source_reason="The Darling has strong cocktails and late-night buzz."),
+            tags=["nightlife", "nightlife", "cocktails"],
+        )
+        verification = GooglePlaceVerification(
+            provider_place_id="gp-hubbard",
+            name="Hubbard Inn",
+            formatted_address="110 W Hubbard St, Chicago, IL",
+            business_status="OPERATIONAL",
+            rating=4.3,
+            user_rating_count=980,
+            confidence="high",
+            types=["bar"],
+        )
+        reason = build_place_reason(
+            candidate_name="Hubbard Inn",
+            user_query="cocktail bars near West Loop Chicago",
+            intent=INTENT_NIGHTLIFE,
+            candidate=candidate,
+            verified_place=verification,
+            known_candidate_names=["Hubbard Inn", "The Darling", "Green Mill"],
+        )
+        low = reason.lower()
+        assert "the darling" not in low
+        assert "hubbard inn" in low or "verified bar" in low
+        assert "###" not in reason
+
+    def test_enrichment_failures_do_not_block_google_verified_cards(self, monkeypatch):
+        monkeypatch.setenv("YELP_API_KEY", "fake")
+        monkeypatch.setenv("FOURSQUARE_API_KEY", "fake")
+        provider = StubLiveSearchProvider(
+            [_hit("Kumiko", "https://example.com/kumiko", "Cocktail bar in West Loop, Chicago.")]
+        )
+        google_map = {
+            "kumiko": GooglePlaceVerification(
+                provider_place_id="gp-kumiko",
+                name="Kumiko",
+                formatted_address="630 W Lake St, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                types=["bar"],
+            ),
+        }
+        svc = LiveResearchService(
+            provider=provider,
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        svc._populate_yelp_enrichment = MagicMock(side_effect=RuntimeError("boom"))  # type: ignore[method-assign]
+        svc._populate_foursquare_enrichment = MagicMock(side_effect=RuntimeError("boom"))  # type: ignore[method-assign]
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars")
+        assert result.restaurants
+        assert result.restaurants[0].name == "Kumiko"
+        assert result.restaurants[0].verified_place is True
+
+    def test_integration_snapshot_west_loop_cocktail_bars(self):
+        hits = [
+            _hit(
+                "Best Cocktail Bars in Chicago",
+                "https://example.com/chicago-bars",
+                "1. Kumiko — West Loop cocktail bar. 2. The Aviary — Fulton Market cocktails.",
+            ),
+            _hit("Kumiko", "https://example.com/kumiko", "Japanese cocktail bar in West Loop."),
+            _hit("The Aviary", "https://example.com/aviary", "Avant-garde cocktails in Fulton Market."),
+        ]
+        google_map = {
+            "kumiko": GooglePlaceVerification(
+                provider_place_id="gp-kumiko",
+                name="Kumiko",
+                formatted_address="630 W Lake St, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                rating=4.7,
+                user_rating_count=1200,
+                types=["bar"],
+            ),
+            "the aviary": GooglePlaceVerification(
+                provider_place_id="gp-aviary",
+                name="The Aviary",
+                formatted_address="955 W Fulton Market, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                rating=4.6,
+                user_rating_count=900,
+                types=["bar"],
+            ),
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider(hits),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(
+            intent=INTENT_NIGHTLIFE,
+            destination="Chicago",
+            user_query="cocktail bars near West Loop Chicago",
+        )
+        assert len(result.restaurants) >= 2
+        assert all((r.google_verification and r.google_verification.business_status == "OPERATIONAL") for r in result.restaurants)
+        assert all(src.trip_addable is False for src in result.research_sources)
+        for r in result.restaurants:
+            text = (r.summary or "").lower()
+            assert "###" not in text
+            assert "http" not in text
+            assert "option in" not in text
+            assert "matches your request" not in text
+            assert r.source_badges and "Google Verified" in r.source_badges
+            assert r.best_for_tags
+
 
 # ── Frontend source evidence rendering (file-read tests) ─────────────────────
 
 class TestFrontendSourceEvidenceRendering:
-    """Check AIConciergePanel.tsx wires sourceEvidence.sourceReason correctly."""
+    """Check AIConciergePanel.tsx renders clean reason/evidence fields only."""
 
     def _read_panel(self) -> str:
         root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -2337,11 +2596,12 @@ class TestFrontendSourceEvidenceRendering:
         src = self._read_panel()
         assert "pickCardReason" in src, "pickCardReason helper must be present"
 
-    def test_panel_prefers_source_evidence_source_reason(self):
-        """The pickCardReason function must reference sourceEvidence.sourceReason."""
+    def test_panel_uses_clean_evidence_field_for_detail(self):
+        """Expanded details should use sanitized evidence array, not raw snippets."""
         src = self._read_panel()
-        assert "sourceEvidence" in src
-        assert "sourceReason" in src
+        assert "card.evidence" in src
+        assert "• ${b}" in src
+        assert "sourceEvidence?.sourceEvidence" not in src
 
     def test_panel_no_more_button_without_extra_detail(self):
         """expandableDetail variable controls the More button — not shown when undefined."""
@@ -2350,9 +2610,9 @@ class TestFrontendSourceEvidenceRendering:
         assert "pickCardDetail" in src
 
     def test_panel_falls_back_gracefully_for_old_cards(self):
-        """pickCardReason falls back to summary/description/reason when sourceEvidence is absent."""
+        """pickCardReason falls back to summary/description/reason when structured reason exists."""
         src = self._read_panel()
         # The fallback chain must reference all three field names
         assert ".summary" in src or '"summary"' in src
         assert ".description" in src or '"description"' in src
-        assert "Verified on Google after appearing in a local guide" in src
+        assert "Verified place with trusted Google signals" in src

@@ -94,6 +94,17 @@ class GoogleVerification(BaseModel):
     failure_reason: Optional[str] = None
 
 
+class VenueEnrichment(BaseModel):
+    """Optional non-authoritative enrichment for already Google-verified places."""
+
+    yelp_rating: Optional[float] = None
+    yelp_review_count: Optional[int] = None
+    yelp_review_excerpts: List[str] = []
+    foursquare_categories: List[str] = []
+    foursquare_tags: List[str] = []
+    foursquare_popularity: Optional[float] = None
+
+
 class UnifiedRestaurantResult(BaseModel):
     type: Literal["verified_place"] = "verified_place"
     name: str
@@ -115,6 +126,11 @@ class UnifiedRestaurantResult(BaseModel):
     verification_tier: Optional[Literal["primary", "secondary"]] = None
     google_verification: Optional[GoogleVerification] = None
     source_evidence: Optional[SourceEvidence] = None
+    evidence: List[str] = []
+    best_for_tags: List[str] = []
+    evidence_count: int = 0
+    source_badges: List[str] = []
+    enrichment: Optional[VenueEnrichment] = None
 
 
 class UnifiedAttractionResult(BaseModel):
@@ -137,6 +153,11 @@ class UnifiedAttractionResult(BaseModel):
     verification_tier: Optional[Literal["primary", "secondary"]] = None
     google_verification: Optional[GoogleVerification] = None
     source_evidence: Optional[SourceEvidence] = None
+    evidence: List[str] = []
+    best_for_tags: List[str] = []
+    evidence_count: int = 0
+    source_badges: List[str] = []
+    enrichment: Optional[VenueEnrichment] = None
 
 
 class UnifiedHotelResult(BaseModel):
@@ -159,6 +180,11 @@ class UnifiedHotelResult(BaseModel):
     verification_tier: Optional[Literal["primary", "secondary"]] = None
     google_verification: Optional[GoogleVerification] = None
     source_evidence: Optional[SourceEvidence] = None
+    evidence: List[str] = []
+    best_for_tags: List[str] = []
+    evidence_count: int = 0
+    source_badges: List[str] = []
+    enrichment: Optional[VenueEnrichment] = None
 
 
 class UnifiedResearchSourceResult(BaseModel):

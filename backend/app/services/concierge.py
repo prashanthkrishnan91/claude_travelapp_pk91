@@ -204,36 +204,54 @@ class ConciergeService:
         live_result = self._fetch_live_research(intent, destination, user_query, trip)
         research_sources = list(live_result.research_sources)
         live_provider_name = live_result.provider_name
+        require_google = getattr(self._settings, "research_engine_require_google_verification", False) is True
+        force_research_only = (
+            require_google
+            and intent in (_RESTAURANT_INTENTS | _ATTRACTION_INTENTS | {INTENT_HOTELS})
+            and not live_result.has_data()
+        )
+        if force_research_only:
+            warnings.append(
+                "No addable place cards were returned because Google verification is currently unavailable."
+            )
+            source_status = SOURCE_UNAVAILABLE
+            sources.append("Google verification unavailable")
+            retrieval_used = True
 
         if intent == INTENT_MICHELIN_RESTAURANTS:
-            from app.services.michelin_retriever import MichelinRetriever
-            restaurants, source_status = MichelinRetriever().fetch(destination, user_query)
-            if source_status == SOURCE_UNAVAILABLE:
-                # No curated Michelin data for this city — prefer live results if available.
-                if live_result.restaurants:
-                    restaurants = live_result.restaurants
-                    source_status = SOURCE_LIVE_SEARCH
-                    cached_response = live_result.cached
-                    sources.append(f"Live search · {live_result.provider_name}")
-                else:
-                    warnings.append(
-                        f"Michelin Guide data is not available for {destination}. "
-                        "Showing general dining recommendations based on local search."
-                    )
-                    raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
-                    source_status = self._infer_source_status(raw_rest)
-                    restaurants = [
-                        self._to_unified_restaurant(r, intent=intent, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
-                        for r in raw_rest[:6]
-                    ]
-                    sources.append("Local restaurant database")
+            if force_research_only:
+                pass
             else:
-                sources.append("Michelin Guide (curated reference data)")
+                from app.services.michelin_retriever import MichelinRetriever
+                restaurants, source_status = MichelinRetriever().fetch(destination, user_query)
+                if source_status == SOURCE_UNAVAILABLE:
+                    # No curated Michelin data for this city — prefer live results if available.
+                    if live_result.restaurants:
+                        restaurants = live_result.restaurants
+                        source_status = SOURCE_LIVE_SEARCH
+                        cached_response = live_result.cached
+                        sources.append(f"Live search · {live_result.provider_name}")
+                    else:
+                        warnings.append(
+                            f"Michelin Guide data is not available for {destination}. "
+                            "Showing general dining recommendations based on local search."
+                        )
+                        raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
+                        source_status = self._infer_source_status(raw_rest)
+                        restaurants = [
+                            self._to_unified_restaurant(r, intent=intent, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
+                            for r in raw_rest[:6]
+                        ]
+                        sources.append("Local restaurant database")
+                else:
+                    sources.append("Michelin Guide (curated reference data)")
             retrieval_used = True
 
         elif intent in {INTENT_RESTAURANTS, INTENT_HIDDEN_GEMS, INTENT_LUXURY_VALUE,
                         INTENT_ROMANTIC, INTENT_FAMILY_FRIENDLY}:
-            if live_result.restaurants:
+            if force_research_only:
+                pass
+            elif live_result.restaurants:
                 restaurants = live_result.restaurants
                 source_status = SOURCE_LIVE_SEARCH
                 cached_response = live_result.cached
@@ -249,7 +267,9 @@ class ConciergeService:
             retrieval_used = True
 
         elif intent == INTENT_NIGHTLIFE:
-            if live_result.restaurants:
+            if force_research_only:
+                retrieval_used = True
+            elif live_result.restaurants:
                 restaurants = live_result.restaurants
                 source_status = SOURCE_LIVE_SEARCH
                 cached_response = live_result.cached
@@ -271,7 +291,9 @@ class ConciergeService:
                     retrieval_used = False
 
         elif intent in _ATTRACTION_INTENTS:
-            if live_result.attractions:
+            if force_research_only:
+                pass
+            elif live_result.attractions:
                 attractions = live_result.attractions
                 source_status = SOURCE_LIVE_SEARCH
                 cached_response = live_result.cached
@@ -299,7 +321,9 @@ class ConciergeService:
                 ]
 
         elif intent == INTENT_HOTELS:
-            if live_result.hotels:
+            if force_research_only:
+                retrieval_used = True
+            elif live_result.hotels:
                 hotels = live_result.hotels
                 source_status = SOURCE_LIVE_SEARCH
                 cached_response = live_result.cached

@@ -1143,6 +1143,15 @@ export interface SourceEvidence {
   mentionCount?: number;
 }
 
+export interface VenueEnrichment {
+  yelpRating?: number;
+  yelpReviewCount?: number;
+  yelpReviewExcerpts?: string[];
+  foursquareCategories?: string[];
+  foursquareTags?: string[];
+  foursquarePopularity?: number;
+}
+
 export interface GoogleVerification {
   provider: "google_places";
   providerPlaceId?: string | null;
@@ -1183,6 +1192,11 @@ export interface UnifiedRestaurantResult {
   verificationTier?: "primary" | "secondary" | null;
   googleVerification?: GoogleVerification | null;
   sourceEvidence?: SourceEvidence | null;
+  evidence?: string[];
+  bestForTags?: string[];
+  evidenceCount?: number;
+  sourceBadges?: string[];
+  enrichment?: VenueEnrichment | null;
 }
 
 export interface UnifiedAttractionResult {
@@ -1205,6 +1219,11 @@ export interface UnifiedAttractionResult {
   verificationTier?: "primary" | "secondary" | null;
   googleVerification?: GoogleVerification | null;
   sourceEvidence?: SourceEvidence | null;
+  evidence?: string[];
+  bestForTags?: string[];
+  evidenceCount?: number;
+  sourceBadges?: string[];
+  enrichment?: VenueEnrichment | null;
 }
 
 export interface UnifiedHotelResult {
@@ -1227,6 +1246,11 @@ export interface UnifiedHotelResult {
   verificationTier?: "primary" | "secondary" | null;
   googleVerification?: GoogleVerification | null;
   sourceEvidence?: SourceEvidence | null;
+  evidence?: string[];
+  bestForTags?: string[];
+  evidenceCount?: number;
+  sourceBadges?: string[];
+  enrichment?: VenueEnrichment | null;
 }
 
 export interface UnifiedAreaComparisonResult {
