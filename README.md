@@ -16,3 +16,5 @@ After applying migrations, reload Supabase/PostgREST schema cache (or restart th
 - When enabled and Google verification is unavailable, concierge returns **research-only** sources (non-addable) and does not fall back to sample/database place cards for place intents.
 - Yelp/Foursquare enrichment is optional and non-authoritative; it never creates new cards and never changes addability.
 - “Why this pick” card copy is deterministic and Google-grounded; raw editorial snippets/listicle text are sanitized/rejected and never rendered directly on addable cards.
+- Addable place cards now use one shared UI layout path: title + Google badge, primary category subtitle, compact metadata row, deduped short tags, one-sentence “Why this pick,” and collapsed structured More/Less details.
+- Address text is intentionally shown only in expanded details (not repeated in the metadata row), and expanded state defaults to collapsed for every card.
