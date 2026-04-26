@@ -103,9 +103,19 @@ def build_why_pick(
     evidence: Sequence[str],
     rating: Optional[float],
     review_count: Optional[int],
+    category: Optional[str] = None,
 ) -> WhyPickResult:
     template_id = _pick_template(evidence, rating, review_count)
     text = _compose_text(template_id, place_name or "This place", evidence)
+    low = text.lower()
+    if category == "bar" and any(tok in low for tok in ("dining", "menu", "chef", "cuisine", "plates", "tasting menu")):
+        text = f"{place_name or 'This place'} is a strong pick for well-reviewed drinks, atmosphere, and a polished night-out experience."
+    elif category == "restaurant" and any(tok in low for tok in ("cocktail", "nightlife", "speakeasy", "bartender", "lounge")):
+        text = f"{place_name or 'This place'} is a strong pick for well-reviewed food, polished service, and a comfortable dining setting."
+    elif category == "bar" and not any(tok in low for tok in ("cocktail", "drinks", "atmosphere", "night-out", "night out")):
+        text = f"{place_name or 'This place'} is a strong pick for well-reviewed drinks, atmosphere, and a polished night-out experience."
+    elif category == "restaurant" and not any(tok in low for tok in ("food", "dining", "menu", "cuisine")):
+        text = f"{place_name or 'This place'} is a strong pick for well-reviewed food, polished service, and a comfortable dining setting."
     if BANNED_STRINGS_RE.search(text):
         text = f"{place_name or 'This place'} is a viable option with {evidence[0].lower()}."
     if not has_concrete_fact(text):

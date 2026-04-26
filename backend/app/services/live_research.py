@@ -1214,7 +1214,7 @@ def _normalize_place_category(types: List[str], candidate: Any = None) -> str:
         return "restaurant"
     if any(tok in blob for tok in ("museum", "park", "tourist_attraction", "art_gallery", "landmark", "zoo", "aquarium")):
         return "attraction"
-    if candidate is not None:
+    if not (types or []) and candidate is not None:
         cuisine = getattr(candidate, "cuisine", None)
         category = getattr(candidate, "category", None)
         hint = f"{cuisine or ''} {category or ''}".lower()
@@ -1256,7 +1256,7 @@ def _category_intent_mismatch(reason_text: str, category: str) -> bool:
     if category == "bar":
         return any(tok in low for tok in _RESTAURANT_ONLY_TOKENS)
     if category == "restaurant":
-        return any(tok in low for tok in _BAR_ONLY_TOKENS) and not any(tok in low for tok in ("food", "menu", "cuisine"))
+        return any(tok in low for tok in _BAR_ONLY_TOKENS)
     if category == "cafe":
         return any(tok in low for tok in _BAR_ONLY_TOKENS)
     return False
@@ -1284,6 +1284,28 @@ def _safe_google_only_reason(
 ) -> str:
     del name, location, rating, review_count
     return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"])
+
+
+def _validate_or_fallback_reason(
+    reason_text: str,
+    *,
+    category: str,
+    own_name: str,
+    known_candidate_names: List[str],
+) -> Tuple[str, str]:
+    """Validation layer for deterministic copy; fallback on any mismatch."""
+    reason = (reason_text or "").strip()
+    if not reason:
+        return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"]), "fallback"
+    first_sentence = reason.split(".")[0].strip()
+    if not first_sentence:
+        return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"]), "fallback"
+    reason = first_sentence + "."
+    if not _reason_guard(reason, own_name, known_candidate_names):
+        return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"]), "fallback"
+    if _category_intent_mismatch(reason, category):
+        return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"]), "fallback"
+    return reason, "deterministic_validated"
 
 
 def _category_fit_score(intent: str, user_query: str, verification: "GooglePlaceVerification") -> float:
@@ -2491,10 +2513,6 @@ def _apply_google_gate(
                     venue.reason_source = reason_source
                 except Exception:
                     pass
-                try:
-                    venue.why_pick = why_pick_payload["why_pick"]
-                except Exception:
-                    pass
                 clean_evidence: List[str] = []
                 if venue_source_ev is not None:
                     for raw_ev in (
@@ -2516,14 +2534,25 @@ def _apply_google_gate(
                     neighborhood=getattr(venue, "neighborhood", None) or verification.formatted_address,
                     tags=getattr(venue, "tags", []),
                 )
+                category = _normalize_place_category(verification.types, venue)
                 why_pick_payload = build_why_pick(
                     place_name=getattr(venue, "name", "") or verification.name or "This place",
                     evidence=clean_evidence,
                     rating=verification.rating,
                     review_count=verification.user_rating_count,
+                    category=category,
                 )
-                reason = why_pick_payload["why_pick"]["text"]
-                reason_source = why_pick_payload["why_pick"]["generation_method"]
+                reason, validation_source = _validate_or_fallback_reason(
+                    why_pick_payload["why_pick"]["text"],
+                    category=category,
+                    own_name=getattr(venue, "name", ""),
+                    known_candidate_names=known_candidate_names,
+                )
+                reason_source = (
+                    why_pick_payload["why_pick"]["generation_method"]
+                    if validation_source == "deterministic_validated"
+                    else validation_source
+                )
                 try:
                     venue.evidence = clean_evidence[:2]
                 except Exception:
@@ -2536,6 +2565,10 @@ def _apply_google_gate(
                 try:
                     mention_count = getattr(venue_source_ev, "mention_count", 0) if venue_source_ev else 0
                     venue.evidence_count = int(max(0, mention_count))
+                except Exception:
+                    pass
+                try:
+                    venue.primary_reason = reason
                 except Exception:
                     pass
                 try:
