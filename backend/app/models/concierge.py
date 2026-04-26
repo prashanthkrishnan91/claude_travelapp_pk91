@@ -105,6 +105,12 @@ class VenueEnrichment(BaseModel):
     foursquare_popularity: Optional[float] = None
 
 
+
+
+class WhyPickDetail(BaseModel):
+    text: str
+    generation_method: Literal["deterministic", "llm"] = "deterministic"
+
 class PlaceSupportingDetails(BaseModel):
     rating: Optional[str] = None
     review_count: Optional[int] = None
@@ -146,6 +152,7 @@ class UnifiedRestaurantResult(BaseModel):
     enrichment: Optional[VenueEnrichment] = None
     primary_reason: Optional[str] = None
     reason_source: Optional[str] = None
+    why_pick: Optional[WhyPickDetail] = None
     supporting_details: Optional[PlaceSupportingDetails] = None
 
 
@@ -176,6 +183,7 @@ class UnifiedAttractionResult(BaseModel):
     enrichment: Optional[VenueEnrichment] = None
     primary_reason: Optional[str] = None
     reason_source: Optional[str] = None
+    why_pick: Optional[WhyPickDetail] = None
     supporting_details: Optional[PlaceSupportingDetails] = None
 
 
@@ -206,6 +214,7 @@ class UnifiedHotelResult(BaseModel):
     enrichment: Optional[VenueEnrichment] = None
     primary_reason: Optional[str] = None
     reason_source: Optional[str] = None
+    why_pick: Optional[WhyPickDetail] = None
     supporting_details: Optional[PlaceSupportingDetails] = None
 
 

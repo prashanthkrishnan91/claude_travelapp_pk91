@@ -14,8 +14,10 @@ interface PlaceCard {
   supportingDetails?: {
     categoryLabel?: string | null;
     metaLine?: string | null;
-    whyPick?: string | null;
+    whyPick?: { text?: string | null; generationMethod?: string | null } | string | null;
   } | null;
+  evidence?: string[];
+  whyPick?: { text?: string | null; generationMethod?: string | null } | string | null;
 }
 
 function parsePlaceCards(response: PlaceRecommendationsResponse): PlaceCard[] {
@@ -25,7 +27,11 @@ function parsePlaceCards(response: PlaceRecommendationsResponse): PlaceCard[] {
 
 function reasonForCard(card: PlaceCard, suggestions: ConciergeSuggestion[]): string {
   const matchingSuggestion = suggestions.find((s) => s.name.toLowerCase() === (card.name ?? "").toLowerCase());
-  return card.supportingDetails?.whyPick ?? matchingSuggestion?.reason ?? "Strong fit for this trip based on trusted place signals.";
+  const fromSupporting = typeof card.supportingDetails?.whyPick === "string"
+    ? card.supportingDetails?.whyPick
+    : card.supportingDetails?.whyPick?.text;
+  const fromTopLevel = typeof card.whyPick === "string" ? card.whyPick : card.whyPick?.text;
+  return fromTopLevel ?? fromSupporting ?? matchingSuggestion?.reason ?? "Strong fit for this trip based on trusted place signals.";
 }
 
 export function PlaceRecommendationsView({ response }: PlaceRecommendationsViewProps) {
@@ -52,6 +58,15 @@ export function PlaceRecommendationsView({ response }: PlaceRecommendationsViewP
               <div className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
                 <span className="font-medium">Why this pick:</span> {reason}
               </div>
+              {card.evidence?.length ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {card.evidence.map((chip) => (
+                    <span key={`${title}-${chip}`} className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] text-sky-700 ring-1 ring-sky-200">
+                      {chip}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <div className="mt-2 flex items-center gap-2">
                 <button type="button" className="rounded-lg bg-sky-600 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-sky-700">
                   Add to Trip

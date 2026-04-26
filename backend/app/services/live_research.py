@@ -51,6 +51,10 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
+from app.concierge.reasoning import (
+    build_why_pick,
+    ensure_non_empty_evidence,
+)
 from app.models.concierge import (
     INTENT_ATTRACTIONS,
     INTENT_BEST_AREA,
@@ -1398,7 +1402,7 @@ def _build_supporting_details(
     venue: Any,
     verification: GooglePlaceVerification,
     *,
-    why_pick: Optional[str] = None,
+    why_pick: Optional[Any] = None,
 ) -> PlaceSupportingDetails:
     """Build the clean, user-facing display payload.
 
@@ -2487,6 +2491,10 @@ def _apply_google_gate(
                     venue.reason_source = reason_source
                 except Exception:
                     pass
+                try:
+                    venue.why_pick = why_pick_payload["why_pick"]
+                except Exception:
+                    pass
                 clean_evidence: List[str] = []
                 if venue_source_ev is not None:
                     for raw_ev in (
@@ -2501,6 +2509,21 @@ def _apply_google_gate(
                         )
                         if cleaned and cleaned not in clean_evidence:
                             clean_evidence.append(cleaned)
+                clean_evidence = ensure_non_empty_evidence(
+                    clean_evidence,
+                    rating=verification.rating,
+                    review_count=verification.user_rating_count,
+                    neighborhood=getattr(venue, "neighborhood", None) or verification.formatted_address,
+                    tags=getattr(venue, "tags", []),
+                )
+                why_pick_payload = build_why_pick(
+                    place_name=getattr(venue, "name", "") or verification.name or "This place",
+                    evidence=clean_evidence,
+                    rating=verification.rating,
+                    review_count=verification.user_rating_count,
+                )
+                reason = why_pick_payload["why_pick"]["text"]
+                reason_source = why_pick_payload["why_pick"]["generation_method"]
                 try:
                     venue.evidence = clean_evidence[:2]
                 except Exception:
