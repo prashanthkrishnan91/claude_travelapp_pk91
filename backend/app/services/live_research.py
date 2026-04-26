@@ -69,6 +69,7 @@ from app.models.concierge import (
     GoogleVerification,
     SOURCE_LIVE_SEARCH,
     SOURCE_NONE,
+    PlaceSupportingDetails,
     SourceEvidence,
     VenueEnrichment,
     UnifiedAttractionResult,
@@ -1082,6 +1083,8 @@ def _reason_guard(reason: str, own_name: str, known_candidate_names: List[str]) 
     first_sentence = text.split(".")[0]
     if _ADDRESS_LIKE_PAT.search(first_sentence):
         return False
+    if "google reviews" in first_sentence.lower() or "★" in first_sentence:
+        return False
     low = text.lower()
     if any(p.search(low) for p in _GENERIC_REASON_PATTERNS):
         return False
@@ -1096,13 +1099,9 @@ def _safe_google_only_reason(
     rating: Optional[float],
     review_count: Optional[int],
 ) -> str:
-    attribute = "strong guest reviews"
-    if rating is not None and review_count is not None:
-        attribute = f"{rating:.1f}★ from {review_count:,} Google reviews"
-    elif rating is not None:
-        attribute = f"{rating:.1f}★ Google rating"
+    del location, rating, review_count
     clean_category = _clean_reason_text(category or "place")
-    reason = _clean_reason_text(f"{clean_category} known for {attribute}.")
+    reason = _clean_reason_text(f"{clean_category} with a strong fit for this trip request.")
     return reason[:120].rstrip(" ;,.") + "."
 
 
@@ -1154,17 +1153,13 @@ def build_place_reason(
             known_candidate_names=known_candidate_names or [],
             max_len=80,
         )
-    primary_bits: List[str] = []
     if evidence_detail:
-        primary_bits.append(evidence_detail)
-    if best_for:
-        primary_bits.append(f"best for {best_for}")
-    if verified_place.rating is not None and review_count is not None:
-        primary_bits.append(f"{verified_place.rating:.1f}★ from {review_count:,} Google reviews")
-    elif verified_place.rating is not None:
-        primary_bits.append(f"{verified_place.rating:.1f}★ Google rating")
-    primary = " ".join(primary_bits).strip()
-    reason = _clean_reason_text(primary or f"{category} known for strong local reviews.")
+        reason = evidence_detail
+    elif best_for:
+        reason = f"{category} known for {best_for}."
+    else:
+        reason = f"{category} known for a distinctive local vibe."
+    reason = _clean_reason_text(reason)
     if not reason.endswith("."):
         reason = f"{reason}."
     reason = reason[:120].rstrip(" ;,.") + "."
@@ -1177,6 +1172,28 @@ def build_place_reason(
         rating=verified_place.rating,
         review_count=review_count,
     )
+
+
+def _build_supporting_details(venue: Any, verification: GooglePlaceVerification) -> PlaceSupportingDetails:
+    details = PlaceSupportingDetails()
+    if verification.rating is not None:
+        details.rating = f"{verification.rating:.1f}"
+    if verification.user_rating_count is not None:
+        details.review_count = int(verification.user_rating_count)
+    if verification.formatted_address:
+        details.address = verification.formatted_address
+    source_ev = getattr(venue, "source_evidence", None)
+    mention_count = getattr(source_ev, "mention_count", None) if source_ev is not None else None
+    if mention_count is not None:
+        details.editorial_mentions = int(max(0, mention_count))
+    tags: List[str] = []
+    for raw in (getattr(venue, "best_for_tags", None) or []):
+        clean = _clean_reason_text(str(raw or "")).strip()
+        if clean and clean not in tags:
+            tags.append(clean)
+    if tags:
+        details.tags = tags[:4]
+    return details
 
 
 def _reason_mentions_other_candidate(reason: str, own_name: str, known_candidate_names: List[str]) -> bool:
@@ -2216,6 +2233,10 @@ def _apply_google_gate(
                     venue.description = reason
                 elif hasattr(venue, "reason"):
                     venue.reason = reason
+                try:
+                    venue.primary_reason = reason
+                except Exception:
+                    pass
                 clean_evidence: List[str] = []
                 if venue_source_ev is not None:
                     for raw_ev in (
@@ -2242,6 +2263,10 @@ def _apply_google_gate(
                 try:
                     mention_count = getattr(venue_source_ev, "mention_count", 0) if venue_source_ev else 0
                     venue.evidence_count = int(max(0, mention_count))
+                except Exception:
+                    pass
+                try:
+                    venue.supporting_details = _build_supporting_details(venue, verification)
                 except Exception:
                     pass
                 try:

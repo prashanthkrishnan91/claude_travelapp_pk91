@@ -1197,6 +1197,14 @@ export interface UnifiedRestaurantResult {
   evidenceCount?: number;
   sourceBadges?: string[];
   enrichment?: VenueEnrichment | null;
+  primaryReason?: string | null;
+  supportingDetails?: {
+    rating?: string | null;
+    reviewCount?: number | null;
+    address?: string | null;
+    editorialMentions?: number | null;
+    tags?: string[];
+  } | null;
 }
 
 export interface UnifiedAttractionResult {
@@ -1224,6 +1232,14 @@ export interface UnifiedAttractionResult {
   evidenceCount?: number;
   sourceBadges?: string[];
   enrichment?: VenueEnrichment | null;
+  primaryReason?: string | null;
+  supportingDetails?: {
+    rating?: string | null;
+    reviewCount?: number | null;
+    address?: string | null;
+    editorialMentions?: number | null;
+    tags?: string[];
+  } | null;
 }
 
 export interface UnifiedHotelResult {
@@ -1251,6 +1267,14 @@ export interface UnifiedHotelResult {
   evidenceCount?: number;
   sourceBadges?: string[];
   enrichment?: VenueEnrichment | null;
+  primaryReason?: string | null;
+  supportingDetails?: {
+    rating?: string | null;
+    reviewCount?: number | null;
+    address?: string | null;
+    editorialMentions?: number | null;
+    tags?: string[];
+  } | null;
 }
 
 export interface UnifiedAreaComparisonResult {

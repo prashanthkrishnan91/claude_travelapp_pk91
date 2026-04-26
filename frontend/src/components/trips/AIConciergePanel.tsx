@@ -227,25 +227,36 @@ function splitReason(text?: string): { short: string; detail?: string } {
 }
 
 function pickCardReason(
-  card: { summary?: string; description?: string; reason?: string; evidence?: string[]; sourceEvidence?: { sourceReason?: string | null; sourceEvidence?: string | null; mentionCount?: number } | null },
+  card: { primaryReason?: string | null; summary?: string; description?: string; reason?: string; evidence?: string[]; sourceEvidence?: { sourceReason?: string | null; sourceEvidence?: string | null; mentionCount?: number } | null },
 ): string | undefined {
   // Addable-card reason must come from clean structured fields only.
-  const base = (card as { summary?: string }).summary
+  const base = (card as { primaryReason?: string | null }).primaryReason
+    ?? (card as { summary?: string }).summary
     ?? (card as { description?: string }).description
     ?? (card as { reason?: string }).reason;
   if (base) return base;
-  return "Verified place with trusted Google signals and relevant local fit.";
+  return "Strong fit for this trip based on trusted place signals.";
 }
 
 function pickCardDetail(
-  card: { evidence?: string[]; sourceEvidence?: { sourceReason?: string | null; sourceEvidence?: string | null } | null },
-): string | undefined {
-  // Never render raw source snippets; use backend-sanitized evidence only.
-  const bullets = (card.evidence ?? []).filter(Boolean).slice(0, 2);
-  if (bullets.length > 0) {
-    return bullets.map((b) => `• ${b}`).join(" ");
+  card: { rating?: number; reviewCount?: number; neighborhood?: string; address?: string; evidenceCount?: number; bestForTags?: string[]; supportingDetails?: { rating?: string | null; reviewCount?: number | null; address?: string | null; editorialMentions?: number | null; tags?: string[] } | null },
+): string[] {
+  const details = card.supportingDetails;
+  const rows: string[] = [];
+  const rating = details?.rating ?? (typeof card.rating === "number" ? card.rating.toFixed(1) : undefined);
+  const reviewCount = details?.reviewCount ?? card.reviewCount;
+  if (rating) {
+    rows.push(`Rating: ${rating}${reviewCount ? ` · ${Number(reviewCount).toLocaleString()} Google reviews` : ""}`);
   }
-  return undefined;
+  const address = details?.address ?? card.address ?? card.neighborhood;
+  if (address) rows.push(`Address: ${address}`);
+  const mentions = details?.editorialMentions ?? card.evidenceCount;
+  if (typeof mentions === "number" && mentions > 0) {
+    rows.push(`Evidence: Mentioned in ${mentions} editorial source${mentions === 1 ? "" : "s"}`);
+  }
+  const tags = (details?.tags ?? card.bestForTags ?? []).filter(Boolean);
+  if (tags.length > 0) rows.push(`Source fit: ${tags.slice(0, 3).join(" · ")}`);
+  return rows;
 }
 
 interface OperationalBadgeCard {
@@ -316,7 +327,7 @@ function ConciergeCard({
   meta: string[];
   tags: string[];
   reason?: string;
-  extraDetail?: string;
+  extraDetail?: string[];
   mapLink?: string;
   sourceLink?: string;
   actionLabel?: string;
@@ -329,9 +340,8 @@ function ConciergeCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const reasonParts = splitReason(reason);
-  // Prefer explicit extraDetail (from sourceEvidence.sourceEvidence) over the
-  // second sentence of the reason string — prevents showing "More" for generic copy.
-  const expandableDetail = extraDetail ?? reasonParts.detail;
+  const expandableDetail = extraDetail ?? [];
+  const hasDetail = expandableDetail.length > 0;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -368,7 +378,7 @@ function ConciergeCard({
 
       <div className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
         <span className="font-medium">Why this pick:</span> {reasonParts.short}
-        {expandableDetail && (
+        {hasDetail && (
           <>
             <button
               onClick={() => setExpanded((v) => !v)}
@@ -377,7 +387,11 @@ function ConciergeCard({
               {expanded ? "Less" : "More"}
               <ChevronDown className={`h-3 w-3 transition ${expanded ? "rotate-180" : ""}`} />
             </button>
-            {expanded && <p className="mt-1 text-[11px] text-slate-500">{expandableDetail}</p>}
+            {expanded && (
+              <div className="mt-1 space-y-0.5 text-[11px] text-slate-500">
+                {expandableDetail.map((line) => <p key={line}>{line}</p>)}
+              </div>
+            )}
           </>
         )}
       </div>

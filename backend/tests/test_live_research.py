@@ -2346,10 +2346,45 @@ class TestGooglePipelineRegression:
             assert not reason.startswith("aba is")
             assert "###" not in reason
             assert "http" not in reason
+            assert "google reviews" not in reason
+            assert "★" not in reason
             for other in names:
                 if other.lower() == card.name.lower():
                     continue
                 assert other.lower() not in reason
+
+    def test_supporting_details_include_rating_and_address_only_outside_primary_reason(self):
+        article = _hit("Kumiko", "https://example.com/k", "Cocktail bar in Chicago.")
+        google_map = {
+            "kumiko": GooglePlaceVerification(
+                provider_place_id="gp-1",
+                name="Kumiko",
+                formatted_address="630 W Lake St, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                rating=4.7,
+                user_rating_count=1200,
+                types=["bar"],
+            )
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider([article]),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars")
+        assert result.restaurants
+        card = result.restaurants[0]
+        primary = (card.primary_reason or card.summary or "").lower()
+        assert "google reviews" not in primary
+        assert "★" not in primary
+        assert "630 w lake st" not in primary
+        assert card.supporting_details is not None
+        assert card.supporting_details.rating == "4.7"
+        assert card.supporting_details.review_count == 1200
+        assert "Lake St" in (card.supporting_details.address or "")
 
     def test_research_sources_suppressed_when_addable_at_least_three(self):
         hits = [_hit("Best Cocktail Bars in Chicago", "https://example.com/bars", "1. Kumiko 2. The Aviary 3. Moneygun")]
@@ -2482,7 +2517,8 @@ class TestGooglePipelineRegression:
         low = reason.lower()
         assert "630 w lake st" not in low
         assert "chicago, il" not in low
-        assert "google reviews" in low
+        assert "google reviews" not in low
+        assert "★" not in low
         assert "###" not in reason
         assert "http" not in low
         assert "option in" not in low
@@ -2644,16 +2680,17 @@ class TestFrontendSourceEvidenceRendering:
         assert "pickCardReason" in src, "pickCardReason helper must be present"
 
     def test_panel_uses_clean_evidence_field_for_detail(self):
-        """Expanded details should use sanitized evidence array, not raw snippets."""
+        """Expanded details should use structured supporting details rows."""
         src = self._read_panel()
-        assert "card.evidence" in src
-        assert "• ${b}" in src
+        assert "supportingDetails" in src
+        assert "Rating:" in src
+        assert "Address:" in src
         assert "sourceEvidence?.sourceEvidence" not in src
 
     def test_panel_no_more_button_without_extra_detail(self):
         """expandableDetail variable controls the More button — not shown when undefined."""
         src = self._read_panel()
-        assert "expandableDetail" in src
+        assert "hasDetail" in src
         assert "pickCardDetail" in src
 
     def test_panel_hides_research_sources_when_addable_cards_exist(self):
@@ -2666,4 +2703,4 @@ class TestFrontendSourceEvidenceRendering:
         # The fallback chain must reference all three field names
         assert ".summary" in src or '"summary"' in src
         assert ".description" in src or '"description"' in src
-        assert "Verified place with trusted Google signals" in src
+        assert "Strong fit for this trip based on trusted place signals." in src
