@@ -1157,6 +1157,8 @@ export interface GoogleVerification {
   userRatingCount?: number | null;
   types?: string[];
   confidence?: SourceConfidence;
+  score?: number;
+  reason?: string | null;
   failureReason?: string | null;
 }
 
@@ -1178,6 +1180,7 @@ export interface UnifiedRestaurantResult {
   aiScore?: number;
   tags: string[];
   verifiedPlace?: boolean | null;
+  verificationTier?: "primary" | "secondary" | null;
   googleVerification?: GoogleVerification | null;
   sourceEvidence?: SourceEvidence | null;
 }
@@ -1199,6 +1202,7 @@ export interface UnifiedAttractionResult {
   aiScore?: number;
   tags: string[];
   verifiedPlace?: boolean | null;
+  verificationTier?: "primary" | "secondary" | null;
   googleVerification?: GoogleVerification | null;
   sourceEvidence?: SourceEvidence | null;
 }
@@ -1220,6 +1224,7 @@ export interface UnifiedHotelResult {
   aiScore?: number;
   tags: string[];
   verifiedPlace?: boolean | null;
+  verificationTier?: "primary" | "secondary" | null;
   googleVerification?: GoogleVerification | null;
   sourceEvidence?: SourceEvidence | null;
 }

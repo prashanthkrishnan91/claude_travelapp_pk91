@@ -166,7 +166,8 @@ _PLACE_PLATFORM_HINT = re.compile(
     re.IGNORECASE,
 )
 
-MAX_VERIFICATION_CANDIDATES: int = 8
+MAX_VERIFICATION_CANDIDATES: int = 40
+MIN_ADDABLE_RESULTS: int = 3
 
 _BOILERPLATE_PATTERNS = [
     re.compile(r"\b(advertising|advertisement|sponsored)\b", re.IGNORECASE),
@@ -914,6 +915,66 @@ def _compose_reason_with_google(
     if bits:
         return ". ".join(bits) + "."
     return "Verified on Google after appearing in a local guide."
+
+
+def _query_intent_label(user_query: str, intent: str) -> str:
+    clean = _clean_reason_text(user_query)
+    if clean:
+        return clean
+    return (intent or "this trip").replace("_", " ")
+
+
+def build_place_reason(
+    *,
+    candidate_name: str,
+    user_query: str,
+    intent: str,
+    candidate: Any,
+    verified_place: GooglePlaceVerification,
+) -> str:
+    name = verified_place.name or candidate_name or "This place"
+    category = ""
+    if hasattr(candidate, "cuisine") and getattr(candidate, "cuisine", None):
+        category = str(getattr(candidate, "cuisine"))
+    elif hasattr(candidate, "category") and getattr(candidate, "category", None):
+        category = str(getattr(candidate, "category"))
+    elif "bar" in " ".join(verified_place.types or []).lower():
+        category = "bar"
+    elif "restaurant" in " ".join(verified_place.types or []).lower():
+        category = "restaurant"
+    elif "hotel" in " ".join(verified_place.types or []).lower() or "lodging" in " ".join(verified_place.types or []).lower():
+        category = "hotel"
+    else:
+        category = "place"
+    location = verified_place.formatted_address or getattr(candidate, "neighborhood", None) or getattr(candidate, "area_label", None)
+    intent_label = _query_intent_label(user_query, intent)
+    evidence_detail = None
+    source_ev = getattr(candidate, "source_evidence", None)
+    if source_ev is not None:
+        evidence_detail = _clean_reason_text(getattr(source_ev, "source_reason", "") or "")
+    parts = [f"{name} is a {category} option"]
+    if location:
+        parts[-1] += f" in {location}"
+    sentence = parts[-1] + "."
+    if evidence_detail:
+        sentence += f" {name} is noted for {evidence_detail}."
+    if verified_place.rating is not None:
+        sentence += f" It has a {verified_place.rating:.1f}★ Google rating and matches your request for {intent_label}."
+    else:
+        sentence += f" It matches your request for {intent_label} and is Google verified as currently operational."
+    return _clean_reason_text(sentence) or f"{name} matches your request and is Google verified as currently operational."
+
+
+def _reason_mentions_other_candidate(reason: str, own_name: str, known_candidate_names: List[str]) -> bool:
+    low_reason = (reason or "").lower()
+    own = (own_name or "").lower()
+    for candidate in known_candidate_names:
+        candidate_low = (candidate or "").lower()
+        if not candidate_low or candidate_low == own:
+            continue
+        if candidate_low in low_reason:
+            return True
+    return False
 
 
 def _strip_publisher(title: str) -> str:
@@ -1782,6 +1843,8 @@ def _apply_google_gate(
     kind_label: str,
     provider_label_default: str,
     intent: str,
+    user_query: str,
+    known_candidate_names: List[str],
     seen_place_ids: Optional[set] = None,
     corroboration_counter: Optional[Counter] = None,
 ) -> List[Any]:
@@ -1822,13 +1885,13 @@ def _apply_google_gate(
                             break
                     continue
                 seen_place_ids.add(pid)
-            if not verification.provider_place_id or not verification.formatted_address:
+            if not verification.provider_place_id:
                 research_sources.append(
                     UnifiedResearchSourceResult(
                         title=str(getattr(venue, "name", f"Unverified {kind_label}") or f"Unverified {kind_label}"),
                         source=str(getattr(venue, "source", provider_label_default) or provider_label_default),
                         source_type="generic_info_source",
-                        summary="Google result missing address or place identifier — research only.",
+                        summary="Google result missing place identifier — research only.",
                         source_url=getattr(venue, "source_url", None),
                         neighborhood=getattr(venue, "neighborhood", None) or getattr(venue, "area_label", None),
                         last_verified_at=getattr(venue, "last_verified_at", None),
@@ -1866,18 +1929,25 @@ def _apply_google_gate(
                 name_lower = (getattr(venue, "name", "") or "").lower()
                 src_count = (corroboration_counter or {}).get(name_lower, 0)
                 venue_source_ev = getattr(venue, "source_evidence", None)
-                reason = _compose_reason_with_google(
-                    source_evidence=venue_source_ev,
-                    verification=verification,
+                reason = build_place_reason(
+                    candidate_name=getattr(venue, "name", "") or verification.name or "",
+                    user_query=user_query,
                     intent=intent,
-                    source_count=src_count,
+                    candidate=venue,
+                    verified_place=verification,
                 )
+                if _reason_mentions_other_candidate(reason, getattr(venue, "name", ""), known_candidate_names):
+                    reason = f"{verification.name or getattr(venue, 'name', 'This place')} matches your request and is Google verified as currently operational."
                 if hasattr(venue, "summary"):
                     venue.summary = reason
                 elif hasattr(venue, "description"):
                     venue.description = reason
                 elif hasattr(venue, "reason"):
                     venue.reason = reason
+            except Exception:
+                pass
+            try:
+                venue.verification_tier = "primary" if verification.confidence == "high" else "secondary"
             except Exception:
                 pass
             # Prefer Google's first-party links when the article didn't have one.
@@ -1961,6 +2031,8 @@ def _to_pydantic_google_verification(
         user_rating_count=verification.user_rating_count,
         types=list(verification.types or []),
         confidence=verification.confidence,  # type: ignore[arg-type]
+        score=verification.score,
+        reason=verification.reason,
         failure_reason=verification.failure_reason,
     )
 
@@ -2128,7 +2200,7 @@ def normalize_hits(
                     article_url_to_candidates.setdefault(hit.url, []).append(
                         normalized_candidate.lower()
                     )
-                    if is_restaurant_intent and len(restaurants) < max_per_kind:
+                    if is_restaurant_intent:
                         cand_cuisine = "Cocktail Bar" if intent == INTENT_NIGHTLIFE else "Restaurant"
                         cand_tags: List[str] = []
                         if intent == INTENT_NIGHTLIFE:
@@ -2156,7 +2228,7 @@ def normalize_hits(
                                 source_evidence=cand_source_ev,
                             )
                         )
-                    elif is_attraction_intent and len(attractions) < max_per_kind:
+                    elif is_attraction_intent:
                         attractions.append(
                             UnifiedAttractionResult(
                                 name=normalized_candidate,
@@ -2172,7 +2244,7 @@ def normalize_hits(
                                 source_evidence=cand_source_ev,
                             )
                         )
-                    elif is_hotel_intent and len(hotels) < max_per_kind:
+                    elif is_hotel_intent:
                         hotels.append(
                             UnifiedHotelResult(
                                 name=normalized_candidate,
@@ -2210,7 +2282,7 @@ def normalize_hits(
             )
             continue
 
-        if is_restaurant_intent and len(restaurants) < max_per_kind:
+        if is_restaurant_intent:
             cuisine = "Cocktail Bar" if intent == INTENT_NIGHTLIFE else "Restaurant"
             summary = _build_summary(
                 hit.snippet,
@@ -2241,7 +2313,7 @@ def normalize_hits(
                     verified_place=True,
                 )
             )
-        elif is_attraction_intent and len(attractions) < max_per_kind:
+        elif is_attraction_intent:
             description = _build_summary(
                 hit.snippet,
                 fallback=f"Live result from {provider_label}.",
@@ -2260,7 +2332,7 @@ def normalize_hits(
                     verified_place=True,
                 )
             )
-        elif is_hotel_intent and len(hotels) < max_per_kind:
+        elif is_hotel_intent:
             reason = _build_summary(
                 hit.snippet,
                 fallback=f"Live result from {provider_label}.",
@@ -2288,9 +2360,9 @@ def normalize_hits(
         key=lambda s: _quality_weight(_source_quality_tier(s.source_url or "", s.title or "", s.summary or "", s.source_type)),
         reverse=True,
     )
-    restaurants = _dedupe_overlapping_venues(restaurants)[:max_per_kind]
-    attractions = _dedupe_overlapping_venues(attractions)[:max_per_kind]
-    hotels = _dedupe_overlapping_venues(hotels)[:max_per_kind]
+    restaurants = _dedupe_overlapping_venues(restaurants)
+    attractions = _dedupe_overlapping_venues(attractions)
+    hotels = _dedupe_overlapping_venues(hotels)
     restaurants = _final_hard_filter_closed_venues(restaurants, kind_label="venue", research_sources=research_sources)
     attractions = _final_hard_filter_closed_venues(attractions, kind_label="attraction", research_sources=research_sources)
     hotels = _final_hard_filter_closed_venues(hotels, kind_label="hotel", research_sources=research_sources)
@@ -2312,6 +2384,8 @@ def normalize_hits(
             kind_label="restaurant",
             provider_label_default="Live search",
             intent=intent,
+            user_query=user_query,
+            known_candidate_names=list(google_verifications.keys()),
             seen_place_ids=_seen_pids,
             corroboration_counter=corroboration_counter,
         )
@@ -2322,6 +2396,8 @@ def normalize_hits(
             kind_label="attraction",
             provider_label_default="Live search",
             intent=intent,
+            user_query=user_query,
+            known_candidate_names=list(google_verifications.keys()),
             seen_place_ids=_seen_pids,
             corroboration_counter=corroboration_counter,
         )
@@ -2332,9 +2408,37 @@ def normalize_hits(
             kind_label="hotel",
             provider_label_default="Live search",
             intent=intent,
+            user_query=user_query,
+            known_candidate_names=list(google_verifications.keys()),
             seen_place_ids=_seen_pids,
             corroboration_counter=corroboration_counter,
         )
+
+    # Cap only after verification + tiering so we don't underflow.
+    restaurants.sort(
+        key=lambda v: (
+            1 if getattr(v, "verification_tier", None) == "primary" else 0,
+            getattr(v, "ai_score", 0.0) or 0.0,
+        ),
+        reverse=True,
+    )
+    attractions.sort(
+        key=lambda v: (
+            1 if getattr(v, "verification_tier", None) == "primary" else 0,
+            getattr(v, "ai_score", 0.0) or 0.0,
+        ),
+        reverse=True,
+    )
+    hotels.sort(
+        key=lambda v: (
+            1 if getattr(v, "verification_tier", None) == "primary" else 0,
+            getattr(v, "ai_score", 0.0) or 0.0,
+        ),
+        reverse=True,
+    )
+    restaurants = restaurants[:max_per_kind]
+    attractions = attractions[:max_per_kind]
+    hotels = hotels[:max_per_kind]
 
     # ── venues_discovered: annotate article research sources ───────────────
     # After the gate we know which venues made it through. Update each
@@ -2464,6 +2568,8 @@ class LiveResearchService:
         candidate_names: List[str] = []
         seen_lower: set = set()
         candidate_neighborhoods: Dict[str, Optional[str]] = {}
+        extracted_candidate_count = 0
+        direct_candidate_count = 0
         for h in hits:
             if _classify_hit(
                 _strip_publisher(h.title),
@@ -2486,15 +2592,12 @@ class LiveResearchService:
                     continue
                 seen_lower.add(low)
                 candidate_names.append(norm)
+                extracted_candidate_count += 1
                 candidate_neighborhoods[low] = _extract_candidate_neighborhood(
                     norm, h.snippet, destination
                 )
-                if len(candidate_names) >= MAX_VERIFICATION_CANDIDATES:
-                    break
-            if len(candidate_names) >= MAX_VERIFICATION_CANDIDATES:
-                break
 
-        for norm in candidate_names:
+        for norm in candidate_names[:MAX_VERIFICATION_CANDIDATES]:
             low = norm.lower()
             vkey = f"verify::{destination.lower()}::{low}::{intent}"
             cached_vr = self._verification_cache.get(vkey)
@@ -2557,9 +2660,17 @@ class LiveResearchService:
                 candidate_neighborhoods[low] = _extract_neighborhood(
                     f"{h.title}\n{h.snippet}", destination
                 )
+                direct_candidate_count += 1
                 display_for_low.setdefault(low, direct_name)
 
-            for low, neighborhood in candidate_neighborhoods.items():
+            logger.info(
+                "live_research candidates: extracted=%d direct=%d deduped=%d",
+                extracted_candidate_count,
+                direct_candidate_count,
+                len(candidate_neighborhoods),
+            )
+
+            for low, neighborhood in list(candidate_neighborhoods.items())[:MAX_VERIFICATION_CANDIDATES]:
                 display_name = display_for_low.get(low, low)
                 try:
                     gv = self._place_verifier.verify(
@@ -2577,6 +2688,33 @@ class LiveResearchService:
                         failure_reason=f"provider_error:{type(exc).__name__}",
                     )
                 google_verifications[low] = gv
+
+            high_conf = 0
+            med_conf = 0
+            low_conf = 0
+            closed = 0
+            failed = 0
+            for gv in google_verifications.values():
+                if gv.is_closed:
+                    closed += 1
+                    continue
+                if not gv.matched:
+                    failed += 1
+                    continue
+                if gv.confidence == "high" and gv.is_operational:
+                    high_conf += 1
+                elif gv.confidence == "medium" and gv.is_operational:
+                    med_conf += 1
+                else:
+                    low_conf += 1
+            logger.info(
+                "google_verify: high=%d medium=%d low=%d closed=%d failed=%d",
+                high_conf,
+                med_conf,
+                low_conf,
+                closed,
+                failed,
+            )
 
             # Google is authoritative — when it says OPERATIONAL with
             # high/medium confidence, the candidate is allowed past the
@@ -2613,8 +2751,11 @@ class LiveResearchService:
         )
         if google_verified_count >= 5:
             normalized["research_sources"] = []
-        logger.info("final_verified=%d", final_verified_count)
-        logger.info("final_research=%d", len(normalized["research_sources"]))
+        logger.info(
+            "final_results: addable=%d research_sources=%d",
+            final_verified_count,
+            len(normalized["research_sources"]),
+        )
 
         if not (
             normalized["restaurants"]
