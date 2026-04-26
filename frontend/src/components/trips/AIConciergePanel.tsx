@@ -211,31 +211,67 @@ function normalizeTitle(value: string): string {
   return value.trim().toLowerCase();
 }
 
-function splitReason(text?: string): { short: string; detail?: string } {
+function splitReason(text?: string): { short: string } {
   const clean = (text ?? "")
     .replace(/#{1,6}\s*/g, " ")
     .replace(/^\s*(?:\d{1,3}[.)]|[-*])\s+/g, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[`*_>~]/g, " ")
+    .replace(/^\s*why this pick:\s*/i, "")
     .replace(/\s+/g, " ")
     .trim();
   if (!clean) return { short: "Great fit for this trip." };
   const parts = clean.split(/(?<=[.!?])\s+/);
-  const first = parts.slice(0, 1).join(" ").slice(0, 120).trim();
+  const first = parts[0]?.slice(0, 180).trim() ?? "";
   return {
     short: first || "Great fit for this trip.",
-    detail: parts.length > 1 ? parts.slice(1).join(" ") : undefined,
   };
+}
+
+function dedupeTagsCaseInsensitive(tags: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  tags.forEach((tag) => {
+    const clean = tag.trim().replace(/\s+/g, " ");
+    if (!clean) return;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(clean);
+  });
+  return out;
+}
+
+function containsAddressSignal(text: string): boolean {
+  return /\b\d{1,6}\s+[A-Za-z0-9.'-]+\s+(?:st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|way|pl|place|ct|court)\b/i.test(text);
+}
+
+function sanitizeWhyPick(
+  rawReason: string | undefined,
+  title: string,
+  allPlaceTitles: string[],
+): string {
+  const reason = splitReason(rawReason).short;
+  const normalizedReason = reason.toLowerCase();
+  if (containsAddressSignal(reason)) {
+    return "Strong fit for this trip based on trusted place signals.";
+  }
+  const hasOtherVenueName = allPlaceTitles
+    .filter((candidate) => normalizeTitle(candidate) !== normalizeTitle(title))
+    .some((candidate) => normalizedReason.includes(normalizeTitle(candidate)));
+  if (hasOtherVenueName) {
+    return "Strong fit for this trip based on trusted place signals.";
+  }
+  if (!reason || reason.length < 12) {
+    return "Strong fit for this trip based on trusted place signals.";
+  }
+  return reason;
 }
 
 function pickCardReason(
   card: { primaryReason?: string | null; summary?: string; description?: string; reason?: string; evidence?: string[]; sourceEvidence?: { sourceReason?: string | null; sourceEvidence?: string | null; mentionCount?: number } | null },
 ): string | undefined {
-  // Addable-card reason must come from clean structured fields only.
-  const base = (card as { primaryReason?: string | null }).primaryReason
-    ?? (card as { summary?: string }).summary
-    ?? (card as { description?: string }).description
-    ?? (card as { reason?: string }).reason;
-  if (base) return base;
-  return "Strong fit for this trip based on trusted place signals.";
+  return card.primaryReason ?? "Strong fit for this trip based on trusted place signals.";
 }
 
 function pickCardDetail(
@@ -254,7 +290,7 @@ function pickCardDetail(
   if (typeof mentions === "number" && mentions > 0) {
     rows.push(`Evidence: Mentioned in ${mentions} editorial source${mentions === 1 ? "" : "s"}`);
   }
-  const tags = (details?.tags ?? card.bestForTags ?? []).filter(Boolean);
+  const tags = dedupeTagsCaseInsensitive((details?.tags ?? card.bestForTags ?? []).filter(Boolean));
   if (tags.length > 0) rows.push(`Source fit: ${tags.slice(0, 3).join(" · ")}`);
   return rows;
 }
@@ -360,9 +396,6 @@ function ConciergeCard({
           </div>
           <p className="mt-0.5 text-xs text-slate-500">{category}</p>
           {meta.length > 0 && <p className="mt-0.5 text-xs text-slate-500">{meta.join(" · ")}</p>}
-          {isOperational && verifiedAt && (
-            <p className="mt-0.5 text-[10px] text-slate-400">{verifiedAt}</p>
-          )}
         </div>
       </div>
 
@@ -838,102 +871,52 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
                   {msg.intent !== "compare" && (msg.restaurants?.length || msg.attractions?.length || msg.hotels?.length || msg.researchSources?.length) ? (
                     <div className="space-y-2">
-                      {msg.restaurants?.filter((r) => r.type === "verified_place").map((r) => {
-                        const key = cardKey(r.name, selectedDayId || undefined);
-                        const reason = pickCardReason(r);
-                        const extraDetail = pickCardDetail(r);
-                        const isClosed = hasClosedSignal(r);
-                        const isOperational = !isClosed && canShowGoogleVerifiedBadge(r);
-                        return (
-                          <ConciergeCard
-                            key={`${r.name}-${key}`}
-                            title={r.name}
-                            category={r.cuisine || "Restaurant"}
-                            meta={[
-                              r.neighborhood || "",
-                              r.rating ? `★ ${r.rating}` : "",
-                              r.reviewCount ? `${r.reviewCount.toLocaleString()} reviews` : "",
-                              typeof r.evidenceCount === "number" && r.evidenceCount > 0 ? `${r.evidenceCount} editorial mentions` : "",
-                            ].filter(Boolean)}
-                            tags={[...(r.tags ?? []), ...(r.bestForTags ?? []), ...(r.sourceBadges ?? [])]}
-                            reason={reason}
-                            extraDetail={extraDetail}
-                            mapLink={r.mapsLink}
-                            sourceLink={r.bookingLink ?? r.sourceUrl}
-                            isOperational={isOperational}
-                            verifiedAt={formatVerifiedAt(r.lastVerifiedAt)}
-                            added={addedItems.has(key)}
-                            adding={addingItems.has(key)}
-                            canAdd={!isClosed}
-                            onAdd={() => addItem(r.name, "restaurant", r, reason)}
-                          />
-                        );
-                      })}
+                      {(() => {
+                        const addablePlaces = [
+                          ...(msg.restaurants ?? []).filter((r) => r.type === "verified_place").map((place) => ({ kind: "restaurant" as const, place, category: place.cuisine || "Restaurant", sourceLink: place.bookingLink ?? place.sourceUrl })),
+                          ...(msg.attractions ?? []).filter((a) => a.type === "verified_place").map((place) => ({ kind: "attraction" as const, place, category: place.category || "Attraction", sourceLink: place.sourceUrl })),
+                          ...(msg.hotels ?? []).filter((h) => h.type === "verified_place").map((place) => ({ kind: "hotel" as const, place, category: "Hotel", sourceLink: place.bookingUrl ?? place.sourceUrl })),
+                        ];
+                        const allTitles = addablePlaces.map(({ place }) => place.name);
 
-                      {msg.attractions?.filter((a) => a.type === "verified_place").map((a) => {
-                        const key = cardKey(a.name, selectedDayId || undefined);
-                        const reason = pickCardReason(a);
-                        const extraDetail = pickCardDetail(a);
-                        const isClosed = hasClosedSignal(a);
-                        const isOperational = !isClosed && canShowGoogleVerifiedBadge(a);
-                        return (
-                          <ConciergeCard
-                            key={`${a.name}-${key}`}
-                            title={a.name}
-                            category={a.category || "Attraction"}
-                            meta={[
-                              a.neighborhood || a.address || "",
-                              a.rating ? `★ ${a.rating}` : "",
-                              a.reviewCount ? `${a.reviewCount.toLocaleString()} reviews` : "",
-                              typeof a.evidenceCount === "number" && a.evidenceCount > 0 ? `${a.evidenceCount} editorial mentions` : "",
-                            ].filter(Boolean)}
-                            tags={[...(a.tags ?? []), ...(a.bestForTags ?? []), ...(a.sourceBadges ?? [])]}
-                            reason={reason}
-                            extraDetail={extraDetail}
-                            mapLink={a.mapsLink}
-                            sourceLink={a.sourceUrl}
-                            isOperational={isOperational}
-                            verifiedAt={formatVerifiedAt(a.lastVerifiedAt)}
-                            added={addedItems.has(key)}
-                            adding={addingItems.has(key)}
-                            canAdd={!isClosed}
-                            onAdd={() => addItem(a.name, "attraction", a, reason)}
-                          />
-                        );
-                      })}
+                        return addablePlaces.map(({ kind, place, category, sourceLink }) => {
+                          const key = cardKey(place.name, selectedDayId || undefined);
+                          const baseReason = pickCardReason(place);
+                          const reason = sanitizeWhyPick(baseReason, place.name, allTitles);
+                          const extraDetail = pickCardDetail(place);
+                          const isClosed = hasClosedSignal(place);
+                          const isOperational = !isClosed && canShowGoogleVerifiedBadge(place);
+                          const sourceChecked = formatVerifiedAt(place.lastVerifiedAt);
+                          const reviewCount = place.supportingDetails?.reviewCount
+                            ?? ("reviewCount" in place ? place.reviewCount : undefined);
+                          const meta = [
+                            place.rating ? `★ ${place.rating}` : "",
+                            reviewCount ? `${Number(reviewCount).toLocaleString()} reviews` : "",
+                            typeof place.evidenceCount === "number" && place.evidenceCount > 0 ? `${place.evidenceCount} editorial mention${place.evidenceCount === 1 ? "" : "s"}` : "",
+                            sourceChecked ?? "",
+                          ].filter(Boolean);
 
-                      {msg.hotels?.filter((h) => h.type === "verified_place").map((h) => {
-                        const key = cardKey(h.name, selectedDayId || undefined);
-                        const reason = pickCardReason(h);
-                        const extraDetail = pickCardDetail(h);
-                        const isClosed = hasClosedSignal(h);
-                        const isOperational = !isClosed && canShowGoogleVerifiedBadge(h);
-                        return (
-                          <ConciergeCard
-                            key={`${h.name}-${key}`}
-                            title={h.name}
-                            category="Hotel"
-                            meta={[
-                              h.areaLabel || "",
-                              h.stars ? `${Math.round(h.stars)}★` : "",
-                              h.rating ? `★ ${h.rating}` : "",
-                              h.pricePerNight ? `~$${Math.round(h.pricePerNight)}/night` : "",
-                              typeof h.evidenceCount === "number" && h.evidenceCount > 0 ? `${h.evidenceCount} editorial mentions` : "",
-                            ].filter(Boolean)}
-                            tags={[...(h.tags ?? []), ...(h.bestForTags ?? []), ...(h.sourceBadges ?? [])]}
-                            reason={reason}
-                            extraDetail={extraDetail}
-                            mapLink={h.mapsLink}
-                            sourceLink={h.bookingUrl ?? h.sourceUrl}
-                            isOperational={isOperational}
-                            verifiedAt={formatVerifiedAt(h.lastVerifiedAt)}
-                            added={addedItems.has(key)}
-                            adding={addingItems.has(key)}
-                            canAdd={!isClosed}
-                            onAdd={() => addItem(h.name, "hotel", h, reason)}
-                          />
-                        );
-                      })}
+                          return (
+                            <ConciergeCard
+                              key={`${place.name}-${key}`}
+                              title={place.name}
+                              category={category}
+                              meta={meta}
+                              tags={dedupeTagsCaseInsensitive([...(place.tags ?? []), ...(place.bestForTags ?? []), ...(place.sourceBadges ?? [])])}
+                              reason={reason}
+                              extraDetail={extraDetail}
+                              mapLink={place.mapsLink}
+                              sourceLink={sourceLink}
+                              isOperational={isOperational}
+                              verifiedAt={sourceChecked}
+                              added={addedItems.has(key)}
+                              adding={addingItems.has(key)}
+                              canAdd={!isClosed}
+                              onAdd={() => addItem(place.name, kind, place, reason)}
+                            />
+                          );
+                        });
+                      })()}
 
                       {(msg.researchSources?.filter((s) => s.type === "research_source").length ?? 0) > 0
                         && addableCount(msg) < 3 && (
