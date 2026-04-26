@@ -79,6 +79,7 @@ class GoogleVerification(BaseModel):
 
 
 class UnifiedRestaurantResult(BaseModel):
+    type: Literal["verified_place"] = "verified_place"
     name: str
     source: str = "Michelin Guide"
     michelin_status: Optional[str] = None  # "3 Stars" | "2 Stars" | "1 Star" | "Bib Gourmand" | "Selected"
@@ -99,6 +100,7 @@ class UnifiedRestaurantResult(BaseModel):
 
 
 class UnifiedAttractionResult(BaseModel):
+    type: Literal["verified_place"] = "verified_place"
     name: str
     source: str = "Search"
     category: str
@@ -118,6 +120,7 @@ class UnifiedAttractionResult(BaseModel):
 
 
 class UnifiedHotelResult(BaseModel):
+    type: Literal["verified_place"] = "verified_place"
     name: str
     source: str = "Search"
     area_label: Optional[str] = None
@@ -137,6 +140,7 @@ class UnifiedHotelResult(BaseModel):
 
 
 class UnifiedResearchSourceResult(BaseModel):
+    type: Literal["research_source"] = "research_source"
     title: str
     source: str = "Live search"
     source_type: Literal["article_listicle_blog_directory", "neighborhood_area", "generic_info_source"] = "generic_info_source"

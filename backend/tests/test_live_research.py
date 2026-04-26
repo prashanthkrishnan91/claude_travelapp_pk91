@@ -28,6 +28,7 @@ from app.models.concierge import (
     SOURCE_UNAVAILABLE,
 )
 from app.services.concierge import ConciergeService
+from app.services.google_places import GooglePlaceVerification
 from app.services.live_research import (
     LiveResearchResult,
     LiveResearchService,
@@ -1168,6 +1169,19 @@ class TestVerifyBeforeAdd:
             enabled=True,
         )
 
+    @staticmethod
+    def _google_stub(mapping):
+        class _Stub:
+            available = True
+
+            def verify(self, name, destination, neighborhood=None, intent=None):
+                return mapping.get(name.lower(), GooglePlaceVerification(confidence="unknown", failure_reason="not_found"))
+
+            def clear_cache_for_destination(self, destination):
+                return 0
+
+        return _Stub()
+
     def test_obvious_non_venue_names_never_become_cards(self):
         """United States / Launch Special / Chicago Explore are pre-filtered."""
         article_hit = _hit(
@@ -1369,6 +1383,86 @@ class TestVerifyBeforeAdd:
         )
         assert result.restaurants == []
         assert result.research_sources  # Article still appears as background source
+
+    def test_google_5_plus_verified_suppresses_research_sources(self):
+        direct_hits = [
+            _hit(f"Venue {idx}", f"https://example.com/venue-{idx}", "Cocktail bar in Chicago.")
+            for idx in range(1, 7)
+        ]
+        provider = _make_verifying_provider(direct_hits, {})
+        google_map = {
+            f"venue {idx}": GooglePlaceVerification(
+                provider_place_id=f"gp-{idx}",
+                name=f"Venue {idx}",
+                formatted_address=f"{idx} Main St, Chicago, IL",
+                business_status="OPERATIONAL",
+                google_maps_uri=f"https://maps.google.com/?cid=gp-{idx}",
+                rating=4.5,
+                types=["bar", "point_of_interest"],
+                confidence="high",
+            )
+            for idx in range(1, 7)
+        }
+        svc = LiveResearchService(
+            provider=provider,
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars")
+        assert len(result.restaurants) >= 5
+        assert result.research_sources == []
+        assert all(r.type == "verified_place" for r in result.restaurants)
+
+    def test_google_verified_reason_and_fields_do_not_use_tavily_snippet(self):
+        suspicious_snippet = "Hotel lounge with rooms upstairs."
+        direct_hit = _hit("Kumiko", "https://example.com/kumiko", suspicious_snippet)
+        provider = _make_verifying_provider([direct_hit], {})
+        google = GooglePlaceVerification(
+            provider_place_id="gp-kumiko",
+            name="Kumiko",
+            formatted_address="630 W Lake St, Chicago, IL",
+            business_status="OPERATIONAL",
+            google_maps_uri="https://maps.google.com/?cid=gp-kumiko",
+            rating=4.7,
+            types=["cocktail_bar", "bar", "point_of_interest"],
+            confidence="high",
+        )
+        svc = LiveResearchService(
+            provider=provider,
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub({"kumiko": google}),
+        )
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        assert len(result.restaurants) == 1
+        card = result.restaurants[0]
+        assert card.summary and "Hotel lounge" not in card.summary
+        assert "Google rating" in card.summary
+        assert card.maps_link == "https://maps.google.com/?cid=gp-kumiko"
+        assert card.type == "verified_place"
+
+    def test_listicle_url_never_surfaces_as_verified_place(self):
+        direct_hit = _hit("Kumiko", "https://example.com/top-10-bars", "Cocktail bar in Chicago.")
+        provider = _make_verifying_provider([direct_hit], {})
+        google = GooglePlaceVerification(
+            provider_place_id="gp-kumiko",
+            name="Kumiko",
+            formatted_address="630 W Lake St, Chicago, IL",
+            business_status="OPERATIONAL",
+            confidence="high",
+        )
+        svc = LiveResearchService(
+            provider=provider,
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub({"kumiko": google}),
+        )
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        assert result.restaurants == []
 
 
 class TestFrontendResearchSourceCard:

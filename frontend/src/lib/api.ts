@@ -1149,6 +1149,7 @@ export interface GoogleVerification {
 }
 
 export interface UnifiedRestaurantResult {
+  type: "verified_place";
   name: string;
   source: string;
   michelinStatus?: string;
@@ -1169,6 +1170,7 @@ export interface UnifiedRestaurantResult {
 }
 
 export interface UnifiedAttractionResult {
+  type: "verified_place";
   name: string;
   source: string;
   category: string;
@@ -1188,6 +1190,7 @@ export interface UnifiedAttractionResult {
 }
 
 export interface UnifiedHotelResult {
+  type: "verified_place";
   name: string;
   source: string;
   areaLabel?: string;
@@ -1220,6 +1223,7 @@ export interface UnifiedAreaComparisonResult {
 }
 
 export interface UnifiedResearchSourceResult {
+  type: "research_source";
   title: string;
   source: string;
   sourceType: "article_listicle_blog_directory" | "neighborhood_area" | "generic_info_source";
