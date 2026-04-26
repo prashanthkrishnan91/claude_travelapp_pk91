@@ -1,53 +1,50 @@
-import { z } from "zod";
-
-export const responseTypeSchema = z.enum([
+export const responseTypeSchema = [
   "place_recommendations",
   "trip_advice",
   "unsupported",
-]);
+] as const;
 
-const suggestionSchema = z.object({
-  type: z.enum(["attraction", "restaurant"]),
-  name: z.string(),
-  reason: z.string(),
-});
+export type ResponseType = (typeof responseTypeSchema)[number];
 
-export const placeRecommendationsSchema = z.object({
-  responseType: z.literal("place_recommendations"),
-  response: z.string(),
-  intent: z.string(),
-  retrievalUsed: z.boolean(),
-  sourceStatus: z.string(),
-  cached: z.boolean().optional(),
-  liveProvider: z.string().nullable().optional(),
-  restaurants: z.array(z.unknown()),
-  attractions: z.array(z.unknown()),
-  hotels: z.array(z.unknown()),
-  researchSources: z.array(z.unknown()),
-  areas: z.array(z.string()),
-  areaComparisons: z.array(z.unknown()),
-  suggestions: z.array(suggestionSchema),
-  sources: z.array(z.string()),
-  warnings: z.array(z.string()),
-});
+export interface ConciergeSuggestion {
+  type: "attraction" | "restaurant";
+  name: string;
+  reason: string;
+}
 
-export const tripAdviceSchema = z.object({
-  responseType: z.literal("trip_advice"),
-  response: z.string(),
-  suggestions: z.array(suggestionSchema).default([]),
-  metadata: z.record(z.unknown()).default({}),
-});
+export interface PlaceRecommendationsResponse {
+  responseType: "place_recommendations";
+  response: string;
+  intent: string;
+  retrievalUsed: boolean;
+  sourceStatus: string;
+  cached?: boolean;
+  liveProvider?: string | null;
+  restaurants: unknown[];
+  attractions: unknown[];
+  hotels: unknown[];
+  researchSources: unknown[];
+  areas: string[];
+  areaComparisons: unknown[];
+  suggestions: ConciergeSuggestion[];
+  sources: string[];
+  warnings: string[];
+}
 
-export const unsupportedSchema = z.object({
-  responseType: z.literal("unsupported"),
-  code: z.string(),
-  message: z.string(),
-});
+export interface TripAdviceResponse {
+  responseType: "trip_advice";
+  response: string;
+  suggestions: ConciergeSuggestion[];
+  metadata: Record<string, unknown>;
+}
 
-export const conciergeResponseSchema = z.discriminatedUnion("responseType", [
-  placeRecommendationsSchema,
-  tripAdviceSchema,
-  unsupportedSchema,
-]);
+export interface UnsupportedResponse {
+  responseType: "unsupported";
+  code: string;
+  message: string;
+}
 
-export type ConciergeResponse = z.infer<typeof conciergeResponseSchema>;
+export type ConciergeResponse =
+  | PlaceRecommendationsResponse
+  | TripAdviceResponse
+  | UnsupportedResponse;
