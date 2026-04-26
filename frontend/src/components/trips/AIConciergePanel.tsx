@@ -837,8 +837,10 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                             meta={[
                               r.neighborhood || "",
                               r.rating ? `★ ${r.rating}` : "",
+                              r.reviewCount ? `${r.reviewCount.toLocaleString()} reviews` : "",
+                              typeof r.evidenceCount === "number" && r.evidenceCount > 0 ? `${r.evidenceCount} editorial mentions` : "",
                             ].filter(Boolean)}
-                            tags={r.tags ?? []}
+                            tags={[...(r.tags ?? []), ...(r.bestForTags ?? []), ...(r.sourceBadges ?? [])]}
                             reason={reason}
                             extraDetail={extraDetail}
                             mapLink={r.mapsLink}
@@ -868,8 +870,9 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                               a.neighborhood || a.address || "",
                               a.rating ? `★ ${a.rating}` : "",
                               a.reviewCount ? `${a.reviewCount.toLocaleString()} reviews` : "",
+                              typeof a.evidenceCount === "number" && a.evidenceCount > 0 ? `${a.evidenceCount} editorial mentions` : "",
                             ].filter(Boolean)}
-                            tags={a.tags ?? []}
+                            tags={[...(a.tags ?? []), ...(a.bestForTags ?? []), ...(a.sourceBadges ?? [])]}
                             reason={reason}
                             extraDetail={extraDetail}
                             mapLink={a.mapsLink}
@@ -900,8 +903,9 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                               h.stars ? `${Math.round(h.stars)}★` : "",
                               h.rating ? `★ ${h.rating}` : "",
                               h.pricePerNight ? `~$${Math.round(h.pricePerNight)}/night` : "",
+                              typeof h.evidenceCount === "number" && h.evidenceCount > 0 ? `${h.evidenceCount} editorial mentions` : "",
                             ].filter(Boolean)}
-                            tags={h.tags ?? []}
+                            tags={[...(h.tags ?? []), ...(h.bestForTags ?? []), ...(h.sourceBadges ?? [])]}
                             reason={reason}
                             extraDetail={extraDetail}
                             mapLink={h.mapsLink}
