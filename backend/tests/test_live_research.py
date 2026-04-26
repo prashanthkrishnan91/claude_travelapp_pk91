@@ -45,8 +45,10 @@ from app.services.live_research import (
     _final_hard_filter_closed_venues,
     _is_obvious_non_venue,
     _make_cache_key,
+    _normalize_place_category,
     _reason_guard,
     _sanitize_reason_evidence_text,
+    _validate_or_fallback_reason,
     _validate_venue_candidate,
     build_place_reason,
     normalize_hits,
@@ -2522,6 +2524,49 @@ class TestGooglePipelineRegression:
         assert any(token in reason for token in ("coffee", "cafe", "casual"))
         assert "cocktails" not in reason
         assert "tasting menu" not in reason
+
+    def test_restaurant_reason_never_mentions_cocktail_or_nightlife_terms(self):
+        article = _hit("Boka", "https://example.com/b", "Restaurant in Chicago.")
+        google_map = {
+            "boka": GooglePlaceVerification(
+                provider_place_id="gp-boka",
+                name="Boka",
+                formatted_address="1729 N Halsted St, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                rating=4.7,
+                user_rating_count=2100,
+                types=["restaurant"],
+            )
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider([article]),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(intent=INTENT_RESTAURANTS, destination="Chicago", user_query="best restaurants")
+        assert result.restaurants
+        reason = (result.restaurants[0].supporting_details.why_pick or "").lower()
+        for forbidden in ("cocktail", "nightlife", "speakeasy", "bartender", "lounge"):
+            assert forbidden not in reason
+
+    def test_unknown_google_types_do_not_fallback_to_candidate_generic_restaurant_label(self):
+        candidate = SimpleNamespace(cuisine="Restaurant", category="Food")
+        category = _normalize_place_category(["point_of_interest", "establishment"], candidate)
+        assert category == "place"
+
+    def test_reason_validation_falls_back_and_returns_single_sentence(self):
+        reason, source = _validate_or_fallback_reason(
+            "Great for tasting menu service. Also near the theater district.",
+            category="bar",
+            own_name="Kumiko",
+            known_candidate_names=["Kumiko", "The Aviary"],
+        )
+        assert source == "fallback"
+        assert reason.count(".") == 1
+        assert "drinks" in reason.lower()
 
     def test_supporting_details_never_leak_internal_metadata_terms(self):
         article = _hit("Kumiko", "https://example.com/k", "Cocktail bar in Chicago.")
