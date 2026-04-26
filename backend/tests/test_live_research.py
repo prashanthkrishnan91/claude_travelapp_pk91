@@ -322,8 +322,9 @@ class TestNormalization:
         ]
         out = normalize_hits(hits, intent=INTENT_RESTAURANTS, destination="Chicago", user_query="restaurants")
         assert out["research_sources"]
+        # Article/listicle sources now get the discovery-oriented fallback reason
         assert out["research_sources"][0].summary == (
-            "This source may contain relevant background, but it is not a confirmed venue."
+            "Used for background discovery; individual venues were verified separately."
         )
 
     def test_research_sources_are_capped_when_venues_exist(self):
@@ -1471,8 +1472,22 @@ class TestFrontendResearchSourceCard:
         panel_path = os.path.join(root, "frontend", "src", "components", "trips", "AIConciergePanel.tsx")
         with open(panel_path, "r", encoding="utf-8") as f:
             src = f.read()
-        assert "category=\"Research source\"" in src
+        # Research source cards must always be rendered with canAdd={false}
         assert "canAdd={false}" in src
+        # The category label for non-article sources is still "Research source"
+        assert '"Research source"' in src
+
+    def test_research_source_open_source_button_not_add_to_trip(self):
+        root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        panel_path = os.path.join(root, "frontend", "src", "components", "trips", "AIConciergePanel.tsx")
+        with open(panel_path, "r", encoding="utf-8") as f:
+            src = f.read()
+        # Non-addable cards with a source link should show "Open source"
+        assert "Open source" in src
+        # ExternalLink icon is used in the non-addable path
+        assert "ExternalLink" in src
+        # The old "Research source" span label is gone
+        assert ">Research source<" not in src
 
 
 class TestFrontendConciergeClearChat:
@@ -1487,3 +1502,365 @@ class TestFrontendConciergeClearChat:
         handle_clear_block = src.split("async function handleClearChat() {", 1)[1].split("}", 1)[0]
         assert "setTripDays([]);" not in handle_clear_block
         assert "setItineraryItems([]);" not in handle_clear_block
+
+
+# ── Listicle-extraction pipeline: new targeted tests ─────────────────────────
+
+class TestListicleTitleNotAddable:
+    """Listicle/article titles must never become addable venue cards."""
+
+    def test_article_title_is_not_addable_venue_no_google(self):
+        """'The 22 Best Cocktail Bars In Chicago' title must stay in research_sources only."""
+        hit = _hit(
+            "The 22 Best Cocktail Bars In Chicago",
+            "https://example.com/best-bars",
+            "Kumiko, The Aviary, and Billy Sunday top the list.",
+        )
+        out = normalize_hits(
+            [hit],
+            intent=INTENT_NIGHTLIFE,
+            destination="Chicago",
+            user_query="cocktail bars",
+        )
+        # The listicle title itself must not appear as a restaurant card
+        names = [r.name for r in out["restaurants"]]
+        assert "The 22 Best Cocktail Bars In Chicago" not in names
+        assert any(s.type == "research_source" for s in out["research_sources"])
+
+    def test_numbered_listicle_title_goes_to_research_sources(self):
+        """'Top 10 Speakeasies In Chicago' title must be classified as research source."""
+        hit = _hit(
+            "Top 10 Speakeasies In Chicago",
+            "https://example.com/speakeasies",
+            "1. The Green Door — Wicker Park. 2. GMan Tavern — Boystown.",
+        )
+        out = normalize_hits(
+            [hit],
+            intent=INTENT_NIGHTLIFE,
+            destination="Chicago",
+            user_query="speakeasies",
+        )
+        restaurant_names = {r.name for r in out["restaurants"]}
+        # The title itself is not a venue
+        assert "Top 10 Speakeasies In Chicago" not in restaurant_names
+
+    def test_guide_title_not_addable(self):
+        """'Guide to Rooftop Bars in NYC' must not produce an addable card."""
+        hit = _hit(
+            "Guide to Rooftop Bars in NYC",
+            "https://example.com/guide",
+            "230 Fifth Rooftop Bar — Midtown. Bar SixtyFive — Rockefeller.",
+        )
+        out = normalize_hits(
+            [hit],
+            intent=INTENT_NIGHTLIFE,
+            destination="New York",
+            user_query="rooftop bars",
+        )
+        names = [r.name for r in out["restaurants"]]
+        assert "Guide to Rooftop Bars in NYC" not in names
+
+
+class TestExtractedVenueRequiresGoogleVerification:
+    """Extracted venue names must only become addable cards after Google verification."""
+
+    def setup_method(self):
+        reset_global_cache()
+
+    def _svc_with_google(self, provider, google_map) -> LiveResearchService:
+        class _Stub:
+            available = True
+            def verify(self, name, destination, neighborhood=None, intent=None):
+                return google_map.get(name.lower(), GooglePlaceVerification(
+                    confidence="unknown", failure_reason="not_found"
+                ))
+            def clear_cache_for_destination(self, destination):
+                return 0
+        return LiveResearchService(
+            provider=provider,
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=_Stub(),
+        )
+
+    def test_extracted_venue_not_addable_without_google_match(self):
+        article = _hit(
+            "Best Cocktail Bars In Chicago",
+            "https://example.com/bars",
+            "1. Kumiko — West Loop. 2. The Aviary — West Loop.",
+        )
+        provider = _make_verifying_provider([article], {"Kumiko": _hit(
+            "Kumiko", "https://www.yelp.com/biz/kumiko", "Cocktail bar at 630 W Lake St, Chicago."
+        )})
+        # Google returns no match for Kumiko
+        svc = self._svc_with_google(provider, {})
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        assert not any(r.name == "Kumiko" for r in result.restaurants)
+
+    def test_extracted_venue_addable_with_operational_google_match(self):
+        article = _hit(
+            "Best Cocktail Bars In Chicago",
+            "https://example.com/bars",
+            "1. Kumiko — West Loop speakeasy cocktail bar in Chicago.",
+        )
+        verify_hit = _hit(
+            "Kumiko", "https://www.yelp.com/biz/kumiko",
+            "Cocktail bar at 630 W Lake St, Chicago, IL."
+        )
+        provider = _make_verifying_provider([article], {"Kumiko": verify_hit})
+        google = GooglePlaceVerification(
+            provider_place_id="gp-kumiko",
+            name="Kumiko",
+            formatted_address="630 W Lake St, Chicago, IL 60661",
+            business_status="OPERATIONAL",
+            google_maps_uri="https://maps.google.com/?cid=gp-kumiko",
+            rating=4.8,
+            types=["cocktail_bar", "bar", "point_of_interest"],
+            confidence="high",
+        )
+        svc = self._svc_with_google(provider, {"kumiko": google})
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        assert any(r.name == "Kumiko" for r in result.restaurants)
+        card = next(r for r in result.restaurants if r.name == "Kumiko")
+        assert card.verified_place is True
+        assert card.google_verification is not None
+        assert card.google_verification.provider_place_id == "gp-kumiko"
+
+    def test_closed_google_match_excluded(self):
+        article = _hit(
+            "Chicago Bars Guide",
+            "https://example.com/bars",
+            "1. OldSpot — Famous dive bar in Logan Square cocktail scene in Chicago.",
+        )
+        verify_hit = _hit(
+            "OldSpot", "https://www.yelp.com/biz/oldspot",
+            "Bar at 1234 N Milwaukee Ave, Chicago, IL."
+        )
+        provider = _make_verifying_provider([article], {"OldSpot": verify_hit})
+        google_closed = GooglePlaceVerification(
+            provider_place_id="gp-oldspot",
+            name="OldSpot",
+            formatted_address="1234 N Milwaukee Ave, Chicago, IL",
+            business_status="CLOSED_PERMANENTLY",
+            confidence="high",
+        )
+        svc = self._svc_with_google(provider, {"oldspot": google_closed})
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        # Permanently closed venue must NOT appear as addable card
+        assert not any(r.name == "OldSpot" for r in result.restaurants)
+
+    def test_low_confidence_google_match_excluded(self):
+        article = _hit(
+            "Chicago Bar Guide",
+            "https://example.com/bars",
+            "1. Mystery Lounge — rumored cocktail spot in Chicago.",
+        )
+        provider = _make_verifying_provider([article], {})
+        google_low = GooglePlaceVerification(
+            provider_place_id="gp-mystery",
+            name="Mystery Lounge",
+            formatted_address="Unknown St, Chicago, IL",
+            business_status="OPERATIONAL",
+            confidence="low",
+        )
+        svc = self._svc_with_google(provider, {"mystery lounge": google_low})
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        assert not any(r.name == "Mystery Lounge" for r in result.restaurants)
+
+
+class TestDedupByGooglePlaceId:
+    """Same Google place_id must never appear as two separate addable cards."""
+
+    def setup_method(self):
+        reset_global_cache()
+
+    def _google_stub(self, mapping):
+        class _Stub:
+            available = True
+            def verify(self, name, destination, neighborhood=None, intent=None):
+                return mapping.get(name.lower(), GooglePlaceVerification(
+                    confidence="unknown", failure_reason="not_found"
+                ))
+            def clear_cache_for_destination(self, destination):
+                return 0
+        return _Stub()
+
+    def test_same_place_id_from_direct_and_article_deduped(self):
+        """If a venue appears both as a direct hit and extracted from an article,
+        only one addable card should be produced."""
+        direct_hit = _hit(
+            "Kumiko",
+            "https://example.com/kumiko",
+            "Cocktail bar at 630 W Lake St, Chicago IL.",
+        )
+        article_hit = _hit(
+            "Best Bars In Chicago",
+            "https://example.com/best-bars",
+            "1. Kumiko — West Loop cocktail bar in Chicago.",
+        )
+        verify_hit = _hit(
+            "Kumiko", "https://www.yelp.com/biz/kumiko",
+            "Cocktail bar at 630 W Lake St, Chicago, IL."
+        )
+        provider = _make_verifying_provider([direct_hit, article_hit], {"Kumiko": verify_hit})
+        same_google = GooglePlaceVerification(
+            provider_place_id="gp-kumiko-unique",
+            name="Kumiko",
+            formatted_address="630 W Lake St, Chicago, IL 60661",
+            business_status="OPERATIONAL",
+            google_maps_uri="https://maps.google.com/?cid=gp-kumiko",
+            rating=4.8,
+            types=["cocktail_bar", "bar"],
+            confidence="high",
+        )
+        svc = LiveResearchService(
+            provider=provider,
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub({"kumiko": same_google}),
+        )
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        kumiko_cards = [r for r in result.restaurants if r.name == "Kumiko"]
+        assert len(kumiko_cards) == 1, "Same place_id must produce exactly one addable card"
+
+    def test_two_different_place_ids_both_addable(self):
+        """Two venues with distinct place_ids must both appear as addable cards."""
+        hits = [
+            _hit("Kumiko", "https://example.com/kumiko", "Cocktail bar at 630 W Lake St, Chicago IL."),
+            _hit("The Aviary", "https://example.com/aviary", "Bar at 955 W Fulton Market, Chicago IL."),
+        ]
+        google_map = {
+            "kumiko": GooglePlaceVerification(
+                provider_place_id="gp-kumiko",
+                name="Kumiko",
+                formatted_address="630 W Lake St, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                types=["bar"],
+            ),
+            "the aviary": GooglePlaceVerification(
+                provider_place_id="gp-aviary",
+                name="The Aviary",
+                formatted_address="955 W Fulton Market, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                types=["bar"],
+            ),
+        }
+        provider = _make_verifying_provider(hits, {})
+        svc = LiveResearchService(
+            provider=provider,
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
+        names = {r.name for r in result.restaurants}
+        assert "Kumiko" in names
+        assert "The Aviary" in names
+
+
+class TestNoRawArticleBecomesAddableCard:
+    """No raw article/listicle should appear directly as an Add to Trip card."""
+
+    def test_article_type_research_source_is_never_trip_addable(self):
+        """UnifiedResearchSourceResult.trip_addable must always be False."""
+        hits = [
+            _hit(
+                "The 15 Best Bars In Chicago — Eater",
+                "https://www.eater.com/chicago/best-bars",
+                "Kumiko, The Violet Hour, and Green Mill are local favorites.",
+            ),
+            _hit(
+                "Chicago Bar Guide 2026",
+                "https://example.com/guide",
+                "This guide covers all neighborhoods.",
+            ),
+        ]
+        out = normalize_hits(
+            hits,
+            intent=INTENT_NIGHTLIFE,
+            destination="Chicago",
+            user_query="bars in chicago",
+        )
+        for src in out["research_sources"]:
+            assert src.trip_addable is False, (
+                f"Research source '{src.title}' has trip_addable=True which is forbidden"
+            )
+
+    def test_article_hit_type_is_research_source_not_verified_place(self):
+        """Articles classified as article_listicle_blog_directory must have
+        type='research_source', never 'verified_place'."""
+        hit = _hit(
+            "Best 10 Restaurants In Chicago",
+            "https://example.com/top-restaurants",
+            "1. Alinea — Lincoln Park. 2. Smyth — West Loop.",
+        )
+        out = normalize_hits(
+            [hit],
+            intent=INTENT_RESTAURANTS,
+            destination="Chicago",
+            user_query="restaurants",
+        )
+        for src in out["research_sources"]:
+            assert src.type == "research_source"
+        # The article title itself must not be in addable results
+        for rest in out["restaurants"]:
+            assert "Best 10 Restaurants" not in rest.name
+
+    def test_venues_discovered_set_after_google_verification(self):
+        """venues_discovered on research source == number of places that passed
+        the Google gate from that article.
+
+        Tested via normalize_hits directly so we have full control over both
+        phase-2 verified_candidates and phase-3 google_verifications.
+        """
+        article = _hit(
+            "Top Cocktail Bars Chicago",
+            "https://example.com/top-bars",
+            "1. Kumiko — West Loop cocktail bar in Chicago.",
+        )
+        google = GooglePlaceVerification(
+            provider_place_id="gp-kumiko",
+            name="Kumiko",
+            formatted_address="630 W Lake St, Chicago, IL",
+            business_status="OPERATIONAL",
+            confidence="high",
+            types=["cocktail_bar", "bar"],
+        )
+        out = normalize_hits(
+            [article],
+            intent=INTENT_NIGHTLIFE,
+            destination="Chicago",
+            user_query="bars",
+            verified_candidates={
+                "kumiko": VerificationResult(
+                    verified=True,
+                    source_url="https://www.yelp.com/biz/kumiko",
+                    neighborhood="West Loop",
+                    reason="Verified on Yelp",
+                )
+            },
+            google_verifications={"kumiko": google},
+            max_per_kind=8,
+        )
+        # Kumiko should be in addable restaurants
+        assert any(r.name == "Kumiko" for r in out["restaurants"]), (
+            "Kumiko should be promoted to addable after Google verification"
+        )
+        # The article source (if returned, depends on venue_count cap) should
+        # have venues_discovered >= 1 when it IS included.
+        article_sources = [
+            s for s in out.get("research_sources", [])
+            if s.source_type == "article_listicle_blog_directory"
+            and "top-bars" in (s.source_url or "")
+        ]
+        # venues_discovered is always set even if the source is capped out of
+        # the return; when shown it must reflect the correct count.
+        for src in article_sources:
+            assert src.venues_discovered >= 1, (
+                "Article research source must show venues_discovered >= 1 after a venue passes Google gate"
+            )

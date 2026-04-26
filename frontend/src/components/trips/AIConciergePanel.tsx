@@ -367,9 +367,18 @@ function ConciergeCard({
           >
             {adding ? <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" /> : added ? <span className="inline-flex items-center gap-1"><Check className="h-3 w-3" /> Added</span> : actionLabel ?? "Add to Trip"}
           </button>
+        ) : sourceLink ? (
+          <a
+            href={sourceLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-200"
+          >
+            <ExternalLink className="h-3 w-3" /> Open source
+          </a>
         ) : (
           <span className="flex-1 rounded-lg bg-slate-100 px-3 py-1.5 text-center text-xs font-medium text-slate-500">
-            Research source
+            Research only
           </span>
         )}
         {mapLink && (
@@ -377,7 +386,7 @@ function ConciergeCard({
             <MapPin className="h-3.5 w-3.5" />
           </a>
         )}
-        {sourceLink && sourceLink !== mapLink && (
+        {sourceLink && sourceLink !== mapLink && canAdd && (
           <a href={sourceLink} target="_blank" rel="noopener noreferrer" title="View source / book" aria-label="View source or book" className="rounded-lg bg-violet-50 px-2 py-1.5 text-xs text-violet-700 hover:bg-violet-100">
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
@@ -877,11 +886,14 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                               <ConciergeCard
                                 key={`${s.title}-${s.sourceUrl ?? "source"}`}
                                 title={s.title}
-                                category="Research source"
-                                meta={[
-                                  s.neighborhood || "",
-                                  s.sourceType.replaceAll("_", " "),
-                                ].filter(Boolean)}
+                                category={
+                                  s.sourceType === "article_listicle_blog_directory"
+                                    ? (s.venuesDiscovered && s.venuesDiscovered > 0
+                                        ? `Discovery source · ${s.venuesDiscovered} place${s.venuesDiscovered !== 1 ? "s" : ""} verified`
+                                        : "Discovery source")
+                                    : "Research source"
+                                }
+                                meta={[s.neighborhood || ""].filter(Boolean)}
                                 tags={[]}
                                 reason={s.summary}
                                 sourceLink={s.sourceUrl}
