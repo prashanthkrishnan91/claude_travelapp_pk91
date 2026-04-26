@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     live_research_enabled: bool = True
     live_research_cache_ttl_seconds: int = 1800
     live_research_timeout_seconds: float = 6.0
+    concierge_router_v2: bool = False
+    concierge_router_v2_confidence_threshold: float = 0.55
     research_engine_require_google_verification: bool = False
     yelp_api_key: str = ""
     foursquare_api_key: str = ""
