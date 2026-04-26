@@ -1559,6 +1559,55 @@ def _google_verification_for(
     return google_verifications.get(name.lower())
 
 
+def _is_listicle_like_text(value: str) -> bool:
+    text = (value or "").lower()
+    if not text:
+        return False
+    if re.search(r"\b(best|top)\s+\d+\b", text):
+        return True
+    if re.search(r"\b(top|best)\b.*\bin\b", text):
+        return True
+    return bool(re.search(r"\b(best|top|guide|listicle|things to do|where to)\b", text))
+
+
+def _is_listicle_like_source(*, title: Optional[str], source_url: Optional[str]) -> bool:
+    if _is_listicle_like_text(title or ""):
+        return True
+    lower_url = (source_url or "").lower()
+    if not lower_url:
+        return False
+    if re.search(r"/(blog|blogs|guide|guides|list|lists|directory|roundup)/", lower_url):
+        return True
+    return any(token in lower_url for token in ("/best-", "/top-", "/things-to-do", "/where-to"))
+
+
+def _google_reason_for_venue(
+    *,
+    verification: GooglePlaceVerification,
+    intent: str,
+) -> str:
+    type_blob = " ".join((verification.types or [])).lower()
+    if intent == INTENT_NIGHTLIFE:
+        category = "Matches nightlife intent (cocktail bar / bar signals)"
+    elif intent == INTENT_HOTELS:
+        category = "Matches hotel intent (lodging/hotel signals)"
+    elif intent in {INTENT_ATTRACTIONS, INTENT_PLAN_DAY}:
+        category = "Matches attraction intent (point-of-interest signals)"
+    elif intent == INTENT_MICHELIN_RESTAURANTS:
+        category = "Matches restaurant intent (dining signals)"
+    elif "cocktail_bar" in type_blob or "bar" in type_blob:
+        category = "Matches nightlife category from Google place types"
+    else:
+        category = "Matches requested category from Google place types"
+
+    bits: List[str] = [category]
+    if verification.rating is not None:
+        bits.append(f"Google rating {verification.rating:.1f}")
+    if verification.formatted_address:
+        bits.append(f"Located at {verification.formatted_address}")
+    return ". ".join(bits) + "."
+
+
 def _apply_google_gate(
     venues: List[Any],
     *,
@@ -1566,6 +1615,7 @@ def _apply_google_gate(
     research_sources: List[UnifiedResearchSourceResult],
     kind_label: str,
     provider_label_default: str,
+    intent: str,
 ) -> List[Any]:
     """Drop venues that don't pass Google Places verification — anything that
     isn't matched + OPERATIONAL with high/medium confidence is demoted to
@@ -1580,6 +1630,26 @@ def _apply_google_gate(
         verification = _google_verification_for(getattr(venue, "name", ""), google_verifications)
         if _google_is_addable(verification):
             assert verification is not None  # for type checkers
+            if not verification.provider_place_id or not verification.formatted_address:
+                research_sources.append(
+                    UnifiedResearchSourceResult(
+                        title=str(getattr(venue, "name", f"Unverified {kind_label}") or f"Unverified {kind_label}"),
+                        source=str(getattr(venue, "source", provider_label_default) or provider_label_default),
+                        source_type="generic_info_source",
+                        summary="Google result missing address or place identifier — research only.",
+                        source_url=getattr(venue, "source_url", None),
+                        neighborhood=getattr(venue, "neighborhood", None) or getattr(venue, "area_label", None),
+                        last_verified_at=getattr(venue, "last_verified_at", None),
+                        confidence=getattr(venue, "confidence", None),
+                        trip_addable=False,
+                    )
+                )
+                continue
+            if _is_listicle_like_source(
+                title=getattr(venue, "name", None),
+                source_url=getattr(venue, "source_url", None),
+            ):
+                continue
             pyd = _to_pydantic_google_verification(verification)
             try:
                 venue.google_verification = pyd
@@ -1589,10 +1659,46 @@ def _apply_google_gate(
                 venue.verified_place = True
             except Exception:
                 pass
+            try:
+                venue.source = "Google Places"
+            except Exception:
+                pass
+            try:
+                venue.name = verification.name or getattr(venue, "name", "")
+            except Exception:
+                pass
+            try:
+                venue.rating = verification.rating
+            except Exception:
+                pass
+            try:
+                venue.review_count = verification.user_rating_count
+            except Exception:
+                pass
+            try:
+                reason = _google_reason_for_venue(verification=verification, intent=intent)
+                if hasattr(venue, "summary"):
+                    venue.summary = reason
+                elif hasattr(venue, "description"):
+                    venue.description = reason
+                elif hasattr(venue, "reason"):
+                    venue.reason = reason
+            except Exception:
+                pass
             # Prefer Google's first-party links when the article didn't have one.
-            if verification.google_maps_uri and not getattr(venue, "maps_link", None):
+            if verification.google_maps_uri:
                 try:
                     venue.maps_link = verification.google_maps_uri
+                except Exception:
+                    pass
+            if verification.formatted_address:
+                try:
+                    if hasattr(venue, "address"):
+                        venue.address = verification.formatted_address
+                    if hasattr(venue, "neighborhood"):
+                        venue.neighborhood = verification.formatted_address
+                    if hasattr(venue, "area_label"):
+                        venue.area_label = verification.formatted_address
                 except Exception:
                     pass
             if verification.website_uri:
@@ -1976,6 +2082,7 @@ def normalize_hits(
             research_sources=research_sources,
             kind_label="restaurant",
             provider_label_default="Live search",
+            intent=intent,
         )
         attractions = _apply_google_gate(
             attractions,
@@ -1983,6 +2090,7 @@ def normalize_hits(
             research_sources=research_sources,
             kind_label="attraction",
             provider_label_default="Live search",
+            intent=intent,
         )
         hotels = _apply_google_gate(
             hotels,
@@ -1990,6 +2098,7 @@ def normalize_hits(
             research_sources=research_sources,
             kind_label="hotel",
             provider_label_default="Live search",
+            intent=intent,
         )
 
     venue_count = len(restaurants) + len(attractions) + len(hotels)
@@ -2085,6 +2194,7 @@ class LiveResearchService:
         except Exception as exc:  # pragma: no cover — defensive
             logger.warning("Live research provider %s raised %s", self._provider.name, exc)
             hits = []
+        logger.info("source=tavily count=%d", len(hits))
 
         if not hits:
             return LiveResearchResult(provider_name=self._provider.name)
@@ -2230,6 +2340,21 @@ class LiveResearchService:
             verified_candidates=verified_candidates,
             google_verifications=google_verifications,
         )
+
+        google_verified_count = 0
+        if google_verifications is not None:
+            google_verified_count = sum(
+                1 for verification in google_verifications.values() if _google_is_addable(verification)
+            )
+        logger.info("source=google_places count=%d", google_verified_count)
+
+        final_verified_count = (
+            len(normalized["restaurants"]) + len(normalized["attractions"]) + len(normalized["hotels"])
+        )
+        if google_verified_count >= 5:
+            normalized["research_sources"] = []
+        logger.info("final_verified=%d", final_verified_count)
+        logger.info("final_research=%d", len(normalized["research_sources"]))
 
         if not (
             normalized["restaurants"]

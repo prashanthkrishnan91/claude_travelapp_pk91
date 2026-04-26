@@ -783,7 +783,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
                   {msg.intent !== "compare" && (msg.restaurants?.length || msg.attractions?.length || msg.hotels?.length || msg.researchSources?.length) ? (
                     <div className="space-y-2">
-                      {msg.restaurants?.map((r) => {
+                      {msg.restaurants?.filter((r) => r.type === "verified_place").map((r) => {
                         const key = cardKey(r.name, selectedDayId || undefined);
                         const reason = r.summary;
                         const isClosed = hasClosedSignal(r);
@@ -811,7 +811,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                         );
                       })}
 
-                      {msg.attractions?.map((a) => {
+                      {msg.attractions?.filter((a) => a.type === "verified_place").map((a) => {
                         const key = cardKey(a.name, selectedDayId || undefined);
                         const isClosed = hasClosedSignal(a);
                         const isOperational = !isClosed && canShowGoogleVerifiedBadge(a);
@@ -839,7 +839,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                         );
                       })}
 
-                      {msg.hotels?.map((h) => {
+                      {msg.hotels?.filter((h) => h.type === "verified_place").map((h) => {
                         const key = cardKey(h.name, selectedDayId || undefined);
                         const reason = h.reason ?? (h.pricePerNight ? `~$${Math.round(h.pricePerNight)}/night` : undefined);
                         const isClosed = hasClosedSignal(h);
@@ -869,26 +869,33 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                         );
                       })}
 
-                      {msg.researchSources?.map((s) => (
-                        <ConciergeCard
-                          key={`${s.title}-${s.sourceUrl ?? "source"}`}
-                          title={s.title}
-                          category="Research source"
-                          meta={[
-                            s.neighborhood || "",
-                            s.sourceType.replaceAll("_", " "),
-                          ].filter(Boolean)}
-                          tags={[]}
-                          reason={s.summary}
-                          sourceLink={s.sourceUrl}
-                          isOperational={false}
-                          verifiedAt={formatVerifiedAt(s.lastVerifiedAt)}
-                          added={false}
-                          adding={false}
-                          canAdd={false}
-                          onAdd={() => undefined}
-                        />
-                      ))}
+                      {(msg.researchSources?.filter((s) => s.type === "research_source").length ?? 0) > 0 && (
+                        <div className="pt-1">
+                          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Research sources</p>
+                          <div className="space-y-2">
+                            {msg.researchSources?.filter((s) => s.type === "research_source").map((s) => (
+                              <ConciergeCard
+                                key={`${s.title}-${s.sourceUrl ?? "source"}`}
+                                title={s.title}
+                                category="Research source"
+                                meta={[
+                                  s.neighborhood || "",
+                                  s.sourceType.replaceAll("_", " "),
+                                ].filter(Boolean)}
+                                tags={[]}
+                                reason={s.summary}
+                                sourceLink={s.sourceUrl}
+                                isOperational={false}
+                                verifiedAt={formatVerifiedAt(s.lastVerifiedAt)}
+                                added={false}
+                                adding={false}
+                                canAdd={false}
+                                onAdd={() => undefined}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : null}
 
