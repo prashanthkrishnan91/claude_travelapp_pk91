@@ -59,6 +59,20 @@ SOURCE_NONE = "none"
 
 # ── Retrieval-first result models ─────────────────────────────────────────────
 
+class SourceEvidence(BaseModel):
+    """Structured evidence record from article/listicle extraction."""
+
+    source_title: Optional[str] = None
+    source_url: Optional[str] = None
+    source_domain: Optional[str] = None
+    source_rank: Optional[int] = None
+    source_reason: Optional[str] = None
+    source_evidence: Optional[str] = None
+    source_category: Optional[str] = None
+    neighborhood_hint: Optional[str] = None
+    mention_count: int = 1
+
+
 class GoogleVerification(BaseModel):
     """Normalized Google Places verification record attached to addable cards."""
 
@@ -97,6 +111,7 @@ class UnifiedRestaurantResult(BaseModel):
     tags: List[str] = []
     verified_place: Optional[bool] = None
     google_verification: Optional[GoogleVerification] = None
+    source_evidence: Optional[SourceEvidence] = None
 
 
 class UnifiedAttractionResult(BaseModel):
@@ -117,6 +132,7 @@ class UnifiedAttractionResult(BaseModel):
     tags: List[str] = []
     verified_place: Optional[bool] = None
     google_verification: Optional[GoogleVerification] = None
+    source_evidence: Optional[SourceEvidence] = None
 
 
 class UnifiedHotelResult(BaseModel):
@@ -137,6 +153,7 @@ class UnifiedHotelResult(BaseModel):
     tags: List[str] = []
     verified_place: Optional[bool] = None
     google_verification: Optional[GoogleVerification] = None
+    source_evidence: Optional[SourceEvidence] = None
 
 
 class UnifiedResearchSourceResult(BaseModel):

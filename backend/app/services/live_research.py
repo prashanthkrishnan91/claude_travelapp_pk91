@@ -69,6 +69,7 @@ from app.models.concierge import (
     GoogleVerification,
     SOURCE_LIVE_SEARCH,
     SOURCE_NONE,
+    SourceEvidence,
     UnifiedAttractionResult,
     UnifiedHotelResult,
     UnifiedResearchSourceResult,
@@ -756,6 +757,14 @@ _DIRECT_PLACE_SOURCE_HINT = re.compile(
 _TRAILING_CONTEXT_WORDS = {"music", "food", "drink", "drinks", "dancing", "brunch", "nightlife"}
 _CLEAN_LIST_NAME_TMPL = r"(?<![A-Za-z0-9])(?:\d{{1,2}}[.)]\s+|[-•]\s+){name}(?=\s*[–—:\-]|\s*$)"
 _NAME_LINKER_WORDS = {"in", "near", "around", "with", "featuring", "including", "from", "for"}
+_BANNED_SOURCE_REASON_PHRASES: Tuple[str, ...] = (
+    "extracted from local guide",
+    "confirmed as an operational google place",
+    "found in article",
+    "verified on google",
+    "confirmed as operational",
+)
+
 _CHAIN_RESTAURANT_NAMES = (
     "the capital grille",
     "ruth's chris",
@@ -801,6 +810,110 @@ def _confidence_from_age(fetched_at: str) -> str:
     if age <= _FRESHNESS_MEDIUM_DAYS:
         return "medium"
     return "low"
+
+
+def _extract_source_reason(candidate: str, snippet: str) -> Optional[str]:
+    """Extract human-readable reason from 'candidate — description' article pattern."""
+    if not candidate or not snippet:
+        return None
+    pat = re.compile(
+        re.escape(candidate) + r"\s*[–—-]\s*([^.!?\n]{10,250}[.!?]?)",
+        re.IGNORECASE,
+    )
+    m = pat.search(snippet)
+    if not m:
+        return None
+    reason = m.group(1).strip().strip(".,;:")
+    lower = reason.lower()
+    if any(banned in lower for banned in _BANNED_SOURCE_REASON_PHRASES):
+        return None
+    cleaned = _clean_reason_text(reason)
+    return cleaned or None
+
+
+def _extract_source_evidence_text(candidate: str, snippet: str) -> Optional[str]:
+    """Extract a window of text around the candidate mention in the snippet."""
+    if not candidate or not snippet:
+        return None
+    low = snippet.lower()
+    idx = low.find(candidate.lower())
+    if idx < 0:
+        return None
+    start = max(0, idx - 30)
+    end = min(len(snippet), idx + len(candidate) + 200)
+    return snippet[start:end].strip() or None
+
+
+def _build_source_evidence(
+    *,
+    candidate: str,
+    source_title: str,
+    source_url: str,
+    source_rank: int,
+    snippet: str,
+    source_category: Optional[str],
+    neighborhood_hint: Optional[str],
+) -> SourceEvidence:
+    """Build a SourceEvidence from article extraction data."""
+    domain = _SOURCE_HOST_STRIP_PAT.sub("", (urlparse(source_url).netloc or "").lower()) or None
+    source_reason = _extract_source_reason(candidate, snippet)
+    evidence_text = _extract_source_evidence_text(candidate, snippet)
+    return SourceEvidence(
+        source_title=_normalize_source_title(source_title) or None,
+        source_url=source_url or None,
+        source_domain=domain,
+        source_rank=source_rank,
+        source_reason=source_reason,
+        source_evidence=evidence_text,
+        source_category=source_category,
+        neighborhood_hint=neighborhood_hint,
+        mention_count=1,
+    )
+
+
+def _compose_reason_with_google(
+    *,
+    source_evidence: Optional[SourceEvidence],
+    verification: "GooglePlaceVerification",
+    intent: str,
+    source_count: int = 0,
+) -> str:
+    """Compose the final card reason from article evidence + Google verification data."""
+    google_bits: List[str] = []
+    if verification.formatted_address:
+        google_bits.append(f"at {verification.formatted_address}")
+    if verification.rating is not None:
+        google_bits.append(f"with a {verification.rating:.1f} rating")
+    google_support = f"Google verifies it {' '.join(google_bits)}" if google_bits else "Confirmed operational by Google"
+
+    if source_evidence and source_evidence.source_reason:
+        reason = source_evidence.source_reason
+        # Add mention-count context only when multiple articles surfaced this venue.
+        if source_evidence.mention_count > 1:
+            prefix = f"Mentioned by {source_evidence.mention_count} guides. "
+            reason = prefix + reason
+        return f"{reason} {google_support}.".strip()
+
+    if source_evidence and source_evidence.source_evidence:
+        # Derive a short reason from the raw evidence text.
+        derived = _clean_reason_text(source_evidence.source_evidence[:200])
+        if derived:
+            return f"{derived} {google_support}.".strip()
+
+    # No article evidence — build a data-rich reason from Google fields only.
+    # For direct venue hits this is the primary reason (keep rating/address).
+    bits: List[str] = []
+    if source_count > 1:
+        bits.append(f"Found in {source_count} local guides.")
+    elif source_count == 1:
+        bits.append("Featured in a local guide.")
+    if verification.rating is not None:
+        bits.append(f"Google rating {verification.rating:.1f}")
+    if verification.formatted_address:
+        bits.append(f"at {verification.formatted_address}")
+    if bits:
+        return ". ".join(bits) + "."
+    return "Verified on Google after appearing in a local guide."
 
 
 def _strip_publisher(title: str) -> str:
@@ -1042,7 +1155,7 @@ def _extract_venue_names_from_text(text: str) -> List[str]:
     seen: set = set()
 
     def _add(raw: str) -> None:
-        name = raw.strip(" \t.,;:\"'“”‘’")
+        name = raw.strip(" \t.,;:\'\"").strip("\u201c\u201d\u2018\u2019")
         low = name.lower()
         if 2 < len(name) <= 60 and low not in seen:
             seen.add(low)
@@ -1056,6 +1169,41 @@ def _extract_venue_names_from_text(text: str) -> List[str]:
         _add(m.group(1))
 
     return candidates
+
+
+def _extract_venue_names_with_rank(text: str) -> "List[Tuple[str, int]]":
+    """Like _extract_venue_names_from_text but returns (name, 1-based-rank) tuples."""
+    if not text:
+        return []
+    results: "List[Tuple[str, int]]" = []
+    seen: set = set()
+
+    def _add_ranked(raw: str, rank: int) -> None:
+        name = raw.strip(" \t.,;:\'\"").strip("\u201c\u201d\u2018\u2019")
+        low = name.lower()
+        if 2 < len(name) <= 60 and low not in seen:
+            seen.add(low)
+            results.append((name, rank))
+
+    # Numbered items with explicit rank capture.
+    _num_rank_pat = re.compile(
+        r"(?<![A-Za-z])(?P<num>\d{1,2})[.)]\s+(?P<name>[A-Z][A-Za-z\u2019\-\.& ]{2,50}?)"
+        r"(?=\s*[\u2013\u2014\-]|\s*[\n:]|\s*\d{1,2}[.)]|\s*$)"
+    )
+    numbered_seen: set = set()
+    for m in _num_rank_pat.finditer(text):
+        name_raw = m.group("name")
+        low = name_raw.strip().lower()
+        if low not in numbered_seen:
+            numbered_seen.add(low)
+            _add_ranked(name_raw, int(m.group("num")))
+
+    for m in _PROPER_NOUN_DASH_PAT.finditer(text):
+        _add_ranked(m.group(1), 0)
+    for m in _QUOTED_VENUE_PAT.finditer(text):
+        _add_ranked(m.group(1), 0)
+
+    return results
 
 
 def _split_words(name: str) -> List[str]:
@@ -1660,20 +1808,18 @@ def _apply_google_gate(
             pid = verification.provider_place_id
             if pid and seen_place_ids is not None:
                 if pid in seen_place_ids:
-                    # Already kept this exact Google place — demote duplicate
-                    research_sources.append(
-                        UnifiedResearchSourceResult(
-                            title=str(getattr(venue, "name", f"Duplicate {kind_label}") or f"Duplicate {kind_label}"),
-                            source=str(getattr(venue, "source", provider_label_default) or provider_label_default),
-                            source_type="generic_info_source",
-                            summary="Same place already shown — skipped to avoid duplicates.",
-                            source_url=getattr(venue, "source_url", None),
-                            neighborhood=getattr(venue, "neighborhood", None) or getattr(venue, "area_label", None),
-                            last_verified_at=getattr(venue, "last_verified_at", None),
-                            confidence=getattr(venue, "confidence", None),
-                            trip_addable=False,
-                        )
-                    )
+                    # Already kept this exact Google place — increment mention_count
+                    # on the first-kept card so the UI can show "Mentioned by N guides".
+                    for existing in kept:
+                        ev = getattr(existing, "source_evidence", None)
+                        existing_gv = getattr(existing, "google_verification", None)
+                        existing_pid = getattr(existing_gv, "provider_place_id", None) if existing_gv else None
+                        if existing_pid == pid and ev is not None:
+                            try:
+                                ev.mention_count += 1
+                            except Exception:
+                                pass
+                            break
                     continue
                 seen_place_ids.add(pid)
             if not verification.provider_place_id or not verification.formatted_address:
@@ -1690,11 +1836,6 @@ def _apply_google_gate(
                         trip_addable=False,
                     )
                 )
-                continue
-            if _is_listicle_like_source(
-                title=getattr(venue, "name", None),
-                source_url=getattr(venue, "source_url", None),
-            ):
                 continue
             pyd = _to_pydantic_google_verification(verification)
             try:
@@ -1724,8 +1865,12 @@ def _apply_google_gate(
             try:
                 name_lower = (getattr(venue, "name", "") or "").lower()
                 src_count = (corroboration_counter or {}).get(name_lower, 0)
-                reason = _google_reason_for_venue(
-                    verification=verification, intent=intent, source_count=src_count
+                venue_source_ev = getattr(venue, "source_evidence", None)
+                reason = _compose_reason_with_google(
+                    source_evidence=venue_source_ev,
+                    verification=verification,
+                    intent=intent,
+                    source_count=src_count,
                 )
                 if hasattr(venue, "summary"):
                     venue.summary = reason
@@ -1909,9 +2054,9 @@ def normalize_hits(
         if classification != "venue_place":
             # For article/listicle hits attempt to extract real venue names first.
             if classification == "article_listicle_blog_directory":
-                extracted = _extract_venue_names_from_text(hit.snippet)
+                extracted_with_rank = _extract_venue_names_with_rank(hit.snippet)
                 source_text = "\n".join(_iter_hit_source_fragments(hit))
-                for candidate in extracted:
+                for candidate, cand_rank in extracted_with_rank:
                     is_valid, normalized_candidate, _evidence = _validate_venue_candidate(
                         candidate,
                         combined,
@@ -1968,6 +2113,17 @@ def normalize_hits(
                         0.0,
                         extracted_ai_score + corr_boost - _chain_penalty(normalized_candidate, user_query),
                     )
+                    # Build structured article evidence for this candidate.
+                    cand_category = _context_type_hint(hit.snippet)
+                    cand_source_ev = _build_source_evidence(
+                        candidate=normalized_candidate,
+                        source_title=title,
+                        source_url=hit.url,
+                        source_rank=cand_rank or 0,
+                        snippet=hit.snippet,
+                        source_category=cand_category,
+                        neighborhood_hint=cand_neighborhood,
+                    )
                     # Track this candidate against its source URL for venues_discovered.
                     article_url_to_candidates.setdefault(hit.url, []).append(
                         normalized_candidate.lower()
@@ -1997,6 +2153,7 @@ def normalize_hits(
                                 tags=cand_tags,
                                 ai_score=extracted_ai_score,
                                 verified_place=cand_verified,
+                                source_evidence=cand_source_ev,
                             )
                         )
                     elif is_attraction_intent and len(attractions) < max_per_kind:
@@ -2012,6 +2169,7 @@ def normalize_hits(
                                 confidence=confidence,
                                 ai_score=extracted_ai_score,
                                 verified_place=cand_verified,
+                                source_evidence=cand_source_ev,
                             )
                         )
                     elif is_hotel_intent and len(hotels) < max_per_kind:
@@ -2027,6 +2185,7 @@ def normalize_hits(
                                 confidence=confidence,
                                 ai_score=extracted_ai_score,
                                 verified_place=cand_verified,
+                                source_evidence=cand_source_ev,
                             )
                         )
 

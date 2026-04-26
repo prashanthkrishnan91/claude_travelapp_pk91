@@ -1131,6 +1131,18 @@ export interface ConciergeResult {
 
 export type SourceConfidence = "high" | "medium" | "low" | "unknown";
 
+export interface SourceEvidence {
+  sourceTitle?: string | null;
+  sourceUrl?: string | null;
+  sourceDomain?: string | null;
+  sourceRank?: number | null;
+  sourceReason?: string | null;
+  sourceEvidence?: string | null;
+  sourceCategory?: string | null;
+  neighborhoodHint?: string | null;
+  mentionCount?: number;
+}
+
 export interface GoogleVerification {
   provider: "google_places";
   providerPlaceId?: string | null;
@@ -1167,6 +1179,7 @@ export interface UnifiedRestaurantResult {
   tags: string[];
   verifiedPlace?: boolean | null;
   googleVerification?: GoogleVerification | null;
+  sourceEvidence?: SourceEvidence | null;
 }
 
 export interface UnifiedAttractionResult {
@@ -1187,6 +1200,7 @@ export interface UnifiedAttractionResult {
   tags: string[];
   verifiedPlace?: boolean | null;
   googleVerification?: GoogleVerification | null;
+  sourceEvidence?: SourceEvidence | null;
 }
 
 export interface UnifiedHotelResult {
@@ -1207,6 +1221,7 @@ export interface UnifiedHotelResult {
   tags: string[];
   verifiedPlace?: boolean | null;
   googleVerification?: GoogleVerification | null;
+  sourceEvidence?: SourceEvidence | null;
 }
 
 export interface UnifiedAreaComparisonResult {

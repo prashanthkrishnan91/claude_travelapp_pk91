@@ -225,6 +225,32 @@ function splitReason(text?: string): { short: string; detail?: string } {
   };
 }
 
+function pickCardReason(
+  card: { summary?: string; description?: string; reason?: string; sourceEvidence?: { sourceReason?: string | null; sourceEvidence?: string | null; mentionCount?: number } | null },
+): string | undefined {
+  const ev = card.sourceEvidence;
+  if (ev?.sourceReason) return ev.sourceReason;
+  // Fallback: summary / description / reason (whichever is present)
+  const base = (card as { summary?: string }).summary
+    ?? (card as { description?: string }).description
+    ?? (card as { reason?: string }).reason;
+  if (base) return base;
+  // Only use the generic copy when both article evidence and base copy are missing.
+  return "Verified on Google after appearing in a local guide.";
+}
+
+function pickCardDetail(
+  card: { sourceEvidence?: { sourceReason?: string | null; sourceEvidence?: string | null } | null },
+): string | undefined {
+  const ev = card.sourceEvidence;
+  if (!ev) return undefined;
+  // Show the raw evidence snippet if it differs from the sourceReason.
+  if (ev.sourceEvidence && ev.sourceEvidence !== ev.sourceReason) {
+    return ev.sourceEvidence;
+  }
+  return undefined;
+}
+
 interface OperationalBadgeCard {
   source?: string | null;
   sourceUrl?: string | null;
@@ -277,6 +303,7 @@ function ConciergeCard({
   meta,
   tags,
   reason,
+  extraDetail,
   mapLink,
   sourceLink,
   actionLabel,
@@ -292,6 +319,7 @@ function ConciergeCard({
   meta: string[];
   tags: string[];
   reason?: string;
+  extraDetail?: string;
   mapLink?: string;
   sourceLink?: string;
   actionLabel?: string;
@@ -304,6 +332,9 @@ function ConciergeCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const reasonParts = splitReason(reason);
+  // Prefer explicit extraDetail (from sourceEvidence.sourceEvidence) over the
+  // second sentence of the reason string — prevents showing "More" for generic copy.
+  const expandableDetail = extraDetail ?? reasonParts.detail;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -340,7 +371,7 @@ function ConciergeCard({
 
       <div className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
         <span className="font-medium">Why this pick:</span> {reasonParts.short}
-        {reasonParts.detail && (
+        {expandableDetail && (
           <>
             <button
               onClick={() => setExpanded((v) => !v)}
@@ -349,7 +380,7 @@ function ConciergeCard({
               {expanded ? "Less" : "More"}
               <ChevronDown className={`h-3 w-3 transition ${expanded ? "rotate-180" : ""}`} />
             </button>
-            {expanded && <p className="mt-1 text-[11px] text-slate-500">{reasonParts.detail}</p>}
+            {expanded && <p className="mt-1 text-[11px] text-slate-500">{expandableDetail}</p>}
           </>
         )}
       </div>
@@ -794,7 +825,8 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                     <div className="space-y-2">
                       {msg.restaurants?.filter((r) => r.type === "verified_place").map((r) => {
                         const key = cardKey(r.name, selectedDayId || undefined);
-                        const reason = r.summary;
+                        const reason = pickCardReason(r);
+                        const extraDetail = pickCardDetail(r);
                         const isClosed = hasClosedSignal(r);
                         const isOperational = !isClosed && canShowGoogleVerifiedBadge(r);
                         return (
@@ -808,6 +840,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                             ].filter(Boolean)}
                             tags={r.tags ?? []}
                             reason={reason}
+                            extraDetail={extraDetail}
                             mapLink={r.mapsLink}
                             sourceLink={r.bookingLink ?? r.sourceUrl}
                             isOperational={isOperational}
@@ -822,6 +855,8 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
                       {msg.attractions?.filter((a) => a.type === "verified_place").map((a) => {
                         const key = cardKey(a.name, selectedDayId || undefined);
+                        const reason = pickCardReason(a);
+                        const extraDetail = pickCardDetail(a);
                         const isClosed = hasClosedSignal(a);
                         const isOperational = !isClosed && canShowGoogleVerifiedBadge(a);
                         return (
@@ -835,7 +870,8 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                               a.reviewCount ? `${a.reviewCount.toLocaleString()} reviews` : "",
                             ].filter(Boolean)}
                             tags={a.tags ?? []}
-                            reason={a.description}
+                            reason={reason}
+                            extraDetail={extraDetail}
                             mapLink={a.mapsLink}
                             sourceLink={a.sourceUrl}
                             isOperational={isOperational}
@@ -843,14 +879,15 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                             added={addedItems.has(key)}
                             adding={addingItems.has(key)}
                             canAdd={!isClosed}
-                            onAdd={() => addItem(a.name, "attraction", a, a.description)}
+                            onAdd={() => addItem(a.name, "attraction", a, reason)}
                           />
                         );
                       })}
 
                       {msg.hotels?.filter((h) => h.type === "verified_place").map((h) => {
                         const key = cardKey(h.name, selectedDayId || undefined);
-                        const reason = h.reason ?? (h.pricePerNight ? `~$${Math.round(h.pricePerNight)}/night` : undefined);
+                        const reason = pickCardReason(h);
+                        const extraDetail = pickCardDetail(h);
                         const isClosed = hasClosedSignal(h);
                         const isOperational = !isClosed && canShowGoogleVerifiedBadge(h);
                         return (
@@ -866,6 +903,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                             ].filter(Boolean)}
                             tags={h.tags ?? []}
                             reason={reason}
+                            extraDetail={extraDetail}
                             mapLink={h.mapsLink}
                             sourceLink={h.bookingUrl ?? h.sourceUrl}
                             isOperational={isOperational}
