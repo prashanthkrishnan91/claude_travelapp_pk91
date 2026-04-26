@@ -9,3 +9,9 @@ For AI Concierge chat persistence, apply these DB migrations in order on the dep
 3. `backend/db/migrations/004_*.sql` (only if a future PR explicitly adds one)
 
 After applying migrations, reload Supabase/PostgREST schema cache (or restart the API) so `public.concierge_messages` and indexes are visible to PostgREST.
+
+## AI Concierge production trust mode
+
+- `RESEARCH_ENGINE_REQUIRE_GOOGLE_VERIFICATION=true` enforces fail-closed behavior for live place cards.
+- When enabled and Google verification is unavailable, concierge returns **research-only** sources (non-addable) and does not fall back to sample/database place cards for place intents.
+- Yelp/Foursquare enrichment is optional and non-authoritative; it never creates new cards and never changes addability.

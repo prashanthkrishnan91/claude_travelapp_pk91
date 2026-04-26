@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     live_research_enabled: bool = True
     live_research_cache_ttl_seconds: int = 1800
     live_research_timeout_seconds: float = 6.0
+    research_engine_require_google_verification: bool = False
+    yelp_api_key: str = ""
+    foursquare_api_key: str = ""
 
     # Google Places — required gate for promoting article-research candidates
     # to addable concierge cards. Without this key, candidates remain as
