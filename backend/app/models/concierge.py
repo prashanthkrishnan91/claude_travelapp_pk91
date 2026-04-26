@@ -105,6 +105,14 @@ class VenueEnrichment(BaseModel):
     foursquare_popularity: Optional[float] = None
 
 
+class PlaceSupportingDetails(BaseModel):
+    rating: Optional[str] = None
+    review_count: Optional[int] = None
+    address: Optional[str] = None
+    editorial_mentions: Optional[int] = None
+    tags: List[str] = []
+
+
 class UnifiedRestaurantResult(BaseModel):
     type: Literal["verified_place"] = "verified_place"
     name: str
@@ -131,6 +139,8 @@ class UnifiedRestaurantResult(BaseModel):
     evidence_count: int = 0
     source_badges: List[str] = []
     enrichment: Optional[VenueEnrichment] = None
+    primary_reason: Optional[str] = None
+    supporting_details: Optional[PlaceSupportingDetails] = None
 
 
 class UnifiedAttractionResult(BaseModel):
@@ -158,6 +168,8 @@ class UnifiedAttractionResult(BaseModel):
     evidence_count: int = 0
     source_badges: List[str] = []
     enrichment: Optional[VenueEnrichment] = None
+    primary_reason: Optional[str] = None
+    supporting_details: Optional[PlaceSupportingDetails] = None
 
 
 class UnifiedHotelResult(BaseModel):
@@ -185,6 +197,8 @@ class UnifiedHotelResult(BaseModel):
     evidence_count: int = 0
     source_badges: List[str] = []
     enrichment: Optional[VenueEnrichment] = None
+    primary_reason: Optional[str] = None
+    supporting_details: Optional[PlaceSupportingDetails] = None
 
 
 class UnifiedResearchSourceResult(BaseModel):

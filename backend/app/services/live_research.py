@@ -69,6 +69,7 @@ from app.models.concierge import (
     GoogleVerification,
     SOURCE_LIVE_SEARCH,
     SOURCE_NONE,
+    PlaceSupportingDetails,
     SourceEvidence,
     VenueEnrichment,
     UnifiedAttractionResult,
@@ -145,6 +146,10 @@ _ARTICLE_FRAGMENT_PAT = re.compile(
 )
 _REASON_ARTIFACT_PAT = re.compile(r"(####|\[\.\.\.\]|</|https?://|\bfor music\b|\bfor something\b)", re.IGNORECASE)
 _HTML_TAG_PAT = re.compile(r"<[^>]+>")
+_ADDRESS_LIKE_PAT = re.compile(
+    r"\b\d{1,5}\s+[A-Za-z0-9'\.\-\s]{2,50}\s(?:st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|ct|court|pl|place)\b",
+    re.IGNORECASE,
+)
 
 # ── Verify-before-add constants ──────────────────────────────────────────────
 
@@ -183,7 +188,18 @@ _PLACE_PLATFORM_HINT = re.compile(
 )
 
 MAX_VERIFICATION_CANDIDATES: int = 40
-MIN_ADDABLE_RESULTS: int = 3
+MIN_ADDABLE_RESULTS: int = 5
+RESEARCH_SUPPRESS_THRESHOLD: int = 3
+
+_PLACE_INTENT_MIN_RESULTS = {
+    INTENT_NIGHTLIFE,
+    INTENT_RESTAURANTS,
+    INTENT_HIDDEN_GEMS,
+    INTENT_LUXURY_VALUE,
+    INTENT_ROMANTIC,
+    INTENT_FAMILY_FRIENDLY,
+    INTENT_MICHELIN_RESTAURANTS,
+}
 
 _BOILERPLATE_PATTERNS = [
     re.compile(r"\b(advertising|advertisement|sponsored)\b", re.IGNORECASE),
@@ -695,6 +711,41 @@ def _build_search_query(intent: str, destination: str, user_query: str) -> str:
     return dest
 
 
+def _is_place_intent(intent: str) -> bool:
+    return intent in _PLACE_INTENT_MIN_RESULTS
+
+
+def _google_fallback_queries(intent: str, destination: str, user_query: str) -> List[str]:
+    dest = (destination or "").strip()
+    base = (user_query or "").strip()
+    if not dest:
+        return []
+    queries: List[str] = []
+    if intent == INTENT_NIGHTLIFE:
+        queries.extend(
+            [
+                f"cocktail bars near {dest}",
+                f"best cocktail bars in {dest}",
+            ]
+        )
+    elif intent == INTENT_RESTAURANTS:
+        queries.extend([f"best restaurants near {dest}", f"restaurants in {dest}"])
+    elif intent == INTENT_MICHELIN_RESTAURANTS:
+        queries.extend([f"Michelin restaurants in {dest}", f"fine dining in {dest}"])
+    else:
+        queries.extend([f"{base or 'places'} near {dest}", f"{base or 'best places'} in {dest}"])
+    # preserve order while deduping
+    seen: set = set()
+    deduped: List[str] = []
+    for query in queries:
+        norm = query.lower().strip()
+        if not norm or norm in seen:
+            continue
+        seen.add(norm)
+        deduped.append(query)
+    return deduped
+
+
 # ── Normalization ────────────────────────────────────────────────────────────
 
 _NEIGHBORHOOD_HINT = re.compile(
@@ -1029,6 +1080,11 @@ def _reason_guard(reason: str, own_name: str, known_candidate_names: List[str]) 
         return False
     if _contains_other_candidate_name(text, own_name, known_candidate_names):
         return False
+    first_sentence = text.split(".")[0]
+    if _ADDRESS_LIKE_PAT.search(first_sentence):
+        return False
+    if "google reviews" in first_sentence.lower() or "★" in first_sentence:
+        return False
     low = text.lower()
     if any(p.search(low) for p in _GENERIC_REASON_PATTERNS):
         return False
@@ -1043,30 +1099,10 @@ def _safe_google_only_reason(
     rating: Optional[float],
     review_count: Optional[int],
 ) -> str:
-    city = None
-    if location and "," in location:
-        city = _clean_reason_text(location.split(",")[1]).strip()
-    parts = [f"Verified {category}"]
-    if city:
-        parts[0] += f" in {city}"
-    elif location:
-        parts[0] += f" in {_clean_reason_text(location)[:24]}"
-    if rating is not None and review_count is not None:
-        parts.append(f"Google shows {rating:.1f}★ and {review_count:,} reviews")
-    elif rating is not None:
-        parts.append(f"Google shows {rating:.1f}★")
-    else:
-        parts.append("Google confirms it is operational")
-    reason = _clean_reason_text(" with ".join(parts) + ".")
-    return reason[:180].rstrip(" ;,.") + "."
-    pieces = [f"{name} is a {category}"]
-    if location:
-        pieces[0] += f" in {location}"
-    if rating is not None and review_count is not None:
-        pieces.append(f"Google reports {rating:.1f}★ across {review_count:,} reviews")
-    elif rating is not None:
-        pieces.append(f"Google reports a {rating:.1f}★ rating")
-    return _clean_reason_text(". ".join(pieces) + ".")
+    del location, rating, review_count
+    clean_category = _clean_reason_text(category or "place")
+    reason = _clean_reason_text(f"{clean_category} with a strong fit for this trip request.")
+    return reason[:120].rstrip(" ;,.") + "."
 
 
 def _bayesian_google_score(rating: Optional[float], review_count: Optional[int]) -> float:
@@ -1106,7 +1142,6 @@ def build_place_reason(
     else:
         category = "place"
     location = verified_place.formatted_address or getattr(candidate, "neighborhood", None) or getattr(candidate, "area_label", None)
-    intent_label = _query_intent_label(user_query, intent)
     review_count = verified_place.user_rating_count
     best_for = _best_for_angle(intent, user_query, candidate)
     evidence_detail = None
@@ -1118,48 +1153,16 @@ def build_place_reason(
             known_candidate_names=known_candidate_names or [],
             max_len=80,
         )
-    location_short = None
-    if location:
-        location_short = _clean_reason_text(str(location).split(",")[0]) or None
-    segments = [f"{name}: verified {category}"]
-    if location_short:
-        segments.append(f"in {location_short}")
-    segments.append(f"for {intent_label}")
-    if verified_place.rating is not None and review_count is not None:
-        segments.append(f"Google {verified_place.rating:.1f}★ ({review_count:,} reviews)")
-    elif verified_place.rating is not None:
-        segments.append(f"Google {verified_place.rating:.1f}★")
+    if evidence_detail:
+        reason = evidence_detail
+    elif best_for:
+        reason = f"{category} known for {best_for}."
     else:
-        segments.append("Google operational")
-    if best_for:
-        segments.append(f"best for {best_for}")
-    if evidence_detail:
-        segments.append(f"editorial signal: {evidence_detail}")
-    reason = _clean_reason_text("; ".join(segments) + ".")
-    if len(reason) > 180:
-        reason = _clean_reason_text("; ".join(segments[:5]) + ".")
-    if len(reason) > 180:
-        reason = _clean_reason_text("; ".join(segments[:4]) + ".")
-        evidence_detail = _clean_reason_text(getattr(source_ev, "source_reason", "") or "")
-    lead = f"{name} is a {category}"
-    if location:
-        lead += f" in {location}"
-    rating_bits = ""
-    if verified_place.rating is not None and review_count is not None:
-        rating_bits = f" (Google rating {verified_place.rating:.1f}★, {review_count:,} reviews)"
-    elif verified_place.rating is not None:
-        rating_bits = f" (Google rating {verified_place.rating:.1f}★)"
-    trust_signal = "Google confirms it is currently operational"
-    if verified_place.rating is not None and review_count is not None:
-        trust_signal = f"Google rating {verified_place.rating:.1f}★ across {review_count:,} reviews"
-    elif verified_place.rating is not None:
-        trust_signal = f"Google rating {verified_place.rating:.1f}★"
-    sentence = f"{lead}. Strong match for {intent_label}. {trust_signal}."
-    if best_for:
-        sentence += f" Best for {best_for}."
-    if evidence_detail:
-        sentence += f" Editorial coverage highlights {evidence_detail}."
-    reason = _clean_reason_text(sentence)
+        reason = f"{category} known for a distinctive local vibe."
+    reason = _clean_reason_text(reason)
+    if not reason.endswith("."):
+        reason = f"{reason}."
+    reason = reason[:120].rstrip(" ;,.") + "."
     if _reason_guard(reason, name, known_candidate_names or []):
         return reason
     return _safe_google_only_reason(
@@ -1169,6 +1172,28 @@ def build_place_reason(
         rating=verified_place.rating,
         review_count=review_count,
     )
+
+
+def _build_supporting_details(venue: Any, verification: GooglePlaceVerification) -> PlaceSupportingDetails:
+    details = PlaceSupportingDetails()
+    if verification.rating is not None:
+        details.rating = f"{verification.rating:.1f}"
+    if verification.user_rating_count is not None:
+        details.review_count = int(verification.user_rating_count)
+    if verification.formatted_address:
+        details.address = verification.formatted_address
+    source_ev = getattr(venue, "source_evidence", None)
+    mention_count = getattr(source_ev, "mention_count", None) if source_ev is not None else None
+    if mention_count is not None:
+        details.editorial_mentions = int(max(0, mention_count))
+    tags: List[str] = []
+    for raw in (getattr(venue, "best_for_tags", None) or []):
+        clean = _clean_reason_text(str(raw or "")).strip()
+        if clean and clean not in tags:
+            tags.append(clean)
+    if tags:
+        details.tags = tags[:4]
+    return details
 
 
 def _reason_mentions_other_candidate(reason: str, own_name: str, known_candidate_names: List[str]) -> bool:
@@ -2208,6 +2233,10 @@ def _apply_google_gate(
                     venue.description = reason
                 elif hasattr(venue, "reason"):
                     venue.reason = reason
+                try:
+                    venue.primary_reason = reason
+                except Exception:
+                    pass
                 clean_evidence: List[str] = []
                 if venue_source_ev is not None:
                     for raw_ev in (
@@ -2234,6 +2263,10 @@ def _apply_google_gate(
                 try:
                     mention_count = getattr(venue_source_ev, "mention_count", 0) if venue_source_ev else 0
                     venue.evidence_count = int(max(0, mention_count))
+                except Exception:
+                    pass
+                try:
+                    venue.supporting_details = _build_supporting_details(venue, verification)
                 except Exception:
                     pass
                 try:
@@ -2314,12 +2347,12 @@ def _apply_google_gate(
             rejection_reason = "closed"
         elif verification is None or not verification.matched:
             summary = "Not yet verified by Google Places — research only."
-            rejected_by_reason["not_matched"] += 1
-            rejection_reason = "not_matched"
+            rejected_by_reason["no_match"] += 1
+            rejection_reason = "no_match"
         else:
             summary = f"Google Places match was below confidence threshold ({reason})."
-            rejected_by_reason[f"low_confidence:{reason}"] += 1
-            rejection_reason = f"low_confidence:{reason}"
+            rejected_by_reason["low_confidence"] += 1
+            rejection_reason = "low_confidence"
 
         source = str(getattr(venue, "source", provider_label_default) or provider_label_default)
         research_sources.append(
@@ -2334,6 +2367,11 @@ def _apply_google_gate(
                 confidence=getattr(venue, "confidence", None),
                 trip_addable=False,
             )
+        )
+        logger.info(
+            "rejected_candidate name=%s rejection_reason=%s",
+            str(getattr(venue, "name", "") or ""),
+            rejection_reason,
         )
         if debug_mode and hash(getattr(venue, "name", "")) % 4 == 0:
             logger.debug(
@@ -2809,10 +2847,14 @@ def normalize_hits(
                 pass
 
     venue_count = len(restaurants) + len(attractions) + len(hotels)
-    # Hide research-source cards when ≥3 venues exist; keep at most 2 otherwise.
-    if venue_count >= 3:
+    debug_mode = os.getenv("RESEARCH_ENGINE_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}
+    low_query = (user_query or "").lower()
+    explicit_sources = any(token in low_query for token in ("show sources", "sources", "articles", "blogs"))
+    # For place intents, suppress research sources whenever we already have
+    # enough addable Google-verified venues.
+    if _is_place_intent(intent) and venue_count >= RESEARCH_SUPPRESS_THRESHOLD and not debug_mode and not explicit_sources:
         research_cap = 0
-    elif venue_count > 0:
+    elif venue_count > 0 and not debug_mode:
         research_cap = 2
     else:
         research_cap = max_per_kind
@@ -2947,6 +2989,7 @@ class LiveResearchService:
                 candidate_neighborhoods[low] = _extract_candidate_neighborhood(
                     norm, h.snippet, destination
                 )
+        raw_candidate_count = len(candidate_names)
 
         for norm in candidate_names[:MAX_VERIFICATION_CANDIDATES]:
             low = norm.lower()
@@ -3020,6 +3063,30 @@ class LiveResearchService:
                 direct_candidate_count,
                 len(candidate_neighborhoods),
             )
+
+            if _is_place_intent(intent) and len(candidate_neighborhoods) < max(MIN_ADDABLE_RESULTS, 8):
+                verifier_client = getattr(self._place_verifier, "_client", None)
+                if verifier_client is None or not hasattr(verifier_client, "text_search"):
+                    verifier_client = None
+                for query in _google_fallback_queries(intent, destination, user_query):
+                    if verifier_client is None:
+                        break
+                    places = verifier_client.text_search(query)[:8]
+                    for place in places:
+                        display_name = (
+                            ((place.get("displayName") or {}).get("text"))
+                            or place.get("name")
+                            or ""
+                        ).strip()
+                        if not display_name:
+                            continue
+                        low = display_name.lower()
+                        if low in candidate_neighborhoods:
+                            continue
+                        candidate_neighborhoods[low] = place.get("formattedAddress")
+                        display_for_low.setdefault(low, display_name)
+                    if len(candidate_neighborhoods) >= 8:
+                        break
 
             for low, neighborhood in list(candidate_neighborhoods.items())[:MAX_VERIFICATION_CANDIDATES]:
                 display_name = display_for_low.get(low, low)
@@ -3129,8 +3196,37 @@ class LiveResearchService:
         final_verified_count = (
             len(normalized["restaurants"]) + len(normalized["attractions"]) + len(normalized["hotels"])
         )
-        if google_verified_count >= 5:
+        if final_verified_count >= RESEARCH_SUPPRESS_THRESHOLD:
             normalized["research_sources"] = []
+        if _is_place_intent(intent) and final_verified_count < MIN_ADDABLE_RESULTS:
+            logger.warning(
+                "addable_underflow intent=%s final_addable_count=%d required_min=%d",
+                intent,
+                final_verified_count,
+                MIN_ADDABLE_RESULTS,
+            )
+        if google_verifications is not None:
+            rejected_closed = 0
+            rejected_no_match = 0
+            rejected_low_confidence = 0
+            for verification in google_verifications.values():
+                if verification.is_closed:
+                    rejected_closed += 1
+                elif not verification.matched:
+                    rejected_no_match += 1
+                elif not _google_is_addable(verification):
+                    rejected_low_confidence += 1
+            logger.info(
+                "addable_pipeline_stats raw_candidate_count=%d deduped_candidate_count=%d google_verified_total=%d google_high_confidence=%d google_medium_confidence=%d rejected_closed=%d rejected_no_match=%d final_addable_count=%d",
+                raw_candidate_count + direct_candidate_count,
+                len(candidate_neighborhoods),
+                google_verified_count,
+                sum(1 for verification in google_verifications.values() if verification.confidence == "high" and verification.is_operational),
+                sum(1 for verification in google_verifications.values() if verification.confidence == "medium" and verification.is_operational),
+                rejected_closed,
+                rejected_no_match + rejected_low_confidence,
+                final_verified_count,
+            )
         logger.info(
             "final_results: addable=%d research_sources=%d",
             final_verified_count,
