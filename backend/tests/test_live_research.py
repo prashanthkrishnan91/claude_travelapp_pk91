@@ -2271,18 +2271,21 @@ class TestGooglePipelineRegression:
 
         return _Stub()
 
-    def test_cocktail_query_does_not_underflow_when_multiple_operational_matches(self):
+    def test_underflow_prevention_returns_five_plus_when_six_operational_exist(self):
         article = _hit(
             "Best Cocktail Bars in Chicago",
             "https://example.com/bars",
             "1. Kumiko — West Loop cocktail bar. 2. The Aviary — Fulton Market cocktails. "
-            "3. Billy Sunday — Logan Square bar. 4. Meadowlark — near Logan Square.",
+            "3. Billy Sunday — Logan Square bar. 4. Meadowlark — near Logan Square. "
+            "5. Moneygun — River North cocktails. 6. Sparrow — classic cocktails.",
         )
         google_map = {
             "kumiko": GooglePlaceVerification(provider_place_id="1", name="Kumiko", business_status="OPERATIONAL", confidence="high", types=["bar"]),
             "the aviary": GooglePlaceVerification(provider_place_id="2", name="The Aviary", business_status="OPERATIONAL", confidence="medium", types=["bar"]),
             "billy sunday": GooglePlaceVerification(provider_place_id="3", name="Billy Sunday", business_status="OPERATIONAL", confidence="medium", types=["bar"]),
             "meadowlark": GooglePlaceVerification(provider_place_id="4", name="Meadowlark", business_status="OPERATIONAL", confidence="medium", types=["bar"]),
+            "moneygun": GooglePlaceVerification(provider_place_id="5", name="Moneygun", business_status="OPERATIONAL", confidence="high", types=["bar"]),
+            "sparrow": GooglePlaceVerification(provider_place_id="6", name="Sparrow", business_status="OPERATIONAL", confidence="medium", types=["bar"]),
         }
         svc = LiveResearchService(
             provider=StubLiveSearchProvider([article]),
@@ -2292,9 +2295,34 @@ class TestGooglePipelineRegression:
             place_verifier=self._google_stub(google_map),
         )
         result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars")
-        assert len(result.restaurants) >= 3
+        assert len(result.restaurants) >= 5
 
-    def test_reason_text_is_grounded_to_each_card_name(self):
+    def test_no_pre_verification_cap_keeps_pool_above_final_results(self):
+        hits = [
+            _hit("Chicago Cocktail Guide", "https://example.com/guide", "1. Kumiko 2. The Aviary 3. Billy Sunday 4. Meadowlark 5. Moneygun 6. Sparrow 7. Estereo 8. Arbella 9. Lazy Bird"),
+            _hit("Kumiko", "https://example.com/k", "Cocktail bar."),
+        ]
+        google_map = {
+            n.lower(): GooglePlaceVerification(
+                provider_place_id=f"gp-{i}",
+                name=n,
+                business_status="OPERATIONAL",
+                confidence="high",
+                types=["bar"],
+            )
+            for i, n in enumerate(["Kumiko", "The Aviary", "Billy Sunday", "Meadowlark", "Moneygun", "Sparrow", "Estereo", "Arbella", "Lazy Bird"], start=1)
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider(hits),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars near my hotel")
+        assert len(result.restaurants) == 8
+
+    def test_reason_text_is_clean_not_address_led_and_no_cross_contamination(self):
         article = _hit(
             "Chicago restaurants",
             "https://example.com/restaurants",
@@ -2315,11 +2343,31 @@ class TestGooglePipelineRegression:
         names = [r.name for r in result.restaurants]
         for card in result.restaurants:
             reason = (card.summary or "").lower()
-            assert card.name.lower() in reason
+            assert not reason.startswith("aba is")
+            assert "###" not in reason
+            assert "http" not in reason
             for other in names:
                 if other.lower() == card.name.lower():
                     continue
                 assert other.lower() not in reason
+
+    def test_research_sources_suppressed_when_addable_at_least_three(self):
+        hits = [_hit("Best Cocktail Bars in Chicago", "https://example.com/bars", "1. Kumiko 2. The Aviary 3. Moneygun")]
+        google_map = {
+            "kumiko": GooglePlaceVerification(provider_place_id="1", name="Kumiko", business_status="OPERATIONAL", confidence="high", types=["bar"]),
+            "the aviary": GooglePlaceVerification(provider_place_id="2", name="The Aviary", business_status="OPERATIONAL", confidence="high", types=["bar"]),
+            "moneygun": GooglePlaceVerification(provider_place_id="3", name="Moneygun", business_status="OPERATIONAL", confidence="high", types=["bar"]),
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider(hits),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars")
+        assert len(result.restaurants) >= 3
+        assert result.research_sources == []
 
     def test_article_pages_stay_in_research_sources_not_addable_cards(self):
         article = _hit(
@@ -2407,7 +2455,7 @@ class TestGooglePipelineRegression:
         for reason in bad_reasons:
             assert _reason_guard(reason, "Kumiko", known) is False
 
-    def test_build_place_reason_contains_match_trust_and_best_for_without_raw_fragments(self):
+    def test_build_place_reason_primary_sentence_is_clean_and_not_address_led(self):
         candidate = SimpleNamespace(
             cuisine="Cocktail Bar",
             source_evidence=SourceEvidence(source_reason="seasonal cocktail program"),
@@ -2432,14 +2480,13 @@ class TestGooglePipelineRegression:
             known_candidate_names=["kumiko", "the aviary"],
         )
         low = reason.lower()
-        assert "kumiko: verified bar" in low
-        assert "for cocktail and nightlife plans" in low
-        assert "google 4.7★" in low
-        assert "best for" in low
+        assert "630 w lake st" not in low
+        assert "chicago, il" not in low
+        assert "google reviews" in low
         assert "###" not in reason
         assert "http" not in low
         assert "option in" not in low
-        assert len(reason) <= 180
+        assert len(reason) <= 120
 
     def test_sanitize_reason_evidence_rejects_polluted_examples(self):
         known = ["Green Mill", "Hubbard Inn", "Maria's", "The Darling", "Chicago Athletic Association"]
@@ -2490,7 +2537,7 @@ class TestGooglePipelineRegression:
         )
         low = reason.lower()
         assert "the darling" not in low
-        assert "hubbard inn" in low or "verified bar" in low
+        assert "google reviews" in low or "known for" in low
         assert "###" not in reason
 
     def test_enrichment_failures_do_not_block_google_verified_cards(self, monkeypatch):
@@ -2608,6 +2655,10 @@ class TestFrontendSourceEvidenceRendering:
         src = self._read_panel()
         assert "expandableDetail" in src
         assert "pickCardDetail" in src
+
+    def test_panel_hides_research_sources_when_addable_cards_exist(self):
+        src = self._read_panel()
+        assert "addableCount(msg) < 3" in src
 
     def test_panel_falls_back_gracefully_for_old_cards(self):
         """pickCardReason falls back to summary/description/reason when structured reason exists."""

@@ -219,8 +219,9 @@ function splitReason(text?: string): { short: string; detail?: string } {
     .trim();
   if (!clean) return { short: "Great fit for this trip." };
   const parts = clean.split(/(?<=[.!?])\s+/);
+  const first = parts.slice(0, 1).join(" ").slice(0, 120).trim();
   return {
-    short: parts.slice(0, 1).join(" "),
+    short: first || "Great fit for this trip.",
     detail: parts.length > 1 ? parts.slice(1).join(" ") : undefined,
   };
 }
@@ -440,6 +441,10 @@ function fromSearchResult(result: ConciergeSearchResult): Message {
     sources: result.sources,
     warnings: result.warnings,
   };
+}
+
+function addableCount(msg: Message): number {
+  return (msg.restaurants?.length ?? 0) + (msg.attractions?.length ?? 0) + (msg.hotels?.length ?? 0);
 }
 
 export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp = [], isOpen, onClose, onItemAdded }: Props) {
@@ -916,7 +921,8 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                         );
                       })}
 
-                      {(msg.researchSources?.filter((s) => s.type === "research_source").length ?? 0) > 0 && (
+                      {(msg.researchSources?.filter((s) => s.type === "research_source").length ?? 0) > 0
+                        && addableCount(msg) < 3 && (
                         <div className="pt-1">
                           <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Research sources</p>
                           <div className="space-y-2">
