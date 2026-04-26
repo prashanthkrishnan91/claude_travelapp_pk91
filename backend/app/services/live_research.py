@@ -143,6 +143,8 @@ _ARTICLE_FRAGMENT_PAT = re.compile(
     r"\b(?:best|top)\s+\d{1,3}\b|\b(listicle|roundup|newsletter|advertisement)\b",
     re.IGNORECASE,
 )
+_REASON_ARTIFACT_PAT = re.compile(r"(####|\[\.\.\.\]|</|https?://|\bfor music\b|\bfor something\b)", re.IGNORECASE)
+_HTML_TAG_PAT = re.compile(r"<[^>]+>")
 
 # ── Verify-before-add constants ──────────────────────────────────────────────
 
@@ -842,7 +844,7 @@ def _extract_source_reason(candidate: str, snippet: str) -> Optional[str]:
     lower = reason.lower()
     if any(banned in lower for banned in _BANNED_SOURCE_REASON_PHRASES):
         return None
-    cleaned = _clean_reason_text(reason)
+    cleaned = _sanitize_reason_evidence_text(reason, own_name=candidate, known_candidate_names=[candidate], max_len=140)
     return cleaned or None
 
 
@@ -856,7 +858,10 @@ def _extract_source_evidence_text(candidate: str, snippet: str) -> Optional[str]
         return None
     start = max(0, idx - 30)
     end = min(len(snippet), idx + len(candidate) + 200)
-    return snippet[start:end].strip() or None
+    raw = snippet[start:end].strip() or None
+    if not raw:
+        return None
+    return _sanitize_reason_evidence_text(raw, own_name=candidate, known_candidate_names=[candidate], max_len=120)
 
 
 def _build_source_evidence(
@@ -933,7 +938,7 @@ def _compose_reason_with_google(
 
 def _query_intent_label(user_query: str, intent: str) -> str:
     clean = _clean_reason_text(user_query)
-    if clean and len(clean) <= 48:
+    if clean and len(clean) <= 24:
         return clean
     intent_map = {
         INTENT_NIGHTLIFE: "cocktail and nightlife plans",
@@ -1038,6 +1043,22 @@ def _safe_google_only_reason(
     rating: Optional[float],
     review_count: Optional[int],
 ) -> str:
+    city = None
+    if location and "," in location:
+        city = _clean_reason_text(location.split(",")[1]).strip()
+    parts = [f"Verified {category}"]
+    if city:
+        parts[0] += f" in {city}"
+    elif location:
+        parts[0] += f" in {_clean_reason_text(location)[:24]}"
+    if rating is not None and review_count is not None:
+        parts.append(f"Google shows {rating:.1f}★ and {review_count:,} reviews")
+    elif rating is not None:
+        parts.append(f"Google shows {rating:.1f}★")
+    else:
+        parts.append("Google confirms it is operational")
+    reason = _clean_reason_text(" with ".join(parts) + ".")
+    return reason[:180].rstrip(" ;,.") + "."
     pieces = [f"{name} is a {category}"]
     if location:
         pieces[0] += f" in {location}"
@@ -1091,6 +1112,34 @@ def build_place_reason(
     evidence_detail = None
     source_ev = getattr(candidate, "source_evidence", None)
     if source_ev is not None:
+        evidence_detail = _sanitize_reason_evidence_text(
+            getattr(source_ev, "source_reason", "") or "",
+            own_name=name,
+            known_candidate_names=known_candidate_names or [],
+            max_len=80,
+        )
+    location_short = None
+    if location:
+        location_short = _clean_reason_text(str(location).split(",")[0]) or None
+    segments = [f"{name}: verified {category}"]
+    if location_short:
+        segments.append(f"in {location_short}")
+    segments.append(f"for {intent_label}")
+    if verified_place.rating is not None and review_count is not None:
+        segments.append(f"Google {verified_place.rating:.1f}★ ({review_count:,} reviews)")
+    elif verified_place.rating is not None:
+        segments.append(f"Google {verified_place.rating:.1f}★")
+    else:
+        segments.append("Google operational")
+    if best_for:
+        segments.append(f"best for {best_for}")
+    if evidence_detail:
+        segments.append(f"editorial signal: {evidence_detail}")
+    reason = _clean_reason_text("; ".join(segments) + ".")
+    if len(reason) > 180:
+        reason = _clean_reason_text("; ".join(segments[:5]) + ".")
+    if len(reason) > 180:
+        reason = _clean_reason_text("; ".join(segments[:4]) + ".")
         evidence_detail = _clean_reason_text(getattr(source_ev, "source_reason", "") or "")
     lead = f"{name} is a {category}"
     if location:
@@ -1242,6 +1291,51 @@ def _clean_reason_text(text: str) -> str:
     if len(clean) <= 2 or re.fullmatch(r"\d+[.)]?", clean):
         return ""
     return clean
+
+
+def _dedupe_repeated_words(text: str) -> str:
+    words = [w for w in (text or "").split(" ") if w]
+    if not words:
+        return ""
+    out: List[str] = []
+    prev = ""
+    for w in words:
+        low = w.lower()
+        if low == prev:
+            continue
+        out.append(w)
+        prev = low
+    return " ".join(out)
+
+
+def _sanitize_reason_evidence_text(
+    text: str,
+    *,
+    own_name: str,
+    known_candidate_names: Optional[List[str]],
+    max_len: int = 160,
+) -> Optional[str]:
+    clean = (text or "").strip()
+    if not clean:
+        return None
+    if _REASON_ARTIFACT_PAT.search(clean):
+        return None
+    clean = _HTML_TAG_PAT.sub(" ", clean)
+    clean = re.sub(r"^\s{0,3}#{1,6}\s*", " ", clean, flags=re.MULTILINE)
+    clean = re.sub(r"^\s*(?:[-*]|\d{1,3}[.)])\s+", " ", clean, flags=re.MULTILINE)
+    clean = re.sub(r"\[[^\]]*\]", " ", clean)
+    clean = clean.replace("…", " ").replace("...", " ")
+    clean = _clean_reason_text(clean)
+    clean = _dedupe_repeated_words(clean)
+    if not clean:
+        return None
+    if len(clean) > max_len:
+        return None
+    if _contains_other_candidate_name(clean, own_name, known_candidate_names or []):
+        return None
+    if _reason_guard(clean, own_name, known_candidate_names or []):
+        return clean
+    return None
 
 
 def _build_summary(snippet: str, fallback: str = "") -> str:
@@ -2114,6 +2208,24 @@ def _apply_google_gate(
                     venue.description = reason
                 elif hasattr(venue, "reason"):
                     venue.reason = reason
+                clean_evidence: List[str] = []
+                if venue_source_ev is not None:
+                    for raw_ev in (
+                        getattr(venue_source_ev, "source_reason", None),
+                        getattr(venue_source_ev, "source_evidence", None),
+                    ):
+                        cleaned = _sanitize_reason_evidence_text(
+                            str(raw_ev or ""),
+                            own_name=getattr(venue, "name", ""),
+                            known_candidate_names=known_candidate_names,
+                            max_len=100,
+                        )
+                        if cleaned and cleaned not in clean_evidence:
+                            clean_evidence.append(cleaned)
+                try:
+                    venue.evidence = clean_evidence[:2]
+                except Exception:
+                    pass
                 guard_ok = _reason_guard(reason, getattr(venue, "name", ""), known_candidate_names)
                 try:
                     venue.best_for_tags = _intent_best_for_tags(intent, user_query)

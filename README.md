@@ -15,3 +15,4 @@ After applying migrations, reload Supabase/PostgREST schema cache (or restart th
 - `RESEARCH_ENGINE_REQUIRE_GOOGLE_VERIFICATION=true` enforces fail-closed behavior for live place cards.
 - When enabled and Google verification is unavailable, concierge returns **research-only** sources (non-addable) and does not fall back to sample/database place cards for place intents.
 - Yelp/Foursquare enrichment is optional and non-authoritative; it never creates new cards and never changes addability.
+- “Why this pick” card copy is deterministic and Google-grounded; raw editorial snippets/listicle text are sanitized/rejected and never rendered directly on addable cards.

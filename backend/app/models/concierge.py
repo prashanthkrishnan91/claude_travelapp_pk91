@@ -126,6 +126,7 @@ class UnifiedRestaurantResult(BaseModel):
     verification_tier: Optional[Literal["primary", "secondary"]] = None
     google_verification: Optional[GoogleVerification] = None
     source_evidence: Optional[SourceEvidence] = None
+    evidence: List[str] = []
     best_for_tags: List[str] = []
     evidence_count: int = 0
     source_badges: List[str] = []
@@ -152,6 +153,7 @@ class UnifiedAttractionResult(BaseModel):
     verification_tier: Optional[Literal["primary", "secondary"]] = None
     google_verification: Optional[GoogleVerification] = None
     source_evidence: Optional[SourceEvidence] = None
+    evidence: List[str] = []
     best_for_tags: List[str] = []
     evidence_count: int = 0
     source_badges: List[str] = []
@@ -178,6 +180,7 @@ class UnifiedHotelResult(BaseModel):
     verification_tier: Optional[Literal["primary", "secondary"]] = None
     google_verification: Optional[GoogleVerification] = None
     source_evidence: Optional[SourceEvidence] = None
+    evidence: List[str] = []
     best_for_tags: List[str] = []
     evidence_count: int = 0
     source_badges: List[str] = []

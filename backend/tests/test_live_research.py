@@ -45,6 +45,7 @@ from app.services.live_research import (
     _final_hard_filter_closed_venues,
     _is_obvious_non_venue,
     _reason_guard,
+    _sanitize_reason_evidence_text,
     _validate_venue_candidate,
     build_place_reason,
     normalize_hits,
@@ -1457,7 +1458,7 @@ class TestVerifyBeforeAdd:
         assert len(result.restaurants) == 1
         card = result.restaurants[0]
         assert card.summary and "Hotel lounge" not in card.summary
-        assert "Google rating" in card.summary
+        assert "Google 4.7★" in card.summary
         assert card.maps_link == "https://maps.google.com/?cid=gp-kumiko"
         assert card.type == "verified_place"
 
@@ -1964,8 +1965,8 @@ class TestSourceEvidenceInSerializedJSON:
         json_str = card.model_dump_json()
         assert '"source_evidence"' in json_str
 
-    def test_source_reason_from_article_text_becomes_card_summary(self):
-        """source_evidence.source_reason must appear in the card summary when present."""
+    def test_source_reason_from_article_text_stays_sanitized(self):
+        """source evidence remains structured while summary stays deterministic and clean."""
         article = _hit(
             "Best Bars in Chicago",
             "https://example.com/bars",
@@ -1989,9 +1990,11 @@ class TestSourceEvidenceInSerializedJSON:
         card = next((r for r in result.restaurants if r.name == "Kumiko"), None)
         assert card is not None
         ev = card.source_evidence
+        assert "####" not in (card.summary or "")
+        assert "[...]" not in (card.summary or "")
         if ev and ev.source_reason:
-            # When source_reason was extracted, the card summary should embed it.
-            assert ev.source_reason.lower()[:15] in (card.summary or "").lower()
+            assert "speakeasy" in ev.source_reason.lower()
+        assert all("http" not in (entry or "").lower() for entry in (card.evidence or []))
 
 
 class TestBannedGenericPhrases:
@@ -2429,13 +2432,66 @@ class TestGooglePipelineRegression:
             known_candidate_names=["kumiko", "the aviary"],
         )
         low = reason.lower()
-        assert "kumiko is a bar" in low
-        assert "strong match" in low
-        assert "google rating" in low
+        assert "kumiko: verified bar" in low
+        assert "for cocktail and nightlife plans" in low
+        assert "google 4.7★" in low
         assert "best for" in low
         assert "###" not in reason
         assert "http" not in low
         assert "option in" not in low
+        assert len(reason) <= 180
+
+    def test_sanitize_reason_evidence_rejects_polluted_examples(self):
+        known = ["Green Mill", "Hubbard Inn", "Maria's", "The Darling", "Chicago Athletic Association"]
+        assert _sanitize_reason_evidence_text(
+            "xt day. [...] #### For Music Green Mill – legendary jazz room",
+            own_name="Green Mill",
+            known_candidate_names=known,
+        ) is None
+        assert _sanitize_reason_evidence_text(
+            "The Darling – The Darling is a bar and restaurant with cocktails.",
+            own_name="Hubbard Inn",
+            known_candidate_names=known,
+        ) is None
+        assert _sanitize_reason_evidence_text(
+            "#### For Something Fancy Chicago Athletic Association rooftop lounge",
+            own_name="Maria's",
+            known_candidate_names=known,
+        ) is None
+        cleaned = _sanitize_reason_evidence_text(
+            "nightlife nightlife cocktails",
+            own_name="Green Mill",
+            known_candidate_names=known,
+        )
+        assert cleaned == "nightlife cocktails"
+
+    def test_build_place_reason_rejects_other_venue_leak_and_uses_google_fallback(self):
+        candidate = SimpleNamespace(
+            source_evidence=SourceEvidence(source_reason="The Darling has strong cocktails and late-night buzz."),
+            tags=["nightlife", "nightlife", "cocktails"],
+        )
+        verification = GooglePlaceVerification(
+            provider_place_id="gp-hubbard",
+            name="Hubbard Inn",
+            formatted_address="110 W Hubbard St, Chicago, IL",
+            business_status="OPERATIONAL",
+            rating=4.3,
+            user_rating_count=980,
+            confidence="high",
+            types=["bar"],
+        )
+        reason = build_place_reason(
+            candidate_name="Hubbard Inn",
+            user_query="cocktail bars near West Loop Chicago",
+            intent=INTENT_NIGHTLIFE,
+            candidate=candidate,
+            verified_place=verification,
+            known_candidate_names=["Hubbard Inn", "The Darling", "Green Mill"],
+        )
+        low = reason.lower()
+        assert "the darling" not in low
+        assert "hubbard inn" in low or "verified bar" in low
+        assert "###" not in reason
 
     def test_enrichment_failures_do_not_block_google_verified_cards(self, monkeypatch):
         monkeypatch.setenv("YELP_API_KEY", "fake")
@@ -2527,7 +2583,7 @@ class TestGooglePipelineRegression:
 # ── Frontend source evidence rendering (file-read tests) ─────────────────────
 
 class TestFrontendSourceEvidenceRendering:
-    """Check AIConciergePanel.tsx wires sourceEvidence.sourceReason correctly."""
+    """Check AIConciergePanel.tsx renders clean reason/evidence fields only."""
 
     def _read_panel(self) -> str:
         root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -2540,11 +2596,12 @@ class TestFrontendSourceEvidenceRendering:
         src = self._read_panel()
         assert "pickCardReason" in src, "pickCardReason helper must be present"
 
-    def test_panel_prefers_source_evidence_source_reason(self):
-        """The pickCardReason function must reference sourceEvidence.sourceReason."""
+    def test_panel_uses_clean_evidence_field_for_detail(self):
+        """Expanded details should use sanitized evidence array, not raw snippets."""
         src = self._read_panel()
-        assert "sourceEvidence" in src
-        assert "sourceReason" in src
+        assert "card.evidence" in src
+        assert "• ${b}" in src
+        assert "sourceEvidence?.sourceEvidence" not in src
 
     def test_panel_no_more_button_without_extra_detail(self):
         """expandableDetail variable controls the More button — not shown when undefined."""
@@ -2553,9 +2610,9 @@ class TestFrontendSourceEvidenceRendering:
         assert "pickCardDetail" in src
 
     def test_panel_falls_back_gracefully_for_old_cards(self):
-        """pickCardReason falls back to summary/description/reason when sourceEvidence is absent."""
+        """pickCardReason falls back to summary/description/reason when structured reason exists."""
         src = self._read_panel()
         # The fallback chain must reference all three field names
         assert ".summary" in src or '"summary"' in src
         assert ".description" in src or '"description"' in src
-        assert "Verified on Google after appearing in a local guide" in src
+        assert "Verified place with trusted Google signals" in src

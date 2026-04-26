@@ -226,27 +226,23 @@ function splitReason(text?: string): { short: string; detail?: string } {
 }
 
 function pickCardReason(
-  card: { summary?: string; description?: string; reason?: string; sourceEvidence?: { sourceReason?: string | null; sourceEvidence?: string | null; mentionCount?: number } | null },
+  card: { summary?: string; description?: string; reason?: string; evidence?: string[]; sourceEvidence?: { sourceReason?: string | null; sourceEvidence?: string | null; mentionCount?: number } | null },
 ): string | undefined {
-  const ev = card.sourceEvidence;
-  if (ev?.sourceReason) return ev.sourceReason;
-  // Fallback: summary / description / reason (whichever is present)
+  // Addable-card reason must come from clean structured fields only.
   const base = (card as { summary?: string }).summary
     ?? (card as { description?: string }).description
     ?? (card as { reason?: string }).reason;
   if (base) return base;
-  // Only use the generic copy when both article evidence and base copy are missing.
-  return "Verified on Google after appearing in a local guide.";
+  return "Verified place with trusted Google signals and relevant local fit.";
 }
 
 function pickCardDetail(
-  card: { sourceEvidence?: { sourceReason?: string | null; sourceEvidence?: string | null } | null },
+  card: { evidence?: string[]; sourceEvidence?: { sourceReason?: string | null; sourceEvidence?: string | null } | null },
 ): string | undefined {
-  const ev = card.sourceEvidence;
-  if (!ev) return undefined;
-  // Show the raw evidence snippet if it differs from the sourceReason.
-  if (ev.sourceEvidence && ev.sourceEvidence !== ev.sourceReason) {
-    return ev.sourceEvidence;
+  // Never render raw source snippets; use backend-sanitized evidence only.
+  const bullets = (card.evidence ?? []).filter(Boolean).slice(0, 2);
+  if (bullets.length > 0) {
+    return bullets.map((b) => `• ${b}`).join(" ");
   }
   return undefined;
 }

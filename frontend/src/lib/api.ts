@@ -1192,6 +1192,7 @@ export interface UnifiedRestaurantResult {
   verificationTier?: "primary" | "secondary" | null;
   googleVerification?: GoogleVerification | null;
   sourceEvidence?: SourceEvidence | null;
+  evidence?: string[];
   bestForTags?: string[];
   evidenceCount?: number;
   sourceBadges?: string[];
@@ -1218,6 +1219,7 @@ export interface UnifiedAttractionResult {
   verificationTier?: "primary" | "secondary" | null;
   googleVerification?: GoogleVerification | null;
   sourceEvidence?: SourceEvidence | null;
+  evidence?: string[];
   bestForTags?: string[];
   evidenceCount?: number;
   sourceBadges?: string[];
@@ -1244,6 +1246,7 @@ export interface UnifiedHotelResult {
   verificationTier?: "primary" | "secondary" | null;
   googleVerification?: GoogleVerification | null;
   sourceEvidence?: SourceEvidence | null;
+  evidence?: string[];
   bestForTags?: string[];
   evidenceCount?: number;
   sourceBadges?: string[];
