@@ -13,6 +13,7 @@ from app.concierge.contracts import (
     TripAdviceResponse,
     UnsupportedResponse,
 )
+from app.concierge.builders.trip_advice import build_trip_advice_payload
 from app.concierge.router import route_prompt
 from app.core.config import get_settings
 from app.core.deps import DB, CurrentUserID
@@ -59,18 +60,26 @@ def build_typed_concierge_response(
             legacy = service.search(payload.trip_id, payload.user_query, user_id, payload.client_message_id)
             typed_payload = PlaceRecommendationsResponse(**legacy.model_dump())
         elif decision.response_type == "trip_advice":
-            typed_payload = TripAdviceResponse(
-                response=(
-                    "Trip advice mode is enabled. I can help with points vs cash tradeoffs, "
-                    "award strategy, and booking timing."
-                ),
-                metadata={
-                    "router": {
-                        "stage1_prior": decision.stage1_prior,
-                        "stage2_confidence": decision.stage2_confidence,
-                    }
-                },
-            )
+            if not getattr(settings, "trip_advice_builder_enabled", False):
+                typed_payload = UnsupportedResponse(
+                    code="trip_advice_disabled",
+                    message="Trip advice mode is currently disabled.",
+                )
+            else:
+                advice_payload = build_trip_advice_payload(payload.user_query)
+                typed_payload = TripAdviceResponse(
+                    response=advice_payload.response,
+                    advice_sections=[section.model_dump() for section in advice_payload.advice_sections],
+                    citations=[citation.model_dump() for citation in advice_payload.citations],
+                    suggestions=advice_payload.suggestions,
+                    metadata={
+                        **advice_payload.metadata,
+                        "router": {
+                            "stage1_prior": decision.stage1_prior,
+                            "stage2_confidence": decision.stage2_confidence,
+                        },
+                    },
+                )
         else:
             typed_payload = UnsupportedResponse(
                 code=decision.code or "unsupported_prompt",
