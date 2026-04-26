@@ -124,6 +124,7 @@ export function TripMapView({
   useEffect(() => {
     if (!center || !mapContainerRef.current) return;
     let cancelled = false;
+    const markers = markersRef.current;
 
     import("leaflet").then((mod) => {
       if (cancelled || !mapContainerRef.current || mapInstanceRef.current) return;
@@ -152,7 +153,7 @@ export function TripMapView({
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
-      markersRef.current.clear();
+      markers.clear();
       heatLayerRef.current = null;
       setMapReady(false);
     };
