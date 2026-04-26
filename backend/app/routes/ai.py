@@ -1,6 +1,7 @@
 """AI concierge endpoint — contextual travel recommendations powered by Claude."""
 
 import logging
+import time
 from typing import List
 from uuid import UUID
 
@@ -14,7 +15,8 @@ from app.concierge.contracts import (
     UnsupportedResponse,
 )
 from app.concierge.builders.trip_advice import build_trip_advice_payload
-from app.concierge.router import route_prompt
+from app.concierge.logging import persist_concierge_request_log, request_log_event
+from app.concierge.router import RouteDecision, route_prompt
 from app.core.config import get_settings
 from app.core.deps import DB, CurrentUserID
 from app.models.concierge import (
@@ -37,13 +39,19 @@ def build_typed_concierge_response(
     service: ConciergeService,
     payload: ConciergeSearchRequest,
     user_id: UUID,
-) -> ConciergeTypedResponse:
+) -> tuple[ConciergeTypedResponse, RouteDecision]:
     """Build and validate the typed concierge response contract."""
     settings = get_settings()
 
     if not settings.concierge_router_v2:
         legacy = service.search(payload.trip_id, payload.user_query, user_id, payload.client_message_id)
         typed_payload = PlaceRecommendationsResponse(**legacy.model_dump())
+        decision = RouteDecision(
+            response_type="place_recommendations",
+            stage1_prior={"place_recommendations": 1.0, "trip_advice": 0.0, "unsupported": 0.0},
+            stage2_confidence=1.0,
+            code="router_v2_disabled",
+        )
     else:
         decision = route_prompt(
             payload.user_query,
@@ -87,7 +95,8 @@ def build_typed_concierge_response(
             )
 
     try:
-        return _typed_response_adapter.validate_python(typed_payload)
+        validated = _typed_response_adapter.validate_python(typed_payload)
+        return validated, decision
     except ValidationError as exc:
         logger.exception("concierge.typed_response_validation_failed")
         raise HTTPException(
@@ -106,7 +115,35 @@ def concierge(payload: ConciergeRequest, db: DB, user_id: CurrentUserID) -> Conc
 def concierge_search(payload: ConciergeSearchRequest, db: DB, user_id: CurrentUserID) -> ConciergeTypedResponse:
     """Retrieval-first concierge with typed response routing contract."""
     service = ConciergeService(db)
-    return build_typed_concierge_response(service, payload, user_id)
+    start = time.perf_counter()
+    response, decision = build_typed_concierge_response(service, payload, user_id)
+    latency_ms = int((time.perf_counter() - start) * 1000)
+
+    request_id = persist_concierge_request_log(
+        db=db,
+        user_id=user_id,
+        prompt=payload.user_query,
+        decision=decision,
+        response=response,
+        latency_ms=latency_ms,
+    )
+
+    llm_usage = getattr(response, "metadata", {}).get("llm_usage", {}) if hasattr(response, "metadata") else {}
+    tokens_in = llm_usage.get("tokens_in") if isinstance(llm_usage, dict) else None
+    tokens_out = llm_usage.get("tokens_out") if isinstance(llm_usage, dict) else None
+    sources_used = response.sources if hasattr(response, "sources") else [c.url for c in getattr(response, "citations", [])]
+
+    request_log_event(
+        request_id=request_id,
+        prompt=payload.user_query,
+        decision=decision,
+        response=response,
+        latency_ms=latency_ms,
+        sources_used=sources_used,
+        llm_tokens_in=tokens_in,
+        llm_tokens_out=tokens_out,
+    )
+    return response
 
 
 @router.get("/concierge/{trip_id}/messages", response_model=List[ConciergeMessage])

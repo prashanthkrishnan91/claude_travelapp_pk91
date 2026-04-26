@@ -142,9 +142,10 @@ def test_concierge_search_integration_returns_typed_response(prompt: str, expect
     with patch("app.routes.ai.get_settings", return_value=SimpleNamespace(concierge_router_v2=True, concierge_router_v2_confidence_threshold=0.55, trip_advice_builder_enabled=True)), patch(
         "app.routes.ai.ConciergeService", return_value=mock_service
     ):
-        result = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+        result, decision = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
 
     assert result.response_type == expected
+    assert decision.response_type in {"place_recommendations", "trip_advice", "unsupported"}
 
 
 @pytest.mark.parametrize(
@@ -162,7 +163,7 @@ def test_trip_advice_prompts_return_structured_sections(prompt: str):
     mock_service = MagicMock()
 
     with patch("app.routes.ai.get_settings", return_value=SimpleNamespace(concierge_router_v2=True, concierge_router_v2_confidence_threshold=0.55, trip_advice_builder_enabled=True)):
-        result = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+        result, _ = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
 
     assert result.response_type == "trip_advice"
     assert len(result.advice_sections) >= 2
@@ -176,7 +177,7 @@ def test_trip_advice_disabled_flag_returns_unsupported():
     mock_service = MagicMock()
 
     with patch("app.routes.ai.get_settings", return_value=SimpleNamespace(concierge_router_v2=True, concierge_router_v2_confidence_threshold=0.55, trip_advice_builder_enabled=False)):
-        result = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+        result, _ = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
 
     assert result.response_type == "unsupported"
     assert result.code == "trip_advice_disabled"
