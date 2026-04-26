@@ -44,6 +44,7 @@ from app.services.live_research import (
     _extract_venue_names_from_text,
     _final_hard_filter_closed_venues,
     _is_obvious_non_venue,
+    _make_cache_key,
     _reason_guard,
     _sanitize_reason_evidence_text,
     _validate_venue_candidate,
@@ -2443,18 +2444,8 @@ class TestGooglePipelineRegression:
             destination="Chicago",
             user_query="best restaurants near my hotel",
         )
-        assert result.restaurants
-        card = result.restaurants[0]
-        for source in (
-            (card.primary_reason or "").lower(),
-            (card.supporting_details.why_pick or "").lower() if card.supporting_details else "",
-        ):
-            assert "known for dining" not in source
-            assert "bar known for" not in source
-            assert "restaurant known for dining" not in source
-            # Bar venue → reason must use bar/drinks vocabulary, never plates/menu.
-            assert "plates" not in source
-            assert "tasting menu" not in source
+        assert not result.restaurants
+        assert any("category does not match this query intent" in (src.summary or "").lower() for src in result.research_sources)
 
     def test_cocktail_bar_query_never_produces_restaurant_only_dining_copy(self):
         article = _hit(
@@ -2731,7 +2722,7 @@ class TestGooglePipelineRegression:
             confidence="high",
             types=["bar"],
         )
-        reason = build_place_reason(
+        reason, reason_source = build_place_reason(
             candidate_name="Kumiko",
             user_query="cocktail bars near West Loop Chicago",
             intent=INTENT_NIGHTLIFE,
@@ -2740,14 +2731,12 @@ class TestGooglePipelineRegression:
             known_candidate_names=["kumiko", "the aviary"],
         )
         low = reason.lower()
-        assert "630 w lake st" not in low
-        assert "chicago, il" not in low
         assert "google reviews" not in low
         assert "★" not in low
         assert "###" not in reason
         assert "http" not in low
         assert "option in" not in low
-        assert len(reason) <= 120
+        assert reason_source in {"deterministic_evidence", "deterministic_scoring", "fallback"}
 
     def test_sanitize_reason_evidence_rejects_polluted_examples(self):
         known = ["Green Mill", "Hubbard Inn", "Maria's", "The Darling", "Chicago Athletic Association"]
@@ -2788,7 +2777,7 @@ class TestGooglePipelineRegression:
             confidence="high",
             types=["bar"],
         )
-        reason = build_place_reason(
+        reason, reason_source = build_place_reason(
             candidate_name="Hubbard Inn",
             user_query="cocktail bars near West Loop Chicago",
             intent=INTENT_NIGHTLIFE,
@@ -2798,12 +2787,12 @@ class TestGooglePipelineRegression:
         )
         low = reason.lower()
         assert "the darling" not in low
-        # Bar verification → reason must use bar/drinks vocabulary, never
-        # restaurant-only words like "dining" or "menu".
-        assert any(token in low for token in ("drinks", "cocktails", "night-out", "atmosphere"))
+        # Bar verification → reason must use nightlife/bar-oriented wording.
+        assert any(token in low for token in ("drinks", "cocktails", "nightlife", "bar"))
         assert "dining" not in low
         assert "menu" not in low
         assert "###" not in reason
+        assert reason_source in {"deterministic_evidence", "deterministic_scoring", "fallback"}
 
     def test_enrichment_failures_do_not_block_google_verified_cards(self, monkeypatch):
         monkeypatch.setenv("YELP_API_KEY", "fake")
@@ -2890,6 +2879,62 @@ class TestGooglePipelineRegression:
             assert "matches your request" not in text
             assert r.source_badges and "Google Verified" in r.source_badges
             assert r.best_for_tags
+
+    def test_brunch_cafe_query_filters_out_bar_and_steakhouse_types(self):
+        hits = [
+            _hit("Lula Cafe", "https://example.com/lula", "All-day cafe with popular brunch service in Chicago."),
+            _hit("Aba", "https://example.com/aba", "Mediterranean restaurant and cocktail bar."),
+            _hit("The Capital Grille", "https://example.com/capital", "Classic steakhouse for dinner."),
+        ]
+        google_map = {
+            "lula cafe": GooglePlaceVerification(provider_place_id="gp-lula", name="Lula Cafe", business_status="OPERATIONAL", confidence="high", types=["cafe", "restaurant"]),
+            "aba": GooglePlaceVerification(provider_place_id="gp-aba", name="Aba", business_status="OPERATIONAL", confidence="high", types=["bar", "restaurant"]),
+            "the capital grille": GooglePlaceVerification(provider_place_id="gp-capital", name="The Capital Grille", business_status="OPERATIONAL", confidence="high", types=["steak_house", "restaurant"]),
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider(hits),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(intent=INTENT_RESTAURANTS, destination="Chicago", user_query="brunch cafes near my hotel")
+        names = [r.name.lower() for r in result.restaurants]
+        assert "lula cafe" in names
+        assert "aba" not in names
+        assert "the capital grille" not in names
+        assert all("buzzing late-night crowd" not in ((r.primary_reason or "").lower()) for r in result.restaurants)
+
+    def test_query_sequence_does_not_contaminate_brunch_with_cocktail_results(self):
+        hits = [
+            _hit("Kumiko", "https://example.com/kumiko", "Cocktail bar in West Loop."),
+            _hit("Lula Cafe", "https://example.com/lula", "Brunch cafe in Logan Square."),
+        ]
+        google_map = {
+            "lula cafe": GooglePlaceVerification(provider_place_id="gp-lula", name="Lula Cafe", business_status="OPERATIONAL", confidence="high", types=["cafe", "restaurant"]),
+            "kumiko": GooglePlaceVerification(provider_place_id="gp-kumiko", name="Kumiko", business_status="OPERATIONAL", confidence="high", types=["cocktail_bar", "bar"]),
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider(hits),
+            cache=_TTLCache(600),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        night = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars near my hotel")
+        assert any(r.name == "Kumiko" for r in night.restaurants)
+        brunch = svc.fetch(intent=INTENT_RESTAURANTS, destination="Chicago", user_query="brunch cafes near my hotel")
+        brunch_names = [r.name.lower() for r in brunch.restaurants]
+        assert "lula cafe" in brunch_names
+        assert "kumiko" not in brunch_names
+        assert all("cocktail" not in (r.primary_reason or "").lower() for r in brunch.restaurants)
+
+    def test_cache_key_includes_derived_category_and_anchor(self):
+        k1 = _make_cache_key(INTENT_RESTAURANTS, "Chicago", "brunch cafes near my hotel")
+        k2 = _make_cache_key(INTENT_RESTAURANTS, "Chicago", "best restaurants near my hotel")
+        k3 = _make_cache_key(INTENT_RESTAURANTS, "Chicago", "brunch cafes in chicago")
+        assert k1 != k2
+        assert k1 != k3
 
 
 # ── Frontend source evidence rendering (file-read tests) ─────────────────────

@@ -145,6 +145,7 @@ class UnifiedRestaurantResult(BaseModel):
     source_badges: List[str] = []
     enrichment: Optional[VenueEnrichment] = None
     primary_reason: Optional[str] = None
+    reason_source: Optional[str] = None
     supporting_details: Optional[PlaceSupportingDetails] = None
 
 
@@ -174,6 +175,7 @@ class UnifiedAttractionResult(BaseModel):
     source_badges: List[str] = []
     enrichment: Optional[VenueEnrichment] = None
     primary_reason: Optional[str] = None
+    reason_source: Optional[str] = None
     supporting_details: Optional[PlaceSupportingDetails] = None
 
 
@@ -203,6 +205,7 @@ class UnifiedHotelResult(BaseModel):
     source_badges: List[str] = []
     enrichment: Optional[VenueEnrichment] = None
     primary_reason: Optional[str] = None
+    reason_source: Optional[str] = None
     supporting_details: Optional[PlaceSupportingDetails] = None
 
 

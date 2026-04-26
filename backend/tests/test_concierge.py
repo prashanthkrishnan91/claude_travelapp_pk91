@@ -33,8 +33,10 @@ from app.models.concierge import (
     SOURCE_NONE,
     SOURCE_SAMPLE_DATA,
     SOURCE_UNAVAILABLE,
+    UnifiedRestaurantResult,
 )
 from app.services.concierge import ConciergeService
+from app.services.live_research import LiveResearchResult
 from app.services.michelin_retriever import MichelinRetriever
 
 FAKE_TRIP_ID = UUID("00000000-0000-0000-0000-000000000001")
@@ -335,6 +337,35 @@ class TestConciergeSearch:
         assert result.restaurants
         assert result.restaurants[0].name == "Boka"
         assert result.source_status in {"sample_data", "app_database", "none"}
+
+    def test_summary_best_overall_is_aligned_to_first_ranked_card(self):
+        svc = self._svc("Chicago")
+        live_result = LiveResearchResult(
+            restaurants=[
+                UnifiedRestaurantResult(
+                    name="Lula Cafe",
+                    cuisine="Cafe",
+                    neighborhood="Logan Square",
+                    rating=4.6,
+                    summary="Brunch-focused cafe.",
+                ),
+                UnifiedRestaurantResult(
+                    name="Aba",
+                    cuisine="Restaurant",
+                    neighborhood="Fulton Market",
+                    rating=4.7,
+                    summary="Mediterranean restaurant.",
+                ),
+            ],
+            source_status="live_search",
+            provider_name="Stub",
+        )
+        bad_llm = json.dumps({"response": "Best overall: Aba. Great brunch options.", "suggestions": []})
+        with patch.object(svc, "_fetch_live_research", return_value=live_result), \
+             patch.object(svc, "_call_claude", return_value=bad_llm):
+            result = svc.search(FAKE_TRIP_ID, "brunch cafes near my hotel", FAKE_USER_ID)
+        assert result.restaurants[0].name == "Lula Cafe"
+        assert "best overall: lula cafe" in result.response.lower()
 
     def test_add_nearby_drinks_returns_structured_cards(self):
         svc = self._svc("Chicago")

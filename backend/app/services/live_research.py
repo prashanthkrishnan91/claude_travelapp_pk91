@@ -626,14 +626,51 @@ _GLOBAL_CACHE = _TTLCache(ttl_seconds=1800)
 _VERIFICATION_CACHE = _TTLCache(ttl_seconds=1800)
 # Bumped to 3 alongside Google Places verification — invalidates older payloads
 # that pre-date the verification gate so addable cards are always re-resolved.
-CONCIERGE_CACHE_VERSION = 3
+CONCIERGE_CACHE_VERSION = 4
+
+
+def _normalize_query(query: str) -> str:
+    return re.sub(r"\s+", " ", (query or "").strip().lower())
+
+
+def _derive_location_anchor(query: str) -> str:
+    low = _normalize_query(query)
+    if "near my hotel" in low or "near hotel" in low:
+        return "hotel_anchor"
+    if "near me" in low:
+        return "near_me"
+    if "west loop" in low:
+        return "west_loop"
+    if "river north" in low:
+        return "river_north"
+    return "none"
+
+
+def _derive_query_category(intent: str, query: str) -> str:
+    low = _normalize_query(query)
+    if intent == INTENT_NIGHTLIFE:
+        return "nightlife_bar"
+    if intent in {INTENT_RESTAURANTS, INTENT_HIDDEN_GEMS, INTENT_ROMANTIC, INTENT_FAMILY_FRIENDLY, INTENT_LUXURY_VALUE}:
+        if any(tok in low for tok in ("brunch", "breakfast", "cafe", "coffee", "bakery")):
+            return "brunch_cafe"
+        return "restaurant"
+    if intent in {INTENT_ATTRACTIONS, INTENT_PLAN_DAY}:
+        return "attraction"
+    if intent == INTENT_HOTELS:
+        return "hotel"
+    return "general"
 
 
 def _make_cache_key(intent: str, destination: str, query: str, dates: Optional[str] = None) -> str:
+    normalized_query = _normalize_query(query)
+    derived_category = _derive_query_category(intent, query)
+    location_anchor = _derive_location_anchor(query)
     parts = [
         intent or "general",
         (destination or "").strip().lower(),
-        re.sub(r"\s+", " ", (query or "").strip().lower()),
+        normalized_query,
+        derived_category,
+        location_anchor,
         dates or "",
     ]
     return "::".join(parts)
@@ -697,6 +734,8 @@ def _build_search_query(intent: str, destination: str, user_query: str) -> str:
     if intent == INTENT_FAMILY_FRIENDLY:
         return f"family-friendly restaurants in {dest}"
     if intent == INTENT_RESTAURANTS:
+        if raw:
+            return f"{raw} in {dest}".strip()
         return f"best restaurants in {dest} 2026"
     if intent in (INTENT_ATTRACTIONS, INTENT_PLAN_DAY):
         return f"top things to do and attractions in {dest}"
@@ -1243,6 +1282,35 @@ def _safe_google_only_reason(
     return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"])
 
 
+def _category_fit_score(intent: str, user_query: str, verification: "GooglePlaceVerification") -> float:
+    blob = " ".join((t or "").lower() for t in (verification.types or []))
+    qcat = _derive_query_category(intent, user_query)
+    if qcat == "nightlife_bar":
+        if any(tok in blob for tok in ("cocktail_bar", "bar", "night_club")):
+            return 1.0
+        if "restaurant" in blob:
+            return 0.35
+        return 0.1
+    if qcat == "brunch_cafe":
+        score = 0.0
+        if any(tok in blob for tok in ("cafe", "coffee_shop", "bakery", "breakfast_restaurant", "brunch_restaurant")):
+            score += 0.75
+        if "restaurant" in blob or "food" in blob:
+            score += 0.25
+        if any(tok in blob for tok in ("bar", "night_club", "liquor_store", "steak_house")):
+            score -= 0.7
+        return max(0.0, min(1.0, score))
+    if qcat == "restaurant":
+        if any(tok in blob for tok in ("restaurant", "food", "meal_takeaway")):
+            return 0.9
+        if any(tok in blob for tok in ("cafe", "bakery", "coffee_shop")):
+            return 0.75
+        if any(tok in blob for tok in ("bar", "night_club")):
+            return 0.2
+        return 0.4
+    return 0.6
+
+
 def _bayesian_google_score(rating: Optional[float], review_count: Optional[int]) -> float:
     if rating is None:
         return 0.0
@@ -1261,7 +1329,7 @@ def build_place_reason(
     candidate: Any,
     verified_place: GooglePlaceVerification,
     known_candidate_names: Optional[List[str]] = None,
-) -> str:
+) -> Tuple[str, str]:
     """Compose a clean, premium concierge reason for a Google-verified place.
 
     Rules:
@@ -1270,23 +1338,41 @@ def build_place_reason(
       • Never exposes source/debug metadata.
       • Falls back to a category-appropriate safe sentence on any uncertainty.
     """
-    del user_query, intent  # category-aware templates already encode the angle
     name = verified_place.name or candidate_name or "This place"
     category = _normalize_place_category(verified_place.types, candidate)
     rating = verified_place.rating
     review_count = verified_place.user_rating_count
-    tier = _reason_quality_tier(rating, review_count)
-    template = (
-        _CATEGORY_REASON_TEMPLATES.get(category, _CATEGORY_REASON_TEMPLATES["place"]).get(tier)
-        or _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"])
-    )
-
-    candidate_reason = template
+    category_fit = _category_fit_score(intent, user_query, verified_place)
+    evidence_reason = None
+    source_ev = getattr(candidate, "source_evidence", None)
+    if source_ev is not None:
+        evidence_reason = _sanitize_reason_evidence_text(
+            str(getattr(source_ev, "source_reason", None) or getattr(source_ev, "source_evidence", None) or ""),
+            own_name=name,
+            known_candidate_names=known_candidate_names or [],
+            max_len=120,
+        )
+    bits: List[str] = []
+    if _derive_query_category(intent, user_query) == "brunch_cafe":
+        bits.append("Strong brunch/cafe fit")
+    elif intent == INTENT_NIGHTLIFE:
+        bits.append("Strong cocktail/nightlife fit")
+    if rating is not None:
+        if review_count and int(review_count) > 0:
+            bits.append(f"Rated {float(rating):.1f} across {int(review_count):,} reviews")
+        else:
+            bits.append(f"Rated {float(rating):.1f}")
+    if evidence_reason:
+        bits.append(evidence_reason)
+    if category_fit >= 0.45 and bits:
+        candidate_reason = ". ".join(bits) + "."
+    else:
+        candidate_reason = _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"])
     if not _reason_guard(candidate_reason, name, known_candidate_names or []):
-        return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"])
+        return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"]), "fallback"
     if _category_intent_mismatch(candidate_reason, category):
-        return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"])
-    return candidate_reason
+        return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"]), "fallback"
+    return candidate_reason, ("deterministic_evidence" if evidence_reason else "deterministic_scoring")
 
 
 def _format_meta_line(
@@ -2354,7 +2440,24 @@ def _apply_google_gate(
                 name_lower = (getattr(venue, "name", "") or "").lower()
                 src_count = (corroboration_counter or {}).get(name_lower, 0)
                 venue_source_ev = getattr(venue, "source_evidence", None)
-                reason = build_place_reason(
+                category_fit = _category_fit_score(intent, user_query, verification)
+                if category_fit < 0.45:
+                    rejected_by_reason["intent_category_mismatch"] += 1
+                    research_sources.append(
+                        UnifiedResearchSourceResult(
+                            title=str(getattr(venue, "name", f"Off-intent {kind_label}") or f"Off-intent {kind_label}"),
+                            source="Google Places",
+                            source_type="generic_info_source",
+                            summary="Google verified the place exists, but its category does not match this query intent.",
+                            source_url=getattr(venue, "source_url", None) or verification.google_maps_uri,
+                            neighborhood=getattr(venue, "neighborhood", None) or verification.formatted_address,
+                            last_verified_at=getattr(venue, "last_verified_at", None),
+                            confidence=getattr(venue, "confidence", None),
+                            trip_addable=False,
+                        )
+                    )
+                    continue
+                reason, reason_source = build_place_reason(
                     candidate_name=getattr(venue, "name", "") or verification.name or "",
                     user_query=user_query,
                     intent=intent,
@@ -2378,6 +2481,10 @@ def _apply_google_gate(
                     venue.reason = reason
                 try:
                     venue.primary_reason = reason
+                except Exception:
+                    pass
+                try:
+                    venue.reason_source = reason_source
                 except Exception:
                     pass
                 clean_evidence: List[str] = []
@@ -2430,10 +2537,20 @@ def _apply_google_gate(
                     relevance = 0.25 if any(t in (user_query or "").lower() for t in _intent_best_for_tags(intent, user_query)) else 0.0
                     distance_hint = 0.2 if verification.formatted_address and getattr(venue, "neighborhood", None) else 0.0
                     evidence_bonus = min(0.3, 0.1 * float(max(0, src_count)))
-                    venue.ai_score = round(base + relevance + distance_hint + evidence_bonus, 4)
+                    venue.category_fit_score = round(category_fit, 4)
+                    venue.ai_score = round((category_fit * 2.0) + base + relevance + distance_hint + evidence_bonus, 4)
                     final_score = float(venue.ai_score or 0.0)
                 except Exception:
                     pass
+                logger.info(
+                    "reason_generation place=%s source=%s model=%s payload=intent:%s query:%s fit=%.2f",
+                    getattr(venue, "name", ""),
+                    reason_source,
+                    "none",
+                    intent,
+                    _normalize_query(user_query)[:120],
+                    category_fit,
+                )
             except Exception:
                 pass
             try:
@@ -3081,13 +3198,24 @@ class LiveResearchService:
         if not self._enabled or intent not in _LIVE_ENABLED_INTENTS or not destination:
             return LiveResearchResult()
 
+        derived_category = _derive_query_category(intent, user_query)
         cache_key = _make_cache_key(intent, destination, user_query, dates)
+        logger.info(
+            "live_research_request query=%r intent=%s derived_category=%s destination=%s cache_key=%s",
+            user_query,
+            intent,
+            derived_category,
+            destination,
+            cache_key,
+        )
         cached = self._cache.get(cache_key)
         if cached is not None:
+            logger.info("live_research_cache hit key=%s", cache_key)
             payload = self._payload_to_result(cached)
             if payload is not None:
                 payload.cached = True
                 return payload
+        logger.info("live_research_cache miss key=%s", cache_key)
 
         if not self._provider.available or isinstance(self._provider, _NoopProvider):
             return LiveResearchResult()
@@ -3379,6 +3507,13 @@ class LiveResearchService:
             final_verified_count,
             len(normalized["research_sources"]),
         )
+        if normalized["restaurants"]:
+            dist: Counter = Counter()
+            for item in normalized["restaurants"]:
+                gv = getattr(item, "google_verification", None)
+                types = getattr(gv, "types", []) if gv is not None else []
+                dist[_normalize_place_category(types, item)] += 1
+            logger.info("final_result_category_distribution intent=%s categories=%s", intent, dict(dist))
 
         if not (
             normalized["restaurants"]
