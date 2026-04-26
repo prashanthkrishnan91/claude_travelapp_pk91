@@ -111,6 +111,11 @@ class PlaceSupportingDetails(BaseModel):
     address: Optional[str] = None
     editorial_mentions: Optional[int] = None
     tags: List[str] = []
+    # User-facing display fields (clean, never carry debug metadata).
+    meta_line: Optional[str] = None
+    why_pick: Optional[str] = None
+    concierge_note: Optional[str] = None
+    category_label: Optional[str] = None
 
 
 class UnifiedRestaurantResult(BaseModel):

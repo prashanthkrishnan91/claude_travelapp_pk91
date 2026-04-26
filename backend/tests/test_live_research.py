@@ -1457,8 +1457,14 @@ class TestVerifyBeforeAdd:
         result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="bars")
         assert len(result.restaurants) == 1
         card = result.restaurants[0]
+        # Suspicious provider snippet must never leak into the user-facing reason.
         assert card.summary and "Hotel lounge" not in card.summary
-        assert "Google 4.7★" in card.summary
+        # Reason carries no debug/structured tokens like "Google 4.7★" — the
+        # star rating belongs in the meta line, not the why-pick sentence.
+        assert "★" not in card.summary
+        assert "google " not in card.summary.lower()
+        # Bar venue → bar/drinks vocabulary, never restaurant-only words.
+        assert "dining" not in card.summary.lower()
         assert card.maps_link == "https://maps.google.com/?cid=gp-kumiko"
         assert card.type == "verified_place"
 
@@ -2385,6 +2391,225 @@ class TestGooglePipelineRegression:
         assert card.supporting_details.rating == "4.7"
         assert card.supporting_details.review_count == 1200
         assert "Lake St" in (card.supporting_details.address or "")
+        # Display fields: meta_line is "★ 4.7 (1,200 reviews) · address" only.
+        meta = card.supporting_details.meta_line or ""
+        assert meta.startswith("★ 4.7")
+        assert "(1,200 reviews)" in meta
+        assert "Lake St" in meta
+        # Internal/debug terms must never appear in the user-facing display fields.
+        for forbidden in (
+            "source checked",
+            "editorial mention",
+            "source fit",
+            "evidence:",
+            "tavily",
+            "verification score",
+            "google verified",
+        ):
+            assert forbidden not in meta.lower()
+            assert forbidden not in (card.supporting_details.why_pick or "").lower()
+            assert forbidden not in (card.supporting_details.concierge_note or "").lower()
+        # Category label must reflect the venue type, not the user's intent.
+        assert (card.supporting_details.category_label or "").lower() in {"cocktail bar", "bar"}
+
+    def test_restaurant_query_never_produces_bar_known_for_dining(self):
+        # A bar that surfaces in a restaurant search must NOT mix categories.
+        article = _hit(
+            "The Aviary",
+            "https://example.com/a",
+            "The Aviary is a renowned cocktail bar in Chicago.",
+        )
+        google_map = {
+            "the aviary": GooglePlaceVerification(
+                provider_place_id="gp-aviary",
+                name="The Aviary",
+                formatted_address="955 W Fulton Market, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                rating=4.6,
+                user_rating_count=1500,
+                types=["bar"],
+            )
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider([article]),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(
+            intent=INTENT_RESTAURANTS,
+            destination="Chicago",
+            user_query="best restaurants near my hotel",
+        )
+        assert result.restaurants
+        card = result.restaurants[0]
+        for source in (
+            (card.primary_reason or "").lower(),
+            (card.supporting_details.why_pick or "").lower() if card.supporting_details else "",
+        ):
+            assert "known for dining" not in source
+            assert "bar known for" not in source
+            assert "restaurant known for dining" not in source
+            # Bar venue → reason must use bar/drinks vocabulary, never plates/menu.
+            assert "plates" not in source
+            assert "tasting menu" not in source
+
+    def test_cocktail_bar_query_never_produces_restaurant_only_dining_copy(self):
+        article = _hit(
+            "Kumiko",
+            "https://example.com/k",
+            "Cocktail bar in West Loop, Chicago.",
+        )
+        google_map = {
+            "kumiko": GooglePlaceVerification(
+                provider_place_id="gp-1",
+                name="Kumiko",
+                formatted_address="630 W Lake St, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                rating=4.7,
+                user_rating_count=1200,
+                types=["bar"],
+            )
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider([article]),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(
+            intent=INTENT_NIGHTLIFE,
+            destination="Chicago",
+            user_query="best cocktail bars near my hotel",
+        )
+        assert result.restaurants
+        card = result.restaurants[0]
+        reason = (card.supporting_details.why_pick or card.primary_reason or "").lower()
+        # Must read like a bar pick, not a restaurant pick.
+        assert any(token in reason for token in ("cocktail", "drinks", "atmosphere", "night-out"))
+        for forbidden in ("dining request", "tasting menu", "polished plates", "diner feedback"):
+            assert forbidden not in reason
+
+    def test_cafe_query_uses_cafe_language(self):
+        article = _hit("Sawada Coffee", "https://example.com/s", "Iconic cafe in Chicago.")
+        google_map = {
+            "sawada coffee": GooglePlaceVerification(
+                provider_place_id="gp-sawada",
+                name="Sawada Coffee",
+                formatted_address="112 N Green St, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                rating=4.6,
+                user_rating_count=900,
+                types=["cafe"],
+            )
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider([article]),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(
+            intent=INTENT_RESTAURANTS,
+            destination="Chicago",
+            user_query="best cafes near my hotel",
+        )
+        # Cafes can be promoted as restaurants in this codebase, but the
+        # category label and reason must remain coffee-shop focused.
+        assert result.restaurants
+        card = result.restaurants[0]
+        details = card.supporting_details
+        assert details is not None
+        assert (details.category_label or "").lower() == "cafe"
+        reason = (details.why_pick or card.primary_reason or "").lower()
+        assert any(token in reason for token in ("coffee", "cafe", "casual"))
+        assert "cocktails" not in reason
+        assert "tasting menu" not in reason
+
+    def test_supporting_details_never_leak_internal_metadata_terms(self):
+        article = _hit("Kumiko", "https://example.com/k", "Cocktail bar in Chicago.")
+        google_map = {
+            "kumiko": GooglePlaceVerification(
+                provider_place_id="gp-1",
+                name="Kumiko",
+                formatted_address="630 W Lake St, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                rating=4.7,
+                user_rating_count=1200,
+                types=["bar"],
+            )
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider([article]),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(
+            intent=INTENT_NIGHTLIFE,
+            destination="Chicago",
+            user_query="cocktail bars",
+        )
+        assert result.restaurants
+        card = result.restaurants[0]
+        forbidden_terms = (
+            "source checked",
+            "editorial mention",
+            "source fit",
+            "evidence:",
+            "tavily",
+            "verification score",
+            "###",
+        )
+        display_fields = [
+            card.supporting_details.meta_line if card.supporting_details else None,
+            card.supporting_details.why_pick if card.supporting_details else None,
+            card.supporting_details.concierge_note if card.supporting_details else None,
+            card.supporting_details.category_label if card.supporting_details else None,
+            card.primary_reason,
+        ]
+        for value in display_fields:
+            low = (value or "").lower()
+            for forbidden in forbidden_terms:
+                assert forbidden not in low, f"display leaked '{forbidden}': {value!r}"
+
+    def test_meta_line_format_is_rating_reviews_address_only(self):
+        article = _hit("Aba", "https://example.com/aba", "Restaurant in Chicago.")
+        google_map = {
+            "aba": GooglePlaceVerification(
+                provider_place_id="gp-aba",
+                name="Aba",
+                formatted_address="302 N Green St 3rd Floor, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                rating=4.8,
+                user_rating_count=9483,
+                types=["restaurant"],
+            )
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider([article]),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(
+            intent=INTENT_RESTAURANTS,
+            destination="Chicago",
+            user_query="best restaurants near my hotel",
+        )
+        assert result.restaurants
+        meta = result.restaurants[0].supporting_details.meta_line or ""
+        assert meta == "★ 4.8 (9,483 reviews) · 302 N Green St 3rd Floor, Chicago, IL"
 
     def test_research_sources_suppressed_when_addable_at_least_three(self):
         hits = [_hit("Best Cocktail Bars in Chicago", "https://example.com/bars", "1. Kumiko 2. The Aviary 3. Moneygun")]
@@ -2573,7 +2798,11 @@ class TestGooglePipelineRegression:
         )
         low = reason.lower()
         assert "the darling" not in low
-        assert "google reviews" in low or "known for" in low
+        # Bar verification → reason must use bar/drinks vocabulary, never
+        # restaurant-only words like "dining" or "menu".
+        assert any(token in low for token in ("drinks", "cocktails", "night-out", "atmosphere"))
+        assert "dining" not in low
+        assert "menu" not in low
         assert "###" not in reason
 
     def test_enrichment_failures_do_not_block_google_verified_cards(self, monkeypatch):
@@ -2679,13 +2908,17 @@ class TestFrontendSourceEvidenceRendering:
         src = self._read_panel()
         assert "pickCardReason" in src, "pickCardReason helper must be present"
 
-    def test_panel_uses_clean_evidence_field_for_detail(self):
-        """Expanded details should use structured supporting details rows."""
+    def test_panel_uses_clean_supporting_details_only(self):
+        """Card meta and details must come from clean supportingDetails fields."""
         src = self._read_panel()
         assert "supportingDetails" in src
-        assert "Rating:" in src
-        assert "Address:" in src
-        assert "sourceEvidence?.sourceEvidence" not in src
+        # Internal/debug labels MUST NOT appear in the rendered card.
+        assert "Source fit" not in src
+        assert "Evidence: Mentioned in" not in src
+        assert "editorial mention" not in src
+        assert "source checked" not in src
+        # Expanded details must use the user-facing concierge note only.
+        assert "conciergeNote" in src
 
     def test_panel_no_more_button_without_extra_detail(self):
         """expandableDetail variable controls the More button — not shown when undefined."""
@@ -2697,10 +2930,10 @@ class TestFrontendSourceEvidenceRendering:
         src = self._read_panel()
         assert "addableCount(msg) < 3" in src
 
-    def test_panel_falls_back_gracefully_for_old_cards(self):
-        """pickCardReason falls back to summary/description/reason when structured reason exists."""
+    def test_panel_meta_line_uses_rating_reviews_address_only(self):
+        """Meta line must come from supportingDetails.metaLine; no leaky tokens."""
         src = self._read_panel()
-        # The fallback chain must reference all three field names
-        assert ".summary" in src or '"summary"' in src
-        assert ".description" in src or '"description"' in src
-        assert "Strong fit for this trip based on trusted place signals." in src
+        assert "metaLine" in src
+        # Meta must never include editorial / source-checked tokens.
+        assert "editorialMentions" not in src or "details?.editorialMentions" not in src
+        assert "evidenceCount" not in src or "place.evidenceCount" not in src

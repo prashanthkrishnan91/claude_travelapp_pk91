@@ -1091,6 +1091,146 @@ def _reason_guard(reason: str, own_name: str, known_candidate_names: List[str]) 
     return True
 
 
+# ── User-facing reason composition ───────────────────────────────────────────
+#
+# A premium concierge reason must:
+#   • Match the venue's actual category (no "bar known for dining" leak).
+#   • Never expose source/debug metadata.
+#   • Never reference another candidate by name.
+#   • Stay one short, polished sentence.
+
+_CATEGORY_FALLBACK_REASON = {
+    "restaurant": "A strong pick for well-reviewed food, polished service, and a setting that fits this dining request.",
+    "bar": "A strong pick for well-reviewed drinks, atmosphere, and a polished night-out experience.",
+    "cafe": "A strong pick for coffee, casual atmosphere, and consistently positive guest feedback.",
+    "hotel": "A strong pick for location, comfort, and consistently positive guest feedback.",
+    "attraction": "A strong pick based on guest feedback, location, and relevance to this request.",
+    "place": "A strong pick based on guest feedback, location, and relevance to this request.",
+}
+
+_CATEGORY_REASON_TEMPLATES = {
+    "restaurant": {
+        "premium": "A standout pick for polished plates, attentive service, and consistently strong diner feedback.",
+        "good": "A reliable choice for well-reviewed food and a comfortable dining setting.",
+    },
+    "bar": {
+        "premium": "A standout pick for crafted cocktails, lively atmosphere, and a buzzing late-night crowd.",
+        "good": "A reliable choice for well-reviewed drinks and a polished night-out vibe.",
+    },
+    "cafe": {
+        "premium": "A standout cafe for quality coffee, a relaxed setting, and warm guest feedback.",
+        "good": "A solid choice for a casual coffee stop with consistently positive reviews.",
+    },
+    "hotel": {
+        "premium": "A standout stay for location, comfort, and consistently glowing guest reviews.",
+        "good": "A reliable choice for a comfortable stay with positive guest feedback.",
+    },
+    "attraction": {
+        "premium": "A standout local choice with strong guest feedback for this kind of trip plan.",
+        "good": "A solid choice with positive reviews and good fit for this trip plan.",
+    },
+    "place": {
+        "premium": "A standout local choice with strong guest feedback for this kind of trip plan.",
+        "good": "A solid choice with positive reviews and good fit for this trip plan.",
+    },
+}
+
+_CATEGORY_LEAD_NOUN = {
+    "restaurant": "restaurant",
+    "bar": "bar",
+    "cafe": "cafe",
+    "hotel": "hotel",
+    "attraction": "place",
+    "place": "place",
+}
+
+# Phrases that, if produced by the editorial path, indicate a category mismatch
+# (e.g. "bar" reason that talks about "dining"). When a venue is a bar we never
+# allow restaurant-only language to leak in, and vice versa.
+_RESTAURANT_ONLY_TOKENS = ("dining", "menu", "tasting menu", "chef", "cuisine", "plates")
+_BAR_ONLY_TOKENS = ("cocktail", "nightlife", "speakeasy", "late-night", "late night", "lounge", "bartender")
+_CAFE_ONLY_TOKENS = ("espresso", "latte", "barista", "coffee bar", "pastry", "pastries")
+
+
+def _normalize_place_category(types: List[str], candidate: Any = None) -> str:
+    """Return a canonical user-facing category from Google place types.
+
+    Google primary types are canonical; candidate-provided cuisine/category is
+    only used as a last-resort hint when Google doesn't classify.
+    """
+    blob = " ".join((t or "").lower() for t in (types or []))
+    if "lodging" in blob or "hotel" in blob:
+        return "hotel"
+    if "night_club" in blob:
+        return "bar"
+    if "bar" in blob:
+        return "bar"
+    if "cafe" in blob or "coffee_shop" in blob or "bakery" in blob:
+        return "cafe"
+    if "restaurant" in blob or "meal_takeaway" in blob or "meal_delivery" in blob or "food" in blob:
+        return "restaurant"
+    if any(tok in blob for tok in ("museum", "park", "tourist_attraction", "art_gallery", "landmark", "zoo", "aquarium")):
+        return "attraction"
+    if candidate is not None:
+        cuisine = getattr(candidate, "cuisine", None)
+        category = getattr(candidate, "category", None)
+        hint = f"{cuisine or ''} {category or ''}".lower()
+        if any(tok in hint for tok in ("bar", "cocktail", "lounge", "nightclub")):
+            return "bar"
+        if any(tok in hint for tok in ("cafe", "coffee", "bakery")):
+            return "cafe"
+        if any(tok in hint for tok in ("hotel", "stay", "resort", "inn")):
+            return "hotel"
+        if cuisine or category:
+            return "restaurant" if cuisine else "attraction"
+    return "place"
+
+
+def _category_label(category: str, candidate: Any = None) -> str:
+    """Return the short user-facing label shown under the place name."""
+    if category == "restaurant":
+        cuisine = getattr(candidate, "cuisine", None) if candidate is not None else None
+        if cuisine and isinstance(cuisine, str) and cuisine.strip():
+            return cuisine.strip().title()
+        return "Restaurant"
+    if category == "bar":
+        return "Cocktail Bar"
+    if category == "cafe":
+        return "Cafe"
+    if category == "hotel":
+        return "Hotel"
+    if category == "attraction":
+        attraction_cat = getattr(candidate, "category", None) if candidate is not None else None
+        if attraction_cat and isinstance(attraction_cat, str) and attraction_cat.strip():
+            return attraction_cat.strip().title()
+        return "Attraction"
+    return "Place"
+
+
+def _category_intent_mismatch(reason_text: str, category: str) -> bool:
+    """Reject reasons that mix mismatched category language."""
+    low = (reason_text or "").lower()
+    if category == "bar":
+        return any(tok in low for tok in _RESTAURANT_ONLY_TOKENS)
+    if category == "restaurant":
+        return any(tok in low for tok in _BAR_ONLY_TOKENS) and not any(tok in low for tok in ("food", "menu", "cuisine"))
+    if category == "cafe":
+        return any(tok in low for tok in _BAR_ONLY_TOKENS)
+    return False
+
+
+def _reason_quality_tier(rating: Optional[float], review_count: Optional[int]) -> str:
+    if rating is None:
+        return "default"
+    r = float(rating)
+    rc = int(review_count or 0)
+    if r >= 4.5 and rc >= 200:
+        return "premium"
+    if r >= 4.2 and rc >= 50:
+        return "good"
+    return "default"
+
+
 def _safe_google_only_reason(
     name: str,
     *,
@@ -1099,10 +1239,8 @@ def _safe_google_only_reason(
     rating: Optional[float],
     review_count: Optional[int],
 ) -> str:
-    del location, rating, review_count
-    clean_category = _clean_reason_text(category or "place")
-    reason = _clean_reason_text(f"{clean_category} with a strong fit for this trip request.")
-    return reason[:120].rstrip(" ;,.") + "."
+    del name, location, rating, review_count
+    return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"])
 
 
 def _bayesian_google_score(rating: Optional[float], review_count: Optional[int]) -> float:
@@ -1124,57 +1262,64 @@ def build_place_reason(
     verified_place: GooglePlaceVerification,
     known_candidate_names: Optional[List[str]] = None,
 ) -> str:
+    """Compose a clean, premium concierge reason for a Google-verified place.
+
+    Rules:
+      • Never combines the venue's category with mismatched intent vocabulary.
+      • Never references another candidate by name.
+      • Never exposes source/debug metadata.
+      • Falls back to a category-appropriate safe sentence on any uncertainty.
+    """
+    del user_query, intent  # category-aware templates already encode the angle
     name = verified_place.name or candidate_name or "This place"
-    category = ""
-    types_blob = " ".join(verified_place.types or []).lower()
-    if "bar" in types_blob or "night_club" in types_blob:
-        category = "bar"
-    elif "cafe" in types_blob or "coffee" in types_blob:
-        category = "coffee shop"
-    elif "restaurant" in types_blob:
-        category = "restaurant"
-    elif "hotel" in types_blob or "lodging" in types_blob:
-        category = "hotel"
-    elif hasattr(candidate, "cuisine") and getattr(candidate, "cuisine", None):
-        category = str(getattr(candidate, "cuisine"))
-    elif hasattr(candidate, "category") and getattr(candidate, "category", None):
-        category = str(getattr(candidate, "category"))
-    else:
-        category = "place"
-    location = verified_place.formatted_address or getattr(candidate, "neighborhood", None) or getattr(candidate, "area_label", None)
+    category = _normalize_place_category(verified_place.types, candidate)
+    rating = verified_place.rating
     review_count = verified_place.user_rating_count
-    best_for = _best_for_angle(intent, user_query, candidate)
-    evidence_detail = None
-    source_ev = getattr(candidate, "source_evidence", None)
-    if source_ev is not None:
-        evidence_detail = _sanitize_reason_evidence_text(
-            getattr(source_ev, "source_reason", "") or "",
-            own_name=name,
-            known_candidate_names=known_candidate_names or [],
-            max_len=80,
-        )
-    if evidence_detail:
-        reason = evidence_detail
-    elif best_for:
-        reason = f"{category} known for {best_for}."
-    else:
-        reason = f"{category} known for a distinctive local vibe."
-    reason = _clean_reason_text(reason)
-    if not reason.endswith("."):
-        reason = f"{reason}."
-    reason = reason[:120].rstrip(" ;,.") + "."
-    if _reason_guard(reason, name, known_candidate_names or []):
-        return reason
-    return _safe_google_only_reason(
-        name,
-        category=category,
-        location=location,
-        rating=verified_place.rating,
-        review_count=review_count,
+    tier = _reason_quality_tier(rating, review_count)
+    template = (
+        _CATEGORY_REASON_TEMPLATES.get(category, _CATEGORY_REASON_TEMPLATES["place"]).get(tier)
+        or _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"])
     )
 
+    candidate_reason = template
+    if not _reason_guard(candidate_reason, name, known_candidate_names or []):
+        return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"])
+    if _category_intent_mismatch(candidate_reason, category):
+        return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"])
+    return candidate_reason
 
-def _build_supporting_details(venue: Any, verification: GooglePlaceVerification) -> PlaceSupportingDetails:
+
+def _format_meta_line(
+    rating: Optional[float],
+    review_count: Optional[int],
+    address: Optional[str],
+) -> Optional[str]:
+    """Compose the subheader line: '★ 4.8 (9,483 reviews) · Address'."""
+    parts: List[str] = []
+    if rating is not None:
+        rating_text = f"★ {float(rating):.1f}"
+        if review_count and int(review_count) > 0:
+            rating_text = f"{rating_text} ({int(review_count):,} reviews)"
+        parts.append(rating_text)
+    if address:
+        parts.append(str(address).strip())
+    if not parts:
+        return None
+    return " · ".join(parts)
+
+
+def _build_supporting_details(
+    venue: Any,
+    verification: GooglePlaceVerification,
+    *,
+    why_pick: Optional[str] = None,
+) -> PlaceSupportingDetails:
+    """Build the clean, user-facing display payload.
+
+    Internal metadata (editorial_mentions, source tags, evidence counts, source
+    badges) is intentionally NOT exposed here. Those remain on the venue model
+    for backend scoring/diagnostics only.
+    """
     details = PlaceSupportingDetails()
     if verification.rating is not None:
         details.rating = f"{verification.rating:.1f}"
@@ -1182,17 +1327,15 @@ def _build_supporting_details(venue: Any, verification: GooglePlaceVerification)
         details.review_count = int(verification.user_rating_count)
     if verification.formatted_address:
         details.address = verification.formatted_address
-    source_ev = getattr(venue, "source_evidence", None)
-    mention_count = getattr(source_ev, "mention_count", None) if source_ev is not None else None
-    if mention_count is not None:
-        details.editorial_mentions = int(max(0, mention_count))
-    tags: List[str] = []
-    for raw in (getattr(venue, "best_for_tags", None) or []):
-        clean = _clean_reason_text(str(raw or "")).strip()
-        if clean and clean not in tags:
-            tags.append(clean)
-    if tags:
-        details.tags = tags[:4]
+    details.meta_line = _format_meta_line(
+        verification.rating,
+        verification.user_rating_count,
+        verification.formatted_address,
+    )
+    category = _normalize_place_category(verification.types, venue)
+    details.category_label = _category_label(category, venue)
+    if why_pick:
+        details.why_pick = why_pick
     return details
 
 
@@ -2266,7 +2409,11 @@ def _apply_google_gate(
                 except Exception:
                     pass
                 try:
-                    venue.supporting_details = _build_supporting_details(venue, verification)
+                    venue.supporting_details = _build_supporting_details(
+                        venue,
+                        verification,
+                        why_pick=reason,
+                    )
                 except Exception:
                     pass
                 try:
