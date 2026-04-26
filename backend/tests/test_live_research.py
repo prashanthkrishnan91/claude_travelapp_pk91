@@ -2240,6 +2240,87 @@ class TestRawArticleNeverAddsCard:
         )
 
 
+class TestGooglePipelineRegression:
+    def _google_stub(self, mapping):
+        class _Stub:
+            available = True
+
+            def verify(self, name, destination, neighborhood=None, intent=None):
+                return mapping.get(name.lower(), GooglePlaceVerification(confidence="unknown", failure_reason="not_found"))
+
+            def clear_cache_for_destination(self, destination):
+                return 0
+
+        return _Stub()
+
+    def test_cocktail_query_does_not_underflow_when_multiple_operational_matches(self):
+        article = _hit(
+            "Best Cocktail Bars in Chicago",
+            "https://example.com/bars",
+            "1. Kumiko — West Loop cocktail bar. 2. The Aviary — Fulton Market cocktails. "
+            "3. Billy Sunday — Logan Square bar. 4. Meadowlark — near Logan Square.",
+        )
+        google_map = {
+            "kumiko": GooglePlaceVerification(provider_place_id="1", name="Kumiko", business_status="OPERATIONAL", confidence="high", types=["bar"]),
+            "the aviary": GooglePlaceVerification(provider_place_id="2", name="The Aviary", business_status="OPERATIONAL", confidence="medium", types=["bar"]),
+            "billy sunday": GooglePlaceVerification(provider_place_id="3", name="Billy Sunday", business_status="OPERATIONAL", confidence="medium", types=["bar"]),
+            "meadowlark": GooglePlaceVerification(provider_place_id="4", name="Meadowlark", business_status="OPERATIONAL", confidence="medium", types=["bar"]),
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider([article]),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars")
+        assert len(result.restaurants) >= 3
+
+    def test_reason_text_is_grounded_to_each_card_name(self):
+        article = _hit(
+            "Chicago restaurants",
+            "https://example.com/restaurants",
+            "Aba and Beatrix are two popular options.",
+        )
+        google_map = {
+            "aba": GooglePlaceVerification(provider_place_id="aba-1", name="Aba", business_status="OPERATIONAL", confidence="high", types=["restaurant"], rating=4.6),
+            "beatrix": GooglePlaceVerification(provider_place_id="bea-1", name="Beatrix", business_status="OPERATIONAL", confidence="high", types=["restaurant"], rating=4.5),
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider([article]),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(intent=INTENT_RESTAURANTS, destination="Chicago", user_query="best restaurants near my hotel")
+        names = [r.name for r in result.restaurants]
+        for card in result.restaurants:
+            reason = (card.summary or "").lower()
+            assert card.name.lower() in reason
+            for other in names:
+                if other.lower() == card.name.lower():
+                    continue
+                assert other.lower() not in reason
+
+    def test_article_pages_stay_in_research_sources_not_addable_cards(self):
+        article = _hit(
+            "The 22 Best Cocktail Bars In Chicago",
+            "https://example.com/top-22-bars",
+            "A listicle about bars in Chicago.",
+        )
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider([article]),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub({}),
+        )
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars")
+        assert all("22 best cocktail bars" not in (r.name or "").lower() for r in result.restaurants)
+        assert any("22 best cocktail bars" in (s.title or "").lower() for s in result.research_sources)
+
+
 # ── Frontend source evidence rendering (file-read tests) ─────────────────────
 
 class TestFrontendSourceEvidenceRendering:

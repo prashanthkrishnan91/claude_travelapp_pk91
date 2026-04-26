@@ -26,6 +26,7 @@ import re
 import threading
 import time
 import unicodedata
+from difflib import SequenceMatcher
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -90,6 +91,7 @@ _NAME_WITH_ADDRESS_MIN_SIMILARITY = 0.65
 _WHITESPACE_PAT = re.compile(r"\s+")
 _NON_ALNUM_PAT = re.compile(r"[^a-z0-9 ]+")
 _ARTICLE_LIKE_TYPES = frozenset({"news", "publisher", "newspaper"})
+_STOPWORD_TOKENS = frozenset({"the"})
 
 
 def _strip_diacritics(value: str) -> str:
@@ -105,6 +107,7 @@ def _normalize_name(value: str) -> str:
     if not value:
         return ""
     base = _strip_diacritics(value).lower()
+    base = base.replace("&", " and ")
     base = _NON_ALNUM_PAT.sub(" ", base)
     base = _WHITESPACE_PAT.sub(" ", base).strip()
     return base
@@ -112,18 +115,28 @@ def _normalize_name(value: str) -> str:
 
 def _token_set(value: str) -> set:
     norm = _normalize_name(value)
-    return {tok for tok in norm.split(" ") if tok}
+    return {tok for tok in norm.split(" ") if tok and tok not in _STOPWORD_TOKENS}
 
 
 def _name_similarity(a: str, b: str) -> float:
-    """Jaccard similarity over normalized token sets — deterministic and cheap."""
+    """Blended token + sequence similarity for real-world place-name variance."""
     set_a = _token_set(a)
     set_b = _token_set(b)
     if not set_a or not set_b:
-        return 0.0
+        seq_a = _normalize_name(a).replace(" ", "")
+        seq_b = _normalize_name(b).replace(" ", "")
+        if not seq_a or not seq_b:
+            return 0.0
+        return SequenceMatcher(None, seq_a, seq_b).ratio()
     intersection = set_a & set_b
     union = set_a | set_b
-    return len(intersection) / len(union)
+    jaccard = len(intersection) / len(union)
+    seq = SequenceMatcher(
+        None,
+        "".join(sorted(set_a)),
+        "".join(sorted(set_b)),
+    ).ratio()
+    return (0.7 * jaccard) + (0.3 * seq)
 
 
 def _is_obvious_non_venue_types(types: List[str]) -> bool:
@@ -191,6 +204,8 @@ class GooglePlaceVerification:
     user_rating_count: Optional[int] = None
     types: List[str] = field(default_factory=list)
     confidence: str = "unknown"  # "high" | "medium" | "low" | "unknown"
+    score: float = 0.0
+    reason: Optional[str] = None
     failure_reason: Optional[str] = None
 
     @property
@@ -516,6 +531,8 @@ class GooglePlacesService:
         if not places:
             return GooglePlaceVerification(
                 confidence="low",
+                score=0.0,
+                reason="No Google Places match found.",
                 failure_reason="no_match",
             )
 
@@ -544,6 +561,7 @@ class GooglePlacesService:
             place_id = place.get("id")
 
             failure_reason: Optional[str] = None
+            reason = "Name, location, and place-type signals are compatible."
 
             address_evidence = bool(
                 (norm_destination and norm_destination in norm_formatted_address)
@@ -553,11 +571,14 @@ class GooglePlacesService:
 
             if _is_obvious_non_venue_types(types):
                 failure_reason = "non_venue_types"
+                reason = "Google result appears to be a publisher/listing, not a place."
             else:
                 if not address_evidence and similarity < _NAME_ONLY_MIN_SIMILARITY:
                     failure_reason = "weak_match_no_address"
+                    reason = "Name match is too weak without location corroboration."
                 elif address_evidence and similarity < _NAME_WITH_ADDRESS_MIN_SIMILARITY:
                     failure_reason = "weak_name_match"
+                    reason = "Name match is weak even with location evidence."
 
                 # Reject hotel-typed matches when the candidate isn't itself a
                 # hotel and the article didn't reference one — avoids matching
@@ -569,8 +590,10 @@ class GooglePlacesService:
                     and not _candidate_inside_hotel_context(candidate, formatted_address, neighborhood)
                 ):
                     failure_reason = "hotel_match_for_non_hotel_candidate"
+                    reason = "Google match is hotel-typed but query/candidate is non-hotel."
 
             confidence = self._score_to_confidence(similarity, address_evidence=address_evidence)
+            score = similarity + (0.15 if business_status == OPERATIONAL else 0.0) + (0.08 if address_evidence else 0.0)
 
             verification = GooglePlaceVerification(
                 provider=PROVIDER_NAME,
@@ -586,10 +609,11 @@ class GooglePlacesService:
                 user_rating_count=place.get("userRatingCount"),
                 types=types,
                 confidence=confidence if failure_reason is None else "low",
+                score=score,
+                reason=reason,
                 failure_reason=failure_reason,
             )
 
-            score = similarity + (0.15 if business_status == OPERATIONAL else 0.0)
             if failure_reason is None and score > best_score:
                 best = verification
                 best_score = score
@@ -600,7 +624,12 @@ class GooglePlacesService:
                 best_failure = failure_reason
 
         if best is None:
-            return GooglePlaceVerification(confidence="low", failure_reason="no_match")
+            return GooglePlaceVerification(
+                confidence="low",
+                score=0.0,
+                reason="No Google Places match found.",
+                failure_reason="no_match",
+            )
         if best_failure and best.failure_reason is None:
             best.failure_reason = best_failure
         return best

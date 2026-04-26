@@ -89,6 +89,8 @@ class GoogleVerification(BaseModel):
     user_rating_count: Optional[int] = None
     types: List[str] = []
     confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
+    score: float = 0.0
+    reason: Optional[str] = None
     failure_reason: Optional[str] = None
 
 
@@ -110,6 +112,7 @@ class UnifiedRestaurantResult(BaseModel):
     ai_score: Optional[float] = None
     tags: List[str] = []
     verified_place: Optional[bool] = None
+    verification_tier: Optional[Literal["primary", "secondary"]] = None
     google_verification: Optional[GoogleVerification] = None
     source_evidence: Optional[SourceEvidence] = None
 
@@ -131,6 +134,7 @@ class UnifiedAttractionResult(BaseModel):
     ai_score: Optional[float] = None
     tags: List[str] = []
     verified_place: Optional[bool] = None
+    verification_tier: Optional[Literal["primary", "secondary"]] = None
     google_verification: Optional[GoogleVerification] = None
     source_evidence: Optional[SourceEvidence] = None
 
@@ -152,6 +156,7 @@ class UnifiedHotelResult(BaseModel):
     ai_score: Optional[float] = None
     tags: List[str] = []
     verified_place: Optional[bool] = None
+    verification_tier: Optional[Literal["primary", "secondary"]] = None
     google_verification: Optional[GoogleVerification] = None
     source_evidence: Optional[SourceEvidence] = None
 
