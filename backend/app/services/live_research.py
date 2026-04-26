@@ -1059,6 +1059,14 @@ def _safe_google_only_reason(
         parts.append("Google confirms it is operational")
     reason = _clean_reason_text(" with ".join(parts) + ".")
     return reason[:180].rstrip(" ;,.") + "."
+    pieces = [f"{name} is a {category}"]
+    if location:
+        pieces[0] += f" in {location}"
+    if rating is not None and review_count is not None:
+        pieces.append(f"Google reports {rating:.1f}★ across {review_count:,} reviews")
+    elif rating is not None:
+        pieces.append(f"Google reports a {rating:.1f}★ rating")
+    return _clean_reason_text(". ".join(pieces) + ".")
 
 
 def _bayesian_google_score(rating: Optional[float], review_count: Optional[int]) -> float:
@@ -1132,6 +1140,26 @@ def build_place_reason(
         reason = _clean_reason_text("; ".join(segments[:5]) + ".")
     if len(reason) > 180:
         reason = _clean_reason_text("; ".join(segments[:4]) + ".")
+        evidence_detail = _clean_reason_text(getattr(source_ev, "source_reason", "") or "")
+    lead = f"{name} is a {category}"
+    if location:
+        lead += f" in {location}"
+    rating_bits = ""
+    if verified_place.rating is not None and review_count is not None:
+        rating_bits = f" (Google rating {verified_place.rating:.1f}★, {review_count:,} reviews)"
+    elif verified_place.rating is not None:
+        rating_bits = f" (Google rating {verified_place.rating:.1f}★)"
+    trust_signal = "Google confirms it is currently operational"
+    if verified_place.rating is not None and review_count is not None:
+        trust_signal = f"Google rating {verified_place.rating:.1f}★ across {review_count:,} reviews"
+    elif verified_place.rating is not None:
+        trust_signal = f"Google rating {verified_place.rating:.1f}★"
+    sentence = f"{lead}. Strong match for {intent_label}. {trust_signal}."
+    if best_for:
+        sentence += f" Best for {best_for}."
+    if evidence_detail:
+        sentence += f" Editorial coverage highlights {evidence_detail}."
+    reason = _clean_reason_text(sentence)
     if _reason_guard(reason, name, known_candidate_names or []):
         return reason
     return _safe_google_only_reason(
