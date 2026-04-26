@@ -386,6 +386,13 @@ class ConciergeService:
         raw = self._call_claude(prompt, system_prompt=system_prompt)
         base = self._parse_response(raw)
         concise_response = self._concise_response(base.response, intent)
+        concise_response = self._align_summary_with_ranked_cards(
+            concise_response,
+            intent=intent,
+            restaurants=restaurants,
+            attractions=attractions,
+            hotels=hotels,
+        )
 
         source_status = self._derive_response_source_status(
             initial_status=source_status,
@@ -422,6 +429,33 @@ class ConciergeService:
             client_message_id=f"{request_id}:assistant",
         )
         return response
+
+    def _align_summary_with_ranked_cards(
+        self,
+        summary: str,
+        *,
+        intent: str,
+        restaurants: List[UnifiedRestaurantResult],
+        attractions: List[UnifiedAttractionResult],
+        hotels: List[UnifiedHotelResult],
+    ) -> str:
+        if intent in _RESTAURANT_INTENTS and restaurants:
+            top_name = restaurants[0].name
+        elif intent in _ATTRACTION_INTENTS and attractions:
+            top_name = attractions[0].name
+        elif intent == INTENT_HOTELS and hotels:
+            top_name = hotels[0].name
+        else:
+            return summary
+        cleaned = (summary or "").strip()
+        if not cleaned:
+            return f"Top pick: {top_name}."
+        best_overall_pat = re.compile(r"(best overall:\s*)([^.]+)", re.IGNORECASE)
+        if best_overall_pat.search(cleaned):
+            return best_overall_pat.sub(rf"\1{top_name}", cleaned)
+        if top_name.lower() in cleaned.lower():
+            return cleaned
+        return f"Top pick: {top_name}. {cleaned}"
 
     def list_messages(self, trip_id: UUID, user_id: UUID) -> List[ConciergeMessage]:
         self._fetch_trip(trip_id, user_id)
