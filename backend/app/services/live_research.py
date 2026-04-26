@@ -185,6 +185,9 @@ _LOW_QUALITY_MARKERS = (
 _NEUTRAL_RESEARCH_REASON = (
     "This source may contain relevant background, but it is not a confirmed venue."
 )
+_NEUTRAL_RESEARCH_REASON_ARTICLE = (
+    "Used for background discovery; individual venues were verified separately."
+)
 _NOISY_TITLE_SUFFIX_PAT = re.compile(r"\(?\bupdated\s+\d{4}\b\)?", re.IGNORECASE)
 _TOP_LISTICLE_TITLE_PAT = re.compile(r"\b(the\s+)?\d{1,3}\s+best\b", re.IGNORECASE)
 _SOURCE_HOST_STRIP_PAT = re.compile(r"^www\.", re.IGNORECASE)
@@ -1585,26 +1588,41 @@ def _google_reason_for_venue(
     *,
     verification: GooglePlaceVerification,
     intent: str,
+    source_count: int = 0,
 ) -> str:
     type_blob = " ".join((verification.types or [])).lower()
-    if intent == INTENT_NIGHTLIFE:
-        category = "Matches nightlife intent (cocktail bar / bar signals)"
-    elif intent == INTENT_HOTELS:
-        category = "Matches hotel intent (lodging/hotel signals)"
-    elif intent in {INTENT_ATTRACTIONS, INTENT_PLAN_DAY}:
-        category = "Matches attraction intent (point-of-interest signals)"
-    elif intent == INTENT_MICHELIN_RESTAURANTS:
-        category = "Matches restaurant intent (dining signals)"
-    elif "cocktail_bar" in type_blob or "bar" in type_blob:
-        category = "Matches nightlife category from Google place types"
-    else:
-        category = "Matches requested category from Google place types"
 
-    bits: List[str] = [category]
+    if intent == INTENT_NIGHTLIFE:
+        guide_label = "cocktail-bar guide"
+    elif intent == INTENT_HOTELS:
+        guide_label = "hotel guide"
+    elif intent in {INTENT_ATTRACTIONS, INTENT_PLAN_DAY}:
+        guide_label = "local guide"
+    elif intent == INTENT_MICHELIN_RESTAURANTS:
+        guide_label = "dining guide"
+    else:
+        guide_label = "local guide"
+
+    if source_count > 1:
+        lead = f"Found in {source_count} trusted {guide_label}s and verified on Google"
+    elif source_count == 1:
+        lead = "Extracted from local guide; confirmed as an operational Google place"
+    else:
+        # Direct venue_place hit (not article-extracted)
+        if "cocktail_bar" in type_blob or "bar" in type_blob:
+            lead = "Confirmed as operational by Google (bar/nightlife types)"
+        elif "lodging" in type_blob or "hotel" in type_blob:
+            lead = "Confirmed as operational by Google (hotel/lodging types)"
+        elif "restaurant" in type_blob or "food" in type_blob:
+            lead = "Confirmed as operational by Google (dining types)"
+        else:
+            lead = "Confirmed as an operational Google place"
+
+    bits: List[str] = [lead]
     if verification.rating is not None:
         bits.append(f"Google rating {verification.rating:.1f}")
     if verification.formatted_address:
-        bits.append(f"Located at {verification.formatted_address}")
+        bits.append(f"at {verification.formatted_address}")
     return ". ".join(bits) + "."
 
 
@@ -1616,6 +1634,8 @@ def _apply_google_gate(
     kind_label: str,
     provider_label_default: str,
     intent: str,
+    seen_place_ids: Optional[set] = None,
+    corroboration_counter: Optional[Counter] = None,
 ) -> List[Any]:
     """Drop venues that don't pass Google Places verification — anything that
     isn't matched + OPERATIONAL with high/medium confidence is demoted to
@@ -1624,12 +1644,38 @@ def _apply_google_gate(
     Cards that pass have ``google_verification`` attached, ``verified_place``
     forced to True, and richer fields (maps URI / website) populated from the
     Google match when the source didn't already provide them.
+
+    ``seen_place_ids`` is a shared set across all three category lists so the
+    same Google place_id cannot appear as both a direct hit and an article-
+    extracted hit. ``corroboration_counter`` drives the "Found in N guides"
+    copy in the card reason.
     """
     kept: List[Any] = []
     for venue in venues:
         verification = _google_verification_for(getattr(venue, "name", ""), google_verifications)
         if _google_is_addable(verification):
             assert verification is not None  # for type checkers
+            # Dedup by Google place_id — prevents the same venue appearing from
+            # both a direct_place hit and an article-extracted candidate.
+            pid = verification.provider_place_id
+            if pid and seen_place_ids is not None:
+                if pid in seen_place_ids:
+                    # Already kept this exact Google place — demote duplicate
+                    research_sources.append(
+                        UnifiedResearchSourceResult(
+                            title=str(getattr(venue, "name", f"Duplicate {kind_label}") or f"Duplicate {kind_label}"),
+                            source=str(getattr(venue, "source", provider_label_default) or provider_label_default),
+                            source_type="generic_info_source",
+                            summary="Same place already shown — skipped to avoid duplicates.",
+                            source_url=getattr(venue, "source_url", None),
+                            neighborhood=getattr(venue, "neighborhood", None) or getattr(venue, "area_label", None),
+                            last_verified_at=getattr(venue, "last_verified_at", None),
+                            confidence=getattr(venue, "confidence", None),
+                            trip_addable=False,
+                        )
+                    )
+                    continue
+                seen_place_ids.add(pid)
             if not verification.provider_place_id or not verification.formatted_address:
                 research_sources.append(
                     UnifiedResearchSourceResult(
@@ -1676,7 +1722,11 @@ def _apply_google_gate(
             except Exception:
                 pass
             try:
-                reason = _google_reason_for_venue(verification=verification, intent=intent)
+                name_lower = (getattr(venue, "name", "") or "").lower()
+                src_count = (corroboration_counter or {}).get(name_lower, 0)
+                reason = _google_reason_for_venue(
+                    verification=verification, intent=intent, source_count=src_count
+                )
                 if hasattr(venue, "summary"):
                     venue.summary = reason
                 elif hasattr(venue, "description"):
@@ -1776,7 +1826,7 @@ def normalize_hits(
     intent: str,
     destination: str,
     user_query: str,
-    max_per_kind: int = 6,
+    max_per_kind: int = 8,
     verified_candidates: Optional[Dict[str, VerificationResult]] = None,
     google_verifications: Optional[Dict[str, GooglePlaceVerification]] = None,
 ) -> Dict[str, List[Any]]:
@@ -1803,6 +1853,27 @@ def normalize_hits(
     }
     is_attraction_intent = intent in {INTENT_ATTRACTIONS, INTENT_PLAN_DAY}
     is_hotel_intent = intent == INTENT_HOTELS
+
+    # Pre-compute corroboration counts once (how many article snippets mention
+    # each candidate name). Used to boost ai_score and build reason copy.
+    corroboration_counter: Counter = Counter()
+    for _ah in hits:
+        if _classify_hit(
+            _strip_publisher(_ah.title),
+            _ah.snippet,
+            _ah.url,
+            intent=intent,
+            destination=destination,
+        ) != "article_listicle_blog_directory":
+            continue
+        for _rn in _extract_venue_names_from_text(_ah.snippet):
+            _nn = _recover_candidate_name(_rn)
+            if _nn:
+                corroboration_counter[_nn.lower()] += 1
+
+    # Track which candidate names were extracted from which article URL so we
+    # can later set venues_discovered on the matching research source record.
+    article_url_to_candidates: Dict[str, List[str]] = {}
 
     for hit in hits:
         combined = f"{hit.title}\n{hit.snippet}"
@@ -1834,23 +1905,6 @@ def normalize_hits(
         neighborhood = _extract_neighborhood(combined, destination)
         confidence = _confidence_from_age(hit.fetched_at)
         provider_label = hit.provider or "Live search"
-        # Track corroboration count across article extractions.
-        # (Only used for article-extracted candidates.)
-        # We recompute lazily from all hits for determinism and minimal state coupling.
-        corroboration_counter: Counter = Counter()
-        for article_hit in hits:
-            if _classify_hit(
-                _strip_publisher(article_hit.title),
-                article_hit.snippet,
-                article_hit.url,
-                intent=intent,
-                destination=destination,
-            ) != "article_listicle_blog_directory":
-                continue
-            for raw_name in _extract_venue_names_from_text(article_hit.snippet):
-                normalized_name = _recover_candidate_name(raw_name)
-                if normalized_name:
-                    corroboration_counter[normalized_name.lower()] += 1
 
         if classification != "venue_place":
             # For article/listicle hits attempt to extract real venue names first.
@@ -1907,7 +1961,17 @@ def normalize_hits(
                     if not cand_summary:
                         continue
                     extracted_ai_score = _extracted_ai_score(quality_tier)
-                    extracted_ai_score = max(0.0, extracted_ai_score - _chain_penalty(normalized_candidate, user_query))
+                    # Boost score for venues corroborated by multiple article sources.
+                    corr = corroboration_counter.get(normalized_candidate.lower(), 1)
+                    corr_boost = min(0.10, (corr - 1) * 0.05)
+                    extracted_ai_score = max(
+                        0.0,
+                        extracted_ai_score + corr_boost - _chain_penalty(normalized_candidate, user_query),
+                    )
+                    # Track this candidate against its source URL for venues_discovered.
+                    article_url_to_candidates.setdefault(hit.url, []).append(
+                        normalized_candidate.lower()
+                    )
                     if is_restaurant_intent and len(restaurants) < max_per_kind:
                         cand_cuisine = "Cocktail Bar" if intent == INTENT_NIGHTLIFE else "Restaurant"
                         cand_tags: List[str] = []
@@ -1966,10 +2030,12 @@ def normalize_hits(
                             )
                         )
 
-            summary = _build_summary(
-                hit.snippet,
-                fallback=_NEUTRAL_RESEARCH_REASON,
+            _article_fallback = (
+                _NEUTRAL_RESEARCH_REASON_ARTICLE
+                if classification == "article_listicle_blog_directory"
+                else _NEUTRAL_RESEARCH_REASON
             )
+            summary = _build_summary(hit.snippet, fallback=_article_fallback)
             research_sources.append(
                 UnifiedResearchSourceResult(
                     title=title,
@@ -2075,7 +2141,11 @@ def normalize_hits(
     # verifications are supplied, every card must clear ``is_addable`` to
     # remain in restaurants/attractions/hotels. Anything else gets demoted
     # to research_sources.
+    #
+    # ``seen_place_ids`` is shared so the same Google place_id cannot appear
+    # across both direct hits and article-extracted hits.
     if google_verifications is not None:
+        _seen_pids: set = set()
         restaurants = _apply_google_gate(
             restaurants,
             google_verifications=google_verifications,
@@ -2083,6 +2153,8 @@ def normalize_hits(
             kind_label="restaurant",
             provider_label_default="Live search",
             intent=intent,
+            seen_place_ids=_seen_pids,
+            corroboration_counter=corroboration_counter,
         )
         attractions = _apply_google_gate(
             attractions,
@@ -2091,6 +2163,8 @@ def normalize_hits(
             kind_label="attraction",
             provider_label_default="Live search",
             intent=intent,
+            seen_place_ids=_seen_pids,
+            corroboration_counter=corroboration_counter,
         )
         hotels = _apply_google_gate(
             hotels,
@@ -2099,7 +2173,34 @@ def normalize_hits(
             kind_label="hotel",
             provider_label_default="Live search",
             intent=intent,
+            seen_place_ids=_seen_pids,
+            corroboration_counter=corroboration_counter,
         )
+
+    # ── venues_discovered: annotate article research sources ───────────────
+    # After the gate we know which venues made it through. Update each
+    # article-type research source with a count of how many verified places
+    # were extracted from it so the UI can show "Used to discover N places."
+    _verified_names: set = {
+        (getattr(v, "name", "") or "").lower()
+        for kind_list in (restaurants, attractions, hotels)
+        for v in kind_list
+    }
+    for _src in research_sources:
+        if _src.source_type != "article_listicle_blog_directory" or not _src.source_url:
+            continue
+        _cands = article_url_to_candidates.get(_src.source_url, [])
+        _count = sum(1 for c in _cands if c in _verified_names)
+        try:
+            _src.venues_discovered = _count
+        except Exception:
+            pass
+        if _count > 0:
+            _note = f"Used to discover {_count} verified place{'s' if _count != 1 else ''}."
+            try:
+                _src.summary = f"{_note} {_src.summary or ''}".strip()
+            except Exception:
+                pass
 
     venue_count = len(restaurants) + len(attractions) + len(hotels)
     # Hide research-source cards when ≥3 venues exist; keep at most 2 otherwise.

@@ -1233,6 +1233,7 @@ export interface UnifiedResearchSourceResult {
   lastVerifiedAt?: string;
   confidence?: SourceConfidence;
   tripAddable: boolean;
+  venuesDiscovered?: number;
 }
 
 export interface ConciergeSearchResult {

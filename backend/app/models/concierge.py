@@ -150,6 +150,7 @@ class UnifiedResearchSourceResult(BaseModel):
     last_verified_at: Optional[str] = None
     confidence: Optional[Literal["high", "medium", "low", "unknown"]] = None
     trip_addable: bool = False
+    venues_discovered: int = 0
 
 
 class UnifiedAreaComparisonResult(BaseModel):
