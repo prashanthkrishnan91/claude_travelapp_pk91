@@ -37,11 +37,14 @@ export function pickCardReason(card) {
     ?? FALLBACK_REASON;
 }
 
+const GENERIC_PHRASES_RE = /\b(a strong pick for well-reviewed|guest feedback, location, and relevance|polished night-out experience|viable option|great fit for this trip|trusted place signals|well-reviewed food|well-reviewed drinks|matches this dining request|matches this value-dinner request|fits this hotel request|fits this Michelin request|is a strong attraction match|well-rated)\b/i;
+
 export function sanitizeWhyPick(rawReason, title, allPlaceTitles) {
   const reason = splitReason(rawReason).short;
   const normalizedReason = reason.toLowerCase();
   if (containsAddressSignal(reason)) return FALLBACK_REASON;
   if (/(backed by rated|with rated)/i.test(reason)) return FALLBACK_REASON;
+  if (GENERIC_PHRASES_RE.test(reason)) return FALLBACK_REASON;
   const hasOtherVenueName = (allPlaceTitles || [])
     .filter((candidate) => normalizeTitle(candidate) !== normalizeTitle(title))
     .some((candidate) => normalizedReason.includes(normalizeTitle(candidate)));
