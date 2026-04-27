@@ -59,7 +59,7 @@ interface Props {
   onItemAdded?: () => void;
 }
 
-const CONCIERGE_CACHE_VERSION = 2;
+const CONCIERGE_CACHE_VERSION = 3;
 const CLOSED_SIGNAL_PATTERNS = [
   "permanently closed",
   "closed permanently",

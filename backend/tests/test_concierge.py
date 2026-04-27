@@ -33,8 +33,11 @@ from app.models.concierge import (
     SOURCE_NONE,
     SOURCE_SAMPLE_DATA,
     SOURCE_UNAVAILABLE,
+    PlaceSupportingDetails,
+    UnifiedResearchSourceResult,
     UnifiedRestaurantResult,
 )
+from app.concierge.contracts import PlaceRecommendationsResponse
 from app.services.concierge import ConciergeService
 from app.services.live_research import LiveResearchResult
 from app.services.michelin_retriever import MichelinRetriever
@@ -325,6 +328,49 @@ class TestConciergeSearch:
         assert hasattr(result, "areas")
         assert isinstance(result.warnings, list)
         assert isinstance(result.sources, list)
+
+    def test_live_nightlife_why_pick_survives_search_serialization(self):
+        svc = self._svc("Chicago")
+        concrete_why_pick = (
+            "Punch House is a West Loop cocktail bar with a 4.6 rating across 1,200 reviews, "
+            "making it a reliable nearby drinks option."
+        )
+        live_result = LiveResearchResult(
+            restaurants=[
+                UnifiedRestaurantResult(
+                    name="Punch House",
+                    source="Live search",
+                    cuisine="Cocktail Bar",
+                    supporting_details=PlaceSupportingDetails(
+                        why_pick=concrete_why_pick,
+                        category_label="Cocktail Bar",
+                    ),
+                    primary_reason=concrete_why_pick,
+                )
+            ],
+            research_sources=[
+                UnifiedResearchSourceResult(
+                    title="Best Cocktail Bars in Chicago",
+                    source_url="https://example.com/bars",
+                    trip_addable=False,
+                )
+            ],
+            source_status="live_search",
+            provider_name="stub",
+        )
+        with patch.object(svc, "_fetch_live_research", return_value=live_result), \
+             patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            result = svc.search(FAKE_TRIP_ID, "Cocktail bars", FAKE_USER_ID)
+
+        typed = PlaceRecommendationsResponse(**result.model_dump())
+        payload = typed.model_dump(mode="json")
+        why_pick = payload["restaurants"][0]["supporting_details"]["why_pick"]
+
+        assert "west loop cocktail bar" in why_pick.lower()
+        assert "4.6 rating across 1,200 reviews" in why_pick
+        assert "selected for this bar request based on verified drinks-focused details and available evidence." not in why_pick.lower()
+        assert payload["research_sources"][0]["type"] == "research_source"
+        assert payload["research_sources"][0]["trip_addable"] is False
 
     def test_michelin_restaurants_not_labeled_as_live_search(self):
         """Michelin curated data must not claim to be live search results."""
