@@ -1206,18 +1206,34 @@ _BAR_ONLY_TOKENS = ("cocktail", "nightlife", "speakeasy", "late-night", "late ni
 _CAFE_ONLY_TOKENS = ("espresso", "latte", "barista", "coffee bar", "pastry", "pastries")
 
 
-def _normalize_place_category(types: List[str], candidate: Any = None) -> str:
+def _normalize_place_category(
+    types: List[str],
+    candidate: Any = None,
+    *,
+    intent: Optional[str] = None,
+    user_query: str = "",
+) -> str:
     """Return a canonical user-facing category from Google place types.
 
     Google primary types are canonical; candidate-provided cuisine/category is
     only used as a last-resort hint when Google doesn't classify.
     """
-    blob = " ".join((t or "").lower() for t in (types or []))
+    normalized_types = [(t or "").lower() for t in (types or [])]
+    blob = " ".join(normalized_types)
+    primary_type = normalized_types[0] if normalized_types else ""
+    query_category = _derive_query_category(intent or "", user_query or "")
+    restaurant_query = query_category in {"restaurant", "brunch_cafe"} or intent == INTENT_MICHELIN_RESTAURANTS
+    has_restaurant_signal = any(tok in blob for tok in ("restaurant", "food", "meal_takeaway", "meal_delivery"))
+    has_bar_signal = any(tok in blob for tok in ("bar", "night_club", "cocktail_bar"))
     if "lodging" in blob or "hotel" in blob:
         return "hotel"
-    if "night_club" in blob:
-        return "bar"
-    if "bar" in blob:
+    if restaurant_query and has_restaurant_signal:
+        # Dinner/restaurant intent should stay restaurant-first unless Google
+        # clearly marks the place as bar-only.
+        if primary_type in {"bar", "night_club", "cocktail_bar"} and not has_restaurant_signal:
+            return "bar"
+        return "restaurant"
+    if has_bar_signal:
         return "bar"
     if "cafe" in blob or "coffee_shop" in blob or "bakery" in blob:
         return "cafe"
@@ -1245,7 +1261,10 @@ def _category_label(category: str, candidate: Any = None) -> str:
     if category == "restaurant":
         cuisine = getattr(candidate, "cuisine", None) if candidate is not None else None
         if cuisine and isinstance(cuisine, str) and cuisine.strip():
-            return cuisine.strip().title()
+            cuisine_clean = cuisine.strip()
+            if cuisine_clean.lower() in {"cocktail bar", "bar", "nightclub", "lounge"}:
+                return "Restaurant"
+            return cuisine_clean.title()
         return "Restaurant"
     if category == "bar":
         return "Cocktail Bar"
@@ -1376,7 +1395,12 @@ def build_place_reason(
       • Falls back to a category-appropriate safe sentence on any uncertainty.
     """
     name = verified_place.name or candidate_name or "This place"
-    category = _normalize_place_category(verified_place.types, candidate)
+    category = _normalize_place_category(
+        verified_place.types,
+        candidate,
+        intent=intent,
+        user_query=user_query,
+    )
     rating = verified_place.rating
     review_count = verified_place.user_rating_count
     category_fit = _category_fit_score(intent, user_query, verified_place)
@@ -1436,6 +1460,8 @@ def _build_supporting_details(
     verification: GooglePlaceVerification,
     *,
     why_pick: Optional[Any] = None,
+    intent: Optional[str] = None,
+    user_query: str = "",
 ) -> PlaceSupportingDetails:
     """Build the clean, user-facing display payload.
 
@@ -1455,7 +1481,12 @@ def _build_supporting_details(
         verification.user_rating_count,
         verification.formatted_address,
     )
-    category = _normalize_place_category(verification.types, venue)
+    category = _normalize_place_category(
+        verification.types,
+        venue,
+        intent=intent,
+        user_query=user_query,
+    )
     details.category_label = _category_label(category, venue)
     if why_pick:
         details.why_pick = why_pick
@@ -2545,7 +2576,12 @@ def _apply_google_gate(
                     neighborhood=getattr(venue, "neighborhood", None) or verification.formatted_address,
                     tags=getattr(venue, "tags", []),
                 )
-                category = _normalize_place_category(verification.types, venue)
+                category = _normalize_place_category(
+                    verification.types,
+                    venue,
+                    intent=intent,
+                    user_query=user_query,
+                )
                 why_pick_payload = build_why_pick(
                     place_name=getattr(venue, "name", "") or verification.name or "This place",
                     evidence=clean_evidence,
@@ -2555,6 +2591,8 @@ def _apply_google_gate(
                     neighborhood=getattr(venue, "neighborhood", None) or verification.formatted_address,
                     cuisine=getattr(venue, "cuisine", None),
                     michelin_status=getattr(venue, "michelin_status", None),
+                    user_query=user_query,
+                    intent=intent,
                 )
                 reason, validation_source = _validate_or_fallback_reason(
                     why_pick_payload["why_pick"]["text"],
@@ -2605,6 +2643,8 @@ def _apply_google_gate(
                         venue,
                         verification,
                         why_pick=reason,
+                        intent=intent,
+                        user_query=user_query,
                     )
                 except Exception:
                     pass

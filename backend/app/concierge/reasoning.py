@@ -90,6 +90,8 @@ def _compose_text(
     cuisine: Optional[str],
     neighborhood: Optional[str],
     michelin_status: Optional[str],
+    intent: Optional[str],
+    user_query: str,
 ) -> str:
     place = place_name or "This place"
     first = _normalize_phrase(evidence[0]) or "solid local fit"
@@ -97,19 +99,29 @@ def _compose_text(
     cuisine_phrase = _normalize_phrase(cuisine)
     neighborhood_phrase = _normalize_phrase(neighborhood)
     michelin_phrase = _normalize_phrase(michelin_status)
+    query_low = (user_query or "").lower()
+    is_value_dinner = (
+        "dinner" in query_low
+        and any(tok in query_low for tok in ("value", "best value", "affordable"))
+    ) or (intent == "luxury_value" and "dinner" in query_low)
 
     if (category == "restaurant" and michelin_phrase) or template_id == "michelin":
         details = [michelin_phrase, cuisine_phrase, neighborhood_phrase]
         detail_blob = ", ".join([d for d in details if d])
         if detail_blob:
             return f"{place} is a {detail_blob} pick that fits this Michelin-focused request."
-        return f"{place} is a Michelin-oriented restaurant choice with strong fit for this request."
+        location = f" in {neighborhood_phrase}" if neighborhood_phrase else ""
+        return f"{place} is a Michelin-oriented restaurant choice{location}, backed by {first.lower()}."
 
     if category == "bar":
         location = f" in {neighborhood_phrase}" if neighborhood_phrase else ""
         support = f" with {second.lower()}" if second else ""
         return f"{place} is a cocktail-forward bar{location}, backed by {first.lower()}{support}."
     if category == "restaurant":
+        if is_value_dinner:
+            location = f" in {neighborhood_phrase}" if neighborhood_phrase else ""
+            support = f", backed by {second.lower()}" if second else ""
+            return f"{place} is a value-forward dining pick{location}, with {first.lower()}{support}."
         cuisine_bit = f" for {cuisine_phrase.lower()} cuisine" if cuisine_phrase else ""
         location = f" in {neighborhood_phrase}" if neighborhood_phrase else ""
         support = f" and {second.lower()}" if second else ""
@@ -150,8 +162,14 @@ def build_why_pick(
     neighborhood: Optional[str] = None,
     cuisine: Optional[str] = None,
     michelin_status: Optional[str] = None,
+    user_query: str = "",
+    intent: Optional[str] = None,
 ) -> WhyPickResult:
-    template_id = "michelin" if category == "restaurant" and michelin_status else _pick_template(evidence, rating, review_count)
+    template_id = "michelin" if category == "restaurant" and (
+        michelin_status
+        or intent == "michelin_restaurants"
+        or any("michelin" in _clean_chip(ev).lower() for ev in evidence)
+    ) else _pick_template(evidence, rating, review_count)
     text = _compose_text(
         template_id=template_id,
         place_name=place_name or "This place",
@@ -160,6 +178,8 @@ def build_why_pick(
         cuisine=cuisine,
         neighborhood=neighborhood,
         michelin_status=michelin_status,
+        intent=intent,
+        user_query=user_query,
     )
     low = text.lower()
     if category == "bar" and any(tok in low for tok in ("dining", "menu", "chef", "cuisine", "plates", "tasting menu")):
