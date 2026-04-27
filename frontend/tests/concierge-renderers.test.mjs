@@ -6,6 +6,7 @@ const conciergeResponse = readFileSync(new URL('../src/components/concierge/Conc
 const conciergeTypes = readFileSync(new URL('../src/lib/concierge/types.ts', import.meta.url), 'utf8');
 const tripAdviceView = readFileSync(new URL('../src/components/concierge/TripAdviceView.tsx', import.meta.url), 'utf8');
 const placeRecommendationsView = readFileSync(new URL('../src/components/concierge/PlaceRecommendationsView.tsx', import.meta.url), 'utf8');
+const aiConciergePanel = readFileSync(new URL('../src/components/trips/AIConciergePanel.tsx', import.meta.url), 'utf8');
 
 test('ConciergeResponse dispatches by response_type/responseType and has unsupported fallback', () => {
   assert.match(conciergeTypes, /response_type/);
@@ -39,4 +40,9 @@ test('TripAdviceView renders markdown sections, tables, and citations footer', (
   assert.match(tripAdviceView, /response\.adviceSections/);
   assert.match(tripAdviceView, /response\.citations/);
   assert.doesNotMatch(tripAdviceView, /Add to Trip/);
+});
+
+test('AI concierge de-emphasizes research sources behind a compact disclosure when addable cards exist', () => {
+  assert.match(aiConciergePanel, /Sources used/);
+  assert.match(aiConciergePanel, /<details/);
 });

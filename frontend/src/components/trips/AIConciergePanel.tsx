@@ -907,35 +907,55 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                         });
                       })()}
 
-                      {(msg.researchSources?.filter((s) => s.type === "research_source").length ?? 0) > 0
-                        && addableCount(msg) < 3 && (
+                      {(msg.researchSources?.filter((s) => s.type === "research_source").length ?? 0) > 0 && (
                         <div className="pt-1">
-                          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Research sources</p>
-                          <div className="space-y-2">
-                            {msg.researchSources?.filter((s) => s.type === "research_source").map((s) => (
-                              <ConciergeCard
-                                key={`${s.title}-${s.sourceUrl ?? "source"}`}
-                                title={s.title}
-                                category={
-                                  s.sourceType === "article_listicle_blog_directory"
-                                    ? (s.venuesDiscovered && s.venuesDiscovered > 0
-                                        ? `Discovery source · ${s.venuesDiscovered} place${s.venuesDiscovered !== 1 ? "s" : ""} verified`
-                                        : "Discovery source")
-                                    : "Research source"
-                                }
-                                meta={[s.neighborhood || ""].filter(Boolean)}
-                                tags={[]}
-                                reason={s.summary}
-                                sourceLink={s.sourceUrl}
-                                isOperational={false}
-                                verifiedAt={null}
-                                added={false}
-                                adding={false}
-                                canAdd={false}
-                                onAdd={() => undefined}
-                              />
-                            ))}
-                          </div>
+                          {addableCount(msg) > 0 ? (
+                            <details className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                              <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                Sources used ({msg.researchSources?.filter((s) => s.type === "research_source").length ?? 0})
+                              </summary>
+                              <ul className="mt-2 space-y-1 text-xs text-slate-600">
+                                {msg.researchSources?.filter((s) => s.type === "research_source").map((s) => (
+                                  <li key={`${s.title}-${s.sourceUrl ?? "source"}`} className="truncate">
+                                    {s.sourceUrl ? (
+                                      <a href={s.sourceUrl} target="_blank" rel="noreferrer" className="underline decoration-slate-300 underline-offset-2 hover:text-slate-800">
+                                        {s.title}
+                                      </a>
+                                    ) : s.title}
+                                  </li>
+                                ))}
+                              </ul>
+                            </details>
+                          ) : (
+                            <div>
+                              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Research sources</p>
+                              <div className="space-y-2">
+                                {msg.researchSources?.filter((s) => s.type === "research_source").map((s) => (
+                                  <ConciergeCard
+                                    key={`${s.title}-${s.sourceUrl ?? "source"}`}
+                                    title={s.title}
+                                    category={
+                                      s.sourceType === "article_listicle_blog_directory"
+                                        ? (s.venuesDiscovered && s.venuesDiscovered > 0
+                                            ? `Discovery source · ${s.venuesDiscovered} place${s.venuesDiscovered !== 1 ? "s" : ""} verified`
+                                            : "Discovery source")
+                                        : "Research source"
+                                    }
+                                    meta={[s.neighborhood || ""].filter(Boolean)}
+                                    tags={[]}
+                                    reason={s.summary}
+                                    sourceLink={s.sourceUrl}
+                                    isOperational={false}
+                                    verifiedAt={null}
+                                    added={false}
+                                    adding={false}
+                                    canAdd={false}
+                                    onAdd={() => undefined}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

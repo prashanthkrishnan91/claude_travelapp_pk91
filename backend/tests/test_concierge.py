@@ -38,6 +38,7 @@ from app.models.concierge import (
 from app.services.concierge import ConciergeService
 from app.services.live_research import LiveResearchResult
 from app.services.michelin_retriever import MichelinRetriever
+from app.concierge.router import route_prompt
 
 FAKE_TRIP_ID = UUID("00000000-0000-0000-0000-000000000001")
 FAKE_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
@@ -194,6 +195,44 @@ class TestIntentDetection:
     def test_general_fallback(self):
         svc = self._svc()
         assert svc._detect_intent("what's the weather like?") == INTENT_GENERAL
+
+    @pytest.mark.parametrize(
+        ("prompt", "expected_response_type", "expected_intent", "expected_category"),
+        [
+            ("Best cocktail bars", "place_recommendations", INTENT_NIGHTLIFE, "bar"),
+            ("Nearby cocktail bars", "place_recommendations", INTENT_NIGHTLIFE, "bar"),
+            ("Best brunch cafes", "place_recommendations", INTENT_RESTAURANTS, "cafe"),
+            ("Michelin restaurants", "place_recommendations", INTENT_MICHELIN_RESTAURANTS, "restaurant"),
+            ("Hidden gem restaurants", "place_recommendations", INTENT_HIDDEN_GEMS, "restaurant"),
+            ("Best hotels", "place_recommendations", INTENT_HOTELS, "hotel"),
+            ("Things to do on Day 2", "place_recommendations", INTENT_PLAN_DAY, "attraction"),
+            ("Compare River North vs West Loop", "place_recommendations", INTENT_COMPARE, "comparison"),
+            ("Points vs cash ideas", "trip_advice", INTENT_REWARDS_HELP, "advice"),
+        ],
+    )
+    def test_qa_prompt_matrix_routes_to_expected_response_and_legacy_intent(
+        self,
+        prompt: str,
+        expected_response_type: str,
+        expected_intent: str,
+        expected_category: str,
+    ):
+        svc = self._svc()
+        decision = route_prompt(prompt, confidence_threshold=0.5)
+        assert decision.response_type == expected_response_type
+        detected_intent = svc._detect_intent(prompt)
+        assert detected_intent == expected_intent
+        category_by_intent = {
+            INTENT_NIGHTLIFE: "bar",
+            INTENT_RESTAURANTS: "cafe",
+            INTENT_MICHELIN_RESTAURANTS: "restaurant",
+            INTENT_HIDDEN_GEMS: "restaurant",
+            INTENT_HOTELS: "hotel",
+            INTENT_PLAN_DAY: "attraction",
+            INTENT_COMPARE: "comparison",
+            INTENT_REWARDS_HELP: "advice",
+        }
+        assert category_by_intent[detected_intent] == expected_category
 
 
 # ── ConciergeService.search() integration tests (mocked) ─────────────────────

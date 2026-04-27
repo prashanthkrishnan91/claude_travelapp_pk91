@@ -562,10 +562,10 @@ class ConciergeService:
             return INTENT_BEST_AREA
         if _HOTEL_PAT.search(q):
             return INTENT_HOTELS
-        if _COMPARE_PAT.search(q):
-            return INTENT_COMPARE
         if _REWARDS_PAT.search(q):
             return INTENT_REWARDS_HELP
+        if _COMPARE_PAT.search(q):
+            return INTENT_COMPARE
         return INTENT_GENERAL
 
     def _sample_nightlife_results(self, destination: str) -> List[UnifiedRestaurantResult]:

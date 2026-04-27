@@ -765,16 +765,27 @@ def _google_fallback_queries(intent: str, destination: str, user_query: str) -> 
         return []
     queries: List[str] = []
     if intent == INTENT_NIGHTLIFE:
+        near_variant = "nearby cocktail bars" if "nearby" in base.lower() else "cocktail bars near me"
         queries.extend(
             [
                 f"cocktail bars near {dest}",
                 f"best cocktail bars in {dest}",
+                f"top speakeasy bars in {dest}",
+                f"open now cocktail bars in {dest}",
+                f"{near_variant} in {dest}",
             ]
         )
     elif intent == INTENT_RESTAURANTS:
         queries.extend([f"best restaurants near {dest}", f"restaurants in {dest}"])
     elif intent == INTENT_MICHELIN_RESTAURANTS:
-        queries.extend([f"Michelin restaurants in {dest}", f"fine dining in {dest}"])
+        queries.extend(
+            [
+                f"Michelin restaurants in {dest}",
+                f"Michelin star restaurants {dest}",
+                f"Bib Gourmand restaurants in {dest}",
+                f"fine dining in {dest}",
+            ]
+        )
     else:
         queries.extend([f"{base or 'places'} near {dest}", f"{base or 'best places'} in {dest}"])
     # preserve order while deduping
@@ -2541,6 +2552,9 @@ def _apply_google_gate(
                     rating=verification.rating,
                     review_count=verification.user_rating_count,
                     category=category,
+                    neighborhood=getattr(venue, "neighborhood", None) or verification.formatted_address,
+                    cuisine=getattr(venue, "cuisine", None),
+                    michelin_status=getattr(venue, "michelin_status", None),
                 )
                 reason, validation_source = _validate_or_fallback_reason(
                     why_pick_payload["why_pick"]["text"],
@@ -2548,6 +2562,21 @@ def _apply_google_gate(
                     own_name=getattr(venue, "name", ""),
                     known_candidate_names=known_candidate_names,
                 )
+                if (
+                    intent == INTENT_MICHELIN_RESTAURANTS
+                    and validation_source == "fallback"
+                    and category == "restaurant"
+                ):
+                    michelin_status = getattr(venue, "michelin_status", None)
+                    cuisine = getattr(venue, "cuisine", None)
+                    neighborhood = getattr(venue, "neighborhood", None) or verification.formatted_address
+                    if michelin_status or cuisine or neighborhood:
+                        parts = [p for p in [michelin_status, cuisine, neighborhood] if p]
+                        reason = (
+                            f"{getattr(venue, 'name', '') or verification.name or 'This restaurant'} is a "
+                            f"{', '.join(parts)} pick that fits this Michelin-focused request."
+                        )
+                        validation_source = "deterministic_validated"
                 reason_source = (
                     why_pick_payload["why_pick"]["generation_method"]
                     if validation_source == "deterministic_validated"
@@ -3175,7 +3204,7 @@ def normalize_hits(
     if _is_place_intent(intent) and venue_count >= RESEARCH_SUPPRESS_THRESHOLD and not debug_mode and not explicit_sources:
         research_cap = 0
     elif venue_count > 0 and not debug_mode:
-        research_cap = 2
+        research_cap = 1
     else:
         research_cap = max_per_kind
     return {

@@ -15,6 +15,8 @@ _PLACE_PATTERNS = [
     for p in [
         r"\bhotel(s)?\b",
         r"\brestaurant(s)?\b",
+        r"\bcafe(s)?\b",
+        r"\bbrunch\b",
         r"\bbar(s)?\b",
         r"\bwhere to eat\b",
         r"\bbest .* in .*\b",
@@ -22,6 +24,8 @@ _PLACE_PATTERNS = [
         r"\battraction(s)?\b",
         r"\bneighborhood(s)?\b",
         r"\barea to stay\b",
+        r"\bcompare\b",
+        r"\bvs\b",
     ]
 ]
 

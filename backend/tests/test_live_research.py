@@ -343,7 +343,7 @@ class TestNormalization:
         ]
         out = normalize_hits(hits, intent=INTENT_RESTAURANTS, destination="Chicago", user_query="restaurants")
         assert len(out["restaurants"]) == 1
-        assert len(out["research_sources"]) == 2
+        assert len(out["research_sources"]) == 1
 
     # ── Venue extraction from listicles ───────────────────────────────────────
 
@@ -2682,6 +2682,84 @@ class TestGooglePipelineRegression:
         assert all("22 best cocktail bars" not in (r.name or "").lower() for r in result.restaurants)
         assert any("22 best cocktail bars" in (s.title or "").lower() for s in result.research_sources)
 
+    def test_cocktail_bar_why_is_evidence_specific_not_generic_fallback(self):
+        article = _hit("Kumiko", "https://example.com/kumiko", "Cocktail bar in West Loop with strong reviews.")
+        google_map = {
+            "kumiko": GooglePlaceVerification(
+                provider_place_id="gp-kumiko",
+                name="Kumiko",
+                formatted_address="630 W Lake St, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                rating=4.7,
+                user_rating_count=1200,
+                types=["bar"],
+            )
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider([article, _hit("Best bars", "https://example.com/list", "Kumiko appears in multiple guides")]),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="best cocktail bars")
+        assert result.restaurants
+        why = (result.restaurants[0].supporting_details.why_pick or "").lower()
+        assert "cocktail" in why
+        assert "west loop" in why or "lake st" in why
+        assert "guest feedback, location, and relevance" not in why
+
+    def test_michelin_why_includes_michelin_or_cuisine_or_neighborhood_context(self):
+        article = _hit("Alinea", "https://example.com/alinea", "Michelin 3-star tasting-menu restaurant in Lincoln Park.")
+        google_map = {
+            "alinea": GooglePlaceVerification(
+                provider_place_id="gp-alinea",
+                name="Alinea",
+                formatted_address="1723 N Halsted St, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                rating=4.6,
+                user_rating_count=1900,
+                types=["restaurant"],
+            )
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider([article, _hit("Michelin guide", "https://guide.michelin.com/chicago", "Alinea is featured by Michelin")]),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(intent=INTENT_MICHELIN_RESTAURANTS, destination="Chicago", user_query="Michelin restaurants")
+        assert result.restaurants
+        card = result.restaurants[0]
+        why = (card.supporting_details.why_pick or "").lower()
+        assert any(token in why for token in ("michelin", "restaurant", "lincoln park", "halsted"))
+        assert "guest feedback, location, and relevance" not in why
+
+    def test_research_sources_presented_as_evidence_only_when_addable_exists(self):
+        article = _hit(
+            "Top bars in Chicago",
+            "https://example.com/bars",
+            "1. Kumiko 2. The Aviary 3. Meadowlark",
+        )
+        google_map = {
+            "kumiko": GooglePlaceVerification(provider_place_id="1", name="Kumiko", business_status="OPERATIONAL", confidence="high", types=["bar"]),
+            "the aviary": GooglePlaceVerification(provider_place_id="2", name="The Aviary", business_status="OPERATIONAL", confidence="high", types=["bar"]),
+            "meadowlark": GooglePlaceVerification(provider_place_id="3", name="Meadowlark", business_status="OPERATIONAL", confidence="high", types=["bar"]),
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider([article]),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="best cocktail bars")
+        assert len(result.restaurants) >= 3
+        assert result.research_sources == []
+
     def test_fail_closed_when_google_required_and_unavailable(self, monkeypatch):
         monkeypatch.setenv("RESEARCH_ENGINE_REQUIRE_GOOGLE_VERIFICATION", "true")
         provider = StubLiveSearchProvider(
@@ -3016,9 +3094,10 @@ class TestFrontendSourceEvidenceRendering:
         assert "hasDetail" in src
         assert "pickCardDetail" in src
 
-    def test_panel_hides_research_sources_when_addable_cards_exist(self):
+    def test_panel_compacts_research_sources_when_addable_cards_exist(self):
         src = self._read_panel()
-        assert "addableCount(msg) < 3" in src
+        assert "Sources used" in src
+        assert "<details" in src
 
     def test_panel_meta_line_uses_rating_reviews_address_only(self):
         """Meta line must come from supportingDetails.metaLine; no leaky tokens."""
