@@ -29,6 +29,7 @@ import type {
   UnifiedRestaurantResult,
 } from "@/lib/api";
 import type { ItineraryDay, ItineraryItem } from "@/types";
+import { pickCardReason, sanitizeWhyPick, shouldShowCollapsedSources, splitReason, normalizeTitle } from "@/lib/concierge/cardPresentation";
 
 type MessageRole = "user" | "assistant";
 
@@ -192,55 +193,9 @@ function cardKey(name: string, dayId?: string): string {
   return `${name.trim().toLowerCase()}::${dayId ?? "trip"}`;
 }
 
-function normalizeTitle(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function splitReason(text?: string): { short: string } {
-  const clean = (text ?? "")
-    .replace(/#{1,6}\s*/g, " ")
-    .replace(/^\s*(?:\d{1,3}[.)]|[-*])\s+/g, "")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/[`*_>~]/g, " ")
-    .replace(/^\s*why this pick:\s*/i, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!clean) return { short: "Great fit for this trip." };
-  const parts = clean.split(/(?<=[.!?])\s+/);
-  const first = parts[0]?.slice(0, 180).trim() ?? "";
-  return {
-    short: first || "Great fit for this trip.",
-  };
-}
-
-function containsAddressSignal(text: string): boolean {
-  return /\b\d{1,6}\s+[A-Za-z0-9.'-]+\s+(?:st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|way|pl|place|ct|court)\b/i.test(text);
-}
-
-function sanitizeWhyPick(
-  rawReason: string | undefined,
-  title: string,
-  allPlaceTitles: string[],
-): string {
-  const reason = splitReason(rawReason).short;
-  const normalizedReason = reason.toLowerCase();
-  if (containsAddressSignal(reason)) {
-    return "Strong fit for this trip based on trusted place signals.";
-  }
-  const hasOtherVenueName = allPlaceTitles
-    .filter((candidate) => normalizeTitle(candidate) !== normalizeTitle(title))
-    .some((candidate) => normalizedReason.includes(normalizeTitle(candidate)));
-  if (hasOtherVenueName) {
-    return "Strong fit for this trip based on trusted place signals.";
-  }
-  if (!reason || reason.length < 12) {
-    return "Strong fit for this trip based on trusted place signals.";
-  }
-  return reason;
-}
-
 type DisplayCard = {
   primaryReason?: string | null;
+  whyPick?: { text?: string | null; generationMethod?: string | null } | string | null;
   rating?: number;
   reviewCount?: number;
   neighborhood?: string;
@@ -250,21 +205,11 @@ type DisplayCard = {
     reviewCount?: number | null;
     address?: string | null;
     metaLine?: string | null;
-    whyPick?: string | null;
+    whyPick?: { text?: string | null; generationMethod?: string | null } | string | null;
     conciergeNote?: string | null;
     categoryLabel?: string | null;
   } | null;
 };
-
-// Pick the user-facing "Why this pick" sentence. Backend already produces a
-// clean, category-aware reason; we only fall back if it's missing entirely.
-function pickCardReason(card: DisplayCard): string | undefined {
-  return (
-    card.supportingDetails?.whyPick
-    ?? card.primaryReason
-    ?? "A strong pick based on guest feedback, location, and relevance to this request."
-  );
-}
 
 // Compose the subheader/meta line: `★ 4.8 (9,483 reviews) · Address`.
 // Address is intentionally *included* here so the card has one consolidated
@@ -484,10 +429,6 @@ function fromSearchResult(result: ConciergeSearchResult): Message {
     sources: result.sources,
     warnings: result.warnings,
   };
-}
-
-function addableCount(msg: Message): number {
-  return (msg.restaurants?.length ?? 0) + (msg.attractions?.length ?? 0) + (msg.hotels?.length ?? 0);
 }
 
 export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp = [], isOpen, onClose, onItemAdded }: Props) {
@@ -877,6 +818,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
                         return addablePlaces.map(({ kind, place, category, sourceLink }) => {
                           const key = cardKey(place.name, selectedDayId || undefined);
+                          // prefers card.supportingDetails?.whyPick ?? card.primaryReason when available
                           const baseReason = pickCardReason(place);
                           const reason = sanitizeWhyPick(baseReason, place.name, allTitles);
                           const extraDetail = pickCardDetail(place);
@@ -909,7 +851,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
                       {(msg.researchSources?.filter((s) => s.type === "research_source").length ?? 0) > 0 && (
                         <div className="pt-1">
-                          {addableCount(msg) > 0 ? (
+                          {shouldShowCollapsedSources(msg) ? (
                             <details className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                               <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                                 Sources used ({msg.researchSources?.filter((s) => s.type === "research_source").length ?? 0})

@@ -1154,12 +1154,12 @@ def _reason_guard(reason: str, own_name: str, known_candidate_names: List[str]) 
 #   • Stay one short, polished sentence.
 
 _CATEGORY_FALLBACK_REASON = {
-    "restaurant": "A strong pick for well-reviewed food, polished service, and a setting that fits this dining request.",
-    "bar": "A strong pick for well-reviewed drinks, atmosphere, and a polished night-out experience.",
+    "restaurant": "Selected for this dining request based on verified restaurant details and available evidence.",
+    "bar": "Selected for this bar request based on verified drinks-focused details and available evidence.",
     "cafe": "A strong pick for coffee, casual atmosphere, and consistently positive guest feedback.",
     "hotel": "A strong pick for location, comfort, and consistently positive guest feedback.",
-    "attraction": "A strong pick based on guest feedback, location, and relevance to this request.",
-    "place": "A strong pick based on guest feedback, location, and relevance to this request.",
+    "attraction": "Selected for this attraction request based on verified place details and available evidence.",
+    "place": "Selected for this request based on verified place details and available evidence.",
 }
 
 _CATEGORY_REASON_TEMPLATES = {
@@ -1169,7 +1169,7 @@ _CATEGORY_REASON_TEMPLATES = {
     },
     "bar": {
         "premium": "A standout pick for crafted cocktails, lively atmosphere, and a buzzing late-night crowd.",
-        "good": "A reliable choice for well-reviewed drinks and a polished night-out vibe.",
+        "good": "Selected as a bar option based on verified details and available evidence.",
     },
     "cafe": {
         "premium": "A standout cafe for quality coffee, a relaxed setting, and warm guest feedback.",
@@ -1327,10 +1327,14 @@ def _validate_or_fallback_reason(
     reason = (reason_text or "").strip()
     if not reason:
         return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"]), "fallback"
-    first_sentence = reason.split(".")[0].strip()
+    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z])", reason, maxsplit=1)
+    first_sentence = (parts[0] if parts else reason).strip()
     if not first_sentence:
         return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"]), "fallback"
-    reason = first_sentence + "."
+    if first_sentence[-1] not in ".!?":
+        reason = first_sentence + "."
+    else:
+        reason = first_sentence
     if not _reason_guard(reason, own_name, known_candidate_names):
         return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"]), "fallback"
     if _category_intent_mismatch(reason, category):

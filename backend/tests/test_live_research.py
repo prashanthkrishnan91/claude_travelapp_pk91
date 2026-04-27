@@ -3169,3 +3169,126 @@ class TestFrontendSourceEvidenceRendering:
         # Meta must never include editorial / source-checked tokens.
         assert "editorialMentions" not in src or "details?.editorialMentions" not in src
         assert "evidenceCount" not in src or "place.evidenceCount" not in src
+
+
+
+
+def _acceptance_google_stub(mapping):
+    class _Stub:
+        available = True
+
+        def verify(self, name, destination, neighborhood=None, intent=None):
+            return mapping.get((name or "").lower().strip(), GooglePlaceVerification(confidence="unknown", failure_reason="not_found"))
+
+        def clear_cache_for_destination(self, destination):
+            return 0
+
+    return _Stub()
+
+@pytest.mark.parametrize(
+    ("prompt", "intent", "place_name", "types", "rating", "review_count", "address", "snippet", "expected_min_cards"),
+    [
+        ("Hidden gems in Chicago", INTENT_HIDDEN_GEMS, "Daisies", ["restaurant"], 4.7, 612, "2375 N Milwaukee Ave, Chicago, IL", "Lower-profile local favorite in Logan Square.", 1),
+        ("Nearby cocktail bars", INTENT_NIGHTLIFE, "Blind Barber", ["bar"], 4.3, 970, "948 W Fulton Market, Chicago, IL", "Cocktail bar in Fulton Market.", 1),
+        ("Best cocktail bars", INTENT_NIGHTLIFE, "Kumiko Cocktail Bar", ["bar"], 4.7, 1200, "630 W Lake St, Chicago, IL", "Cocktail bar at 630 W Lake St, Chicago IL.", 1),
+        ("Best restaurants near my hotel in Chicago", INTENT_RESTAURANTS, "Aba", ["restaurant"], 4.8, 9483, "302 N Green St 3rd Floor, Chicago, IL", "Popular restaurant in Fulton Market.", 1),
+        ("Best value dinner", INTENT_LUXURY_VALUE, "The Gage", ["restaurant"], 4.6, 4100, "24 S Michigan Ave, Chicago, IL", "Value-friendly dinner spot near Loop hotels.", 1),
+        ("Michelin restaurants", INTENT_MICHELIN_RESTAURANTS, "Alinea", ["restaurant"], 4.6, 1900, "1723 N Halsted St, Chicago, IL", "Michelin 3-star tasting-menu restaurant.", 1),
+        ("Best hotels", INTENT_HOTELS, "The Langham", ["lodging", "hotel"], 4.7, 2500, "330 N Wabash Ave, Chicago, IL", "Luxury Chicago River hotel.", 1),
+        ("Attractions for Day 2", INTENT_ATTRACTIONS, "Cloud Gate Attraction", ["tourist_attraction"], 4.8, 34000, "201 E Randolph St, Chicago, IL", "Attraction at Millennium Park, Chicago.", 1),
+    ],
+)
+def test_acceptance_place_card_matrix(prompt, intent, place_name, types, rating, review_count, address, snippet, expected_min_cards, monkeypatch):
+    import app.services.live_research as live_research_module
+    monkeypatch.setattr(live_research_module, "MIN_ADDABLE_RESULTS", 1)
+    article = _hit(place_name, f"https://example.com/{place_name.lower().replace(' ', '-')}", snippet)
+    google_map = {
+        place_name.lower(): GooglePlaceVerification(
+            provider_place_id=f"gp-{place_name.lower().replace(' ', '-')}",
+            name=place_name,
+            formatted_address=address,
+            business_status="OPERATIONAL",
+            confidence="high",
+            rating=rating,
+            user_rating_count=review_count,
+            types=types,
+        )
+    }
+    svc = LiveResearchService(
+        provider=StubLiveSearchProvider([article]),
+        cache=_TTLCache(0),
+        verification_cache=_TTLCache(0),
+        enabled=True,
+        place_verifier=_acceptance_google_stub(google_map),
+    )
+    result = svc.fetch(intent=intent, destination="Chicago", user_query=prompt)
+    cards = [*(result.restaurants or []), *(result.attractions or []), *(result.hotels or [])]
+    assert len(cards) >= expected_min_cards
+
+    forbidden_generic = (
+        "a strong pick for well-reviewed",
+        "guest feedback, location, and relevance",
+        "setting that fits this dining request",
+        "polished night-out experience",
+        "great fit for this trip",
+        "trusted place signals",
+        "viable option",
+    )
+    forbidden_awkward = ("backed by rated", "with rated")
+
+    for card in cards:
+        assert card.name
+        details = card.supporting_details
+        assert details is not None
+        assert details.category_label
+        if rating is not None:
+            assert details.rating is not None
+        if review_count is not None:
+            assert details.review_count is not None
+        if address:
+            assert details.address is not None
+
+        why = (details.why_pick or "").lower()
+        assert why
+        assert why.count(".") <= 2
+        for phrase in forbidden_generic:
+            assert phrase not in why
+        for phrase in forbidden_awkward:
+            assert phrase not in why
+
+        has_concrete = any(
+            token in why
+            for token in (
+                "rating",
+                "review",
+                "restaurant",
+                "bar",
+                "hotel",
+                "museum",
+                "michelin",
+                "fulton",
+                "lake st",
+                "milwaukee",
+                "wabash",
+                "michigan ave",
+            )
+        )
+        assert has_concrete
+
+        gv = getattr(card, "google_verification", None)
+        if gv and gv.business_status == "OPERATIONAL" and (gv.confidence or "").lower() in {"high", "medium"}:
+            assert gv.provider_place_id
+
+
+@pytest.mark.parametrize(
+    ("prompt", "expected_response_type"),
+    [
+        ("Compare neighborhoods", "place_recommendations"),
+        ("Points vs cash ideas", "trip_advice"),
+    ],
+)
+def test_acceptance_non_place_prompt_matrix_routes(prompt, expected_response_type):
+    from app.concierge.router import route_prompt
+
+    decision = route_prompt(prompt, confidence_threshold=0.5)
+    assert decision.response_type == expected_response_type
