@@ -628,9 +628,8 @@ class _TTLCache:
 _GLOBAL_CACHE = _TTLCache(ttl_seconds=1800)
 # Separate cache for candidate verification results.
 _VERIFICATION_CACHE = _TTLCache(ttl_seconds=1800)
-# Bumped to 3 alongside Google Places verification — invalidates older payloads
-# that pre-date the verification gate so addable cards are always re-resolved.
-CONCIERGE_CACHE_VERSION = 4
+# Bumped to invalidate stale cached reasons after why_pick guard wiring fixes.
+CONCIERGE_CACHE_VERSION = 5
 
 
 def _normalize_query(query: str) -> str:
@@ -1140,7 +1139,28 @@ def _reason_guard(reason: str, own_name: str, known_candidate_names: List[str]) 
     if "google reviews" in first_sentence.lower() or "★" in first_sentence:
         return False
     low = text.lower()
-    if any(p.search(low) for p in _GENERIC_REASON_PATTERNS):
+    generic_match = any(p.search(low) for p in _GENERIC_REASON_PATTERNS)
+    has_concrete_signal = bool(
+        re.search(r"\b\d+(?:\.\d+)?\b", text)
+        or re.search(r"\b\d{1,3}(?:,\d{3})+\s+reviews?\b", low)
+        or any(
+            tok in low
+            for tok in (
+                "rating",
+                "reviews",
+                "michelin",
+                "cocktail bar",
+                "restaurant",
+                "cafe",
+                "hotel",
+                "attraction",
+                "west loop",
+                "river north",
+                "lincoln park",
+            )
+        )
+    )
+    if generic_match and not has_concrete_signal:
         return False
     return True
 

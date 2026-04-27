@@ -95,6 +95,21 @@ test('sanitizeWhyPick passes evidence-based text with rating and location', () =
   }
 });
 
+test('renderer flow preserves valid backend whyPick text', () => {
+  const card = {
+    name: 'Punch House',
+    supportingDetails: {
+      whyPick: 'Punch House is a West Loop cocktail bar with a 4.6 rating across 1,200 reviews, making it a reliable nearby drinks option.',
+      categoryLabel: 'Cocktail Bar',
+    },
+    primaryReason: 'Selected for this bar request based on verified drinks-focused details and available evidence.',
+  };
+  const picked = pickCardReason(card);
+  const rendered = sanitizeWhyPick(picked, card.name, [card.name]);
+  assert.equal(rendered, picked);
+  assert.doesNotMatch(rendered, /Selected for this bar request based on verified drinks-focused details and available evidence\./i);
+});
+
 test('blocked generic phrases are absent from accepted visible reason text', () => {
   const reason = sanitizeWhyPick(
     'Kumiko is a West Loop cocktail bar with a 4.7 rating across 1,200 reviews, making it a reliable nearby drinks option.',
