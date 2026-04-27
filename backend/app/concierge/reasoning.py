@@ -20,7 +20,7 @@ class WhyPick(TypedDict):
 
 class WhyPickResult(TypedDict):
     why_pick: WhyPick
-    template_id: Literal["rating_and_editorial", "editorial_only", "google_only", "fallback"]
+    template_id: Literal["rating_and_editorial", "editorial_only", "google_only", "fallback", "michelin"]
 
 
 def _clean_chip(text: str) -> str:
@@ -76,16 +76,59 @@ def _pick_template(evidence: Sequence[str], rating: Optional[float], review_coun
     return "fallback"
 
 
-def _compose_text(template_id: str, place_name: str, evidence: Sequence[str]) -> str:
-    first = evidence[0]
-    second = evidence[1] if len(evidence) > 1 else None
+def _normalize_phrase(value: Optional[str]) -> Optional[str]:
+    clean = _clean_chip(value or "")
+    return clean if clean else None
+
+
+def _compose_text(
+    *,
+    template_id: str,
+    place_name: str,
+    evidence: Sequence[str],
+    category: Optional[str],
+    cuisine: Optional[str],
+    neighborhood: Optional[str],
+    michelin_status: Optional[str],
+) -> str:
+    place = place_name or "This place"
+    first = _normalize_phrase(evidence[0]) or "solid local fit"
+    second = _normalize_phrase(evidence[1] if len(evidence) > 1 else None)
+    cuisine_phrase = _normalize_phrase(cuisine)
+    neighborhood_phrase = _normalize_phrase(neighborhood)
+    michelin_phrase = _normalize_phrase(michelin_status)
+
+    if (category == "restaurant" and michelin_phrase) or template_id == "michelin":
+        details = [michelin_phrase, cuisine_phrase, neighborhood_phrase]
+        detail_blob = ", ".join([d for d in details if d])
+        if detail_blob:
+            return f"{place} is a {detail_blob} pick that fits this Michelin-focused request."
+        return f"{place} is a Michelin-oriented restaurant choice with strong fit for this request."
+
+    if category == "bar":
+        location = f" in {neighborhood_phrase}" if neighborhood_phrase else ""
+        support = f" with {second.lower()}" if second else ""
+        return f"{place} is a cocktail-forward bar{location}, backed by {first.lower()}{support}."
+    if category == "restaurant":
+        cuisine_bit = f" for {cuisine_phrase.lower()} cuisine" if cuisine_phrase else ""
+        location = f" in {neighborhood_phrase}" if neighborhood_phrase else ""
+        support = f" and {second.lower()}" if second else ""
+        return f"{place} is a strong restaurant pick{cuisine_bit}{location}, supported by {first.lower()}{support}."
+    if category == "hotel":
+        location = f" in {neighborhood_phrase}" if neighborhood_phrase else ""
+        support = f" and {second.lower()}" if second else ""
+        return f"{place} is a reliable hotel option{location}, with {first.lower()}{support}."
+    if category == "attraction":
+        location = f" in {neighborhood_phrase}" if neighborhood_phrase else ""
+        support = f" and {second.lower()}" if second else ""
+        return f"{place} is a high-fit attraction{location}, with {first.lower()}{support}."
     if template_id == "rating_and_editorial" and second:
-        return f"{place_name} stands out for {first.lower()} and {second.lower()}."
+        return f"{place} stands out for {first.lower()} and {second.lower()}."
     if template_id == "editorial_only":
-        return f"{place_name} is a practical pick based on {first.lower()}."
+        return f"{place} is a practical pick based on {first.lower()}."
     if template_id == "google_only":
-        return f"{place_name} is a solid choice with {first.lower()}."
-    return f"{place_name} is a viable option with {first.lower()}."
+        return f"{place} is a solid choice with {first.lower()}."
+    return f"{place} is a viable option with {first.lower()}."
 
 
 def has_concrete_fact(text: str) -> bool:
@@ -104,18 +147,29 @@ def build_why_pick(
     rating: Optional[float],
     review_count: Optional[int],
     category: Optional[str] = None,
+    neighborhood: Optional[str] = None,
+    cuisine: Optional[str] = None,
+    michelin_status: Optional[str] = None,
 ) -> WhyPickResult:
-    template_id = _pick_template(evidence, rating, review_count)
-    text = _compose_text(template_id, place_name or "This place", evidence)
+    template_id = "michelin" if category == "restaurant" and michelin_status else _pick_template(evidence, rating, review_count)
+    text = _compose_text(
+        template_id=template_id,
+        place_name=place_name or "This place",
+        evidence=evidence,
+        category=category,
+        cuisine=cuisine,
+        neighborhood=neighborhood,
+        michelin_status=michelin_status,
+    )
     low = text.lower()
     if category == "bar" and any(tok in low for tok in ("dining", "menu", "chef", "cuisine", "plates", "tasting menu")):
-        text = f"{place_name or 'This place'} is a strong pick for well-reviewed drinks, atmosphere, and a polished night-out experience."
+        text = f"{place_name or 'This place'} is a cocktail-focused bar in {neighborhood or 'this area'}, backed by {evidence[0].lower()}."
     elif category == "restaurant" and any(tok in low for tok in ("cocktail", "nightlife", "speakeasy", "bartender", "lounge")):
-        text = f"{place_name or 'This place'} is a strong pick for well-reviewed food, polished service, and a comfortable dining setting."
-    elif category == "bar" and not any(tok in low for tok in ("cocktail", "drinks", "atmosphere", "night-out", "night out")):
-        text = f"{place_name or 'This place'} is a strong pick for well-reviewed drinks, atmosphere, and a polished night-out experience."
-    elif category == "restaurant" and not any(tok in low for tok in ("food", "dining", "menu", "cuisine")):
-        text = f"{place_name or 'This place'} is a strong pick for well-reviewed food, polished service, and a comfortable dining setting."
+        text = f"{place_name or 'This place'} is a dining-focused restaurant in {neighborhood or 'this area'}, supported by {evidence[0].lower()}."
+    elif category == "bar" and not any(tok in low for tok in ("cocktail", "drinks", "bar")):
+        text = f"{place_name or 'This place'} is a bar pick in {neighborhood or 'this area'}, with {evidence[0].lower()}."
+    elif category == "restaurant" and not any(tok in low for tok in ("food", "dining", "menu", "cuisine", "restaurant", "michelin")):
+        text = f"{place_name or 'This place'} is a restaurant pick in {neighborhood or 'this area'}, with {evidence[0].lower()}."
     if BANNED_STRINGS_RE.search(text):
         text = f"{place_name or 'This place'} is a viable option with {evidence[0].lower()}."
     if not has_concrete_fact(text):
