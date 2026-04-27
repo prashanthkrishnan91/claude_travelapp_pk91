@@ -9,6 +9,18 @@ BANNED_STRINGS_RE = re.compile(
     r"(source checked|editorial mention|source fit|evidence:|tavily|verification score|###|https?://)",
     re.IGNORECASE,
 )
+
+# Phrases that signal generic, template-level output — must never appear in why_pick.
+GENERIC_PHRASES_RE = re.compile(
+    r"(a strong pick for well-reviewed|guest feedback, location, and relevance|"
+    r"polished night-out experience|viable option|great fit for this trip|"
+    r"trusted place signals|fits this request as a google-verified|"
+    r"well-reviewed food|well-reviewed drinks|matches this dining request|"
+    r"matches this value-dinner request|fits this hotel request|"
+    r"fits this Michelin request|is a strong attraction match|"
+    r"\bwell-rated\b)",
+    re.IGNORECASE,
+)
 _NUMBER_RE = re.compile(r"\b\d+(?:\.\d+)?\b")
 _PLACE_WORD_RE = re.compile(r"\b(?:in|near|at)\s+[A-Z][\w'’.-]*(?:\s+[A-Z][\w'’.-]*)*\b")
 
@@ -115,6 +127,8 @@ def _compose_text(
     michelin_status: Optional[str],
     intent: Optional[str],
     user_query: str,
+    rating: Optional[float] = None,
+    review_count: Optional[int] = None,
 ) -> str:
     place = place_name or "This place"
     cuisine_phrase = _normalize_phrase(cuisine)
@@ -122,55 +136,80 @@ def _compose_text(
     query_low = (user_query or "").lower()
     is_hidden_gems = intent == "hidden_gems" or "hidden gem" in query_low
     is_cocktail = intent == "nightlife" or ("cocktail" in query_low and "bar" in query_low)
+    is_value = "value" in query_low or intent == "luxury_value"
 
-    # Build concrete evidence phrases from available chips.
-    concrete: List[str] = []
-    for chip in evidence:
-        clean = _normalize_phrase(chip)
-        if clean and clean.lower() not in {c.lower() for c in concrete}:
-            concrete.append(clean)
+    # Prefer direct rating/review_count; fall back to scanning evidence chips.
+    if rating is not None:
+        if review_count and int(review_count) > 0:
+            rating_str: Optional[str] = f"a {float(rating):.1f} rating across {int(review_count):,} reviews"
+        else:
+            rating_str = f"a {float(rating):.1f} rating"
+    else:
+        rating_str = None
+        for chip in evidence:
+            low = chip.lower()
+            if "rated" in low or "review" in low:
+                rating_str = chip.rstrip(".")
+                break
 
-    rating_phrase = None
-    for chip in concrete:
-        low = chip.lower()
-        if "rated" in low or "review" in low:
-            rating_phrase = chip
-            break
-    if not rating_phrase:
-        rating_phrase = "well-rated"
+    cuisine_low = cuisine_phrase.lower() if cuisine_phrase else None
+    rating_part = f" with {rating_str}" if rating_str else ""
 
-    if category == "restaurant" and (michelin_status or intent == "michelin_restaurants" or template_id == "michelin"):
-        parts = [p for p in [michelin_status, cuisine_phrase, location] if p]
-        if parts:
-            return f"{place} fits this Michelin request as a {', '.join(parts)} option with {rating_phrase.lower()}."
-        return f"{place} fits this Michelin request with {rating_phrase.lower()}."
+    # Michelin
+    if michelin_status or template_id == "michelin":
+        star_text = michelin_status or "Michelin-recognized"
+        cuisine_part = f" {cuisine_low}" if cuisine_low else ""
+        loc_part = f" {location}" if location else ""
+        return (
+            f"{place} is a {star_text}{loc_part}{cuisine_part} destination, "
+            f"making it the top splurge option for a Michelin-focused dinner."
+        )
 
+    # Bar / cocktail bar
     if category == "bar" or is_cocktail:
-        category_text = "cocktail bar" if is_cocktail else "bar"
-        loc = f" in {location}" if location else ""
-        cuisine_bit = f" known for {cuisine_phrase.lower()}" if cuisine_phrase and category != "bar" else ""
-        hidden = " with a lower-profile local feel" if is_hidden_gems else ""
-        return f"{place} fits this request as a Google-verified {category_text}{loc} with {rating_phrase.lower()}{cuisine_bit}{hidden}."
+        category_label = "cocktail bar" if is_cocktail else "bar"
+        desc = f"{location + ' ' if location else ''}{category_label}"
+        if is_hidden_gems:
+            return (
+                f"{place} is a lower-profile {desc}{rating_part}, "
+                f"making it a strong local find away from tourist-heavy areas."
+            )
+        return f"{place} is a {desc}{rating_part}, making it a reliable nearby drinks option."
 
+    # Restaurant
     if category == "restaurant":
-        cuisine_bit = f" for {cuisine_phrase.lower()}" if cuisine_phrase else ""
-        loc = f" in {location}" if location else ""
-        hidden = " with a lower-profile local profile" if is_hidden_gems else ""
-        if "value" in query_low:
-            return f"{place} matches this value-dinner request{cuisine_bit}{loc} with {rating_phrase.lower()}{hidden}."
-        return f"{place} matches this dining request{cuisine_bit}{loc} with {rating_phrase.lower()}{hidden}."
+        type_label = cuisine_low or "restaurant"
+        if is_hidden_gems:
+            spot_label = f"{location + ' ' if location else ''}{cuisine_low + ' ' if cuisine_low else ''}spot"
+            return (
+                f"{place} is a lower-profile {spot_label}{rating_part}, "
+                f"making it a strong local favorite away from tourist-heavy areas."
+            )
+        desc = f"{location + ' ' if location else ''}{type_label}"
+        if is_value:
+            return f"{place} is a {desc}{rating_part}, offering a strong value alternative."
+        return f"{place} is a {desc}{rating_part}, making it a top dining choice."
 
+    # Hotel
     if category == "hotel":
-        loc = f" in {location}" if location else ""
-        return f"{place} fits this hotel request{loc} with {rating_phrase.lower()}."
+        desc = f"{location + ' ' if location else ''}hotel"
+        return f"{place} is a {desc}{rating_part}, making it a solid accommodation option."
 
+    # Attraction
     if category == "attraction":
-        loc = f" in {location}" if location else ""
-        return f"{place} is a strong attraction match{loc} with {rating_phrase.lower()}."
+        type_label = cuisine_low or "attraction"
+        desc = f"{location + ' ' if location else ''}{type_label}"
+        return f"{place} is a {desc}{rating_part}, making it a top draw for this area."
 
-    if concrete:
-        return f"{place} matches this request based on {concrete[0].lower()}."
-    return f"{place} matches this request based on verified place details."
+    # Generic — still anchored to real data when available
+    if rating_str:
+        loc_bit = f" {location}" if location else ""
+        type_bit = f" {cuisine_low}" if cuisine_low else ""
+        return f"{place} is a{loc_bit}{type_bit} option{rating_part}."
+    if location or cuisine_low:
+        parts = [p for p in [location, cuisine_low] if p]
+        return f"{place} is a {' '.join(parts)} option."
+    return f"{place} is a verified place matching this request."
 
 
 def has_concrete_fact(text: str) -> bool:
@@ -216,17 +255,22 @@ def build_why_pick(
         michelin_status=michelin_status,
         intent=intent,
         user_query=user_query,
+        rating=rating,
+        review_count=review_count,
     )
 
-    if BANNED_STRINGS_RE.search(text):
-        text = f"{place_name or 'This place'} matches this request based on verified place details."
+    if BANNED_STRINGS_RE.search(text) or GENERIC_PHRASES_RE.search(text):
+        loc = _location_phrase(neighborhood)
+        loc_part = f" {loc}" if loc else ""
+        rp = _rating_phrase(rating, review_count, concrete_evidence) or "verified place details"
+        text = f"{place_name or 'This place'} is a{loc_part} option with {rp.lower()}."
     if "backed by rated" in text.lower() or "with rated" in text.lower():
         text = text.replace("backed by rated", "with a").replace("with rated", "with a")
     if not has_concrete_fact(text):
         loc = _location_phrase(neighborhood)
-        loc_part = f" in {loc}" if loc else ""
+        loc_part = f" {loc}" if loc else ""
         rating_part = _rating_phrase(rating, review_count, concrete_evidence) or "verified place details"
-        text = f"{place_name or 'This place'} matches this request{loc_part} with {rating_part.lower()}."
+        text = f"{place_name or 'This place'} is a{loc_part} option with {rating_part.lower()}."
 
     return {
         "why_pick": {"text": text, "generation_method": "deterministic"},
