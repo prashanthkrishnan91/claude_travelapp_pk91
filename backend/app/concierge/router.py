@@ -25,7 +25,6 @@ _PLACE_PATTERNS = [
         r"\bneighborhood(s)?\b",
         r"\barea to stay\b",
         r"\bcompare\b",
-        r"\bvs\b",
     ]
 ]
 
@@ -78,6 +77,11 @@ def route_prompt(prompt: str, confidence_threshold: float = 0.55) -> RouteDecisi
             stage2_confidence=0.9,
             code="empty_prompt",
         )
+
+    text_low = text.lower()
+    if any(tok in text_low for tok in ("points", "miles", "cash", "redeem", "transfer partner", "award flight", "card strategy")):
+        prior = {"place_recommendations": 0.1, "trip_advice": 0.8, "unsupported": 0.1}
+        return RouteDecision(response_type="trip_advice", stage1_prior=prior, stage2_confidence=0.8)
 
     place_score = _score(text, _PLACE_PATTERNS, base=0.18)
     advice_score = _score(text, _ADVICE_PATTERNS, base=0.2)

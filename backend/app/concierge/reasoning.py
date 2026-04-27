@@ -81,6 +81,29 @@ def _normalize_phrase(value: Optional[str]) -> Optional[str]:
     return clean if clean else None
 
 
+def _rating_phrase(rating: Optional[float], review_count: Optional[int], evidence: Sequence[str]) -> Optional[str]:
+    if rating is not None:
+        if review_count and int(review_count) > 0:
+            return f"{float(rating):.1f} rating across {int(review_count):,} reviews"
+        return f"{float(rating):.1f} rating"
+    for chip in evidence:
+        low = chip.lower()
+        if "rated" in low or "review" in low:
+            return chip
+    return None
+
+
+def _location_phrase(neighborhood: Optional[str]) -> Optional[str]:
+    if not neighborhood:
+        return None
+    clean = _normalize_phrase(neighborhood)
+    if not clean:
+        return None
+    if re.search(r"\b\d{1,6}\s+", clean):
+        return None
+    return clean.replace(", Chicago, IL", "").replace(", IL", "")
+
+
 def _compose_text(
     *,
     template_id: str,
@@ -94,53 +117,60 @@ def _compose_text(
     user_query: str,
 ) -> str:
     place = place_name or "This place"
-    first = _normalize_phrase(evidence[0]) or "solid local fit"
-    second = _normalize_phrase(evidence[1] if len(evidence) > 1 else None)
     cuisine_phrase = _normalize_phrase(cuisine)
-    neighborhood_phrase = _normalize_phrase(neighborhood)
-    michelin_phrase = _normalize_phrase(michelin_status)
+    location = _location_phrase(neighborhood)
     query_low = (user_query or "").lower()
-    is_value_dinner = (
-        "dinner" in query_low
-        and any(tok in query_low for tok in ("value", "best value", "affordable"))
-    ) or (intent == "luxury_value" and "dinner" in query_low)
+    is_hidden_gems = intent == "hidden_gems" or "hidden gem" in query_low
+    is_cocktail = intent == "nightlife" or ("cocktail" in query_low and "bar" in query_low)
 
-    if (category == "restaurant" and michelin_phrase) or template_id == "michelin":
-        details = [michelin_phrase, cuisine_phrase, neighborhood_phrase]
-        detail_blob = ", ".join([d for d in details if d])
-        if detail_blob:
-            return f"{place} is a {detail_blob} pick that fits this Michelin-focused request."
-        location = f" in {neighborhood_phrase}" if neighborhood_phrase else ""
-        return f"{place} is a Michelin-oriented restaurant choice{location}, backed by {first.lower()}."
+    # Build concrete evidence phrases from available chips.
+    concrete: List[str] = []
+    for chip in evidence:
+        clean = _normalize_phrase(chip)
+        if clean and clean.lower() not in {c.lower() for c in concrete}:
+            concrete.append(clean)
 
-    if category == "bar":
-        location = f" in {neighborhood_phrase}" if neighborhood_phrase else ""
-        support = f" with {second.lower()}" if second else ""
-        return f"{place} is a cocktail-forward bar{location}, backed by {first.lower()}{support}."
+    rating_phrase = None
+    for chip in concrete:
+        low = chip.lower()
+        if "rated" in low or "review" in low:
+            rating_phrase = chip
+            break
+    if not rating_phrase:
+        rating_phrase = "well-rated"
+
+    if category == "restaurant" and (michelin_status or intent == "michelin_restaurants" or template_id == "michelin"):
+        parts = [p for p in [michelin_status, cuisine_phrase, location] if p]
+        if parts:
+            return f"{place} fits this Michelin request as a {', '.join(parts)} option with {rating_phrase.lower()}."
+        return f"{place} fits this Michelin request with {rating_phrase.lower()}."
+
+    if category == "bar" or is_cocktail:
+        category_text = "cocktail bar" if is_cocktail else "bar"
+        loc = f" in {location}" if location else ""
+        cuisine_bit = f" known for {cuisine_phrase.lower()}" if cuisine_phrase and category != "bar" else ""
+        hidden = " with a lower-profile local feel" if is_hidden_gems else ""
+        return f"{place} fits this request as a Google-verified {category_text}{loc} with {rating_phrase.lower()}{cuisine_bit}{hidden}."
+
     if category == "restaurant":
-        if is_value_dinner:
-            location = f" in {neighborhood_phrase}" if neighborhood_phrase else ""
-            support = f", backed by {second.lower()}" if second else ""
-            return f"{place} is a value-forward dining pick{location}, with {first.lower()}{support}."
-        cuisine_bit = f" for {cuisine_phrase.lower()} cuisine" if cuisine_phrase else ""
-        location = f" in {neighborhood_phrase}" if neighborhood_phrase else ""
-        support = f" and {second.lower()}" if second else ""
-        return f"{place} is a strong restaurant pick{cuisine_bit}{location}, supported by {first.lower()}{support}."
+        cuisine_bit = f" for {cuisine_phrase.lower()}" if cuisine_phrase else ""
+        loc = f" in {location}" if location else ""
+        hidden = " with a lower-profile local profile" if is_hidden_gems else ""
+        if "value" in query_low:
+            return f"{place} matches this value-dinner request{cuisine_bit}{loc} with {rating_phrase.lower()}{hidden}."
+        return f"{place} matches this dining request{cuisine_bit}{loc} with {rating_phrase.lower()}{hidden}."
+
     if category == "hotel":
-        location = f" in {neighborhood_phrase}" if neighborhood_phrase else ""
-        support = f" and {second.lower()}" if second else ""
-        return f"{place} is a reliable hotel option{location}, with {first.lower()}{support}."
+        loc = f" in {location}" if location else ""
+        return f"{place} fits this hotel request{loc} with {rating_phrase.lower()}."
+
     if category == "attraction":
-        location = f" in {neighborhood_phrase}" if neighborhood_phrase else ""
-        support = f" and {second.lower()}" if second else ""
-        return f"{place} is a high-fit attraction{location}, with {first.lower()}{support}."
-    if template_id == "rating_and_editorial" and second:
-        return f"{place} stands out for {first.lower()} and {second.lower()}."
-    if template_id == "editorial_only":
-        return f"{place} is a practical pick based on {first.lower()}."
-    if template_id == "google_only":
-        return f"{place} is a solid choice with {first.lower()}."
-    return f"{place} is a viable option with {first.lower()}."
+        loc = f" in {location}" if location else ""
+        return f"{place} is a strong attraction match{loc} with {rating_phrase.lower()}."
+
+    if concrete:
+        return f"{place} matches this request based on {concrete[0].lower()}."
+    return f"{place} matches this request based on verified place details."
 
 
 def has_concrete_fact(text: str) -> bool:
@@ -148,7 +178,7 @@ def has_concrete_fact(text: str) -> bool:
         return True
     if _PLACE_WORD_RE.search(text):
         return True
-    keyword_hits = ("guide", "michelin", "bar", "restaurant", "cafe", "hotel", "museum", "park")
+    keyword_hits = ("guide", "michelin", "bar", "restaurant", "cafe", "hotel", "museum", "park", "reviews")
     return any(k in text.lower() for k in keyword_hits)
 
 
@@ -170,10 +200,16 @@ def build_why_pick(
         or intent == "michelin_restaurants"
         or any("michelin" in _clean_chip(ev).lower() for ev in evidence)
     ) else _pick_template(evidence, rating, review_count)
+
+    concrete_evidence = list(evidence)
+    rating_phrase = _rating_phrase(rating, review_count, concrete_evidence)
+    if rating_phrase and all(rating_phrase.lower() != ev.lower() for ev in concrete_evidence):
+        concrete_evidence = [rating_phrase, *concrete_evidence]
+
     text = _compose_text(
         template_id=template_id,
         place_name=place_name or "This place",
-        evidence=evidence,
+        evidence=concrete_evidence,
         category=category,
         cuisine=cuisine,
         neighborhood=neighborhood,
@@ -181,19 +217,17 @@ def build_why_pick(
         intent=intent,
         user_query=user_query,
     )
-    low = text.lower()
-    if category == "bar" and any(tok in low for tok in ("dining", "menu", "chef", "cuisine", "plates", "tasting menu")):
-        text = f"{place_name or 'This place'} is a cocktail-focused bar in {neighborhood or 'this area'}, backed by {evidence[0].lower()}."
-    elif category == "restaurant" and any(tok in low for tok in ("cocktail", "nightlife", "speakeasy", "bartender", "lounge")):
-        text = f"{place_name or 'This place'} is a dining-focused restaurant in {neighborhood or 'this area'}, supported by {evidence[0].lower()}."
-    elif category == "bar" and not any(tok in low for tok in ("cocktail", "drinks", "bar")):
-        text = f"{place_name or 'This place'} is a bar pick in {neighborhood or 'this area'}, with {evidence[0].lower()}."
-    elif category == "restaurant" and not any(tok in low for tok in ("food", "dining", "menu", "cuisine", "restaurant", "michelin")):
-        text = f"{place_name or 'This place'} is a restaurant pick in {neighborhood or 'this area'}, with {evidence[0].lower()}."
+
     if BANNED_STRINGS_RE.search(text):
-        text = f"{place_name or 'This place'} is a viable option with {evidence[0].lower()}."
+        text = f"{place_name or 'This place'} matches this request based on verified place details."
+    if "backed by rated" in text.lower() or "with rated" in text.lower():
+        text = text.replace("backed by rated", "with a").replace("with rated", "with a")
     if not has_concrete_fact(text):
-        text = f"{place_name or 'This place'} is a viable option with {evidence[0].lower()} in this area."
+        loc = _location_phrase(neighborhood)
+        loc_part = f" in {loc}" if loc else ""
+        rating_part = _rating_phrase(rating, review_count, concrete_evidence) or "verified place details"
+        text = f"{place_name or 'This place'} matches this request{loc_part} with {rating_part.lower()}."
+
     return {
         "why_pick": {"text": text, "generation_method": "deterministic"},
         "template_id": template_id,
