@@ -2552,6 +2552,66 @@ class TestGooglePipelineRegression:
         for forbidden in ("cocktail", "nightlife", "speakeasy", "bartender", "lounge"):
             assert forbidden not in reason
 
+    def test_best_restaurants_near_hotel_uses_specific_why_not_generic_fallback(self):
+        article = _hit("Corner Brew Cafe", "https://example.com/corner-brew", "Cafe with strong reviews near River North.")
+        google_map = {
+            "corner brew cafe": GooglePlaceVerification(
+                provider_place_id="gp-corner",
+                name="Corner Brew Cafe",
+                formatted_address="420 N Clark St, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                rating=4.9,
+                user_rating_count=1842,
+                types=["restaurant", "cafe"],
+            )
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider([article]),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(intent=INTENT_RESTAURANTS, destination="Chicago", user_query="Best restaurants near my hotel in Chicago")
+        assert result.restaurants
+        card = result.restaurants[0]
+        assert card.supporting_details is not None
+        why = (card.supporting_details.why_pick or "").lower()
+        assert "guest feedback, location, and relevance" not in why
+        assert any(token in why for token in ("rated", "review", "clark st", "chicago"))
+
+    def test_value_dinner_keeps_restaurant_category_when_google_has_secondary_bar_type(self):
+        article = _hit("The Capital Grille", "https://example.com/capital-grille", "Steakhouse in River North.")
+        google_map = {
+            "the capital grille": GooglePlaceVerification(
+                provider_place_id="gp-capital",
+                name="The Capital Grille",
+                formatted_address="633 N St Clair St, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                rating=4.6,
+                user_rating_count=2301,
+                types=["restaurant", "bar"],
+            )
+        }
+        svc = LiveResearchService(
+            provider=StubLiveSearchProvider([article]),
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=self._google_stub(google_map),
+        )
+        result = svc.fetch(intent=INTENT_LUXURY_VALUE, destination="Chicago", user_query="Best value dinner")
+        assert result.restaurants
+        details = result.restaurants[0].supporting_details
+        assert details is not None
+        assert (details.category_label or "").lower() == "restaurant"
+        why = (details.why_pick or "").lower()
+        assert "value" in why
+        for forbidden in ("cocktail", "drinks", "nightlife", "night-out"):
+            assert forbidden not in why
+
     def test_unknown_google_types_do_not_fallback_to_candidate_generic_restaurant_label(self):
         candidate = SimpleNamespace(cuisine="Restaurant", category="Food")
         category = _normalize_place_category(["point_of_interest", "establishment"], candidate)
@@ -2735,7 +2795,8 @@ class TestGooglePipelineRegression:
         assert result.restaurants
         card = result.restaurants[0]
         why = (card.supporting_details.why_pick or "").lower()
-        assert any(token in why for token in ("michelin", "restaurant", "lincoln park", "halsted"))
+        assert "michelin" in why
+        assert any(token in why for token in ("lincoln park", "halsted", "restaurant"))
         assert "guest feedback, location, and relevance" not in why
 
     def test_research_sources_presented_as_evidence_only_when_addable_exists(self):
@@ -3075,6 +3136,8 @@ class TestFrontendSourceEvidenceRendering:
         """AIConciergePanel must call pickCardReason() for venue cards."""
         src = self._read_panel()
         assert "pickCardReason" in src, "pickCardReason helper must be present"
+        assert "card.supportingDetails?.whyPick" in src
+        assert "?? card.primaryReason" in src
 
     def test_panel_uses_clean_supporting_details_only(self):
         """Card meta and details must come from clean supportingDetails fields."""
