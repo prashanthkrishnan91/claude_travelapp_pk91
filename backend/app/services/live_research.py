@@ -628,8 +628,8 @@ class _TTLCache:
 _GLOBAL_CACHE = _TTLCache(ttl_seconds=1800)
 # Separate cache for candidate verification results.
 _VERIFICATION_CACHE = _TTLCache(ttl_seconds=1800)
-# Bumped to invalidate stale cached reasons after why_pick guard wiring fixes.
-CONCIERGE_CACHE_VERSION = 5
+# Bumped to invalidate stale cached reasons after evidence-composed why_pick rollout.
+CONCIERGE_CACHE_VERSION = 6
 
 
 def _normalize_query(query: str) -> str:
@@ -2615,6 +2615,7 @@ def _apply_google_gate(
                     neighborhood=getattr(venue, "neighborhood", None) or verification.formatted_address,
                     cuisine=getattr(venue, "cuisine", None),
                     michelin_status=getattr(venue, "michelin_status", None),
+                    price_level=getattr(venue, "price_level", None),
                     user_query=user_query,
                     intent=intent,
                 )

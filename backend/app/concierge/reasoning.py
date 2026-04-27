@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Iterable, List, Literal, Optional, Sequence, TypedDict
+from typing import Iterable, List, Literal, Optional, Sequence, Tuple, TypedDict
 
 BANNED_STRINGS_RE = re.compile(
     r"(source checked|editorial mention|source fit|evidence:|tavily|verification score|###|https?://)",
@@ -116,6 +116,72 @@ def _location_phrase(neighborhood: Optional[str]) -> Optional[str]:
     return clean.replace(", Chicago, IL", "").replace(", IL", "")
 
 
+def _location_area_phrase(neighborhood: Optional[str]) -> Optional[str]:
+    loc = _location_phrase(neighborhood)
+    if not loc:
+        return None
+    if "," not in loc:
+        return loc
+    parts = [p.strip() for p in loc.split(",") if p.strip()]
+    for part in parts[1:]:
+        if not re.search(r"\b\d{1,6}\b", part):
+            return part
+    return parts[0] if parts else None
+
+
+def _price_level_phrase(price_level: Optional[int]) -> Optional[str]:
+    if price_level is None:
+        return None
+    try:
+        p = int(price_level)
+    except (TypeError, ValueError):
+        return None
+    if p <= 1:
+        return "inexpensive pricing"
+    if p == 2:
+        return "moderate pricing"
+    if p >= 4:
+        return "very expensive pricing"
+    return "expensive pricing"
+
+
+def _editorial_phrase(evidence: Sequence[str]) -> Optional[str]:
+    for chip in evidence:
+        low = chip.lower()
+        if "michelin" in low:
+            continue
+        if any(tok in low for tok in ("guide", "list", "editor", "featured", "recommended", "infatuation", "eater")):
+            return chip.rstrip(".")
+    return None
+
+
+def _tag_or_sentiment_phrase(evidence: Sequence[str]) -> Optional[str]:
+    for chip in evidence:
+        low = chip.lower()
+        if any(tok in low for tok in ("foursquare", "yelp", "tag", "sentiment")):
+            return chip.rstrip(".")
+    return None
+
+
+def _value_evidence_phrase(
+    evidence: Sequence[str],
+    *,
+    price_level: Optional[int],
+) -> Optional[str]:
+    price_phrase = _price_level_phrase(price_level)
+    if price_phrase and int(price_level or 0) <= 2:
+        return price_phrase
+    for chip in evidence:
+        low = chip.lower()
+        if any(tok in low for tok in ("affordable", "budget", "good deal", "prix fixe", "happy hour", "inexpensive")):
+            return chip.rstrip(".")
+        if "value" in low and any(tok in low for tok in ("$", "price", "priced", "menu", "cost", "under", "around")):
+            return chip.rstrip(".")
+        if "$" in chip and any(tok in low for tok in ("under", "around", "from", "prix")):
+            return chip.rstrip(".")
+    return None
+
+
 def _compose_text(
     *,
     template_id: str,
@@ -129,87 +195,63 @@ def _compose_text(
     user_query: str,
     rating: Optional[float] = None,
     review_count: Optional[int] = None,
+    price_level: Optional[int] = None,
 ) -> str:
     place = place_name or "This place"
     cuisine_phrase = _normalize_phrase(cuisine)
-    location = _location_phrase(neighborhood)
+    location = _location_area_phrase(neighborhood) or _location_phrase(neighborhood)
     query_low = (user_query or "").lower()
-    is_hidden_gems = intent == "hidden_gems" or "hidden gem" in query_low
-    is_cocktail = intent == "nightlife" or ("cocktail" in query_low and "bar" in query_low)
-    is_value = "value" in query_low or intent == "luxury_value"
+    is_cocktail = category == "bar" or intent == "nightlife" or ("cocktail" in query_low and "bar" in query_low)
+    rating_signal = _rating_phrase(rating, review_count, evidence)
+    editorial_signal = _editorial_phrase(evidence)
+    tag_signal = _tag_or_sentiment_phrase(evidence)
+    value_signal = _value_evidence_phrase(evidence, price_level=price_level)
+    has_michelin_evidence = bool(michelin_status) or any("michelin" in _clean_chip(ev).lower() for ev in evidence)
 
-    # Prefer direct rating/review_count; fall back to scanning evidence chips.
-    if rating is not None:
-        if review_count and int(review_count) > 0:
-            rating_str: Optional[str] = f"a {float(rating):.1f} rating across {int(review_count):,} reviews"
-        else:
-            rating_str = f"a {float(rating):.1f} rating"
-    else:
-        rating_str = None
-        for chip in evidence:
-            low = chip.lower()
-            if "rated" in low or "review" in low:
-                rating_str = chip.rstrip(".")
-                break
-
-    cuisine_low = cuisine_phrase.lower() if cuisine_phrase else None
-    rating_part = f" with {rating_str}" if rating_str else ""
-
-    # Michelin
-    if michelin_status or template_id == "michelin":
+    if has_michelin_evidence and category == "restaurant":
+        loc_part = f" in {location}" if location else ""
+        cuisine_part = f" for {cuisine_phrase.lower()}" if cuisine_phrase else ""
+        rating_part = f", with {rating_signal}" if rating_signal else ""
         star_text = michelin_status or "Michelin-recognized"
-        cuisine_part = f" {cuisine_low}" if cuisine_low else ""
-        loc_part = f" {location}" if location else ""
-        return (
-            f"{place} is a {star_text}{loc_part}{cuisine_part} destination, "
-            f"making it the top splurge option for a Michelin-focused dinner."
-        )
+        return f"{place} is {star_text}{loc_part}{cuisine_part}{rating_part}."
 
-    # Bar / cocktail bar
-    if category == "bar" or is_cocktail:
-        category_label = "cocktail bar" if is_cocktail else "bar"
-        desc = f"{location + ' ' if location else ''}{category_label}"
-        if is_hidden_gems:
-            return (
-                f"{place} is a lower-profile {desc}{rating_part}, "
-                f"making it a strong local find away from tourist-heavy areas."
-            )
-        return f"{place} is a {desc}{rating_part}, making it a reliable nearby drinks option."
-
-    # Restaurant
     if category == "restaurant":
-        type_label = cuisine_low or "restaurant"
-        if is_hidden_gems:
-            spot_label = f"{location + ' ' if location else ''}{cuisine_low + ' ' if cuisine_low else ''}spot"
-            return (
-                f"{place} is a lower-profile {spot_label}{rating_part}, "
-                f"making it a strong local favorite away from tourist-heavy areas."
-            )
-        desc = f"{location + ' ' if location else ''}{type_label}"
-        if is_value:
-            return f"{place} is a {desc}{rating_part}, offering a strong value alternative."
-        return f"{place} is a {desc}{rating_part}, making it a top dining choice."
+        category_phrase = cuisine_phrase.lower() if cuisine_phrase else "restaurant"
+    elif is_cocktail:
+        category_phrase = "cocktail bar"
+    elif category:
+        category_phrase = category.replace("_", " ")
+    else:
+        category_phrase = "place"
 
-    # Hotel
-    if category == "hotel":
-        desc = f"{location + ' ' if location else ''}hotel"
-        return f"{place} is a {desc}{rating_part}, making it a solid accommodation option."
+    evidence_bits: List[str] = []
+    if rating_signal:
+        evidence_bits.append(rating_signal)
+    if value_signal:
+        evidence_bits.append(value_signal)
+    if editorial_signal:
+        evidence_bits.append(editorial_signal)
+    elif tag_signal:
+        evidence_bits.append(tag_signal)
 
-    # Attraction
-    if category == "attraction":
-        type_label = cuisine_low or "attraction"
-        desc = f"{location + ' ' if location else ''}{type_label}"
-        return f"{place} is a {desc}{rating_part}, making it a top draw for this area."
+    base = f"{place}"
+    if location:
+        base = f"{base} in {location}"
+    base = f"{base} is a {category_phrase}"
 
-    # Generic — still anchored to real data when available
-    if rating_str:
-        loc_bit = f" {location}" if location else ""
-        type_bit = f" {cuisine_low}" if cuisine_low else ""
-        return f"{place} is a{loc_bit}{type_bit} option{rating_part}."
-    if location or cuisine_low:
-        parts = [p for p in [location, cuisine_low] if p]
-        return f"{place} is a {' '.join(parts)} option."
-    return f"{place} is a verified place matching this request."
+    if not evidence_bits:
+        return f"{base} with verified listing details."
+
+    seed = sum(ord(c) for c in f"{place}|{category_phrase}|{location or ''}|{rating_signal or ''}") % 3
+    first, rest = evidence_bits[0], evidence_bits[1:]
+    if seed == 0:
+        tail = ", ".join(rest)
+        return f"{base} backed by {first}" + (f" plus {tail}." if tail else ".")
+    if seed == 1:
+        tail = ", ".join(rest)
+        return f"With {first}" + (f" and {tail}, {base}." if tail else f", {base}.")
+    tail = ", ".join(rest)
+    return f"{base}, with {first}" + (f" and {tail}." if tail else ".")
 
 
 def has_concrete_fact(text: str) -> bool:
@@ -231,14 +273,12 @@ def build_why_pick(
     neighborhood: Optional[str] = None,
     cuisine: Optional[str] = None,
     michelin_status: Optional[str] = None,
+    price_level: Optional[int] = None,
     user_query: str = "",
     intent: Optional[str] = None,
 ) -> WhyPickResult:
-    template_id = "michelin" if category == "restaurant" and (
-        michelin_status
-        or intent == "michelin_restaurants"
-        or any("michelin" in _clean_chip(ev).lower() for ev in evidence)
-    ) else _pick_template(evidence, rating, review_count)
+    has_michelin_evidence = bool(michelin_status) or any("michelin" in _clean_chip(ev).lower() for ev in evidence)
+    template_id = "michelin" if category == "restaurant" and has_michelin_evidence else _pick_template(evidence, rating, review_count)
 
     concrete_evidence = list(evidence)
     rating_phrase = _rating_phrase(rating, review_count, concrete_evidence)
@@ -257,6 +297,7 @@ def build_why_pick(
         user_query=user_query,
         rating=rating,
         review_count=review_count,
+        price_level=price_level,
     )
 
     if BANNED_STRINGS_RE.search(text) or GENERIC_PHRASES_RE.search(text):

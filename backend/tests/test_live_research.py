@@ -2608,9 +2608,19 @@ class TestGooglePipelineRegression:
         assert details is not None
         assert (details.category_label or "").lower() == "restaurant"
         why = (details.why_pick or "").lower()
-        assert "value" in why
+        assert "value" not in why
         for forbidden in ("cocktail", "drinks", "nightlife", "night-out"):
             assert forbidden not in why
+
+    def test_reason_validation_rejects_venue_name_contamination(self):
+        reason, source = _validate_or_fallback_reason(
+            "Kumiko in West Loop is a cocktail bar with a 4.7 rating across 1,200 reviews.",
+            category="bar",
+            own_name="The Aviary",
+            known_candidate_names=["The Aviary", "Kumiko"],
+        )
+        assert source == "fallback"
+        assert "selected for this bar request" in reason.lower()
 
     def test_unknown_google_types_do_not_fallback_to_candidate_generic_restaurant_label(self):
         candidate = SimpleNamespace(cuisine="Restaurant", category="Food")

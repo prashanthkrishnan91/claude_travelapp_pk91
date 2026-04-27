@@ -106,7 +106,7 @@ def test_hidden_gem_and_michelin_reasons_include_concrete_fields():
     hidden = hidden_text.lower()
     assert "rating" in hidden or "review" in hidden, f"No rating/review in: {hidden_text!r}"
     assert "logan square" in hidden, f"No location in: {hidden_text!r}"
-    assert "lower-profile" in hidden, f"Missing hidden-gem framing: {hidden_text!r}"
+    assert "restaurant" in hidden or "midwestern" in hidden, f"Missing category cue: {hidden_text!r}"
 
     michelin_text = build_why_pick(
         place_name="Alinea",
@@ -123,7 +123,7 @@ def test_hidden_gem_and_michelin_reasons_include_concrete_fields():
     michelin = michelin_text.lower()
     assert "michelin" in michelin, f"No Michelin mention in: {michelin_text!r}"
     assert "lincoln park" in michelin, f"No location in: {michelin_text!r}"
-    assert "destination" in michelin, f"Missing destination framing: {michelin_text!r}"
+    assert "4.6 rating across 1,900 reviews" in michelin_text, f"Missing concrete rating evidence: {michelin_text!r}"
 
 
 def test_why_pick_cocktail_bar_output_quality():
@@ -162,8 +162,91 @@ def test_why_pick_value_restaurant_output_quality():
     assert "4.6" in text, f"Rating missing: {text!r}"
     assert "river north" in low, f"Neighbourhood missing: {text!r}"
     assert "french brasserie" in low, f"Cuisine missing: {text!r}"
+    assert "value" not in low, "Value phrasing should not appear without explicit value/price evidence"
     for phrase in _BLOCKED_GENERIC:
         assert phrase not in low, f"Blocked phrase {phrase!r} found in: {text!r}"
+
+
+def test_two_cocktail_bars_with_different_evidence_have_distinct_why_pick_wording():
+    first = build_why_pick(
+        place_name="The Drifter",
+        evidence=["Mentioned in Eater Chicago cocktail lists"],
+        rating=4.4,
+        review_count=826,
+        category="bar",
+        neighborhood="River North",
+        user_query="cocktail bars in chicago",
+        intent="nightlife",
+    )["why_pick"]["text"]
+    second = build_why_pick(
+        place_name="Kumiko",
+        evidence=["Foursquare tags: omakase cocktails, reservation-only"],
+        rating=4.8,
+        review_count=1210,
+        category="bar",
+        neighborhood="West Loop",
+        user_query="cocktail bars in chicago",
+        intent="nightlife",
+    )["why_pick"]["text"]
+    assert first != second
+    assert "eater chicago cocktail lists" in first.lower()
+    assert "foursquare tags" in second.lower()
+
+
+def test_michelin_wording_requires_michelin_evidence():
+    no_michelin = build_why_pick(
+        place_name="Boka",
+        evidence=["Rated 4.7 (3,100 reviews)"],
+        rating=4.7,
+        review_count=3100,
+        category="restaurant",
+        cuisine="American",
+        neighborhood="Lincoln Park",
+        user_query="michelin restaurants in chicago",
+        intent="michelin_restaurants",
+    )["why_pick"]["text"]
+    yes_michelin = build_why_pick(
+        place_name="Smyth",
+        evidence=["Rated 4.7 (1,400 reviews)", "Listed in Michelin Guide Chicago"],
+        rating=4.7,
+        review_count=1400,
+        category="restaurant",
+        cuisine="Tasting menu",
+        neighborhood="West Loop",
+        user_query="michelin restaurants in chicago",
+        intent="michelin_restaurants",
+    )["why_pick"]["text"]
+    assert "michelin" not in no_michelin.lower()
+    assert "michelin" in yes_michelin.lower()
+
+
+def test_value_wording_requires_explicit_value_or_price_evidence():
+    with_value = build_why_pick(
+        place_name="Maman Zari",
+        evidence=["Value tasting menu around $90"],
+        rating=4.6,
+        review_count=640,
+        category="restaurant",
+        cuisine="Persian",
+        neighborhood="Albany Park",
+        user_query="best value dinner",
+        intent="luxury_value",
+        price_level=2,
+    )["why_pick"]["text"]
+    no_value = build_why_pick(
+        place_name="Pizzeria Portofino",
+        evidence=["Rated 4.8 (15,718 reviews)"],
+        rating=4.8,
+        review_count=15718,
+        category="restaurant",
+        cuisine="Italian",
+        neighborhood="Riverwalk",
+        user_query="best value dinner",
+        intent="luxury_value",
+        price_level=4,
+    )["why_pick"]["text"]
+    assert "value" in with_value.lower() or "inexpensive pricing" in with_value.lower() or "moderate pricing" in with_value.lower()
+    assert "value" not in no_value.lower()
 
 
 def test_why_pick_no_generic_fallback_when_data_exists():
@@ -188,3 +271,18 @@ def test_why_pick_no_generic_fallback_when_data_exists():
         assert _has_concrete_data_signal(text), f"No concrete signal in: {text!r}"
         for phrase in _BLOCKED_GENERIC:
             assert phrase not in text.lower(), f"Blocked phrase {phrase!r} in: {text!r}"
+
+
+def test_fallback_generic_phrases_are_blocked_by_guard():
+    text = build_why_pick(
+        place_name="Fallback Check",
+        evidence=[],
+        rating=None,
+        review_count=None,
+        category="bar",
+        neighborhood=None,
+        user_query="best bars",
+    )["why_pick"]["text"]
+    low = text.lower()
+    assert "selected for this bar request" not in low
+    assert "a strong pick for well-reviewed" not in low
