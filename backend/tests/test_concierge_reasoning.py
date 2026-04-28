@@ -159,10 +159,16 @@ def test_why_pick_value_restaurant_output_quality():
         intent="luxury_value",
     )["why_pick"]["text"]
     low = text.lower()
-    assert "4.6" in text, f"Rating missing: {text!r}"
+    # Per the new spec, raw rating number may not appear as the main anchor —
+    # neighbourhood and cuisine must anchor the sentence; rating is supporting signal.
     assert "river north" in low, f"Neighbourhood missing: {text!r}"
     assert "french brasserie" in low, f"Cuisine missing: {text!r}"
     assert "value" not in low, "Value phrasing should not appear without explicit value/price evidence"
+    # Must not be a bare rating-only template sentence
+    assert not re.search(
+        r"^A (?:top-rated|verified) restaurant with \d|^[Ww]ith\s+\d+[\.,]\d+\s+rating",
+        text,
+    ), f"Bare rating template found: {text!r}"
     for phrase in _BLOCKED_GENERIC:
         assert phrase not in low, f"Blocked phrase {phrase!r} found in: {text!r}"
 
