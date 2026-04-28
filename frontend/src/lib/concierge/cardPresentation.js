@@ -1,4 +1,4 @@
-const FALLBACK_REASON = "Selected because available place details match this request.";
+const FALLBACK_REASON = "A well-regarded local pick with verified listing details.";
 
 export function splitReason(text) {
   const clean = String(text ?? "")
@@ -43,7 +43,7 @@ export function sanitizeWhyPick(rawReason, title, allPlaceTitles) {
   const reason = splitReason(rawReason).short;
   const normalizedReason = reason.toLowerCase();
   if (containsAddressSignal(reason)) return FALLBACK_REASON;
-  if (/(backed by rated|with rated)/i.test(reason)) return FALLBACK_REASON;
+  if (/(backed by|available evidence|selected for this|verified restaurant details|verified drinks-focused|verified place details|with rated)/i.test(reason)) return FALLBACK_REASON;
   if (GENERIC_PHRASES_RE.test(reason)) return FALLBACK_REASON;
   const hasOtherVenueName = (allPlaceTitles || [])
     .filter((candidate) => normalizeTitle(candidate) !== normalizeTitle(title))

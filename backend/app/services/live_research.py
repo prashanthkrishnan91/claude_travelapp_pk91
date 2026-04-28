@@ -141,6 +141,7 @@ _GENERIC_REASON_PATTERNS = (
     re.compile(r"\bgreat fit for (this trip|your trip)\b", re.IGNORECASE),
     re.compile(r"\bmatches your request\b", re.IGNORECASE),
     re.compile(r"\bfits your request\b", re.IGNORECASE),
+    re.compile(r"\bbacked by\b", re.IGNORECASE),
 )
 _RAW_URL_PAT = re.compile(r"https?://", re.IGNORECASE)
 _MARKDOWN_LIST_PAT = re.compile(r"^\s*(?:[-*]|\d{1,3}[.)])\s+", re.MULTILINE)
@@ -1174,40 +1175,22 @@ def _reason_guard(reason: str, own_name: str, known_candidate_names: List[str]) 
 #   • Stay one short, polished sentence.
 
 _CATEGORY_FALLBACK_REASON = {
-    "restaurant": "Selected for this dining request based on verified restaurant details and available evidence.",
-    "bar": "Selected for this bar request based on verified drinks-focused details and available evidence.",
-    "cafe": "A strong pick for coffee, casual atmosphere, and consistently positive guest feedback.",
-    "hotel": "A strong pick for location, comfort, and consistently positive guest feedback.",
-    "attraction": "Selected for this attraction request based on verified place details and available evidence.",
-    "place": "Selected for this request based on verified place details and available evidence.",
+    "restaurant": "A well-regarded dining option with verified Google listing.",
+    "bar": "A verified cocktail bar with consistent guest ratings.",
+    "cafe": "A reliable spot for coffee and a relaxed setting.",
+    "hotel": "A well-located stay with positive guest ratings.",
+    "attraction": "A popular local attraction with verified listing details.",
+    "place": "A verified local pick with strong Google signals.",
 }
 
-_CATEGORY_REASON_TEMPLATES = {
-    "restaurant": {
-        "premium": "A standout pick for polished plates, attentive service, and consistently strong diner feedback.",
-        "good": "A reliable choice for well-reviewed food and a comfortable dining setting.",
-    },
-    "bar": {
-        "premium": "A standout pick for crafted cocktails, lively atmosphere, and a buzzing late-night crowd.",
-        "good": "Selected as a bar option based on verified details and available evidence.",
-    },
-    "cafe": {
-        "premium": "A standout cafe for quality coffee, a relaxed setting, and warm guest feedback.",
-        "good": "A solid choice for a casual coffee stop with consistently positive reviews.",
-    },
-    "hotel": {
-        "premium": "A standout stay for location, comfort, and consistently glowing guest reviews.",
-        "good": "A reliable choice for a comfortable stay with positive guest feedback.",
-    },
-    "attraction": {
-        "premium": "A standout local choice with strong guest feedback for this kind of trip plan.",
-        "good": "A solid choice with positive reviews and good fit for this trip plan.",
-    },
-    "place": {
-        "premium": "A standout local choice with strong guest feedback for this kind of trip plan.",
-        "good": "A solid choice with positive reviews and good fit for this trip plan.",
-    },
-}
+_BANNED_REASON_FRAGMENTS = (
+    "backed by",
+    "available evidence",
+    "selected for this",
+    "verified restaurant details",
+    "verified drinks-focused",
+    "verified place details",
+)
 
 _CATEGORY_LEAD_NOUN = {
     "restaurant": "restaurant",
@@ -1336,6 +1319,16 @@ def _safe_google_only_reason(
     return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"])
 
 
+def _enforce_reason_fragments(reason: str, *, category: str) -> str:
+    text = (reason or "").strip()
+    if not text:
+        return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"])
+    low = text.lower()
+    if any(fragment in low for fragment in _BANNED_REASON_FRAGMENTS):
+        return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"])
+    return text
+
+
 def _validate_or_fallback_reason(
     reason_text: str,
     *,
@@ -1355,6 +1348,7 @@ def _validate_or_fallback_reason(
         reason = first_sentence + "."
     else:
         reason = first_sentence
+    reason = _enforce_reason_fragments(reason, category=category)
     if not _reason_guard(reason, own_name, known_candidate_names):
         return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"]), "fallback"
     if _category_intent_mismatch(reason, category):
@@ -1453,6 +1447,7 @@ def build_place_reason(
         candidate_reason = ". ".join(bits) + "."
     else:
         candidate_reason = _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"])
+    candidate_reason = _enforce_reason_fragments(candidate_reason, category=category)
     if not _reason_guard(candidate_reason, name, known_candidate_names or []):
         return _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"]), "fallback"
     if _category_intent_mismatch(candidate_reason, category):
@@ -1513,7 +1508,7 @@ def _build_supporting_details(
     )
     details.category_label = _category_label(category, venue)
     if why_pick:
-        details.why_pick = why_pick
+        details.why_pick = _enforce_reason_fragments(str(why_pick), category=category)
     return details
 
 
