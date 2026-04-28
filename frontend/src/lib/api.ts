@@ -1386,6 +1386,39 @@ export async function fetchConciergeMessages(tripId: string): Promise<ConciergeM
   return apiFetch<ConciergeMessage[]>(`/ai/concierge/${tripId}/messages`);
 }
 
+// [DEV-ONLY] Debug trace for the AI Concierge pipeline
+export interface ConciergeDebugTrace {
+  summary: {
+    rawCandidateCount: number;
+    dedupedCandidateCount: number;
+    googleMatchedCount: number;
+    rejectedCountByReason: Record<string, number>;
+    finalAddableCount: number;
+    researchOnlyCount: number;
+    whyPickSourceDistribution: Record<string, number>;
+  };
+  parsedIntent: string;
+  searchQueries: string[];
+  rawCandidates: string[];
+  dedupedCandidates: string[];
+  googleVerification: Record<string, unknown>;
+  rejectionReasons: unknown[];
+  finalAddableCards: unknown[];
+  finalDisplayPayload: unknown;
+  cacheStatus: { hit: boolean; key: string | null };
+}
+
+export async function callConciergeDebugTrace(
+  userQuery: string,
+  location: string,
+  limit = 10
+): Promise<ConciergeDebugTrace> {
+  return apiFetch<ConciergeDebugTrace>("/ai/concierge/debug-trace", {
+    method: "POST",
+    body: JSON.stringify({ user_query: userQuery, location, limit }),
+  });
+}
+
 export async function clearConciergeCache(
   tripId: string,
   destination?: string | null

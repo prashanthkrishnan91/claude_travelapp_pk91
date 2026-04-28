@@ -300,6 +300,13 @@ class ConciergeSearchResponse(BaseModel):
     warnings: List[str] = []
 
 
+class ConciergeDebugRequest(BaseModel):
+    """[DEV-ONLY] Request model for the concierge debug-trace endpoint."""
+    user_query: str
+    location: str
+    limit: int = 10
+
+
 class ConciergeMessage(BaseModel):
     id: UUID
     trip_id: UUID

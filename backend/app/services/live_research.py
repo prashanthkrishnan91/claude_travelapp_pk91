@@ -3367,6 +3367,7 @@ class LiveResearchService:
         destination: str,
         user_query: str,
         dates: Optional[str] = None,
+        _debug_out: Optional[Dict] = None,
     ) -> LiveResearchResult:
         if not self._enabled or intent not in _LIVE_ENABLED_INTENTS or not destination:
             return LiveResearchResult()
@@ -3387,13 +3388,21 @@ class LiveResearchService:
             payload = self._payload_to_result(cached)
             if payload is not None:
                 payload.cached = True
+                if _debug_out is not None:
+                    _debug_out["cache_hit"] = True
+                    _debug_out["cache_key"] = cache_key
                 return payload
         logger.info("live_research_cache miss key=%s", cache_key)
+        if _debug_out is not None:
+            _debug_out["cache_hit"] = False
+            _debug_out["cache_key"] = cache_key
 
         if not self._provider.available or isinstance(self._provider, _NoopProvider):
             return LiveResearchResult()
 
         query = _build_search_query(intent, destination, user_query)
+        if _debug_out is not None:
+            _debug_out["search_queries"] = [query]
         try:
             hits = self._provider.search(query, max_results=self._max_results)
         except Exception as exc:  # pragma: no cover — defensive
@@ -3438,6 +3447,9 @@ class LiveResearchService:
                     norm, h.snippet, destination
                 )
         raw_candidate_count = len(candidate_names)
+        if _debug_out is not None:
+            _debug_out["raw_candidates"] = list(candidate_names)
+            _debug_out["raw_candidate_count"] = raw_candidate_count
 
         for norm in candidate_names[:MAX_VERIFICATION_CANDIDATES]:
             low = norm.lower()
@@ -3536,6 +3548,15 @@ class LiveResearchService:
                     if len(candidate_neighborhoods) >= 8:
                         break
 
+            if _debug_out is not None:
+                _debug_out["deduped_candidates"] = list(candidate_neighborhoods.keys())
+                _debug_out["deduped_candidate_count"] = len(candidate_neighborhoods)
+                if "search_queries" in _debug_out:
+                    _debug_out["search_queries"] = (
+                        _debug_out["search_queries"]
+                        + _google_fallback_queries(intent, destination, user_query)
+                    )
+
             for low, neighborhood in list(candidate_neighborhoods.items())[:MAX_VERIFICATION_CANDIDATES]:
                 display_name = display_for_low.get(low, low)
                 try:
@@ -3594,6 +3615,21 @@ class LiveResearchService:
                         neighborhood=gv.formatted_address,
                         reason="Google Places operational match",
                     )
+
+            if _debug_out is not None:
+                _debug_out["google_verification"] = {
+                    name: {
+                        "confidence": gv.confidence,
+                        "matched": gv.matched,
+                        "is_operational": gv.is_operational,
+                        "is_closed": gv.is_closed,
+                        "place_id": gv.provider_place_id,
+                        "display_name": gv.name,
+                        "formatted_address": gv.formatted_address,
+                        "types": getattr(gv, "types", []),
+                    }
+                    for name, gv in google_verifications.items()
+                }
         # ── /Phase 3 ──────────────────────────────────────────────────────────
         elif self._require_google_verification:
             logger.warning(
@@ -3675,6 +3711,27 @@ class LiveResearchService:
                 rejected_no_match + rejected_low_confidence,
                 final_verified_count,
             )
+            if _debug_out is not None:
+                _debug_out["google_matched_count"] = google_verified_count
+                _debug_out["rejection_reasons"] = {
+                    "closed": rejected_closed,
+                    "no_match": rejected_no_match,
+                    "low_confidence": rejected_low_confidence,
+                }
+                _debug_out["rejection_details"] = [
+                    {
+                        "name": name,
+                        "reason": (
+                            "closed" if gv.is_closed
+                            else "no_match" if not gv.matched
+                            else "low_confidence" if not _google_is_addable(gv)
+                            else "accepted"
+                        ),
+                        "confidence": gv.confidence,
+                        "is_operational": gv.is_operational,
+                    }
+                    for name, gv in google_verifications.items()
+                ]
         logger.info(
             "final_results: addable=%d research_sources=%d",
             final_verified_count,
