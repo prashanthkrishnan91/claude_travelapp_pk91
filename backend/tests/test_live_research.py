@@ -3337,3 +3337,291 @@ def test_supporting_details_why_pick_is_sanitized_when_upstream_reason_contains_
     low = (details.why_pick or "").lower()
     for fragment in _BANNED_REASON_FRAGMENTS:
         assert fragment not in low
+
+
+# ── Candidate extraction underfill fix — acceptance tests ─────────────────────
+
+def _make_google_stub(mapping):
+    """Return a minimal GooglePlacesService-like stub from a {name_lower: gv} map."""
+    class _Stub:
+        available = True
+
+        def verify(self, name, destination, neighborhood=None, intent=None):
+            return mapping.get(
+                (name or "").lower().strip(),
+                GooglePlaceVerification(confidence="unknown", failure_reason="not_found"),
+            )
+
+        def clear_cache_for_destination(self, destination):
+            return 0
+
+    return _Stub()
+
+
+def _make_svc(hits, google_map):
+    return LiveResearchService(
+        provider=StubLiveSearchProvider(hits),
+        cache=_TTLCache(0),
+        verification_cache=_TTLCache(0),
+        enabled=True,
+        place_verifier=_make_google_stub(google_map),
+    )
+
+
+class TestCandidateExtractionUnderfillFixes:
+    """Acceptance tests for the bar candidate extraction / Google matching fix."""
+
+    def test_cocktail_bars_chicago_produces_more_than_two_addable_cards(self):
+        """When Google Places returns valid operational cocktail bars for Chicago,
+        the pipeline must surface >2 addable cards.
+
+        This mirrors the real 'cocktail bars in Chicago' debug trace failure where
+        only 2 cards were returned despite 9 raw candidates.
+        """
+        # Simulate The Infatuation listicle with full numbered content in raw field.
+        article = LiveSearchHit(
+            title="The 22 Best Cocktail Bars In Chicago — The Infatuation",
+            url="https://www.theinfatuation.com/chicago/guides/best-cocktail-bars-chicago",
+            snippet="Our picks for the best cocktail bars in Chicago this year.",
+            provider="Tavily",
+            raw={
+                "content": (
+                    "1. Punch House — Bridgeport basement bar with seasonal cocktails.\n"
+                    "2. Kumiko — West Loop Japanese-inspired cocktail bar.\n"
+                    "3. Billy Sunday — Logan Square inventive cocktails.\n"
+                    "4. The Aviary — Fulton Market avant-garde cocktail experience.\n"
+                    "5. Lost Lake — Tiki bar in Logan Square.\n"
+                )
+            },
+        )
+        google_map = {
+            "punch house": GooglePlaceVerification(
+                provider_place_id="gp-punch",
+                name="Punch House",
+                formatted_address="1227 W 18th St, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                types=["cocktail_bar", "bar"],
+                rating=4.6,
+                user_rating_count=1300,
+            ),
+            "kumiko": GooglePlaceVerification(
+                provider_place_id="gp-kumiko",
+                name="Kumiko",
+                formatted_address="630 W Lake St, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                types=["cocktail_bar", "bar"],
+                rating=4.7,
+                user_rating_count=1200,
+            ),
+            "billy sunday": GooglePlaceVerification(
+                provider_place_id="gp-billy",
+                name="Billy Sunday",
+                formatted_address="3143 W Logan Blvd, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                types=["bar"],
+                rating=4.5,
+                user_rating_count=800,
+            ),
+            "the aviary": GooglePlaceVerification(
+                provider_place_id="gp-aviary",
+                name="The Aviary",
+                formatted_address="955 W Fulton Market, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                types=["bar"],
+                rating=4.6,
+                user_rating_count=900,
+            ),
+            "lost lake": GooglePlaceVerification(
+                provider_place_id="gp-lost",
+                name="Lost Lake",
+                formatted_address="3154 W Diversey Ave, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                types=["bar"],
+                rating=4.5,
+                user_rating_count=700,
+            ),
+        }
+        svc = _make_svc([article], google_map)
+        result = svc.fetch(
+            intent=INTENT_NIGHTLIFE,
+            destination="Chicago",
+            user_query="cocktail bars in Chicago",
+        )
+        assert len(result.restaurants) > 2, (
+            f"Expected >2 addable bars, got {len(result.restaurants)}: "
+            f"{[r.name for r in result.restaurants]}"
+        )
+        assert all(
+            r.google_verification and r.google_verification.business_status == "OPERATIONAL"
+            for r in result.restaurants
+        )
+
+    def test_infatuation_listicle_produces_venues_discovered_gt_zero(self):
+        """When The Infatuation article provides a numbered list via raw content,
+        venuesDiscovered on the research source must be > 0 after Google gate.
+        """
+        article = LiveSearchHit(
+            title="The 22 Best Cocktail Bars In Chicago — The Infatuation",
+            url="https://www.theinfatuation.com/chicago/guides/best-cocktail-bars-chicago",
+            snippet="Best cocktail bars in Chicago.",
+            provider="Tavily",
+            raw={
+                "content": (
+                    "1. Punch House — Bridgeport basement cocktail bar in Chicago.\n"
+                    "2. Kumiko — West Loop cocktail bar.\n"
+                )
+            },
+        )
+        google_map = {
+            "punch house": GooglePlaceVerification(
+                provider_place_id="gp-punch",
+                name="Punch House",
+                formatted_address="1227 W 18th St, Chicago, IL",
+                business_status="OPERATIONAL",
+                confidence="high",
+                types=["cocktail_bar", "bar"],
+            ),
+        }
+        out = normalize_hits(
+            [article],
+            intent=INTENT_NIGHTLIFE,
+            destination="Chicago",
+            user_query="cocktail bars",
+            verified_candidates={
+                "punch house": VerificationResult(
+                    verified=True,
+                    source_url="https://www.yelp.com/biz/punch-house",
+                    neighborhood="Bridgeport",
+                )
+            },
+            google_verifications={"punch house": google_map["punch house"]},
+        )
+        assert any(r.name.lower() == "punch house" for r in out["restaurants"]), (
+            "Punch House must be promoted to addable"
+        )
+        article_sources = [
+            s for s in out.get("research_sources", [])
+            if "theinfatuation" in (s.source_url or "")
+        ]
+        for src in article_sources:
+            assert src.venues_discovered >= 1, (
+                f"Infatuation source venues_discovered={src.venues_discovered}, expected >=1"
+            )
+
+    def test_broken_shaker_alias_accepted_when_google_returns_longer_name(self):
+        """'Broken Shaker' → 'Broken Shaker at Freehand Chicago' must be accepted
+        when Google returns bar/cocktail_bar types and the address is in Chicago.
+        """
+        from app.services.google_places import GooglePlacesService
+
+        class _Client:
+            available = True
+
+            def text_search(self, query):
+                return [
+                    {
+                        "id": "gp-broken-shaker",
+                        "displayName": {"text": "Broken Shaker at Freehand Chicago"},
+                        "formattedAddress": "19 W Ohio St, Chicago, IL 60654",
+                        "businessStatus": "OPERATIONAL",
+                        "types": ["cocktail_bar", "bar", "establishment"],
+                        "rating": 4.4,
+                        "userRatingCount": 620,
+                        "googleMapsUri": "https://maps.google.com/?cid=123",
+                    }
+                ]
+
+        svc = GooglePlacesService(client=_Client())
+        result = svc.verify("Broken Shaker", "Chicago", intent=INTENT_NIGHTLIFE)
+        assert result.matched, (
+            f"Broken Shaker should match 'Broken Shaker at Freehand Chicago'; "
+            f"confidence={result.confidence} failure={result.failure_reason}"
+        )
+        assert result.is_operational
+        assert result.confidence in {"high", "medium"}, (
+            f"Expected high/medium confidence, got {result.confidence}"
+        )
+
+    def test_junk_candidates_not_accepted_as_cocktail_bars(self):
+        """Junk names from article extraction must be rejected by Google or
+        filtered before Google verification.
+        """
+        junk_names = ["Anne Wilson", "Opera of Chicago", "Lime Painting"]
+        for junk in junk_names:
+            gv = GooglePlaceVerification(
+                provider_place_id=None,
+                name=junk,
+                business_status="OPERATIONAL",
+                confidence="low",
+                failure_reason="non_venue_types",
+                types=["theater", "performing_arts"],
+            )
+            assert not gv.matched or not (gv.confidence in {"high", "medium"}), (
+                f"Junk candidate '{junk}' should not be addable"
+            )
+
+        # Also assert slash-merged names are filtered by _is_obvious_non_venue
+        from app.services.live_research import _is_obvious_non_venue
+        assert _is_obvious_non_venue("Something Fancy / Chicago Athletic Association", "Chicago")
+        assert _is_obvious_non_venue("Opera of Chicago / Anne Wilson", "Chicago")
+        assert not _is_obvious_non_venue("Punch House", "Chicago")
+        assert not _is_obvious_non_venue("Broken Shaker", "Chicago")
+
+    def test_closed_violet_hour_remains_rejected(self):
+        """The Violet Hour (closed) must never appear as an addable card."""
+        from app.services.google_places import GooglePlacesService
+
+        class _Client:
+            available = True
+
+            def text_search(self, query):
+                return [
+                    {
+                        "id": "gp-violet-hour",
+                        "displayName": {"text": "The Violet Hour"},
+                        "formattedAddress": "1520 N Damen Ave, Chicago, IL",
+                        "businessStatus": "CLOSED_PERMANENTLY",
+                        "types": ["cocktail_bar", "bar"],
+                        "rating": 4.7,
+                        "userRatingCount": 2100,
+                    }
+                ]
+
+        svc = GooglePlacesService(client=_Client())
+        result = svc.verify("The Violet Hour", "Chicago", intent=INTENT_NIGHTLIFE)
+        assert result.is_closed, "Closed venue must be flagged is_closed=True"
+        assert not result.is_operational
+        from app.services.google_places import is_addable
+        assert not is_addable(result), "Closed venues must not be addable"
+
+    def test_single_word_lime_does_not_match_unrelated_business(self):
+        """Single-word ambiguous candidate 'Lime' must not alias-match
+        to 'Lime Painting' or any unrelated business (alias fix requires ≥2 tokens).
+        """
+        from app.services.google_places import GooglePlacesService
+
+        class _Client:
+            available = True
+
+            def text_search(self, query):
+                return [
+                    {
+                        "id": "gp-lime-painting",
+                        "displayName": {"text": "Lime Painting"},
+                        "formattedAddress": "123 Fake St, Chicago, IL",
+                        "businessStatus": "OPERATIONAL",
+                        "types": ["painting_contractor", "establishment"],
+                    }
+                ]
+
+        svc = GooglePlacesService(client=_Client())
+        result = svc.verify("Lime", "Chicago", intent=INTENT_NIGHTLIFE)
+        # "Lime" alone should not match "Lime Painting" as a bar
+        assert not (result.matched and result.confidence in {"high", "medium"}), (
+            "Single-word 'Lime' must not alias-match 'Lime Painting' as a bar"
+        )

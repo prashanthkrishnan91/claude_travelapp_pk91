@@ -197,6 +197,9 @@ _PLACE_PLATFORM_HINT = re.compile(
 MAX_VERIFICATION_CANDIDATES: int = 40
 MIN_ADDABLE_RESULTS: int = 5
 RESEARCH_SUPPRESS_THRESHOLD: int = 3
+# Minimum raw candidates to accumulate before skipping Google direct fallback.
+# Set high so the fallback always supplements Tavily article extraction.
+_GOOGLE_DIRECT_MIN_CANDIDATES: int = 25
 
 _PLACE_INTENT_MIN_RESULTS = {
     INTENT_NIGHTLIFE,
@@ -2289,6 +2292,11 @@ def _is_obvious_non_venue(name: str, destination: str) -> bool:
         return True
     if destination and low == destination.lower():
         return True
+    # Merged title artifact: "Something Fancy / Another Venue" — the slash
+    # indicates two article titles or venue names were glued together during
+    # extraction and the result is not a real venue name.
+    if " / " in name:
+        return True
     words = low.split()
     if not words:
         return True
@@ -2944,12 +2952,14 @@ def normalize_hits(
         if classification != "venue_place":
             # For article/listicle hits attempt to extract real venue names first.
             if classification == "article_listicle_blog_directory":
-                extracted_with_rank = _extract_venue_names_with_rank(hit.snippet)
                 source_text = "\n".join(_iter_hit_source_fragments(hit))
+                # Prefer full article body over the short snippet so numbered
+                # listicle entries absent from the Tavily preview are extracted.
+                extracted_with_rank = _extract_venue_names_with_rank(source_text or hit.snippet)
                 for candidate, cand_rank in extracted_with_rank:
                     is_valid, normalized_candidate, _evidence = _validate_venue_candidate(
                         candidate,
-                        combined,
+                        source_text or combined,
                         intent=intent,
                         destination=destination,
                         title=title,
@@ -3418,6 +3428,7 @@ class LiveResearchService:
         candidate_names: List[str] = []
         seen_lower: set = set()
         candidate_neighborhoods: Dict[str, Optional[str]] = {}
+        candidate_source_map: Dict[str, str] = {}  # name_lower → source label
         extracted_candidate_count = 0
         direct_candidate_count = 0
         for h in hits:
@@ -3429,7 +3440,11 @@ class LiveResearchService:
                 destination=destination,
             ) != "article_listicle_blog_directory":
                 continue
-            for raw_name in _extract_venue_names_from_text(h.snippet):
+            # Use all available content (snippet + raw article body) so numbered
+            # listicle items that are absent from the short Tavily snippet are
+            # still extracted from the full article content field when present.
+            _full_text = "\n".join(f for f in _iter_hit_source_fragments(h) if f)
+            for raw_name in _extract_venue_names_from_text(_full_text):
                 norm = _recover_candidate_name(raw_name)
                 if not norm:
                     continue
@@ -3444,8 +3459,9 @@ class LiveResearchService:
                 candidate_names.append(norm)
                 extracted_candidate_count += 1
                 candidate_neighborhoods[low] = _extract_candidate_neighborhood(
-                    norm, h.snippet, destination
+                    norm, _full_text, destination
                 )
+                candidate_source_map[low] = "tavily_article_extract"
         raw_candidate_count = len(candidate_names)
         if _debug_out is not None:
             _debug_out["raw_candidates"] = list(candidate_names)
@@ -3516,6 +3532,7 @@ class LiveResearchService:
                 )
                 direct_candidate_count += 1
                 display_for_low.setdefault(low, direct_name)
+                candidate_source_map.setdefault(low, "tavily_search_result")
 
             logger.info(
                 "live_research candidates: extracted=%d direct=%d deduped=%d",
@@ -3524,7 +3541,7 @@ class LiveResearchService:
                 len(candidate_neighborhoods),
             )
 
-            if _is_place_intent(intent) and len(candidate_neighborhoods) < max(MIN_ADDABLE_RESULTS, 8):
+            if _is_place_intent(intent) and len(candidate_neighborhoods) < _GOOGLE_DIRECT_MIN_CANDIDATES:
                 verifier_client = getattr(self._place_verifier, "_client", None)
                 if verifier_client is None or not hasattr(verifier_client, "text_search"):
                     verifier_client = None
@@ -3545,12 +3562,17 @@ class LiveResearchService:
                             continue
                         candidate_neighborhoods[low] = place.get("formattedAddress")
                         display_for_low.setdefault(low, display_name)
-                    if len(candidate_neighborhoods) >= 8:
+                        candidate_source_map.setdefault(low, "google_direct")
+                    if len(candidate_neighborhoods) >= _GOOGLE_DIRECT_MIN_CANDIDATES:
                         break
 
             if _debug_out is not None:
                 _debug_out["deduped_candidates"] = list(candidate_neighborhoods.keys())
                 _debug_out["deduped_candidate_count"] = len(candidate_neighborhoods)
+                _debug_out["candidate_sources"] = {
+                    name: candidate_source_map.get(name, "unknown")
+                    for name in candidate_neighborhoods
+                }
                 if "search_queries" in _debug_out:
                     _debug_out["search_queries"] = (
                         _debug_out["search_queries"]
@@ -3729,6 +3751,7 @@ class LiveResearchService:
                         ),
                         "confidence": gv.confidence,
                         "is_operational": gv.is_operational,
+                        "source": candidate_source_map.get(name, "unknown"),
                     }
                     for name, gv in google_verifications.items()
                 ]

@@ -550,6 +550,8 @@ class GooglePlacesService:
                 name = name.get("text", "")
             name = (name or "").strip()
             similarity = _name_similarity(candidate, name)
+            candidate_tokens = _token_set(candidate)
+            result_tokens = _token_set(name)
 
             formatted_address = (place.get("formattedAddress") or "").strip()
             norm_formatted_address = _normalize_name(formatted_address)
@@ -579,6 +581,32 @@ class GooglePlacesService:
                 elif address_evidence and similarity < _NAME_WITH_ADDRESS_MIN_SIMILARITY:
                     failure_reason = "weak_name_match"
                     reason = "Name match is weak even with location evidence."
+
+                # Alias subset override: "Broken Shaker" ⊆ "Broken Shaker at Freehand
+                # Chicago". When the candidate's tokens are a strict subset of the
+                # Google result's tokens (small extension only), the result has
+                # bar/venue-compatible types, and the address corroborates the
+                # location, accept at medium confidence rather than rejecting for
+                # weak name match. Requires ≥2 candidate tokens to prevent single-
+                # word junk like "Lime" from matching unrelated businesses.
+                if (
+                    failure_reason == "weak_name_match"
+                    and candidate_tokens
+                    and len(candidate_tokens) >= 2
+                    and candidate_tokens.issubset(result_tokens)
+                    and len(result_tokens - candidate_tokens) <= 4
+                    and address_evidence
+                    and any(
+                        t in (types or [])
+                        for t in (
+                            "cocktail_bar", "bar", "night_club", "restaurant",
+                            "food", "establishment", "point_of_interest",
+                        )
+                    )
+                ):
+                    failure_reason = None
+                    reason = "Candidate is a shortened form of this verified place name."
+                    similarity = max(similarity, 0.76)
 
                 # Reject hotel-typed matches when the candidate isn't itself a
                 # hotel and the article didn't reference one — avoids matching
