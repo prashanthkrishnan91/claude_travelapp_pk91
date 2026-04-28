@@ -293,6 +293,55 @@ def _build_nightlife_display_why(
     return f"A {cat} with strong Google presence, a consistent nightlife option."[:150]
 
 
+def _build_cuisine_restaurant_display_why(
+    *,
+    cuisine: str,
+    loc: Optional[str] = None,
+    rating: Optional[float] = None,
+    review_count: Optional[int] = None,
+) -> str:
+    """Premium deterministic concierge copy for cuisine-specific restaurant cards (D).
+
+    ``loc`` must be a pre-validated area-level neighborhood (never a full address,
+    never the place's own name). Uses volume/quality signals; never bare rating template.
+    """
+    cat = cuisine.lower()
+    if not cat.endswith("restaurant"):
+        cat = f"{cat} restaurant"
+    r = float(rating or 0)
+    rc = int(review_count or 0)
+    loc_part = f" {loc}" if loc else ""
+
+    # Deep review volume + high quality = proven anchor
+    if rc >= 1500 and r >= 4.5:
+        return f"A high-volume{loc_part} {cat} with deep review depth, a reliable neighborhood anchor."[:140]
+
+    if rc >= 1000 and r >= 4.2:
+        return f"A well-established{loc_part} {cat} with strong Google volume and consistent ratings."[:140]
+
+    # Small + excellent = local gem feel
+    if rc < 400 and r >= 4.6:
+        return f"A smaller{loc_part} {cat} with unusually high ratings, better for a local-feeling pick."[:140]
+
+    # High rating with moderate volume
+    if r >= 4.7:
+        return f"An unusually well-rated{loc_part} {cat}, a confident pick for the cuisine."[:140]
+
+    if r >= 4.5:
+        if loc:
+            return f"A highly rated {loc} {cat}, a solid neighborhood choice."[:140]
+        return f"A highly rated {cat}, a solid pick in this area."[:140]
+
+    if r >= 4.2:
+        if loc:
+            return f"A reliable {loc} {cat} with solid Google ratings."[:140]
+        return f"A reliable {cat} with solid Google ratings."[:140]
+
+    if loc:
+        return f"A {cat} in {loc} with strong Google presence."[:140]
+    return f"A {cat} with solid Google presence."[:140]
+
+
 def has_concrete_fact(text: str) -> bool:
     if _NUMBER_RE.search(text):
         return True
@@ -346,6 +395,15 @@ def build_concierge_display_reason(
 
     # Location anchor (area-level, not full address).
     loc = _location_area_phrase(neighborhood) or _location_phrase(neighborhood)
+    # Safety (E): never use a location that appears to be the place's own name.
+    if loc and place_name:
+        _pl_lower = place_name.lower()
+        _loc_clean = re.sub(r"['’]s?\s*$", "", loc, flags=re.IGNORECASE).strip().lower()
+        _loc_tokens = {t for t in re.split(r"\W+", _loc_clean) if t and len(t) > 2}
+        _name_tokens = {t for t in re.split(r"\W+", _pl_lower) if t and len(t) > 2}
+        # Reject if the loc is a subset of the place name tokens or vice-versa
+        if _loc_tokens and _loc_tokens.issubset(_name_tokens):
+            loc = None
     loc_part = f" in {loc}" if loc else ""
 
     # Is this a cocktail / nightlife request?
@@ -450,7 +508,23 @@ def build_concierge_display_reason(
         inner = cuisine.lower() if cuisine else (category or "spot").replace("_", " ")
         return _append_rating(f"A family-friendly {inner}{loc_part}")[:140]
 
-    # ── Priority e: Neighborhood + cuisine/category ──────────────────────────
+    # ── Priority e: Cuisine-specific restaurant — volume/quality framing (D) ──
+    # For cuisine-specific restaurant queries without editorial, use the dedicated
+    # cuisine-restaurant copy builder instead of the generic rating template.
+    _is_cuisine_restaurant = (
+        cuisine
+        and (category or "").lower() in ("restaurant", "")
+        and intent not in ("romantic", "family_friendly", "hidden_gems", "nightlife")
+    )
+    if _is_cuisine_restaurant:
+        return _build_cuisine_restaurant_display_why(
+            cuisine=cuisine,  # type: ignore[arg-type]
+            loc=loc,
+            rating=rating,
+            review_count=review_count,
+        )[:140]
+
+    # ── Priority f: Neighborhood + generic category ──────────────────────────
     if loc and cuisine:
         return _append_rating(f"A top-rated {cuisine.lower()}{loc_part}")[:140]
 
@@ -458,12 +532,12 @@ def build_concierge_display_reason(
         inner = (category or "place").replace("_", " ")
         return _append_rating(f"A {inner}{loc_part}")[:140]
 
-    # ── Priority f: Category + rating (no location) ──────────────────────────
+    # ── Priority g: Category + rating (no location) ──────────────────────────
     if rating_support:
         inner = cuisine.lower() if cuisine else (category or "place").replace("_", " ")
         return f"A verified {inner} with {rating_support}."[:140]
 
-    # ── Priority g: Absolute fallback ────────────────────────────────────────
+    # ── Priority h: Absolute fallback ────────────────────────────────────────
     inner = cuisine.lower() if cuisine else (category or "place").replace("_", " ")
     return f"A verified {inner} that fits this request, with strong Google signals."[:140]
 

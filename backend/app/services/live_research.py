@@ -788,7 +788,17 @@ def _google_fallback_queries(intent: str, destination: str, user_query: str) -> 
             ]
         )
     elif intent == INTENT_RESTAURANTS:
-        queries.extend([f"best restaurants near {dest}", f"restaurants in {dest}"])
+        # For cuisine-specific queries (e.g. "Mexican restaurants in Seattle"),
+        # generate targeted queries so Google Places returns cuisine-matched results (F).
+        cuisine_filter = _extract_cuisine_filter(base)
+        if cuisine_filter:
+            queries.extend([
+                f"{cuisine_filter} restaurants in {dest}",
+                f"best {cuisine_filter} restaurants in {dest}",
+                f"top {cuisine_filter} restaurants near {dest}",
+            ])
+        else:
+            queries.extend([f"best restaurants near {dest}", f"restaurants in {dest}"])
     elif intent == INTENT_MICHELIN_RESTAURANTS:
         queries.extend(
             [
@@ -978,6 +988,54 @@ _CUISINE_TO_GOOGLE_TYPES: Dict[str, frozenset] = {
     "brunch": frozenset({"breakfast_restaurant", "brunch_restaurant", "cafe"}),
     "seafood": frozenset({"seafood_restaurant"}),
     "pizza": frozenset({"pizza_restaurant"}),
+}
+
+# Google place types that qualify a place as restaurant-compatible.
+_RESTAURANT_COMPATIBLE_TYPES: frozenset = frozenset({
+    "restaurant", "meal_takeaway", "meal_delivery", "food", "cafe", "bakery",
+    "coffee_shop", "bar_and_grill", "brunch_restaurant", "breakfast_restaurant",
+    "fast_food_restaurant", "pizza_restaurant",
+    "mexican_restaurant", "italian_restaurant", "japanese_restaurant",
+    "sushi_restaurant", "chinese_restaurant", "thai_restaurant",
+    "french_restaurant", "indian_restaurant", "korean_restaurant",
+    "vietnamese_restaurant", "mediterranean_restaurant", "greek_restaurant",
+    "spanish_restaurant", "steak_house", "seafood_restaurant",
+    "ramen_restaurant", "american_restaurant", "hamburger_restaurant",
+    "sandwich_shop", "bar", "night_club",
+})
+
+# Google place types that, when present WITHOUT any restaurant-compatible type,
+# indicate a non-food-service place that must not be addable as a restaurant card.
+_NON_RESTAURANT_TYPES: frozenset = frozenset({
+    "grocery_store", "supermarket", "convenience_store", "store",
+    "butcher_shop", "manufacturer", "wholesaler", "market",
+    "food_store", "department_store", "drugstore", "pharmacy",
+    "gas_station", "car_wash", "bank", "atm",
+})
+
+# Maps Google cuisine-specific place types → user-facing display labels.
+_GOOGLE_TYPE_TO_CUISINE_LABEL: Dict[str, str] = {
+    "mexican_restaurant": "Mexican Restaurant",
+    "italian_restaurant": "Italian Restaurant",
+    "japanese_restaurant": "Japanese Restaurant",
+    "sushi_restaurant": "Japanese Restaurant",
+    "ramen_restaurant": "Japanese Restaurant",
+    "chinese_restaurant": "Chinese Restaurant",
+    "thai_restaurant": "Thai Restaurant",
+    "french_restaurant": "French Restaurant",
+    "indian_restaurant": "Indian Restaurant",
+    "korean_restaurant": "Korean Restaurant",
+    "vietnamese_restaurant": "Vietnamese Restaurant",
+    "mediterranean_restaurant": "Mediterranean Restaurant",
+    "greek_restaurant": "Greek Restaurant",
+    "spanish_restaurant": "Spanish Restaurant",
+    "steak_house": "Steakhouse",
+    "seafood_restaurant": "Seafood Restaurant",
+    "pizza_restaurant": "Pizza Restaurant",
+    "brunch_restaurant": "Brunch Restaurant",
+    "breakfast_restaurant": "Breakfast Restaurant",
+    "american_restaurant": "American Restaurant",
+    "hamburger_restaurant": "Burger Restaurant",
 }
 
 
@@ -1336,6 +1394,12 @@ def _category_label(
     sub-types (cocktail_bar, wine_bar, rooftop/view bar, bar+restaurant, etc.).
     """
     if category == "restaurant":
+        # Google types are authoritative for cuisine-specific labels (C).
+        for gt in (google_types or []):
+            cuisine_label = _GOOGLE_TYPE_TO_CUISINE_LABEL.get((gt or "").lower())
+            if cuisine_label:
+                return cuisine_label
+        # Fall back to candidate-provided cuisine string.
         cuisine = getattr(candidate, "cuisine", None) if candidate is not None else None
         if cuisine and isinstance(cuisine, str) and cuisine.strip():
             cuisine_clean = cuisine.strip()
@@ -1459,12 +1523,21 @@ def _category_fit_score(intent: str, user_query: str, verification: "GooglePlace
         # so they rank below cuisine-matched results when enough alternatives exist.
         cuisine_filter = _extract_cuisine_filter(user_query)
         if cuisine_filter:
+            place_types_list = [(t or "").lower() for t in (verification.types or [])]
+            place_types_set = set(place_types_list)
+            has_restaurant_compat = any(t in _RESTAURANT_COMPATIBLE_TYPES for t in place_types_set)
+            # Hard gate B: grocery/butcher/store-only places are not addable restaurants.
+            if place_types_set and not has_restaurant_compat and any(
+                t in _NON_RESTAURANT_TYPES for t in place_types_set
+            ):
+                return 0.1  # non_restaurant_place_type — below threshold
             cuisine_types = _CUISINE_TO_GOOGLE_TYPES.get(cuisine_filter, frozenset())
             if cuisine_types and any(t in blob for t in cuisine_types):
                 return 1.0  # Google cuisine-type match
             place_name = (verification.name or "").lower()
-            if cuisine_filter in place_name:
-                return 0.75  # name-semantic match (e.g. "RPM Italian")
+            # Name-semantic match only valid when restaurant-compatible types exist.
+            if cuisine_filter in place_name and has_restaurant_compat:
+                return 0.75  # e.g. "RPM Italian" with restaurant types
             if any(tok in blob for tok in ("restaurant", "food", "meal_takeaway")):
                 return 0.35  # generic restaurant, cuisine mismatch — penalize
             if any(tok in blob for tok in ("bar", "night_club")):
@@ -1699,6 +1772,19 @@ def _extract_neighborhood(text: str, destination: str) -> Optional[str]:
     return candidate
 
 
+def _neighborhood_is_business_name(neighborhood: str, candidate_name: str) -> bool:
+    """Return True when the extracted neighborhood is derived from the business name itself (E)."""
+    if not neighborhood or not candidate_name:
+        return False
+    neigh_clean = re.sub(r"['`’]s?\s*$", "", neighborhood.strip(), flags=re.IGNORECASE).strip().lower()
+    cand_clean = re.sub(r"['`’]s?\s*$", "", candidate_name.strip(), flags=re.IGNORECASE).strip().lower()
+    if neigh_clean in cand_clean or cand_clean.startswith(neigh_clean):
+        return True
+    neigh_tokens = set(re.split(r"\W+", neigh_clean)) - {"the", "a", "an", ""}
+    cand_tokens = set(re.split(r"\W+", cand_clean)) - {"the", "a", "an", ""}
+    return bool(neigh_tokens) and neigh_tokens.issubset(cand_tokens)
+
+
 def _extract_candidate_neighborhood(candidate: str, text: str, destination: str) -> Optional[str]:
     """Extract neighborhood signal near the specific candidate mention."""
     if not text:
@@ -1710,7 +1796,11 @@ def _extract_candidate_neighborhood(candidate: str, text: str, destination: str)
     if idx < 0:
         return None
     window = text[max(0, idx - 100) : idx + len(candidate) + 140]
-    return _extract_neighborhood(window, destination)
+    neighborhood = _extract_neighborhood(window, destination)
+    # Safety (E): reject neighborhoods that are just the business name or a prefix of it.
+    if neighborhood and _neighborhood_is_business_name(neighborhood, candidate):
+        return None
+    return neighborhood
 
 
 def _clean_reason_text(text: str) -> str:
@@ -2663,7 +2753,18 @@ def _apply_google_gate(
                 venue_source_ev = getattr(venue, "source_evidence", None)
                 category_fit = _category_fit_score(intent, user_query, verification)
                 if category_fit < 0.45:
-                    rejected_by_reason["intent_category_mismatch"] += 1
+                    # Determine specific rejection reason for debug tracing (G).
+                    _cuisine_f = _extract_cuisine_filter(user_query)
+                    if _cuisine_f:
+                        _vt_set = set((t or "").lower() for t in (verification.types or []))
+                        _has_rc = any(t in _RESTAURANT_COMPATIBLE_TYPES for t in _vt_set)
+                        if _vt_set and not _has_rc and any(t in _NON_RESTAURANT_TYPES for t in _vt_set):
+                            _rej_key = "non_restaurant_place_type"
+                        else:
+                            _rej_key = "cuisine_mismatch"
+                    else:
+                        _rej_key = "intent_category_mismatch"
+                    rejected_by_reason[_rej_key] += 1
                     research_sources.append(
                         UnifiedResearchSourceResult(
                             title=str(getattr(venue, "name", f"Off-intent {kind_label}") or f"Off-intent {kind_label}"),
@@ -2813,12 +2914,24 @@ def _apply_google_gate(
                 except Exception:
                     pass
                 try:
+                    # Derive cuisine from Google types first (C/D) — overrides hardcoded stubs.
+                    _cuisine_raw = getattr(venue, "cuisine", None)
+                    _cuisine_for_display: Optional[str] = None
+                    if _cuisine_raw and _cuisine_raw.lower() not in ("restaurant", "place", ""):
+                        _cuisine_for_display = _cuisine_raw
+                    if not _cuisine_for_display:
+                        for _gt in (verification.types or []):
+                            _cl_label = _GOOGLE_TYPE_TO_CUISINE_LABEL.get((_gt or "").lower())
+                            if _cl_label:
+                                # Strip " Restaurant" suffix → pass pure cuisine name
+                                _cuisine_for_display = re.sub(r"\s+Restaurant$", "", _cl_label, flags=re.IGNORECASE)
+                                break
                     _display_why = build_concierge_display_reason(
                         place_name=getattr(venue, "name", "") or "",
                         query_context=user_query,
                         intent=intent,
                         category=category,
-                        cuisine=getattr(venue, "cuisine", None),
+                        cuisine=_cuisine_for_display,
                         neighborhood=getattr(venue, "neighborhood", None),
                         michelin_status=getattr(venue, "michelin_status", None),
                         rating=verification.rating,
@@ -2829,14 +2942,21 @@ def _apply_google_gate(
                         google_types=verification.types,
                     )
                     _sd = getattr(venue, "supporting_details", None)
-                    _cat_label = (_sd.category_label if _sd and _sd.category_label else None) or category or "Place"
-                    # Derive displayCategorySource for debug tracing
+                    # Category label: use google_types-aware inference (C).
+                    _cat_label = _category_label(category, venue, google_types=verification.types)
+                    # displayCategorySource for debug tracing (G).
                     from app.concierge.reasoning import infer_nightlife_category_label
                     _cat_source: Optional[str] = None
                     if category == "bar":
                         _, _cat_source = infer_nightlife_category_label(
                             verification.types, getattr(venue, "name", "") or ""
                         )
+                    else:
+                        # Indicate whether the label came from google_types or fallback
+                        _cat_source = "google_types" if any(
+                            _GOOGLE_TYPE_TO_CUISINE_LABEL.get((t or "").lower())
+                            for t in (verification.types or [])
+                        ) else "intent_fallback"
                     venue.display = ConciergeDisplayFields(
                         display_name=getattr(venue, "name", "") or "",
                         display_category=_cat_label,
@@ -3358,11 +3478,18 @@ def normalize_hits(
                 continue
             _gd_neighborhood = _gv.formatted_address if _gv else None
             if is_restaurant_intent:
+                # Derive cuisine from Google types (C) — do not hardcode "Restaurant".
+                _gd_cuisine = "Restaurant"
+                for _gdt in (_gv.types if _gv else []):
+                    _gd_cl = _GOOGLE_TYPE_TO_CUISINE_LABEL.get((_gdt or "").lower())
+                    if _gd_cl:
+                        _gd_cuisine = re.sub(r"\s+Restaurant$", "", _gd_cl, flags=re.IGNORECASE).strip()
+                        break
                 restaurants.append(
                     UnifiedRestaurantResult(
                         name=_gd_display,
                         source="Google Places",
-                        cuisine="Restaurant",
+                        cuisine=_gd_cuisine,
                         neighborhood=_gd_neighborhood,
                         summary=f"Google-verified restaurant in {destination}.",
                         ai_score=0.0,
@@ -3949,11 +4076,27 @@ class LiveResearchService:
             )
             if _debug_out is not None:
                 _debug_out["google_matched_count"] = google_verified_count
+                _cuisine_intent_debug = _extract_cuisine_filter(user_query)
+                # Tally cuisine_mismatch and non_restaurant_place_type for the summary (G).
+                _rejected_cuisine_mismatch = 0
+                _rejected_non_restaurant = 0
+                for _gv_debug in google_verifications.values():
+                    if _google_is_addable(_gv_debug):
+                        _fit = _category_fit_score(intent, user_query, _gv_debug)
+                        if _fit < 0.45 and _cuisine_intent_debug:
+                            _vt_d = set((t or "").lower() for t in (_gv_debug.types or []))
+                            if _vt_d and not any(t in _RESTAURANT_COMPATIBLE_TYPES for t in _vt_d) and any(t in _NON_RESTAURANT_TYPES for t in _vt_d):
+                                _rejected_non_restaurant += 1
+                            else:
+                                _rejected_cuisine_mismatch += 1
                 _debug_out["rejection_reasons"] = {
                     "closed": rejected_closed,
                     "no_match": rejected_no_match,
                     "low_confidence": rejected_low_confidence,
+                    "cuisine_mismatch": _rejected_cuisine_mismatch,
+                    "non_restaurant_place_type": _rejected_non_restaurant,
                 }
+                _debug_out["cuisine_intent"] = _cuisine_intent_debug
                 _debug_out["rejection_details"] = [
                     {
                         "name": name,
@@ -3961,10 +4104,34 @@ class LiveResearchService:
                             "closed" if gv.is_closed
                             else "no_match" if not gv.matched
                             else "low_confidence" if not _google_is_addable(gv)
-                            else "accepted"
+                            else (
+                                lambda _fit=_category_fit_score(intent, user_query, gv): (
+                                    (
+                                        "non_restaurant_place_type"
+                                        if (
+                                            set((t or "").lower() for t in (gv.types or []))
+                                            and not any(t in _RESTAURANT_COMPATIBLE_TYPES for t in (gv.types or []))
+                                            and any(t in _NON_RESTAURANT_TYPES for t in (gv.types or []))
+                                        )
+                                        else "cuisine_mismatch"
+                                    )
+                                    if _fit < 0.45 and _cuisine_intent_debug
+                                    else "intent_category_mismatch" if _fit < 0.45
+                                    else "accepted"
+                                )
+                            )()
                         ),
                         "confidence": gv.confidence,
                         "is_operational": gv.is_operational,
+                        "cuisine_intent": _cuisine_intent_debug,
+                        "cuisine_matched": (
+                            any(
+                                t in (_CUISINE_TO_GOOGLE_TYPES.get(_cuisine_intent_debug, frozenset()))
+                                for t in (gv.types or [])
+                            )
+                            if _cuisine_intent_debug and _google_is_addable(gv)
+                            else None
+                        ),
                         "source": candidate_source_map.get(name, "unknown"),
                     }
                     for name, gv in google_verifications.items()

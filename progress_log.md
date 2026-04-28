@@ -30,6 +30,15 @@
 - Fixed `_category_label` to pass google_types through to `infer_nightlife_category_label` for bar sub-type disambiguation in `_build_supporting_details`.
 - Added 46 new tests in `test_nightlife_display.py` covering all acceptance criteria; all existing display/reasoning tests pass.
 
+## 2026-04-28 (latest)
+- Cuisine-specific restaurant intent filtering clean pass: non-Mexican restaurants (Italian, American, Seafood) now hard-rejected for "Mexican restaurants" queries (score 0.35 < 0.45 threshold); Mendoza's Mexican Mercado (grocery_store/butcher_shop only, no restaurant-compatible type) now correctly rejected even though its name contains "mexican" — name-match score gated behind restaurant-compatible type presence.
+- Category label inference upgraded: `_category_label` now checks Google types first via `_GOOGLE_TYPE_TO_CUISINE_LABEL` map before falling back to `candidate.cuisine`; `mexican_restaurant` → "Mexican Restaurant", `italian_restaurant` → "Italian Restaurant", etc. Direct Google stubs no longer hardcode `cuisine="Restaurant"` — cuisine is derived from Google types.
+- `displayWhy` generation replaced for cuisine-specific restaurant results: new `_build_cuisine_restaurant_display_why` function produces volume/quality-framed concierge copy ("A high-volume West Seattle Mexican restaurant with deep review depth…") instead of generic "A top-rated restaurant with 4.8 rating across 1,141 reviews." template.
+- Fake neighborhood guard added: `_neighborhood_is_business_name` rejects neighborhoods whose tokens are a subset of the candidate's own name tokens; "in Rojo" from Rojo's Mexican Kitchen is now suppressed. `build_concierge_display_reason` additionally validates `loc` against `place_name` tokens before using it.
+- Google fallback queries are now cuisine-specific: "Mexican restaurants in Seattle" generates "mexican restaurants in Seattle", "best mexican restaurants in Seattle", "top mexican restaurants near Seattle" instead of generic "best restaurants near Seattle".
+- Debug trace enriched: `rejection_reasons` now includes `cuisine_mismatch` and `non_restaurant_place_type` counts; per-card `rejection_details` carries `cuisineIntent` and `cuisineMatched` fields; `displayCategorySource` uses `"google_types"` or `"intent_fallback"` for restaurant cards.
+- Added 36 regression tests in `backend/tests/test_cuisine_restaurant_filtering.py` covering all acceptance criteria; all 246 existing tests pass.
+
 ## 2026-04-28
 - Applied a targeted AI Concierge anti-regression hardening pass for visible card reasons: deterministic `build_why_pick` no longer emits `backed by`, sanitizer logic now blocks `backed by` generally (not just `backed by rated`), and both backend + frontend reason sanitizers now reject the banned fragment set before UI display.
 - Replaced category fallback copy in `LiveResearchService` with neutral polished wording, removed unused category reason templates, and added enforcement so final `supporting_details.why_pick` falls back safely if any banned fragment appears upstream.
