@@ -53,6 +53,8 @@ from app.services.live_research import (
     _build_supporting_details,
     _validate_or_fallback_reason,
     _validate_venue_candidate,
+    _category_fit_score,
+    _extract_cuisine_filter,
     build_place_reason,
     normalize_hits,
     reset_global_cache,
@@ -3871,3 +3873,117 @@ class TestGoogleDirectSelectionRanking:
         assert any("girl" in n.lower() or "goat" in n.lower() for n in all_names) or any(
             "aba" in n.lower() for n in all_names
         ), f"No google_direct candidate in final result: {all_names}"
+
+
+# ── Cuisine intent filtering / ranking ──────────────────────────────────────
+
+
+class TestJunkTokenFiltering:
+    """Junk candidates are rejected before or during Google verification."""
+
+    def test_usa_is_obvious_non_venue(self):
+        assert _is_obvious_non_venue("USA", "Chicago") is True
+
+    def test_illinois_is_obvious_non_venue(self):
+        assert _is_obvious_non_venue("Illinois", "Chicago") is True
+
+    def test_visited_is_obvious_non_venue(self):
+        assert _is_obvious_non_venue("Visited", "Chicago") is True
+
+    def test_chicago_restaurants_is_obvious_non_venue(self):
+        # "restaurants" is a _NON_VENUE_SUFFIX_WORDS entry — suffix check fires.
+        assert _is_obvious_non_venue("Chicago Restaurants", "Chicago") is True
+
+    def test_chicago_italian_michelin_restaurants_is_obvious_non_venue(self):
+        assert _is_obvious_non_venue("Chicago Italian MICHELIN Restaurants", "Chicago") is True
+
+    def test_real_venue_not_filtered(self):
+        assert _is_obvious_non_venue("RPM Italian", "Chicago") is False
+        assert _is_obvious_non_venue("Quartino Ristorante", "Chicago") is False
+        assert _is_obvious_non_venue("Girl & The Goat", "Chicago") is False
+
+    def test_single_word_italian_fails_validation_without_strong_signal(self):
+        # Single-word cuisine names need a direct-place signal to pass.
+        valid, _, _ = _validate_venue_candidate(
+            "Italian",
+            "best italian restaurants in chicago",
+            intent="restaurants",
+            destination="Chicago",
+            title="Best Italian Restaurants",
+            url="https://example.com/guide",
+            snippet="italian cuisine restaurants chicago",
+            corroborating_hits=1,
+        )
+        assert valid is False
+
+
+class TestExtractCuisineFilter:
+    def test_italian_detected(self):
+        assert _extract_cuisine_filter("Italian restaurants in Chicago") == "italian"
+
+    def test_sushi_detected(self):
+        assert _extract_cuisine_filter("best sushi in NYC") == "sushi"
+
+    def test_brunch_detected(self):
+        assert _extract_cuisine_filter("brunch spots this weekend") == "brunch"
+
+    def test_non_cuisine_query_returns_none(self):
+        assert _extract_cuisine_filter("best restaurants in Chicago") is None
+        assert _extract_cuisine_filter("Michelin starred dining") is None
+
+    def test_michelin_italian_detected(self):
+        assert _extract_cuisine_filter("Michelin Italian restaurants in Chicago") == "italian"
+
+
+class TestCuisineSpecificFitScore:
+    """_category_fit_score returns higher scores for cuisine-matched places."""
+
+    def _make_verification(self, types, name=""):
+        from app.services.google_places import GooglePlaceVerification
+        return GooglePlaceVerification(
+            provider="google_places",
+            provider_place_id="ChIJ-test",
+            name=name,
+            formatted_address="123 Main St, Chicago, IL, USA",
+            business_status="OPERATIONAL",
+            types=types,
+            confidence="medium",
+            score=0.8,
+        )
+
+    def test_italian_type_match_scores_1(self):
+        v = self._make_verification(["italian_restaurant", "restaurant", "food"])
+        score = _category_fit_score(
+            "restaurants", "Italian restaurants in Chicago", v
+        )
+        assert score == 1.0
+
+    def test_generic_restaurant_penalized_on_italian_query(self):
+        v = self._make_verification(["restaurant", "food", "establishment"])
+        score = _category_fit_score(
+            "restaurants", "Italian restaurants in Chicago", v
+        )
+        assert score <= 0.4
+
+    def test_name_semantic_match_scores_higher_than_generic(self):
+        generic = self._make_verification(["restaurant", "food"], name="Au Cheval")
+        semantic = self._make_verification(["restaurant", "food"], name="RPM Italian")
+        s_generic = _category_fit_score("restaurants", "Italian restaurants in Chicago", generic)
+        s_semantic = _category_fit_score("restaurants", "Italian restaurants in Chicago", semantic)
+        assert s_semantic > s_generic
+
+    def test_non_cuisine_query_uses_original_scoring(self):
+        # Without a cuisine filter, generic restaurant score should stay near 0.9
+        v = self._make_verification(["restaurant", "food", "establishment"])
+        score = _category_fit_score("restaurants", "best restaurants in Chicago", v)
+        assert score >= 0.85
+
+    def test_bar_penalized_on_italian_query(self):
+        v = self._make_verification(["bar", "night_club"])
+        score = _category_fit_score("restaurants", "Italian restaurants in Chicago", v)
+        assert score <= 0.15
+
+    def test_sushi_type_match_for_sushi_query(self):
+        v = self._make_verification(["sushi_restaurant", "japanese_restaurant", "restaurant"])
+        score = _category_fit_score("restaurants", "best sushi in Chicago", v)
+        assert score == 1.0

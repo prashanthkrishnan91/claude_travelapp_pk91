@@ -608,6 +608,33 @@ class GooglePlacesService:
                     reason = "Candidate is a shortened form of this verified place name."
                     similarity = max(similarity, 0.76)
 
+                # Reverse alias override: candidate name has extra location tokens
+                # not present in the Google result (e.g. candidate="RPM Italian Chicago"
+                # → result="RPM Italian"). When the result's core tokens are a strict
+                # subset of the candidate's tokens, with at most 2 extra tokens in the
+                # candidate, address evidence confirms the location, and the result is a
+                # venue type, boost similarity to at least 0.76 so it reaches "medium"
+                # confidence.  This fires regardless of whether a failure_reason was
+                # already assigned, ensuring the borderline-similarity case is promoted.
+                if (
+                    failure_reason in (None, "weak_name_match", "weak_match_no_address")
+                    and result_tokens
+                    and len(result_tokens) >= 2
+                    and result_tokens.issubset(candidate_tokens)
+                    and len(candidate_tokens - result_tokens) <= 2
+                    and address_evidence
+                    and any(
+                        t in (types or [])
+                        for t in (
+                            "cocktail_bar", "bar", "night_club", "restaurant",
+                            "food", "establishment", "point_of_interest",
+                        )
+                    )
+                ):
+                    failure_reason = None
+                    reason = "Verified place name is core tokens of candidate; location suffix matched."
+                    similarity = max(similarity, 0.76)
+
                 # Reject hotel-typed matches when the candidate isn't itself a
                 # hotel and the article didn't reference one — avoids matching
                 # to an unrelated hotel listing page.

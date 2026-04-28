@@ -176,6 +176,10 @@ _OBVIOUS_NON_VENUE_LOWER: frozenset = frozenset({
     "east asia",
     "the middle east",
     "middle east",
+    # Common junk tokens that appear in article titles / extraction artifacts
+    "usa",
+    "illinois",
+    "visited",
 })
 
 _NON_VENUE_SUFFIX_WORDS: frozenset = frozenset({
@@ -185,6 +189,9 @@ _NON_VENUE_SUFFIX_WORDS: frozenset = frozenset({
     "update", "updates", "edition", "editions", "award", "awards",
     "deal", "deals", "offer", "offers", "sale", "newsletter",
     "blog", "list", "listing", "listings", "directory",
+    # Catches list-title artifacts like "Chicago Restaurants" or
+    # "Chicago Italian MICHELIN Restaurants"
+    "restaurants",
 })
 
 _PLACE_PLATFORM_HINT = re.compile(
@@ -872,6 +879,24 @@ _AMBIGUOUS_SINGLE_WORD_CANDIDATES = {
     "union",
     "loop",
     "district",
+    # Generic cuisine/category nouns extracted as standalone tokens are almost
+    # never real venue names; require a direct place signal to pass.
+    "italian",
+    "mexican",
+    "japanese",
+    "sushi",
+    "french",
+    "chinese",
+    "thai",
+    "indian",
+    "mediterranean",
+    "greek",
+    "korean",
+    "vietnamese",
+    "spanish",
+    "brunch",
+    "seafood",
+    "pizza",
 }
 _TRUSTED_EDITORIAL_SOURCE_HINT = re.compile(
     r"(timeout|tripadvisor|infatuation|eater|cntraveler|lonelyplanet|michelin|opentable|resy|thrillist|fodor)",
@@ -924,6 +949,42 @@ _PRICE_VALUE_HINT = re.compile(
 )
 _AWARD_HINT = re.compile(r"(michelin|james beard|award-winning|award winning|starred)", re.IGNORECASE)
 _LUXURY_HINT = re.compile(r"(luxury|fine dining|chef'?s tasting|degustation)", re.IGNORECASE)
+
+# ── Cuisine-intent scoring ────────────────────────────────────────────────────
+
+# Detects when the user query is specifically targeting a named cuisine.
+_CUISINE_QUERY_RE = re.compile(
+    r"\b(italian|japanese|sushi|mexican|french|chinese|thai|indian|mediterranean|"
+    r"greek|korean|vietnamese|spanish|steakhouse|brunch|seafood|pizza)\b",
+    re.IGNORECASE,
+)
+
+# Maps extracted cuisine keyword → Google Places type tokens that confirm the match.
+_CUISINE_TO_GOOGLE_TYPES: Dict[str, frozenset] = {
+    "italian": frozenset({"italian_restaurant"}),
+    "japanese": frozenset({"japanese_restaurant", "sushi_restaurant", "ramen_restaurant"}),
+    "sushi": frozenset({"sushi_restaurant", "japanese_restaurant"}),
+    "mexican": frozenset({"mexican_restaurant"}),
+    "french": frozenset({"french_restaurant"}),
+    "chinese": frozenset({"chinese_restaurant"}),
+    "thai": frozenset({"thai_restaurant"}),
+    "indian": frozenset({"indian_restaurant"}),
+    "mediterranean": frozenset({"mediterranean_restaurant", "greek_restaurant"}),
+    "greek": frozenset({"greek_restaurant"}),
+    "korean": frozenset({"korean_restaurant"}),
+    "vietnamese": frozenset({"vietnamese_restaurant"}),
+    "spanish": frozenset({"spanish_restaurant"}),
+    "steakhouse": frozenset({"steak_house"}),
+    "brunch": frozenset({"breakfast_restaurant", "brunch_restaurant", "cafe"}),
+    "seafood": frozenset({"seafood_restaurant"}),
+    "pizza": frozenset({"pizza_restaurant"}),
+}
+
+
+def _extract_cuisine_filter(user_query: str) -> Optional[str]:
+    """Return the cuisine keyword when the query explicitly targets a cuisine, else None."""
+    m = _CUISINE_QUERY_RE.search((user_query or "").lower())
+    return m.group(1).lower() if m else None
 
 
 def _confidence_from_age(fetched_at: str) -> str:
@@ -1380,6 +1441,23 @@ def _category_fit_score(intent: str, user_query: str, verification: "GooglePlace
             score -= 0.7
         return max(0.0, min(1.0, score))
     if qcat == "restaurant":
+        # For cuisine-specific queries, heavily favor places whose Google type or
+        # name confirms the cuisine.  Generic restaurants get a significant penalty
+        # so they rank below cuisine-matched results when enough alternatives exist.
+        cuisine_filter = _extract_cuisine_filter(user_query)
+        if cuisine_filter:
+            cuisine_types = _CUISINE_TO_GOOGLE_TYPES.get(cuisine_filter, frozenset())
+            if cuisine_types and any(t in blob for t in cuisine_types):
+                return 1.0  # Google cuisine-type match
+            place_name = (verification.name or "").lower()
+            if cuisine_filter in place_name:
+                return 0.75  # name-semantic match (e.g. "RPM Italian")
+            if any(tok in blob for tok in ("restaurant", "food", "meal_takeaway")):
+                return 0.35  # generic restaurant, cuisine mismatch — penalize
+            if any(tok in blob for tok in ("bar", "night_club")):
+                return 0.1
+            return 0.2
+        # Non-cuisine-specific restaurant query — original scoring
         if any(tok in blob for tok in ("restaurant", "food", "meal_takeaway")):
             return 0.9
         if any(tok in blob for tok in ("cafe", "bakery", "coffee_shop")):
