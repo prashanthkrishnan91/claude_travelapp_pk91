@@ -2718,9 +2718,13 @@ def _apply_google_gate(
                     relevance = 0.25 if any(t in (user_query or "").lower() for t in _intent_best_for_tags(intent, user_query)) else 0.0
                     distance_hint = 0.2 if verification.formatted_address and getattr(venue, "neighborhood", None) else 0.0
                     evidence_bonus = min(0.3, 0.1 * float(max(0, src_count)))
-                    venue.category_fit_score = round(category_fit, 4)
-                    venue.ai_score = round((category_fit * 2.0) + base + relevance + distance_hint + evidence_bonus, 4)
+                    _computed_score = round((category_fit * 2.0) + base + relevance + distance_hint + evidence_bonus, 4)
+                    venue.ai_score = _computed_score
                     final_score = float(venue.ai_score or 0.0)
+                except Exception:
+                    pass
+                try:
+                    venue.category_fit_score = round(category_fit, 4)  # type: ignore[attr-defined]
                 except Exception:
                     pass
                 logger.info(
@@ -2872,6 +2876,7 @@ def normalize_hits(
     max_per_kind: int = 8,
     verified_candidates: Optional[Dict[str, VerificationResult]] = None,
     google_verifications: Optional[Dict[str, GooglePlaceVerification]] = None,
+    google_direct_candidates: Optional[Dict[str, str]] = None,
 ) -> Dict[str, List[Any]]:
     """Convert raw provider hits into Concierge Unified result lists.
 
@@ -3195,6 +3200,61 @@ def normalize_hits(
     attractions = _final_hard_filter_closed_venues(attractions, kind_label="attraction", research_sources=research_sources)
     hotels = _final_hard_filter_closed_venues(hotels, kind_label="hotel", research_sources=research_sources)
 
+    # ── Inject google_direct stubs ─────────────────────────────────────────
+    # Candidates fetched directly from Google Places fallback queries have no
+    # corresponding Tavily hit, so they never get venue objects from the loop
+    # above. Inject lightweight stubs here so the Google gate below can enrich
+    # and score them the same way it handles article-extracted venues.
+    if google_direct_candidates and google_verifications is not None:
+        existing_lowers = {
+            (getattr(v, "name", "") or "").lower()
+            for lst in (restaurants, attractions, hotels)
+            for v in lst
+        }
+        for _gd_low, _gd_display in google_direct_candidates.items():
+            if _gd_low in existing_lowers:
+                continue
+            _gv = google_verifications.get(_gd_low)
+            if not _google_is_addable(_gv):
+                continue
+            _gd_neighborhood = _gv.formatted_address if _gv else None
+            if is_restaurant_intent:
+                restaurants.append(
+                    UnifiedRestaurantResult(
+                        name=_gd_display,
+                        source="Google Places",
+                        cuisine="Restaurant",
+                        neighborhood=_gd_neighborhood,
+                        summary=f"Google-verified restaurant in {destination}.",
+                        ai_score=0.0,
+                        verified_place=False,
+                    )
+                )
+            elif is_attraction_intent:
+                attractions.append(
+                    UnifiedAttractionResult(
+                        name=_gd_display,
+                        source="Google Places",
+                        category="attraction",
+                        description=f"Google-verified attraction in {destination}.",
+                        neighborhood=_gd_neighborhood,
+                        ai_score=0.0,
+                        verified_place=False,
+                    )
+                )
+            elif is_hotel_intent:
+                hotels.append(
+                    UnifiedHotelResult(
+                        name=_gd_display,
+                        source="Google Places",
+                        area_label=_gd_neighborhood,
+                        reason=f"Google-verified hotel in {destination}.",
+                        ai_score=0.0,
+                        verified_place=False,
+                    )
+                )
+            existing_lowers.add(_gd_low)
+
     # ── Google Places gate ─────────────────────────────────────────────────
     # Article search alone never produces an addable card. When Google
     # verifications are supplied, every card must clear ``is_addable`` to
@@ -3502,6 +3562,7 @@ class LiveResearchService:
         # legacy Tavily-only behavior — required for local dev without keys.
         # In production the API key is configured and the gate is enforced.
         google_verifications: Optional[Dict[str, GooglePlaceVerification]] = None
+        google_direct_names: Optional[Dict[str, str]] = None
         place_verifier_available = bool(getattr(self._place_verifier, "available", False))
         if place_verifier_available:
             google_verifications = {}
@@ -3566,9 +3627,21 @@ class LiveResearchService:
                     if len(candidate_neighborhoods) >= _GOOGLE_DIRECT_MIN_CANDIDATES:
                         break
 
+            google_direct_names = {
+                name_lower: display_for_low.get(name_lower, name_lower)
+                for name_lower, src in candidate_source_map.items()
+                if src == "google_direct"
+            }
+
             if _debug_out is not None:
+                _gd_count = len(google_direct_names)
+                _merged_count = len(candidate_neighborhoods)
                 _debug_out["deduped_candidates"] = list(candidate_neighborhoods.keys())
-                _debug_out["deduped_candidate_count"] = len(candidate_neighborhoods)
+                _debug_out["deduped_candidate_count"] = _merged_count
+                _debug_out["merged_candidate_count"] = _merged_count
+                _debug_out["extracted_candidate_count"] = extracted_candidate_count
+                _debug_out["google_direct_candidate_count"] = _gd_count
+                _debug_out["raw_provider_candidate_count"] = raw_candidate_count
                 _debug_out["candidate_sources"] = {
                     name: candidate_source_map.get(name, "unknown")
                     for name in candidate_neighborhoods
@@ -3687,8 +3760,10 @@ class LiveResearchService:
             intent=intent,
             destination=destination,
             user_query=user_query,
+            max_per_kind=self._max_results,
             verified_candidates=verified_candidates,
             google_verifications=google_verifications,
+            google_direct_candidates=google_direct_names,
         )
         self._apply_optional_enrichment(normalized, destination=destination)
 

@@ -1389,9 +1389,14 @@ export async function fetchConciergeMessages(tripId: string): Promise<ConciergeM
 // [DEV-ONLY] Debug trace for the AI Concierge pipeline
 export interface ConciergeDebugTrace {
   summary: {
-    rawCandidateCount: number;
+    rawProviderCandidateCount: number;
+    extractedCandidateCount: number;
+    googleDirectCandidateCount: number;
+    mergedCandidateCount: number;
     dedupedCandidateCount: number;
+    rawCandidateCount: number;
     googleMatchedCount: number;
+    acceptedOperationalCount: number;
     rejectedCountByReason: Record<string, number>;
     finalAddableCount: number;
     researchOnlyCount: number;
