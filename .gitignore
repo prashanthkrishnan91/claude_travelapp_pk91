@@ -13,3 +13,7 @@ node_modules/
 .code-review-graph/
 # Claude Flow runtime data
 .claude-flow/
+out/
+*.csv
+*.json (unless it's a config file)
+public/assets/
