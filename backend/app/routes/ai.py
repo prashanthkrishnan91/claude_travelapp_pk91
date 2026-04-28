@@ -22,6 +22,7 @@ from app.core.deps import DB, CurrentUserID
 from app.models.concierge import (
     ConciergeCacheClearRequest,
     ConciergeCacheClearResponse,
+    ConciergeDebugRequest,
     ConciergeMessage,
     ConciergeRequest,
     ConciergeResponse,
@@ -144,6 +145,73 @@ def concierge_search(payload: ConciergeSearchRequest, db: DB, user_id: CurrentUs
         llm_tokens_out=tokens_out,
     )
     return response
+
+
+@router.post("/concierge/debug-trace")
+def concierge_debug_trace(payload: ConciergeDebugRequest, db: DB, user_id: CurrentUserID) -> dict:
+    """[DEV-ONLY] Run the live-research pipeline for a free-form query and return a full debug trace.
+
+    Does NOT require a trip_id — use location directly. Safe: read-only, no side effects.
+    """
+    from app.services.live_research import LiveResearchService
+
+    service = ConciergeService(db)
+    intent = service._detect_intent(payload.user_query)
+
+    debug_out: dict = {}
+    live_svc = LiveResearchService(max_results=payload.limit)
+    result = live_svc.fetch(
+        intent=intent,
+        destination=payload.location,
+        user_query=payload.user_query,
+        _debug_out=debug_out,
+    )
+
+    all_addable = result.restaurants + result.attractions + result.hotels
+
+    why_pick_dist: dict = {}
+    for card in all_addable:
+        gv = getattr(card, "google_verification", None)
+        types: list = getattr(gv, "types", []) if gv else []
+        label = types[0] if types else "unknown"
+        why_pick_dist[label] = why_pick_dist.get(label, 0) + 1
+
+    def _card_dump(c: object) -> dict:
+        try:
+            return c.model_dump()  # type: ignore[attr-defined]
+        except Exception:
+            return {}
+
+    return {
+        "summary": {
+            "raw_candidate_count": debug_out.get("raw_candidate_count", 0),
+            "deduped_candidate_count": debug_out.get("deduped_candidate_count", 0),
+            "google_matched_count": debug_out.get("google_matched_count", 0),
+            "rejected_count_by_reason": debug_out.get("rejection_reasons", {}),
+            "final_addable_count": len(all_addable),
+            "research_only_count": len(result.research_sources),
+            "why_pick_source_distribution": why_pick_dist,
+        },
+        "parsed_intent": intent,
+        "search_queries": debug_out.get("search_queries", []),
+        "raw_candidates": debug_out.get("raw_candidates", []),
+        "deduped_candidates": debug_out.get("deduped_candidates", []),
+        "google_verification": debug_out.get("google_verification", {}),
+        "rejection_reasons": debug_out.get("rejection_details", []),
+        "final_addable_cards": [_card_dump(c) for c in all_addable],
+        "final_display_payload": {
+            "restaurants": [_card_dump(c) for c in result.restaurants],
+            "attractions": [_card_dump(c) for c in result.attractions],
+            "hotels": [_card_dump(c) for c in result.hotels],
+            "research_sources": [_card_dump(c) for c in result.research_sources],
+            "source_status": result.source_status,
+            "provider_name": result.provider_name,
+        },
+        "cache_status": {
+            "hit": debug_out.get("cache_hit", False),
+            "key": debug_out.get("cache_key"),
+        },
+    }
 
 
 @router.get("/concierge/{trip_id}/messages", response_model=List[ConciergeMessage])
