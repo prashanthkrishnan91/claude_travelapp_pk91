@@ -29,7 +29,7 @@ import type {
   UnifiedRestaurantResult,
 } from "@/lib/api";
 import type { ItineraryDay, ItineraryItem } from "@/types";
-import { pickCardReason, sanitizeWhyPick, shouldShowCollapsedSources, splitReason, normalizeTitle } from "@/lib/concierge/cardPresentation";
+import { pickCardReason, pickCardCategory, sanitizeWhyPick, shouldShowCollapsedSources, splitReason, normalizeTitle } from "@/lib/concierge/cardPresentation";
 
 type MessageRole = "user" | "assistant";
 
@@ -59,7 +59,7 @@ interface Props {
   onItemAdded?: () => void;
 }
 
-const CONCIERGE_CACHE_VERSION = 3;
+const CONCIERGE_CACHE_VERSION = 4;
 const CLOSED_SIGNAL_PATTERNS = [
   "permanently closed",
   "closed permanently",
@@ -209,12 +209,20 @@ type DisplayCard = {
     conciergeNote?: string | null;
     categoryLabel?: string | null;
   } | null;
+  display?: {
+    displayWhy?: string | null;
+    displayCategory?: string | null;
+    displayMetaLine?: string | null;
+    displayBadges?: string[];
+    addability?: string | null;
+  } | null;
 };
 
 // Compose the subheader/meta line: `★ 4.8 (9,483 reviews) · Address`.
 // Address is intentionally *included* here so the card has one consolidated
 // info line and the expanded view doesn't need to repeat it.
 function pickCardMeta(card: DisplayCard): string[] {
+  if (card.display?.displayMetaLine) return [card.display.displayMetaLine];
   const details = card.supportingDetails;
   if (details?.metaLine) return [details.metaLine];
   const rating = details?.rating ?? (typeof card.rating === "number" ? card.rating.toFixed(1) : undefined);
@@ -825,7 +833,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                           const isClosed = hasClosedSignal(place);
                           const isOperational = !isClosed && canShowGoogleVerifiedBadge(place);
                           const meta = pickCardMeta(place);
-                          const displayCategory = place.supportingDetails?.categoryLabel ?? category;
+                          const displayCategory = pickCardCategory(place, category);
 
                           return (
                             <ConciergeCard

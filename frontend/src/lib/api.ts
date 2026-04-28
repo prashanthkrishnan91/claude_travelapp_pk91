@@ -1118,6 +1118,16 @@ export async function addOptimizedHotelToTrip(
 
 // ─── AI Concierge ─────────────────────────────────────────────────────────────
 
+export interface ConciergeDisplayFields {
+  displayName: string;
+  displayCategory: string;
+  displayMetaLine?: string | null;
+  displayWhy: string;
+  displaySourceSummary?: string | null;
+  displayBadges: string[];
+  addability: "addable" | "research_only" | "closed";
+}
+
 export interface ConciergeSuggestion {
   type: "attraction" | "restaurant";
   name: string;
@@ -1209,6 +1219,7 @@ export interface UnifiedRestaurantResult {
     conciergeNote?: string | null;
     categoryLabel?: string | null;
   } | null;
+  display?: ConciergeDisplayFields | null;
 }
 
 export interface UnifiedAttractionResult {
@@ -1248,6 +1259,7 @@ export interface UnifiedAttractionResult {
     conciergeNote?: string | null;
     categoryLabel?: string | null;
   } | null;
+  display?: ConciergeDisplayFields | null;
 }
 
 export interface UnifiedHotelResult {
@@ -1287,6 +1299,7 @@ export interface UnifiedHotelResult {
     conciergeNote?: string | null;
     categoryLabel?: string | null;
   } | null;
+  display?: ConciergeDisplayFields | null;
 }
 
 export interface UnifiedAreaComparisonResult {

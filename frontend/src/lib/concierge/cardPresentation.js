@@ -30,14 +30,25 @@ function pickWhyText(value) {
   return undefined;
 }
 
+// Canonical display contract — check display.displayWhy first.
+// Falls back through legacy fields for old cached messages.
 export function pickCardReason(card) {
-  return pickWhyText(card?.supportingDetails?.whyPick)
+  return (card?.display?.displayWhy && card.display.displayWhy.length >= 12 ? card.display.displayWhy : undefined)
+    ?? pickWhyText(card?.supportingDetails?.whyPick)
     ?? pickWhyText(card?.whyPick)
     ?? card?.primaryReason
     ?? FALLBACK_REASON;
 }
 
-const GENERIC_PHRASES_RE = /\b(a strong pick for well-reviewed|guest feedback, location, and relevance|polished night-out experience|viable option|great fit for this trip|trusted place signals|well-reviewed food|well-reviewed drinks|matches this dining request|matches this value-dinner request|fits this hotel request|fits this Michelin request|is a strong attraction match|well-rated)\b/i;
+// Display category from canonical display contract, or legacy fallback.
+export function pickCardCategory(card, fallbackCategory) {
+  return card?.display?.displayCategory || card?.supportingDetails?.categoryLabel || fallbackCategory || "Place";
+}
+
+const GENERIC_PHRASES_RE = /\b(a strong pick for well-reviewed|guest feedback, location, and relevance|polished night-out experience|viable option|great fit for this trip|trusted place signals|well-reviewed food|well-reviewed drinks|matches this dining request|matches this value-dinner request|fits this hotel request|fits this Michelin request|is a strong attraction match|well-rated|consistent guest ratings)\b/i;
+
+// Patterns that indicate the old bad template output — must be filtered.
+const BAD_TEMPLATE_RE = /^[A-Z][^.!?]+\s+is\s+a\s+(?:restaurant|bar|hotel|attraction|place)\b[^.]*with\s+\d|^[Ww]ith\s+\d+[\.,]\d+\s+rating/;
 
 export function sanitizeWhyPick(rawReason, title, allPlaceTitles) {
   const reason = splitReason(rawReason).short;
@@ -45,6 +56,7 @@ export function sanitizeWhyPick(rawReason, title, allPlaceTitles) {
   if (containsAddressSignal(reason)) return FALLBACK_REASON;
   if (/(backed by|available evidence|selected for this|verified restaurant details|verified drinks-focused|verified place details|with rated)/i.test(reason)) return FALLBACK_REASON;
   if (GENERIC_PHRASES_RE.test(reason)) return FALLBACK_REASON;
+  if (BAD_TEMPLATE_RE.test(reason)) return FALLBACK_REASON;
   const hasOtherVenueName = (allPlaceTitles || [])
     .filter((candidate) => normalizeTitle(candidate) !== normalizeTitle(title))
     .some((candidate) => normalizedReason.includes(normalizeTitle(candidate)));
