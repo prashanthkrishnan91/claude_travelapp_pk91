@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Iterable, List, Literal, Optional, Sequence, TypedDict
+from typing import Iterable, List, Literal, Optional, Sequence, Tuple, TypedDict
 
 BANNED_STRINGS_RE = re.compile(
     r"(source checked|editorial mention|source fit|evidence:|tavily|verification score|###|https?://)",
@@ -46,6 +46,15 @@ _INTERNAL_INTENT_TAGS = frozenset({
 
 _NUMBER_RE = re.compile(r"\b\d+(?:\.\d+)?\b")
 _PLACE_WORD_RE = re.compile(r"\b(?:in|near|at)\s+[A-Z][\w''.-]*(?:\s+[A-Z][\w''.-]*)*\b")
+
+# Nightlife category inference signals
+_NIGHTLIFE_VIEW_SIGNALS: frozenset = frozenset({
+    "observatory", "tower", "rooftop", "roof", "perch", "summit", "sky",
+    "altitude", "heights", "view", "vista", "lookout",
+})
+_NIGHTLIFE_SPEAKEASY_SIGNALS: frozenset = frozenset({
+    "speakeasy", "underground",
+})
 
 
 class WhyPick(TypedDict):
@@ -173,6 +182,117 @@ def _price_level_phrase(price_level: Optional[int]) -> Optional[str]:
     return "expensive pricing"
 
 
+def infer_nightlife_category_label(
+    google_types: Optional[List[str]],
+    place_name: str,
+) -> Tuple[str, str]:
+    """Derive bar display label from Google place types + name signals.
+
+    Returns (label, source) where source is one of:
+      'google_types' | 'name_signal' | 'intent_fallback'
+
+    Priority: Google types → name signals → intent fallback.
+    """
+    type_blob = " ".join((t or "").lower() for t in (google_types or []))
+    name_lower = (place_name or "").lower()
+
+    # Google types are authoritative
+    if "cocktail_bar" in type_blob:
+        return "Cocktail Bar", "google_types"
+    if "wine_bar" in type_blob:
+        return "Wine Bar", "google_types"
+    if "lounge_bar" in type_blob:
+        return "Lounge", "google_types"
+    if "brewery" in type_blob or "brewpub" in type_blob:
+        return "Brewery", "google_types"
+
+    # Name signals: rooftop/view/landmark structures
+    if any(sig in name_lower for sig in _NIGHTLIFE_VIEW_SIGNALS):
+        is_rooftop = any(s in name_lower for s in ("rooftop", "roof", "sky"))
+        return ("Rooftop Bar" if is_rooftop else "View Bar"), "name_signal"
+    if any(sig in name_lower for sig in _NIGHTLIFE_SPEAKEASY_SIGNALS):
+        return "Speakeasy", "name_signal"
+    if "lounge" in name_lower:
+        return "Lounge", "name_signal"
+    if any(s in name_lower for s in ("winery", " wine ")):
+        return "Wine Bar", "name_signal"
+    if "brewery" in name_lower or "brewing" in name_lower:
+        return "Brewery", "name_signal"
+
+    # Distinguish bar+restaurant vs pure bar from Google types
+    if type_blob:
+        has_restaurant = any(t in type_blob for t in ("restaurant", "food", "meal"))
+        has_bar = any(t in type_blob for t in ("bar", "night_club"))
+        if has_restaurant and has_bar:
+            return "Bar & Restaurant", "google_types"
+        if has_bar:
+            return "Bar", "google_types"
+        if "night_club" in type_blob:
+            return "Nightclub", "google_types"
+
+    return "Cocktail Bar", "intent_fallback"
+
+
+def _build_nightlife_display_why(
+    *,
+    place_name: str,
+    google_types: Optional[List[str]],
+    rating: Optional[float],
+    review_count: Optional[int],
+) -> str:
+    """Premium deterministic concierge copy for nightlife/bar cards with no clean location.
+
+    Produces place-specific copy using category inference + volume/rating signals.
+    Never produces a bare rating-only sentence.
+    """
+    category_label, _ = infer_nightlife_category_label(google_types, place_name)
+    cat = category_label.lower()
+    name_lower = (place_name or "").lower()
+    r = float(rating or 0)
+    rc = int(review_count or 0)
+
+    # View/landmark venues — the setting is the primary draw
+    if any(sig in name_lower for sig in _NIGHTLIFE_VIEW_SIGNALS):
+        landmark = "landmark tower" if any(s in name_lower for s in ("tower", "observatory")) else "landmark building"
+        return (
+            f"A {cat} in a {landmark} setting, "
+            f"best when the setting matters as much as the drinks."
+        )[:150]
+
+    if any(sig in name_lower for sig in _NIGHTLIFE_SPEAKEASY_SIGNALS):
+        return (
+            f"A speakeasy-style bar with a hidden-door atmosphere, "
+            f"good for a memorable and off-the-beaten-path night out."
+        )[:150]
+
+    # Volume + quality characterization
+    if rc >= 2000 and r >= 4.2:
+        return (
+            f"A high-volume {cat} with standout review depth, "
+            f"reliable for a busy and lively drinks stop."
+        )[:150]
+
+    if rc >= 500 and r >= 4.5:
+        return (
+            f"A well-regarded {cat} with strong Google volume, "
+            f"a solid pick for a dependable nightlife stop."
+        )[:150]
+
+    if rc < 300 and r >= 4.5:
+        return (
+            f"A smaller {cat} with excellent ratings, "
+            f"better for a more local-feeling night out away from tourist-heavy spots."
+        )[:150]
+
+    if r >= 4.5:
+        return f"A highly-rated {cat}, a reliable pick for the evening."[:150]
+
+    if r >= 4.2:
+        return f"A {cat} with solid Google ratings, useful for a dependable evening stop."[:150]
+
+    return f"A {cat} with strong Google presence, a consistent nightlife option."[:150]
+
+
 def has_concrete_fact(text: str) -> bool:
     if _NUMBER_RE.search(text):
         return True
@@ -196,6 +316,7 @@ def build_concierge_display_reason(
     price_level: Optional[int] = None,
     evidence: Optional[Sequence[str]] = None,
     tags: Optional[Iterable[str]] = None,
+    google_types: Optional[List[str]] = None,
 ) -> str:
     """Canonical display reason using a prioritized evidence ladder.
 
@@ -249,8 +370,7 @@ def build_concierge_display_reason(
         return _append_rating(f"{michelin_status}{cat_part}{loc_part}")[:140]
 
     # ── Priority b: Cocktail/nightlife — bar framing, editorial only if bar-specific ─
-    # Category label must read like a bar pick. Only use editorial as lead when it
-    # explicitly mentions cocktail/bar terms; otherwise use "A cocktail bar" framing.
+    # Use Google types to infer precise category label; editorial leads when available.
     if is_cocktail:
         _BAR_TOKENS = ("cocktail", "bar", "drinks", "nightlife", "spirits", "lounge", "speakeasy")
         edit_with_bar_signal = next(
@@ -269,7 +389,22 @@ def build_concierge_display_reason(
             else:
                 result += "."
             return result[:140]
-        return _append_rating(f"A cocktail bar{loc_part}")[:140]
+
+        # Infer precise category from Google types + name signals
+        _cat_label, _ = infer_nightlife_category_label(google_types, place_name)
+        _cat_lower = _cat_label.lower()
+
+        if loc_part:
+            # Clean location available → use it as anchor with a drinks qualifier
+            return _append_rating(f"A {_cat_lower}{loc_part}, a reliable spot for evening drinks")[:140]
+
+        # No clean location → use volume/type characterization (not rating-only)
+        return _build_nightlife_display_why(
+            place_name=place_name,
+            google_types=google_types,
+            rating=rating,
+            review_count=review_count,
+        )[:150]
 
     # ── Priority c: Editorial / list source evidence ─────────────────────────
     if editorial:
@@ -346,6 +481,7 @@ def build_why_pick(
     price_level: Optional[int] = None,
     user_query: str = "",
     intent: Optional[str] = None,
+    google_types: Optional[List[str]] = None,
 ) -> WhyPickResult:
     has_michelin_evidence = bool(michelin_status) or any("michelin" in _clean_chip(ev).lower() for ev in evidence)
     template_id: Literal["rating_and_editorial", "editorial_only", "google_only", "fallback", "michelin"] = (
@@ -373,6 +509,7 @@ def build_why_pick(
         review_count=review_count,
         price_level=price_level,
         evidence=evidence,
+        google_types=google_types,
     )
 
     # Final guards — must never reach these in normal flow.

@@ -1325,18 +1325,31 @@ def _normalize_place_category(
     return "place"
 
 
-def _category_label(category: str, candidate: Any = None) -> str:
-    """Return the short user-facing label shown under the place name."""
+def _category_label(
+    category: str,
+    candidate: Any = None,
+    google_types: Optional[List[str]] = None,
+) -> str:
+    """Return the short user-facing label shown under the place name.
+
+    For bar category, google_types are used first to distinguish specific bar
+    sub-types (cocktail_bar, wine_bar, rooftop/view bar, bar+restaurant, etc.).
+    """
     if category == "restaurant":
         cuisine = getattr(candidate, "cuisine", None) if candidate is not None else None
         if cuisine and isinstance(cuisine, str) and cuisine.strip():
             cuisine_clean = cuisine.strip()
-            if cuisine_clean.lower() in {"cocktail bar", "bar", "nightclub", "lounge"}:
+            # Prevent legacy cuisine="Cocktail Bar" leaking as a restaurant label
+            if cuisine_clean.lower() in {"cocktail bar", "bar", "nightclub", "lounge", "restaurant"}:
                 return "Restaurant"
             return cuisine_clean.title()
         return "Restaurant"
     if category == "bar":
-        return "Cocktail Bar"
+        # Use google_types + name signals for precise bar sub-type
+        from app.concierge.reasoning import infer_nightlife_category_label
+        place_name = getattr(candidate, "name", "") or ""
+        label, _ = infer_nightlife_category_label(google_types, place_name)
+        return label
     if category == "cafe":
         return "Cafe"
     if category == "hotel":
@@ -1589,7 +1602,7 @@ def _build_supporting_details(
         intent=intent,
         user_query=user_query,
     )
-    details.category_label = _category_label(category, venue)
+    details.category_label = _category_label(category, venue, google_types=verification.types)
     if why_pick:
         details.why_pick = _enforce_reason_fragments(str(why_pick), category=category)
     return details
@@ -1883,6 +1896,35 @@ def _classify_hit(title: str, snippet: str, url: str, *, intent: str, destinatio
     return "generic_info_source"
 
 
+_DRINK_INGREDIENT_WORDS: frozenset = frozenset({
+    "cucumber", "lemon", "lime", "ginger", "mint", "basil", "lavender",
+    "elderflower", "passion", "mango", "pineapple", "citrus", "berry",
+    "cherry", "peach", "apple", "vodka", "gin", "rum", "tequila", "bourbon",
+    "whiskey", "whisky", "mezcal", "champagne", "prosecco", "bitters",
+    "simple", "syrup", "juice", "cream", "coconut", "tropical", "spiced",
+    "flavour", "flavor",
+})
+_DRINK_PREP_WORDS: frozenset = frozenset({
+    "collins", "mule", "sour", "fizz", "spritz", "smash", "blast",
+    "express", "punch", "highball", "toddy", "sling", "buck", "rickey",
+    "swizzle", "martini", "negroni", "mojito", "daiquiri", "margarita",
+    "cosmopolitan", "manhattan", "gimlet", "sazerac", "sidecar",
+    "signature", "classic", "special",
+})
+_DRINK_WORDS: frozenset = _DRINK_INGREDIENT_WORDS | _DRINK_PREP_WORDS
+_STOP_WORDS_EN: frozenset = frozenset({"the", "a", "an", "of", "and", "with", "on", "at", "in"})
+
+
+def _is_likely_drink_name(name: str) -> bool:
+    """Return True when a candidate name looks like a cocktail/drink rather than a venue."""
+    words = [w.lower() for w in re.split(r"[\s\-_]+", name) if w]
+    significant = [w for w in words if w not in _STOP_WORDS_EN]
+    # Only flag short names (2-3 significant words) where ALL words are drink vocabulary
+    if len(significant) < 2 or len(significant) > 3:
+        return False
+    return all(w in _DRINK_WORDS for w in significant)
+
+
 def _extract_venue_names_from_text(text: str) -> List[str]:
     """Extract candidate venue names from article/listicle snippet text."""
     if not text:
@@ -1894,6 +1936,8 @@ def _extract_venue_names_from_text(text: str) -> List[str]:
         name = raw.strip(" \t.,;:\'\"").strip("\u201c\u201d\u2018\u2019")
         low = name.lower()
         if 2 < len(name) <= 60 and low not in seen:
+            if _is_likely_drink_name(name):
+                return  # Reject obvious cocktail names (e.g. "Cucumber Collins")
             seen.add(low)
             candidates.append(name)
 
@@ -1918,6 +1962,8 @@ def _extract_venue_names_with_rank(text: str) -> "List[Tuple[str, int]]":
         name = raw.strip(" \t.,;:\'\"").strip("\u201c\u201d\u2018\u2019")
         low = name.lower()
         if 2 < len(name) <= 60 and low not in seen:
+            if _is_likely_drink_name(name):
+                return  # Reject obvious cocktail names
             seen.add(low)
             results.append((name, rank))
 
@@ -2701,6 +2747,7 @@ def _apply_google_gate(
                     price_level=getattr(venue, "price_level", None),
                     user_query=user_query,
                     intent=intent,
+                    google_types=verification.types,
                 )
                 reason, validation_source = _validate_or_fallback_reason(
                     why_pick_payload["why_pick"]["text"],
@@ -2779,15 +2826,26 @@ def _apply_google_gate(
                         price_level=getattr(venue, "price_level", None),
                         evidence=clean_evidence,
                         tags=getattr(venue, "tags", []),
+                        google_types=verification.types,
                     )
                     _sd = getattr(venue, "supporting_details", None)
+                    _cat_label = (_sd.category_label if _sd and _sd.category_label else None) or category or "Place"
+                    # Derive displayCategorySource for debug tracing
+                    from app.concierge.reasoning import infer_nightlife_category_label
+                    _cat_source: Optional[str] = None
+                    if category == "bar":
+                        _, _cat_source = infer_nightlife_category_label(
+                            verification.types, getattr(venue, "name", "") or ""
+                        )
                     venue.display = ConciergeDisplayFields(
                         display_name=getattr(venue, "name", "") or "",
-                        display_category=(_sd.category_label if _sd and _sd.category_label else None) or category or "Place",
+                        display_category=_cat_label,
                         display_meta_line=_sd.meta_line if _sd else None,
                         display_why=_display_why,
                         display_badges=getattr(venue, "source_badges", []),
                         addability="addable" if _google_is_addable(verification) else "research_only",
+                        display_category_source=_cat_source,
+                        display_why_source="deterministic_concierge",
                     )
                 except Exception:
                     pass
@@ -2830,7 +2888,10 @@ def _apply_google_gate(
                 try:
                     if hasattr(venue, "address"):
                         venue.address = verification.formatted_address
-                    if hasattr(venue, "neighborhood"):
+                    # Do NOT overwrite neighborhood with the full address — the
+                    # Tavily-extracted neighborhood (area-level) is cleaner for
+                    # display_why text. Only fill in if currently empty.
+                    if hasattr(venue, "neighborhood") and not getattr(venue, "neighborhood", None):
                         venue.neighborhood = verification.formatted_address
                     if hasattr(venue, "area_label"):
                         venue.area_label = verification.formatted_address

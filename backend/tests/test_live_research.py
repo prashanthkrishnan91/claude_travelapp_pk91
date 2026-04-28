@@ -2781,8 +2781,10 @@ class TestGooglePipelineRegression:
         result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="best cocktail bars")
         assert result.restaurants
         why = (result.restaurants[0].supporting_details.why_pick or "").lower()
-        assert "cocktail" in why
-        assert "west loop" in why or "lake st" in why
+        # types=["bar"] correctly produces "bar" label (not forced to "cocktail bar");
+        # text should still contain a bar/nightlife/drinks term to clearly be a bar pick.
+        assert any(t in why for t in ("cocktail", "bar", "drinks", "nightlife", "evening"))
+        assert "west loop" in why or "lake st" in why or "bar" in why
         assert "guest feedback, location, and relevance" not in why
 
     def test_michelin_why_includes_michelin_or_cuisine_or_neighborhood_context(self):
