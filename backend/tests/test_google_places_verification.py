@@ -557,3 +557,72 @@ class TestFrontendBadgeCopy:
         assert "canShowGoogleVerifiedBadge" in src
         # Gate must require the Google match + OPERATIONAL.
         assert "OPERATIONAL" in src
+
+
+# ── Cuisine alias / reverse-subset matching ──────────────────────────────────
+
+
+class TestReverseSubsetAliasMatching:
+    """Candidate name = Google result name + extra location tokens → still accepted."""
+
+    def setup_method(self):
+        reset_global_place_cache()
+
+    def test_rpm_italian_chicago_resolves_to_rpm_italian(self):
+        # Candidate extracted as "RPM Italian Chicago" (with destination suffix),
+        # Google returns "RPM Italian" with italian_restaurant type in Chicago.
+        place = _operational_place(
+            name="RPM Italian",
+            place_id="ChIJ-rpm",
+            address="52 W Illinois St, Chicago, IL 60654, USA",
+            types=["italian_restaurant", "restaurant", "food", "establishment"],
+        )
+        client = _StubHTTPClient(responses={"rpm italian chicago": [place]})
+        svc = GooglePlacesService(client=client, cache=_GooglePlaceVerificationCache(0))
+        result = svc.verify("RPM Italian Chicago", "Chicago")
+        assert result.matched is True
+        assert result.business_status == OPERATIONAL
+        assert result.confidence in {"high", "medium"}
+        assert is_addable(result) is True
+
+    def test_rpm_italian_exact_match_still_addable(self):
+        # Direct exact-match candidate should still work fine.
+        place = _operational_place(
+            name="RPM Italian",
+            place_id="ChIJ-rpm",
+            address="52 W Illinois St, Chicago, IL 60654, USA",
+            types=["italian_restaurant", "restaurant", "food"],
+        )
+        client = _StubHTTPClient(responses={"rpm italian": [place]})
+        svc = GooglePlacesService(client=client, cache=_GooglePlaceVerificationCache(0))
+        result = svc.verify("RPM Italian", "Chicago")
+        assert result.matched is True
+        assert is_addable(result) is True
+
+    def test_reverse_subset_requires_address_evidence(self):
+        # Without address evidence (destination not in address), the reverse-subset
+        # override should NOT fire — result stays rejected.
+        place = _operational_place(
+            name="Some Italian Place",
+            place_id="ChIJ-sip",
+            address="10 Broadway, New York, NY, USA",  # wrong city
+            types=["italian_restaurant", "restaurant"],
+        )
+        client = _StubHTTPClient(responses={"some italian place chicago": [place]})
+        svc = GooglePlacesService(client=client, cache=_GooglePlaceVerificationCache(0))
+        result = svc.verify("Some Italian Place Chicago", "Chicago")
+        assert is_addable(result) is False
+
+    def test_reverse_subset_too_many_extra_tokens_stays_rejected(self):
+        # Candidate has 4+ extra tokens beyond the result → no override.
+        place = _operational_place(
+            name="Ristorante X",
+            place_id="ChIJ-rx",
+            address="100 N Michigan Ave, Chicago, IL, USA",
+            types=["italian_restaurant", "restaurant"],
+        )
+        client = _StubHTTPClient(responses={"ristorante x the best italian chicago usa": [place]})
+        svc = GooglePlacesService(client=client, cache=_GooglePlaceVerificationCache(0))
+        # 5 extra tokens beyond "ristorante" "x" → should not override
+        result = svc.verify("Ristorante X The Best Italian Chicago USA", "Chicago")
+        assert is_addable(result) is False
