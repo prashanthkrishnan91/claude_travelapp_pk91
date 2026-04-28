@@ -122,6 +122,9 @@ class ConciergeDisplayFields(BaseModel):
     display_source_summary: Optional[str] = None
     display_badges: List[str] = []
     addability: Literal["addable", "research_only", "closed"] = "addable"
+    # Debug trace fields — not shown in UI, used for pipeline observability
+    display_category_source: Optional[str] = None  # "google_types" | "name_signal" | "intent_fallback"
+    display_why_source: Optional[str] = None  # "deterministic_concierge"
 
 
 class WhyPickDetail(BaseModel):

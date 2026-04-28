@@ -19,6 +19,17 @@
 - Added regression coverage for evidence-driven divergence across cocktail bars, Michelin/value claim gating, blocked fallback phrase leakage, and explicit venue-name contamination rejection in reason validation; kept Google verification, ranking, addability, and collapsed-source behavior unchanged.
 - Bumped backend concierge cache version again to flush stale template-style reasons after the evidence-composed rollout.
 
+## 2026-04-29
+- Nightlife/bar display pipeline clean pass: category labels now derived from Google place types + name signals (cocktail_bar → "Cocktail Bar", wine_bar → "Wine Bar", tower/observatory name → "View Bar", bar + restaurant → "Bar & Restaurant"), not forced to "Cocktail Bar" for all nightlife results. Added `infer_nightlife_category_label` to `reasoning.py` for deterministic type-aware categorization.
+- Replaced generic nightlife why-text template ("A cocktail bar with X rating across Y reviews.") with premium deterministic concierge copy via `_build_nightlife_display_why`: view venues get landmark framing, high-volume bars get depth-of-review signal, smaller bars get local-feeling framing, speakeasies get atmosphere framing — all place-specific and non-template.
+- Fixed neighborhood field pollution: `venue.neighborhood` is no longer overwritten with the full formatted address (Google Places API) when a cleaner Tavily-extracted area label already exists; the display_why text now anchors on the area-level neighborhood, not the full address.
+- Added `google_types` parameter to `build_concierge_display_reason` and `build_why_pick` so the full Google place types list informs both category labels and why-text generation.
+- Added `displayCategorySource` and `displayWhySource` debug trace fields to `ConciergeDisplayFields` model for pipeline observability.
+- Added semantically correct `bars` bucket to `finalDisplayPayload` for nightlife queries (alongside legacy `restaurants` for backward compat).
+- Added drink name extractor guard (`_is_likely_drink_name`) in live research so cocktail names from Tavily articles (e.g. "Cucumber Collins", "Spiced Mule") are filtered before entering the verification pipeline.
+- Fixed `_category_label` to pass google_types through to `infer_nightlife_category_label` for bar sub-type disambiguation in `_build_supporting_details`.
+- Added 46 new tests in `test_nightlife_display.py` covering all acceptance criteria; all existing display/reasoning tests pass.
+
 ## 2026-04-28
 - Applied a targeted AI Concierge anti-regression hardening pass for visible card reasons: deterministic `build_why_pick` no longer emits `backed by`, sanitizer logic now blocks `backed by` generally (not just `backed by rated`), and both backend + frontend reason sanitizers now reject the banned fragment set before UI display.
 - Replaced category fallback copy in `LiveResearchService` with neutral polished wording, removed unused category reason templates, and added enforcement so final `supporting_details.why_pick` falls back safely if any banned fragment appears upstream.
