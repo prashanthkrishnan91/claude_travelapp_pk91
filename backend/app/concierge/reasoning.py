@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import re
-from typing import Iterable, List, Literal, Optional, Sequence, Tuple, TypedDict
+from typing import Iterable, List, Literal, Optional, Sequence, TypedDict
 
 BANNED_STRINGS_RE = re.compile(
     r"(source checked|editorial mention|source fit|evidence:|tavily|verification score|###|https?://)",
     re.IGNORECASE,
 )
 
-# Phrases that signal generic, template-level output — must never appear in why_pick.
+# Phrases that signal generic, template-level output — must never appear in display_why.
 GENERIC_PHRASES_RE = re.compile(
     r"(a strong pick for well-reviewed|guest feedback, location, and relevance|"
     r"polished night-out experience|viable option|great fit for this trip|"
@@ -20,11 +20,32 @@ GENERIC_PHRASES_RE = re.compile(
     r"fits this Michelin request|is a strong attraction match|"
     r"available evidence|selected for this|verified restaurant details|"
     r"verified drinks-focused|verified place details|backed by|"
+    r"consistent guest ratings|"
     r"\bwell-rated\b)",
     re.IGNORECASE,
 )
+
+# Patterns that indicate the old bad template output — must never appear.
+_BAD_TEMPLATE_RE = re.compile(
+    r"^\s*[A-Za-z][^.!?]+\s+is\s+a\s+(?:restaurant|bar|hotel|attraction|place)\b[^.]*with\s+\d|"
+    r"^\s*[Ww]ith\s+\d+[\.,]\d+\s+rating",
+    re.IGNORECASE,
+)
+
+# Pure rating/location chips added as fallbacks — not editorial evidence.
+_PURE_RATING_CHIP_RE = re.compile(
+    r"^(?:rated\s+)?\d+[\.,]\d+|^google verified listing|^near\s+",
+    re.IGNORECASE,
+)
+
+# Internal intent/category labels injected as tags — must never be used as editorial leads.
+_INTERNAL_INTENT_TAGS = frozenset({
+    "nightlife", "hidden gem", "luxury value", "romantic", "family-friendly",
+    "google verified", "editorial", "google",
+})
+
 _NUMBER_RE = re.compile(r"\b\d+(?:\.\d+)?\b")
-_PLACE_WORD_RE = re.compile(r"\b(?:in|near|at)\s+[A-Z][\w'’.-]*(?:\s+[A-Z][\w'’.-]*)*\b")
+_PLACE_WORD_RE = re.compile(r"\b(?:in|near|at)\s+[A-Z][\w''.-]*(?:\s+[A-Z][\w''.-]*)*\b")
 
 
 class WhyPick(TypedDict):
@@ -41,6 +62,11 @@ def _clean_chip(text: str) -> str:
     cleaned = re.sub(r"\s+", " ", str(text or "")).strip(" .,-")
     cleaned = re.sub(r"[\[\]#*`]+", "", cleaned).strip()
     return cleaned
+
+
+def _is_pure_rating_chip(chip: str) -> bool:
+    """Return True for fallback rating/location chips that carry no editorial signal."""
+    return bool(_PURE_RATING_CHIP_RE.match(chip.strip()))
 
 
 def ensure_non_empty_evidence(
@@ -147,115 +173,6 @@ def _price_level_phrase(price_level: Optional[int]) -> Optional[str]:
     return "expensive pricing"
 
 
-def _editorial_phrase(evidence: Sequence[str]) -> Optional[str]:
-    for chip in evidence:
-        low = chip.lower()
-        if "michelin" in low:
-            continue
-        if any(tok in low for tok in ("guide", "list", "editor", "featured", "recommended", "infatuation", "eater")):
-            return chip.rstrip(".")
-    return None
-
-
-def _tag_or_sentiment_phrase(evidence: Sequence[str]) -> Optional[str]:
-    for chip in evidence:
-        low = chip.lower()
-        if any(tok in low for tok in ("foursquare", "yelp", "tag", "sentiment")):
-            return chip.rstrip(".")
-    return None
-
-
-def _value_evidence_phrase(
-    evidence: Sequence[str],
-    *,
-    price_level: Optional[int],
-) -> Optional[str]:
-    price_phrase = _price_level_phrase(price_level)
-    if price_phrase and int(price_level or 0) <= 2:
-        return price_phrase
-    for chip in evidence:
-        low = chip.lower()
-        if any(tok in low for tok in ("affordable", "budget", "good deal", "prix fixe", "happy hour", "inexpensive")):
-            return chip.rstrip(".")
-        if "value" in low and any(tok in low for tok in ("$", "price", "priced", "menu", "cost", "under", "around")):
-            return chip.rstrip(".")
-        if "$" in chip and any(tok in low for tok in ("under", "around", "from", "prix")):
-            return chip.rstrip(".")
-    return None
-
-
-def _compose_text(
-    *,
-    template_id: str,
-    place_name: str,
-    evidence: Sequence[str],
-    category: Optional[str],
-    cuisine: Optional[str],
-    neighborhood: Optional[str],
-    michelin_status: Optional[str],
-    intent: Optional[str],
-    user_query: str,
-    rating: Optional[float] = None,
-    review_count: Optional[int] = None,
-    price_level: Optional[int] = None,
-) -> str:
-    place = place_name or "This place"
-    cuisine_phrase = _normalize_phrase(cuisine)
-    location = _location_area_phrase(neighborhood) or _location_phrase(neighborhood)
-    query_low = (user_query or "").lower()
-    is_cocktail = category == "bar" or intent == "nightlife" or ("cocktail" in query_low and "bar" in query_low)
-    rating_signal = _rating_phrase(rating, review_count, evidence)
-    editorial_signal = _editorial_phrase(evidence)
-    tag_signal = _tag_or_sentiment_phrase(evidence)
-    value_signal = _value_evidence_phrase(evidence, price_level=price_level)
-    has_michelin_evidence = bool(michelin_status) or any("michelin" in _clean_chip(ev).lower() for ev in evidence)
-
-    if has_michelin_evidence and category == "restaurant":
-        loc_part = f" in {location}" if location else ""
-        cuisine_part = f" for {cuisine_phrase.lower()}" if cuisine_phrase else ""
-        rating_part = f", with {rating_signal}" if rating_signal else ""
-        star_text = michelin_status or "Michelin-recognized"
-        return f"{place} is {star_text}{loc_part}{cuisine_part}{rating_part}."
-
-    if category == "restaurant":
-        category_phrase = cuisine_phrase.lower() if cuisine_phrase else "restaurant"
-    elif is_cocktail:
-        category_phrase = "cocktail bar"
-    elif category:
-        category_phrase = category.replace("_", " ")
-    else:
-        category_phrase = "place"
-
-    evidence_bits: List[str] = []
-    if rating_signal:
-        evidence_bits.append(rating_signal)
-    if value_signal:
-        evidence_bits.append(value_signal)
-    if editorial_signal:
-        evidence_bits.append(editorial_signal)
-    elif tag_signal:
-        evidence_bits.append(tag_signal)
-
-    base = f"{place}"
-    if location:
-        base = f"{base} in {location}"
-    base = f"{base} is a {category_phrase}"
-
-    if not evidence_bits:
-        return f"{base} with verified listing details."
-
-    seed = sum(ord(c) for c in f"{place}|{category_phrase}|{location or ''}|{rating_signal or ''}") % 3
-    first, rest = evidence_bits[0], evidence_bits[1:]
-    if seed == 0:
-        tail = ", ".join(rest)
-        return f"{base} with {first}" + (f" plus {tail}." if tail else ".")
-    if seed == 1:
-        tail = ", ".join(rest)
-        return f"With {first}" + (f" and {tail}, {base}." if tail else f", {base}.")
-    tail = ", ".join(rest)
-    return f"{base}, with {first}" + (f" and {tail}." if tail else ".")
-
-
 def has_concrete_fact(text: str) -> bool:
     if _NUMBER_RE.search(text):
         return True
@@ -263,6 +180,157 @@ def has_concrete_fact(text: str) -> bool:
         return True
     keyword_hits = ("guide", "michelin", "bar", "restaurant", "cafe", "hotel", "museum", "park", "reviews")
     return any(k in text.lower() for k in keyword_hits)
+
+
+def build_concierge_display_reason(
+    *,
+    place_name: str,
+    query_context: str = "",
+    intent: Optional[str] = None,
+    category: Optional[str] = None,
+    cuisine: Optional[str] = None,
+    neighborhood: Optional[str] = None,
+    michelin_status: Optional[str] = None,
+    rating: Optional[float] = None,
+    review_count: Optional[int] = None,
+    price_level: Optional[int] = None,
+    evidence: Optional[Sequence[str]] = None,
+    tags: Optional[Iterable[str]] = None,
+) -> str:
+    """Canonical display reason using a prioritized evidence ladder.
+
+    Priority:
+      a) Michelin status / explicit intent match (Michelin, cocktail, hidden gem, etc.)
+      b) Editorial / list source evidence
+      c) Neighborhood + cuisine/category
+      d) Category fit with rating as supporting detail
+      e) Rating-only fallback (never the main sentence structure)
+      f) Absolute fallback: "A verified {category} that fits this request, with strong Google signals."
+
+    Never produces "X is a restaurant with rating" or "With rating, X is a restaurant."
+    Rating is always supporting detail appended to a category/location anchor.
+    Max 140 chars.
+    """
+    query_low = (query_context or "").lower()
+
+    # Separate editorial evidence from pure fallback rating/location chips and internal intent tags.
+    editorial = [
+        e for e in (evidence or [])
+        if e and not _is_pure_rating_chip(e) and not BANNED_STRINGS_RE.search(e)
+        and e.strip().lower() not in _INTERNAL_INTENT_TAGS
+    ]
+
+    # Rating as supporting detail string.
+    rating_support = _rating_phrase(rating, review_count, list(evidence or []))
+
+    # Location anchor (area-level, not full address).
+    loc = _location_area_phrase(neighborhood) or _location_phrase(neighborhood)
+    loc_part = f" in {loc}" if loc else ""
+
+    # Is this a cocktail / nightlife request?
+    is_cocktail = (
+        (category or "").lower() in ("bar", "night_club", "cocktail_bar")
+        or intent == "nightlife"
+        or "cocktail" in query_low
+    )
+
+    def _append_rating(base: str) -> str:
+        """Append rating as supporting detail if it fits within 140 chars."""
+        stripped = base.rstrip(".")
+        if rating_support and not stripped.lower().endswith(rating_support.lower()):
+            candidate = f"{stripped} with {rating_support}."
+            if len(candidate) <= 140:
+                return candidate
+        return stripped + "."
+
+    # ── Priority a: Michelin status ──────────────────────────────────────────
+    if michelin_status:
+        cat_part = f" {cuisine.lower()}" if cuisine else ""
+        return _append_rating(f"{michelin_status}{cat_part}{loc_part}")[:140]
+
+    # ── Priority b: Cocktail/nightlife — bar framing, editorial only if bar-specific ─
+    # Category label must read like a bar pick. Only use editorial as lead when it
+    # explicitly mentions cocktail/bar terms; otherwise use "A cocktail bar" framing.
+    if is_cocktail:
+        _BAR_TOKENS = ("cocktail", "bar", "drinks", "nightlife", "spirits", "lounge", "speakeasy")
+        edit_with_bar_signal = next(
+            (e for e in editorial if any(tok in e.lower() for tok in _BAR_TOKENS)),
+            None,
+        )
+        if edit_with_bar_signal:
+            best = _clean_chip(edit_with_bar_signal)
+            if len(best) > 100:
+                best = best[:97] + "..."
+            result = best.rstrip(".")
+            if loc and loc.lower() not in result.lower():
+                result += f" ({loc})"
+            if rating_support and len(result) + len(rating_support) + 5 <= 135:
+                result += f" — {rating_support}."
+            else:
+                result += "."
+            return result[:140]
+        return _append_rating(f"A cocktail bar{loc_part}")[:140]
+
+    # ── Priority c: Editorial / list source evidence ─────────────────────────
+    if editorial:
+        best = _clean_chip(editorial[0])
+        if len(best) > 100:
+            best = best[:97] + "..."
+        result = best.rstrip(".")
+        if loc and loc.lower() not in result.lower():
+            result += f" ({loc})"
+        if rating_support and len(result) + len(rating_support) + 5 <= 135:
+            result += f" — {rating_support}."
+        else:
+            result += "."
+        return result[:140]
+
+    # ── Priority d: Intent-specific category framing (no editorial) ──────────
+    if intent == "hidden_gems":
+        if cuisine and category == "restaurant":
+            inner = f"{cuisine.lower()} restaurant"
+        elif cuisine:
+            inner = cuisine.lower()
+        else:
+            inner = (category or "spot").replace("_", " ")
+        return _append_rating(f"A local {inner}{loc_part}")[:140]
+
+    if "near my hotel" in query_low or "near hotel" in query_low:
+        if category in ("cafe", "bar", "hotel", "attraction"):
+            inner = category
+        elif cuisine:
+            inner = cuisine.lower()
+        else:
+            inner = (category or "pick").replace("_", " ")
+        return _append_rating(f"A {inner}{loc_part}")[:140]
+
+    if "brunch" in query_low:
+        return _append_rating(f"A popular brunch spot{loc_part}")[:140]
+
+    if intent == "romantic":
+        inner = cuisine.lower() if cuisine else (category or "spot").replace("_", " ")
+        return _append_rating(f"A romantic {inner}{loc_part}")[:140]
+
+    if intent == "family_friendly":
+        inner = cuisine.lower() if cuisine else (category or "spot").replace("_", " ")
+        return _append_rating(f"A family-friendly {inner}{loc_part}")[:140]
+
+    # ── Priority e: Neighborhood + cuisine/category ──────────────────────────
+    if loc and cuisine:
+        return _append_rating(f"A top-rated {cuisine.lower()}{loc_part}")[:140]
+
+    if loc:
+        inner = (category or "place").replace("_", " ")
+        return _append_rating(f"A {inner}{loc_part}")[:140]
+
+    # ── Priority f: Category + rating (no location) ──────────────────────────
+    if rating_support:
+        inner = cuisine.lower() if cuisine else (category or "place").replace("_", " ")
+        return f"A verified {inner} with {rating_support}."[:140]
+
+    # ── Priority g: Absolute fallback ────────────────────────────────────────
+    inner = cuisine.lower() if cuisine else (category or "place").replace("_", " ")
+    return f"A verified {inner} that fits this request, with strong Google signals."[:140]
 
 
 def build_why_pick(
@@ -280,41 +348,49 @@ def build_why_pick(
     intent: Optional[str] = None,
 ) -> WhyPickResult:
     has_michelin_evidence = bool(michelin_status) or any("michelin" in _clean_chip(ev).lower() for ev in evidence)
-    template_id = "michelin" if category == "restaurant" and has_michelin_evidence else _pick_template(evidence, rating, review_count)
+    template_id: Literal["rating_and_editorial", "editorial_only", "google_only", "fallback", "michelin"] = (
+        "michelin" if category == "restaurant" and has_michelin_evidence
+        else _pick_template(evidence, rating, review_count)
+    )
 
-    concrete_evidence = list(evidence)
-    rating_phrase = _rating_phrase(rating, review_count, concrete_evidence)
-    if rating_phrase and all(rating_phrase.lower() != ev.lower() for ev in concrete_evidence):
-        concrete_evidence = [rating_phrase, *concrete_evidence]
+    # Promote michelin_status when it's embedded only in evidence chips.
+    effective_michelin = michelin_status
+    if not effective_michelin and has_michelin_evidence:
+        for chip in evidence:
+            if "michelin" in chip.lower():
+                effective_michelin = chip.rstrip(".")
+                break
 
-    text = _compose_text(
-        template_id=template_id,
+    text = build_concierge_display_reason(
         place_name=place_name or "This place",
-        evidence=concrete_evidence,
+        query_context=user_query,
+        intent=intent,
         category=category,
         cuisine=cuisine,
         neighborhood=neighborhood,
-        michelin_status=michelin_status,
-        intent=intent,
-        user_query=user_query,
+        michelin_status=effective_michelin,
         rating=rating,
         review_count=review_count,
         price_level=price_level,
+        evidence=evidence,
     )
 
-    if BANNED_STRINGS_RE.search(text) or GENERIC_PHRASES_RE.search(text):
+    # Final guards — must never reach these in normal flow.
+    if BANNED_STRINGS_RE.search(text) or GENERIC_PHRASES_RE.search(text) or _BAD_TEMPLATE_RE.search(text):
         loc = _location_phrase(neighborhood)
         loc_part = f" {loc}" if loc else ""
-        rp = _rating_phrase(rating, review_count, concrete_evidence) or "verified place details"
-        text = f"{place_name or 'This place'} is a{loc_part} option with {rp.lower()}."
+        rp = _rating_phrase(rating, review_count, list(evidence)) or "verified place details"
+        text = f"A verified{loc_part} option with {rp.lower()}."
+
     if "backed by" in text.lower() or "with rated" in text.lower():
         text = re.sub(r"\bbacked by\b", "with", text, flags=re.IGNORECASE)
         text = re.sub(r"\bwith rated\b", "with a", text, flags=re.IGNORECASE)
+
     if not has_concrete_fact(text):
         loc = _location_phrase(neighborhood)
         loc_part = f" {loc}" if loc else ""
-        rating_part = _rating_phrase(rating, review_count, concrete_evidence) or "verified place details"
-        text = f"{place_name or 'This place'} is a{loc_part} option with {rating_part.lower()}."
+        rating_part = _rating_phrase(rating, review_count, list(evidence)) or "verified place details"
+        text = f"A verified{loc_part} option with {rating_part.lower()}."
 
     return {
         "why_pick": {"text": text, "generation_method": "deterministic"},

@@ -52,6 +52,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from app.concierge.reasoning import (
+    build_concierge_display_reason,
     build_why_pick,
     ensure_non_empty_evidence,
 )
@@ -70,6 +71,7 @@ from app.models.concierge import (
     INTENT_RESTAURANTS,
     INTENT_REWARDS_HELP,
     INTENT_ROMANTIC,
+    ConciergeDisplayFields,
     GoogleVerification,
     SOURCE_LIVE_SEARCH,
     SOURCE_NONE,
@@ -629,8 +631,8 @@ class _TTLCache:
 _GLOBAL_CACHE = _TTLCache(ttl_seconds=1800)
 # Separate cache for candidate verification results.
 _VERIFICATION_CACHE = _TTLCache(ttl_seconds=1800)
-# Bumped to invalidate stale cached reasons after evidence-composed why_pick rollout.
-CONCIERGE_CACHE_VERSION = 6
+# Bumped to invalidate stale cached reasons after canonical display contract rollout.
+CONCIERGE_CACHE_VERSION = 7
 
 
 def _normalize_query(query: str) -> str:
@@ -1176,7 +1178,7 @@ def _reason_guard(reason: str, own_name: str, known_candidate_names: List[str]) 
 
 _CATEGORY_FALLBACK_REASON = {
     "restaurant": "A well-regarded dining option with verified Google listing.",
-    "bar": "A verified cocktail bar with consistent guest ratings.",
+    "bar": "A well-regarded local bar with verified Google listing.",
     "cafe": "A reliable spot for coffee and a relaxed setting.",
     "hotel": "A well-located stay with positive guest ratings.",
     "attraction": "A popular local attraction with verified listing details.",
@@ -2675,6 +2677,32 @@ def _apply_google_gate(
                     if src_count > 0:
                         badges.append("Editorial")
                     venue.source_badges = badges
+                except Exception:
+                    pass
+                try:
+                    _display_why = build_concierge_display_reason(
+                        place_name=getattr(venue, "name", "") or "",
+                        query_context=user_query,
+                        intent=intent,
+                        category=category,
+                        cuisine=getattr(venue, "cuisine", None),
+                        neighborhood=getattr(venue, "neighborhood", None),
+                        michelin_status=getattr(venue, "michelin_status", None),
+                        rating=verification.rating,
+                        review_count=verification.user_rating_count,
+                        price_level=getattr(venue, "price_level", None),
+                        evidence=clean_evidence,
+                        tags=getattr(venue, "tags", []),
+                    )
+                    _sd = getattr(venue, "supporting_details", None)
+                    venue.display = ConciergeDisplayFields(
+                        display_name=getattr(venue, "name", "") or "",
+                        display_category=(_sd.category_label if _sd and _sd.category_label else None) or category or "Place",
+                        display_meta_line=_sd.meta_line if _sd else None,
+                        display_why=_display_why,
+                        display_badges=getattr(venue, "source_badges", []),
+                        addability="addable" if _google_is_addable(verification) else "research_only",
+                    )
                 except Exception:
                     pass
                 try:

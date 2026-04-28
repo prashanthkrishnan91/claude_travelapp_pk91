@@ -4,6 +4,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
+
+
 from pydantic import BaseModel
 
 
@@ -107,6 +109,21 @@ class VenueEnrichment(BaseModel):
 
 
 
+class ConciergeDisplayFields(BaseModel):
+    """Canonical display contract for AI Concierge cards.
+
+    Frontend should read these fields directly; no frontend-side reason
+    generation is needed when this object is present.
+    """
+    display_name: str
+    display_category: str
+    display_meta_line: Optional[str] = None
+    display_why: str
+    display_source_summary: Optional[str] = None
+    display_badges: List[str] = []
+    addability: Literal["addable", "research_only", "closed"] = "addable"
+
+
 class WhyPickDetail(BaseModel):
     text: str
     generation_method: Literal["deterministic", "llm"] = "deterministic"
@@ -154,6 +171,7 @@ class UnifiedRestaurantResult(BaseModel):
     reason_source: Optional[str] = None
     why_pick: Optional[WhyPickDetail] = None
     supporting_details: Optional[PlaceSupportingDetails] = None
+    display: Optional[ConciergeDisplayFields] = None
 
 
 class UnifiedAttractionResult(BaseModel):
@@ -185,6 +203,7 @@ class UnifiedAttractionResult(BaseModel):
     reason_source: Optional[str] = None
     why_pick: Optional[WhyPickDetail] = None
     supporting_details: Optional[PlaceSupportingDetails] = None
+    display: Optional[ConciergeDisplayFields] = None
 
 
 class UnifiedHotelResult(BaseModel):
@@ -216,6 +235,7 @@ class UnifiedHotelResult(BaseModel):
     reason_source: Optional[str] = None
     why_pick: Optional[WhyPickDetail] = None
     supporting_details: Optional[PlaceSupportingDetails] = None
+    display: Optional[ConciergeDisplayFields] = None
 
 
 class UnifiedResearchSourceResult(BaseModel):
