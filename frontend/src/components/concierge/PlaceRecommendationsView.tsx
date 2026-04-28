@@ -1,4 +1,5 @@
 import type { ConciergeSuggestion, PlaceRecommendationsResponse } from "@/lib/concierge/types";
+import { pickCardReason, sanitizeWhyPick } from "@/lib/concierge/cardPresentation";
 
 interface PlaceRecommendationsViewProps {
   response: PlaceRecommendationsResponse;
@@ -31,11 +32,12 @@ function reasonForCard(card: PlaceCard, suggestions: ConciergeSuggestion[]): str
     ? card.supportingDetails?.whyPick
     : card.supportingDetails?.whyPick?.text;
   const fromTopLevel = typeof card.whyPick === "string" ? card.whyPick : card.whyPick?.text;
-  return fromTopLevel ?? fromSupporting ?? matchingSuggestion?.reason ?? "Strong fit for this trip based on trusted place signals.";
+  return fromSupporting ?? fromTopLevel ?? matchingSuggestion?.reason ?? pickCardReason(card);
 }
 
 export function PlaceRecommendationsView({ response }: PlaceRecommendationsViewProps) {
   const cards = parsePlaceCards(response);
+  const allTitles = cards.map((card) => card.name ?? "");
 
   return (
     <section aria-label="place recommendations" className="space-y-3">
@@ -45,7 +47,7 @@ export function PlaceRecommendationsView({ response }: PlaceRecommendationsViewP
           const title = card.name ?? "Recommended place";
           const category = card.supportingDetails?.categoryLabel ?? card.cuisine ?? card.category ?? "Recommendation";
           const meta = card.supportingDetails?.metaLine;
-          const reason = reasonForCard(card, response.suggestions);
+          const reason = sanitizeWhyPick(reasonForCard(card, response.suggestions), title, allTitles);
           const sourceLink = card.bookingLink ?? card.sourceUrl;
 
           return (

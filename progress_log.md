@@ -18,3 +18,9 @@
 - Tightened claim gating so Michelin wording only appears with Michelin evidence and value wording only appears with explicit value/price evidence (including low Google price level), while unsupported claims (e.g., hidden gem / local favorite / splurge) are no longer introduced.
 - Added regression coverage for evidence-driven divergence across cocktail bars, Michelin/value claim gating, blocked fallback phrase leakage, and explicit venue-name contamination rejection in reason validation; kept Google verification, ranking, addability, and collapsed-source behavior unchanged.
 - Bumped backend concierge cache version again to flush stale template-style reasons after the evidence-composed rollout.
+
+## 2026-04-28
+- Applied a targeted AI Concierge anti-regression hardening pass for visible card reasons: deterministic `build_why_pick` no longer emits `backed by`, sanitizer logic now blocks `backed by` generally (not just `backed by rated`), and both backend + frontend reason sanitizers now reject the banned fragment set before UI display.
+- Replaced category fallback copy in `LiveResearchService` with neutral polished wording, removed unused category reason templates, and added enforcement so final `supporting_details.why_pick` falls back safely if any banned fragment appears upstream.
+- Aligned `PlaceRecommendationsView` with shared card presentation helpers (`pickCardReason` + `sanitizeWhyPick`), standardized reason priority to `supportingDetails.whyPick` first, and removed the old hardcoded generic fallback sentence.
+- Added regression tests across backend and frontend to guarantee banned fragments (including `backed by`, `available evidence`, `selected for this`, and related variants) never surface in rendered card reasons.

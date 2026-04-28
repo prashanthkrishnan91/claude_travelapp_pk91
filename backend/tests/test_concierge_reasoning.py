@@ -286,3 +286,24 @@ def test_fallback_generic_phrases_are_blocked_by_guard():
     low = text.lower()
     assert "selected for this bar request" not in low
     assert "a strong pick for well-reviewed" not in low
+
+
+def test_build_why_pick_never_emits_backed_by_including_seed_zero_paths():
+    seed_zero_input_found = False
+    for i in range(60):
+        place_name = f"Seed Candidate {i}"
+        text = build_why_pick(
+            place_name=place_name,
+            evidence=["4.5 rating across 120 reviews", "Mentioned by local guides"],
+            rating=4.5,
+            review_count=120,
+            category="bar",
+            neighborhood="West Loop",
+            intent="nightlife",
+            user_query="cocktail bars",
+        )["why_pick"]["text"]
+        seed = sum(ord(c) for c in f"{place_name}|cocktail bar|West Loop|4.5 rating across 120 reviews") % 3
+        if seed == 0:
+            seed_zero_input_found = True
+        assert "backed by" not in text.lower()
+    assert seed_zero_input_found is True

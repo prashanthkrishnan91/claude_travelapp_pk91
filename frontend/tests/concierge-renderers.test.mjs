@@ -9,6 +9,7 @@ import {
 } from '../src/lib/concierge/cardPresentation.js';
 
 const aiConciergePanel = readFileSync(new URL('../src/components/trips/AIConciergePanel.tsx', import.meta.url), 'utf8');
+const placeRecommendationsView = readFileSync(new URL('../src/components/concierge/PlaceRecommendationsView.tsx', import.meta.url), 'utf8');
 
 const blockedGenericPhrases = [
   'A strong pick for well-reviewed',
@@ -54,10 +55,10 @@ test('card reason prefers supportingDetails.whyPick.text over fallback', () => {
 
 test('sanitizeWhyPick blocks awkward fragments and cross-venue leakage', () => {
   const fallback = sanitizeWhyPick('Alinea is backed by rated 4.8 and with rated praise.', 'Alinea', ['Alinea', 'Oriole']);
-  assert.match(fallback, /Selected because available place details/i);
+  assert.match(fallback, /well-regarded local pick with verified listing details/i);
 
   const leaked = sanitizeWhyPick('Try Oriole first.', 'Alinea', ['Alinea', 'Oriole']);
-  assert.match(leaked, /Selected because available place details/i);
+  assert.match(leaked, /well-regarded local pick with verified listing details/i);
 });
 
 test('sanitizeWhyPick blocks all listed generic phrases', () => {
@@ -72,8 +73,22 @@ test('sanitizeWhyPick blocks all listed generic phrases', () => {
   ];
   for (const input of genericInputs) {
     const result = sanitizeWhyPick(input, 'Some Place', ['Some Place']);
-    assert.match(result, /Selected because available place details/i,
+    assert.match(result, /well-regarded local pick with verified listing details/i,
       `Expected fallback for: "${input}", got: "${result}"`);
+  }
+});
+
+test('sanitizeWhyPick replaces all newly banned fragments', () => {
+  const bannedInputs = [
+    'This place is backed by guest feedback.',
+    'Selected for this request based on available evidence.',
+    'Verified restaurant details are included here.',
+    'Verified drinks-focused details indicate quality.',
+    'Verified place details confirm this pick.',
+  ];
+  for (const input of bannedInputs) {
+    const result = sanitizeWhyPick(input, 'Some Place', ['Some Place']);
+    assert.equal(result, 'A well-regarded local pick with verified listing details.');
   }
 });
 
@@ -87,7 +102,7 @@ test('sanitizeWhyPick passes evidence-based text with rating and location', () =
   for (const input of goodInputs) {
     const result = sanitizeWhyPick(input, 'Test Place', ['Test Place']);
     assert.equal(
-      /Selected because available place details/i.test(result),
+      /well-regarded local pick with verified listing details/i.test(result),
       false,
       `Expected good text to pass, got fallback for: "${input}"`,
     );
@@ -146,6 +161,13 @@ test('AIConciergePanel keeps compact Sources used disclosure path', () => {
   assert.match(aiConciergePanel, /Sources used/);
   assert.match(aiConciergePanel, /<details/);
   assert.match(aiConciergePanel, /shouldShowCollapsedSources\(msg\)/);
+});
+
+test('PlaceRecommendationsView sanitizes reasons via shared cardPresentation helpers', () => {
+  assert.match(placeRecommendationsView, /pickCardReason/);
+  assert.match(placeRecommendationsView, /sanitizeWhyPick/);
+  assert.match(placeRecommendationsView, /fromSupporting \?\? fromTopLevel/);
+  assert.doesNotMatch(placeRecommendationsView, /Strong fit for this trip based on trusted place signals\./);
 });
 
 test('AIConciergePanel does not render research sources as ConciergeCard', () => {

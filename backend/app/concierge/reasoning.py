@@ -18,6 +18,8 @@ GENERIC_PHRASES_RE = re.compile(
     r"well-reviewed food|well-reviewed drinks|matches this dining request|"
     r"matches this value-dinner request|fits this hotel request|"
     r"fits this Michelin request|is a strong attraction match|"
+    r"available evidence|selected for this|verified restaurant details|"
+    r"verified drinks-focused|verified place details|backed by|"
     r"\bwell-rated\b)",
     re.IGNORECASE,
 )
@@ -246,7 +248,7 @@ def _compose_text(
     first, rest = evidence_bits[0], evidence_bits[1:]
     if seed == 0:
         tail = ", ".join(rest)
-        return f"{base} backed by {first}" + (f" plus {tail}." if tail else ".")
+        return f"{base} with {first}" + (f" plus {tail}." if tail else ".")
     if seed == 1:
         tail = ", ".join(rest)
         return f"With {first}" + (f" and {tail}, {base}." if tail else f", {base}.")
@@ -305,8 +307,9 @@ def build_why_pick(
         loc_part = f" {loc}" if loc else ""
         rp = _rating_phrase(rating, review_count, concrete_evidence) or "verified place details"
         text = f"{place_name or 'This place'} is a{loc_part} option with {rp.lower()}."
-    if "backed by rated" in text.lower() or "with rated" in text.lower():
-        text = text.replace("backed by rated", "with a").replace("with rated", "with a")
+    if "backed by" in text.lower() or "with rated" in text.lower():
+        text = re.sub(r"\bbacked by\b", "with", text, flags=re.IGNORECASE)
+        text = re.sub(r"\bwith rated\b", "with a", text, flags=re.IGNORECASE)
     if not has_concrete_fact(text):
         loc = _location_phrase(neighborhood)
         loc_part = f" {loc}" if loc else ""

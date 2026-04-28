@@ -38,6 +38,8 @@ from app.services.live_research import (
     VerificationResult,
     _NoopProvider,
     _TTLCache,
+    _BANNED_REASON_FRAGMENTS,
+    _CATEGORY_FALLBACK_REASON,
     _VERIFICATION_CACHE,
     _build_verification_query,
     _check_verification_hits,
@@ -48,6 +50,7 @@ from app.services.live_research import (
     _normalize_place_category,
     _reason_guard,
     _sanitize_reason_evidence_text,
+    _build_supporting_details,
     _validate_or_fallback_reason,
     _validate_venue_candidate,
     build_place_reason,
@@ -3302,3 +3305,35 @@ def test_acceptance_non_place_prompt_matrix_routes(prompt, expected_response_typ
 
     decision = route_prompt(prompt, confidence_threshold=0.5)
     assert decision.response_type == expected_response_type
+
+
+def test_category_fallback_reason_values_do_not_contain_banned_fragments():
+    for category, fallback in _CATEGORY_FALLBACK_REASON.items():
+        low = fallback.lower()
+        for fragment in _BANNED_REASON_FRAGMENTS:
+            assert fragment not in low, f"{category} fallback leaked banned fragment: {fragment}"
+
+
+def test_supporting_details_why_pick_is_sanitized_when_upstream_reason_contains_banned_fragment():
+    venue = SimpleNamespace(name="Kumiko")
+    verification = GooglePlaceVerification(
+        provider_place_id="gp-kumiko",
+        name="Kumiko",
+        formatted_address="630 W Lake St, Chicago, IL",
+        business_status="OPERATIONAL",
+        confidence="high",
+        rating=4.7,
+        user_rating_count=1200,
+        types=["bar"],
+    )
+    details = _build_supporting_details(
+        venue,
+        verification,
+        why_pick="Kumiko is backed by available evidence and selected for this bar request using verified drinks-focused details.",
+        intent=INTENT_NIGHTLIFE,
+        user_query="cocktail bars",
+    )
+    assert details.why_pick == _CATEGORY_FALLBACK_REASON["bar"]
+    low = (details.why_pick or "").lower()
+    for fragment in _BANNED_REASON_FRAGMENTS:
+        assert fragment not in low
