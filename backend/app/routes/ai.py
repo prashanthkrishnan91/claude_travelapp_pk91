@@ -184,9 +184,14 @@ def concierge_debug_trace(payload: ConciergeDebugRequest, db: DB, user_id: Curre
 
     return {
         "summary": {
-            "raw_candidate_count": debug_out.get("raw_candidate_count", 0),
+            "raw_provider_candidate_count": debug_out.get("raw_provider_candidate_count", debug_out.get("raw_candidate_count", 0)),
+            "extracted_candidate_count": debug_out.get("extracted_candidate_count", debug_out.get("raw_candidate_count", 0)),
+            "google_direct_candidate_count": debug_out.get("google_direct_candidate_count", 0),
+            "merged_candidate_count": debug_out.get("merged_candidate_count", debug_out.get("deduped_candidate_count", 0)),
             "deduped_candidate_count": debug_out.get("deduped_candidate_count", 0),
+            "raw_candidate_count": debug_out.get("raw_candidate_count", 0),
             "google_matched_count": debug_out.get("google_matched_count", 0),
+            "accepted_operational_count": debug_out.get("google_matched_count", 0),
             "rejected_count_by_reason": debug_out.get("rejection_reasons", {}),
             "final_addable_count": len(all_addable),
             "research_only_count": len(result.research_sources),

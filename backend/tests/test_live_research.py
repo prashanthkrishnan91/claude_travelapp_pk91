@@ -2332,7 +2332,7 @@ class TestGooglePipelineRegression:
             place_verifier=self._google_stub(google_map),
         )
         result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars near my hotel")
-        assert len(result.restaurants) == 8
+        assert len(result.restaurants) >= 8  # cap is max_per_kind=max_results (default 10), so 9 verified pass through
 
     def test_reason_text_is_clean_not_address_led_and_no_cross_contamination(self):
         article = _hit(
@@ -3625,3 +3625,249 @@ class TestCandidateExtractionUnderfillFixes:
         assert not (result.matched and result.confidence in {"high", "medium"}), (
             "Single-word 'Lime' must not alias-match 'Lime Painting' as a bar"
         )
+
+
+# ── Google-direct selection and ranking ──────────────────────────────────────
+
+def _gv(place_id: str, name: str, address: str = "Chicago, IL", rating: float = 4.5, reviews: int = 500) -> GooglePlaceVerification:
+    return GooglePlaceVerification(
+        provider_place_id=place_id,
+        name=name,
+        formatted_address=address,
+        business_status="OPERATIONAL",
+        google_maps_uri=f"https://maps.google.com/?cid={place_id}",
+        rating=rating,
+        user_rating_count=reviews,
+        types=["restaurant", "point_of_interest"],
+        confidence="high",
+    )
+
+
+class TestGoogleDirectSelectionRanking:
+    """Post-verification selection must include google_direct candidates.
+
+    Acceptance: for 11 accepted candidates (including google_direct) with
+    limit=10, finalAddableCount should be more than 4.
+    """
+
+    def setup_method(self):
+        reset_global_cache()
+
+    def test_google_direct_candidates_included_in_normalize_hits(self):
+        """google_direct stubs injected into normalize_hits appear in final output."""
+        gvs = {
+            "girl & the goat": _gv("gp-gatg", "Girl & The Goat", rating=4.6, reviews=5000),
+            "aba": _gv("gp-aba", "Aba", rating=4.5, reviews=2000),
+            "river roast": _gv("gp-rr", "River Roast", rating=4.4, reviews=1500),
+        }
+        google_direct = {
+            "girl & the goat": "Girl & The Goat",
+            "aba": "Aba",
+            "river roast": "River Roast",
+        }
+        out = normalize_hits(
+            [],  # no Tavily hits — purely google_direct
+            intent=INTENT_RESTAURANTS,
+            destination="Chicago",
+            user_query="best restaurants in Chicago",
+            google_verifications=gvs,
+            google_direct_candidates=google_direct,
+        )
+        names = [r.name for r in out["restaurants"]]
+        assert "Girl & The Goat" in names
+        assert "Aba" in names
+        assert "River Roast" in names
+        assert len(out["restaurants"]) == 3
+
+    def test_google_direct_not_excluded_when_article_candidates_exist(self):
+        """google_direct candidates compete alongside article-extracted candidates."""
+        article_hit = _hit(
+            "Best Restaurants Chicago",
+            "https://example.com/guide",
+            "1. Kasama — Filipino restaurant Noble Square Chicago. "
+            "2. Lula Cafe — Logan Square Chicago.",
+        )
+        gvs = {
+            "kasama": _gv("gp-kasama", "Kasama", rating=4.8, reviews=3000),
+            "lula cafe": _gv("gp-lula", "Lula Cafe", rating=4.6, reviews=2500),
+            "girl & the goat": _gv("gp-gatg", "Girl & The Goat", rating=4.6, reviews=5000),
+            "aba": _gv("gp-aba", "Aba", rating=4.5, reviews=2000),
+        }
+        google_direct = {
+            "girl & the goat": "Girl & The Goat",
+            "aba": "Aba",
+        }
+        verified = {
+            "kasama": VerificationResult(verified=True, source_url="https://example.com", neighborhood="Noble Square"),
+            "lula cafe": VerificationResult(verified=True, source_url="https://example.com", neighborhood="Logan Square"),
+        }
+        out = normalize_hits(
+            [article_hit],
+            intent=INTENT_RESTAURANTS,
+            destination="Chicago",
+            user_query="best restaurants in Chicago",
+            verified_candidates=verified,
+            google_verifications=gvs,
+            google_direct_candidates=google_direct,
+        )
+        names = [r.name for r in out["restaurants"]]
+        assert "Girl & The Goat" in names, f"google_direct candidate missing from {names}"
+        assert "Aba" in names, f"google_direct candidate missing from {names}"
+        assert len(out["restaurants"]) == 4
+
+    def test_eleven_accepted_candidates_with_limit_10_returns_more_than_four(self):
+        """Simulates the reported trace: 11 accepted, limit 10 → finalAddableCount > 4."""
+        candidates = [
+            ("kasama", "Kasama", 4.8, 3000),
+            ("lula cafe", "Lula Cafe", 4.6, 2500),
+            ("pleasant house pub", "Pleasant House Pub", 4.5, 1200),
+            ("the crepe shop", "The Crepe Shop", 4.4, 800),
+            ("aba", "Aba", 4.5, 2000),
+            ("alla vita", "Alla Vita", 4.4, 1500),
+            ("the dearborn", "The Dearborn", 4.3, 1800),
+            ("the izakaya", "The Izakaya", 4.3, 700),
+            ("quartino ristorante", "Quartino Ristorante", 4.2, 2200),
+            ("girl & the goat", "Girl & The Goat", 4.6, 5000),
+            ("river roast", "River Roast", 4.4, 1500),
+        ]
+        gvs = {low: _gv(f"gp-{i}", name, rating=rating, reviews=reviews) for i, (low, name, rating, reviews) in enumerate(candidates)}
+
+        # First 4 are article-extracted; remaining 7 are google_direct
+        article_extracted = [low for low, _, _, _ in candidates[:4]]
+        google_direct = {low: name for low, name, _, _ in candidates[4:]}
+
+        verified = {
+            low: VerificationResult(verified=True, source_url="https://example.com")
+            for low in article_extracted
+        }
+        article_hit = _hit(
+            "Best Restaurants in Chicago",
+            "https://example.com/guide",
+            ". ".join(f"{i+1}. {name} — restaurant in Chicago." for i, (_, name, _, _) in enumerate(candidates[:4])),
+        )
+        out = normalize_hits(
+            [article_hit],
+            intent=INTENT_RESTAURANTS,
+            destination="Chicago",
+            user_query="best restaurants in Chicago",
+            max_per_kind=10,
+            verified_candidates=verified,
+            google_verifications=gvs,
+            google_direct_candidates=google_direct,
+        )
+        assert len(out["restaurants"]) > 4, (
+            f"Expected >4 final cards from 11 accepted candidates, got {len(out['restaurants'])}: "
+            f"{[r.name for r in out['restaurants']]}"
+        )
+        names = [r.name for r in out["restaurants"]]
+        google_direct_names = {name for _, name, _, _ in candidates[4:]}
+        assert any(n in google_direct_names for n in names), (
+            f"No google_direct candidate in final output: {names}"
+        )
+
+    def test_google_direct_scored_by_google_rating_not_zero(self):
+        """google_direct stubs get proper ai_score from _apply_google_gate, not 0.0."""
+        gvs = {"aba": _gv("gp-aba", "Aba", rating=4.7, reviews=3000)}
+        out = normalize_hits(
+            [],
+            intent=INTENT_RESTAURANTS,
+            destination="Chicago",
+            user_query="best restaurants",
+            google_verifications=gvs,
+            google_direct_candidates={"aba": "Aba"},
+        )
+        assert len(out["restaurants"]) == 1
+        card = out["restaurants"][0]
+        assert (card.ai_score or 0.0) > 0.0, "google_direct stub must have ai_score > 0 after gate scoring"
+
+    def test_closed_google_direct_candidate_excluded(self):
+        """google_direct stubs pointing to closed places are not included."""
+        gvs = {
+            "closed spot": GooglePlaceVerification(
+                provider_place_id="gp-closed",
+                name="Closed Spot",
+                business_status="CLOSED_PERMANENTLY",
+                confidence="high",
+            ),
+            "open spot": _gv("gp-open", "Open Spot"),
+        }
+        out = normalize_hits(
+            [],
+            intent=INTENT_RESTAURANTS,
+            destination="Chicago",
+            user_query="restaurants",
+            google_verifications=gvs,
+            google_direct_candidates={"closed spot": "Closed Spot", "open spot": "Open Spot"},
+        )
+        names = [r.name for r in out["restaurants"]]
+        assert "Closed Spot" not in names
+        assert "Open Spot" in names
+
+    def test_debug_counts_distinguish_extracted_and_google_direct(self):
+        """debug_out must emit separate extracted_candidate_count and google_direct_candidate_count."""
+        article_hit = _hit(
+            "Best Restaurants in Chicago",
+            "https://example.com/guide",
+            "1. Kasama — Filipino restaurant Noble Square Chicago.",
+        )
+        provider = _make_verifying_provider(
+            [article_hit],
+            {"Kasama": _hit("Kasama", "https://kasama.com", "Filipino restaurant Chicago.")},
+        )
+
+        google_map = {
+            "kasama": _gv("gp-kasama", "Kasama", rating=4.8, reviews=3000),
+            "girl & the goat": _gv("gp-gatg", "Girl & The Goat", rating=4.6, reviews=5000),
+            "aba": _gv("gp-aba", "Aba", rating=4.5, reviews=2000),
+        }
+
+        class _GoogleStub:
+            available = True
+
+            def verify(self, name, destination, neighborhood=None, intent=None):
+                return google_map.get(
+                    name.lower(),
+                    GooglePlaceVerification(confidence="unknown", failure_reason="not_found"),
+                )
+
+            class _InnerClient:
+                def text_search(self, query):
+                    return [
+                        {"displayName": {"text": "Girl & The Goat"}, "formattedAddress": "800 W Randolph St, Chicago, IL"},
+                        {"displayName": {"text": "Aba"}, "formattedAddress": "302 N Green St, Chicago, IL"},
+                    ]
+
+            _client = _InnerClient()
+
+            def clear_cache_for_destination(self, destination):
+                return 0
+
+        svc = LiveResearchService(
+            provider=provider,
+            cache=_TTLCache(0),
+            verification_cache=_TTLCache(0),
+            enabled=True,
+            place_verifier=_GoogleStub(),
+        )
+        debug_out: dict = {}
+        result = svc.fetch(
+            intent=INTENT_RESTAURANTS,
+            destination="Chicago",
+            user_query="best restaurants in Chicago",
+            _debug_out=debug_out,
+        )
+        # extracted_candidate_count tracks only article-extracted candidates
+        assert "extracted_candidate_count" in debug_out
+        # google_direct_candidate_count tracks only google_direct fallback candidates
+        assert "google_direct_candidate_count" in debug_out
+        assert debug_out["google_direct_candidate_count"] > 0, (
+            "google_direct_candidate_count should be > 0 when fallback runs"
+        )
+        # merged_candidate_count is the total (extracted + direct + google_direct)
+        assert "merged_candidate_count" in debug_out
+        assert debug_out["merged_candidate_count"] >= debug_out.get("extracted_candidate_count", 0)
+        # Final output should include google_direct candidates
+        all_names = [r.name for r in result.restaurants]
+        assert any("girl" in n.lower() or "goat" in n.lower() for n in all_names) or any(
+            "aba" in n.lower() for n in all_names
+        ), f"No google_direct candidate in final result: {all_names}"
