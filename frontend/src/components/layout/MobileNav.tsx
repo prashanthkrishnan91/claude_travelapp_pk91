@@ -38,16 +38,16 @@ export function MobileNav() {
   return (
     <>
       {/* ── Glass top bar ───────────────────────────────────── */}
-      <header className="lg:hidden sticky top-0 z-40 flex items-center justify-between px-4 py-3 glass border-b border-slate-200/70">
+      <header className="lg:hidden sticky top-0 z-40 flex items-center justify-between px-4 py-3 glass border-b border-white/[.07]">
         <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-sky-600 text-white">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-500 text-dark-50">
             <Plane className="w-4 h-4" />
           </div>
-          <span className="text-sm font-bold text-slate-900">Travel Concierge</span>
+          <span className="text-sm font-bold text-cream-100">Travel Concierge</span>
         </div>
         <button
           onClick={() => setOpen(!open)}
-          className="p-2 rounded-lg text-slate-600 hover:bg-slate-100/80 transition"
+          className="p-2 rounded-lg text-cream-400 hover:bg-white/[.06] transition"
           aria-label="Toggle menu"
         >
           {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -57,7 +57,7 @@ export function MobileNav() {
       {/* ── Drawer overlay ──────────────────────────────────── */}
       {open && (
         <div
-          className="lg:hidden fixed inset-0 z-30 bg-slate-900/30 backdrop-blur-sm"
+          className="lg:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-sm"
           onClick={() => setOpen(false)}
         />
       )}
@@ -65,16 +65,16 @@ export function MobileNav() {
       {/* ── Slide-out drawer ────────────────────────────────── */}
       <div
         className={clsx(
-          "lg:hidden fixed inset-y-0 left-0 z-40 w-64 glass border-r border-slate-200/70",
+          "lg:hidden fixed inset-y-0 left-0 z-40 w-64 glass border-r border-white/[.07]",
           "transition-transform duration-300 ease-out",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100/80">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-sky-600 text-white">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-white/[.06]">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-500 text-dark-50">
             <Plane className="w-4 h-4" />
           </div>
-          <span className="text-sm font-bold text-slate-900">Travel Concierge</span>
+          <span className="text-sm font-bold text-cream-100">Travel Concierge</span>
         </div>
         <nav className="px-3 py-4 space-y-0.5">
           {links.map(({ label, href, icon: Icon }) => (
@@ -92,7 +92,7 @@ export function MobileNav() {
       </div>
 
       {/* ── Bottom tab bar (Apple-style) ─────────────────────── */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 glass border-t border-slate-200/70 flex items-stretch pb-safe">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 glass border-t border-white/[.07] flex items-stretch pb-safe">
         {tabLinks.map(({ label, href, icon: Icon }) => {
           const active = isActive(href);
           const isNew = href === "/trips/new";
@@ -102,7 +102,7 @@ export function MobileNav() {
               href={href}
               className={clsx(
                 "flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 min-w-0 transition-colors",
-                active ? "text-sky-600" : "text-slate-400 hover:text-slate-600"
+                active ? "text-brand-400" : "text-cream-500 hover:text-cream-300"
               )}
               aria-label={label}
             >
@@ -110,9 +110,9 @@ export function MobileNav() {
                 className={clsx(
                   "flex items-center justify-center rounded-xl transition-all",
                   isNew
-                    ? "w-10 h-10 bg-sky-600 text-white shadow-md shadow-sky-200 -mt-4"
+                    ? "w-10 h-10 bg-brand-500 text-dark-50 shadow-md shadow-brand-500/30 -mt-4"
                     : "w-7 h-7",
-                  isNew && active && "bg-sky-700"
+                  isNew && active && "bg-brand-600"
                 )}
               >
                 <Icon className={isNew ? "w-5 h-5" : "w-5 h-5"} />

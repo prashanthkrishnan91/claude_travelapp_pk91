@@ -16,7 +16,7 @@ export function StatCard({
   icon,
   trend,
   trendUp,
-  colorClass = "bg-sky-50 text-sky-600",
+  colorClass = "bg-brand-500/15 text-brand-400",
 }: StatCardProps) {
   return (
     <div className="card p-6 flex items-start gap-4">
@@ -24,13 +24,13 @@ export function StatCard({
         {icon}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm text-slate-500 font-medium">{label}</p>
-        <p className="text-2xl font-bold text-slate-900 mt-0.5">{value}</p>
+        <p className="text-sm text-cream-500 font-medium">{label}</p>
+        <p className="text-2xl font-bold text-cream-100 mt-0.5">{value}</p>
         {trend && (
           <p
             className={clsx(
               "text-xs mt-1 font-medium",
-              trendUp ? "text-emerald-600" : "text-slate-400"
+              trendUp ? "text-emerald-400" : "text-cream-500"
             )}
           >
             {trend}
