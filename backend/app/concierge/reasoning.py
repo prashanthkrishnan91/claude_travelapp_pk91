@@ -26,8 +26,11 @@ GENERIC_PHRASES_RE = re.compile(
 )
 
 # Patterns that indicate the old bad template output — must never appear.
+# Note: [^,]* (no-comma) stops at the first comma so sentences like
+# "Kumiko is a bar in West Loop, a reliable spot for drinks with 4.7 rating"
+# are not falsely rejected (the comma before the descriptive clause breaks the match).
 _BAD_TEMPLATE_RE = re.compile(
-    r"^\s*[A-Za-z][^.!?]+\s+is\s+a\s+(?:restaurant|bar|hotel|attraction|place)\b[^.]*with\s+\d|"
+    r"^\s*[A-Za-z][^.!?]+\s+is\s+a\s+(?:restaurant|bar|hotel|attraction|place)\b[^,]*with\s+\d|"
     r"^\s*[Ww]ith\s+\d+[\.,]\d+\s+rating",
     re.IGNORECASE,
 )
@@ -47,6 +50,22 @@ _INTERNAL_INTENT_TAGS = frozenset({
 _NUMBER_RE = re.compile(r"\b\d+(?:\.\d+)?\b")
 _PLACE_WORD_RE = re.compile(r"\b(?:in|near|at)\s+[A-Z][\w''.-]*(?:\s+[A-Z][\w''.-]*)*\b")
 
+
+def _trim_to_word(text: str, max_len: int = 140) -> str:
+    """Trim text to at most max_len characters at a word boundary.
+
+    Never cuts mid-word; backs up to the last space and ensures the
+    result ends with a sentence-terminating punctuation mark.
+    """
+    if len(text) <= max_len:
+        return text
+    trimmed = text[:max_len]
+    last_space = trimmed.rfind(" ")
+    if last_space > max_len // 2:
+        trimmed = trimmed[:last_space]
+    return trimmed.rstrip(" .,;:!?") + "."
+
+
 # Nightlife category inference signals
 _NIGHTLIFE_VIEW_SIGNALS: frozenset = frozenset({
     "observatory", "tower", "rooftop", "roof", "perch", "summit", "sky",
@@ -59,7 +78,7 @@ _NIGHTLIFE_SPEAKEASY_SIGNALS: frozenset = frozenset({
 
 class WhyPick(TypedDict):
     text: str
-    generation_method: Literal["deterministic"]
+    generation_method: Literal["deterministic", "llm"]
 
 
 class WhyPickResult(TypedDict):
@@ -293,12 +312,30 @@ def _build_nightlife_display_why(
     return f"A {cat} with strong Google presence, a consistent nightlife option."[:150]
 
 
+def _michelin_stars_text(status: str) -> str:
+    """Translate raw michelin_status to natural adjective form."""
+    s = (status or "").strip()
+    low = s.lower().replace("-", " ")  # normalize "3-star" → "3 star"
+    if "3 star" in low or "three" in low:
+        return "three-Michelin-star"
+    if "2 star" in low or "two" in low:
+        return "two-Michelin-star"
+    if "1 star" in low:
+        return "Michelin-starred"
+    if "bib gourmand" in low:
+        return "Michelin Bib Gourmand"
+    if "star" in low:
+        return "Michelin-starred"
+    return s
+
+
 def _build_cuisine_restaurant_display_why(
     *,
     cuisine: str,
     loc: Optional[str] = None,
     rating: Optional[float] = None,
     review_count: Optional[int] = None,
+    place_name: Optional[str] = None,
 ) -> str:
     """Premium deterministic concierge copy for cuisine-specific restaurant cards (D).
 
@@ -311,35 +348,46 @@ def _build_cuisine_restaurant_display_why(
     r = float(rating or 0)
     rc = int(review_count or 0)
     loc_part = f" {loc}" if loc else ""
+    name = place_name or ""
 
     # Deep review volume + high quality = proven anchor
     if rc >= 1500 and r >= 4.5:
-        return f"A high-volume{loc_part} {cat} with deep review depth, a reliable neighborhood anchor."[:140]
+        if name:
+            return _trim_to_word(f"{name} is a{loc_part} {cat} favorite with strong review volume and consistent ratings, making it a reliable neighborhood anchor.")
+        return _trim_to_word(f"A high-volume{loc_part} {cat} with deep review depth, a reliable neighborhood anchor.")
 
     if rc >= 1000 and r >= 4.2:
-        return f"A well-established{loc_part} {cat} with strong Google volume and consistent ratings."[:140]
+        if name:
+            return _trim_to_word(f"{name} is a{loc_part} {cat} with strong review volume and consistent ratings, making it a reliable pick.")
+        return _trim_to_word(f"A well-established{loc_part} {cat} with strong Google volume and consistent ratings.")
 
     # Small + excellent = local gem feel
     if rc < 400 and r >= 4.6:
-        return f"A smaller{loc_part} {cat} with unusually high ratings, better for a local-feeling pick."[:140]
+        if name:
+            return _trim_to_word(f"{name} is a smaller{loc_part} {cat} with unusually high ratings, a strong local-feeling pick.")
+        return _trim_to_word(f"A smaller{loc_part} {cat} with unusually high ratings, better for a local-feeling pick.")
 
     # High rating with moderate volume
     if r >= 4.7:
-        return f"An unusually well-rated{loc_part} {cat}, a confident pick for the cuisine."[:140]
+        if name:
+            return _trim_to_word(f"{name} is an unusually well-rated{loc_part} {cat}, a confident pick for the cuisine.")
+        return _trim_to_word(f"An unusually well-rated{loc_part} {cat}, a confident pick for the cuisine.")
 
     if r >= 4.5:
         if loc:
-            return f"A highly rated {loc} {cat}, a solid neighborhood choice."[:140]
-        return f"A highly rated {cat}, a solid pick in this area."[:140]
+            if name:
+                return _trim_to_word(f"{name} is a highly rated {loc} {cat}, a solid neighborhood choice.")
+            return _trim_to_word(f"A highly rated {loc} {cat}, a solid neighborhood choice.")
+        return _trim_to_word(f"A highly rated {cat}, a solid pick in this area.")
 
     if r >= 4.2:
         if loc:
-            return f"A reliable {loc} {cat} with solid Google ratings."[:140]
-        return f"A reliable {cat} with solid Google ratings."[:140]
+            return _trim_to_word(f"A reliable {loc} {cat} with solid Google ratings.")
+        return _trim_to_word(f"A reliable {cat} with solid Google ratings.")
 
     if loc:
-        return f"A {cat} in {loc} with strong Google presence."[:140]
-    return f"A {cat} with solid Google presence."[:140]
+        return _trim_to_word(f"A {cat} in {loc} with strong Google presence.")
+    return _trim_to_word(f"A {cat} with solid Google presence.")
 
 
 def has_concrete_fact(text: str) -> bool:
@@ -426,8 +474,10 @@ def build_concierge_display_reason(
 
     # ── Priority a: Michelin status ──────────────────────────────────────────
     if michelin_status:
+        stars = _michelin_stars_text(michelin_status)
         cat_part = f" {cuisine.lower()}" if cuisine else ""
-        return _append_rating(f"{michelin_status}{cat_part}{loc_part}")[:140]
+        dest = loc_part or ""
+        return _trim_to_word(f"{place_name} is a {stars}{cat_part} destination{dest}, making it a standout for fine dining.")
 
     # ── Priority b: Cocktail/nightlife — bar framing, editorial only if bar-specific ─
     # Use Google types to infer precise category label; editorial leads when available.
@@ -448,15 +498,16 @@ def build_concierge_display_reason(
                 result += f" — {rating_support}."
             else:
                 result += "."
-            return result[:140]
+            return _trim_to_word(result)
 
         # Infer precise category from Google types + name signals
         _cat_label, _ = infer_nightlife_category_label(google_types, place_name)
         _cat_lower = _cat_label.lower()
 
         if loc_part:
-            # Clean location available → use it as anchor with a drinks qualifier
-            return _append_rating(f"A {_cat_lower}{loc_part}, a reliable spot for evening drinks")[:140]
+            if place_name:
+                return _trim_to_word(_append_rating(f"{place_name} is a {_cat_lower}{loc_part}, a reliable spot for evening drinks"))
+            return _trim_to_word(_append_rating(f"A {_cat_lower}{loc_part}, a reliable spot for evening drinks"))
 
         # No clean location → use volume/type characterization (not rating-only)
         return _build_nightlife_display_why(
@@ -478,7 +529,7 @@ def build_concierge_display_reason(
             result += f" — {rating_support}."
         else:
             result += "."
-        return result[:140]
+        return _trim_to_word(result)
 
     # ── Priority d: Intent-specific category framing (no editorial) ──────────
     if intent == "hidden_gems":
@@ -488,7 +539,7 @@ def build_concierge_display_reason(
             inner = cuisine.lower()
         else:
             inner = (category or "spot").replace("_", " ")
-        return _append_rating(f"A local {inner}{loc_part}")[:140]
+        return _trim_to_word(_append_rating(f"A local {inner}{loc_part}"))
 
     if "near my hotel" in query_low or "near hotel" in query_low:
         if category in ("cafe", "bar", "hotel", "attraction"):
@@ -498,19 +549,19 @@ def build_concierge_display_reason(
         else:
             inner = (category or "pick").replace("_", " ")
         if inner.lower() == "restaurant":
-            return _append_rating(f"A well-regarded nearby restaurant{loc_part}")[:140]
-        return _append_rating(f"A {inner}{loc_part}")[:140]
+            return _trim_to_word(_append_rating(f"A well-regarded nearby restaurant{loc_part}"))
+        return _trim_to_word(_append_rating(f"A {inner}{loc_part}"))
 
     if "brunch" in query_low:
-        return _append_rating(f"A popular brunch spot{loc_part}")[:140]
+        return _trim_to_word(_append_rating(f"A popular brunch spot{loc_part}"))
 
     if intent == "romantic":
         inner = cuisine.lower() if cuisine else (category or "spot").replace("_", " ")
-        return _append_rating(f"A romantic {inner}{loc_part}")[:140]
+        return _trim_to_word(_append_rating(f"A romantic {inner}{loc_part}"))
 
     if intent == "family_friendly":
         inner = cuisine.lower() if cuisine else (category or "spot").replace("_", " ")
-        return _append_rating(f"A family-friendly {inner}{loc_part}")[:140]
+        return _trim_to_word(_append_rating(f"A family-friendly {inner}{loc_part}"))
 
     # ── Priority e1: Hotel-specific location-led copy (never rating-first) ──
     if (category or "").lower() == "hotel":
@@ -534,28 +585,29 @@ def build_concierge_display_reason(
             loc=loc,
             rating=rating,
             review_count=review_count,
-        )[:140]
+            place_name=place_name,
+        )
 
     # ── Priority f: Neighborhood + generic category ──────────────────────────
     if loc and cuisine:
-        return _append_rating(f"A top-rated {cuisine.lower()}{loc_part}")[:140]
+        return _trim_to_word(_append_rating(f"A top-rated {cuisine.lower()}{loc_part}"))
 
     if loc:
         inner = (category or "place").replace("_", " ")
         if inner.lower() == "restaurant":
-            return _append_rating(f"A well-regarded {loc} restaurant")[:140]
-        return _append_rating(f"A {inner}{loc_part}")[:140]
+            return _trim_to_word(_append_rating(f"A well-regarded {loc} restaurant"))
+        return _trim_to_word(_append_rating(f"A {inner}{loc_part}"))
 
     # ── Priority g: Category + rating (no location) ──────────────────────────
     if rating_support:
         inner = cuisine.lower() if cuisine else (category or "place").replace("_", " ")
         if inner.lower() == "restaurant":
-            return f"A well-regarded restaurant with strong review volume and verified listing details."[:140]
-        return f"A verified {inner} with {rating_support}."[:140]
+            return _trim_to_word(f"A well-regarded restaurant with strong review volume and verified listing details.")
+        return _trim_to_word(f"A verified {inner} with {rating_support}.")
 
     # ── Priority h: Absolute fallback ────────────────────────────────────────
     inner = cuisine.lower() if cuisine else (category or "place").replace("_", " ")
-    return f"A verified {inner} that fits this request, with strong Google signals."[:140]
+    return _trim_to_word(f"A verified {inner} that fits this request, with strong Google signals.")
 
 
 def build_why_pick(
@@ -629,3 +681,75 @@ def build_why_pick(
         "why_pick": {"text": text, "generation_method": "deterministic"},
         "template_id": template_id,
     }
+
+
+def build_why_pick_with_structured_evidence(
+    *,
+    place_name: str,
+    evidence: Sequence[str],
+    rating: Optional[float],
+    review_count: Optional[int],
+    evidence_units: Optional[List] = None,
+    category: Optional[str] = None,
+    neighborhood: Optional[str] = None,
+    cuisine: Optional[str] = None,
+    michelin_status: Optional[str] = None,
+    price_level: Optional[int] = None,
+    user_query: str = "",
+    intent: Optional[str] = None,
+    google_types: Optional[List[str]] = None,
+    city: str = "",
+    api_key: Optional[str] = None,
+    known_venue_names: Optional[List[str]] = None,
+) -> WhyPickResult:
+    """Try LLM-synthesized whyPick first; fall back to deterministic on any failure.
+
+    The LLM path is used only when:
+    - evidence_units is provided and non-empty
+    - at least one unit is safe_for_copy
+    - api_key is configured
+
+    Alignment guarantee: the returned why_pick.text is always propagated to
+    venue.why_pick, supporting_details.why_pick, and display.display_why by
+    the caller (live_research._apply_google_gate).
+    """
+    if evidence_units:
+        try:
+            from app.concierge.whypick_prompt import generate_llm_why_pick
+            llm_result = generate_llm_why_pick(
+                venue_name=place_name,
+                category=category or "place",
+                intent=intent or "",
+                city=city,
+                evidence_units=evidence_units,
+                api_key=api_key,
+                known_venue_names=known_venue_names,
+            )
+            if llm_result is not None:
+                llm_text = llm_result["whyPick"].strip()
+                if llm_text and not BANNED_STRINGS_RE.search(llm_text) and not GENERIC_PHRASES_RE.search(llm_text):
+                    template_id: Literal["rating_and_editorial", "editorial_only", "google_only", "fallback", "michelin"] = (
+                        "michelin" if michelin_status or any("michelin" in eu.claim.lower() for eu in evidence_units)
+                        else "rating_and_editorial"
+                    )
+                    return {
+                        "why_pick": {"text": llm_text, "generation_method": "llm"},
+                        "template_id": template_id,
+                    }
+        except Exception:
+            pass
+
+    return build_why_pick(
+        place_name=place_name,
+        evidence=evidence,
+        rating=rating,
+        review_count=review_count,
+        category=category,
+        neighborhood=neighborhood,
+        cuisine=cuisine,
+        michelin_status=michelin_status,
+        price_level=price_level,
+        user_query=user_query,
+        intent=intent,
+        google_types=google_types,
+    )

@@ -51,9 +51,11 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
+from app.concierge.evidence import normalize_evidence
 from app.concierge.reasoning import (
     build_concierge_display_reason,
     build_why_pick,
+    build_why_pick_with_structured_evidence,
     ensure_non_empty_evidence,
 )
 from app.models.concierge import (
@@ -1124,6 +1126,19 @@ def _build_source_evidence(
     domain = _SOURCE_HOST_STRIP_PAT.sub("", (urlparse(source_url).netloc or "").lower()) or None
     source_reason = _extract_source_reason(candidate, snippet)
     evidence_text = _extract_source_evidence_text(candidate, snippet)
+    # When the article title IS the candidate (direct venue page/hit), the snippet
+    # describes the venue directly even if the candidate name doesn't appear inside it.
+    if (
+        not source_reason
+        and not evidence_text
+        and source_title
+        and candidate
+        and source_title.strip().lower() == candidate.strip().lower()
+        and snippet
+    ):
+        evidence_text = _sanitize_reason_evidence_text(
+            snippet[:200], own_name=candidate, known_candidate_names=[candidate], max_len=140
+        )
     return SourceEvidence(
         source_title=_normalize_source_title(source_title) or None,
         source_url=source_url or None,
@@ -1281,6 +1296,9 @@ def _reason_guard(reason: str, own_name: str, known_candidate_names: List[str]) 
     if "google reviews" in first_sentence.lower() or "★" in first_sentence:
         return False
     low = text.lower()
+    # "is a...option" is always generic regardless of any concrete signal present
+    if re.search(r"\bis a\b.*\boption\b", low, re.IGNORECASE):
+        return False
     generic_match = any(p.search(low) for p in _GENERIC_REASON_PATTERNS)
     has_concrete_signal = bool(
         re.search(r"\b\d+(?:\.\d+)?\b", text)
@@ -1317,7 +1335,7 @@ def _reason_guard(reason: str, own_name: str, known_candidate_names: List[str]) 
 
 _CATEGORY_FALLBACK_REASON = {
     "restaurant": "A well-regarded dining option with verified Google listing.",
-    "bar": "A well-regarded local bar with verified Google listing.",
+    "bar": "A well-regarded bar with a solid drinks selection and a verified Google listing.",
     "cafe": "A reliable spot for coffee and a relaxed setting.",
     "hotel": "A well-located stay with positive guest ratings.",
     "attraction": "A popular local attraction with verified listing details.",
@@ -2719,6 +2737,7 @@ def _apply_google_gate(
     known_candidate_names: List[str],
     seen_place_ids: Optional[set] = None,
     corroboration_counter: Optional[Counter] = None,
+    destination: str = "",
 ) -> List[Any]:
     """Drop venues that don't pass Google Places verification — anything that
     isn't matched + OPERATIONAL with high/medium confidence is demoted to
@@ -2892,11 +2911,21 @@ def _apply_google_gate(
                     intent=intent,
                     user_query=user_query,
                 )
-                why_pick_payload = build_why_pick(
-                    place_name=getattr(venue, "name", "") or verification.name or "This place",
+                _venue_name_for_ev = getattr(venue, "name", "") or verification.name or "This place"
+                _evidence_units = normalize_evidence(
+                    venue_name=_venue_name_for_ev,
+                    category=category,
+                    google_verification=verification,
+                    source_evidence=venue_source_ev,
+                    enrichment=getattr(venue, "enrichment", None),
+                    michelin_status=getattr(venue, "michelin_status", None),
+                )
+                why_pick_payload = build_why_pick_with_structured_evidence(
+                    place_name=_venue_name_for_ev,
                     evidence=clean_evidence,
                     rating=verification.rating,
                     review_count=verification.user_rating_count,
+                    evidence_units=_evidence_units,
                     category=category,
                     neighborhood=getattr(venue, "neighborhood", None) or verification.formatted_address,
                     cuisine=getattr(venue, "cuisine", None),
@@ -2905,6 +2934,8 @@ def _apply_google_gate(
                     user_query=user_query,
                     intent=intent,
                     google_types=verification.types,
+                    city=destination,
+                    known_venue_names=known_candidate_names,
                 )
                 reason, validation_source = _validate_or_fallback_reason(
                     why_pick_payload["why_pick"]["text"],
@@ -2914,19 +2945,34 @@ def _apply_google_gate(
                 )
                 if (
                     intent == INTENT_MICHELIN_RESTAURANTS
-                    and validation_source == "fallback"
                     and category == "restaurant"
+                    and "michelin" not in reason.lower()
                 ):
-                    michelin_status = getattr(venue, "michelin_status", None)
-                    cuisine = getattr(venue, "cuisine", None)
-                    neighborhood = getattr(venue, "neighborhood", None) or verification.formatted_address
-                    if michelin_status or cuisine or neighborhood:
-                        parts = [p for p in [michelin_status, cuisine, neighborhood] if p]
-                        reason = (
-                            f"{getattr(venue, 'name', '') or verification.name or 'This restaurant'} is a "
-                            f"{', '.join(parts)} pick that fits this Michelin-focused request."
+                    _m_status = getattr(venue, "michelin_status", None)
+                    _m_cuisine = getattr(venue, "cuisine", None)
+                    _m_neighborhood = (
+                        getattr(venue, "neighborhood", None)
+                        or _extract_neighborhood(
+                            verification.formatted_address or "",
+                            destination,
                         )
-                        validation_source = "deterministic_validated"
+                        or verification.formatted_address
+                    )
+                    _m_place = getattr(venue, "name", "") or verification.name or "This restaurant"
+                    if _m_status:
+                        reason = (
+                            f"{_m_place} holds {_m_status} Michelin recognition"
+                            + (f" in {_m_neighborhood}" if _m_neighborhood else "")
+                            + ", making it a standout choice for fine dining."
+                        )
+                    else:
+                        _m_parts = [p for p in [_m_cuisine, _m_neighborhood] if p]
+                        reason = (
+                            f"{_m_place} is a"
+                            + (f" {', '.join(_m_parts)}" if _m_parts else "")
+                            + " restaurant, a strong Michelin-caliber pick for this request."
+                        )
+                    validation_source = "deterministic_validated"
                 reason_source = (
                     why_pick_payload["why_pick"]["generation_method"]
                     if validation_source == "deterministic_validated"
@@ -3021,8 +3067,12 @@ def _apply_google_gate(
                         display_badges=getattr(venue, "source_badges", []),
                         addability="addable" if _google_is_addable(verification) else "research_only",
                         display_category_source=_cat_source,
-                        display_why_source="deterministic_concierge",
+                        display_why_source=reason_source,
                     )
+                    try:
+                        venue.reason_source = reason_source
+                    except Exception:
+                        pass
                     canonical_why = (
                         str(reason or "").strip()
                         or str(getattr(venue, "primary_reason", "") or "").strip()
@@ -3363,7 +3413,7 @@ def normalize_hits(
                         normalized_candidate.lower()
                     )
                     if is_restaurant_intent:
-                        cand_cuisine = None if intent == INTENT_NIGHTLIFE else "Restaurant"
+                        cand_cuisine = "Cocktail Bar" if intent == INTENT_NIGHTLIFE else "Restaurant"
                         cand_tags: List[str] = []
                         if intent == INTENT_NIGHTLIFE:
                             cand_tags.append("Nightlife")
@@ -3445,7 +3495,7 @@ def normalize_hits(
             continue
 
         if is_restaurant_intent:
-            cuisine = None if intent == INTENT_NIGHTLIFE else "Restaurant"
+            cuisine = "Cocktail Bar" if intent == INTENT_NIGHTLIFE else "Restaurant"
             summary = _build_summary(
                 hit.snippet,
                 fallback=f"Live result from {provider_label} matching \"{user_query}\".",
@@ -3612,6 +3662,7 @@ def normalize_hits(
             known_candidate_names=list(google_verifications.keys()),
             seen_place_ids=_seen_pids,
             corroboration_counter=corroboration_counter,
+            destination=destination,
         )
         attractions = _apply_google_gate(
             attractions,
@@ -3624,6 +3675,7 @@ def normalize_hits(
             known_candidate_names=list(google_verifications.keys()),
             seen_place_ids=_seen_pids,
             corroboration_counter=corroboration_counter,
+            destination=destination,
         )
         hotels = _apply_google_gate(
             hotels,
@@ -3636,6 +3688,7 @@ def normalize_hits(
             known_candidate_names=list(google_verifications.keys()),
             seen_place_ids=_seen_pids,
             corroboration_counter=corroboration_counter,
+            destination=destination,
         )
 
     # Cap only after verification + tiering so we don't underflow.

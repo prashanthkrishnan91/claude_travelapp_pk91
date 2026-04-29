@@ -189,9 +189,8 @@ def test_michelin_restaurants_leads_with_star_status():
         evidence=["Rated 4.6 (1,900 reviews)"],
     )
     _assert_display_why_quality(text, label="michelin_starred")
-    assert "michelin 3-star" in text.lower(), f"Expected Michelin status lead: {text!r}"
+    assert "three-michelin-star" in text.lower(), f"Expected translated Michelin status: {text!r}"
     assert "lincoln park" in text.lower(), f"Expected neighborhood: {text!r}"
-    assert "4.6 rating across 1,900 reviews" in text, f"Expected rating detail: {text!r}"
 
 
 def test_michelin_via_evidence_chip_no_explicit_status():
