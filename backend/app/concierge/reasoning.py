@@ -258,10 +258,11 @@ def _build_nightlife_display_why(
     google_types: Optional[List[str]],
     rating: Optional[float],
     review_count: Optional[int],
+    specialty_tags: Optional[List[str]] = None,
 ) -> str:
     """Premium deterministic concierge copy for nightlife/bar cards with no clean location.
 
-    Produces place-specific copy using category inference + volume/rating signals.
+    Produces place-specific copy using specialty signals first, then category inference.
     Never produces a bare rating-only sentence.
     """
     category_label, _ = infer_nightlife_category_label(google_types, place_name)
@@ -284,32 +285,39 @@ def _build_nightlife_display_why(
             f"good for a memorable and off-the-beaten-path night out."
         )[:150]
 
-    # Volume + quality characterization
+    # Specialty tag — venue's own signature (craft cocktails, natural wine, mezcal, etc.)
+    if specialty_tags:
+        tag = specialty_tags[0].lower().strip()
+        return _trim_to_word(
+            f"A {cat} known for {tag}, worth seeking out for a distinct evening."
+        )
+
+    # Volume + quality characterization (fallback when no specialty signal)
     if rc >= 2000 and r >= 4.2:
         return (
-            f"A high-volume {cat} with standout review depth, "
-            f"reliable for a busy and lively drinks stop."
+            f"A high-volume {cat} with a devoted crowd, "
+            f"reliable for a lively and well-regarded drinks stop."
         )[:150]
 
     if rc >= 500 and r >= 4.5:
         return (
-            f"A well-regarded {cat} with strong Google volume, "
-            f"a solid pick for a dependable nightlife stop."
+            f"A {cat} with deep review volume and consistent praise, "
+            f"a dependable pick for the evening."
         )[:150]
 
     if rc < 300 and r >= 4.5:
         return (
             f"A smaller {cat} with excellent ratings, "
-            f"better for a more local-feeling night out away from tourist-heavy spots."
+            f"better for a local-feeling night out away from tourist-heavy spots."
         )[:150]
 
     if r >= 4.5:
-        return f"A highly-rated {cat}, a reliable pick for the evening."[:150]
+        return f"A highly-rated {cat}, a confident pick for an evening out."[:150]
 
     if r >= 4.2:
-        return f"A {cat} with solid Google ratings, useful for a dependable evening stop."[:150]
+        return f"A {cat} with strong guest ratings, useful for a dependable evening stop."[:150]
 
-    return f"A {cat} with strong Google presence, a consistent nightlife option."[:150]
+    return f"A {cat} with solid Google presence, a consistent nightlife option."[:150]
 
 
 def _michelin_stars_text(status: str) -> str:
@@ -336,30 +344,40 @@ def _build_cuisine_restaurant_display_why(
     rating: Optional[float] = None,
     review_count: Optional[int] = None,
     place_name: Optional[str] = None,
+    specialty_tags: Optional[List[str]] = None,
 ) -> str:
     """Premium deterministic concierge copy for cuisine-specific restaurant cards (D).
 
     ``loc`` must be a pre-validated area-level neighborhood (never a full address,
-    never the place's own name). Uses volume/quality signals; never bare rating template.
+    never the place's own name). Uses specialty signals first, then volume/quality.
     """
     cat = cuisine.lower()
     if not cat.endswith("restaurant"):
         cat = f"{cat} restaurant"
+    # Capitalised form for user-facing copy (e.g. "Mexican restaurant", not "mexican restaurant")
+    cat_display = cat[0].upper() + cat[1:]
     r = float(rating or 0)
     rc = int(review_count or 0)
-    loc_part = f" {loc}" if loc else ""
+    loc_part = f" in {loc}" if loc else ""
     name = place_name or ""
+
+    # Specialty tag — the venue's own signature draw
+    if specialty_tags:
+        tag = specialty_tags[0].lower().strip()
+        if name:
+            return _trim_to_word(f"{name} is a {cat_display}{loc_part} known for {tag}.")
+        return _trim_to_word(f"A {cat_display}{loc_part} known for {tag}.")
 
     # Deep review volume + high quality = proven anchor
     if rc >= 1500 and r >= 4.5:
         if name:
-            return _trim_to_word(f"{name} is a{loc_part} {cat} favorite with strong review volume and consistent ratings, making it a reliable neighborhood anchor.")
-        return _trim_to_word(f"A high-volume{loc_part} {cat} with deep review depth, a reliable neighborhood anchor.")
+            return _trim_to_word(f"{name} is a{loc_part} {cat} with a devoted following and deep review volume, a reliable neighborhood anchor.")
+        return _trim_to_word(f"A high-volume{loc_part} {cat} with a devoted following, a reliable neighborhood anchor.")
 
     if rc >= 1000 and r >= 4.2:
         if name:
-            return _trim_to_word(f"{name} is a{loc_part} {cat} with strong review volume and consistent ratings, making it a reliable pick.")
-        return _trim_to_word(f"A well-established{loc_part} {cat} with strong Google volume and consistent ratings.")
+            return _trim_to_word(f"{name} is a{loc_part} {cat} with a loyal crowd and strong Google volume, a well-established pick.")
+        return _trim_to_word(f"A well-established{loc_part} {cat} with a loyal crowd and strong Google volume.")
 
     # Small + excellent = local gem feel
     if rc < 400 and r >= 4.6:
@@ -382,11 +400,11 @@ def _build_cuisine_restaurant_display_why(
 
     if r >= 4.2:
         if loc:
-            return _trim_to_word(f"A reliable {loc} {cat} with solid Google ratings.")
-        return _trim_to_word(f"A reliable {cat} with solid Google ratings.")
+            return _trim_to_word(f"A {loc} {cat} with solid guest ratings and strong Google presence.")
+        return _trim_to_word(f"A {cat} with solid guest ratings and strong Google presence.")
 
     if loc:
-        return _trim_to_word(f"A {cat} in {loc} with strong Google presence.")
+        return _trim_to_word(f"A {cat} in {loc} with solid Google presence.")
     return _trim_to_word(f"A {cat} with solid Google presence.")
 
 
@@ -395,7 +413,12 @@ def has_concrete_fact(text: str) -> bool:
         return True
     if _PLACE_WORD_RE.search(text):
         return True
-    keyword_hits = ("guide", "michelin", "bar", "restaurant", "cafe", "hotel", "museum", "park", "reviews")
+    keyword_hits = (
+        "guide", "michelin", "bar", "restaurant", "cafe", "hotel", "museum", "park", "reviews",
+        # Venue-specific signals that appear in editorial/specialty copy
+        "cocktail", "lounge", "speakeasy", "brewery", "winery", "tasting", "omakase",
+        "known for", "celebrated for", "awarded", "specialty", "signature",
+    )
     return any(k in text.lower() for k in keyword_hits)
 
 
@@ -475,7 +498,7 @@ def build_concierge_display_reason(
     # ── Priority a: Michelin status ──────────────────────────────────────────
     if michelin_status:
         stars = _michelin_stars_text(michelin_status)
-        cat_part = f" {cuisine.lower()}" if cuisine else ""
+        cat_part = f" {cuisine}" if cuisine else ""
         dest = loc_part or ""
         return _trim_to_word(f"{place_name} is a {stars}{cat_part} destination{dest}, making it a standout for fine dining.")
 
@@ -491,13 +514,10 @@ def build_concierge_display_reason(
             best = _clean_chip(edit_with_bar_signal)
             if len(best) > 100:
                 best = best[:97] + "..."
-            result = best.rstrip(".")
+            result = best.rstrip(". ")
             if loc and loc.lower() not in result.lower():
                 result += f" ({loc})"
-            if rating_support and len(result) + len(rating_support) + 5 <= 135:
-                result += f" — {rating_support}."
-            else:
-                result += "."
+            result += "."
             return _trim_to_word(result)
 
         # Infer precise category from Google types + name signals
@@ -505,16 +525,23 @@ def build_concierge_display_reason(
         _cat_lower = _cat_label.lower()
 
         if loc_part:
+            # Specialty tag takes priority over generic "reliable spot" phrasing
+            _specialty = list(tags)[0].lower() if tags else None
+            if _specialty:
+                if place_name:
+                    return _trim_to_word(f"{place_name} is a {_cat_lower}{loc_part} known for {_specialty}.")
+                return _trim_to_word(f"A {_cat_lower}{loc_part} known for {_specialty}.")
             if place_name:
                 return _trim_to_word(_append_rating(f"{place_name} is a {_cat_lower}{loc_part}, a reliable spot for evening drinks"))
             return _trim_to_word(_append_rating(f"A {_cat_lower}{loc_part}, a reliable spot for evening drinks"))
 
-        # No clean location → use volume/type characterization (not rating-only)
+        # No clean location → use specialty tags then volume/type characterization
         return _build_nightlife_display_why(
             place_name=place_name,
             google_types=google_types,
             rating=rating,
             review_count=review_count,
+            specialty_tags=list(tags) if tags else None,
         )[:150]
 
     # ── Priority c: Editorial / list source evidence ─────────────────────────
@@ -522,13 +549,10 @@ def build_concierge_display_reason(
         best = _clean_chip(editorial[0])
         if len(best) > 100:
             best = best[:97] + "..."
-        result = best.rstrip(".")
+        result = best.rstrip(". ")
         if loc and loc.lower() not in result.lower():
             result += f" ({loc})"
-        if rating_support and len(result) + len(rating_support) + 5 <= 135:
-            result += f" — {rating_support}."
-        else:
-            result += "."
+        result += "."
         return _trim_to_word(result)
 
     # ── Priority d: Intent-specific category framing (no editorial) ──────────
@@ -586,6 +610,7 @@ def build_concierge_display_reason(
             rating=rating,
             review_count=review_count,
             place_name=place_name,
+            specialty_tags=list(tags) if tags else None,
         )
 
     # ── Priority f: Neighborhood + generic category ──────────────────────────
@@ -624,6 +649,7 @@ def build_why_pick(
     user_query: str = "",
     intent: Optional[str] = None,
     google_types: Optional[List[str]] = None,
+    specialty_tags: Optional[List[str]] = None,
 ) -> WhyPickResult:
     def _safe_fallback_text() -> str:
         loc = _location_phrase(neighborhood)
@@ -664,6 +690,7 @@ def build_why_pick(
         price_level=price_level,
         evidence=evidence,
         google_types=google_types,
+        tags=specialty_tags,
     )
 
     # Final guards — must never reach these in normal flow.
@@ -713,6 +740,21 @@ def build_why_pick_with_structured_evidence(
     venue.why_pick, supporting_details.why_pick, and display.display_why by
     the caller (live_research._apply_google_gate).
     """
+    # Extract foursquare specialty labels for the deterministic fallback path.
+    # Only foursquare_tag claims are venue-specific signals (e.g. "handmade tortillas").
+    # foursquare_category labels (e.g. "Mexican Restaurant") are category identifiers,
+    # not specialties, so they must not be used for "known for" copy.
+    specialty_tags: Optional[List[str]] = None
+    if evidence_units:
+        _tags: List[str] = []
+        for eu in evidence_units:
+            if eu.claim_type == "foursquare_tag":
+                tag = re.sub(r"^tagged as\s+", "", eu.claim, flags=re.IGNORECASE).strip()
+                if tag:
+                    _tags.append(tag)
+        if _tags:
+            specialty_tags = _tags[:3]
+
     if evidence_units:
         try:
             from app.concierge.whypick_prompt import generate_llm_why_pick
@@ -752,4 +794,5 @@ def build_why_pick_with_structured_evidence(
         user_query=user_query,
         intent=intent,
         google_types=google_types,
+        specialty_tags=specialty_tags,
     )
