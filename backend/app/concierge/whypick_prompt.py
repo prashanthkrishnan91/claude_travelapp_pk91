@@ -37,6 +37,107 @@ _VAGUE_PHRASES = frozenset({
     "well-known",
 })
 
+# ── Differentiator selection ──────────────────────────────────────────────────
+
+# Preferred claim types for differentiator selection (lower index = higher priority).
+# Specialty/vibe/editorial signals first; generic rating/count/location last.
+_DIFFERENTIATOR_PREFERRED: tuple = (
+    "michelin_status",
+    "editorial_mention",
+    "foursquare_tag",
+    "foursquare_category",
+    "attribute",
+    "tavily_snippet",
+)
+
+# Claim types too generic to anchor a whyPick sentence.
+_GENERIC_CLAIM_TYPES: frozenset = frozenset({
+    "rating",
+    "yelp_rating",
+    "review_volume",
+    "location",
+    "google_verified",
+    "neighborhood",
+    "price_level",
+    "yelp_review_excerpt",
+})
+
+
+def select_differentiators(evidence_units: List[EvidenceUnit]) -> List[EvidenceUnit]:
+    """Pick 1–2 venue-specific differentiators before the LLM call.
+
+    Prefers specialty, vibe, editorial, and crowd-specific signals.
+    Deprioritizes rating, review count, location, and Google verification.
+    Returns an empty list when no strong differentiators exist.
+    """
+    preferred_order = {ct: i for i, ct in enumerate(_DIFFERENTIATOR_PREFERRED)}
+    candidates = [
+        eu for eu in evidence_units
+        if eu.safe_for_copy and eu.claim_type not in _GENERIC_CLAIM_TYPES
+    ]
+    candidates.sort(key=lambda eu: preferred_order.get(eu.claim_type, len(_DIFFERENTIATOR_PREFERRED)))
+    return candidates[:2]
+
+
+# ── Generic output detection ──────────────────────────────────────────────────
+
+# Strip rating/count/volume signals when checking for specificity.
+_STRIP_RATING_VOLUME_RE = re.compile(
+    r"\b\d+[\.,]\d+\s+(?:rating|stars?)\b"
+    r"|\b\d[\d,]+\s+(?:reviews?|ratings?)\b"
+    r"|\b(?:strong|high|solid|deep|standout|large|great|impressive)\s+(?:review\s+)?(?:volume|depth|count)\b"
+    r"|\b(?:consistent|reliable|strong|high|solid|great)\s+ratings?\b"
+    r"|\b(?:highly|well)[- ]rated\b"
+    r"|\bgoogle[- ]verified\b"
+    r"|\bverified\s+(?:on\s+)?google\b"
+    r"|\boperational\s+and\s+verified\b",
+    re.IGNORECASE,
+)
+
+# Words that are structurally necessary but carry no venue-specific signal.
+_GENERIC_TOKENS: frozenset = frozenset({
+    "a", "an", "the", "is", "are", "was", "with", "and", "or", "for",
+    "to", "of", "on", "at", "in", "near", "by", "its", "this", "that",
+    "which", "where", "has", "have", "been", "their", "here", "there",
+    "from", "into", "per", "via", "out", "all", "both", "just",
+    # Generic quality adjectives
+    "well", "solid", "reliable", "popular", "good", "great", "strong",
+    "consistent", "dependable", "trusted", "practical", "useful", "lively",
+    "busy", "high", "deep", "standout", "large", "impressive", "notable",
+    # Words that appear in "well-regarded", "well-rated", etc.
+    "regarded", "rated", "noted", "established", "known", "recognized",
+    "verified", "operational", "confirmed", "listed",
+    # Generic outcome nouns
+    "pick", "option", "choice", "stop", "spot", "evening", "night",
+    "dining", "drinks", "anchor", "staple", "base", "destination",
+    "making", "providing", "offering", "being",
+})
+
+# Venue category tokens that are not differentiators.
+_CATEGORY_TOKENS: frozenset = frozenset({
+    "restaurant", "restaurants", "bar", "bars", "cafe", "cafes", "hotel",
+    "hotels", "attraction", "venue", "venues", "place", "places",
+    "cocktail", "cocktails", "nightclub", "lounge", "brewery", "winery",
+    "dining", "bistro",
+})
+
+
+def _lacks_venue_specific_differentiator(text: str) -> bool:
+    """Return True when the text's main content is only category + location + rating/volume.
+
+    After stripping rating/count/volume patterns, location phrases, and generic
+    structural words, fewer than 2 substantive tokens means nothing venue-specific remains.
+    """
+    working = _STRIP_RATING_VOLUME_RE.sub("", text.strip())
+    # Remove location phrases ("in West Loop", "near the hotel", "in Chicago")
+    working = re.sub(
+        r"\b(?:in|near|at)\s+[A-Z][\w''.\-]+(?:\s+[A-Z][\w''.\-]+)*\b", "", working
+    )
+    working = re.sub(r"\b(?:in|near|at)\s+the\s+\w+\b", "", working, flags=re.IGNORECASE)
+    tokens = re.findall(r"[a-zA-Z]{3,}", working.lower())
+    substantive = [t for t in tokens if t not in _GENERIC_TOKENS and t not in _CATEGORY_TOKENS]
+    return len(substantive) < 2
+
 
 class WhyPickLLMResult(TypedDict):
     whyPick: str
@@ -66,17 +167,39 @@ def _build_user_prompt(
     category: str,
     intent: str,
     evidence_units: List[EvidenceUnit],
+    selected_differentiators: Optional[List[EvidenceUnit]] = None,
 ) -> str:
     safe_units = [eu for eu in evidence_units if eu.safe_for_copy][:8]
     evidence_lines = "\n".join(
         f"  [{eu.id}] {eu.claim_type}: {eu.claim}"
         for eu in safe_units
     ) if safe_units else "  (none)"
+
+    if selected_differentiators:
+        diff_lines = "\n".join(
+            f"  [{eu.id}] {eu.claim_type}: {eu.claim}"
+            for eu in selected_differentiators
+        )
+        diff_section = (
+            f"\nPRIMARY DIFFERENTIATORS — anchor your whyPick on 1–2 of these:\n"
+            f"{diff_lines}\n"
+            "\nCritical rules:\n"
+            "- Your whyPick MUST use the PRIMARY DIFFERENTIATORS as its main hook\n"
+            "- Do NOT use rating numbers, review counts, or Google verification as the primary reason\n"
+            "- Do NOT use location alone — pair it with a specific quality from the differentiators\n"
+        )
+    else:
+        diff_section = (
+            "\nNo strong differentiators found — use the most specific evidence available.\n"
+            "- Do NOT lead with rating, review count, or location alone\n"
+        )
+
     return (
         f"Venue: {venue_name}\n"
         f"Category: {category}\n"
         f"Request intent: {intent}\n"
-        f"\nEvidence units (safe_for_copy only):\n{evidence_lines}\n\n"
+        f"{diff_section}"
+        f"\nAll evidence (context):\n{evidence_lines}\n\n"
         "Respond with JSON only — no preamble, no markdown:\n"
         '{"whyPick": "...", "evidenceIdsUsed": ["id1", ...], '
         '"confidence": "high|medium|low", "fallbackReason": "..."}'
@@ -136,6 +259,9 @@ def validate_llm_output(
     if evidence_ids_used and not any(eid in valid_ids for eid in evidence_ids_used):
         return "evidence IDs do not match provided units"
 
+    if _lacks_venue_specific_differentiator(text):
+        return "generic output: lacks venue-specific differentiator"
+
     return None
 
 
@@ -168,6 +294,8 @@ def generate_llm_why_pick(
     if cached is not None:
         return cached
 
+    differentiators = select_differentiators(evidence_units)
+
     try:
         import anthropic
         client = anthropic.Anthropic(api_key=effective_key)
@@ -177,6 +305,7 @@ def generate_llm_why_pick(
             system=_build_system_prompt(),
             messages=[{"role": "user", "content": _build_user_prompt(
                 venue_name, category, intent, evidence_units,
+                selected_differentiators=differentiators,
             )}],
         )
         raw = message.content[0].text.strip()

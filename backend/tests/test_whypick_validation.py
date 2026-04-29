@@ -13,7 +13,7 @@ from app.concierge.whypick_prompt import WhyPickLLMResult, validate_llm_output
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _make_result(
-    why_pick: str = "A cocktail bar in West Loop with deep review volume, a solid evening pick.",
+    why_pick: str = "Billy Sunday pours inventive stirred cocktails in a cozy West Loop setting.",
     evidence_ids: list = None,
     confidence: str = "high",
     fallback: str = "A reliable cocktail bar.",
@@ -50,13 +50,13 @@ def _make_restaurant_units() -> list:
 
 def test_valid_bar_output_passes():
     units = _make_bar_units()
-    result = _make_result("A cocktail bar in West Loop with deep review volume, a solid evening pick.")
+    result = _make_result("Billy Sunday pours inventive stirred cocktails in a cozy West Loop setting.")
     assert validate_llm_output(result, venue_name="Billy Sunday", category="bar", evidence_units=units) is None
 
 
 def test_valid_restaurant_output_passes():
     units = _make_restaurant_units()
-    result = _make_result("A Mediterranean restaurant in River West with high review volume and consistent ratings.")
+    result = _make_result("Avec serves wood-fired small plates in a River West space built for sharing.")
     assert validate_llm_output(result, venue_name="Avec", category="restaurant", evidence_units=units) is None
 
 
@@ -216,7 +216,7 @@ def test_cocktail_bar_language_in_restaurant_rejected():
 
 def test_bar_language_in_bar_context_is_fine():
     units = _make_bar_units()
-    result = _make_result("A cocktail bar in West Loop with standout review depth.")
+    result = _make_result("Billy Sunday is a cocktail bar in West Loop known for its inventive seasonal cocktail program.")
     assert validate_llm_output(result, venue_name="Billy Sunday", category="bar", evidence_units=units) is None
 
 
@@ -233,8 +233,8 @@ def test_three_sentences_rejected():
 
 def test_two_sentences_short_passes():
     units = _make_bar_units()
-    result = _make_result("A cocktail bar in West Loop. Strong ratings.")
-    # two short sentences under 140 chars — allowed
+    result = _make_result("Billy Sunday serves inventive cocktails in West Loop. A strong pick for the evening.")
+    # two short sentences under 140 chars with specific signal — allowed
     rejection = validate_llm_output(result, venue_name="Billy Sunday", category="bar", evidence_units=units)
     assert rejection is None
 
@@ -255,9 +255,8 @@ def test_two_sentences_over_140_chars_rejected():
 
 def test_invalid_evidence_ids_rejected():
     units = _make_bar_units()
-    valid_ids = [u.id for u in units]
     result = _make_result(
-        "A cocktail bar in West Loop with strong ratings.",
+        "Billy Sunday is a cocktail bar in West Loop with an inventive seasonal program.",
         evidence_ids=["deadbeef", "cafebabe"],  # none match
     )
     rejection = validate_llm_output(result, venue_name="Billy Sunday", category="bar", evidence_units=units)
@@ -268,7 +267,7 @@ def test_valid_evidence_ids_pass():
     units = _make_bar_units()
     valid_id = units[0].id
     result = _make_result(
-        "A cocktail bar in West Loop with strong ratings.",
+        "Billy Sunday is a cocktail bar in West Loop with an inventive seasonal program.",
         evidence_ids=[valid_id],
     )
     assert validate_llm_output(result, venue_name="Billy Sunday", category="bar", evidence_units=units) is None
@@ -277,7 +276,7 @@ def test_valid_evidence_ids_pass():
 def test_empty_evidence_ids_passes():
     units = _make_bar_units()
     result = _make_result(
-        "A cocktail bar in West Loop with strong ratings.",
+        "Billy Sunday is a cocktail bar in West Loop with an inventive seasonal program.",
         evidence_ids=[],
     )
     assert validate_llm_output(result, venue_name="Billy Sunday", category="bar", evidence_units=units) is None
@@ -294,5 +293,28 @@ def test_vague_phrase_rejected():
 
 def test_concrete_specific_output_passes():
     units = _make_bar_units()
-    result = _make_result("A well-regarded cocktail bar in West Loop with 1,800 reviews and consistent ratings.")
+    result = _make_result("Billy Sunday is a cocktail bar in West Loop celebrated for its zero-waste spirit program.")
     assert validate_llm_output(result, venue_name="Billy Sunday", category="bar", evidence_units=units) is None
+
+
+# ── Generic (rating/volume/location only) outputs now rejected ───────────────
+
+def test_generic_bar_rating_volume_rejected():
+    units = _make_bar_units()
+    result = _make_result("A cocktail bar in West Loop with deep review volume, a solid evening pick.")
+    rejection = validate_llm_output(result, venue_name="Billy Sunday", category="bar", evidence_units=units)
+    assert rejection == "generic output: lacks venue-specific differentiator"
+
+
+def test_generic_restaurant_volume_rating_rejected():
+    units = _make_restaurant_units()
+    result = _make_result("A Mediterranean restaurant in River West with high review volume and consistent ratings.")
+    rejection = validate_llm_output(result, venue_name="Avec", category="restaurant", evidence_units=units)
+    assert rejection == "generic output: lacks venue-specific differentiator"
+
+
+def test_generic_bar_count_only_rejected():
+    units = _make_bar_units()
+    result = _make_result("A well-regarded cocktail bar in West Loop with 1,800 reviews and consistent ratings.")
+    rejection = validate_llm_output(result, venue_name="Billy Sunday", category="bar", evidence_units=units)
+    assert rejection == "generic output: lacks venue-specific differentiator"
