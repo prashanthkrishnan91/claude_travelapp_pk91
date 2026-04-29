@@ -26,6 +26,7 @@ Before giving any Claude/Codex prompt, ChatGPT must silently check:
 12. For PR review: cheap merge gate first, deep audit only if suspicious?
 13. Budget gate: can this be split/downgraded to avoid extra usage?
 14. If extra usage may be needed, did the Code Committee approve it?
+15. For UI work: did the UI budget gate approve the scope?
 
 If any check fails, rewrite before showing the user.
 
@@ -42,6 +43,31 @@ Before any prompt likely to be Medium-High or High usage:
 5. Exclude README unless public/setup behavior changed.
 6. Use cheap merge gate before any deep audit.
 7. Defer non-blocking improvements to a follow-up list, not the current prompt.
+
+## UI budget gate
+
+Any prompt containing UI, visual, design-system, premium, boutique, polish, redesign, theme, layout, or aesthetic must include a UI budget outside the copy block.
+
+UI budget format:
+
+```md
+UI budget:
+- Phase: [map / foundation / one page / one component / merge gate]
+- Max files: [number]
+- Primary surfaces: [screens/components]
+- Forbidden surfaces: [what not to touch]
+- Stop condition: [when to stop instead of expanding]
+- Decision: APPROVE / SPLIT / REJECT
+```
+
+Hard rules:
+
+- Full-app UI upgrades default to SPLIT.
+- Sonnet UI implementation max scope: 6 files unless Code Committee explicitly approves more.
+- If primary UI files are unknown, run Codex surface map first; do not use Sonnet discovery.
+- Page-specific UI polish must target one page/screen at a time.
+- UI merge gates use Codex by default and read diff only.
+- No prompt may say "make the whole app premium" without max files + phase boundary.
 
 ## Extra usage approval gate
 
@@ -157,7 +183,29 @@ MANDATORY:
 
 ---
 
-## 4. PR Review — default cheap merge gate (Codex preferred)
+## 4. UI workflow
+
+For UI work, never skip UI budget.
+
+Preferred flow:
+
+1. Codex map if primary visual surfaces are unknown.
+2. Sonnet implements one capped phase.
+3. Codex cheap visual merge gate.
+4. Subsequent page/component passes only if needed.
+
+Implementation prompt must include:
+
+- UI budget
+- primary edit target(s)
+- forbidden surfaces
+- max files
+- discovery budget
+- HANDOFF.md update
+
+---
+
+## 5. PR Review — default cheap merge gate (Codex preferred)
 
 Use this first for normal pre-merge review.
 
@@ -176,7 +224,7 @@ Output only:
 - HANDOFF.md edited: Yes/No
 - Non-blocking follow-ups, max 3 bullets
 
-## 5. PR Review — deep audit (Sonnet only if suspicious)
+## 6. PR Review — deep audit (Sonnet only if suspicious)
 
 Use only after cheap merge gate finds a specific suspected risk.
 
