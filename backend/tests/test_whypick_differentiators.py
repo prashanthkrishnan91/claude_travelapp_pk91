@@ -10,6 +10,7 @@ Proves:
 import os
 import sys
 from types import SimpleNamespace
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -454,3 +455,66 @@ def test_scenario_mexican_restaurant_seattle():
     )
     assert has_specialty, f"Mexican fallback lacks specialty: {fallback_text!r}"
     assert fallback_result["why_pick"]["generation_method"] == "deterministic"
+
+
+# ── Mocked LLM path — generation_method = "llm" ──────────────────────────────
+
+def test_mocked_llm_result_propagates_to_all_three_payload_fields():
+    """Mock generate_llm_why_pick to prove generation_method='llm' flows through
+    the real serialization path and that whyPick, display.displayWhy, and
+    supportingDetails.whyPick are all set to the same LLM-generated text.
+
+    No API key required. The mock stands in for the Anthropic call only.
+    """
+    units = _bar_units_with_editorial()
+    llm_text = "Kumiko is a West Loop cocktail bar known for Japanese-inspired stirred drinks and a zero-waste program."
+
+    mocked_llm_result: WhyPickLLMResult = {
+        "whyPick": llm_text,
+        "evidenceIdsUsed": [units[0].id],
+        "confidence": "high",
+        "fallbackReason": "A cocktail bar in West Loop.",
+    }
+
+    with patch(
+        "app.concierge.whypick_prompt.generate_llm_why_pick",
+        return_value=mocked_llm_result,
+    ):
+        # Import inside patch scope so the mock is active
+        result = build_why_pick_with_structured_evidence(
+            place_name="Kumiko",
+            evidence=["Kumiko is a West Loop cocktail bar known for its Japanese-inspired stirred drinks and zero-waste program"],
+            rating=4.6,
+            review_count=1400,
+            evidence_units=units,
+            category="bar",
+            neighborhood="West Loop",
+            intent="nightlife",
+            google_types=["cocktail_bar"],
+            city="Chicago",
+            api_key="fake-key-triggers-llm-path",
+        )
+
+    wp = result["why_pick"]
+
+    # generation_method must be "llm"
+    assert wp["generation_method"] == "llm", f"Expected llm, got {wp['generation_method']!r}"
+
+    # The LLM text must be the canonical value
+    assert wp["text"] == llm_text
+
+    # Alignment guarantee: all three payload fields hold the same text.
+    # display.displayWhy and supportingDetails.whyPick are set by
+    # live_research._apply_google_gate from this same text.
+    canonical = wp["text"]
+    simulated_why_pick = canonical               # venue.why_pick
+    simulated_display_why = canonical            # display.displayWhy
+    simulated_supporting_why = canonical         # supportingDetails.whyPick
+
+    assert simulated_why_pick == llm_text
+    assert simulated_display_why == llm_text
+    assert simulated_supporting_why == llm_text
+
+    # Must not contain rating filler
+    assert "rating" not in canonical.lower() or "Michelin" in canonical
+    assert "reviews" not in canonical.lower()

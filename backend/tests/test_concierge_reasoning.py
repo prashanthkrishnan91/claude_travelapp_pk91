@@ -5,6 +5,7 @@ from app.concierge.reasoning import (
     GENERIC_PHRASES_RE,
     build_why_pick,
     ensure_non_empty_evidence,
+    has_concrete_fact,
 )
 
 _BLOCKED_GENERIC = [
@@ -61,8 +62,10 @@ def test_synthetic_payloads_all_pass_banned_strings_filter():
         assert not GENERIC_PHRASES_RE.search(text), f"Generic phrase in: {text!r}"
         assert "with rated" not in text.lower()
         assert "backed by rated" not in text.lower()
-        # Must contain actual rating number
-        assert _RATING_RE.search(text), f"No rating number found in: {text!r}"
+        # Output must contain at least one concrete signal (rating, location, or
+        # venue-specific keyword). Rating filler is intentionally omitted when
+        # editorial/specialty differentiators are present.
+        assert has_concrete_fact(text), f"Output lacks any concrete fact: {text!r}"
 
 
 def test_template_selection_is_deterministic_for_evidence_shape():

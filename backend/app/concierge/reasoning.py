@@ -354,6 +354,8 @@ def _build_cuisine_restaurant_display_why(
     cat = cuisine.lower()
     if not cat.endswith("restaurant"):
         cat = f"{cat} restaurant"
+    # Capitalised form for user-facing copy (e.g. "Mexican restaurant", not "mexican restaurant")
+    cat_display = cat[0].upper() + cat[1:]
     r = float(rating or 0)
     rc = int(review_count or 0)
     loc_part = f" in {loc}" if loc else ""
@@ -363,8 +365,8 @@ def _build_cuisine_restaurant_display_why(
     if specialty_tags:
         tag = specialty_tags[0].lower().strip()
         if name:
-            return _trim_to_word(f"{name} is a {cat}{loc_part} known for {tag}.")
-        return _trim_to_word(f"A {cat}{loc_part} known for {tag}.")
+            return _trim_to_word(f"{name} is a {cat_display}{loc_part} known for {tag}.")
+        return _trim_to_word(f"A {cat_display}{loc_part} known for {tag}.")
 
     # Deep review volume + high quality = proven anchor
     if rc >= 1500 and r >= 4.5:
@@ -411,7 +413,12 @@ def has_concrete_fact(text: str) -> bool:
         return True
     if _PLACE_WORD_RE.search(text):
         return True
-    keyword_hits = ("guide", "michelin", "bar", "restaurant", "cafe", "hotel", "museum", "park", "reviews")
+    keyword_hits = (
+        "guide", "michelin", "bar", "restaurant", "cafe", "hotel", "museum", "park", "reviews",
+        # Venue-specific signals that appear in editorial/specialty copy
+        "cocktail", "lounge", "speakeasy", "brewery", "winery", "tasting", "omakase",
+        "known for", "celebrated for", "awarded", "specialty", "signature",
+    )
     return any(k in text.lower() for k in keyword_hits)
 
 
@@ -491,7 +498,7 @@ def build_concierge_display_reason(
     # ── Priority a: Michelin status ──────────────────────────────────────────
     if michelin_status:
         stars = _michelin_stars_text(michelin_status)
-        cat_part = f" {cuisine.lower()}" if cuisine else ""
+        cat_part = f" {cuisine}" if cuisine else ""
         dest = loc_part or ""
         return _trim_to_word(f"{place_name} is a {stars}{cat_part} destination{dest}, making it a standout for fine dining.")
 
@@ -507,13 +514,10 @@ def build_concierge_display_reason(
             best = _clean_chip(edit_with_bar_signal)
             if len(best) > 100:
                 best = best[:97] + "..."
-            result = best.rstrip(".")
+            result = best.rstrip(". ")
             if loc and loc.lower() not in result.lower():
                 result += f" ({loc})"
-            if rating_support and len(result) + len(rating_support) + 5 <= 135:
-                result += f" — {rating_support}."
-            else:
-                result += "."
+            result += "."
             return _trim_to_word(result)
 
         # Infer precise category from Google types + name signals
@@ -545,13 +549,10 @@ def build_concierge_display_reason(
         best = _clean_chip(editorial[0])
         if len(best) > 100:
             best = best[:97] + "..."
-        result = best.rstrip(".")
+        result = best.rstrip(". ")
         if loc and loc.lower() not in result.lower():
             result += f" ({loc})"
-        if rating_support and len(result) + len(rating_support) + 5 <= 135:
-            result += f" — {rating_support}."
-        else:
-            result += "."
+        result += "."
         return _trim_to_word(result)
 
     # ── Priority d: Intent-specific category framing (no editorial) ──────────
