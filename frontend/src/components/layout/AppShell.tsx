@@ -61,8 +61,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Protected pages: show loading until session confirmed
   if (checking) {
     return (
-      <div className="flex h-full min-h-screen items-center justify-center">
-        <p className="text-gray-500 text-sm">Loading…</p>
+      <div className="flex h-full min-h-screen items-center justify-center bg-dark-50">
+        <p className="text-cream-500 text-sm">Loading…</p>
       </div>
     );
   }
@@ -82,8 +82,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             left: "-10%",
             width: "60vw",
             height: "60vw",
-            background: "radial-gradient(circle, rgba(186,230,253,0.55) 0%, transparent 70%)",
-            filter: "blur(60px)",
+            background: "radial-gradient(circle, rgba(200,165,92,0.22) 0%, transparent 70%)",
+            filter: "blur(70px)",
           }}
         />
         <div
@@ -93,8 +93,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             right: "-10%",
             width: "55vw",
             height: "55vw",
-            background: "radial-gradient(circle, rgba(196,181,253,0.40) 0%, transparent 70%)",
-            filter: "blur(70px)",
+            background: "radial-gradient(circle, rgba(88,80,180,0.18) 0%, transparent 70%)",
+            filter: "blur(80px)",
           }}
         />
         <div
@@ -104,8 +104,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             left: "25%",
             width: "40vw",
             height: "40vw",
-            background: "radial-gradient(circle, rgba(254,243,199,0.45) 0%, transparent 70%)",
-            filter: "blur(55px)",
+            background: "radial-gradient(circle, rgba(166,88,60,0.16) 0%, transparent 70%)",
+            filter: "blur(65px)",
           }}
         />
       </div>
@@ -113,7 +113,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex h-full min-h-screen">
         <Sidebar />
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 lg:pb-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 lg:pb-8 text-cream-100">
             {children}
           </div>
         </main>

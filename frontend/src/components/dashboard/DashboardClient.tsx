@@ -90,7 +90,7 @@ export function DashboardClient() {
           icon={<Map className="w-5 h-5" />}
           trend={upcomingCount > 0 ? `${upcomingCount} in planning` : undefined}
           trendUp={upcomingCount > 0}
-          colorClass="bg-sky-50 text-sky-600"
+          colorClass="bg-brand-500/15 text-brand-400"
         />
         <StatCard
           label="Upcoming"
@@ -98,13 +98,13 @@ export function DashboardClient() {
           icon={<Plane className="w-5 h-5" />}
           trend={nextTrip}
           trendUp={!!nextTrip}
-          colorClass="bg-violet-50 text-violet-600"
+          colorClass="bg-violet-500/15 text-violet-400"
         />
         <StatCard
           label="Travel Cards"
           value={summary.cardCount}
           icon={<CreditCard className="w-5 h-5" />}
-          colorClass="bg-emerald-50 text-emerald-600"
+          colorClass="bg-emerald-500/15 text-emerald-400"
         />
         <StatCard
           label="Total Points"
@@ -116,7 +116,7 @@ export function DashboardClient() {
               : undefined
           }
           trendUp={pointsValue > 0}
-          colorClass="bg-amber-50 text-amber-600"
+          colorClass="bg-amber-500/15 text-amber-400"
         />
       </div>
 

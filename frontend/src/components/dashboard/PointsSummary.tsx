@@ -7,11 +7,11 @@ interface PointsSummaryProps {
 }
 
 const CARD_COLORS = [
-  "bg-amber-400",
-  "bg-sky-500",
-  "bg-violet-500",
-  "bg-emerald-500",
-  "bg-rose-500",
+  "bg-brand-500/80",
+  "bg-violet-500/80",
+  "bg-emerald-500/80",
+  "bg-amber-500/80",
+  "bg-rose-500/80",
 ];
 
 export function PointsSummary({ cards }: PointsSummaryProps) {
@@ -25,7 +25,7 @@ export function PointsSummary({ cards }: PointsSummaryProps) {
   return (
     <div className="card p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-semibold text-slate-900">Points Summary</h2>
+        <h2 className="text-base font-semibold text-cream-100">Points Summary</h2>
         {avgCpp > 0 && (
           <span className="badge badge-planned">
             <TrendingUp className="w-3 h-3" />
@@ -35,12 +35,12 @@ export function PointsSummary({ cards }: PointsSummaryProps) {
       </div>
 
       {cards.length === 0 ? (
-        <div className="text-center py-6 text-slate-400">
-          <CreditCard className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-          <p className="text-sm font-medium text-slate-500">No cards added yet</p>
+        <div className="text-center py-6 text-cream-500">
+          <CreditCard className="w-8 h-8 mx-auto mb-2 text-cream-500/60" />
+          <p className="text-sm font-medium text-cream-400">No cards added yet</p>
           <Link
             href="/cards"
-            className="text-sm text-sky-600 hover:text-sky-700 font-medium mt-2 inline-block"
+            className="text-sm text-brand-400 hover:text-brand-300 font-medium mt-2 inline-block"
           >
             Add a travel card →
           </Link>
@@ -48,9 +48,9 @@ export function PointsSummary({ cards }: PointsSummaryProps) {
       ) : (
         <>
           {/* Total */}
-          <div className="rounded-xl bg-white/55 backdrop-blur-[16px] border border-white/40 shadow-[0_4px_16px_0_rgb(0_0_0/0.07)] p-4 mb-4">
-            <p className="text-xs text-slate-500 font-medium">Total Points</p>
-            <p className="text-3xl font-bold text-slate-900 mt-0.5">
+          <div className="rounded-xl bg-white/[.05] backdrop-blur-[16px] border border-white/[.08] p-4 mb-4">
+            <p className="text-xs text-cream-500 font-medium">Total Points</p>
+            <p className="text-3xl font-bold text-cream-100 mt-0.5">
               {totalPoints.toLocaleString()}
             </p>
             {estimatedValue > 0 && (
@@ -76,13 +76,13 @@ export function PointsSummary({ cards }: PointsSummaryProps) {
                   <CreditCard className="w-4 h-4 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-800 truncate">
+                  <p className="text-sm font-medium text-cream-200 truncate">
                     {card.displayName}
                   </p>
-                  <p className="text-xs text-slate-400">{card.issuer}</p>
+                  <p className="text-xs text-cream-500">{card.issuer}</p>
                 </div>
                 <div className="text-right shrink-0 space-y-1">
-                  <p className="text-sm font-semibold text-slate-800">
+                  <p className="text-sm font-semibold text-cream-100">
                     {(card.pointsBalance ?? 0).toLocaleString()}
                   </p>
                   {card.pointValueCpp && (

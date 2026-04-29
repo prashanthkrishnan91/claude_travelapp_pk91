@@ -23,47 +23,47 @@ export function RecentTrips({ trips }: RecentTripsProps) {
 
   return (
     <div className="card overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-        <h2 className="text-base font-semibold text-slate-900">Recent Trips</h2>
+      <div className="flex items-center justify-between px-6 py-4 border-b border-white/[.06]">
+        <h2 className="text-base font-semibold text-cream-100">Recent Trips</h2>
         <Link
           href="/trips"
-          className="flex items-center gap-1 text-sm text-sky-600 hover:text-sky-700 font-medium transition"
+          className="flex items-center gap-1 text-sm text-brand-400 hover:text-brand-300 font-medium transition"
         >
           View all <ArrowRight className="w-3.5 h-3.5" />
         </Link>
       </div>
 
       {recent.length === 0 ? (
-        <div className="px-6 py-8 text-center text-slate-400">
+        <div className="px-6 py-8 text-center text-cream-500">
           <p className="text-sm">No trips yet.</p>
-          <Link href="/trips/new" className="text-sm text-sky-600 hover:text-sky-700 font-medium mt-2 inline-block">
+          <Link href="/trips/new" className="text-sm text-brand-400 hover:text-brand-300 font-medium mt-2 inline-block">
             Plan your first trip →
           </Link>
         </div>
       ) : (
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-white/[.05]">
           {recent.map((trip) => (
             <li key={trip.id}>
               <Link
                 href={`/trips/${trip.id}`}
-                className="flex items-start gap-4 px-6 py-4 hover:bg-slate-50 transition-all duration-150 group border-l-2 border-transparent hover:border-sky-400"
+                className="flex items-start gap-4 px-6 py-4 hover:bg-white/[.04] transition-all duration-150 group border-l-2 border-transparent hover:border-brand-400"
               >
                 {/* Destination icon */}
-                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-sky-50 text-sky-600 shrink-0 mt-0.5">
+                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-500/15 text-brand-400 shrink-0 mt-0.5">
                   <MapPin className="w-4 h-4" />
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-slate-900 group-hover:text-sky-700 transition truncate">
+                    <span className="text-sm font-semibold text-cream-100 group-hover:text-brand-400 transition truncate">
                       {trip.title}
                     </span>
                     <TripStatusBadge status={trip.status} />
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5 truncate">
+                  <p className="text-xs text-cream-400 mt-0.5 truncate">
                     {trip.destination}
                   </p>
-                  <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-400">
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-cream-500">
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
                       {formatDateRange(trip.startDate, trip.endDate)}
@@ -78,7 +78,7 @@ export function RecentTrips({ trips }: RecentTripsProps) {
 
                 {trip.budgetCash && (
                   <div className="shrink-0 text-right space-y-1">
-                    <p className="text-sm font-semibold text-slate-800">
+                    <p className="text-sm font-semibold text-cream-100">
                       {new Intl.NumberFormat("en-US", {
                         style: "currency",
                         currency: trip.budgetCurrency,

@@ -1,6 +1,47 @@
 # AI Handoff — Travel Concierge
 
-## Last change
+## Last change (2026-04-29) — UI Design System: Dark Mode-First Foundation
+
+Frontend-only visual upgrade to a premium boutique concierge aesthetic. No backend, API, or business-logic changes.
+
+### Files touched
+- `frontend/src/app/globals.css` — full dark theme: body background, `.card`, `.glass`, `.btn-primary` (→ warm gold), `.btn-ghost`, `.btn-emerald`, `.btn-gold`, form controls, badges, skeleton, nav items, color tokens (`--color-cream-*`, `--color-dark-*`, `--color-brand-*`)
+- `frontend/src/components/layout/AppShell.tsx` — ambient glow blobs → warm gold/amber on dark bg; loading state → dark
+- `frontend/src/components/layout/Sidebar.tsx` — brand icon → gold; borders → white/7%; nav section labels, user avatar
+- `frontend/src/components/layout/MobileNav.tsx` — brand icon/active tabs → gold; drawer overlay → black/60%; borders → white/7%
+- `frontend/src/components/layout/PageHeader.tsx` — h1 → cream-100; description → cream-500
+- `frontend/src/components/ui/StatCard.tsx` — label/value/trend text → cream scale; default colorClass → brand gold
+- `frontend/src/components/ui/EmptyState.tsx` — icon container → dark glass surface
+- `frontend/src/components/dashboard/DashboardClient.tsx` — stat colorClass props → dark tinted variants
+- `frontend/src/components/dashboard/RecentTrips.tsx` — all text/border/hover/link/icon classes → dark
+- `frontend/src/components/dashboard/QuickActions.tsx` — action tile surfaces and text → dark
+- `frontend/src/components/dashboard/PointsSummary.tsx` — surfaces, text, card color chips → dark
+- `frontend/src/components/dashboard/DealsFeed.tsx` — hover/badge/text/link → dark with gold accent
+- `frontend/src/app/trips/page.tsx` — modals: `bg-white` → `.card`; inputs → `.input`/`.label`; trip card text/border/button classes → dark
+
+### Behavior change
+Visual only. Layout, routing, data, auth, business logic: unchanged. All existing data continues to render identically.
+
+### Design tokens introduced
+- `--color-cream-{50–500}`: warm text scale (cream-100 = primary text on dark)
+- `--color-dark-{50–500}`: dark surface scale
+- `--color-brand-{300–700}`: warm gold accent (replaces sky-blue as primary CTA/accent)
+
+### Known limitations
+- Deep trip-detail pages (`/trips/[id]`, concierge panel, search results, cards page) still use light-era Tailwind classes — these pages will inherit the dark card/glass/body styles but inline text classes (`text-slate-*`) may appear dark-on-dark in some sections. Follow-up pass needed.
+- Auth pages unchanged (already have a luxury dark background).
+
+### Next likely task
+- Page-by-page polish pass: `/trips/[id]` TripBuilder, AIConciergePanel, SearchResultCard, `/cards`, `/settings`
+- Consider adding a `text-cream-100` default to `[data-page]` wrappers so any remaining `text-slate-900` elements fall back cleanly
+- Validate on mobile (bottom nav gold active state, drawer)
+
+### Supabase SQL required: No
+### Backend touched: No
+
+---
+
+## Previous change — whyPick evidence enrichment
 Enriched whyPick evidence quality by promoting venue-specific Foursquare tags, Tavily award signals, and Yelp "known for" patterns to structured differentiators (branch: claude/verify-whypick-pipeline-73XFm).
 
 ## Files touched
