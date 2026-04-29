@@ -808,6 +808,23 @@ def _google_fallback_queries(intent: str, destination: str, user_query: str) -> 
                 f"fine dining in {dest}",
             ]
         )
+    elif intent == INTENT_HOTELS:
+        queries.extend(
+            [
+                f"best hotels in {dest}",
+                f"luxury hotels in {dest}",
+                f"best value hotels in {dest}",
+                f"boutique hotels in {dest}",
+            ]
+        )
+    elif intent in (INTENT_ATTRACTIONS, INTENT_PLAN_DAY):
+        queries.extend(
+            [
+                f"top attractions in {dest}",
+                f"best things to do in {dest}",
+                f"must see places in {dest}",
+            ]
+        )
     else:
         queries.extend([f"{base or 'places'} near {dest}", f"{base or 'best places'} in {dest}"])
     # preserve order while deduping
@@ -1501,12 +1518,22 @@ def _validate_or_fallback_reason(
 
 def _category_fit_score(intent: str, user_query: str, verification: "GooglePlaceVerification") -> float:
     blob = " ".join((t or "").lower() for t in (verification.types or []))
+    place_types_set = set((t or "").lower() for t in (verification.types or []))
     qcat = _derive_query_category(intent, user_query)
+    lodging_types = {
+        "lodging", "hotel", "resort_hotel", "motel", "bed_and_breakfast",
+        "hostel", "extended_stay_hotel", "serviced_apartment",
+    }
+    bar_types = {"bar", "night_club", "cocktail_bar"}
+    attraction_types = {
+        "tourist_attraction", "park", "museum", "art_gallery", "zoo",
+        "aquarium", "historical_landmark", "landmark",
+    }
     if qcat == "nightlife_bar":
-        if any(tok in blob for tok in ("cocktail_bar", "bar", "night_club")):
+        if place_types_set & bar_types:
             return 1.0
-        if "restaurant" in blob:
-            return 0.35
+        if "restaurant" in place_types_set and ("bar_and_grill" in place_types_set):
+            return 0.5
         return 0.1
     if qcat == "brunch_cafe":
         score = 0.0
@@ -1551,6 +1578,14 @@ def _category_fit_score(intent: str, user_query: str, verification: "GooglePlace
         if any(tok in blob for tok in ("bar", "night_club")):
             return 0.2
         return 0.4
+    if qcat == "hotel":
+        if place_types_set & lodging_types:
+            return 1.0
+        return 0.1
+    if qcat == "attraction":
+        if place_types_set & attraction_types:
+            return 1.0
+        return 0.1
     return 0.6
 
 
@@ -1605,6 +1640,14 @@ def build_place_reason(
         bits.append("Strong brunch/cafe fit")
     elif intent == INTENT_NIGHTLIFE:
         bits.append("Strong cocktail/nightlife fit")
+    elif _derive_query_category(intent, user_query) == "hotel":
+        location_hint = (verified_place.formatted_address or getattr(candidate, "neighborhood", None) or "").strip()
+        location_part = f" in {location_hint}" if location_hint else ""
+        candidate_reason = (
+            f"{name} is a centrally located hotel{location_part}, making it a practical base for exploring the city."
+        )
+        candidate_reason = _enforce_reason_fragments(candidate_reason, category=category)
+        return candidate_reason, "deterministic_location"
     if rating is not None:
         if review_count and int(review_count) > 0:
             bits.append(f"Rated {float(rating):.1f} across {int(review_count):,} reviews")
@@ -2981,12 +3024,17 @@ def _apply_google_gate(
                         display_why_source="deterministic_concierge",
                     )
                     canonical_why = (
-                        (_display_why or "").strip()
-                        or str(getattr(_sd, "why_pick", "") or "").strip()
+                        str(reason or "").strip()
                         or str(getattr(venue, "primary_reason", "") or "").strip()
+                        or str(getattr(_sd, "why_pick", "") or "").strip()
+                        or str(_display_why or "").strip()
                         or _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"])
                     )
                     venue.why_pick = canonical_why
+                    if _sd is not None:
+                        _sd.why_pick = canonical_why
+                    if getattr(venue, "display", None) is not None:
+                        venue.display.display_why = canonical_why
                 except Exception:
                     pass
                 try:

@@ -405,6 +405,8 @@ def build_concierge_display_reason(
         if _loc_tokens and _loc_tokens.issubset(_name_tokens):
             loc = None
     loc_part = f" in {loc}" if loc else ""
+    query_city_match = re.search(r"\b(?:in|near)\s+([A-Za-z][A-Za-z\s\-']{1,40})\b", query_low)
+    query_city = query_city_match.group(1).strip().title() if query_city_match else None
 
     # Is this a cocktail / nightlife request?
     is_cocktail = (
@@ -507,6 +509,14 @@ def build_concierge_display_reason(
     if intent == "family_friendly":
         inner = cuisine.lower() if cuisine else (category or "spot").replace("_", " ")
         return _append_rating(f"A family-friendly {inner}{loc_part}")[:140]
+
+    # ── Priority e1: Hotel-specific location-led copy (never rating-first) ──
+    if (category or "").lower() == "hotel":
+        hotel_anchor = loc or query_city or "city-center"
+        return (
+            f"{place_name} is a well-located {hotel_anchor} hotel with strong review volume, "
+            "making it a practical base for exploring the city."
+        )[:170]
 
     # ── Priority e: Cuisine-specific restaurant — volume/quality framing (D) ──
     # For cuisine-specific restaurant queries without editorial, use the dedicated
