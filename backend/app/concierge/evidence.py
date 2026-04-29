@@ -34,6 +34,70 @@ ClaimType = Literal[
     "google_verified",
 ]
 
+# ── Foursquare tag specificity filter ────────────────────────────────────────
+
+# Tags that carry no venue-specific differentiating signal.
+_GENERIC_FS_TAGS: frozenset = frozenset({
+    "popular", "popular spot", "great food", "good food", "good service",
+    "nice atmosphere", "must visit", "must-visit", "nearby", "casual dining",
+    "outdoor seating", "outdoor dining", "wifi", "takeout", "delivery",
+    "dine-in", "reservations", "fast service", "friendly staff", "good value",
+    "trendy", "hipster", "local", "neighborhood spot", "late night",
+    "happy hour", "bar bites", "drinks", "date night", "date-night",
+    "romantic", "groups", "parking", "accessible", "family-friendly",
+    "family friendly", "vegetarian-friendly", "vegetarian friendly",
+    "vegan", "gluten free", "gluten-free", "cash only", "credit cards",
+    "takeaway", "sit down", "quick bite", "dinner", "lunch", "brunch",
+    "breakfast", "late night food", "comfort food", "neighborhood",
+    "casual", "laid-back", "laid back", "chill", "cozy", "intimate",
+})
+
+# Pure venue-category tokens — not differentiators on their own.
+_FS_CATEGORY_TOKENS: frozenset = frozenset({
+    "restaurant", "bar", "cafe", "hotel", "lounge", "brewery", "winery",
+    "bistro", "pub", "club", "diner", "grill", "brasserie", "tavern",
+})
+
+
+def _foursquare_tag_is_specific(tag: str) -> bool:
+    """Return True when a Foursquare tag is a genuine venue differentiator.
+
+    Rejects generic sentiment/use-case labels ("trendy", "date-night") and
+    pure category names ("bar", "restaurant"). Accepts specific dish/drink/
+    program signals ("handmade tortillas", "craft cocktails", "zero-waste").
+    """
+    if not tag:
+        return False
+    tag_low = tag.lower().strip()
+    if len(tag_low) < 3:
+        return False
+    if tag_low in _GENERIC_FS_TAGS:
+        return False
+    tokens = set(re.findall(r"[a-z]+", tag_low))
+    if tokens and tokens.issubset(_FS_CATEGORY_TOKENS):
+        return False
+    return True
+
+
+# ── Award / recognition signal patterns ─────────────────────────────────────
+
+_AWARD_SIGNAL_RE = re.compile(
+    r"\b(michelin[\s\-]+(?:stars?|starred|bib|guide|recognized|selected)"
+    r"|bib[\s\-]+gourmand"
+    r"|james[\s\-]+beard(?:[\s\-]+award)?(?:[\s\-]+(?:winner|finalist|nominated|semifinalist))?"
+    r"|award[\s\-]winning"
+    r"|(?:one|two|three|1|2|3)[\s\-]+michelin[\s\-]+stars?"
+    r"|world(?:'s|s)?[\s]+50[\s]+best)\b",
+    re.IGNORECASE,
+)
+
+# ── "Known for X" extraction pattern ────────────────────────────────────────
+
+_KNOWN_FOR_RE = re.compile(
+    r"(?:known|celebrated|acclaimed|famous|noted|recognized|lauded)\s+for\s+(?:its?\s+)?([^,;.!?\n]{5,80})",
+    re.IGNORECASE,
+)
+
 SourceFamily = Literal["google", "editorial", "yelp", "foursquare", "tavily", "internal"]
 
 
@@ -192,6 +256,22 @@ def normalize_evidence(
                 venue_name=venue_name,
                 category=category,
             ))
+            # Promote award signals (Michelin, James Beard) from Tavily as
+            # structured attribute units safe for LLM differentiator selection.
+            award_match = _AWARD_SIGNAL_RE.search(clean)
+            if award_match:
+                award_phrase = award_match.group(0).strip()
+                units.append(EvidenceUnit(
+                    id=_eid(venue_name, "attribute_t", i),
+                    claim=f"Award recognition: {award_phrase}",
+                    claim_type="attribute",
+                    source_family="tavily",
+                    confidence="medium",
+                    safe_for_copy=True,
+                    venue_name=venue_name,
+                    category=category,
+                    metadata={"award_phrase": award_phrase},
+                ))
 
     # ── Yelp enrichment (non-canonical) ────────────────────────────────────
     if enrichment is not None:
@@ -225,6 +305,22 @@ def normalize_evidence(
                     venue_name=venue_name,
                     category=category,
                 ))
+                # Extract "known for X" signals from Yelp excerpts as structured
+                # attribute units safe for LLM differentiator selection.
+                kf_match = _KNOWN_FOR_RE.search(clean)
+                if kf_match:
+                    signal = kf_match.group(1).strip()[:60]
+                    if len(signal) >= 5:
+                        units.append(EvidenceUnit(
+                            id=_eid(venue_name, "attribute_y", i),
+                            claim=f"Known for {signal}",
+                            claim_type="attribute",
+                            source_family="yelp",
+                            confidence="medium",
+                            safe_for_copy=True,
+                            venue_name=venue_name,
+                            category=category,
+                        ))
 
     # ── Foursquare enrichment (non-canonical) ──────────────────────────────
     if enrichment is not None:
@@ -242,13 +338,17 @@ def normalize_evidence(
                 ))
         for i, fs_tag in enumerate(getattr(enrichment, "foursquare_tags", [])[:3]):
             if fs_tag:
+                is_specific = _foursquare_tag_is_specific(fs_tag)
                 units.append(EvidenceUnit(
                     id=_eid(venue_name, "foursquare_tag", i),
                     claim=f"Tagged as {fs_tag}",
                     claim_type="foursquare_tag",
                     source_family="foursquare",
-                    confidence="low",
-                    safe_for_copy=False,
+                    # Specific venue signals (e.g. "handmade tortillas",
+                    # "craft cocktails") are safe to surface in LLM copy.
+                    # Generic/use-case labels remain unsafe.
+                    confidence="medium" if is_specific else "low",
+                    safe_for_copy=is_specific,
                     venue_name=venue_name,
                     category=category,
                 ))

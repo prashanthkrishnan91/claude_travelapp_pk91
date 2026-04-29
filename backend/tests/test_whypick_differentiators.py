@@ -165,11 +165,14 @@ def test_select_differentiators_prefers_michelin_above_all():
     assert diffs[0].claim_type == "michelin_status"
 
 
-def test_select_differentiators_returns_foursquare_tags_when_no_editorial():
+def test_select_differentiators_returns_specific_foursquare_tags():
+    # "craft cocktails", "small plates", "natural wine" are specific → safe_for_copy=True
+    # → they now surface as differentiators even without editorial evidence.
     units = _bar_units_with_foursquare()
     diffs = select_differentiators(units)
-    # foursquare_tag/category are not safe_for_copy — expect empty
-    assert diffs == []  # foursquare_tag safe_for_copy=False so not selected
+    assert len(diffs) >= 1
+    assert all(d.claim_type == "foursquare_tag" for d in diffs)
+    assert all(d.safe_for_copy is True for d in diffs)
 
 
 def test_select_differentiators_max_two():
@@ -420,8 +423,10 @@ def test_scenario_mexican_restaurant_seattle():
     units = _mexican_units_with_foursquare()
     diffs = select_differentiators(units)
 
-    # No safe_for_copy specialty units — foursquare tags are not safe_for_copy
-    assert diffs == []
+    # Specific foursquare tags ("handmade tortillas", "mezcal cocktails", "carnitas")
+    # are now safe_for_copy=True and surface as differentiators.
+    assert len(diffs) >= 1
+    assert all(d.claim_type == "foursquare_tag" for d in diffs)
 
     # Differentiated output still passes validation
     valid_output = "Mas Maiz is a Capitol Hill Mexican restaurant celebrated for handmade tortillas and mezcal cocktails."
@@ -518,3 +523,143 @@ def test_mocked_llm_result_propagates_to_all_three_payload_fields():
     # Must not contain rating filler
     assert "rating" not in canonical.lower() or "Michelin" in canonical
     assert "reviews" not in canonical.lower()
+
+
+# ── Kumiko: editorial surfaces Japanese/zero-waste identity ──────────────────
+
+def test_kumiko_editorial_differentiator_surfaces_specific_identity():
+    """Kumiko's editorial claim carries Japanese-inspired / zero-waste signal
+    and must be the top differentiator (over rating/location)."""
+    units = _bar_units_with_editorial()
+    diffs = select_differentiators(units)
+    assert diffs[0].claim_type == "editorial_mention"
+    claim_lower = diffs[0].claim.lower()
+    has_signal = (
+        "japanese" in claim_lower
+        or "zero-waste" in claim_lower
+        or "stirred" in claim_lower
+        or "kumiko" in claim_lower
+    )
+    assert has_signal, f"Editorial claim lacks Kumiko-specific signal: {diffs[0].claim!r}"
+
+
+def test_kumiko_generic_output_rejected_and_specific_passes():
+    """Kumiko's specific identity must anchor the whyPick;
+    generic volume/location output is rejected."""
+    units = _bar_units_with_editorial()
+    generic = _result("A cocktail bar in West Loop with deep review volume, a solid evening pick.")
+    specific = _result("Kumiko is a West Loop cocktail bar celebrated for Japanese-inspired stirred drinks and a zero-waste program.")
+    assert validate_llm_output(generic, venue_name="Kumiko", category="bar", evidence_units=units) is not None
+    assert validate_llm_output(specific, venue_name="Kumiko", category="bar", evidence_units=units) is None
+
+
+# ── Foursquare tag specificity — safe_for_copy promotion ─────────────────────
+
+def test_specific_foursquare_tags_safe_for_copy_in_units():
+    """Venue-specific FS tags must be safe_for_copy=True in the evidence units."""
+    from app.concierge.evidence import normalize_evidence
+    from types import SimpleNamespace
+
+    class FakeEnrich:
+        foursquare_categories = []
+        foursquare_tags = ["handmade tortillas", "mezcal cocktails"]
+        foursquare_review_count = None
+        yelp_rating = None
+        yelp_review_count = None
+        yelp_review_excerpts = []
+
+    units = normalize_evidence(
+        venue_name="Mas Maiz",
+        category="restaurant",
+        enrichment=FakeEnrich(),
+    )
+    tag_units = [u for u in units if u.claim_type == "foursquare_tag"]
+    assert all(u.safe_for_copy is True for u in tag_units)
+    assert all(u.confidence == "medium" for u in tag_units)
+
+
+def test_generic_foursquare_tags_remain_unsafe():
+    """Generic FS tags must stay safe_for_copy=False."""
+    from app.concierge.evidence import normalize_evidence
+    from types import SimpleNamespace
+
+    class FakeEnrich:
+        foursquare_categories = []
+        foursquare_tags = ["trendy", "date-night", "casual"]
+        foursquare_review_count = None
+        yelp_rating = None
+        yelp_review_count = None
+        yelp_review_excerpts = []
+
+    units = normalize_evidence(
+        venue_name="Some Bar",
+        category="bar",
+        enrichment=FakeEnrich(),
+    )
+    tag_units = [u for u in units if u.claim_type == "foursquare_tag"]
+    assert all(u.safe_for_copy is False for u in tag_units)
+
+
+# ── Tavily award signal extraction ───────────────────────────────────────────
+
+def test_tavily_award_mention_becomes_differentiator():
+    """A James Beard mention in a Tavily snippet must surface as an attribute
+    differentiator with safe_for_copy=True."""
+    from app.concierge.evidence import normalize_evidence
+    snippets = [
+        "Kumiko earned a James Beard Award nomination for outstanding bar program in 2023."
+    ]
+    units = normalize_evidence(
+        venue_name="Kumiko",
+        category="bar",
+        tavily_snippets=snippets,
+    )
+    attr_units = [u for u in units if u.claim_type == "attribute" and u.source_family == "tavily"]
+    assert len(attr_units) == 1
+    assert attr_units[0].safe_for_copy is True
+    # Award attribute participates in differentiator selection
+    diffs = select_differentiators(units)
+    diff_types = {d.claim_type for d in diffs}
+    assert "attribute" in diff_types
+
+
+def test_alinea_michelin_in_tavily_surfaces_as_differentiator():
+    """Three Michelin star mention in Tavily → attribute unit → differentiator."""
+    from app.concierge.evidence import normalize_evidence
+    snippets = ["Alinea holds three Michelin stars and is considered one of the best restaurants in the US."]
+    units = normalize_evidence(
+        venue_name="Alinea",
+        category="restaurant",
+        tavily_snippets=snippets,
+    )
+    attr_units = [u for u in units if u.claim_type == "attribute"]
+    assert len(attr_units) >= 1
+    assert any(u.safe_for_copy for u in attr_units)
+
+
+# ── Yelp "known for" extraction ───────────────────────────────────────────────
+
+def test_yelp_known_for_excerpt_surfaces_as_attribute_differentiator():
+    """'Known for X' in a Yelp review excerpt must create a safe attribute unit."""
+    from app.concierge.evidence import normalize_evidence
+    from types import SimpleNamespace
+
+    class FakeEnrich:
+        foursquare_categories = []
+        foursquare_tags = []
+        foursquare_review_count = None
+        yelp_rating = 4.6
+        yelp_review_count = 800
+        yelp_review_excerpts = ["This gem is known for its sable fish and seasonal omakase menu."]
+
+    units = normalize_evidence(
+        venue_name="Katana Kitten",
+        category="restaurant",
+        enrichment=FakeEnrich(),
+    )
+    attr_units = [u for u in units if u.claim_type == "attribute" and u.source_family == "yelp"]
+    assert len(attr_units) == 1
+    assert "sable fish" in attr_units[0].claim or "omakase" in attr_units[0].claim
+    assert attr_units[0].safe_for_copy is True
+    diffs = select_differentiators(units)
+    assert any(d.claim_type == "attribute" for d in diffs)
