@@ -1,5 +1,15 @@
 # Prompt Library (Token Optimized)
 
+## Copy rule
+
+When ChatGPT gives the user a Claude/Codex prompt:
+
+- Put `Model:` and `Chat:` OUTSIDE the copyable prompt block.
+- The copyable prompt block must contain only text intended to paste into Claude/Codex.
+- Do not include explanatory notes inside the prompt block.
+
+---
+
 ## 1. Design (Opus)
 Use for architecture only
 
@@ -7,6 +17,7 @@ Rules:
 - max 2 examples
 - no large JSON blocks
 - no repeated explanation
+- produce reusable spec, then stop
 
 ---
 
@@ -32,7 +43,7 @@ Output:
 - plan
 - files
 - tests
-- handoff update summary (exact text to write into HANDOFF.md)
+- handoff update summary
 
 ---
 
