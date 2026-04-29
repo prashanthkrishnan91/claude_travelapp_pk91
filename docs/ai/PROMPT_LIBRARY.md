@@ -22,6 +22,7 @@ Before giving any Claude/Codex prompt, ChatGPT must silently check:
 8. Is README.md explicitly excluded unless public/setup behavior changed?
 9. Is the copy block mobile-safe with no model/chat/usage metadata?
 10. Is there a usage estimate before the prompt?
+11. Does the prompt include a discovery budget when file paths are known?
 
 If a prompt fails any check, rewrite it before showing the user.
 
@@ -34,6 +35,20 @@ Every Claude/Codex prompt must include an estimate outside the copy block:
 - Why: one sentence
 
 Do not claim exact token or cost certainty. Estimate based on prompt size, number of files, task complexity, model choice, likely repo exploration, and whether tests/builds are required.
+
+## Discovery budget rule
+
+When file paths are known, prompts must tell Claude/Codex not to run broad discovery.
+
+Use this pattern:
+
+```md
+Discovery budget:
+- Do not run find/grep/glob for initial exploration.
+- Read only the primary edit target and listed test files first.
+- Read fallback files only if blocked, and state why.
+- Run focused tests only; do not run broad test discovery unless focused tests fail for unknown reasons.
+```
 
 ---
 
@@ -56,8 +71,19 @@ Task:
 State:
 [logs/json]
 
-Files:
-[file1, file2]
+Primary edit target:
+[file1]
+
+Test targets:
+[test1, test2]
+
+Fallback reads only if blocked:
+[file2, file3]
+
+Discovery budget:
+- no find/grep/glob for initial exploration
+- read primary + tests first
+- fallback files only if blocked
 
 Constraints:
 - no refactors
@@ -67,7 +93,6 @@ MANDATORY:
 - Update docs/ai/HANDOFF.md in the same change
 
 Output:
-- plan
 - files
 - tests
 - handoff update summary
@@ -88,8 +113,11 @@ Actual:
 Logs:
 [paste]
 
-Files:
+Primary file:
 [file1]
+
+Discovery budget:
+- no broad search unless primary file does not contain the bug
 
 MANDATORY:
 - If bug fix changes behavior, update docs/ai/HANDOFF.md
