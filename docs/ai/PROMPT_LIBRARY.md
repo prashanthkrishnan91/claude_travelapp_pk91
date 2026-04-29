@@ -12,35 +12,34 @@ When ChatGPT gives the user a Claude/Codex prompt:
 
 Before giving any Claude/Codex prompt, ChatGPT must silently check:
 
-1. Is this the cheapest capable model?
-2. Is this a new chat or same chat, and why?
-3. Can repo memory replace repeated context?
-4. Is the file list limited to likely hot surfaces?
-5. Are constraints compressed instead of repeated?
-6. Is plan-only mode truly necessary, or can it implement in one pass?
-7. Is HANDOFF.md update required inside the PR?
-8. Is README.md explicitly excluded unless public/setup behavior changed?
-9. Is the copy block mobile-safe with no model/chat/usage metadata?
-10. Is there a usage estimate before the prompt?
-11. Does the prompt include a discovery budget when file paths are known?
+1. Cheapest capable model?
+2. Correct new/same chat?
+3. Repo memory instead of repeated context?
+4. Minimal file scope?
+5. Compressed constraints?
+6. Plan-only truly needed?
+7. HANDOFF.md required inside PR?
+8. README excluded unless public/setup changed?
+9. Mobile-safe copy block?
+10. Usage estimate included?
+11. Discovery budget included when paths are known?
+12. For PR review: cheap merge gate first, deep audit only if suspicious?
 
-If a prompt fails any check, rewrite it before showing the user.
+If any check fails, rewrite before showing the user.
 
 ## Usage estimate rule
 
-Every Claude/Codex prompt must include an estimate outside the copy block:
+Every prompt must include outside the copy block:
 
 - Expected session usage: Low / Medium / High
 - Expected extra cost risk: Low / Medium / High
 - Why: one sentence
 
-Do not claim exact token or cost certainty. Estimate based on prompt size, number of files, task complexity, model choice, likely repo exploration, and whether tests/builds are required.
+Estimate from prompt size, files, model, task complexity, likely exploration, and tests/builds. Do not claim certainty.
 
 ## Discovery budget rule
 
-When file paths are known, prompts must tell Claude/Codex not to run broad discovery.
-
-Use this pattern:
+When paths are known:
 
 ```md
 Discovery budget:
@@ -53,7 +52,7 @@ Discovery budget:
 ---
 
 ## 1. Design (Opus)
-Use for architecture only
+Use only for architecture.
 
 Rules:
 - max 2 examples
@@ -124,13 +123,40 @@ MANDATORY:
 
 ---
 
-## 4. PR Review (Codex)
+## 4. PR Review — default cheap merge gate (Codex preferred)
+
+Use this first for normal pre-merge review.
+
+Discovery budget:
+- Read PR diff and changed files only.
+- Do not run find/grep/glob.
+- Do not generate exploratory scripts.
+- Run focused tests only if they are named.
+- If a blocker is found, stop and report it; do not fix it.
+
+Output only:
+- Merge recommendation: MERGE / DO NOT MERGE
+- Blocking issues only
+- Tests run + results
+- Supabase SQL: Yes/No
+- HANDOFF.md edited: Yes/No
+- Non-blocking follow-ups, max 3 bullets
+
+## 5. PR Review — deep audit (Sonnet only if suspicious)
+
+Use only after cheap merge gate finds a specific suspected risk.
 
 Input:
-PR summary
+- one suspected risk
+- relevant file/diff only
+
+Discovery budget:
+- inspect only files related to that risk
+- no broad repo search
+- no unrelated risk review
 
 Output:
-- risks
-- missing tests
-- edge cases
-- required HANDOFF.md updates
+- blocking: Yes/No
+- evidence
+- minimal fix recommendation if blocking
+- tests run
