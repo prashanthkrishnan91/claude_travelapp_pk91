@@ -1,10 +1,12 @@
 """End-to-end proof: LLM whyPick reaches the final serialized card.
 
 Proves:
-1. Mocked LLM text flows through evidence → reasoning → sanitizer → final card
-   (venue.why_pick == supporting_details.why_pick == display.display_why == LLM text)
-2. display_why_source == "llm" when LLM ran; "deterministic" or "fallback" otherwise
-3. When validation fails, fallback triggers and generation_method == deterministic
+1. Arbitrary mocked LLM text (unique per run) flows through evidence → reasoning
+   → sanitizer → final card unchanged (venue.why_pick == supporting_details.why_pick
+   == display.display_why == original LLM text)
+2. display_why_source == "llm" when LLM ran; "deterministic" otherwise
+3. When LLM text is blocked by BANNED_STRINGS_RE, fallback triggers and the
+   mocked string does NOT appear in the final card
 
 Also generates three concrete card JSON examples (cocktail bars Chicago,
 Michelin tasting menu Chicago, Mexican restaurants Seattle) as would be
@@ -14,14 +16,11 @@ serialized for the frontend.
 import json
 import os
 import sys
-from types import SimpleNamespace
+import uuid
 from unittest.mock import patch
-
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from app.models.concierge import GoogleVerification, SourceEvidence
 from app.services.google_places import GooglePlaceVerification
 from app.services.live_research import (
     INTENT_MICHELIN_RESTAURANTS,
@@ -78,20 +77,35 @@ def _make_svc(hits, google_map):
     )
 
 
-_LLM_TEXT = "Billy Sunday is a cocktail bar in West Town with deep review volume, a solid evening pick."
+def _unique_llm_text(venue_name: str, uid: str) -> str:
+    """Generate a unique, guard-passing LLM whyPick string for venue_name.
+
+    Designed to pass every filter in the pipeline:
+    - No banned strings (tavily, yelp, foursquare, ###, https://)
+    - No generic phrases (great fit, matches your request, etc.)
+    - No banned reason fragments (backed by, selected for this, etc.)
+    - No markdown, no URLs, single sentence
+    - Contains 'cocktail bar' (concrete signal + category-safe for bar)
+    - Contains a number (satisfies has_concrete_signal check)
+    """
+    return f"TEST-WHY-{uid} cocktail bar pick with 1 verified location."
 
 
-# ── Core proof: LLM text reaches all three card fields ───────────────────────
+# ── Core proof: arbitrary LLM text reaches all three card fields ──────────────
 
 def test_llm_text_reaches_all_three_card_fields():
-    """Mocked LLM output must appear in venue.why_pick, supporting_details.why_pick,
-    and display.display_why unchanged."""
+    """A programmatically generated unique string injected as mocked LLM output
+    must appear EXACTLY in venue.why_pick, supporting_details.why_pick, and
+    display.display_why — no transformation, truncation, or replacement."""
+    uid = uuid.uuid4().hex[:12]
+    llm_text = _unique_llm_text("Billy Sunday", uid)
+
     hits = [_hit("Billy Sunday", snippet="Cocktail bar at 1143 N Bosworth Ave, Chicago.")]
     google_map = {"billy sunday": _gv("Billy Sunday", 4.5, 1800, "1143 N Bosworth Ave, Chicago, IL", ["cocktail_bar"])}
     svc = _make_svc(hits, google_map)
 
     llm_payload = {
-        "whyPick": _LLM_TEXT,
+        "whyPick": llm_text,
         "evidenceIdsUsed": [],
         "confidence": "high",
         "fallbackReason": "A reliable cocktail bar.",
@@ -103,17 +117,97 @@ def test_llm_text_reaches_all_three_card_fields():
     assert result.restaurants, "Expected at least one card"
     card = result.restaurants[0]
 
-    # All three alignment fields must carry the LLM text
-    assert card.why_pick == _LLM_TEXT, f"venue.why_pick mismatch: {card.why_pick!r}"
+    # ── Exact string match on all three alignment fields ──────────────────────
+    assert card.why_pick == llm_text, (
+        f"venue.why_pick does not match LLM output.\n"
+        f"  LLM text:  {llm_text!r}\n"
+        f"  card text: {card.why_pick!r}"
+    )
     assert card.supporting_details is not None
-    assert card.supporting_details.why_pick == _LLM_TEXT, f"supporting_details.why_pick mismatch: {card.supporting_details.why_pick!r}"
+    assert card.supporting_details.why_pick == llm_text, (
+        f"supporting_details.why_pick does not match LLM output.\n"
+        f"  LLM text:  {llm_text!r}\n"
+        f"  card text: {card.supporting_details.why_pick!r}"
+    )
     assert card.display is not None
-    assert card.display.display_why == _LLM_TEXT, f"display.display_why mismatch: {card.display.display_why!r}"
+    assert card.display.display_why == llm_text, (
+        f"display.display_why does not match LLM output.\n"
+        f"  LLM text:  {llm_text!r}\n"
+        f"  card text: {card.display.display_why!r}"
+    )
 
-    # generation_method must be traceable in the final card
-    assert card.display.display_why_source == "llm", f"display_why_source: {card.display.display_why_source!r}"
-    assert card.reason_source == "llm", f"reason_source: {card.reason_source!r}"
+    # ── No truncation or transformation ──────────────────────────────────────
+    assert len(card.why_pick) == len(llm_text), (
+        f"Length mismatch — truncation or padding occurred.\n"
+        f"  expected len={len(llm_text)}, got len={len(card.why_pick)}"
+    )
+    assert card.why_pick[-10:] == llm_text[-10:], (
+        f"Tail mismatch — text was modified at end.\n"
+        f"  expected tail: {llm_text[-10:]!r}\n"
+        f"  actual tail:   {card.why_pick[-10:]!r}"
+    )
 
+    # ── generation_method must be traceable in the final card ─────────────────
+    assert card.display.display_why_source == "llm", (
+        f"display_why_source={card.display.display_why_source!r}, expected 'llm'"
+    )
+    assert card.reason_source == "llm", (
+        f"reason_source={card.reason_source!r}, expected 'llm'"
+    )
+
+    # Print for human review
+    print(f"\n[proof] uid={uid}")
+    print(f"[proof] llm_text={llm_text!r}")
+    print(f"[proof] card.why_pick={card.why_pick!r}")
+    print(f"[proof] generation_method={card.reason_source!r}")
+
+
+# ── Negative proof: banned LLM text must NOT reach the final card ─────────────
+
+def test_llm_banned_text_does_not_reach_card():
+    """When the mocked LLM output contains a banned string ('tavily' is in
+    BANNED_STRINGS_RE in reasoning.py), the pipeline must block it and fall
+    back to deterministic copy. The mocked string must not appear anywhere
+    in the final card, and generation_method must not be 'llm'."""
+    uid = uuid.uuid4().hex[:12]
+    # Include 'tavily' — in BANNED_STRINGS_RE in reasoning.py, blocked even
+    # if generate_llm_why_pick returns it directly.
+    banned_text = f"TEST-WHY-NEG-{uid} tavily confirms cocktail bar."
+
+    hits = [_hit("Billy Sunday", snippet="Cocktail bar at 1143 N Bosworth Ave, Chicago.")]
+    google_map = {"billy sunday": _gv("Billy Sunday", 4.5, 1800, "1143 N Bosworth Ave, Chicago, IL", ["cocktail_bar"])}
+    svc = _make_svc(hits, google_map)
+
+    with patch("app.concierge.whypick_prompt.generate_llm_why_pick", return_value={
+        "whyPick": banned_text,
+        "evidenceIdsUsed": [],
+        "confidence": "high",
+        "fallbackReason": "A reliable cocktail bar.",
+    }):
+        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars in Chicago")
+
+    assert result.restaurants
+    card = result.restaurants[0]
+
+    # The banned string must NOT appear in any field
+    assert card.why_pick != banned_text, "Banned LLM text leaked into venue.why_pick"
+    assert "tavily" not in (card.why_pick or "").lower(), "Banned token 'tavily' leaked into why_pick"
+
+    # generation_method must NOT be 'llm' — deterministic fallback took over
+    assert card.display.display_why_source != "llm", (
+        f"display_why_source={card.display.display_why_source!r} — should not be 'llm' when text was banned"
+    )
+
+    # Fallback must still produce valid copy
+    assert card.why_pick, "Fallback produced empty why_pick"
+
+    print(f"\n[negative-proof] uid={uid}")
+    print(f"[negative-proof] banned_text={banned_text!r}")
+    print(f"[negative-proof] fallback_text={card.why_pick!r}")
+    print(f"[negative-proof] generation_method={card.display.display_why_source!r}")
+
+
+# ── LLM returns None → deterministic ─────────────────────────────────────────
 
 def test_llm_failure_produces_deterministic_fallback():
     """When the LLM returns None, the card must use deterministic copy and
@@ -130,45 +224,14 @@ def test_llm_failure_produces_deterministic_fallback():
 
     assert card.display.display_why_source != "llm", "Should not claim LLM when LLM returned None"
     assert card.why_pick, "Must still have a why_pick from deterministic fallback"
-    # Deterministic text must not contain banned strings
     assert "tavily" not in (card.why_pick or "").lower()
     assert "yelp" not in (card.why_pick or "").lower()
 
 
-def test_llm_validation_fail_uses_deterministic_not_llm_text():
-    """When LLM returns text with a banned string (tavily), reasoning.py's BANNED_STRINGS_RE
-    catches it before it reaches the card, and the deterministic fallback is used instead."""
-    hits = [_hit("Billy Sunday", snippet="Cocktail bar at 1143 N Bosworth Ave, Chicago.")]
-    google_map = {"billy sunday": _gv("Billy Sunday", 4.5, 1800, "1143 N Bosworth Ave, Chicago, IL", ["cocktail_bar"])}
-    svc = _make_svc(hits, google_map)
-
-    # "tavily" is in BANNED_STRINGS_RE in reasoning.py — blocked even if generate_llm_why_pick returns it
-    bad_llm_payload = {
-        "whyPick": "Tavily research confirms this is a top cocktail bar.",
-        "evidenceIdsUsed": [],
-        "confidence": "high",
-        "fallbackReason": "A reliable cocktail bar.",
-    }
-
-    with patch("app.concierge.whypick_prompt.generate_llm_why_pick", return_value=bad_llm_payload):
-        result = svc.fetch(intent=INTENT_NIGHTLIFE, destination="Chicago", user_query="cocktail bars in Chicago")
-
-    assert result.restaurants
-    card = result.restaurants[0]
-
-    # The banned LLM text must NOT appear in the final card
-    assert "tavily" not in (card.why_pick or "").lower(), "Banned LLM text leaked into final card"
-    assert card.display.display_why_source != "llm", "display_why_source should not be 'llm' when LLM text was banned"
-
-
 # ── Serialized card JSON examples ─────────────────────────────────────────────
-#
-# These are the exact JSON structures the frontend receives.
-# Run with: pytest -s tests/test_end_to_end_whypick_proof.py::test_serialized_card_examples
-#
+
 def test_serialized_card_examples():
     """Generate and validate final serialized card JSON for three scenarios."""
-    import json
 
     # ── Scenario 1: cocktail bars in Chicago ─────────────────────────────────
     hits_cocktail = [_hit("Kumiko", "https://example.com/kumiko", "Cocktail bar at 630 W Lake St, Chicago IL.")]
@@ -197,7 +260,6 @@ def test_serialized_card_examples():
     assert r3.restaurants, "Scenario 3: expected a card"
     card3 = r3.restaurants[0]
 
-    # ── Build compact serialized output for each card ─────────────────────────
     def _serialize(card, scenario: str) -> dict:
         display = card.display
         sd = card.supporting_details
@@ -225,8 +287,27 @@ def test_serialized_card_examples():
     s2 = _serialize(card2, "Michelin tasting menu Chicago")
     s3 = _serialize(card3, "Mexican restaurants in Seattle")
 
-    # Print for human review
     print("\n\n=== SERIALIZED CARD EXAMPLES (final payload) ===\n")
+    for s in [s1, s2, s3]:
+        print(json.dumps(s, indent=2))
+        print()
+
+    # Alignment: all three fields must carry the same text
+    for s in [s1, s2, s3]:
+        assert s["whyPick"], f"{s['scenario']}: missing whyPick"
+        assert s["whyPick"] == s["supportingDetails"]["whyPick"], \
+            f"{s['scenario']}: venue.why_pick != supporting_details.why_pick"
+        assert s["whyPick"] == s["display"]["displayWhy"], \
+            f"{s['scenario']}: venue.why_pick != display.display_why"
+        assert s["generation_method"] in ("llm", "deterministic", "fallback"), \
+            f"{s['scenario']}: unexpected generation_method={s['generation_method']!r}"
+        assert "tavily" not in (s["whyPick"] or "").lower()
+        assert "yelp" not in (s["whyPick"] or "").lower()
+
+    assert s2["name"] == "Alinea"
+    assert "michelin" in (s2["whyPick"] or "").lower(), f"Michelin scenario missing 'michelin': {s2['whyPick']!r}"
+    assert "mexican" in (s3["whyPick"] or "").lower() or "restaurant" in (s3["whyPick"] or "").lower()
+
     for s in [s1, s2, s3]:
         print(json.dumps(s, indent=2))
         print()
