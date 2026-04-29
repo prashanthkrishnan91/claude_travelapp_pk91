@@ -5,7 +5,6 @@ __pycache__/
 venv/
 .env
 .env.local
-node_modules/
 .next/
 .DS_Store
 *.tsbuildinfo
@@ -15,5 +14,4 @@ node_modules/
 .claude-flow/
 out/
 *.csv
-*.json (unless it's a config file)
 public/assets/
