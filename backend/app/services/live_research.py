@@ -3067,8 +3067,12 @@ def _apply_google_gate(
                         display_badges=getattr(venue, "source_badges", []),
                         addability="addable" if _google_is_addable(verification) else "research_only",
                         display_category_source=_cat_source,
-                        display_why_source="deterministic_concierge",
+                        display_why_source=reason_source,
                     )
+                    try:
+                        venue.reason_source = reason_source
+                    except Exception:
+                        pass
                     canonical_why = (
                         str(reason or "").strip()
                         or str(getattr(venue, "primary_reason", "") or "").strip()
