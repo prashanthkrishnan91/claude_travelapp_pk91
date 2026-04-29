@@ -27,8 +27,22 @@ Before giving any Claude/Codex prompt, ChatGPT must silently check:
 13. Budget gate: can this be split/downgraded to avoid extra usage?
 14. If extra usage may be needed, did the Code Committee approve it?
 15. For UI work: did the UI budget gate approve the scope?
+16. After heavy Claude PR: does the prompt tell user to stop that Claude session and review elsewhere?
 
 If any check fails, rewrite before showing the user.
+
+## Session stop rule
+
+After any Medium-High or High usage Claude prompt creates a PR, do not continue implementation, audit, merge, or next-step planning in that Claude chat.
+
+Required next step:
+
+- Stop the Claude chat.
+- Bring the PR summary, link, screenshots, or cost data back to ChatGPT/project workflow review.
+- Use Codex cheap merge gate for PR review unless a blocker is found.
+- Do not ask Sonnet for the next prompt in the same session.
+
+Any prompt expected to create a Medium-High/High PR must include a final instruction: "After opening the PR, stop. Do not propose the next implementation prompt."
 
 ## Budget gate
 
@@ -150,6 +164,7 @@ Constraints:
 
 MANDATORY:
 - Update docs/ai/HANDOFF.md in the same change
+- If this is Medium-High/High usage, stop after PR and do not propose next prompt
 
 Output:
 - files
@@ -191,8 +206,9 @@ Preferred flow:
 
 1. Codex map if primary visual surfaces are unknown.
 2. Sonnet implements one capped phase.
-3. Codex cheap visual merge gate.
-4. Subsequent page/component passes only if needed.
+3. Stop Sonnet chat after PR.
+4. Codex cheap visual merge gate.
+5. Subsequent page/component passes only if needed.
 
 Implementation prompt must include:
 
@@ -202,6 +218,7 @@ Implementation prompt must include:
 - max files
 - discovery budget
 - HANDOFF.md update
+- stop-after-PR instruction for Medium-High/High work
 
 ---
 
