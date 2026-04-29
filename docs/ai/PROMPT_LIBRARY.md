@@ -4,7 +4,7 @@
 
 When ChatGPT gives the user a Claude/Codex prompt:
 
-- Put `Model:` and `Chat:` OUTSIDE the copyable prompt block.
+- Put `Model:`, `Chat:`, and `Usage estimate:` OUTSIDE the copyable prompt block.
 - The copyable prompt block must contain only text intended to paste into Claude/Codex.
 - Do not include explanatory notes inside the prompt block.
 
@@ -20,9 +20,20 @@ Before giving any Claude/Codex prompt, ChatGPT must silently check:
 6. Is plan-only mode truly necessary, or can it implement in one pass?
 7. Is HANDOFF.md update required inside the PR?
 8. Is README.md explicitly excluded unless public/setup behavior changed?
-9. Is the copy block mobile-safe with no model/chat metadata?
+9. Is the copy block mobile-safe with no model/chat/usage metadata?
+10. Is there a usage estimate before the prompt?
 
 If a prompt fails any check, rewrite it before showing the user.
+
+## Usage estimate rule
+
+Every Claude/Codex prompt must include an estimate outside the copy block:
+
+- Expected session usage: Low / Medium / High
+- Expected extra cost risk: Low / Medium / High
+- Why: one sentence
+
+Do not claim exact token or cost certainty. Estimate based on prompt size, number of files, task complexity, model choice, likely repo exploration, and whether tests/builds are required.
 
 ---
 
