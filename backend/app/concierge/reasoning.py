@@ -59,7 +59,7 @@ _NIGHTLIFE_SPEAKEASY_SIGNALS: frozenset = frozenset({
 
 class WhyPick(TypedDict):
     text: str
-    generation_method: Literal["deterministic"]
+    generation_method: Literal["deterministic", "llm"]
 
 
 class WhyPickResult(TypedDict):
@@ -629,3 +629,75 @@ def build_why_pick(
         "why_pick": {"text": text, "generation_method": "deterministic"},
         "template_id": template_id,
     }
+
+
+def build_why_pick_with_structured_evidence(
+    *,
+    place_name: str,
+    evidence: Sequence[str],
+    rating: Optional[float],
+    review_count: Optional[int],
+    evidence_units: Optional[List] = None,
+    category: Optional[str] = None,
+    neighborhood: Optional[str] = None,
+    cuisine: Optional[str] = None,
+    michelin_status: Optional[str] = None,
+    price_level: Optional[int] = None,
+    user_query: str = "",
+    intent: Optional[str] = None,
+    google_types: Optional[List[str]] = None,
+    city: str = "",
+    api_key: Optional[str] = None,
+    known_venue_names: Optional[List[str]] = None,
+) -> WhyPickResult:
+    """Try LLM-synthesized whyPick first; fall back to deterministic on any failure.
+
+    The LLM path is used only when:
+    - evidence_units is provided and non-empty
+    - at least one unit is safe_for_copy
+    - api_key is configured
+
+    Alignment guarantee: the returned why_pick.text is always propagated to
+    venue.why_pick, supporting_details.why_pick, and display.display_why by
+    the caller (live_research._apply_google_gate).
+    """
+    if evidence_units:
+        try:
+            from app.concierge.whypick_prompt import generate_llm_why_pick
+            llm_result = generate_llm_why_pick(
+                venue_name=place_name,
+                category=category or "place",
+                intent=intent or "",
+                city=city,
+                evidence_units=evidence_units,
+                api_key=api_key,
+                known_venue_names=known_venue_names,
+            )
+            if llm_result is not None:
+                llm_text = llm_result["whyPick"].strip()
+                if llm_text and not BANNED_STRINGS_RE.search(llm_text) and not GENERIC_PHRASES_RE.search(llm_text):
+                    template_id: Literal["rating_and_editorial", "editorial_only", "google_only", "fallback", "michelin"] = (
+                        "michelin" if michelin_status or any("michelin" in eu.claim.lower() for eu in evidence_units)
+                        else "rating_and_editorial"
+                    )
+                    return {
+                        "why_pick": {"text": llm_text, "generation_method": "llm"},
+                        "template_id": template_id,
+                    }
+        except Exception:
+            pass
+
+    return build_why_pick(
+        place_name=place_name,
+        evidence=evidence,
+        rating=rating,
+        review_count=review_count,
+        category=category,
+        neighborhood=neighborhood,
+        cuisine=cuisine,
+        michelin_status=michelin_status,
+        price_level=price_level,
+        user_query=user_query,
+        intent=intent,
+        google_types=google_types,
+    )

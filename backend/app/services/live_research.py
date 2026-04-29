@@ -51,9 +51,11 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
+from app.concierge.evidence import normalize_evidence
 from app.concierge.reasoning import (
     build_concierge_display_reason,
     build_why_pick,
+    build_why_pick_with_structured_evidence,
     ensure_non_empty_evidence,
 )
 from app.models.concierge import (
@@ -2719,6 +2721,7 @@ def _apply_google_gate(
     known_candidate_names: List[str],
     seen_place_ids: Optional[set] = None,
     corroboration_counter: Optional[Counter] = None,
+    destination: str = "",
 ) -> List[Any]:
     """Drop venues that don't pass Google Places verification — anything that
     isn't matched + OPERATIONAL with high/medium confidence is demoted to
@@ -2892,11 +2895,21 @@ def _apply_google_gate(
                     intent=intent,
                     user_query=user_query,
                 )
-                why_pick_payload = build_why_pick(
-                    place_name=getattr(venue, "name", "") or verification.name or "This place",
+                _venue_name_for_ev = getattr(venue, "name", "") or verification.name or "This place"
+                _evidence_units = normalize_evidence(
+                    venue_name=_venue_name_for_ev,
+                    category=category,
+                    google_verification=verification,
+                    source_evidence=venue_source_ev,
+                    enrichment=getattr(venue, "enrichment", None),
+                    michelin_status=getattr(venue, "michelin_status", None),
+                )
+                why_pick_payload = build_why_pick_with_structured_evidence(
+                    place_name=_venue_name_for_ev,
                     evidence=clean_evidence,
                     rating=verification.rating,
                     review_count=verification.user_rating_count,
+                    evidence_units=_evidence_units,
                     category=category,
                     neighborhood=getattr(venue, "neighborhood", None) or verification.formatted_address,
                     cuisine=getattr(venue, "cuisine", None),
@@ -2905,6 +2918,8 @@ def _apply_google_gate(
                     user_query=user_query,
                     intent=intent,
                     google_types=verification.types,
+                    city=destination,
+                    known_venue_names=known_candidate_names,
                 )
                 reason, validation_source = _validate_or_fallback_reason(
                     why_pick_payload["why_pick"]["text"],
@@ -3612,6 +3627,7 @@ def normalize_hits(
             known_candidate_names=list(google_verifications.keys()),
             seen_place_ids=_seen_pids,
             corroboration_counter=corroboration_counter,
+            destination=destination,
         )
         attractions = _apply_google_gate(
             attractions,
@@ -3624,6 +3640,7 @@ def normalize_hits(
             known_candidate_names=list(google_verifications.keys()),
             seen_place_ids=_seen_pids,
             corroboration_counter=corroboration_counter,
+            destination=destination,
         )
         hotels = _apply_google_gate(
             hotels,
@@ -3636,6 +3653,7 @@ def normalize_hits(
             known_candidate_names=list(google_verifications.keys()),
             seen_place_ids=_seen_pids,
             corroboration_counter=corroboration_counter,
+            destination=destination,
         )
 
     # Cap only after verification + tiering so we don't underflow.
