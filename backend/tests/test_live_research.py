@@ -55,6 +55,7 @@ from app.services.live_research import (
     _validate_venue_candidate,
     _category_fit_score,
     _extract_cuisine_filter,
+    _google_fallback_queries,
     build_place_reason,
     normalize_hits,
     reset_global_cache,
@@ -3989,3 +3990,116 @@ class TestCuisineSpecificFitScore:
         v = self._make_verification(["sushi_restaurant", "japanese_restaurant", "restaurant"])
         score = _category_fit_score("restaurants", "best sushi in Chicago", v)
         assert score == 1.0
+
+
+def test_hotels_intent_rejects_verified_parks_and_attractions():
+    hits = [
+        _hit("Lincoln Park", "https://example.com/lincoln-park", "Top spot in Chicago."),
+        _hit("Hotel Chicago Downtown", "https://example.com/hotel-chicago", "River North hotel."),
+    ]
+    google_map = {
+        "lincoln park": GooglePlaceVerification(
+            provider_place_id="gp-park",
+            name="Lincoln Park",
+            business_status="OPERATIONAL",
+            confidence="high",
+            types=["park", "tourist_attraction"],
+        ),
+        "hotel chicago downtown": GooglePlaceVerification(
+            provider_place_id="gp-hotel",
+            name="Hotel Chicago Downtown",
+            formatted_address="333 N Dearborn St, Chicago, IL",
+            business_status="OPERATIONAL",
+            confidence="high",
+            rating=4.4,
+            user_rating_count=2806,
+            types=["lodging", "hotel"],
+        ),
+    }
+    svc = _make_svc(hits, google_map)
+    result = svc.fetch(intent=INTENT_HOTELS, destination="Chicago", user_query="Best hotels in Chicago")
+    assert [h.name for h in result.hotels] == ["Hotel Chicago Downtown"]
+    assert all(
+        any((t or "").lower() in {"lodging", "hotel"} for t in ((h.google_verification and h.google_verification.types) or []))
+        for h in result.hotels
+    )
+
+
+def test_hotel_fallback_queries_are_strict_and_not_generic():
+    queries = _google_fallback_queries(INTENT_HOTELS, "Chicago", "Best hotels in Chicago")
+    joined = " | ".join(queries).lower()
+    assert "best hotels in chicago" in joined
+    assert "luxury hotels in chicago" in joined
+    assert "best places in chicago" not in joined
+    assert "things to do in chicago" not in joined
+    assert "attractions" not in joined
+
+
+def test_hotel_why_pick_fallback_is_not_rating_only():
+    v = GooglePlaceVerification(
+        provider_place_id="gp-hotel",
+        name="Hotel Chicago Downtown",
+        formatted_address="River North, Chicago, IL",
+        business_status="OPERATIONAL",
+        confidence="high",
+        rating=4.4,
+        user_rating_count=2806,
+        types=["lodging", "hotel"],
+    )
+    reason, source = build_place_reason(
+        candidate_name="Hotel Chicago Downtown",
+        user_query="Best hotels in Chicago",
+        intent=INTENT_HOTELS,
+        candidate=SimpleNamespace(neighborhood="River North"),
+        verified_place=v,
+        known_candidate_names=["Hotel Chicago Downtown"],
+    )
+    low = reason.lower()
+    assert source == "deterministic_location"
+    assert "practical base" in low
+    assert "4.4 rating across 2,806 reviews" not in reason
+
+
+def test_hotel_display_reason_is_location_led_not_verified_hotel_template():
+    hits = [_hit("Hotel Theodore", "https://example.com/hotel-theodore", "Downtown Seattle hotel.")]
+    google_map = {
+        "hotel theodore": GooglePlaceVerification(
+            provider_place_id="gp-hotel-theodore",
+            name="Hotel Theodore",
+            formatted_address="1531 7th Ave, Seattle, WA",
+            business_status="OPERATIONAL",
+            confidence="high",
+            rating=4.5,
+            user_rating_count=2200,
+            types=["lodging", "hotel"],
+        ),
+    }
+    svc = _make_svc(hits, google_map)
+    result = svc.fetch(intent=INTENT_HOTELS, destination="Seattle", user_query="Best hotels in Seattle")
+    assert result.hotels
+    hotel = result.hotels[0]
+    why = (hotel.why_pick or "").lower()
+    assert "a verified hotel" not in why
+    assert "with 4.5 rating across 2,200 reviews" not in why
+    assert "well-located" in why
+    assert hotel.supporting_details is not None and hotel.display is not None
+    assert hotel.why_pick == hotel.supporting_details.why_pick == hotel.display.display_why
+
+
+def test_restaurant_display_reason_is_not_generic_a_restaurant_with_rating_template():
+    from app.concierge.reasoning import build_concierge_display_reason
+
+    why = build_concierge_display_reason(
+        place_name="Alinea",
+        query_context="Best restaurants in Chicago",
+        intent=INTENT_RESTAURANTS,
+        category="restaurant",
+        cuisine=None,
+        neighborhood=None,
+        rating=4.8,
+        review_count=15764,
+        evidence=[],
+        google_types=["restaurant", "food"],
+    ).lower()
+    assert "a restaurant with 4.8 rating across 15,764 reviews" not in why
+    assert not why.startswith("a restaurant with")
