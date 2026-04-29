@@ -33,8 +33,24 @@ Do not ignore these files. If the user gives a prompt that conflicts with them, 
 - Do not add unrelated refactors.
 - Never expose secrets or `.env` contents.
 - Always state whether Supabase SQL is required.
-- Update `docs/ai/HANDOFF.md` after meaningful code changes.
 - Update `README.md` only when user-visible behavior, setup, migration, or architecture changes.
+
+## Mandatory handoff automation
+
+For every implementation, bug fix, refactor, UI change, migration, or architecture change, update `docs/ai/HANDOFF.md` in the same PR/commit. This is required, not optional.
+
+`docs/ai/HANDOFF.md` must include:
+
+- Last change
+- Files touched
+- Behavior change
+- Known issues
+- Next likely task
+- Debug notes
+
+If the task is purely documentation-only and does not change product behavior, still update the handoff if it changes workflow instructions or future Claude context.
+
+Do not end a coding task with "Handoff update needed: Yes" unless you already updated the file. Use "Handoff updated: Yes" or explain why no update was required.
 
 ## Response format
 
@@ -45,7 +61,7 @@ Use this order:
 3. Tests/checks run or required
 4. Risks / rollback notes
 5. Supabase SQL required: Yes/No
-6. Handoff update needed: Yes/No
+6. Handoff updated: Yes/No with reason
 
 ## AI Concierge invariants
 
