@@ -663,3 +663,31 @@ def test_yelp_known_for_excerpt_surfaces_as_attribute_differentiator():
     assert attr_units[0].safe_for_copy is True
     diffs = select_differentiators(units)
     assert any(d.claim_type == "attribute" for d in diffs)
+
+
+def test_deterministic_fallback_uses_safe_attribute_when_no_foursquare_tags():
+    units = [
+        EvidenceUnit(
+            id="a1",
+            claim="Known for Japanese-inspired cocktails",
+            claim_type="attribute",
+            source_family="yelp",
+            confidence="medium",
+            safe_for_copy=True,
+            venue_name="Kumiko",
+            category="bar",
+        )
+    ]
+    out = build_why_pick_with_structured_evidence(
+        place_name="Kumiko",
+        evidence=[],
+        rating=4.6,
+        review_count=1200,
+        evidence_units=units,
+        category="bar",
+        neighborhood="West Loop",
+        city="Chicago",
+        api_key=None,
+    )
+    text = out["why_pick"]["text"].lower()
+    assert "known for japanese-inspired cocktails" in text

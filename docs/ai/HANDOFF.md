@@ -44,3 +44,18 @@ Enriched whyPick evidence quality by promoting venue-specific Foursquare tags, T
 - `_foursquare_tag_is_specific()` in `evidence.py:46` controls the promotion logic; extend `_GENERIC_FS_TAGS` if new generic tags appear in production
 - Award regex: `_AWARD_SIGNAL_RE` in `evidence.py:74`; handles "Michelin stars" (plural) and "James Beard" variants
 - All new evidence units preserve the `venue_name` anti-contamination field
+
+## 2026-04-29 Hardening Follow-up (Post PR #164)
+
+### Summary
+- Extended generic Foursquare tag blocklist with: `cocktail bar`, `highly rated`, `good drinks`, `nightlife`.
+- Added Yelp `known for X` generic-signal guard to reject service/praise-only matches (`great`, `customer`, `service`, `popular`, `nice`, `friendly`, `good food`, `good drinks`) while preserving specific differentiators.
+- Threaded safe attribute-claim units (`yelp`/`tavily` attributes) into deterministic fallback specialty tags so fallback whyPick can use concrete non-Foursquare differentiators.
+
+### Tests
+- `backend/tests/test_evidence_normalization.py`
+- `backend/tests/test_whypick_differentiators.py`
+- `backend/tests/test_whypick_integration.py`
+
+### Next Step
+- Monitor production logs for fallback whyPick copy quality to confirm no drift toward generic language after adding attribute-driven specialty fallback.
