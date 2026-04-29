@@ -219,6 +219,33 @@ def test_normalize_evidence_yelp_excerpt_known_for_extracted():
     assert attr_units[0].safe_for_copy is True
 
 
+
+
+def test_normalize_evidence_foursquare_new_generic_tags_not_safe_for_copy():
+    enrichment = _make_enrichment(foursquare_tags=["cocktail bar", "highly rated", "good drinks", "nightlife"])
+    units = normalize_evidence(venue_name="Night Spot", category="bar", enrichment=enrichment)
+    tag_units = [u for u in units if u.claim_type == "foursquare_tag"]
+    assert len(tag_units) == 3  # capped at 3
+    assert all(u.safe_for_copy is False for u in tag_units)
+
+
+def test_normalize_evidence_yelp_known_for_generic_signal_rejected():
+    enrichment = _make_enrichment(
+        yelp_review_excerpts=["This place is known for good drinks and friendly service."]
+    )
+    units = normalize_evidence(venue_name="Some Bar", category="bar", enrichment=enrichment)
+    attr_units = [u for u in units if u.claim_type == "attribute" and u.source_family == "yelp"]
+    assert attr_units == []
+
+
+def test_normalize_evidence_yelp_known_for_specific_signal_kept():
+    enrichment = _make_enrichment(
+        yelp_review_excerpts=["The bar is known for Japanese-inspired cocktails and a zero-waste program."]
+    )
+    units = normalize_evidence(venue_name="Kumiko", category="bar", enrichment=enrichment)
+    attr_units = [u for u in units if u.claim_type == "attribute" and u.source_family == "yelp"]
+    assert len(attr_units) == 1
+    assert "japanese-inspired cocktails" in attr_units[0].claim.lower()
 def test_normalize_evidence_yelp_excerpt_no_signal_no_attribute():
     # Generic Yelp excerpt without "known for" → no attribute unit.
     enrichment = _make_enrichment(yelp_review_excerpts=["Great service and delicious food!"])

@@ -50,6 +50,7 @@ _GENERIC_FS_TAGS: frozenset = frozenset({
     "takeaway", "sit down", "quick bite", "dinner", "lunch", "brunch",
     "breakfast", "late night food", "comfort food", "neighborhood",
     "casual", "laid-back", "laid back", "chill", "cozy", "intimate",
+    "cocktail bar", "highly rated", "good drinks", "nightlife",
 })
 
 # Pure venue-category tokens — not differentiators on their own.
@@ -97,6 +98,31 @@ _KNOWN_FOR_RE = re.compile(
     r"(?:known|celebrated|acclaimed|famous|noted|recognized|lauded)\s+for\s+(?:its?\s+)?([^,;.!?\n]{5,80})",
     re.IGNORECASE,
 )
+
+
+
+# Generic “known for” tails that are not true differentiators.
+_GENERIC_KNOWN_FOR_SIGNALS: frozenset = frozenset({
+    "great", "customer", "service", "popular", "nice", "friendly",
+    "good food", "good drinks",
+})
+
+
+def _is_specific_known_for_signal(signal: str) -> bool:
+    if not signal:
+        return False
+    clean = re.sub(r"\s+", " ", signal.lower().strip(" .,!;:-"))
+    if clean in _GENERIC_KNOWN_FOR_SIGNALS:
+        return False
+    tokens = [t for t in re.findall(r"[a-z]+", clean) if t]
+    if not tokens:
+        return False
+    generic_vocab = {"great", "customer", "service", "popular", "nice", "friendly", "good", "food", "drinks"}
+    stopwords = {"and", "the", "a", "an", "its", "their", "very"}
+    meaningful = [t for t in tokens if t not in stopwords]
+    if meaningful and all(t in generic_vocab for t in meaningful):
+        return False
+    return True
 
 SourceFamily = Literal["google", "editorial", "yelp", "foursquare", "tavily", "internal"]
 
@@ -310,7 +336,7 @@ def normalize_evidence(
                 kf_match = _KNOWN_FOR_RE.search(clean)
                 if kf_match:
                     signal = kf_match.group(1).strip()[:60]
-                    if len(signal) >= 5:
+                    if len(signal) >= 5 and _is_specific_known_for_signal(signal):
                         units.append(EvidenceUnit(
                             id=_eid(venue_name, "attribute_y", i),
                             claim=f"Known for {signal}",
