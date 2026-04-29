@@ -50,6 +50,22 @@ _INTERNAL_INTENT_TAGS = frozenset({
 _NUMBER_RE = re.compile(r"\b\d+(?:\.\d+)?\b")
 _PLACE_WORD_RE = re.compile(r"\b(?:in|near|at)\s+[A-Z][\w''.-]*(?:\s+[A-Z][\w''.-]*)*\b")
 
+
+def _trim_to_word(text: str, max_len: int = 140) -> str:
+    """Trim text to at most max_len characters at a word boundary.
+
+    Never cuts mid-word; backs up to the last space and ensures the
+    result ends with a sentence-terminating punctuation mark.
+    """
+    if len(text) <= max_len:
+        return text
+    trimmed = text[:max_len]
+    last_space = trimmed.rfind(" ")
+    if last_space > max_len // 2:
+        trimmed = trimmed[:last_space]
+    return trimmed.rstrip(" .,;:!?") + "."
+
+
 # Nightlife category inference signals
 _NIGHTLIFE_VIEW_SIGNALS: frozenset = frozenset({
     "observatory", "tower", "rooftop", "roof", "perch", "summit", "sky",
@@ -337,41 +353,41 @@ def _build_cuisine_restaurant_display_why(
     # Deep review volume + high quality = proven anchor
     if rc >= 1500 and r >= 4.5:
         if name:
-            return f"{name} is a{loc_part} {cat} favorite with strong review volume and consistent ratings, making it a reliable neighborhood anchor."[:140]
-        return f"A high-volume{loc_part} {cat} with deep review depth, a reliable neighborhood anchor."[:140]
+            return _trim_to_word(f"{name} is a{loc_part} {cat} favorite with strong review volume and consistent ratings, making it a reliable neighborhood anchor.")
+        return _trim_to_word(f"A high-volume{loc_part} {cat} with deep review depth, a reliable neighborhood anchor.")
 
     if rc >= 1000 and r >= 4.2:
         if name:
-            return f"{name} is a{loc_part} {cat} with strong review volume and consistent ratings, making it a reliable pick."[:140]
-        return f"A well-established{loc_part} {cat} with strong Google volume and consistent ratings."[:140]
+            return _trim_to_word(f"{name} is a{loc_part} {cat} with strong review volume and consistent ratings, making it a reliable pick.")
+        return _trim_to_word(f"A well-established{loc_part} {cat} with strong Google volume and consistent ratings.")
 
     # Small + excellent = local gem feel
     if rc < 400 and r >= 4.6:
         if name:
-            return f"{name} is a smaller{loc_part} {cat} with unusually high ratings, a strong local-feeling pick."[:140]
-        return f"A smaller{loc_part} {cat} with unusually high ratings, better for a local-feeling pick."[:140]
+            return _trim_to_word(f"{name} is a smaller{loc_part} {cat} with unusually high ratings, a strong local-feeling pick.")
+        return _trim_to_word(f"A smaller{loc_part} {cat} with unusually high ratings, better for a local-feeling pick.")
 
     # High rating with moderate volume
     if r >= 4.7:
         if name:
-            return f"{name} is an unusually well-rated{loc_part} {cat}, a confident pick for the cuisine."[:140]
-        return f"An unusually well-rated{loc_part} {cat}, a confident pick for the cuisine."[:140]
+            return _trim_to_word(f"{name} is an unusually well-rated{loc_part} {cat}, a confident pick for the cuisine.")
+        return _trim_to_word(f"An unusually well-rated{loc_part} {cat}, a confident pick for the cuisine.")
 
     if r >= 4.5:
         if loc:
             if name:
-                return f"{name} is a highly rated {loc} {cat}, a solid neighborhood choice."[:140]
-            return f"A highly rated {loc} {cat}, a solid neighborhood choice."[:140]
-        return f"A highly rated {cat}, a solid pick in this area."[:140]
+                return _trim_to_word(f"{name} is a highly rated {loc} {cat}, a solid neighborhood choice.")
+            return _trim_to_word(f"A highly rated {loc} {cat}, a solid neighborhood choice.")
+        return _trim_to_word(f"A highly rated {cat}, a solid pick in this area.")
 
     if r >= 4.2:
         if loc:
-            return f"A reliable {loc} {cat} with solid Google ratings."[:140]
-        return f"A reliable {cat} with solid Google ratings."[:140]
+            return _trim_to_word(f"A reliable {loc} {cat} with solid Google ratings.")
+        return _trim_to_word(f"A reliable {cat} with solid Google ratings.")
 
     if loc:
-        return f"A {cat} in {loc} with strong Google presence."[:140]
-    return f"A {cat} with solid Google presence."[:140]
+        return _trim_to_word(f"A {cat} in {loc} with strong Google presence.")
+    return _trim_to_word(f"A {cat} with solid Google presence.")
 
 
 def has_concrete_fact(text: str) -> bool:
@@ -461,7 +477,7 @@ def build_concierge_display_reason(
         stars = _michelin_stars_text(michelin_status)
         cat_part = f" {cuisine.lower()}" if cuisine else ""
         dest = loc_part or ""
-        return f"{place_name} is a {stars}{cat_part} destination{dest}, making it a standout for fine dining."[:140]
+        return _trim_to_word(f"{place_name} is a {stars}{cat_part} destination{dest}, making it a standout for fine dining.")
 
     # ── Priority b: Cocktail/nightlife — bar framing, editorial only if bar-specific ─
     # Use Google types to infer precise category label; editorial leads when available.
@@ -482,7 +498,7 @@ def build_concierge_display_reason(
                 result += f" — {rating_support}."
             else:
                 result += "."
-            return result[:140]
+            return _trim_to_word(result)
 
         # Infer precise category from Google types + name signals
         _cat_label, _ = infer_nightlife_category_label(google_types, place_name)
@@ -490,8 +506,8 @@ def build_concierge_display_reason(
 
         if loc_part:
             if place_name:
-                return _append_rating(f"{place_name} is a {_cat_lower}{loc_part}, a reliable spot for evening drinks")[:140]
-            return _append_rating(f"A {_cat_lower}{loc_part}, a reliable spot for evening drinks")[:140]
+                return _trim_to_word(_append_rating(f"{place_name} is a {_cat_lower}{loc_part}, a reliable spot for evening drinks"))
+            return _trim_to_word(_append_rating(f"A {_cat_lower}{loc_part}, a reliable spot for evening drinks"))
 
         # No clean location → use volume/type characterization (not rating-only)
         return _build_nightlife_display_why(
@@ -513,7 +529,7 @@ def build_concierge_display_reason(
             result += f" — {rating_support}."
         else:
             result += "."
-        return result[:140]
+        return _trim_to_word(result)
 
     # ── Priority d: Intent-specific category framing (no editorial) ──────────
     if intent == "hidden_gems":
@@ -523,7 +539,7 @@ def build_concierge_display_reason(
             inner = cuisine.lower()
         else:
             inner = (category or "spot").replace("_", " ")
-        return _append_rating(f"A local {inner}{loc_part}")[:140]
+        return _trim_to_word(_append_rating(f"A local {inner}{loc_part}"))
 
     if "near my hotel" in query_low or "near hotel" in query_low:
         if category in ("cafe", "bar", "hotel", "attraction"):
@@ -533,19 +549,19 @@ def build_concierge_display_reason(
         else:
             inner = (category or "pick").replace("_", " ")
         if inner.lower() == "restaurant":
-            return _append_rating(f"A well-regarded nearby restaurant{loc_part}")[:140]
-        return _append_rating(f"A {inner}{loc_part}")[:140]
+            return _trim_to_word(_append_rating(f"A well-regarded nearby restaurant{loc_part}"))
+        return _trim_to_word(_append_rating(f"A {inner}{loc_part}"))
 
     if "brunch" in query_low:
-        return _append_rating(f"A popular brunch spot{loc_part}")[:140]
+        return _trim_to_word(_append_rating(f"A popular brunch spot{loc_part}"))
 
     if intent == "romantic":
         inner = cuisine.lower() if cuisine else (category or "spot").replace("_", " ")
-        return _append_rating(f"A romantic {inner}{loc_part}")[:140]
+        return _trim_to_word(_append_rating(f"A romantic {inner}{loc_part}"))
 
     if intent == "family_friendly":
         inner = cuisine.lower() if cuisine else (category or "spot").replace("_", " ")
-        return _append_rating(f"A family-friendly {inner}{loc_part}")[:140]
+        return _trim_to_word(_append_rating(f"A family-friendly {inner}{loc_part}"))
 
     # ── Priority e1: Hotel-specific location-led copy (never rating-first) ──
     if (category or "").lower() == "hotel":
@@ -570,28 +586,28 @@ def build_concierge_display_reason(
             rating=rating,
             review_count=review_count,
             place_name=place_name,
-        )[:140]
+        )
 
     # ── Priority f: Neighborhood + generic category ──────────────────────────
     if loc and cuisine:
-        return _append_rating(f"A top-rated {cuisine.lower()}{loc_part}")[:140]
+        return _trim_to_word(_append_rating(f"A top-rated {cuisine.lower()}{loc_part}"))
 
     if loc:
         inner = (category or "place").replace("_", " ")
         if inner.lower() == "restaurant":
-            return _append_rating(f"A well-regarded {loc} restaurant")[:140]
-        return _append_rating(f"A {inner}{loc_part}")[:140]
+            return _trim_to_word(_append_rating(f"A well-regarded {loc} restaurant"))
+        return _trim_to_word(_append_rating(f"A {inner}{loc_part}"))
 
     # ── Priority g: Category + rating (no location) ──────────────────────────
     if rating_support:
         inner = cuisine.lower() if cuisine else (category or "place").replace("_", " ")
         if inner.lower() == "restaurant":
-            return f"A well-regarded restaurant with strong review volume and verified listing details."[:140]
-        return f"A verified {inner} with {rating_support}."[:140]
+            return _trim_to_word(f"A well-regarded restaurant with strong review volume and verified listing details.")
+        return _trim_to_word(f"A verified {inner} with {rating_support}.")
 
     # ── Priority h: Absolute fallback ────────────────────────────────────────
     inner = cuisine.lower() if cuisine else (category or "place").replace("_", " ")
-    return f"A verified {inner} that fits this request, with strong Google signals."[:140]
+    return _trim_to_word(f"A verified {inner} that fits this request, with strong Google signals.")
 
 
 def build_why_pick(

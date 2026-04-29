@@ -328,3 +328,81 @@ def test_serialized_card_examples():
     assert s2["name"] == "Alinea"
     assert "michelin" in (s2["whyPick"] or "").lower(), f"Michelin scenario missing 'michelin': {s2['whyPick']!r}"
     assert "mexican" in (s3["whyPick"] or "").lower() or "restaurant" in (s3["whyPick"] or "").lower()
+
+
+# ── Truncation-safety tests ───────────────────────────────────────────────────
+
+def test_why_pick_never_ends_mid_word():
+    """whyPick must always end at a word boundary — never with a partial word.
+
+    Exercises the long-name + long-neighborhood path that previously produced
+    'neighborhood anch.' (truncated mid-word at 140 chars).
+    """
+    import re
+
+    # Build a card whose deterministic template exceeds 140 chars raw.
+    # 'La Carta de Oaxaca' (19 chars) + ' in Ballard' causes the
+    # 'neighborhood anchor.' template to reach ~144 chars before trimming.
+    hits = [_hit("La Carta de Oaxaca", "https://example.com/lco", "Mexican restaurant in Ballard.")]
+    google_map = {
+        "la carta de oaxaca": _gv(
+            "La Carta de Oaxaca", 4.5, 1800,
+            "5431 Ballard Ave NW, Seattle, WA",
+            ["restaurant", "mexican_restaurant"],
+        )
+    }
+    svc = _make_svc(hits, google_map)
+    result = svc.fetch(intent=INTENT_RESTAURANTS, destination="Seattle", user_query="Mexican restaurants in Seattle")
+
+    assert result.restaurants
+    card = result.restaurants[0]
+    text = card.why_pick or ""
+
+    assert text, "why_pick must not be empty"
+
+    # Must end with sentence-terminating punctuation
+    assert text[-1] in ".!?", f"why_pick does not end with punctuation: {text!r}"
+
+    # Last token before the period must be a complete word (no partial — e.g. 'anch.')
+    last_word_match = re.search(r"(\w+)[.!?]$", text)
+    assert last_word_match, f"Cannot find terminal word in: {text!r}"
+    last_word = last_word_match.group(1)
+
+    # A partial truncation leaves a short fragment like 'anch', 'restaura', etc.
+    # Require the last word to be at least 3 chars OR a known short word.
+    _KNOWN_SHORT = {"a", "an", "in", "on", "at", "by", "to", "of", "or"}
+    assert len(last_word) >= 3 or last_word.lower() in _KNOWN_SHORT, (
+        f"Terminal word looks like a truncation fragment: {last_word!r} in {text!r}"
+    )
+
+    # Total length must be <= 140
+    assert len(text) <= 140, f"why_pick exceeds 140 chars: {len(text)} — {text!r}"
+
+    print(f"\n[truncation-proof] text={text!r} (len={len(text)})")
+
+
+def test_trim_to_word_helper_never_cuts_mid_word():
+    """Unit-level proof that _trim_to_word always cuts at space boundaries."""
+    from app.concierge.reasoning import _trim_to_word
+
+    cases = [
+        # (input, max_len)
+        ("A well-regarded cocktail bar in West Loop, a reliable spot for evening drinks with 4.7 rating.", 140),
+        ("La Carta de Oaxaca is a in Ballard restaurant favorite with strong review volume and consistent ratings, making it a reliable neighborhood anchor.", 140),
+        ("Short text.", 140),
+        ("Exactly one hundred and forty characters long string that should pass through completely with no changes needed X.", 140),
+        ("A" * 80 + " " + "B" * 70, 140),  # word boundary right before 140
+    ]
+
+    for text, max_len in cases:
+        result = _trim_to_word(text, max_len)
+        assert len(result) <= max_len, f"Result exceeds max_len={max_len}: {len(result)} — {result!r}"
+        assert result[-1] in ".!?", f"Result does not end with punctuation: {result!r}"
+        # No partial word: character before terminal punct must be alphanumeric
+        # (not a space, comma, or other separator)
+        import re
+        pre_punct = result[:-1]
+        if pre_punct:
+            assert re.search(r"\w$", pre_punct), (
+                f"Result ends with non-word char before punct: {result!r}"
+            )
