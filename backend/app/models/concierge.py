@@ -127,10 +127,6 @@ class ConciergeDisplayFields(BaseModel):
     display_why_source: Optional[str] = None  # "deterministic_concierge"
 
 
-class WhyPickDetail(BaseModel):
-    text: str
-    generation_method: Literal["deterministic", "llm"] = "deterministic"
-
 class PlaceSupportingDetails(BaseModel):
     rating: Optional[str] = None
     review_count: Optional[int] = None
@@ -149,7 +145,7 @@ class UnifiedRestaurantResult(BaseModel):
     name: str
     source: str = "Michelin Guide"
     michelin_status: Optional[str] = None  # "3 Stars" | "2 Stars" | "1 Star" | "Bib Gourmand" | "Selected"
-    cuisine: str
+    cuisine: Optional[str] = None
     neighborhood: Optional[str] = None
     rating: Optional[float] = None
     review_count: Optional[int] = None
@@ -172,7 +168,7 @@ class UnifiedRestaurantResult(BaseModel):
     enrichment: Optional[VenueEnrichment] = None
     primary_reason: Optional[str] = None
     reason_source: Optional[str] = None
-    why_pick: Optional[WhyPickDetail] = None
+    why_pick: Optional[str] = None
     supporting_details: Optional[PlaceSupportingDetails] = None
     display: Optional[ConciergeDisplayFields] = None
 
@@ -204,7 +200,7 @@ class UnifiedAttractionResult(BaseModel):
     enrichment: Optional[VenueEnrichment] = None
     primary_reason: Optional[str] = None
     reason_source: Optional[str] = None
-    why_pick: Optional[WhyPickDetail] = None
+    why_pick: Optional[str] = None
     supporting_details: Optional[PlaceSupportingDetails] = None
     display: Optional[ConciergeDisplayFields] = None
 
@@ -236,7 +232,7 @@ class UnifiedHotelResult(BaseModel):
     enrichment: Optional[VenueEnrichment] = None
     primary_reason: Optional[str] = None
     reason_source: Optional[str] = None
-    why_pick: Optional[WhyPickDetail] = None
+    why_pick: Optional[str] = None
     supporting_details: Optional[PlaceSupportingDetails] = None
     display: Optional[ConciergeDisplayFields] = None
 

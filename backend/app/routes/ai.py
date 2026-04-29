@@ -205,9 +205,7 @@ def concierge_debug_trace(payload: ConciergeDebugRequest, db: DB, user_id: Curre
         "rejection_reasons": debug_out.get("rejection_details", []),
         "final_addable_cards": [_card_dump(c) for c in all_addable],
         "final_display_payload": {
-            "restaurants": [_card_dump(c) for c in result.restaurants],
-            # Semantically correct nightlife bucket (same cards, separate key)
-            # Frontend can consume either; `restaurants` is kept for backward compat.
+            "restaurants": [] if intent == "nightlife" else [_card_dump(c) for c in result.restaurants],
             "bars": [_card_dump(c) for c in result.restaurants] if intent == "nightlife" else [],
             "attractions": [_card_dump(c) for c in result.attractions],
             "hotels": [_card_dump(c) for c in result.hotels],

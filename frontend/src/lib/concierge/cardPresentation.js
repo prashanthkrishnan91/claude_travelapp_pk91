@@ -34,8 +34,8 @@ function pickWhyText(value) {
 // Falls back through legacy fields for old cached messages.
 export function pickCardReason(card) {
   return (card?.display?.displayWhy && card.display.displayWhy.length >= 12 ? card.display.displayWhy : undefined)
-    ?? pickWhyText(card?.supportingDetails?.whyPick)
     ?? pickWhyText(card?.whyPick)
+    ?? pickWhyText(card?.supportingDetails?.whyPick)
     ?? card?.primaryReason
     ?? FALLBACK_REASON;
 }

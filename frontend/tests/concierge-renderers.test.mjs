@@ -53,6 +53,20 @@ test('card reason prefers supportingDetails.whyPick.text over fallback', () => {
   );
 });
 
+test('card reason prefers top-level whyPick over supportingDetails when displayWhy is missing', () => {
+  const card = {
+    name: 'Scotch Lodge',
+    whyPick: 'Top-level reason from canonical payload.',
+    supportingDetails: { whyPick: 'Supporting-details reason.' },
+  };
+  assert.equal(pickCardReason(card), 'Top-level reason from canonical payload.');
+});
+
+test('card reason does not render [object Object] when whyPick is string contract', () => {
+  const card = { whyPick: 'String reason contract.' };
+  assert.equal(pickCardReason(card), 'String reason contract.');
+});
+
 test('sanitizeWhyPick blocks awkward fragments and cross-venue leakage', () => {
   const fallback = sanitizeWhyPick('Alinea is backed by rated 4.8 and with rated praise.', 'Alinea', ['Alinea', 'Oriole']);
   assert.match(fallback, /well-regarded local pick with verified listing details/i);
@@ -166,7 +180,7 @@ test('AIConciergePanel keeps compact Sources used disclosure path', () => {
 test('PlaceRecommendationsView sanitizes reasons via shared cardPresentation helpers', () => {
   assert.match(placeRecommendationsView, /pickCardReason/);
   assert.match(placeRecommendationsView, /sanitizeWhyPick/);
-  assert.match(placeRecommendationsView, /fromSupporting \?\? fromTopLevel/);
+  assert.match(placeRecommendationsView, /pickCardReason\(card\)/);
   assert.doesNotMatch(placeRecommendationsView, /Strong fit for this trip based on trusted place signals\./);
 });
 
