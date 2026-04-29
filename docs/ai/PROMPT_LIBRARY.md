@@ -24,8 +24,42 @@ Before giving any Claude/Codex prompt, ChatGPT must silently check:
 10. Usage estimate included?
 11. Discovery budget included when paths are known?
 12. For PR review: cheap merge gate first, deep audit only if suspicious?
+13. Budget gate: can this be split/downgraded to avoid extra usage?
+14. If extra usage may be needed, did the Code Committee approve it?
 
 If any check fails, rewrite before showing the user.
+
+## Budget gate
+
+Default monthly budget target: ChatGPT Plus + Claude Pro only. Avoid extra usage.
+
+Before any prompt likely to be Medium-High or High usage:
+
+1. Try Codex first if task is bug fix, audit, refactor, or <=3 primary files.
+2. Split design from implementation only if it reduces total rework; otherwise one-pass implementation.
+3. Limit primary edit targets to 1-2 files.
+4. Move examples/logs into compact state packs.
+5. Exclude README unless public/setup behavior changed.
+6. Use cheap merge gate before any deep audit.
+7. Defer non-blocking improvements to a follow-up list, not the current prompt.
+
+## Extra usage approval gate
+
+If extra usage may be required, do not present the prompt until the Code Committee review is complete.
+
+Code Committee review format:
+
+```md
+Budget review:
+- Need: [why this task matters now]
+- Cheapest path tried/available: [Codex / smaller scope / defer]
+- Risk of not doing it: [short]
+- Estimated usage: [Low/Medium/High + rough %]
+- Extra usage risk: [Low/Medium/High]
+- Decision: APPROVE / REJECT / SPLIT
+```
+
+Default decision is REJECT unless the task is blocking progress, preventing data loss/security issue, or avoiding larger rework.
 
 ## Usage estimate rule
 
@@ -52,7 +86,7 @@ Discovery budget:
 ---
 
 ## 1. Design (Opus)
-Use only for architecture.
+Use only for architecture. Opus requires budget review unless the output is a reusable spec that prevents multiple Sonnet/Codex failures.
 
 Rules:
 - max 2 examples
@@ -98,10 +132,10 @@ Output:
 
 ---
 
-## 3. Debug (Codex)
+## 3. Debug / small implementation (Codex preferred)
 
 Task:
-[bug]
+[bug or small change]
 
 Expected:
 [short]
@@ -109,17 +143,17 @@ Expected:
 Actual:
 [short]
 
-Logs:
+Logs/state:
 [paste]
 
 Primary file:
 [file1]
 
 Discovery budget:
-- no broad search unless primary file does not contain the bug
+- no broad search unless primary file does not contain the issue
 
 MANDATORY:
-- If bug fix changes behavior, update docs/ai/HANDOFF.md
+- If behavior changes, update docs/ai/HANDOFF.md
 
 ---
 
