@@ -4084,3 +4084,22 @@ def test_hotel_display_reason_is_location_led_not_verified_hotel_template():
     assert "well-located" in why
     assert hotel.supporting_details is not None and hotel.display is not None
     assert hotel.why_pick == hotel.supporting_details.why_pick == hotel.display.display_why
+
+
+def test_restaurant_display_reason_is_not_generic_a_restaurant_with_rating_template():
+    from app.concierge.reasoning import build_concierge_display_reason
+
+    why = build_concierge_display_reason(
+        place_name="Alinea",
+        query_context="Best restaurants in Chicago",
+        intent=INTENT_RESTAURANTS,
+        category="restaurant",
+        cuisine=None,
+        neighborhood=None,
+        rating=4.8,
+        review_count=15764,
+        evidence=[],
+        google_types=["restaurant", "food"],
+    ).lower()
+    assert "a restaurant with 4.8 rating across 15,764 reviews" not in why
+    assert not why.startswith("a restaurant with")

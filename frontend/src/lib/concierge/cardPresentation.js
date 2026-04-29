@@ -34,8 +34,8 @@ function pickWhyText(value) {
 // Falls back through legacy fields for old cached messages.
 export function pickCardReason(card) {
   return (card?.display?.displayWhy && card.display.displayWhy.length >= 12 ? card.display.displayWhy : undefined)
-    ?? pickWhyText(card?.whyPick)
     ?? pickWhyText(card?.supportingDetails?.whyPick)
+    ?? pickWhyText(card?.whyPick)
     ?? card?.primaryReason
     ?? FALLBACK_REASON;
 }
@@ -48,7 +48,7 @@ export function pickCardCategory(card, fallbackCategory) {
 const GENERIC_PHRASES_RE = /\b(a strong pick for well-reviewed|guest feedback, location, and relevance|polished night-out experience|viable option|great fit for this trip|trusted place signals|well-reviewed food|well-reviewed drinks|matches this dining request|matches this value-dinner request|fits this hotel request|fits this Michelin request|is a strong attraction match|well-rated|consistent guest ratings)\b/i;
 
 // Patterns that indicate the old bad template output — must be filtered.
-const BAD_TEMPLATE_RE = /^[A-Z][^.!?]+\s+is\s+a\s+(?:restaurant|bar|hotel|attraction|place)\b[^.]*with\s+\d|^[Ww]ith\s+\d+[\.,]\d+\s+rating/;
+const BAD_TEMPLATE_RE = /^(?:[A-Z][^.!?]+\s+is\s+a\s+(?:restaurant|bar|hotel|attraction|place)\b[^.]*with\s+\d|[Aa]\s+(?:restaurant|bar|hotel|attraction|place)\s+with\s+\d|[Ww]ith\s+\d+[\.,]\d+\s+rating)/;
 
 export function sanitizeWhyPick(rawReason, title, allPlaceTitles) {
   const reason = splitReason(rawReason).short;

@@ -497,6 +497,8 @@ def build_concierge_display_reason(
             inner = cuisine.lower()
         else:
             inner = (category or "pick").replace("_", " ")
+        if inner.lower() == "restaurant":
+            return _append_rating(f"A well-regarded nearby restaurant{loc_part}")[:140]
         return _append_rating(f"A {inner}{loc_part}")[:140]
 
     if "brunch" in query_low:
@@ -540,11 +542,15 @@ def build_concierge_display_reason(
 
     if loc:
         inner = (category or "place").replace("_", " ")
+        if inner.lower() == "restaurant":
+            return _append_rating(f"A well-regarded {loc} restaurant")[:140]
         return _append_rating(f"A {inner}{loc_part}")[:140]
 
     # ── Priority g: Category + rating (no location) ──────────────────────────
     if rating_support:
         inner = cuisine.lower() if cuisine else (category or "place").replace("_", " ")
+        if inner.lower() == "restaurant":
+            return f"A well-regarded restaurant with strong review volume and verified listing details."[:140]
         return f"A verified {inner} with {rating_support}."[:140]
 
     # ── Priority h: Absolute fallback ────────────────────────────────────────
@@ -567,6 +573,18 @@ def build_why_pick(
     intent: Optional[str] = None,
     google_types: Optional[List[str]] = None,
 ) -> WhyPickResult:
+    def _safe_fallback_text() -> str:
+        loc = _location_phrase(neighborhood)
+        loc_part = f" in {loc}" if loc else ""
+        cat = (category or "place").replace("_", " ").lower()
+        if cat == "hotel":
+            return f"{place_name or 'This hotel'} is a well-located hotel{loc_part}, making it a practical base for exploring the city."
+        if cat == "restaurant":
+            return f"A well-regarded restaurant{loc_part} with verified listing details and strong review volume."
+        if cat == "bar":
+            return f"A reliable bar{loc_part} with verified listing details and strong review volume."
+        return f"A well-regarded {cat}{loc_part} with verified listing details."
+
     has_michelin_evidence = bool(michelin_status) or any("michelin" in _clean_chip(ev).lower() for ev in evidence)
     template_id: Literal["rating_and_editorial", "editorial_only", "google_only", "fallback", "michelin"] = (
         "michelin" if category == "restaurant" and has_michelin_evidence
@@ -598,20 +616,14 @@ def build_why_pick(
 
     # Final guards — must never reach these in normal flow.
     if BANNED_STRINGS_RE.search(text) or GENERIC_PHRASES_RE.search(text) or _BAD_TEMPLATE_RE.search(text):
-        loc = _location_phrase(neighborhood)
-        loc_part = f" {loc}" if loc else ""
-        rp = _rating_phrase(rating, review_count, list(evidence)) or "verified place details"
-        text = f"A verified{loc_part} option with {rp.lower()}."
+        text = _safe_fallback_text()
 
     if "backed by" in text.lower() or "with rated" in text.lower():
         text = re.sub(r"\bbacked by\b", "with", text, flags=re.IGNORECASE)
         text = re.sub(r"\bwith rated\b", "with a", text, flags=re.IGNORECASE)
 
     if not has_concrete_fact(text):
-        loc = _location_phrase(neighborhood)
-        loc_part = f" {loc}" if loc else ""
-        rating_part = _rating_phrase(rating, review_count, list(evidence)) or "verified place details"
-        text = f"A verified{loc_part} option with {rating_part.lower()}."
+        text = _safe_fallback_text()
 
     return {
         "why_pick": {"text": text, "generation_method": "deterministic"},

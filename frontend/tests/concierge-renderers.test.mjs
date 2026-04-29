@@ -53,13 +53,22 @@ test('card reason prefers supportingDetails.whyPick.text over fallback', () => {
   );
 });
 
-test('card reason prefers top-level whyPick over supportingDetails when displayWhy is missing', () => {
+test('card reason prefers supportingDetails over top-level whyPick when displayWhy is missing', () => {
   const card = {
     name: 'Scotch Lodge',
     whyPick: 'Top-level reason from canonical payload.',
     supportingDetails: { whyPick: 'Supporting-details reason.' },
   };
-  assert.equal(pickCardReason(card), 'Top-level reason from canonical payload.');
+  assert.equal(pickCardReason(card), 'Supporting-details reason.');
+});
+
+test('sanitizeWhyPick blocks category+rating generic template', () => {
+  const result = sanitizeWhyPick(
+    'A restaurant with 4.8 rating across 15,764 reviews.',
+    'Alinea',
+    ['Alinea'],
+  );
+  assert.equal(result, 'A well-regarded local pick with verified listing details.');
 });
 
 test('card reason does not render [object Object] when whyPick is string contract', () => {
