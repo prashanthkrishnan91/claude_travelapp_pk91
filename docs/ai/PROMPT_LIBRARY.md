@@ -25,10 +25,14 @@ Constraints:
 - no refactors
 - minimal patch
 
+MANDATORY:
+- Update docs/ai/HANDOFF.md in the same change
+
 Output:
 - plan
 - files
 - tests
+- handoff update summary (exact text to write into HANDOFF.md)
 
 ---
 
@@ -49,6 +53,9 @@ Logs:
 Files:
 [file1]
 
+MANDATORY:
+- If bug fix changes behavior, update docs/ai/HANDOFF.md
+
 ---
 
 ## 4. PR Review (Codex)
@@ -60,3 +67,4 @@ Output:
 - risks
 - missing tests
 - edge cases
+- required HANDOFF.md updates
