@@ -740,6 +740,9 @@ def build_why_pick_with_structured_evidence(
     the caller (live_research._apply_google_gate).
     """
     # Extract foursquare specialty labels for the deterministic fallback path.
+    # Only foursquare_tag claims are venue-specific signals (e.g. "handmade tortillas").
+    # foursquare_category labels (e.g. "Mexican Restaurant") are category identifiers,
+    # not specialties, so they must not be used for "known for" copy.
     specialty_tags: Optional[List[str]] = None
     if evidence_units:
         _tags: List[str] = []
@@ -748,11 +751,6 @@ def build_why_pick_with_structured_evidence(
                 tag = re.sub(r"^tagged as\s+", "", eu.claim, flags=re.IGNORECASE).strip()
                 if tag:
                     _tags.append(tag)
-            elif eu.claim_type == "foursquare_category":
-                cat_label = re.sub(r"^categorized as\s+", "", eu.claim, flags=re.IGNORECASE)
-                cat_label = re.sub(r"\s+on\s+foursquare\s*$", "", cat_label, flags=re.IGNORECASE).strip()
-                if cat_label:
-                    _tags.append(cat_label)
         if _tags:
             specialty_tags = _tags[:3]
 
