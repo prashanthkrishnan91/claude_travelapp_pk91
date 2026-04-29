@@ -39,6 +39,8 @@ from app.models.concierge import (
     ConciergeResponse,
     ConciergeMessage,
     ConciergeSearchResponse,
+    ConciergeDisplayFields,
+    PlaceSupportingDetails,
     Suggestion,
     UnifiedAttractionResult,
     UnifiedAreaComparisonResult,
@@ -90,6 +92,45 @@ _RESTAURANT_INTENTS = {
     INTENT_LUXURY_VALUE, INTENT_ROMANTIC, INTENT_FAMILY_FRIENDLY, INTENT_NIGHTLIFE,
 }
 _ATTRACTION_INTENTS = {INTENT_ATTRACTIONS, INTENT_PLAN_DAY}
+_BANNED_REASON_BITS = (
+    "sample",
+    "static sample",
+    "research data",
+    "verify hours",
+    "verify current status",
+    "before booking",
+)
+
+
+def _clean_reason_text(
+    *,
+    text: str,
+    name: str,
+    category: Optional[str],
+    rating: Optional[float],
+    review_count: Optional[int],
+    neighborhood: Optional[str],
+    intent: str,
+) -> str:
+    raw = (text or "").strip()
+    low = raw.lower()
+    has_banned = any(bit in low for bit in _BANNED_REASON_BITS)
+    cleaned = re.sub(r"\s+", " ", raw).strip()
+    cleaned = re.sub(r"\.{2,}", ".", cleaned)
+    if cleaned and not has_banned and len(cleaned) >= 16:
+        return cleaned
+    cat = (category or "place").lower()
+    loc = neighborhood if neighborhood and "," not in neighborhood else None
+    rating_part = ""
+    if rating is not None and review_count:
+        rating_part = f" with a {float(rating):.1f} rating across {int(review_count):,} reviews"
+    elif rating is not None:
+        rating_part = f" with a {float(rating):.1f} rating"
+    if intent == INTENT_NIGHTLIFE or "bar" in cat or "cocktail" in cat or "speakeasy" in cat:
+        loc_part = f" in {loc}" if loc else ""
+        return f"{name} is a {cat} pick{loc_part}{rating_part}, making it a strong option for polished drinks."
+    loc_part = f" in {loc}" if loc else ""
+    return f"{name} is a strong {cat} option{loc_part}{rating_part}."
 
 
 def _kw_pattern(*keywords: str) -> re.Pattern:
@@ -401,6 +442,36 @@ class ConciergeService:
             hotels=hotels,
             research_sources=research_sources,
         )
+        for card in restaurants:
+            reason = (
+                ((getattr(card, "display", None) and getattr(card.display, "display_why", None)) or "").strip()
+                or str((getattr(card, "supporting_details", None) and getattr(card.supporting_details, "why_pick", None)) or "").strip()
+                or str(getattr(card, "primary_reason", None) or "").strip()
+                or str(getattr(card, "summary", None) or "").strip()
+            )
+            if reason:
+                reason = _clean_reason_text(
+                    text=reason,
+                    name=getattr(card, "name", "Place"),
+                    category=getattr(card, "cuisine", None),
+                    rating=getattr(card, "rating", None),
+                    review_count=getattr(card, "review_count", None),
+                    neighborhood=getattr(card, "neighborhood", None),
+                    intent=intent,
+                )
+                card.why_pick = reason
+                if getattr(card, "supporting_details", None) is None:
+                    card.supporting_details = PlaceSupportingDetails()
+                card.supporting_details.why_pick = reason
+                if getattr(card, "display", None) is None:
+                    card.display = ConciergeDisplayFields(
+                        display_name=getattr(card, "name", "Place"),
+                        display_category=getattr(card, "cuisine", None) or "Place",
+                        display_why=reason,
+                        display_badges=[],
+                    )
+                elif not getattr(card.display, "display_why", None):
+                    card.display.display_why = reason
         if source_status not in {SOURCE_LIVE_SEARCH, SOURCE_MIXED}:
             live_provider_name = None
 
@@ -850,6 +921,16 @@ class ConciergeService:
                     booking_link = candidate_url
                     break
 
+        clean_summary = _clean_reason_text(
+            text=summary,
+            name=name,
+            category=cuisine,
+            rating=rating_10,
+            review_count=num_reviews,
+            neighborhood=location or None,
+            intent=intent,
+        )
+
         return UnifiedRestaurantResult(
             name=name,
             source="Restaurant database",
@@ -858,7 +939,24 @@ class ConciergeService:
             neighborhood=location,
             rating=rating_10,
             review_count=num_reviews,
-            summary=summary,
+            summary=clean_summary,
+            primary_reason=clean_summary,
+            why_pick=clean_summary,
+            supporting_details=PlaceSupportingDetails(
+                why_pick=clean_summary,
+                meta_line=(f"★ {rating_10:.1f} ({num_reviews:,} reviews)" if rating_10 is not None and num_reviews else None),
+                address=location or None,
+                category_label=cuisine or "Restaurant",
+            ),
+            display=ConciergeDisplayFields(
+                display_name=name,
+                display_category=cuisine or "Restaurant",
+                display_meta_line=(f"★ {rating_10:.1f} ({num_reviews:,} reviews)" if rating_10 is not None and num_reviews else None),
+                display_why=clean_summary,
+                display_badges=[],
+                addability="addable",
+                display_why_source="deterministic_concierge",
+            ),
             maps_link=f"https://maps.google.com/?q={maps_query}",
             booking_link=booking_link,
             ai_score=ai_score,

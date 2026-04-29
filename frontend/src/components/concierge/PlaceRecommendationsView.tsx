@@ -28,11 +28,7 @@ function parsePlaceCards(response: PlaceRecommendationsResponse): PlaceCard[] {
 
 function reasonForCard(card: PlaceCard, suggestions: ConciergeSuggestion[]): string {
   const matchingSuggestion = suggestions.find((s) => s.name.toLowerCase() === (card.name ?? "").toLowerCase());
-  const fromSupporting = typeof card.supportingDetails?.whyPick === "string"
-    ? card.supportingDetails?.whyPick
-    : card.supportingDetails?.whyPick?.text;
-  const fromTopLevel = typeof card.whyPick === "string" ? card.whyPick : card.whyPick?.text;
-  return fromSupporting ?? fromTopLevel ?? matchingSuggestion?.reason ?? pickCardReason(card);
+  return pickCardReason(card) ?? matchingSuggestion?.reason ?? "";
 }
 
 export function PlaceRecommendationsView({ response }: PlaceRecommendationsViewProps) {

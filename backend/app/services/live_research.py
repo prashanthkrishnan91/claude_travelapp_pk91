@@ -2501,6 +2501,8 @@ def _is_obvious_non_venue(name: str, destination: str) -> bool:
     """
     if not name:
         return True
+    if "\n" in name:
+        return True
     low = name.lower().strip()
     if low in _OBVIOUS_NON_VENUE_LOWER:
         return True
@@ -2521,6 +2523,17 @@ def _is_obvious_non_venue(name: str, destination: str) -> bool:
             return True
     # Ends with a promotional/article word e.g. "Launch Special", "Summer Guide"
     if words[-1] in _NON_VENUE_SUFFIX_WORDS:
+        return True
+    bad_phrase_markers = (
+        "here is the current menu",
+        "the restaurant serves",
+        "current menu",
+    )
+    if any(marker in low for marker in bad_phrase_markers):
+        return True
+    # Reject obvious neighborhood-only tokens before verification unless later
+    # validated by Google place types during verification/ranking.
+    if low in {"kerns", "pearl district", "st. johns", "st johns"}:
         return True
     return False
 
@@ -2967,6 +2980,13 @@ def _apply_google_gate(
                         display_category_source=_cat_source,
                         display_why_source="deterministic_concierge",
                     )
+                    canonical_why = (
+                        (_display_why or "").strip()
+                        or str(getattr(_sd, "why_pick", "") or "").strip()
+                        or str(getattr(venue, "primary_reason", "") or "").strip()
+                        or _CATEGORY_FALLBACK_REASON.get(category, _CATEGORY_FALLBACK_REASON["place"])
+                    )
+                    venue.why_pick = canonical_why
                 except Exception:
                     pass
                 try:
@@ -3011,8 +3031,10 @@ def _apply_google_gate(
                     # Do NOT overwrite neighborhood with the full address — the
                     # Tavily-extracted neighborhood (area-level) is cleaner for
                     # display_why text. Only fill in if currently empty.
-                    if hasattr(venue, "neighborhood") and not getattr(venue, "neighborhood", None):
-                        venue.neighborhood = verification.formatted_address
+                    if hasattr(venue, "neighborhood") and getattr(venue, "neighborhood", None):
+                        _n_val = str(getattr(venue, "neighborhood", "") or "").strip()
+                        if _n_val and _ADDRESS_HINT.search(_n_val):
+                            venue.neighborhood = None
                     if hasattr(venue, "area_label"):
                         venue.area_label = verification.formatted_address
                 except Exception:
@@ -3293,7 +3315,7 @@ def normalize_hits(
                         normalized_candidate.lower()
                     )
                     if is_restaurant_intent:
-                        cand_cuisine = "Cocktail Bar" if intent == INTENT_NIGHTLIFE else "Restaurant"
+                        cand_cuisine = None if intent == INTENT_NIGHTLIFE else "Restaurant"
                         cand_tags: List[str] = []
                         if intent == INTENT_NIGHTLIFE:
                             cand_tags.append("Nightlife")
@@ -3375,7 +3397,7 @@ def normalize_hits(
             continue
 
         if is_restaurant_intent:
-            cuisine = "Cocktail Bar" if intent == INTENT_NIGHTLIFE else "Restaurant"
+            cuisine = None if intent == INTENT_NIGHTLIFE else "Restaurant"
             summary = _build_summary(
                 hit.snippet,
                 fallback=f"Live result from {provider_label} matching \"{user_query}\".",
