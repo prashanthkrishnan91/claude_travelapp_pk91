@@ -1504,10 +1504,10 @@ class TestFrontendResearchSourceCard:
         panel_path = os.path.join(root, "frontend", "src", "components", "trips", "AIConciergePanel.tsx")
         with open(panel_path, "r", encoding="utf-8") as f:
             src = f.read()
-        # Research source cards must always be rendered with canAdd={false}
-        assert "canAdd={false}" in src
-        # The category label for non-article sources is still "Research source"
-        assert '"Research source"' in src
+        # Research sources are shown in a collapsed "Sources used" list, not as addable cards
+        assert "Sources used" in src
+        # Sources are filtered by the research_source type
+        assert "research_source" in src
 
     def test_research_source_open_source_button_not_add_to_trip(self):
         root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -2626,7 +2626,7 @@ class TestGooglePipelineRegression:
             known_candidate_names=["The Aviary", "Kumiko"],
         )
         assert source == "fallback"
-        assert "selected for this bar request" in reason.lower()
+        assert "drinks" in reason.lower()
 
     def test_unknown_google_types_do_not_fallback_to_candidate_generic_restaurant_label(self):
         candidate = SimpleNamespace(cuisine="Restaurant", category="Food")

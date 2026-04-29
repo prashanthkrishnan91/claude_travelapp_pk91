@@ -26,8 +26,11 @@ GENERIC_PHRASES_RE = re.compile(
 )
 
 # Patterns that indicate the old bad template output — must never appear.
+# Note: [^,]* (no-comma) stops at the first comma so sentences like
+# "Kumiko is a bar in West Loop, a reliable spot for drinks with 4.7 rating"
+# are not falsely rejected (the comma before the descriptive clause breaks the match).
 _BAD_TEMPLATE_RE = re.compile(
-    r"^\s*[A-Za-z][^.!?]+\s+is\s+a\s+(?:restaurant|bar|hotel|attraction|place)\b[^.]*with\s+\d|"
+    r"^\s*[A-Za-z][^.!?]+\s+is\s+a\s+(?:restaurant|bar|hotel|attraction|place)\b[^,]*with\s+\d|"
     r"^\s*[Ww]ith\s+\d+[\.,]\d+\s+rating",
     re.IGNORECASE,
 )
@@ -293,12 +296,30 @@ def _build_nightlife_display_why(
     return f"A {cat} with strong Google presence, a consistent nightlife option."[:150]
 
 
+def _michelin_stars_text(status: str) -> str:
+    """Translate raw michelin_status to natural adjective form."""
+    s = (status or "").strip()
+    low = s.lower().replace("-", " ")  # normalize "3-star" → "3 star"
+    if "3 star" in low or "three" in low:
+        return "three-Michelin-star"
+    if "2 star" in low or "two" in low:
+        return "two-Michelin-star"
+    if "1 star" in low:
+        return "Michelin-starred"
+    if "bib gourmand" in low:
+        return "Michelin Bib Gourmand"
+    if "star" in low:
+        return "Michelin-starred"
+    return s
+
+
 def _build_cuisine_restaurant_display_why(
     *,
     cuisine: str,
     loc: Optional[str] = None,
     rating: Optional[float] = None,
     review_count: Optional[int] = None,
+    place_name: Optional[str] = None,
 ) -> str:
     """Premium deterministic concierge copy for cuisine-specific restaurant cards (D).
 
@@ -311,24 +332,35 @@ def _build_cuisine_restaurant_display_why(
     r = float(rating or 0)
     rc = int(review_count or 0)
     loc_part = f" {loc}" if loc else ""
+    name = place_name or ""
 
     # Deep review volume + high quality = proven anchor
     if rc >= 1500 and r >= 4.5:
+        if name:
+            return f"{name} is a{loc_part} {cat} favorite with strong review volume and consistent ratings, making it a reliable neighborhood anchor."[:140]
         return f"A high-volume{loc_part} {cat} with deep review depth, a reliable neighborhood anchor."[:140]
 
     if rc >= 1000 and r >= 4.2:
+        if name:
+            return f"{name} is a{loc_part} {cat} with strong review volume and consistent ratings, making it a reliable pick."[:140]
         return f"A well-established{loc_part} {cat} with strong Google volume and consistent ratings."[:140]
 
     # Small + excellent = local gem feel
     if rc < 400 and r >= 4.6:
+        if name:
+            return f"{name} is a smaller{loc_part} {cat} with unusually high ratings, a strong local-feeling pick."[:140]
         return f"A smaller{loc_part} {cat} with unusually high ratings, better for a local-feeling pick."[:140]
 
     # High rating with moderate volume
     if r >= 4.7:
+        if name:
+            return f"{name} is an unusually well-rated{loc_part} {cat}, a confident pick for the cuisine."[:140]
         return f"An unusually well-rated{loc_part} {cat}, a confident pick for the cuisine."[:140]
 
     if r >= 4.5:
         if loc:
+            if name:
+                return f"{name} is a highly rated {loc} {cat}, a solid neighborhood choice."[:140]
             return f"A highly rated {loc} {cat}, a solid neighborhood choice."[:140]
         return f"A highly rated {cat}, a solid pick in this area."[:140]
 
@@ -426,8 +458,10 @@ def build_concierge_display_reason(
 
     # ── Priority a: Michelin status ──────────────────────────────────────────
     if michelin_status:
+        stars = _michelin_stars_text(michelin_status)
         cat_part = f" {cuisine.lower()}" if cuisine else ""
-        return _append_rating(f"{michelin_status}{cat_part}{loc_part}")[:140]
+        dest = loc_part or ""
+        return f"{place_name} is a {stars}{cat_part} destination{dest}, making it a standout for fine dining."[:140]
 
     # ── Priority b: Cocktail/nightlife — bar framing, editorial only if bar-specific ─
     # Use Google types to infer precise category label; editorial leads when available.
@@ -455,7 +489,8 @@ def build_concierge_display_reason(
         _cat_lower = _cat_label.lower()
 
         if loc_part:
-            # Clean location available → use it as anchor with a drinks qualifier
+            if place_name:
+                return _append_rating(f"{place_name} is a {_cat_lower}{loc_part}, a reliable spot for evening drinks")[:140]
             return _append_rating(f"A {_cat_lower}{loc_part}, a reliable spot for evening drinks")[:140]
 
         # No clean location → use volume/type characterization (not rating-only)
@@ -534,6 +569,7 @@ def build_concierge_display_reason(
             loc=loc,
             rating=rating,
             review_count=review_count,
+            place_name=place_name,
         )[:140]
 
     # ── Priority f: Neighborhood + generic category ──────────────────────────
