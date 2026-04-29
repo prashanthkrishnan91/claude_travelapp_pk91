@@ -2,20 +2,20 @@
 
 ## Operating mode
 
-This repo is developed through Claude/Codex in browser or mobile app. Do not assume CLI-only hooks, background agents, swarms, or local terminal orchestration are available unless the user explicitly says they are using CLI.
+Browser/mobile Claude + Codex workflow. No CLI-only hooks, swarms, background agents, or local terminal assumptions unless user explicitly says CLI is available.
 
-Primary objective: preserve Claude Pro usage by using repo memory files and compact state packs instead of rediscovering the app.
+Primary objective: every Claude/Codex token must move the fix forward. No filler, no broad repo exploration, no speculative rewrites.
 
 ## Required memory files
 
-Before planning or coding, use these files as the current source of truth:
+Before planning or coding, use the smallest needed subset of:
 
-1. `docs/ai/CLAUDE_WORKFLOW_KIT.md`
-2. `docs/ai/HANDOFF.md`
-3. `docs/ai/PROMPT_LIBRARY.md`
-4. `README.md` only when setup/user-facing behavior is relevant
+1. `docs/ai/HANDOFF.md` — current state and next likely task
+2. `docs/ai/PROMPT_LIBRARY.md` — prompt/task shape
+3. `docs/ai/CLAUDE_WORKFLOW_KIT.md` — stable project rules
+4. `README.md` — only for public/setup/user-facing context
 
-Do not ignore these files. If the user gives a prompt that conflicts with them, point out the conflict briefly and follow the newest explicit user instruction.
+Do not restate these files. Use them.
 
 ## Project stack
 
@@ -24,20 +24,24 @@ Do not ignore these files. If the user gives a prompt that conflicts with them, 
 - Database/Auth: Supabase
 - Hosting: Vercel frontend, Railway backend
 
-## Work rules
+## Zero-waste work rules
 
+- Every sentence in the response must be useful for diagnosis, implementation, verification, or merge decision.
 - Do only the requested task.
+- Read only the hot files required for the task.
+- Do not scan the whole repo unless the task is impossible without it.
 - Prefer smallest safe patch.
-- Read only hot files relevant to the task.
-- Do not scan the whole repo unless necessary.
-- Do not add unrelated refactors.
+- Do not refactor unrelated code.
+- Do not repeat known architecture unless it affects the fix.
 - Never expose secrets or `.env` contents.
 - Always state whether Supabase SQL is required.
 - Update `README.md` only when user-visible behavior, setup, migration, or architecture changes.
 
 ## Mandatory handoff automation
 
-For every implementation, bug fix, refactor, UI change, migration, or architecture change, update `docs/ai/HANDOFF.md` in the same PR/commit. This is required, not optional.
+For every implementation, bug fix, refactor, UI change, migration, architecture change, workflow change, or prompt-system change, edit `docs/ai/HANDOFF.md` in the same PR/commit. This is a required deliverable.
+
+The task is incomplete if `docs/ai/HANDOFF.md` should change and was not edited.
 
 `docs/ai/HANDOFF.md` must include:
 
@@ -48,20 +52,21 @@ For every implementation, bug fix, refactor, UI change, migration, or architectu
 - Next likely task
 - Debug notes
 
-If the task is purely documentation-only and does not change product behavior, still update the handoff if it changes workflow instructions or future Claude context.
+Never ask the user to update HANDOFF manually. Update it yourself.
 
-Do not end a coding task with "Handoff update needed: Yes" unless you already updated the file. Use "Handoff updated: Yes" or explain why no update was required.
+## Required final response
 
-## Response format
+Use this exact compact format:
 
-Use this order:
-
-1. Root cause or plan
-2. Files changed / files to change
-3. Tests/checks run or required
-4. Risks / rollback notes
-5. Supabase SQL required: Yes/No
-6. Handoff updated: Yes/No with reason
+```md
+Root cause/plan:
+Files changed:
+Tests:
+Risks:
+Supabase SQL: Yes/No
+HANDOFF.md edited: Yes/No + reason
+README.md edited: Yes/No + reason
+```
 
 ## AI Concierge invariants
 
@@ -69,14 +74,13 @@ Use this order:
 - Yelp and Foursquare are enrichment only.
 - Tavily/editorial/social sources are evidence only.
 - Only Google-verified operational places are addable.
-- User-facing cards must stay clean: title, category/subtitle, compact meta, one-line why, collapsed More/Less details.
+- User-facing cards: title, category/subtitle, compact meta, one-line why, collapsed More/Less details.
 - `display.displayWhy`, `supportingDetails.whyPick`, and top-level `whyPick` must stay aligned.
 - No debug metadata, provider internals, source leakage, or raw snippets in user-facing card copy.
 
 ## Chat strategy
 
-- New feature/fix: new Claude/Codex chat.
-- PR review: use Codex or ChatGPT unless implementation reasoning is needed.
-- Opus: planning only, produce compact spec, then stop.
-- Sonnet: focused implementation.
 - Codex: bug fixes, audits, smaller implementation.
+- Sonnet: focused implementation.
+- Opus: planning only; produce compact spec, then stop.
+- New feature/fix: new chat.
