@@ -153,7 +153,8 @@ def test_normalize_evidence_yelp_not_safe_for_copy():
     assert "4.3" in yelp_units[0].claim
 
 
-def test_normalize_evidence_foursquare_not_safe_for_copy():
+def test_normalize_evidence_foursquare_generic_tags_not_safe_for_copy():
+    # "trendy" and "date-night" are generic — must stay safe_for_copy=False.
     enrichment = _make_enrichment(
         foursquare_categories=["Cocktail Bar", "Lounge"],
         foursquare_tags=["trendy", "date-night"],
@@ -162,6 +163,68 @@ def test_normalize_evidence_foursquare_not_safe_for_copy():
     fs_units = [u for u in units if u.source_family == "foursquare"]
     assert len(fs_units) > 0
     assert all(u.safe_for_copy is False for u in fs_units)
+
+
+def test_normalize_evidence_specific_foursquare_tag_safe_for_copy():
+    # "craft cocktails" is a venue-specific differentiator → safe_for_copy=True.
+    enrichment = _make_enrichment(foursquare_tags=["craft cocktails"])
+    units = normalize_evidence(venue_name="Boka Bar", category="bar", enrichment=enrichment)
+    tag_units = [u for u in units if u.claim_type == "foursquare_tag"]
+    assert len(tag_units) == 1
+    assert tag_units[0].safe_for_copy is True
+    assert tag_units[0].confidence == "medium"
+
+
+def test_normalize_evidence_specific_foursquare_tags_mixed():
+    # Specific tags become safe; generic tags stay unsafe.
+    enrichment = _make_enrichment(
+        foursquare_tags=["handmade tortillas", "trendy", "mezcal cocktails"],
+    )
+    units = normalize_evidence(venue_name="Mas Maiz", category="restaurant", enrichment=enrichment)
+    tag_units = [u for u in units if u.claim_type == "foursquare_tag"]
+    safe = [u for u in tag_units if u.safe_for_copy]
+    unsafe = [u for u in tag_units if not u.safe_for_copy]
+    assert len(safe) == 2   # handmade tortillas, mezcal cocktails
+    assert len(unsafe) == 1  # trendy
+
+
+def test_normalize_evidence_tavily_award_signal_extracted_as_attribute():
+    # Tavily snippet containing "Michelin-starred" yields an attribute unit.
+    snippets = ["Alinea is a three Michelin star restaurant serving avant-garde cuisine."]
+    units = normalize_evidence(venue_name="Alinea", category="restaurant", tavily_snippets=snippets)
+    attr_units = [u for u in units if u.claim_type == "attribute" and u.source_family == "tavily"]
+    assert len(attr_units) == 1
+    assert "Michelin" in attr_units[0].claim or "michelin" in attr_units[0].claim.lower()
+    assert attr_units[0].safe_for_copy is True
+    assert attr_units[0].confidence == "medium"
+
+
+def test_normalize_evidence_tavily_no_award_no_attribute():
+    # Generic Tavily snippet without award mention → no attribute unit.
+    snippets = ["A great place to eat in Chicago with good food."]
+    units = normalize_evidence(venue_name="Some Cafe", category="restaurant", tavily_snippets=snippets)
+    attr_units = [u for u in units if u.claim_type == "attribute" and u.source_family == "tavily"]
+    assert len(attr_units) == 0
+
+
+def test_normalize_evidence_yelp_excerpt_known_for_extracted():
+    # Yelp review excerpt with "known for X" yields an attribute unit.
+    enrichment = _make_enrichment(
+        yelp_review_excerpts=["This place is known for its handmade pasta and seasonal ingredients."]
+    )
+    units = normalize_evidence(venue_name="Dario's", category="restaurant", enrichment=enrichment)
+    attr_units = [u for u in units if u.claim_type == "attribute" and u.source_family == "yelp"]
+    assert len(attr_units) == 1
+    assert "handmade pasta" in attr_units[0].claim
+    assert attr_units[0].safe_for_copy is True
+
+
+def test_normalize_evidence_yelp_excerpt_no_signal_no_attribute():
+    # Generic Yelp excerpt without "known for" → no attribute unit.
+    enrichment = _make_enrichment(yelp_review_excerpts=["Great service and delicious food!"])
+    units = normalize_evidence(venue_name="Some Place", category="restaurant", enrichment=enrichment)
+    attr_units = [u for u in units if u.claim_type == "attribute" and u.source_family == "yelp"]
+    assert len(attr_units) == 0
 
 
 def test_normalize_evidence_foursquare_capped_at_2_categories_3_tags():
