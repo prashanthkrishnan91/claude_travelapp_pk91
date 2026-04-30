@@ -49,7 +49,7 @@ export default function LoginPage() {
 
         <form
           onSubmit={handleSubmit}
-          className="bg-white/90 backdrop-blur-xl shadow-2xl rounded-2xl p-8 space-y-5 border border-white/60"
+          className="card rounded-2xl p-8 space-y-5"
         >
           {error && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
@@ -58,7 +58,7 @@ export default function LoginPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="label">
               Email
             </label>
             <input
@@ -66,12 +66,12 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="input placeholder:text-cream-500 [&:-webkit-autofill]:!text-cream-100 [&:-webkit-autofill]:[-webkit-text-fill-color:#f2ede4] [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_rgba(22,22,42,0.92)]"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="label">
               Password
             </label>
             <input
@@ -79,23 +79,23 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="input placeholder:text-cream-500 [&:-webkit-autofill]:!text-cream-100 [&:-webkit-autofill]:[-webkit-text-fill-color:#f2ede4] [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_rgba(22,22,42,0.92)]"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="btn-primary w-full justify-center py-2.5 disabled:opacity-50"
           >
             {loading ? "Signing in…" : "Sign in"}
           </button>
 
-          <p className="text-center text-sm text-gray-500">
+          <p className="text-center text-sm text-cream-300">
             No account?{" "}
             <Link
               href="/auth/signup"
-              className="text-blue-600 hover:underline font-medium"
+              className="text-brand-400 hover:underline font-medium"
             >
               Sign up
             </Link>
