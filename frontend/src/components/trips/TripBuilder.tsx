@@ -225,16 +225,20 @@ function RecTag({ tag }: { tag: string }) {
 
 function AiScoreBadge({ score }: { score: number }) {
   const { bg, text, ring } =
-    score >= 70 ? { bg: "bg-emerald-50", text: "text-emerald-700", ring: "ring-emerald-300" } :
-    score >= 50 ? { bg: "bg-amber-50",   text: "text-amber-700",   ring: "ring-amber-300"   } :
-                  { bg: "bg-slate-50",   text: "text-slate-500",   ring: "ring-slate-200"   };
+    score >= 70 ? { bg: "bg-emerald-500/15", text: "text-emerald-200", ring: "ring-emerald-400/45" } :
+    score >= 50 ? { bg: "bg-amber-500/15",   text: "text-amber-200",   ring: "ring-amber-400/45"   } :
+                  { bg: "bg-slate-500/15",   text: "text-slate-200",   ring: "ring-white/20"   };
   return (
     <div className={`flex flex-col items-center justify-center w-10 h-10 rounded-full ring-2 ${ring} ${bg} flex-shrink-0`}>
       <p className={`text-xs font-bold leading-none ${text}`}>{Math.round(score)}</p>
-      <p className="text-[9px] text-slate-400 leading-none mt-0.5">score</p>
+      <p className="text-[9px] text-cream-300 leading-none mt-0.5">score</p>
     </div>
   );
 }
+
+const PREMIUM_CARD_BASE = "candidate-card relative border rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 shadow-sm hover:shadow-md border-white/12 bg-gradient-to-br from-dark-200/95 to-dark-300/95 hover:border-white/25";
+const SECONDARY_CTA = "flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border border-white/15 bg-dark-300/75 text-cream-200 hover:bg-dark-200 hover:border-white/30 text-xs font-medium transition-all";
+const PRIMARY_CTA = "flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-brand-500 hover:bg-brand-400 text-dark-900 text-xs font-semibold transition-all disabled:opacity-50 shadow-sm";
 
 // ─── Sort control ─────────────────────────────────────────────────────────────
 
@@ -256,8 +260,8 @@ function SortControl({
           onClick={() => onChange(key)}
           className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all ${
             current === key
-              ? "bg-sky-600 text-white shadow-sm"
-              : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+              ? "bg-brand-500/85 text-dark-900 shadow-sm"
+              : "bg-dark-300/80 text-cream-300 border border-white/10 hover:bg-dark-200"
           }`}
         >
           {label}
@@ -375,14 +379,10 @@ function FlightCandidateCard({
   const explanation = (d.explanation      as string)   ?? "";
   const bookingUrl  = (d.bookingUrl       as string)   ?? "";
 
-  const containerClass = isTopPick
-    ? "border-emerald-300/45 bg-gradient-to-br from-emerald-900/20 to-dark-200"
-    : isLowScore
-    ? "border-slate-200/60 opacity-55"
-    : "border-white/14 bg-gradient-to-br from-dark-200 to-dark-300";
+  const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-brand-400/45" : ""} ${isLowScore ? "opacity-55" : ""}`;
 
   return (
-    <div className={`candidate-card relative border rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 hover:shadow-md hover:border-slate-300 shadow-sm ${containerClass}`}>
+    <div className={containerClass}>
       {isTopPick && (
         <div className="absolute -top-2.5 left-3">
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
@@ -410,9 +410,9 @@ function FlightCandidateCard({
           </div>
           <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
             <div className="flex items-center gap-1 w-full">
-              <div className="flex-1 h-px bg-slate-200" />
+              <div className="flex-1 h-px bg-white/20" />
               <Plane className="w-3 h-3 text-sky-500" />
-              <div className="flex-1 h-px bg-slate-200" />
+              <div className="flex-1 h-px bg-white/20" />
             </div>
             <p className="text-[10px] text-cream-300 text-center">
               {duration > 0 ? formatDuration(duration) : ""}
@@ -450,7 +450,7 @@ function FlightCandidateCard({
         {points > 0 && (
           <div className="text-center">
             <p className="text-[10px] text-cream-300 uppercase tracking-wide">Points</p>
-            <p className="text-sm font-bold text-violet-700">
+            <p className="text-sm font-bold text-brand-300">
               {points >= 1000 ? `${(points / 1000).toFixed(0)}k` : points}
             </p>
           </div>
@@ -458,7 +458,7 @@ function FlightCandidateCard({
         {cpp > 0 && (
           <div className="text-center">
             <p className="text-[10px] text-cream-300 uppercase tracking-wide">CPP</p>
-            <p className={`text-sm font-bold ${cpp >= 2 ? "text-emerald-600" : "text-slate-700"}`}>
+            <p className={`text-sm font-bold ${cpp >= 2 ? "text-emerald-300" : "text-cream-200"}`}>
               {cpp.toFixed(2)}¢
             </p>
           </div>
@@ -471,11 +471,7 @@ function FlightCandidateCard({
           <button
             onClick={() => onToggleCompare(item)}
             title="Compare"
-            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-xs font-medium transition-all ${
-              isComparing
-                ? "bg-violet-600 text-white shadow-sm"
-                : "bg-slate-100 hover:bg-violet-50 hover:text-violet-700 text-slate-600"
-            }`}
+            className={`${SECONDARY_CTA} ${isComparing ? "bg-brand-500/25 border-brand-400/40 text-brand-200" : ""}`}
           >
             <Scale className="w-3.5 h-3.5" />
             Compare
@@ -488,7 +484,7 @@ function FlightCandidateCard({
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
             title="Book externally"
-            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-slate-100 hover:bg-sky-50 hover:text-sky-700 text-slate-600 text-xs font-medium transition-all"
+            className={SECONDARY_CTA}
           >
             <ExternalLink className="w-3.5 h-3.5" />
             Book
@@ -497,7 +493,7 @@ function FlightCandidateCard({
         <button
           onClick={() => onAddToItinerary(item)}
           disabled={adding}
-          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-all disabled:opacity-50 shadow-sm"
+          className={PRIMARY_CTA}
         >
           {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           Add
@@ -529,32 +525,32 @@ function FlightLegRow({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
-        <span className="text-xs text-slate-500">{airline} <span className="text-slate-300">{flightNum}</span></span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-cream-300">{label}</span>
+        <span className="text-xs text-cream-200">{airline} <span className="text-cream-300">{flightNum}</span></span>
       </div>
       <div className="flex items-center gap-2">
         <div className="text-center min-w-[36px]">
-          <p className="text-sm font-bold text-slate-900">{origin}</p>
-          {depTime && <p className="text-[10px] text-slate-400">{formatTime(depTime)}</p>}
+          <p className="text-sm font-bold text-cream-100">{origin}</p>
+          {depTime && <p className="text-[10px] text-cream-300">{formatTime(depTime)}</p>}
         </div>
         <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
           <div className="flex items-center gap-1 w-full">
-            <div className="flex-1 h-px bg-slate-200" />
+            <div className="flex-1 h-px bg-white/20" />
             <Plane className="w-3 h-3 text-sky-400" />
-            <div className="flex-1 h-px bg-slate-200" />
+            <div className="flex-1 h-px bg-white/20" />
           </div>
-          <p className="text-[10px] text-slate-400">
+          <p className="text-[10px] text-cream-300">
             {duration > 0 ? formatDuration(duration) : ""}
             {duration > 0 && " · "}
             {stops === 0 ? "Nonstop" : `${stops} stop${stops > 1 ? "s" : ""}`}
           </p>
         </div>
         <div className="text-center min-w-[36px]">
-          <p className="text-sm font-bold text-slate-900">{dest}</p>
-          {arrTime && <p className="text-[10px] text-slate-400">{formatTime(arrTime)}</p>}
+          <p className="text-sm font-bold text-cream-100">{dest}</p>
+          {arrTime && <p className="text-[10px] text-cream-300">{formatTime(arrTime)}</p>}
         </div>
         {price > 0 && (
-          <p className="text-xs font-semibold text-slate-600 ml-1">${Math.round(price)}</p>
+          <p className="text-xs font-semibold text-cream-200 ml-1">${Math.round(price)}</p>
         )}
       </div>
     </div>
@@ -586,14 +582,10 @@ function RoundTripFlightCard({
   const combinedCpp = ((d.combinedCpp ?? d.combined_cpp)  as number) ?? 0;
   const aiScore     = ((d.aiScore     ?? d.ai_score)      as number) ?? 0;
 
-  const containerClass = isTopPick
-    ? "border-emerald-300/70 bg-gradient-to-br from-emerald-50/60 to-white"
-    : isLowScore
-    ? "border-slate-200/60 opacity-55"
-    : "border-slate-200/80 bg-white";
+  const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-brand-400/45" : ""} ${isLowScore ? "opacity-55" : ""}`;
 
   return (
-    <div className={`candidate-card relative border rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 hover:shadow-md hover:border-slate-300 shadow-sm ${containerClass}`}>
+    <div className={containerClass}>
       {isTopPick && (
         <div className="absolute -top-2.5 left-3">
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
@@ -606,42 +598,42 @@ function RoundTripFlightCard({
       {/* Header: round-trip label + AI score */}
       <div className="flex items-start justify-between gap-2 pt-0.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-slate-900 leading-tight">Round-Trip</p>
-          <p className="text-xs text-slate-400 mt-0.5">Outbound + Return pair</p>
+          <p className="text-sm font-bold text-cream-100 leading-tight">Round-Trip</p>
+          <p className="text-xs text-cream-300 mt-0.5">Outbound + Return pair</p>
         </div>
         <AiScoreBadge score={aiScore} />
       </div>
 
       {/* Outbound leg */}
-      <div className="rounded-xl bg-sky-50/60 px-3 py-2.5">
+      <div className="rounded-xl bg-dark-300/70 border border-white/10 px-3 py-2.5">
         <FlightLegRow leg={outbound} label="Outbound" />
       </div>
 
       {/* Return leg */}
-      <div className="rounded-xl bg-violet-50/60 px-3 py-2.5">
+      <div className="rounded-xl bg-dark-300/70 border border-white/10 px-3 py-2.5">
         <FlightLegRow leg={returnFlight} label="Return" />
       </div>
 
       {/* Combined pricing */}
-      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/10">
         {totalPrice > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Total Cash</p>
-            <p className="text-sm font-bold text-slate-900">${Math.round(totalPrice)}</p>
+            <p className="text-[10px] text-cream-300 uppercase tracking-wide">Total Cash</p>
+            <p className="text-sm font-bold text-cream-100">${Math.round(totalPrice)}</p>
           </div>
         )}
         {totalPoints > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Total Pts</p>
-            <p className="text-sm font-bold text-violet-700">
+            <p className="text-[10px] text-cream-300 uppercase tracking-wide">Total Pts</p>
+            <p className="text-sm font-bold text-brand-300">
               {totalPoints >= 1000 ? `${(totalPoints / 1000).toFixed(0)}k` : totalPoints}
             </p>
           </div>
         )}
         {combinedCpp > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide">CPP</p>
-            <p className={`text-sm font-bold ${combinedCpp >= 2 ? "text-emerald-600" : "text-slate-700"}`}>
+            <p className="text-[10px] text-cream-300 uppercase tracking-wide">CPP</p>
+            <p className={`text-sm font-bold ${combinedCpp >= 2 ? "text-emerald-300" : "text-cream-200"}`}>
               {combinedCpp.toFixed(2)}¢
             </p>
           </div>
@@ -652,7 +644,7 @@ function RoundTripFlightCard({
       <button
         onClick={() => onAddToItinerary(item)}
         disabled={adding}
-        className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-all disabled:opacity-50 shadow-sm w-full"
+        className={`${PRIMARY_CTA} w-full`}
       >
         {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
         Add Both Flights to Itinerary
@@ -696,14 +688,10 @@ function HotelCandidateCard({
   const proximityLabel  = (d.proximity_label as string) ?? null;
   const areaLabel       = (d.area_label      as string) ?? null;
 
-  const containerClass = isTopPick
-    ? "border-violet-300/70 bg-gradient-to-br from-violet-50/60 to-white"
-    : isLowScore
-    ? "border-slate-200/60 opacity-55"
-    : "border-slate-200/80 bg-white";
+  const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-brand-400/45" : ""} ${isLowScore ? "opacity-55" : ""}`;
 
   return (
-    <div className={`candidate-card relative border rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 hover:shadow-md hover:border-slate-300 shadow-sm ${containerClass}`}>
+    <div className={containerClass}>
       {isTopPick && (
         <div className="absolute -top-2.5 left-3">
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-violet-500 text-white shadow-sm">
@@ -716,13 +704,13 @@ function HotelCandidateCard({
       {/* Header: name + stars + AI score */}
       <div className="flex items-start justify-between gap-2 pt-0.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-slate-900 leading-tight">{name}</p>
+          <p className="text-sm font-bold text-cream-100 leading-tight">{name}</p>
           <div className="flex items-center gap-2 mt-0.5">
             {stars != null && (
               <span className="text-xs text-amber-400">{"★".repeat(Math.min(5, Math.round(stars)))}</span>
             )}
             {location && (
-              <span className="flex items-center gap-0.5 text-xs text-slate-400 truncate">
+              <span className="flex items-center gap-0.5 text-xs text-cream-300 truncate">
                 <MapPin className="w-3 h-3 flex-shrink-0" />
                 {location}
               </span>
@@ -767,11 +755,11 @@ function HotelCandidateCard({
 
       {/* Explanation */}
       {explanation && (
-        <p className="text-xs text-slate-500 leading-relaxed">{explanation}</p>
+        <p className="text-xs text-cream-300 leading-relaxed">{explanation}</p>
       )}
 
       {/* Pricing grid */}
-      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/10">
         {pricePerNight > 0 && (
           <div className="text-center">
             <p className="text-[10px] text-slate-400 uppercase tracking-wide">Per Night</p>
@@ -796,7 +784,7 @@ function HotelCandidateCard({
       {amenities.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {amenities.slice(0, 3).map((a) => (
-            <span key={a} className="px-2 py-0.5 bg-slate-100 rounded-full text-xs text-slate-500">{a}</span>
+            <span key={a} className="px-2 py-0.5 bg-white/10 border border-white/10 rounded-full text-xs text-cream-300">{a}</span>
           ))}
         </div>
       )}
@@ -807,11 +795,7 @@ function HotelCandidateCard({
           <button
             onClick={() => onToggleCompare(item)}
             title="Compare"
-            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-xs font-medium transition-all ${
-              isComparing
-                ? "bg-violet-600 text-white shadow-sm"
-                : "bg-slate-100 hover:bg-violet-50 hover:text-violet-700 text-slate-600"
-            }`}
+            className={`${SECONDARY_CTA} ${isComparing ? "bg-brand-500/25 border-brand-400/40 text-brand-200" : ""}`}
           >
             <Scale className="w-3.5 h-3.5" />
             Compare
@@ -824,7 +808,7 @@ function HotelCandidateCard({
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
             title="Book externally"
-            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-slate-100 hover:bg-violet-50 hover:text-violet-700 text-slate-600 text-xs font-medium transition-all"
+            className={SECONDARY_CTA}
           >
             <ExternalLink className="w-3.5 h-3.5" />
             Book
@@ -833,7 +817,7 @@ function HotelCandidateCard({
         <button
           onClick={() => onAddToItinerary(item)}
           disabled={adding}
-          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-all disabled:opacity-50 shadow-sm"
+          className={PRIMARY_CTA}
         >
           {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           Add
@@ -898,12 +882,10 @@ function AttractionCandidateCard({
   const numReviews    = attraction.numReviews;
   const mapsUrl       = `https://www.google.com/maps/search/${encodeURIComponent(attraction.name + " " + attraction.location)}`;
 
-  const containerClass = isTopPick
-    ? "border-emerald-300/70 bg-gradient-to-br from-emerald-50/60 to-white"
-    : "border-slate-200/80 bg-white";
+  const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-brand-400/45" : ""}`;
 
   return (
-    <div className={`candidate-card relative border rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 hover:shadow-md hover:border-slate-300 shadow-sm ${containerClass}`}>
+    <div className={containerClass}>
       {isTopPick && (
         <div className="absolute -top-2.5 left-3">
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
@@ -916,13 +898,13 @@ function AttractionCandidateCard({
       {/* Header: name + AI score */}
       <div className="flex items-start justify-between gap-2 pt-0.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-slate-900 leading-tight">{attraction.name}</p>
+          <p className="text-sm font-bold text-cream-100 leading-tight">{attraction.name}</p>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {rating != null && (
               <span className="text-xs text-amber-500 font-semibold">★ {rating.toFixed(1)}</span>
             )}
             {numReviews != null && (
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-cream-300">
                 {numReviews >= 1000 ? `${(numReviews / 1000).toFixed(0)}k` : numReviews} reviews
               </span>
             )}
@@ -933,7 +915,7 @@ function AttractionCandidateCard({
 
       {/* Description */}
       {attraction.description && (
-        <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">{attraction.description}</p>
+        <p className="text-xs text-cream-300 leading-relaxed line-clamp-2">{attraction.description}</p>
       )}
 
       {/* Tags */}
@@ -946,20 +928,20 @@ function AttractionCandidateCard({
       {/* Meta row: address, hours, duration, price */}
       <div className="flex flex-col gap-1">
         {attraction.address && (
-          <div className="flex items-center gap-1 text-xs text-slate-400">
+          <div className="flex items-center gap-1 text-xs text-cream-300">
             <MapPin className="w-3 h-3 flex-shrink-0" />
             <span className="truncate">{attraction.address}</span>
           </div>
         )}
         <div className="flex items-center gap-3 flex-wrap">
           {attraction.openingHours && (
-            <div className="flex items-center gap-1 text-xs text-slate-400">
+            <div className="flex items-center gap-1 text-xs text-cream-300">
               <Clock className="w-3 h-3 flex-shrink-0" />
               <span>{attraction.openingHours}</span>
             </div>
           )}
           {attraction.durationMinutes != null && (
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-cream-300">
               {formatDuration(attraction.durationMinutes)}
             </span>
           )}
@@ -975,7 +957,7 @@ function AttractionCandidateCard({
           href={mapsUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 text-xs font-medium transition-all"
+          className={SECONDARY_CTA}
         >
           <ExternalLink className="w-3.5 h-3.5" />
           View
@@ -983,7 +965,7 @@ function AttractionCandidateCard({
         <button
           onClick={() => onAddToTrip(attraction)}
           disabled={adding}
-          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-all disabled:opacity-50 shadow-sm"
+          className={PRIMARY_CTA}
         >
           {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           Add to Trip
@@ -1023,28 +1005,19 @@ function RestaurantCandidateCard({
   const numReviews = restaurant.numReviews;
   const mapsUrl    = `https://www.google.com/maps/search/${encodeURIComponent(restaurant.name + " " + restaurant.location)}`;
 
-  const containerClass = isTopPick
-    ? "candidate-card relative flex flex-col gap-2 p-3 rounded-2xl border border-rose-200 bg-rose-50/40 shadow-sm"
-    : "candidate-card relative flex flex-col gap-2 p-3 rounded-2xl border border-slate-100 bg-white shadow-sm";
-
-  const scoreColor =
-    aiScore >= 70 ? "bg-rose-500 text-white" :
-    aiScore >= 50 ? "bg-amber-400 text-white" :
-                    "bg-slate-200 text-slate-600";
+  const containerClass = `${PREMIUM_CARD_BASE} gap-2 p-3 ${isTopPick ? "border-brand-400/45" : ""}`;
 
   return (
     <div className={containerClass}>
       {isTopPick && (
-        <span className="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wide text-rose-500 bg-rose-100 px-1.5 py-0.5 rounded-full">
-          Top Pick
-        </span>
+        <span className="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wide text-brand-200 bg-brand-500/20 border border-brand-400/30 px-1.5 py-0.5 rounded-full">Top Pick</span>
       )}
 
       <div className="flex items-start justify-between gap-2 pt-0.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-slate-900 leading-tight">{restaurant.name}</p>
+          <p className="text-sm font-bold text-cream-100 leading-tight">{restaurant.name}</p>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <span className="text-[10px] text-slate-400 font-medium">{restaurant.cuisine}</span>
+            <span className="text-[10px] text-cream-300 font-medium">{restaurant.cuisine}</span>
             {rating != null && (
               <span className="flex items-center gap-0.5 text-xs text-amber-500 font-semibold">
                 <Star className="w-3 h-3 fill-amber-400 stroke-amber-400" />
@@ -1058,9 +1031,7 @@ function RestaurantCandidateCard({
             )}
           </div>
         </div>
-        <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${scoreColor}`}>
-          {Math.round(aiScore)}
-        </div>
+        <AiScoreBadge score={aiScore} />
       </div>
 
       {/* Tags */}
@@ -1073,14 +1044,14 @@ function RestaurantCandidateCard({
       {/* Meta row */}
       <div className="flex flex-col gap-1">
         {restaurant.address && (
-          <div className="flex items-center gap-1 text-xs text-slate-400">
+          <div className="flex items-center gap-1 text-xs text-cream-300">
             <MapPin className="w-3 h-3 flex-shrink-0" />
             <span className="truncate">{restaurant.address}</span>
           </div>
         )}
         <div className="flex items-center gap-3 flex-wrap">
           {restaurant.openingHours && (
-            <div className="flex items-center gap-1 text-xs text-slate-400">
+            <div className="flex items-center gap-1 text-xs text-cream-300">
               <Clock className="w-3 h-3 flex-shrink-0" />
               <span>{restaurant.openingHours}</span>
             </div>
@@ -1097,7 +1068,7 @@ function RestaurantCandidateCard({
           href={mapsUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 text-xs font-medium transition-all"
+          className={SECONDARY_CTA}
         >
           <ExternalLink className="w-3.5 h-3.5" />
           Maps
@@ -1105,7 +1076,7 @@ function RestaurantCandidateCard({
         <button
           onClick={() => onAddToTrip(restaurant)}
           disabled={adding}
-          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-all disabled:opacity-50 shadow-sm"
+          className={PRIMARY_CTA}
         >
           {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           Add to Trip
@@ -1130,7 +1101,7 @@ function FilterPills({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">{label}</span>
+      <span className="text-[9px] font-semibold uppercase tracking-wider text-cream-300">{label}</span>
       <div className="flex flex-wrap gap-1">
         {options.map((opt) => (
           <button
@@ -1138,8 +1109,8 @@ function FilterPills({
             onClick={() => onChange(opt.value === value ? null : opt.value)}
             className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-all border ${
               opt.value === value
-                ? "bg-slate-700 text-white border-slate-700"
-                : "bg-transparent text-slate-500 border-slate-200 hover:border-slate-400 hover:text-slate-700"
+                ? "bg-brand-500/80 text-dark-900 border-brand-400"
+                : "bg-dark-300/60 text-cream-300 border-white/15 hover:border-white/35 hover:text-cream-100"
             }`}
           >
             {opt.label}
