@@ -286,32 +286,32 @@ function SummaryBar({
   const topDest     = isRoundTrip ? (outFd.destination as string) : (fd.destination as string);
   const topPrice    = isRoundTrip ? (fd.total_price as number) : (fd.price as number);
   return (
-    <div className="glass border border-white/60 rounded-2xl p-3 flex gap-3 shadow-sm">
+    <div className="glass border border-white/12 rounded-2xl p-3 flex gap-3 shadow-sm">
       {topFlight && (
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
-            <Plane className="w-3 h-3 text-sky-500" /> {isRoundTrip ? "Best Round-Trip" : "Best Flight"}
+          <p className="text-[10px] text-cream-300 uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
+            <Plane className="w-3 h-3 text-brand-300" /> {isRoundTrip ? "Best Round-Trip" : "Best Flight"}
           </p>
-          <p className="text-xs font-bold text-slate-800 truncate">
+          <p className="text-xs font-bold text-cream-100 truncate">
             {topAirline ?? topFlight.title}
           </p>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-cream-300">
             {topOrigin ?? ""}
             {topDest ? ` → ${topDest}` : ""}
             {topPrice ? ` · $${Math.round(topPrice)}` : ""}
           </p>
         </div>
       )}
-      {topFlight && topHotel && <div className="w-px bg-slate-200 self-stretch" />}
+      {topFlight && topHotel && <div className="w-px bg-white/12 self-stretch" />}
       {topHotel && (
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
-            <Hotel className="w-3 h-3 text-violet-500" /> Best Hotel
+          <p className="text-[10px] text-cream-300 uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
+            <Hotel className="w-3 h-3 text-brand-400" /> Best Hotel
           </p>
-          <p className="text-xs font-bold text-slate-800 truncate">
+          <p className="text-xs font-bold text-cream-100 truncate">
             {(hd.name as string) ?? topHotel.title}
           </p>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-cream-300">
             {hd.pricePerNight ? `$${Math.round(hd.pricePerNight as number)}/night` : ""}
             {hd.rating ? ` · ★ ${(hd.rating as number).toFixed(1)}` : ""}
           </p>
@@ -325,16 +325,16 @@ function SummaryBar({
 
 function BestAreaCard({ bestArea }: { bestArea: BestAreaRecommendation }) {
   return (
-    <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50 p-3 shadow-sm flex flex-col gap-1.5">
+    <div className="rounded-2xl border border-brand-500/35 bg-gradient-to-br from-dark-200 to-dark-300 p-3 shadow-sm flex flex-col gap-1.5">
       <div className="flex items-center gap-1.5">
         <span className="text-base leading-none">📍</span>
-        <span className="text-[10px] font-bold text-violet-500 uppercase tracking-wider">Best Area to Stay</span>
-        <span className="ml-auto text-[10px] font-bold text-violet-400 bg-violet-100 px-1.5 py-0.5 rounded-full">
+        <span className="text-[10px] font-bold text-brand-300 uppercase tracking-wider">Best Area to Stay</span>
+        <span className="ml-auto text-[10px] font-bold text-brand-300 bg-brand-600/20 border border-brand-500/35 px-1.5 py-0.5 rounded-full">
           {bestArea.score.toFixed(0)}/100
         </span>
       </div>
-      <p className="text-sm font-extrabold text-violet-900 leading-tight">{bestArea.areaName}</p>
-      <p className="text-xs text-violet-600 leading-snug">{bestArea.reason}</p>
+      <p className="text-sm font-extrabold text-cream-100 leading-tight">{bestArea.areaName}</p>
+      <p className="text-xs text-cream-300 leading-snug">{bestArea.reason}</p>
     </div>
   );
 }
@@ -376,10 +376,10 @@ function FlightCandidateCard({
   const bookingUrl  = (d.bookingUrl       as string)   ?? "";
 
   const containerClass = isTopPick
-    ? "border-emerald-300/70 bg-gradient-to-br from-emerald-50/60 to-white"
+    ? "border-emerald-300/45 bg-gradient-to-br from-emerald-900/20 to-dark-200"
     : isLowScore
     ? "border-slate-200/60 opacity-55"
-    : "border-slate-200/80 bg-white";
+    : "border-white/14 bg-gradient-to-br from-dark-200 to-dark-300";
 
   return (
     <div className={`candidate-card relative border rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 hover:shadow-md hover:border-slate-300 shadow-sm ${containerClass}`}>
@@ -395,8 +395,8 @@ function FlightCandidateCard({
       {/* Header: airline + flight number + AI score */}
       <div className="flex items-start justify-between gap-2 pt-0.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-slate-900 leading-tight">{airline || flightNum}</p>
-          {airline && <p className="text-xs text-slate-400 mt-0.5">{flightNum}</p>}
+          <p className="text-sm font-bold text-cream-100 leading-tight">{airline || flightNum}</p>
+          {airline && <p className="text-xs text-cream-300 mt-0.5">{flightNum}</p>}
         </div>
         <AiScoreBadge score={aiScore} />
       </div>
@@ -405,8 +405,8 @@ function FlightCandidateCard({
       {origin && destination && (
         <div className="flex items-center gap-2">
           <div className="text-center min-w-[40px]">
-            <p className="text-sm font-bold text-slate-900">{origin}</p>
-            {depTime && <p className="text-[11px] text-slate-400">{formatTime(depTime)}</p>}
+            <p className="text-sm font-bold text-cream-100">{origin}</p>
+            {depTime && <p className="text-[11px] text-cream-300">{formatTime(depTime)}</p>}
           </div>
           <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
             <div className="flex items-center gap-1 w-full">
@@ -414,15 +414,15 @@ function FlightCandidateCard({
               <Plane className="w-3 h-3 text-sky-500" />
               <div className="flex-1 h-px bg-slate-200" />
             </div>
-            <p className="text-[10px] text-slate-400 text-center">
+            <p className="text-[10px] text-cream-300 text-center">
               {duration > 0 ? formatDuration(duration) : ""}
               {duration > 0 && " · "}
               {stops === 0 ? "Nonstop" : `${stops} stop${stops > 1 ? "s" : ""}`}
             </p>
           </div>
           <div className="text-center min-w-[40px]">
-            <p className="text-sm font-bold text-slate-900">{destination}</p>
-            {arrTime && <p className="text-[11px] text-slate-400">{formatTime(arrTime)}</p>}
+            <p className="text-sm font-bold text-cream-100">{destination}</p>
+            {arrTime && <p className="text-[11px] text-cream-300">{formatTime(arrTime)}</p>}
           </div>
         </div>
       )}
@@ -436,20 +436,20 @@ function FlightCandidateCard({
 
       {/* Explanation */}
       {explanation && (
-        <p className="text-xs text-slate-500 leading-relaxed">{explanation}</p>
+        <p className="text-xs text-cream-300 leading-relaxed">{explanation}</p>
       )}
 
       {/* Pricing grid */}
-      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/10">
         {price > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Cash</p>
-            <p className="text-sm font-bold text-slate-900">${Math.round(price)}</p>
+            <p className="text-[10px] text-cream-300 uppercase tracking-wide">Cash</p>
+            <p className="text-sm font-bold text-cream-100">${Math.round(price)}</p>
           </div>
         )}
         {points > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Points</p>
+            <p className="text-[10px] text-cream-300 uppercase tracking-wide">Points</p>
             <p className="text-sm font-bold text-violet-700">
               {points >= 1000 ? `${(points / 1000).toFixed(0)}k` : points}
             </p>
@@ -457,7 +457,7 @@ function FlightCandidateCard({
         )}
         {cpp > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide">CPP</p>
+            <p className="text-[10px] text-cream-300 uppercase tracking-wide">CPP</p>
             <p className={`text-sm font-bold ${cpp >= 2 ? "text-emerald-600" : "text-slate-700"}`}>
               {cpp.toFixed(2)}¢
             </p>

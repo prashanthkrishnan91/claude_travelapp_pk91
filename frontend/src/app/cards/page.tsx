@@ -68,10 +68,10 @@ function AddCardModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+      <div className="card rounded-2xl shadow-xl w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold text-slate-900">Add Travel Card</h2>
-          <button onClick={onClose} className="btn-ghost p-2">
+          <h2 className="text-lg font-bold text-cream-100">Add Travel Card</h2>
+          <button onClick={onClose} className="btn-ghost p-2" aria-label="Close add card modal">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -99,7 +99,7 @@ function AddCardModal({
               onChange={(e) => patch({ cardKey: e.target.value })}
               required
             />
-            <p className="mt-1 text-xs text-slate-400">Unique identifier, lowercase with underscores.</p>
+            <p className="mt-1 text-xs text-cream-400">Unique identifier, lowercase with underscores.</p>
           </div>
 
           <div>
@@ -149,11 +149,11 @@ function AddCardModal({
               onChange={(e) => patch({ isPrimary: e.target.checked })}
               className="rounded border-slate-300"
             />
-            <span className="text-sm text-slate-700">Set as primary card</span>
+            <span className="text-sm text-cream-200">Set as primary card</span>
           </label>
 
           {error && (
-            <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <div className="rounded-xl bg-rose-500/12 border border-rose-500/35 px-4 py-3 text-sm text-rose-100">
               {error}
             </div>
           )}
@@ -228,23 +228,23 @@ export default function CardsPage() {
             <div key={card.id} className="card p-5 flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">{card.displayName}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">{card.issuer}</p>
+                  <p className="text-sm font-semibold text-cream-100">{card.displayName}</p>
+                  <p className="text-xs text-cream-300 mt-0.5">{card.issuer}</p>
                 </div>
                 {card.isPrimary && (
                   <span className="badge badge-value text-[10px] px-1.5 py-0.5 shrink-0">Primary</span>
                 )}
               </div>
-              <div className="flex gap-4 text-xs text-slate-500">
+              <div className="flex gap-4 text-xs text-cream-300">
                 <span>
-                  <span className="font-semibold text-slate-800">
+                  <span className="font-semibold text-cream-100">
                     {(card.pointsBalance ?? 0).toLocaleString()}
                   </span>{" "}
                   pts
                 </span>
                 {card.pointValueCpp && (
                   <span>
-                    <span className="font-semibold text-slate-800">
+                    <span className="font-semibold text-cream-100">
                       {Number(card.pointValueCpp).toFixed(2)}¢
                     </span>{" "}
                     / pt
