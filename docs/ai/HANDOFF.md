@@ -1,6 +1,47 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-04-30) — Trip Ideas UX Discoverability Fix
+## Last change (2026-04-30) — Trip Ideas Triage v1
+
+### Summary
+Added priority/status triage and user notes to the Trip Ideas panel. Each saved idea now supports a `must_do | maybe | skipped` status and an optional short note. Skipped ideas are hidden from the default list with a "N skipped · show" toggle to reveal them. Status and notes persist to Supabase via the existing JSONB merge approach (no new table, no migration).
+
+### Files touched
+- `frontend/src/lib/api.ts` — added `updateIdeaMeta(itemId, currentDetails, patch)` which merges `{ ideaStatus?, userNote? }` into the existing details dict and calls the existing `PATCH /itinerary/items/{id}` endpoint; updated `saveToTripIdeas` to set `idea_status: "maybe"` as the default on new saves
+- `frontend/src/components/trips/TripIdeasPanel.tsx` — added `STATUS_OPTIONS` (Must-do / Maybe / Skip); `IdeaCard` now renders a priority row with three pill buttons and an expandable note textarea (auto-debounced 800 ms); `TripIdeasPanel` filters visible ideas by `status !== "skipped"` by default and shows a "N skipped · show / hide" toggle when skipped ideas exist; added `handleUpdate` which optimistically updates local state and calls `updateIdeaMeta`
+- `frontend/tests/trip-ideas.test.mjs` — added 3 new tests: `updateIdeaMeta` exported, `saveToTripIdeas` sets `idea_status: "maybe"`, TripIdeasPanel has Must-do/Maybe/Skip buttons
+- `backend/tests/test_trip_ideas.py` — added 2 new tests: merged details update preserves `source_kind`, skipped ideas are still returned by the backend list (backend is status-agnostic; frontend filters)
+
+### Behavior change
+- New saved ideas default to `idea_status: "maybe"` stored in `details` JSONB
+- Each Trip Idea card shows three priority pills: **Must-do** (emerald), **Maybe** (amber), **Skip** (slate)
+- Clicking a pill immediately updates optimistically and persists via PATCH
+- A **+ note** / **note ✎** button toggles an inline textarea; note is auto-saved 800 ms after last keystroke
+- Ideas with `idea_status = "skipped"` are hidden by default; a small link at the bottom of the list reveals them
+- Badge count on the Trip Ideas panel header reflects visible (non-skipped) count
+- All previous behaviors preserved: Save from AI Concierge, immediate appearance, persist after refresh, assign to day, remove
+
+### Data model
+```
+details.source_kind   = "concierge_idea"   (unchanged)
+details.idea_status   = "must_do" | "maybe" | "skipped"   (new; default "maybe")
+details.user_note     = string   (new; optional)
+```
+Frontend sends full merged details via existing `PATCH /itinerary/items/{id}`. Backend stores them as-is. No new endpoint, no migration.
+
+### Known issues
+- IdeaCard local `status`/`note` state is not synced back from props after an API failure (page refresh gives correct state). Acceptable for v1.
+- `idea_status` for ideas saved before this PR will be treated as "maybe" by the frontend default logic.
+
+### Next likely task
+- Mobile viewport test: three-button status row on small screens
+- Consider a subtle animation when status changes (e.g., card fades out on Skip)
+
+### Supabase SQL: No
+### Backend touched: No (tests only)
+
+---
+
+## Previous change (2026-04-30) — Trip Ideas UX Discoverability Fix
 
 ### Summary
 UX patch on top of the Saved Shortlist feature: after saving, the concierge card now clearly shows "Saved to Ideas" (not just "Saved"), an auto-dismissing toast in the concierge drawer says "Saved to Trip Ideas — close this panel to schedule it.", and the Trip Ideas panel is always visible (never hidden when empty) with a subtitle explaining its purpose. Panel auto-expands whenever new ideas arrive.

@@ -159,3 +159,36 @@ test('AIConciergePanel saveIdea deduplicates by normalizedName not day-keyed car
   assert.doesNotMatch(fn, /cardKey\(/, 'saveIdea must NOT use day-keyed cardKey for deduplication');
   assert.match(fn, /normalizedName/, 'saveIdea must use normalizedName for trip-wide deduplication');
 });
+
+// ---------------------------------------------------------------------------
+// 13. api.ts: updateIdeaMeta is exported
+// ---------------------------------------------------------------------------
+
+test('api.ts exports updateIdeaMeta for persisting triage status and notes', () => {
+  assert.match(apiTs, /export async function updateIdeaMeta/, 'updateIdeaMeta must be exported from api.ts');
+  assert.match(apiTs, /ideaStatus|idea_status/, 'updateIdeaMeta must reference ideaStatus field');
+  assert.match(apiTs, /userNote|user_note/, 'updateIdeaMeta must reference userNote field');
+});
+
+// ---------------------------------------------------------------------------
+// 14. api.ts: saveToTripIdeas sets a default idea_status of "maybe"
+// ---------------------------------------------------------------------------
+
+test('saveToTripIdeas sets idea_status to "maybe" by default', () => {
+  const saveFnStart = apiTs.indexOf('export async function saveToTripIdeas');
+  const saveFnEnd = apiTs.indexOf('\nexport async function', saveFnStart + 1);
+  const fn = apiTs.slice(saveFnStart, saveFnEnd > 0 ? saveFnEnd : undefined);
+  assert.match(fn, /idea_status.*maybe|maybe.*idea_status/, 'saveToTripIdeas must default idea_status to "maybe"');
+});
+
+// ---------------------------------------------------------------------------
+// 15. TripIdeasPanel: has status buttons (Must-do, Maybe, Skip)
+// ---------------------------------------------------------------------------
+
+test('TripIdeasPanel has Must-do, Maybe, and Skip priority buttons', () => {
+  assert.match(tripIdeasPanel, /Must-do/, '"Must-do" status label must appear in TripIdeasPanel');
+  assert.match(tripIdeasPanel, /Maybe/, '"Maybe" status label must appear in TripIdeasPanel');
+  assert.match(tripIdeasPanel, /Skip/, '"Skip" status label must appear in TripIdeasPanel');
+  assert.match(tripIdeasPanel, /must_do/, 'must_do value must be present in STATUS_OPTIONS');
+  assert.match(tripIdeasPanel, /skipped/, 'skipped value must be present for filtering');
+});

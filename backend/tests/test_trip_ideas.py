@@ -341,3 +341,56 @@ def test_unscheduled_items_scoped_to_trip():
     assert ideas_a[0].title == "Girl & the Goat"
     assert len(ideas_b) == 1
     assert ideas_b[0].title == "Nobu Chicago"
+
+
+# ---------------------------------------------------------------------------
+# Test 8: Updating idea_status via merged details preserves source_kind
+# ---------------------------------------------------------------------------
+
+def test_update_idea_status_preserves_source_kind():
+    """Merging idea_status into details must not clobber source_kind."""
+    db = _FakeDB()
+    svc = ItineraryService(db)
+    trip_id = uuid4()
+
+    idea = svc.create_trip_item(_make_idea(trip_id, "Alinea"))
+    assert idea.details.get("source_kind") == "concierge_idea"
+
+    # Simulate the frontend merge: spread existing details + new fields
+    merged = dict(idea.details)
+    merged["idea_status"] = "must_do"
+    merged["user_note"] = "Reserve three months out"
+
+    updated = svc.update_item(idea.id, ItineraryItemUpdate(details=merged))
+
+    assert updated.details.get("source_kind") == "concierge_idea", "source_kind must survive JSONB merge"
+    assert updated.details.get("idea_status") == "must_do"
+    assert updated.details.get("user_note") == "Reserve three months out"
+
+
+# ---------------------------------------------------------------------------
+# Test 9: Skipped ideas are still returned by list_unscheduled_items (backend
+# does not filter by status — that is the frontend's responsibility)
+# ---------------------------------------------------------------------------
+
+def test_skipped_ideas_still_returned_by_backend_list():
+    """Backend returns all concierge ideas regardless of idea_status.
+
+    Filtering of 'skipped' ideas is the frontend's responsibility so that
+    users can reveal skipped items via the show-skipped toggle without an
+    extra API call.
+    """
+    db = _FakeDB()
+    svc = ItineraryService(db)
+    trip_id = uuid4()
+
+    idea = svc.create_trip_item(_make_idea(trip_id, "Smyth"))
+
+    # Mark as skipped via update
+    merged = dict(idea.details)
+    merged["idea_status"] = "skipped"
+    svc.update_item(idea.id, ItineraryItemUpdate(details=merged))
+
+    unscheduled = svc.list_unscheduled_items(trip_id)
+    ids = [it.id for it in unscheduled]
+    assert idea.id in ids, "Backend must return skipped ideas; frontend handles the hide-by-default logic"
