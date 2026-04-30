@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Pencil, Sparkles, Trash2, X, Zap } from "lucide-react";
+import { ChevronLeft, Compass, Pencil, Sparkles, Trash2, X, Zap } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TripBuilder } from "@/components/trips/TripBuilder";
 import { OptimizeTripModal } from "@/components/trips/OptimizeTripModal";
@@ -276,10 +276,13 @@ export default function TripDetailPage() {
             <p className="text-sm text-slate-400 italic">Fetching destination vibe…</p>
           ) : tripContext ? (
             <>
-              <span className="text-xl leading-none" aria-hidden="true">
-                {getDestinationEmoji(trip?.destination ?? "")}
+              <span
+                className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-brand-600/15 border border-brand-500/30 text-brand-300"
+                aria-hidden="true"
+              >
+                <Compass className="w-3.5 h-3.5" />
               </span>
-              <p className="text-sm font-medium text-slate-500 tracking-wide">
+              <p className="text-sm font-medium text-cream-300 tracking-wide">
                 {tripContext.dateRange
                   ? `${tripContext.vibe} • ${tripContext.dateRange}`
                   : tripContext.vibe}
