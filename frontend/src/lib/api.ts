@@ -1531,12 +1531,22 @@ export async function saveToTripIdeas(
       reason: reason ?? null,
       tags: item.tags ?? [],
       source_kind: "concierge_idea",
+      idea_status: "maybe",
     },
   };
   return apiFetch<ItineraryItem>("/itinerary/items", {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function updateIdeaMeta(
+  itemId: string,
+  currentDetails: Record<string, unknown>,
+  patch: { ideaStatus?: string; userNote?: string }
+): Promise<ItineraryItem> {
+  const merged = { ...currentDetails, ...patch };
+  return updateItem(itemId, { details: merged as ItineraryItem["details"] });
 }
 
 export async function assignIdeaToDay(itemId: string, dayId: string): Promise<ItineraryItem> {
