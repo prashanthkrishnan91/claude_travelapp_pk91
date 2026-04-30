@@ -383,6 +383,12 @@ def list_trip_items(trip_id: UUID, db: DB, user_id: CurrentUserID) -> List[Itine
     return ItineraryService(db).list_items_by_trip(trip_id)
 
 
+@router.get("/{trip_id}/ideas", response_model=List[ItineraryItem])
+def list_trip_ideas(trip_id: UUID, db: DB, user_id: CurrentUserID) -> List[ItineraryItem]:
+    """Return unscheduled itinerary items (saved concierge ideas not yet assigned to a day)."""
+    return ItineraryService(db).list_unscheduled_items(trip_id)
+
+
 @router.post("/create-with-search", response_model=TripWithResults, status_code=status.HTTP_201_CREATED)
 def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: CurrentUserID) -> TripWithResults:
     """Unified concierge flow: resolve airports → search flights + hotels → AI-score → create trip."""

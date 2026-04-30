@@ -162,6 +162,18 @@ class ItineraryService:
         )
         return [ItineraryItem(**row) for row in result.data]
 
+    def list_unscheduled_items(self, trip_id: UUID) -> List[ItineraryItem]:
+        """Items saved to a trip but not yet assigned to any day."""
+        result = (
+            self.db.table(ITEMS_TABLE)
+            .select("*")
+            .eq("trip_id", str(trip_id))
+            .is_("day_id", "null")
+            .order("position")
+            .execute()
+        )
+        return [ItineraryItem(**row) for row in result.data]
+
     def list_items(self, day_id: UUID) -> List[ItineraryItem]:
         result = (
             self.db.table(ITEMS_TABLE)

@@ -1439,10 +1439,12 @@ export async function clearConciergeCache(
 
 type ConciergeStructuredItem = UnifiedRestaurantResult | UnifiedAttractionResult | UnifiedHotelResult;
 
+export type ConciergeItemKind = "restaurant" | "attraction" | "hotel";
+
 export async function addStructuredConciergeItemToTrip(
   tripId: string,
   item: ConciergeStructuredItem,
-  kind: "restaurant" | "attraction" | "hotel",
+  kind: ConciergeItemKind,
   opts?: { dayId?: string; reason?: string }
 ): Promise<ItineraryItem> {
   const cityOrArea = "neighborhood" in item ? item.neighborhood : ("areaLabel" in item ? item.areaLabel : undefined);
@@ -1482,6 +1484,65 @@ export async function addStructuredConciergeItemToTrip(
   return apiFetch<ItineraryItem>("/itinerary/items", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchTripIdeas(tripId: string): Promise<ItineraryItem[]> {
+  try {
+    return await apiFetch<ItineraryItem[]>(`/trips/${tripId}/ideas`);
+  } catch {
+    return [];
+  }
+}
+
+export async function saveToTripIdeas(
+  tripId: string,
+  item: ConciergeStructuredItem,
+  kind: ConciergeItemKind,
+  reason?: string,
+): Promise<ItineraryItem> {
+  const cityOrArea = "neighborhood" in item ? item.neighborhood : ("areaLabel" in item ? item.areaLabel : undefined);
+  const reviewCount = "reviewCount" in item ? (item.reviewCount ?? null) : null;
+  const category = kind === "restaurant"
+    ? "restaurant"
+    : kind === "hotel"
+      ? "hotel"
+      : ("category" in item ? item.category : "activity");
+  const payload = {
+    trip_id: tripId,
+    item_type: kind === "restaurant" ? "meal" : kind === "hotel" ? "hotel" : "activity",
+    title: item.name,
+    location: cityOrArea || item.name,
+    details: {
+      name: item.name,
+      category,
+      type: category,
+      city: cityOrArea ?? null,
+      location: cityOrArea ?? null,
+      address: "address" in item ? (item.address ?? null) : null,
+      rating: item.rating ?? null,
+      review_count: reviewCount,
+      review_count_text: reviewCount != null ? `${reviewCount}` : null,
+      source: item.source ?? null,
+      source_url: "mapsLink" in item ? (item.mapsLink ?? null) : null,
+      maps_link: "mapsLink" in item ? (item.mapsLink ?? null) : null,
+      booking_url: "bookingLink" in item ? (item.bookingLink ?? null) : null,
+      notes: reason ?? ("summary" in item ? (item.summary ?? null) : ("description" in item ? (item.description ?? null) : null)),
+      reason: reason ?? null,
+      tags: item.tags ?? [],
+      source_kind: "concierge_idea",
+    },
+  };
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function assignIdeaToDay(itemId: string, dayId: string): Promise<ItineraryItem> {
+  return apiFetch<ItineraryItem>(`/itinerary/items/${itemId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ day_id: dayId }),
   });
 }
 

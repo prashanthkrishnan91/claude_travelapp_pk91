@@ -1,6 +1,45 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-04-29) — UI Design System: Dark Mode-First Foundation
+## Last change (2026-04-30) — Saved Trip Ideas / Unscheduled Shortlist
+
+### Summary
+Added a "Save to Ideas" flow that lets users save AI Concierge results to a trip without assigning them to a specific day. Saved ideas appear in a new **Trip Ideas** panel in the trip builder. Users can assign an idea to a day (removing it from the unscheduled list) or delete it.
+
+### Files touched
+- `backend/app/services/itinerary.py` — added `list_unscheduled_items(trip_id)`: returns items with `day_id IS NULL`
+- `backend/app/routes/trips.py` — added `GET /trips/{trip_id}/ideas` endpoint
+- `frontend/src/lib/api.ts` — added `fetchTripIdeas`, `saveToTripIdeas` (marks `source_kind: "concierge_idea"` in details), `assignIdeaToDay`, exported `ConciergeItemKind` type
+- `frontend/src/components/trips/AIConciergePanel.tsx` — added "Save" button alongside "Add to Day"; `savedIdeaItems`/`savingIdeaItems` state; `saveIdea()` handler; `onIdeaSaved` prop; pre-populates saved state from existing ideas on panel open
+- `frontend/src/components/trips/TripIdeasPanel.tsx` — NEW: collapsible panel listing concierge-saved ideas; per-idea "Add to Day" selector+button and remove button; fetches from `/trips/{trip_id}/ideas` filtered by `source_kind=concierge_idea`
+- `frontend/src/components/trips/TripBuilder.tsx` — imports and renders `TripIdeasPanel` in right panel above day columns; accepts `ideasRefreshKey` and `onIdeaAssigned` props
+- `frontend/src/app/trips/[id]/page.tsx` — adds `tripIdeasKey` state; passes `ideasRefreshKey` to TripBuilder; passes `onIdeaSaved` to AIConciergePanel; `onIdeaAssigned` refreshes itinerary days + TripBuilder
+- `backend/tests/test_trip_ideas.py` — NEW: 7 backend unit tests
+- `frontend/tests/trip-ideas.test.mjs` — NEW: 12 frontend renderer/contract tests
+
+### Behavior change
+- AI Concierge cards now show two actions: **Add to Day** (requires day selection, existing behavior) and **Save** (saves to trip without day assignment, new)
+- A **Trip Ideas** section appears in the TripBuilder right panel above itinerary days, only when ideas exist
+- Saved ideas are persisted to Supabase `itinerary_items` with `day_id = null` and `details.source_kind = "concierge_idea"`
+- Duplicate protection: saving the same place to ideas twice returns the existing item
+- Assigning an idea to a day updates `day_id` on the item and removes it from the unscheduled list
+- Removing an idea deletes the item from `itinerary_items`
+
+### Known issues
+- No schema change: the existing `itinerary_items` table already supports `day_id = null`. The `source_kind` marker is stored in the `details` JSONB column (no migration needed).
+- Flight/hotel candidate items (created at trip creation) are also `day_id = null` but are NOT marked `source_kind = "concierge_idea"`, so they remain invisible to the Trip Ideas panel.
+- No drag-and-drop from Trip Ideas panel (v1 uses day selector dropdown, consistent with scope).
+
+### Next likely task
+- Monitor `source_kind` usage in production to confirm no flight/hotel candidates bleed into the Trip Ideas panel
+- Consider adding a "notes" editable field for saved ideas
+- Test on mobile: the two-button layout in ConciergeCard should be verified at small viewport widths
+
+### Supabase SQL: No (no migration — existing schema supports `day_id = null` and `details` JSONB)
+### Backend touched: Yes (`itinerary.py` service, `trips.py` route)
+
+---
+
+## Previous change (2026-04-29) — UI Design System: Dark Mode-First Foundation
 
 Frontend-only visual upgrade to a premium boutique concierge aesthetic. No backend, API, or business-logic changes.
 
