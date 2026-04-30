@@ -107,7 +107,10 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
     setLoading(true);
     const all = await fetchTripIdeas(tripId);
     const conciergeIdeas = all.filter(
-      (it) => (it.details as Record<string, unknown>)?.source_kind === "concierge_idea",
+      (it) => {
+        const details = (it.details ?? {}) as Record<string, unknown>;
+        return details.sourceKind === "concierge_idea" || details.source_kind === "concierge_idea";
+      },
     );
     setIdeas(conciergeIdeas);
     setLoading(false);

@@ -163,7 +163,7 @@ class ItineraryService:
         return [ItineraryItem(**row) for row in result.data]
 
     def list_unscheduled_items(self, trip_id: UUID) -> List[ItineraryItem]:
-        """Items saved to a trip but not yet assigned to any day."""
+        """Concierge ideas saved to a trip but not yet assigned to any day."""
         result = (
             self.db.table(ITEMS_TABLE)
             .select("*")
@@ -172,7 +172,13 @@ class ItineraryService:
             .order("position")
             .execute()
         )
-        return [ItineraryItem(**row) for row in result.data]
+        rows = result.data or []
+        concierge_rows = []
+        for row in rows:
+            details = row.get("details") if isinstance(row, dict) else None
+            if isinstance(details, dict) and details.get("source_kind") == "concierge_idea":
+                concierge_rows.append(row)
+        return [ItineraryItem(**row) for row in concierge_rows]
 
     def list_items(self, day_id: UUID) -> List[ItineraryItem]:
         result = (

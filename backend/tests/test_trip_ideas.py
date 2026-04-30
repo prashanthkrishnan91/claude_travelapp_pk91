@@ -209,6 +209,33 @@ def test_list_unscheduled_items_returns_only_null_day_items():
 
 
 # ---------------------------------------------------------------------------
+# Test 2b: list_unscheduled_items excludes non-concierge unscheduled candidates
+# ---------------------------------------------------------------------------
+
+def test_list_unscheduled_items_excludes_non_concierge_candidates():
+    db = _FakeDB()
+    svc = ItineraryService(db)
+    trip_id = uuid4()
+
+    idea = svc.create_trip_item(_make_idea(trip_id, "Lou Malnati's"))
+    # Simulate unscheduled trip-level candidate item (e.g., flight/hotel preload)
+    db.tables["itinerary_items"].append({
+        "id": str(uuid4()),
+        "trip_id": str(trip_id),
+        "day_id": None,
+        "item_type": "hotel",
+        "title": "Candidate Hotel",
+        "position": 1,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "details": {"source_kind": "search_candidate"},
+    })
+
+    unscheduled = svc.list_unscheduled_items(trip_id)
+    assert len(unscheduled) == 1
+    assert unscheduled[0].id == idea.id
+
+# ---------------------------------------------------------------------------
 # Test 3: Duplicate idea for the same trip/title is not created
 # ---------------------------------------------------------------------------
 
