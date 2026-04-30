@@ -1,6 +1,34 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-04-30) — Saved Trip Ideas / Unscheduled Shortlist
+## Last change (2026-04-30) — Trip Ideas UX Discoverability Fix
+
+### Summary
+UX patch on top of the Saved Shortlist feature: after saving, the concierge card now clearly shows "Saved to Ideas" (not just "Saved"), an auto-dismissing toast in the concierge drawer says "Saved to Trip Ideas — close this panel to schedule it.", and the Trip Ideas panel is always visible (never hidden when empty) with a subtitle explaining its purpose. Panel auto-expands whenever new ideas arrive.
+
+### Files touched
+- `frontend/src/components/trips/AIConciergePanel.tsx` — restored missing `inputRef`/`bottomRef` refs; added `setToast("Saved to Trip Ideas — close this panel to schedule it.")` call in `saveIdea` success path; changed saved button label from `Saved` to `Saved to Ideas`; auto-dismiss `useEffect` already in place
+- `frontend/src/components/trips/TripIdeasPanel.tsx` — removed `if (!loading && ideas.length === 0) return null` guard; updated empty state text to "Save recommendations from AI Concierge and schedule them later."; added subtitle "Saved from AI Concierge · add to a day when ready" under heading; added `useEffect` to auto-expand (`setOpen(true)`) when ideas arrive
+
+### Behavior change
+- Concierge card saved state label: "Saved" → "Saved to Ideas"
+- Toast fires inside concierge drawer after every successful save, auto-dismisses after 4 s
+- Trip Ideas panel is always rendered (even empty), so users see where saved items will appear
+- Panel auto-expands when the first idea is saved, surfacing it immediately
+
+### Known issues
+- Trip Ideas panel is always visible even on trips with no concierge activity — acceptable as it shows helpful onboarding empty state
+- Toast position is fixed inside the concierge drawer overlay; visible only while drawer is open (intended — tells user to close and check the panel)
+
+### Next likely task
+- Mobile viewport test: two-button layout (Add to Day / Save) on small screens
+- Consider a subtle animation when a new idea card appears in TripIdeasPanel
+
+### Supabase SQL: No
+### Backend touched: No
+
+---
+
+## Previous change (2026-04-30) — Saved Trip Ideas / Unscheduled Shortlist
 
 ### Summary
 Added a "Save to Ideas" flow that lets users save AI Concierge results to a trip without assigning them to a specific day. Saved ideas appear in a new **Trip Ideas** panel in the trip builder. Users can assign an idea to a day (removing it from the unscheduled list) or delete it.

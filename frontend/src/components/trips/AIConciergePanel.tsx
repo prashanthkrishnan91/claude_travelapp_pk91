@@ -412,7 +412,7 @@ function ConciergeCard({
                   : "bg-slate-800 text-slate-300 ring-slate-600 hover:bg-slate-700 hover:text-slate-100"
               }`}
             >
-              {savingIdea ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : savedIdea ? <span className="inline-flex items-center gap-1"><Check className="h-3 w-3" /> Saved</span> : "Save"}
+              {savingIdea ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : savedIdea ? <span className="inline-flex items-center gap-1"><Check className="h-3 w-3" /> Saved to Ideas</span> : "Save"}
             </button>
           </>
         ) : sourceLink ? (
@@ -480,9 +480,15 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
   const [toast, setToast] = useState<string | null>(null);
   const loadedTripRef = useRef<string | null>(null);
   const skipReloadRef = useRef(false);
-
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Auto-dismiss toast after 4 s
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   const quickActions = useMemo(() => {
     const dest = destination || "this destination";
@@ -741,6 +747,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
     try {
       await saveToTripIdeas(tripId, item, kind, reason);
       setSavedIdeaItems((prev) => new Set(prev).add(normalizedName));
+      setToast("Saved to Trip Ideas — close this panel to schedule it.");
       onIdeaSaved?.();
     } catch (err) {
       console.error("[concierge] save idea failed", err);

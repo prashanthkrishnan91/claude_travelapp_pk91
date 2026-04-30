@@ -117,6 +117,11 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
     void load();
   }, [load, refreshKey]);
 
+  // Auto-expand when ideas arrive so users see them immediately
+  useEffect(() => {
+    if (ideas.length > 0) setOpen(true);
+  }, [ideas.length]);
+
   async function handleAssign(itemId: string, dayId: string) {
     setAssigningId(itemId);
     try {
@@ -142,8 +147,6 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
     }
   }
 
-  if (!loading && ideas.length === 0) return null;
-
   return (
     <div className="rounded-2xl border border-amber-200/15 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 shadow-sm">
       <button
@@ -152,7 +155,10 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
       >
         <div className="flex items-center gap-2">
           <Bookmark className="h-3.5 w-3.5 text-amber-200/70" />
-          <span className="text-sm font-semibold text-slate-100">Trip Ideas</span>
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold text-slate-100">Trip Ideas</span>
+            <span className="text-[10px] text-slate-400">Saved from AI Concierge · add to a day when ready</span>
+          </div>
           {ideas.length > 0 && (
             <span className="rounded-full bg-amber-200/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-200">
               {ideas.length}
@@ -170,7 +176,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
               Loading ideas…
             </div>
           ) : ideas.length === 0 ? (
-            <p className="py-2 text-xs text-slate-400">No saved ideas yet. Use Save on any concierge result.</p>
+            <p className="py-2 text-xs text-slate-400">Save recommendations from AI Concierge and schedule them later.</p>
           ) : (
             <div className="space-y-2">
               {ideas.map((idea) => (
