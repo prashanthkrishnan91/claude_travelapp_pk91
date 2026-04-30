@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bookmark, ChevronDown, Loader2, Trash2, X } from "lucide-react";
+import { Bookmark, ChevronDown, Loader2, X } from "lucide-react";
 import { fetchTripIdeas, assignIdeaToDay, deleteItem } from "@/lib/api";
 import type { ItineraryDay, ItineraryItem } from "@/types";
 
@@ -170,7 +170,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
               Loading ideas…
             </div>
           ) : ideas.length === 0 ? (
-            <p className="py-2 text-xs text-slate-400">No saved ideas yet. Use "Save" on any concierge result.</p>
+            <p className="py-2 text-xs text-slate-400">No saved ideas yet. Use Save on any concierge result.</p>
           ) : (
             <div className="space-y-2">
               {ideas.map((idea) => (
