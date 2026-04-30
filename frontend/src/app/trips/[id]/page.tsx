@@ -72,6 +72,7 @@ export default function TripDetailPage() {
   const [optimizeOpen,  setOptimizeOpen]  = useState(false);
   const [conciergeOpen, setConciergeOpen] = useState(false);
   const [tripBuilderKey, setTripBuilderKey] = useState(0);
+  const [tripIdeasKey,  setTripIdeasKey]  = useState(0);
 
   useEffect(() => {
     if (!id) return;
@@ -321,6 +322,18 @@ export default function TripDetailPage() {
         endDate={trip?.endDate}
         initialDays={itineraryDays}
         initialResults={[]}
+        ideasRefreshKey={tripIdeasKey}
+        onIdeaAssigned={() => {
+          const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
+            ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;
+          const endDate = (trip as (Trip & { end_date?: string }) | null)?.endDate
+            ?? (trip as (Trip & { end_date?: string }) | null)?.end_date;
+          ensureTripDays(id, startDate, endDate).then((days) => {
+            setItineraryDays(days);
+            setTripBuilderKey((k) => k + 1);
+            showToast("Added to itinerary!");
+          });
+        }}
       />
 
       <AIConciergePanel
@@ -340,6 +353,7 @@ export default function TripDetailPage() {
             showToast("Added to your itinerary!");
           });
         }}
+        onIdeaSaved={() => setTripIdeasKey((k) => k + 1)}
       />
     </>
   );

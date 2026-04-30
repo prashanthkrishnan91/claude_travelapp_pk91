@@ -84,6 +84,7 @@ import { ItineraryItemCard } from "./ItineraryItemCard";
 import { CompareModal } from "./CompareModal";
 import { DayPlanModal } from "./DayPlanModal";
 import { TripMapView } from "./TripMapView";
+import { TripIdeasPanel } from "./TripIdeasPanel";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1218,11 +1219,15 @@ interface TripBuilderProps {
   endDate?: string;
   initialDays: ItineraryDay[];
   initialResults: ResearchResult[];
+  /** Bump to trigger TripIdeasPanel to re-fetch saved ideas. */
+  ideasRefreshKey?: number;
+  /** Called when a saved idea is assigned to a day from TripIdeasPanel. */
+  onIdeaAssigned?: () => void;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults }: TripBuilderProps) {
+export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned }: TripBuilderProps) {
   const [days,           setDays]          = useState<ItineraryDay[]>(
     [...initialDays].sort((a, b) => a.dayNumber - b.dayNumber)
   );
@@ -2403,6 +2408,13 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                 )}
               </div>
             </div>
+
+            <TripIdeasPanel
+              tripId={tripId}
+              days={displayDays}
+              refreshKey={ideasRefreshKey}
+              onIdeaAssigned={onIdeaAssigned}
+            />
 
             <div className="flex flex-col gap-3 pr-0.5 overflow-visible">
               <SortableContext items={days.map((d) => d.id)} strategy={verticalListSortingStrategy}>
