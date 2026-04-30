@@ -29,8 +29,32 @@ Before giving any Claude/Codex prompt, ChatGPT must silently check:
 15. For UI work: did the UI budget gate approve the scope?
 16. After heavy Claude PR: does the prompt tell user to stop that Claude session and review elsewhere?
 17. Does any Medium/High prompt include a timeout/checkpoint rule?
+18. For complex refactors: did the split gate reduce the task to one deliverable?
 
 If any check fails, rewrite before showing the user.
+
+## Complex refactor split gate
+
+A prompt must be split if it combines 3+ of these in one task:
+
+- bug fix
+- UI refactor
+- persistence/idempotency
+- history/log display
+- analytics/performance display
+- tests
+- documentation
+- migration/schema work
+- multiple workflows/screens
+
+Default split order:
+
+1. Logic correctness only (helpers/state semantics/persistence denominator)
+2. UI separation only (cards/layout using corrected helpers)
+3. History/analytics display only
+4. Tests/docs/handoff finalization or cheap merge gate
+
+For complex refactors, the first prompt should usually be Codex or Sonnet with max 1–2 primary files and one deliverable. Do not request full redesign + persistence + history + performance + docs in one prompt unless Code Committee explicitly approves High usage.
 
 ## Timeout / continue budget rule
 
