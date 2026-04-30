@@ -28,18 +28,6 @@ const DESTINATION_GRADIENTS: Array<{ keywords: string[]; gradient: string }> = [
 
 const DEFAULT_GRADIENT = "linear-gradient(160deg,#0ea5e9 0%,#38bdf8 40%,#7dd3fc 75%,#e0f2fe 100%)";
 
-const BEACH_KW  = ["honolulu","hawaii","maui","maldives","caribbean","bahamas","cancun","aruba","bali","phuket","lombok","fiji","tahiti","barbados"];
-const COLD_KW   = ["swiss","switzerland","alps","himalaya","mountain","colorado","rockies","norway","iceland","alaska","anchorage","aspen","vail"];
-const CITY_KW   = ["new york","nyc","chicago","london","tokyo","paris","rome","dubai","singapore","hong kong","las vegas","berlin","sydney","melbourne"];
-
-function getDestinationEmoji(destination: string): string {
-  const lower = destination.toLowerCase();
-  if (BEACH_KW.some((k) => lower.includes(k))) return "🌴";
-  if (COLD_KW.some((k) => lower.includes(k))) return "❄️";
-  if (CITY_KW.some((k) => lower.includes(k))) return "🏙";
-  return "✈️";
-}
-
 function getDestinationGradient(destination: string): string {
   const lower = destination.toLowerCase();
   for (const theme of DESTINATION_GRADIENTS) {
