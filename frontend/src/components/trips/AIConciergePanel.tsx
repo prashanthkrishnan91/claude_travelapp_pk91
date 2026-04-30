@@ -329,48 +329,49 @@ function ConciergeCard({
   const hasDetail = expandableDetail.length > 0;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+    <div className="rounded-2xl border border-amber-200/20 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-3.5 shadow-[0_16px_36px_rgba(2,6,23,0.45)]">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <p className="truncate text-sm font-semibold text-slate-900">{title}</p>
+            <p className="truncate text-sm font-semibold tracking-tight text-slate-100">{title}</p>
             {isOperational && (
               <span
-                className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700"
+                className="rounded-full border border-amber-300/40 bg-amber-200/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-amber-100"
                 title={verifiedAt ?? "Verified by Google Places"}
               >
                 Google verified
               </span>
             )}
           </div>
-          <p className="mt-0.5 text-xs text-slate-500">{category}</p>
-          {meta.length > 0 && <p className="mt-0.5 text-xs text-slate-500">{meta.join(" · ")}</p>}
+          <p className="mt-0.5 text-[11px] uppercase tracking-[0.1em] text-slate-400">{category}</p>
+          {meta.length > 0 && <p className="mt-1 text-xs leading-relaxed text-slate-300">{meta.join(" · ")}</p>}
         </div>
       </div>
 
       {tags.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {tags.slice(0, 3).map((tag) => (
-            <span key={tag} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
+            <span key={tag} className="rounded-full border border-slate-700 bg-slate-800/70 px-2 py-0.5 text-[10px] text-slate-300">
               {tag}
             </span>
           ))}
         </div>
       )}
 
-      <div className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
-        <span className="font-medium">Why this pick:</span> {reasonParts.short}
+      <div className="mt-3 rounded-xl border border-slate-700/80 bg-slate-900/60 px-3 py-2 text-xs leading-relaxed text-slate-200">
+        <span className="font-semibold uppercase tracking-[0.1em] text-[10px] text-amber-200/90">Concierge note</span>
+        <p className="mt-1 break-words">{reasonParts.short}</p>
         {hasDetail && (
           <>
             <button
               onClick={() => setExpanded((v) => !v)}
-              className="ml-1 inline-flex items-center gap-0.5 text-[11px] font-medium text-slate-500 hover:text-slate-700"
+              className="mt-1 inline-flex items-center gap-0.5 text-[11px] font-medium text-amber-200/80 hover:text-amber-100"
             >
               {expanded ? "Less" : "More"}
               <ChevronDown className={`h-3 w-3 transition ${expanded ? "rotate-180" : ""}`} />
             </button>
             {expanded && (
-              <div className="mt-1 space-y-0.5 text-[11px] text-slate-500">
+              <div className="mt-1 space-y-1 text-[11px] leading-relaxed text-slate-300/90">
                 {expandableDetail.map((line) => <p key={line}>{line}</p>)}
               </div>
             )}
@@ -385,8 +386,8 @@ function ConciergeCard({
             disabled={adding || added}
             className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
               added
-                ? "bg-emerald-50 text-emerald-700"
-                : "bg-sky-50 text-sky-700 hover:bg-sky-100"
+                ? "bg-emerald-300/15 text-emerald-200 ring-1 ring-emerald-300/30"
+                : "bg-amber-200/15 text-amber-100 ring-1 ring-amber-300/40 hover:bg-amber-200/25"
             }`}
           >
             {adding ? <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" /> : added ? <span className="inline-flex items-center gap-1"><Check className="h-3 w-3" /> Added</span> : actionLabel ?? "Add to Trip"}
@@ -396,22 +397,22 @@ function ConciergeCard({
             href={sourceLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-200"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700"
           >
             <ExternalLink className="h-3 w-3" /> Open source
           </a>
         ) : (
-          <span className="flex-1 rounded-lg bg-slate-100 px-3 py-1.5 text-center text-xs font-medium text-slate-500">
+          <span className="flex-1 rounded-lg bg-slate-800 px-3 py-1.5 text-center text-xs font-medium text-slate-300">
             Research only
           </span>
         )}
         {mapLink && (
-          <a href={mapLink} target="_blank" rel="noopener noreferrer" title="View on map" aria-label="View on map" className="rounded-lg bg-slate-100 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-200">
+          <a href={mapLink} target="_blank" rel="noopener noreferrer" title="View on map" aria-label="View on map" className="rounded-lg bg-slate-800 px-2 py-1.5 text-xs text-slate-200 hover:bg-slate-700">
             <MapPin className="h-3.5 w-3.5" />
           </a>
         )}
         {sourceLink && sourceLink !== mapLink && canAdd && (
-          <a href={sourceLink} target="_blank" rel="noopener noreferrer" title="View source / book" aria-label="View source or book" className="rounded-lg bg-violet-50 px-2 py-1.5 text-xs text-violet-700 hover:bg-violet-100">
+          <a href={sourceLink} target="_blank" rel="noopener noreferrer" title="View source / book" aria-label="View source or book" className="rounded-lg bg-amber-200/15 px-2 py-1.5 text-xs text-amber-100 hover:bg-amber-200/25">
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
         )}
@@ -697,32 +698,32 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
   return (
     <div className="fixed inset-0 z-50 flex justify-end" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-violet-600 to-sky-500 px-4 py-3">
-          <div className="flex items-center gap-2 text-white">
+      <div className="relative flex h-full w-full max-w-md flex-col border-l border-amber-200/20 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-700/80 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-4 py-3">
+          <div className="flex items-center gap-2 text-amber-100">
             <Sparkles className="h-4 w-4" />
             <span className="text-sm font-semibold">AI Concierge</span>
-            {destination && <span className="text-xs text-white/80">· {destination}</span>}
+            {destination && <span className="text-xs text-slate-300">· {destination}</span>}
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleClearChat}
-              className="rounded bg-white/15 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-white/25"
+              className="rounded border border-slate-600 bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-slate-100 hover:bg-slate-700"
             >
               Clear chat
             </button>
-            <button onClick={onClose} className="rounded p-1 text-white/80 hover:bg-white/20" aria-label="Close">
+            <button onClick={onClose} className="rounded p-1 text-slate-300 hover:bg-slate-700" aria-label="Close">
               <X className="h-4 w-4" />
             </button>
           </div>
         </div>
 
-        <div className="border-b border-slate-100 bg-slate-50 px-4 py-2">
-          <label className="text-[11px] font-medium text-slate-500">Add items to day</label>
+        <div className="border-b border-slate-700/80 bg-slate-900/70 px-4 py-2.5">
+          <label className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">Add items to day</label>
           <select
             value={selectedDayId}
             onChange={(e) => setSelectedDayId(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"
+            className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-2 py-1.5 text-xs text-slate-100"
           >
             {tripDays.length === 0 && <option value="">No days yet</option>}
             {tripDays.map((day) => (
@@ -735,11 +736,11 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
           {loadingHistory && (
-            <div className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-500">Loading previous chat…</div>
+            <div className="rounded-lg bg-slate-800 px-3 py-2 text-xs text-slate-300">Loading previous chat…</div>
           )}
 
           {loading && messages.length === 0 && (
-            <div className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-500">Loading concierge…</div>
+            <div className="rounded-lg bg-slate-800 px-3 py-2 text-xs text-slate-300">Loading concierge…</div>
           )}
 
           {error && (
@@ -747,7 +748,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
           )}
 
           {historyWarning && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <div className="rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs text-slate-300">
               {historyWarning}
             </div>
           )}
@@ -763,7 +764,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                     <p className="text-xs leading-relaxed text-slate-700">{msg.text}</p>
                   </div>
                 ) : (
-                  <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${msg.role === "user" ? "rounded-br-sm bg-sky-500 text-white" : "rounded-bl-sm bg-slate-100 text-slate-800"}`}>
+                  <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${msg.role === "user" ? "rounded-br-sm bg-amber-200/20 text-amber-50 ring-1 ring-amber-300/30" : "rounded-bl-sm bg-slate-800 text-slate-100"}`}>
                     {msg.text}
                   </div>
                 )}
@@ -908,7 +909,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                 <button
                   key={prompt}
                   onClick={() => sendQuery(prompt)}
-                  className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-100"
+                  className="rounded-full border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700"
                 >
                   {prompt}
                 </button>
@@ -918,9 +919,9 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
           {loading && (
             <div className="flex justify-start">
-              <div className="flex items-center gap-2 rounded-2xl rounded-bl-sm bg-slate-100 px-3 py-2">
-                <Loader2 className="h-3 w-3 animate-spin text-slate-400" />
-                <span className="text-xs text-slate-500">Researching options…</span>
+              <div className="flex items-center gap-2 rounded-2xl rounded-bl-sm bg-slate-800 px-3 py-2">
+                <Loader2 className="h-3 w-3 animate-spin text-slate-300" />
+                <span className="text-xs text-slate-300">Researching options…</span>
               </div>
             </div>
           )}
@@ -928,7 +929,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
           <div ref={bottomRef} />
         </div>
 
-        <div className="border-t border-slate-100 bg-white px-4 py-3">
+        <div className="border-t border-slate-700/80 bg-slate-950/90 px-4 py-3">
           {toast && (
             <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
               {toast}
@@ -940,7 +941,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                 <button
                   key={prompt}
                   onClick={() => sendQuery(prompt)}
-                  className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-100"
+                  className="rounded-full border border-slate-600 bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-700"
                 >
                   {prompt}
                 </button>
@@ -956,12 +957,12 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendQuery(input.trim())}
               placeholder="Ask for restaurants, hotels, attractions..."
               disabled={loading}
-              className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60"
+              className="flex-1 rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-300/60 disabled:opacity-60"
             />
             <button
               onClick={() => sendQuery(input.trim())}
               disabled={loading || !input.trim()}
-              className="btn-primary px-3 py-2 disabled:opacity-50"
+              className="rounded-xl bg-amber-200/20 px-3 py-2 text-amber-100 ring-1 ring-amber-300/40 transition hover:bg-amber-200/30 disabled:opacity-50"
               aria-label="Send"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
