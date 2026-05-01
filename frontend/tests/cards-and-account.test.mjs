@@ -142,3 +142,47 @@ test('getUserDisplay prefers full_name from metadata', () => {
 test('getUserDisplay falls back to email prefix when no name', () => {
   assert.match(sidebarTs, /split\(["']@["']\)|email\.split/);
 });
+
+
+// ── EditCardModal submit-time points validation ─────────────────────────────
+
+test('edit submit rejects non-numeric/NaN points before updateCard', () => {
+  const after = cardsPage.slice(cardsPage.indexOf('function EditCardModal'));
+  const chunk = after.slice(0, 4500);
+  assert.match(chunk, /Number\.isFinite\(parsedPointsBalance\)/);
+  assert.match(chunk, /setError\("Points balance must be a non-negative number\."\)/);
+});
+
+test('edit submit rejects negative points before updateCard', () => {
+  const after = cardsPage.slice(cardsPage.indexOf('function EditCardModal'));
+  const chunk = after.slice(0, 4500);
+  assert.match(chunk, /parsedPointsBalance\s*<\s*0/);
+});
+
+test('edit submit rejects blank points before updateCard', () => {
+  const after = cardsPage.slice(cardsPage.indexOf('function EditCardModal'));
+  const chunk = after.slice(0, 4500);
+  assert.match(chunk, /!rawPointsBalance/);
+});
+
+test('edit submit allows zero points balance', () => {
+  const after = cardsPage.slice(cardsPage.indexOf('function EditCardModal'));
+  const chunk = after.slice(0, 4500);
+  assert.match(chunk, /pointsBalance:\s*parsedPointsBalance/);
+  assert.doesNotMatch(chunk, /parsedPointsBalance\s*\?\s*Number/);
+});
+
+test('edit submit allows positive points balance via parsed numeric payload', () => {
+  const after = cardsPage.slice(cardsPage.indexOf('function EditCardModal'));
+  const chunk = after.slice(0, 4500);
+  assert.match(chunk, /const parsedPointsBalance = Number\(rawPointsBalance\)/);
+  assert.match(chunk, /updateCard\(card\.id,\s*\{/);
+});
+
+test('edit validation is submit-time logic, not only input attributes', () => {
+  const after = cardsPage.slice(cardsPage.indexOf('function EditCardModal'));
+  const chunk = after.slice(0, 4500);
+  const submitGuardIndex = chunk.indexOf('Number.isFinite(parsedPointsBalance)');
+  const updateCallIndex = chunk.indexOf('updateCard(card.id');
+  assert.ok(submitGuardIndex >= 0 && updateCallIndex >= 0 && submitGuardIndex < updateCallIndex);
+});
