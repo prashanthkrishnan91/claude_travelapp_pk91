@@ -77,6 +77,7 @@ import {
   planClusterDay,
   addAttractionToDay,
   addRestaurantToDay,
+  moveIdeaToTripIdeas,
 } from "@/lib/api";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
@@ -1254,6 +1255,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const [compareOpen,    setCompareOpen]    = useState(false);
   const [compareResults, setCompareResults] = useState<CompareResult[]>([]);
   const [compareLoading, setCompareLoading] = useState(false);
+  const [ideasRefreshNonce, setIdeasRefreshNonce] = useState(0);
   const compareDataRef = useRef<Map<string, { name: string; itemType: string; cashPrice: number; pointsCost: number; rating?: number; lat?: number; lng?: number }>>(new Map());
 
   const sensors = useSensors(
@@ -1578,6 +1580,22 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     );
     try { await deleteItem(itemId); } catch { /* silently ignore */ }
   }, []);
+
+  const handleMoveItemToIdeas = useCallback(async (itemId: string, dayId: string) => {
+    setDays((prev) =>
+      prev.map((d) =>
+        d.id === dayId
+          ? { ...d, items: d.items.filter((i) => i.id !== itemId).map((i, idx) => ({ ...i, position: idx })) }
+          : d
+      )
+    );
+    try {
+      await moveIdeaToTripIdeas(itemId);
+      setIdeasRefreshNonce((k) => k + 1);
+    } catch {
+      showToast("Failed to move idea back to Trip Ideas");
+    }
+  }, [showToast]);
 
   // ── Add empty note to a day ──────────────────────────────────────────────────
 
@@ -2383,7 +2401,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
             <TripIdeasPanel
               tripId={tripId}
               days={displayDays}
-              refreshKey={ideasRefreshKey}
+              refreshKey={(ideasRefreshKey ?? 0) + ideasRefreshNonce}
               onIdeaAssigned={onIdeaAssigned}
             />
 
@@ -2400,6 +2418,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                       setExpandedDayNumber((prev) => (prev === dayNumber ? null : dayNumber))
                     }
                     onRemoveItem={handleRemoveItem}
+                    onMoveItemToIdeas={handleMoveItemToIdeas}
                     onAddItem={handleAddToDay}
                     onToggleCompare={handleToggleCompareItem}
                     compareSet={compareSet}

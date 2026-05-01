@@ -44,3 +44,7 @@
 - Replaced category fallback copy in `LiveResearchService` with neutral polished wording, removed unused category reason templates, and added enforcement so final `supporting_details.why_pick` falls back safely if any banned fragment appears upstream.
 - Aligned `PlaceRecommendationsView` with shared card presentation helpers (`pickCardReason` + `sanitizeWhyPick`), standardized reason priority to `supportingDetails.whyPick` first, and removed the old hardcoded generic fallback sentence.
 - Added regression tests across backend and frontend to guarantee banned fragments (including `backed by`, `available evidence`, `selected for this`, and related variants) never surface in rendered card reasons.
+
+## 2026-05-01
+- Focused Trip Ideas workflow fix: added a day-item action to move day-assigned concierge ideas back to Trip Ideas by PATCHing `day_id` to null, preserving existing details metadata (`source_kind`, `idea_status`, `user_note`, links/metadata) and triggering immediate Trip Ideas refresh.
+- Added regression coverage for move-back behavior and metadata preservation in backend itinerary service tests, plus frontend API contract tests for the new move-to-ideas endpoint helper.
