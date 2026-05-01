@@ -128,11 +128,11 @@ test('ItineraryItemCard Move to Ideas button is conditionally rendered (no dupli
 });
 
 // ---------------------------------------------------------------------------
-// 11. Travel-time connectors preserved within sections
+// 11. Travel-time connectors preserved within sections (via computeAdjacentHints)
 // ---------------------------------------------------------------------------
 
-test('ItineraryDayColumn still renders travel connectors via estimateTravel', () => {
-  assert.match(dayColumn, /estimateTravel/, 'estimateTravel must still be called for connectors');
+test('ItineraryDayColumn renders travel connectors via computeAdjacentHints from travelHints', () => {
+  assert.match(dayColumn, /computeAdjacentHints/, 'computeAdjacentHints must be used for connectors in ItineraryDayColumn');
 });
 
 // ---------------------------------------------------------------------------

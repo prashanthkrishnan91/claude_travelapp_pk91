@@ -1,5 +1,47 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-01) — Travel Time Hints v1
+
+### Summary
+Added read-only day-level Travel Time Hints v1. Adjacent itinerary stops within each timeline section now show helpful hints about travel between them — rough walk/drive estimates when location data exists, gentle "Add location details" prompts when it's missing, and "These two stops may be far apart" warnings when the haversine distance implies a long drive. A `DayTravelHintBar` at the bottom of each expanded day column summarizes day-level issues when any pair is flagged.
+
+### Files touched
+- `frontend/src/lib/travelHints.ts` — NEW: exports `PairHint`, `PairHintKind`, `FAR_APART_DRIVE_MIN`, `computeAdjacentHints(items)` (returns one hint per adjacent pair: `travel_ok`, `far_apart`, or `missing_location`), and `summarizeHints(hints)` (aggregates for day-level display); imports `estimateTravel` + `formatTravelBadge` from existing `travelTime.ts`; entirely pure/side-effect free
+- `frontend/src/components/trips/ItineraryDayColumn.tsx` — replaced direct `estimateTravel`/`formatTravelBadge` calls in `renderItemsWithConnectors` with `computeAdjacentHints`; added three connector UI branches: `travel_ok` (unchanged walk/drive badge with `~` prefix), `far_apart` (badge + amber warning line), `missing_location` (MapPin icon + italic help text); added `DayTravelHintBar` sub-component that calls `computeAdjacentHints` + `summarizeHints` on `visibleItems` and renders a subtle info bar when any pair has issues; added `Info`, `MapPin` imports from lucide-react; removed `estimateTravel`/`formatTravelBadge` imports (now delegated to `travelHints.ts`)
+- `frontend/tests/travel-time-hints.test.mjs` — NEW: 24 contract tests covering exports, PairHintKind values, per-pair hint logic (travel_ok/far_apart/missing_location), summarizeHints aggregation, DayTravelHintBar presence, copy requirements, no-map/no-route scope guard
+- `frontend/tests/itinerary-timeline.test.mjs` — updated test 11 to check for `computeAdjacentHints` instead of `estimateTravel` (refactored delegation; behavior preserved)
+
+### Behavior change
+- Adjacent items with `details.lat`/`details.lng` within the same timeline section show `~N min walk` or `~N min drive` connectors (same as before, now with `~` prefix to signal rough estimate)
+- Adjacent pairs where drive time exceeds ~30 min show an additional amber "These two stops may be far apart." line under the travel badge
+- Adjacent pairs missing lat/lng on either item show a soft MapPin icon + "Add location details to improve travel hints." connector (previously showed nothing)
+- Each expanded day column shows a `DayTravelHintBar` at the bottom when any pair has issues, with message: "Some stops may be far apart. Consider grouping nearby items." or "Add location details to improve travel hints." followed by "Rough hints only."
+- All estimates are clearly labeled rough/approximate (`~` prefix, "Rough hints only" disclaimer)
+- No items are mutated, reordered, or moved; hints are read-only
+
+### Hint logic
+```
+items[i].details.lat/lng + items[i+1].details.lat/lng → haversine distance
+  driveMinutes > 30  → far_apart: "These two stops may be far apart."
+  driveMinutes ≤ 30  → travel_ok: "~N min walk" or "~N min drive"
+  lat/lng missing    → missing_location: "Add location details to improve travel hints."
+```
+
+### Known issues / v1 limits
+- `FAR_APART_DRIVE_MIN = 30` is a rough city-speed threshold (30 km/h average); actual routing may differ significantly
+- `DayTravelHintBar` operates on the flat `visibleItems` list, so cross-section pairs (last morning item → first afternoon item) are also evaluated — this is intentional for day-level overview
+- Hints reset when `visibleItems` changes (e.g., after a full itinerary reload); no caching
+- No time-of-day awareness (rush hour, transit, etc.) — this is a v1 rough hint only
+
+### Next likely task
+- Use `details.lat/lng` for geographic clustering in trip planning suggestions
+- Consider showing a day-level "geographic spread" score when all items have coordinates
+
+### Supabase SQL: No
+### Backend touched: No
+
+---
+
 ## Last change (2026-05-01) — Concierge metadata preservation for Trip Ideas + Day add
 
 ### Summary
