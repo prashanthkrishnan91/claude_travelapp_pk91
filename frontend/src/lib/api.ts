@@ -1441,6 +1441,54 @@ type ConciergeStructuredItem = UnifiedRestaurantResult | UnifiedAttractionResult
 
 export type ConciergeItemKind = "restaurant" | "attraction" | "hotel";
 
+function normalizeGoogleVerificationDetails(item: ConciergeStructuredItem): Record<string, unknown> {
+  const gv = item.googleVerification;
+  if (!gv || typeof gv !== "object") return {};
+  const gvAliases = gv as unknown as {
+    lat?: number | null;
+    lng?: number | null;
+    provider_place_id?: string | null;
+    formatted_address?: string | null;
+    google_maps_uri?: string | null;
+  };
+
+  const getNonEmpty = <T>(...values: Array<T | null | undefined | "">): T | undefined => {
+    for (const value of values) {
+      if (value !== null && value !== undefined && value !== "") return value as T;
+    }
+    return undefined;
+  };
+
+  const lat = getNonEmpty<number>(
+    gv.lat,
+    gvAliases.lat
+  );
+  const lng = getNonEmpty<number>(
+    gv.lng,
+    gvAliases.lng
+  );
+  const providerPlaceId = getNonEmpty<string>(
+    gv.providerPlaceId ?? undefined,
+    gvAliases.provider_place_id ?? undefined
+  );
+  const formattedAddress = getNonEmpty<string>(
+    gv.formattedAddress ?? undefined,
+    gvAliases.formatted_address ?? undefined
+  );
+  const googleMapsUri = getNonEmpty<string>(
+    gv.googleMapsUri ?? undefined,
+    gvAliases.google_maps_uri ?? undefined
+  );
+
+  return {
+    ...(lat !== undefined ? { lat } : {}),
+    ...(lng !== undefined ? { lng } : {}),
+    ...(providerPlaceId ? { provider_place_id: providerPlaceId } : {}),
+    ...(formattedAddress ? { formatted_address: formattedAddress } : {}),
+    ...(googleMapsUri ? { google_maps_uri: googleMapsUri } : {}),
+  };
+}
+
 export async function addStructuredConciergeItemToTrip(
   tripId: string,
   item: ConciergeStructuredItem,
@@ -1479,6 +1527,7 @@ export async function addStructuredConciergeItemToTrip(
       estimated_price_tag: "pricePerNight" in item && item.pricePerNight != null ? `$${Math.round(item.pricePerNight)}/night` : null,
       value_tag: "pricePerNight" in item && item.pricePerNight != null ? `$${Math.round(item.pricePerNight)}/night` : null,
       tags: item.tags ?? [],
+      ...normalizeGoogleVerificationDetails(item),
     },
   };
   return apiFetch<ItineraryItem>("/itinerary/items", {
@@ -1532,6 +1581,7 @@ export async function saveToTripIdeas(
       tags: item.tags ?? [],
       source_kind: "concierge_idea",
       idea_status: "maybe",
+      ...normalizeGoogleVerificationDetails(item),
     },
   };
   return apiFetch<ItineraryItem>("/itinerary/items", {

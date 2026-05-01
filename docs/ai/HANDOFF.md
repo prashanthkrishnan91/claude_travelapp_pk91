@@ -1,5 +1,29 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-01) — Concierge metadata preservation for Trip Ideas + Day add
+
+### Summary
+Persisted optional Google verification metadata when saving AI Concierge results to Trip Ideas and when adding them directly to an itinerary day. Both flows now preserve `details.lat`, `details.lng`, `details.provider_place_id`, `details.formatted_address`, and `details.google_maps_uri` when present, while skipping null/undefined/empty values.
+
+### Files touched
+- `frontend/src/lib/api.ts` — added `normalizeGoogleVerificationDetails(item)` helper; wired it into both `addStructuredConciergeItemToTrip` and `saveToTripIdeas` detail payloads so Google verification metadata is merged without overwriting existing fields with empty values
+- `frontend/tests/trip-ideas.test.mjs` — added focused contract tests confirming both save/add flows include the metadata helper and that the helper safely no-ops when `googleVerification` is missing
+
+### Behavior change
+- AI Concierge → Trip Ideas now persists Google metadata into `details` when available
+- AI Concierge → Day now persists Google metadata into `details` when available
+- Existing fields (`location`, `address`, `dayPart`, `timeLabel`, notes/status/priority, etc.) remain preserved because this change only appends non-empty metadata keys
+- Trip Ideas ↔ Day movement remains day_id-only and continues to preserve `details` as-is
+
+### Known issues / v1 limits
+- Metadata persistence is source-dependent: if a card has no `googleVerification`, no new metadata fields are added (expected behavior)
+
+### Next likely task
+- Use persisted `details.lat/lng` + place metadata for Travel Time Hints v1 calculations (no UI yet)
+
+### Supabase SQL: No
+### Backend touched: No
+
 ## Last change (2026-05-01) — Smart Day Timeline AI Planning v1
 
 ### Summary
