@@ -30,6 +30,11 @@ const apiTs = readFileSync(
   'utf8',
 );
 
+const itineraryItemCard = readFileSync(
+  new URL('../src/components/trips/ItineraryItemCard.tsx', import.meta.url),
+  'utf8',
+);
+
 // ---------------------------------------------------------------------------
 // 1. AIConciergePanel: "Save" button exists alongside "Add to Day"
 // ---------------------------------------------------------------------------
@@ -201,4 +206,10 @@ test('TripIdeasPanel has Must-do, Maybe, and Skip priority buttons', () => {
   assert.match(tripIdeasPanel, /Skip/, '"Skip" status label must appear in TripIdeasPanel');
   assert.match(tripIdeasPanel, /must_do/, 'must_do value must be present in STATUS_OPTIONS');
   assert.match(tripIdeasPanel, /skipped/, 'skipped value must be present for filtering');
+});
+
+test('ItineraryItemCard renders Move to Ideas action only for concierge ideas', () => {
+  assert.match(itineraryItemCard, /isConciergeIdea/, 'Card must derive concierge marker from details');
+  assert.match(itineraryItemCard, /Move to Ideas/, 'Card must render Move to Ideas action');
+  assert.match(itineraryItemCard, /isConciergeIdea && onMoveToIdeas/, 'Move action should be gated to concierge ideas only');
 });

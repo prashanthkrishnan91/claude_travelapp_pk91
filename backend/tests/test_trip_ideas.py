@@ -301,6 +301,25 @@ def test_assigning_idea_to_day_removes_from_unscheduled():
     assert all(it.id != idea.id for it in after), "After assignment, idea must NOT appear in unscheduled list"
 
 
+def test_assigning_idea_to_day_preserves_concierge_metadata():
+    db = _FakeDB()
+    svc = ItineraryService(db)
+    trip_id = uuid4()
+    day = _make_day(svc, trip_id, 2)
+
+    idea = svc.create_trip_item(_make_idea(trip_id, "Arbella"))
+    merged = dict(idea.details)
+    merged["idea_status"] = "maybe"
+    merged["user_note"] = "Try rooftop seating"
+    idea = svc.update_item(idea.id, ItineraryItemUpdate(details=merged))
+
+    assigned = svc.update_item(idea.id, ItineraryItemUpdate(day_id=day.id))
+    assert assigned.day_id == day.id
+    assert assigned.details.get("source_kind") == "concierge_idea"
+    assert assigned.details.get("idea_status") == "maybe"
+    assert assigned.details.get("user_note") == "Try rooftop seating"
+
+
 # ---------------------------------------------------------------------------
 # Test 6: API data contract — unscheduled items have day_id=None
 # ---------------------------------------------------------------------------

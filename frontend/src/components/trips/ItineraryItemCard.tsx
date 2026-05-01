@@ -147,6 +147,15 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
             {item.title}
           </span>
           <div className="flex items-center gap-1 flex-shrink-0">
+            {isConciergeIdea && onMoveToIdeas && (
+              <button
+                onClick={() => onMoveToIdeas(item.id)}
+                className="flex-shrink-0 rounded-md border border-amber-300/35 bg-amber-300/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-200 hover:bg-amber-300/20 transition-colors"
+                aria-label={`Move ${item.title} back to Trip Ideas`}
+              >
+                Move to Ideas
+              </button>
+            )}
             {onToggleCompare && (
               <button
                 onClick={() => onToggleCompare(item)}
