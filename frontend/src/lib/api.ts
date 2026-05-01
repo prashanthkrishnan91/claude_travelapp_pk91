@@ -1032,6 +1032,22 @@ export async function createCard(data: CreateCardData): Promise<TravelCard> {
   });
 }
 
+export interface UpdateCardData {
+  displayName?: string;
+  issuer?: string;
+  pointsBalance?: number;
+  pointValueCpp?: number;
+  isPrimary?: boolean;
+}
+
+export async function updateCard(cardId: string, data: UpdateCardData): Promise<TravelCard> {
+  const payload = toSnake(data);
+  return apiFetch<TravelCard>(`/cards/${cardId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 // ─── Trip Optimization ────────────────────────────────────────────────────────
 
 export async function optimizeTrip(
