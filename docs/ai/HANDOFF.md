@@ -1,6 +1,47 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-04-30) — Trip Ideas Triage v1
+## Last change (2026-05-01) — Smart Day Timeline v1 Foundation
+
+### Summary
+Converted each itinerary day's expanded view from a plain item list into a timeline-grouped layout. Items are now bucketed into **Morning / Afternoon / Evening / Unscheduled** sections based on available time metadata, with no AI scheduling, routing, or time generation added.
+
+### Files touched
+- `frontend/src/components/trips/ItineraryDayColumn.tsx` — added `DayPart` type, `DAY_PART_META` config, `getItemDayPart()` helper (reads `details.dayPart`, `details.timeLabel`, then `startTime` hour), `groupByDayPart()`, `renderItemsWithConnectors()` extracted function, and `TimelineSections` sub-component that renders section headers + item cards per bucket; existing travel-time connectors preserved within sections; drag/drop (`SortableContext`, `useDroppable`) unchanged
+- `frontend/tests/itinerary-timeline.test.mjs` — NEW: 13 renderer contract tests covering classification signals, section labels, Unscheduled fallback, drag/drop preservation, move-to-ideas guard, and travel connectors
+
+### Behavior change
+- Day expanded view: items grouped into Morning / Afternoon / Evening / Unscheduled sections
+- If **all** items are unscheduled → single "Unscheduled · N items" header shown (clean fallback)
+- If **any** item is timed → section headers (Morning amber, Afternoon sky, Evening violet, Unscheduled slate) appear for non-empty buckets
+- Travel-time connectors between adjacent items within the same section are preserved
+- All existing behaviors preserved: Trip Ideas → Day, Day → Trip Ideas, drag/drop between days, notes/status/priority, move-to-ideas for concierge items only
+- No changes to data model, no migration, no Supabase SQL
+
+### Timeline metadata resolution order
+1. `item.details.dayPart` — explicit override ("morning" | "afternoon" | "evening")
+2. `item.details.timeLabel` — keyword match (e.g., "Morning", "afternoon stroll", "evening dinner")
+3. `item.startTime` — ISO datetime or HH:MM; hour → section boundary
+4. Default → `"unscheduled"`
+
+### Section hour boundaries
+- Morning: 5:00–11:59
+- Afternoon: 12:00–16:59
+- Evening: 17:00+
+
+### Known issues
+- The collapsed-view preview (first item title + "+N more") does not show section context — acceptable for v1
+- `PREVIEW_ITEM_LIMIT = 4` still limits visible items before "Show all N items" is clicked; section grouping applies only to visible items
+
+### Next likely task
+- Add optional time input to the "Add item" form so users can assign times and see items move into the correct section
+- Add `details.dayPart` to the concierge-to-ideas flow so AI-recommended items can optionally carry a section hint
+
+### Supabase SQL: No
+### Backend touched: No
+
+---
+
+## Previous change (2026-04-30) — Trip Ideas Triage v1
 
 ### Summary
 Added priority/status triage and user notes to the Trip Ideas panel. Each saved idea now supports a `must_do | maybe | skipped` status and an optional short note. Skipped ideas are hidden from the default list with a "N skipped · show" toggle to reveal them. Status and notes persist to Supabase via the existing JSONB merge approach (no new table, no migration).

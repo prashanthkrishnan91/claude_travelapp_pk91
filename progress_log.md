@@ -48,3 +48,4 @@
 ## 2026-05-01
 - Focused Trip Ideas workflow fix: added a day-item action to move day-assigned concierge ideas back to Trip Ideas by PATCHing `day_id` to null, preserving existing details metadata (`source_kind`, `idea_status`, `user_note`, links/metadata) and triggering immediate Trip Ideas refresh.
 - Added regression coverage for move-back behavior and metadata preservation in backend itinerary service tests, plus frontend API contract tests for the new move-to-ideas endpoint helper.
+- Smart Day Timeline v1 foundation: converted each itinerary day's expanded view from a plain item list into a Morning / Afternoon / Evening / Unscheduled grouped timeline layout; items are bucketed via `startTime` hour, `details.dayPart` override, or `details.timeLabel` keyword — no migration required; all existing drag/drop, Trip Ideas movement, travel-time connectors, and item actions preserved; 13 new renderer contract tests added.
