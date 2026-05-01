@@ -28,6 +28,8 @@ function getItemDayPart(item: ItineraryItem): DayPart {
   // Explicit override stored in details.dayPart
   const explicit = d.dayPart as string | undefined;
   if (explicit === "morning" || explicit === "afternoon" || explicit === "evening") return explicit;
+  // Explicit unscheduled override — bypasses startTime classification
+  if (explicit === "unscheduled") return "unscheduled";
 
   // Keyword in details.timeLabel
   const label = ((d.timeLabel as string | undefined) ?? "").toLowerCase();
@@ -83,6 +85,7 @@ interface TimelineSectionsProps {
   onMoveItemToIdeas?: (itemId: string, dayId: string) => void;
   onToggleCompare?: (item: ItineraryItem) => void;
   compareSet?: Set<string>;
+  onUpdateTimeline?: (updatedItem: ItineraryItem) => void;
 }
 
 function renderItemsWithConnectors(
@@ -92,6 +95,7 @@ function renderItemsWithConnectors(
   onMoveItemToIdeas?: (itemId: string, dayId: string) => void,
   onToggleCompare?: (item: ItineraryItem) => void,
   compareSet?: Set<string>,
+  onUpdateTimeline?: (updatedItem: ItineraryItem) => void,
 ) {
   return items.flatMap((item, idx) => {
     const card = (
@@ -102,6 +106,7 @@ function renderItemsWithConnectors(
         onMoveToIdeas={onMoveItemToIdeas ? (itemId) => onMoveItemToIdeas(itemId, dayId) : undefined}
         onToggleCompare={onToggleCompare}
         isComparing={compareSet?.has(item.id)}
+        onTimelineUpdated={onUpdateTimeline}
       />
     );
     if (idx >= items.length - 1) return [card];
@@ -138,6 +143,7 @@ function TimelineSections({
   onMoveItemToIdeas,
   onToggleCompare,
   compareSet,
+  onUpdateTimeline,
 }: TimelineSectionsProps) {
   const grouped = groupByDayPart(items);
   const hasTimedItems =
@@ -158,7 +164,7 @@ function TimelineSections({
           </span>
         </div>
         <div className="space-y-2">
-          {renderItemsWithConnectors(items, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet)}
+          {renderItemsWithConnectors(items, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet, onUpdateTimeline)}
         </div>
       </div>
     );
@@ -180,7 +186,7 @@ function TimelineSections({
               <span className="text-[10px] text-slate-600">{meta.timeHint}</span>
             </div>
             <div className="space-y-2">
-              {renderItemsWithConnectors(sectionItems, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet)}
+              {renderItemsWithConnectors(sectionItems, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet, onUpdateTimeline)}
             </div>
           </div>
         );
@@ -204,6 +210,7 @@ interface ItineraryDayColumnProps {
   compareSet?: Set<string>;
   onPlanDay?: (dayId: string, dayNumber: number) => void;
   planDayLoading?: boolean;
+  onUpdateTimeline?: (updatedItem: ItineraryItem) => void;
 }
 
 function formatDate(dateStr: string): string {
@@ -233,8 +240,11 @@ export function ItineraryDayColumn({
   compareSet,
   onPlanDay,
   planDayLoading,
+  onUpdateTimeline,
 }: ItineraryDayColumnProps) {
   const [expandedItemDays, setExpandedItemDays] = useState<Record<number, boolean>>({});
+  // Local overrides for optimistic timeline updates — item moves to correct section immediately
+  const [itemOverrides, setItemOverrides] = useState<Record<string, ItineraryItem>>({});
 
   useEffect(() => {
     if (!isExpanded) {
@@ -250,11 +260,20 @@ export function ItineraryDayColumn({
     data: { type: "day", dayId: day.id },
   });
 
+  const handleTimelineUpdated = (updatedItem: ItineraryItem) => {
+    setItemOverrides((prev) => ({ ...prev, [updatedItem.id]: updatedItem }));
+    onUpdateTimeline?.(updatedItem);
+  };
+
   const showAllItems = expandedItemDays[day.dayNumber] ?? false;
   const hasHiddenItems = day.items.length > PREVIEW_ITEM_LIMIT;
   const visibleItems = useMemo(
-    () => (showAllItems ? day.items : day.items.slice(0, PREVIEW_ITEM_LIMIT)),
-    [day.items, showAllItems]
+    () => {
+      const items = showAllItems ? day.items : day.items.slice(0, PREVIEW_ITEM_LIMIT);
+      // Apply optimistic timeline overrides so moved items appear in the correct section immediately
+      return items.map((item) => itemOverrides[item.id] ?? item);
+    },
+    [day.items, showAllItems, itemOverrides]
   );
   const itemIds = visibleItems.map((item: ItineraryItem) => item.id);
   const hiddenItemsCount = Math.max(day.items.length - 1, 0);
@@ -378,6 +397,7 @@ export function ItineraryDayColumn({
               onMoveItemToIdeas={onMoveItemToIdeas}
               onToggleCompare={onToggleCompare}
               compareSet={compareSet}
+              onUpdateTimeline={handleTimelineUpdated}
             />
             {!showAllItems && hasHiddenItems && (
               <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-14 bg-gradient-to-b from-transparent to-slate-950/95" />

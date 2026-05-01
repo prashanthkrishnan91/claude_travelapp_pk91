@@ -25,6 +25,11 @@ const itemCard = readFileSync(
   'utf8',
 );
 
+const api = readFileSync(
+  new URL('../src/lib/api.ts', import.meta.url),
+  'utf8',
+);
+
 // ---------------------------------------------------------------------------
 // 1. DayPart classification: labels and constants present
 // ---------------------------------------------------------------------------
@@ -136,4 +141,78 @@ test('ItineraryDayColumn still renders travel connectors via estimateTravel', ()
 
 test('ItineraryDayColumn threads onMoveItemToIdeas to TimelineSections', () => {
   assert.match(dayColumn, /onMoveItemToIdeas/, 'onMoveItemToIdeas must be passed through');
+});
+
+// ---------------------------------------------------------------------------
+// Manual Timeline Controls v1 — new tests
+// ---------------------------------------------------------------------------
+
+// 13. api.ts exports updateItemTimeline
+test('api.ts exports updateItemTimeline function', () => {
+  assert.match(api, /export async function updateItemTimeline/, 'updateItemTimeline must be exported from api.ts');
+});
+
+// 14. updateItemTimeline accepts dayPart and optional timeLabel
+test('api.ts updateItemTimeline persists dayPart and timeLabel via updateItem', () => {
+  assert.match(api, /dayPart/, 'updateItemTimeline must accept dayPart field');
+  assert.match(api, /timeLabel/, 'updateItemTimeline must handle timeLabel field');
+});
+
+// 15. ItineraryItemCard has onTimelineUpdated prop
+test('ItineraryItemCard accepts onTimelineUpdated prop', () => {
+  assert.match(itemCard, /onTimelineUpdated/, 'onTimelineUpdated prop must exist in ItineraryItemCard');
+});
+
+// 16. ItineraryItemCard has timeline edit trigger button
+test('ItineraryItemCard has a timeline edit trigger (clock button)', () => {
+  assert.match(itemCard, /timelineOpen/, 'timelineOpen state must exist for the timeline editor');
+  assert.match(itemCard, /Set timeline/, 'timeline trigger button must have accessible label');
+});
+
+// 17. ItineraryItemCard defines four day-part options
+test('ItineraryItemCard defines Morning, Afternoon, Evening, Unscheduled day-part options', () => {
+  assert.match(itemCard, /DAY_PARTS/, 'DAY_PARTS constant must exist in ItineraryItemCard');
+  assert.match(itemCard, /Morning/, 'Morning option must exist in card');
+  assert.match(itemCard, /Afternoon/, 'Afternoon option must exist in card');
+  assert.match(itemCard, /Evening/, 'Evening option must exist in card');
+  assert.match(itemCard, /Unscheduled/, 'Unscheduled option must exist in card');
+});
+
+// 18. ItineraryItemCard has timeLabel input
+test('ItineraryItemCard has a timeLabel text input for freeform time label', () => {
+  assert.match(itemCard, /timeLabelInput/, 'timeLabelInput state must exist in ItineraryItemCard');
+  assert.match(itemCard, /Time label/, 'timeLabel input placeholder must exist in card');
+});
+
+// 19. ItineraryItemCard calls updateItemTimeline on save
+test('ItineraryItemCard imports and calls updateItemTimeline from api on save', () => {
+  assert.match(itemCard, /updateItemTimeline/, 'updateItemTimeline must be imported and called in ItineraryItemCard');
+  assert.match(itemCard, /handleSaveTimeline/, 'handleSaveTimeline handler must exist in ItineraryItemCard');
+});
+
+// 20. ItineraryDayColumn threads onUpdateTimeline to TimelineSections
+test('ItineraryDayColumn threads onUpdateTimeline prop to TimelineSections', () => {
+  assert.match(dayColumn, /onUpdateTimeline/, 'onUpdateTimeline must be threaded in ItineraryDayColumn');
+});
+
+// 21. ItineraryDayColumn maintains itemOverrides for optimistic section movement
+test('ItineraryDayColumn maintains itemOverrides state for immediate timeline section movement', () => {
+  assert.match(dayColumn, /itemOverrides/, 'itemOverrides state must exist in ItineraryDayColumn for optimistic updates');
+});
+
+// 22. Existing item data fields preserved (notes, status, priority preserved via details merge)
+test('updateItemTimeline merges details to preserve existing fields', () => {
+  // The function spreads currentDetails before applying the patch
+  assert.match(api, /\.\.\.(currentDetails|merged)/, 'existing details must be spread/preserved in updateItemTimeline');
+});
+
+// 23. getItemDayPart handles explicit "unscheduled" override
+test('ItineraryDayColumn getItemDayPart handles explicit unscheduled value as override', () => {
+  assert.match(dayColumn, /explicit.*unscheduled|"unscheduled"\).*return.*"unscheduled"/, 'explicit unscheduled must bypass startTime classification');
+});
+
+// 24. No duplicate action buttons: timeline clock button is one button
+test('ItineraryItemCard timeline button is a single non-duplicated control', () => {
+  const ariaMatches = (itemCard.match(/aria-label="Set timeline"/g) ?? []).length;
+  assert.equal(ariaMatches, 1, 'only one aria-label="Set timeline" button must exist');
 });
