@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Menu,
   X,
@@ -12,8 +12,11 @@ import {
   CreditCard,
   Settings,
   Plane,
+  LogOut,
 } from "lucide-react";
 import clsx from "clsx";
+import { supabase } from "@/lib/supabase";
+import type { User } from "@supabase/supabase-js";
 
 const links = [
   { label: "Dashboard",    href: "/",         icon: LayoutDashboard },
@@ -23,17 +26,42 @@ const links = [
   { label: "Settings",     href: "/settings", icon: Settings },
 ];
 
-/* Bottom tab bar items (5 across) */
 const tabLinks = links;
+
+function getUserDisplay(user: User): { name: string; initial: string } {
+  const meta = user.user_metadata ?? {};
+  const name: string =
+    meta.full_name || meta.name || (user.email ? user.email.split("@")[0] : "");
+  const initial = (name || user.email || "?").charAt(0).toUpperCase();
+  return { name: name || user.email || "", initial };
+}
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  async function handleSignOut() {
+    setOpen(false);
+    await supabase.auth.signOut();
+    router.push("/auth/login");
+  }
 
   function isActive(href: string) {
     if (href === "/") return pathname === "/";
     return pathname.startsWith(href);
   }
+
+  const display = user ? getUserDisplay(user) : null;
 
   return (
     <>
@@ -65,7 +93,7 @@ export function MobileNav() {
       {/* ── Slide-out drawer ────────────────────────────────── */}
       <div
         className={clsx(
-          "lg:hidden fixed inset-y-0 left-0 z-40 w-64 glass border-r border-white/[.07]",
+          "lg:hidden fixed inset-y-0 left-0 z-40 w-64 glass border-r border-white/[.07] flex flex-col",
           "transition-transform duration-300 ease-out",
           open ? "translate-x-0" : "-translate-x-full"
         )}
@@ -76,7 +104,7 @@ export function MobileNav() {
           </div>
           <span className="text-sm font-bold text-cream-100">Travel Concierge</span>
         </div>
-        <nav className="px-3 py-4 space-y-0.5">
+        <nav className="flex-1 px-3 py-4 space-y-0.5">
           {links.map(({ label, href, icon: Icon }) => (
             <Link
               key={href}
@@ -89,6 +117,26 @@ export function MobileNav() {
             </Link>
           ))}
         </nav>
+
+        {/* User identity + sign out at bottom of drawer */}
+        <div className="px-4 py-4 border-t border-white/[.06] space-y-1">
+          {display && (
+            <div className="flex items-center gap-3 px-2 py-2">
+              <div className="w-7 h-7 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center text-xs font-semibold shrink-0">
+                {display.initial}
+              </div>
+              <p className="text-sm font-medium text-cream-200 truncate">{display.name}</p>
+            </div>
+          )}
+          <button
+            onClick={handleSignOut}
+            className="nav-item w-full text-cream-500 hover:text-rose-300"
+            aria-label="Sign out"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            Sign out
+          </button>
+        </div>
       </div>
 
       {/* ── Bottom tab bar (Apple-style) ─────────────────────── */}

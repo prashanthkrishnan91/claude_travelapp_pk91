@@ -1,5 +1,37 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-01) — Card points edit + Account identity / sign out
+
+### Summary
+Fixed two checkpoint UX issues before wife testing:
+
+**Scope A — Card points editable:** Each travel card on `/cards` now has a pencil-icon edit button that opens an `EditCardModal` (pre-filled with current values). Users can update points balance, cpp value, display name, issuer, and primary status. Updates persist via the existing `PATCH /cards/{card_id}` backend endpoint. Added `updateCard` / `UpdateCardData` to `frontend/src/lib/api.ts`.
+
+**Scope B — Real user identity + sign out:** Sidebar and MobileNav drawer now load the authenticated user from `supabase.auth.getUser()` / `onAuthStateChange`. `getUserDisplay()` prefers `user_metadata.full_name` → `user_metadata.name` → email prefix; falls back to `?` only if none are present. Both Sidebar and the MobileNav drawer show a "Sign out" button that calls `supabase.auth.signOut()` and redirects to `/auth/login`.
+
+### Files touched
+- `frontend/src/lib/api.ts` — added `UpdateCardData` interface and `updateCard(cardId, data)` function; calls `PATCH /cards/{cardId}`
+- `frontend/src/app/cards/page.tsx` — added `EditCardModal` component; added `editingCard` state; added pencil edit button on each card; added `handleUpdated` to update the local list optimistically
+- `frontend/src/components/layout/Sidebar.tsx` — added `user` state via `supabase.auth.getUser()` + `onAuthStateChange`; added `getUserDisplay()` helper (prefers full_name → name → email prefix); added `handleSignOut()` + LogOut button; removed hardcoded "Traveler" / "traveler@example.com"
+- `frontend/src/components/layout/MobileNav.tsx` — added same user identity + sign out pattern in the slide-out drawer; drawer now shows user initial + name and a Sign out button
+- `frontend/tests/cards-and-account.test.mjs` — NEW: 21 renderer/contract tests covering all acceptance criteria for both scopes
+
+### Behavior change
+- `/cards`: each card tile now shows a pencil edit button → opens an edit modal with points balance and all fields pre-filled → Save calls `PATCH /cards/{id}` → card list updates immediately without reload
+- Sidebar (desktop): shows authenticated user's display name (or email prefix) and email; avatar shows first letter; "Sign out" button at bottom-left routes to login after sign-out
+- MobileNav drawer (mobile): shows user initial + display name and a "Sign out" button at the bottom of the drawer
+
+### Data model
+No new tables, no schema change. `updateCard` reuses the existing `PATCH /cards/{id}` endpoint with `TravelCardUpdate` payload (all optional fields).
+
+### Known issues / v1 limits
+- User metadata (`full_name`, `name`) depends on what the OAuth/email provider populates; email-only signups will show the email prefix as the name (intentional fallback)
+
+### Supabase SQL: No
+### Backend touched: No (existing PATCH endpoint used)
+
+---
+
 ## Last change (2026-05-01) — Trip Ideas filters/sort/search v1
 
 ### Summary
