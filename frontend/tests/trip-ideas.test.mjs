@@ -211,5 +211,12 @@ test('TripIdeasPanel has Must-do, Maybe, and Skip priority buttons', () => {
 test('ItineraryItemCard renders Move to Ideas action only for concierge ideas', () => {
   assert.match(itineraryItemCard, /isConciergeIdea/, 'Card must derive concierge marker from details');
   assert.match(itineraryItemCard, /Move to Ideas/, 'Card must render Move to Ideas action');
-  assert.match(itineraryItemCard, /isConciergeIdea && onMoveToIdeas/, 'Move action should be gated to concierge ideas only');
+  assert.match(itineraryItemCard, /showMoveToIdeasAction/, 'Move action should be gated to concierge ideas only');
+});
+
+test('ItineraryItemCard contains exactly one Move to Ideas label and one concierge gate', () => {
+  const moveLabelCount = (itineraryItemCard.match(/Move to Ideas/g) ?? []).length;
+  const gateCount = (itineraryItemCard.match(/showMoveToIdeasAction/g) ?? []).length;
+  assert.equal(moveLabelCount, 1, 'There must be exactly one visible Move to Ideas action label in the card renderer');
+  assert.equal(gateCount, 2, 'Gate should be defined once and rendered once in one canonical location');
 });
