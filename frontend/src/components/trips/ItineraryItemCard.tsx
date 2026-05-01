@@ -26,6 +26,7 @@ import { RewardsIntelligencePanel } from "./RewardsIntelligencePanel";
 interface ItineraryItemCardProps {
   item: ItineraryItem;
   onRemove: (itemId: string) => void;
+  onMoveToIdeas?: (itemId: string) => void;
   onToggleCompare?: (item: ItineraryItem) => void;
   isComparing?: boolean;
 }
@@ -89,7 +90,7 @@ function formatClock(value?: string): string | null {
   return value;
 }
 
-export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing }: ItineraryItemCardProps) {
+export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompare, isComparing }: ItineraryItemCardProps) {
   const [bookingOpen, setBookingOpen] = useState(false);
 
   const {
@@ -110,6 +111,8 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
   };
 
   const config = typeConfig[item.itemType];
+  const details = (item.details ?? {}) as Record<string, unknown>;
+  const isConciergeIdea = details.sourceKind === "concierge_idea" || details.source_kind === "concierge_idea";
 
   return (
     <>
@@ -173,6 +176,15 @@ export function ItineraryItemCard({ item, onRemove, onToggleCompare, isComparing
             </button>
           </div>
         </div>
+        {isConciergeIdea && onMoveToIdeas && (
+          <button
+            onClick={() => onMoveToIdeas(item.id)}
+            className="mt-1 rounded-md border border-amber-300/35 bg-amber-300/10 px-2 py-1 text-[11px] font-medium text-amber-200 hover:bg-amber-300/20 transition-colors"
+            aria-label={`Move ${item.title} back to Trip Ideas`}
+          >
+            Move to Ideas
+          </button>
+        )}
 
         {item.description && (
           <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">

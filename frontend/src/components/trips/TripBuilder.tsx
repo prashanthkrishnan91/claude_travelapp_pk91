@@ -77,6 +77,7 @@ import {
   planClusterDay,
   addAttractionToDay,
   addRestaurantToDay,
+  moveIdeaToTripIdeas,
 } from "@/lib/api";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
@@ -1579,6 +1580,22 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     try { await deleteItem(itemId); } catch { /* silently ignore */ }
   }, []);
 
+  const handleMoveItemToIdeas = useCallback(async (itemId: string, dayId: string) => {
+    setDays((prev) =>
+      prev.map((d) =>
+        d.id === dayId
+          ? { ...d, items: d.items.filter((i) => i.id !== itemId).map((i, idx) => ({ ...i, position: idx })) }
+          : d
+      )
+    );
+    try {
+      await moveIdeaToTripIdeas(itemId);
+      setIdeasRefreshKey((k) => k + 1);
+    } catch {
+      showToast("Failed to move idea back to Trip Ideas");
+    }
+  }, [showToast]);
+
   // ── Add empty note to a day ──────────────────────────────────────────────────
 
   const handleAddToDay = useCallback(async (dayId: string) => {
@@ -2400,6 +2417,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                       setExpandedDayNumber((prev) => (prev === dayNumber ? null : dayNumber))
                     }
                     onRemoveItem={handleRemoveItem}
+                    onMoveItemToIdeas={handleMoveItemToIdeas}
                     onAddItem={handleAddToDay}
                     onToggleCompare={handleToggleCompareItem}
                     compareSet={compareSet}
