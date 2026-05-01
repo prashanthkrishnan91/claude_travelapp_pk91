@@ -1444,6 +1444,13 @@ export type ConciergeItemKind = "restaurant" | "attraction" | "hotel";
 function normalizeGoogleVerificationDetails(item: ConciergeStructuredItem): Record<string, unknown> {
   const gv = item.googleVerification;
   if (!gv || typeof gv !== "object") return {};
+  const gvAliases = gv as unknown as {
+    lat?: number | null;
+    lng?: number | null;
+    provider_place_id?: string | null;
+    formatted_address?: string | null;
+    google_maps_uri?: string | null;
+  };
 
   const getNonEmpty = <T>(...values: Array<T | null | undefined | "">): T | undefined => {
     for (const value of values) {
@@ -1454,23 +1461,23 @@ function normalizeGoogleVerificationDetails(item: ConciergeStructuredItem): Reco
 
   const lat = getNonEmpty<number>(
     gv.lat,
-    (gv as Record<string, unknown>).lat as number | null | undefined
+    gvAliases.lat
   );
   const lng = getNonEmpty<number>(
     gv.lng,
-    (gv as Record<string, unknown>).lng as number | null | undefined
+    gvAliases.lng
   );
   const providerPlaceId = getNonEmpty<string>(
     gv.providerPlaceId ?? undefined,
-    (gv as Record<string, unknown>).provider_place_id as string | null | undefined
+    gvAliases.provider_place_id ?? undefined
   );
   const formattedAddress = getNonEmpty<string>(
     gv.formattedAddress ?? undefined,
-    (gv as Record<string, unknown>).formatted_address as string | null | undefined
+    gvAliases.formatted_address ?? undefined
   );
   const googleMapsUri = getNonEmpty<string>(
     gv.googleMapsUri ?? undefined,
-    (gv as Record<string, unknown>).google_maps_uri as string | null | undefined
+    gvAliases.google_maps_uri ?? undefined
   );
 
   return {
