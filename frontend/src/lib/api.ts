@@ -1556,6 +1556,13 @@ export async function assignIdeaToDay(itemId: string, dayId: string): Promise<It
   });
 }
 
+export async function moveIdeaToTripIdeas(itemId: string): Promise<ItineraryItem> {
+  return apiFetch<ItineraryItem>(`/itinerary/items/${itemId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ day_id: null }),
+  });
+}
+
 export async function addConciergeItemToTrip(
   tripId: string,
   suggestion: ConciergeSuggestion

@@ -87,6 +87,7 @@ test('saveToTripIdeas sets source_kind to concierge_idea in item details', () =>
 test('api.ts exports fetchTripIdeas and assignIdeaToDay', () => {
   assert.match(apiTs, /export async function fetchTripIdeas/, 'fetchTripIdeas must be exported');
   assert.match(apiTs, /export async function assignIdeaToDay/, 'assignIdeaToDay must be exported');
+  assert.match(apiTs, /export async function moveIdeaToTripIdeas/, 'moveIdeaToTripIdeas must be exported');
 });
 
 // ---------------------------------------------------------------------------
@@ -100,6 +101,15 @@ test('assignIdeaToDay uses PATCH on /itinerary/items/{itemId} with day_id', () =
   assert.match(fn, /PATCH/, 'Must use PATCH method');
   assert.match(fn, /itinerary\/items/, 'Must target /itinerary/items endpoint');
   assert.match(fn, /day_id/, 'Must send day_id in the payload');
+});
+
+test('moveIdeaToTripIdeas uses PATCH with day_id set to null', () => {
+  const fnSection = apiTs.slice(apiTs.indexOf('export async function moveIdeaToTripIdeas'));
+  const closingIdx = fnSection.indexOf('\n}');
+  const fn = fnSection.slice(0, closingIdx + 2);
+  assert.match(fn, /PATCH/, 'Must use PATCH method');
+  assert.match(fn, /day_id/, 'Must send day_id in payload');
+  assert.match(fn, /null/, 'Must set day_id to null to move back to Trip Ideas');
 });
 
 // ---------------------------------------------------------------------------

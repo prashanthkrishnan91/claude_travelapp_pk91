@@ -231,7 +231,7 @@ class ItineraryService:
         return ItineraryItem(**result.data[0])
 
     def update_item(self, item_id: UUID, payload: ItineraryItemUpdate) -> ItineraryItem:
-        data = payload.model_dump(mode="json", exclude_none=True)
+        data = payload.model_dump(mode="json", exclude_unset=True)
         if not data:
             return self.get_item(item_id)
         result = (

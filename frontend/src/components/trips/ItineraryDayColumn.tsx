@@ -22,6 +22,7 @@ interface ItineraryDayColumnProps {
   isExpanded?: boolean;
   onToggleExpanded?: (dayNumber: number) => void;
   onRemoveItem: (itemId: string, dayId: string) => void;
+  onMoveItemToIdeas?: (itemId: string, dayId: string) => void;
   onAddItem: (dayId: string) => void;
   onToggleCompare?: (item: ItineraryItem) => void;
   compareSet?: Set<string>;
@@ -50,6 +51,7 @@ export function ItineraryDayColumn({
   isExpanded = false,
   onToggleExpanded,
   onRemoveItem,
+  onMoveItemToIdeas,
   onAddItem,
   onToggleCompare,
   compareSet,
@@ -199,6 +201,7 @@ export function ItineraryDayColumn({
                     key={item.id}
                     item={item}
                     onRemove={(itemId) => onRemoveItem(itemId, day.id)}
+                    onMoveToIdeas={onMoveItemToIdeas ? (itemId) => onMoveItemToIdeas(itemId, day.id) : undefined}
                     onToggleCompare={onToggleCompare}
                     isComparing={compareSet?.has(item.id)}
                   />
