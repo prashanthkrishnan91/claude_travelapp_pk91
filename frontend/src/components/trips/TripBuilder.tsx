@@ -2079,7 +2079,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <MapPin className="w-3.5 h-3.5 text-sky-500 flex-shrink-0" />
-                          <span className="text-sm font-bold text-slate-800">{cluster.areaName || "Popular Area"}</span>
+                          <span className="text-sm font-bold text-slate-100">{cluster.areaName || "Popular Area"}</span>
                         </div>
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
