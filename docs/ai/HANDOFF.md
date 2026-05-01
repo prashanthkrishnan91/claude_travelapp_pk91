@@ -1,5 +1,35 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-01) — Trip Ideas filters/sort/search v1
+
+### Summary
+Added frontend-only search, filter, and sort controls to the Trip Ideas panel so users can manage a large saved shortlist without backend changes. Controls are compact, mobile-usable, and do not affect the AI Concierge, persistence semantics, or itinerary day logic.
+
+### Files touched
+- `frontend/src/types/index.ts` — added `createdAt?: string` and `updatedAt?: string` to `ItineraryItem` (backend already sends these via `TimestampedBase`; the `toCamel` transform makes them available; only the TypeScript type was missing them)
+- `frontend/src/components/trips/TripIdeasPanel.tsx` — added exported `filterByStatus`, `searchIdeas`, `sortIdeas` pure functions; added `STATUS_FILTER_OPTIONS`, `SORT_OPTIONS`, `PRIORITY_ORDER` constants; added `StatusFilter` and `SortOption` types; replaced `showSkipped` state with `statusFilter: StatusFilter` state; added `searchQuery` and `sortBy` state; added `filteredAndSorted` useMemo pipeline; added compact filter controls UI (search input, status filter pills, sort select, clear button); updated badge count to reflect active (non-skipped) count regardless of current filter; updated empty state to distinguish "no ideas at all" vs "no ideas match filters"; removed the old "N skipped · show" toggle (replaced by the "Skip" status filter pill)
+- `frontend/tests/trip-ideas.test.mjs` — added 10 new renderer/contract tests (tests 22–31) covering: exported function presence, filterByStatus logic, searchIdeas field coverage, sortIdeas all four options, PRIORITY_ORDER ranking, STATUS_FILTER_OPTIONS values, SORT_OPTIONS values, search input + accessible labels, hasActiveFilters + handleReset, and empty state differentiation
+
+### Behavior change
+- Trip Ideas panel now shows a compact search input + status filter pills (All / Must-do / Maybe / Skip) + sort select (Priority / Recently saved / Name / Category) + "Clear ×" button (visible only when any filter is active)
+- **Search** matches title, `item.location`, `details.address`, `details.userNote`/`user_note`, and `ideaCategory()`
+- **Status filter default** = "All" (non-skipped), same as before — the old "N skipped · show" toggle is replaced by the "Skip" filter pill
+- **Sort default** = Priority (must_do → maybe → skipped)
+- **Recently saved** sort uses `item.createdAt` (descending); falls back gracefully when absent
+- **Name / Category** sort uses `localeCompare`
+- Empty state when no ideas: "Save recommendations from AI Concierge and schedule them later." (unchanged)
+- Empty state when ideas exist but none match: "No ideas match your current filters."
+- Badge on header reflects active (non-skipped) count regardless of current filter state
+
+### Data assumptions
+- `createdAt` / `updatedAt` are provided by the backend (`itinerary_items` table via `TimestampedBase`) and transformed to camelCase by `toCamel()` in `api.ts`; no API change needed
+- `details.address`, `details.category`, `details.type`, `details.userNote`/`user_note` are used read-only for search; no new fields added
+
+### Supabase SQL: No
+### Backend touched: No
+
+---
+
 ## Last change (2026-05-01) — AI/Search cost-control guardrails (per-user throttle + dedupe)
 
 ### Summary
