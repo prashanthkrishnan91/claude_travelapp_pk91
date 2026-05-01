@@ -116,10 +116,10 @@ function renderItemsWithConnectors(
     let connector: React.ReactNode;
     if (hint.kind === "missing_location") {
       connector = (
-        <div key={`hint-${item.id}`} className="flex items-center gap-1.5 px-3 -my-0.5">
-          <div className="w-px h-3 bg-slate-800 ml-[17px] flex-shrink-0" />
+        <div key={`hint-${item.id}`} className="flex items-center gap-1.5 px-3 py-1">
+          <div className="w-px h-4 bg-slate-800 ml-[17px] flex-shrink-0" />
           <MapPin className="w-3 h-3 text-slate-600 flex-shrink-0" />
-          <span className="text-[10px] text-slate-600 leading-none italic">{hint.label}</span>
+          <span className="text-[10px] text-slate-600 leading-snug italic">{hint.label}</span>
         </div>
       );
     } else if (hint.kind === "far_apart") {
@@ -127,19 +127,19 @@ function renderItemsWithConnectors(
       const mode = est.walkMinutes <= 20 ? "walk" : "drive";
       const timeLabel = mode === "walk" ? `~${est.walkMinutes} min walk` : `~${est.driveMinutes} min drive`;
       connector = (
-        <div key={`travel-${item.id}`} className="flex flex-col gap-0.5 px-3 -my-0.5">
+        <div key={`travel-${item.id}`} className="flex flex-col gap-1 px-3 py-1">
           <div className="flex items-center gap-1.5">
-            <div className="w-px h-3 bg-slate-700 ml-[17px] flex-shrink-0" />
+            <div className="w-px h-4 bg-slate-700 ml-[17px] flex-shrink-0" />
             {mode === "walk" ? (
               <Footprints className="w-3 h-3 text-slate-500 flex-shrink-0" />
             ) : (
               <Car className="w-3 h-3 text-slate-500 flex-shrink-0" />
             )}
-            <span className="text-[10px] text-slate-500 leading-none">{timeLabel}</span>
-            <span className="text-[10px] text-slate-600 leading-none">· {est.distanceKm} km</span>
+            <span className="text-[10px] text-slate-500 leading-snug">{timeLabel}</span>
+            <span className="text-[10px] text-slate-600 leading-snug">· {est.distanceKm} km</span>
           </div>
-          <div className="flex items-center gap-1 pl-[29px]">
-            <span className="text-[10px] text-amber-500/70 leading-none">{hint.label}</span>
+          <div className="flex items-center gap-1 pl-[29px] pr-1">
+            <span className="text-[10px] text-amber-500/70 leading-snug">{hint.label}</span>
           </div>
         </div>
       );
@@ -147,15 +147,15 @@ function renderItemsWithConnectors(
       const est = hint.estimate!;
       const mode = est.walkMinutes <= 20 ? "walk" : "drive";
       connector = (
-        <div key={`travel-${item.id}`} className="flex items-center gap-1.5 px-3 -my-0.5">
-          <div className="w-px h-3 bg-slate-700 ml-[17px] flex-shrink-0" />
+        <div key={`travel-${item.id}`} className="flex items-center gap-1.5 px-3 py-1">
+          <div className="w-px h-4 bg-slate-700 ml-[17px] flex-shrink-0" />
           {mode === "walk" ? (
             <Footprints className="w-3 h-3 text-slate-500 flex-shrink-0" />
           ) : (
             <Car className="w-3 h-3 text-slate-500 flex-shrink-0" />
           )}
-          <span className="text-[10px] text-slate-500 leading-none">{hint.label}</span>
-          <span className="text-[10px] text-slate-600 leading-none">· {est.distanceKm} km</span>
+          <span className="text-[10px] text-slate-500 leading-snug">{hint.label}</span>
+          <span className="text-[10px] text-slate-600 leading-snug">· {est.distanceKm} km</span>
         </div>
       );
     }

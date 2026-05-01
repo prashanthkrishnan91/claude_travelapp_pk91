@@ -1,6 +1,6 @@
 /** Client-side travel time hints for adjacent itinerary stops. */
 
-import { estimateTravel, formatTravelBadge, TravelEstimate } from "./travelTime";
+import { estimateTravel, TravelEstimate } from "./travelTime";
 
 export type PairHintKind = "travel_ok" | "far_apart" | "missing_location";
 
@@ -15,6 +15,10 @@ export interface PairHint {
 
 /** Drive time above which stops are considered potentially far apart — rough threshold, not precise routing. */
 export const FAR_APART_DRIVE_MIN = 30;
+/** Multiplier applied to straight-line walking estimates to avoid optimistic hints in dense city grids. */
+export const CONSERVATIVE_WALK_FACTOR = 1.35;
+/** Prefer walk hints only when the conservative estimate remains reasonably short. */
+export const MAX_WALK_HINT_MIN = 35;
 
 interface HintableItem {
   id: string;
@@ -48,22 +52,29 @@ export function computeAdjacentHints(items: HintableItem[]): PairHint[] {
     }
 
     const estimate = estimateTravel(lat1, lng1, lat2, lng2);
+    const conservativeWalkMin = Math.max(1, Math.ceil(estimate.walkMinutes * CONSERVATIVE_WALK_FACTOR));
+    const mode: "walk" | "drive" = conservativeWalkMin <= MAX_WALK_HINT_MIN ? "walk" : "drive";
+
     if (estimate.driveMinutes > FAR_APART_DRIVE_MIN) {
       hints.push({
         itemAId: a.id,
         itemBId: b.id,
         kind: "far_apart",
         label: "These two stops may be far apart.",
-        estimate,
+        estimate: { ...estimate, walkMinutes: conservativeWalkMin },
       });
     } else {
-      const { label } = formatTravelBadge(estimate);
+      const walkAdjustedEstimate = { ...estimate, walkMinutes: conservativeWalkMin };
+      const label =
+        mode === "walk"
+          ? `${walkAdjustedEstimate.walkMinutes} min walk`
+          : `${walkAdjustedEstimate.driveMinutes} min drive`;
       hints.push({
         itemAId: a.id,
         itemBId: b.id,
         kind: "travel_ok",
         label: `~${label}`,
-        estimate,
+        estimate: walkAdjustedEstimate,
       });
     }
   }
