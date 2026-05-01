@@ -1255,6 +1255,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const [compareOpen,    setCompareOpen]    = useState(false);
   const [compareResults, setCompareResults] = useState<CompareResult[]>([]);
   const [compareLoading, setCompareLoading] = useState(false);
+  const [ideasRefreshNonce, setIdeasRefreshNonce] = useState(0);
   const compareDataRef = useRef<Map<string, { name: string; itemType: string; cashPrice: number; pointsCost: number; rating?: number; lat?: number; lng?: number }>>(new Map());
 
   const sensors = useSensors(
@@ -1590,7 +1591,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     );
     try {
       await moveIdeaToTripIdeas(itemId);
-      setIdeasRefreshKey((k) => k + 1);
+      setIdeasRefreshNonce((k) => k + 1);
     } catch {
       showToast("Failed to move idea back to Trip Ideas");
     }
@@ -2400,7 +2401,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
             <TripIdeasPanel
               tripId={tripId}
               days={displayDays}
-              refreshKey={ideasRefreshKey}
+              refreshKey={(ideasRefreshKey ?? 0) + ideasRefreshNonce}
               onIdeaAssigned={onIdeaAssigned}
             />
 
