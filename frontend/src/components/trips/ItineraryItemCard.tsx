@@ -131,11 +131,14 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
   const details = (item.details ?? {}) as Record<string, unknown>;
   const isConciergeIdea = details.sourceKind === "concierge_idea" || details.source_kind === "concierge_idea";
   const showMoveToIdeasAction = isConciergeIdea && !!onMoveToIdeas;
-  const hasSchedule = !!(details.dayPart || details.timeLabel);
+  // Normalize to typed strings before any JSX use — avoids unknown→ReactNode error in strict builds
+  const dayPartValue = typeof details.dayPart === "string" ? details.dayPart : "";
+  const timeLabelValue = typeof details.timeLabel === "string" ? details.timeLabel : "";
+  const hasSchedule = !!(dayPartValue || timeLabelValue);
 
   const handleOpenTimeline = () => {
-    setSelectedPart((details.dayPart as string | undefined) ?? "unscheduled");
-    setTimeLabelInput((details.timeLabel as string | undefined) ?? "");
+    setSelectedPart(dayPartValue || "unscheduled");
+    setTimeLabelInput(timeLabelValue);
     setTimelineOpen(true);
   };
 
@@ -226,7 +229,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                   ? "opacity-100 bg-amber-500/20 text-amber-300"
                   : hasSchedule
                     ? "opacity-75 bg-slate-800 text-slate-500 hover:bg-amber-500/15 hover:text-amber-300"
-                    : "opacity-0 group-hover:opacity-100 bg-slate-800 hover:bg-amber-500/15 text-slate-400 hover:text-amber-300"
+                    : "opacity-100 md:opacity-0 md:group-hover:opacity-100 bg-slate-800 hover:bg-amber-500/15 text-slate-400 hover:text-amber-300"
               }`}
               aria-label="Set timeline"
               title="Set timeline"
@@ -319,10 +322,10 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
             </span>
           )}
           {/* Show user-set timeLabel when present and no startTime */}
-          {!item.startTime && details.timeLabel && (
+          {!item.startTime && timeLabelValue && (
             <span className="flex items-center gap-1 text-[10px] text-slate-500">
               <Clock className="w-2.5 h-2.5" />
-              {details.timeLabel as string}
+              {timeLabelValue}
             </span>
           )}
           {item.location && (
