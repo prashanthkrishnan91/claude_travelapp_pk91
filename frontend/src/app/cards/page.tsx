@@ -201,13 +201,21 @@ function EditCardModal({
       setError("Card name is required.");
       return;
     }
+
+    const rawPointsBalance = form.pointsBalance.trim();
+    const parsedPointsBalance = Number(rawPointsBalance);
+    if (!rawPointsBalance || !Number.isFinite(parsedPointsBalance) || parsedPointsBalance < 0) {
+      setError("Points balance must be a non-negative number.");
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
       const updated = await updateCard(card.id, {
         displayName: form.displayName.trim(),
         issuer: form.issuer,
-        pointsBalance: form.pointsBalance ? Number(form.pointsBalance) : 0,
+        pointsBalance: parsedPointsBalance,
         pointValueCpp: form.pointValueCpp ? Number(form.pointValueCpp) : undefined,
         isPrimary: form.isPrimary,
       });
