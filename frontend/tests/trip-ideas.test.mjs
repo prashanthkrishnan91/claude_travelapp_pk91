@@ -220,3 +220,13 @@ test('ItineraryItemCard contains exactly one Move to Ideas label and one concier
   assert.equal(moveLabelCount, 1, 'There must be exactly one visible Move to Ideas action label in the card renderer');
   assert.equal(gateCount, 2, 'Gate should be defined once and rendered once in one canonical location');
 });
+
+test('ItineraryItemCard invokes move-back handler exactly once from one action button', () => {
+  const moveHandlerCallCount = (itineraryItemCard.match(/onMoveToIdeas\(item.id\)/g) ?? []).length;
+  assert.equal(moveHandlerCallCount, 1, 'Move-back handler should be wired to exactly one UI action');
+  assert.doesNotMatch(
+    itineraryItemCard,
+    /mt-1 rounded-md border border-amber-300\/35 bg-amber-300\/10 px-2 py-1 text-\[11px\]/,
+    'Secondary inline/details Move to Ideas button must not be rendered'
+  );
+});
