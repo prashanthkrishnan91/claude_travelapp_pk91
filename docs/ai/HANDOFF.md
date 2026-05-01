@@ -1,6 +1,46 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-01) — Smart Day Timeline v1 Foundation
+## Last change (2026-05-01) — Manual Timeline Controls v1
+
+### Summary
+Added simple manual controls so a user can set or adjust an itinerary day item's timeline placement (Morning / Afternoon / Evening / Unscheduled) and optional freeform timeLabel. Items immediately move to the correct section after saving without a full refresh. No AI scheduling, routing, or map optimization added.
+
+### Files touched
+- `frontend/src/lib/api.ts` — added `updateItemTimeline(itemId, currentDetails, { dayPart, timeLabel })`: merges `dayPart` and optional `timeLabel` into existing `details` JSONB and PATCHes via existing `PATCH /itinerary/items/{id}` endpoint; clears `timeLabel` from details when empty
+- `frontend/src/components/trips/ItineraryItemCard.tsx` — added `DAY_PARTS` constant (4 options); `onTimelineUpdated` prop; `timelineOpen` / `selectedPart` / `timeLabelInput` / `saving` local state; `handleOpenTimeline` (pre-fills from `item.details`); `handleSaveTimeline` (calls `updateItemTimeline`, fires callback, closes panel); a Clock icon trigger button (hover-only unless already scheduled); inline timeline editor panel (day-part pills + timeLabel input + Save); displays `details.timeLabel` as a small badge when set and no `startTime` exists; imports `updateItemTimeline` from `@/lib/api`
+- `frontend/src/components/trips/ItineraryDayColumn.tsx` — updated `getItemDayPart` to explicitly handle `"unscheduled"` value (bypasses `startTime` classification); added `onUpdateTimeline` prop to `ItineraryDayColumnProps`, `TimelineSectionsProps`, and `renderItemsWithConnectors`; added `itemOverrides` local state in `ItineraryDayColumn`; `handleTimelineUpdated` stores updated item in overrides and bubbles to parent; `visibleItems` useMemo applies overrides so the item moves to the correct section immediately; threaded `onUpdateTimeline={handleTimelineUpdated}` into `TimelineSections`
+- `frontend/tests/itinerary-timeline.test.mjs` — added 12 new renderer/contract tests (tests 14–25) covering: `updateItemTimeline` export, `dayPart`/`timeLabel` persistence, `onTimelineUpdated` prop, timeline trigger button, 4 day-part options in card, `timeLabelInput` state, `handleSaveTimeline`, `onUpdateTimeline` threading, `itemOverrides` state, details spread for field preservation, explicit unscheduled override, single timeline button
+
+### Behavior change
+- Each itinerary day item now shows a Clock icon button (hover-visible, always-visible when already scheduled)
+- Clicking the Clock icon opens an inline panel with 4 day-part pills (Morning/Afternoon/Evening/Unscheduled) and an optional timeLabel input
+- Saving persists `details.dayPart` and `details.timeLabel` via the existing PATCH endpoint
+- Item immediately moves to the correct timeline section without page refresh (optimistic via `itemOverrides`)
+- Explicitly setting "Unscheduled" overrides any `startTime`-derived section (new `getItemDayPart` branch)
+- If `details.timeLabel` is set and no `startTime` exists, the timeLabel is shown as a small clock badge on the card
+- All existing behaviors preserved: drag/drop, Trip Ideas ↔ Day, notes/status/priority, concierge item identity
+
+### Timeline persistence model
+```
+details.dayPart   = "morning" | "afternoon" | "evening" | "unscheduled"
+details.timeLabel = string  (optional, freeform, e.g. "9:00 AM", "After lunch")
+```
+Frontend merges patch into existing details (preserving all other detail fields). No migration needed.
+
+### Known issues
+- `itemOverrides` in `ItineraryDayColumn` resets on full itinerary reload (e.g., after move-to-ideas or parent refresh). This is acceptable for v1 — the server-persisted value will be correct after reload.
+- Timeline editor is hover-triggered on desktop; on mobile it becomes accessible when the item already has a schedule (clock icon is always visible at reduced opacity in that case).
+
+### Next likely task
+- Wire `onUpdateTimeline` callback up through TripBuilder → page if full parent refresh is desired after timeline changes
+- Add `details.dayPart` hint to the AI Concierge → save-to-ideas flow so AI-recommended items can optionally carry a section hint
+
+### Supabase SQL: No
+### Backend touched: No
+
+---
+
+## Previous change (2026-05-01) — Smart Day Timeline v1 Foundation
 
 ### Summary
 Converted each itinerary day's expanded view from a plain item list into a timeline-grouped layout. Items are now bucketed into **Morning / Afternoon / Evening / Unscheduled** sections based on available time metadata, with no AI scheduling, routing, or time generation added.

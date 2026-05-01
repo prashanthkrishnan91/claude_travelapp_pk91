@@ -1549,6 +1549,20 @@ export async function updateIdeaMeta(
   return updateItem(itemId, { details: merged as ItineraryItem["details"] });
 }
 
+export async function updateItemTimeline(
+  itemId: string,
+  currentDetails: Record<string, unknown>,
+  patch: { dayPart: string; timeLabel?: string }
+): Promise<ItineraryItem> {
+  const merged: Record<string, unknown> = { ...currentDetails, dayPart: patch.dayPart };
+  if (patch.timeLabel) {
+    merged.timeLabel = patch.timeLabel;
+  } else {
+    delete merged.timeLabel;
+  }
+  return updateItem(itemId, { details: merged as ItineraryItem["details"] });
+}
+
 export async function assignIdeaToDay(itemId: string, dayId: string): Promise<ItineraryItem> {
   return apiFetch<ItineraryItem>(`/itinerary/items/${itemId}`, {
     method: "PATCH",

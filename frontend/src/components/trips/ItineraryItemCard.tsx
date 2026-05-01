@@ -22,6 +22,18 @@ import {
 import { ItineraryItem, ItemType } from "@/types";
 import { BookingChecklistModal } from "./BookingChecklistModal";
 import { RewardsIntelligencePanel } from "./RewardsIntelligencePanel";
+import { updateItemTimeline } from "@/lib/api";
+
+// ─── Timeline day-part options ────────────────────────────────────────────────
+
+const DAY_PARTS = [
+  { value: "morning",     label: "Morning",     activeClass: "bg-amber-500/20 border-amber-400/50 text-amber-300" },
+  { value: "afternoon",   label: "Afternoon",   activeClass: "bg-sky-500/20 border-sky-400/50 text-sky-300" },
+  { value: "evening",     label: "Evening",     activeClass: "bg-violet-500/20 border-violet-400/50 text-violet-300" },
+  { value: "unscheduled", label: "Unscheduled", activeClass: "bg-slate-700/60 border-slate-500/50 text-slate-300" },
+] as const;
+
+// ─── Type icon config ─────────────────────────────────────────────────────────
 
 interface ItineraryItemCardProps {
   item: ItineraryItem;
@@ -29,6 +41,7 @@ interface ItineraryItemCardProps {
   onMoveToIdeas?: (itemId: string) => void;
   onToggleCompare?: (item: ItineraryItem) => void;
   isComparing?: boolean;
+  onTimelineUpdated?: (updatedItem: ItineraryItem) => void;
 }
 
 const typeConfig: Record<
@@ -90,8 +103,12 @@ function formatClock(value?: string): string | null {
   return value;
 }
 
-export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompare, isComparing }: ItineraryItemCardProps) {
+export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompare, isComparing, onTimelineUpdated }: ItineraryItemCardProps) {
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [selectedPart, setSelectedPart] = useState<string>("unscheduled");
+  const [timeLabelInput, setTimeLabelInput] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const {
     attributes,
@@ -114,6 +131,33 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
   const details = (item.details ?? {}) as Record<string, unknown>;
   const isConciergeIdea = details.sourceKind === "concierge_idea" || details.source_kind === "concierge_idea";
   const showMoveToIdeasAction = isConciergeIdea && !!onMoveToIdeas;
+  // Normalize to typed strings before any JSX use — avoids unknown→ReactNode error in strict builds
+  const dayPartValue = typeof details.dayPart === "string" ? details.dayPart : "";
+  const timeLabelValue = typeof details.timeLabel === "string" ? details.timeLabel : "";
+  const hasSchedule = !!(dayPartValue || timeLabelValue);
+
+  const handleOpenTimeline = () => {
+    setSelectedPart(dayPartValue || "unscheduled");
+    setTimeLabelInput(timeLabelValue);
+    setTimelineOpen(true);
+  };
+
+  const handleSaveTimeline = async () => {
+    setSaving(true);
+    try {
+      const currentDetails = (item.details ?? {}) as Record<string, unknown>;
+      const updated = await updateItemTimeline(item.id, currentDetails, {
+        dayPart: selectedPart,
+        timeLabel: timeLabelInput.trim() || undefined,
+      });
+      onTimelineUpdated?.(updated);
+      setTimelineOpen(false);
+    } catch (err) {
+      console.error("[timeline] save failed:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <>
@@ -170,6 +214,28 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                 <Scale className="w-3 h-3" />
               </button>
             )}
+            {/* Timeline edit trigger */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (timelineOpen) {
+                  setTimelineOpen(false);
+                } else {
+                  handleOpenTimeline();
+                }
+              }}
+              className={`flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center transition-all ${
+                timelineOpen
+                  ? "opacity-100 bg-amber-500/20 text-amber-300"
+                  : hasSchedule
+                    ? "opacity-75 bg-slate-800 text-slate-500 hover:bg-amber-500/15 hover:text-amber-300"
+                    : "opacity-100 md:opacity-0 md:group-hover:opacity-100 bg-slate-800 hover:bg-amber-500/15 text-slate-400 hover:text-amber-300"
+              }`}
+              aria-label="Set timeline"
+              title="Set timeline"
+            >
+              <Clock className="w-3 h-3" />
+            </button>
             <button
               onClick={() => setBookingOpen(true)}
               className="flex-shrink-0 w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 flex items-center justify-center transition-all"
@@ -255,6 +321,13 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
               {item.endTime && ` – ${item.endTime}`}
             </span>
           )}
+          {/* Show user-set timeLabel when present and no startTime */}
+          {!item.startTime && timeLabelValue && (
+            <span className="flex items-center gap-1 text-[10px] text-slate-500">
+              <Clock className="w-2.5 h-2.5" />
+              {timeLabelValue}
+            </span>
+          )}
           {item.location && (
             <span className="flex items-center gap-1 text-xs text-slate-400 min-w-0">
               <MapPin className="w-3 h-3" />
@@ -292,6 +365,48 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           item.rewardsIntelligence && (
             <RewardsIntelligencePanel rewards={item.rewardsIntelligence} />
           )}
+
+        {/* Inline timeline editor */}
+        {timelineOpen && (
+          <div className="mt-2 pt-2 border-t border-slate-700/60">
+            <div className="flex flex-wrap gap-1 mb-1.5">
+              {DAY_PARTS.map((part) => (
+                <button
+                  key={part.value}
+                  onClick={() => setSelectedPart(part.value)}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${
+                    selectedPart === part.value
+                      ? part.activeClass
+                      : "border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-300"
+                  }`}
+                >
+                  {part.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1">
+              <input
+                type="text"
+                value={timeLabelInput}
+                onChange={(e) => setTimeLabelInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveTimeline();
+                  if (e.key === "Escape") setTimelineOpen(false);
+                }}
+                placeholder="Time label, e.g. 9:00 AM (optional)"
+                maxLength={40}
+                className="flex-1 min-w-0 text-[10px] bg-slate-800 border border-slate-700 rounded px-1.5 py-1 text-slate-300 placeholder-slate-600 focus:outline-none focus:border-slate-500"
+              />
+              <button
+                onClick={handleSaveTimeline}
+                disabled={saving}
+                className="flex-shrink-0 px-2 py-1 rounded text-[10px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-colors disabled:opacity-50"
+              >
+                {saving ? "…" : "Save"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
 
