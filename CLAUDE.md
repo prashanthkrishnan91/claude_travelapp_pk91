@@ -8,9 +8,10 @@ Before work, read only the smallest needed subset of:
 2. `docs/ai/PROMPT_LIBRARY.md` — workflow, budget, prompt, UI, and review rules
 3. `docs/ai/skills/README.md` — task-specific workflow skill router
 4. `docs/ai/CLAUDE_PERSONAL_SKILLS.md` — optional personal Claude skill routing when a prompt names a personal skill
-5. `docs/ai/UI_BASELINE.md` — UI baseline and known visual costs when doing UI work
-6. `docs/ai/CLAUDE_WORKFLOW_KIT.md` — stable project constraints only when needed
-7. `README.md` — public/setup context only when needed
+5. `docs/ai/DESIGN_VISION.md` — long-term aspirational UI direction and timing gate when doing major design work
+6. `docs/ai/UI_BASELINE.md` — UI baseline and known visual costs when doing UI work
+7. `docs/ai/CLAUDE_WORKFLOW_KIT.md` — stable project constraints only when needed
+8. `README.md` — public/setup context only when needed
 
 Use one primary workflow skill when it matches the task:
 
@@ -28,6 +29,7 @@ Core rules:
 - Smallest safe patch. No unrelated refactors.
 - Use repo-local workflow skills instead of repeating large instruction blocks in prompts.
 - Personal Claude skills are optional accelerators only; they do not replace repo rules, budget gates, or project invariants.
+- Major design transformation must wait until `docs/ai/DESIGN_VISION.md` timing gate is satisfied; do small UI fixes only when needed before then.
 - If a task needs three or more skill types, split it before implementation.
 - Update `docs/ai/HANDOFF.md` in the same PR for any implementation, bug fix, UI change, architecture change, migration, or workflow change.
 - State Supabase SQL requirement in every PR summary.
