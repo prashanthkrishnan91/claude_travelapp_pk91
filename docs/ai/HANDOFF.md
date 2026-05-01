@@ -1,5 +1,20 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-01) — Travel Time Hints v1 readability + conservative walk estimate cleanup
+
+### Summary
+Small frontend-only cleanup for Travel Time Hints v1: connector hint rows now have slightly more vertical breathing room (less cramped between cards), and walking-time hints are now intentionally conservative using an adjustment factor so city-grid walks are less optimistic while still clearly marked as rough (`~`).
+
+### Files touched
+- `frontend/src/lib/travelHints.ts` — added `CONSERVATIVE_WALK_FACTOR` + `MAX_WALK_HINT_MIN`; adjusts `walkMinutes` with `Math.ceil(walkMinutes * factor)` before label selection; preserves missing-location and far-apart logic
+- `frontend/src/components/trips/ItineraryDayColumn.tsx` — connector spacing/readability tweaks (`py-1`, taller divider line, `leading-snug`) for travel + missing-location connector rows
+- `frontend/tests/travel-time-hints.test.mjs` — added focused contract checks for conservative walking constants/adjustment and connector spacing classes
+
+### Supabase SQL: No
+### Backend touched: No
+
+---
+
 ## Last change (2026-05-01) — Travel Time Hints v1
 
 ### Summary

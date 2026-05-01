@@ -44,6 +44,11 @@ test('travelHints exports FAR_APART_DRIVE_MIN constant', () => {
   assert.match(travelHintsSrc, /export const FAR_APART_DRIVE_MIN/, 'FAR_APART_DRIVE_MIN must be exported');
 });
 
+test('travelHints exports conservative walking constants', () => {
+  assert.match(travelHintsSrc, /export const CONSERVATIVE_WALK_FACTOR/, 'CONSERVATIVE_WALK_FACTOR must be exported');
+  assert.match(travelHintsSrc, /export const MAX_WALK_HINT_MIN/, 'MAX_WALK_HINT_MIN must be exported');
+});
+
 // ---------------------------------------------------------------------------
 // 2. PairHint shape: kind and label fields
 // ---------------------------------------------------------------------------
@@ -171,6 +176,19 @@ test('DayTravelHintBar shows "Rough hints only" disclaimer', () => {
 
 test('travel_ok hint label is prefixed with ~ to indicate rough estimate', () => {
   assert.match(travelHintsSrc, /`~\$\{label\}`/, 'travel_ok label must use ~ prefix for rough estimate');
+});
+
+test('walking hint uses conservative adjustment (ceil walkMinutes * factor)', () => {
+  assert.match(
+    travelHintsSrc,
+    /Math\.ceil\(estimate\.walkMinutes \* CONSERVATIVE_WALK_FACTOR\)/,
+    'walking estimate should be adjusted conservatively'
+  );
+});
+
+test('connector rows include vertical breathing room classes', () => {
+  assert.match(dayColumn, /py-1/, 'connector row should include py-1 spacing');
+  assert.match(dayColumn, /leading-snug/, 'connector copy should use readable line-height');
 });
 
 // ---------------------------------------------------------------------------

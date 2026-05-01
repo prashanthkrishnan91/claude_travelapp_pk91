@@ -56,3 +56,5 @@
 - Smart Day Timeline AI Planning v1 (PR #188): added AI-assisted `dayPart` and optional `timeLabel` suggestions using existing itinerary item metadata fields (`details.dayPart`, `details.timeLabel`) with user review/apply flow; persistence uses existing PATCH path and required no Supabase SQL changes.
 
 - Metadata preservation fix for AI Concierge saves/adds: `saveToTripIdeas` and `addStructuredConciergeItemToTrip` now persist optional Google verification fields (`lat`, `lng`, `provider_place_id`, `formatted_address`, `google_maps_uri`) into itinerary item `details` only when values are non-empty, preventing null/empty overwrites while preserving existing timeline/triage/detail fields and day_id-only movement behavior.
+
+- 2026-05-01: Travel Time Hints v1 cleanup — improved connector spacing/readability in itinerary day columns and applied conservative walking-time adjustment in hint labels; updated focused frontend hint tests.
