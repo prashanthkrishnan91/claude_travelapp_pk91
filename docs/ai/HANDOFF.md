@@ -1,6 +1,58 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-01) — Manual Timeline Controls v1
+## Last change (2026-05-01) — Smart Day Timeline AI Planning v1
+
+### Summary
+Added a "Suggest Timing" button to each itinerary day column. When clicked for a day that has items, the feature gathers those items and calls a new `POST /ai/timeline/suggest` backend endpoint to suggest `details.dayPart` and optional `details.timeLabel` for each item. The user reviews the suggestions in a compact inline panel and clicks "Apply All Suggestions" to persist them via the existing `updateItemTimeline` / `PATCH /itinerary/items/{id}` path. A deterministic client-side fallback runs when the backend is unreachable or no AI key is configured.
+
+### Files touched
+- `frontend/src/lib/dayPlanner.ts` — NEW: exports `DayPlannerSuggestion` type and `suggestTimelineFallback(items)` deterministic rule-based planner; classification rules: breakfast/brunch/cafe → morning, dinner/cocktail bar → evening, lunch → afternoon, generic meal → afternoon, generic activity → morning, flight/hotel → unscheduled; preserves existing `details.dayPart` when already set; `timeLabel` is always `undefined` (not blank string) when not strongly implied
+- `frontend/src/lib/api.ts` — added `TimelineSuggestion` interface and `suggestDayTimeline(items)` export; calls `POST /ai/timeline/suggest`; on any error falls back to `suggestTimelineFallback` imported lazily from `dayPlanner.ts`
+- `frontend/src/components/trips/ItineraryDayColumn.tsx` — added `suggestingTimeline`, `timelineSuggestions`, `applyingTimeline` state; `handleSuggestTimeline()` handler calls `suggestDayTimeline`, stores suggestions; `handleApplyTimeline()` calls `updateItemTimeline` for each suggestion in parallel, updates `itemOverrides` for optimistic section movement, clears suggestion state; new `SuggestionsReviewPanel` sub-component: shows item → dayPart + timeLabel rows, "Apply All Suggestions" button, and "Dismiss" X button; "Suggest Timing" button added to day header (visible when day has ≥1 item), coloured slate (distinct from amber "Plan My Day"); imports `suggestDayTimeline`, `updateItemTimeline`, `TimelineSuggestion` from `@/lib/api`; imports `Check`, `X` icons from lucide-react
+- `backend/app/routes/ai.py` — added Pydantic models `_TimelineItem`, `_TimelineSuggestion`, `_TimelineSuggestRequest`, `_TimelineSuggestResponse`; added `_classify_deterministic()` with same keyword rules as the TS fallback; added `_build_claude_prompt()` and `_parse_claude_suggestions()` for the AI path; added `POST /ai/timeline/suggest` route: uses Claude (`claude-haiku-4-5-20251001`) if `ANTHROPIC_API_KEY` is set, otherwise runs deterministic fallback; safe to call in local/dev/test with no API key; returns `provider: "claude"|"deterministic"` in response
+- `frontend/tests/smart-timeline.test.mjs` — NEW: 29 renderer/contract tests covering: `suggestTimelineFallback` export and shape, breakfast→morning, cafe→morning, dinner→evening, lunch→afternoon, flight/hotel→unscheduled, activity→morning, meal→afternoon, explicit dayPart preservation, timeLabel read-through, timeLabel defaults to undefined, day_id never touched, `suggestDayTimeline` export and fallback, backend endpoint path, `TimelineSuggestion` fields, `SuggestionsReviewPanel` controls, no day_id mutation in apply handler
+
+### Behavior change
+- Each expanded itinerary day column (when the day has ≥1 item) now shows a "Suggest Timing" button (Clock icon, slate style) in the day header
+- Clicking "Suggest Timing" fires `POST /ai/timeline/suggest` with the day's items; a loading spinner appears on the button while the request is in flight
+- On success, a `SuggestionsReviewPanel` appears above the timeline sections showing each item with its suggested dayPart and timeLabel
+- "Apply All Suggestions" persists each suggestion via the existing `PATCH /itinerary/items/{id}` endpoint (same path as manual timeline controls); items move to the correct section optimistically
+- "Dismiss" (X icon) clears the suggestions without applying them
+- No items are duplicated, no day_id is changed, no items are moved to Trip Ideas
+- Fallback path (no API key, network error) runs entirely in the browser with deterministic rules — feature remains usable in local/dev/test
+
+### AI planner rules (both backend and fallback)
+```
+breakfast/brunch → morning (timeLabel: "Breakfast")
+coffee/cafe/bakery → morning (timeLabel: "Morning coffee")
+dinner/supper → evening (timeLabel: "Dinner")
+cocktail/bar → evening (timeLabel: "Evening drinks")
+nightlife → evening (timeLabel: "Night out")
+lunch/midday/noon → afternoon (timeLabel: "Lunch")
+generic meal → afternoon (timeLabel: "Lunch")
+generic activity → morning (no timeLabel)
+flight / hotel → unscheduled (no timeLabel)
+already has details.dayPart → preserve (no change)
+unsure → unscheduled
+```
+
+### Known issues / v1 limits
+- Suggestion panel is only shown after user clicks the button; it does not auto-apply. This is by design (requires confirmation).
+- If the backend call fails AND the dynamic import of `dayPlanner.ts` also fails (unlikely), the `suggestDayTimeline` promise would reject — callers in `ItineraryDayColumn` guard with `try/finally` so the loading state is cleared.
+- Suggestion panel does not persist between page navigations (dismissed on unmount). Applied suggestions do persist via Supabase.
+- `SuggestionsReviewPanel` does not support per-item override — it's apply-all or dismiss. Per-item editing is a v2 scope.
+
+### Next likely task
+- Wire `onUpdateTimeline` callback up through TripBuilder → page if full parent refresh is desired after apply
+- Add per-item suggestion editing (v2 scope)
+- Consider auto-expanding day when "Suggest Timing" is triggered from the collapsed view
+
+### Supabase SQL: No
+### Backend touched: Yes (`backend/app/routes/ai.py` — new endpoint, no DB writes)
+
+---
+
+## Previous change (2026-05-01) — Manual Timeline Controls v1
 
 ### Summary
 Added simple manual controls so a user can set or adjust an itinerary day item's timeline placement (Morning / Afternoon / Evening / Unscheduled) and optional freeform timeLabel. Items immediately move to the correct section after saving without a full refresh. No AI scheduling, routing, or map optimization added.
