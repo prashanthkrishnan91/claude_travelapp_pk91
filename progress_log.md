@@ -60,3 +60,5 @@
 - 2026-05-01: Travel Time Hints v1 cleanup — improved connector spacing/readability in itinerary day columns and applied conservative walking-time adjustment in hint labels; updated focused frontend hint tests.
 
 - 2026-05-01: Security hardening blocker fix: itinerary routes now require authenticated user dependency and enforce trip/day/item ownership checks at service boundary (404 on cross-user access), backend request middleware no longer logs raw request bodies, and frontend API client removed sensitive auth/request/response debug logging.
+
+- 2026-05-01: Follow-up itinerary security closure: authenticated and ownership-scoped `get_booking_links` route so booking links cannot be fetched cross-user by guessed item id. Added focused booking-link auth tests.

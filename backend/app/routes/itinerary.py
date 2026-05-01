@@ -120,14 +120,14 @@ def delete_item(item_id: UUID, user_id: CurrentUserID, db: DB) -> None:
 
 
 @router.get("/items/{item_id}/booking-links", response_model=List[BookingOption])
-def get_booking_links(item_id: UUID, db: DB) -> List[BookingOption]:
+def get_booking_links(item_id: UUID, user_id: CurrentUserID, db: DB) -> List[BookingOption]:
     """Generate booking deep-links for an itinerary item.
 
     Returns provider-labelled URLs pre-filled with the item's type, title,
     location, and dates.  Existing booking options stored on the item are
     returned first, followed by any additional generated links.
     """
-    item = ItineraryService(db).get_item(item_id)
+    item = ItineraryService(db).get_item(item_id, user_id)
     stored: List[BookingOption] = []
     if item.details and "booking_options" in item.details:
         stored = [BookingOption(**opt) for opt in item.details["booking_options"]]

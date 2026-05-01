@@ -1,5 +1,15 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-01) — Booking-links auth scope closure
+
+### Summary
+Closed remaining itinerary hardening gap: `GET /itinerary/items/{item_id}/booking-links` now requires authenticated `CurrentUserID` and resolves itinerary item using user-scoped ownership checks before returning stored/generated booking links.
+
+### Supabase SQL: No
+### Backend touched: Yes
+
+---
+
 ## Last change (2026-05-01) — Itinerary auth/scoping + sensitive logging hardening
 
 ### Summary
