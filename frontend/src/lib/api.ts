@@ -1563,6 +1563,47 @@ export async function updateItemTimeline(
   return updateItem(itemId, { details: merged as ItineraryItem["details"] });
 }
 
+// ─── Smart Day Timeline AI Planning ──────────────────────────────────────────
+
+export interface TimelineSuggestion {
+  itemId: string;
+  dayPart: "morning" | "afternoon" | "evening" | "unscheduled";
+  timeLabel?: string;
+}
+
+/**
+ * Ask the backend AI planner to suggest dayPart/timeLabel for a list of
+ * itinerary items. Falls back to the client-side deterministic planner when
+ * the backend is unreachable or the AI key is not configured.
+ *
+ * Preserves all other item fields — only dayPart and timeLabel are suggested.
+ * Callers must still apply suggestions via updateItemTimeline.
+ */
+export async function suggestDayTimeline(
+  items: ItineraryItem[]
+): Promise<TimelineSuggestion[]> {
+  const payload = {
+    items: items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      item_type: item.itemType,
+      details: (item.details ?? {}) as Record<string, unknown>,
+    })),
+  };
+
+  try {
+    const result = await apiFetch<{ suggestions: TimelineSuggestion[] }>(
+      "/ai/timeline/suggest",
+      { method: "POST", body: JSON.stringify(payload) }
+    );
+    return result.suggestions;
+  } catch {
+    // Client-side deterministic fallback — always works in local/dev/test
+    const { suggestTimelineFallback } = await import("./dayPlanner");
+    return suggestTimelineFallback(items);
+  }
+}
+
 export async function assignIdeaToDay(itemId: string, dayId: string): Promise<ItineraryItem> {
   return apiFetch<ItineraryItem>(`/itinerary/items/${itemId}`, {
     method: "PATCH",

@@ -6,10 +6,11 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CalendarDays, Car, ChevronDown, ChevronUp, Clock, Footprints, Loader2, Plus, Sparkles } from "lucide-react";
+import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Loader2, Plus, Sparkles, X } from "lucide-react";
 import { ItineraryDay, ItineraryItem } from "@/types";
 import { ItineraryItemCard } from "./ItineraryItemCard";
 import { estimateTravel, formatTravelBadge } from "@/lib/travelTime";
+import { suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from "@/lib/api";
 
 // ─── Timeline helpers ────────────────────────────────────────────────────────
 
@@ -195,6 +196,82 @@ function TimelineSections({
   );
 }
 
+// ─── SuggestionsReviewPanel ───────────────────────────────────────────────────
+
+const DAY_PART_COLOR: Record<string, string> = {
+  morning:     "text-amber-300",
+  afternoon:   "text-sky-300",
+  evening:     "text-violet-300",
+  unscheduled: "text-slate-400",
+};
+
+interface SuggestionsReviewPanelProps {
+  suggestions: TimelineSuggestion[];
+  items: ItineraryItem[];
+  applying: boolean;
+  onApply: () => void;
+  onDismiss: () => void;
+}
+
+function SuggestionsReviewPanel({
+  suggestions,
+  items,
+  applying,
+  onApply,
+  onDismiss,
+}: SuggestionsReviewPanelProps) {
+  const itemMap = new Map(items.map((i) => [i.id, i]));
+  return (
+    <div className="rounded-xl border border-slate-700/80 bg-slate-900/80 p-3 mb-2 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-slate-200 flex items-center gap-1.5">
+          <Sparkles className="w-3 h-3 text-amber-300" />
+          Suggested timing for {suggestions.length} {suggestions.length === 1 ? "item" : "items"}
+        </span>
+        <button
+          onClick={onDismiss}
+          className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+          aria-label="Dismiss suggestions"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <div className="space-y-1">
+        {suggestions.map((s) => {
+          const item = itemMap.get(s.itemId);
+          if (!item) return null;
+          const colorClass = DAY_PART_COLOR[s.dayPart] ?? "text-slate-400";
+          return (
+            <div key={s.itemId} className="flex items-center gap-2 text-[11px]">
+              <span className="truncate flex-1 text-slate-300">{item.title}</span>
+              <span className={`font-medium ${colorClass} flex-shrink-0`}>
+                {s.dayPart.charAt(0).toUpperCase() + s.dayPart.slice(1)}
+              </span>
+              {s.timeLabel && (
+                <span className="text-slate-500 flex-shrink-0">· {s.timeLabel}</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <button
+        onClick={onApply}
+        disabled={applying}
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-400/30 text-[11px] font-semibold transition-colors disabled:opacity-50"
+      >
+        {applying ? (
+          <Loader2 className="w-3 h-3 animate-spin" />
+        ) : (
+          <Check className="w-3 h-3" />
+        )}
+        Apply All Suggestions
+      </button>
+    </div>
+  );
+}
+
 interface ItineraryDayColumnProps {
   day: ItineraryDay;
   /** True when this day is the current target for left-panel "+" additions. */
@@ -245,6 +322,10 @@ export function ItineraryDayColumn({
   const [expandedItemDays, setExpandedItemDays] = useState<Record<number, boolean>>({});
   // Local overrides for optimistic timeline updates — item moves to correct section immediately
   const [itemOverrides, setItemOverrides] = useState<Record<string, ItineraryItem>>({});
+  // Smart timeline AI planning state
+  const [suggestingTimeline, setSuggestingTimeline] = useState(false);
+  const [timelineSuggestions, setTimelineSuggestions] = useState<TimelineSuggestion[] | null>(null);
+  const [applyingTimeline, setApplyingTimeline] = useState(false);
 
   useEffect(() => {
     if (!isExpanded) {
@@ -263,6 +344,41 @@ export function ItineraryDayColumn({
   const handleTimelineUpdated = (updatedItem: ItineraryItem) => {
     setItemOverrides((prev) => ({ ...prev, [updatedItem.id]: updatedItem }));
     onUpdateTimeline?.(updatedItem);
+  };
+
+  const handleSuggestTimeline = async () => {
+    if (day.items.length === 0) return;
+    setSuggestingTimeline(true);
+    setTimelineSuggestions(null);
+    try {
+      const suggestions = await suggestDayTimeline(day.items);
+      setTimelineSuggestions(suggestions);
+    } finally {
+      setSuggestingTimeline(false);
+    }
+  };
+
+  const handleApplyTimeline = async () => {
+    if (!timelineSuggestions) return;
+    setApplyingTimeline(true);
+    try {
+      await Promise.all(
+        timelineSuggestions.map(async (s) => {
+          const item = day.items.find((i) => i.id === s.itemId);
+          if (!item) return;
+          const currentDetails = (item.details ?? {}) as Record<string, unknown>;
+          const updated = await updateItemTimeline(item.id, currentDetails, {
+            dayPart: s.dayPart,
+            timeLabel: s.timeLabel,
+          });
+          setItemOverrides((prev) => ({ ...prev, [updated.id]: updated }));
+          onUpdateTimeline?.(updated);
+        })
+      );
+    } finally {
+      setApplyingTimeline(false);
+      setTimelineSuggestions(null);
+    }
   };
 
   const showAllItems = expandedItemDays[day.dayNumber] ?? false;
@@ -335,6 +451,25 @@ export function ItineraryDayColumn({
               Plan My Day
             </button>
           )}
+          {day.items.length > 0 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSuggestTimeline();
+              }}
+              disabled={suggestingTimeline || applyingTimeline}
+              title="Suggest timing for items on this day"
+              aria-label="Suggest day timing"
+              className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-700/60 hover:bg-slate-700 text-slate-300 border border-slate-600/50 text-[11px] font-medium transition-colors disabled:opacity-50"
+            >
+              {suggestingTimeline ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Clock className="w-3 h-3" />
+              )}
+              Suggest Timing
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -385,6 +520,16 @@ export function ItineraryDayColumn({
           isOver ? "bg-amber-500/10" : "bg-slate-950/70"
         }`}
       >
+        {timelineSuggestions && (
+          <SuggestionsReviewPanel
+            suggestions={timelineSuggestions}
+            items={day.items}
+            applying={applyingTimeline}
+            onApply={handleApplyTimeline}
+            onDismiss={() => setTimelineSuggestions(null)}
+          />
+        )}
+
         <SortableContext
           items={itemIds}
           strategy={verticalListSortingStrategy}
