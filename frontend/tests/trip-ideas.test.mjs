@@ -196,6 +196,24 @@ test('saveToTripIdeas sets idea_status to "maybe" by default', () => {
   assert.match(fn, /idea_status.*maybe|maybe.*idea_status/, 'saveToTripIdeas must default idea_status to "maybe"');
 });
 
+test('saveToTripIdeas persists optional google verification metadata into details', () => {
+  const saveFnStart = apiTs.indexOf('export async function saveToTripIdeas');
+  const saveFnEnd = apiTs.indexOf('\nexport async function', saveFnStart + 1);
+  const fn = apiTs.slice(saveFnStart, saveFnEnd > 0 ? saveFnEnd : undefined);
+  assert.match(fn, /normalizeGoogleVerificationDetails\(item\)/, 'saveToTripIdeas must merge normalized google verification metadata');
+  assert.match(apiTs, /provider_place_id/, 'google provider_place_id must be persisted in details');
+  assert.match(apiTs, /formatted_address/, 'google formatted_address must be persisted in details');
+  assert.match(apiTs, /google_maps_uri/, 'google_maps_uri must be persisted in details');
+});
+
+test('addStructuredConciergeItemToTrip persists optional google verification metadata into details', () => {
+  const addFnStart = apiTs.indexOf('export async function addStructuredConciergeItemToTrip');
+  const addFnEnd = apiTs.indexOf('\nexport async function', addFnStart + 1);
+  const fn = apiTs.slice(addFnStart, addFnEnd > 0 ? addFnEnd : undefined);
+  assert.match(fn, /normalizeGoogleVerificationDetails\(item\)/, 'addStructuredConciergeItemToTrip must merge normalized google verification metadata');
+  assert.match(apiTs, /if \(!gv \|\| typeof gv !== "object"\) return \{\}/, 'metadata helper must safely no-op when googleVerification is absent');
+});
+
 // ---------------------------------------------------------------------------
 // 15. TripIdeasPanel: has status buttons (Must-do, Maybe, Skip)
 // ---------------------------------------------------------------------------
