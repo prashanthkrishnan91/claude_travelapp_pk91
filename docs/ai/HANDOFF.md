@@ -1,5 +1,30 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-01) — AI/Search cost-control guardrails (per-user throttle + dedupe)
+
+### Summary
+Added lightweight, in-memory cost guardrails on expensive provider-backed routes before second-user access. Authenticated users now have per-endpoint throttling windows and short duplicate-request cooldowns on AI Concierge and search APIs. Limits are env-tunable with safe defaults and return HTTP 429 with a frontend-safe JSON detail payload (`code`, `message`, `retry_after_seconds`).
+
+### Supabase SQL: No
+### Backend touched: Yes
+
+### Guardrail defaults
+- `guardrail_ai_concierge_requests=6`
+- `guardrail_ai_concierge_window_seconds=60`
+- `guardrail_ai_concierge_dedupe_seconds=8`
+- `guardrail_ai_timeline_requests=10`
+- `guardrail_ai_timeline_window_seconds=60`
+- `guardrail_ai_timeline_dedupe_seconds=5`
+- `guardrail_search_requests=20`
+- `guardrail_search_window_seconds=60`
+- `guardrail_search_dedupe_seconds=3`
+
+### Notes
+- Search routes now require authenticated `CurrentUserID` so guardrails are keyed per-user consistently.
+- Existing provider fallback behavior is unchanged: when providers/timeouts fail, existing deterministic/sample fallbacks still execute.
+
+---
+
 ## Last change (2026-05-01) — Booking-links auth scope closure
 
 ### Summary

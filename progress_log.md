@@ -62,3 +62,5 @@
 - 2026-05-01: Security hardening blocker fix: itinerary routes now require authenticated user dependency and enforce trip/day/item ownership checks at service boundary (404 on cross-user access), backend request middleware no longer logs raw request bodies, and frontend API client removed sensitive auth/request/response debug logging.
 
 - 2026-05-01: Follow-up itinerary security closure: authenticated and ownership-scoped `get_booking_links` route so booking links cannot be fetched cross-user by guessed item id. Added focused booking-link auth tests.
+
+- 2026-05-01: Added backend in-memory cost guardrails for expensive AI/search routes (per-user throttles + short duplicate cooldowns) with env-configurable defaults and 429 frontend-safe responses; applied to `/ai/concierge`, `/ai/concierge/search`, `/ai/timeline/suggest`, and `/search/*` endpoints; also required authenticated user context on search routes for per-user keying. Added focused guardrail unit tests and updated AI handoff docs.

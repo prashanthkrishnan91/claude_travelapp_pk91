@@ -21,6 +21,7 @@ from app.concierge.logging import persist_concierge_request_log, request_log_eve
 from app.concierge.router import RouteDecision, route_prompt
 from app.core.config import get_settings
 from app.core.deps import DB, CurrentUserID
+from app.core.cost_guardrails import GuardrailRule, guardrails
 from app.models.concierge import (
     ConciergeCacheClearRequest,
     ConciergeCacheClearResponse,
@@ -111,12 +112,34 @@ def build_typed_concierge_response(
 @router.post("/concierge", response_model=ConciergeResponse)
 def concierge(payload: ConciergeRequest, db: DB, user_id: CurrentUserID) -> ConciergeResponse:
     """Generate contextual travel recommendations for a trip using Claude."""
+    settings = get_settings()
+    guardrails.enforce(
+        endpoint_key="ai.concierge",
+        user_id=user_id,
+        rule=GuardrailRule(
+            requests=settings.guardrail_ai_concierge_requests,
+            window_seconds=settings.guardrail_ai_concierge_window_seconds,
+            dedupe_seconds=settings.guardrail_ai_concierge_dedupe_seconds,
+        ),
+        dedupe_payload={"trip_id": payload.trip_id, "query": payload.user_query.strip().lower(), "day": payload.day_number},
+    )
     return ConciergeService(db).answer(payload.trip_id, payload.user_query, user_id, payload.day_number)
 
 
 @router.post("/concierge/search", response_model=ConciergeTypedResponse)
 def concierge_search(payload: ConciergeSearchRequest, db: DB, user_id: CurrentUserID) -> ConciergeTypedResponse:
     """Retrieval-first concierge with typed response routing contract."""
+    settings = get_settings()
+    guardrails.enforce(
+        endpoint_key="ai.concierge_search",
+        user_id=user_id,
+        rule=GuardrailRule(
+            requests=settings.guardrail_ai_concierge_requests,
+            window_seconds=settings.guardrail_ai_concierge_window_seconds,
+            dedupe_seconds=settings.guardrail_ai_concierge_dedupe_seconds,
+        ),
+        dedupe_payload={"trip_id": payload.trip_id, "query": payload.user_query.strip().lower(), "client_message_id": payload.client_message_id},
+    )
     service = ConciergeService(db)
     start = time.perf_counter()
     response, decision = build_typed_concierge_response(service, payload, user_id)
@@ -405,6 +428,16 @@ def suggest_timeline(
         return _TimelineSuggestResponse(suggestions=[], provider="deterministic")
 
     settings = get_settings()
+    guardrails.enforce(
+        endpoint_key="ai.timeline_suggest",
+        user_id=user_id,
+        rule=GuardrailRule(
+            requests=settings.guardrail_ai_timeline_requests,
+            window_seconds=settings.guardrail_ai_timeline_window_seconds,
+            dedupe_seconds=settings.guardrail_ai_timeline_dedupe_seconds,
+        ),
+        dedupe_payload={"items": [{"id": i.id, "title": i.title, "type": i.item_type} for i in payload.items]},
+    )
     api_key = settings.anthropic_api_key
 
     if api_key:

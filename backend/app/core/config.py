@@ -46,6 +46,17 @@ class Settings(BaseSettings):
     # research_source only.
     google_places_api_key: str = ""
 
+    # Cost-control guardrails for expensive AI/search routes
+    guardrail_ai_concierge_requests: int = 6
+    guardrail_ai_concierge_window_seconds: int = 60
+    guardrail_ai_concierge_dedupe_seconds: int = 8
+    guardrail_ai_timeline_requests: int = 10
+    guardrail_ai_timeline_window_seconds: int = 60
+    guardrail_ai_timeline_dedupe_seconds: int = 5
+    guardrail_search_requests: int = 20
+    guardrail_search_window_seconds: int = 60
+    guardrail_search_dedupe_seconds: int = 3
+
     # CORS
     cors_allow_all: bool = True
     cors_origins: List[str] = []
