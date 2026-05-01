@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Bookmark, ChevronDown, Loader2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Bookmark, ChevronDown, Loader2, Search, X } from "lucide-react";
 import { fetchTripIdeas, assignIdeaToDay, deleteItem, updateIdeaMeta } from "@/lib/api";
 import type { ItineraryDay, ItineraryItem } from "@/types";
 
@@ -19,6 +19,30 @@ const STATUS_OPTIONS = [
 ] as const;
 
 type IdeaStatus = "must_do" | "maybe" | "skipped";
+
+// "active" = all non-skipped (default view); other values filter to that status only
+export type StatusFilter = "active" | "must_do" | "maybe" | "skipped";
+export type SortOption = "priority" | "recently_saved" | "name" | "category";
+
+export const STATUS_FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
+  { value: "active",  label: "All" },
+  { value: "must_do", label: "Must-do" },
+  { value: "maybe",   label: "Maybe" },
+  { value: "skipped", label: "Skip" },
+];
+
+export const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "priority",       label: "Priority" },
+  { value: "recently_saved", label: "Recently saved" },
+  { value: "name",           label: "Name" },
+  { value: "category",       label: "Category" },
+];
+
+const PRIORITY_ORDER: Record<IdeaStatus, number> = {
+  must_do: 0,
+  maybe: 1,
+  skipped: 2,
+};
 
 function getIdeaStatus(item: ItineraryItem): IdeaStatus {
   const d = (item.details ?? {}) as Record<string, unknown>;
@@ -48,6 +72,52 @@ function ideaRating(item: ItineraryItem): string | null {
   const rc = details.review_count as number | null | undefined;
   if (!r) return null;
   return rc ? `★ ${r.toFixed(1)} (${Number(rc).toLocaleString()} reviews)` : `★ ${r.toFixed(1)}`;
+}
+
+export function filterByStatus(ideas: ItineraryItem[], filter: StatusFilter): ItineraryItem[] {
+  if (filter === "active") return ideas.filter((it) => getIdeaStatus(it) !== "skipped");
+  return ideas.filter((it) => getIdeaStatus(it) === filter);
+}
+
+export function searchIdeas(ideas: ItineraryItem[], query: string): ItineraryItem[] {
+  const q = query.toLowerCase().trim();
+  if (!q) return ideas;
+  return ideas.filter((idea) => {
+    const details = (idea.details ?? {}) as Record<string, unknown>;
+    const note = ((details.userNote ?? details.user_note) as string | undefined) ?? "";
+    const address = (details.address as string | undefined) ?? "";
+    const category = ideaCategory(idea).toLowerCase();
+    return (
+      idea.title.toLowerCase().includes(q) ||
+      (idea.location ?? "").toLowerCase().includes(q) ||
+      address.toLowerCase().includes(q) ||
+      note.toLowerCase().includes(q) ||
+      category.includes(q)
+    );
+  });
+}
+
+export function sortIdeas(ideas: ItineraryItem[], sortBy: SortOption): ItineraryItem[] {
+  const sorted = [...ideas];
+  switch (sortBy) {
+    case "priority":
+      return sorted.sort((a, b) => PRIORITY_ORDER[getIdeaStatus(a)] - PRIORITY_ORDER[getIdeaStatus(b)]);
+    case "recently_saved":
+      return sorted.sort((a, b) => {
+        const ta = a.createdAt;
+        const tb = b.createdAt;
+        if (!ta && !tb) return 0;
+        if (!ta) return 1;
+        if (!tb) return -1;
+        return tb.localeCompare(ta);
+      });
+    case "name":
+      return sorted.sort((a, b) => a.title.localeCompare(b.title));
+    case "category":
+      return sorted.sort((a, b) => ideaCategory(a).localeCompare(ideaCategory(b)));
+    default:
+      return sorted;
+  }
 }
 
 function IdeaCard({
@@ -187,7 +257,9 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [open, setOpen] = useState(true);
-  const [showSkipped, setShowSkipped] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
+  const [sortBy, setSortBy] = useState<SortOption>("priority");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -211,8 +283,24 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
     if (ideas.length > 0) setOpen(true);
   }, [ideas.length]);
 
-  const visibleIdeas = ideas.filter((it) => showSkipped || getIdeaStatus(it) !== "skipped");
-  const skippedCount = ideas.filter((it) => getIdeaStatus(it) === "skipped").length;
+  // Badge shows active (non-skipped) count regardless of current filter
+  const activeCount = ideas.filter((it) => getIdeaStatus(it) !== "skipped").length;
+
+  const filteredAndSorted = useMemo(() => {
+    let result = filterByStatus(ideas, statusFilter);
+    result = searchIdeas(result, searchQuery);
+    result = sortIdeas(result, sortBy);
+    return result;
+  }, [ideas, statusFilter, searchQuery, sortBy]);
+
+  const hasActiveFilters =
+    statusFilter !== "active" || searchQuery.trim().length > 0 || sortBy !== "priority";
+
+  function handleReset() {
+    setSearchQuery("");
+    setStatusFilter("active");
+    setSortBy("priority");
+  }
 
   async function handleAssign(itemId: string, dayId: string) {
     setAssigningId(itemId);
@@ -268,9 +356,9 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
             <span className="text-sm font-semibold text-slate-100">Trip Ideas</span>
             <span className="text-[10px] text-slate-400">Saved from AI Concierge · add to a day when ready</span>
           </div>
-          {visibleIdeas.length > 0 && (
+          {activeCount > 0 && (
             <span className="rounded-full bg-amber-200/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-200">
-              {visibleIdeas.length}
+              {activeCount}
             </span>
           )}
         </div>
@@ -287,30 +375,76 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
           ) : ideas.length === 0 ? (
             <p className="py-2 text-xs text-slate-400">Save recommendations from AI Concierge and schedule them later.</p>
           ) : (
-            <div className="space-y-2">
-              {visibleIdeas.map((idea) => (
-                <IdeaCard
-                  key={idea.id}
-                  item={idea}
-                  days={days}
-                  assigning={assigningId === idea.id}
-                  removing={removingId === idea.id}
-                  onAssign={(dayId) => handleAssign(idea.id, dayId)}
-                  onRemove={() => handleRemove(idea.id)}
-                  onUpdate={(patch) => handleUpdate(idea.id, patch)}
-                />
-              ))}
-              {skippedCount > 0 && (
-                <button
-                  onClick={() => setShowSkipped((v) => !v)}
-                  className="w-full pt-1 text-center text-[10px] text-slate-500 hover:text-slate-300 transition"
-                >
-                  {showSkipped
-                    ? `Hide ${skippedCount} skipped`
-                    : `${skippedCount} skipped · show`}
-                </button>
+            <>
+              {/* Compact filter / search / sort controls */}
+              <div className="mb-3 space-y-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search ideas…"
+                    aria-label="Search trip ideas"
+                    className="w-full rounded-lg border border-slate-600 bg-slate-800 py-1.5 pl-7 pr-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-300/50"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-1">
+                  {STATUS_FILTER_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setStatusFilter(opt.value)}
+                      aria-pressed={statusFilter === opt.value}
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 transition ${
+                        statusFilter === opt.value
+                          ? "bg-amber-200/15 text-amber-200 ring-amber-300/40"
+                          : "text-slate-500 ring-slate-600/40 hover:text-slate-300 hover:ring-slate-500/60"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortOption)}
+                    aria-label="Sort ideas"
+                    className="ml-auto rounded-lg border border-slate-600 bg-slate-800 px-2 py-1 text-[10px] text-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-300/50"
+                  >
+                    {SORT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  {hasActiveFilters && (
+                    <button
+                      onClick={handleReset}
+                      aria-label="Reset filters"
+                      className="text-[10px] text-slate-500 hover:text-slate-300 transition"
+                    >
+                      Clear ×
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {filteredAndSorted.length === 0 ? (
+                <p className="py-2 text-xs text-slate-400">No ideas match your current filters.</p>
+              ) : (
+                <div className="space-y-2">
+                  {filteredAndSorted.map((idea) => (
+                    <IdeaCard
+                      key={idea.id}
+                      item={idea}
+                      days={days}
+                      assigning={assigningId === idea.id}
+                      removing={removingId === idea.id}
+                      onAssign={(dayId) => handleAssign(idea.id, dayId)}
+                      onRemove={() => handleRemove(idea.id)}
+                      onUpdate={(patch) => handleUpdate(idea.id, patch)}
+                    />
+                  ))}
+                </div>
               )}
-            </div>
+            </>
           )}
         </div>
       )}

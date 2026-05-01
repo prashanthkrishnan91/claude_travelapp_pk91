@@ -91,6 +91,8 @@ export interface ItineraryItem {
   bestOption?: "cash" | "points";
   rewardsIntelligence?: RewardsIntelligence;
   position: number;
+  createdAt?: string;
+  updatedAt?: string;
   details?: {
     bookingOptions?: BookingOption[];
     [key: string]: unknown;

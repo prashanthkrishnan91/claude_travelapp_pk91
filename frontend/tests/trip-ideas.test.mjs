@@ -248,3 +248,146 @@ test('ItineraryItemCard invokes move-back handler exactly once from one action b
     'Secondary inline/details Move to Ideas button must not be rendered'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Filter / Search / Sort v1 — tests 18–27
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// 18. Exported filter/search/sort functions exist
+// ---------------------------------------------------------------------------
+
+test('TripIdeasPanel exports filterByStatus, searchIdeas, and sortIdeas functions', () => {
+  assert.match(tripIdeasPanel, /export function filterByStatus/, 'filterByStatus must be exported');
+  assert.match(tripIdeasPanel, /export function searchIdeas/, 'searchIdeas must be exported');
+  assert.match(tripIdeasPanel, /export function sortIdeas/, 'sortIdeas must be exported');
+});
+
+// ---------------------------------------------------------------------------
+// 19. filterByStatus: "active" excludes skipped, specific value filters to that value
+// ---------------------------------------------------------------------------
+
+test('filterByStatus handles active, must_do, maybe, skipped filter values', () => {
+  const fnStart = tripIdeasPanel.indexOf('export function filterByStatus');
+  const fnEnd = tripIdeasPanel.indexOf('\nexport function', fnStart + 1);
+  const fn = tripIdeasPanel.slice(fnStart, fnEnd > 0 ? fnEnd : undefined);
+  assert.match(fn, /filter === "active"/, '"active" filter case must exist');
+  assert.match(fn, /!== "skipped"/, '"active" must exclude skipped items');
+  assert.match(fn, /=== filter/, 'specific status filter must use equality check');
+});
+
+// ---------------------------------------------------------------------------
+// 20. searchIdeas: matches title, location, address, notes, category
+// ---------------------------------------------------------------------------
+
+test('searchIdeas searches title, location, address, note, and category fields', () => {
+  const fnStart = tripIdeasPanel.indexOf('export function searchIdeas');
+  const fnEnd = tripIdeasPanel.indexOf('\nexport function', fnStart + 1);
+  const fn = tripIdeasPanel.slice(fnStart, fnEnd > 0 ? fnEnd : undefined);
+  assert.match(fn, /idea\.title\.toLowerCase/, 'searchIdeas must search title');
+  assert.match(fn, /idea\.location/, 'searchIdeas must search location');
+  assert.match(fn, /address/, 'searchIdeas must search address from details');
+  assert.match(fn, /userNote|user_note/, 'searchIdeas must search user note');
+  assert.match(fn, /ideaCategory/, 'searchIdeas must search category');
+  assert.match(fn, /if \(!q\) return ideas/, 'searchIdeas must short-circuit on empty query');
+});
+
+// ---------------------------------------------------------------------------
+// 21. sortIdeas: all four sort options are handled
+// ---------------------------------------------------------------------------
+
+test('sortIdeas handles priority, recently_saved, name, and category sort options', () => {
+  const fnStart = tripIdeasPanel.indexOf('export function sortIdeas');
+  const fnEnd = tripIdeasPanel.indexOf('\nfunction IdeaCard', fnStart + 1);
+  const fn = tripIdeasPanel.slice(fnStart, fnEnd > 0 ? fnEnd : undefined);
+  assert.match(fn, /case "priority"/, 'priority sort must be handled');
+  assert.match(fn, /case "recently_saved"/, 'recently_saved sort must be handled');
+  assert.match(fn, /case "name"/, 'name sort must be handled');
+  assert.match(fn, /case "category"/, 'category sort must be handled');
+  assert.match(fn, /PRIORITY_ORDER/, 'priority sort must use PRIORITY_ORDER map');
+  assert.match(fn, /createdAt/, 'recently_saved sort must use createdAt timestamp');
+  assert.match(fn, /title\.localeCompare/, 'name sort must use localeCompare');
+  assert.match(fn, /ideaCategory.*localeCompare|localeCompare.*ideaCategory/, 'category sort must use ideaCategory + localeCompare');
+});
+
+// ---------------------------------------------------------------------------
+// 22. PRIORITY_ORDER: must_do < maybe < skipped
+// ---------------------------------------------------------------------------
+
+test('PRIORITY_ORDER ranks must_do first, then maybe, then skipped', () => {
+  assert.match(tripIdeasPanel, /must_do:\s*0/, 'must_do must have priority 0 (highest)');
+  assert.match(tripIdeasPanel, /maybe:\s*1/, 'maybe must have priority 1');
+  assert.match(tripIdeasPanel, /skipped:\s*2/, 'skipped must have priority 2 (lowest)');
+});
+
+// ---------------------------------------------------------------------------
+// 23. STATUS_FILTER_OPTIONS: all four status filter values present
+// ---------------------------------------------------------------------------
+
+test('STATUS_FILTER_OPTIONS includes active, must_do, maybe, and skipped values', () => {
+  assert.match(tripIdeasPanel, /STATUS_FILTER_OPTIONS/, 'STATUS_FILTER_OPTIONS constant must exist');
+  assert.match(tripIdeasPanel, /"active"/, '"active" status filter value must exist');
+  assert.match(tripIdeasPanel, /"must_do"/, '"must_do" status filter value must exist');
+  assert.match(tripIdeasPanel, /"maybe"/, '"maybe" status filter value must exist');
+  assert.match(tripIdeasPanel, /"skipped"/, '"skipped" status filter value must exist');
+});
+
+// ---------------------------------------------------------------------------
+// 24. SORT_OPTIONS: all four sort options present
+// ---------------------------------------------------------------------------
+
+test('SORT_OPTIONS includes priority, recently_saved, name, and category options', () => {
+  assert.match(tripIdeasPanel, /SORT_OPTIONS/, 'SORT_OPTIONS constant must exist');
+  assert.match(tripIdeasPanel, /"recently_saved"/, '"recently_saved" sort option must exist');
+  assert.match(tripIdeasPanel, /"priority"/, '"priority" sort option must exist');
+  assert.match(tripIdeasPanel, /"name"/, '"name" sort option must exist');
+  assert.match(tripIdeasPanel, /"category"/, '"category" sort option must exist');
+});
+
+// ---------------------------------------------------------------------------
+// 25. Search input and controls are present in the panel
+// ---------------------------------------------------------------------------
+
+test('TripIdeasPanel renders search input and filter/sort controls', () => {
+  assert.match(tripIdeasPanel, /Search ideas/, 'Search placeholder text must appear');
+  assert.match(tripIdeasPanel, /aria-label="Search trip ideas"/, 'Search input must have accessible label');
+  assert.match(tripIdeasPanel, /aria-label="Sort ideas"/, 'Sort select must have accessible label');
+  assert.match(tripIdeasPanel, /STATUS_FILTER_OPTIONS\.map/, 'Status filter pills must be rendered from STATUS_FILTER_OPTIONS');
+  assert.match(tripIdeasPanel, /SORT_OPTIONS\.map/, 'Sort options must be rendered from SORT_OPTIONS');
+});
+
+// ---------------------------------------------------------------------------
+// 26. hasActiveFilters gates the Clear button; handleReset resets all controls
+// ---------------------------------------------------------------------------
+
+test('TripIdeasPanel has hasActiveFilters guard and handleReset function for clear action', () => {
+  assert.match(tripIdeasPanel, /hasActiveFilters/, 'hasActiveFilters derived value must exist');
+  assert.match(tripIdeasPanel, /handleReset/, 'handleReset function must exist');
+  assert.match(tripIdeasPanel, /Clear ×/, 'Clear button label must appear in UI');
+  assert.match(tripIdeasPanel, /setSearchQuery\(""\)/, 'handleReset must clear search query');
+  assert.match(tripIdeasPanel, /setStatusFilter\("active"\)/, 'handleReset must reset status filter to active');
+  assert.match(tripIdeasPanel, /setSortBy\("priority"\)/, 'handleReset must reset sort to priority');
+});
+
+// ---------------------------------------------------------------------------
+// 27. Empty state differentiates: no ideas vs no filter match
+// ---------------------------------------------------------------------------
+
+test('TripIdeasPanel shows different empty states for no ideas and no filter match', () => {
+  assert.match(
+    tripIdeasPanel,
+    /Save recommendations from AI Concierge and schedule them later\./,
+    'Must show onboarding empty state when no ideas exist',
+  );
+  assert.match(
+    tripIdeasPanel,
+    /No ideas match your current filters\./,
+    'Must show filter-empty state when ideas exist but none match current filters',
+  );
+  // The two empty states must be in different branches (ideas.length === 0 vs filteredAndSorted.length === 0)
+  const noIdeasIdx = tripIdeasPanel.indexOf('Save recommendations from AI Concierge');
+  const noMatchIdx = tripIdeasPanel.indexOf('No ideas match your current filters');
+  assert.notEqual(noIdeasIdx, -1, 'Onboarding empty state must exist');
+  assert.notEqual(noMatchIdx, -1, 'Filter-empty state must exist');
+  assert.notEqual(noIdeasIdx, noMatchIdx, 'The two empty states must be at different locations in the source');
+});
