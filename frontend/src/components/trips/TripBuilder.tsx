@@ -763,13 +763,13 @@ function HotelCandidateCard({
         {pricePerNight > 0 && (
           <div className="text-center">
             <p className="text-[10px] text-slate-400 uppercase tracking-wide">Per Night</p>
-            <p className="text-sm font-bold text-slate-900">${Math.round(pricePerNight)}</p>
+            <p className="text-sm font-bold text-cream-100">${Math.round(pricePerNight)}</p>
           </div>
         )}
         {nights > 1 && pricePerNight > 0 && (
           <div className="text-center">
             <p className="text-[10px] text-slate-400 uppercase tracking-wide">Total</p>
-            <p className="text-sm font-bold text-slate-700">${Math.round(pricePerNight * nights)}</p>
+            <p className="text-sm font-bold text-cream-100">${Math.round(pricePerNight * nights)}</p>
           </div>
         )}
         {rating != null && (
@@ -1151,7 +1151,7 @@ function CandidatePanel({
     <div className="card p-3 flex flex-col gap-2">
       <button
         onClick={onToggle}
-        className="flex items-center justify-between w-full text-sm font-semibold text-slate-700"
+        className="flex items-center justify-between w-full text-sm font-semibold text-cream-100"
       >
         <span className="flex items-center gap-1.5">
           {icon}
@@ -1161,8 +1161,8 @@ function CandidatePanel({
           </span>
         </span>
         {open
-          ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
-          : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+          ? <ChevronUp className="w-3.5 h-3.5 text-cream-300" />
+          : <ChevronDown className="w-3.5 h-3.5 text-cream-300" />}
       </button>
       {open && sortControls && <div className="pt-0.5">{sortControls}</div>}
       {open && !hasData && (
