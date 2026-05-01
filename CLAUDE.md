@@ -6,14 +6,27 @@ Before work, read only the smallest needed subset of:
 
 1. `docs/ai/HANDOFF.md` — current state
 2. `docs/ai/PROMPT_LIBRARY.md` — workflow, budget, prompt, UI, and review rules
-3. `docs/ai/UI_BASELINE.md` — UI baseline and known visual costs when doing UI work
-4. `docs/ai/CLAUDE_WORKFLOW_KIT.md` — stable project constraints only when needed
-5. `README.md` — public/setup context only when needed
+3. `docs/ai/skills/README.md` — task-specific workflow skill router
+4. `docs/ai/UI_BASELINE.md` — UI baseline and known visual costs when doing UI work
+5. `docs/ai/CLAUDE_WORKFLOW_KIT.md` — stable project constraints only when needed
+6. `README.md` — public/setup context only when needed
+
+Use one primary workflow skill when it matches the task:
+
+- `docs/ai/skills/discovery.md` — map unknown files or visual surfaces before implementation
+- `docs/ai/skills/bugfix.md` — focused bug fix or small behavior correction
+- `docs/ai/skills/ui_fix.md` — capped UI polish or visual consistency pass
+- `docs/ai/skills/implementation.md` — focused multi-file feature implementation
+- `docs/ai/skills/merge_gate.md` — cheap PR review before merge
+- `docs/ai/skills/workflow_update.md` — workflow/documentation updates
+- `docs/ai/skills/supabase_change.md` — any Supabase SQL, schema, RLS, auth, or persistence-contract change
 
 Core rules:
 
 - No broad discovery. Read primary target files first; fallback reads only if blocked.
 - Smallest safe patch. No unrelated refactors.
+- Use repo-local workflow skills instead of repeating large instruction blocks in prompts.
+- If a task needs three or more skill types, split it before implementation.
 - Update `docs/ai/HANDOFF.md` in the same PR for any implementation, bug fix, UI change, architecture change, migration, or workflow change.
 - State Supabase SQL requirement in every PR summary.
 - Stop after opening any Medium-High/High usage PR. Do not propose the next implementation prompt.
