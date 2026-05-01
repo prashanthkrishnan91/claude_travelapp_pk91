@@ -186,6 +186,15 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
             </button>
           </div>
         </div>
+        {isConciergeIdea && onMoveToIdeas && (
+          <button
+            onClick={() => onMoveToIdeas(item.id)}
+            className="mt-1 rounded-md border border-amber-300/35 bg-amber-300/10 px-2 py-1 text-[11px] font-medium text-amber-200 hover:bg-amber-300/20 transition-colors"
+            aria-label={`Move ${item.title} back to Trip Ideas`}
+          >
+            Move to Ideas
+          </button>
+        )}
 
         {item.description && (
           <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
