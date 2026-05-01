@@ -18,6 +18,7 @@ from app.models import (
 
 DAYS_TABLE = "itinerary_days"
 ITEMS_TABLE = "itinerary_items"
+TRIPS_TABLE = "trips"
 logger = logging.getLogger(__name__)
 
 
@@ -29,7 +30,9 @@ class ItineraryService:
     # Days
     # ------------------------------------------------------------------
 
-    def list_days(self, trip_id: UUID) -> List[ItineraryDay]:
+    def list_days(self, trip_id: UUID, user_id: Optional[UUID] = None) -> List[ItineraryDay]:
+        if user_id is not None:
+            self._ensure_trip_owned(trip_id, user_id)
         result = (
             self.db.table(DAYS_TABLE)
             .select("*")
@@ -39,7 +42,9 @@ class ItineraryService:
         )
         return [ItineraryDay(**row) for row in result.data]
 
-    def get_day(self, day_id: UUID) -> ItineraryDay:
+    def get_day(self, day_id: UUID, user_id: Optional[UUID] = None) -> ItineraryDay:
+        if user_id is not None:
+            self._ensure_day_owned(day_id, user_id)
         result = (
             self.db.table(DAYS_TABLE)
             .select("*")
@@ -54,7 +59,9 @@ class ItineraryService:
             )
         return ItineraryDay(**result.data[0])
 
-    def create_day(self, payload: ItineraryDayCreate) -> ItineraryDay:
+    def create_day(self, payload: ItineraryDayCreate, user_id: Optional[UUID] = None) -> ItineraryDay:
+        if user_id is not None:
+            self._ensure_trip_owned(payload.trip_id, user_id)
         result = (
             self.db.table(DAYS_TABLE)
             .insert(payload.model_dump(mode="json"))
@@ -62,10 +69,12 @@ class ItineraryService:
         )
         return ItineraryDay(**result.data[0])
 
-    def update_day(self, day_id: UUID, payload: ItineraryDayUpdate) -> ItineraryDay:
+    def update_day(self, day_id: UUID, payload: ItineraryDayUpdate, user_id: Optional[UUID] = None) -> ItineraryDay:
+        if user_id is not None:
+            self._ensure_day_owned(day_id, user_id)
         data = payload.model_dump(mode="json", exclude_none=True)
         if not data:
-            return self.get_day(day_id)
+            return self.get_day(day_id, user_id)
         result = (
             self.db.table(DAYS_TABLE)
             .update(data)
@@ -79,7 +88,9 @@ class ItineraryService:
             )
         return ItineraryDay(**result.data[0])
 
-    def delete_day(self, day_id: UUID) -> None:
+    def delete_day(self, day_id: UUID, user_id: Optional[UUID] = None) -> None:
+        if user_id is not None:
+            self._ensure_day_owned(day_id, user_id)
         self.db.table(DAYS_TABLE).delete().eq("id", str(day_id)).execute()
 
     def ensure_trip_days(
@@ -87,6 +98,7 @@ class ItineraryService:
         trip_id: UUID,
         start_date: date,
         end_date: date,
+        user_id: UUID,
     ) -> List[ItineraryDay]:
         if end_date < start_date:
             raise HTTPException(
@@ -98,7 +110,7 @@ class ItineraryService:
         expected_numbers = set(range(1, expected_count + 1))
         logger.info("[trip-days] ensure start trip_id=%s expected=%s", trip_id, expected_count)
 
-        existing_days = self.list_days(trip_id)
+        existing_days = self.list_days(trip_id, user_id)
         existing_by_number = {day.day_number: day for day in existing_days}
         existing_numbers = sorted(existing_by_number.keys())
         logger.info("[trip-days] existing day_numbers=%s", existing_numbers)
@@ -115,7 +127,7 @@ class ItineraryService:
                 if not existing_day.title:
                     updates["title"] = f"Day {day_number}"
                 if updates:
-                    self.update_day(existing_day.id, ItineraryDayUpdate(**updates))
+                    self.update_day(existing_day.id, ItineraryDayUpdate(**updates), user_id)
                     updated_numbers.append(day_number)
                 continue
             self.create_day(
@@ -124,7 +136,8 @@ class ItineraryService:
                     day_number=day_number,
                     title=f"Day {day_number}",
                     date=expected_date,
-                )
+                ),
+                user_id,
             )
             created_numbers.append(day_number)
         if created_numbers:
@@ -140,11 +153,11 @@ class ItineraryService:
         for day in existing_days:
             if day.day_number in expected_numbers:
                 continue
-            items = self.list_items(day.id)
+            items = self.list_items(day.id, user_id)
             if not items:
-                self.delete_day(day.id)
+                self.delete_day(day.id, user_id)
 
-        complete_days = self.list_days(trip_id)
+        complete_days = self.list_days(trip_id, user_id)
         logger.info("[trip-days] complete count=%s", len(complete_days))
         return complete_days
 
@@ -180,7 +193,9 @@ class ItineraryService:
                 concierge_rows.append(row)
         return [ItineraryItem(**row) for row in concierge_rows]
 
-    def list_items(self, day_id: UUID) -> List[ItineraryItem]:
+    def list_items(self, day_id: UUID, user_id: Optional[UUID] = None) -> List[ItineraryItem]:
+        if user_id is not None:
+            self._ensure_day_owned(day_id, user_id)
         result = (
             self.db.table(ITEMS_TABLE)
             .select("*")
@@ -190,7 +205,9 @@ class ItineraryService:
         )
         return [ItineraryItem(**row) for row in result.data]
 
-    def get_item(self, item_id: UUID) -> ItineraryItem:
+    def get_item(self, item_id: UUID, user_id: Optional[UUID] = None) -> ItineraryItem:
+        if user_id is not None:
+            self._ensure_item_owned(item_id, user_id)
         result = (
             self.db.table(ITEMS_TABLE)
             .select("*")
@@ -205,7 +222,9 @@ class ItineraryService:
             )
         return ItineraryItem(**result.data[0])
 
-    def create_item(self, payload: ItineraryItemCreate) -> ItineraryItem:
+    def create_item(self, payload: ItineraryItemCreate, user_id: Optional[UUID] = None) -> ItineraryItem:
+        if user_id is not None:
+            self._ensure_day_owned(payload.day_id, user_id)
         result = (
             self.db.table(ITEMS_TABLE)
             .insert(payload.model_dump(mode="json"))
@@ -213,7 +232,11 @@ class ItineraryService:
         )
         return ItineraryItem(**result.data[0])
 
-    def create_trip_item(self, payload: ItineraryItemDirectCreate) -> ItineraryItem:
+    def create_trip_item(self, payload: ItineraryItemDirectCreate, user_id: Optional[UUID] = None) -> ItineraryItem:
+        if user_id is not None:
+            self._ensure_trip_owned(payload.trip_id, user_id)
+        if user_id is not None and payload.day_id is not None:
+            self._ensure_day_owned(payload.day_id, user_id)
         data = payload.model_dump(mode="json", exclude_none=True)
         duplicate = self._find_duplicate_item(
             trip_id=payload.trip_id,
@@ -230,10 +253,14 @@ class ItineraryService:
         )
         return ItineraryItem(**result.data[0])
 
-    def update_item(self, item_id: UUID, payload: ItineraryItemUpdate) -> ItineraryItem:
+    def update_item(self, item_id: UUID, payload: ItineraryItemUpdate, user_id: Optional[UUID] = None) -> ItineraryItem:
+        if user_id is not None:
+            self._ensure_item_owned(item_id, user_id)
+        if user_id is not None and payload.day_id is not None:
+            self._ensure_day_owned(payload.day_id, user_id)
         data = payload.model_dump(mode="json", exclude_unset=True)
         if not data:
-            return self.get_item(item_id)
+            return self.get_item(item_id, user_id)
         result = (
             self.db.table(ITEMS_TABLE)
             .update(data)
@@ -247,8 +274,46 @@ class ItineraryService:
             )
         return ItineraryItem(**result.data[0])
 
-    def delete_item(self, item_id: UUID) -> None:
+    def delete_item(self, item_id: UUID, user_id: Optional[UUID] = None) -> None:
+        if user_id is not None:
+            self._ensure_item_owned(item_id, user_id)
         self.db.table(ITEMS_TABLE).delete().eq("id", str(item_id)).execute()
+
+    def _ensure_trip_owned(self, trip_id: UUID, user_id: UUID) -> None:
+        result = (
+            self.db.table(TRIPS_TABLE)
+            .select("id")
+            .eq("id", str(trip_id))
+            .eq("user_id", str(user_id))
+            .limit(1)
+            .execute()
+        )
+        if not result.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+
+    def _ensure_day_owned(self, day_id: UUID, user_id: UUID) -> None:
+        result = (
+            self.db.table(DAYS_TABLE)
+            .select("id, trip_id")
+            .eq("id", str(day_id))
+            .limit(1)
+            .execute()
+        )
+        if not result.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Itinerary day not found")
+        self._ensure_trip_owned(UUID(result.data[0]["trip_id"]), user_id)
+
+    def _ensure_item_owned(self, item_id: UUID, user_id: UUID) -> None:
+        result = (
+            self.db.table(ITEMS_TABLE)
+            .select("id, trip_id")
+            .eq("id", str(item_id))
+            .limit(1)
+            .execute()
+        )
+        if not result.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Itinerary item not found")
+        self._ensure_trip_owned(UUID(result.data[0]["trip_id"]), user_id)
 
     def _find_duplicate_item(self, trip_id: UUID, title: str, item_type: str, day_id: Optional[UUID]) -> Optional[dict]:
         query = (

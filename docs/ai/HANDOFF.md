@@ -1,5 +1,15 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-01) — Itinerary auth/scoping + sensitive logging hardening
+
+### Summary
+Implemented blocker security hardening before second-user access: itinerary route handlers now require authenticated `CurrentUserID`, itinerary service methods enforce ownership checks for trip/day/item operations using authenticated user scope, backend request middleware no longer logs raw request bodies, and frontend API debug logging was reduced to avoid exposing auth/session/token/payload details.
+
+### Supabase SQL: No
+### Backend touched: Yes
+
+---
+
 ## Last change (2026-05-01) — Travel Time Hints v1 readability + conservative walk estimate cleanup
 
 ### Summary

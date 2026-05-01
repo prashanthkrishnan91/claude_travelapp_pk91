@@ -45,12 +45,10 @@ import {
 /** Direct connection to FastAPI backend — no proxy, no rewrites. */
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
-console.log("API URL:", process.env.NEXT_PUBLIC_API_URL);
 
 async function getAuthHeader(): Promise<Record<string, string>> {
   const { data: { session } } = await supabase.auth.getSession();
 
-  console.log("[auth] session:", session);
 
   if (!session) {
     throw new Error("[auth] No active session — request blocked. User must be signed in.");
@@ -62,10 +60,8 @@ async function getAuthHeader(): Promise<Record<string, string>> {
     throw new Error("[auth] Missing access_token in session.");
   }
 
-  console.log("[auth] access_token:", token.slice(0, 20) + "…");
 
   const header = { Authorization: `Bearer ${token}` };
-  console.log("[auth] Authorization header attached:", header.Authorization.slice(0, 30) + "…");
   return header;
 }
 
@@ -108,10 +104,6 @@ async function apiFetch<T>(
 ): Promise<T> {
   const url = `${API_URL}${path}`;
 
-  console.log(`[apiFetch] → ${options.method ?? "GET"} ${url}`);
-  if (options.body) {
-    console.log(`[apiFetch] body:`, options.body);
-  }
 
   const authHeader = await getAuthHeader();
 
@@ -121,7 +113,6 @@ async function apiFetch<T>(
     ...(options.headers as Record<string, string>),
   };
 
-  console.log("[apiFetch] final request headers:", finalHeaders);
 
   const res = await fetch(url, {
     ...options,
@@ -130,7 +121,6 @@ async function apiFetch<T>(
     cache: "no-store",
   });
 
-  console.log(`[apiFetch] ← ${res.status} ${res.statusText} (${url})`);
 
   if (res.status === 204) return null as T;
 
@@ -138,7 +128,6 @@ async function apiFetch<T>(
     let detail = `${res.status} ${res.statusText}`;
     try {
       const body = await res.json();
-      console.error(`[apiFetch] error body:`, body);
       detail = body?.detail ?? detail;
     } catch {
       // ignore parse errors
@@ -147,7 +136,6 @@ async function apiFetch<T>(
   }
 
   const json = await res.json();
-  console.log(`[apiFetch] response body:`, json);
   return toCamel<T>(json);
 }
 
