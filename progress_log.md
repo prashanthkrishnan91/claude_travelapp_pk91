@@ -58,3 +58,7 @@
 - Metadata preservation fix for AI Concierge saves/adds: `saveToTripIdeas` and `addStructuredConciergeItemToTrip` now persist optional Google verification fields (`lat`, `lng`, `provider_place_id`, `formatted_address`, `google_maps_uri`) into itinerary item `details` only when values are non-empty, preventing null/empty overwrites while preserving existing timeline/triage/detail fields and day_id-only movement behavior.
 
 - 2026-05-01: Travel Time Hints v1 cleanup — improved connector spacing/readability in itinerary day columns and applied conservative walking-time adjustment in hint labels; updated focused frontend hint tests.
+
+- 2026-05-01: Security hardening blocker fix: itinerary routes now require authenticated user dependency and enforce trip/day/item ownership checks at service boundary (404 on cross-user access), backend request middleware no longer logs raw request bodies, and frontend API client removed sensitive auth/request/response debug logging.
+
+- 2026-05-01: Follow-up itinerary security closure: authenticated and ownership-scoped `get_booking_links` route so booking links cannot be fetched cross-user by guessed item id. Added focused booking-link auth tests.
