@@ -6,10 +6,10 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Loader2, Plus, Sparkles, X } from "lucide-react";
+import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Info, Loader2, MapPin, Plus, Sparkles, X } from "lucide-react";
 import { ItineraryDay, ItineraryItem } from "@/types";
 import { ItineraryItemCard } from "./ItineraryItemCard";
-import { estimateTravel, formatTravelBadge } from "@/lib/travelTime";
+import { computeAdjacentHints, summarizeHints } from "@/lib/travelHints";
 import { suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from "@/lib/api";
 
 // ─── Timeline helpers ────────────────────────────────────────────────────────
@@ -98,6 +98,7 @@ function renderItemsWithConnectors(
   compareSet?: Set<string>,
   onUpdateTimeline?: (updatedItem: ItineraryItem) => void,
 ) {
+  const hints = computeAdjacentHints(items);
   return items.flatMap((item, idx) => {
     const card = (
       <ItineraryItemCard
@@ -111,28 +112,53 @@ function renderItemsWithConnectors(
       />
     );
     if (idx >= items.length - 1) return [card];
-    const next = items[idx + 1];
-    const d = item.details as Record<string, unknown> | undefined;
-    const nd = next.details as Record<string, unknown> | undefined;
-    const lat1 = d?.lat as number | null | undefined;
-    const lng1 = d?.lng as number | null | undefined;
-    const lat2 = nd?.lat as number | null | undefined;
-    const lng2 = nd?.lng as number | null | undefined;
-    if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return [card];
-    const est = estimateTravel(lat1, lng1, lat2, lng2);
-    const { label, mode } = formatTravelBadge(est);
-    const connector = (
-      <div key={`travel-${item.id}`} className="flex items-center gap-1.5 px-3 -my-0.5">
-        <div className="w-px h-3 bg-slate-700 ml-[17px] flex-shrink-0" />
-        {mode === "walk" ? (
-          <Footprints className="w-3 h-3 text-slate-500 flex-shrink-0" />
-        ) : (
-          <Car className="w-3 h-3 text-slate-500 flex-shrink-0" />
-        )}
-        <span className="text-[10px] text-slate-500 leading-none">{label}</span>
-        <span className="text-[10px] text-slate-600 leading-none">· {est.distanceKm} km</span>
-      </div>
-    );
+    const hint = hints[idx];
+    let connector: React.ReactNode;
+    if (hint.kind === "missing_location") {
+      connector = (
+        <div key={`hint-${item.id}`} className="flex items-center gap-1.5 px-3 -my-0.5">
+          <div className="w-px h-3 bg-slate-800 ml-[17px] flex-shrink-0" />
+          <MapPin className="w-3 h-3 text-slate-600 flex-shrink-0" />
+          <span className="text-[10px] text-slate-600 leading-none italic">{hint.label}</span>
+        </div>
+      );
+    } else if (hint.kind === "far_apart") {
+      const est = hint.estimate!;
+      const mode = est.walkMinutes <= 20 ? "walk" : "drive";
+      const timeLabel = mode === "walk" ? `~${est.walkMinutes} min walk` : `~${est.driveMinutes} min drive`;
+      connector = (
+        <div key={`travel-${item.id}`} className="flex flex-col gap-0.5 px-3 -my-0.5">
+          <div className="flex items-center gap-1.5">
+            <div className="w-px h-3 bg-slate-700 ml-[17px] flex-shrink-0" />
+            {mode === "walk" ? (
+              <Footprints className="w-3 h-3 text-slate-500 flex-shrink-0" />
+            ) : (
+              <Car className="w-3 h-3 text-slate-500 flex-shrink-0" />
+            )}
+            <span className="text-[10px] text-slate-500 leading-none">{timeLabel}</span>
+            <span className="text-[10px] text-slate-600 leading-none">· {est.distanceKm} km</span>
+          </div>
+          <div className="flex items-center gap-1 pl-[29px]">
+            <span className="text-[10px] text-amber-500/70 leading-none">{hint.label}</span>
+          </div>
+        </div>
+      );
+    } else {
+      const est = hint.estimate!;
+      const mode = est.walkMinutes <= 20 ? "walk" : "drive";
+      connector = (
+        <div key={`travel-${item.id}`} className="flex items-center gap-1.5 px-3 -my-0.5">
+          <div className="w-px h-3 bg-slate-700 ml-[17px] flex-shrink-0" />
+          {mode === "walk" ? (
+            <Footprints className="w-3 h-3 text-slate-500 flex-shrink-0" />
+          ) : (
+            <Car className="w-3 h-3 text-slate-500 flex-shrink-0" />
+          )}
+          <span className="text-[10px] text-slate-500 leading-none">{hint.label}</span>
+          <span className="text-[10px] text-slate-600 leading-none">· {est.distanceKm} km</span>
+        </div>
+      );
+    }
     return [card, connector];
   });
 }
@@ -268,6 +294,31 @@ function SuggestionsReviewPanel({
         )}
         Apply All Suggestions
       </button>
+    </div>
+  );
+}
+
+// ─── DayTravelHintBar ─────────────────────────────────────────────────────────
+
+function DayTravelHintBar({ items }: { items: ItineraryItem[] }) {
+  if (items.length < 2) return null;
+  const hints = computeAdjacentHints(items);
+  const { farApartCount, missingLocationCount, hasIssues } = summarizeHints(hints);
+  if (!hasIssues) return null;
+
+  let message: string;
+  if (farApartCount > 0 && missingLocationCount > 0) {
+    message = "Some stops may be far apart. Add location details to improve hints.";
+  } else if (farApartCount > 0) {
+    message = "Some stops may be far apart. Consider grouping nearby items.";
+  } else {
+    message = "Add location details to improve travel hints.";
+  }
+
+  return (
+    <div className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-slate-900/50 border border-slate-800/50 mt-1.5">
+      <Info className="w-3 h-3 text-slate-500 flex-shrink-0 mt-px" />
+      <span className="text-[10px] text-slate-500 leading-tight">{message} Rough hints only.</span>
     </div>
   );
 }
@@ -549,6 +600,8 @@ export function ItineraryDayColumn({
             )}
           </div>
         </SortableContext>
+
+        {visibleItems.length >= 2 && <DayTravelHintBar items={visibleItems} />}
 
         {day.items.length === 0 ? (
           <div
