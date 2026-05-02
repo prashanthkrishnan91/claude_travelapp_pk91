@@ -1252,6 +1252,51 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const attractionListRef  = useRef<HTMLDivElement>(null);
   const restaurantListRef  = useRef<HTMLDivElement>(null);
   const prevViewModeRef    = useRef<"list" | "map" | "grouped">("list");
+  const attractionsHydrationKeyRef = useRef<string | null>(null);
+  const restaurantsHydrationKeyRef = useRef<string | null>(null);
+  const attractionsRequestRef = useRef<Promise<AttractionSearchResult[]> | null>(null);
+  const restaurantsRequestRef = useRef<Promise<RestaurantSearchResult[]> | null>(null);
+
+  const mapTripItemToAttraction = (item: ItineraryItem): AttractionSearchResult => {
+    const details = (item.details ?? {}) as Record<string, unknown>;
+    return {
+      id: String(item.id),
+      name: String(details.name ?? item.title ?? "Attraction"),
+      location: String(details.location ?? item.location ?? destination ?? ""),
+      address: String(details.address ?? item.location ?? ""),
+      rating: typeof details.rating === "number" ? details.rating : undefined,
+      numReviews: typeof details.numReviews === "number" ? details.numReviews : undefined,
+      aiScore: typeof details.aiScore === "number" ? details.aiScore : undefined,
+      tags: Array.isArray(details.tags) ? details.tags.filter((tag): tag is string => typeof tag === "string") : [],
+      category: typeof details.category === "string" ? details.category : undefined,
+      description: typeof details.description === "string" ? details.description : undefined,
+      openingHours: typeof details.openingHours === "string" ? details.openingHours : undefined,
+      priceLevel: typeof details.priceLevel === "number" ? details.priceLevel : undefined,
+      bookingUrl: typeof details.bookingUrl === "string" ? details.bookingUrl : undefined,
+      lat: typeof details.lat === "number" ? details.lat : undefined,
+      lng: typeof details.lng === "number" ? details.lng : undefined,
+    };
+  };
+
+  const mapTripItemToRestaurant = (item: ItineraryItem): RestaurantSearchResult => {
+    const details = (item.details ?? {}) as Record<string, unknown>;
+    return {
+      id: String(item.id),
+      name: String(details.name ?? item.title ?? "Restaurant"),
+      cuisine: String(details.cuisine ?? "Restaurant"),
+      location: String(details.location ?? item.location ?? destination ?? ""),
+      address: String(details.address ?? item.location ?? ""),
+      rating: typeof details.rating === "number" ? details.rating : undefined,
+      numReviews: typeof details.numReviews === "number" ? details.numReviews : undefined,
+      priceLevel: typeof details.priceLevel === "number" ? details.priceLevel : undefined,
+      openingHours: typeof details.openingHours === "string" ? details.openingHours : undefined,
+      aiScore: typeof details.aiScore === "number" ? details.aiScore : undefined,
+      tags: Array.isArray(details.tags) ? details.tags.filter((tag): tag is string => typeof tag === "string") : [],
+      bookingUrl: typeof details.bookingUrl === "string" ? details.bookingUrl : undefined,
+      lat: typeof details.lat === "number" ? details.lat : undefined,
+      lng: typeof details.lng === "number" ? details.lng : undefined,
+    };
+  };
 
   // ── Compare state ────────────────────────────────────────────────────────────
   const [compareSet,     setCompareSet]     = useState<Set<string>>(new Set());
@@ -1309,6 +1354,16 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         .sort((a, b) => aiScoreOf(b) - aiScoreOf(a));
       setCandidateFlights(flights);
       setCandidateHotels(hotels);
+      const persistedAttractions = items
+        .filter((i) => i.itemType === "activity" && !i.dayId)
+        .map(mapTripItemToAttraction)
+        .sort((a, b) => (b.aiScore ?? 0) - (a.aiScore ?? 0));
+      const persistedRestaurants = items
+        .filter((i) => i.itemType === "meal" && !i.dayId)
+        .map(mapTripItemToRestaurant)
+        .sort((a, b) => (b.aiScore ?? 0) - (a.aiScore ?? 0));
+      if (persistedAttractions.length > 0) setCandidateAttractions(persistedAttractions);
+      if (persistedRestaurants.length > 0) setCandidateRestaurants(persistedRestaurants);
     });
   }, [tripId]);
 
@@ -1329,11 +1384,22 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   // Auto-load attractions for the trip destination
   useEffect(() => {
     if (!destination || !authSessionReady) return;
+    if (candidateAttractions.length > 0) return;
+    const hydrationKey = `${tripId}:${destination.toLowerCase()}`;
+    if (attractionsHydrationKeyRef.current === hydrationKey) return;
+    attractionsHydrationKeyRef.current = hydrationKey;
     setAttractionsLoading(true);
-    searchAttractions(destination).then((attractions) => {
+    const request = attractionsRequestRef.current ?? searchAttractions(destination);
+    attractionsRequestRef.current = request;
+    request.then((attractions) => {
       setCandidateAttractions(attractions);
-    }).finally(() => setAttractionsLoading(false));
-  }, [destination, authSessionReady]);
+    }).catch((error) => {
+      console.error("[TripBuilder] attractions hydration failed", { tripId, destination, error });
+    }).finally(() => {
+      attractionsRequestRef.current = null;
+      setAttractionsLoading(false);
+    });
+  }, [destination, authSessionReady, candidateAttractions.length, tripId]);
 
   // GSAP entrance animations for attraction cards
   useEffect(() => {
@@ -1345,11 +1411,22 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   // Auto-load restaurants for the trip destination
   useEffect(() => {
     if (!destination || !authSessionReady) return;
+    if (candidateRestaurants.length > 0) return;
+    const hydrationKey = `${tripId}:${destination.toLowerCase()}`;
+    if (restaurantsHydrationKeyRef.current === hydrationKey) return;
+    restaurantsHydrationKeyRef.current = hydrationKey;
     setRestaurantsLoading(true);
-    searchRestaurants(destination).then((restaurants) => {
+    const request = restaurantsRequestRef.current ?? searchRestaurants(destination);
+    restaurantsRequestRef.current = request;
+    request.then((restaurants) => {
       setCandidateRestaurants(restaurants);
-    }).finally(() => setRestaurantsLoading(false));
-  }, [destination, authSessionReady]);
+    }).catch((error) => {
+      console.error("[TripBuilder] restaurants hydration failed", { tripId, destination, error });
+    }).finally(() => {
+      restaurantsRequestRef.current = null;
+      setRestaurantsLoading(false);
+    });
+  }, [destination, authSessionReady, candidateRestaurants.length, tripId]);
 
   // GSAP entrance animations for restaurant cards
   useEffect(() => {
