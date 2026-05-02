@@ -1,5 +1,51 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-02) — Persisted Explore Candidate Snapshots v1 (Attractions + Restaurants)
+
+### Summary
+Implemented snapshot-first hydration for the Explore Attractions and Restaurants panels. Scored/ranked candidates from provider search are now persisted per-trip in `trips.metadata.explore_snapshot`. On existing-trip page load, TripBuilder hydrates Attractions and Restaurants from the snapshot first — skipping the expensive provider-backed search call entirely. Provider search only runs when no usable snapshot exists. After a successful provider search the result is saved as the new snapshot.
+
+### Problem solved
+Explore recommendations degraded after page refresh because `searchAttractions`/`searchRestaurants` returned provider results without scoring metadata on subsequent calls, causing score badges to show 0 and Top Pick to appear without a valid signal.
+
+### Explore hydration order (after this PR)
+1. `fetchTripItems(tripId)` — load flights/hotels from persisted trip-level items (unchanged)
+2. `fetchExploreSnapshot(tripId)` — load Attractions + Restaurants from snapshot in `trips.metadata`
+3. If snapshot has usable candidates → hydrate state, **no provider call**
+4. If snapshot absent/empty → call `searchAttractions(destination)` + `searchRestaurants(destination)`, then `saveExploreSnapshot(tripId, ...)` after success
+
+### How scoring/top-pick is preserved
+- `fetchExploreSnapshot` mapper: `aiScore: typeof a.aiScore === "number" && a.aiScore > 0 ? a.aiScore : undefined` — only positive scores passed through; no fake 0 fallback
+- `saveExploreSnapshot` serializes `ai_score: a.aiScore ?? null` per candidate using snake_case for backend
+- `AiScoreBadge` renders null for score ≤ 0 or non-finite (unchanged)
+- Top Pick gated on `(attraction.aiScore ?? 0) > 0` (unchanged)
+
+### How repeated provider calls are avoided
+- `exploreSnapshotLoadedRef` stores a `${tripId}:${destination}` hydration key — the combined hydration effect bails immediately on re-render if key already processed
+- No separate attractions/restaurants refs needed; single async effect covers both
+
+### Snapshot storage decision
+Stored in `trips.metadata.explore_snapshot` (existing `jsonb` column on the `trips` table). No new Supabase table or migration required. Service method merges snapshot into existing metadata, preserving other keys.
+
+### Files touched
+- `backend/app/models/search.py` — added `ExploreSnapshotAttraction`, `ExploreSnapshotRestaurant`, `ExploreSnapshot` Pydantic models
+- `backend/app/services/trips.py` — added `get_explore_snapshot(trip_id, user_id)` and `save_explore_snapshot(trip_id, user_id, snapshot)` service methods; added `Dict, Any` import
+- `backend/app/routes/trips.py` — added `GET /trips/{trip_id}/explore-snapshot` and `PUT /trips/{trip_id}/explore-snapshot` endpoints; imported `ExploreSnapshot`
+- `frontend/src/lib/api.ts` — added `ExploreSnapshot` interface, `fetchExploreSnapshot(tripId)`, `saveExploreSnapshot(tripId, snapshot)` exports
+- `frontend/src/components/trips/TripBuilder.tsx` — imported `fetchExploreSnapshot`/`saveExploreSnapshot`; added `exploreSnapshotLoadedRef`; replaced two separate hydration effects with one unified snapshot-first async effect
+- `frontend/tests/explore-hydration.test.mjs` — updated test #5 title + assertions for snapshot-first behavior; added 14 new snapshot contract tests (total 20 tests)
+- `backend/tests/test_explore_snapshot.py` — NEW: 10 backend unit tests for TripsService snapshot methods and ExploreSnapshot models
+
+### Known issues / v1 limits
+- Snapshot has no TTL in v1 — once saved it stays until a new provider search runs. This is intentional: provider search is the expensive path and scored data from it is durable.
+- User-triggered regeneration path (if implemented later) should clear `exploreSnapshotLoadedRef` and call `saveExploreSnapshot` after the new results arrive.
+- Snapshot is per-trip — does not carry over if a user changes the destination.
+
+### Supabase SQL: No (uses existing `trips.metadata jsonb` column)
+### Backend touched: Yes (new endpoints + service methods, no DB schema change)
+
+---
+
 ## Last change (2026-05-01) — Card points edit + Account identity / sign out
 
 ### Summary

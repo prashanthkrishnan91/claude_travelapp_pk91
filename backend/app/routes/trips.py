@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from app.core.deps import DB, CurrentUserID
 from app.models import Trip, TripCreate, TripUpdate, ItineraryItem
 from app.models.itinerary import ItineraryItemDirectCreate
-from app.models.search import FlightResult, FlightSearchRequest, HotelResult, HotelSearchRequest, RoundTripFlightPair
+from app.models.search import ExploreSnapshot, FlightResult, FlightSearchRequest, HotelResult, HotelSearchRequest, RoundTripFlightPair
 from app.services import TripsService
 from app.services.itinerary import ItineraryService
 from app.services.search import SearchService
@@ -389,6 +389,21 @@ def list_trip_ideas(trip_id: UUID, db: DB, user_id: CurrentUserID) -> List[Itine
     """Return unscheduled itinerary items (saved concierge ideas not yet assigned to a day)."""
     TripsService(db).get_trip(trip_id, user_id)
     return ItineraryService(db).list_unscheduled_items(trip_id)
+
+
+@router.get("/{trip_id}/explore-snapshot", response_model=Optional[ExploreSnapshot])
+def get_explore_snapshot(trip_id: UUID, db: DB, user_id: CurrentUserID) -> Optional[ExploreSnapshot]:
+    """Return persisted Explore candidate snapshot for Attractions and Restaurants, or null when absent."""
+    snapshot = TripsService(db).get_explore_snapshot(trip_id, user_id)
+    if not snapshot:
+        return None
+    return ExploreSnapshot(**snapshot)
+
+
+@router.put("/{trip_id}/explore-snapshot", status_code=status.HTTP_204_NO_CONTENT)
+def save_explore_snapshot(trip_id: UUID, payload: ExploreSnapshot, db: DB, user_id: CurrentUserID) -> None:
+    """Persist Explore candidate snapshot for the trip. Overwrites previous snapshot."""
+    TripsService(db).save_explore_snapshot(trip_id, user_id, payload.model_dump(mode="json"))
 
 
 @router.post("/create-with-search", response_model=TripWithResults, status_code=status.HTTP_201_CREATED)
