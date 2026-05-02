@@ -317,3 +317,178 @@ def test_explore_snapshot_ownership_enforced_by_user_id():
     import fastapi
     with pytest.raises((fastapi.HTTPException, Exception)):
         svc.get_explore_snapshot(trip["id"], other_id)
+
+
+# ---------------------------------------------------------------------------
+# Tests: stale cache-hit re-scoring in search_attractions / search_restaurants
+# ---------------------------------------------------------------------------
+
+from app.services.search import SearchService, _compute_attraction_ai_score, _compute_restaurant_ai_score
+from app.models.search import AttractionSearchRequest, RestaurantSearchRequest
+
+
+class _FakeSupabase:
+    """Minimal Supabase client mock for search service cache tests.
+
+    Returns rows in the format _get_cache expects:
+    [{"payload": {"results": [...]}, "expires_at": None}]
+    """
+
+    def __init__(self, cached_rows=None):
+        self._cached_rows = cached_rows  # None = cache miss; list = cache hit
+
+    def table(self, name):
+        return self
+
+    def select(self, *_):
+        return self
+
+    def eq(self, *_):
+        return self
+
+    def gt(self, *_):
+        return self
+
+    def order(self, *_):
+        return self
+
+    def limit(self, *_):
+        return self
+
+    def execute(self):
+        class _R:
+            def __init__(self, data):
+                self.data = data
+        if self._cached_rows is None:
+            return _R([])
+        return _R([{"payload": {"results": self._cached_rows}, "expires_at": None}])
+
+    def insert(self, *_):
+        return self
+
+    def upsert(self, *_):
+        return self
+
+
+def test_search_attractions_rescores_stale_cache_hit_with_null_ai_score():
+    """Stale cache rows with ai_score=None are re-scored on cache hit."""
+    stale_row = {
+        "id": "attr-stale-1",
+        "name": "Old Museum",
+        "category": "landmarks",
+        "description": "A museum",
+        "location": "Paris",
+        "address": "1 Museum St",
+        "rating": 4.6,
+        "num_reviews": 50000,
+        "price_level": 1,
+        "opening_hours": None,
+        "duration_minutes": 90,
+        "ai_score": None,  # stale — no score
+        "tags": [],
+        "booking_url": "https://example.com/museum",
+        "source": "mock",
+        "lat": 48.86,
+        "lng": 2.35,
+    }
+    db = _FakeSupabase(cached_rows=[stale_row])
+    svc = SearchService(db)
+    req = AttractionSearchRequest(location="Paris")
+    results = svc.search_attractions(req)
+
+    assert len(results) == 1
+    result = results[0]
+    assert result.ai_score is not None, "Cache-hit re-scoring must populate ai_score"
+    assert result.ai_score > 0, "Re-scored ai_score must be positive"
+    expected = _compute_attraction_ai_score(4.6, 50000, "landmarks")
+    assert result.ai_score == expected, "Re-scored value must match _compute_attraction_ai_score"
+
+
+def test_search_attractions_preserves_existing_positive_ai_score():
+    """Cache rows that already have a positive ai_score must not be re-scored."""
+    cached_row = {
+        "id": "attr-scored-1",
+        "name": "Grand Palace",
+        "category": "landmarks",
+        "description": "A palace",
+        "location": "Paris",
+        "address": "Palace Rd",
+        "rating": 4.8,
+        "num_reviews": 200000,
+        "price_level": 2,
+        "opening_hours": None,
+        "duration_minutes": 120,
+        "ai_score": 91.5,
+        "tags": ["Must Visit"],
+        "booking_url": "https://example.com/palace",
+        "source": "mock",
+        "lat": 48.87,
+        "lng": 2.34,
+    }
+    db = _FakeSupabase(cached_rows=[cached_row])
+    svc = SearchService(db)
+    req = AttractionSearchRequest(location="Paris")
+    results = svc.search_attractions(req)
+
+    assert results[0].ai_score == 91.5, "Existing positive ai_score must be preserved"
+
+
+def test_search_restaurants_rescores_stale_cache_hit_with_null_ai_score():
+    """Stale restaurant cache rows with ai_score=None are re-scored on cache hit."""
+    stale_row = {
+        "id": "rest-stale-1",
+        "name": "Old Bistro",
+        "cuisine": "French",
+        "location": "Paris",
+        "address": "12 Bistro Lane",
+        "rating": 4.4,
+        "num_reviews": 8000,
+        "price_level": 2,
+        "opening_hours": None,
+        "ai_score": None,
+        "sentiment": None,
+        "tags": [],
+        "booking_url": "https://example.com/bistro",
+        "source": "mock",
+        "lat": 48.85,
+        "lng": 2.36,
+    }
+    db = _FakeSupabase(cached_rows=[stale_row])
+    svc = SearchService(db)
+    req = RestaurantSearchRequest(location="Paris")
+    results = svc.search_restaurants(req)
+
+    assert len(results) == 1
+    result = results[0]
+    assert result.ai_score is not None, "Cache-hit re-scoring must populate restaurant ai_score"
+    assert result.ai_score > 0, "Re-scored restaurant ai_score must be positive"
+    expected = _compute_restaurant_ai_score(4.4, 8000, 2, None)
+    assert result.ai_score == expected, "Re-scored value must match _compute_restaurant_ai_score"
+
+
+def test_search_restaurants_preserves_existing_positive_ai_score():
+    """Restaurant cache rows that already have a positive ai_score must not be re-scored."""
+    cached_row = {
+        "id": "rest-scored-1",
+        "name": "Le Gourmet",
+        "cuisine": "French",
+        "location": "Paris",
+        "address": "5 Gourmet Place",
+        "rating": 4.7,
+        "num_reviews": 20000,
+        "price_level": 3,
+        "opening_hours": None,
+        "ai_score": 85.0,
+        "sentiment": 0.9,
+        "tags": [],
+        "booking_url": "https://example.com/gourmet",
+        "source": "mock",
+        "lat": 48.84,
+        "lng": 2.37,
+    }
+    db = _FakeSupabase(cached_rows=[cached_row])
+    svc = SearchService(db)
+    req = RestaurantSearchRequest(location="Paris")
+    results = svc.search_restaurants(req)
+
+    assert results[0].ai_score == 85.0, "Existing positive restaurant ai_score must be preserved"

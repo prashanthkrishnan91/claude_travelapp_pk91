@@ -1,6 +1,33 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-02) — Persisted Explore Candidate Snapshots v1 (Attractions + Restaurants)
+## Last change (2026-05-02) — Explore Scoring Durability Fix (stale cache re-scoring + snapshot enrichment)
+
+### Summary
+Fixed a scoring durability gap where Explore Attractions and Restaurants showed no AI score badges or Top Pick after snapshot load. Root cause: Supabase `research_cache` entries from before scoring was added had `ai_score: null`; cache hits returned these as-is, bypassing `_compute_attraction_ai_score`/`_compute_restaurant_ai_score`; nulls were saved into `trips.metadata.explore_snapshot`; snapshot loaded back with no scores on every subsequent visit.
+
+### Two-layer fix
+
+**Backend (`search.py`):** `search_attractions` and `search_restaurants` now re-score on cache hit any row with `ai_score is None` but non-null `rating` and `num_reviews` using the existing deterministic formulas. Rows with a positive existing score are not re-scored.
+
+**Frontend (`api.ts`):** Added `computeExploreAttractionScore` and `computeExploreRestaurantScore` (mirror exact backend formulas using `Math.log1p` and same weight constants). Both are exported. `fetchExploreSnapshot` now enriches stale snapshot entries: if `aiScore` is null but `rating`/`numReviews` are present, computes a score as fallback (still gated on `> 0`). `saveExploreSnapshot` applies the same enrichment before serializing to backend so future loads get pre-scored snapshots.
+
+### Score gating invariants (unchanged)
+- `AiScoreBadge` renders null for score ≤ 0 or non-finite
+- Top Pick gated on `(attraction.aiScore ?? 0) > 0`
+- Neither computed nor persisted scores are faked — no enrichment if `rating`/`numReviews` absent
+
+### Files touched
+- `backend/app/services/search.py` — re-score stale cache hits in `search_attractions` and `search_restaurants`
+- `frontend/src/lib/api.ts` — added `computeExploreAttractionScore`, `computeExploreRestaurantScore`; updated `fetchExploreSnapshot` mapper and `saveExploreSnapshot` to enrich stale candidates
+- `frontend/tests/explore-hydration.test.mjs` — updated tests 15–16 for new code structure; added 6 new scoring contract tests (total 26 tests)
+- `backend/tests/test_explore_snapshot.py` — added 4 new cache-hit re-scoring tests (total 14 tests)
+
+### Supabase SQL: No
+### Backend touched: Yes (scoring logic in existing service, no DB schema change)
+
+---
+
+## Previous change (2026-05-02) — Persisted Explore Candidate Snapshots v1 (Attractions + Restaurants)
 
 ### Summary
 Implemented snapshot-first hydration for the Explore Attractions and Restaurants panels. Scored/ranked candidates from provider search are now persisted per-trip in `trips.metadata.explore_snapshot`. On existing-trip page load, TripBuilder hydrates Attractions and Restaurants from the snapshot first — skipping the expensive provider-backed search call entirely. Provider search only runs when no usable snapshot exists. After a successful provider search the result is saved as the new snapshot.
@@ -15,8 +42,8 @@ Explore recommendations degraded after page refresh because `searchAttractions`/
 4. If snapshot absent/empty → call `searchAttractions(destination)` + `searchRestaurants(destination)`, then `saveExploreSnapshot(tripId, ...)` after success
 
 ### How scoring/top-pick is preserved
-- `fetchExploreSnapshot` mapper: `aiScore: typeof a.aiScore === "number" && a.aiScore > 0 ? a.aiScore : undefined` — only positive scores passed through; no fake 0 fallback
-- `saveExploreSnapshot` serializes `ai_score: a.aiScore ?? null` per candidate using snake_case for backend
+- `fetchExploreSnapshot` mapper: only positive scores passed through; no fake 0 fallback (see scoring fix above for stale enrichment)
+- `saveExploreSnapshot` serializes enriched `ai_score` per candidate using snake_case for backend
 - `AiScoreBadge` renders null for score ≤ 0 or non-finite (unchanged)
 - Top Pick gated on `(attraction.aiScore ?? 0) > 0` (unchanged)
 

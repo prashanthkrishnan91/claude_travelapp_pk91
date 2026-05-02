@@ -772,7 +772,13 @@ class SearchService:
         key = _cache_key("attractions", query)
         cached = self._get_cache(key)
         if cached:
-            return [AttractionResult(**item) for item in cached]
+            results = []
+            for item in cached:
+                r = AttractionResult(**item)
+                if r.ai_score is None and r.rating is not None and r.num_reviews is not None:
+                    r.ai_score = _compute_attraction_ai_score(r.rating, r.num_reviews, r.category or "")
+                results.append(r)
+            return results
 
         results = _mock_attractions(req)
         self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
@@ -783,7 +789,14 @@ class SearchService:
         key = _cache_key("restaurants", query)
         cached = self._get_cache(key)
         if cached:
-            return [RestaurantResult(**item) for item in cached]
+            results = []
+            for item in cached:
+                r = RestaurantResult(**item)
+                if r.ai_score is None and r.rating is not None and r.num_reviews is not None:
+                    price_level = r.price_level if r.price_level is not None else 2
+                    r.ai_score = _compute_restaurant_ai_score(r.rating, r.num_reviews, price_level, r.sentiment)
+                results.append(r)
+            return results
 
         results = _mock_restaurants(req)
         self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])

@@ -114,13 +114,70 @@ test('api.ts ExploreSnapshot interface is exported and includes required fields'
 });
 
 test('api.ts snapshot mapper gates aiScore on positive value only (no fake 0 scores)', () => {
-  assert.match(apiClient, /typeof a\.aiScore === "number" && a\.aiScore > 0 \? a\.aiScore : undefined/, 'Snapshot attraction mapper must only pass positive aiScore');
-  assert.match(apiClient, /typeof r\.aiScore === "number" && r\.aiScore > 0 \? r\.aiScore : undefined/, 'Snapshot restaurant mapper must only pass positive aiScore');
+  // Mapper uses storedScore (positive guard) and falls back to computedScore enrichment
+  assert.match(apiClient, /a\.aiScore > 0/, 'Snapshot attraction mapper must guard against zero/negative aiScore');
+  assert.match(apiClient, /r\.aiScore > 0/, 'Snapshot restaurant mapper must guard against zero/negative aiScore');
+  // computeExploreAttractionScore and computeExploreRestaurantScore exported for enrichment
+  assert.match(apiClient, /computeExploreAttractionScore/, 'api.ts must export computeExploreAttractionScore');
+  assert.match(apiClient, /computeExploreRestaurantScore/, 'api.ts must export computeExploreRestaurantScore');
 });
 
 test('api.ts saveExploreSnapshot sends snake_case ai_score field to backend', () => {
-  assert.match(apiClient, /ai_score: a\.aiScore \?\? null/, 'saveExploreSnapshot must serialize aiScore as ai_score for backend');
-  assert.match(apiClient, /ai_score: r\.aiScore \?\? null/, 'saveExploreSnapshot must serialize restaurant aiScore as ai_score for backend');
+  assert.match(apiClient, /ai_score: aiScore/, 'saveExploreSnapshot must serialize enriched aiScore as ai_score for backend');
+});
+
+test('api.ts computeExploreAttractionScore mirrors backend formula (rating, numReviews, category)', () => {
+  // Function must be exported
+  assert.match(apiClient, /export function computeExploreAttractionScore/, 'computeExploreAttractionScore must be exported');
+  // Must use log1p for review volume (matches backend math.log1p)
+  assert.match(apiClient, /Math\.log1p\(numReviews\)/, 'attraction scorer must use log1p for review volume');
+  // Must include uniqueness bonus for hidden_gems and local_favorites
+  assert.match(apiClient, /hidden_gems.*local_favorites|local_favorites.*hidden_gems/, 'attraction scorer must apply uniqueness bonus for hidden_gems/local_favorites');
+  // Must clamp to 0-100
+  assert.match(apiClient, /Math\.min\(100\.0,\s*Math\.max\(0\.0,/, 'attraction scorer must clamp result to 0-100');
+});
+
+test('api.ts computeExploreRestaurantScore mirrors backend formula (rating, numReviews, priceLevel, sentiment)', () => {
+  assert.match(apiClient, /export function computeExploreRestaurantScore/, 'computeExploreRestaurantScore must be exported');
+  assert.match(apiClient, /Math\.log1p\(numReviews\)/, 'restaurant scorer must use log1p for review volume');
+  // Must handle sentiment branch
+  assert.match(apiClient, /sentiment != null/, 'restaurant scorer must have sentiment branch');
+  // Must include price_value calculation
+  assert.match(apiClient, /4 - priceLevel/, 'restaurant scorer must compute price value from priceLevel');
+});
+
+test('api.ts fetchExploreSnapshot enriches stale candidates (aiScore=null) using computed score fallback', () => {
+  // Enrichment path: compute score when storedScore is null but rating+numReviews present
+  assert.match(apiClient, /computeExploreAttractionScore\(a\.rating/, 'fetchExploreSnapshot must enrich attractions via computeExploreAttractionScore');
+  assert.match(apiClient, /computeExploreRestaurantScore\(/, 'fetchExploreSnapshot must enrich restaurants via computeExploreRestaurantScore');
+  // Computed score must still be gated (no zero scores)
+  assert.match(apiClient, /computedScore != null && computedScore > 0/, 'Enrichment must still gate on positive computed score');
+});
+
+test('api.ts saveExploreSnapshot enriches candidates with computed score before persisting', () => {
+  // saveExploreSnapshot must apply enrichment before serializing
+  assert.match(apiClient, /computeExploreAttractionScore\(a\.rating/, 'saveExploreSnapshot must compute score for attractions missing aiScore');
+  assert.match(apiClient, /computeExploreRestaurantScore\(/, 'saveExploreSnapshot must compute score for restaurants missing aiScore');
+  // Final serialization uses local aiScore variable, not raw a.aiScore
+  assert.match(apiClient, /ai_score: aiScore/, 'saveExploreSnapshot must serialize enriched aiScore as ai_score');
+});
+
+test('Backend search_attractions re-scores stale cache hits with null ai_score', () => {
+  const searchService = readFileSync(
+    new URL('../../backend/app/services/search.py', import.meta.url),
+    'utf8',
+  );
+  assert.match(searchService, /if r\.ai_score is None and r\.rating is not None and r\.num_reviews is not None/, 'search_attractions must re-score stale cache hits where ai_score is None');
+  assert.match(searchService, /_compute_attraction_ai_score\(r\.rating, r\.num_reviews, r\.category/, 'search_attractions must call _compute_attraction_ai_score for re-scoring');
+});
+
+test('Backend search_restaurants re-scores stale cache hits with null ai_score', () => {
+  const searchService = readFileSync(
+    new URL('../../backend/app/services/search.py', import.meta.url),
+    'utf8',
+  );
+  assert.match(searchService, /if r\.ai_score is None and r\.rating is not None and r\.num_reviews is not None/, 'search_restaurants must re-score stale cache hits where ai_score is None');
+  assert.match(searchService, /_compute_restaurant_ai_score\(r\.rating, r\.num_reviews, price_level, r\.sentiment\)/, 'search_restaurants must call _compute_restaurant_ai_score for re-scoring');
 });
 
 test('Backend trips routes include explore-snapshot GET and PUT endpoints', () => {
