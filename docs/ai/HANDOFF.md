@@ -529,3 +529,9 @@ Enriched whyPick evidence quality by promoting venue-specific Foursquare tags, T
 
 ### Next Step
 - Monitor production logs for fallback whyPick copy quality to confirm no drift toward generic language after adding attribute-driven specialty fallback.
+
+## 2026-05-02 Explore hydration follow-up (existing trips still empty)
+- Root assumption corrected: existing-trip Explore candidates are available from persisted itinerary items, not only from runtime provider `/search/attractions` and `/search/restaurants` calls.
+- TripBuilder now hydrates `candidateAttractions` and `candidateRestaurants` from `fetchTripItems(tripId)` by mapping trip-level `activity`/`meal` items (`day_id = null`) into the exact panel-rendered candidate state shape.
+- Provider-backed attraction/restaurant hydration remains as fallback only when persisted candidates are absent.
+- Added one-shot hydration keys (`tripId + destination`) and in-flight request refs to prevent duplicate expensive provider calls during rerenders/refresh loops.
