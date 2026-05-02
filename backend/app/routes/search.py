@@ -129,7 +129,7 @@ def search_attractions(payload: AttractionSearchRequest, db: DB, user_id: Curren
             window_seconds=settings.guardrail_search_window_seconds,
             dedupe_seconds=settings.guardrail_search_dedupe_seconds,
         ),
-        dedupe_payload={"location": payload.location, "query": payload.query, "limit": payload.limit},
+        dedupe_payload={"location": payload.location, "category": payload.category, "date": payload.date},
     )
     return SearchService(db).search_attractions(payload)
 
@@ -152,7 +152,7 @@ def search_restaurants(payload: RestaurantSearchRequest, db: DB, user_id: Curren
             window_seconds=settings.guardrail_search_window_seconds,
             dedupe_seconds=settings.guardrail_search_dedupe_seconds,
         ),
-        dedupe_payload={"location": payload.location, "cuisine": payload.cuisine, "limit": payload.limit},
+        dedupe_payload={"location": payload.location, "cuisine": payload.cuisine, "date": payload.date},
     )
     return SearchService(db).search_restaurants(payload)
 
