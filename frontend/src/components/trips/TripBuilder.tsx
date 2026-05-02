@@ -148,6 +148,47 @@ function sortRestaurants(items: RestaurantSearchResult[], key: SortKey): Restaur
   });
 }
 
+function mapTripItemToAttraction(item: ItineraryItem, fallbackDestination?: string): AttractionSearchResult {
+  const details = (item.details ?? {}) as Record<string, unknown>;
+  return {
+    id: String(item.id),
+    name: String(details.name ?? item.title ?? "Attraction"),
+    category: String(details.category ?? "attraction"),
+    description: String(details.description ?? ""),
+    location: String(details.location ?? item.location ?? fallbackDestination ?? ""),
+    address: String(details.address ?? item.location ?? ""),
+    rating: typeof details.rating === "number" ? details.rating : undefined,
+    numReviews: typeof details.numReviews === "number" ? details.numReviews : undefined,
+    aiScore: typeof details.aiScore === "number" ? details.aiScore : undefined,
+    tags: Array.isArray(details.tags) ? details.tags.filter((tag): tag is string => typeof tag === "string") : [],
+    openingHours: typeof details.openingHours === "string" ? details.openingHours : undefined,
+    priceLevel: typeof details.priceLevel === "number" ? details.priceLevel : undefined,
+    bookingUrl: typeof details.bookingUrl === "string" ? details.bookingUrl : undefined,
+    lat: typeof details.lat === "number" ? details.lat : undefined,
+    lng: typeof details.lng === "number" ? details.lng : undefined,
+  };
+}
+
+function mapTripItemToRestaurant(item: ItineraryItem, fallbackDestination?: string): RestaurantSearchResult {
+  const details = (item.details ?? {}) as Record<string, unknown>;
+  return {
+    id: String(item.id),
+    name: String(details.name ?? item.title ?? "Restaurant"),
+    cuisine: String(details.cuisine ?? "Restaurant"),
+    location: String(details.location ?? item.location ?? fallbackDestination ?? ""),
+    address: String(details.address ?? item.location ?? ""),
+    rating: typeof details.rating === "number" ? details.rating : undefined,
+    numReviews: typeof details.numReviews === "number" ? details.numReviews : undefined,
+    priceLevel: typeof details.priceLevel === "number" ? details.priceLevel : undefined,
+    openingHours: typeof details.openingHours === "string" ? details.openingHours : undefined,
+    aiScore: typeof details.aiScore === "number" ? details.aiScore : undefined,
+    tags: Array.isArray(details.tags) ? details.tags.filter((tag): tag is string => typeof tag === "string") : [],
+    bookingUrl: typeof details.bookingUrl === "string" ? details.bookingUrl : undefined,
+    lat: typeof details.lat === "number" ? details.lat : undefined,
+    lng: typeof details.lng === "number" ? details.lng : undefined,
+  };
+}
+
 function filterAttractions(
   items: AttractionSearchResult[],
   ratingMin: number | null,
@@ -1257,47 +1298,6 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const attractionsRequestRef = useRef<Promise<AttractionSearchResult[]> | null>(null);
   const restaurantsRequestRef = useRef<Promise<RestaurantSearchResult[]> | null>(null);
 
-  const mapTripItemToAttraction = (item: ItineraryItem): AttractionSearchResult => {
-    const details = (item.details ?? {}) as Record<string, unknown>;
-    return {
-      id: String(item.id),
-      name: String(details.name ?? item.title ?? "Attraction"),
-      location: String(details.location ?? item.location ?? destination ?? ""),
-      address: String(details.address ?? item.location ?? ""),
-      rating: typeof details.rating === "number" ? details.rating : undefined,
-      numReviews: typeof details.numReviews === "number" ? details.numReviews : undefined,
-      aiScore: typeof details.aiScore === "number" ? details.aiScore : undefined,
-      tags: Array.isArray(details.tags) ? details.tags.filter((tag): tag is string => typeof tag === "string") : [],
-      category: typeof details.category === "string" ? details.category : undefined,
-      description: typeof details.description === "string" ? details.description : undefined,
-      openingHours: typeof details.openingHours === "string" ? details.openingHours : undefined,
-      priceLevel: typeof details.priceLevel === "number" ? details.priceLevel : undefined,
-      bookingUrl: typeof details.bookingUrl === "string" ? details.bookingUrl : undefined,
-      lat: typeof details.lat === "number" ? details.lat : undefined,
-      lng: typeof details.lng === "number" ? details.lng : undefined,
-    };
-  };
-
-  const mapTripItemToRestaurant = (item: ItineraryItem): RestaurantSearchResult => {
-    const details = (item.details ?? {}) as Record<string, unknown>;
-    return {
-      id: String(item.id),
-      name: String(details.name ?? item.title ?? "Restaurant"),
-      cuisine: String(details.cuisine ?? "Restaurant"),
-      location: String(details.location ?? item.location ?? destination ?? ""),
-      address: String(details.address ?? item.location ?? ""),
-      rating: typeof details.rating === "number" ? details.rating : undefined,
-      numReviews: typeof details.numReviews === "number" ? details.numReviews : undefined,
-      priceLevel: typeof details.priceLevel === "number" ? details.priceLevel : undefined,
-      openingHours: typeof details.openingHours === "string" ? details.openingHours : undefined,
-      aiScore: typeof details.aiScore === "number" ? details.aiScore : undefined,
-      tags: Array.isArray(details.tags) ? details.tags.filter((tag): tag is string => typeof tag === "string") : [],
-      bookingUrl: typeof details.bookingUrl === "string" ? details.bookingUrl : undefined,
-      lat: typeof details.lat === "number" ? details.lat : undefined,
-      lng: typeof details.lng === "number" ? details.lng : undefined,
-    };
-  };
-
   // ── Compare state ────────────────────────────────────────────────────────────
   const [compareSet,     setCompareSet]     = useState<Set<string>>(new Set());
   const [compareOpen,    setCompareOpen]    = useState(false);
@@ -1356,16 +1356,16 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       setCandidateHotels(hotels);
       const persistedAttractions = items
         .filter((i) => i.itemType === "activity" && !i.dayId)
-        .map(mapTripItemToAttraction)
+        .map((item) => mapTripItemToAttraction(item, destination))
         .sort((a, b) => (b.aiScore ?? 0) - (a.aiScore ?? 0));
       const persistedRestaurants = items
         .filter((i) => i.itemType === "meal" && !i.dayId)
-        .map(mapTripItemToRestaurant)
+        .map((item) => mapTripItemToRestaurant(item, destination))
         .sort((a, b) => (b.aiScore ?? 0) - (a.aiScore ?? 0));
       if (persistedAttractions.length > 0) setCandidateAttractions(persistedAttractions);
       if (persistedRestaurants.length > 0) setCandidateRestaurants(persistedRestaurants);
     });
-  }, [tripId]);
+  }, [tripId, destination]);
 
   // GSAP entrance animations for flight cards
   useEffect(() => {
