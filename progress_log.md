@@ -66,3 +66,4 @@
 - 2026-05-01: Follow-up itinerary security closure: authenticated and ownership-scoped `get_booking_links` route so booking links cannot be fetched cross-user by guessed item id. Added focused booking-link auth tests.
 
 - 2026-05-01: Added backend in-memory cost guardrails for expensive AI/search routes (per-user throttles + short duplicate cooldowns) with env-configurable defaults and 429 frontend-safe responses; applied to `/ai/concierge`, `/ai/concierge/search`, `/ai/timeline/suggest`, and `/search/*` endpoints; also required authenticated user context on search routes for per-user keying. Added focused guardrail unit tests and updated AI handoff docs.
+- 2026-05-02: Fixed Explore existing-trip hydration regression by gating attraction/restaurant auto-load behind confirmed Supabase session readiness in TripBuilder to avoid one-time unauthenticated empty responses on refresh; added focused Explore hydration test coverage.

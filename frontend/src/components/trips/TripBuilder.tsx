@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import type { Session } from "@supabase/supabase-js";
 import {
   DndContext,
   DragCancelEvent,
@@ -46,6 +47,7 @@ import {
 } from "lucide-react";
 import { estimateTravel, sumRoute } from "@/lib/travelTime";
 import { addDaysToIsoDate, normalizeIsoDate } from "@/lib/tripDays";
+import { supabase } from "@/lib/supabase";
 import gsap from "gsap";
 import type {
   ItineraryDay,
@@ -1216,6 +1218,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const [candidateRestaurants, setCandidateRestaurants] = useState<RestaurantSearchResult[]>([]);
   const [attractionsLoading,   setAttractionsLoading]   = useState(false);
   const [restaurantsLoading,   setRestaurantsLoading]   = useState(false);
+  const [authSessionReady, setAuthSessionReady] = useState(false);
   const [flightPanelOpen,      setFlightPanelOpen]      = useState(true);
   const [hotelPanelOpen,       setHotelPanelOpen]       = useState(true);
   const [attractionPanelOpen,  setAttractionPanelOpen]  = useState(true);
@@ -1266,6 +1269,23 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     setDays([...initialDays].sort((a, b) => a.dayNumber - b.dayNumber));
   }, [initialDays]);
 
+  useEffect(() => {
+    let active = true;
+
+    const applySession = (session: Session | null) => {
+      if (!active) return;
+      setAuthSessionReady(!!session?.access_token);
+    };
+
+    supabase.auth.getSession().then(({ data }) => applySession(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => applySession(session));
+
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
   const canonicalStartDate = normalizeIsoDate(startDate);
   const displayDays = useMemo(
     () =>
@@ -1308,12 +1328,12 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
   // Auto-load attractions for the trip destination
   useEffect(() => {
-    if (!destination) return;
+    if (!destination || !authSessionReady) return;
     setAttractionsLoading(true);
     searchAttractions(destination).then((attractions) => {
       setCandidateAttractions(attractions);
     }).finally(() => setAttractionsLoading(false));
-  }, [destination]);
+  }, [destination, authSessionReady]);
 
   // GSAP entrance animations for attraction cards
   useEffect(() => {
@@ -1324,12 +1344,12 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
   // Auto-load restaurants for the trip destination
   useEffect(() => {
-    if (!destination) return;
+    if (!destination || !authSessionReady) return;
     setRestaurantsLoading(true);
     searchRestaurants(destination).then((restaurants) => {
       setCandidateRestaurants(restaurants);
     }).finally(() => setRestaurantsLoading(false));
-  }, [destination]);
+  }, [destination, authSessionReady]);
 
   // GSAP entrance animations for restaurant cards
   useEffect(() => {
