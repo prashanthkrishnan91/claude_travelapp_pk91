@@ -6,6 +6,10 @@ const tripBuilder = readFileSync(
   new URL('../src/components/trips/TripBuilder.tsx', import.meta.url),
   'utf8',
 );
+const apiClient = readFileSync(
+  new URL('../src/lib/api.ts', import.meta.url),
+  'utf8',
+);
 
 test('TripBuilder waits for auth session before loading attractions/restaurants', () => {
   assert.match(tripBuilder, /authSessionReady/, 'authSessionReady state must exist to gate hydration');
@@ -15,9 +19,17 @@ test('TripBuilder waits for auth session before loading attractions/restaurants'
 });
 
 test('TripBuilder hydration mapper preserves attraction and restaurant score fields from persisted snake_case/camelCase details', () => {
-  assert.match(tripBuilder, /typeof details\.ai_score === "number" \? details\.ai_score/, 'Persisted ai_score should map into aiScore');
-  assert.match(tripBuilder, /typeof details\.score === "number" \? details\.score/, 'Persisted fallback score should map into aiScore');
+  assert.match(tripBuilder, /function normalizeExploreScore\(details: Record<string, unknown>\)/, 'TripBuilder should centralize explore score normalization');
+  assert.match(tripBuilder, /if \(typeof details\.ai_score === "number"\) return details\.ai_score;/, 'Persisted ai_score should map into aiScore');
+  assert.match(tripBuilder, /if \(typeof details\.score === "number"\) return details\.score;/, 'Persisted fallback score should map into aiScore');
   assert.match(tripBuilder, /typeof details\.num_reviews === "number" \? details\.num_reviews/, 'Persisted num_reviews should map for card details');
+});
+
+test('API search mappers preserve attraction and restaurant score fields from snake_case/camelCase/score payloads', () => {
+  assert.match(apiClient, /typeof a\.ai_score === "number"/, 'Attractions mapper should support ai_score from backend payload');
+  assert.match(apiClient, /typeof a\.score === "number"/, 'Attractions mapper should support legacy score field');
+  assert.match(apiClient, /typeof r\.ai_score === "number"/, 'Restaurants mapper should support ai_score from backend payload');
+  assert.match(apiClient, /typeof r\.score === "number"/, 'Restaurants mapper should support legacy score field');
 });
 
 test('TripBuilder existing-trip hydration still refreshes via provider search path', () => {
