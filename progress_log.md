@@ -1,3 +1,6 @@
+## 2026-05-02
+- Added Provider Result Cache v1 for `LiveResearchService` (Tavily/Brave/Serper). Replaced 30-min hard-expiry `_TTLCache` with `ProviderResultCache` (soft 3-tier TTL: 0–6h fresh, 6–24h stale/quality-gated, 24h+ expired). Added quality gate that rejects empty, error-status, and intent-insufficient payloads on both read and write. Cache failures are non-fatal (try/except + log). Backward-compatible: existing `_TTLCache(0)` test injection still works via `get_with_status()` compat shim. Added 46 focused tests; all 632 tests pass. Docs: `HANDOFF.md` updated with cache contract, TTL thresholds, log event reference, and future AI notes.
+
 ## 2026-04-26
 - Fixed AI Concierge intent-isolation and category-fit correctness for place research: cache keys now include normalized query + destination + derived intent-category + location anchor, restaurant live-search query building now preserves user phrasing (e.g., brunch/cafes), and logging now records query/intent/category, cache hit/miss key, reason-source generation path, and final addable category distribution.
 - Added category-fit scoring and guardrails in Google verification gate so Google-verified but wrong-intent places (e.g., bars/steakhouses for brunch-cafe queries) are demoted to research sources instead of addable cards; ranking now prioritizes category fit before other score signals.

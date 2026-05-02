@@ -638,9 +638,19 @@ class _TTLCache:
                 removed += 1
         return removed
 
+    def get_with_status(self, key: str) -> Optional[Tuple[str, Any]]:
+        """Compatibility shim: maps _TTLCache hits to ("fresh", payload)."""
+        payload = self.get(key)
+        return ("fresh", payload) if payload is not None else None
 
-# Module-level cache so multiple ConciergeService instances share results.
-_GLOBAL_CACHE = _TTLCache(ttl_seconds=1800)
+
+# Module-level cache — ProviderResultCache provides soft-TTL and quality gate.
+from app.services.provider_cache import (  # noqa: E402 — after class definitions
+    ProviderResultCache,
+    is_live_research_payload_quality_sufficient as _is_cache_quality_sufficient,
+    reset_provider_cache,
+)
+_GLOBAL_CACHE = ProviderResultCache()
 # Separate cache for candidate verification results.
 _VERIFICATION_CACHE = _TTLCache(ttl_seconds=1800)
 # Bumped to invalidate stale cached reasons after canonical display contract rollout.
@@ -3787,7 +3797,7 @@ class LiveResearchService:
     def __init__(
         self,
         provider: Optional[LiveSearchProvider] = None,
-        cache: Optional[_TTLCache] = None,
+        cache: Optional[Any] = None,
         *,
         enabled: bool = True,
         max_results: int = 10,
@@ -3841,16 +3851,39 @@ class LiveResearchService:
             destination,
             cache_key,
         )
-        cached = self._cache.get(cache_key)
-        if cached is not None:
-            logger.info("live_research_cache hit key=%s", cache_key)
-            payload = self._payload_to_result(cached)
+        cache_entry = None
+        try:
+            cache_entry = self._cache.get_with_status(cache_key)
+            if cache_entry is not None:
+                cache_status, raw_cached = cache_entry
+                quality_ok = _is_cache_quality_sufficient(
+                    raw_cached, intent=intent, cache_version=CONCIERGE_CACHE_VERSION
+                )
+                if not quality_ok:
+                    logger.info(
+                        "live_research_cache weak_bypass key=%s status=%s intent=%s",
+                        cache_key, cache_status, intent,
+                    )
+                    cache_entry = None
+                elif cache_status == "stale":
+                    logger.info("live_research_cache stale_reuse key=%s intent=%s", cache_key, intent)
+                else:
+                    logger.info("live_research_cache hit key=%s", cache_key)
+        except Exception as _cache_exc:
+            logger.warning("live_research_cache read_error key=%s err=%s", cache_key, _cache_exc)
+            cache_entry = None
+
+        if cache_entry is not None:
+            _, raw_cached = cache_entry
+            payload = self._payload_to_result(raw_cached)
             if payload is not None:
                 payload.cached = True
                 if _debug_out is not None:
                     _debug_out["cache_hit"] = True
                     _debug_out["cache_key"] = cache_key
+                    _debug_out["cache_status"] = cache_entry[0]
                 return payload
+
         logger.info("live_research_cache miss key=%s", cache_key)
         if _debug_out is not None:
             _debug_out["cache_hit"] = False
@@ -4300,7 +4333,18 @@ class LiveResearchService:
             provider_name=self._provider.name,
             source_url=first_url,
         )
-        self._cache.set(cache_key, self._result_to_payload(result))
+        try:
+            payload_to_store = self._result_to_payload(result)
+            if _is_cache_quality_sufficient(payload_to_store, intent=intent, cache_version=CONCIERGE_CACHE_VERSION):
+                self._cache.set(cache_key, payload_to_store)
+                logger.info(
+                    "live_research_cache stored key=%s restaurants=%d attractions=%d hotels=%d",
+                    cache_key, len(result.restaurants), len(result.attractions), len(result.hotels),
+                )
+            else:
+                logger.info("live_research_cache not_stored key=%s intent=%s (weak result)", cache_key, intent)
+        except Exception as _store_exc:
+            logger.warning("live_research_cache write_error key=%s err=%s", cache_key, _store_exc)
         return result
 
     def _apply_optional_enrichment(self, normalized: Dict[str, List[Any]], *, destination: str) -> None:
@@ -4460,6 +4504,7 @@ def reset_global_cache() -> None:
     """Test helper — clear the module-level caches."""
     _GLOBAL_CACHE.clear()
     _VERIFICATION_CACHE.clear()
+    reset_provider_cache()
     # Also reset the Google Places verification cache so tests start clean.
     from app.services.google_places import reset_global_place_cache
     reset_global_place_cache()
