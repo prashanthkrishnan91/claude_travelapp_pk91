@@ -1303,10 +1303,6 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const attractionListRef  = useRef<HTMLDivElement>(null);
   const restaurantListRef  = useRef<HTMLDivElement>(null);
   const prevViewModeRef    = useRef<"list" | "map" | "grouped">("list");
-  const attractionsHydrationKeyRef = useRef<string | null>(null);
-  const restaurantsHydrationKeyRef = useRef<string | null>(null);
-  const attractionsRequestRef = useRef<Promise<AttractionSearchResult[]> | null>(null);
-  const restaurantsRequestRef = useRef<Promise<RestaurantSearchResult[]> | null>(null);
   const exploreSnapshotLoadedRef = useRef<string | null>(null);
 
   // ── Compare state ────────────────────────────────────────────────────────────
@@ -1413,8 +1409,8 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       setAttractionsLoading(true);
       setRestaurantsLoading(true);
       const [attractionsResult, restaurantsResult] = await Promise.allSettled([
-        (attractionsRequestRef.current ?? searchAttractions(destination)),
-        (restaurantsRequestRef.current ?? searchRestaurants(destination)),
+        searchAttractions(destination),
+        searchRestaurants(destination),
       ]);
 
       const resolvedAttractions = attractionsResult.status === "fulfilled" ? attractionsResult.value : [];
@@ -1422,8 +1418,6 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
       if (resolvedAttractions.length > 0) setCandidateAttractions(resolvedAttractions);
       if (resolvedRestaurants.length > 0) setCandidateRestaurants(resolvedRestaurants);
-      attractionsRequestRef.current = null;
-      restaurantsRequestRef.current = null;
       setAttractionsLoading(false);
       setRestaurantsLoading(false);
 
