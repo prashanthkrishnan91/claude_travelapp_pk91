@@ -11,6 +11,23 @@ const apiClient = readFileSync(
   'utf8',
 );
 
+const searchModels = readFileSync(
+  new URL('../../backend/app/models/search.py', import.meta.url),
+  'utf8',
+);
+
+
+test('Existing-trip hydration API contract only exposes ai_score (not rank/top-pick/value score aliases)', () => {
+  assert.match(searchModels, /class AttractionResult\(SearchResult\):[\s\S]*?ai_score: Optional\[float\]/, 'Attraction response model should expose ai_score');
+  assert.match(searchModels, /class RestaurantResult\(SearchResult\):[\s\S]*?ai_score: Optional\[float\]/, 'Restaurant response model should expose ai_score');
+  assert.doesNotMatch(searchModels, /recommendation_score|recommendationScore|value_score|valueScore|rank(?:ing)?|top_pick|is_top_pick|isTopPick/, 'Search response model should not define additional score/rank/top-pick fields');
+});
+
+test('Hydration mappers do not currently accept recommendation/value/rank/top-pick score aliases', () => {
+  assert.doesNotMatch(tripBuilder, /details\.(?:valueScore|value_score|recommendationScore|recommendation_score|ranking|rank|topPick|top_pick|isTopPick|is_top_pick)/, 'Trip item hydration score mapper is limited to aiScore/ai_score/score');
+  assert.doesNotMatch(apiClient, /(?:valueScore|value_score|recommendationScore|recommendation_score|ranking|rank|topPick|top_pick|isTopPick|is_top_pick)/, 'API search mapper is limited to aiScore/ai_score/score');
+});
+
 test('TripBuilder waits for auth session before loading attractions/restaurants', () => {
   assert.match(tripBuilder, /authSessionReady/, 'authSessionReady state must exist to gate hydration');
   assert.match(tripBuilder, /supabase\.auth\.getSession\(\)/, 'TripBuilder must check current session on mount');
