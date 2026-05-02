@@ -70,3 +70,15 @@ def test_duplicate_request_triggers_cooldown_with_frontend_safe_shape(monkeypatc
     assert exc.value.payload["code"] == "rate_limited"
     assert "Duplicate request" in exc.value.payload["message"]
     assert isinstance(exc.value.payload["retry_after_seconds"], int)
+
+
+def test_search_routes_do_not_access_invalid_attraction_restaurant_fields():
+    src = (Path(__file__).resolve().parents[1] / "app" / "routes" / "search.py").read_text()
+    assert "payload.query" not in src
+    assert "payload.limit" not in src
+
+
+def test_search_routes_use_model_safe_dedupe_payload_fields_for_explore_endpoints():
+    src = (Path(__file__).resolve().parents[1] / "app" / "routes" / "search.py").read_text()
+    assert 'dedupe_payload={"location": payload.location, "category": payload.category, "date": payload.date}' in src
+    assert 'dedupe_payload={"location": payload.location, "cuisine": payload.cuisine, "date": payload.date}' in src
