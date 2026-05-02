@@ -535,3 +535,8 @@ Enriched whyPick evidence quality by promoting venue-specific Foursquare tags, T
 - TripBuilder now hydrates `candidateAttractions` and `candidateRestaurants` from `fetchTripItems(tripId)` by mapping trip-level `activity`/`meal` items (`day_id = null`) into the exact panel-rendered candidate state shape.
 - Provider-backed attraction/restaurant hydration remains as fallback only when persisted candidates are absent.
 - Added one-shot hydration keys (`tripId + destination`) and in-flight request refs to prevent duplicate expensive provider calls during rerenders/refresh loops.
+
+## 2026-05-02 Explore hydration scoring + ranking follow-up
+- Existing-trip Explore hydration can ingest persisted itinerary `details` with mixed key casing. Do **not** assume only camelCase: saved payloads may carry `ai_score`, `num_reviews`, `price_level`, `opening_hours`, and sometimes plain `score`.
+- If hydration mapper only reads camelCase (`aiScore`), candidate cards degrade to basic metadata with `aiScore` undefined, causing score badge fallback `0` and false-positive Top Pick when badge logic uses list index.
+- Existing-trip candidate breadth should not depend solely on persisted trip-level items (often user-pruned subset). Keep one-shot provider refresh for destination hydration so existing trips converge toward create-trip candidate breadth without rerender loops.

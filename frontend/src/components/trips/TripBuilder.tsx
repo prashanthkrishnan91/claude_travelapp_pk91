@@ -158,12 +158,12 @@ function mapTripItemToAttraction(item: ItineraryItem, fallbackDestination?: stri
     location: String(details.location ?? item.location ?? fallbackDestination ?? ""),
     address: String(details.address ?? item.location ?? ""),
     rating: typeof details.rating === "number" ? details.rating : undefined,
-    numReviews: typeof details.numReviews === "number" ? details.numReviews : undefined,
-    aiScore: typeof details.aiScore === "number" ? details.aiScore : undefined,
+    numReviews: typeof details.numReviews === "number" ? details.numReviews : typeof details.num_reviews === "number" ? details.num_reviews : undefined,
+    aiScore: typeof details.aiScore === "number" ? details.aiScore : typeof details.ai_score === "number" ? details.ai_score : typeof details.score === "number" ? details.score : undefined,
     tags: Array.isArray(details.tags) ? details.tags.filter((tag): tag is string => typeof tag === "string") : [],
-    openingHours: typeof details.openingHours === "string" ? details.openingHours : undefined,
-    priceLevel: typeof details.priceLevel === "number" ? details.priceLevel : undefined,
-    bookingUrl: typeof details.bookingUrl === "string" ? details.bookingUrl : undefined,
+    openingHours: typeof details.openingHours === "string" ? details.openingHours : typeof details.opening_hours === "string" ? details.opening_hours : undefined,
+    priceLevel: typeof details.priceLevel === "number" ? details.priceLevel : typeof details.price_level === "number" ? details.price_level : undefined,
+    bookingUrl: typeof details.bookingUrl === "string" ? details.bookingUrl : typeof details.booking_url === "string" ? details.booking_url : undefined,
     lat: typeof details.lat === "number" ? details.lat : undefined,
     lng: typeof details.lng === "number" ? details.lng : undefined,
   };
@@ -178,10 +178,10 @@ function mapTripItemToRestaurant(item: ItineraryItem, fallbackDestination?: stri
     location: String(details.location ?? item.location ?? fallbackDestination ?? ""),
     address: String(details.address ?? item.location ?? ""),
     rating: typeof details.rating === "number" ? details.rating : undefined,
-    numReviews: typeof details.numReviews === "number" ? details.numReviews : undefined,
-    priceLevel: typeof details.priceLevel === "number" ? details.priceLevel : undefined,
-    openingHours: typeof details.openingHours === "string" ? details.openingHours : undefined,
-    aiScore: typeof details.aiScore === "number" ? details.aiScore : undefined,
+    numReviews: typeof details.numReviews === "number" ? details.numReviews : typeof details.num_reviews === "number" ? details.num_reviews : undefined,
+    priceLevel: typeof details.priceLevel === "number" ? details.priceLevel : typeof details.price_level === "number" ? details.price_level : undefined,
+    openingHours: typeof details.openingHours === "string" ? details.openingHours : typeof details.opening_hours === "string" ? details.opening_hours : undefined,
+    aiScore: typeof details.aiScore === "number" ? details.aiScore : typeof details.ai_score === "number" ? details.ai_score : typeof details.score === "number" ? details.score : undefined,
     tags: Array.isArray(details.tags) ? details.tags.filter((tag): tag is string => typeof tag === "string") : [],
     bookingUrl: typeof details.bookingUrl === "string" ? details.bookingUrl : undefined,
     lat: typeof details.lat === "number" ? details.lat : undefined,
@@ -267,14 +267,15 @@ function RecTag({ tag }: { tag: string }) {
 
 // ─── AI score badge ───────────────────────────────────────────────────────────
 
-function AiScoreBadge({ score }: { score: number }) {
+function AiScoreBadge({ score }: { score?: number | null }) {
+  if (typeof score !== "number" || !Number.isFinite(score) || score <= 0) return null;
   const { bg, text, ring } =
     score >= 70 ? { bg: "bg-emerald-500/15", text: "text-emerald-200", ring: "ring-emerald-400/45" } :
     score >= 50 ? { bg: "bg-amber-500/15",   text: "text-amber-200",   ring: "ring-amber-400/45"   } :
                   { bg: "bg-slate-500/15",   text: "text-slate-200",   ring: "ring-white/20"   };
   return (
     <div className={`flex flex-col items-center justify-center w-10 h-10 rounded-full ring-2 ${ring} ${bg} flex-shrink-0`}>
-      <p className={`text-xs font-bold leading-none ${text}`}>{Math.round(score)}</p>
+      <p className={`text-xs font-bold leading-none ${text}`}>{Math.round(score ?? 0)}</p>
       <p className="text-[9px] text-cream-300 leading-none mt-0.5">score</p>
     </div>
   );
@@ -1384,7 +1385,6 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   // Auto-load attractions for the trip destination
   useEffect(() => {
     if (!destination || !authSessionReady) return;
-    if (candidateAttractions.length > 0) return;
     const hydrationKey = `${tripId}:${destination.toLowerCase()}`;
     if (attractionsHydrationKeyRef.current === hydrationKey) return;
     attractionsHydrationKeyRef.current = hydrationKey;
@@ -1411,7 +1411,6 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   // Auto-load restaurants for the trip destination
   useEffect(() => {
     if (!destination || !authSessionReady) return;
-    if (candidateRestaurants.length > 0) return;
     const hydrationKey = `${tripId}:${destination.toLowerCase()}`;
     if (restaurantsHydrationKeyRef.current === hydrationKey) return;
     restaurantsHydrationKeyRef.current = hydrationKey;
@@ -2336,7 +2335,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                             attraction={attraction}
                             onAddToTrip={handleAddAttractionToItinerary}
                             adding={addingId === attraction.id}
-                            isTopPick={attractionSort === "ai" && idx < top20}
+                            isTopPick={attractionSort === "ai" && idx < top20 && (attraction.aiScore ?? 0) > 0}
                           />
                         </div>
                       ));
@@ -2428,7 +2427,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                             restaurant={restaurant}
                             onAddToTrip={handleAddRestaurantToItinerary}
                             adding={addingId === restaurant.id}
-                            isTopPick={restaurantSort === "ai" && idx < top20}
+                            isTopPick={restaurantSort === "ai" && idx < top20 && (restaurant.aiScore ?? 0) > 0}
                           />
                         </div>
                       ));
