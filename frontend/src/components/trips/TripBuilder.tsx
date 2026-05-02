@@ -148,6 +148,13 @@ function sortRestaurants(items: RestaurantSearchResult[], key: SortKey): Restaur
   });
 }
 
+function normalizeExploreScore(details: Record<string, unknown>): number | undefined {
+  if (typeof details.aiScore === "number") return details.aiScore;
+  if (typeof details.ai_score === "number") return details.ai_score;
+  if (typeof details.score === "number") return details.score;
+  return undefined;
+}
+
 function mapTripItemToAttraction(item: ItineraryItem, fallbackDestination?: string): AttractionSearchResult {
   const details = (item.details ?? {}) as Record<string, unknown>;
   return {
@@ -159,7 +166,7 @@ function mapTripItemToAttraction(item: ItineraryItem, fallbackDestination?: stri
     address: String(details.address ?? item.location ?? ""),
     rating: typeof details.rating === "number" ? details.rating : undefined,
     numReviews: typeof details.numReviews === "number" ? details.numReviews : typeof details.num_reviews === "number" ? details.num_reviews : undefined,
-    aiScore: typeof details.aiScore === "number" ? details.aiScore : typeof details.ai_score === "number" ? details.ai_score : typeof details.score === "number" ? details.score : undefined,
+    aiScore: normalizeExploreScore(details),
     tags: Array.isArray(details.tags) ? details.tags.filter((tag): tag is string => typeof tag === "string") : [],
     openingHours: typeof details.openingHours === "string" ? details.openingHours : typeof details.opening_hours === "string" ? details.opening_hours : undefined,
     priceLevel: typeof details.priceLevel === "number" ? details.priceLevel : typeof details.price_level === "number" ? details.price_level : undefined,
@@ -181,7 +188,7 @@ function mapTripItemToRestaurant(item: ItineraryItem, fallbackDestination?: stri
     numReviews: typeof details.numReviews === "number" ? details.numReviews : typeof details.num_reviews === "number" ? details.num_reviews : undefined,
     priceLevel: typeof details.priceLevel === "number" ? details.priceLevel : typeof details.price_level === "number" ? details.price_level : undefined,
     openingHours: typeof details.openingHours === "string" ? details.openingHours : typeof details.opening_hours === "string" ? details.opening_hours : undefined,
-    aiScore: typeof details.aiScore === "number" ? details.aiScore : typeof details.ai_score === "number" ? details.ai_score : typeof details.score === "number" ? details.score : undefined,
+    aiScore: normalizeExploreScore(details),
     tags: Array.isArray(details.tags) ? details.tags.filter((tag): tag is string => typeof tag === "string") : [],
     bookingUrl: typeof details.bookingUrl === "string" ? details.bookingUrl : undefined,
     lat: typeof details.lat === "number" ? details.lat : undefined,

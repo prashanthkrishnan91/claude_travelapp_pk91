@@ -588,6 +588,8 @@ interface RawAttractionResult {
   bookingUrl?: string;
   bookingOptions?: BookingOption[];
   aiScore?: number;
+  ai_score?: number;
+  score?: number;
   tags?: string[];
   numReviews?: number;
   openingHours?: string;
@@ -613,6 +615,14 @@ interface RawHotelResult {
 }
 
 function mapAttractionToResult(a: RawAttractionResult): AttractionSearchResult {
+  const normalizedAiScore =
+    typeof a.aiScore === "number"
+      ? a.aiScore
+      : typeof a.ai_score === "number"
+        ? a.ai_score
+        : typeof a.score === "number"
+          ? a.score
+          : undefined;
   return {
     id: a.id,
     name: a.name,
@@ -626,7 +636,7 @@ function mapAttractionToResult(a: RawAttractionResult): AttractionSearchResult {
     priceLevel: a.priceLevel,
     openingHours: a.openingHours,
     durationMinutes: a.durationMinutes,
-    aiScore: a.aiScore,
+    aiScore: normalizedAiScore,
     tags: a.tags ?? [],
     bookingUrl: a.bookingUrl,
     bookingOptions: a.bookingOptions,
@@ -710,6 +720,8 @@ interface RawRestaurantResult {
   priceLevel?: number;
   openingHours?: string;
   aiScore?: number;
+  ai_score?: number;
+  score?: number;
   sentiment?: number;
   tags?: string[];
   bookingUrl?: string;
@@ -717,6 +729,14 @@ interface RawRestaurantResult {
 }
 
 function mapRestaurantToResult(r: RawRestaurantResult): RestaurantSearchResult {
+  const normalizedAiScore =
+    typeof r.aiScore === "number"
+      ? r.aiScore
+      : typeof r.ai_score === "number"
+        ? r.ai_score
+        : typeof r.score === "number"
+          ? r.score
+          : undefined;
   return {
     id: r.id,
     name: r.name,
@@ -728,7 +748,7 @@ function mapRestaurantToResult(r: RawRestaurantResult): RestaurantSearchResult {
     price: r.price,
     priceLevel: r.priceLevel,
     openingHours: r.openingHours,
-    aiScore: r.aiScore,
+    aiScore: normalizedAiScore,
     sentiment: r.sentiment,
     tags: r.tags ?? [],
     bookingUrl: r.bookingUrl,
