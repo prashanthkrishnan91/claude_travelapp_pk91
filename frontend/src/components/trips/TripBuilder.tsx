@@ -198,6 +198,16 @@ function mapTripItemToRestaurant(item: ItineraryItem, fallbackDestination?: stri
   };
 }
 
+function hasPositiveExploreScore(
+  attractions: AttractionSearchResult[],
+  restaurants: RestaurantSearchResult[],
+): boolean {
+  return (
+    attractions.some((a) => typeof a.aiScore === "number" && Number.isFinite(a.aiScore) && a.aiScore > 0) ||
+    restaurants.some((r) => typeof r.aiScore === "number" && Number.isFinite(r.aiScore) && r.aiScore > 0)
+  );
+}
+
 function filterAttractions(
   items: AttractionSearchResult[],
   ratingMin: number | null,
@@ -1402,10 +1412,10 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       if (snapshot && (snapshot.attractions.length > 0 || snapshot.restaurants.length > 0)) {
         if (snapshot.attractions.length > 0) setCandidateAttractions(snapshot.attractions);
         if (snapshot.restaurants.length > 0) setCandidateRestaurants(snapshot.restaurants);
-        return;
+        if (hasPositiveExploreScore(snapshot.attractions, snapshot.restaurants)) return;
       }
 
-      // No usable snapshot — call provider-backed search, then persist result.
+      // No usable snapshot (or stale unscored snapshot) — call provider-backed search, then persist result.
       setAttractionsLoading(true);
       setRestaurantsLoading(true);
       const [attractionsResult, restaurantsResult] = await Promise.allSettled([

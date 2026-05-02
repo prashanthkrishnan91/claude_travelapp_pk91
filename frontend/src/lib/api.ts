@@ -855,6 +855,10 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
       const storedScore =
         typeof a.aiScore === "number" && a.aiScore > 0
           ? a.aiScore
+          : typeof a.ai_score === "number" && a.ai_score > 0
+            ? a.ai_score
+            : typeof a.score === "number" && a.score > 0
+              ? a.score
           : undefined;
       const computedScore =
         storedScore == null &&
@@ -872,13 +876,13 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
         location: String(a.location ?? ""),
         address: String(a.address ?? ""),
         rating: typeof a.rating === "number" ? a.rating : undefined,
-        numReviews: typeof a.numReviews === "number" ? a.numReviews : undefined,
-        priceLevel: typeof a.priceLevel === "number" ? a.priceLevel : undefined,
-        openingHours: typeof a.openingHours === "string" ? a.openingHours : undefined,
-        durationMinutes: typeof a.durationMinutes === "number" ? a.durationMinutes : undefined,
+        numReviews: typeof a.numReviews === "number" ? a.numReviews : typeof a.num_reviews === "number" ? a.num_reviews : undefined,
+        priceLevel: typeof a.priceLevel === "number" ? a.priceLevel : typeof a.price_level === "number" ? a.price_level : undefined,
+        openingHours: typeof a.openingHours === "string" ? a.openingHours : typeof a.opening_hours === "string" ? a.opening_hours : undefined,
+        durationMinutes: typeof a.durationMinutes === "number" ? a.durationMinutes : typeof a.duration_minutes === "number" ? a.duration_minutes : undefined,
         aiScore,
         tags: Array.isArray(a.tags) ? (a.tags as string[]) : [],
-        bookingUrl: typeof a.bookingUrl === "string" ? a.bookingUrl : undefined,
+        bookingUrl: typeof a.bookingUrl === "string" ? a.bookingUrl : typeof a.booking_url === "string" ? a.booking_url : undefined,
         lat: typeof a.lat === "number" ? a.lat : undefined,
         lng: typeof a.lng === "number" ? a.lng : undefined,
       };
@@ -887,6 +891,10 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
       const storedScore =
         typeof r.aiScore === "number" && r.aiScore > 0
           ? r.aiScore
+          : typeof r.ai_score === "number" && r.ai_score > 0
+            ? r.ai_score
+            : typeof r.score === "number" && r.score > 0
+              ? r.score
           : undefined;
       const sentiment = typeof r.sentiment === "number" ? r.sentiment : undefined;
       const computedScore =
@@ -909,13 +917,13 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
         location: String(r.location ?? ""),
         address: String(r.address ?? ""),
         rating: typeof r.rating === "number" ? r.rating : undefined,
-        numReviews: typeof r.numReviews === "number" ? r.numReviews : undefined,
-        priceLevel: typeof r.priceLevel === "number" ? r.priceLevel : undefined,
-        openingHours: typeof r.openingHours === "string" ? r.openingHours : undefined,
+        numReviews: typeof r.numReviews === "number" ? r.numReviews : typeof r.num_reviews === "number" ? r.num_reviews : undefined,
+        priceLevel: typeof r.priceLevel === "number" ? r.priceLevel : typeof r.price_level === "number" ? r.price_level : undefined,
+        openingHours: typeof r.openingHours === "string" ? r.openingHours : typeof r.opening_hours === "string" ? r.opening_hours : undefined,
         aiScore,
         sentiment,
         tags: Array.isArray(r.tags) ? (r.tags as string[]) : [],
-        bookingUrl: typeof r.bookingUrl === "string" ? r.bookingUrl : undefined,
+        bookingUrl: typeof r.bookingUrl === "string" ? r.bookingUrl : typeof r.booking_url === "string" ? r.booking_url : undefined,
         lat: typeof r.lat === "number" ? r.lat : undefined,
         lng: typeof r.lng === "number" ? r.lng : undefined,
       };
