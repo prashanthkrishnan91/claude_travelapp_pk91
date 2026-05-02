@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import type { Session } from "@supabase/supabase-js";
 import {
   DndContext,
   DragCancelEvent,
@@ -46,6 +47,7 @@ import {
 } from "lucide-react";
 import { estimateTravel, sumRoute } from "@/lib/travelTime";
 import { addDaysToIsoDate, normalizeIsoDate } from "@/lib/tripDays";
+import { supabase } from "@/lib/supabase";
 import gsap from "gsap";
 import type {
   ItineraryDay,
@@ -77,6 +79,9 @@ import {
   planClusterDay,
   addAttractionToDay,
   addRestaurantToDay,
+  moveIdeaToTripIdeas,
+  fetchExploreSnapshot,
+  saveExploreSnapshot,
 } from "@/lib/api";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
@@ -84,6 +89,7 @@ import { ItineraryItemCard } from "./ItineraryItemCard";
 import { CompareModal } from "./CompareModal";
 import { DayPlanModal } from "./DayPlanModal";
 import { TripMapView } from "./TripMapView";
+import { TripIdeasPanel } from "./TripIdeasPanel";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -142,6 +148,16 @@ function sortRestaurants(items: RestaurantSearchResult[], key: SortKey): Restaur
     if (key === "price")  return (a.priceLevel ?? 0) - (b.priceLevel ?? 0);
     return (b.aiScore ?? 0) - (a.aiScore ?? 0);
   });
+}
+
+function hasPositiveExploreScore(
+  attractions: AttractionSearchResult[],
+  restaurants: RestaurantSearchResult[],
+): boolean {
+  return (
+    attractions.some((a) => typeof a.aiScore === "number" && Number.isFinite(a.aiScore) && a.aiScore > 0) ||
+    restaurants.some((r) => typeof r.aiScore === "number" && Number.isFinite(r.aiScore) && r.aiScore > 0)
+  );
 }
 
 function filterAttractions(
@@ -222,18 +238,23 @@ function RecTag({ tag }: { tag: string }) {
 
 // ─── AI score badge ───────────────────────────────────────────────────────────
 
-function AiScoreBadge({ score }: { score: number }) {
+function AiScoreBadge({ score }: { score?: number | null }) {
+  if (typeof score !== "number" || !Number.isFinite(score) || score <= 0) return null;
   const { bg, text, ring } =
-    score >= 70 ? { bg: "bg-emerald-50", text: "text-emerald-700", ring: "ring-emerald-300" } :
-    score >= 50 ? { bg: "bg-amber-50",   text: "text-amber-700",   ring: "ring-amber-300"   } :
-                  { bg: "bg-slate-50",   text: "text-slate-500",   ring: "ring-slate-200"   };
+    score >= 70 ? { bg: "bg-emerald-500/15", text: "text-emerald-200", ring: "ring-emerald-400/45" } :
+    score >= 50 ? { bg: "bg-amber-500/15",   text: "text-amber-200",   ring: "ring-amber-400/45"   } :
+                  { bg: "bg-slate-500/15",   text: "text-slate-200",   ring: "ring-white/20"   };
   return (
     <div className={`flex flex-col items-center justify-center w-10 h-10 rounded-full ring-2 ${ring} ${bg} flex-shrink-0`}>
-      <p className={`text-xs font-bold leading-none ${text}`}>{Math.round(score)}</p>
-      <p className="text-[9px] text-slate-400 leading-none mt-0.5">score</p>
+      <p className={`text-xs font-bold leading-none ${text}`}>{Math.round(score ?? 0)}</p>
+      <p className="text-[9px] text-cream-300 leading-none mt-0.5">score</p>
     </div>
   );
 }
+
+const PREMIUM_CARD_BASE = "candidate-card relative border rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 shadow-sm hover:shadow-md border-white/12 bg-gradient-to-br from-dark-200/95 to-dark-300/95 hover:border-white/25";
+const SECONDARY_CTA = "flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border border-white/15 bg-dark-300/75 text-cream-200 hover:bg-dark-200 hover:border-white/30 text-xs font-medium transition-all";
+const PRIMARY_CTA = "flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-brand-500 hover:bg-brand-400 text-dark-900 text-xs font-semibold transition-all disabled:opacity-50 shadow-sm";
 
 // ─── Sort control ─────────────────────────────────────────────────────────────
 
@@ -255,8 +276,8 @@ function SortControl({
           onClick={() => onChange(key)}
           className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all ${
             current === key
-              ? "bg-sky-600 text-white shadow-sm"
-              : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+              ? "bg-brand-500/85 text-dark-900 shadow-sm"
+              : "bg-dark-300/80 text-cream-300 border border-white/10 hover:bg-dark-200"
           }`}
         >
           {label}
@@ -285,32 +306,32 @@ function SummaryBar({
   const topDest     = isRoundTrip ? (outFd.destination as string) : (fd.destination as string);
   const topPrice    = isRoundTrip ? (fd.total_price as number) : (fd.price as number);
   return (
-    <div className="glass border border-white/60 rounded-2xl p-3 flex gap-3 shadow-sm">
+    <div className="glass border border-white/12 rounded-2xl p-3 flex gap-3 shadow-sm">
       {topFlight && (
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
-            <Plane className="w-3 h-3 text-sky-500" /> {isRoundTrip ? "Best Round-Trip" : "Best Flight"}
+          <p className="text-[10px] text-cream-300 uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
+            <Plane className="w-3 h-3 text-brand-300" /> {isRoundTrip ? "Best Round-Trip" : "Best Flight"}
           </p>
-          <p className="text-xs font-bold text-slate-800 truncate">
+          <p className="text-xs font-bold text-cream-100 truncate">
             {topAirline ?? topFlight.title}
           </p>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-cream-300">
             {topOrigin ?? ""}
             {topDest ? ` → ${topDest}` : ""}
             {topPrice ? ` · $${Math.round(topPrice)}` : ""}
           </p>
         </div>
       )}
-      {topFlight && topHotel && <div className="w-px bg-slate-200 self-stretch" />}
+      {topFlight && topHotel && <div className="w-px bg-white/12 self-stretch" />}
       {topHotel && (
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
-            <Hotel className="w-3 h-3 text-violet-500" /> Best Hotel
+          <p className="text-[10px] text-cream-300 uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
+            <Hotel className="w-3 h-3 text-brand-400" /> Best Hotel
           </p>
-          <p className="text-xs font-bold text-slate-800 truncate">
+          <p className="text-xs font-bold text-cream-100 truncate">
             {(hd.name as string) ?? topHotel.title}
           </p>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-cream-300">
             {hd.pricePerNight ? `$${Math.round(hd.pricePerNight as number)}/night` : ""}
             {hd.rating ? ` · ★ ${(hd.rating as number).toFixed(1)}` : ""}
           </p>
@@ -324,16 +345,16 @@ function SummaryBar({
 
 function BestAreaCard({ bestArea }: { bestArea: BestAreaRecommendation }) {
   return (
-    <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50 p-3 shadow-sm flex flex-col gap-1.5">
+    <div className="rounded-2xl border border-brand-500/35 bg-gradient-to-br from-dark-200 to-dark-300 p-3 shadow-sm flex flex-col gap-1.5">
       <div className="flex items-center gap-1.5">
         <span className="text-base leading-none">📍</span>
-        <span className="text-[10px] font-bold text-violet-500 uppercase tracking-wider">Best Area to Stay</span>
-        <span className="ml-auto text-[10px] font-bold text-violet-400 bg-violet-100 px-1.5 py-0.5 rounded-full">
+        <span className="text-[10px] font-bold text-brand-300 uppercase tracking-wider">Best Area to Stay</span>
+        <span className="ml-auto text-[10px] font-bold text-brand-300 bg-brand-600/20 border border-brand-500/35 px-1.5 py-0.5 rounded-full">
           {bestArea.score.toFixed(0)}/100
         </span>
       </div>
-      <p className="text-sm font-extrabold text-violet-900 leading-tight">{bestArea.areaName}</p>
-      <p className="text-xs text-violet-600 leading-snug">{bestArea.reason}</p>
+      <p className="text-sm font-extrabold text-cream-100 leading-tight">{bestArea.areaName}</p>
+      <p className="text-xs text-cream-300 leading-snug">{bestArea.reason}</p>
     </div>
   );
 }
@@ -374,14 +395,10 @@ function FlightCandidateCard({
   const explanation = (d.explanation      as string)   ?? "";
   const bookingUrl  = (d.bookingUrl       as string)   ?? "";
 
-  const containerClass = isTopPick
-    ? "border-emerald-300/70 bg-gradient-to-br from-emerald-50/60 to-white"
-    : isLowScore
-    ? "border-slate-200/60 opacity-55"
-    : "border-slate-200/80 bg-white";
+  const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-brand-400/45" : ""} ${isLowScore ? "opacity-55" : ""}`;
 
   return (
-    <div className={`candidate-card relative border rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 hover:shadow-md hover:border-slate-300 shadow-sm ${containerClass}`}>
+    <div className={containerClass}>
       {isTopPick && (
         <div className="absolute -top-2.5 left-3">
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
@@ -394,8 +411,8 @@ function FlightCandidateCard({
       {/* Header: airline + flight number + AI score */}
       <div className="flex items-start justify-between gap-2 pt-0.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-slate-900 leading-tight">{airline || flightNum}</p>
-          {airline && <p className="text-xs text-slate-400 mt-0.5">{flightNum}</p>}
+          <p className="text-sm font-bold text-cream-100 leading-tight">{airline || flightNum}</p>
+          {airline && <p className="text-xs text-cream-300 mt-0.5">{flightNum}</p>}
         </div>
         <AiScoreBadge score={aiScore} />
       </div>
@@ -404,24 +421,24 @@ function FlightCandidateCard({
       {origin && destination && (
         <div className="flex items-center gap-2">
           <div className="text-center min-w-[40px]">
-            <p className="text-sm font-bold text-slate-900">{origin}</p>
-            {depTime && <p className="text-[11px] text-slate-400">{formatTime(depTime)}</p>}
+            <p className="text-sm font-bold text-cream-100">{origin}</p>
+            {depTime && <p className="text-[11px] text-cream-300">{formatTime(depTime)}</p>}
           </div>
           <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
             <div className="flex items-center gap-1 w-full">
-              <div className="flex-1 h-px bg-slate-200" />
+              <div className="flex-1 h-px bg-white/20" />
               <Plane className="w-3 h-3 text-sky-500" />
-              <div className="flex-1 h-px bg-slate-200" />
+              <div className="flex-1 h-px bg-white/20" />
             </div>
-            <p className="text-[10px] text-slate-400 text-center">
+            <p className="text-[10px] text-cream-300 text-center">
               {duration > 0 ? formatDuration(duration) : ""}
               {duration > 0 && " · "}
               {stops === 0 ? "Nonstop" : `${stops} stop${stops > 1 ? "s" : ""}`}
             </p>
           </div>
           <div className="text-center min-w-[40px]">
-            <p className="text-sm font-bold text-slate-900">{destination}</p>
-            {arrTime && <p className="text-[11px] text-slate-400">{formatTime(arrTime)}</p>}
+            <p className="text-sm font-bold text-cream-100">{destination}</p>
+            {arrTime && <p className="text-[11px] text-cream-300">{formatTime(arrTime)}</p>}
           </div>
         </div>
       )}
@@ -435,29 +452,29 @@ function FlightCandidateCard({
 
       {/* Explanation */}
       {explanation && (
-        <p className="text-xs text-slate-500 leading-relaxed">{explanation}</p>
+        <p className="text-xs text-cream-300 leading-relaxed">{explanation}</p>
       )}
 
       {/* Pricing grid */}
-      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/10">
         {price > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Cash</p>
-            <p className="text-sm font-bold text-slate-900">${Math.round(price)}</p>
+            <p className="text-[10px] text-cream-300 uppercase tracking-wide">Cash</p>
+            <p className="text-sm font-bold text-cream-100">${Math.round(price)}</p>
           </div>
         )}
         {points > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Points</p>
-            <p className="text-sm font-bold text-violet-700">
+            <p className="text-[10px] text-cream-300 uppercase tracking-wide">Points</p>
+            <p className="text-sm font-bold text-brand-300">
               {points >= 1000 ? `${(points / 1000).toFixed(0)}k` : points}
             </p>
           </div>
         )}
         {cpp > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide">CPP</p>
-            <p className={`text-sm font-bold ${cpp >= 2 ? "text-emerald-600" : "text-slate-700"}`}>
+            <p className="text-[10px] text-cream-300 uppercase tracking-wide">CPP</p>
+            <p className={`text-sm font-bold ${cpp >= 2 ? "text-emerald-300" : "text-cream-200"}`}>
               {cpp.toFixed(2)}¢
             </p>
           </div>
@@ -470,11 +487,7 @@ function FlightCandidateCard({
           <button
             onClick={() => onToggleCompare(item)}
             title="Compare"
-            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-xs font-medium transition-all ${
-              isComparing
-                ? "bg-violet-600 text-white shadow-sm"
-                : "bg-slate-100 hover:bg-violet-50 hover:text-violet-700 text-slate-600"
-            }`}
+            className={`${SECONDARY_CTA} ${isComparing ? "bg-brand-500/25 border-brand-400/40 text-brand-200" : ""}`}
           >
             <Scale className="w-3.5 h-3.5" />
             Compare
@@ -487,7 +500,7 @@ function FlightCandidateCard({
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
             title="Book externally"
-            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-slate-100 hover:bg-sky-50 hover:text-sky-700 text-slate-600 text-xs font-medium transition-all"
+            className={SECONDARY_CTA}
           >
             <ExternalLink className="w-3.5 h-3.5" />
             Book
@@ -496,7 +509,7 @@ function FlightCandidateCard({
         <button
           onClick={() => onAddToItinerary(item)}
           disabled={adding}
-          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-all disabled:opacity-50 shadow-sm"
+          className={PRIMARY_CTA}
         >
           {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           Add
@@ -528,32 +541,32 @@ function FlightLegRow({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
-        <span className="text-xs text-slate-500">{airline} <span className="text-slate-300">{flightNum}</span></span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-cream-300">{label}</span>
+        <span className="text-xs text-cream-200">{airline} <span className="text-cream-300">{flightNum}</span></span>
       </div>
       <div className="flex items-center gap-2">
         <div className="text-center min-w-[36px]">
-          <p className="text-sm font-bold text-slate-900">{origin}</p>
-          {depTime && <p className="text-[10px] text-slate-400">{formatTime(depTime)}</p>}
+          <p className="text-sm font-bold text-cream-100">{origin}</p>
+          {depTime && <p className="text-[10px] text-cream-300">{formatTime(depTime)}</p>}
         </div>
         <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
           <div className="flex items-center gap-1 w-full">
-            <div className="flex-1 h-px bg-slate-200" />
+            <div className="flex-1 h-px bg-white/20" />
             <Plane className="w-3 h-3 text-sky-400" />
-            <div className="flex-1 h-px bg-slate-200" />
+            <div className="flex-1 h-px bg-white/20" />
           </div>
-          <p className="text-[10px] text-slate-400">
+          <p className="text-[10px] text-cream-300">
             {duration > 0 ? formatDuration(duration) : ""}
             {duration > 0 && " · "}
             {stops === 0 ? "Nonstop" : `${stops} stop${stops > 1 ? "s" : ""}`}
           </p>
         </div>
         <div className="text-center min-w-[36px]">
-          <p className="text-sm font-bold text-slate-900">{dest}</p>
-          {arrTime && <p className="text-[10px] text-slate-400">{formatTime(arrTime)}</p>}
+          <p className="text-sm font-bold text-cream-100">{dest}</p>
+          {arrTime && <p className="text-[10px] text-cream-300">{formatTime(arrTime)}</p>}
         </div>
         {price > 0 && (
-          <p className="text-xs font-semibold text-slate-600 ml-1">${Math.round(price)}</p>
+          <p className="text-xs font-semibold text-cream-200 ml-1">${Math.round(price)}</p>
         )}
       </div>
     </div>
@@ -585,14 +598,10 @@ function RoundTripFlightCard({
   const combinedCpp = ((d.combinedCpp ?? d.combined_cpp)  as number) ?? 0;
   const aiScore     = ((d.aiScore     ?? d.ai_score)      as number) ?? 0;
 
-  const containerClass = isTopPick
-    ? "border-emerald-300/70 bg-gradient-to-br from-emerald-50/60 to-white"
-    : isLowScore
-    ? "border-slate-200/60 opacity-55"
-    : "border-slate-200/80 bg-white";
+  const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-brand-400/45" : ""} ${isLowScore ? "opacity-55" : ""}`;
 
   return (
-    <div className={`candidate-card relative border rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 hover:shadow-md hover:border-slate-300 shadow-sm ${containerClass}`}>
+    <div className={containerClass}>
       {isTopPick && (
         <div className="absolute -top-2.5 left-3">
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
@@ -605,42 +614,42 @@ function RoundTripFlightCard({
       {/* Header: round-trip label + AI score */}
       <div className="flex items-start justify-between gap-2 pt-0.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-slate-900 leading-tight">Round-Trip</p>
-          <p className="text-xs text-slate-400 mt-0.5">Outbound + Return pair</p>
+          <p className="text-sm font-bold text-cream-100 leading-tight">Round-Trip</p>
+          <p className="text-xs text-cream-300 mt-0.5">Outbound + Return pair</p>
         </div>
         <AiScoreBadge score={aiScore} />
       </div>
 
       {/* Outbound leg */}
-      <div className="rounded-xl bg-sky-50/60 px-3 py-2.5">
+      <div className="rounded-xl bg-dark-300/70 border border-white/10 px-3 py-2.5">
         <FlightLegRow leg={outbound} label="Outbound" />
       </div>
 
       {/* Return leg */}
-      <div className="rounded-xl bg-violet-50/60 px-3 py-2.5">
+      <div className="rounded-xl bg-dark-300/70 border border-white/10 px-3 py-2.5">
         <FlightLegRow leg={returnFlight} label="Return" />
       </div>
 
       {/* Combined pricing */}
-      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/10">
         {totalPrice > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Total Cash</p>
-            <p className="text-sm font-bold text-slate-900">${Math.round(totalPrice)}</p>
+            <p className="text-[10px] text-cream-300 uppercase tracking-wide">Total Cash</p>
+            <p className="text-sm font-bold text-cream-100">${Math.round(totalPrice)}</p>
           </div>
         )}
         {totalPoints > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Total Pts</p>
-            <p className="text-sm font-bold text-violet-700">
+            <p className="text-[10px] text-cream-300 uppercase tracking-wide">Total Pts</p>
+            <p className="text-sm font-bold text-brand-300">
               {totalPoints >= 1000 ? `${(totalPoints / 1000).toFixed(0)}k` : totalPoints}
             </p>
           </div>
         )}
         {combinedCpp > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide">CPP</p>
-            <p className={`text-sm font-bold ${combinedCpp >= 2 ? "text-emerald-600" : "text-slate-700"}`}>
+            <p className="text-[10px] text-cream-300 uppercase tracking-wide">CPP</p>
+            <p className={`text-sm font-bold ${combinedCpp >= 2 ? "text-emerald-300" : "text-cream-200"}`}>
               {combinedCpp.toFixed(2)}¢
             </p>
           </div>
@@ -651,7 +660,7 @@ function RoundTripFlightCard({
       <button
         onClick={() => onAddToItinerary(item)}
         disabled={adding}
-        className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-all disabled:opacity-50 shadow-sm w-full"
+        className={`${PRIMARY_CTA} w-full`}
       >
         {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
         Add Both Flights to Itinerary
@@ -695,14 +704,10 @@ function HotelCandidateCard({
   const proximityLabel  = (d.proximity_label as string) ?? null;
   const areaLabel       = (d.area_label      as string) ?? null;
 
-  const containerClass = isTopPick
-    ? "border-violet-300/70 bg-gradient-to-br from-violet-50/60 to-white"
-    : isLowScore
-    ? "border-slate-200/60 opacity-55"
-    : "border-slate-200/80 bg-white";
+  const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-brand-400/45" : ""} ${isLowScore ? "opacity-55" : ""}`;
 
   return (
-    <div className={`candidate-card relative border rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 hover:shadow-md hover:border-slate-300 shadow-sm ${containerClass}`}>
+    <div className={containerClass}>
       {isTopPick && (
         <div className="absolute -top-2.5 left-3">
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-violet-500 text-white shadow-sm">
@@ -715,13 +720,13 @@ function HotelCandidateCard({
       {/* Header: name + stars + AI score */}
       <div className="flex items-start justify-between gap-2 pt-0.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-slate-900 leading-tight">{name}</p>
+          <p className="text-sm font-bold text-cream-100 leading-tight">{name}</p>
           <div className="flex items-center gap-2 mt-0.5">
             {stars != null && (
               <span className="text-xs text-amber-400">{"★".repeat(Math.min(5, Math.round(stars)))}</span>
             )}
             {location && (
-              <span className="flex items-center gap-0.5 text-xs text-slate-400 truncate">
+              <span className="flex items-center gap-0.5 text-xs text-cream-300 truncate">
                 <MapPin className="w-3 h-3 flex-shrink-0" />
                 {location}
               </span>
@@ -766,21 +771,21 @@ function HotelCandidateCard({
 
       {/* Explanation */}
       {explanation && (
-        <p className="text-xs text-slate-500 leading-relaxed">{explanation}</p>
+        <p className="text-xs text-cream-300 leading-relaxed">{explanation}</p>
       )}
 
       {/* Pricing grid */}
-      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/10">
         {pricePerNight > 0 && (
           <div className="text-center">
             <p className="text-[10px] text-slate-400 uppercase tracking-wide">Per Night</p>
-            <p className="text-sm font-bold text-slate-900">${Math.round(pricePerNight)}</p>
+            <p className="text-sm font-bold text-cream-100">${Math.round(pricePerNight)}</p>
           </div>
         )}
         {nights > 1 && pricePerNight > 0 && (
           <div className="text-center">
             <p className="text-[10px] text-slate-400 uppercase tracking-wide">Total</p>
-            <p className="text-sm font-bold text-slate-700">${Math.round(pricePerNight * nights)}</p>
+            <p className="text-sm font-bold text-cream-100">${Math.round(pricePerNight * nights)}</p>
           </div>
         )}
         {rating != null && (
@@ -795,7 +800,7 @@ function HotelCandidateCard({
       {amenities.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {amenities.slice(0, 3).map((a) => (
-            <span key={a} className="px-2 py-0.5 bg-slate-100 rounded-full text-xs text-slate-500">{a}</span>
+            <span key={a} className="px-2 py-0.5 bg-white/10 border border-white/10 rounded-full text-xs text-cream-300">{a}</span>
           ))}
         </div>
       )}
@@ -806,11 +811,7 @@ function HotelCandidateCard({
           <button
             onClick={() => onToggleCompare(item)}
             title="Compare"
-            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-xs font-medium transition-all ${
-              isComparing
-                ? "bg-violet-600 text-white shadow-sm"
-                : "bg-slate-100 hover:bg-violet-50 hover:text-violet-700 text-slate-600"
-            }`}
+            className={`${SECONDARY_CTA} ${isComparing ? "bg-brand-500/25 border-brand-400/40 text-brand-200" : ""}`}
           >
             <Scale className="w-3.5 h-3.5" />
             Compare
@@ -823,7 +824,7 @@ function HotelCandidateCard({
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
             title="Book externally"
-            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-slate-100 hover:bg-violet-50 hover:text-violet-700 text-slate-600 text-xs font-medium transition-all"
+            className={SECONDARY_CTA}
           >
             <ExternalLink className="w-3.5 h-3.5" />
             Book
@@ -832,7 +833,7 @@ function HotelCandidateCard({
         <button
           onClick={() => onAddToItinerary(item)}
           disabled={adding}
-          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-all disabled:opacity-50 shadow-sm"
+          className={PRIMARY_CTA}
         >
           {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           Add
@@ -897,12 +898,10 @@ function AttractionCandidateCard({
   const numReviews    = attraction.numReviews;
   const mapsUrl       = `https://www.google.com/maps/search/${encodeURIComponent(attraction.name + " " + attraction.location)}`;
 
-  const containerClass = isTopPick
-    ? "border-emerald-300/70 bg-gradient-to-br from-emerald-50/60 to-white"
-    : "border-slate-200/80 bg-white";
+  const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-brand-400/45" : ""}`;
 
   return (
-    <div className={`candidate-card relative border rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 hover:shadow-md hover:border-slate-300 shadow-sm ${containerClass}`}>
+    <div className={containerClass}>
       {isTopPick && (
         <div className="absolute -top-2.5 left-3">
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
@@ -915,13 +914,13 @@ function AttractionCandidateCard({
       {/* Header: name + AI score */}
       <div className="flex items-start justify-between gap-2 pt-0.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-slate-900 leading-tight">{attraction.name}</p>
+          <p className="text-sm font-bold text-cream-100 leading-tight">{attraction.name}</p>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {rating != null && (
               <span className="text-xs text-amber-500 font-semibold">★ {rating.toFixed(1)}</span>
             )}
             {numReviews != null && (
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-cream-300">
                 {numReviews >= 1000 ? `${(numReviews / 1000).toFixed(0)}k` : numReviews} reviews
               </span>
             )}
@@ -932,7 +931,7 @@ function AttractionCandidateCard({
 
       {/* Description */}
       {attraction.description && (
-        <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">{attraction.description}</p>
+        <p className="text-xs text-cream-300 leading-relaxed line-clamp-2">{attraction.description}</p>
       )}
 
       {/* Tags */}
@@ -945,20 +944,20 @@ function AttractionCandidateCard({
       {/* Meta row: address, hours, duration, price */}
       <div className="flex flex-col gap-1">
         {attraction.address && (
-          <div className="flex items-center gap-1 text-xs text-slate-400">
+          <div className="flex items-center gap-1 text-xs text-cream-300">
             <MapPin className="w-3 h-3 flex-shrink-0" />
             <span className="truncate">{attraction.address}</span>
           </div>
         )}
         <div className="flex items-center gap-3 flex-wrap">
           {attraction.openingHours && (
-            <div className="flex items-center gap-1 text-xs text-slate-400">
+            <div className="flex items-center gap-1 text-xs text-cream-300">
               <Clock className="w-3 h-3 flex-shrink-0" />
               <span>{attraction.openingHours}</span>
             </div>
           )}
           {attraction.durationMinutes != null && (
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-cream-300">
               {formatDuration(attraction.durationMinutes)}
             </span>
           )}
@@ -974,7 +973,7 @@ function AttractionCandidateCard({
           href={mapsUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 text-xs font-medium transition-all"
+          className={SECONDARY_CTA}
         >
           <ExternalLink className="w-3.5 h-3.5" />
           View
@@ -982,7 +981,7 @@ function AttractionCandidateCard({
         <button
           onClick={() => onAddToTrip(attraction)}
           disabled={adding}
-          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-all disabled:opacity-50 shadow-sm"
+          className={PRIMARY_CTA}
         >
           {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           Add to Trip
@@ -1022,28 +1021,19 @@ function RestaurantCandidateCard({
   const numReviews = restaurant.numReviews;
   const mapsUrl    = `https://www.google.com/maps/search/${encodeURIComponent(restaurant.name + " " + restaurant.location)}`;
 
-  const containerClass = isTopPick
-    ? "candidate-card relative flex flex-col gap-2 p-3 rounded-2xl border border-rose-200 bg-rose-50/40 shadow-sm"
-    : "candidate-card relative flex flex-col gap-2 p-3 rounded-2xl border border-slate-100 bg-white shadow-sm";
-
-  const scoreColor =
-    aiScore >= 70 ? "bg-rose-500 text-white" :
-    aiScore >= 50 ? "bg-amber-400 text-white" :
-                    "bg-slate-200 text-slate-600";
+  const containerClass = `${PREMIUM_CARD_BASE} gap-2 p-3 ${isTopPick ? "border-brand-400/45" : ""}`;
 
   return (
     <div className={containerClass}>
       {isTopPick && (
-        <span className="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wide text-rose-500 bg-rose-100 px-1.5 py-0.5 rounded-full">
-          Top Pick
-        </span>
+        <span className="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wide text-brand-200 bg-brand-500/20 border border-brand-400/30 px-1.5 py-0.5 rounded-full">Top Pick</span>
       )}
 
       <div className="flex items-start justify-between gap-2 pt-0.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-slate-900 leading-tight">{restaurant.name}</p>
+          <p className="text-sm font-bold text-cream-100 leading-tight">{restaurant.name}</p>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <span className="text-[10px] text-slate-400 font-medium">{restaurant.cuisine}</span>
+            <span className="text-[10px] text-cream-300 font-medium">{restaurant.cuisine}</span>
             {rating != null && (
               <span className="flex items-center gap-0.5 text-xs text-amber-500 font-semibold">
                 <Star className="w-3 h-3 fill-amber-400 stroke-amber-400" />
@@ -1057,9 +1047,7 @@ function RestaurantCandidateCard({
             )}
           </div>
         </div>
-        <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${scoreColor}`}>
-          {Math.round(aiScore)}
-        </div>
+        <AiScoreBadge score={aiScore} />
       </div>
 
       {/* Tags */}
@@ -1072,14 +1060,14 @@ function RestaurantCandidateCard({
       {/* Meta row */}
       <div className="flex flex-col gap-1">
         {restaurant.address && (
-          <div className="flex items-center gap-1 text-xs text-slate-400">
+          <div className="flex items-center gap-1 text-xs text-cream-300">
             <MapPin className="w-3 h-3 flex-shrink-0" />
             <span className="truncate">{restaurant.address}</span>
           </div>
         )}
         <div className="flex items-center gap-3 flex-wrap">
           {restaurant.openingHours && (
-            <div className="flex items-center gap-1 text-xs text-slate-400">
+            <div className="flex items-center gap-1 text-xs text-cream-300">
               <Clock className="w-3 h-3 flex-shrink-0" />
               <span>{restaurant.openingHours}</span>
             </div>
@@ -1096,7 +1084,7 @@ function RestaurantCandidateCard({
           href={mapsUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 text-xs font-medium transition-all"
+          className={SECONDARY_CTA}
         >
           <ExternalLink className="w-3.5 h-3.5" />
           Maps
@@ -1104,7 +1092,7 @@ function RestaurantCandidateCard({
         <button
           onClick={() => onAddToTrip(restaurant)}
           disabled={adding}
-          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-all disabled:opacity-50 shadow-sm"
+          className={PRIMARY_CTA}
         >
           {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           Add to Trip
@@ -1129,7 +1117,7 @@ function FilterPills({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">{label}</span>
+      <span className="text-[9px] font-semibold uppercase tracking-wider text-cream-300">{label}</span>
       <div className="flex flex-wrap gap-1">
         {options.map((opt) => (
           <button
@@ -1137,8 +1125,8 @@ function FilterPills({
             onClick={() => onChange(opt.value === value ? null : opt.value)}
             className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-all border ${
               opt.value === value
-                ? "bg-slate-700 text-white border-slate-700"
-                : "bg-transparent text-slate-500 border-slate-200 hover:border-slate-400 hover:text-slate-700"
+                ? "bg-brand-500/80 text-dark-900 border-brand-400"
+                : "bg-dark-300/60 text-cream-300 border-white/15 hover:border-white/35 hover:text-cream-100"
             }`}
           >
             {opt.label}
@@ -1179,7 +1167,7 @@ function CandidatePanel({
     <div className="card p-3 flex flex-col gap-2">
       <button
         onClick={onToggle}
-        className="flex items-center justify-between w-full text-sm font-semibold text-slate-700"
+        className="flex items-center justify-between w-full text-sm font-semibold text-cream-100"
       >
         <span className="flex items-center gap-1.5">
           {icon}
@@ -1189,8 +1177,8 @@ function CandidatePanel({
           </span>
         </span>
         {open
-          ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
-          : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+          ? <ChevronUp className="w-3.5 h-3.5 text-cream-300" />
+          : <ChevronDown className="w-3.5 h-3.5 text-cream-300" />}
       </button>
       {open && sortControls && <div className="pt-0.5">{sortControls}</div>}
       {open && !hasData && (
@@ -1218,11 +1206,15 @@ interface TripBuilderProps {
   endDate?: string;
   initialDays: ItineraryDay[];
   initialResults: ResearchResult[];
+  /** Bump to trigger TripIdeasPanel to re-fetch saved ideas. */
+  ideasRefreshKey?: number;
+  /** Called when a saved idea is assigned to a day from TripIdeasPanel. */
+  onIdeaAssigned?: () => void;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults }: TripBuilderProps) {
+export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned }: TripBuilderProps) {
   const [days,           setDays]          = useState<ItineraryDay[]>(
     [...initialDays].sort((a, b) => a.dayNumber - b.dayNumber)
   );
@@ -1239,6 +1231,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const [candidateRestaurants, setCandidateRestaurants] = useState<RestaurantSearchResult[]>([]);
   const [attractionsLoading,   setAttractionsLoading]   = useState(false);
   const [restaurantsLoading,   setRestaurantsLoading]   = useState(false);
+  const [authSessionReady, setAuthSessionReady] = useState(false);
   const [flightPanelOpen,      setFlightPanelOpen]      = useState(true);
   const [hotelPanelOpen,       setHotelPanelOpen]       = useState(true);
   const [attractionPanelOpen,  setAttractionPanelOpen]  = useState(true);
@@ -1272,12 +1265,14 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const attractionListRef  = useRef<HTMLDivElement>(null);
   const restaurantListRef  = useRef<HTMLDivElement>(null);
   const prevViewModeRef    = useRef<"list" | "map" | "grouped">("list");
+  const exploreSnapshotLoadedRef = useRef<string | null>(null);
 
   // ── Compare state ────────────────────────────────────────────────────────────
   const [compareSet,     setCompareSet]     = useState<Set<string>>(new Set());
   const [compareOpen,    setCompareOpen]    = useState(false);
   const [compareResults, setCompareResults] = useState<CompareResult[]>([]);
   const [compareLoading, setCompareLoading] = useState(false);
+  const [ideasRefreshNonce, setIdeasRefreshNonce] = useState(0);
   const compareDataRef = useRef<Map<string, { name: string; itemType: string; cashPrice: number; pointsCost: number; rating?: number; lat?: number; lng?: number }>>(new Map());
 
   const sensors = useSensors(
@@ -1287,6 +1282,23 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   useEffect(() => {
     setDays([...initialDays].sort((a, b) => a.dayNumber - b.dayNumber));
   }, [initialDays]);
+
+  useEffect(() => {
+    let active = true;
+
+    const applySession = (session: Session | null) => {
+      if (!active) return;
+      setAuthSessionReady(!!session?.access_token);
+    };
+
+    supabase.auth.getSession().then(({ data }) => applySession(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => applySession(session));
+
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
 
   const canonicalStartDate = normalizeIsoDate(startDate);
   const displayDays = useMemo(
@@ -1300,7 +1312,10 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     [days, canonicalStartDate]
   );
 
-  // Load trip-level items on mount, sort by AI score
+  // Load trip-level items on mount, sort by AI score.
+  // Attractions and restaurants are hydrated exclusively by the snapshot-first effect below.
+  // Loading them here caused a race condition: unscored trip-level items (concierge ideas
+  // with day_id=null, no ai_score) raced against and overwrote scored snapshot candidates.
   useEffect(() => {
     fetchTripItems(tripId).then((items) => {
       const flights = items
@@ -1328,14 +1343,44 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     gsap.from(cards, { y: 24, opacity: 0, duration: 0.45, stagger: 0.07, ease: "power2.out", clearProps: "all" });
   }, [candidateHotels.length]);
 
-  // Auto-load attractions for the trip destination
+  // Snapshot-first Explore hydration.
+  // On mount: load from persisted snapshot when available, skip provider search.
+  // On cache miss: call provider-backed search (one-shot per tripId:destination) then persist snapshot.
   useEffect(() => {
-    if (!destination) return;
-    setAttractionsLoading(true);
-    searchAttractions(destination).then((attractions) => {
-      setCandidateAttractions(attractions);
-    }).finally(() => setAttractionsLoading(false));
-  }, [destination]);
+    if (!destination || !authSessionReady) return;
+    const hydrationKey = `${tripId}:${destination.toLowerCase()}`;
+    if (exploreSnapshotLoadedRef.current === hydrationKey) return;
+    exploreSnapshotLoadedRef.current = hydrationKey;
+
+    (async () => {
+      const snapshot = await fetchExploreSnapshot(tripId);
+      if (snapshot && (snapshot.attractions.length > 0 || snapshot.restaurants.length > 0)) {
+        if (snapshot.attractions.length > 0) setCandidateAttractions(snapshot.attractions);
+        if (snapshot.restaurants.length > 0) setCandidateRestaurants(snapshot.restaurants);
+        if (hasPositiveExploreScore(snapshot.attractions, snapshot.restaurants)) return;
+      }
+
+      // No usable snapshot (or stale unscored snapshot) — call provider-backed search, then persist result.
+      setAttractionsLoading(true);
+      setRestaurantsLoading(true);
+      const [attractionsResult, restaurantsResult] = await Promise.allSettled([
+        searchAttractions(destination),
+        searchRestaurants(destination),
+      ]);
+
+      const resolvedAttractions = attractionsResult.status === "fulfilled" ? attractionsResult.value : [];
+      const resolvedRestaurants = restaurantsResult.status === "fulfilled" ? restaurantsResult.value : [];
+
+      if (resolvedAttractions.length > 0) setCandidateAttractions(resolvedAttractions);
+      if (resolvedRestaurants.length > 0) setCandidateRestaurants(resolvedRestaurants);
+      setAttractionsLoading(false);
+      setRestaurantsLoading(false);
+
+      if (resolvedAttractions.length > 0 || resolvedRestaurants.length > 0) {
+        saveExploreSnapshot(tripId, { destination, attractions: resolvedAttractions, restaurants: resolvedRestaurants });
+      }
+    })();
+  }, [destination, authSessionReady, tripId]);
 
   // GSAP entrance animations for attraction cards
   useEffect(() => {
@@ -1343,15 +1388,6 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     const cards = attractionListRef.current.querySelectorAll(".candidate-card");
     gsap.from(cards, { y: 24, opacity: 0, duration: 0.45, stagger: 0.05, ease: "power2.out", clearProps: "all" });
   }, [candidateAttractions.length]);
-
-  // Auto-load restaurants for the trip destination
-  useEffect(() => {
-    if (!destination) return;
-    setRestaurantsLoading(true);
-    searchRestaurants(destination).then((restaurants) => {
-      setCandidateRestaurants(restaurants);
-    }).finally(() => setRestaurantsLoading(false));
-  }, [destination]);
 
   // GSAP entrance animations for restaurant cards
   useEffect(() => {
@@ -1602,6 +1638,22 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     );
     try { await deleteItem(itemId); } catch { /* silently ignore */ }
   }, []);
+
+  const handleMoveItemToIdeas = useCallback(async (itemId: string, dayId: string) => {
+    setDays((prev) =>
+      prev.map((d) =>
+        d.id === dayId
+          ? { ...d, items: d.items.filter((i) => i.id !== itemId).map((i, idx) => ({ ...i, position: idx })) }
+          : d
+      )
+    );
+    try {
+      await moveIdeaToTripIdeas(itemId);
+      setIdeasRefreshNonce((k) => k + 1);
+    } catch {
+      showToast("Failed to move idea back to Trip Ideas");
+    }
+  }, [showToast]);
 
   // ── Add empty note to a day ──────────────────────────────────────────────────
 
@@ -2085,7 +2137,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <MapPin className="w-3.5 h-3.5 text-sky-500 flex-shrink-0" />
-                          <span className="text-sm font-bold text-slate-800">{cluster.areaName || "Popular Area"}</span>
+                          <span className="text-sm font-bold text-slate-100">{cluster.areaName || "Popular Area"}</span>
                         </div>
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
@@ -2126,7 +2178,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                         {cluster.places.map((place) => (
                           <div
                             key={place.id}
-                            className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2"
+                            className="flex items-center gap-2 rounded-xl border border-slate-700/80 bg-slate-900/70 px-3 py-2 shadow-[inset_0_1px_0_rgba(148,163,184,0.15)]"
                           >
                             <span
                               className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
@@ -2134,8 +2186,8 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                               }`}
                             />
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-slate-800 truncate">{place.name}</p>
-                              <p className="text-[10px] text-slate-400 truncate">{place.category} · {place.address.split(",")[0]}</p>
+                              <p className="text-xs font-semibold text-slate-100 truncate">{place.name}</p>
+                              <p className="text-[10px] text-slate-300 truncate">{place.category} · {place.address.split(",")[0]}</p>
                             </div>
                             {place.rating != null && (
                               <span className="flex items-center gap-0.5 text-[10px] text-amber-500 font-semibold flex-shrink-0">
@@ -2245,7 +2297,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                             attraction={attraction}
                             onAddToTrip={handleAddAttractionToItinerary}
                             adding={addingId === attraction.id}
-                            isTopPick={attractionSort === "ai" && idx < top20}
+                            isTopPick={attractionSort === "ai" && idx < top20 && (attraction.aiScore ?? 0) > 0}
                           />
                         </div>
                       ));
@@ -2337,7 +2389,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                             restaurant={restaurant}
                             onAddToTrip={handleAddRestaurantToItinerary}
                             adding={addingId === restaurant.id}
-                            isTopPick={restaurantSort === "ai" && idx < top20}
+                            isTopPick={restaurantSort === "ai" && idx < top20 && (restaurant.aiScore ?? 0) > 0}
                           />
                         </div>
                       ));
@@ -2404,6 +2456,13 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
               </div>
             </div>
 
+            <TripIdeasPanel
+              tripId={tripId}
+              days={displayDays}
+              refreshKey={(ideasRefreshKey ?? 0) + ideasRefreshNonce}
+              onIdeaAssigned={onIdeaAssigned}
+            />
+
             <div className="flex flex-col gap-3 pr-0.5 overflow-visible">
               <SortableContext items={days.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                 {displayDays.map((day) => (
@@ -2417,6 +2476,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                       setExpandedDayNumber((prev) => (prev === dayNumber ? null : dayNumber))
                     }
                     onRemoveItem={handleRemoveItem}
+                    onMoveItemToIdeas={handleMoveItemToIdeas}
                     onAddItem={handleAddToDay}
                     onToggleCompare={handleToggleCompareItem}
                     compareSet={compareSet}

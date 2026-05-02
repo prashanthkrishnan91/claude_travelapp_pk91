@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Pencil, Sparkles, Trash2, X, Zap } from "lucide-react";
+import { ChevronLeft, Compass, Pencil, Sparkles, Trash2, X, Zap } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TripBuilder } from "@/components/trips/TripBuilder";
 import { OptimizeTripModal } from "@/components/trips/OptimizeTripModal";
@@ -27,18 +27,6 @@ const DESTINATION_GRADIENTS: Array<{ keywords: string[]; gradient: string }> = [
 ];
 
 const DEFAULT_GRADIENT = "linear-gradient(160deg,#0ea5e9 0%,#38bdf8 40%,#7dd3fc 75%,#e0f2fe 100%)";
-
-const BEACH_KW  = ["honolulu","hawaii","maui","maldives","caribbean","bahamas","cancun","aruba","bali","phuket","lombok","fiji","tahiti","barbados"];
-const COLD_KW   = ["swiss","switzerland","alps","himalaya","mountain","colorado","rockies","norway","iceland","alaska","anchorage","aspen","vail"];
-const CITY_KW   = ["new york","nyc","chicago","london","tokyo","paris","rome","dubai","singapore","hong kong","las vegas","berlin","sydney","melbourne"];
-
-function getDestinationEmoji(destination: string): string {
-  const lower = destination.toLowerCase();
-  if (BEACH_KW.some((k) => lower.includes(k))) return "🌴";
-  if (COLD_KW.some((k) => lower.includes(k))) return "❄️";
-  if (CITY_KW.some((k) => lower.includes(k))) return "🏙";
-  return "✈️";
-}
 
 function getDestinationGradient(destination: string): string {
   const lower = destination.toLowerCase();
@@ -72,6 +60,7 @@ export default function TripDetailPage() {
   const [optimizeOpen,  setOptimizeOpen]  = useState(false);
   const [conciergeOpen, setConciergeOpen] = useState(false);
   const [tripBuilderKey, setTripBuilderKey] = useState(0);
+  const [tripIdeasKey,  setTripIdeasKey]  = useState(0);
 
   useEffect(() => {
     if (!id) return;
@@ -275,10 +264,13 @@ export default function TripDetailPage() {
             <p className="text-sm text-slate-400 italic">Fetching destination vibe…</p>
           ) : tripContext ? (
             <>
-              <span className="text-xl leading-none" aria-hidden="true">
-                {getDestinationEmoji(trip?.destination ?? "")}
+              <span
+                className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-brand-600/15 border border-brand-500/30 text-brand-300"
+                aria-hidden="true"
+              >
+                <Compass className="w-3.5 h-3.5" />
               </span>
-              <p className="text-sm font-medium text-slate-500 tracking-wide">
+              <p className="text-sm font-medium text-cream-300 tracking-wide">
                 {tripContext.dateRange
                   ? `${tripContext.vibe} • ${tripContext.dateRange}`
                   : tripContext.vibe}
@@ -321,6 +313,18 @@ export default function TripDetailPage() {
         endDate={trip?.endDate}
         initialDays={itineraryDays}
         initialResults={[]}
+        ideasRefreshKey={tripIdeasKey}
+        onIdeaAssigned={() => {
+          const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
+            ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;
+          const endDate = (trip as (Trip & { end_date?: string }) | null)?.endDate
+            ?? (trip as (Trip & { end_date?: string }) | null)?.end_date;
+          ensureTripDays(id, startDate, endDate).then((days) => {
+            setItineraryDays(days);
+            setTripBuilderKey((k) => k + 1);
+            showToast("Added to itinerary!");
+          });
+        }}
       />
 
       <AIConciergePanel
@@ -340,6 +344,7 @@ export default function TripDetailPage() {
             showToast("Added to your itinerary!");
           });
         }}
+        onIdeaSaved={() => setTripIdeasKey((k) => k + 1)}
       />
     </>
   );

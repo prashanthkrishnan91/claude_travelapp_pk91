@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from app.core.deps import DB, CurrentUserID
 from app.models import Trip, TripCreate, TripUpdate, ItineraryItem
 from app.models.itinerary import ItineraryItemDirectCreate
-from app.models.search import FlightResult, FlightSearchRequest, HotelResult, HotelSearchRequest, RoundTripFlightPair
+from app.models.search import ExploreSnapshot, FlightResult, FlightSearchRequest, HotelResult, HotelSearchRequest, RoundTripFlightPair
 from app.services import TripsService
 from app.services.itinerary import ItineraryService
 from app.services.search import SearchService
@@ -352,7 +352,7 @@ def create_trip(payload: TripCreate, db: DB, user_id: CurrentUserID) -> Trip:
     """Create a new trip. user_id is always taken from the JWT."""
     trip = TripsService(db).create_trip(payload.model_copy(update={"user_id": user_id}))
     if trip.start_date and trip.end_date:
-        ItineraryService(db).ensure_trip_days(trip.id, trip.start_date, trip.end_date)
+        ItineraryService(db).ensure_trip_days(trip.id, trip.start_date, trip.end_date, user_id)
     return trip
 
 
@@ -367,7 +367,7 @@ def update_trip(trip_id: UUID, payload: TripUpdate, db: DB, user_id: CurrentUser
     """Partially update a trip — must belong to the authenticated user."""
     trip = TripsService(db).update_trip(trip_id, payload, user_id)
     if trip.start_date and trip.end_date:
-        ItineraryService(db).ensure_trip_days(trip.id, trip.start_date, trip.end_date)
+        ItineraryService(db).ensure_trip_days(trip.id, trip.start_date, trip.end_date, user_id)
     return trip
 
 
@@ -380,7 +380,30 @@ def delete_trip(trip_id: UUID, db: DB, user_id: CurrentUserID) -> None:
 @router.get("/{trip_id}/items", response_model=List[ItineraryItem])
 def list_trip_items(trip_id: UUID, db: DB, user_id: CurrentUserID) -> List[ItineraryItem]:
     """Return all itinerary items for a trip regardless of day assignment."""
+    TripsService(db).get_trip(trip_id, user_id)
     return ItineraryService(db).list_items_by_trip(trip_id)
+
+
+@router.get("/{trip_id}/ideas", response_model=List[ItineraryItem])
+def list_trip_ideas(trip_id: UUID, db: DB, user_id: CurrentUserID) -> List[ItineraryItem]:
+    """Return unscheduled itinerary items (saved concierge ideas not yet assigned to a day)."""
+    TripsService(db).get_trip(trip_id, user_id)
+    return ItineraryService(db).list_unscheduled_items(trip_id)
+
+
+@router.get("/{trip_id}/explore-snapshot", response_model=Optional[ExploreSnapshot])
+def get_explore_snapshot(trip_id: UUID, db: DB, user_id: CurrentUserID) -> Optional[ExploreSnapshot]:
+    """Return persisted Explore candidate snapshot for Attractions and Restaurants, or null when absent."""
+    snapshot = TripsService(db).get_explore_snapshot(trip_id, user_id)
+    if not snapshot:
+        return None
+    return ExploreSnapshot(**snapshot)
+
+
+@router.put("/{trip_id}/explore-snapshot", status_code=status.HTTP_204_NO_CONTENT)
+def save_explore_snapshot(trip_id: UUID, payload: ExploreSnapshot, db: DB, user_id: CurrentUserID) -> None:
+    """Persist Explore candidate snapshot for the trip. Overwrites previous snapshot."""
+    TripsService(db).save_explore_snapshot(trip_id, user_id, payload.model_dump(mode="json"))
 
 
 @router.post("/create-with-search", response_model=TripWithResults, status_code=status.HTTP_201_CREATED)
@@ -475,7 +498,7 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
     )
     itinerary_svc = ItineraryService(db)
     if trip.start_date and trip.end_date:
-        itinerary_svc.ensure_trip_days(trip.id, trip.start_date, trip.end_date)
+        itinerary_svc.ensure_trip_days(trip.id, trip.start_date, trip.end_date, user_id)
 
     # Step 6: Persist flight + hotel candidates as trip-level itinerary items
     for idx, flight in enumerate(flights_sorted[:10]):
@@ -515,7 +538,7 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
                         for o in flight.booking_options
                     ],
                 },
-            ))
+            ), user_id)
         except Exception:
             pass
 
@@ -555,7 +578,7 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
                     "proximity_label": hotel.proximity_label,
                     "area_label": hotel.area_label,
                 },
-            ))
+            ), user_id)
         except Exception:
             pass
 
@@ -611,7 +634,7 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
                         "booking_url": pair.return_flight.booking_url,
                     },
                 },
-            ))
+            ), user_id)
         except Exception:
             pass
 

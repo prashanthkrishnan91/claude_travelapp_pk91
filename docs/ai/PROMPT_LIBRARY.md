@@ -28,8 +28,50 @@ Before giving any Claude/Codex prompt, ChatGPT must silently check:
 14. If extra usage may be needed, did the Code Committee approve it?
 15. For UI work: did the UI budget gate approve the scope?
 16. After heavy Claude PR: does the prompt tell user to stop that Claude session and review elsewhere?
+17. Does any Medium/High prompt include a timeout/checkpoint rule?
+18. For complex refactors: did the split gate reduce the task to one deliverable?
 
 If any check fails, rewrite before showing the user.
+
+## Complex refactor split gate
+
+A prompt must be split if it combines 3+ of these in one task:
+
+- bug fix
+- UI refactor
+- persistence/idempotency
+- history/log display
+- analytics/performance display
+- tests
+- documentation
+- migration/schema work
+- multiple workflows/screens
+
+Default split order:
+
+1. Logic correctness only (helpers/state semantics/persistence denominator)
+2. UI separation only (cards/layout using corrected helpers)
+3. History/analytics display only
+4. Tests/docs/handoff finalization or cheap merge gate
+
+For complex refactors, the first prompt should usually be Codex or Sonnet with max 1–2 primary files and one deliverable. Do not request full redesign + persistence + history + performance + docs in one prompt unless Code Committee explicitly approves High usage.
+
+## Timeout / continue budget rule
+
+Repeated "continue" after Claude stops or times out is expensive because the full accumulated chat, file reads, command output, and partial work remain in context and are resent on subsequent turns.
+
+For Medium/High prompts, include:
+
+```md
+Timeout budget:
+- If you are about to exceed time/context or cannot finish cleanly, stop after a checkpoint.
+- Before stopping, write: files changed, tests run, current status, remaining steps, and whether a PR exists.
+- Do not start broad new discovery after a continue.
+- If resumed, continue only from the checkpoint and do not reread files already summarized.
+- If two continues are needed, stop and ask the user to move the checkpoint summary to a fresh chat.
+```
+
+User-side rule: after two timeouts/continues, do not keep saying continue. Start fresh with Claude's checkpoint summary or bring it to ChatGPT for compression.
 
 ## Session stop rule
 
@@ -158,6 +200,10 @@ Discovery budget:
 - read primary + tests first
 - fallback files only if blocked
 
+Timeout budget:
+- checkpoint before timing out
+- max two continues, then fresh chat/checkpoint compression
+
 Constraints:
 - no refactors
 - minimal patch
@@ -217,6 +263,7 @@ Implementation prompt must include:
 - forbidden surfaces
 - max files
 - discovery budget
+- timeout budget for Medium/High work
 - HANDOFF.md update
 - stop-after-PR instruction for Medium-High/High work
 

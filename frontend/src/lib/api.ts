@@ -45,12 +45,10 @@ import {
 /** Direct connection to FastAPI backend — no proxy, no rewrites. */
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
-console.log("API URL:", process.env.NEXT_PUBLIC_API_URL);
 
 async function getAuthHeader(): Promise<Record<string, string>> {
   const { data: { session } } = await supabase.auth.getSession();
 
-  console.log("[auth] session:", session);
 
   if (!session) {
     throw new Error("[auth] No active session — request blocked. User must be signed in.");
@@ -62,10 +60,8 @@ async function getAuthHeader(): Promise<Record<string, string>> {
     throw new Error("[auth] Missing access_token in session.");
   }
 
-  console.log("[auth] access_token:", token.slice(0, 20) + "…");
 
   const header = { Authorization: `Bearer ${token}` };
-  console.log("[auth] Authorization header attached:", header.Authorization.slice(0, 30) + "…");
   return header;
 }
 
@@ -108,10 +104,6 @@ async function apiFetch<T>(
 ): Promise<T> {
   const url = `${API_URL}${path}`;
 
-  console.log(`[apiFetch] → ${options.method ?? "GET"} ${url}`);
-  if (options.body) {
-    console.log(`[apiFetch] body:`, options.body);
-  }
 
   const authHeader = await getAuthHeader();
 
@@ -121,7 +113,6 @@ async function apiFetch<T>(
     ...(options.headers as Record<string, string>),
   };
 
-  console.log("[apiFetch] final request headers:", finalHeaders);
 
   const res = await fetch(url, {
     ...options,
@@ -130,7 +121,6 @@ async function apiFetch<T>(
     cache: "no-store",
   });
 
-  console.log(`[apiFetch] ← ${res.status} ${res.statusText} (${url})`);
 
   if (res.status === 204) return null as T;
 
@@ -138,7 +128,6 @@ async function apiFetch<T>(
     let detail = `${res.status} ${res.statusText}`;
     try {
       const body = await res.json();
-      console.error(`[apiFetch] error body:`, body);
       detail = body?.detail ?? detail;
     } catch {
       // ignore parse errors
@@ -147,7 +136,6 @@ async function apiFetch<T>(
   }
 
   const json = await res.json();
-  console.log(`[apiFetch] response body:`, json);
   return toCamel<T>(json);
 }
 
@@ -600,6 +588,8 @@ interface RawAttractionResult {
   bookingUrl?: string;
   bookingOptions?: BookingOption[];
   aiScore?: number;
+  ai_score?: number;
+  score?: number;
   tags?: string[];
   numReviews?: number;
   openingHours?: string;
@@ -625,6 +615,14 @@ interface RawHotelResult {
 }
 
 function mapAttractionToResult(a: RawAttractionResult): AttractionSearchResult {
+  const normalizedAiScore =
+    typeof a.aiScore === "number"
+      ? a.aiScore
+      : typeof a.ai_score === "number"
+        ? a.ai_score
+        : typeof a.score === "number"
+          ? a.score
+          : undefined;
   return {
     id: a.id,
     name: a.name,
@@ -638,7 +636,7 @@ function mapAttractionToResult(a: RawAttractionResult): AttractionSearchResult {
     priceLevel: a.priceLevel,
     openingHours: a.openingHours,
     durationMinutes: a.durationMinutes,
-    aiScore: a.aiScore,
+    aiScore: normalizedAiScore,
     tags: a.tags ?? [],
     bookingUrl: a.bookingUrl,
     bookingOptions: a.bookingOptions,
@@ -722,6 +720,8 @@ interface RawRestaurantResult {
   priceLevel?: number;
   openingHours?: string;
   aiScore?: number;
+  ai_score?: number;
+  score?: number;
   sentiment?: number;
   tags?: string[];
   bookingUrl?: string;
@@ -729,6 +729,14 @@ interface RawRestaurantResult {
 }
 
 function mapRestaurantToResult(r: RawRestaurantResult): RestaurantSearchResult {
+  const normalizedAiScore =
+    typeof r.aiScore === "number"
+      ? r.aiScore
+      : typeof r.ai_score === "number"
+        ? r.ai_score
+        : typeof r.score === "number"
+          ? r.score
+          : undefined;
   return {
     id: r.id,
     name: r.name,
@@ -740,7 +748,7 @@ function mapRestaurantToResult(r: RawRestaurantResult): RestaurantSearchResult {
     price: r.price,
     priceLevel: r.priceLevel,
     openingHours: r.openingHours,
-    aiScore: r.aiScore,
+    aiScore: normalizedAiScore,
     sentiment: r.sentiment,
     tags: r.tags ?? [],
     bookingUrl: r.bookingUrl,
@@ -779,6 +787,233 @@ export async function searchClusters(
     });
   } catch {
     return [];
+  }
+}
+
+// ─── Explore candidate snapshots ─────────────────────────────────────────────
+
+export interface ExploreSnapshot {
+  destination: string;
+  createdAt: string;
+  attractions: AttractionSearchResult[];
+  restaurants: RestaurantSearchResult[];
+}
+
+/**
+ * Deterministic attraction score mirroring backend _compute_attraction_ai_score.
+ * Used to enrich stale snapshot candidates that have rating/numReviews but no aiScore.
+ */
+export function computeExploreAttractionScore(
+  rating: number,
+  numReviews: number,
+  category: string
+): number {
+  const ratingScore = (rating / 5.0) * 100;
+  const reviewScore = Math.min(100.0, (Math.log1p(numReviews) / Math.log1p(500_000)) * 100);
+  const popularity = ratingScore * 0.6 + reviewScore * 0.4;
+  const uniquenessBonus = category === "hidden_gems" || category === "local_favorites" ? 8.0 : 0.0;
+  const raw = popularity * 0.9 + uniquenessBonus * 0.1;
+  return Math.round(Math.min(100.0, Math.max(0.0, raw)) * 10) / 10;
+}
+
+/**
+ * Deterministic restaurant score mirroring backend _compute_restaurant_ai_score.
+ * Used to enrich stale snapshot candidates that have rating/numReviews but no aiScore.
+ */
+export function computeExploreRestaurantScore(
+  rating: number,
+  numReviews: number,
+  priceLevel: number,
+  sentiment?: number
+): number {
+  const ratingScore = (rating / 5.0) * 100;
+  const reviewScore = Math.min(100.0, (Math.log1p(numReviews) / Math.log1p(500_000)) * 100);
+  const priceValue = Math.max(0.0, ((4 - priceLevel) / 4.0) * 100);
+  let raw: number;
+  if (sentiment != null) {
+    raw = ratingScore * 0.4 + reviewScore * 0.3 + priceValue * 0.15 + sentiment * 100 * 0.15;
+  } else {
+    raw = ratingScore * 0.45 + reviewScore * 0.35 + priceValue * 0.2;
+  }
+  return Math.round(Math.min(100.0, Math.max(0.0, raw)) * 10) / 10;
+}
+
+/**
+ * Fetch the persisted Explore candidate snapshot for a trip.
+ * Returns null when no snapshot exists or on network/auth failure.
+ * Snapshot is keyed per-trip in trips.metadata.explore_snapshot.
+ * Enriches stale candidates (ai_score=null) with deterministic scoring when rating data is present.
+ */
+export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnapshot | null> {
+  try {
+    const data = await apiFetch<Record<string, unknown> | null>(`/trips/${tripId}/explore-snapshot`);
+    if (!data) return null;
+    const rawAttractions = Array.isArray(data.attractions) ? (data.attractions as Record<string, unknown>[]) : [];
+    const rawRestaurants = Array.isArray(data.restaurants) ? (data.restaurants as Record<string, unknown>[]) : [];
+    if (rawAttractions.length === 0 && rawRestaurants.length === 0) return null;
+    const attractions: AttractionSearchResult[] = rawAttractions.map((a) => {
+      const storedScore =
+        typeof a.aiScore === "number" && a.aiScore > 0
+          ? a.aiScore
+          : typeof a.ai_score === "number" && a.ai_score > 0
+            ? a.ai_score
+            : typeof a.score === "number" && a.score > 0
+              ? a.score
+          : undefined;
+      const computedScore =
+        storedScore == null &&
+        typeof a.rating === "number" &&
+        typeof a.numReviews === "number" &&
+        a.numReviews > 0
+          ? computeExploreAttractionScore(a.rating, a.numReviews, String(a.category ?? ""))
+          : undefined;
+      const aiScore = storedScore ?? (computedScore != null && computedScore > 0 ? computedScore : undefined);
+      return {
+        id: String(a.id ?? ""),
+        name: String(a.name ?? ""),
+        category: String(a.category ?? "attraction"),
+        description: String(a.description ?? ""),
+        location: String(a.location ?? ""),
+        address: String(a.address ?? ""),
+        rating: typeof a.rating === "number" ? a.rating : undefined,
+        numReviews: typeof a.numReviews === "number" ? a.numReviews : typeof a.num_reviews === "number" ? a.num_reviews : undefined,
+        priceLevel: typeof a.priceLevel === "number" ? a.priceLevel : typeof a.price_level === "number" ? a.price_level : undefined,
+        openingHours: typeof a.openingHours === "string" ? a.openingHours : typeof a.opening_hours === "string" ? a.opening_hours : undefined,
+        durationMinutes: typeof a.durationMinutes === "number" ? a.durationMinutes : typeof a.duration_minutes === "number" ? a.duration_minutes : undefined,
+        aiScore,
+        tags: Array.isArray(a.tags) ? (a.tags as string[]) : [],
+        bookingUrl: typeof a.bookingUrl === "string" ? a.bookingUrl : typeof a.booking_url === "string" ? a.booking_url : undefined,
+        lat: typeof a.lat === "number" ? a.lat : undefined,
+        lng: typeof a.lng === "number" ? a.lng : undefined,
+      };
+    });
+    const restaurants: RestaurantSearchResult[] = rawRestaurants.map((r) => {
+      const storedScore =
+        typeof r.aiScore === "number" && r.aiScore > 0
+          ? r.aiScore
+          : typeof r.ai_score === "number" && r.ai_score > 0
+            ? r.ai_score
+            : typeof r.score === "number" && r.score > 0
+              ? r.score
+          : undefined;
+      const sentiment = typeof r.sentiment === "number" ? r.sentiment : undefined;
+      const computedScore =
+        storedScore == null &&
+        typeof r.rating === "number" &&
+        typeof r.numReviews === "number" &&
+        r.numReviews > 0
+          ? computeExploreRestaurantScore(
+              r.rating,
+              r.numReviews,
+              typeof r.priceLevel === "number" ? r.priceLevel : 2,
+              sentiment
+            )
+          : undefined;
+      const aiScore = storedScore ?? (computedScore != null && computedScore > 0 ? computedScore : undefined);
+      return {
+        id: String(r.id ?? ""),
+        name: String(r.name ?? ""),
+        cuisine: String(r.cuisine ?? "Restaurant"),
+        location: String(r.location ?? ""),
+        address: String(r.address ?? ""),
+        rating: typeof r.rating === "number" ? r.rating : undefined,
+        numReviews: typeof r.numReviews === "number" ? r.numReviews : typeof r.num_reviews === "number" ? r.num_reviews : undefined,
+        priceLevel: typeof r.priceLevel === "number" ? r.priceLevel : typeof r.price_level === "number" ? r.price_level : undefined,
+        openingHours: typeof r.openingHours === "string" ? r.openingHours : typeof r.opening_hours === "string" ? r.opening_hours : undefined,
+        aiScore,
+        sentiment,
+        tags: Array.isArray(r.tags) ? (r.tags as string[]) : [],
+        bookingUrl: typeof r.bookingUrl === "string" ? r.bookingUrl : typeof r.booking_url === "string" ? r.booking_url : undefined,
+        lat: typeof r.lat === "number" ? r.lat : undefined,
+        lng: typeof r.lng === "number" ? r.lng : undefined,
+      };
+    });
+    return {
+      destination: String(data.destination ?? ""),
+      createdAt: String(data.createdAt ?? ""),
+      attractions,
+      restaurants,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persist scored Explore candidates for a trip.
+ * Snapshot is stored in trips.metadata.explore_snapshot.
+ * Enriches candidates missing aiScore using deterministic scoring before saving.
+ * Failure is non-fatal — next load will call provider search again.
+ */
+export async function saveExploreSnapshot(
+  tripId: string,
+  snapshot: { destination: string; attractions: AttractionSearchResult[]; restaurants: RestaurantSearchResult[] }
+): Promise<void> {
+  try {
+    const body = {
+      destination: snapshot.destination,
+      created_at: new Date().toISOString(),
+      attractions: snapshot.attractions.map((a) => {
+        let aiScore = a.aiScore != null && a.aiScore > 0 ? a.aiScore : null;
+        if (aiScore == null && a.rating != null && a.numReviews != null && a.numReviews > 0) {
+          const computed = computeExploreAttractionScore(a.rating, a.numReviews, a.category ?? "");
+          aiScore = computed > 0 ? computed : null;
+        }
+        return {
+          id: a.id,
+          name: a.name,
+          category: a.category,
+          description: a.description ?? "",
+          location: a.location,
+          address: a.address,
+          rating: a.rating ?? null,
+          num_reviews: a.numReviews ?? null,
+          price_level: a.priceLevel ?? null,
+          opening_hours: a.openingHours ?? null,
+          duration_minutes: a.durationMinutes ?? null,
+          ai_score: aiScore,
+          tags: a.tags ?? [],
+          booking_url: a.bookingUrl ?? null,
+          lat: a.lat ?? null,
+          lng: a.lng ?? null,
+        };
+      }),
+      restaurants: snapshot.restaurants.map((r) => {
+        let aiScore = r.aiScore != null && r.aiScore > 0 ? r.aiScore : null;
+        if (aiScore == null && r.rating != null && r.numReviews != null && r.numReviews > 0) {
+          const computed = computeExploreRestaurantScore(
+            r.rating,
+            r.numReviews,
+            r.priceLevel ?? 2,
+            r.sentiment
+          );
+          aiScore = computed > 0 ? computed : null;
+        }
+        return {
+          id: r.id,
+          name: r.name,
+          cuisine: r.cuisine,
+          location: r.location,
+          address: r.address,
+          rating: r.rating ?? null,
+          num_reviews: r.numReviews ?? null,
+          price_level: r.priceLevel ?? null,
+          opening_hours: r.openingHours ?? null,
+          ai_score: aiScore,
+          sentiment: r.sentiment ?? null,
+          tags: r.tags ?? [],
+          booking_url: r.bookingUrl ?? null,
+          lat: r.lat ?? null,
+          lng: r.lng ?? null,
+        };
+      }),
+    };
+    await apiFetch(`/trips/${tripId}/explore-snapshot`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  } catch {
+    // Non-fatal: next load will call provider search again
   }
 }
 
@@ -1040,6 +1275,22 @@ export async function createCard(data: CreateCardData): Promise<TravelCard> {
   });
   return apiFetch<TravelCard>("/cards", {
     method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export interface UpdateCardData {
+  displayName?: string;
+  issuer?: string;
+  pointsBalance?: number;
+  pointValueCpp?: number;
+  isPrimary?: boolean;
+}
+
+export async function updateCard(cardId: string, data: UpdateCardData): Promise<TravelCard> {
+  const payload = toSnake(data);
+  return apiFetch<TravelCard>(`/cards/${cardId}`, {
+    method: "PATCH",
     body: JSON.stringify(payload),
   });
 }
@@ -1439,10 +1690,60 @@ export async function clearConciergeCache(
 
 type ConciergeStructuredItem = UnifiedRestaurantResult | UnifiedAttractionResult | UnifiedHotelResult;
 
+export type ConciergeItemKind = "restaurant" | "attraction" | "hotel";
+
+function normalizeGoogleVerificationDetails(item: ConciergeStructuredItem): Record<string, unknown> {
+  const gv = item.googleVerification;
+  if (!gv || typeof gv !== "object") return {};
+  const gvAliases = gv as unknown as {
+    lat?: number | null;
+    lng?: number | null;
+    provider_place_id?: string | null;
+    formatted_address?: string | null;
+    google_maps_uri?: string | null;
+  };
+
+  const getNonEmpty = <T>(...values: Array<T | null | undefined | "">): T | undefined => {
+    for (const value of values) {
+      if (value !== null && value !== undefined && value !== "") return value as T;
+    }
+    return undefined;
+  };
+
+  const lat = getNonEmpty<number>(
+    gv.lat,
+    gvAliases.lat
+  );
+  const lng = getNonEmpty<number>(
+    gv.lng,
+    gvAliases.lng
+  );
+  const providerPlaceId = getNonEmpty<string>(
+    gv.providerPlaceId ?? undefined,
+    gvAliases.provider_place_id ?? undefined
+  );
+  const formattedAddress = getNonEmpty<string>(
+    gv.formattedAddress ?? undefined,
+    gvAliases.formatted_address ?? undefined
+  );
+  const googleMapsUri = getNonEmpty<string>(
+    gv.googleMapsUri ?? undefined,
+    gvAliases.google_maps_uri ?? undefined
+  );
+
+  return {
+    ...(lat !== undefined ? { lat } : {}),
+    ...(lng !== undefined ? { lng } : {}),
+    ...(providerPlaceId ? { provider_place_id: providerPlaceId } : {}),
+    ...(formattedAddress ? { formatted_address: formattedAddress } : {}),
+    ...(googleMapsUri ? { google_maps_uri: googleMapsUri } : {}),
+  };
+}
+
 export async function addStructuredConciergeItemToTrip(
   tripId: string,
   item: ConciergeStructuredItem,
-  kind: "restaurant" | "attraction" | "hotel",
+  kind: ConciergeItemKind,
   opts?: { dayId?: string; reason?: string }
 ): Promise<ItineraryItem> {
   const cityOrArea = "neighborhood" in item ? item.neighborhood : ("areaLabel" in item ? item.areaLabel : undefined);
@@ -1477,11 +1778,144 @@ export async function addStructuredConciergeItemToTrip(
       estimated_price_tag: "pricePerNight" in item && item.pricePerNight != null ? `$${Math.round(item.pricePerNight)}/night` : null,
       value_tag: "pricePerNight" in item && item.pricePerNight != null ? `$${Math.round(item.pricePerNight)}/night` : null,
       tags: item.tags ?? [],
+      ...normalizeGoogleVerificationDetails(item),
     },
   };
   return apiFetch<ItineraryItem>("/itinerary/items", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchTripIdeas(tripId: string): Promise<ItineraryItem[]> {
+  try {
+    return await apiFetch<ItineraryItem[]>(`/trips/${tripId}/ideas`);
+  } catch {
+    return [];
+  }
+}
+
+export async function saveToTripIdeas(
+  tripId: string,
+  item: ConciergeStructuredItem,
+  kind: ConciergeItemKind,
+  reason?: string,
+): Promise<ItineraryItem> {
+  const cityOrArea = "neighborhood" in item ? item.neighborhood : ("areaLabel" in item ? item.areaLabel : undefined);
+  const reviewCount = "reviewCount" in item ? (item.reviewCount ?? null) : null;
+  const category = kind === "restaurant"
+    ? "restaurant"
+    : kind === "hotel"
+      ? "hotel"
+      : ("category" in item ? item.category : "activity");
+  const payload = {
+    trip_id: tripId,
+    item_type: kind === "restaurant" ? "meal" : kind === "hotel" ? "hotel" : "activity",
+    title: item.name,
+    location: cityOrArea || item.name,
+    details: {
+      name: item.name,
+      category,
+      type: category,
+      city: cityOrArea ?? null,
+      location: cityOrArea ?? null,
+      address: "address" in item ? (item.address ?? null) : null,
+      rating: item.rating ?? null,
+      review_count: reviewCount,
+      review_count_text: reviewCount != null ? `${reviewCount}` : null,
+      source: item.source ?? null,
+      source_url: "mapsLink" in item ? (item.mapsLink ?? null) : null,
+      maps_link: "mapsLink" in item ? (item.mapsLink ?? null) : null,
+      booking_url: "bookingLink" in item ? (item.bookingLink ?? null) : null,
+      notes: reason ?? ("summary" in item ? (item.summary ?? null) : ("description" in item ? (item.description ?? null) : null)),
+      reason: reason ?? null,
+      tags: item.tags ?? [],
+      source_kind: "concierge_idea",
+      idea_status: "maybe",
+      ...normalizeGoogleVerificationDetails(item),
+    },
+  };
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateIdeaMeta(
+  itemId: string,
+  currentDetails: Record<string, unknown>,
+  patch: { ideaStatus?: string; userNote?: string }
+): Promise<ItineraryItem> {
+  const merged = { ...currentDetails, ...patch };
+  return updateItem(itemId, { details: merged as ItineraryItem["details"] });
+}
+
+export async function updateItemTimeline(
+  itemId: string,
+  currentDetails: Record<string, unknown>,
+  patch: { dayPart: string; timeLabel?: string }
+): Promise<ItineraryItem> {
+  const merged: Record<string, unknown> = { ...currentDetails, dayPart: patch.dayPart };
+  if (patch.timeLabel) {
+    merged.timeLabel = patch.timeLabel;
+  } else {
+    delete merged.timeLabel;
+  }
+  return updateItem(itemId, { details: merged as ItineraryItem["details"] });
+}
+
+// ─── Smart Day Timeline AI Planning ──────────────────────────────────────────
+
+export interface TimelineSuggestion {
+  itemId: string;
+  dayPart: "morning" | "afternoon" | "evening" | "unscheduled";
+  timeLabel?: string;
+}
+
+/**
+ * Ask the backend AI planner to suggest dayPart/timeLabel for a list of
+ * itinerary items. Falls back to the client-side deterministic planner when
+ * the backend is unreachable or the AI key is not configured.
+ *
+ * Preserves all other item fields — only dayPart and timeLabel are suggested.
+ * Callers must still apply suggestions via updateItemTimeline.
+ */
+export async function suggestDayTimeline(
+  items: ItineraryItem[]
+): Promise<TimelineSuggestion[]> {
+  const payload = {
+    items: items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      item_type: item.itemType,
+      details: (item.details ?? {}) as Record<string, unknown>,
+    })),
+  };
+
+  try {
+    const result = await apiFetch<{ suggestions: TimelineSuggestion[] }>(
+      "/ai/timeline/suggest",
+      { method: "POST", body: JSON.stringify(payload) }
+    );
+    return result.suggestions;
+  } catch {
+    // Client-side deterministic fallback — always works in local/dev/test
+    const { suggestTimelineFallback } = await import("./dayPlanner");
+    return suggestTimelineFallback(items);
+  }
+}
+
+export async function assignIdeaToDay(itemId: string, dayId: string): Promise<ItineraryItem> {
+  return apiFetch<ItineraryItem>(`/itinerary/items/${itemId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ day_id: dayId }),
+  });
+}
+
+export async function moveIdeaToTripIdeas(itemId: string): Promise<ItineraryItem> {
+  return apiFetch<ItineraryItem>(`/itinerary/items/${itemId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ day_id: null }),
   });
 }
 

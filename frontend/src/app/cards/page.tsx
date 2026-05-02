@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CreditCard, PlusCircle, X } from "lucide-react";
+import { CreditCard, PlusCircle, X, Pencil } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { fetchCards, createCard } from "@/lib/api";
+import { fetchCards, createCard, updateCard } from "@/lib/api";
 import type { TravelCard } from "@/types";
 
 const ISSUERS = [
@@ -68,10 +68,10 @@ function AddCardModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+      <div className="card rounded-2xl shadow-xl w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold text-slate-900">Add Travel Card</h2>
-          <button onClick={onClose} className="btn-ghost p-2">
+          <h2 className="text-lg font-bold text-cream-100">Add Travel Card</h2>
+          <button onClick={onClose} className="btn-ghost p-2" aria-label="Close add card modal">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -99,7 +99,7 @@ function AddCardModal({
               onChange={(e) => patch({ cardKey: e.target.value })}
               required
             />
-            <p className="mt-1 text-xs text-slate-400">Unique identifier, lowercase with underscores.</p>
+            <p className="mt-1 text-xs text-cream-400">Unique identifier, lowercase with underscores.</p>
           </div>
 
           <div>
@@ -149,11 +149,11 @@ function AddCardModal({
               onChange={(e) => patch({ isPrimary: e.target.checked })}
               className="rounded border-slate-300"
             />
-            <span className="text-sm text-slate-700">Set as primary card</span>
+            <span className="text-sm text-cream-200">Set as primary card</span>
           </label>
 
           {error && (
-            <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <div className="rounded-xl bg-rose-500/12 border border-rose-500/35 px-4 py-3 text-sm text-rose-100">
               {error}
             </div>
           )}
@@ -172,10 +172,157 @@ function AddCardModal({
   );
 }
 
+function EditCardModal({
+  card,
+  onClose,
+  onSaved,
+}: {
+  card: TravelCard;
+  onClose: () => void;
+  onSaved: (card: TravelCard) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    displayName: card.displayName,
+    issuer: card.issuer,
+    pointsBalance: String(card.pointsBalance ?? 0),
+    pointValueCpp: card.pointValueCpp != null ? String(card.pointValueCpp) : "",
+    isPrimary: card.isPrimary,
+  });
+
+  function patch(update: Partial<typeof form>) {
+    setForm((prev) => ({ ...prev, ...update }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.displayName.trim()) {
+      setError("Card name is required.");
+      return;
+    }
+
+    const rawPointsBalance = form.pointsBalance.trim();
+    const parsedPointsBalance = Number(rawPointsBalance);
+    if (!rawPointsBalance || !Number.isFinite(parsedPointsBalance) || parsedPointsBalance < 0) {
+      setError("Points balance must be a non-negative number.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await updateCard(card.id, {
+        displayName: form.displayName.trim(),
+        issuer: form.issuer,
+        pointsBalance: parsedPointsBalance,
+        pointValueCpp: form.pointValueCpp ? Number(form.pointValueCpp) : undefined,
+        isPrimary: form.isPrimary,
+      });
+      onSaved(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update card.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="card rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-bold text-cream-100">Edit Card</h2>
+          <button onClick={onClose} className="btn-ghost p-2" aria-label="Close edit card modal">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="label" htmlFor="edit-card-name">Card name</label>
+            <input
+              id="edit-card-name"
+              className="input"
+              value={form.displayName}
+              onChange={(e) => patch({ displayName: e.target.value })}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="label" htmlFor="edit-card-issuer">Issuer</label>
+            <select
+              id="edit-card-issuer"
+              className="select"
+              value={form.issuer}
+              onChange={(e) => patch({ issuer: e.target.value })}
+            >
+              {ISSUERS.map((i) => <option key={i} value={i}>{i}</option>)}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label" htmlFor="edit-card-points">Points balance</label>
+              <input
+                id="edit-card-points"
+                type="number"
+                min="0"
+                className="input"
+                placeholder="0"
+                value={form.pointsBalance}
+                onChange={(e) => patch({ pointsBalance: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="edit-card-cpp">Value (cpp)</label>
+              <input
+                id="edit-card-cpp"
+                type="number"
+                min="0"
+                step="0.01"
+                className="input"
+                placeholder="e.g. 1.5"
+                value={form.pointValueCpp}
+                onChange={(e) => patch({ pointValueCpp: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={form.isPrimary}
+              onChange={(e) => patch({ isPrimary: e.target.checked })}
+              className="rounded border-slate-300"
+            />
+            <span className="text-sm text-cream-200">Set as primary card</span>
+          </label>
+
+          {error && (
+            <div className="rounded-xl bg-rose-500/12 border border-rose-500/35 px-4 py-3 text-sm text-rose-100">
+              {error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-ghost">
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function CardsPage() {
   const [cards, setCards] = useState<TravelCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingCard, setEditingCard] = useState<TravelCard | null>(null);
 
   useEffect(() => {
     fetchCards()
@@ -187,6 +334,11 @@ export default function CardsPage() {
   function handleSaved(card: TravelCard) {
     setCards((prev) => [...prev, card]);
     setShowModal(false);
+  }
+
+  function handleUpdated(updated: TravelCard) {
+    setCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setEditingCard(null);
   }
 
   return (
@@ -204,6 +356,14 @@ export default function CardsPage() {
 
       {showModal && (
         <AddCardModal onClose={() => setShowModal(false)} onSaved={handleSaved} />
+      )}
+
+      {editingCard && (
+        <EditCardModal
+          card={editingCard}
+          onClose={() => setEditingCard(null)}
+          onSaved={handleUpdated}
+        />
       )}
 
       {loading ? (
@@ -228,23 +388,32 @@ export default function CardsPage() {
             <div key={card.id} className="card p-5 flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">{card.displayName}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">{card.issuer}</p>
+                  <p className="text-sm font-semibold text-cream-100">{card.displayName}</p>
+                  <p className="text-xs text-cream-300 mt-0.5">{card.issuer}</p>
                 </div>
-                {card.isPrimary && (
-                  <span className="badge badge-value text-[10px] px-1.5 py-0.5 shrink-0">Primary</span>
-                )}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {card.isPrimary && (
+                    <span className="badge badge-value text-[10px] px-1.5 py-0.5">Primary</span>
+                  )}
+                  <button
+                    onClick={() => setEditingCard(card)}
+                    className="btn-ghost p-1.5 rounded-lg"
+                    aria-label={`Edit ${card.displayName}`}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-4 text-xs text-slate-500">
+              <div className="flex gap-4 text-xs text-cream-300">
                 <span>
-                  <span className="font-semibold text-slate-800">
+                  <span className="font-semibold text-cream-100">
                     {(card.pointsBalance ?? 0).toLocaleString()}
                   </span>{" "}
                   pts
                 </span>
                 {card.pointValueCpp && (
                   <span>
-                    <span className="font-semibold text-slate-800">
+                    <span className="font-semibold text-cream-100">
                       {Number(card.pointValueCpp).toFixed(2)}¢
                     </span>{" "}
                     / pt

@@ -6,12 +6,322 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CalendarDays, Car, ChevronDown, ChevronUp, Footprints, Loader2, Plus, Sparkles } from "lucide-react";
+import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Info, Loader2, MapPin, Plus, Sparkles, X } from "lucide-react";
 import { ItineraryDay, ItineraryItem } from "@/types";
 import { ItineraryItemCard } from "./ItineraryItemCard";
-import { estimateTravel, formatTravelBadge } from "@/lib/travelTime";
+import { computeAdjacentHints, summarizeHints } from "@/lib/travelHints";
+import { suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from "@/lib/api";
+
+// ─── Timeline helpers ────────────────────────────────────────────────────────
+
+type DayPart = "morning" | "afternoon" | "evening" | "unscheduled";
+
+const DAY_PART_META: Record<DayPart, { label: string; timeHint: string; colorClass: string }> = {
+  morning:     { label: "Morning",     timeHint: "5 AM – 12 PM",  colorClass: "text-amber-300" },
+  afternoon:   { label: "Afternoon",   timeHint: "12 PM – 5 PM",  colorClass: "text-sky-300" },
+  evening:     { label: "Evening",     timeHint: "5 PM – 10 PM",  colorClass: "text-violet-300" },
+  unscheduled: { label: "Unscheduled", timeHint: "no time set",   colorClass: "text-slate-400" },
+};
+
+function getItemDayPart(item: ItineraryItem): DayPart {
+  const d = (item.details ?? {}) as Record<string, unknown>;
+
+  // Explicit override stored in details.dayPart
+  const explicit = d.dayPart as string | undefined;
+  if (explicit === "morning" || explicit === "afternoon" || explicit === "evening") return explicit;
+  // Explicit unscheduled override — bypasses startTime classification
+  if (explicit === "unscheduled") return "unscheduled";
+
+  // Keyword in details.timeLabel
+  const label = ((d.timeLabel as string | undefined) ?? "").toLowerCase();
+  if (label.includes("morning")) return "morning";
+  if (label.includes("afternoon")) return "afternoon";
+  if (label.includes("evening") || label.includes("night")) return "evening";
+
+  // Parse startTime (ISO datetime or HH:MM)
+  const raw = item.startTime;
+  if (raw) {
+    const isoMatch = raw.match(/T(\d{2}):/);
+    const hour = isoMatch
+      ? Number(isoMatch[1])
+      : (() => {
+          const hhMM = raw.match(/^(\d{1,2}):\d{2}/);
+          if (hhMM) return Number(hhMM[1]);
+          const parsed = new Date(raw);
+          return isNaN(parsed.getTime()) ? null : parsed.getHours();
+        })();
+    if (hour !== null) {
+      if (hour >= 5 && hour < 12) return "morning";
+      if (hour >= 12 && hour < 17) return "afternoon";
+      if (hour >= 17) return "evening";
+    }
+  }
+
+  return "unscheduled";
+}
+
+interface GroupedItems {
+  morning: ItineraryItem[];
+  afternoon: ItineraryItem[];
+  evening: ItineraryItem[];
+  unscheduled: ItineraryItem[];
+}
+
+function groupByDayPart(items: ItineraryItem[]): GroupedItems {
+  const result: GroupedItems = { morning: [], afternoon: [], evening: [], unscheduled: [] };
+  for (const item of items) {
+    result[getItemDayPart(item)].push(item);
+  }
+  return result;
+}
 
 const PREVIEW_ITEM_LIMIT = 4;
+
+// ─── TimelineSections ────────────────────────────────────────────────────────
+
+interface TimelineSectionsProps {
+  items: ItineraryItem[];
+  dayId: string;
+  onRemoveItem: (itemId: string, dayId: string) => void;
+  onMoveItemToIdeas?: (itemId: string, dayId: string) => void;
+  onToggleCompare?: (item: ItineraryItem) => void;
+  compareSet?: Set<string>;
+  onUpdateTimeline?: (updatedItem: ItineraryItem) => void;
+}
+
+function renderItemsWithConnectors(
+  items: ItineraryItem[],
+  dayId: string,
+  onRemoveItem: (itemId: string, dayId: string) => void,
+  onMoveItemToIdeas?: (itemId: string, dayId: string) => void,
+  onToggleCompare?: (item: ItineraryItem) => void,
+  compareSet?: Set<string>,
+  onUpdateTimeline?: (updatedItem: ItineraryItem) => void,
+) {
+  const hints = computeAdjacentHints(items);
+  return items.flatMap((item, idx) => {
+    const card = (
+      <ItineraryItemCard
+        key={item.id}
+        item={item}
+        onRemove={(itemId) => onRemoveItem(itemId, dayId)}
+        onMoveToIdeas={onMoveItemToIdeas ? (itemId) => onMoveItemToIdeas(itemId, dayId) : undefined}
+        onToggleCompare={onToggleCompare}
+        isComparing={compareSet?.has(item.id)}
+        onTimelineUpdated={onUpdateTimeline}
+      />
+    );
+    if (idx >= items.length - 1) return [card];
+    const hint = hints[idx];
+    let connector: React.ReactNode;
+    if (hint.kind === "missing_location") {
+      connector = (
+        <div key={`hint-${item.id}`} className="flex items-center gap-1.5 px-3 py-1">
+          <div className="w-px h-4 bg-slate-800 ml-[17px] flex-shrink-0" />
+          <MapPin className="w-3 h-3 text-slate-600 flex-shrink-0" />
+          <span className="text-[10px] text-slate-600 leading-snug italic">{hint.label}</span>
+        </div>
+      );
+    } else if (hint.kind === "far_apart") {
+      const est = hint.estimate!;
+      const mode = est.walkMinutes <= 20 ? "walk" : "drive";
+      const timeLabel = mode === "walk" ? `~${est.walkMinutes} min walk` : `~${est.driveMinutes} min drive`;
+      connector = (
+        <div key={`travel-${item.id}`} className="flex flex-col gap-1 px-3 py-1">
+          <div className="flex items-center gap-1.5">
+            <div className="w-px h-4 bg-slate-700 ml-[17px] flex-shrink-0" />
+            {mode === "walk" ? (
+              <Footprints className="w-3 h-3 text-slate-500 flex-shrink-0" />
+            ) : (
+              <Car className="w-3 h-3 text-slate-500 flex-shrink-0" />
+            )}
+            <span className="text-[10px] text-slate-500 leading-snug">{timeLabel}</span>
+            <span className="text-[10px] text-slate-600 leading-snug">· {est.distanceKm} km</span>
+          </div>
+          <div className="flex items-center gap-1 pl-[29px] pr-1">
+            <span className="text-[10px] text-amber-500/70 leading-snug">{hint.label}</span>
+          </div>
+        </div>
+      );
+    } else {
+      const est = hint.estimate!;
+      const mode = est.walkMinutes <= 20 ? "walk" : "drive";
+      connector = (
+        <div key={`travel-${item.id}`} className="flex items-center gap-1.5 px-3 py-1">
+          <div className="w-px h-4 bg-slate-700 ml-[17px] flex-shrink-0" />
+          {mode === "walk" ? (
+            <Footprints className="w-3 h-3 text-slate-500 flex-shrink-0" />
+          ) : (
+            <Car className="w-3 h-3 text-slate-500 flex-shrink-0" />
+          )}
+          <span className="text-[10px] text-slate-500 leading-snug">{hint.label}</span>
+          <span className="text-[10px] text-slate-600 leading-snug">· {est.distanceKm} km</span>
+        </div>
+      );
+    }
+    return [card, connector];
+  });
+}
+
+function TimelineSections({
+  items,
+  dayId,
+  onRemoveItem,
+  onMoveItemToIdeas,
+  onToggleCompare,
+  compareSet,
+  onUpdateTimeline,
+}: TimelineSectionsProps) {
+  const grouped = groupByDayPart(items);
+  const hasTimedItems =
+    grouped.morning.length > 0 ||
+    grouped.afternoon.length > 0 ||
+    grouped.evening.length > 0;
+
+  const orderedSections: DayPart[] = ["morning", "afternoon", "evening", "unscheduled"];
+
+  // When nothing is timed, render plain list with a single "Unscheduled" label
+  if (!hasTimedItems) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-1.5 px-1 pt-1 pb-0.5">
+          <Clock className="w-3 h-3 text-slate-500 flex-shrink-0" />
+          <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
+            Unscheduled · {items.length} {items.length === 1 ? "item" : "items"}
+          </span>
+        </div>
+        <div className="space-y-2">
+          {renderItemsWithConnectors(items, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet, onUpdateTimeline)}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {orderedSections.map((part) => {
+        const sectionItems = grouped[part];
+        if (sectionItems.length === 0) return null;
+        const meta = DAY_PART_META[part];
+        return (
+          <div key={part} className="space-y-1.5">
+            <div className="flex items-center gap-1.5 px-1 pt-0.5">
+              <Clock className={`w-3 h-3 flex-shrink-0 ${meta.colorClass}`} />
+              <span className={`text-[10px] font-semibold uppercase tracking-wide ${meta.colorClass}`}>
+                {meta.label}
+              </span>
+              <span className="text-[10px] text-slate-600">{meta.timeHint}</span>
+            </div>
+            <div className="space-y-2">
+              {renderItemsWithConnectors(sectionItems, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet, onUpdateTimeline)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── SuggestionsReviewPanel ───────────────────────────────────────────────────
+
+const DAY_PART_COLOR: Record<string, string> = {
+  morning:     "text-amber-300",
+  afternoon:   "text-sky-300",
+  evening:     "text-violet-300",
+  unscheduled: "text-slate-400",
+};
+
+interface SuggestionsReviewPanelProps {
+  suggestions: TimelineSuggestion[];
+  items: ItineraryItem[];
+  applying: boolean;
+  onApply: () => void;
+  onDismiss: () => void;
+}
+
+function SuggestionsReviewPanel({
+  suggestions,
+  items,
+  applying,
+  onApply,
+  onDismiss,
+}: SuggestionsReviewPanelProps) {
+  const itemMap = new Map(items.map((i) => [i.id, i]));
+  return (
+    <div className="rounded-xl border border-slate-700/80 bg-slate-900/80 p-3 mb-2 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-slate-200 flex items-center gap-1.5">
+          <Sparkles className="w-3 h-3 text-amber-300" />
+          Suggested timing for {suggestions.length} {suggestions.length === 1 ? "item" : "items"}
+        </span>
+        <button
+          onClick={onDismiss}
+          className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+          aria-label="Dismiss suggestions"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <div className="space-y-1">
+        {suggestions.map((s) => {
+          const item = itemMap.get(s.itemId);
+          if (!item) return null;
+          const colorClass = DAY_PART_COLOR[s.dayPart] ?? "text-slate-400";
+          return (
+            <div key={s.itemId} className="flex items-center gap-2 text-[11px]">
+              <span className="truncate flex-1 text-slate-300">{item.title}</span>
+              <span className={`font-medium ${colorClass} flex-shrink-0`}>
+                {s.dayPart.charAt(0).toUpperCase() + s.dayPart.slice(1)}
+              </span>
+              {s.timeLabel && (
+                <span className="text-slate-500 flex-shrink-0">· {s.timeLabel}</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <button
+        onClick={onApply}
+        disabled={applying}
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-400/30 text-[11px] font-semibold transition-colors disabled:opacity-50"
+      >
+        {applying ? (
+          <Loader2 className="w-3 h-3 animate-spin" />
+        ) : (
+          <Check className="w-3 h-3" />
+        )}
+        Apply All Suggestions
+      </button>
+    </div>
+  );
+}
+
+// ─── DayTravelHintBar ─────────────────────────────────────────────────────────
+
+function DayTravelHintBar({ items }: { items: ItineraryItem[] }) {
+  if (items.length < 2) return null;
+  const hints = computeAdjacentHints(items);
+  const { farApartCount, missingLocationCount, hasIssues } = summarizeHints(hints);
+  if (!hasIssues) return null;
+
+  let message: string;
+  if (farApartCount > 0 && missingLocationCount > 0) {
+    message = "Some stops may be far apart. Add location details to improve hints.";
+  } else if (farApartCount > 0) {
+    message = "Some stops may be far apart. Consider grouping nearby items.";
+  } else {
+    message = "Add location details to improve travel hints.";
+  }
+
+  return (
+    <div className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-slate-900/50 border border-slate-800/50 mt-1.5">
+      <Info className="w-3 h-3 text-slate-500 flex-shrink-0 mt-px" />
+      <span className="text-[10px] text-slate-500 leading-tight">{message} Rough hints only.</span>
+    </div>
+  );
+}
 
 interface ItineraryDayColumnProps {
   day: ItineraryDay;
@@ -22,11 +332,13 @@ interface ItineraryDayColumnProps {
   isExpanded?: boolean;
   onToggleExpanded?: (dayNumber: number) => void;
   onRemoveItem: (itemId: string, dayId: string) => void;
+  onMoveItemToIdeas?: (itemId: string, dayId: string) => void;
   onAddItem: (dayId: string) => void;
   onToggleCompare?: (item: ItineraryItem) => void;
   compareSet?: Set<string>;
   onPlanDay?: (dayId: string, dayNumber: number) => void;
   planDayLoading?: boolean;
+  onUpdateTimeline?: (updatedItem: ItineraryItem) => void;
 }
 
 function formatDate(dateStr: string): string {
@@ -50,13 +362,21 @@ export function ItineraryDayColumn({
   isExpanded = false,
   onToggleExpanded,
   onRemoveItem,
+  onMoveItemToIdeas,
   onAddItem,
   onToggleCompare,
   compareSet,
   onPlanDay,
   planDayLoading,
+  onUpdateTimeline,
 }: ItineraryDayColumnProps) {
   const [expandedItemDays, setExpandedItemDays] = useState<Record<number, boolean>>({});
+  // Local overrides for optimistic timeline updates — item moves to correct section immediately
+  const [itemOverrides, setItemOverrides] = useState<Record<string, ItineraryItem>>({});
+  // Smart timeline AI planning state
+  const [suggestingTimeline, setSuggestingTimeline] = useState(false);
+  const [timelineSuggestions, setTimelineSuggestions] = useState<TimelineSuggestion[] | null>(null);
+  const [applyingTimeline, setApplyingTimeline] = useState(false);
 
   useEffect(() => {
     if (!isExpanded) {
@@ -72,11 +392,55 @@ export function ItineraryDayColumn({
     data: { type: "day", dayId: day.id },
   });
 
+  const handleTimelineUpdated = (updatedItem: ItineraryItem) => {
+    setItemOverrides((prev) => ({ ...prev, [updatedItem.id]: updatedItem }));
+    onUpdateTimeline?.(updatedItem);
+  };
+
+  const handleSuggestTimeline = async () => {
+    if (day.items.length === 0) return;
+    setSuggestingTimeline(true);
+    setTimelineSuggestions(null);
+    try {
+      const suggestions = await suggestDayTimeline(day.items);
+      setTimelineSuggestions(suggestions);
+    } finally {
+      setSuggestingTimeline(false);
+    }
+  };
+
+  const handleApplyTimeline = async () => {
+    if (!timelineSuggestions) return;
+    setApplyingTimeline(true);
+    try {
+      await Promise.all(
+        timelineSuggestions.map(async (s) => {
+          const item = day.items.find((i) => i.id === s.itemId);
+          if (!item) return;
+          const currentDetails = (item.details ?? {}) as Record<string, unknown>;
+          const updated = await updateItemTimeline(item.id, currentDetails, {
+            dayPart: s.dayPart,
+            timeLabel: s.timeLabel,
+          });
+          setItemOverrides((prev) => ({ ...prev, [updated.id]: updated }));
+          onUpdateTimeline?.(updated);
+        })
+      );
+    } finally {
+      setApplyingTimeline(false);
+      setTimelineSuggestions(null);
+    }
+  };
+
   const showAllItems = expandedItemDays[day.dayNumber] ?? false;
   const hasHiddenItems = day.items.length > PREVIEW_ITEM_LIMIT;
   const visibleItems = useMemo(
-    () => (showAllItems ? day.items : day.items.slice(0, PREVIEW_ITEM_LIMIT)),
-    [day.items, showAllItems]
+    () => {
+      const items = showAllItems ? day.items : day.items.slice(0, PREVIEW_ITEM_LIMIT);
+      // Apply optimistic timeline overrides so moved items appear in the correct section immediately
+      return items.map((item) => itemOverrides[item.id] ?? item);
+    },
+    [day.items, showAllItems, itemOverrides]
   );
   const itemIds = visibleItems.map((item: ItineraryItem) => item.id);
   const hiddenItemsCount = Math.max(day.items.length - 1, 0);
@@ -138,6 +502,25 @@ export function ItineraryDayColumn({
               Plan My Day
             </button>
           )}
+          {day.items.length > 0 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSuggestTimeline();
+              }}
+              disabled={suggestingTimeline || applyingTimeline}
+              title="Suggest timing for items on this day"
+              aria-label="Suggest day timing"
+              className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-700/60 hover:bg-slate-700 text-slate-300 border border-slate-600/50 text-[11px] font-medium transition-colors disabled:opacity-50"
+            >
+              {suggestingTimeline ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Clock className="w-3 h-3" />
+              )}
+              Suggest Timing
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -188,51 +571,37 @@ export function ItineraryDayColumn({
           isOver ? "bg-amber-500/10" : "bg-slate-950/70"
         }`}
       >
+        {timelineSuggestions && (
+          <SuggestionsReviewPanel
+            suggestions={timelineSuggestions}
+            items={day.items}
+            applying={applyingTimeline}
+            onApply={handleApplyTimeline}
+            onDismiss={() => setTimelineSuggestions(null)}
+          />
+        )}
+
         <SortableContext
           items={itemIds}
           strategy={verticalListSortingStrategy}
         >
-          <div className={`relative space-y-2 rounded-xl p-1 ${isSelected ? "bg-slate-900/55 ring-1 ring-amber-300/20" : "bg-transparent"}`}>
-              {visibleItems.flatMap((item: ItineraryItem, idx: number) => {
-                const card = (
-                  <ItineraryItemCard
-                    key={item.id}
-                    item={item}
-                    onRemove={(itemId) => onRemoveItem(itemId, day.id)}
-                    onToggleCompare={onToggleCompare}
-                    isComparing={compareSet?.has(item.id)}
-                  />
-                );
-                if (idx >= visibleItems.length - 1) return [card];
-                const next = visibleItems[idx + 1];
-                const d = item.details as Record<string, unknown> | undefined;
-                const nd = next.details as Record<string, unknown> | undefined;
-                const lat1 = d?.lat as number | null | undefined;
-                const lng1 = d?.lng as number | null | undefined;
-                const lat2 = nd?.lat as number | null | undefined;
-                const lng2 = nd?.lng as number | null | undefined;
-                if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return [card];
-                const est = estimateTravel(lat1, lng1, lat2, lng2);
-                const { label, mode } = formatTravelBadge(est);
-                const connector = (
-                  <div key={`travel-${item.id}`} className="flex items-center gap-1.5 px-3 -my-0.5">
-                    <div className="w-px h-3 bg-slate-700 ml-[17px] flex-shrink-0" />
-                    {mode === "walk" ? (
-                      <Footprints className="w-3 h-3 text-slate-500 flex-shrink-0" />
-                    ) : (
-                      <Car className="w-3 h-3 text-slate-500 flex-shrink-0" />
-                    )}
-                    <span className="text-[10px] text-slate-500 leading-none">{label}</span>
-                    <span className="text-[10px] text-slate-600 leading-none">· {est.distanceKm} km</span>
-                  </div>
-                );
-                return [card, connector];
-              })}
+          <div className={`relative rounded-xl p-1 ${isSelected ? "bg-slate-900/55 ring-1 ring-amber-300/20" : "bg-transparent"}`}>
+            <TimelineSections
+              items={visibleItems}
+              dayId={day.id}
+              onRemoveItem={onRemoveItem}
+              onMoveItemToIdeas={onMoveItemToIdeas}
+              onToggleCompare={onToggleCompare}
+              compareSet={compareSet}
+              onUpdateTimeline={handleTimelineUpdated}
+            />
             {!showAllItems && hasHiddenItems && (
               <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-14 bg-gradient-to-b from-transparent to-slate-950/95" />
             )}
           </div>
         </SortableContext>
+
+        {visibleItems.length >= 2 && <DayTravelHintBar items={visibleItems} />}
 
         {day.items.length === 0 ? (
           <div

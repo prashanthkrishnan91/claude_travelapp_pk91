@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import {
   addStructuredConciergeItemToTrip,
+  saveToTripIdeas,
+  fetchTripIdeas,
   callConciergeSearch,
   clearConciergeCache,
   fetchConciergeMessages,
@@ -57,6 +59,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onItemAdded?: () => void;
+  onIdeaSaved?: () => void;
 }
 
 const CONCIERGE_CACHE_VERSION = 4;
@@ -302,9 +305,12 @@ function ConciergeCard({
   actionLabel,
   added,
   adding,
+  savedIdea,
+  savingIdea,
   isOperational,
   verifiedAt,
   onAdd,
+  onSaveIdea,
   canAdd = true,
 }: {
   title: string;
@@ -318,9 +324,12 @@ function ConciergeCard({
   actionLabel?: string;
   added: boolean;
   adding: boolean;
+  savedIdea: boolean;
+  savingIdea: boolean;
   isOperational?: boolean;
   verifiedAt?: string | null;
   onAdd: () => void;
+  onSaveIdea: () => void;
   canAdd?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -381,17 +390,31 @@ function ConciergeCard({
 
       <div className="mt-2 flex items-center gap-2">
         {canAdd ? (
-          <button
-            onClick={onAdd}
-            disabled={adding || added}
-            className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-              added
-                ? "bg-emerald-300/15 text-emerald-200 ring-1 ring-emerald-300/30"
-                : "bg-amber-200/15 text-amber-100 ring-1 ring-amber-300/40 hover:bg-amber-200/25"
-            }`}
-          >
-            {adding ? <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" /> : added ? <span className="inline-flex items-center gap-1"><Check className="h-3 w-3" /> Added</span> : actionLabel ?? "Add to Trip"}
-          </button>
+          <>
+            <button
+              onClick={onAdd}
+              disabled={adding || added}
+              className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                added
+                  ? "bg-emerald-300/15 text-emerald-200 ring-1 ring-emerald-300/30"
+                  : "bg-amber-200/15 text-amber-100 ring-1 ring-amber-300/40 hover:bg-amber-200/25"
+              }`}
+            >
+              {adding ? <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" /> : added ? <span className="inline-flex items-center gap-1"><Check className="h-3 w-3" /> Added</span> : actionLabel ?? "Add to Day"}
+            </button>
+            <button
+              onClick={onSaveIdea}
+              disabled={savingIdea || savedIdea}
+              title={savedIdea ? "Saved to trip ideas" : "Save to trip ideas without assigning a day"}
+              className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition ring-1 ${
+                savedIdea
+                  ? "bg-slate-700/60 text-slate-300 ring-slate-600/50"
+                  : "bg-slate-800 text-slate-300 ring-slate-600 hover:bg-slate-700 hover:text-slate-100"
+              }`}
+            >
+              {savingIdea ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : savedIdea ? <span className="inline-flex items-center gap-1"><Check className="h-3 w-3" /> Saved to Ideas</span> : "Save"}
+            </button>
+          </>
         ) : sourceLink ? (
           <a
             href={sourceLink}
@@ -440,7 +463,7 @@ function fromSearchResult(result: ConciergeSearchResult): Message {
   };
 }
 
-export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp = [], isOpen, onClose, onItemAdded }: Props) {
+export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp = [], isOpen, onClose, onItemAdded, onIdeaSaved }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -450,14 +473,22 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
   const [selectedDayId, setSelectedDayId] = useState<string>("");
   const [addingItems, setAddingItems] = useState<Set<string>>(new Set());
   const [addedItems, setAddedItems] = useState<Set<string>>(new Set());
+  const [savingIdeaItems, setSavingIdeaItems] = useState<Set<string>>(new Set());
+  const [savedIdeaItems, setSavedIdeaItems] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [historyWarning, setHistoryWarning] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const loadedTripRef = useRef<string | null>(null);
   const skipReloadRef = useRef(false);
-
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Auto-dismiss toast after 4 s
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   const quickActions = useMemo(() => {
     const dest = destination || "this destination";
@@ -496,9 +527,10 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
     setLoadingHistory(true);
     setError(null);
     setHistoryWarning(null);
-    const [historyResult, itineraryResult] = await Promise.allSettled([
+    const [historyResult, itineraryResult, ideasResult] = await Promise.allSettled([
       fetchConciergeMessages(tripId),
       tripDaysProp.length > 0 ? Promise.resolve(tripDaysProp) : fetchItinerary(tripId),
+      fetchTripIdeas(tripId),
     ]);
 
     const historyMessages: Message[] = historyResult.status === "fulfilled"
@@ -549,9 +581,17 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
       console.error("[concierge] failed to load itinerary days", itineraryResult.reason);
     }
 
+    const existingIdeas = ideasResult.status === "fulfilled" ? ideasResult.value : [];
+    const ideaTitles = new Set(
+      existingIdeas
+        .filter((it) => (it.details as Record<string, unknown>)?.source_kind === "concierge_idea")
+        .map((it) => it.title.trim().toLowerCase()),
+    );
+
     setMessages(initialMessages);
     setTripDays(itinerary);
     setItineraryItems(itinerary.flatMap((day) => day.items ?? []));
+    setSavedIdeaItems(ideaTitles);
     setSelectedDayId((prev) => {
       if (prev && itinerary.some((day) => day.id === prev)) return prev;
       return itinerary[0]?.id || "";
@@ -693,6 +733,34 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
     }
   }
 
+  async function saveIdea(
+    name: string,
+    kind: "restaurant" | "attraction" | "hotel",
+    item: UnifiedRestaurantResult | UnifiedAttractionResult | UnifiedHotelResult,
+    reason?: string,
+  ) {
+    const normalizedName = name.trim().toLowerCase();
+    if (savingIdeaItems.has(normalizedName) || savedIdeaItems.has(normalizedName)) return;
+
+    setSavingIdeaItems((prev) => new Set(prev).add(normalizedName));
+    setError(null);
+    try {
+      await saveToTripIdeas(tripId, item, kind, reason);
+      setSavedIdeaItems((prev) => new Set(prev).add(normalizedName));
+      setToast("Saved to Trip Ideas — close this panel to schedule it.");
+      onIdeaSaved?.();
+    } catch (err) {
+      console.error("[concierge] save idea failed", err);
+      setError("Could not save idea to trip.");
+    } finally {
+      setSavingIdeaItems((prev) => {
+        const next = new Set(prev);
+        next.delete(normalizedName);
+        return next;
+      });
+    }
+  }
+
   if (!isOpen) return null;
 
   return (
@@ -719,7 +787,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
         </div>
 
         <div className="border-b border-slate-700/80 bg-slate-900/70 px-4 py-2.5">
-          <label className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">Add items to day</label>
+          <label className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">Target day for Add to Day</label>
           <select
             value={selectedDayId}
             onChange={(e) => setSelectedDayId(e.target.value)}
@@ -836,6 +904,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                           const meta = pickCardMeta(place);
                           const displayCategory = pickCardCategory(place, category);
 
+                          const normalizedName = place.name.trim().toLowerCase();
                           return (
                             <ConciergeCard
                               key={`${place.name}-${key}`}
@@ -851,8 +920,11 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                               verifiedAt={null}
                               added={addedItems.has(key)}
                               adding={addingItems.has(key)}
+                              savedIdea={savedIdeaItems.has(normalizedName)}
+                              savingIdea={savingIdeaItems.has(normalizedName)}
                               canAdd={!isClosed}
                               onAdd={() => addItem(place.name, kind, place, reason)}
+                              onSaveIdea={() => saveIdea(place.name, kind, place, reason)}
                             />
                           );
                         });

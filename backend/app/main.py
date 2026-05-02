@@ -71,23 +71,19 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log every incoming request: method, path, body, and elapsed time."""
-    body = b""
-    try:
-        body = await request.body()
-    except Exception:
-        pass
-
-    body_text = body.decode("utf-8", errors="replace") if body else ""
-    print(f"[REQ] {request.method} {request.url.path}  body={body_text or '<empty>'}")
-    logger.debug("[REQUEST] %s %s  body=%s", request.method, request.url.path, body_text or "<empty>")
-
+    """Log safe request metadata only: method, path, status, duration."""
     start = time.time()
     response = await call_next(request)
     elapsed = round((time.time() - start) * 1000)
-
-    print(f"[RES] {request.method} {request.url.path} → {response.status_code} ({elapsed}ms)")
-    logger.debug("[RESPONSE] %s %s → %s (%dms)", request.method, request.url.path, response.status_code, elapsed)
+    request_id = request.headers.get("x-request-id", "-")
+    logger.info(
+        "[REQ] %s %s -> %s (%dms) request_id=%s",
+        request.method,
+        request.url.path,
+        response.status_code,
+        elapsed,
+        request_id,
+    )
     return response
 
 
