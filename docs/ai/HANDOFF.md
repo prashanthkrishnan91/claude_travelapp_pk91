@@ -1,6 +1,36 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-02) — Explore Scoring Durability Fix (stale cache re-scoring + snapshot enrichment)
+## Last change (2026-05-02) — Explore Score Race Condition Fix (fetchTripItems no longer owns candidate state)
+
+### Summary
+Fixed a persistent race condition that caused Explore Attractions and Restaurants to lose AI score badges and Top Pick labels on trips where users had saved AI Concierge ideas.
+
+### Root cause
+Two concurrent `useEffect` hooks in `TripBuilder.tsx` both wrote to `candidateAttractions`/`candidateRestaurants`:
+1. **`fetchTripItems` effect** (deps `[tripId, destination]`): fetched all trip-level items, filtered `activity`/`meal` items with `day_id=null`, and called `setCandidateAttractions`/`setCandidateRestaurants` — including unscored concierge ideas (`source_kind: "concierge_idea"`, no `ai_score`).
+2. **Snapshot-first effect** (deps `[destination, authSessionReady, tripId]`): fetched scored candidates from `trips.metadata.explore_snapshot`.
+
+When `fetchTripItems` resolved after the snapshot effect (common under normal network conditions), it overwrote the scored snapshot candidates with unscored concierge ideas, causing all score badges to disappear.
+
+### Fix
+Removed the `persistedAttractions`/`persistedRestaurants` hydration code from the `fetchTripItems` effect. Attractions and restaurants are now owned exclusively by the snapshot-first hydration effect. The `fetchTripItems` effect only sets `candidateFlights` and `candidateHotels`. Removed `destination` from the dep array since it was no longer used.
+
+### Score/snapshot contract (unchanged)
+- `fetchExploreSnapshot` reads `aiScore` (primary, from `toCamel`), then `ai_score`, then `score`; enriches stale entries via `computeExploreAttractionScore`/`computeExploreRestaurantScore`
+- `saveExploreSnapshot` enriches before persisting; serializes as `ai_score` (snake_case) for backend
+- `AiScoreBadge` renders null for score ≤ 0 or non-finite
+- Top Pick gated on `(attraction.aiScore ?? 0) > 0`
+
+### Files touched
+- `frontend/src/components/trips/TripBuilder.tsx` — removed `persistedAttractions`/`persistedRestaurants` hydration from `fetchTripItems` effect; dep array changed from `[tripId, destination]` to `[tripId]`
+- `frontend/tests/explore-hydration.test.mjs` — added 13 new tests covering: race condition fix, normalizeExploreScore priority chain, mapAttractionToResult/mapRestaurantToResult normalizedAiScore, saveExploreSnapshot positive guard, fetchExploreSnapshot storedScore chain, AiScoreBadge null guard, Top Pick positive guard, hasPositiveExploreScore gate, hydrationKey format, loading state flags (total 41 tests)
+
+### Supabase SQL: No
+### Backend touched: No
+
+---
+
+## Previous change (2026-05-02) — Explore Scoring Durability Fix (stale cache re-scoring + snapshot enrichment)
 
 ### Summary
 Fixed a scoring durability gap where Explore Attractions and Restaurants showed no AI score badges or Top Pick after snapshot load. Root cause: Supabase `research_cache` entries from before scoring was added had `ai_score: null`; cache hits returned these as-is, bypassing `_compute_attraction_ai_score`/`_compute_restaurant_ai_score`; nulls were saved into `trips.metadata.explore_snapshot`; snapshot loaded back with no scores on every subsequent visit.

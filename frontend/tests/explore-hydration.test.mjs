@@ -45,11 +45,14 @@ test('TripBuilder waits for auth session before loading attractions/restaurants'
   assert.match(tripBuilder, /if \(!destination \|\| !authSessionReady\) return;/, 'Explore loaders must bail when auth is not ready');
 });
 
-test('TripBuilder hydration mapper preserves attraction and restaurant score fields from persisted snake_case/camelCase details', () => {
-  assert.match(tripBuilder, /function normalizeExploreScore\(details: Record<string, unknown>\)/, 'TripBuilder should centralize explore score normalization');
-  assert.match(tripBuilder, /if \(typeof details\.ai_score === "number"\) return details\.ai_score;/, 'Persisted ai_score should map into aiScore');
-  assert.match(tripBuilder, /if \(typeof details\.score === "number"\) return details\.score;/, 'Persisted fallback score should map into aiScore');
-  assert.match(tripBuilder, /typeof details\.num_reviews === "number" \? details\.num_reviews/, 'Persisted num_reviews should map for card details');
+test('TripBuilder does not contain trip-item-to-explore-candidate mapper functions (race condition removal)', () => {
+  // mapTripItemToAttraction and mapTripItemToRestaurant were the entry point of the race condition:
+  // they mapped unscored concierge ideas into candidateAttractions/Restaurants, overwriting scores.
+  // Removing them also made normalizeExploreScore unused, so it is removed too.
+  // Score normalization for the Explore path now lives exclusively in api.ts fetchExploreSnapshot.
+  assert.doesNotMatch(tripBuilder, /function mapTripItemToAttraction/, 'mapTripItemToAttraction must be absent — it was the origin of the race');
+  assert.doesNotMatch(tripBuilder, /function mapTripItemToRestaurant/, 'mapTripItemToRestaurant must be absent — it was the origin of the race');
+  assert.doesNotMatch(tripBuilder, /function normalizeExploreScore/, 'normalizeExploreScore must be absent — its only callers were the deleted mappers');
 });
 
 test('API search mappers preserve attraction and restaurant score fields from snake_case/camelCase/score payloads', () => {
@@ -218,4 +221,100 @@ test('Backend ExploreSnapshot model is defined in search.py with required fields
   assert.match(searchModels, /class ExploreSnapshotAttraction\(BaseModel\)/, 'ExploreSnapshotAttraction model must be defined');
   assert.match(searchModels, /class ExploreSnapshotRestaurant\(BaseModel\)/, 'ExploreSnapshotRestaurant model must be defined');
   assert.match(searchModels, /ai_score: Optional\[float\] = None/, 'Snapshot models must include ai_score field');
+});
+
+// ─── Race Condition Fix: fetchTripItems must not own explore candidate state ───
+
+test('fetchTripItems effect does not set candidateAttractions or candidateRestaurants (race condition fix)', () => {
+  // Previously the effect built persistedAttractions/persistedRestaurants from all trip-level
+  // activity/meal items with day_id=null — including unscored concierge ideas — and called
+  // setCandidateAttractions/setCandidateRestaurants. These unscored items raced against and
+  // overwrote scored snapshot candidates fetched concurrently by the snapshot-first effect.
+  // Fix: attractions/restaurants are owned exclusively by the snapshot-first effect.
+  assert.doesNotMatch(tripBuilder, /persistedAttractions/, 'fetchTripItems must not build persistedAttractions — snapshot-first effect owns attraction candidate state');
+  assert.doesNotMatch(tripBuilder, /persistedRestaurants/, 'fetchTripItems must not build persistedRestaurants — snapshot-first effect owns restaurant candidate state');
+});
+
+test('fetchTripItems effect dependency array is [tripId] only (destination removed — no longer used in effect)', () => {
+  // After removing attraction/restaurant hydration, destination is no longer referenced inside
+  // the fetchTripItems effect. Keeping it in deps would cause spurious re-runs on destination change.
+  assert.match(tripBuilder, /setCandidateHotels\(hotels\);\s*\}\);\s*\}, \[tripId\]\)/, 'fetchTripItems dep array must be [tripId] only');
+});
+
+// ─── Score Normalization Boundary Tests ──────────────────────────────────────
+
+test('api.ts fetchExploreSnapshot storedScore reads aiScore (camelCase, toCamel-primary) before snake_case fallbacks', () => {
+  // apiFetch applies toCamel() to all responses: backend ai_score → aiScore on arrival.
+  // storedScore chain must check camelCase aiScore first so toCamel-converted payloads resolve correctly,
+  // then fall back to snake_case ai_score and legacy score for raw JSONB paths.
+  assert.match(apiClient, /typeof a\.aiScore === "number" && a\.aiScore > 0/, 'Snapshot attraction storedScore must check camelCase aiScore first');
+  assert.match(apiClient, /typeof a\.ai_score === "number" && a\.ai_score > 0/, 'Snapshot attraction storedScore must fall back to snake_case ai_score');
+  assert.match(apiClient, /typeof a\.score === "number" && a\.score > 0/, 'Snapshot attraction storedScore must fall back to legacy score');
+});
+
+test('mapAttractionToResult normalizes score aliases in priority order: aiScore > ai_score > score', () => {
+  // Ternary priority order must match normalizeExploreScore: camelCase first.
+  // After apiFetch applies toCamel(), ai_score fields arrive as aiScore — so camelCase wins.
+  assert.match(apiClient, /typeof a\.aiScore === "number"\s*\?\s*a\.aiScore/, 'mapAttractionToResult must prefer camelCase aiScore as primary');
+  assert.match(apiClient, /typeof a\.ai_score === "number"\s*\?\s*a\.ai_score/, 'mapAttractionToResult must fall back to snake_case ai_score');
+  assert.match(apiClient, /typeof a\.score === "number"\s*\?\s*a\.score/, 'mapAttractionToResult must fall back to legacy score field');
+  assert.match(apiClient, /aiScore: normalizedAiScore/, 'mapAttractionToResult must expose normalizedAiScore as aiScore on the result object');
+});
+
+test('mapRestaurantToResult normalizes score aliases in priority order: aiScore > ai_score > score', () => {
+  assert.match(apiClient, /typeof r\.aiScore === "number"\s*\?\s*r\.aiScore/, 'mapRestaurantToResult must prefer camelCase aiScore as primary');
+  assert.match(apiClient, /typeof r\.ai_score === "number"\s*\?\s*r\.ai_score/, 'mapRestaurantToResult must fall back to snake_case ai_score');
+  assert.match(apiClient, /typeof r\.score === "number"\s*\?\s*r\.score/, 'mapRestaurantToResult must fall back to legacy score field');
+});
+
+test('saveExploreSnapshot initializes aiScore from candidate.aiScore with positive guard before enrichment', () => {
+  // Candidates already in aiScore state; the serializer must guard against zero/falsy values
+  // before attempting computed enrichment. Using null (not 0) as fallback prevents fake scores.
+  assert.match(apiClient, /let aiScore = a\.aiScore != null && a\.aiScore > 0 \? a\.aiScore : null;/, 'Attraction save must initialise aiScore from candidate state with positive guard');
+  assert.match(apiClient, /let aiScore = r\.aiScore != null && r\.aiScore > 0 \? r\.aiScore : null;/, 'Restaurant save must initialise aiScore from candidate state with positive guard');
+});
+
+test('fetchExploreSnapshot storedScore chain reads toCamel-converted a.aiScore as primary', () => {
+  // apiFetch applies toCamel() globally: backend ai_score → aiScore on arrival in the mapper.
+  // storedScore checks a.aiScore first (camelCase result of toCamel), then a.ai_score and a.score.
+  assert.match(apiClient, /typeof a\.aiScore === "number" && a\.aiScore > 0\s*\?\s*a\.aiScore/, 'Snapshot attraction storedScore chain must read toCamel-converted aiScore as primary');
+  assert.match(apiClient, /typeof r\.aiScore === "number" && r\.aiScore > 0\s*\?\s*r\.aiScore/, 'Snapshot restaurant storedScore chain must read toCamel-converted aiScore as primary');
+});
+
+test('fetchExploreSnapshot storedScore chain falls back to snake_case ai_score and legacy score', () => {
+  // Raw JSONB payloads retrieved via some paths may still arrive with snake_case keys.
+  assert.match(apiClient, /typeof a\.ai_score === "number" && a\.ai_score > 0/, 'Snapshot attraction storedScore must fall back to snake_case ai_score');
+  assert.match(apiClient, /typeof r\.ai_score === "number" && r\.ai_score > 0/, 'Snapshot restaurant storedScore must fall back to snake_case ai_score');
+  assert.match(apiClient, /typeof a\.score === "number" && a\.score > 0/, 'Snapshot attraction storedScore must fall back to legacy score field');
+  assert.match(apiClient, /typeof r\.score === "number" && r\.score > 0/, 'Snapshot restaurant storedScore must fall back to legacy score field');
+});
+
+test('AiScoreBadge hides for non-number, non-finite, and non-positive score', () => {
+  // Returning null for undefined, NaN, Infinity, 0, and negative scores prevents misleading UI.
+  assert.match(tripBuilder, /if \(typeof score !== "number" \|\| !Number\.isFinite\(score\) \|\| score <= 0\) return null;/, 'AiScoreBadge must guard all three zero/absent cases');
+});
+
+test('Top Pick badge rendered only when sort=ai, idx < top20, AND aiScore > 0 for both types', () => {
+  // isTopPick must be false for zero or undefined aiScore even when sort mode and rank qualify.
+  assert.match(tripBuilder, /isTopPick=\{attractionSort === "ai" && idx < top20 && \(attraction\.aiScore \?\? 0\) > 0\}/, 'Attraction Top Pick must require positive aiScore');
+  assert.match(tripBuilder, /isTopPick=\{restaurantSort === "ai" && idx < top20 && \(restaurant\.aiScore \?\? 0\) > 0\}/, 'Restaurant Top Pick must require positive aiScore');
+});
+
+test('hasPositiveExploreScore guards snapshot early-return in snapshot-first hydration', () => {
+  // Without this guard a stale unscored snapshot would block provider search on every load.
+  assert.match(tripBuilder, /function hasPositiveExploreScore/, 'hasPositiveExploreScore must be a named function');
+  assert.match(tripBuilder, /if \(hasPositiveExploreScore\(snapshot\.attractions, snapshot\.restaurants\)\) return;/, 'Snapshot-first hydration must early-return only when snapshot already has positive scores');
+});
+
+test('hydrationKey format is tripId:destination.toLowerCase() ensuring per-destination idempotency', () => {
+  // Lowercasing prevents duplicate provider calls when destination casing varies between renders.
+  // The ref is assigned synchronously so concurrent async paths inside the effect cannot race.
+  assert.match(tripBuilder, /const hydrationKey = `\$\{tripId\}:\$\{destination\.toLowerCase\(\)\}`/, 'hydrationKey must be tripId:destination.toLowerCase() for case-insensitive idempotency');
+  assert.match(tripBuilder, /exploreSnapshotLoadedRef\.current = hydrationKey/, 'Ref must be assigned synchronously before any await to block concurrent runs');
+});
+
+test('snapshot-first hydration sets loading flags before provider search and clears them after', () => {
+  // Loading flags must bracket the provider search so UI shows spinner during network calls.
+  assert.match(tripBuilder, /setAttractionsLoading\(true\);\s*setRestaurantsLoading\(true\)/, 'Must set both loading flags before provider search');
+  assert.match(tripBuilder, /setAttractionsLoading\(false\);\s*setRestaurantsLoading\(false\)/, 'Must clear both loading flags after provider search resolves');
 });
