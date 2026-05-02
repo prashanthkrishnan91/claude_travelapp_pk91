@@ -1,5 +1,62 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-02) — Provider Result Cache v1
+
+Added a soft-TTL in-memory provider result cache for the `LiveResearchService.fetch()` path (Tavily/Brave/Serper), with a quality gate to avoid serving stale/weak results.
+
+### Files touched
+- `backend/app/services/provider_cache.py` — NEW: `ProviderResultCache` class, `is_live_research_payload_quality_sufficient()` quality gate, module-level singleton + reset helper
+- `backend/app/services/live_research.py` — `_TTLCache.get_with_status()` compat shim; `_GLOBAL_CACHE` upgraded from `_TTLCache(1800)` to `ProviderResultCache()`; `fetch()` updated with soft-TTL read logic, quality gate on both read and store, structured log events; `reset_global_cache()` updated
+- `backend/tests/test_provider_cache.py` — NEW: 46 focused tests covering all cache paths
+
+### Behavior change
+**Before:** `LiveResearchService` used a 30-minute hard-expiry `_TTLCache`. On expiry the result was silently discarded and the live provider was called.
+
+**After:** Three-tier soft TTL:
+- `0–6h` (FRESH): return from cache; skip live provider
+- `6–24h` (STALE): return from cache only if quality gate passes; otherwise fall through to live provider
+- `24h+` (EXPIRED): bypass cache, force live provider call
+
+**Quality gate (read + write):**
+- Payload must be a non-empty dict
+- `cache_version` must match `CONCIERGE_CACHE_VERSION`
+- `source_status` must not be `error`/`unavailable`/`none`
+- Intent-aware minimum: restaurant intents require ≥1 restaurant OR research_sources; attraction intents require ≥1 attraction OR research_sources; hotel intents require ≥1 hotel OR research_sources; general intents require any non-zero total
+- Truly empty payloads (all buckets zero) are never stored or reused
+
+**Log events added:**
+- `live_research_cache hit` — FRESH cache reuse
+- `live_research_cache stale_reuse` — STALE cache reuse (quality ok)
+- `live_research_cache weak_bypass` — cache found but quality gate failed
+- `live_research_cache miss` — no cache entry (or expired/bypassed)
+- `live_research_cache stored` — result stored after live provider call
+- `live_research_cache not_stored` — live result not stored (weak quality)
+- `live_research_cache read_error` / `write_error` — cache exception, logged and ignored
+
+**Cache failures are non-fatal:** both `get_with_status()` and `set()` are wrapped in try/except; any exception falls through to the live provider path.
+
+**Backward compatible:** existing tests that inject `_TTLCache(0)` (disabled cache) continue to work via the `get_with_status()` compatibility shim. No Supabase SQL required. No response schema changes. No frontend changes.
+
+### Cache contract for future AI agents
+- Cache singleton: `backend/app/services/provider_cache._PROVIDER_CACHE`
+- Import: `from app.services.provider_cache import ProviderResultCache, get_provider_cache, reset_provider_cache`
+- Cache key: produced by `_make_cache_key(intent, destination, query, dates)` in `live_research.py` — normalizes whitespace/case; includes intent, destination, derived_category, location_anchor
+- TTL constants: `FRESH_SECONDS = 21600`, `STALE_SECONDS = 86400` — can be adjusted in `provider_cache.py`
+- Quality gate function: `is_live_research_payload_quality_sufficient(payload, intent=..., cache_version=...)` — import from `provider_cache`
+- Test helper: `reset_provider_cache()` clears the singleton; `reset_global_cache()` in `live_research.py` calls it automatically
+
+### Known issues
+- `ProviderResultCache` is in-memory only: restarts clear the cache. For persistence across restarts, a future v2 could use Redis or Supabase with the existing `research_cache` table.
+- STALE tier TTL (6–24h) means popular searches on a busy day will be served stale data for up to 18h when quality is ok. This is intentional (cost reduction) but should be monitored.
+
+### Next likely task
+- Monitor `live_research_cache stale_reuse` and `weak_bypass` log rates in production to tune FRESH/STALE thresholds
+- Consider a `?refresh=true` query param on `/ai/concierge/search` to force bypass (already has a `DELETE /ai/concierge/cache` endpoint for manual clear)
+- Provider result cache v2: Redis or Supabase persistence for cross-restart cache warmth
+
+### Supabase SQL required: No
+### Backend touched: Yes (`live_research.py`, new `provider_cache.py`)
+### Frontend touched: No
 ## Last change (2026-05-02) — Explore Score Race Condition Fix (fetchTripItems no longer owns candidate state)
 
 ### Summary
