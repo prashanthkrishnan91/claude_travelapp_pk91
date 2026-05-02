@@ -2178,7 +2178,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                         {cluster.places.map((place) => (
                           <div
                             key={place.id}
-                            className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2"
+                            className="flex items-center gap-2 rounded-xl border border-slate-700/80 bg-slate-900/70 px-3 py-2 shadow-[inset_0_1px_0_rgba(148,163,184,0.15)]"
                           >
                             <span
                               className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
@@ -2186,8 +2186,8 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                               }`}
                             />
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-slate-800 truncate">{place.name}</p>
-                              <p className="text-[10px] text-slate-400 truncate">{place.category} · {place.address.split(",")[0]}</p>
+                              <p className="text-xs font-semibold text-slate-100 truncate">{place.name}</p>
+                              <p className="text-[10px] text-slate-300 truncate">{place.category} · {place.address.split(",")[0]}</p>
                             </div>
                             {place.rating != null && (
                               <span className="flex items-center gap-0.5 text-[10px] text-amber-500 font-semibold flex-shrink-0">
