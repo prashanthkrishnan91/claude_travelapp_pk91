@@ -117,9 +117,24 @@ test('api.ts snapshot mapper gates aiScore on positive value only (no fake 0 sco
   // Mapper uses storedScore (positive guard) and falls back to computedScore enrichment
   assert.match(apiClient, /a\.aiScore > 0/, 'Snapshot attraction mapper must guard against zero/negative aiScore');
   assert.match(apiClient, /r\.aiScore > 0/, 'Snapshot restaurant mapper must guard against zero/negative aiScore');
+  assert.match(apiClient, /r\.ai_score === "number" && r\.ai_score > 0/, 'Snapshot restaurant mapper must read persisted snake_case ai_score');
+  assert.match(apiClient, /a\.ai_score === "number" && a\.ai_score > 0/, 'Snapshot attraction mapper must read persisted snake_case ai_score');
   // computeExploreAttractionScore and computeExploreRestaurantScore exported for enrichment
   assert.match(apiClient, /computeExploreAttractionScore/, 'api.ts must export computeExploreAttractionScore');
   assert.match(apiClient, /computeExploreRestaurantScore/, 'api.ts must export computeExploreRestaurantScore');
+});
+
+test('api.ts fetchExploreSnapshot supports score aliases and snake_case metadata fields', () => {
+  assert.match(apiClient, /typeof a\.score === "number" && a\.score > 0/, 'Attraction snapshot mapper must support legacy score field');
+  assert.match(apiClient, /typeof r\.score === "number" && r\.score > 0/, 'Restaurant snapshot mapper must support legacy score field');
+  assert.match(apiClient, /typeof a\.num_reviews === "number" \? a\.num_reviews/, 'Attraction snapshot mapper must map num_reviews');
+  assert.match(apiClient, /typeof r\.num_reviews === "number" \? r\.num_reviews/, 'Restaurant snapshot mapper must map num_reviews');
+});
+
+test('TripBuilder re-runs provider search exactly once for stale unscored snapshot', () => {
+  assert.match(tripBuilder, /hasPositiveExploreScore/, 'TripBuilder must detect whether snapshot already has positive explore scores');
+  assert.match(tripBuilder, /if \(hasPositiveExploreScore\(snapshot\.attractions, snapshot\.restaurants\)\) return;/, 'TripBuilder should only short-circuit when snapshot has valid scores');
+  assert.match(tripBuilder, /exploreSnapshotLoadedRef\.current === hydrationKey/, 'Hydration key guard avoids repeated provider calls on rerenders');
 });
 
 test('api.ts saveExploreSnapshot sends snake_case ai_score field to backend', () => {
