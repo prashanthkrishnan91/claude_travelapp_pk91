@@ -254,3 +254,51 @@ class SearchCacheEntry(ORMBase):
     payload: Dict[str, Any]
     expires_at: Optional[datetime] = None
     created_at: datetime
+
+
+# ------------------------------------------------------------------
+# Explore candidate snapshot — persisted per-trip in trips.metadata
+# ------------------------------------------------------------------
+
+class ExploreSnapshotAttraction(BaseModel):
+    id: str
+    name: str
+    category: str
+    description: str = ""
+    location: str
+    address: str
+    rating: Optional[float] = None
+    num_reviews: Optional[int] = None
+    price_level: Optional[int] = None
+    opening_hours: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    ai_score: Optional[float] = None
+    tags: List[str] = Field(default_factory=list)
+    booking_url: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+
+class ExploreSnapshotRestaurant(BaseModel):
+    id: str
+    name: str
+    cuisine: str
+    location: str
+    address: str
+    rating: Optional[float] = None
+    num_reviews: Optional[int] = None
+    price_level: Optional[int] = None
+    opening_hours: Optional[str] = None
+    ai_score: Optional[float] = None
+    sentiment: Optional[float] = None
+    tags: List[str] = Field(default_factory=list)
+    booking_url: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+
+class ExploreSnapshot(BaseModel):
+    destination: str
+    created_at: str = Field(..., description="ISO datetime string when snapshot was saved")
+    attractions: List[ExploreSnapshotAttraction] = Field(default_factory=list)
+    restaurants: List[ExploreSnapshotRestaurant] = Field(default_factory=list)

@@ -80,6 +80,8 @@ import {
   addAttractionToDay,
   addRestaurantToDay,
   moveIdeaToTripIdeas,
+  fetchExploreSnapshot,
+  saveExploreSnapshot,
 } from "@/lib/api";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
@@ -1305,6 +1307,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const restaurantsHydrationKeyRef = useRef<string | null>(null);
   const attractionsRequestRef = useRef<Promise<AttractionSearchResult[]> | null>(null);
   const restaurantsRequestRef = useRef<Promise<RestaurantSearchResult[]> | null>(null);
+  const exploreSnapshotLoadedRef = useRef<string | null>(null);
 
   // ── Compare state ────────────────────────────────────────────────────────────
   const [compareSet,     setCompareSet]     = useState<Set<string>>(new Set());
@@ -1389,24 +1392,46 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     gsap.from(cards, { y: 24, opacity: 0, duration: 0.45, stagger: 0.07, ease: "power2.out", clearProps: "all" });
   }, [candidateHotels.length]);
 
-  // Auto-load attractions for the trip destination
+  // Snapshot-first Explore hydration.
+  // On mount: load from persisted snapshot when available, skip provider search.
+  // On cache miss: call provider-backed search (one-shot per tripId:destination) then persist snapshot.
   useEffect(() => {
     if (!destination || !authSessionReady) return;
     const hydrationKey = `${tripId}:${destination.toLowerCase()}`;
-    if (attractionsHydrationKeyRef.current === hydrationKey) return;
-    attractionsHydrationKeyRef.current = hydrationKey;
-    setAttractionsLoading(true);
-    const request = attractionsRequestRef.current ?? searchAttractions(destination);
-    attractionsRequestRef.current = request;
-    request.then((attractions) => {
-      setCandidateAttractions(attractions);
-    }).catch((error) => {
-      console.error("[TripBuilder] attractions hydration failed", { tripId, destination, error });
-    }).finally(() => {
+    if (exploreSnapshotLoadedRef.current === hydrationKey) return;
+    exploreSnapshotLoadedRef.current = hydrationKey;
+
+    (async () => {
+      const snapshot = await fetchExploreSnapshot(tripId);
+      if (snapshot && (snapshot.attractions.length > 0 || snapshot.restaurants.length > 0)) {
+        if (snapshot.attractions.length > 0) setCandidateAttractions(snapshot.attractions);
+        if (snapshot.restaurants.length > 0) setCandidateRestaurants(snapshot.restaurants);
+        return;
+      }
+
+      // No usable snapshot — call provider-backed search, then persist result.
+      setAttractionsLoading(true);
+      setRestaurantsLoading(true);
+      const [attractionsResult, restaurantsResult] = await Promise.allSettled([
+        (attractionsRequestRef.current ?? searchAttractions(destination)),
+        (restaurantsRequestRef.current ?? searchRestaurants(destination)),
+      ]);
+
+      const resolvedAttractions = attractionsResult.status === "fulfilled" ? attractionsResult.value : [];
+      const resolvedRestaurants = restaurantsResult.status === "fulfilled" ? restaurantsResult.value : [];
+
+      if (resolvedAttractions.length > 0) setCandidateAttractions(resolvedAttractions);
+      if (resolvedRestaurants.length > 0) setCandidateRestaurants(resolvedRestaurants);
       attractionsRequestRef.current = null;
+      restaurantsRequestRef.current = null;
       setAttractionsLoading(false);
-    });
-  }, [destination, authSessionReady, candidateAttractions.length, tripId]);
+      setRestaurantsLoading(false);
+
+      if (resolvedAttractions.length > 0 || resolvedRestaurants.length > 0) {
+        saveExploreSnapshot(tripId, { destination, attractions: resolvedAttractions, restaurants: resolvedRestaurants });
+      }
+    })();
+  }, [destination, authSessionReady, tripId]);
 
   // GSAP entrance animations for attraction cards
   useEffect(() => {
@@ -1414,25 +1439,6 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     const cards = attractionListRef.current.querySelectorAll(".candidate-card");
     gsap.from(cards, { y: 24, opacity: 0, duration: 0.45, stagger: 0.05, ease: "power2.out", clearProps: "all" });
   }, [candidateAttractions.length]);
-
-  // Auto-load restaurants for the trip destination
-  useEffect(() => {
-    if (!destination || !authSessionReady) return;
-    const hydrationKey = `${tripId}:${destination.toLowerCase()}`;
-    if (restaurantsHydrationKeyRef.current === hydrationKey) return;
-    restaurantsHydrationKeyRef.current = hydrationKey;
-    setRestaurantsLoading(true);
-    const request = restaurantsRequestRef.current ?? searchRestaurants(destination);
-    restaurantsRequestRef.current = request;
-    request.then((restaurants) => {
-      setCandidateRestaurants(restaurants);
-    }).catch((error) => {
-      console.error("[TripBuilder] restaurants hydration failed", { tripId, destination, error });
-    }).finally(() => {
-      restaurantsRequestRef.current = null;
-      setRestaurantsLoading(false);
-    });
-  }, [destination, authSessionReady, candidateRestaurants.length, tripId]);
 
   // GSAP entrance animations for restaurant cards
   useEffect(() => {

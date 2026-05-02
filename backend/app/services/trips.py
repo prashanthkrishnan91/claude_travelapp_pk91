@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -71,3 +71,16 @@ class TripsService:
         if user_id is not None:
             query = query.eq("user_id", str(user_id))
         query.execute()
+
+    # ------------------------------------------------------------------
+    # Explore candidate snapshots (persisted in trips.metadata)
+    # ------------------------------------------------------------------
+
+    def get_explore_snapshot(self, trip_id: UUID, user_id: UUID) -> Optional[Dict[str, Any]]:
+        trip = self.get_trip(trip_id, user_id)
+        return trip.metadata.get("explore_snapshot") if trip.metadata else None
+
+    def save_explore_snapshot(self, trip_id: UUID, user_id: UUID, snapshot: Dict[str, Any]) -> None:
+        trip = self.get_trip(trip_id, user_id)
+        new_metadata = {**(trip.metadata or {}), "explore_snapshot": snapshot}
+        self.db.table(TABLE).update({"metadata": new_metadata}).eq("id", str(trip_id)).eq("user_id", str(user_id)).execute()

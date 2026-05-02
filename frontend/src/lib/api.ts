@@ -790,6 +790,131 @@ export async function searchClusters(
   }
 }
 
+// ─── Explore candidate snapshots ─────────────────────────────────────────────
+
+export interface ExploreSnapshot {
+  destination: string;
+  createdAt: string;
+  attractions: AttractionSearchResult[];
+  restaurants: RestaurantSearchResult[];
+}
+
+/**
+ * Fetch the persisted Explore candidate snapshot for a trip.
+ * Returns null when no snapshot exists or on network/auth failure.
+ * Snapshot is keyed per-trip in trips.metadata.explore_snapshot.
+ */
+export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnapshot | null> {
+  try {
+    const data = await apiFetch<Record<string, unknown> | null>(`/trips/${tripId}/explore-snapshot`);
+    if (!data) return null;
+    const rawAttractions = Array.isArray(data.attractions) ? (data.attractions as Record<string, unknown>[]) : [];
+    const rawRestaurants = Array.isArray(data.restaurants) ? (data.restaurants as Record<string, unknown>[]) : [];
+    if (rawAttractions.length === 0 && rawRestaurants.length === 0) return null;
+    const attractions: AttractionSearchResult[] = rawAttractions.map((a) => ({
+      id: String(a.id ?? ""),
+      name: String(a.name ?? ""),
+      category: String(a.category ?? "attraction"),
+      description: String(a.description ?? ""),
+      location: String(a.location ?? ""),
+      address: String(a.address ?? ""),
+      rating: typeof a.rating === "number" ? a.rating : undefined,
+      numReviews: typeof a.numReviews === "number" ? a.numReviews : undefined,
+      priceLevel: typeof a.priceLevel === "number" ? a.priceLevel : undefined,
+      openingHours: typeof a.openingHours === "string" ? a.openingHours : undefined,
+      durationMinutes: typeof a.durationMinutes === "number" ? a.durationMinutes : undefined,
+      aiScore: typeof a.aiScore === "number" && a.aiScore > 0 ? a.aiScore : undefined,
+      tags: Array.isArray(a.tags) ? (a.tags as string[]) : [],
+      bookingUrl: typeof a.bookingUrl === "string" ? a.bookingUrl : undefined,
+      lat: typeof a.lat === "number" ? a.lat : undefined,
+      lng: typeof a.lng === "number" ? a.lng : undefined,
+    }));
+    const restaurants: RestaurantSearchResult[] = rawRestaurants.map((r) => ({
+      id: String(r.id ?? ""),
+      name: String(r.name ?? ""),
+      cuisine: String(r.cuisine ?? "Restaurant"),
+      location: String(r.location ?? ""),
+      address: String(r.address ?? ""),
+      rating: typeof r.rating === "number" ? r.rating : undefined,
+      numReviews: typeof r.numReviews === "number" ? r.numReviews : undefined,
+      priceLevel: typeof r.priceLevel === "number" ? r.priceLevel : undefined,
+      openingHours: typeof r.openingHours === "string" ? r.openingHours : undefined,
+      aiScore: typeof r.aiScore === "number" && r.aiScore > 0 ? r.aiScore : undefined,
+      sentiment: typeof r.sentiment === "number" ? r.sentiment : undefined,
+      tags: Array.isArray(r.tags) ? (r.tags as string[]) : [],
+      bookingUrl: typeof r.bookingUrl === "string" ? r.bookingUrl : undefined,
+      lat: typeof r.lat === "number" ? r.lat : undefined,
+      lng: typeof r.lng === "number" ? r.lng : undefined,
+    }));
+    return {
+      destination: String(data.destination ?? ""),
+      createdAt: String(data.createdAt ?? ""),
+      attractions,
+      restaurants,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persist scored Explore candidates for a trip.
+ * Snapshot is stored in trips.metadata.explore_snapshot.
+ * Failure is non-fatal — next load will call provider search again.
+ */
+export async function saveExploreSnapshot(
+  tripId: string,
+  snapshot: { destination: string; attractions: AttractionSearchResult[]; restaurants: RestaurantSearchResult[] }
+): Promise<void> {
+  try {
+    const body = {
+      destination: snapshot.destination,
+      created_at: new Date().toISOString(),
+      attractions: snapshot.attractions.map((a) => ({
+        id: a.id,
+        name: a.name,
+        category: a.category,
+        description: a.description ?? "",
+        location: a.location,
+        address: a.address,
+        rating: a.rating ?? null,
+        num_reviews: a.numReviews ?? null,
+        price_level: a.priceLevel ?? null,
+        opening_hours: a.openingHours ?? null,
+        duration_minutes: a.durationMinutes ?? null,
+        ai_score: a.aiScore ?? null,
+        tags: a.tags ?? [],
+        booking_url: a.bookingUrl ?? null,
+        lat: a.lat ?? null,
+        lng: a.lng ?? null,
+      })),
+      restaurants: snapshot.restaurants.map((r) => ({
+        id: r.id,
+        name: r.name,
+        cuisine: r.cuisine,
+        location: r.location,
+        address: r.address,
+        rating: r.rating ?? null,
+        num_reviews: r.numReviews ?? null,
+        price_level: r.priceLevel ?? null,
+        opening_hours: r.openingHours ?? null,
+        ai_score: r.aiScore ?? null,
+        sentiment: r.sentiment ?? null,
+        tags: r.tags ?? [],
+        booking_url: r.bookingUrl ?? null,
+        lat: r.lat ?? null,
+        lng: r.lng ?? null,
+      })),
+    };
+    await apiFetch(`/trips/${tripId}/explore-snapshot`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  } catch {
+    // Non-fatal: next load will call provider search again
+  }
+}
+
 /** Fetch the best area recommendation for a destination. */
 export async function fetchBestArea(
   location: string,
