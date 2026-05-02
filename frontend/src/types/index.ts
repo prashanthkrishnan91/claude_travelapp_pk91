@@ -209,6 +209,9 @@ export interface RestaurantSearchResult {
   bookingOptions?: BookingOption[];
   lat?: number;
   lng?: number;
+  providerPlaceId?: string;
+  googleMapsUri?: string;
+  placeId?: string;
 }
 
 // ─── Attraction Search Result ─────────────────────────────────────────────────

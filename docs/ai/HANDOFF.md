@@ -702,3 +702,9 @@ Enriched whyPick evidence quality by promoting venue-specific Foursquare tags, T
 - Existing-trip candidate breadth should not depend solely on persisted trip-level items (often user-pruned subset). Keep one-shot provider refresh for destination hydration so existing trips converge toward create-trip candidate breadth without rerender loops.
 
 - 2026-05-02: Explore score restoration follow-up: unified attraction/restaurant score normalization across both provider search mapping and existing-trip persisted hydration (`aiScore`/`ai_score`/legacy `score`) to restore meaningful ranking after refresh without fake 0 fallbacks; kept Top Pick gated on positive normalized score and retained one-shot provider refresh behavior.
+
+## 2026-05-02 – Wife-testing QA: Trusted Explore restaurant identity
+- Explore restaurant cards must have verified Google place identity to be treated as trusted/addable in Explore.
+- Frontend now filters out unverified restaurant results/snapshots (missing `google_maps_uri` and place id aliases).
+- Restaurant Maps links now prioritize canonical `google_maps_uri`, then `place_id` URL, instead of loose `name + city` query when verified identity exists.
+- Snapshot persistence/hydration now carries `provider_place_id` / `google_maps_uri` / `place_id` to prevent reintroducing unverified entities after refresh.
