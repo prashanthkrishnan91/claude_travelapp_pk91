@@ -182,9 +182,19 @@ class TestQualityGate:
         payload = _make_payload(source_status="error")
         assert not is_live_research_payload_quality_sufficient(payload)
 
+    def test_error_source_status_with_research_sources_still_fails(self):
+        # source_status=error overrides non-empty research_sources — never cache errors
+        payload = _make_payload(source_status="error", restaurants=0, research_sources=3)
+        assert not is_live_research_payload_quality_sufficient(payload, intent=INTENT_NIGHTLIFE)
+
     def test_unavailable_source_status_fails(self):
         payload = _make_payload(source_status="unavailable")
         assert not is_live_research_payload_quality_sufficient(payload)
+
+    def test_unavailable_source_status_with_research_sources_still_fails(self):
+        # source_status=unavailable overrides non-empty research_sources
+        payload = _make_payload(source_status="unavailable", restaurants=0, research_sources=2)
+        assert not is_live_research_payload_quality_sufficient(payload, intent=INTENT_RESTAURANTS)
 
     def test_empty_source_status_fails(self):
         payload = _make_payload(source_status="none")
