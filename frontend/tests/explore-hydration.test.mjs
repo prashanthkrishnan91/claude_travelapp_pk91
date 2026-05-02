@@ -14,16 +14,21 @@ test('TripBuilder waits for auth session before loading attractions/restaurants'
   assert.match(tripBuilder, /if \(!destination \|\| !authSessionReady\) return;/, 'Explore loaders must bail when auth is not ready');
 });
 
-test('TripBuilder hydrates attraction/restaurant candidates from persisted trip-level itinerary items first', () => {
-  assert.match(tripBuilder, /filter\(\(i\) => i\.itemType === "activity" && !i\.dayId\)/, 'Must read trip-level activity items before provider search');
-  assert.match(tripBuilder, /filter\(\(i\) => i\.itemType === "meal" && !i\.dayId\)/, 'Must read trip-level meal items before provider search');
-  assert.match(tripBuilder, /setCandidateAttractions\(persistedAttractions\)/, 'Persisted attractions must be mapped into rendered candidateAttractions state');
-  assert.match(tripBuilder, /setCandidateRestaurants\(persistedRestaurants\)/, 'Persisted restaurants must be mapped into rendered candidateRestaurants state');
+test('TripBuilder hydration mapper preserves attraction and restaurant score fields from persisted snake_case/camelCase details', () => {
+  assert.match(tripBuilder, /typeof details\.ai_score === "number" \? details\.ai_score/, 'Persisted ai_score should map into aiScore');
+  assert.match(tripBuilder, /typeof details\.score === "number" \? details\.score/, 'Persisted fallback score should map into aiScore');
+  assert.match(tripBuilder, /typeof details\.num_reviews === "number" \? details\.num_reviews/, 'Persisted num_reviews should map for card details');
 });
 
-test('TripBuilder avoids duplicate provider-backed attraction/restaurant calls for same trip+destination', () => {
-  assert.match(tripBuilder, /attractionsHydrationKeyRef/, 'Attractions hydration key cache must exist');
-  assert.match(tripBuilder, /restaurantsHydrationKeyRef/, 'Restaurants hydration key cache must exist');
-  assert.match(tripBuilder, /if \(candidateAttractions\.length > 0\) return;/, 'Must skip attractions provider call when already hydrated');
-  assert.match(tripBuilder, /if \(candidateRestaurants\.length > 0\) return;/, 'Must skip restaurants provider call when already hydrated');
+test('TripBuilder existing-trip hydration still refreshes via provider search path', () => {
+  assert.match(tripBuilder, /searchAttractions\(destination\)/, 'Attractions should be refreshed from provider-backed search path');
+  assert.match(tripBuilder, /searchRestaurants\(destination\)/, 'Restaurants should be refreshed from provider-backed search path');
+  assert.doesNotMatch(tripBuilder, /if \(candidateAttractions\.length > 0\) return;/, 'Existing in-memory candidates must not short-circuit provider hydration');
+  assert.doesNotMatch(tripBuilder, /if \(candidateRestaurants\.length > 0\) return;/, 'Existing in-memory candidates must not short-circuit provider hydration');
+});
+
+test('TripBuilder does not render misleading score or Top Pick for zero/absent score', () => {
+  assert.match(tripBuilder, /if \(typeof score !== "number" \|\| !Number\.isFinite\(score\) \|\| score <= 0\) return null;/, 'Score badge must be hidden for missing or zero score');
+  assert.match(tripBuilder, /isTopPick=\{attractionSort === "ai" && idx < top20 && \(attraction\.aiScore \?\? 0\) > 0\}/, 'Attraction Top Pick requires positive score');
+  assert.match(tripBuilder, /isTopPick=\{restaurantSort === "ai" && idx < top20 && \(restaurant\.aiScore \?\? 0\) > 0\}/, 'Restaurant Top Pick requires positive score');
 });
