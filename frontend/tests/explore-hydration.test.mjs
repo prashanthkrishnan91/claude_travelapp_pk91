@@ -45,11 +45,14 @@ test('TripBuilder waits for auth session before loading attractions/restaurants'
   assert.match(tripBuilder, /if \(!destination \|\| !authSessionReady\) return;/, 'Explore loaders must bail when auth is not ready');
 });
 
-test('TripBuilder hydration mapper preserves attraction and restaurant score fields from persisted snake_case/camelCase details', () => {
-  assert.match(tripBuilder, /function normalizeExploreScore\(details: Record<string, unknown>\)/, 'TripBuilder should centralize explore score normalization');
-  assert.match(tripBuilder, /if \(typeof details\.ai_score === "number"\) return details\.ai_score;/, 'Persisted ai_score should map into aiScore');
-  assert.match(tripBuilder, /if \(typeof details\.score === "number"\) return details\.score;/, 'Persisted fallback score should map into aiScore');
-  assert.match(tripBuilder, /typeof details\.num_reviews === "number" \? details\.num_reviews/, 'Persisted num_reviews should map for card details');
+test('TripBuilder does not contain trip-item-to-explore-candidate mapper functions (race condition removal)', () => {
+  // mapTripItemToAttraction and mapTripItemToRestaurant were the entry point of the race condition:
+  // they mapped unscored concierge ideas into candidateAttractions/Restaurants, overwriting scores.
+  // Removing them also made normalizeExploreScore unused, so it is removed too.
+  // Score normalization for the Explore path now lives exclusively in api.ts fetchExploreSnapshot.
+  assert.doesNotMatch(tripBuilder, /function mapTripItemToAttraction/, 'mapTripItemToAttraction must be absent — it was the origin of the race');
+  assert.doesNotMatch(tripBuilder, /function mapTripItemToRestaurant/, 'mapTripItemToRestaurant must be absent — it was the origin of the race');
+  assert.doesNotMatch(tripBuilder, /function normalizeExploreScore/, 'normalizeExploreScore must be absent — its only callers were the deleted mappers');
 });
 
 test('API search mappers preserve attraction and restaurant score fields from snake_case/camelCase/score payloads', () => {
@@ -240,12 +243,13 @@ test('fetchTripItems effect dependency array is [tripId] only (destination remov
 
 // ─── Score Normalization Boundary Tests ──────────────────────────────────────
 
-test('normalizeExploreScore reads details.aiScore (camelCase) first, then ai_score, then score', () => {
-  // Trip item details arrive in camelCase (apiFetch toCamel transform) or snake_case (legacy writes).
-  // aiScore (camelCase) must be the primary check so post-toCamel payloads resolve correctly.
-  assert.match(tripBuilder, /if \(typeof details\.aiScore === "number"\) return details\.aiScore;/, 'normalizeExploreScore must check camelCase aiScore first');
-  assert.match(tripBuilder, /if \(typeof details\.ai_score === "number"\) return details\.ai_score;/, 'normalizeExploreScore must fall back to snake_case ai_score');
-  assert.match(tripBuilder, /if \(typeof details\.score === "number"\) return details\.score;/, 'normalizeExploreScore must fall back to legacy score field');
+test('api.ts fetchExploreSnapshot storedScore reads aiScore (camelCase, toCamel-primary) before snake_case fallbacks', () => {
+  // apiFetch applies toCamel() to all responses: backend ai_score → aiScore on arrival.
+  // storedScore chain must check camelCase aiScore first so toCamel-converted payloads resolve correctly,
+  // then fall back to snake_case ai_score and legacy score for raw JSONB paths.
+  assert.match(apiClient, /typeof a\.aiScore === "number" && a\.aiScore > 0/, 'Snapshot attraction storedScore must check camelCase aiScore first');
+  assert.match(apiClient, /typeof a\.ai_score === "number" && a\.ai_score > 0/, 'Snapshot attraction storedScore must fall back to snake_case ai_score');
+  assert.match(apiClient, /typeof a\.score === "number" && a\.score > 0/, 'Snapshot attraction storedScore must fall back to legacy score');
 });
 
 test('mapAttractionToResult normalizes score aliases in priority order: aiScore > ai_score > score', () => {
