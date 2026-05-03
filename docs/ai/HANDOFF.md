@@ -708,3 +708,9 @@ Enriched whyPick evidence quality by promoting venue-specific Foursquare tags, T
 - Frontend now filters out unverified restaurant results/snapshots (missing `google_maps_uri` and place id aliases).
 - Restaurant Maps links now prioritize canonical `google_maps_uri`, then `place_id` URL, instead of loose `name + city` query when verified identity exists.
 - Snapshot persistence/hydration now carries `provider_place_id` / `google_maps_uri` / `place_id` to prevent reintroducing unverified entities after refresh.
+
+## 2026-05-03 – Explore Restaurants no-empty-list trust contract regression
+- Root cause: frontend Explore restaurant trust gate correctly required verified Google identity, but mapper did not recognize newer backend alias fields (`google_place_id`, `formatted_address`, `user_ratings_total`, `review_count`) so valid verified cards could lose identity and get filtered out as untrusted/empty.
+- Contract tightened (not loosened): trusted/addable restaurant cards still require canonical Google identity (`google_maps_uri` OR place id identity).
+- Mapper/hydrator now preserve alias fields across search response and explore snapshot hydration so verified restaurants survive: `google_place_id` aliases into `providerPlaceId`/`placeId`, address falls back to `formatted_address`, and review count falls back to `review_count`/`user_ratings_total`.
+- Added no-empty-list regression contract tests in `frontend/tests/explore-restaurants-trust-contract.test.mjs` and wired them into frontend `npm test`.

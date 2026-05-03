@@ -728,10 +728,22 @@ interface RawRestaurantResult {
   bookingOptions?: BookingOption[];
   provider_place_id?: string;
   providerPlaceId?: string;
+  google_place_id?: string;
+  googlePlaceId?: string;
   google_maps_uri?: string;
   googleMapsUri?: string;
   place_id?: string;
   placeId?: string;
+  formatted_address?: string;
+  formattedAddress?: string;
+  user_ratings_total?: number;
+  userRatingsTotal?: number;
+  review_count?: number;
+  reviewCount?: number;
+  source_status?: string;
+  sourceStatus?: string;
+  verification_status?: string;
+  verificationStatus?: string;
 }
 
 function extractVerifiedRestaurantIdentity(r: RawRestaurantResult): {
@@ -740,9 +752,10 @@ function extractVerifiedRestaurantIdentity(r: RawRestaurantResult): {
   placeId?: string;
 } {
   const providerPlaceId = typeof r.providerPlaceId === "string" ? r.providerPlaceId : typeof r.provider_place_id === "string" ? r.provider_place_id : undefined;
+  const googlePlaceId = typeof r.googlePlaceId === "string" ? r.googlePlaceId : typeof r.google_place_id === "string" ? r.google_place_id : undefined;
   const googleMapsUri = typeof r.googleMapsUri === "string" ? r.googleMapsUri : typeof r.google_maps_uri === "string" ? r.google_maps_uri : undefined;
   const placeId = typeof r.placeId === "string" ? r.placeId : typeof r.place_id === "string" ? r.place_id : undefined;
-  return { providerPlaceId, googleMapsUri, placeId };
+  return { providerPlaceId: providerPlaceId ?? googlePlaceId, googleMapsUri, placeId: placeId ?? googlePlaceId };
 }
 
 function mapRestaurantToResult(r: RawRestaurantResult): RestaurantSearchResult {
@@ -760,9 +773,25 @@ function mapRestaurantToResult(r: RawRestaurantResult): RestaurantSearchResult {
     name: r.name,
     cuisine: r.cuisine,
     location: r.location,
-    address: r.address,
+    address: typeof r.address === "string" && r.address.trim().length > 0
+      ? r.address
+      : typeof r.formattedAddress === "string"
+        ? r.formattedAddress
+        : typeof r.formatted_address === "string"
+          ? r.formatted_address
+          : "",
     rating: r.rating,
-    numReviews: r.numReviews,
+    numReviews: typeof r.numReviews === "number"
+      ? r.numReviews
+      : typeof r.reviewCount === "number"
+        ? r.reviewCount
+        : typeof r.review_count === "number"
+          ? r.review_count
+          : typeof r.userRatingsTotal === "number"
+            ? r.userRatingsTotal
+            : typeof r.user_ratings_total === "number"
+              ? r.user_ratings_total
+              : undefined,
     price: r.price,
     priceLevel: r.priceLevel,
     openingHours: r.openingHours,
@@ -933,18 +962,35 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
             )
           : undefined;
       const aiScore = storedScore ?? (computedScore != null && computedScore > 0 ? computedScore : undefined);
-      const providerPlaceId = typeof r.providerPlaceId === "string" ? r.providerPlaceId : typeof r.provider_place_id === "string" ? r.provider_place_id : undefined;
+      const providerPlaceId =
+        typeof r.providerPlaceId === "string" ? r.providerPlaceId :
+        typeof r.provider_place_id === "string" ? r.provider_place_id :
+        typeof r.googlePlaceId === "string" ? r.googlePlaceId :
+        typeof r.google_place_id === "string" ? r.google_place_id : undefined;
       const googleMapsUri = typeof r.googleMapsUri === "string" ? r.googleMapsUri : typeof r.google_maps_uri === "string" ? r.google_maps_uri : undefined;
-      const placeId = typeof r.placeId === "string" ? r.placeId : typeof r.place_id === "string" ? r.place_id : undefined;
+      const placeId =
+        typeof r.placeId === "string" ? r.placeId :
+        typeof r.place_id === "string" ? r.place_id :
+        typeof r.googlePlaceId === "string" ? r.googlePlaceId :
+        typeof r.google_place_id === "string" ? r.google_place_id : undefined;
       if (!googleMapsUri && !providerPlaceId && !placeId) return null;
       return {
         id: String(r.id ?? ""),
         name: String(r.name ?? ""),
         cuisine: String(r.cuisine ?? "Restaurant"),
         location: String(r.location ?? ""),
-        address: String(r.address ?? ""),
+        address:
+          typeof r.address === "string" && r.address.trim().length > 0
+            ? r.address
+            : String(r.formattedAddress ?? r.formatted_address ?? ""),
         rating: typeof r.rating === "number" ? r.rating : undefined,
-        numReviews: typeof r.numReviews === "number" ? r.numReviews : typeof r.num_reviews === "number" ? r.num_reviews : undefined,
+        numReviews:
+          typeof r.numReviews === "number" ? r.numReviews :
+          typeof r.num_reviews === "number" ? r.num_reviews :
+          typeof r.reviewCount === "number" ? r.reviewCount :
+          typeof r.review_count === "number" ? r.review_count :
+          typeof r.userRatingsTotal === "number" ? r.userRatingsTotal :
+          typeof r.user_ratings_total === "number" ? r.user_ratings_total : undefined,
         priceLevel: typeof r.priceLevel === "number" ? r.priceLevel : typeof r.price_level === "number" ? r.price_level : undefined,
         openingHours: typeof r.openingHours === "string" ? r.openingHours : typeof r.opening_hours === "string" ? r.opening_hours : undefined,
         aiScore,
