@@ -28,6 +28,11 @@ from app.services.search import (
 )
 
 
+
+
+def _fetch_results(*args, **kwargs):
+    return _fetch_restaurants_google_places(*args, **kwargs)[0]
+
 # ---------------------------------------------------------------------------
 # DB stubs
 # ---------------------------------------------------------------------------
@@ -261,7 +266,7 @@ def test_fetch_restaurants_google_places_returns_empty_on_http_error():
     mock_client.post = MagicMock(side_effect=real_httpx.ConnectError("refused"))
 
     with patch("httpx.Client", return_value=mock_client):
-        out = _fetch_restaurants_google_places(
+        out = _fetch_results(
             RestaurantSearchRequest(location="Chicago"), api_key="fake-key"
         )
     assert out == []
@@ -384,7 +389,7 @@ def test_fetch_restaurants_no_loose_name_city_url():
     ctx, _ = _patch_httpx([fake_place])
 
     with ctx:
-        out = _fetch_restaurants_google_places(
+        out = _fetch_results(
             RestaurantSearchRequest(location="Chicago"), api_key="fake-key"
         )
 
@@ -578,7 +583,7 @@ def test_fetch_skips_non_operational_places():
     ]
     ctx, _ = _patch_httpx(places)
     with ctx:
-        out = _fetch_restaurants_google_places(
+        out = _fetch_results(
             RestaurantSearchRequest(location="Chicago"), api_key="fake-key"
         )
     assert len(out) == 1
@@ -591,7 +596,7 @@ def test_fetch_skips_places_without_id():
     place_no_id.pop("id")
     ctx, _ = _patch_httpx([place_no_id])
     with ctx:
-        out = _fetch_restaurants_google_places(
+        out = _fetch_results(
             RestaurantSearchRequest(location="Chicago"), api_key="fake-key"
         )
     assert out == []
@@ -603,7 +608,7 @@ def test_fetch_price_level_string_enum_mapped():
         place = _make_fake_place(price_level=enum_str)
         ctx, _ = _patch_httpx([place])
         with ctx:
-            out = _fetch_restaurants_google_places(
+            out = _fetch_results(
                 RestaurantSearchRequest(location="Chicago"), api_key="fake-key"
             )
         if out:
@@ -615,7 +620,7 @@ def test_fetch_cuisine_from_primary_type():
     place = _make_fake_place(primary_type="italian_restaurant", types=["restaurant", "food"])
     ctx, _ = _patch_httpx([place])
     with ctx:
-        out = _fetch_restaurants_google_places(
+        out = _fetch_results(
             RestaurantSearchRequest(location="Chicago"), api_key="fake-key"
         )
     assert out
@@ -627,7 +632,7 @@ def test_fetch_cuisine_fallback_from_types():
     place = _make_fake_place(primary_type="restaurant", types=["japanese_restaurant", "food"])
     ctx, _ = _patch_httpx([place])
     with ctx:
-        out = _fetch_restaurants_google_places(
+        out = _fetch_results(
             RestaurantSearchRequest(location="Chicago"), api_key="fake-key"
         )
     assert out
@@ -636,7 +641,7 @@ def test_fetch_cuisine_fallback_from_types():
 
 def test_fetch_returns_empty_when_api_key_missing():
     """_fetch_restaurants_google_places returns [] immediately when api_key is empty."""
-    out = _fetch_restaurants_google_places(
+    out = _fetch_results(
         RestaurantSearchRequest(location="Chicago"), api_key=""
     )
     assert out == []
