@@ -800,6 +800,7 @@ class SearchService:
         key = _cache_key("restaurants", query)
         cached = self._get_cache(key)
         if cached:
+            raw_count = len(cached)
             results = []
             for item in cached:
                 r = RestaurantResult(**item)

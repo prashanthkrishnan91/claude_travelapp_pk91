@@ -301,6 +301,9 @@ class ExploreSnapshotRestaurant(BaseModel):
     booking_url: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
+    provider_place_id: Optional[str] = Field(None, description="Verified provider place identifier")
+    google_maps_uri: Optional[str] = Field(None, description="Canonical Google Maps URI for this place")
+    place_id: Optional[str] = Field(None, description="Google place_id")
 
 
 class ExploreSnapshot(BaseModel):

@@ -1,5 +1,56 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-03) — Fix Explore Restaurants 0-result bug (cache hit NameError + snapshot identity)
+
+### Root cause (two-bug chain)
+
+**Bug 1 — Backend `raw_count` undefined on cache hit (primary blocker):**
+`SearchService.search_restaurants()` referenced `raw_count` in a `logger.info` call inside the `if cached:` block, but `raw_count` was never defined in that scope. On the first request (cache miss) this variable is absent so no error occurs. On every subsequent request (cache hit), Python raises `NameError: name 'raw_count' is not defined`, which propagates as an unhandled exception → FastAPI returns HTTP 500 → frontend `apiFetch` throws → `searchRestaurants` catch returns `{ restaurants: [] }` → `setCandidateRestaurants([])` → UI shows 0 restaurants.
+
+**Bug 2 — `ExploreSnapshotRestaurant` missing identity fields (persistence cycle):**
+The Pydantic model for snapshot restaurants did not declare `provider_place_id`, `google_maps_uri`, or `place_id`. Pydantic silently strips unknown fields on PUT, so these identity fields were never stored in `trips.metadata.explore_snapshot`. On the next page load, `fetchExploreSnapshot`'s identity-trust gate (`if (!googleMapsUri && !providerPlaceId && !placeId) return null`) filtered all snapshot restaurants to `[]`, forcing a self-heal live search on EVERY load — which then hit Bug 1 on the second page load.
+
+### Failure chain for existing trips
+1. Cold cache (miss): backend returns 12, frontend shows 12 ✓
+2. `saveExploreSnapshot` sends identity fields → Bug 2 strips them → snapshot saved without identity
+3. Reload: `fetchExploreSnapshot` maps restaurants, identity check fails → `restaurants = []`
+4. Self-heal: `searchRestaurants` called → cache HIT → Bug 1: `NameError` → 500 → frontend gets `[]`
+5. `setCandidateRestaurants([])` → UI shows 0 permanently ✗
+
+### Fix
+- `backend/app/services/search.py` line 803: added `raw_count = len(cached)` before the cache-hit `logger.info` call.
+- `backend/app/models/search.py` `ExploreSnapshotRestaurant`: added `provider_place_id`, `google_maps_uri`, `place_id` optional fields so they survive Pydantic validation on PUT and are stored in JSONB. On the next page load, snapshot restaurants pass the frontend identity trust gate → `hasHealthyRestaurants = true` → no repeated live search needed.
+
+### Self-heal behavior for existing trips
+Existing trips with empty/bad snapshots self-heal on the NEXT page load:
+1. `fetchExploreSnapshot` returns `restaurants = []` (old snapshot, no identity)
+2. `shouldFetchRestaurants = true` → `searchRestaurants` → cache miss OR warm (now no NameError) → 12 restaurants
+3. `setCandidateRestaurants(12)` → renders
+4. `saveExploreSnapshot` now sends identity fields → `ExploreSnapshotRestaurant` stores them
+5. Next reload: snapshot restaurants have identity → pass trust gate → no live search needed
+
+### Files changed
+- `backend/app/services/search.py` — added `raw_count = len(cached)` in cache hit block
+- `backend/app/models/search.py` — added `provider_place_id`, `google_maps_uri`, `place_id` to `ExploreSnapshotRestaurant`
+- `backend/tests/test_restaurant_search_diagnostics.py` — 10 focused tests: miss path, cache hit path (no NameError), cache hit verified identity, count match, stale ai_score rescore, ExploreSnapshotRestaurant identity fields, optional fields, model_dump serialization, unverified regression
+- `frontend/tests/explore-restaurants-trust-contract.test.mjs` — 18 focused tests: API mapping, trust gate, RestaurantSearchEnvelope shape, catch envelope, state/snapshot self-heal, canPersistRestaurants guard, hydration camelCase/alias reads, saveExploreSnapshot sends identity, backend model contract, raw_count fix assertion, regression tests for unverified blocking and Maps URL
+
+### Lesson: When backend returned_count > 0 but UI shows 0
+**Always trace in this order before touching provider/search logic:**
+1. Backend: does the CACHE HIT path have the same variables as the miss path? A NameError/exception in the hit path causes every warm-cache reload to fail silently in the frontend try/catch.
+2. API parse: does `apiFetch` + `toCamel` produce camelCase fields the mapper reads? (`source_status` → `sourceStatus`, `google_maps_uri` → `googleMapsUri`)
+3. Mapper: does `mapRestaurantToResult` read both camelCase and snake_case aliases?
+4. Trust gate: does the mapped result have `googleMapsUri || providerPlaceId || placeId`?
+5. State merge: is `setCandidateRestaurants(resolvedRestaurants)` called unconditionally (not gated on `length > 0`)?
+6. Snapshot: does the backend model (`ExploreSnapshotRestaurant`) declare the identity fields so they're stored and survive the next hydration?
+7. Render: does `filteredRestaurants.length === 0` show "No restaurants match" when `candidateRestaurants.length > 0` with active filters?
+
+### Supabase SQL: No
+### Backend touched: Yes (`search.py` bug fix, `models/search.py` field addition)
+### Frontend touched: No (tests only)
+
+---
+
 ## Last change (2026-05-02) — Provider Result Cache v1
 
 Added a soft-TTL in-memory provider result cache for the `LiveResearchService.fetch()` path (Tavily/Brave/Serper), with a quality gate to avoid serving stale/weak results.
