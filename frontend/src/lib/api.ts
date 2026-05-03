@@ -742,6 +742,8 @@ interface RawRestaurantResult {
   reviewCount?: number;
   source_status?: string;
   sourceStatus?: string;
+  cache_status?: string;
+  cacheStatus?: string;
   verification_status?: string;
   verificationStatus?: string;
 }
@@ -807,21 +809,32 @@ function mapRestaurantToResult(r: RawRestaurantResult): RestaurantSearchResult {
 }
 
 /** Fetch restaurants and dining options for a location, sorted by AI score DESC. */
+export interface RestaurantSearchEnvelope {
+  restaurants: RestaurantSearchResult[];
+  sourceStatus: string;
+  cacheStatus: string;
+  terminalNoResults: boolean;
+}
+
 export async function searchRestaurants(
   location: string,
   date?: string
-): Promise<RestaurantSearchResult[]> {
+): Promise<RestaurantSearchEnvelope> {
   try {
     const payload = toSnake({ location, date: date ?? null });
     const results = await apiFetch<RawRestaurantResult[]>("/search/restaurants", {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    return results
-      .map(mapRestaurantToResult)
-      .filter((r) => Boolean(r.googleMapsUri || r.providerPlaceId || r.placeId));
+    const mapped = results.map(mapRestaurantToResult);
+    const verified = mapped.filter((r) => Boolean(r.googleMapsUri || r.providerPlaceId || r.placeId));
+    const sourceStatus = String((results[0] as RawRestaurantResult | undefined)?.source_status ?? "ok");
+    const cacheStatus = String((results[0] as RawRestaurantResult | undefined)?.cache_status ?? "unknown");
+    const terminalNoResults = verified.length === 0 && sourceStatus === "terminal_no_results";
+    console.info("[explore_restaurants_mapper] input=%d mapped=%d dropped=%d drop_unverified=%d source_status=%s cache_status=%s", results.length, mapped.length, mapped.length-verified.length, mapped.length-verified.length, sourceStatus, cacheStatus);
+    return { restaurants: verified, sourceStatus, cacheStatus, terminalNoResults };
   } catch {
-    return [];
+    return { restaurants: [], sourceStatus: "error", cacheStatus: "bypass", terminalNoResults: false };
   }
 }
 
@@ -849,6 +862,7 @@ export interface ExploreSnapshot {
   createdAt: string;
   attractions: AttractionSearchResult[];
   restaurants: RestaurantSearchResult[];
+  restaurantStatus?: string;
 }
 
 /**
@@ -1009,6 +1023,7 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
       createdAt: String(data.createdAt ?? ""),
       attractions,
       restaurants,
+      restaurantStatus: String(data.restaurant_status ?? "unknown"),
     };
   } catch {
     return null;
@@ -1023,7 +1038,7 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
  */
 export async function saveExploreSnapshot(
   tripId: string,
-  snapshot: { destination: string; attractions: AttractionSearchResult[]; restaurants: RestaurantSearchResult[] }
+  snapshot: { destination: string; attractions: AttractionSearchResult[]; restaurants: RestaurantSearchResult[]; restaurantStatus?: string }
 ): Promise<void> {
   try {
     const body = {
@@ -1054,6 +1069,7 @@ export async function saveExploreSnapshot(
           lng: a.lng ?? null,
         };
       }),
+      restaurant_status: snapshot.restaurantStatus ?? "unknown",
       restaurants: snapshot.restaurants.map((r) => {
         let aiScore = r.aiScore != null && r.aiScore > 0 ? r.aiScore : null;
         if (aiScore == null && r.rating != null && r.numReviews != null && r.numReviews > 0) {

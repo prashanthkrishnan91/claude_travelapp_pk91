@@ -11,6 +11,7 @@ Architecture
 """
 
 import hashlib
+import logging
 import json
 import math
 import random
@@ -40,6 +41,7 @@ from app.models.search import (
 )
 
 CACHE_TABLE = "research_cache"
+logger = logging.getLogger(__name__)
 CACHE_TTL_HOURS = 1
 
 # Known city centres for coordinate generation
@@ -609,7 +611,10 @@ def _mock_restaurants(req: RestaurantSearchRequest) -> List[RestaurantResult]:
         address = f"{random.randint(1, 999)} {random.choice(STREET_NAMES)}, {city}"
 
         name_slug = name_tpl.lower().replace(" ", "-").replace("'", "").replace("&", "and")
-        direct_url = f"https://maps.example.com/restaurants/{name_slug}-{loc_slug}"
+        provider_place_id = f"mock-{name_slug}-{city.lower().replace(" ", "-")}"
+        place_id = provider_place_id
+        google_maps_uri = f"https://www.google.com/maps/place/?q=place_id:{place_id}"
+        direct_url = google_maps_uri
         restaurant_options = [
             BookingOption(provider="google_maps", url=f"https://maps.example.com/restaurants/{name_slug}"),
             BookingOption(provider="opentable", url=f"https://book.example.com/restaurants/opentable/{name_slug}"),
@@ -634,6 +639,12 @@ def _mock_restaurants(req: RestaurantSearchRequest) -> List[RestaurantResult]:
                 opening_hours=opening_hours,
                 price_level=price_level,
                 sentiment=sentiment,
+                provider_place_id=provider_place_id,
+                google_maps_uri=google_maps_uri,
+                place_id=place_id,
+                source_status="ok",
+                cache_status="miss",
+                verification_status="verified",
             )
         )
 
@@ -795,10 +806,21 @@ class SearchService:
                 if r.ai_score is None and r.rating is not None and r.num_reviews is not None:
                     price_level = r.price_level if r.price_level is not None else 2
                     r.ai_score = _compute_restaurant_ai_score(r.rating, r.num_reviews, price_level, r.sentiment)
+                r.cache_status = "hit"
+                r.source_status = r.source_status or "ok"
+                r.verification_status = "verified" if (r.google_maps_uri or r.provider_place_id or r.place_id) else "unverified"
                 results.append(r)
+            verified_count = sum(1 for r in results if r.verification_status == "verified")
+            logger.info("[search_restaurants] location=%s cuisine=%s cache_status=hit raw_candidates=%d verified_candidates=%d returned=%d source_status=%s", req.location, req.cuisine, raw_count, verified_count, len(results), "ok")
             return results
 
         results = _mock_restaurants(req)
+        for r in results:
+            r.cache_status = "miss"
+            r.source_status = r.source_status or "ok"
+            r.verification_status = "verified" if (r.google_maps_uri or r.provider_place_id or r.place_id) else "unverified"
+        verified_count = sum(1 for r in results if r.verification_status == "verified")
+        logger.info("[search_restaurants] location=%s cuisine=%s cache_status=miss raw_candidates=%d verified_candidates=%d returned=%d source_status=%s", req.location, req.cuisine, len(results), verified_count, len(results), "ok")
         self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
         return results
 

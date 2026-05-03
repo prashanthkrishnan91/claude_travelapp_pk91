@@ -179,6 +179,12 @@ class RestaurantResult(SearchResult):
     opening_hours: Optional[str] = Field(None, description="Opening hours summary")
     price_level: Optional[int] = Field(None, ge=0, le=4, description="Price level 0=free, 1=inexpensive, 2=moderate, 3=expensive, 4=very expensive")
     sentiment: Optional[float] = Field(None, ge=0, le=1, description="Sentiment score 0–1 derived from review analysis")
+    provider_place_id: Optional[str] = Field(None, description="Verified provider place identifier")
+    google_maps_uri: Optional[str] = Field(None, description="Canonical Google Maps URI for this place")
+    place_id: Optional[str] = Field(None, description="Google place_id")
+    source_status: Optional[str] = Field(None, description="Result health marker: ok | weak_empty | unavailable | error")
+    cache_status: Optional[str] = Field(None, description="Result cache marker: hit | miss | bypass")
+    verification_status: Optional[str] = Field(None, description="Verification marker: verified | unverified")
     lat: Optional[float] = Field(None, description="Latitude coordinate")
     lng: Optional[float] = Field(None, description="Longitude coordinate")
 
