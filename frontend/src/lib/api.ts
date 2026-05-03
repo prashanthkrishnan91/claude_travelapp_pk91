@@ -740,6 +740,7 @@ interface RawRestaurantResult {
   userRatingsTotal?: number;
   review_count?: number;
   reviewCount?: number;
+  source?: string;
   source_status?: string;
   sourceStatus?: string;
   cache_status?: string;
@@ -826,12 +827,18 @@ export async function searchRestaurants(
       method: "POST",
       body: JSON.stringify(payload),
     });
-    const mapped = results.map(mapRestaurantToResult);
-    const verified = mapped.filter((r) => Boolean(r.googleMapsUri || r.providerPlaceId || r.placeId));
+    // Safety net: reject mock/demo/fallback restaurants before the verified filter.
+    // source="mock" or providerPlaceId starting with "mock-" indicates backend mock data.
+    const nonMockRaw = results.filter((r) => r.source !== "mock");
+    const mapped = nonMockRaw.map(mapRestaurantToResult);
+    const verified = mapped.filter((r) => {
+      const pId = r.providerPlaceId ?? "";
+      return !pId.startsWith("mock-") && Boolean(r.googleMapsUri || r.providerPlaceId || r.placeId);
+    });
     const sourceStatus = String((results[0] as RawRestaurantResult | undefined)?.source_status ?? "ok");
     const cacheStatus = String((results[0] as RawRestaurantResult | undefined)?.cache_status ?? "unknown");
     const terminalNoResults = verified.length === 0 && sourceStatus === "terminal_no_results";
-    console.info("[explore_restaurants_mapper] input=%d mapped=%d dropped=%d drop_unverified=%d source_status=%s cache_status=%s", results.length, mapped.length, mapped.length-verified.length, mapped.length-verified.length, sourceStatus, cacheStatus);
+    console.info("[explore_restaurants_mapper] input=%d drop_mock=%d mapped=%d drop_unverified=%d source_status=%s cache_status=%s", results.length, results.length-nonMockRaw.length, mapped.length, mapped.length-verified.length, sourceStatus, cacheStatus);
     return { restaurants: verified, sourceStatus, cacheStatus, terminalNoResults };
   } catch {
     return { restaurants: [], sourceStatus: "error", cacheStatus: "bypass", terminalNoResults: false };
@@ -987,6 +994,12 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
         typeof r.place_id === "string" ? r.place_id :
         typeof r.googlePlaceId === "string" ? r.googlePlaceId :
         typeof r.google_place_id === "string" ? r.google_place_id : undefined;
+      // Quarantine: stale mock snapshot entries have providerPlaceId starting with "mock-".
+      // These must not hydrate into visible restaurant cards.
+      const isMockEntry =
+        (typeof providerPlaceId === "string" && providerPlaceId.startsWith("mock-")) ||
+        (typeof r.source === "string" && r.source === "mock");
+      if (isMockEntry) return null;
       if (!googleMapsUri && !providerPlaceId && !placeId) return null;
       return {
         id: String(r.id ?? ""),
@@ -1070,7 +1083,9 @@ export async function saveExploreSnapshot(
         };
       }),
       restaurant_status: snapshot.restaurantStatus ?? "unknown",
-      restaurants: snapshot.restaurants.map((r) => {
+      restaurants: snapshot.restaurants
+        .filter((r) => !r.providerPlaceId?.startsWith("mock-"))
+        .map((r) => {
         let aiScore = r.aiScore != null && r.aiScore > 0 ? r.aiScore : null;
         if (aiScore == null && r.rating != null && r.numReviews != null && r.numReviews > 0) {
           const computed = computeExploreRestaurantScore(
