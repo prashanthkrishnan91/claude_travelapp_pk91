@@ -151,13 +151,9 @@ function sortRestaurants(items: RestaurantSearchResult[], key: SortKey): Restaur
 }
 
 function hasPositiveExploreScore(
-  attractions: AttractionSearchResult[],
-  restaurants: RestaurantSearchResult[],
+  items: Array<{ aiScore?: number | null }>,
 ): boolean {
-  return (
-    attractions.some((a) => typeof a.aiScore === "number" && Number.isFinite(a.aiScore) && a.aiScore > 0) ||
-    restaurants.some((r) => typeof r.aiScore === "number" && Number.isFinite(r.aiScore) && r.aiScore > 0)
-  );
+  return items.some((item) => typeof item.aiScore === "number" && Number.isFinite(item.aiScore) && item.aiScore > 0);
 }
 
 function filterAttractions(
@@ -1361,25 +1357,33 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
     (async () => {
       const snapshot = await fetchExploreSnapshot(tripId);
-      if (snapshot && (snapshot.attractions.length > 0 || snapshot.restaurants.length > 0)) {
+      if (snapshot) {
         if (snapshot.attractions.length > 0) setCandidateAttractions(snapshot.attractions);
         if (snapshot.restaurants.length > 0) setCandidateRestaurants(snapshot.restaurants);
-        if (hasPositiveExploreScore(snapshot.attractions, snapshot.restaurants)) return;
       }
 
-      // No usable snapshot (or stale unscored snapshot) — call provider-backed search, then persist result.
-      setAttractionsLoading(true);
-      setRestaurantsLoading(true);
+      const hasHealthyAttractions = snapshot != null && snapshot.attractions.length > 0 && hasPositiveExploreScore(snapshot.attractions);
+      const hasHealthyRestaurants = snapshot != null && snapshot.restaurants.length > 0 && hasPositiveExploreScore(snapshot.restaurants);
+
+      if (hasHealthyAttractions && hasHealthyRestaurants) return;
+
+      // Section-aware self-heal: refetch only missing/stale sections once per hydration key.
+      const shouldFetchAttractions = !hasHealthyAttractions;
+      const shouldFetchRestaurants = !hasHealthyRestaurants;
+
+      if (shouldFetchAttractions) setAttractionsLoading(true);
+      if (shouldFetchRestaurants) setRestaurantsLoading(true);
+
       const [attractionsResult, restaurantsResult] = await Promise.allSettled([
-        searchAttractions(destination),
-        searchRestaurants(destination),
+        shouldFetchAttractions ? searchAttractions(destination) : Promise.resolve(snapshot?.attractions ?? []),
+        shouldFetchRestaurants ? searchRestaurants(destination) : Promise.resolve(snapshot?.restaurants ?? []),
       ]);
 
-      const resolvedAttractions = attractionsResult.status === "fulfilled" ? attractionsResult.value : [];
-      const resolvedRestaurants = restaurantsResult.status === "fulfilled" ? restaurantsResult.value : [];
+      const resolvedAttractions = attractionsResult.status === "fulfilled" ? attractionsResult.value : (snapshot?.attractions ?? []);
+      const resolvedRestaurants = restaurantsResult.status === "fulfilled" ? restaurantsResult.value : (snapshot?.restaurants ?? []);
 
-      if (resolvedAttractions.length > 0) setCandidateAttractions(resolvedAttractions);
-      if (resolvedRestaurants.length > 0) setCandidateRestaurants(resolvedRestaurants);
+      setCandidateAttractions(resolvedAttractions);
+      setCandidateRestaurants(resolvedRestaurants);
       setAttractionsLoading(false);
       setRestaurantsLoading(false);
 
