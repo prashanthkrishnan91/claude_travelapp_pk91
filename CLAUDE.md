@@ -6,12 +6,13 @@ Before work, read only the smallest needed subset of:
 
 1. `docs/ai/HANDOFF.md` — current state
 2. `docs/ai/PROMPT_LIBRARY.md` — workflow, budget, prompt, UI, and review rules
-3. `docs/ai/skills/README.md` — task-specific workflow skill router
-4. `docs/ai/CLAUDE_PERSONAL_SKILLS.md` — optional personal Claude skill routing when a prompt names a personal skill
-5. `docs/ai/DESIGN_VISION.md` — long-term aspirational UI direction and timing gate when doing major design work
-6. `docs/ai/UI_BASELINE.md` — UI baseline and known visual costs when doing UI work
-7. `docs/ai/CLAUDE_WORKFLOW_KIT.md` — stable project constraints only when needed
-8. `README.md` — public/setup context only when needed
+3. `docs/ai/ROOT_CAUSE_QUALITY_BAR.md` — bounded root-cause quality bar for bugs, regressions, complex features, and reviews
+4. `docs/ai/skills/README.md` — task-specific workflow skill router
+5. `docs/ai/CLAUDE_PERSONAL_SKILLS.md` — optional personal Claude skill routing when a prompt names a personal skill
+6. `docs/ai/DESIGN_VISION.md` — long-term aspirational UI direction and timing gate when doing major design work
+7. `docs/ai/UI_BASELINE.md` — UI baseline and known visual costs when doing UI work
+8. `docs/ai/CLAUDE_WORKFLOW_KIT.md` — stable project constraints only when needed
+9. `README.md` — public/setup context only when needed
 
 Use one primary workflow skill when it matches the task:
 
@@ -27,6 +28,7 @@ Core rules:
 
 - No broad discovery. Read primary target files first; fallback reads only if blocked.
 - Smallest safe patch. No unrelated refactors.
+- Fix root causes, not symptoms. Do not hide broken behavior, remove UI, or add brittle glue code when the end-to-end flow is fixable within scope.
 - Use repo-local workflow skills instead of repeating large instruction blocks in prompts.
 - Personal Claude skills are optional accelerators only; they do not replace repo rules, budget gates, or project invariants.
 - Major design transformation must wait until `docs/ai/DESIGN_VISION.md` timing gate is satisfied; do small UI fixes only when needed before then.
