@@ -14,10 +14,16 @@ import hashlib
 import logging
 import json
 import math
+import os
 import random
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
+
+try:
+    import httpx as httpx
+except ImportError:  # pragma: no cover — httpx is in requirements.txt
+    httpx = None  # type: ignore[assignment]
 
 from supabase import Client
 
@@ -298,7 +304,7 @@ def _mock_flights(req: FlightSearchRequest) -> List[FlightResult]:
         )
 
     results.sort(key=lambda r: r.price or 0)
-    return results
+    return results, "ok" if results else "empty"
 
 
 def _mock_hotels(req: HotelSearchRequest) -> List[HotelResult]:
@@ -649,7 +655,209 @@ def _mock_restaurants(req: RestaurantSearchRequest) -> List[RestaurantResult]:
         )
 
     results.sort(key=lambda r: r.ai_score or 0, reverse=True)
-    return results
+    return results, "ok" if results else "empty"
+
+
+# ---------------------------------------------------------------------------
+# Google Places live restaurant provider
+# ---------------------------------------------------------------------------
+
+_GOOGLE_PLACES_SEARCH_ENDPOINT = "https://places.googleapis.com/v1/places:searchText"
+
+# Field mask for restaurant search — includes price and type fields not in the
+# verification mask used by GooglePlacesService.
+_RESTAURANT_SEARCH_FIELD_MASK = ",".join([
+    "places.id",
+    "places.displayName",
+    "places.formattedAddress",
+    "places.location",
+    "places.businessStatus",
+    "places.types",
+    "places.rating",
+    "places.userRatingCount",
+    "places.googleMapsUri",
+    "places.regularOpeningHours",
+    "places.priceLevel",
+    "places.primaryType",
+])
+
+# Google Places (New API) priceLevel enum → integer 0–4
+_PRICE_LEVEL_MAP: Dict[str, int] = {
+    "PRICE_LEVEL_FREE": 0,
+    "PRICE_LEVEL_INEXPENSIVE": 1,
+    "PRICE_LEVEL_MODERATE": 2,
+    "PRICE_LEVEL_EXPENSIVE": 3,
+    "PRICE_LEVEL_VERY_EXPENSIVE": 4,
+}
+
+# Google Places primaryType / types → human-readable cuisine label
+_GOOGLE_TYPE_TO_CUISINE: Dict[str, str] = {
+    "japanese_restaurant": "Japanese",
+    "sushi_restaurant": "Sushi",
+    "ramen_restaurant": "Ramen",
+    "chinese_restaurant": "Chinese",
+    "italian_restaurant": "Italian",
+    "pizza_restaurant": "Pizza",
+    "mexican_restaurant": "Mexican",
+    "indian_restaurant": "Indian",
+    "thai_restaurant": "Thai",
+    "french_restaurant": "French",
+    "mediterranean_restaurant": "Mediterranean",
+    "greek_restaurant": "Greek",
+    "spanish_restaurant": "Spanish",
+    "american_restaurant": "American",
+    "hamburger_restaurant": "Burgers",
+    "seafood_restaurant": "Seafood",
+    "steak_house": "Steakhouse",
+    "korean_restaurant": "Korean",
+    "vietnamese_restaurant": "Vietnamese",
+    "middle_eastern_restaurant": "Middle Eastern",
+    "vegetarian_restaurant": "Vegetarian",
+    "brunch_restaurant": "Brunch",
+    "fast_food_restaurant": "Fast Food",
+    "cafe": "Café",
+    "coffee_shop": "Coffee",
+    "bakery": "Bakery",
+    "bar": "Bar",
+}
+
+
+def _fetch_restaurants_google_places(
+    req: RestaurantSearchRequest,
+    api_key: str,
+    *,
+    timeout: float = 8.0,
+) -> tuple[List["RestaurantResult"], str]:
+    """Query Google Places Text Search for real restaurants in a destination.
+
+    Returns an empty list on any error (fail-closed). Never returns mock data.
+    Sets source="google_places" on every result so cache and frontend guards can
+    distinguish real provider results from the rejected "mock" source value.
+    """
+    if not api_key:
+        return [], "config_missing"
+    if httpx is None:
+        logger.warning("[search_restaurants] httpx not installed; Google Places provider disabled")
+        return [], "unavailable"
+
+    location = (req.location or "").strip()
+    if req.cuisine:
+        query = f"{req.cuisine.strip()} restaurants in {location}"
+    else:
+        query = f"restaurants in {location}"
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": api_key,
+        "X-Goog-FieldMask": _RESTAURANT_SEARCH_FIELD_MASK,
+    }
+    body = {"textQuery": query, "maxResultCount": 20}
+
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(_GOOGLE_PLACES_SEARCH_ENDPOINT, headers=headers, json=body)
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as exc:
+        logger.warning("[search_restaurants] Google Places request failed: %s", exc)
+        return [], "error"
+
+    raw_places = list(data.get("places") or [])
+    results: List[RestaurantResult] = []
+
+    for place in raw_places:
+        # Only surface open, operational restaurants.
+        if place.get("businessStatus") != "OPERATIONAL":
+            continue
+        place_id = place.get("id")
+        if not place_id:
+            continue
+
+        display_name = place.get("displayName") or {}
+        name = (display_name.get("text") if isinstance(display_name, dict) else str(display_name or "")).strip()
+        if not name:
+            continue
+
+        formatted_address = (place.get("formattedAddress") or "").strip()
+        location_data = place.get("location") or {}
+        lat = location_data.get("latitude") if isinstance(location_data, dict) else None
+        lng = location_data.get("longitude") if isinstance(location_data, dict) else None
+
+        rating = place.get("rating")
+        num_reviews = place.get("userRatingCount")
+        google_maps_uri = (place.get("googleMapsUri") or "").strip() or None
+
+        # Price level: New API returns string enum; guard against int from old API.
+        price_level_raw = place.get("priceLevel")
+        if isinstance(price_level_raw, int):
+            price_level = max(0, min(4, price_level_raw))
+        elif isinstance(price_level_raw, str):
+            price_level = _PRICE_LEVEL_MAP.get(price_level_raw, 2)
+        else:
+            price_level = 2
+
+        # Cuisine: prefer primaryType, fall through types list.
+        primary_type = (place.get("primaryType") or "").strip()
+        types = list(place.get("types") or [])
+        cuisine = _GOOGLE_TYPE_TO_CUISINE.get(primary_type)
+        if not cuisine:
+            for t in types:
+                cuisine = _GOOGLE_TYPE_TO_CUISINE.get(t)
+                if cuisine:
+                    break
+        cuisine = cuisine or "Restaurant"
+
+        # Opening hours: use first weekday description line.
+        hours_data = place.get("regularOpeningHours") or {}
+        weekday_desc = hours_data.get("weekdayDescriptions") or []
+        opening_hours = weekday_desc[0] if weekday_desc else None
+
+        ai_score = None
+        if rating is not None and num_reviews is not None:
+            ai_score = _compute_restaurant_ai_score(rating, num_reviews, price_level)
+        tags = _compute_restaurant_tags(ai_score or 0.0, rating or 0.0, num_reviews or 0, price_level)
+
+        # Canonical Maps link: prefer googleMapsUri, fallback to place_id URL.
+        booking_url = google_maps_uri or f"https://www.google.com/maps/place/?q=place_id:{place_id}"
+
+        results.append(RestaurantResult(
+            id=f"gp-{place_id}",
+            price=None,
+            points_estimate=None,
+            rating=rating,
+            location=req.location,
+            booking_url=booking_url,
+            source="google_places",
+            booking_options=[],
+            name=name,
+            cuisine=cuisine,
+            address=formatted_address or req.location,
+            ai_score=ai_score,
+            tags=tags,
+            num_reviews=num_reviews,
+            opening_hours=opening_hours,
+            price_level=price_level,
+            sentiment=None,
+            provider_place_id=place_id,
+            google_maps_uri=google_maps_uri,
+            place_id=place_id,
+            source_status="ok",
+            cache_status="miss",
+            verification_status="verified",
+            lat=lat,
+            lng=lng,
+        ))
+
+    # Cuisine filter: apply only when a cuisine was requested AND it doesn't drop all results.
+    if req.cuisine and results:
+        cuisine_lower = req.cuisine.lower()
+        filtered = [r for r in results if r.cuisine and cuisine_lower in r.cuisine.lower()]
+        if filtered:
+            results = filtered
+        # If every result would be filtered out, return all (cuisine label mismatch, not absence).
+
+    results.sort(key=lambda r: r.ai_score or 0.0, reverse=True)
+    return results, "ok" if results else "empty"
 
 
 # ---------------------------------------------------------------------------
@@ -799,10 +1007,15 @@ class SearchService:
         query = req.model_dump(mode="json")
         key = _cache_key("restaurants", query)
         cached = self._get_cache(key)
+
         # Discard stale mock cache entries — mock data must never reach the live API.
         if cached and all(item.get("source") == "mock" for item in cached):
-            logger.info("[search_restaurants] location=%s cuisine=%s cache_status=mock_bypass — discarding stale mock cache, returning no_provider", req.location, req.cuisine)
+            logger.info(
+                "[search_restaurants] location=%s cuisine=%s cache_status=mock_bypass — discarding stale mock cache",
+                req.location, req.cuisine,
+            )
             cached = None
+
         if cached:
             raw_count = len(cached)
             results = []
@@ -816,13 +1029,47 @@ class SearchService:
                 r.verification_status = "verified" if (r.google_maps_uri or r.provider_place_id or r.place_id) else "unverified"
                 results.append(r)
             verified_count = sum(1 for r in results if r.verification_status == "verified")
-            logger.info("[search_restaurants] location=%s cuisine=%s cache_status=hit raw_candidates=%d verified_candidates=%d returned=%d source_status=%s", req.location, req.cuisine, raw_count, verified_count, len(results), "ok")
+            logger.info(
+                "[search_restaurants] location=%s cuisine=%s cache_status=hit raw_candidates=%d verified_candidates=%d returned=%d source_status=ok",
+                req.location, req.cuisine, raw_count, verified_count, len(results),
+            )
             return results
 
-        # No live restaurant provider configured — return empty rather than mock data.
-        # Mock/demo/fallback restaurants must never be served from the production API.
-        logger.info("[search_restaurants] location=%s cuisine=%s cache_status=miss source_status=no_provider raw_candidates=0 verified_candidates=0 returned=0", req.location, req.cuisine)
-        return []
+        # Cache miss — call the live Google Places provider when configured.
+        api_key = os.getenv("GOOGLE_PLACES_API_KEY", "")
+        provider_configured = bool(api_key)
+        logger.info(
+            "[search_restaurants] location=%s cuisine=%s cache_status=miss provider_configured=%s",
+            req.location, req.cuisine, provider_configured,
+        )
+
+        if not provider_configured:
+            logger.info(
+                "[search_restaurants] location=%s cuisine=%s source_status=no_provider raw_candidates=0 verified_candidates=0 returned=0",
+                req.location, req.cuisine,
+            )
+            return []
+
+        results, provider_status = _fetch_restaurants_google_places(req, api_key)
+        raw_candidates = len(results)
+        verified_candidates = sum(
+            1 for r in results if r.provider_place_id or r.google_maps_uri or r.place_id
+        )
+        source_status = provider_status
+
+        if results:
+            self._set_cache(
+                key,
+                source="google_places",
+                query=query,
+                results=[r.model_dump(mode="json") for r in results],
+            )
+
+        logger.info(
+            "[search_restaurants] location=%s cuisine=%s cache_status=miss provider_configured=True raw_candidates=%d verified_candidates=%d returned=%d source_status=%s",
+            req.location, req.cuisine, raw_candidates, verified_candidates, len(results), source_status,
+        )
+        return results
 
     def search_clusters(self, req: ClusterSearchRequest) -> List[LocationCluster]:
         """Fetch all attractions + restaurants for a location and group them by proximity."""
