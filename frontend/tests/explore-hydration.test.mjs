@@ -267,6 +267,21 @@ test('mapRestaurantToResult normalizes score aliases in priority order: aiScore 
   assert.match(apiClient, /typeof r\.score === "number"\s*\?\s*r\.score/, 'mapRestaurantToResult must fall back to legacy score field');
 });
 
+test('Explore restaurants require verified Google place identity before rendering/persisting', () => {
+  assert.match(apiClient, /\.filter\(\(r\) => Boolean\(r\.googleMapsUri \|\| r\.providerPlaceId \|\| r\.placeId\)\)/, 'searchRestaurants must drop unverified results missing Google identity');
+  assert.match(apiClient, /if \(!googleMapsUri && !providerPlaceId && !placeId\) return null;/, 'fetchExploreSnapshot must reject unverified restaurant snapshot rows');
+});
+
+test('Restaurant maps links prefer canonical Google identity (uri/place_id) over loose text search', () => {
+  assert.match(tripBuilder, /restaurant\.googleMapsUri[\s\S]*restaurant\.providerPlaceId[\s\S]*restaurant\.placeId/, 'TripBuilder maps link must prioritize verified Google identity fields');
+  assert.match(tripBuilder, /google\.com\/maps\/place\/\?q=place_id:/, 'TripBuilder should use place_id Google Maps canonical URL when URI is absent');
+});
+
+test('saveExploreSnapshot persists restaurant Google identity fields for hydration safety', () => {
+  assert.match(apiClient, /provider_place_id: r\.providerPlaceId \?\? r\.placeId \?\? null/, 'saveExploreSnapshot must persist provider_place_id');
+  assert.match(apiClient, /google_maps_uri: r\.googleMapsUri \?\? null/, 'saveExploreSnapshot must persist google_maps_uri');
+});
+
 test('saveExploreSnapshot initializes aiScore from candidate.aiScore with positive guard before enrichment', () => {
   // Candidates already in aiScore state; the serializer must guard against zero/falsy values
   // before attempting computed enrichment. Using null (not 0) as fallback prevents fake scores.

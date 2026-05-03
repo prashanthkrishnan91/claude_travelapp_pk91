@@ -726,6 +726,23 @@ interface RawRestaurantResult {
   tags?: string[];
   bookingUrl?: string;
   bookingOptions?: BookingOption[];
+  provider_place_id?: string;
+  providerPlaceId?: string;
+  google_maps_uri?: string;
+  googleMapsUri?: string;
+  place_id?: string;
+  placeId?: string;
+}
+
+function extractVerifiedRestaurantIdentity(r: RawRestaurantResult): {
+  providerPlaceId?: string;
+  googleMapsUri?: string;
+  placeId?: string;
+} {
+  const providerPlaceId = typeof r.providerPlaceId === "string" ? r.providerPlaceId : typeof r.provider_place_id === "string" ? r.provider_place_id : undefined;
+  const googleMapsUri = typeof r.googleMapsUri === "string" ? r.googleMapsUri : typeof r.google_maps_uri === "string" ? r.google_maps_uri : undefined;
+  const placeId = typeof r.placeId === "string" ? r.placeId : typeof r.place_id === "string" ? r.place_id : undefined;
+  return { providerPlaceId, googleMapsUri, placeId };
 }
 
 function mapRestaurantToResult(r: RawRestaurantResult): RestaurantSearchResult {
@@ -737,6 +754,7 @@ function mapRestaurantToResult(r: RawRestaurantResult): RestaurantSearchResult {
         : typeof r.score === "number"
           ? r.score
           : undefined;
+  const identity = extractVerifiedRestaurantIdentity(r);
   return {
     id: r.id,
     name: r.name,
@@ -753,6 +771,9 @@ function mapRestaurantToResult(r: RawRestaurantResult): RestaurantSearchResult {
     tags: r.tags ?? [],
     bookingUrl: r.bookingUrl,
     bookingOptions: r.bookingOptions,
+    providerPlaceId: identity.providerPlaceId,
+    googleMapsUri: identity.googleMapsUri,
+    placeId: identity.placeId,
   };
 }
 
@@ -767,7 +788,9 @@ export async function searchRestaurants(
       method: "POST",
       body: JSON.stringify(payload),
     });
-    return results.map(mapRestaurantToResult);
+    return results
+      .map(mapRestaurantToResult)
+      .filter((r) => Boolean(r.googleMapsUri || r.providerPlaceId || r.placeId));
   } catch {
     return [];
   }
@@ -863,9 +886,9 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
       const computedScore =
         storedScore == null &&
         typeof a.rating === "number" &&
-        typeof a.numReviews === "number" &&
-        a.numReviews > 0
-          ? computeExploreAttractionScore(a.rating, a.numReviews, String(a.category ?? ""))
+        typeof (a.numReviews ?? a.num_reviews) === "number" &&
+        Number(a.numReviews ?? a.num_reviews) > 0
+          ? computeExploreAttractionScore(a.rating, Number(a.numReviews ?? a.num_reviews), String(a.category ?? ""))
           : undefined;
       const aiScore = storedScore ?? (computedScore != null && computedScore > 0 ? computedScore : undefined);
       return {
@@ -887,7 +910,7 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
         lng: typeof a.lng === "number" ? a.lng : undefined,
       };
     });
-    const restaurants: RestaurantSearchResult[] = rawRestaurants.map((r) => {
+    const restaurants = rawRestaurants.map((r): RestaurantSearchResult | null => {
       const storedScore =
         typeof r.aiScore === "number" && r.aiScore > 0
           ? r.aiScore
@@ -900,16 +923,20 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
       const computedScore =
         storedScore == null &&
         typeof r.rating === "number" &&
-        typeof r.numReviews === "number" &&
-        r.numReviews > 0
+        typeof (r.numReviews ?? r.num_reviews) === "number" &&
+        Number(r.numReviews ?? r.num_reviews) > 0
           ? computeExploreRestaurantScore(
               r.rating,
-              r.numReviews,
+              Number(r.numReviews ?? r.num_reviews),
               typeof r.priceLevel === "number" ? r.priceLevel : 2,
               sentiment
             )
           : undefined;
       const aiScore = storedScore ?? (computedScore != null && computedScore > 0 ? computedScore : undefined);
+      const providerPlaceId = typeof r.providerPlaceId === "string" ? r.providerPlaceId : typeof r.provider_place_id === "string" ? r.provider_place_id : undefined;
+      const googleMapsUri = typeof r.googleMapsUri === "string" ? r.googleMapsUri : typeof r.google_maps_uri === "string" ? r.google_maps_uri : undefined;
+      const placeId = typeof r.placeId === "string" ? r.placeId : typeof r.place_id === "string" ? r.place_id : undefined;
+      if (!googleMapsUri && !providerPlaceId && !placeId) return null;
       return {
         id: String(r.id ?? ""),
         name: String(r.name ?? ""),
@@ -926,8 +953,11 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
         bookingUrl: typeof r.bookingUrl === "string" ? r.bookingUrl : typeof r.booking_url === "string" ? r.booking_url : undefined,
         lat: typeof r.lat === "number" ? r.lat : undefined,
         lng: typeof r.lng === "number" ? r.lng : undefined,
+        providerPlaceId,
+        googleMapsUri,
+        placeId,
       };
-    });
+    }).filter((r): r is RestaurantSearchResult => r !== null);
     return {
       destination: String(data.destination ?? ""),
       createdAt: String(data.createdAt ?? ""),
@@ -1005,6 +1035,9 @@ export async function saveExploreSnapshot(
           booking_url: r.bookingUrl ?? null,
           lat: r.lat ?? null,
           lng: r.lng ?? null,
+          provider_place_id: r.providerPlaceId ?? r.placeId ?? null,
+          google_maps_uri: r.googleMapsUri ?? null,
+          place_id: r.placeId ?? null,
         };
       }),
     };

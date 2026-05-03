@@ -1019,7 +1019,14 @@ function RestaurantCandidateCard({
   const aiScore    = restaurant.aiScore ?? 0;
   const rating     = restaurant.rating;
   const numReviews = restaurant.numReviews;
-  const mapsUrl    = `https://www.google.com/maps/search/${encodeURIComponent(restaurant.name + " " + restaurant.location)}`;
+  const mapsUrl =
+    restaurant.googleMapsUri
+      ? restaurant.googleMapsUri
+      : restaurant.providerPlaceId
+        ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(restaurant.providerPlaceId)}`
+        : restaurant.placeId
+          ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(restaurant.placeId)}`
+          : `https://www.google.com/maps/search/${encodeURIComponent(restaurant.name + " " + restaurant.location)}`;
 
   const containerClass = `${PREMIUM_CARD_BASE} gap-2 p-3 ${isTopPick ? "border-brand-400/45" : ""}`;
 
