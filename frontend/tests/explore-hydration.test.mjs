@@ -89,15 +89,24 @@ test('TripBuilder has exploreSnapshotLoadedRef to gate one-shot snapshot fetch',
 
 test('TripBuilder snapshot-first hydration: fetches snapshot before calling provider search', () => {
   assert.match(tripBuilder, /const snapshot = await fetchExploreSnapshot\(tripId\)/, 'TripBuilder must await fetchExploreSnapshot before provider search');
-  assert.match(tripBuilder, /snapshot\.attractions\.length > 0 \|\| snapshot\.restaurants\.length > 0/, 'Snapshot usability check must cover both attractions and restaurants');
+    assert.match(tripBuilder, /const hasHealthyAttractions = snapshot != null && snapshot\.attractions\.length > 0 && hasPositiveExploreScore\(snapshot\.attractions\);/, 'Snapshot health check must evaluate attractions section quality');
+  assert.match(tripBuilder, /const hasHealthyRestaurants = snapshot != null && snapshot\.restaurants\.length > 0 && hasPositiveExploreScore\(snapshot\.restaurants\);/, 'Snapshot health check must evaluate restaurants section quality');
 });
 
 test('TripBuilder skips provider search and returns early when usable snapshot exists', () => {
-  assert.match(tripBuilder, /if \(snapshot && \(snapshot\.attractions\.length > 0 \|\| snapshot\.restaurants\.length > 0\)\)/, 'Must short-circuit provider search when snapshot is present and non-empty');
+    assert.match(tripBuilder, /if \(hasHealthyAttractions && hasHealthyRestaurants\) return;/, 'Must short-circuit only when both sections are healthy');
   assert.match(tripBuilder, /if \(snapshot\.attractions\.length > 0\) setCandidateAttractions\(snapshot\.attractions\)/, 'Must hydrate attractions from snapshot');
   assert.match(tripBuilder, /if \(snapshot\.restaurants\.length > 0\) setCandidateRestaurants\(snapshot\.restaurants\)/, 'Must hydrate restaurants from snapshot');
 });
 
+
+
+test('TripBuilder performs section-aware self-heal so empty restaurants do not block live refetch', () => {
+  assert.match(tripBuilder, /const hasHealthyAttractions = snapshot != null && snapshot\.attractions\.length > 0 && hasPositiveExploreScore\(snapshot\.attractions\);/);
+  assert.match(tripBuilder, /const hasHealthyRestaurants = snapshot != null && snapshot\.restaurants\.length > 0 && hasPositiveExploreScore\(snapshot\.restaurants\);/);
+  assert.match(tripBuilder, /const shouldFetchRestaurants = !hasHealthyRestaurants;/);
+  assert.match(tripBuilder, /shouldFetchRestaurants \? searchRestaurants\(destination\) : Promise\.resolve\(snapshot\?\.restaurants \?\? \[\]\)/);
+});
 test('TripBuilder persists snapshot after successful provider search', () => {
   assert.match(tripBuilder, /saveExploreSnapshot\(tripId, \{ destination, attractions: resolvedAttractions, restaurants: resolvedRestaurants \}\)/, 'Provider search results must be persisted as snapshot');
   assert.match(tripBuilder, /if \(resolvedAttractions\.length > 0 \|\| resolvedRestaurants\.length > 0\)/, 'Snapshot save must be gated on non-empty results');
@@ -134,9 +143,10 @@ test('api.ts fetchExploreSnapshot supports score aliases and snake_case metadata
   assert.match(apiClient, /typeof r\.num_reviews === "number" \? r\.num_reviews/, 'Restaurant snapshot mapper must map num_reviews');
 });
 
-test('TripBuilder re-runs provider search exactly once for stale unscored snapshot', () => {
-  assert.match(tripBuilder, /hasPositiveExploreScore/, 'TripBuilder must detect whether snapshot already has positive explore scores');
-  assert.match(tripBuilder, /if \(hasPositiveExploreScore\(snapshot\.attractions, snapshot\.restaurants\)\) return;/, 'TripBuilder should only short-circuit when snapshot has valid scores');
+test('TripBuilder re-runs provider search exactly once for stale unscored or empty restaurant snapshot', () => {
+  assert.match(tripBuilder, /hasPositiveExploreScore/, 'TripBuilder must detect whether each section has positive explore scores');
+  assert.match(tripBuilder, /const hasHealthyRestaurants = snapshot != null && snapshot\.restaurants\.length > 0 && hasPositiveExploreScore\(snapshot\.restaurants\);/, 'Empty restaurant snapshots must be treated as unhealthy');
+  assert.match(tripBuilder, /const shouldFetchRestaurants = !hasHealthyRestaurants;/, 'Unhealthy restaurant snapshots must trigger controlled refetch');
   assert.match(tripBuilder, /exploreSnapshotLoadedRef\.current === hydrationKey/, 'Hydration key guard avoids repeated provider calls on rerenders');
 });
 
@@ -318,7 +328,7 @@ test('Top Pick badge rendered only when sort=ai, idx < top20, AND aiScore > 0 fo
 test('hasPositiveExploreScore guards snapshot early-return in snapshot-first hydration', () => {
   // Without this guard a stale unscored snapshot would block provider search on every load.
   assert.match(tripBuilder, /function hasPositiveExploreScore/, 'hasPositiveExploreScore must be a named function');
-  assert.match(tripBuilder, /if \(hasPositiveExploreScore\(snapshot\.attractions, snapshot\.restaurants\)\) return;/, 'Snapshot-first hydration must early-return only when snapshot already has positive scores');
+    assert.match(tripBuilder, /if \(hasHealthyAttractions && hasHealthyRestaurants\) return;/, 'Snapshot-first hydration must early-return only when both sections are healthy');
 });
 
 test('hydrationKey format is tripId:destination.toLowerCase() ensuring per-destination idempotency', () => {
@@ -330,6 +340,7 @@ test('hydrationKey format is tripId:destination.toLowerCase() ensuring per-desti
 
 test('snapshot-first hydration sets loading flags before provider search and clears them after', () => {
   // Loading flags must bracket the provider search so UI shows spinner during network calls.
-  assert.match(tripBuilder, /setAttractionsLoading\(true\);\s*setRestaurantsLoading\(true\)/, 'Must set both loading flags before provider search');
+    assert.match(tripBuilder, /if \(shouldFetchAttractions\) setAttractionsLoading\(true\);/, 'Must set attraction loading only when that section refetches');
+  assert.match(tripBuilder, /if \(shouldFetchRestaurants\) setRestaurantsLoading\(true\);/, 'Must set restaurant loading only when that section refetches');
   assert.match(tripBuilder, /setAttractionsLoading\(false\);\s*setRestaurantsLoading\(false\)/, 'Must clear both loading flags after provider search resolves');
 });

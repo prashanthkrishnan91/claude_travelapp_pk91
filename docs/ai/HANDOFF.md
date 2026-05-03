@@ -714,3 +714,7 @@ Enriched whyPick evidence quality by promoting venue-specific Foursquare tags, T
 - Contract tightened (not loosened): trusted/addable restaurant cards still require canonical Google identity (`google_maps_uri` OR place id identity).
 - Mapper/hydrator now preserve alias fields across search response and explore snapshot hydration so verified restaurants survive: `google_place_id` aliases into `providerPlaceId`/`placeId`, address falls back to `formatted_address`, and review count falls back to `review_count`/`user_ratings_total`.
 - Added no-empty-list regression contract tests in `frontend/tests/explore-restaurants-trust-contract.test.mjs` and wired them into frontend `npm test`.
+
+## Wife-testing QA regression (2026-05-03)
+- Existing trips with persisted `explore_snapshot.restaurants: []` must self-heal via one controlled live Restaurants refetch; empty restaurant snapshots are not a healthy final state.
+- Keep verified Google trust gates strict; persist successful verified replacement back to snapshot to recover refresh behavior.
