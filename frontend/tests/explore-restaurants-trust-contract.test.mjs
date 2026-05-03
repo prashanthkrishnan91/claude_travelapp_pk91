@@ -26,7 +26,9 @@ test('restaurant mapper preserves verified google fields through snapshot hydrat
 });
 
 test('explore restaurant trust gate still requires verified place identity fields', () => {
-  assert.match(apiTs, /\.filter\(\(r\) => Boolean\(r\.googleMapsUri \|\| r\.providerPlaceId \|\| r\.placeId\)\)/);
+  // searchRestaurants: verified filter includes canonical identity check (Boolean(...))
+  assert.match(apiTs, /Boolean\(r\.googleMapsUri \|\| r\.providerPlaceId \|\| r\.placeId\)/);
+  // fetchExploreSnapshot: null-return trust gate still present
   assert.match(apiTs, /if \(!googleMapsUri && !providerPlaceId && !placeId\) return null/);
 });
 
@@ -51,9 +53,10 @@ test('searchRestaurants maps backend snake_case to camelCase identity fields via
 });
 
 test('searchRestaurants trust filter keeps all verified restaurants and drops unverified', () => {
-  // Verified: has googleMapsUri or providerPlaceId or placeId
-  // Unverified: all three are falsy
-  assert.match(apiTs, /const verified = mapped\.filter\(\(r\) => Boolean\(r\.googleMapsUri \|\| r\.providerPlaceId \|\| r\.placeId\)\)/);
+  // Verified: has googleMapsUri or providerPlaceId or placeId AND no mock- prefix
+  // Filter now combines mock-prefix guard + identity check in one step
+  assert.match(apiTs, /const verified = mapped\.filter/);
+  assert.match(apiTs, /Boolean\(r\.googleMapsUri \|\| r\.providerPlaceId \|\| r\.placeId\)/);
   // Non-zero verified → returned in envelope
   assert.match(apiTs, /return \{ restaurants: verified, sourceStatus, cacheStatus, terminalNoResults \}/);
 });
@@ -114,19 +117,39 @@ test('ExploreSnapshotRestaurant model includes provider_place_id, google_maps_ur
   assert.match(backendModels, /place_id: Optional\[str\]/);
 });
 
-// ─── Test 6: Backend cache hit raw_count defined ─────────────────────────────
+// ─── Test 6: Backend cache hit raw_count defined + mock data removed ────────────
 
 test('backend search_restaurants cache hit path defines raw_count before logger.info', () => {
-  // Previously raw_count was undefined on cache hit → NameError → 500 → frontend gets []
-  // The fix: raw_count = len(cached) must appear before the logger.info call
+  // raw_count = len(cached) must still exist for the cache-hit logger.info call
   assert.match(backendSearch, /raw_count = len\(cached\)/);
-  // raw_count must appear BEFORE the logger.info that uses it in the cache hit block
-  const hitBlock = backendSearch.slice(
-    backendSearch.indexOf('if cached:'),
-    backendSearch.indexOf('results = _mock_restaurants')
-  );
-  assert.match(hitBlock, /raw_count = len\(cached\)/);
-  assert.match(hitBlock, /raw_candidates=%d.*raw_count/s);
+  // Locate the search_restaurants method body for scoped assertions
+  const methodStart = backendSearch.indexOf('def search_restaurants(');
+  const methodEnd = backendSearch.indexOf('\n    def ', methodStart + 1);
+  const methodBody = methodEnd > methodStart
+    ? backendSearch.slice(methodStart, methodEnd)
+    : backendSearch.slice(methodStart);
+  // raw_count must appear in the method (cache-hit block)
+  assert.match(methodBody, /raw_count = len\(cached\)/);
+  assert.match(methodBody, /raw_candidates=%d.*raw_count/s);
+});
+
+test('backend search_restaurants no longer calls _mock_restaurants (mock fallback removed)', () => {
+  // After fix: search_restaurants returns [] on cache miss, never calls _mock_restaurants
+  const methodStart = backendSearch.indexOf('def search_restaurants(');
+  const methodEnd = backendSearch.indexOf('\n    def ', methodStart + 1);
+  const methodBody = methodEnd > methodStart
+    ? backendSearch.slice(methodStart, methodEnd)
+    : backendSearch.slice(methodStart);
+  // _mock_restaurants must NOT be called inside search_restaurants
+  assert.doesNotMatch(methodBody, /_mock_restaurants\(/);
+  // The no-provider path must log source_status=no_provider
+  assert.match(methodBody, /no_provider/);
+});
+
+test('backend search_restaurants discards stale mock cache entries (mock_bypass)', () => {
+  // All-mock cache entries must be discarded, not returned to the API consumer
+  assert.match(backendSearch, /all\(item\.get\("source"\) == "mock" for item in cached\)/);
+  assert.match(backendSearch, /mock_bypass/);
 });
 
 // ─── Test 7: Regression - unverified restaurants still blocked ────────────────
@@ -135,10 +158,9 @@ test('fetchExploreSnapshot filters out restaurants with no google identity (null
   assert.match(apiTs, /if \(!googleMapsUri && !providerPlaceId && !placeId\) return null/);
 });
 
-test('searchRestaurants trust gate: restaurant with no googleMapsUri/providerPlaceId/placeId is dropped', () => {
-  // verified = mapped.filter(r => Boolean(r.googleMapsUri || r.providerPlaceId || r.placeId))
-  // A restaurant with all three absent returns false from Boolean(false || false || false)
-  assert.match(apiTs, /const verified = mapped\.filter\(\(r\) => Boolean\(r\.googleMapsUri \|\| r\.providerPlaceId \|\| r\.placeId\)\)/);
+test('searchRestaurants trust gate: non-mock restaurant with no identity fields is dropped', () => {
+  // verified filter now also excludes mock- prefixed providerPlaceId
+  assert.match(apiTs, /!pId\.startsWith\("mock-"\) && Boolean\(r\.googleMapsUri \|\| r\.providerPlaceId \|\| r\.placeId\)/);
 });
 
 // ─── Test 8: Maps URL uses google_maps_uri/place_id ──────────────────────────
@@ -173,4 +195,52 @@ test('TripBuilder does not overwrite prior non-empty restaurants with empty live
   assert.match(tripBuilder, /const shouldPersistEmptyRestaurants = resolvedRestaurants\.length === 0 && resolvedRestaurantEnvelope\.terminalNoResults/);
   // canPersistRestaurants = true only when there are results OR terminal OR prior was already empty
   assert.match(tripBuilder, /const canPersistRestaurants = resolvedRestaurants\.length > 0 \|\| shouldPersistEmptyRestaurants \|\| priorRestaurants\.length === 0/);
+});
+
+// ─── Tests 11–16: Mock/demo restaurant rejection ─────────────────────────────
+
+test('searchRestaurants rejects source="mock" restaurants before any identity check', () => {
+  // Safety net: mock-source results are stripped before verified filter
+  // Mock names like Bangkok Garden Chicago, Corner Brew Café Chicago, Spice Route Chicago
+  // have source="mock" → nonMockRaw filter drops them
+  assert.match(apiTs, /const nonMockRaw = results\.filter\(\(r\) => r\.source !== "mock"\)/);
+  assert.match(apiTs, /const mapped = nonMockRaw\.map\(mapRestaurantToResult\)/);
+});
+
+test('searchRestaurants rejects mock- prefixed providerPlaceId (fake identity) from verified list', () => {
+  // Mock restaurants have provider_place_id="mock-{slug}-{city}" which fakes a verified identity.
+  // The verified filter now also rejects entries where providerPlaceId starts with "mock-".
+  assert.match(apiTs, /!pId\.startsWith\("mock-"\)/);
+});
+
+test('RawRestaurantResult interface includes source field for mock-source detection', () => {
+  assert.match(apiTs, /interface RawRestaurantResult/);
+  // source field must be declared so TypeScript consumers can check r.source === "mock"
+  assert.match(apiTs, /source\?: string/);
+});
+
+test('fetchExploreSnapshot quarantines mock snapshot entries with isMockEntry guard', () => {
+  // Stale mock snapshots have providerPlaceId="mock-{slug}-{city}" saved from previous renders.
+  // isMockEntry guard must return null before trust gate, preventing hydration as visible cards.
+  assert.match(apiTs, /const isMockEntry/);
+  assert.match(apiTs, /providerPlaceId\.startsWith\("mock-"\)/);
+  assert.match(apiTs, /if \(isMockEntry\) return null/);
+});
+
+test('saveExploreSnapshot filters out mock-marker restaurants before persisting to snapshot', () => {
+  // Defense: even if a mock restaurant reaches candidateRestaurants state,
+  // saveExploreSnapshot must not write it to trips.metadata.explore_snapshot.
+  assert.match(apiTs, /\.filter\(\(r\) => !r\.providerPlaceId\?\.startsWith\("mock-"\)\)/);
+});
+
+test('backend _mock_restaurants function still exists for test/dev use but is NOT called from search_restaurants', () => {
+  // _mock_restaurants stays in the file for isolated test use — it must not be imported into
+  // production test suites. Verify the function definition exists but is not called in the method.
+  assert.match(backendSearch, /def _mock_restaurants\(/);
+  const methodStart = backendSearch.indexOf('def search_restaurants(');
+  const methodEnd = backendSearch.indexOf('\n    def ', methodStart + 1);
+  const methodBody = methodEnd > methodStart
+    ? backendSearch.slice(methodStart, methodEnd)
+    : backendSearch.slice(methodStart);
+  assert.doesNotMatch(methodBody, /_mock_restaurants\(/);
 });

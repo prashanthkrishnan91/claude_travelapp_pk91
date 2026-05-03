@@ -799,6 +799,10 @@ class SearchService:
         query = req.model_dump(mode="json")
         key = _cache_key("restaurants", query)
         cached = self._get_cache(key)
+        # Discard stale mock cache entries — mock data must never reach the live API.
+        if cached and all(item.get("source") == "mock" for item in cached):
+            logger.info("[search_restaurants] location=%s cuisine=%s cache_status=mock_bypass — discarding stale mock cache, returning no_provider", req.location, req.cuisine)
+            cached = None
         if cached:
             raw_count = len(cached)
             results = []
@@ -815,15 +819,10 @@ class SearchService:
             logger.info("[search_restaurants] location=%s cuisine=%s cache_status=hit raw_candidates=%d verified_candidates=%d returned=%d source_status=%s", req.location, req.cuisine, raw_count, verified_count, len(results), "ok")
             return results
 
-        results = _mock_restaurants(req)
-        for r in results:
-            r.cache_status = "miss"
-            r.source_status = r.source_status or "ok"
-            r.verification_status = "verified" if (r.google_maps_uri or r.provider_place_id or r.place_id) else "unverified"
-        verified_count = sum(1 for r in results if r.verification_status == "verified")
-        logger.info("[search_restaurants] location=%s cuisine=%s cache_status=miss raw_candidates=%d verified_candidates=%d returned=%d source_status=%s", req.location, req.cuisine, len(results), verified_count, len(results), "ok")
-        self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
-        return results
+        # No live restaurant provider configured — return empty rather than mock data.
+        # Mock/demo/fallback restaurants must never be served from the production API.
+        logger.info("[search_restaurants] location=%s cuisine=%s cache_status=miss source_status=no_provider raw_candidates=0 verified_candidates=0 returned=0", req.location, req.cuisine)
+        return []
 
     def search_clusters(self, req: ClusterSearchRequest) -> List[LocationCluster]:
         """Fetch all attractions + restaurants for a location and group them by proximity."""

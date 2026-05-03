@@ -1,5 +1,56 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-03) — Hotfix: Explore Restaurants showing mock/fake cards (Bangkok Garden, Corner Brew, Spice Route)
+
+### Root cause
+`_mock_restaurants()` in `backend/app/services/search.py` is the exclusive fallback when no live restaurant provider (e.g., Google Places) is configured. On a cache miss, `search_restaurants` called `_mock_restaurants` and cached the result in Supabase `research_cache`. The mock data included venue names like "Bangkok Garden Chicago", "Corner Brew Café Chicago", "Spice Route Chicago", fake addresses ("715 Main St, Chicago"), huge fake review counts (14k–75k), tags ("Must Try", "Local Favorite", "Budget Friendly"), and scores in the 80–90 range.
+
+Critically, `_mock_restaurants` set `provider_place_id = f"mock-{slug}-{city}"` and `google_maps_uri = f"https://www.google.com/maps/place/?q=place_id:mock-..."` — fake-but-plausible identity fields that **passed the frontend trust gate** (`Boolean(googleMapsUri || providerPlaceId || placeId)`). These mock restaurants were then saved to `trips.metadata.explore_snapshot` and hydrated as visible cards on every subsequent page load.
+
+The previous PR (PR #216) fixed the NameError on cache hit — which made the cache correctly return the 12 mock results instead of crashing — directly exposing the mock data as visible cards.
+
+### Three-layer fix
+
+**Layer 1 — Backend (`search.py`):**
+- `search_restaurants` on cache miss: returns `[]` instead of calling `_mock_restaurants`. No real provider = no data; mock data must never reach the production API.
+- `search_restaurants` on cache hit: if ALL cached items have `source="mock"`, discards the cache and returns `[]` (logged as `cache_status=mock_bypass`). This purges stale mock entries from `research_cache` on first request.
+- `_mock_restaurants` stays in the file — it's still callable for isolated unit tests but must not be used in production runtime.
+
+**Layer 2 — Frontend (`api.ts`) — defense-in-depth:**
+- `RawRestaurantResult` interface: added `source?: string` field.
+- `searchRestaurants`: added `nonMockRaw` pre-filter that drops any result with `source === "mock"` before mapping. The `verified` filter also rejects entries with `providerPlaceId` starting with `"mock-"`.
+- `fetchExploreSnapshot` restaurant mapper: added `isMockEntry` guard that returns `null` for snapshot entries where `providerPlaceId.startsWith("mock-")` or `source === "mock"`. Stale mock snapshots are quarantined → `restaurants = []` → `hasHealthyRestaurants = false` → self-heal triggers on next load.
+- `saveExploreSnapshot`: added `.filter((r) => !r.providerPlaceId?.startsWith("mock-"))` before the `.map(...)` to prevent mock restaurants from being written to the snapshot.
+
+**Layer 3 — Stale snapshot recovery:**
+- With both backend and snapshot mapper changes, an existing trip with mock restaurants in `explore_snapshot` will: (1) quarantine mock entries on snapshot load → `restaurants = []`, (2) trigger self-heal live search → backend returns `[]`, (3) save `[]` to snapshot replacing mock data. Future loads follow the same path until a live provider is configured.
+
+### Lesson: Explore Restaurants must never fall back to mock/demo cards in production
+- **Mock/demo restaurants must never render in production Explore Restaurants.** The fallback for "no provider configured" must be an empty list with a clear status, not fabricated venue data.
+- **Stale mock snapshots must be quarantined.** Mock identity fields (`provider_place_id = "mock-..."`) are the detection marker. Any snapshot entry with a `mock-` prefixed providerPlaceId must be rejected by `fetchExploreSnapshot` before the trust gate runs.
+- **`source="mock"` on API results is the primary signal.** The backend's `SearchResult` base class has always had `source: str` — this field must be checked at the API boundary before mapping.
+- **Never set `source_status="ok"` on mock data.** Mock fallbacks logged `source_status=ok` which made them look like verified provider results. The no-provider path now logs `source_status=no_provider`.
+
+### Self-heal behavior for existing trips with mock snapshots
+1. `fetchExploreSnapshot` loads snapshot → `isMockEntry` guard filters all 12 mocks → `restaurants = []`
+2. `hasHealthyRestaurants = false` → `shouldFetchRestaurants = true`
+3. `searchRestaurants(destination)` → backend cache bypass (mock_bypass) → cache miss → no provider → `[]`
+4. `setCandidateRestaurants([])` → Explore shows "No restaurants found" (empty state, correct)
+5. `saveExploreSnapshot` with `[]` restaurants replaces stale mock snapshot
+6. All subsequent loads: snapshot has `[]` → self-heal fires once per load, returns `[]`
+7. When a live provider is configured: first miss returns real data → saved to snapshot → no further self-heal needed
+
+### Files changed
+- `backend/app/services/search.py` — `search_restaurants`: mock cache bypass + no-provider empty return
+- `frontend/src/lib/api.ts` — `RawRestaurantResult.source`, mock guard in `searchRestaurants`, `isMockEntry` guard in `fetchExploreSnapshot`, mock filter in `saveExploreSnapshot`
+- `frontend/tests/explore-restaurants-trust-contract.test.mjs` — updated 4 existing tests to match new filter shapes; added 6 new mock-rejection contract tests (total 43 tests)
+
+### Supabase SQL: No
+### Backend touched: Yes (`search.py` — mock bypass and no-provider return)
+### Frontend touched: Yes (`api.ts` — mock guards; tests only otherwise)
+
+---
+
 ## Last change (2026-05-03) — Fix Explore Restaurants 0-result bug (cache hit NameError + snapshot identity)
 
 ### Root cause (two-bug chain)
