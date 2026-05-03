@@ -304,7 +304,7 @@ def _mock_flights(req: FlightSearchRequest) -> List[FlightResult]:
         )
 
     results.sort(key=lambda r: r.price or 0)
-    return results
+    return results, "ok" if results else "empty"
 
 
 def _mock_hotels(req: HotelSearchRequest) -> List[HotelResult]:
@@ -655,7 +655,7 @@ def _mock_restaurants(req: RestaurantSearchRequest) -> List[RestaurantResult]:
         )
 
     results.sort(key=lambda r: r.ai_score or 0, reverse=True)
-    return results
+    return results, "ok" if results else "empty"
 
 
 # ---------------------------------------------------------------------------
@@ -727,7 +727,7 @@ def _fetch_restaurants_google_places(
     api_key: str,
     *,
     timeout: float = 8.0,
-) -> List["RestaurantResult"]:
+) -> tuple[List["RestaurantResult"], str]:
     """Query Google Places Text Search for real restaurants in a destination.
 
     Returns an empty list on any error (fail-closed). Never returns mock data.
@@ -735,10 +735,10 @@ def _fetch_restaurants_google_places(
     distinguish real provider results from the rejected "mock" source value.
     """
     if not api_key:
-        return []
+        return [], "config_missing"
     if httpx is None:
         logger.warning("[search_restaurants] httpx not installed; Google Places provider disabled")
-        return []
+        return [], "unavailable"
 
     location = (req.location or "").strip()
     if req.cuisine:
@@ -760,7 +760,7 @@ def _fetch_restaurants_google_places(
             data = resp.json()
     except Exception as exc:
         logger.warning("[search_restaurants] Google Places request failed: %s", exc)
-        return []
+        return [], "error"
 
     raw_places = list(data.get("places") or [])
     results: List[RestaurantResult] = []
@@ -857,7 +857,7 @@ def _fetch_restaurants_google_places(
         # If every result would be filtered out, return all (cuisine label mismatch, not absence).
 
     results.sort(key=lambda r: r.ai_score or 0.0, reverse=True)
-    return results
+    return results, "ok" if results else "empty"
 
 
 # ---------------------------------------------------------------------------
@@ -1050,12 +1050,12 @@ class SearchService:
             )
             return []
 
-        results = _fetch_restaurants_google_places(req, api_key)
+        results, provider_status = _fetch_restaurants_google_places(req, api_key)
         raw_candidates = len(results)
         verified_candidates = sum(
             1 for r in results if r.provider_place_id or r.google_maps_uri or r.place_id
         )
-        source_status = "ok" if results else "empty"
+        source_status = provider_status
 
         if results:
             self._set_cache(
