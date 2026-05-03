@@ -611,7 +611,7 @@ def _mock_restaurants(req: RestaurantSearchRequest) -> List[RestaurantResult]:
         address = f"{random.randint(1, 999)} {random.choice(STREET_NAMES)}, {city}"
 
         name_slug = name_tpl.lower().replace(" ", "-").replace("'", "").replace("&", "and")
-        provider_place_id = f"mock-{name_slug}-{city.lower().replace(" ", "-")}"
+        provider_place_id = f"mock-{name_slug}-{city.lower().replace(' ', '-')}"
         place_id = provider_place_id
         google_maps_uri = f"https://www.google.com/maps/place/?q=place_id:{place_id}"
         direct_url = google_maps_uri
