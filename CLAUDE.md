@@ -6,14 +6,15 @@ Before work, read only the smallest needed subset of:
 
 1. `docs/ai/HANDOFF.md` — current state
 2. `docs/ai/PROMPT_LIBRARY.md` — workflow, budget, prompt, UI, and review rules
-3. `docs/ai/EXECUTION_PRINCIPLES.md` — think-before-coding, simplicity-first, surgical changes, and goal-driven execution for every prompt
-4. `docs/ai/ROOT_CAUSE_QUALITY_BAR.md` — bounded root-cause quality bar for bugs, regressions, complex features, and reviews
-5. `docs/ai/skills/README.md` — task-specific workflow skill router
-6. `docs/ai/CLAUDE_PERSONAL_SKILLS.md` — optional personal Claude skill routing when a prompt names a personal skill
-7. `docs/ai/DESIGN_VISION.md` — long-term aspirational UI direction and timing gate when doing major design work
-8. `docs/ai/UI_BASELINE.md` — UI baseline and known visual costs when doing UI work
-9. `docs/ai/CLAUDE_WORKFLOW_KIT.md` — stable project constraints only when needed
-10. `README.md` — public/setup context only when needed
+3. `docs/ai/ISSUE_SEVERITY_ROUTING.md` — choose patch vs focused root-cause fix vs full plumbing analysis vs split plan
+4. `docs/ai/EXECUTION_PRINCIPLES.md` — think-before-coding, simplicity-first, surgical changes, and goal-driven execution for every prompt
+5. `docs/ai/ROOT_CAUSE_QUALITY_BAR.md` — bounded root-cause quality bar for bugs, regressions, complex features, and reviews
+6. `docs/ai/skills/README.md` — task-specific workflow skill router
+7. `docs/ai/CLAUDE_PERSONAL_SKILLS.md` — optional personal Claude skill routing when a prompt names a personal skill
+8. `docs/ai/DESIGN_VISION.md` — long-term aspirational UI direction and timing gate when doing major design work
+9. `docs/ai/UI_BASELINE.md` — UI baseline and known visual costs when doing UI work
+10. `docs/ai/CLAUDE_WORKFLOW_KIT.md` — stable project constraints only when needed
+11. `README.md` — public/setup context only when needed
 
 Use one primary workflow skill when it matches the task:
 
@@ -28,6 +29,8 @@ Use one primary workflow skill when it matches the task:
 Core rules:
 
 - No broad discovery. Read primary target files first; fallback reads only if blocked.
+- Classify issue severity before choosing Codex patch, Sonnet full plumbing analysis, or split plan.
+- Do not keep patching after failed patches. After one failed patch, reclassify. After two related patches, escalate to full plumbing analysis or split plan.
 - Smallest safe patch. No unrelated refactors.
 - For non-trivial work, state assumptions and success criteria before coding.
 - Every changed line must trace to the task.
@@ -51,6 +54,7 @@ Project invariants:
 Final response format:
 
 ```md
+Severity classification: Level 0/1/2/3, when applicable
 Root cause/plan:
 Files changed:
 Tests:
