@@ -1376,20 +1376,25 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
       const [attractionsResult, restaurantsResult] = await Promise.allSettled([
         shouldFetchAttractions ? searchAttractions(destination) : Promise.resolve(snapshot?.attractions ?? []),
-        shouldFetchRestaurants ? searchRestaurants(destination) : Promise.resolve(snapshot?.restaurants ?? []),
+        shouldFetchRestaurants ? searchRestaurants(destination) : Promise.resolve({ restaurants: snapshot?.restaurants ?? [], sourceStatus: snapshot?.restaurantStatus ?? "snapshot", cacheStatus: "snapshot", terminalNoResults: false }),
       ]);
 
       const resolvedAttractions = attractionsResult.status === "fulfilled" ? attractionsResult.value : (snapshot?.attractions ?? []);
-      const resolvedRestaurants = restaurantsResult.status === "fulfilled" ? restaurantsResult.value : (snapshot?.restaurants ?? []);
+      const resolvedRestaurantEnvelope = restaurantsResult.status === "fulfilled" ? restaurantsResult.value : { restaurants: snapshot?.restaurants ?? [], sourceStatus: "error", cacheStatus: "bypass", terminalNoResults: false };
+      const resolvedRestaurants = resolvedRestaurantEnvelope.restaurants;
 
       setCandidateAttractions(resolvedAttractions);
       setCandidateRestaurants(resolvedRestaurants);
       setAttractionsLoading(false);
       setRestaurantsLoading(false);
 
-      if (resolvedAttractions.length > 0 || resolvedRestaurants.length > 0) {
-        saveExploreSnapshot(tripId, { destination, attractions: resolvedAttractions, restaurants: resolvedRestaurants });
+      const priorRestaurants = snapshot?.restaurants ?? [];
+      const shouldPersistEmptyRestaurants = resolvedRestaurants.length === 0 && resolvedRestaurantEnvelope.terminalNoResults;
+      const canPersistRestaurants = resolvedRestaurants.length > 0 || shouldPersistEmptyRestaurants || priorRestaurants.length === 0;
+      if (resolvedAttractions.length > 0 || canPersistRestaurants) {
+        saveExploreSnapshot(tripId, { destination, attractions: resolvedAttractions, restaurants: canPersistRestaurants ? resolvedRestaurants : priorRestaurants, restaurantStatus: resolvedRestaurantEnvelope.sourceStatus });
       }
+      console.info("[explore_snapshot_save] restaurants_saved=%d source_status=%s cache_status=%s", (canPersistRestaurants ? resolvedRestaurants : priorRestaurants).length, resolvedRestaurantEnvelope.sourceStatus, resolvedRestaurantEnvelope.cacheStatus);
     })();
   }, [destination, authSessionReady, tripId]);
 

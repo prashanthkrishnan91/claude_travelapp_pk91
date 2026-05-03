@@ -105,11 +105,11 @@ test('TripBuilder performs section-aware self-heal so empty restaurants do not b
   assert.match(tripBuilder, /const hasHealthyAttractions = snapshot != null && snapshot\.attractions\.length > 0 && hasPositiveExploreScore\(snapshot\.attractions\);/);
   assert.match(tripBuilder, /const hasHealthyRestaurants = snapshot != null && snapshot\.restaurants\.length > 0 && hasPositiveExploreScore\(snapshot\.restaurants\);/);
   assert.match(tripBuilder, /const shouldFetchRestaurants = !hasHealthyRestaurants;/);
-  assert.match(tripBuilder, /shouldFetchRestaurants \? searchRestaurants\(destination\) : Promise\.resolve\(snapshot\?\.restaurants \?\? \[\]\)/);
+  assert.match(tripBuilder, /shouldFetchRestaurants \? searchRestaurants\(destination\) : Promise\.resolve\(\{ restaurants: snapshot\?\.restaurants \?\? \[\]/);
 });
 test('TripBuilder persists snapshot after successful provider search', () => {
-  assert.match(tripBuilder, /saveExploreSnapshot\(tripId, \{ destination, attractions: resolvedAttractions, restaurants: resolvedRestaurants \}\)/, 'Provider search results must be persisted as snapshot');
-  assert.match(tripBuilder, /if \(resolvedAttractions\.length > 0 \|\| resolvedRestaurants\.length > 0\)/, 'Snapshot save must be gated on non-empty results');
+  assert.match(tripBuilder, /saveExploreSnapshot\(tripId, \{ destination, attractions: resolvedAttractions, restaurants: canPersistRestaurants \? resolvedRestaurants : priorRestaurants, restaurantStatus: resolvedRestaurantEnvelope\.sourceStatus \}\)/, 'Provider search results must be persisted as snapshot');
+  assert.match(tripBuilder, /if \(resolvedAttractions\.length > 0 \|\| canPersistRestaurants\)/, 'Snapshot save must be gated on non-empty results');
 });
 
 test('api.ts exports fetchExploreSnapshot and saveExploreSnapshot', () => {
@@ -343,4 +343,16 @@ test('snapshot-first hydration sets loading flags before provider search and cle
     assert.match(tripBuilder, /if \(shouldFetchAttractions\) setAttractionsLoading\(true\);/, 'Must set attraction loading only when that section refetches');
   assert.match(tripBuilder, /if \(shouldFetchRestaurants\) setRestaurantsLoading\(true\);/, 'Must set restaurant loading only when that section refetches');
   assert.match(tripBuilder, /setAttractionsLoading\(false\);\s*setRestaurantsLoading\(false\)/, 'Must clear both loading flags after provider search resolves');
+});
+
+test('TripBuilder avoids persisting empty restaurants unless terminal no-results', () => {
+  assert.match(tripBuilder, /shouldPersistEmptyRestaurants = resolvedRestaurants\.length === 0 && resolvedRestaurantEnvelope\.terminalNoResults/);
+  assert.match(tripBuilder, /canPersistRestaurants = resolvedRestaurants\.length > 0 \|\| shouldPersistEmptyRestaurants \|\| priorRestaurants\.length === 0/);
+});
+
+test('searchRestaurants returns status envelope and mapper diagnostics', () => {
+  assert.match(apiClient, /export interface RestaurantSearchEnvelope/);
+  assert.match(apiClient, /\[explore_restaurants_mapper\]/);
+  assert.match(apiClient, /sourceStatus: string/);
+  assert.match(apiClient, /terminalNoResults: boolean/);
 });

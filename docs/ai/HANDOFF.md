@@ -718,3 +718,5 @@ Enriched whyPick evidence quality by promoting venue-specific Foursquare tags, T
 ## Wife-testing QA regression (2026-05-03)
 - Existing trips with persisted `explore_snapshot.restaurants: []` must self-heal via one controlled live Restaurants refetch; empty restaurant snapshots are not a healthy final state.
 - Keep verified Google trust gates strict; persist successful verified replacement back to snapshot to recover refresh behavior.
+
+- Restaurant debug rule (2026-05-03): Always log counts/status across backend and frontend: backend `/search/restaurants` must emit raw candidate count, verified candidate count, returned count, `source_status`, and `cache_status`; frontend mapper must log input/mapped/dropped counts with reason buckets; snapshot save must log saved restaurant count and status markers to diagnose whether 0 came from backend or trust-gate filtering.
