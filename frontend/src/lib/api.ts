@@ -886,15 +886,11 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
       const computedScore =
         storedScore == null &&
         typeof a.rating === "number" &&
-        typeof a.numReviews === "number" &&
-        a.numReviews > 0
-          ? computeExploreAttractionScore(a.rating, a.numReviews, String(a.category ?? ""))
+        typeof (a.numReviews ?? a.num_reviews) === "number" &&
+        Number(a.numReviews ?? a.num_reviews) > 0
+          ? computeExploreAttractionScore(a.rating, Number(a.numReviews ?? a.num_reviews), String(a.category ?? ""))
           : undefined;
       const aiScore = storedScore ?? (computedScore != null && computedScore > 0 ? computedScore : undefined);
-      const providerPlaceId = typeof r.providerPlaceId === "string" ? r.providerPlaceId : typeof r.provider_place_id === "string" ? r.provider_place_id : undefined;
-      const googleMapsUri = typeof r.googleMapsUri === "string" ? r.googleMapsUri : typeof r.google_maps_uri === "string" ? r.google_maps_uri : undefined;
-      const placeId = typeof r.placeId === "string" ? r.placeId : typeof r.place_id === "string" ? r.place_id : undefined;
-      if (!googleMapsUri && !providerPlaceId && !placeId) return null;
       return {
         id: String(a.id ?? ""),
         name: String(a.name ?? ""),
@@ -914,7 +910,7 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
         lng: typeof a.lng === "number" ? a.lng : undefined,
       };
     });
-    const restaurants: RestaurantSearchResult[] = rawRestaurants.map((r) => {
+    const restaurants = rawRestaurants.map((r): RestaurantSearchResult | null => {
       const storedScore =
         typeof r.aiScore === "number" && r.aiScore > 0
           ? r.aiScore
@@ -927,16 +923,20 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
       const computedScore =
         storedScore == null &&
         typeof r.rating === "number" &&
-        typeof r.numReviews === "number" &&
-        r.numReviews > 0
+        typeof (r.numReviews ?? r.num_reviews) === "number" &&
+        Number(r.numReviews ?? r.num_reviews) > 0
           ? computeExploreRestaurantScore(
               r.rating,
-              r.numReviews,
+              Number(r.numReviews ?? r.num_reviews),
               typeof r.priceLevel === "number" ? r.priceLevel : 2,
               sentiment
             )
           : undefined;
       const aiScore = storedScore ?? (computedScore != null && computedScore > 0 ? computedScore : undefined);
+      const providerPlaceId = typeof r.providerPlaceId === "string" ? r.providerPlaceId : typeof r.provider_place_id === "string" ? r.provider_place_id : undefined;
+      const googleMapsUri = typeof r.googleMapsUri === "string" ? r.googleMapsUri : typeof r.google_maps_uri === "string" ? r.google_maps_uri : undefined;
+      const placeId = typeof r.placeId === "string" ? r.placeId : typeof r.place_id === "string" ? r.place_id : undefined;
+      if (!googleMapsUri && !providerPlaceId && !placeId) return null;
       return {
         id: String(r.id ?? ""),
         name: String(r.name ?? ""),
