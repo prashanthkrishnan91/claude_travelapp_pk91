@@ -742,6 +742,8 @@ interface RawRestaurantResult {
   reviewCount?: number;
   source_status?: string;
   sourceStatus?: string;
+  cache_status?: string;
+  cacheStatus?: string;
   verification_status?: string;
   verificationStatus?: string;
 }
