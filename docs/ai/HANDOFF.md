@@ -1,5 +1,50 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-03) — Fix: Wire /search/restaurants to live Google Places provider (production blocker)
+
+### Root cause
+After the prior mock-removal hotfix, `search_restaurants` in `backend/app/services/search.py` had **no live provider path**. On every cache miss it returned `[]` with `source_status=no_provider`. `GooglePlacesService` in `google_places.py` existed for single-venue concierge verification only — it was never wired into the restaurant search path. Production showed empty state because the real Google Places API key (`GOOGLE_PLACES_API_KEY`) was present on Railway but was never called.
+
+### Fix
+**Backend only** (`search.py`):
+- Added `import httpx` at module level (was already in `requirements.txt`).
+- Added `_RESTAURANT_SEARCH_FIELD_MASK` (includes `priceLevel`, `primaryType` in addition to the base verification mask).
+- Added `_PRICE_LEVEL_MAP` (Google New API string enum → integer 0–4).
+- Added `_GOOGLE_TYPE_TO_CUISINE` (Google Places `primaryType` / `types` → human-readable cuisine label).
+- Added `_fetch_restaurants_google_places(req, api_key, *, timeout)` — a standalone function that:
+  - Queries `POST https://places.googleapis.com/v1/places:searchText` with `"restaurants in {location}"` (or `"{cuisine} restaurants in {location}"` when cuisine is specified).
+  - Filters to `businessStatus == "OPERATIONAL"` places only.
+  - Maps each place to `RestaurantResult` with `source="google_places"`, canonical `provider_place_id`, `place_id`, `google_maps_uri`, and `booking_url` pointing to `googleMapsUri` (fallback: `place_id` URL — never a loose name+city query URL).
+  - Applies cuisine filter after collecting all results; if filter would drop everything, returns all (prevents empty Explore when cuisine label doesn't exactly match Google type).
+  - Fails closed to `[]` on any HTTP error, import error, or empty API response.
+  - Never returns mock data.
+- Updated `search_restaurants` on cache miss:
+  - Reads `GOOGLE_PLACES_API_KEY` from env.
+  - Logs `provider_configured=True/False` before calling.
+  - Calls `_fetch_restaurants_google_places` when key is present.
+  - Caches real results with `source="google_places"`.
+  - Does NOT cache empty results (provider failure or no results).
+  - Logs full count contract: `raw_candidates`, `verified_candidates`, `returned`, `cache_status`, `source_status`.
+  - All prior mock-bypass and cache-hit logic preserved unchanged.
+
+### Lesson: After mock removal, search_restaurants must be wired to a real provider path
+- Removing the mock fallback without wiring a live provider causes fail-closed empty state on every cache miss.
+- The Google Places provider already existed in `google_places.py` for verification; reusing the same endpoint (`places:searchText`) for direct restaurant discovery avoids a parallel implementation.
+- `GOOGLE_PLACES_API_KEY` is the env var name for both code (`os.getenv("GOOGLE_PLACES_API_KEY", "")`) and Railway config — these must match exactly.
+- Real Google Places results carry `source="google_places"` and will not be discarded by the mock-bypass check (`all(source == "mock")`).
+- `_fetch_restaurants_google_places` is a free function (not a method), taking `api_key` explicitly, so it is testable without a SearchService instance.
+
+### Files changed
+- `backend/app/services/search.py` — added `httpx` module-level import, `_RESTAURANT_SEARCH_FIELD_MASK`, `_PRICE_LEVEL_MAP`, `_GOOGLE_TYPE_TO_CUISINE`, `_fetch_restaurants_google_places`; updated `search_restaurants` to call live provider on cache miss
+- `backend/tests/test_restaurant_search_diagnostics.py` — rewrote: updated pre-existing tests that seeded from cold miss (now uses `_CacheHitDB` with real payloads); added 31 total focused contract tests covering all 10 required scenarios
+- `backend/tests/test_explore_snapshot.py` — fixed 2 tests that used `source="mock"` in cache payloads; changed to `source="google_places"` with canonical identity fields so they correctly test cache-hit re-scoring without triggering mock-bypass
+
+### Supabase SQL: No
+### Backend touched: Yes (`search.py` — provider wiring; tests updated)
+### Frontend touched: No
+
+---
+
 ## Last change (2026-05-03) — Hotfix: Explore Restaurants showing mock/fake cards (Bangkok Garden, Corner Brew, Spice Route)
 
 ### Root cause
