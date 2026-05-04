@@ -75,6 +75,59 @@ def _build_reuse_summary(rerank_rule: str, n: int) -> str:
     return f"Here are the top {n} picks from your previous search results."
 
 
+def _normalize_free_text(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    return re.sub(r"\s+", " ", text)
+
+
+def _card_identity_keys(card: Any) -> set[str]:
+    """Build stable identity keys for safe duplicate exclusion."""
+    keys: set[str] = set()
+    gv = getattr(card, "google_verification", None)
+    provider_place_id = getattr(gv, "provider_place_id", None) if gv else None
+    google_maps_uri = getattr(gv, "google_maps_uri", None) if gv else None
+    if provider_place_id:
+        keys.add(f"pid:{_normalize_free_text(provider_place_id)}")
+    if google_maps_uri:
+        keys.add(f"gmaps:{_normalize_free_text(google_maps_uri)}")
+    if gv and getattr(gv, "name", None) and getattr(gv, "formatted_address", None):
+        keys.add(
+            f"name_addr:{_normalize_free_text(gv.name)}|{_normalize_free_text(gv.formatted_address)}"
+        )
+    return keys
+
+
+def _exclude_prior_verified_cards(
+    response: PlaceRecommendationsResponse,
+    prior_pool: Optional[Dict[str, Any]],
+) -> PlaceRecommendationsResponse:
+    if not isinstance(prior_pool, dict):
+        return response
+    prior_keys: set[str] = set()
+    for bucket in ("restaurants", "attractions", "hotels"):
+        for raw_card in (prior_pool.get(bucket) or []):
+            if not isinstance(raw_card, dict):
+                continue
+            gv = raw_card.get("google_verification") or {}
+            pid = gv.get("provider_place_id")
+            uri = gv.get("google_maps_uri")
+            if pid:
+                prior_keys.add(f"pid:{_normalize_free_text(pid)}")
+            if uri:
+                prior_keys.add(f"gmaps:{_normalize_free_text(uri)}")
+            if gv.get("name") and gv.get("formatted_address"):
+                prior_keys.add(
+                    f"name_addr:{_normalize_free_text(gv.get('name'))}|{_normalize_free_text(gv.get('formatted_address'))}"
+                )
+    if not prior_keys:
+        return response
+
+    response.restaurants = [c for c in response.restaurants if _card_identity_keys(c).isdisjoint(prior_keys)]
+    response.attractions = [c for c in response.attractions if _card_identity_keys(c).isdisjoint(prior_keys)]
+    response.hotels = [c for c in response.hotels if _card_identity_keys(c).isdisjoint(prior_keys)]
+    return response
+
+
 def build_typed_concierge_response(
     service: ConciergeService,
     payload: ConciergeSearchRequest,
@@ -178,9 +231,9 @@ def build_typed_concierge_response(
         and ctx is not None
         and is_more_options_continuation(payload.user_query, ctx)
     ):
-        _category_hint = derive_category_hint(ctx.prior_card_pool)
-        if _category_hint:
-            _contextualized_query = f"more {_category_hint}"
+        _query_hint = ctx.prior_place_query_hint or derive_category_hint(ctx.prior_card_pool)
+        if _query_hint:
+            _contextualized_query = f"more {_query_hint}"
             logger.info(
                 "concierge.context.more_options_continuation trip_id=%s "
                 "turn_mode=new_search provider_call=true "
@@ -189,7 +242,7 @@ def build_typed_concierge_response(
                 payload.trip_id,
                 payload.user_query,
                 _contextualized_query,
-                _category_hint,
+                _query_hint,
                 ctx.source_message_id,
                 ctx.card_pool_size,
             )
@@ -198,6 +251,7 @@ def build_typed_concierge_response(
                     payload.trip_id, _contextualized_query, user_id, payload.client_message_id
                 )
                 typed_payload = PlaceRecommendationsResponse(**legacy.model_dump())
+                typed_payload = _exclude_prior_verified_cards(typed_payload, ctx.prior_card_pool)
                 decision = RouteDecision(
                     response_type="place_recommendations",
                     stage1_prior={"place_recommendations": 1.0, "trip_advice": 0.0, "unsupported": 0.0},

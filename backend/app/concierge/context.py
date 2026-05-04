@@ -46,6 +46,8 @@ class ContextWindow(BaseModel):
     # PR 2.5: derived category hint from prior pool intent (e.g. "cocktail bars", "restaurants").
     # Used by the more-options continuation path to construct a provider-facing query.
     prior_place_category: Optional[str] = None
+    # PR 2.6: subtype-aware prior place phrase (e.g. "Italian restaurants").
+    prior_place_query_hint: Optional[str] = None
 
 
 # ── Classifier patterns ────────────────────────────────────────────────────────
@@ -154,6 +156,35 @@ def derive_category_hint(prior_card_pool: Optional[Dict[str, Any]]) -> Optional[
         return "hotels"
 
     return None
+
+
+def derive_prior_place_query_hint(
+    prior_card_pool: Optional[Dict[str, Any]],
+    prior_user_prompts: Optional[List[str]] = None,
+) -> Optional[str]:
+    """Derive a subtype-aware place query hint for continuation turns.
+
+    Prefers the most recent explicit place phrase from prior prompts (e.g.
+    "Italian restaurants"), then falls back to coarse category hint.
+    """
+    prompts = prior_user_prompts or []
+    for raw_prompt in prompts:
+        prompt = (raw_prompt or "").strip()
+        if not prompt:
+            continue
+        m = re.search(
+            r"\b([a-z][a-z\s&'-]{1,40})\s+"
+            r"(restaurants?|bars?|cocktail bars?|coffee shops?|cafes?|attractions?|hotels?)\b",
+            prompt,
+            re.IGNORECASE,
+        )
+        if not m:
+            continue
+        phrase = re.sub(r"\s+", " ", m.group(0).strip().lower())
+        if phrase.startswith(("more ", "show ", "give ", "another ")):
+            continue
+        return phrase
+    return derive_category_hint(prior_card_pool)
 
 
 def is_more_options_continuation(
@@ -293,6 +324,7 @@ def build_context_window(
             break
 
     prior_place_category = derive_category_hint(prior_card_pool) if prior_card_pool else None
+    prior_place_query_hint = derive_prior_place_query_hint(prior_card_pool, user_prompts) if prior_card_pool else None
 
     return ContextWindow(
         trip_id=trip_id,
@@ -303,6 +335,7 @@ def build_context_window(
         prior_user_prompts=user_prompts,
         prior_card_pool=prior_card_pool,
         prior_place_category=prior_place_category,
+        prior_place_query_hint=prior_place_query_hint,
     )
 
 

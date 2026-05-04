@@ -101,3 +101,4 @@
 - 2026-05-03: Added end-to-end restaurant diagnostics (backend counts/status + frontend mapper/snapshot logs) and snapshot guard to prevent persisting weak empty restaurant results; identified trust-gate drop risk when responses lack verified Google identity.
 
 - 2026-05-04: Trip destination autocomplete fix for wife-testing QA blocker: backend `/resolve/airports` now includes Kahului (OGG) with Maui/Kahului Airport aliases and alias-aware matching, enabling searches like “Maui”, “Maui, Hawaii”, “Kahului”, “Kahului Airport”, and “OGG” to resolve to a selectable destination. Added focused backend resolver tests for Maui alias, Kahului Airport alias, and OGG IATA lookup.
+- 2026-05-04: Fixed AI Concierge `more options` continuation quality: preserve subtype hints (e.g., Italian restaurants) and exclude previously returned verified cards using stable place identities; added focused backend tests for continuation query derivation and duplicate filtering behavior.
