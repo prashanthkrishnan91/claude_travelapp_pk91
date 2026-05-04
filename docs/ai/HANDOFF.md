@@ -1,5 +1,51 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-04) — AI Concierge Conversational Context v1 PR 1 (dark backend foundation)
+
+### Summary
+Added a dark backend foundation for AI Concierge follow-up detection. Classifies each user turn and logs the result. No behavior change: provider calls, card output, add-to-trip, and save-to-ideas flows are all identical to before.
+
+### What was added
+- **`backend/app/concierge/context.py`** — new module:
+  - `TurnMode` literal: `new_search | refine_previous | anchor_new | reset`
+  - `RerankRule` literal: `top_n | best_one | compare | date_night | cheapest | most_upscale | filter_constraint | none`
+  - `ContextWindow` Pydantic model: `trip_id`, `destination`, `card_pool_size`, `has_prior_cards`, `source_message_id`, `prior_user_prompts`, `reset_reason`
+  - `classify_turn(user_query, context_window)` — deterministic regex classifier (no LLM), deny-by-default (ambiguous → `new_search`)
+  - `build_context_window(db, trip_id, destination=None)` — reads last 6 `concierge_messages` rows, finds most recent assistant message with place-producing cards, caps user prompts to 3; never raises
+  - `log_context_turn(...)` — emits one `concierge.context.turn` structured log line per turn
+- **`backend/app/routes/ai.py`** — wired dark classification at the start of `build_typed_concierge_response()`: builds context window, classifies, logs, then continues existing search flow exactly as before; wrapped in try/except so any failure is non-fatal
+
+### Classifier behavior
+- `reset`: unconditional for "start over" / "new chat" / "reset"
+- `anchor_new`: "near the first one" / "near #1" / "around the second one" / "same area as #2" — only when `has_prior_cards`
+- `refine_previous`: "top 3" / "top three" / "show me 5" / "best one" / "which one is best" / "best for date night" / "cheapest" / "most upscale" / "compare these" / "rank these" — only when `has_prior_cards` AND no new_search override signal present
+- `new_search` (deny-by-default): no prior cards, OR "more options" / "things to do" / named category (restaurants/bars/etc.) / "in/near/around [location]" / temporal context
+
+### Observability
+Each request logs one `concierge.context.turn` line with: `trip_id`, `turn_mode`, `rerank_rule`, `card_pool_size`, `has_prior_cards`, `provider_call_expected_for_future_mode`, `source_message_id`, `reset_reason`.
+
+### Current limitations / TODOs
+- `destination` in `ContextWindow` is always `None` in PR 1 — no extra trip fetch is done (would require `_fetch_trip(trip_id, user_id)` call). Reset-on-destination-mismatch is therefore not implemented; add a TODO for PR 2.
+- `provider_call_expected_for_future_mode` is `True` for `new_search` and `reset`, `False` for `refine_previous` and `anchor_new` — this is logging-only; actual call skipping is deferred to future PRs.
+- Anchor-based search behavior is not implemented; `anchor_new` is classified and logged only.
+
+### Next PR recommendation
+**PR 2**: Implement `REFINE_PREVIOUS` behind a feature flag for `top_n`, `best_one`, and `compare` rules only. When the flag is enabled and `turn_mode == refine_previous`, reuse the `card_pool` from the prior assistant message's `structured_results` (already persisted), rerank/subset the cards, and skip the provider call. Test with the manual wife-test sequence:
+1. "cocktail bars" → `new_search`, provider call, returns N cards
+2. "top 3" → `refine_previous`, top_n, reuses prior cards, no provider call
+3. "best for date night" → `refine_previous`, date_night, reranks prior cards
+4. "more options" → `new_search`, provider call again
+
+### Behavior changed: No
+### Provider-call behavior changed: No
+### Structured card output changed: No
+### Supabase SQL: No
+### Frontend touched: No
+### Backend touched: Yes (`context.py` new module, `ai.py` dark wiring)
+### Tests: 65 new passing; 25 pre-existing failures in unrelated files (test_restaurant_search_diagnostics, test_trip_days, test_itinerary_auth_scope, test_concierge_router_v2, test_concierge_observability) unchanged
+
+---
+
 ## Last change (2026-05-03) — Fix: Wire /search/restaurants to live Google Places provider (production blocker)
 
 ### Root cause
