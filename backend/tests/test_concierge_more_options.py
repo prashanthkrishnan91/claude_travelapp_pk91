@@ -57,6 +57,7 @@ from app.concierge.context import (
     ContextWindow,
     classify_turn,
     derive_category_hint,
+    derive_prior_place_query_hint,
     is_more_options_continuation,
     build_context_window,
 )
@@ -341,6 +342,41 @@ def _make_fake_place_response() -> PlaceRecommendationsResponse:
     )
 
 
+def _make_place_response_with_names(names: list[str]) -> PlaceRecommendationsResponse:
+    cards = []
+    for n in names:
+        cards.append(
+            {
+                "type": "verified_place",
+                "name": n,
+                "source": "Search",
+                "google_verification": {
+                    "provider": "google_places",
+                    "business_status": "OPERATIONAL",
+                    "provider_place_id": f"id-{n.lower()}",
+                    "google_maps_uri": f"https://maps.google.com/?cid={n.lower()}",
+                    "name": n,
+                    "formatted_address": f"123 {n} St",
+                },
+            }
+        )
+    return PlaceRecommendationsResponse(
+        response="more results",
+        intent="restaurants",
+        retrieval_used=True,
+        source_status="live_search",
+        restaurants=cards,
+        attractions=[],
+        hotels=[],
+        research_sources=[],
+        areas=[],
+        area_comparisons=[],
+        suggestions=[],
+        sources=[],
+        warnings=[],
+    )
+
+
 def _settings(flag: bool = True) -> SimpleNamespace:
     return SimpleNamespace(
         concierge_context_v1_enabled=flag,
@@ -401,6 +437,84 @@ def test_more_options_calls_search_with_contextualized_query() -> None:
     provider_query = call_args[0][1]
     assert provider_query == "more cocktail bars"
     assert provider_query != "more options"
+
+
+def test_italian_more_options_preserves_subtype_in_query() -> None:
+    pool = _pool(
+        restaurants=[_verified_card("A"), _verified_card("B")],
+        intent="restaurants",
+    )
+    ctx = ContextWindow(
+        trip_id=FAKE_TRIP_ID,
+        card_pool_size=2,
+        has_prior_cards=True,
+        source_message_id="msg-prev",
+        prior_card_pool=pool,
+        prior_user_prompts=["Italian restaurants"],
+        prior_place_category="restaurants",
+        prior_place_query_hint="italian restaurants",
+    )
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="more options")
+    mock_service = MagicMock()
+    mock_service.search.return_value = _make_fake_place_response()
+    with (
+        patch("app.routes.ai.get_settings", return_value=_settings(flag=True)),
+        patch("app.routes.ai.build_context_window", return_value=ctx),
+    ):
+        build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+    assert mock_service.search.call_args[0][1] == "more italian restaurants"
+
+
+def test_more_options_excludes_prior_card_identities_from_response() -> None:
+    prior_one = _verified_card("DupBar")
+    prior_two = _verified_card("UniqueOld")
+    pool = _pool(restaurants=[prior_one, prior_two], intent="nightlife")
+    ctx = ContextWindow(
+        trip_id=FAKE_TRIP_ID,
+        card_pool_size=2,
+        has_prior_cards=True,
+        source_message_id="msg-prev",
+        prior_card_pool=pool,
+        prior_place_category="cocktail bars",
+        prior_place_query_hint="cocktail bars",
+    )
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="more options")
+    mock_service = MagicMock()
+    mock_service.search.return_value = _make_place_response_with_names(["DupBar", "FreshBar"])
+    with (
+        patch("app.routes.ai.get_settings", return_value=_settings(flag=True)),
+        patch("app.routes.ai.build_context_window", return_value=ctx),
+    ):
+        result, _ = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+    assert [r.name for r in result.restaurants] == ["FreshBar"]
+
+
+def test_more_options_keeps_fewer_verified_results_when_unique_pool_small() -> None:
+    pool = _pool(restaurants=[_verified_card("OnlyBar")], intent="nightlife")
+    ctx = ContextWindow(
+        trip_id=FAKE_TRIP_ID,
+        card_pool_size=1,
+        has_prior_cards=True,
+        source_message_id="msg-prev",
+        prior_card_pool=pool,
+        prior_place_category="cocktail bars",
+        prior_place_query_hint="cocktail bars",
+    )
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="more options")
+    mock_service = MagicMock()
+    mock_service.search.return_value = _make_place_response_with_names(["OnlyBar"])
+    with (
+        patch("app.routes.ai.get_settings", return_value=_settings(flag=True)),
+        patch("app.routes.ai.build_context_window", return_value=ctx),
+    ):
+        result, _ = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+    assert result.restaurants == []
+
+
+def test_query_hint_helper_preserves_subtype_and_generic_fallback() -> None:
+    pool = _pool(restaurants=[_verified_card("A")], intent="restaurants")
+    assert derive_prior_place_query_hint(pool, ["Italian restaurants in Chicago"]) == "italian restaurants"
+    assert derive_prior_place_query_hint(pool, ["show me more"]) == "restaurants"
 
 
 def test_show_more_flag_on_prior_restaurant_cards_returns_place_recommendations() -> None:

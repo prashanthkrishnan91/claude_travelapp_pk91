@@ -1105,3 +1105,10 @@ Enriched whyPick evidence quality by promoting venue-specific Foursquare tags, T
 - Keep verified Google trust gates strict; persist successful verified replacement back to snapshot to recover refresh behavior.
 
 - Restaurant debug rule (2026-05-03): Always log counts/status across backend and frontend: backend `/search/restaurants` must emit raw candidate count, verified candidate count, returned count, `source_status`, and `cache_status`; frontend mapper must log input/mapped/dropped counts with reason buckets; snapshot save must log saved restaurant count and status markers to diagnose whether 0 came from backend or trust-gate filtering.
+
+
+## 2026-05-04 Concierge context continuation fix (PR 2.6)
+- Fixed subtype loss in more-options continuation by deriving a prior place query hint from recent prompts first (e.g., "Italian restaurants") and falling back to broad category only when subtype is unavailable.
+- Added safe post-verification duplicate exclusion for more-options provider responses using stable identities in priority order: provider_place_id, google_maps_uri, then normalized name+address fallback.
+- Duplicate exclusion is scoped only to continuation provider path; refine_previous reuse (`top 3`/`best one`/`compare`) remains unchanged and still skips provider calls when eligible.
+- If unique verified cards are exhausted after exclusion, response intentionally returns fewer cards (including zero) rather than repeating prior cards or fabricating entities.
