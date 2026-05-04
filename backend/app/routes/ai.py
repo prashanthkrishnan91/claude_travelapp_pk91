@@ -17,7 +17,13 @@ from app.concierge.contracts import (
     UnsupportedResponse,
 )
 from app.concierge.builders.trip_advice import build_trip_advice_payload
-from app.concierge.context import build_context_window, classify_turn, log_context_turn
+from app.concierge.context import (
+    build_context_window,
+    classify_turn,
+    derive_category_hint,
+    is_more_options_continuation,
+    log_context_turn,
+)
 from app.concierge.context_resolver import resolve_refine_previous
 from app.concierge.logging import persist_concierge_request_log, request_log_event
 from app.models.concierge import (
@@ -160,6 +166,63 @@ def build_typed_concierge_response(
         except Exception:
             logger.exception(
                 "concierge.context_resolver.error trip_id=%s falling_through=true",
+                payload.trip_id,
+            )
+
+    # PR 2.5: more-options continuation — force place_recommendations with a category-aware
+    # provider query when the user says "more options" / "show more" / etc. after prior cards.
+    # The classifier correctly marks these as new_search; we intercept here to preserve category.
+    if (
+        _flag_on
+        and turn_mode == "new_search"
+        and ctx is not None
+        and is_more_options_continuation(payload.user_query, ctx)
+    ):
+        _category_hint = derive_category_hint(ctx.prior_card_pool)
+        if _category_hint:
+            _contextualized_query = f"more {_category_hint}"
+            logger.info(
+                "concierge.context.more_options_continuation trip_id=%s "
+                "turn_mode=new_search provider_call=true "
+                "original_user_query=%r contextualized_query=%r "
+                "prior_category_hint=%s source_message_id=%s card_pool_size=%d",
+                payload.trip_id,
+                payload.user_query,
+                _contextualized_query,
+                _category_hint,
+                ctx.source_message_id,
+                ctx.card_pool_size,
+            )
+            try:
+                legacy = service.search(
+                    payload.trip_id, _contextualized_query, user_id, payload.client_message_id
+                )
+                typed_payload = PlaceRecommendationsResponse(**legacy.model_dump())
+                decision = RouteDecision(
+                    response_type="place_recommendations",
+                    stage1_prior={"place_recommendations": 1.0, "trip_advice": 0.0, "unsupported": 0.0},
+                    stage2_confidence=1.0,
+                    code="more_options_continuation",
+                )
+                try:
+                    validated = _typed_response_adapter.validate_python(typed_payload)
+                    return validated, decision
+                except ValidationError:
+                    logger.warning(
+                        "concierge.more_options_continuation.validation_failed trip_id=%s "
+                        "falling_through=true",
+                        payload.trip_id,
+                    )
+            except Exception:
+                logger.exception(
+                    "concierge.more_options_continuation.search_failed trip_id=%s "
+                    "falling_through=true",
+                    payload.trip_id,
+                )
+        else:
+            logger.info(
+                "concierge.more_options_continuation.fall_through trip_id=%s "
+                "fall_through_reason=no_prior_category_hint provider_call=true",
                 payload.trip_id,
             )
 

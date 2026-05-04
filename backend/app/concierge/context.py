@@ -43,6 +43,9 @@ class ContextWindow(BaseModel):
     # PR 2: raw structured_results dict from most recent assistant message with cards.
     # Populated only when has_prior_cards is True. Used by context_resolver for card reuse.
     prior_card_pool: Optional[Dict[str, Any]] = None
+    # PR 2.5: derived category hint from prior pool intent (e.g. "cocktail bars", "restaurants").
+    # Used by the more-options continuation path to construct a provider-facing query.
+    prior_place_category: Optional[str] = None
 
 
 # ── Classifier patterns ────────────────────────────────────────────────────────
@@ -93,6 +96,79 @@ _NEW_SEARCH_OVERRIDE_PATTERNS = [
     ),
     re.compile(r"\b(tomorrow|tonight|this weekend|next week)\b", re.IGNORECASE),
 ]
+
+
+# Continuation phrases: "more options" and equivalents.
+# These are a subset of new_search override signals; the classifier correctly
+# returns new_search for them. The continuation helper below uses these patterns
+# to distinguish "more of the same" from a genuinely unrelated new search.
+_CONTINUATION_PATTERNS = [
+    re.compile(r"\bmore options\b", re.IGNORECASE),
+    re.compile(r"\bshow more\b", re.IGNORECASE),
+    re.compile(r"\bmore like these\b", re.IGNORECASE),
+    re.compile(r"\bgive me more\b", re.IGNORECASE),
+    re.compile(r"\banother batch\b", re.IGNORECASE),
+]
+
+# Maps prior card pool intent to a provider-facing category phrase.
+# Only intents that map cleanly to a searchable category are included.
+# Omitted intents fall through to the bucket-based fallback.
+_INTENT_TO_QUERY_HINT: Dict[str, str] = {
+    "nightlife": "cocktail bars",
+    "restaurants": "restaurants",
+    "michelin_restaurants": "restaurants",
+    "hidden_gems": "restaurants",
+    "luxury_value": "restaurants",
+    "romantic": "restaurants",
+    "family_friendly": "attractions",
+    "attractions": "attractions",
+    "hotels": "hotels",
+}
+
+
+def derive_category_hint(prior_card_pool: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Derive a provider-facing category phrase from a prior card pool.
+
+    Returns a phrase like 'cocktail bars', 'restaurants', 'attractions', or None
+    when no safe derivation is possible (falls through to existing behavior).
+    """
+    if not isinstance(prior_card_pool, dict):
+        return None
+
+    intent = prior_card_pool.get("intent")
+    if intent and isinstance(intent, str):
+        hint = _INTENT_TO_QUERY_HINT.get(intent)
+        if hint:
+            return hint
+
+    # Fall back to dominant bucket when intent is missing or unmapped.
+    n_restaurants = len(prior_card_pool.get("restaurants") or [])
+    n_attractions = len(prior_card_pool.get("attractions") or [])
+    n_hotels = len(prior_card_pool.get("hotels") or [])
+
+    if n_restaurants > 0 and n_restaurants >= n_attractions and n_restaurants >= n_hotels:
+        return "restaurants"
+    if n_attractions > 0 and n_attractions >= n_hotels:
+        return "attractions"
+    if n_hotels > 0:
+        return "hotels"
+
+    return None
+
+
+def is_more_options_continuation(
+    user_query: str,
+    context_window: ContextWindow,
+) -> bool:
+    """Return True when the query is a continuation phrase and prior place cards exist.
+
+    Continuation phrases mean "give me more of the same category" after a verified
+    place search. Requires has_prior_cards so it falls through for fresh sessions.
+    """
+    if not context_window.has_prior_cards:
+        return False
+    text = (user_query or "").strip()
+    return any(pat.search(text) for pat in _CONTINUATION_PATTERNS)
 
 
 def classify_turn(
@@ -216,6 +292,8 @@ def build_context_window(
             prior_card_pool = structured  # raw dict; used by context_resolver for card reuse
             break
 
+    prior_place_category = derive_category_hint(prior_card_pool) if prior_card_pool else None
+
     return ContextWindow(
         trip_id=trip_id,
         destination=destination,
@@ -224,6 +302,7 @@ def build_context_window(
         source_message_id=source_id,
         prior_user_prompts=user_prompts,
         prior_card_pool=prior_card_pool,
+        prior_place_category=prior_place_category,
     )
 
 

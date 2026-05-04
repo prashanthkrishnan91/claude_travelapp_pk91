@@ -1,5 +1,104 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-04) — AI Concierge Conversational Context v1 PR 2.5 ("More options" category-preserving continuation)
+
+### Staging QA bug found
+After enabling `concierge_context_v1_enabled` in a safe staging environment, the manual wife-test sequence found:
+1. "Cocktail bars" → new_search, provider call, verified place cards. ✓
+2. "Top 3" → refine_previous, card reuse, no provider call. ✓
+3. "Best one" → refine_previous, card reuse, no provider call. ✓
+4. "Compare these" → refine_previous, card reuse, no provider call. ✓
+5. **"More options" → context layer logs `turn_mode=new_search` correctly, but UI returns generic Chicago early-June advice text and no structured cards.** ✗
+
+### Root cause
+The classifier correctly returns `new_search` for "more options" (it's in `_NEW_SEARCH_OVERRIDE_PATTERNS`). However, the bare string `"More options"` has no category signal. When passed to `route_prompt()`, it scored below the `place_recommendations` threshold and was classified as `trip_advice` or `unsupported`, returning a template response instead of a provider-backed place search.
+
+### Fix
+Added a narrow continuation intercept in `build_typed_concierge_response()` that fires only when:
+- Feature flag `concierge_context_v1_enabled` is ON
+- `turn_mode == "new_search"` (classifier did its job correctly)
+- `is_more_options_continuation(user_query, ctx)` is True (continuation phrase detected)
+- `ctx.has_prior_cards` is True (prior place cards exist)
+
+When all conditions hold:
+1. `derive_category_hint(ctx.prior_card_pool)` maps the prior intent → category phrase (e.g. `nightlife` → `"cocktail bars"`)
+2. Contextualized query constructed: `f"more {category_hint}"` (e.g. `"more cocktail bars"`)
+3. `service.search()` called with contextualized query — full verified provider pipeline runs
+4. Returns `PlaceRecommendationsResponse` with `code="more_options_continuation"`
+
+Falls through to existing behavior (no exception raised) if:
+- Category hint cannot be safely derived → logs `fall_through_reason=no_prior_category_hint`
+- `service.search()` raises → logs `search_failed falling_through=true`
+- Validation fails → logs `validation_failed falling_through=true`
+
+### Supported continuation phrases
+- "more options"
+- "show more"
+- "more like these"
+- "give me more"
+- "another batch"
+
+### Intent → category hint mapping
+| Intent | Provider query hint |
+|--------|-------------------|
+| nightlife | cocktail bars |
+| restaurants | restaurants |
+| michelin_restaurants | restaurants |
+| hidden_gems | restaurants |
+| luxury_value | restaurants |
+| romantic | restaurants |
+| family_friendly | attractions |
+| attractions | attractions |
+| hotels | hotels |
+
+Unmapped intents (general, general_destination_research, plan_day, etc.) fall back to the dominant bucket (whichever of restaurants/attractions/hotels has the most cards). If all buckets are empty, returns None and falls through.
+
+### Known limitation (v1)
+Dedup/novelty is not implemented. If the provider returns some of the same places that appeared in the prior card pool, they will be shown again. The primary fix is "provider search happens and returns structured cards" — not perfect novelty ranking. Document as a known v1 limitation.
+
+### What was added
+- **`backend/app/concierge/context.py`**:
+  - `_CONTINUATION_PATTERNS` — 5 regex patterns for continuation phrases
+  - `_INTENT_TO_QUERY_HINT` — mapping dict (9 intent → hint entries)
+  - `ContextWindow.prior_place_category: Optional[str]` — category hint field, populated in `build_context_window()`
+  - `is_more_options_continuation(user_query, context_window) -> bool` — exported helper
+  - `derive_category_hint(prior_card_pool) -> Optional[str]` — exported helper
+  - `build_context_window()` updated to populate `prior_place_category`
+- **`backend/app/routes/ai.py`**:
+  - Import `is_more_options_continuation`, `derive_category_hint` from `app.concierge.context`
+  - Continuation intercept block in `build_typed_concierge_response()` between the refine_previous card-reuse block and the router
+- **`backend/tests/test_concierge_more_options.py`** — NEW: 66 tests
+
+### Updated manual wife-test script (after enabling flag in safe environment)
+1. "cocktail bars" → new_search, provider call, returns N cards
+2. "top 3" → refine_previous, top_n, reuses prior cards, no provider call; `context_reuse.provider_call = false`
+3. "best one" → refine_previous, best_one, returns 1 card, no provider call
+4. "compare these" → refine_previous, compare, returns prior cards for comparison
+5. **"more options" → continuation new search, provider call, `code="more_options_continuation"`, returns fresh place_recommendations cards**
+
+### Observability (log lines when continuation fires)
+```
+concierge.context.more_options_continuation trip_id=... turn_mode=new_search provider_call=true
+  original_user_query="More options" contextualized_query="more cocktail bars"
+  prior_category_hint=cocktail bars source_message_id=... card_pool_size=...
+```
+When category hint cannot be derived:
+```
+concierge.more_options_continuation.fall_through trip_id=... fall_through_reason=no_prior_category_hint provider_call=true
+```
+
+### Behavior changed when flag OFF: No
+### Behavior changed when flag ON: Yes (new_search + continuation phrase + prior cards → place_recommendations)
+### Provider-call behavior changed: Yes — continuation path calls provider with contextualized query
+### Structured card output changed: No (cards come from live provider pipeline, not mutated)
+### Trust gates weakened: No
+### Supabase SQL: No
+### Frontend touched: No
+### Backend touched: Yes (`context.py` + `ai.py` + new test file)
+### Tests: 66 new passing (214 total concierge context/resolver/router/more-options tests)
+
+---
+
 ## Last change (2026-05-04) — AI Concierge Conversational Context v1 PR 2 (feature-flagged REFINE_PREVIOUS card reuse)
 
 ### Summary
