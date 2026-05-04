@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     concierge_router_v2: bool = False
     concierge_router_v2_confidence_threshold: float = 0.55
     trip_advice_builder_enabled: bool = False
+    # PR 2: feature-flagged refine_previous card reuse for top_n, best_one, compare.
+    # Default OFF. Enable in safe env after manual wife-test validation.
+    concierge_context_v1_enabled: bool = False
     research_engine_require_google_verification: bool = False
     yelp_api_key: str = ""
     foursquare_api_key: str = ""

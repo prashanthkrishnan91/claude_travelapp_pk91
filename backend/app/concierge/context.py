@@ -40,6 +40,9 @@ class ContextWindow(BaseModel):
     # Most recent user prompts, capped to 3, newest first.
     prior_user_prompts: List[str] = []
     reset_reason: Optional[str] = None
+    # PR 2: raw structured_results dict from most recent assistant message with cards.
+    # Populated only when has_prior_cards is True. Used by context_resolver for card reuse.
+    prior_card_pool: Optional[Dict[str, Any]] = None
 
 
 # ── Classifier patterns ────────────────────────────────────────────────────────
@@ -200,14 +203,17 @@ def build_context_window(
     # Find the most recent assistant message with place-producing cards.
     source_id: Optional[str] = None
     card_pool_size = 0
+    prior_card_pool: Optional[Dict[str, Any]] = None
     for msg in messages:
         if msg.get("role") != "assistant":
             continue
-        count = _count_place_cards(msg.get("structured_results"))
+        structured = msg.get("structured_results")
+        count = _count_place_cards(structured)
         if count > 0:
             raw_id = msg.get("id")
             source_id = str(raw_id) if raw_id is not None else None
             card_pool_size = count
+            prior_card_pool = structured  # raw dict; used by context_resolver for card reuse
             break
 
     return ContextWindow(
@@ -217,6 +223,7 @@ def build_context_window(
         has_prior_cards=card_pool_size > 0,
         source_message_id=source_id,
         prior_user_prompts=user_prompts,
+        prior_card_pool=prior_card_pool,
     )
 
 

@@ -297,6 +297,10 @@ class ConciergeSearchResponse(BaseModel):
     suggestions: List[Suggestion] = []
     sources: List[str] = []
     warnings: List[str] = []
+    # PR 2: additive optional context-reuse metadata. Populated only when
+    # concierge_context_v1_enabled is ON and cards are reused from prior pool.
+    turn_mode: Optional[str] = None
+    context_reuse: Optional[Dict[str, Any]] = None
 
 
 class ConciergeDebugRequest(BaseModel):

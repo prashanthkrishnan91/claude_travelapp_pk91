@@ -18,7 +18,13 @@ from app.concierge.contracts import (
 )
 from app.concierge.builders.trip_advice import build_trip_advice_payload
 from app.concierge.context import build_context_window, classify_turn, log_context_turn
+from app.concierge.context_resolver import resolve_refine_previous
 from app.concierge.logging import persist_concierge_request_log, request_log_event
+from app.models.concierge import (
+    UnifiedAttractionResult,
+    UnifiedHotelResult,
+    UnifiedRestaurantResult,
+)
 from app.concierge.router import RouteDecision, route_prompt
 from app.core.config import get_settings
 from app.core.deps import DB, CurrentUserID
@@ -40,6 +46,29 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 _typed_response_adapter = TypeAdapter(ConciergeTypedResponse)
 
 
+def _validate_reused_cards(raw_cards: List[Any], model_cls: Any) -> List[Any]:
+    """Deserialize raw card dicts into typed Pydantic models; drop any that fail."""
+    result = []
+    for card in raw_cards:
+        try:
+            result.append(model_cls.model_validate(card))
+        except Exception:
+            logger.warning(
+                "concierge.context_resolver.card_validation_failed model=%s",
+                model_cls.__name__,
+            )
+    return result
+
+
+def _build_reuse_summary(rerank_rule: str, n: int) -> str:
+    if rerank_rule == "best_one":
+        return "Here is the top pick from your previous search results."
+    if rerank_rule == "compare":
+        return "Here are your previous search results for comparison."
+    # top_n
+    return f"Here are the top {n} picks from your previous search results."
+
+
 def build_typed_concierge_response(
     service: ConciergeService,
     payload: ConciergeSearchRequest,
@@ -48,11 +77,19 @@ def build_typed_concierge_response(
     """Build and validate the typed concierge response contract."""
     settings = get_settings()
 
-    # Dark context classification — PR 1 foundation. Classifies and logs only.
-    # No behavior change: existing search flow runs unconditionally after this block.
+    # Context classification — classifies and logs. PR 2: may skip provider call.
+    turn_mode = "new_search"
+    rerank_rule = "none"
+    ctx = None
     try:
         ctx = build_context_window(service._db, payload.trip_id)
         turn_mode, rerank_rule = classify_turn(payload.user_query, ctx)
+        provider_call_expected = not (
+            getattr(settings, "concierge_context_v1_enabled", False)
+            and turn_mode == "refine_previous"
+            and rerank_rule in ("top_n", "best_one", "compare")
+            and ctx.has_prior_cards
+        )
         log_context_turn(
             trip_id=payload.trip_id,
             turn_mode=turn_mode,
@@ -61,14 +98,70 @@ def build_typed_concierge_response(
             has_prior_cards=ctx.has_prior_cards,
             source_message_id=ctx.source_message_id,
             reset_reason=ctx.reset_reason,
-            # In PR 1 we always make a provider call; future PRs will skip it for
-            # refine_previous and anchor_new modes.
-            provider_call_expected_for_future_mode=turn_mode in ("new_search", "reset"),
+            provider_call_expected_for_future_mode=provider_call_expected,
         )
     except Exception:
         logger.exception(
             "concierge.context.classify_failed trip_id=%s", payload.trip_id
         )
+
+    # PR 2: attempt card reuse when flag is ON and turn qualifies.
+    # getattr guard: safe when settings is a SimpleNamespace/stub without the field.
+    _flag_on = getattr(settings, "concierge_context_v1_enabled", False)
+    if (
+        _flag_on
+        and turn_mode == "refine_previous"
+        and ctx is not None
+    ):
+        try:
+            resolved = resolve_refine_previous(ctx, rerank_rule, payload.user_query)
+            if resolved is not None:
+                restaurants = _validate_reused_cards(resolved.restaurants, UnifiedRestaurantResult)
+                attractions = _validate_reused_cards(resolved.attractions, UnifiedAttractionResult)
+                hotels = _validate_reused_cards(resolved.hotels, UnifiedHotelResult)
+
+                n_after = len(restaurants) + len(attractions) + len(hotels)
+                if n_after > 0:
+                    summary = _build_reuse_summary(rerank_rule, n_after)
+                    typed_payload = PlaceRecommendationsResponse(
+                        response=summary,
+                        intent=resolved.prior_intent or "general",
+                        retrieval_used=True,
+                        source_status="reused_context",
+                        cached=False,
+                        restaurants=restaurants,
+                        attractions=attractions,
+                        hotels=hotels,
+                        turn_mode="refine_previous",
+                        context_reuse={
+                            "provider_call": False,
+                            "card_pool_size": resolved.pool_size_before,
+                            "cards_returned": n_after,
+                            "source_message_id": resolved.source_message_id,
+                            "rerank_rule": resolved.rerank_rule,
+                            "filter_applied": None,
+                        },
+                    )
+                    decision = RouteDecision(
+                        response_type="place_recommendations",
+                        stage1_prior={"place_recommendations": 1.0, "trip_advice": 0.0, "unsupported": 0.0},
+                        stage2_confidence=1.0,
+                        code="refine_previous_card_reuse",
+                    )
+                    try:
+                        validated = _typed_response_adapter.validate_python(typed_payload)
+                        return validated, decision
+                    except ValidationError:
+                        logger.warning(
+                            "concierge.context_resolver.validation_failed trip_id=%s "
+                            "falling_through=true",
+                            payload.trip_id,
+                        )
+        except Exception:
+            logger.exception(
+                "concierge.context_resolver.error trip_id=%s falling_through=true",
+                payload.trip_id,
+            )
 
     if not settings.concierge_router_v2:
         legacy = service.search(payload.trip_id, payload.user_query, user_id, payload.client_message_id)

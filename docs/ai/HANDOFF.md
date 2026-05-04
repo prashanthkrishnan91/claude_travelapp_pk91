@@ -1,5 +1,98 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-04) — AI Concierge Conversational Context v1 PR 2 (feature-flagged REFINE_PREVIOUS card reuse)
+
+### Summary
+Implements card reuse for `top_n`, `best_one`, and `compare` follow-up turns behind the feature flag `concierge_context_v1_enabled` (default `False`). When the flag is ON and the classifier returns `refine_previous` with a supported rule, the prior verified card pool is reused and the provider call is skipped entirely. When the flag is OFF or conditions aren't met, behavior is identical to PR 1.
+
+### What was added
+- **`backend/app/core/config.py`**: Added `concierge_context_v1_enabled: bool = False` — feature flag, default OFF.
+- **`backend/app/concierge/context.py`**: Added `prior_card_pool: Optional[Dict[str, Any]]` to `ContextWindow`. Updated `build_context_window()` to populate `prior_card_pool` from the most-recent assistant message's `structured_results`.
+- **`backend/app/concierge/context_resolver.py`** — NEW module:
+  - `_SUPPORTED_RULES = frozenset({"top_n", "best_one", "compare"})`
+  - `_MAX_COMPARE_CARDS = 6`
+  - `_card_passes_trust_gate(card)` — checks `type == "verified_place"`, `google_verification.business_status == "OPERATIONAL"`, non-empty `provider_place_id`, non-empty `google_maps_uri`. Drops cards that fail.
+  - `_parse_top_n(query, pool_size)` — extracts N from "top 3" / "show me 5" / "top three" etc. Clamps to [1, pool_size].
+  - `RefineResolved` dataclass — returned on successful resolution (restaurants, attractions, hotels, pool metadata).
+  - `resolve_refine_previous(ctx, rerank_rule, user_query)` — returns `RefineResolved` or `None` (fall-through).
+- **`backend/app/models/concierge.py`**: Added optional `turn_mode: Optional[str]` and `context_reuse: Optional[Dict[str, Any]]` to `ConciergeSearchResponse` for additive response metadata.
+- **`backend/app/routes/ai.py`**: Wired resolver into `build_typed_concierge_response()`. Uses `getattr(settings, 'concierge_context_v1_enabled', False)` for safe access. When resolver succeeds: returns `PlaceRecommendationsResponse` with reused cards, `turn_mode="refine_previous"`, `context_reuse` metadata, decision code `"refine_previous_card_reuse"`. Helper functions `_validate_reused_cards()` and `_build_reuse_summary()` added.
+- **`backend/tests/test_concierge_context_resolver.py`** — NEW: 50 tests.
+
+### Feature flag
+**Name:** `concierge_context_v1_enabled`
+**Default:** `False`
+**Env var:** `CONCIERGE_CONTEXT_V1_ENABLED=true` to enable.
+
+### Supported rules in PR 2
+- `top_n` — returns first N verified cards from prior pool (N parsed from query)
+- `best_one` — returns first 1 verified card from prior pool
+- `compare` — returns prior verified cards up to `_MAX_COMPARE_CARDS = 6`
+
+### Explicit limitations
+- No `date_night` reranking yet
+- No `cheapest` / `most_upscale` reranking yet
+- No `rooftop` / `vegan` / `open-late` filter support yet
+- No `anchor_new` behavior yet
+- No frontend tag for reused turns yet
+- `destination` in `ContextWindow` remains `None` (as in PR 1) — destination-mismatch reset not yet implemented
+
+### Trust gate (per-card, before reuse)
+A card is reused only if all hold:
+1. `card["type"] == "verified_place"`
+2. `card["google_verification"]["business_status"] == "OPERATIONAL"`
+3. `card["google_verification"]["provider_place_id"]` is non-empty
+4. `card["google_verification"]["google_maps_uri"]` is non-empty
+
+Cards failing the trust gate are dropped (not patched). If all drop → fall through to provider search.
+
+### Response metadata (when flag ON + reuse succeeds)
+```json
+{
+  "turn_mode": "refine_previous",
+  "context_reuse": {
+    "provider_call": false,
+    "card_pool_size": 5,
+    "cards_returned": 3,
+    "source_message_id": "...",
+    "rerank_rule": "top_n",
+    "filter_applied": null
+  }
+}
+```
+
+### Manual wife-test script (after enabling flag in safe environment)
+1. "cocktail bars" → new_search, provider call, returns N cards
+2. "top 3" → refine_previous, top_n, reuses prior cards, no provider call; `context_reuse.provider_call = false`
+3. "best one" → refine_previous, best_one, returns 1 card, no provider call
+4. "compare these" → refine_previous, compare, returns prior cards for comparison
+5. "more options" → new_search override, provider call again
+
+### Observability (log line extension)
+When resolver succeeds:
+```
+concierge.context_resolver.resolved trip_id=... turn_mode=refine_previous rerank_rule=... provider_call=false pool_size_before=... pool_size_after=... source_message_id=... feature_flag_enabled=true
+```
+When resolver falls through:
+```
+concierge.context_resolver.unsupported_rule / no_pool / all_dropped_fall_through ... fall_through_reason=... provider_call=true
+```
+
+### Behavior changed when flag OFF: No
+### Behavior changed when flag ON: Yes (for refine_previous + top_n/best_one/compare only)
+### Provider-call behavior changed: Yes — only for the refine_previous + supported-rule path when flag is ON
+### Structured card output changed: No (cards are returned as-is from prior pool)
+### Trust gates weakened: No
+### Supabase SQL: No
+### Frontend touched: No
+### Backend touched: Yes (`context.py` + new `context_resolver.py` + `routes/ai.py` + `models/concierge.py`)
+### Tests: 50 new passing (747 total with pre-existing failures unchanged)
+
+### Next PR recommendation
+**PR 3**: Enable `concierge_context_v1_enabled` in the staging environment and run the manual wife-test script. After validation, consider implementing `date_night` reranking (already classified). Also consider: destination-aware reset detection (fetch trip to compare destination), and `anchor_new` provider behavior.
+
+---
+
 ## Last change (2026-05-04) — AI Concierge Conversational Context v1 PR 1 (dark backend foundation)
 
 ### Summary
