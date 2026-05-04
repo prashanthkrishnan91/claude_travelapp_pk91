@@ -27,3 +27,12 @@ def test_resolve_supports_kahului_airport_alias():
 def test_resolve_supports_ogg_iata():
     cities = _cities_for("OGG")
     assert "Kahului" in cities
+
+
+def test_resolve_short_query_returns_empty_list():
+    assert search_airport_matches("m") == []
+
+
+def test_resolve_alias_substring_requires_minimum_length():
+    cities = _cities_for("aw")
+    assert "Kahului" not in cities

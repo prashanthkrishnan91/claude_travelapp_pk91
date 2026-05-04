@@ -237,7 +237,7 @@ def search_airport_matches(query: str) -> List[AirportMatch]:
     """Return up to 10 city matches for a city/alias/airport-code query."""
     raw = query.strip()
     if len(raw) < 2:
-        return AirportResolveResponse(matches=[])
+        return []
 
     q = _normalize(raw)
     iata_upper = raw.upper()
@@ -272,8 +272,9 @@ def search_airport_matches(query: str) -> List[AirportMatch]:
             seen.add(key)
             continue
 
-        # Substring match
-        if q in city_norm or any(q in alias for alias in alias_norms):
+        # Substring match (noise-controlled for short queries)
+        alias_substring_match = len(q) >= 3 and any(q in alias for alias in alias_norms)
+        if q in city_norm or alias_substring_match:
             partial.append(entry)
             seen.add(key)
 
