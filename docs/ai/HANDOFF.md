@@ -1,6 +1,107 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-04) — AI Concierge Conversational Context v1 PR 3 ("More options" fast continuation: pool + early dedup + bounded refill)
+## Last change (2026-05-04) — AI Concierge Fast Dynamic Place Search v1
+
+### Problem diagnosed from wife-testing
+Two product failures:
+1. **"tapas bar" → cocktail bars**: `_detect_intent("tapas bar")` matched `_NIGHTLIFE_PAT` on the word "bar", routing to `INTENT_NIGHTLIFE` and building the query `"best cocktail bars and nightlife in Chicago 2026"`. The user's literal intent (tapas/Spanish small plates) was lost.
+2. **126s latency**: Old pipeline: Tavily article extraction (~2.6s) → serial candidate verification via Tavily (~40-60s cumulative) → serial Google Places verification per candidate (~50s cumulative) → per-card reason generation (~70s). Total: ~127s.
+
+### Fix: fast_dynamic_place_search.py (feature-flagged)
+
+**Feature flag**: `CONCIERGE_FAST_DYNAMIC_PLACE_SEARCH_V1_ENABLED` (default: `False`)
+Settings name: `concierge_fast_dynamic_place_search_v1_enabled`
+
+**When OFF**: existing behavior unchanged.  
+**When ON**: fast pipeline for restaurant/nightlife/hidden_gems/luxury/romantic/family/michelin intents.
+
+#### Fast pipeline architecture
+
+1. **Natural-language intent extraction (deterministic)**  
+   `parse_place_query(user_query, destination)` returns `ParsedPlaceQuery` with:
+   - `canonical_query` — the user's literal ask (preserved verbatim)
+   - `search_query` — canonical_query + destination (sent directly to Google)
+   - `cuisine` — detected subtype ("tapas", "sushi", "seafood", ...)
+   - `place_type` — "restaurant" | "bar" | "restaurant_or_bar"
+   - `vibe`, `constraint`, `negative_constraint`
+   
+   "tapas bar" → cuisine="tapas", place_type="restaurant_or_bar", search_query="tapas bar Chicago"  
+   "cocktail bars" → place_type="bar", search_query="cocktail bars Chicago"  
+   "romantic tapas but not too loud" → cuisine="tapas", vibe="romantic", negative="not too loud"  
+   Negative constraints are stripped from the search query so Google isn't confused.
+
+2. **Direct Google Places text_search**  
+   Single call to `places.googleapis.com/v1/places:searchText` with:
+   - `textQuery = canonical_query + destination`
+   - `maxResultCount = 15`
+   No Tavily article extraction. No serial Tavily verification loop.
+
+3. **Filter and rank**  
+   - businessStatus != OPERATIONAL → excluded  
+   - `_category_score()` < 0.2 → excluded (intent mismatch gate)  
+   - `prior_identity_keys` dedup → already-shown cards excluded  
+   - Ranked: 0.7 × category_score + 0.3 × bayesian_score
+
+4. **Dynamic deterministic reason building**  
+   `_build_dynamic_why()` — always references the user's specific ask:  
+   - "tapas bar" → "A stronger tapas/small-plates match than a generic cocktail bar in West Loop."  
+   - "sushi + waterfront" → "Best fit if you want sushi with a polished setting near waterfront; verify exact seating when booking."  
+   - "romantic tapas" → "Fits the tapas brief with a dinner-date feel in River North."  
+   Never invents awards, Michelin mentions, or unverified vibes.  
+   No per-card LLM calls. No `build_why_pick_with_structured_evidence` in fast path.
+
+#### Trust gates (unchanged)
+- Only OPERATIONAL Google Places results become addable cards.
+- `_category_score < 0.2` is rejected (e.g., a cocktail bar for a tapas query scores 0.25 — still included as a match, scored below tapas-specific results).
+- Cards come directly from Google; no free-form/fabricated cards.
+- `prior_identity_keys` prevents re-showing already-seen cards.
+
+#### Timing logs
+`fast_dynamic_place_search.timing` emits:  
+`fast_dynamic_enabled`, `extraction_ms`, `google_search_ms`, `google_verify_or_details_ms`, `evidence_enrichment_ms`, `reason_generation_ms`, `total_ms`, `candidate_count`, `verified_count`, `filtered_count`, `final_unique_count`, `pool_hit`, `provider_call`, `reason_mode`
+
+#### Latency improvement
+- Old: ~126s (serial Tavily extraction + serial Google verification + LLM reasons)
+- New: ~3–8s (single Google text_search + deterministic reasons)
+- Follow-up / pool hit: < 1s (pool logic unchanged, works with fast cards)
+
+#### Pool / cache compatibility
+Fast-path results populate `live_result.restaurants` the same way the old path does. The existing `ContinuationResultPool` and `prior_identity_keys` dedup in `routes/ai.py` work unchanged. Cache keys separate cleanly: "tapas bar Chicago" vs "cocktail bars Chicago" vs "seafood restaurants Chicago".
+
+#### Rollback
+Set `CONCIERGE_FAST_DYNAMIC_PLACE_SEARCH_V1_ENABLED=false` (or remove the env var). The existing slow pipeline resumes with zero code changes required.
+
+### Behavior matrix (flag ON)
+
+| User query | Detected | Search query sent to Google | Reason style |
+|-----------|---------|---------------------------|-------------|
+| "tapas bar" | cuisine=tapas, type=restaurant_or_bar | "tapas bar Chicago" | "tapas/small-plates match" |
+| "nice sushi restaurants with a waterfront view" | cuisine=sushi, constraint=waterfront | "nice sushi restaurants with a waterfront view Chicago" | mentions sushi + waterfront |
+| "romantic tapas but not too loud" | cuisine=tapas, vibe=romantic, neg=loud | "romantic tapas Chicago" | "dinner-date feel" |
+| "seafood restaurants" | cuisine=seafood | "seafood restaurants Chicago" | seafood-specific |
+| "cocktail bars" | type=bar | "cocktail bars Chicago" | cocktail bar |
+| "Italian restaurants" | cuisine=italian | "Italian restaurants Chicago" | italian-specific |
+| "Mexican restaurants" | cuisine=mexican | "Mexican restaurants Chicago" | mexican-specific |
+| "more options" | continuation (pool/provider) | canonical from prior | unchanged |
+| "top 3" / "best one" / "compare" | refine_previous (flag: context_v1) | no provider call | card reuse |
+
+### Remaining risks
+- Fast path requires GOOGLE_PLACES_API_KEY; falls through to slow path when unavailable.
+- Google text_search returns up to 15 results; niche queries in small cities may return fewer.
+- Constraint verification (e.g., "waterfront view") is honest — reason says "verify when booking" rather than asserting the view exists.
+- In-memory singleton; process restart clears it (same as before).
+
+### What was added / changed
+- **`backend/app/core/config.py`** — `concierge_fast_dynamic_place_search_v1_enabled: bool = False`
+- **`backend/app/services/fast_dynamic_place_search.py`** — new fast pipeline
+- **`backend/app/services/concierge.py`** — `_fetch_live_research()` checks flag and delegates to fast path
+- **`backend/tests/test_fast_dynamic_place_search.py`** — 46 tests covering parsing, scoring, reasons, trust gates, feature flag, dedup
+
+**Supabase SQL**: No.
+
+---
+
+## Previous change (2026-05-04) — AI Concierge Conversational Context v1 PR 3 ("More options" fast continuation: pool + early dedup + bounded refill)
 
 ### Problem diagnosed from Railway logs
 Two root causes behind "only 1 new verified place after more options":

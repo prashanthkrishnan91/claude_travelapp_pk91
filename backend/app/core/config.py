@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # Default OFF. Enable in safe env after manual wife-test validation.
     concierge_context_v1_enabled: bool = False
     research_engine_require_google_verification: bool = False
+    # PR fast-dynamic: feature-flagged fast pipeline for place searches.
+    # Default OFF. Enable after validation.
+    concierge_fast_dynamic_place_search_v1_enabled: bool = False
     yelp_api_key: str = ""
     foursquare_api_key: str = ""
 

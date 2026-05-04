@@ -581,6 +581,17 @@ class ConciergeService:
     # Intent detection
     # ------------------------------------------------------------------
 
+    # Intents where the fast dynamic pipeline is applicable.
+    _FAST_DYNAMIC_INTENTS = {
+        INTENT_RESTAURANTS,
+        INTENT_NIGHTLIFE,
+        INTENT_HIDDEN_GEMS,
+        INTENT_LUXURY_VALUE,
+        INTENT_ROMANTIC,
+        INTENT_FAMILY_FRIENDLY,
+        INTENT_MICHELIN_RESTAURANTS,
+    }
+
     def _fetch_live_research(
         self,
         intent: str,
@@ -591,12 +602,49 @@ class ConciergeService:
     ) -> LiveResearchResult:
         """Run live research and return normalized results, never raising.
 
+        When CONCIERGE_FAST_DYNAMIC_PLACE_SEARCH_V1_ENABLED is ON and the intent
+        is a place-search intent, delegates to the fast dynamic pipeline which:
+        - Preserves the user's literal query (tapas stays tapas, not cocktail bars)
+        - Calls Google Places directly (no Tavily article extraction)
+        - Returns results in 3-8s instead of 126s
+
+        When the flag is OFF or fast path is unavailable, falls through to the
+        existing slow pipeline unchanged.
+
         prior_identity_keys: when provided (continuation turns), candidates whose
         Google verification matches are filtered before reason_generation runs.
 
         A failed live-research call must NOT break the concierge flow — fall
         back to existing curated/app-database/sample paths instead.
         """
+        # ── Fast dynamic path ─────────────────────────────────────────────────
+        fast_enabled = bool(
+            getattr(self._settings, "concierge_fast_dynamic_place_search_v1_enabled", False)
+        )
+        if fast_enabled and intent in self._FAST_DYNAMIC_INTENTS and destination:
+            try:
+                from app.services.fast_dynamic_place_search import get_fast_dynamic_search
+                fast_svc = get_fast_dynamic_search()
+                if fast_svc.available:
+                    logger.info(
+                        "concierge.fast_dynamic_place_search intent=%s destination=%r query=%r",
+                        intent, destination, user_query,
+                    )
+                    return fast_svc.search(
+                        user_query=user_query,
+                        destination=destination,
+                        intent=intent,
+                        prior_identity_keys=set(prior_identity_keys) if prior_identity_keys else None,
+                    )
+                logger.info(
+                    "concierge.fast_dynamic_place_search: unavailable "
+                    "(no GOOGLE_PLACES_API_KEY), falling through to slow path"
+                )
+            except Exception as exc:
+                logger.warning(
+                    "concierge.fast_dynamic_place_search failed, falling through: %s", exc
+                )
+        # ── Existing slow pipeline (unchanged when flag OFF) ──────────────────
         try:
             svc = self._get_live_research()
         except Exception as exc:
