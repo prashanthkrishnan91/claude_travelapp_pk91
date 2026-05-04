@@ -17,6 +17,7 @@ from app.concierge.contracts import (
     UnsupportedResponse,
 )
 from app.concierge.builders.trip_advice import build_trip_advice_payload
+from app.concierge.context import build_context_window, classify_turn, log_context_turn
 from app.concierge.logging import persist_concierge_request_log, request_log_event
 from app.concierge.router import RouteDecision, route_prompt
 from app.core.config import get_settings
@@ -46,6 +47,28 @@ def build_typed_concierge_response(
 ) -> tuple[ConciergeTypedResponse, RouteDecision]:
     """Build and validate the typed concierge response contract."""
     settings = get_settings()
+
+    # Dark context classification — PR 1 foundation. Classifies and logs only.
+    # No behavior change: existing search flow runs unconditionally after this block.
+    try:
+        ctx = build_context_window(service._db, payload.trip_id)
+        turn_mode, rerank_rule = classify_turn(payload.user_query, ctx)
+        log_context_turn(
+            trip_id=payload.trip_id,
+            turn_mode=turn_mode,
+            rerank_rule=rerank_rule,
+            card_pool_size=ctx.card_pool_size,
+            has_prior_cards=ctx.has_prior_cards,
+            source_message_id=ctx.source_message_id,
+            reset_reason=ctx.reset_reason,
+            # In PR 1 we always make a provider call; future PRs will skip it for
+            # refine_previous and anchor_new modes.
+            provider_call_expected_for_future_mode=turn_mode in ("new_search", "reset"),
+        )
+    except Exception:
+        logger.exception(
+            "concierge.context.classify_failed trip_id=%s", payload.trip_id
+        )
 
     if not settings.concierge_router_v2:
         legacy = service.search(payload.trip_id, payload.user_query, user_id, payload.client_message_id)
