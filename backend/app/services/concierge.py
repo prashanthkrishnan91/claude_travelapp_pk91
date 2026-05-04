@@ -219,7 +219,12 @@ class ConciergeService:
     # ------------------------------------------------------------------
 
     def search(
-        self, trip_id: UUID, user_query: str, user_id: UUID, client_message_id: Optional[str] = None
+        self,
+        trip_id: UUID,
+        user_query: str,
+        user_id: UUID,
+        client_message_id: Optional[str] = None,
+        prior_identity_keys: Optional[frozenset] = None,
     ) -> ConciergeSearchResponse:
         trip = self._fetch_trip(trip_id, user_id)
         request_id = (client_message_id or "").strip() or str(uuid4())
@@ -242,7 +247,10 @@ class ConciergeService:
 
         search_svc = SearchService(self._db)
 
-        live_result = self._fetch_live_research(intent, destination, user_query, trip)
+        live_result = self._fetch_live_research(
+            intent, destination, user_query, trip,
+            prior_identity_keys=prior_identity_keys,
+        )
         research_sources = list(live_result.research_sources)
         live_provider_name = live_result.provider_name
         require_google = getattr(self._settings, "research_engine_require_google_verification", False) is True
@@ -579,8 +587,12 @@ class ConciergeService:
         destination: str,
         user_query: str,
         trip: dict,
+        prior_identity_keys: Optional[frozenset] = None,
     ) -> LiveResearchResult:
         """Run live research and return normalized results, never raising.
+
+        prior_identity_keys: when provided (continuation turns), candidates whose
+        Google verification matches are filtered before reason_generation runs.
 
         A failed live-research call must NOT break the concierge flow — fall
         back to existing curated/app-database/sample paths instead.
@@ -603,6 +615,7 @@ class ConciergeService:
                 destination=destination,
                 user_query=user_query,
                 dates=dates,
+                prior_identity_keys=prior_identity_keys,
             )
         except Exception as exc:
             logger.warning("Live research fetch failed: %s", exc)

@@ -24,6 +24,7 @@ from app.concierge.context import (
     is_more_options_continuation,
     log_context_turn,
 )
+from app.concierge.result_pool import _GLOBAL_CONTINUATION_POOL
 from app.concierge.context_resolver import resolve_refine_previous
 from app.concierge.logging import persist_concierge_request_log, request_log_event
 from app.models.concierge import (
@@ -158,6 +159,87 @@ def _exclude_prior_verified_cards(
     return response, stats
 
 
+def _build_prior_identity_keys_set(prior_card_pool: Optional[Dict[str, Any]]) -> frozenset:
+    """Build a frozenset of stable identity keys from a prior card pool dict."""
+    if not isinstance(prior_card_pool, dict):
+        return frozenset()
+    keys: set = set()
+    for bucket in ("restaurants", "attractions", "hotels"):
+        for raw_card in (prior_card_pool.get(bucket) or []):
+            if isinstance(raw_card, dict):
+                keys.update(_card_identity_keys(raw_card))
+    return frozenset(keys)
+
+
+def _filter_pool_buckets_by_identity(
+    buckets: Dict[str, Any],
+    prior_keys: frozenset,
+) -> tuple[Dict[str, List], int]:
+    """Filter pool card dicts against prior identity keys. Returns (filtered_buckets, unique_count)."""
+    result: Dict[str, List] = {}
+    for bucket in ("restaurants", "attractions", "hotels"):
+        cards = buckets.get(bucket) or []
+        result[bucket] = [c for c in cards if _card_identity_keys(c).isdisjoint(prior_keys)]
+    unique_count = sum(len(v) for v in result.values())
+    return result, unique_count
+
+
+def _build_place_response_from_pool(
+    buckets: Dict[str, Any],
+    query_hint: str,
+) -> PlaceRecommendationsResponse:
+    """Build a PlaceRecommendationsResponse from raw pool card dicts."""
+    from app.models.concierge import (
+        UnifiedAttractionResult,
+        UnifiedHotelResult,
+        UnifiedRestaurantResult,
+    )
+
+    def _load_cards(raw_list: List, model_cls: Any) -> List[Any]:
+        result = []
+        for raw in (raw_list or []):
+            try:
+                result.append(model_cls.model_validate(raw) if isinstance(raw, dict) else raw)
+            except Exception:
+                pass
+        return result
+
+    restaurants = _load_cards(buckets.get("restaurants"), UnifiedRestaurantResult)
+    attractions = _load_cards(buckets.get("attractions"), UnifiedAttractionResult)
+    hotels = _load_cards(buckets.get("hotels"), UnifiedHotelResult)
+    n = len(restaurants) + len(attractions) + len(hotels)
+    return PlaceRecommendationsResponse(
+        response=f"Here are more {query_hint} from your search.",
+        intent="restaurants" if restaurants else ("attractions" if attractions else "hotels"),
+        retrieval_used=True,
+        source_status="pool",
+        cached=False,
+        restaurants=restaurants,
+        attractions=attractions,
+        hotels=hotels,
+        turn_mode="new_search",
+    )
+
+
+def _refill_variant_queries(query_hint: str) -> List[str]:
+    """Return bounded variant queries for a refill attempt when pool is empty."""
+    base = (query_hint or "").strip().lower()
+    if not base:
+        return []
+    return [
+        f"best {base}",
+        f"popular {base}",
+    ]
+
+
+def _response_identity_keys(response: PlaceRecommendationsResponse) -> frozenset:
+    """Build identity keys from cards already in a PlaceRecommendationsResponse."""
+    keys: set = set()
+    for card in list(response.restaurants) + list(response.attractions) + list(response.hotels):
+        keys.update(_card_identity_keys(card))
+    return frozenset(keys)
+
+
 def build_typed_concierge_response(
     service: ConciergeService,
     payload: ConciergeSearchRequest,
@@ -252,9 +334,19 @@ def build_typed_concierge_response(
                 payload.trip_id,
             )
 
-    # PR 2.5: more-options continuation — force place_recommendations with a category-aware
-    # provider query when the user says "more options" / "show more" / etc. after prior cards.
-    # The classifier correctly marks these as new_search; we intercept here to preserve category.
+    # PR 2.5 / PR 3: more-options continuation — fast pagination through verified places.
+    #
+    # Algorithm:
+    #   1. Canonicalize: use canonical subtype query (e.g. "mexican restaurants") not
+    #      "more mexican restaurants" — better cache alignment and provider diversity.
+    #   2. Pool check: if in-memory result pool has unused verified cards, return them
+    #      immediately without a provider call (target < 2 s backend time).
+    #   3. Provider search: if pool miss, call service.search() with canonical query +
+    #      prior_identity_keys for early dedup (skips reason_generation for duplicates).
+    #   4. Bounded refill: if < 2 unique cards remain, try up to 2 canonical variant
+    #      queries ("best <subtype>", "popular <subtype>") to surface new candidates.
+    #   5. Store: save final unique cards in pool keyed by (trip_id, canonical_query)
+    #      for the next more-options call.
     if (
         _flag_on
         and turn_mode == "new_search"
@@ -263,37 +355,201 @@ def build_typed_concierge_response(
     ):
         _query_hint = ctx.prior_place_query_hint or derive_category_hint(ctx.prior_card_pool)
         if _query_hint:
-            _contextualized_query = f"more {_query_hint}"
+            _t0_cont = time.perf_counter()
+            # Canonical query: plain subtype phrase without "more " prefix.
+            # This aligns with the initial search cache key, reducing redundant provider calls.
+            _canonical_query = _query_hint
+
+            _prior_keys = _build_prior_identity_keys_set(ctx.prior_card_pool)
+
             logger.info(
                 "concierge.context.more_options_continuation trip_id=%s "
-                "turn_mode=new_search provider_call=true "
-                "original_user_query=%r contextualized_query=%r "
-                "prior_category_hint=%s source_message_id=%s card_pool_size=%d",
+                "turn_mode=new_search canonical_query=%r original_user_query=%r "
+                "prior_category_hint=%s source_message_id=%s card_pool_size=%d "
+                "prior_identity_key_count=%d",
                 payload.trip_id,
+                _canonical_query,
                 payload.user_query,
-                _contextualized_query,
                 _query_hint,
                 ctx.source_message_id,
                 ctx.card_pool_size,
+                len(_prior_keys),
             )
-            try:
-                legacy = service.search(
-                    payload.trip_id, _contextualized_query, user_id, payload.client_message_id
+
+            # ── Step 2: pool check ────────────────────────────────────────────
+            _t_pool_start = time.perf_counter()
+            _pool_entry = _GLOBAL_CONTINUATION_POOL.pop(str(payload.trip_id), _canonical_query)
+            _pool_ms = int((time.perf_counter() - _t_pool_start) * 1000)
+            _pool_hit = _pool_entry is not None
+            _pool_size_before = _pool_entry[1] if _pool_entry is not None else 0
+
+            if _pool_hit and _pool_entry is not None:
+                _pool_unique, _pool_unique_count = _filter_pool_buckets_by_identity(
+                    _pool_entry[0], _prior_keys
                 )
-                typed_payload = PlaceRecommendationsResponse(**legacy.model_dump())
-                typed_payload, dedup_stats = _exclude_prior_verified_cards(typed_payload, ctx.prior_card_pool)
                 logger.info(
-                    "concierge.more_options_continuation.dedup trip_id=%s prior_exclusion_count=%d "
-                    "raw_candidate_count=%d verified_candidate_count=%d excluded_prior_duplicate_count=%d "
-                    "final_unique_count=%d cache_status=%s",
+                    "concierge.more_options_continuation.pool trip_id=%s "
+                    "pool_hit=true pool_size_before=%d pool_unique_count=%d pool_ms=%d",
+                    payload.trip_id, _pool_size_before, _pool_unique_count, _pool_ms,
+                )
+                if _pool_unique_count >= 1:
+                    try:
+                        _typed_pool = _build_place_response_from_pool(_pool_unique, _canonical_query)
+                        _decision_pool = RouteDecision(
+                            response_type="place_recommendations",
+                            stage1_prior={"place_recommendations": 1.0, "trip_advice": 0.0, "unsupported": 0.0},
+                            stage2_confidence=1.0,
+                            code="more_options_continuation",
+                        )
+                        logger.info(
+                            "concierge.more_options_continuation.pool_fast_path trip_id=%s "
+                            "unique_count=%d total_ms=%d",
+                            payload.trip_id,
+                            _pool_unique_count,
+                            int((time.perf_counter() - _t0_cont) * 1000),
+                        )
+                        try:
+                            validated = _typed_response_adapter.validate_python(_typed_pool)
+                            return validated, _decision_pool
+                        except ValidationError:
+                            logger.warning(
+                                "concierge.more_options_continuation.pool_validation_failed "
+                                "trip_id=%s falling_through_to_provider=true",
+                                payload.trip_id,
+                            )
+                    except Exception:
+                        logger.exception(
+                            "concierge.more_options_continuation.pool_build_failed "
+                            "trip_id=%s falling_through_to_provider=true",
+                            payload.trip_id,
+                        )
+            else:
+                logger.info(
+                    "concierge.more_options_continuation.pool trip_id=%s "
+                    "pool_hit=false pool_ms=%d",
+                    payload.trip_id, _pool_ms,
+                )
+
+            # ── Step 3: provider search (canonical query + early dedup) ───────
+            try:
+                _t_provider_start = time.perf_counter()
+                legacy = service.search(
+                    payload.trip_id,
+                    _canonical_query,
+                    user_id,
+                    payload.client_message_id,
+                    prior_identity_keys=_prior_keys,
+                )
+                _provider_ms = int((time.perf_counter() - _t_provider_start) * 1000)
+
+                typed_payload = PlaceRecommendationsResponse(**legacy.model_dump())
+
+                # Post-search dedup (catches any duplicates not covered by early dedup)
+                _t_dedup_start = time.perf_counter()
+                typed_payload, dedup_stats = _exclude_prior_verified_cards(typed_payload, ctx.prior_card_pool)
+                _dedup_ms = int((time.perf_counter() - _t_dedup_start) * 1000)
+                _final_count = dedup_stats["final_unique_count"]
+
+                logger.info(
+                    "concierge.more_options_continuation.dedup trip_id=%s "
+                    "prior_exclusion_count=%d raw_candidate_count=%d "
+                    "excluded_prior_duplicate_count=%d final_unique_count=%d "
+                    "provider_ms=%d dedup_ms=%d",
                     payload.trip_id,
                     dedup_stats["prior_exclusion_count"],
                     dedup_stats["raw_candidate_count"],
-                    dedup_stats["verified_candidate_count"],
                     dedup_stats["excluded_prior_duplicate_count"],
-                    dedup_stats["final_unique_count"],
-                    getattr(typed_payload, "cache_status", None),
+                    _final_count,
+                    _provider_ms,
+                    _dedup_ms,
                 )
+
+                # ── Step 4: bounded refill when < 2 unique cards ──────────────
+                if _final_count < 2:
+                    _combined_prior = _prior_keys | _response_identity_keys(typed_payload)
+                    _refill_variants = _refill_variant_queries(_canonical_query)
+                    _refill_added = 0
+                    for _variant in _refill_variants:
+                        if _final_count >= 2:
+                            break
+                        try:
+                            _t_refill = time.perf_counter()
+                            _refill_legacy = service.search(
+                                payload.trip_id,
+                                _variant,
+                                user_id,
+                                None,
+                                prior_identity_keys=_combined_prior,
+                            )
+                            _refill_resp = PlaceRecommendationsResponse(**_refill_legacy.model_dump())
+                            _refill_resp, _refill_dedup = _exclude_prior_verified_cards(
+                                _refill_resp,
+                                ctx.prior_card_pool,
+                            )
+                            # Also exclude cards already in current typed_payload
+                            _current_keys = _response_identity_keys(typed_payload)
+                            _refill_resp.restaurants = [
+                                c for c in _refill_resp.restaurants
+                                if _card_identity_keys(c).isdisjoint(_current_keys)
+                            ]
+                            _refill_resp.attractions = [
+                                c for c in _refill_resp.attractions
+                                if _card_identity_keys(c).isdisjoint(_current_keys)
+                            ]
+                            _refill_resp.hotels = [
+                                c for c in _refill_resp.hotels
+                                if _card_identity_keys(c).isdisjoint(_current_keys)
+                            ]
+                            _batch_added = (
+                                len(_refill_resp.restaurants)
+                                + len(_refill_resp.attractions)
+                                + len(_refill_resp.hotels)
+                            )
+                            if _batch_added > 0:
+                                typed_payload.restaurants += _refill_resp.restaurants
+                                typed_payload.attractions += _refill_resp.attractions
+                                typed_payload.hotels += _refill_resp.hotels
+                                _refill_added += _batch_added
+                                _final_count += _batch_added
+                                _combined_prior = _combined_prior | _response_identity_keys(typed_payload)
+                            logger.info(
+                                "concierge.more_options_continuation.refill trip_id=%s "
+                                "variant=%r batch_added=%d total_unique=%d refill_ms=%d",
+                                payload.trip_id,
+                                _variant,
+                                _batch_added,
+                                _final_count,
+                                int((time.perf_counter() - _t_refill) * 1000),
+                            )
+                        except Exception:
+                            logger.warning(
+                                "concierge.more_options_continuation.refill_failed "
+                                "trip_id=%s variant=%r",
+                                payload.trip_id,
+                                _variant,
+                                exc_info=True,
+                            )
+
+                # ── Step 5: store results in pool for next more-options call ──
+                _pool_cards = {
+                    "restaurants": [c.model_dump() for c in typed_payload.restaurants],
+                    "attractions": [c.model_dump() for c in typed_payload.attractions],
+                    "hotels": [c.model_dump() for c in typed_payload.hotels],
+                }
+                if _final_count > 0:
+                    _GLOBAL_CONTINUATION_POOL.store(
+                        str(payload.trip_id), _canonical_query, _pool_cards
+                    )
+
+                logger.info(
+                    "concierge.more_options_continuation.complete trip_id=%s "
+                    "final_unique_count=%d total_ms=%d provider_cache_status=%s",
+                    payload.trip_id,
+                    _final_count,
+                    int((time.perf_counter() - _t0_cont) * 1000),
+                    getattr(legacy, "cached", False),
+                )
+
                 decision = RouteDecision(
                     response_type="place_recommendations",
                     stage1_prior={"place_recommendations": 1.0, "trip_advice": 0.0, "unsupported": 0.0},
