@@ -587,6 +587,31 @@ class TestConciergeSearch:
         assert result.warnings
 
 
+    def test_require_google_unavailable_only_when_live_research_reports_unavailable(self, monkeypatch):
+        svc = self._svc("Chicago")
+        monkeypatch.setattr(svc._settings, "research_engine_require_google_verification", True)
+        live_result = LiveResearchResult(source_status=SOURCE_NONE, provider_name="stub")
+        with patch("app.services.concierge.SearchService") as MockSearch,              patch.object(svc, "_fetch_live_research", return_value=live_result),              patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            mock_search = self._mock_search_svc()
+            MockSearch.return_value = mock_search
+            result = svc.search(FAKE_TRIP_ID, "Seafood restaurants", FAKE_USER_ID)
+        assert all("google verification" not in (w or "").lower() for w in result.warnings)
+
+    def test_require_google_unavailable_warning_when_live_research_marks_unavailable(self, monkeypatch):
+        svc = self._svc("Chicago")
+        monkeypatch.setattr(svc._settings, "research_engine_require_google_verification", True)
+        live_result = LiveResearchResult(
+            research_sources=[UnifiedResearchSourceResult(title="Source", trip_addable=False)],
+            source_status=SOURCE_UNAVAILABLE,
+            provider_name="stub",
+        )
+        with patch("app.services.concierge.SearchService") as MockSearch,              patch.object(svc, "_fetch_live_research", return_value=live_result),              patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            mock_search = self._mock_search_svc()
+            MockSearch.return_value = mock_search
+            result = svc.search(FAKE_TRIP_ID, "Seafood restaurants", FAKE_USER_ID)
+        assert any("google verification" in (w or "").lower() for w in result.warnings)
+
+
 class _FakeMessagesQuery:
     def select(self, *_args, **_kwargs):
         return self

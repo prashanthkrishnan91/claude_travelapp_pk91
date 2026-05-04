@@ -77,6 +77,7 @@ from app.models.concierge import (
     GoogleVerification,
     SOURCE_LIVE_SEARCH,
     SOURCE_NONE,
+    SOURCE_UNAVAILABLE,
     PlaceSupportingDetails,
     SourceEvidence,
     VenueEnrichment,
@@ -4216,7 +4217,7 @@ class LiveResearchService:
                     )
                     for h in hits[: min(len(hits), 8)]
                 ],
-                source_status=SOURCE_LIVE_SEARCH,
+                source_status=SOURCE_UNAVAILABLE,
                 provider_name=self._provider.name,
                 source_url=hits[0].url if hits else None,
             )
