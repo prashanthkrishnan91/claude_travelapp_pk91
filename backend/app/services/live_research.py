@@ -3772,6 +3772,31 @@ def normalize_hits(
     }
 
 
+# ── Early-dedup helpers (prior place identity from GooglePlaceVerification) ───
+
+
+def _gv_identity_keys_from_verification(
+    name_lower: str,
+    gv: "GooglePlaceVerification",
+) -> frozenset:
+    """Compute stable identity keys from a GooglePlaceVerification.
+
+    Mirrors the key schema in ai._card_identity_keys so that continuation
+    dedup can filter candidates before reason_generation runs.
+    Returns an empty frozenset when no stable key can be derived.
+    """
+    keys: set = set()
+    if gv.provider_place_id:
+        keys.add(f"pid:{gv.provider_place_id.strip().lower()}")
+    if gv.google_maps_uri:
+        keys.add(f"gmaps:{gv.google_maps_uri.strip().lower()}")
+    gv_name = re.sub(r"[^a-z0-9]+", " ", (gv.name or name_lower).lower()).strip()
+    gv_addr = re.sub(r"[^a-z0-9]+", " ", (gv.formatted_address or "").lower()).strip()
+    if gv_name and gv_addr:
+        keys.add(f"name_addr:{gv_name}|{gv_addr}")
+    return frozenset(keys)
+
+
 # ── Service ──────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -3836,22 +3861,35 @@ class LiveResearchService:
         destination: str,
         user_query: str,
         dates: Optional[str] = None,
+        prior_identity_keys: Optional[frozenset] = None,
         _debug_out: Optional[Dict] = None,
     ) -> LiveResearchResult:
+        """Fetch and normalize live-research results for the given intent.
+
+        prior_identity_keys: stable identity key set (pid:/gmaps:/name_addr:) for
+        cards already shown to the user. When provided, candidates whose Google
+        verification matches any key are filtered out BEFORE reason_generation runs,
+        avoiding wasted enrichment work for continuation turns.
+        """
         if not self._enabled or intent not in _LIVE_ENABLED_INTENTS or not destination:
             return LiveResearchResult()
+
+        _t_fetch_start = time.monotonic()
 
         derived_category = _derive_query_category(intent, user_query)
         cache_key = _make_cache_key(intent, destination, user_query, dates)
         logger.info(
-            "live_research_request query=%r intent=%s derived_category=%s destination=%s cache_key=%s",
+            "live_research_request query=%r intent=%s derived_category=%s destination=%s cache_key=%s "
+            "prior_key_count=%d",
             user_query,
             intent,
             derived_category,
             destination,
             cache_key,
+            len(prior_identity_keys) if prior_identity_keys else 0,
         )
         cache_entry = None
+        _t_cache_start = time.monotonic()
         try:
             cache_entry = self._cache.get_with_status(cache_key)
             if cache_entry is not None:
@@ -3873,6 +3911,7 @@ class LiveResearchService:
             logger.warning("live_research_cache read_error key=%s err=%s", cache_key, _cache_exc)
             cache_entry = None
 
+        _t_cache_ms = int((time.monotonic() - _t_cache_start) * 1000)
         if cache_entry is not None:
             _, raw_cached = cache_entry
             payload = self._payload_to_result(raw_cached)
@@ -3882,6 +3921,11 @@ class LiveResearchService:
                     _debug_out["cache_hit"] = True
                     _debug_out["cache_key"] = cache_key
                     _debug_out["cache_status"] = cache_entry[0]
+                logger.info(
+                    "live_research.timing cache_hit=true cache_ms=%d total_ms=%d",
+                    _t_cache_ms,
+                    int((time.monotonic() - _t_fetch_start) * 1000),
+                )
                 return payload
 
         logger.info("live_research_cache miss key=%s", cache_key)
@@ -3895,12 +3939,14 @@ class LiveResearchService:
         query = _build_search_query(intent, destination, user_query)
         if _debug_out is not None:
             _debug_out["search_queries"] = [query]
+        _t_provider_start = time.monotonic()
         try:
             hits = self._provider.search(query, max_results=self._max_results)
         except Exception as exc:  # pragma: no cover — defensive
             logger.warning("Live research provider %s raised %s", self._provider.name, exc)
             hits = []
-        logger.info("source=tavily count=%d", len(hits))
+        _t_provider_ms = int((time.monotonic() - _t_provider_start) * 1000)
+        logger.info("source=tavily count=%d provider_fetch_ms=%d", len(hits), _t_provider_ms)
 
         if not hits:
             return LiveResearchResult(provider_name=self._provider.name)
@@ -3945,10 +3991,12 @@ class LiveResearchService:
                 )
                 candidate_source_map[low] = "tavily_article_extract"
         raw_candidate_count = len(candidate_names)
+        _t_extraction_ms = int((time.monotonic() - _t_provider_start) * 1000)
         if _debug_out is not None:
             _debug_out["raw_candidates"] = list(candidate_names)
             _debug_out["raw_candidate_count"] = raw_candidate_count
 
+        _t_verify_start = time.monotonic()
         for norm in candidate_names[:MAX_VERIFICATION_CANDIDATES]:
             low = norm.lower()
             vkey = f"verify::{destination.lower()}::{low}::{intent}"
@@ -4177,6 +4225,36 @@ class LiveResearchService:
                 "Google Places verifier unavailable; live research will return non-authoritative addable candidates only because REQUIRE_GOOGLE is disabled."
             )
 
+        _t_verify_ms = int((time.monotonic() - _t_verify_start) * 1000)
+
+        # ── Early dedup: remove prior-shown candidates before reason_generation ─
+        # When prior_identity_keys is supplied (continuation turns), any candidate
+        # whose Google verification matches a prior card is removed from both
+        # verified_candidates and google_verifications so that normalize_hits /
+        # reason_generation does not run for them.  This is the primary latency
+        # improvement for "more options" turns.
+        _early_dedup_count = 0
+        _t_early_dedup_start = time.monotonic()
+        if prior_identity_keys and google_verifications is not None:
+            for _low in list(google_verifications.keys()):
+                _gv = google_verifications[_low]
+                _gv_keys = _gv_identity_keys_from_verification(_low, _gv)
+                if _gv_keys and not _gv_keys.isdisjoint(prior_identity_keys):
+                    del google_verifications[_low]
+                    verified_candidates.pop(_low, None)
+                    _early_dedup_count += 1
+            if _early_dedup_count > 0:
+                logger.info(
+                    "live_research.early_dedup prior_key_count=%d early_dedup_count=%d "
+                    "remaining_verified=%d",
+                    len(prior_identity_keys),
+                    _early_dedup_count,
+                    len(verified_candidates),
+                )
+        _t_early_dedup_ms = int((time.monotonic() - _t_early_dedup_start) * 1000)
+        # ── /Early dedup ─────────────────────────────────────────────────────────
+
+        _t_reason_start = time.monotonic()
         normalized = normalize_hits(
             hits,
             intent=intent,
@@ -4332,6 +4410,24 @@ class LiveResearchService:
             cached=False,
             provider_name=self._provider.name,
             source_url=first_url,
+        )
+        _t_reason_ms = int((time.monotonic() - _t_reason_start) * 1000)
+        _t_total_ms = int((time.monotonic() - _t_fetch_start) * 1000)
+        logger.info(
+            "live_research.timing provider_cache_status=%s "
+            "cache_ms=%d provider_fetch_ms=%d extraction_ms=%d google_verify_ms=%d "
+            "prior_dedup_ms=%d early_dedup_count=%d reason_generation_ms=%d total_ms=%d "
+            "final_unique_count=%d",
+            "hit" if cache_entry is not None else "miss",
+            _t_cache_ms,
+            _t_provider_ms,
+            _t_extraction_ms,
+            _t_verify_ms,
+            _t_early_dedup_ms,
+            _early_dedup_count,
+            _t_reason_ms,
+            _t_total_ms,
+            len(result.restaurants) + len(result.attractions) + len(result.hotels),
         )
         try:
             payload_to_store = self._result_to_payload(result)

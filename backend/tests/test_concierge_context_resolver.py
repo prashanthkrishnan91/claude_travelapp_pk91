@@ -688,16 +688,23 @@ def test_sequence_cocktail_bars_top3_more_options():
         total2 = len(response2.restaurants) + len(response2.attractions) + len(response2.hotels)
         assert total2 == 3
 
-        # --- Turn 3: 'more options' — new_search override ---
+        # --- Turn 3: 'more options' — new_search override, at least one provider call ---
+        from app.concierge.result_pool import _GLOBAL_CONTINUATION_POOL
+        _GLOBAL_CONTINUATION_POOL.clear(str(FAKE_TRIP_ID))
+
         svc3 = MagicMock()
         svc3._db = MagicMock()
         _setup_db_with_cards(svc3._db, cards)
-        svc3.search.return_value = _mock_search_response()
+        # Return a fresh card so bounded refill is not triggered (final_count >= 1)
+        svc3.search.return_value = _mock_search_response_with_new_card()
 
         build_typed_concierge_response(
             svc3, ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="more options"), FAKE_TRIP_ID
         )
-        svc3.search.assert_called_once()
+        # At least one provider call; canonical query used, not "more options"
+        assert svc3.search.call_count >= 1, "Turn 3: provider should be called at least once"
+        first_query = svc3.search.call_args_list[0][0][1]
+        assert first_query != "more options", "Turn 3: must not forward raw 'more options' to provider"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -735,6 +742,45 @@ def _mock_search_response() -> MagicMock:
         "cached": False,
         "live_provider": None,
         "restaurants": [],
+        "attractions": [],
+        "hotels": [],
+        "research_sources": [],
+        "areas": [],
+        "area_comparisons": [],
+        "suggestions": [],
+        "sources": [],
+        "warnings": [],
+        "turn_mode": None,
+        "context_reuse": None,
+    }
+    return r
+
+
+def _mock_search_response_with_new_card() -> MagicMock:
+    """Build a mock response with one unique fresh card (prevents bounded refill trigger)."""
+    r = MagicMock()
+    r.model_dump.return_value = {
+        "response": "Here are new options.",
+        "intent": "nightlife",
+        "retrieval_used": True,
+        "source_status": "live_search",
+        "cached": False,
+        "live_provider": None,
+        "restaurants": [
+            {
+                "type": "verified_place",
+                "name": "FreshNewBar",
+                "source": "Search",
+                "google_verification": {
+                    "provider": "google_places",
+                    "business_status": "OPERATIONAL",
+                    "provider_place_id": "pid-fresh-new-bar",
+                    "google_maps_uri": "https://maps.google.com/?cid=freshnewbar",
+                    "name": "FreshNewBar",
+                    "formatted_address": "999 Fresh St, Chicago IL",
+                },
+            }
+        ],
         "attractions": [],
         "hotels": [],
         "research_sources": [],

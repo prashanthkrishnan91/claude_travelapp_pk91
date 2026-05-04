@@ -1,6 +1,110 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-04) — AI Concierge Conversational Context v1 PR 2.5 ("More options" category-preserving continuation)
+## Last change (2026-05-04) — AI Concierge Conversational Context v1 PR 3 ("More options" fast continuation: pool + early dedup + bounded refill)
+
+### Problem diagnosed from Railway logs
+Two root causes behind "only 1 new verified place after more options":
+
+**Root cause 1 (shallow pool / redundant provider calls)**
+Continuation query was `"more mexican restaurants"` — a different cache key from the initial
+`"mexican restaurants"` search. Tavily returned the same ~10 articles both times, yielding
+overlapping candidates. After 27 prior identity keys excluded 9 of 10 results, only 1 unique
+card remained. The query itself was surfacing the same shallow provider pool every time.
+
+**Root cause 2 (latency: ~78 s)**
+Reason generation and enrichment ran for ALL 10 candidates BEFORE `_exclude_prior_verified_cards`
+ran. This wasted ~70 s enriching 9 candidates that were discarded immediately afterwards.
+
+### Fix
+
+#### 1. Canonicalize provider query (removes "more " prefix)
+`_contextualized_query = f"more {_query_hint}"` changed to `_canonical_query = _query_hint`
+(e.g., `"mexican restaurants"`, not `"more mexican restaurants"`). This:
+- Aligns cache key with initial search → cache hit reuse when query is fresh
+- Reduces provider query variation → cleaner article extraction
+
+#### 2. In-memory result pool (`backend/app/concierge/result_pool.py`, new)
+`ContinuationResultPool` singleton keyed by `(trip_id, canonical_query)` with 10-min TTL.
+- `store(trip_id, canonical_query, buckets)` — called after each successful continuation search
+- `pop(trip_id, canonical_query)` → `(buckets, total)` or `None` — returns raw pool cards
+- `clear(trip_id)` — removes all pool entries for a trip
+
+Pool fast path: if pool has unused verified cards (not in `prior_identity_keys`), returns them
+immediately without a provider call. Target: < 2 s backend time on pool hit.
+
+**Documented limitations:**
+- In-memory only; pool is lost on process restart or Gunicorn worker recycle.
+- Not shared across processes; multi-worker deployments see independent pools. Pool hit rate
+  depends on sticky-session or single-worker config (Railway single-replica benefits fully).
+- TTL: 10 min.
+
+#### 3. Early dedup before reason_generation
+`LiveResearchService.fetch()` now accepts `prior_identity_keys: Optional[frozenset]`.
+After Phase 3 (Google Places verification — where stable place IDs are available), candidates
+matching prior identity keys are removed from `google_verifications` and `verified_candidates`
+BEFORE `normalize_hits()` / reason_generation. This eliminates wasted enrichment for cards
+that would be discarded anyway.
+
+Helper `_gv_identity_keys_from_verification(name_lower, gv)` computes `pid:/gmaps:/name_addr:`
+keys from a `GooglePlaceVerification` — mirrors the schema in `ai._card_identity_keys`.
+
+#### 4. Bounded refill (≤ 2 variant queries)
+When `_final_count < 2` after canonical search + dedup, the continuation path tries up to 2
+canonical variant queries ("best {subtype}", "popular {subtype}") via `service.search()`.
+Each refill uses the same Google verify gate. Results are aggregated and de-overlapped.
+Maximum 3 total provider calls (1 canonical + 2 refill). No loops.
+
+#### 5. Per-stage timing instrumentation
+`fetch()` logs `live_research.timing` with:
+`cache_ms`, `provider_fetch_ms`, `extraction_ms`, `google_verify_ms`, `prior_dedup_ms`,
+`early_dedup_count`, `reason_generation_ms`, `total_ms`, `final_unique_count`.
+
+Continuation block in `ai.py` logs:
+- Pool check: `result_pool_hit`, `pool_size_before`, `pool_unique_count`, `pool_ms`
+- Provider: `provider_ms`, `dedup_ms`, `final_unique_count`, `total_ms`
+- Refill: `variant`, `batch_added`, `total_unique`, `refill_ms`
+
+### Behavior matrix (post-PR 3)
+
+| Query | Path | Provider calls |
+|-------|------|---------------|
+| "Mexican restaurants" → initial | new_search → provider | 1 |
+| "more options" (pool hit, unique cards) | pool fast path | 0 |
+| "more options" (pool miss, canonical gives unique) | provider (canonical query) | 1 |
+| "more options" (all duplicates) | canonical + up to 2 refill variants | ≤ 3 |
+| "more options" (only 1 verified unique) | returns 1 card, no fabrication | ≤ 3 |
+| "Italian restaurants" → more options | canonical "italian restaurants" | ≤ 3 |
+| "cocktail bars" → more options | canonical "cocktail bars" | ≤ 3 |
+| "top 3" / "best one" / "compare these" | refine_previous card reuse | 0 |
+
+### Remaining risks
+- Pool is in-memory: multi-instance Railway deploys or dyno restarts will miss the pool.
+  Fall-through to provider path is safe; just slower.
+- Refill variant queries ("best X") may surface overlapping Tavily articles in small markets
+  with few places. After dedup, 0–1 new cards may be the honest result — this is correct
+  behavior, not a bug.
+- The canonical query change means the cache key for a fresh initial search ("mexican
+  restaurants") now matches continuation — cache hit on canonical is intentional and correct.
+
+### What was added / changed
+- **`backend/app/concierge/result_pool.py`** — new, in-memory continuation pool
+- **`backend/app/services/live_research.py`** — `prior_identity_keys` param to `fetch()`,
+  `_gv_identity_keys_from_verification()` helper, per-stage timing, early dedup after Phase 3
+- **`backend/app/services/concierge.py`** — `prior_identity_keys` optional param to `search()`
+  and `_fetch_live_research()`
+- **`backend/app/routes/ai.py`** — reimplemented `more_options_continuation` block:
+  canonical query, pool check, early dedup, bounded refill, pool store, timing logs;
+  new helpers `_build_prior_identity_keys_set`, `_filter_pool_buckets_by_identity`,
+  `_build_place_response_from_pool`, `_refill_variant_queries`, `_response_identity_keys`
+- **`backend/tests/test_concierge_more_options.py`** — pool isolation fixture, updated query
+  assertions for canonical query (removed "more " prefix), 8 new required tests
+- **`backend/tests/test_result_pool.py`** — new, 11 unit tests for ContinuationResultPool
+- **`backend/tests/test_concierge_context_resolver.py`** — updated sequence test for new provider
+  call contract
+
+---
+
+## Previous change (2026-05-04) — AI Concierge Conversational Context v1 PR 2.5 ("More options" category-preserving continuation)
 
 ### Staging QA bug found
 After enabling `concierge_context_v1_enabled` in a safe staging environment, the manual wife-test sequence found:

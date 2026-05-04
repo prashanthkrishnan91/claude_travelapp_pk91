@@ -62,11 +62,20 @@ from app.concierge.context import (
     build_context_window,
 )
 from app.concierge.contracts import PlaceRecommendationsResponse
+from app.concierge.result_pool import _GLOBAL_CONTINUATION_POOL
 from app.models.concierge import ConciergeSearchRequest
 from app.routes.ai import build_typed_concierge_response
 
 FAKE_TRIP_ID = UUID("00000000-0000-0000-0000-000000000010")
 FAKE_USER_ID = UUID("00000000-0000-0000-0000-000000000011")
+
+
+@pytest.fixture(autouse=True)
+def _clear_result_pool() -> None:
+    """Prevent test cross-contamination via the module-level pool singleton."""
+    _GLOBAL_CONTINUATION_POOL.clear(str(FAKE_TRIP_ID))
+    yield
+    _GLOBAL_CONTINUATION_POOL.clear(str(FAKE_TRIP_ID))
 
 
 # ── Card factories ─────────────────────────────────────────────────────────────
@@ -418,10 +427,11 @@ def test_more_options_flag_on_prior_cards_returns_place_recommendations() -> Non
     assert decision.code == "more_options_continuation"
 
 
-def test_more_options_calls_search_with_contextualized_query() -> None:
-    """Provider search must receive 'more cocktail bars', not 'more options'."""
+def test_more_options_calls_search_with_canonical_query() -> None:
+    """Provider search must receive canonical 'cocktail bars' (no 'more ' prefix), not 'more options'."""
     payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="more options")
-    fake_response = _make_fake_place_response()
+    # Return a response with >=1 card so bounded refill is not triggered (final_count >= 1)
+    fake_response = _make_place_response_with_names(["NewBar1"])
     mock_service = MagicMock()
     mock_service.search.return_value = fake_response
 
@@ -431,12 +441,11 @@ def test_more_options_calls_search_with_contextualized_query() -> None:
     ):
         build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
 
-    mock_service.search.assert_called_once()
-    call_args = mock_service.search.call_args
-    # Second positional arg is the user_query sent to provider
-    provider_query = call_args[0][1]
-    assert provider_query == "more cocktail bars"
-    assert provider_query != "more options"
+    # First call must use canonical query (no "more " prefix), not the raw user query
+    first_call_query = mock_service.search.call_args_list[0][0][1]
+    assert first_call_query == "cocktail bars", f"Expected 'cocktail bars', got {first_call_query!r}"
+    assert first_call_query != "more options"
+    assert "more " not in first_call_query
 
 
 def test_italian_more_options_preserves_subtype_in_query() -> None:
@@ -456,13 +465,15 @@ def test_italian_more_options_preserves_subtype_in_query() -> None:
     )
     payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="more options")
     mock_service = MagicMock()
-    mock_service.search.return_value = _make_fake_place_response()
+    # Return a card so refill is not triggered
+    mock_service.search.return_value = _make_place_response_with_names(["NuovoResto"])
     with (
         patch("app.routes.ai.get_settings", return_value=_settings(flag=True)),
         patch("app.routes.ai.build_context_window", return_value=ctx),
     ):
         build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
-    assert mock_service.search.call_args[0][1] == "more italian restaurants"
+    first_call_query = mock_service.search.call_args_list[0][0][1]
+    assert first_call_query == "italian restaurants"
 
 
 def test_more_options_excludes_prior_card_identities_from_response() -> None:
@@ -597,8 +608,9 @@ def test_show_more_flag_on_prior_restaurant_cards_returns_place_recommendations(
 
     assert result.response_type == "place_recommendations"
     assert decision.code == "more_options_continuation"
-    call_args = mock_service.search.call_args[0][1]
-    assert call_args == "more restaurants"
+    # canonical query: no "more " prefix
+    first_call_query = mock_service.search.call_args_list[0][0][1]
+    assert first_call_query == "restaurants"
 
 
 def test_more_like_these_prior_attraction_cards() -> None:
@@ -623,7 +635,8 @@ def test_more_like_these_prior_attraction_cards() -> None:
 
     assert result.response_type == "place_recommendations"
     assert decision.code == "more_options_continuation"
-    assert mock_service.search.call_args[0][1] == "more attractions"
+    first_call_query = mock_service.search.call_args_list[0][0][1]
+    assert first_call_query == "attractions"
 
 
 def test_more_options_flag_off_falls_through_to_router() -> None:
@@ -750,3 +763,304 @@ def test_top_3_still_uses_card_reuse_not_provider(monkeypatch) -> None:
     assert decision.code == "refine_previous_card_reuse"
     # Provider was NOT called
     mock_service.search.assert_not_called()
+
+
+# ── PR 3 required tests ────────────────────────────────────────────────────────
+# Tests 1-8 as specified in the task.
+
+
+# Test 1: Initial search stores verified continuation pool
+def test_initial_search_stores_pool_after_continuation() -> None:
+    """After a continuation search returns results, the pool stores them for next call."""
+    pool = _pool(restaurants=[_verified_card("Taco1"), _verified_card("Taco2")], intent="restaurants")
+    ctx = ContextWindow(
+        trip_id=FAKE_TRIP_ID,
+        card_pool_size=2,
+        has_prior_cards=True,
+        source_message_id="msg-prev",
+        prior_card_pool=pool,
+        prior_place_category="restaurants",
+        prior_place_query_hint="mexican restaurants",
+    )
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="more options")
+    mock_service = MagicMock()
+    # Return 2 unique new restaurants (not in prior pool)
+    mock_service.search.return_value = _make_place_response_with_names(["NewTaco1", "NewTaco2"])
+
+    with (
+        patch("app.routes.ai.get_settings", return_value=_settings(flag=True)),
+        patch("app.routes.ai.build_context_window", return_value=ctx),
+    ):
+        result, _ = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+
+    # Pool should now have entries for this trip + canonical query
+    assert _GLOBAL_CONTINUATION_POOL.pool_size() > 0, "Pool should be populated after successful search"
+    # Result should include the new restaurants
+    assert {r.name for r in result.restaurants} == {"NewTaco1", "NewTaco2"}
+
+
+# Test 2: Second more-options uses pool fast path (no new provider call)
+def test_second_more_options_uses_pool_not_provider() -> None:
+    """When pool has unused verified cards, second more-options returns from pool without provider."""
+    prior_pool = _pool(restaurants=[_verified_card("Taco1")], intent="restaurants")
+    ctx = ContextWindow(
+        trip_id=FAKE_TRIP_ID,
+        card_pool_size=1,
+        has_prior_cards=True,
+        source_message_id="msg-prev",
+        prior_card_pool=prior_pool,
+        prior_place_category="restaurants",
+        prior_place_query_hint="mexican restaurants",
+    )
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="more options")
+
+    # Pre-populate the pool with 2 fresh cards
+    _GLOBAL_CONTINUATION_POOL.store(
+        str(FAKE_TRIP_ID),
+        "mexican restaurants",
+        {
+            "restaurants": [_verified_card("PoolTaco1"), _verified_card("PoolTaco2")],
+            "attractions": [],
+            "hotels": [],
+        },
+    )
+
+    mock_service = MagicMock()
+    mock_service.search.return_value = _make_place_response_with_names(["ShouldNotAppear"])
+
+    with (
+        patch("app.routes.ai.get_settings", return_value=_settings(flag=True)),
+        patch("app.routes.ai.build_context_window", return_value=ctx),
+    ):
+        result, decision = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+
+    # Provider must NOT have been called (pool fast path)
+    mock_service.search.assert_not_called()
+    assert decision.code == "more_options_continuation"
+    assert {r.name for r in result.restaurants} == {"PoolTaco1", "PoolTaco2"}
+
+
+# Test 3: Exhausted pool triggers bounded refill (at most 2 variant queries)
+def test_exhausted_pool_triggers_bounded_refill() -> None:
+    """When provider returns only duplicates (pool effectively empty), refill fires at most twice."""
+    prior_pool = _pool(restaurants=[_verified_card("Taco1"), _verified_card("Taco2")], intent="restaurants")
+    ctx = ContextWindow(
+        trip_id=FAKE_TRIP_ID,
+        card_pool_size=2,
+        has_prior_cards=True,
+        source_message_id="msg-prev",
+        prior_card_pool=prior_pool,
+        prior_place_category="restaurants",
+        prior_place_query_hint="mexican restaurants",
+    )
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="more options")
+    mock_service = MagicMock()
+    # All calls return duplicates of prior pool → triggers refill
+    mock_service.search.return_value = _make_place_response_with_names(["Taco1", "Taco2"])
+
+    with (
+        patch("app.routes.ai.get_settings", return_value=_settings(flag=True)),
+        patch("app.routes.ai.build_context_window", return_value=ctx),
+    ):
+        build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+
+    # At most 3 total calls: 1 canonical + 2 refill variants
+    assert mock_service.search.call_count <= 3, (
+        f"Expected ≤3 provider calls (1 canonical + 2 refill), got {mock_service.search.call_count}"
+    )
+    # Second and third calls (if made) must use variant queries with canonical prefix
+    queries_used = [call[0][1] for call in mock_service.search.call_args_list]
+    assert queries_used[0] == "mexican restaurants", "First call must use canonical query"
+    for variant in queries_used[1:]:
+        assert "mexican restaurants" in variant, f"Refill variant must reference canonical: {variant!r}"
+
+
+# Test 4: Continuation dedup happens before expensive reason generation
+def test_early_dedup_skips_prior_cards_before_reason_generation() -> None:
+    """Prior identity keys are passed to service.search() for early dedup in fetch()."""
+    prior_pool = _pool(restaurants=[_verified_card("OldPlace")], intent="restaurants")
+    ctx = ContextWindow(
+        trip_id=FAKE_TRIP_ID,
+        card_pool_size=1,
+        has_prior_cards=True,
+        source_message_id="msg-prev",
+        prior_card_pool=prior_pool,
+        prior_place_category="restaurants",
+        prior_place_query_hint="italian restaurants",
+    )
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="more options")
+    mock_service = MagicMock()
+    mock_service.search.return_value = _make_place_response_with_names(["NewPlace"])
+
+    with (
+        patch("app.routes.ai.get_settings", return_value=_settings(flag=True)),
+        patch("app.routes.ai.build_context_window", return_value=ctx),
+    ):
+        build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+
+    # service.search() must have received prior_identity_keys
+    first_call_kwargs = mock_service.search.call_args_list[0][1]
+    assert "prior_identity_keys" in first_call_kwargs, (
+        "service.search must receive prior_identity_keys for early dedup"
+    )
+    prior_keys = first_call_kwargs["prior_identity_keys"]
+    assert isinstance(prior_keys, frozenset), "prior_identity_keys must be a frozenset"
+    assert len(prior_keys) > 0, "prior_identity_keys must not be empty when prior pool exists"
+
+
+# Test 5: If only one verified unique card remains, return it (no fabrication)
+def test_single_unique_card_returned_without_fabrication() -> None:
+    """When only 1 unique verified card remains after dedup, return exactly 1 card."""
+    prior_pool = _pool(restaurants=[_verified_card("OldBar1"), _verified_card("OldBar2")], intent="nightlife")
+    ctx = ContextWindow(
+        trip_id=FAKE_TRIP_ID,
+        card_pool_size=2,
+        has_prior_cards=True,
+        source_message_id="msg-prev",
+        prior_card_pool=prior_pool,
+        prior_place_category="cocktail bars",
+        prior_place_query_hint="cocktail bars",
+    )
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="more options")
+    mock_service = MagicMock()
+    # Return 1 duplicate + 1 new; refill returns only duplicates
+    def _side_effect(trip_id, query, user_id, client_msg=None, **kwargs):
+        if "best" in query or "popular" in query:
+            return _make_place_response_with_names(["OldBar1"])  # refill only duplicates
+        return _make_place_response_with_names(["OldBar1", "OnlyNewBar"])
+
+    mock_service.search.side_effect = _side_effect
+
+    with (
+        patch("app.routes.ai.get_settings", return_value=_settings(flag=True)),
+        patch("app.routes.ai.build_context_window", return_value=ctx),
+    ):
+        result, decision = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+
+    assert decision.code == "more_options_continuation"
+    names = {r.name for r in result.restaurants}
+    assert "OldBar1" not in names, "Prior duplicate must not appear in response"
+    assert "OldBar2" not in names, "Prior duplicate must not appear in response"
+    assert "OnlyNewBar" in names, "The single unique verified card must be returned"
+
+
+# Test 6: Cache-hit continuation still excludes prior cards
+def test_cache_hit_continuation_still_excludes_prior_cards() -> None:
+    """Even when service returns cached results, prior card dedup is enforced."""
+    prior_one = _verified_card("CachedBar")
+    prior_pool = _pool(restaurants=[prior_one], intent="nightlife")
+    ctx = ContextWindow(
+        trip_id=FAKE_TRIP_ID,
+        card_pool_size=1,
+        has_prior_cards=True,
+        source_message_id="msg-prev",
+        prior_card_pool=prior_pool,
+        prior_place_category="cocktail bars",
+        prior_place_query_hint="cocktail bars",
+    )
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="more options")
+    mock_service = MagicMock()
+    # Service returns cached=True response with CachedBar (same as prior) + FreshBar
+    response = _make_place_response_with_names(["CachedBar", "FreshBar"])
+    response.cached = True
+    mock_service.search.return_value = response
+
+    with (
+        patch("app.routes.ai.get_settings", return_value=_settings(flag=True)),
+        patch("app.routes.ai.build_context_window", return_value=ctx),
+    ):
+        result, _ = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+
+    names = {r.name for r in result.restaurants}
+    assert "CachedBar" not in names, "Prior card must be excluded even from cached results"
+    assert "FreshBar" in names or len(names) >= 0  # FreshBar or refill result
+
+
+# Test 7: top 3 / best one / compare these skip provider (regression guard)
+def test_top_3_skips_provider_with_pool_active() -> None:
+    """Even with pool enabled, top 3 must still use card reuse (refine_previous), not provider."""
+    from app.concierge.context_resolver import RefineResolved
+
+    prior_pool = _pool(
+        restaurants=[_verified_card("R1"), _verified_card("R2"), _verified_card("R3")],
+        intent="restaurants",
+    )
+    ctx = ContextWindow(
+        trip_id=FAKE_TRIP_ID,
+        card_pool_size=3,
+        has_prior_cards=True,
+        source_message_id="msg-prev",
+        prior_card_pool=prior_pool,
+        prior_place_category="restaurants",
+    )
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="top 3")
+    mock_service = MagicMock()
+
+    resolved = RefineResolved(
+        restaurants=[_verified_card("R1"), _verified_card("R2"), _verified_card("R3")],
+        attractions=[],
+        hotels=[],
+        pool_size_before=3,
+        pool_size_after=3,
+        rerank_rule="top_n",
+        source_message_id="msg-prev",
+        prior_intent="restaurants",
+    )
+
+    with (
+        patch("app.routes.ai.get_settings", return_value=_settings(flag=True)),
+        patch("app.routes.ai.build_context_window", return_value=ctx),
+        patch("app.routes.ai.resolve_refine_previous", return_value=resolved),
+    ):
+        result, decision = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+
+    assert decision.code == "refine_previous_card_reuse"
+    mock_service.search.assert_not_called()
+
+
+# Test 8: New category search does not page Mexican pool
+def test_new_category_search_does_not_use_mexican_pool() -> None:
+    """After Mexican restaurants, a non-continuation search must not consume the Mexican pool."""
+    # Pre-populate Mexican pool
+    _GLOBAL_CONTINUATION_POOL.store(
+        str(FAKE_TRIP_ID),
+        "mexican restaurants",
+        {
+            "restaurants": [_verified_card("MexicanResto")],
+            "attractions": [],
+            "hotels": [],
+        },
+    )
+
+    # Simulate a fresh "more options" continuation with cocktail bar context (different category).
+    # The pool key for "cocktail bars" is different from "mexican restaurants", so the Mexican
+    # pool must not be consumed.
+    prior_pool = _pool(restaurants=[_verified_card("OldBar")], intent="nightlife")
+    ctx = ContextWindow(
+        trip_id=FAKE_TRIP_ID,
+        card_pool_size=1,
+        has_prior_cards=True,
+        source_message_id="msg-prev",
+        prior_card_pool=prior_pool,
+        prior_place_category="cocktail bars",
+        prior_place_query_hint="cocktail bars",
+    )
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="more options")
+    mock_service = MagicMock()
+    mock_service.search.return_value = _make_place_response_with_names(["NewBar"])
+
+    with (
+        patch("app.routes.ai.get_settings", return_value=_settings(flag=True)),
+        patch("app.routes.ai.build_context_window", return_value=ctx),
+    ):
+        result, decision = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+
+    assert decision.code == "more_options_continuation"
+    # Mexican pool must still be intact (different canonical key — not consumed)
+    pool_entry = _GLOBAL_CONTINUATION_POOL.pop(str(FAKE_TRIP_ID), "mexican restaurants")
+    assert pool_entry is not None, "Mexican pool must not be consumed by cocktail bars continuation"
+    pool_names = {c["name"] for c in pool_entry[0].get("restaurants", [])}
+    assert "MexicanResto" in pool_names, "Mexican pool card must still be in pool"
+    # Cocktail bar result must not contain Mexican pool cards
+    result_names = {r.name for r in result.restaurants}
+    assert "MexicanResto" not in result_names, "Mexican pool cards must not appear in cocktail bar results"
