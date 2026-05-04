@@ -511,6 +511,60 @@ def test_more_options_keeps_fewer_verified_results_when_unique_pool_small() -> N
     assert result.restaurants == []
 
 
+def test_more_options_exclusion_matches_place_id_alias() -> None:
+    prior = _verified_card("AliasDup")
+    prior["place_id"] = "gpid-123"
+    pool = _pool(restaurants=[prior], intent="nightlife")
+    ctx = ContextWindow(
+        trip_id=FAKE_TRIP_ID,
+        card_pool_size=1,
+        has_prior_cards=True,
+        source_message_id="msg-prev",
+        prior_card_pool=pool,
+        prior_place_query_hint="cocktail bars",
+    )
+    new_resp = _make_place_response_with_names(["AliasDup", "FreshBar"])
+    new_resp.restaurants[0].google_verification.provider_place_id = "gpid-123"
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="more options")
+    svc = MagicMock()
+    svc.search.return_value = new_resp
+    with (
+        patch("app.routes.ai.get_settings", return_value=_settings(flag=True)),
+        patch("app.routes.ai.build_context_window", return_value=ctx),
+    ):
+        result, _ = build_typed_concierge_response(svc, payload, FAKE_USER_ID)
+    assert [r.name for r in result.restaurants] == ["FreshBar"]
+
+
+def test_more_options_exclusion_matches_normalized_name_address_fallback() -> None:
+    prior = _verified_card("The Violet Hour")
+    prior["google_verification"]["provider_place_id"] = None
+    prior["google_verification"]["google_maps_uri"] = None
+    prior["google_verification"]["formatted_address"] = "1520 N Damen Ave, Chicago, IL"
+    pool = _pool(restaurants=[prior], intent="nightlife")
+    ctx = ContextWindow(
+        trip_id=FAKE_TRIP_ID,
+        card_pool_size=1,
+        has_prior_cards=True,
+        source_message_id="msg-prev",
+        prior_card_pool=pool,
+        prior_place_query_hint="cocktail bars",
+    )
+    dup = _make_place_response_with_names(["The Violet Hour", "FreshBar"])
+    dup.restaurants[0].google_verification.provider_place_id = None
+    dup.restaurants[0].google_verification.google_maps_uri = None
+    dup.restaurants[0].google_verification.formatted_address = "1520 N. Damen Ave Chicago IL"
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="more options")
+    svc = MagicMock()
+    svc.search.return_value = dup
+    with (
+        patch("app.routes.ai.get_settings", return_value=_settings(flag=True)),
+        patch("app.routes.ai.build_context_window", return_value=ctx),
+    ):
+        result, _ = build_typed_concierge_response(svc, payload, FAKE_USER_ID)
+    assert [r.name for r in result.restaurants] == ["FreshBar"]
+
+
 def test_query_hint_helper_preserves_subtype_and_generic_fallback() -> None:
     pool = _pool(restaurants=[_verified_card("A")], intent="restaurants")
     assert derive_prior_place_query_hint(pool, ["Italian restaurants in Chicago"]) == "italian restaurants"
