@@ -80,52 +80,82 @@ def _normalize_free_text(value: Any) -> str:
     return re.sub(r"\s+", " ", text)
 
 
+def _get_value(source: Any, key: str) -> Any:
+    if isinstance(source, dict):
+        return source.get(key)
+    return getattr(source, key, None)
+
+
+def _normalize_identity_text(value: Any) -> str:
+    text = _normalize_free_text(value)
+    return re.sub(r"[^a-z0-9]+", " ", text).strip()
+
+
 def _card_identity_keys(card: Any) -> set[str]:
     """Build stable identity keys for safe duplicate exclusion."""
     keys: set[str] = set()
-    gv = getattr(card, "google_verification", None)
-    provider_place_id = getattr(gv, "provider_place_id", None) if gv else None
-    google_maps_uri = getattr(gv, "google_maps_uri", None) if gv else None
-    if provider_place_id:
-        keys.add(f"pid:{_normalize_free_text(provider_place_id)}")
-    if google_maps_uri:
-        keys.add(f"gmaps:{_normalize_free_text(google_maps_uri)}")
-    if gv and getattr(gv, "name", None) and getattr(gv, "formatted_address", None):
-        keys.add(
-            f"name_addr:{_normalize_free_text(gv.name)}|{_normalize_free_text(gv.formatted_address)}"
-        )
+    gv = _get_value(card, "google_verification")
+    id_candidates = [
+        _get_value(card, "provider_place_id"),
+        _get_value(card, "google_place_id"),
+        _get_value(card, "place_id"),
+        _get_value(gv, "provider_place_id"),
+        _get_value(gv, "google_place_id"),
+        _get_value(gv, "place_id"),
+    ]
+    for candidate in id_candidates:
+        if candidate:
+            keys.add(f"pid:{_normalize_free_text(candidate)}")
+    for uri_candidate in (
+        _get_value(card, "google_maps_uri"),
+        _get_value(gv, "google_maps_uri"),
+    ):
+        if uri_candidate:
+            keys.add(f"gmaps:{_normalize_free_text(uri_candidate)}")
+    name = _get_value(card, "name") or _get_value(gv, "name")
+    address = (
+        _get_value(card, "address")
+        or _get_value(card, "formatted_address")
+        or _get_value(gv, "formatted_address")
+    )
+    if name and address:
+        keys.add(f"name_addr:{_normalize_identity_text(name)}|{_normalize_identity_text(address)}")
     return keys
 
 
 def _exclude_prior_verified_cards(
     response: PlaceRecommendationsResponse,
     prior_pool: Optional[Dict[str, Any]],
-) -> PlaceRecommendationsResponse:
+) -> tuple[PlaceRecommendationsResponse, Dict[str, int]]:
+    stats = {
+        "prior_exclusion_count": 0,
+        "raw_candidate_count": len(response.restaurants) + len(response.attractions) + len(response.hotels),
+        "verified_candidate_count": len(response.restaurants) + len(response.attractions) + len(response.hotels),
+        "excluded_prior_duplicate_count": 0,
+        "final_unique_count": 0,
+    }
     if not isinstance(prior_pool, dict):
-        return response
+        stats["final_unique_count"] = stats["raw_candidate_count"]
+        return response, stats
     prior_keys: set[str] = set()
     for bucket in ("restaurants", "attractions", "hotels"):
         for raw_card in (prior_pool.get(bucket) or []):
             if not isinstance(raw_card, dict):
                 continue
-            gv = raw_card.get("google_verification") or {}
-            pid = gv.get("provider_place_id")
-            uri = gv.get("google_maps_uri")
-            if pid:
-                prior_keys.add(f"pid:{_normalize_free_text(pid)}")
-            if uri:
-                prior_keys.add(f"gmaps:{_normalize_free_text(uri)}")
-            if gv.get("name") and gv.get("formatted_address"):
-                prior_keys.add(
-                    f"name_addr:{_normalize_free_text(gv.get('name'))}|{_normalize_free_text(gv.get('formatted_address'))}"
-                )
+            prior_keys.update(_card_identity_keys(raw_card))
+    stats["prior_exclusion_count"] = len(prior_keys)
     if not prior_keys:
-        return response
+        stats["final_unique_count"] = stats["raw_candidate_count"]
+        return response, stats
 
+    before = stats["raw_candidate_count"]
     response.restaurants = [c for c in response.restaurants if _card_identity_keys(c).isdisjoint(prior_keys)]
     response.attractions = [c for c in response.attractions if _card_identity_keys(c).isdisjoint(prior_keys)]
     response.hotels = [c for c in response.hotels if _card_identity_keys(c).isdisjoint(prior_keys)]
-    return response
+    after = len(response.restaurants) + len(response.attractions) + len(response.hotels)
+    stats["final_unique_count"] = after
+    stats["excluded_prior_duplicate_count"] = max(0, before - after)
+    return response, stats
 
 
 def build_typed_concierge_response(
@@ -251,7 +281,19 @@ def build_typed_concierge_response(
                     payload.trip_id, _contextualized_query, user_id, payload.client_message_id
                 )
                 typed_payload = PlaceRecommendationsResponse(**legacy.model_dump())
-                typed_payload = _exclude_prior_verified_cards(typed_payload, ctx.prior_card_pool)
+                typed_payload, dedup_stats = _exclude_prior_verified_cards(typed_payload, ctx.prior_card_pool)
+                logger.info(
+                    "concierge.more_options_continuation.dedup trip_id=%s prior_exclusion_count=%d "
+                    "raw_candidate_count=%d verified_candidate_count=%d excluded_prior_duplicate_count=%d "
+                    "final_unique_count=%d cache_status=%s",
+                    payload.trip_id,
+                    dedup_stats["prior_exclusion_count"],
+                    dedup_stats["raw_candidate_count"],
+                    dedup_stats["verified_candidate_count"],
+                    dedup_stats["excluded_prior_duplicate_count"],
+                    dedup_stats["final_unique_count"],
+                    getattr(typed_payload, "cache_status", None),
+                )
                 decision = RouteDecision(
                     response_type="place_recommendations",
                     stage1_prior={"place_recommendations": 1.0, "trip_advice": 0.0, "unsupported": 0.0},

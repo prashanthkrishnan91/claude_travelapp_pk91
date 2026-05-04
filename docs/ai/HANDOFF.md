@@ -1112,3 +1112,10 @@ Enriched whyPick evidence quality by promoting venue-specific Foursquare tags, T
 - Added safe post-verification duplicate exclusion for more-options provider responses using stable identities in priority order: provider_place_id, google_maps_uri, then normalized name+address fallback.
 - Duplicate exclusion is scoped only to continuation provider path; refine_previous reuse (`top 3`/`best one`/`compare`) remains unchanged and still skips provider calls when eligible.
 - If unique verified cards are exhausted after exclusion, response intentionally returns fewer cards (including zero) rather than repeating prior cards or fabricating entities.
+
+## 2026-05-04 Concierge continuation dedupe follow-up (PR 2.7)
+- Root cause of remaining duplicate cards: continuation dedupe keys were too narrow (`provider_place_id` + `google_maps_uri` + exact `name|formatted_address` only), so cards using alias identity fields or punctuation/format variants in address could bypass exclusion and reappear.
+- Durable fix: continuation-only dedupe now builds identity keys from both prior pool and returned verified cards using stable IDs (`google_place_id` / `provider_place_id` / `place_id` / `google_maps_uri`) plus normalized fallback (`normalized name + normalized address`).
+- Exclusion remains post-provider/post-verification and runs even when the provider response comes from cache, so cache hits still honor prior-card uniqueness.
+- If all candidates are prior duplicates, API returns fewer/zero cards; no fabricated replacements are generated.
+- Added continuation dedupe observability log fields: `prior_exclusion_count`, `raw_candidate_count`, `verified_candidate_count`, `excluded_prior_duplicate_count`, `final_unique_count`, and `cache_status`.
