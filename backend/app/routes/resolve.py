@@ -54,6 +54,7 @@ _CITY_AIRPORT_MAP = [
     {"city": "Albuquerque",    "country": "US", "airports": ["ABQ"]},
     {"city": "Sacramento",     "country": "US", "airports": ["SMF"]},
     {"city": "Honolulu",       "country": "US", "airports": ["HNL"]},
+    {"city": "Kahului",        "country": "US", "airports": ["OGG"], "aliases": ["Maui", "Maui Hawaii", "Kahului Airport"]},
     {"city": "Anchorage",      "country": "US", "airports": ["ANC"]},
     {"city": "Buffalo",        "country": "US", "airports": ["BUF"]},
     # Canada
@@ -228,12 +229,13 @@ def _normalize(text: str) -> str:
 
 @router.post("/airports", response_model=AirportResolveResponse)
 def resolve_airports(payload: AirportResolveRequest) -> AirportResolveResponse:
-    """Resolve a city name or partial string to IATA airport codes.
+    """Resolve a city name or partial string to IATA airport codes."""
+    return AirportResolveResponse(matches=search_airport_matches(payload.query))
 
-    Returns up to 10 matching cities with their airport codes.
-    Also matches if the query is a direct 3-letter IATA code.
-    """
-    raw = payload.query.strip()
+
+def search_airport_matches(query: str) -> List[AirportMatch]:
+    """Return up to 10 city matches for a city/alias/airport-code query."""
+    raw = query.strip()
     if len(raw) < 2:
         return AirportResolveResponse(matches=[])
 
@@ -250,6 +252,7 @@ def resolve_airports(payload: AirportResolveRequest) -> AirportResolveResponse:
             continue
 
         city_norm = _normalize(entry["city"])
+        alias_norms = [_normalize(alias) for alias in entry.get("aliases", [])]
 
         # Direct IATA code match
         if len(iata_upper) == 3 and iata_upper in entry["airports"]:
@@ -263,14 +266,19 @@ def resolve_airports(payload: AirportResolveRequest) -> AirportResolveResponse:
             seen.add(key)
             continue
 
+        # Alias prefix match (e.g., "Maui" -> Kahului/OGG)
+        if any(alias.startswith(q) for alias in alias_norms):
+            exact.append(entry)
+            seen.add(key)
+            continue
+
         # Substring match
-        if q in city_norm:
+        if q in city_norm or any(q in alias for alias in alias_norms):
             partial.append(entry)
             seen.add(key)
 
     combined = exact + partial
-    matches = [
+    return [
         AirportMatch(city=e["city"], country=e["country"], airports=e["airports"])
         for e in combined[:10]
     ]
-    return AirportResolveResponse(matches=matches)
