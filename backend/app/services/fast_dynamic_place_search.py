@@ -49,10 +49,19 @@ _PLACES_FIELD_MASK = ",".join(
         "places.types",
         "places.rating",
         "places.userRatingCount",
+        "places.priceLevel",
         "places.googleMapsUri",
         "places.websiteUri",
     ]
 )
+
+# Google priceLevel → human label (used to prefix reasons when relevant)
+_PRICE_LEVEL_LABEL: Dict[str, str] = {
+    "PRICE_LEVEL_INEXPENSIVE": "budget-friendly",
+    "PRICE_LEVEL_MODERATE": "mid-range",
+    "PRICE_LEVEL_EXPENSIVE": "upscale",
+    "PRICE_LEVEL_VERY_EXPENSIVE": "fine-dining",
+}
 _OPERATIONAL = "OPERATIONAL"
 
 # Cuisine/subtype keywords that should be passed through literally to Google.
@@ -87,7 +96,6 @@ _SUBTYPE_KEYWORDS: List[str] = [
     "chinese",
     "spanish",
     "taqueria",
-    "ramen",
     "izakaya",
     "bistro",
 ]
@@ -423,6 +431,19 @@ def _derive_cuisine_label(types: List[str], cuisine_hint: Optional[str]) -> str:
     return "Restaurant"
 
 
+def _review_tier(review_count: Optional[int]) -> str:
+    """Translate review volume into a meaningful signal phrase."""
+    if not review_count:
+        return ""
+    if review_count >= 1500:
+        return "one of the most-reviewed"
+    if review_count >= 400:
+        return "consistently well-rated"
+    if review_count >= 100:
+        return "well-regarded"
+    return ""
+
+
 def _build_dynamic_why(
     *,
     place_name: str,
@@ -431,17 +452,17 @@ def _build_dynamic_why(
     address: Optional[str],
     rating: Optional[float],
     review_count: Optional[int],
+    price_level: Optional[str],
     parsed: ParsedPlaceQuery,
 ) -> str:
     """Build a concise, dynamic, evidence-grounded reason for this card.
 
     Rules:
-    - Never repeat rating counts as the whole reason.
-    - Never invent vibes, awards, or attributes.
-    - Never use generic "This place has many ratings."
+    - Never repeat rating counts as the whole reason — use tier language instead.
+    - Never invent vibes, awards, or attributes not present in the data.
     - Always reference the user's specific ask.
-    - Max 160 chars.
-    - 1-2 sentences.
+    - Use price level and review tier when available.
+    - Max 160 chars, 1-2 sentences.
     """
     cuisine = (parsed.cuisine or "").lower()
     constraint = parsed.constraint
@@ -452,90 +473,106 @@ def _build_dynamic_why(
     area = _extract_area_from_address(address or "", dest)
     loc_part = f" in {area}" if area else ""
 
-    # Thin rating support (appended only when reason < 110 chars)
-    rating_suffix = ""
-    if rating is not None and review_count and review_count > 50:
-        rating_suffix = f" ({rating:.1f} ★, {review_count:,} reviews)"
-    elif rating is not None:
-        rating_suffix = f" ({rating:.1f} ★)"
+    price_label = _PRICE_LEVEL_LABEL.get(price_level or "", "")
+    tier = _review_tier(review_count)
+
+    # Short rating badge appended only when it fits and adds signal
+    rating_badge = ""
+    if rating is not None:
+        rating_badge = f" ({rating:.1f} ★)"
 
     def _clip(text: str) -> str:
         return text[:160]
 
-    # ── Tapas-specific ────────────────────────────────────────────────────────
-    if cuisine == "tapas":
-        base = f"A stronger tapas/small-plates match than a generic cocktail bar{loc_part}"
-        if vibe == "romantic" or vibe == "date night":
-            base = f"Fits the tapas brief with a dinner-date feel{loc_part}"
-        elif negative and "loud" in negative:
-            base = f"A tapas/small-plates pick{loc_part} with a more relaxed vibe than a crowded bar crawl"
-        elif constraint:
-            base = f"A tapas-focused spot{loc_part}; verify {constraint} seating when booking"
-        if len(base) + len(rating_suffix) <= 155:
-            return _clip(base + rating_suffix + ".")
+    def _with_badge(base: str) -> str:
+        if rating_badge and len(base) + len(rating_badge) <= 155:
+            return _clip(base + rating_badge + ".")
         return _clip(base + ".")
 
-    # ── Sushi + waterfront/view ───────────────────────────────────────────────
+    # ── Tapas-specific ────────────────────────────────────────────────────────
+    if cuisine == "tapas":
+        if vibe in ("romantic", "date night"):
+            base = f"A romantic tapas/small-plates pick{loc_part}, well-suited for a dinner date"
+        elif negative and "loud" in negative:
+            base = f"A tapas/small-plates spot{loc_part} with a more relaxed atmosphere than a bar crawl"
+        elif constraint:
+            base = f"A tapas-focused spot{loc_part}; verify {constraint} seating when booking"
+        else:
+            prefix = f"{price_label} " if price_label else ""
+            base = f"A {prefix}tapas/small-plates match{loc_part}, not a generic cocktail bar"
+        return _with_badge(base)
+
+    # ── Sushi/Japanese + location constraint ─────────────────────────────────
     if cuisine in ("sushi", "japanese") and constraint in (
         "waterfront", "water", "view", "lake", "river", "lake view", "river view",
     ):
-        base = f"Best fit if you want sushi with a polished setting near {constraint}; verify exact seating when booking"
-        return _clip(base + ".")
+        prefix = f"{price_label} " if price_label else ""
+        base = f"A {prefix}sushi option{loc_part}; verify {constraint} seating directly when booking"
+        return _with_badge(base)
 
     # ── Generic cuisine + constraint ─────────────────────────────────────────
     if cuisine and constraint:
-        base = f"A verified {cuisine} option{loc_part}; verify {constraint} setting when booking"
-        return _clip(base + ".")
+        prefix = f"{price_label} " if price_label else ""
+        base = f"A {prefix}{cuisine} pick{loc_part}; verify {constraint} setting when booking"
+        return _with_badge(base)
 
     # ── Cuisine + vibe ────────────────────────────────────────────────────────
     if cuisine and vibe:
+        prefix = f"{price_label} " if price_label else ""
         if vibe in ("romantic", "date night"):
-            base = f"A {vibe} {cuisine} pick{loc_part}, well-suited for a special dinner"
+            base = f"A {prefix}{cuisine} option{loc_part} suited for a special dinner"
         else:
-            base = f"A {vibe} {cuisine} restaurant{loc_part}"
-        if len(base) + len(rating_suffix) <= 155:
-            return _clip(base + rating_suffix + ".")
-        return _clip(base + ".")
+            base = f"A {vibe}, {prefix}{cuisine} restaurant{loc_part}"
+        return _with_badge(base)
 
     # ── Cuisine only ─────────────────────────────────────────────────────────
     if cuisine:
-        # Use Google-verified name signals for specificity
-        name_lower = place_name.lower()
-        if cuisine in name_lower:
-            base = f"A verified {cuisine} match{loc_part} with strong Google presence"
+        prefix = f"{price_label} " if price_label else ""
+        if tier:
+            base = f"A {tier} {prefix}{cuisine} option{loc_part}"
+        elif cuisine in place_name.lower():
+            base = f"A {prefix}{cuisine} specialist{loc_part}"
         else:
             cat = cuisine_label.lower() if cuisine_label else cuisine
-            base = f"A verified {cat}{loc_part}"
-        if len(base) + len(rating_suffix) <= 155:
-            return _clip(base + rating_suffix + ".")
-        return _clip(base + ".")
+            base = f"A {prefix}{cat}{loc_part}"
+        return _with_badge(base)
 
     # ── Bar (no cuisine) ─────────────────────────────────────────────────────
     types_set = {(t or "").lower() for t in types}
-    if parsed.place_type == "bar" or any(t in types_set for t in ("cocktail_bar", "bar", "night_club")):
-        cat = cuisine_label.lower() or "cocktail bar"
-        base = f"A verified {cat}{loc_part}"
-        if constraint:
-            base = f"A {cat}{loc_part} with {constraint} access"
-        if len(base) + len(rating_suffix) <= 155:
-            return _clip(base + rating_suffix + ".")
-        return _clip(base + ".")
+    if parsed.place_type == "bar" or any(t in types_set for t in ("cocktail_bar", "wine_bar", "bar", "night_club")):
+        # Use the most specific type label available
+        if "cocktail_bar" in types_set:
+            cat = "craft cocktail bar"
+        elif "wine_bar" in types_set:
+            cat = "wine bar"
+        elif "night_club" in types_set:
+            cat = "nightclub"
+        else:
+            cat = cuisine_label.lower() or "bar"
+        prefix = f"{price_label} " if price_label else ""
+        if tier:
+            base = f"A {tier} {prefix}{cat}{loc_part}"
+        elif constraint:
+            base = f"A {prefix}{cat}{loc_part} with {constraint} access"
+        else:
+            base = f"A {prefix}{cat}{loc_part}"
+        return _with_badge(base)
 
     # ── Constraint without cuisine ────────────────────────────────────────────
     if constraint:
         cat = cuisine_label.lower() or "dining option"
-        base = f"A {cat} option{loc_part}; verify {constraint} setting when booking"
-        return _clip(base + ".")
+        prefix = f"{price_label} " if price_label else ""
+        base = f"A {prefix}{cat}{loc_part}; verify {constraint} setting when booking"
+        return _with_badge(base)
 
-    # ── Generic fallback (still query-specific) ───────────────────────────────
-    # This path only runs when no cuisine/bar/constraint signals were parsed.
-    # Use the canonical query to stay specific.
-    canonical = parsed.canonical_query.strip().lower()
-    cat = cuisine_label.lower() or "place"
-    base = f"A verified {cat}{loc_part} matching your '{canonical}' ask"
-    if len(base) + len(rating_suffix) <= 155:
-        return _clip(base + rating_suffix + ".")
-    return _clip(base + ".")
+    # ── Generic fallback — still evidence-grounded ────────────────────────────
+    cat = cuisine_label.lower() or "restaurant"
+    prefix = f"{price_label} " if price_label else ""
+    if tier:
+        base = f"A {tier} {prefix}{cat}{loc_part}"
+    else:
+        base = f"A {prefix}{cat}{loc_part}"
+    return _with_badge(base)
 
 
 class FastDynamicPlaceSearch:
@@ -756,6 +793,7 @@ class FastDynamicPlaceSearch:
         types = [t for t in (place.get("types") or [])]
         rating = place.get("rating")
         review_count = place.get("userRatingCount")
+        price_level: Optional[str] = place.get("priceLevel")
         address = (place.get("formattedAddress") or "").strip() or None
         maps_uri = place.get("googleMapsUri")
         website = place.get("websiteUri")
@@ -769,6 +807,7 @@ class FastDynamicPlaceSearch:
             address=address,
             rating=rating,
             review_count=review_count,
+            price_level=price_level,
             parsed=parsed,
         )
 

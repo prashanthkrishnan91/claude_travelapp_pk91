@@ -46,6 +46,7 @@ def _make_place(
     business_status: str = _OPERATIONAL,
     address: str = "100 Main St, Chicago, IL, USA",
     maps_uri: str = "https://maps.google.com/?cid=1",
+    price_level: Optional[str] = None,
 ) -> Dict[str, Any]:
     return {
         "id": place_id,
@@ -57,6 +58,7 @@ def _make_place(
         "formattedAddress": address,
         "googleMapsUri": maps_uri,
         "websiteUri": None,
+        "priceLevel": price_level,
     }
 
 
@@ -200,6 +202,8 @@ class TestDynamicReasons:
             address="200 W Randolph St, Chicago, IL",
             rating=4.6,
             review_count=300,
+            price_level=None,
+
             parsed=_tapas_parsed(),
         )
         assert "tapas" in why.lower(), f"tapas reason must mention tapas: {why!r}"
@@ -222,6 +226,8 @@ class TestDynamicReasons:
             address="739 N LaSalle Dr, Chicago, IL",
             rating=4.5,
             review_count=1200,
+            price_level=None,
+
             parsed=_romantic_tapas_parsed(),
         )
         lower = why.lower()
@@ -238,6 +244,8 @@ class TestDynamicReasons:
             address="55 W Illinois St, Chicago, IL",
             rating=4.7,
             review_count=800,
+            price_level=None,
+
             parsed=_sushi_waterfront_parsed(),
         )
         lower = why.lower()
@@ -254,6 +262,8 @@ class TestDynamicReasons:
             address="Chicago, IL",
             rating=4.5,
             review_count=500,
+            price_level=None,
+
             parsed=_tapas_parsed(),
         )
         # Must not start with just the rating
@@ -270,6 +280,8 @@ class TestDynamicReasons:
             address="Chicago, IL",
             rating=4.2,
             review_count=100,
+            price_level=None,
+
             parsed=_tapas_parsed(),
         )
         assert "michelin" not in why.lower(), f"must not invent Michelin: {why!r}"
@@ -282,6 +294,8 @@ class TestDynamicReasons:
             address="Chicago, IL",
             rating=4.0,
             review_count=50,
+            price_level=None,
+
             parsed=_tapas_parsed(),
         )
         assert "award" not in why.lower(), f"must not invent awards: {why!r}"
@@ -295,9 +309,39 @@ class TestDynamicReasons:
             address="1234 N Long Address Street, Suite 100, Chicago, IL 60601",
             rating=4.5,
             review_count=500,
+            price_level=None,
+
             parsed=_tapas_parsed(),
         )
         assert len(why) <= 165, f"reason must be <= 165 chars, got {len(why)}: {why!r}"
+
+    def test_upscale_price_level_appears_in_reason(self) -> None:
+        why = _build_dynamic_why(
+            place_name="Sushi Nakazawa",
+            types=["sushi_restaurant"],
+            cuisine_label="Sushi Restaurant",
+            address="200 W Grand Ave, Chicago, IL",
+            rating=4.8,
+            review_count=900,
+            price_level="PRICE_LEVEL_EXPENSIVE",
+            parsed=parse_place_query("sushi", "Chicago"),
+        )
+        assert "upscale" in why.lower(), f"EXPENSIVE price level should surface as 'upscale': {why!r}"
+
+    def test_most_reviewed_tier_appears_for_high_count(self) -> None:
+        why = _build_dynamic_why(
+            place_name="Girl & the Goat",
+            types=["restaurant"],
+            cuisine_label="American Restaurant",
+            address="820 W Randolph St, Chicago, IL",
+            rating=4.5,
+            review_count=2500,
+            price_level=None,
+            parsed=parse_place_query("dinner restaurants", "Chicago"),
+        )
+        assert "most-reviewed" in why.lower() or "well-rated" in why.lower(), (
+            f"2500 reviews should trigger high-volume tier language: {why!r}"
+        )
 
 
 # ── 4. Cuisine label derivation ───────────────────────────────────────────────
