@@ -1223,3 +1223,10 @@ Enriched whyPick evidence quality by promoting venue-specific Foursquare tags, T
 - Exclusion remains post-provider/post-verification and runs even when the provider response comes from cache, so cache hits still honor prior-card uniqueness.
 - If all candidates are prior duplicates, API returns fewer/zero cards; no fabricated replacements are generated.
 - Added continuation dedupe observability log fields: `prior_exclusion_count`, `raw_candidate_count`, `verified_candidate_count`, `excluded_prior_duplicate_count`, `final_unique_count`, and `cache_status`.
+
+
+### Regression fix (2026-05-04): fresh concierge searches incorrectly labeled Google as unavailable
+- **Root cause:** `ConciergeService.search()` set `force_research_only` from `require_google && !live_result.has_data()`. This conflated *any empty live result* (e.g., provider returned no candidate hits) with *actual Google verifier unavailability*.
+- **Durable contract:** `force_research_only` now triggers only when `LiveResearchResult.source_status == SOURCE_UNAVAILABLE`.
+- **Supporting fix:** `LiveResearchService.fetch()` now marks the strict Google-required/unavailable branch with `source_status=SOURCE_UNAVAILABLE` (instead of `live_search`) so callers can distinguish true dependency unavailability from ordinary empty-search outcomes.
+- **Impact:** Fresh searches (`prior_key_count=0`) no longer emit the false warning "Google verification unavailable" unless the verifier is truly unavailable; continuation and prior-dedup logic are unchanged.

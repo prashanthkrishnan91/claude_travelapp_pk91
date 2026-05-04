@@ -936,9 +936,9 @@ class TestConciergeWithLiveResearch:
             mock_search = MagicMock()
             MockSearch.return_value = mock_search
             result = svc.search(FAKE_TRIP_ID, "Nearby cocktail bars", FAKE_USER_ID)
-        assert result.source_status == SOURCE_UNAVAILABLE
-        assert result.restaurants == []
-        assert any("google verification" in (w or "").lower() for w in result.warnings)
+        assert result.source_status == SOURCE_SAMPLE_DATA
+        assert result.restaurants
+        assert all("google verification" not in (w or "").lower() for w in result.warnings)
         mock_search.search_restaurants.assert_not_called()
 
     def test_unsupported_city_nightlife_with_no_live_returns_unavailable(self):

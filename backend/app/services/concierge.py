@@ -257,7 +257,7 @@ class ConciergeService:
         force_research_only = (
             require_google
             and intent in (_RESTAURANT_INTENTS | _ATTRACTION_INTENTS | {INTENT_HOTELS})
-            and not live_result.has_data()
+            and live_result.source_status == SOURCE_UNAVAILABLE
         )
         if force_research_only:
             warnings.append(
