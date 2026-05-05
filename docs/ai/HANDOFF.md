@@ -1,6 +1,66 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-05) — AI Concierge Semantic Place Understanding v2 (venue head, open-class detector, location modifiers, wrong-category penalty)
+## Last change (2026-05-05) — Venue-Head-Over-Modifier Contract (semantic retrieval v1 hardening)
+
+### Production finding (post-Semantic Place Understanding v2 validation)
+With `CONCIERGE_SEMANTIC_RETRIEVAL_V1_ENABLED=true`:
+- "best breweries" — improved (brewery-first queries, brewery-like results).
+- "best waterfront breweries" — still flawed: cards included Chicago Brewhouse Riverwalk, The Lakefront Restaurant, Lakefront Park, Chicago Horizon, Chicago Riverwalk; deterministic reasons repeated "Good waterfront match in Chicago, near waterfront."
+
+### Root cause
+The frame extractor and planner already produced venue-anchored queries, but the ranker leaked through wrong-category cards: `_subtype_fit` awarded `query_match=0.6` to **any** entity returned by a brewery-targeted query (because the source query echoed "brewery"). With concept-confidence weighting that pushed wrong-category entities to ~0.57 — well above the `_WRONG_CATEGORY_SUBTYPE_FIT_MAX=0.30` threshold — so the wrong-category penalty never applied to them. A scenic riverwalk landmark or lakefront restaurant could ride that signal past brewery-only fallbacks and into the final cards.
+
+### Durable fix (one PR, no PR-3 batched LLM reasoning)
+- **`backend/app/concierge/ranker.py`**
+  - Lowered `query_match` weight from 0.6 → 0.20. Source-query echoes are weak evidence (planner targeted the concept; entity may or may not be on-concept) and must stay below `_WRONG_CATEGORY_SUBTYPE_FIT_MAX` so the penalty kicks in.
+  - Raised `_WRONG_CATEGORY_PENALTY` from 0.20 → 0.30 to widen the gap between on-concept and modifier-only matches.
+  - Added `_ON_CONCEPT_SUBTYPE_FIT_MIN=0.45` and a post-rank venue-head filter: when the user named a strong venue concept (`confidence ≥ 0.85`) AND there are ≥ 3 on-concept candidates, off-concept candidates are dropped entirely. When the venue concept is recognized (in a known synonym set) AND zero on-concept candidates verified, the ranker returns zero cards rather than filling with modifier-only wrong-category matches. Open-vocabulary heads with no synonym set (e.g. "izakaya") still degrade gracefully.
+  - New `rank_entities_with_stats()` returns a `RankerStats` side channel for observability without breaking the public `rank_entities()` signature.
+- **`backend/app/concierge/retrieval_planner.py`**
+  - Always emits one pure `{venue} {destination}` recall query in addition to the geo-targeted variants, so brewery recall isn't entirely dependent on the geo-modified Google result set. Order: (1) venue + dest + modifier, (2) venue + dest pure recall, (3) synonym + dest + modifier, (4) venue + loc anchor + geo when both present.
+- **`backend/app/concierge/semantic_retrieval.py`**
+  - `semantic_retrieval_v1.turn` log now reports `off_concept_dropped`, `on_concept_count`, and `venue_head_recognized` for visibility into the post-rank filter.
+
+### Critical invariants preserved
+- No fake addable cards. Google place id + OPERATIONAL + Google Maps URI gates unchanged.
+- No Tavily / editorial / Yelp / Foursquare. No SQL or frontend changes.
+- Google rating displays on native 0–5 scale. PR-3 batched grounded reasoning **not** started in this PR.
+
+### Tests (15 new, total 120 in `test_semantic_retrieval_v1.py`, all passing)
+- `TestPlannerNoStandaloneModifierQueries` — 6 parametrized queries verify no `waterfront chicago` / `riverwalk chicago` / `lakefront chicago` / `view chicago` / `water chicago` standalone modifier queries are emitted; pure `brewery chicago` recall query confirmed for waterfront ask; `breweries near the river` stays brewery-first.
+- `TestRankerVenueHeadDominance` —
+  - Brewery with weak waterfront evidence outranks riverside park with strong waterfront evidence.
+  - Source-query echo no longer pushes wrong-category subtype_fit above the penalty threshold.
+  - 3 breweries + 3 wrong-category modifier-matches → only breweries survive, with `off_concept_dropped=3`.
+  - Recognized venue concept + zero on-concept candidates → empty result.
+  - Unknown concept ("izakaya") keeps weak matches (no over-aggressive filtering).
+- `TestRegressionExistingVenueHeads` —
+  - "best breweries" still returns brewery-like cards.
+  - "best waterfront breweries" with mixed Google response (3 breweries + 3 wrong-category) returns only brewery cards.
+  - "best izakayas" open-class still works.
+- `TestSafeReasonNoUnsupportedModifierClaim` —
+  - "Good waterfront match" repetition gone.
+  - No unsupported "near the river" / "on the river" claim when address has no river.
+  - No unsupported "quiet atmosphere" claim.
+  - Brewery anchor (not waterfront) present in reason for waterfront-brewery ask.
+
+### Validation cases (production checklist after deploy)
+With `CONCIERGE_SEMANTIC_RETRIEVAL_V1_ENABLED=true`:
+1. "best breweries" Chicago → brewery-first queries, brewery-like cards. **No regression.**
+2. "best waterfront breweries" Chicago → brewery cards dominate; no parks / riverwalk attractions / generic waterfront restaurants in cards; deterministic reasons no longer repeat "Good waterfront match".
+3. "breweries near the river" Chicago → brewery-anchored queries; brewery-like cards.
+4. "taprooms with a view" Chicago → taproom-anchored queries; taproom-like cards.
+5. "best izakayas in Fulton Street" Chicago → unchanged from PR-2.5; izakaya cards.
+
+If Google returns no brewery-like candidates for "best waterfront breweries", expect zero cards rather than wrong-category fillers — `semantic_retrieval_v1.turn outcome=no_cards_after_trust_gate off_concept_dropped=N venue_head_recognized=true`.
+
+PR-3 batched grounded reasoning **has not started yet**.
+
+Supabase SQL: No.
+
+---
+
+## Previous change (2026-05-05) — AI Concierge Semantic Place Understanding v2 (venue head, open-class detector, location modifiers, wrong-category penalty)
 
 ### Production finding (post-PR #237 validation)
 With `CONCIERGE_SEMANTIC_RETRIEVAL_V1_ENABLED=true`:

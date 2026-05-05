@@ -162,7 +162,15 @@ def plan_queries(
     else:
         _add(f"{primary} {destination}")
 
-    # Query 2: venue synonym variant + destination + (loc anchor or geo)
+    # Query 2: pure venue + destination — broader recall so the venue head
+    # always has at least one modifier-free query. Ensures a brewery ask
+    # captures real breweries even when the geo-targeted query mostly returns
+    # modifier-y waterfront/riverwalk results.
+    _add(f"{primary} {destination}")
+
+    # Query 3: venue synonym variant + destination + (loc anchor or geo).
+    # Synonyms widen recall while staying venue-anchored ("brewery" → "taproom",
+    # "tapas" → "small plates"). Modifier is preserved when present.
     if frame.subtype_concepts:
         variants = _synonym_variants(frame.subtype_concepts[0])
         for variant in variants[1:3]:
@@ -174,12 +182,6 @@ def plan_queries(
                 _add(f"{variant} {destination} {geo_term}")
             else:
                 _add(f"{variant} {destination}")
-
-    # Query 3: venue + destination (no modifier) — broader recall fallback so
-    # we still catch on-concept results when geo / location filters are too
-    # narrow on the provider side.
-    if len(queries) < cap:
-        _add(f"{primary} {destination}")
 
     # Query 4 (only if room): venue + location anchor + geo hint together.
     # Useful for asks like "best izakayas near Fulton Street waterfront".

@@ -198,8 +198,8 @@ def _run_pipeline(
 
     # ── Step 5: SemanticRanker v1 ────────────────────────────────────────────
     t0 = time.monotonic()
-    from app.concierge.ranker import rank_entities, build_evidence_bundle
-    ranked = rank_entities(entities, frame, top_n=max_cards)
+    from app.concierge.ranker import rank_entities_with_stats, build_evidence_bundle
+    ranked, ranker_stats = rank_entities_with_stats(entities, frame, top_n=max_cards)
     latency["rank_ms"] = int((time.monotonic() - t0) * 1000)
 
     # ── Step 6+7: Evidence bundles + SafeReasonBuilder ───────────────────────
@@ -231,7 +231,10 @@ def _run_pipeline(
     # ── Step 9: Structured observability ─────────────────────────────────────
     # Wrong-category fit diagnostics: count entities whose subtype_fit fell
     # below the wrong-category threshold (used for visibility into ranker
-    # behavior, not for any hard gate).
+    # behavior, not for any hard gate). off_concept_dropped reports the
+    # entities removed by the post-rank venue-head filter — i.e., modifier-only
+    # matches discarded so a brewery ask doesn't surface parks or riverwalk
+    # attractions that just happen to satisfy the geo modifier.
     wrong_category_count = sum(
         1 for _, rs in ranked if rs.subtype_fit < 0.30
     )
@@ -239,6 +242,9 @@ def _run_pipeline(
         **vars(entity_stats),
         "trust_gate_rejected": trust_rejected,
         "wrong_category_low_subtype_fit": wrong_category_count,
+        "off_concept_dropped": ranker_stats.off_concept_dropped,
+        "on_concept_count": ranker_stats.on_concept_count,
+        "venue_head_recognized": ranker_stats.concept_is_recognized,
     }
     _log_semantic_turn(
         user_query=user_query,
