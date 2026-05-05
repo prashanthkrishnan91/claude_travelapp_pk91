@@ -10,6 +10,7 @@ import {
 
 const aiConciergePanel = readFileSync(new URL('../src/components/trips/AIConciergePanel.tsx', import.meta.url), 'utf8');
 const placeRecommendationsView = readFileSync(new URL('../src/components/concierge/PlaceRecommendationsView.tsx', import.meta.url), 'utf8');
+const apiClient = readFileSync(new URL('../src/lib/api.ts', import.meta.url), 'utf8');
 
 const blockedGenericPhrases = [
   'A strong pick for well-reviewed',
@@ -201,4 +202,9 @@ test('AIConciergePanel does not render research sources as ConciergeCard', () =>
   // The canAdd={false} ConciergeCard for research_source must not exist
   assert.doesNotMatch(aiConciergePanel, /sourceType.*article_listicle_blog_directory/s,
     'Old research-source card branch should be removed');
+});
+
+test('callConciergeSearch normalizes snake_case typed responses before mapping cards', () => {
+  assert.match(apiClient, /normalizeConciergeResponse\(raw\)/);
+  assert.match(apiClient, /normalized\.responseType !== "place_recommendations"/);
 });

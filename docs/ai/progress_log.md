@@ -51,3 +51,5 @@
 **Flag**: `CONCIERGE_SEMANTIC_RETRIEVAL_V1_ENABLED=false` (default). Rollback = set to false.
 
 **Not done (explicit scope)**: LLM batched reasoning (PR-3), Tavily, SQL, frontend UI, Yelp/Foursquare, personalization, vector search.
+
+- 2026-05-05: Fixed live semantic retrieval card display contract for AI Concierge drawer. Root cause: frontend `callConciergeSearch` consumed `/ai/concierge/search` typed response without normalizing snake_case fields (`response_type`, `retrieval_used`, `source_status`, etc.), so verified cards were dropped and UI rendered text-only. Added focused contract tests (backend router typed place payload preservation + empty-card honesty; frontend assertion that search path normalizes typed response before mapping). Production validation checklist: Izakayas; Izakayas on Fulton Street; best breweries; best waterfront breweries; breweries near the river; taprooms with a view. PR-3 batched grounded reasoning not started.

@@ -181,3 +181,68 @@ def test_trip_advice_disabled_flag_returns_unsupported():
 
     assert result.response_type == "unsupported"
     assert result.code == "trip_advice_disabled"
+
+
+@pytest.mark.parametrize("prompt", ["Izakayas", "Izakayas on Fulton Street"])
+def test_semantic_place_prompts_preserve_verified_cards_in_place_response(prompt: str):
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query=prompt)
+    mock_service = MagicMock()
+    mock_service.search.return_value = PlaceRecommendationsResponse(
+        response="Here are top izakaya picks.",
+        intent="restaurants",
+        retrieval_used=True,
+        source_status="live_search",
+        restaurants=[
+            {
+                "type": "verified_place",
+                "name": "The Izakaya",
+                "google_place_id": "gid-1",
+                "maps_link": "https://maps.google.com/?q=place_id:gid-1",
+                "google_maps_uri": "https://maps.google.com/?q=place_id:gid-1",
+            }
+        ],
+        attractions=[],
+        hotels=[],
+        research_sources=[],
+        areas=[],
+        area_comparisons=[],
+        suggestions=[],
+        sources=[],
+        warnings=[],
+    )
+
+    with patch("app.routes.ai.get_settings", return_value=SimpleNamespace(concierge_router_v2=True, concierge_router_v2_confidence_threshold=0.55, trip_advice_builder_enabled=True)):
+        result, _ = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+
+    assert result.response_type == "place_recommendations"
+    assert len(result.restaurants) == 1
+    assert result.restaurants[0].type == "verified_place"
+    assert result.restaurants[0].name == "The Izakaya"
+
+
+def test_empty_place_results_remain_honest_without_fabricated_cards():
+    payload = ConciergeSearchRequest(trip_id=FAKE_TRIP_ID, user_query="Izakayas")
+    mock_service = MagicMock()
+    mock_service.search.return_value = PlaceRecommendationsResponse(
+        response="No verified places found right now.",
+        intent="restaurants",
+        retrieval_used=True,
+        source_status="none",
+        restaurants=[],
+        attractions=[],
+        hotels=[],
+        research_sources=[],
+        areas=[],
+        area_comparisons=[],
+        suggestions=[],
+        sources=[],
+        warnings=["No verified cards were found."],
+    )
+
+    with patch("app.routes.ai.get_settings", return_value=SimpleNamespace(concierge_router_v2=True, concierge_router_v2_confidence_threshold=0.55, trip_advice_builder_enabled=True)):
+        result, _ = build_typed_concierge_response(mock_service, payload, FAKE_USER_ID)
+
+    assert result.response_type == "place_recommendations"
+    assert result.restaurants == []
+    assert result.attractions == []
+    assert result.hotels == []
