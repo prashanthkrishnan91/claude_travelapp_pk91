@@ -208,3 +208,8 @@ test('callConciergeSearch normalizes snake_case typed responses before mapping c
   assert.match(apiClient, /normalizeConciergeResponse\(raw\)/);
   assert.match(apiClient, /normalized\.responseType !== "place_recommendations"/);
 });
+
+test('AIConciergePanel does not hard-require type=verified_place for rendering addable cards', () => {
+  assert.match(aiConciergePanel, /isRenderableVerifiedPlace/);
+  assert.doesNotMatch(aiConciergePanel, /\.filter\(\(r\) => r\.type === "verified_place"\)/);
+});

@@ -1661,3 +1661,35 @@ Enriched whyPick evidence quality by promoting venue-specific Foursquare tags, T
   - breweries near the river
   - taprooms with a view
 - PR-3 batched grounded reasoning was not started.
+
+## Update (2026-05-05) — L2 frontend semantic card render hotfix
+
+### Situation
+- After the prior `/ai/concierge/search` typed normalization patch, live UI still rendered text-only bubbles for semantic place asks (`izakayas`, `izakayas on fulton street`) even though Railway logs showed `response_type=place_recommendations` and `final_card_count=8`.
+
+### Final root cause
+- Frontend drawer renderer (`AIConciergePanel`) used a strict addable-card gate: `type === "verified_place"`.
+- In live typed payload variants, cards may still be verified via `verifiedPlace` / `googleVerification` even when `type` is omitted.
+- Result: cards reached the assistant message path but were filtered out at render time, so no addable cards were displayed.
+
+### Fix applied
+- Added `isRenderableVerifiedPlace` and replaced strict type-only filters for restaurants/attractions/hotels with shape-tolerant verified-card checks (`type` OR `verifiedPlace` OR `googleVerification`).
+- Kept changes surgical to frontend rendering path only.
+
+### Tests added/run
+- Added frontend regression assertion to ensure renderer no longer hard-requires `type=verified_place`.
+- Ran frontend test suite including concierge renderer contracts.
+
+### Production validation checklist (post-deploy)
+- `izakayas`
+- `izakayas on fulton street`
+- `best breweries`
+- `best waterfront breweries`
+- `breweries near the river`
+- `taprooms with a view`
+
+### Scope guardrails
+- No semantic planner/ranker/provider/category changes.
+- No visual redesign.
+- PR-3 batched grounded reasoning **not started**.
+- PGRST204 logging/schema issue deferred (non-blocker for card rendering path in this PR).

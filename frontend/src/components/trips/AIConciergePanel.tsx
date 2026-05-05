@@ -463,6 +463,12 @@ function fromSearchResult(result: ConciergeSearchResult): Message {
   };
 }
 
+function isRenderableVerifiedPlace(place: { type?: string | null; verifiedPlace?: boolean | null; googleVerification?: unknown }): boolean {
+  if (place.type === "verified_place") return true;
+  if (place.verifiedPlace === true) return true;
+  return place.googleVerification != null;
+}
+
 export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp = [], isOpen, onClose, onItemAdded, onIdeaSaved }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -887,9 +893,9 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                     <div className="space-y-2">
                       {(() => {
                         const addablePlaces = [
-                          ...(msg.restaurants ?? []).filter((r) => r.type === "verified_place").map((place) => ({ kind: "restaurant" as const, place, category: place.cuisine || "Restaurant", sourceLink: place.bookingLink ?? place.sourceUrl })),
-                          ...(msg.attractions ?? []).filter((a) => a.type === "verified_place").map((place) => ({ kind: "attraction" as const, place, category: place.category || "Attraction", sourceLink: place.sourceUrl })),
-                          ...(msg.hotels ?? []).filter((h) => h.type === "verified_place").map((place) => ({ kind: "hotel" as const, place, category: "Hotel", sourceLink: place.bookingUrl ?? place.sourceUrl })),
+                          ...(msg.restaurants ?? []).filter((r) => isRenderableVerifiedPlace(r)).map((place) => ({ kind: "restaurant" as const, place, category: place.cuisine || "Restaurant", sourceLink: place.bookingLink ?? place.sourceUrl })),
+                          ...(msg.attractions ?? []).filter((a) => isRenderableVerifiedPlace(a)).map((place) => ({ kind: "attraction" as const, place, category: place.category || "Attraction", sourceLink: place.sourceUrl })),
+                          ...(msg.hotels ?? []).filter((h) => isRenderableVerifiedPlace(h)).map((place) => ({ kind: "hotel" as const, place, category: "Hotel", sourceLink: place.bookingUrl ?? place.sourceUrl })),
                         ];
                         const allTitles = addablePlaces.map(({ place }) => place.name);
 
