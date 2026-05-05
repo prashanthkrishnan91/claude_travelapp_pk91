@@ -49,6 +49,23 @@ _W_VALUE = 0.04
 # when no on-concept results are available.
 _WRONG_CATEGORY_PENALTY = 0.30
 
+# Destination mismatch penalty: applied when the entity's formatted_address
+# contains no token from the destination city/destination words. This ensures
+# that a Milwaukee brewery cannot rank above Chicago breweries for a Chicago
+# request simply because it has higher ratings or review counts.
+_DESTINATION_MISMATCH_PENALTY = 0.45
+
+# State abbreviations and country codes to skip when parsing address segments
+# for destination validation.
+_ADDRESS_SKIP_TOKENS = frozenset({
+    "usa", "us", "uk",
+    "al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga",
+    "hi", "id", "il", "in", "ia", "ks", "ky", "la", "me", "md",
+    "ma", "mi", "mn", "ms", "mo", "mt", "ne", "nv", "nh", "nj",
+    "nm", "ny", "nc", "nd", "oh", "ok", "or", "pa", "ri", "sc",
+    "sd", "tn", "tx", "ut", "vt", "va", "wa", "wv", "wi", "wy",
+})
+
 # Subtype-fit threshold below which an entity is treated as wrong-category
 # when the user named a confident venue concept. Above this, no penalty.
 _WRONG_CATEGORY_SUBTYPE_FIT_MAX = 0.30
@@ -156,6 +173,7 @@ class RankerStats:
     primary_label: str = ""
     concept_is_recognized: bool = False
     has_strong_concept: bool = False
+    destination_penalized_count: int = 0
 
 
 # ── Feature computation ───────────────────────────────────────────────────────
@@ -391,6 +409,64 @@ def _value_fit(entity: PlaceEntity, frame: ExperienceFrame) -> float:
     return 0.5  # unknown price level → neutral
 
 
+def _destination_penalty(entity: PlaceEntity, frame: ExperienceFrame) -> float:
+    """Return a score penalty when the entity is confirmed not in the destination.
+
+    Checks whether any token from the destination city appears in the entity's
+    formatted_address. If the address exists but contains no destination token
+    AND contains at least one other city-shaped segment (non-digit, non-state,
+    len > 2), the entity is likely in a different city and gets a heavy penalty.
+
+    This prevents a Milwaukee brewery from outranking Chicago breweries for a
+    Chicago request simply because of higher ratings.
+
+    Returns 0.0 (no penalty) when:
+    - No destination is set
+    - No formatted_address available
+    - Destination token appears in the address (in-destination confirmed)
+    - Address is too short to make a determination
+
+    Returns _DESTINATION_MISMATCH_PENALTY when address confirms a different city.
+    """
+    dest = (frame.destination or "").lower().strip()
+    if not dest:
+        return 0.0
+
+    address = (entity.formatted_address or "").lower()
+    if not address:
+        return 0.0
+
+    dest_words = set(dest.split())
+
+    # If any non-trivial destination word appears anywhere in the address → no penalty
+    if any(word in address for word in dest_words if len(word) > 2):
+        return 0.0
+
+    # Destination not found. Check whether the address has a city-shaped segment
+    # that is clearly a different city.
+    parts = [p.strip().lower() for p in address.split(",")]
+    has_other_city = False
+    for part in parts:
+        if not part:
+            continue
+        if any(c.isdigit() for c in part):
+            continue  # street number or zip — skip
+        if len(part) <= 2:
+            continue  # state abbreviation
+        if part in _ADDRESS_SKIP_TOKENS:
+            continue
+        # This segment looks like a city or neighborhood name.
+        # If it contains any destination word, confirm in-destination.
+        if any(word in part for word in dest_words if len(word) > 2):
+            return 0.0
+        has_other_city = True
+
+    if has_other_city:
+        return _DESTINATION_MISMATCH_PENALTY
+
+    return 0.0
+
+
 # ── Evidence bundle ───────────────────────────────────────────────────────────
 
 def _location_modifier_confirmed(modifier: str, entity: PlaceEntity) -> bool:
@@ -543,6 +619,8 @@ def rank_entities_with_stats(
         and _has_known_synonym_set(primary_label)
     )
 
+    dest_penalized_count = 0
+
     for entity in entities:
         sf = _subtype_fit(entity, frame)
         gf = _geo_fit(entity, frame)
@@ -559,6 +637,14 @@ def rank_entities_with_stats(
         # so generic restaurants/parks don't dominate brewery/sushi asks.
         if has_strong_concept and sf < _WRONG_CATEGORY_SUBTYPE_FIT_MAX:
             pen += _WRONG_CATEGORY_PENALTY
+
+        # Destination discipline: penalize entities whose address confirms a
+        # different city than the requested destination. A Milwaukee brewery
+        # must not outrank Chicago breweries for a Chicago request.
+        dest_pen = _destination_penalty(entity, frame)
+        if dest_pen > 0:
+            pen += dest_pen
+            dest_penalized_count += 1
 
         total = (
             _W_SUBTYPE_FIT * sf
@@ -622,6 +708,7 @@ def rank_entities_with_stats(
     stats.concept_is_recognized = bool(concept_is_recognized)
     stats.on_concept_count = on_concept_total
     stats.off_concept_dropped = dropped_off_concept
+    stats.destination_penalized_count = dest_penalized_count
 
     logger.debug(
         "ranker: entities=%d ranked=%d off_concept_dropped=%d "
