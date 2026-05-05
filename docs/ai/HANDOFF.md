@@ -1646,3 +1646,18 @@ Enriched whyPick evidence quality by promoting venue-specific Foursquare tags, T
 - **Impact:** Fresh searches (`prior_key_count=0`) no longer emit the false warning "Google verification unavailable" unless the verifier is truly unavailable; continuation and prior-dedup logic are unchanged.
 
 - 2026-05-05: AI Concierge rating display scale fix — root cause was a legacy `rating * 2` conversion in `backend/app/concierge/semantic_retrieval.py::_entity_to_card`, which serialized/displayed Google ratings on 0–10. Fixed to preserve native Google 0–5 rating in card `rating` and meta line while leaving review count wiring unchanged. Added focused semantic retrieval regression tests for native 4.6 display + null-rating safety; no semantic retrieval ranking/planning/trust gate behavior changed.
+
+## 2026-05-05 — Live semantic retrieval card display contract fix
+- Fixed AI Concierge drawer live contract issue where `/ai/concierge/search` place payloads were not normalized in frontend API client, causing semantic verified cards to be dropped and replies to appear text-only.
+- Root cause: response schema mismatch (backend snake_case typed payload vs frontend camelCase expectation in `callConciergeSearch`).
+- Tests added/run:
+  - backend/tests/test_concierge_router_v2.py (Izakayas + Izakayas on Fulton Street place payload preservation; empty-card no-fabrication behavior)
+  - frontend/tests/concierge-renderers.test.mjs (assert search path normalizes typed response before card mapping)
+- Production validation checklist:
+  - Izakayas
+  - Izakayas on Fulton Street
+  - best breweries
+  - best waterfront breweries
+  - breweries near the river
+  - taprooms with a view
+- PR-3 batched grounded reasoning was not started.

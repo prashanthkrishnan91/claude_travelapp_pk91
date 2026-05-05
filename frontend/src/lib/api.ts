@@ -32,6 +32,7 @@ import type {
   TripOptimizationResponse,
 } from "@/types";
 import { supabase } from "./supabase";
+import { normalizeConciergeResponse } from "./concierge/types";
 import {
   addDaysToIsoDate,
   computeExpectedTripDayCount,
@@ -1733,7 +1734,7 @@ export async function callConciergeSearch(
   userQuery: string,
   clientMessageId?: string
 ): Promise<ConciergeSearchResult> {
-  return apiFetch<ConciergeSearchResult>("/ai/concierge/search", {
+  const raw = await apiFetch<unknown>("/ai/concierge/search", {
     method: "POST",
     body: JSON.stringify({
       trip_id: tripId,
@@ -1741,6 +1742,25 @@ export async function callConciergeSearch(
       ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
     }),
   });
+  const normalized = normalizeConciergeResponse(raw);
+  if (normalized.responseType !== "place_recommendations") {
+    return {
+      response: normalized.responseType === "trip_advice" ? normalized.response : normalized.message,
+      intent: "",
+      retrievalUsed: false,
+      sourceStatus: "none",
+      restaurants: [],
+      attractions: [],
+      hotels: [],
+      researchSources: [],
+      areas: [],
+      areaComparisons: [],
+      suggestions: [],
+      sources: [],
+      warnings: [],
+    };
+  }
+  return normalized;
 }
 
 export async function fetchConciergeMessages(tripId: string): Promise<ConciergeMessage[]> {
