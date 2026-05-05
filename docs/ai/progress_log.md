@@ -1,5 +1,28 @@
 # Progress Log
 
+## 2026-05-05 — Merge-Gate: 21 Failures Eliminated (0 concierge/related remain)
+
+**Branch**: `claude/fix-concierge-reasoning-qyJkD`
+
+**Problem**: PR #250 had 36 backend failures; after previous session reduced to 16. This session fixed the remaining merge-blockers.
+
+**Root causes fixed**:
+1. `conftest.py`: `app.core` stub lacked `__path__` → `ModuleNotFoundError: app.core.cost_guardrails; 'app.core' is not a package`. Fixed: set `__path__` on the stub (same pattern as `app.services`).
+2. `router.py`: Missing venue-type patterns (izakaya, brewery, taproom) + `unsupported_score` base 0.20→0.10; "Izakayas" scored 0.5, below 0.55 threshold. Fixed both.
+3. `concierge.py`: `source_unavailable` from semantic_retrieval_v1 returned early, intercepting live_research/fast_dynamic paths. Changed to fall-through like `no_verified_cards`.
+4. `itinerary.py`: `ensure_trip_days(user_id: UUID)` was non-optional; other methods use `Optional[UUID]=None`. Made optional.
+5. `test_itinerary_auth_scope.py`: Wrong relative path `'backend/app/routes/itinerary.py'` — should be `__file__`-relative.
+6. `test_concierge_observability.py`: Checked `row["intent_classifier_version"]` in DB row; field intentionally omitted from DB insert (documented in schema tolerance tests). Fixed assertion.
+
+**Tests**: 1271 passing, 20 failing (all `test_restaurant_search_diagnostics.py`, `ModuleNotFoundError: httpx` pre-existing).
+
+**Evidence harness**: 21/21 validated, 0 omitted — unchanged.
+
+**Supabase SQL**: No
+**HANDOFF.md edited**: Yes
+
+---
+
 ## 2026-05-05 — Reasoning Reliability v2: Three-Pass Orchestrator + Validated Display Contract
 
 **Branch**: `claude/fix-concierge-reasoning-qyJkD`

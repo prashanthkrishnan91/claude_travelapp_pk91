@@ -2,7 +2,7 @@
 
 ## Last change (2026-05-05) — Reasoning Reliability v2: Three-Pass Orchestrator + Validated Display Contract
 
-**Status: IN PROGRESS** (this PR)
+**Status: MERGE-READY** — 0 concierge failures; 20 pre-existing httpx-only remain (unrelated)
 
 ### Root cause (this PR)
 
