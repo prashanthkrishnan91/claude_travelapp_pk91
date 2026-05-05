@@ -28,6 +28,11 @@ logger = logging.getLogger(__name__)
 
 BATCHED_REASON_TIMEOUT_S = float(os.getenv("BATCHED_REASON_TIMEOUT_S", "3.0"))
 MAX_CARDS_FOR_LLM_BATCH = int(os.getenv("BATCHED_REASON_MAX_CARDS", "8"))
+# Default: sonnet for production validation quality. Downgrade to haiku only after
+# production quality passes. Override via Railway env: CONCIERGE_BATCHED_REASONING_MODEL.
+CONCIERGE_BATCHED_REASONING_MODEL = os.getenv(
+    "CONCIERGE_BATCHED_REASONING_MODEL", "claude-sonnet-4-6"
+)
 _REASON_MIN_WORDS = 8
 _REASON_MAX_CHARS = 220
 
@@ -210,7 +215,7 @@ Respond with ONLY a valid JSON object mapping place number (as string) to the no
     return prompt
 
 
-def _call_llm(prompt: str, timeout: float) -> Optional[str]:
+def _call_llm(prompt: str, timeout: float, model: str = "") -> Optional[str]:
     """Call the Claude API with a timeout. Returns raw response text or None."""
     try:
         import anthropic  # type: ignore[import]
@@ -223,17 +228,21 @@ def _call_llm(prompt: str, timeout: float) -> Optional[str]:
         logger.warning("batched_reason_builder: ANTHROPIC_API_KEY not set, skipping LLM")
         return None
 
+    resolved_model = model or CONCIERGE_BATCHED_REASONING_MODEL
+    logger.debug("batched_reason_builder: calling model=%s", resolved_model)
     try:
         client = anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=resolved_model,
             max_tokens=1024,
             timeout=timeout,
             messages=[{"role": "user", "content": prompt}],
         )
         return message.content[0].text if message.content else None
     except Exception as exc:
-        logger.warning("batched_reason_builder: llm_call_failed error=%s", exc)
+        logger.warning(
+            "batched_reason_builder: llm_call_failed model=%s error=%s", resolved_model, exc
+        )
         return None
 
 
@@ -360,9 +369,23 @@ def build_batched_reasons(
             else:
                 rejected_reasons.append(f"idx={idx_str}:{rejection}")
 
+        validator_rejected = len([r for r in rejected_reasons if "thin_evidence" not in r])
         logger.info(
-            "batched_reason_builder: llm_path elapsed_ms=%d accepted=%d/%d rejected=%r",
-            elapsed_ms, accepted, len(cards_data), rejected_reasons,
+            "batched_reason_builder: llm_path "
+            "grounded_reason_model=%s "
+            "grounded_reason_attempted=%d "
+            "grounded_reason_success=%d "
+            "fallback_note_count=%d "
+            "validator_rejected_count=%d "
+            "elapsed_ms=%d "
+            "rejected=%r",
+            CONCIERGE_BATCHED_REASONING_MODEL,
+            len(cards_data),
+            accepted,
+            len(cards_data) - accepted,
+            validator_rejected,
+            elapsed_ms,
+            rejected_reasons,
         )
         return result
 

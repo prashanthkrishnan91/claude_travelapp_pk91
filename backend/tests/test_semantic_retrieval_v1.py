@@ -2455,6 +2455,104 @@ class TestBatchedReasonBuilder:
         os.environ.pop("CONCIERGE_BATCHED_REASONING_ENABLED", None)
 
 
+class TestBatchedReasonModelConfig:
+    """CONCIERGE_BATCHED_REASONING_MODEL env var must control the Anthropic model used.
+
+    Default: claude-sonnet-4-6 (high-quality production validation default).
+    Override: any valid model string (e.g. claude-haiku-4-5-20251001 after quality passes).
+    """
+
+    def test_default_model_is_sonnet(self):
+        """When CONCIERGE_BATCHED_REASONING_MODEL is absent, default is claude-sonnet-4-6."""
+        import importlib
+        import os
+        import app.concierge.batched_reason_builder as brb
+        old = os.environ.pop("CONCIERGE_BATCHED_REASONING_MODEL", None)
+        try:
+            importlib.reload(brb)
+            assert brb.CONCIERGE_BATCHED_REASONING_MODEL == "claude-sonnet-4-6", (
+                f"Default model must be claude-sonnet-4-6, got {brb.CONCIERGE_BATCHED_REASONING_MODEL}"
+            )
+        finally:
+            if old is not None:
+                os.environ["CONCIERGE_BATCHED_REASONING_MODEL"] = old
+            importlib.reload(brb)
+
+    def test_env_override_respected(self):
+        """CONCIERGE_BATCHED_REASONING_MODEL env var overrides the default."""
+        import importlib
+        import os
+        import app.concierge.batched_reason_builder as brb
+        os.environ["CONCIERGE_BATCHED_REASONING_MODEL"] = "claude-haiku-4-5-20251001"
+        try:
+            importlib.reload(brb)
+            assert brb.CONCIERGE_BATCHED_REASONING_MODEL == "claude-haiku-4-5-20251001", (
+                f"Env override not respected: {brb.CONCIERGE_BATCHED_REASONING_MODEL}"
+            )
+        finally:
+            del os.environ["CONCIERGE_BATCHED_REASONING_MODEL"]
+            importlib.reload(brb)
+
+    def test_call_llm_uses_resolved_model(self):
+        """_call_llm must pass the resolved model to the Anthropic client."""
+        from unittest.mock import patch, MagicMock
+        import os
+        import app.concierge.batched_reason_builder as brb
+
+        mock_client = MagicMock()
+        mock_message = MagicMock()
+        mock_message.content = [MagicMock(text='{"1": "test note"}')]
+        mock_client.messages.create.return_value = mock_message
+
+        os.environ["ANTHROPIC_API_KEY"] = "test-key"
+        with patch("anthropic.Anthropic", return_value=mock_client):
+            brb._call_llm("test prompt", timeout=3.0, model="claude-haiku-4-5-20251001")
+
+        call_kwargs = mock_client.messages.create.call_args
+        assert call_kwargs is not None
+        used_model = (
+            call_kwargs.kwargs.get("model") or
+            (call_kwargs.args[0] if call_kwargs.args else None)
+        )
+        # model kwarg may be positional; check via kwargs
+        create_kwargs = mock_client.messages.create.call_args[1]
+        assert create_kwargs.get("model") == "claude-haiku-4-5-20251001", (
+            f"model kwarg must be haiku, got {create_kwargs.get('model')}"
+        )
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+
+    def test_no_note_generation_broken_when_model_env_missing(self):
+        """When CONCIERGE_BATCHED_REASONING_MODEL is missing, deterministic fallback works fine."""
+        import os
+        from app.concierge.batched_reason_builder import build_batched_reasons
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.place_entity_layer import PlaceEntity
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        from app.concierge.safe_reason_builder import build_safe_reason
+
+        os.environ.pop("CONCIERGE_BATCHED_REASONING_MODEL", None)
+        os.environ["CONCIERGE_BATCHED_REASONING_ENABLED"] = "false"
+
+        frame = extract_frame("best izakayas", "Chicago")
+        entity = PlaceEntity(
+            place_id="pid_mc", name="Model Config Test Izakaya",
+            types=["japanese_restaurant"], primary_type="japanese_restaurant",
+            rating=4.4, user_rating_count=300, business_status="OPERATIONAL",
+            formatted_address="1960 N Damen Ave, Chicago, IL",
+            google_maps_uri="https://maps.google.com/?cid=mc",
+            website_uri=None, price_level=None, lat=41.88, lng=-87.63,
+            source_query="izakaya Chicago",
+        )
+        score = RankScore(total=0.75, subtype_fit=0.85, geo_fit=0.5)
+        ev = build_evidence_bundle(entity, frame, score)
+        det = build_safe_reason(entity, ev, frame, score)
+        result = build_batched_reasons([(entity, ev, score, det)], frame)
+
+        assert "1" in result, "Must return a result even when model env is absent"
+        assert result["1"] == det, "Must return deterministic fallback when flag is off"
+        os.environ.pop("CONCIERGE_BATCHED_REASONING_ENABLED", None)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # PR-3: Regression Tests
 # ══════════════════════════════════════════════════════════════════════════════
