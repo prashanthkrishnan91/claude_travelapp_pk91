@@ -93,6 +93,29 @@ _REPETITIVE_MATCH_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Generic "Strong/Good/Great X match in Y" boilerplate.
+# These phrases convey no verified information and MUST be rejected whether
+# produced by the deterministic path or the LLM. Examples:
+#   "Strong izakaya match in Chicago."
+#   "Good brewery match in Milwaukee."
+#   "Strong brewery match in Chicago, near waterfront."
+_GENERIC_MATCH_IN_RE = re.compile(
+    r"\b(Strong|Good|Great|Solid|Excellent)\s+\w+\s+match\b",
+    re.IGNORECASE,
+)
+
+# Template-shaped "Verified {category} with {rating}★ across {N} reviews." pattern.
+# This is a fill-in-the-blank note that provides no card-specific differentiation.
+# It does NOT vary by card and must be rejected from both deterministic and LLM paths.
+# Examples:
+#   "Verified Brewery with 4.5★ across 1,234 Google reviews."
+#   "Verified Japanese Restaurant with 4.3★ across 210 reviews."
+#   "Verified Bar with 4.1★."
+_VERIFIED_TEMPLATE_RE = re.compile(
+    r"\bVerified\s+\w[\w\s]*\s+with\s+\d[\d.]*\s*★",
+    re.IGNORECASE,
+)
+
 
 def validate_reason(
     reason: str,
@@ -120,13 +143,24 @@ def validate_reason(
     if _REPETITIVE_MATCH_RE.search(reason):
         return False, "match_in_non_neighborhood_fragment"
 
-    # 2. Unsupported physical attribute claims
+    # 1b. Generic "Strong/Good X match" boilerplate — rejected regardless of city.
+    # These notes provide no grounded information (city name is not evidence).
+    if _GENERIC_MATCH_IN_RE.search(reason):
+        return False, "generic_match_boilerplate"
+
+    # 1c. "Verified {category} with {rating}★" template — fill-in-the-blank, no differentiation.
+    if _VERIFIED_TEMPLATE_RE.search(reason):
+        return False, "verified_category_template"
+
+    # 2. Unsupported physical attribute claims.
+    # Allow when (a) evidence bundle confirms it, or (b) the term appears
+    # inside an explicit negation/caveat ("not confirmed", "cannot be verified").
     unsupported_match = _UNSUPPORTED_ATTRIBUTE_RE.search(reason)
     if unsupported_match:
         claim = unsupported_match.group(0)
-        # Allow claim only when evidence bundle confirms it
         if not _evidence_supports_claim(claim, evidence):
-            return False, f"unsupported_attribute_claim:{claim.lower()}"
+            if not _claim_is_negated(reason, unsupported_match.start()):
+                return False, f"unsupported_attribute_claim:{claim.lower()}"
 
     # 3. Internal metric / debug fields leaked into user text
     internal_match = _INTERNAL_FIELD_RE.search(reason)
@@ -161,6 +195,29 @@ def _evidence_supports_claim(claim: str, evidence: MinimalEvidenceBundle) -> boo
         if any(tok in fact.lower() for tok in re.findall(r"[a-z]+", claim_lower) if len(tok) > 4):
             return True
     return False
+
+
+# Negation/caveat patterns that indicate the term is being DENIED, not asserted.
+_NEGATION_CONTEXT_RE = re.compile(
+    r"\b(not confirmed|not verified|cannot be|cannot verify|is not|isn't|"
+    r"doesn't|don't|no\s+(?:waterfront|view|river|lake|water|riverwalk)|"
+    r"never|without|unconfirmed|not available|not in|not directly|"
+    r"not confirmed|cannot be structurally)\b",
+    re.IGNORECASE,
+)
+
+
+def _claim_is_negated(reason: str, match_start: int) -> bool:
+    """Return True when the matched attribute appears inside a negation/caveat.
+
+    Checks both before and after the match position within an 80-char window.
+    This allows phrases like "waterfront setting is not confirmed" and
+    "requested waterfront cannot be verified" to pass validation.
+    """
+    window_start = max(0, match_start - 80)
+    window_end = min(len(reason), match_start + 80)
+    context = reason[window_start:window_end]
+    return bool(_NEGATION_CONTEXT_RE.search(context))
 
 
 def _reason_claims_modifier_confirmed(reason: str, modifier: str) -> bool:

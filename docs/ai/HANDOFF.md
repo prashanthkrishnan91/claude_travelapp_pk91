@@ -1,6 +1,105 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-05) — PR-3 Batched Grounded Reasoning + Validators + Location Modifier Preservation
+## Last change (2026-05-05) — PR-4 STOP-THE-LINE: Concierge Note Quality + Destination Discipline
+
+### Why PR-3 merged but visible notes still failed
+
+PR-3 introduced `reason_validator.py` and `batched_reason_builder.py` but the validator was **only applied to LLM-generated text** inside `build_batched_reasons()`. Because `CONCIERGE_BATCHED_REASONING_ENABLED` defaults to `false`, the LLM path is never reached in production. The **deterministic `build_safe_reason()` output went directly to cards with zero validation**, allowing bad notes to render unchanged.
+
+Additionally, `build_safe_reason()` itself generated the exact banned pattern "Strong {concept} match in {city}" as its primary format, and the validator had no rule to catch this pattern. So even if the validator had been applied to the deterministic path, the old notes would have passed.
+
+### Root causes (PR-4)
+
+1. **`build_safe_reason()` emitted generic boilerplate.** The core format `"Strong {concept} match in {city}"` was always generic. When `_area_from_address` returned `None` (no meaningful neighborhood in the address), `loc_part` fell back to `f" in {destination}"` → "Strong izakaya match in Chicago."
+
+2. **Validator never applied to deterministic output.** `validate_reason()` was called only inside `build_batched_reasons()` (flag off by default → never reached). Deterministic bad notes bypassed all validation.
+
+3. **No destination discipline.** The ranker had no penalty for out-of-destination entities. Lakefront Brewery (Milwaukee, WI) could rank first for a Chicago request because its review count raised `_popularity_signal` and `_quality_signal` above in-city competitors. The note then correctly read the address and said "Strong brewery match in Milwaukee" — showing the wrong city explicitly.
+
+4. **`_UNSUPPORTED_ATTRIBUTE_RE` in the validator matched "waterfront" even in caveat text.** This was a latent issue: if applied to notes like "waterfront setting is not confirmed," the validator would reject them. Fixed by adding `_claim_is_negated()` to allow negation context.
+
+5. **Missing `_GENERIC_MATCH_IN_RE` validator rule.** "Strong/Good/Great X match in Y" had no validator rule; it would have passed validation even if applied.
+
+### Durable fixes (PR-4)
+
+**`backend/app/concierge/safe_reason_builder.py`** — complete rewrite of `build_safe_reason()`:
+- Format changed to: `"Verified {type} [on/in {location}] with {rating}★ across {N} Google reviews. [caveats]"`
+- Never emits city name as a "match" location. `f" in {destination}"` removed entirely.
+- Geo hints (waterfront, river, lake) always produce honest caveat: "The requested {geo_hint} setting is not confirmed in available data."
+- Ambiguity flags ("view_not_structurally_verifiable") produce caveat even when `geo_hints` is empty.
+- Confirmed location modifier → `"on {modifier}"` in the opening. Unconfirmed → "Not directly on {modifier} — nearest match in {area}."
+
+**`backend/app/concierge/reason_validator.py`** — two additions:
+- `_GENERIC_MATCH_IN_RE`: rejects "Strong/Good/Great/Solid/Excellent X match" patterns.
+- `_claim_is_negated()` + `_NEGATION_CONTEXT_RE`: allows waterfront/view/riverwalk when they appear in negation context ("not confirmed", "cannot be verified", etc.).
+
+**`backend/app/concierge/ranker.py`** — destination discipline:
+- `_destination_penalty()`: returns `_DESTINATION_MISMATCH_PENALTY = 0.45` when entity's formatted_address contains no destination city token AND contains a different city-shaped segment. Zero penalty when destination token confirmed in address.
+- `RankerStats.destination_penalized_count`: new field for observability.
+- Penalty applied in `rank_entities_with_stats()` alongside the wrong-category penalty.
+
+**`backend/app/concierge/semantic_retrieval.py`** — validator wired to deterministic path:
+- After `det_reason = build_safe_reason(...)`, calls `validate_reason(det_reason, frame, evidence)`.
+- If rejected: warns with entity name + rejection reason, uses `_minimal_safe_note(entity)` fallback (type + rating only, no location, no geo claims).
+- `_minimal_safe_note()`: new helper; never generic boilerplate.
+- `_log_semantic_turn()`: new fields: `grounded_reason_attempted`, `grounded_reason_success`, `destination_penalized`, `det_reason_rejected`, `top_card_name`, `top_card_city`.
+- `rejection_stats` enriched with `destination_penalized_count`, `det_reason_rejected_count`, `grounded_reason_attempted`, `grounded_reason_success`.
+
+### Validator contract (updated)
+
+A note passes validation when it:
+- Does NOT match "Strong/Good/Great X match" (generic boilerplate)
+- Does NOT claim waterfront/view/riverwalk/Michelin/awards/hours/prices UNLESS:
+  - The evidence bundle confirms it (`_evidence_supports_claim`), OR
+  - The term appears inside an explicit negation/caveat (`_claim_is_negated`)
+- Does NOT use address-fragment locations ("in Lower Level")
+- Does NOT contain internal metric names
+- Does NOT assert a location modifier as confirmed unless evidence confirms it
+- Does NOT contain distance claims ("5 steps from", "200 feet from")
+
+### Destination discipline contract
+
+- Entity address containing destination city token → no penalty.
+- Entity address with confirmed different city (no destination token, has other city segment) → `_DESTINATION_MISMATCH_PENALTY = 0.45` penalty in rank score.
+- Milwaukee, Evanston, etc. cannot outrank Chicago places for a Chicago request even with higher ratings or review counts.
+
+### Tests (34 new, 5 existing tests updated, total 194 passing)
+
+- `TestFinalVisibleNoteValidator` — 8 tests: rejects all live bad note patterns; accepts verified-fact format.
+- `TestSafeFallbackFormat` — 7 tests: fallback format includes rating/type; never generic boilerplate; waterfront always caveated; all notes pass validator.
+- `TestDestinationDiscipline` — 6 tests: Chicago brewery outranks Milwaukee brewery for Chicago request; penalty applied to out-of-city; no penalty for in-city; multi-word destination (New York) handled.
+- `TestReasoningSourceContract` — 3 tests: batched flag off by default; all test queries produce validator-passing deterministic notes; old bad patterns fail validator.
+- `TestPR4FullRegressionSuite` — 10 tests: all acceptance criteria queries produce non-generic notes; all notes pass validator; native 0-5 rating preserved; `_minimal_safe_note` is not generic boilerplate.
+- 5 existing tests updated to accept honest caveat format ("not confirmed") instead of old "Verify before booking" format.
+
+### Production validation checklist (updated)
+
+With `CONCIERGE_SEMANTIC_RETRIEVAL_V1_ENABLED=true`:
+1. "izakayas" → cards render; notes say "Verified Izakaya with X★ across N Google reviews." No "Strong izakaya match."
+2. "izakayas with waterfront views" → notes include "waterfront setting is not confirmed." No "Strong izakaya match."
+3. "izakayas on fulton street" → modifier caveat or confirmation in note.
+4. "best breweries" → brewery-first cards; notes are specific, not generic.
+5. "best waterfront breweries" → Chicago breweries dominate; Milwaukee penalized; notes caveat waterfront.
+6. "breweries near the river" → brewery cards; notes do not claim river proximity.
+7. "taprooms with a view" → taproom cards; notes caveat view.
+8. Railway logs: `det_reason_rejected=N` (should be 0 after fix); `destination_penalized=N`; `top_card_city=Chicago` for Chicago requests.
+9. Batched reasoning flag still off by default; `grounded_reason_attempted=False`.
+10. No "Strong X match" pattern in any visible card note.
+
+### Critical invariants preserved
+- No fake addable cards. Google place id + OPERATIONAL + Google Maps URI gates unchanged.
+- No Tavily / editorial / Yelp / Foursquare.
+- Google rating displays on native 0–5 scale.
+- No frontend changes. Card rendering contract not regressed.
+- No SQL or schema changes.
+- Batched LLM path still feature-flagged off by default.
+
+Supabase SQL: No.
+HANDOFF.md edited: Yes — added PR-4 root cause, fixes, and production validation checklist.
+
+---
+
+## Previous change (2026-05-05) — PR-3 Batched Grounded Reasoning + Validators + Location Modifier Preservation
 
 ### Root cause of bad notes
 Two independent bugs were producing generic/wrong card notes:

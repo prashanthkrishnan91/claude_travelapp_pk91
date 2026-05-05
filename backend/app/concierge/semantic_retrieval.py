@@ -205,12 +205,30 @@ def _run_pipeline(
     # ── Step 6: Evidence bundles + deterministic SafeReasonBuilder ───────────
     t0 = time.monotonic()
     from app.concierge.safe_reason_builder import build_safe_reason
+    from app.concierge.reason_validator import validate_reason
 
-    # Build evidence bundles and deterministic fallback reasons for all cards.
+    # Build evidence bundles, deterministic reasons, and validate each one.
+    # A deterministic reason that fails validation falls back to a minimal
+    # safe note built from verified facts only (rating + type label).
     cards_data: List[Any] = []  # (entity, evidence, rank_score, det_reason)
+    det_reason_rejected_count = 0
+
     for entity, rank_score in ranked:
         evidence = build_evidence_bundle(entity, frame, rank_score)
         det_reason = build_safe_reason(entity, evidence, frame, rank_score)
+
+        # Validate the deterministic reason using the same validator applied
+        # to LLM output. If it fails, fall back to a minimal honest note.
+        is_valid, rejection = validate_reason(det_reason, frame, evidence)
+        if not is_valid:
+            logger.warning(
+                "semantic_retrieval_v1: det_reason_rejected "
+                "name=%s rejection=%s reason=%r",
+                entity.name, rejection, det_reason,
+            )
+            det_reason = _minimal_safe_note(entity)
+            det_reason_rejected_count += 1
+
         cards_data.append((entity, evidence, rank_score, det_reason))
 
     latency["det_reason_ms"] = int((time.monotonic() - t0) * 1000)
@@ -255,6 +273,18 @@ def _run_pipeline(
     wrong_category_count = sum(
         1 for _, rs in ranked if rs.subtype_fit < 0.30
     )
+    top_card_name = cards[0].name if cards else ""
+    top_card_city = ""
+    if cards:
+        addr = getattr(cards[0], "neighborhood", "") or ""
+        # Extract city segment from formatted address for observability
+        addr_parts = [p.strip() for p in addr.split(",")]
+        for part in addr_parts:
+            if not any(c.isdigit() for c in part) and len(part) > 2:
+                if part.strip().lower() not in {"usa", "us"}:
+                    top_card_city = part.strip()
+                    break
+
     rejection_stats = {
         **vars(entity_stats),
         "trust_gate_rejected": trust_rejected,
@@ -262,6 +292,10 @@ def _run_pipeline(
         "off_concept_dropped": ranker_stats.off_concept_dropped,
         "on_concept_count": ranker_stats.on_concept_count,
         "venue_head_recognized": ranker_stats.concept_is_recognized,
+        "destination_penalized_count": ranker_stats.destination_penalized_count,
+        "det_reason_rejected_count": det_reason_rejected_count,
+        "grounded_reason_attempted": _batched_flag(),
+        "grounded_reason_success": _batched_flag() and reason_source == "batched_grounded_v1",
     }
     _log_semantic_turn(
         user_query=user_query,
@@ -279,6 +313,8 @@ def _run_pipeline(
         outcome="ok" if final_card_count > 0 else "no_cards_after_trust_gate",
         rank_top3=rank_debug[:3],
         reason_source=reason_source,
+        top_card_name=top_card_name,
+        top_card_city=top_card_city,
     )
 
     if not cards:
@@ -289,6 +325,26 @@ def _run_pipeline(
         source_status=SOURCE_LIVE_SEARCH,
         provider_name=PROVIDER_NAME,
     )
+
+
+def _minimal_safe_note(entity: Any) -> str:
+    """Ultra-safe fallback note when deterministic reason fails validation.
+
+    Anchored on the place's actual name — never a type-template.
+    "Goose Island Brewery — 4.5★." is acceptable.
+    "Verified Brewery with 4.5★ across reviews." is banned.
+    """
+    name = getattr(entity, "name", None) or "This place"
+    rating = getattr(entity, "rating", None)
+    review_count = getattr(entity, "user_rating_count", None) or 0
+
+    if rating is not None and review_count >= 50:
+        if review_count >= 1000:
+            return f"{name} — {rating:.1f}★ from {review_count:,} reviews."
+        return f"{name} — {rating:.1f}★ ({review_count:,} reviews)."
+    elif rating is not None:
+        return f"{name} — {rating:.1f}★."
+    return f"{name}."
 
 
 def _trust_gate(cards: List[Any]) -> tuple:
@@ -489,6 +545,8 @@ def _log_semantic_turn(
     outcome: str,
     rank_top3: Optional[List[Dict]] = None,
     reason_source: str = "deterministic_safe_v1",
+    top_card_name: str = "",
+    top_card_city: str = "",
 ) -> None:
     """Log one structured semantic turn line for zero-card failure debugging."""
     total_ms = int((time.monotonic() - t_pipeline_start) * 1000)
@@ -527,6 +585,12 @@ def _log_semantic_turn(
         "rejection_stats=%r "
         "final_card_count=%d "
         "reason_source=%s "
+        "grounded_reason_attempted=%s "
+        "grounded_reason_success=%s "
+        "destination_penalized=%d "
+        "det_reason_rejected=%d "
+        "top_card_name=%r "
+        "top_card_city=%r "
         "latency_by_stage=%r "
         "total_ms=%d "
         "rank_top3=%r "
@@ -553,6 +617,12 @@ def _log_semantic_turn(
         rejection_stats,
         final_card_count,
         reason_source,
+        rejection_stats.get("grounded_reason_attempted", False),
+        rejection_stats.get("grounded_reason_success", False),
+        rejection_stats.get("destination_penalized_count", 0),
+        rejection_stats.get("det_reason_rejected_count", 0),
+        top_card_name,
+        top_card_city,
         latency,
         total_ms,
         rank_top3 or [],
