@@ -25,6 +25,13 @@
         "CLAUDE_FLOW_MEMORY_BACKEND": "hybrid"
       },
       "autoStart": false
+    },
+    "Railway": {
+      "command": "npx",
+      "args": [
+        "@railway/mcp-server"
+      ],
+      "type": "stdio"
     }
   }
 }
