@@ -114,12 +114,14 @@ def _run_pipeline(
     latency["frame_ms"] = int((time.monotonic() - t0) * 1000)
 
     logger.debug(
-        "semantic_retrieval_v1.frame query=%r concepts=%r geo=%r prefs=%r neg=%r",
+        "semantic_retrieval_v1.frame query=%r concepts=%r geo=%r locs=%r prefs=%r neg=%r open_class=%s",
         user_query,
         [(c.label, round(c.confidence, 2)) for c in frame.subtype_concepts],
         frame.geography_hints,
+        getattr(frame, "location_modifiers", []),
         frame.soft_preferences,
         frame.negative_constraints,
+        getattr(frame, "open_class_place_detected", False),
     )
 
     # ── Step 2: RetrievalPlanner ─────────────────────────────────────────────
@@ -227,7 +229,17 @@ def _run_pipeline(
     final_card_count = len(cards)
 
     # ── Step 9: Structured observability ─────────────────────────────────────
-    rejection_stats = {**vars(entity_stats), "trust_gate_rejected": trust_rejected}
+    # Wrong-category fit diagnostics: count entities whose subtype_fit fell
+    # below the wrong-category threshold (used for visibility into ranker
+    # behavior, not for any hard gate).
+    wrong_category_count = sum(
+        1 for _, rs in ranked if rs.subtype_fit < 0.30
+    )
+    rejection_stats = {
+        **vars(entity_stats),
+        "trust_gate_rejected": trust_rejected,
+        "wrong_category_low_subtype_fit": wrong_category_count,
+    }
     _log_semantic_turn(
         user_query=user_query,
         frame=frame,
@@ -458,6 +470,11 @@ def _log_semantic_turn(
         [(c.label, round(c.confidence, 2)) for c in frame.subtype_concepts]
         if hasattr(frame, "subtype_concepts") else []
     )
+    venue_concept = (
+        frame.subtype_concepts[0].label
+        if getattr(frame, "subtype_concepts", None)
+        else ""
+    )
     logger.info(
         "semantic_retrieval_v1.turn "
         "pipeline_version=%s "
@@ -465,8 +482,16 @@ def _log_semantic_turn(
         "turn_mode=new_search "
         "query=%r "
         "destination=%r "
+        "open_class_place_detected=%s "
+        "venue_concept=%r "
         "concepts=%r "
         "geo_hints=%r "
+        "location_modifiers=%r "
+        "soft_preferences=%r "
+        "negative_constraints=%r "
+        "use_cases=%r "
+        "value_signals=%r "
+        "ambiguity_flags=%r "
         "retrieval_queries=%r "
         "provider_calls=%d "
         "provider_success=%d "
@@ -483,8 +508,16 @@ def _log_semantic_turn(
         PIPELINE_VERSION,
         user_query,
         getattr(frame, "destination", ""),
+        getattr(frame, "open_class_place_detected", False),
+        venue_concept,
         concepts_summary,
         getattr(frame, "geography_hints", []),
+        getattr(frame, "location_modifiers", []),
+        getattr(frame, "soft_preferences", []),
+        getattr(frame, "negative_constraints", []),
+        getattr(frame, "use_cases", []),
+        getattr(frame, "value_signals", []),
+        getattr(frame, "ambiguity_flags", []),
         queries,
         provider_call_count,
         provider_success_count,

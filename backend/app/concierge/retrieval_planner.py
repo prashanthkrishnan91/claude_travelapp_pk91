@@ -119,6 +119,12 @@ def plan_queries(
 ) -> List[str]:
     """Generate 1–max_queries provider-friendly Google Text Search queries.
 
+    Query construction is venue-first: every query starts with the primary
+    venue concept (or a near-synonym) and only then adds destination, location
+    modifiers, and geo hints. This ensures "waterfront breweries" produces
+    queries like "brewery Chicago waterfront" instead of "waterfront Chicago"
+    that would surface arbitrary waterfront restaurants/parks.
+
     Args:
         frame: Extracted ExperienceFrame from the user ask.
         max_queries: Soft cap. Hard capped at HARD_CAP_QUERIES.
@@ -142,40 +148,52 @@ def plan_queries(
 
     primary = _primary_label(frame)
     geo_hints = frame.geography_hints
+    location_modifiers = getattr(frame, "location_modifiers", []) or []
+    geo_term = _geo_query_term(geo_hints[0], destination) if geo_hints else ""
+    loc_anchor = location_modifiers[0] if location_modifiers else ""
 
-    # -- Query 1: primary concept + destination (+ most salient geo hint if present)
-    if geo_hints:
-        # First: concept + destination + first geo hint
-        geo_term = geo_hints[0]
-        q1_geo = _geo_query_term(geo_term, destination)
-        _add(f"{primary} {destination} {q1_geo}" if q1_geo else f"{primary} {destination}")
+    # Query 1: venue + destination + (location modifier OR geo hint).
+    # Concrete location anchors (e.g., "Fulton Street") take priority over
+    # abstract geo hints because they constrain the search far more tightly.
+    if loc_anchor:
+        _add(f"{primary} {loc_anchor} {destination}".strip())
+    elif geo_term:
+        _add(f"{primary} {destination} {geo_term}")
     else:
         _add(f"{primary} {destination}")
 
-    # -- Query 2: synonym variant + destination
+    # Query 2: venue synonym variant + destination + (loc anchor or geo)
     if frame.subtype_concepts:
         variants = _synonym_variants(frame.subtype_concepts[0])
-        for variant in variants[1:3]:  # try up to 2 synonyms
+        for variant in variants[1:3]:
             if len(queries) >= cap:
                 break
-            if geo_hints:
-                geo_term = _geo_query_term(geo_hints[0], destination)
-                _add(f"{variant} {destination} {geo_term}" if geo_term else f"{variant} {destination}")
+            if loc_anchor:
+                _add(f"{variant} {loc_anchor} {destination}".strip())
+            elif geo_term:
+                _add(f"{variant} {destination} {geo_term}")
             else:
                 _add(f"{variant} {destination}")
 
-    # -- Query 3: concept + destination (no geo modifier, broader fallback)
+    # Query 3: venue + destination (no modifier) — broader recall fallback so
+    # we still catch on-concept results when geo / location filters are too
+    # narrow on the provider side.
     if len(queries) < cap:
         _add(f"{primary} {destination}")
 
-    # -- Fallback: if nothing generated, use normalized ask + destination
+    # Query 4 (only if room): venue + location anchor + geo hint together.
+    # Useful for asks like "best izakayas near Fulton Street waterfront".
+    if len(queries) < cap and loc_anchor and geo_term:
+        _add(f"{primary} {loc_anchor} {geo_term}")
+
+    # Fallback: if nothing generated, use normalized ask + destination
     if not queries:
         fallback = f"{(frame.normalized_ask or frame.literal_ask).strip()} {destination}"
         queries.append(_clean_query(fallback))
 
     logger.debug(
-        "retrieval_planner: query=%r destination=%r geo=%r → queries=%r",
-        frame.literal_ask, destination, geo_hints, queries,
+        "retrieval_planner: query=%r destination=%r geo=%r locs=%r → queries=%r",
+        frame.literal_ask, destination, geo_hints, location_modifiers, queries,
     )
 
     return queries[:cap]
