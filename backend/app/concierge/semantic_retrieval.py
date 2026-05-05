@@ -330,27 +330,21 @@ def _run_pipeline(
 def _minimal_safe_note(entity: Any) -> str:
     """Ultra-safe fallback note when deterministic reason fails validation.
 
-    Uses only verified structural fields: Google type and rating.
-    Never emits city name, geo claims, or qualitative assertions.
+    Anchored on the place's actual name — never a type-template.
+    "Goose Island Brewery — 4.5★." is acceptable.
+    "Verified Brewery with 4.5★ across reviews." is banned.
     """
-    parts = []
-    if getattr(entity, "primary_type", None):
-        type_label = entity.primary_type.replace("_", " ").title()
-        parts.append(f"Verified {type_label}")
-    elif getattr(entity, "types", None):
-        type_label = entity.types[0].replace("_", " ").title()
-        parts.append(f"Verified {type_label}")
-    else:
-        parts.append("Verified Google place")
-
+    name = getattr(entity, "name", None) or "This place"
     rating = getattr(entity, "rating", None)
-    review_count = getattr(entity, "user_rating_count", None)
-    if rating is not None and review_count:
-        parts.append(f"{rating:.1f}★ ({review_count:,} reviews)")
-    elif rating is not None:
-        parts.append(f"{rating:.1f}★")
+    review_count = getattr(entity, "user_rating_count", None) or 0
 
-    return "; ".join(parts) + "."
+    if rating is not None and review_count >= 50:
+        if review_count >= 1000:
+            return f"{name} — {rating:.1f}★ from {review_count:,} reviews."
+        return f"{name} — {rating:.1f}★ ({review_count:,} reviews)."
+    elif rating is not None:
+        return f"{name} — {rating:.1f}★."
+    return f"{name}."
 
 
 def _trust_gate(cards: List[Any]) -> tuple:

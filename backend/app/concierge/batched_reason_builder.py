@@ -33,7 +33,41 @@ _REASON_MAX_CHARS = 220
 
 
 def _flag_enabled() -> bool:
-    return os.getenv("CONCIERGE_BATCHED_REASONING_ENABLED", "false").lower() == "true"
+    """LLM reasoning is the preferred path — auto-enable when ANTHROPIC_API_KEY is present.
+
+    Override with CONCIERGE_BATCHED_REASONING_ENABLED=true/false to force on/off.
+    When auto (env var not set), enabled iff ANTHROPIC_API_KEY is configured.
+    """
+    explicit = os.getenv("CONCIERGE_BATCHED_REASONING_ENABLED", "").lower()
+    if explicit in ("true", "false"):
+        return explicit == "true"
+    # Auto-enable when API key is present — LLM synthesis is the quality path
+    return bool(os.getenv("ANTHROPIC_API_KEY", ""))
+
+
+def _extract_street_from_address(address: str) -> str:
+    """Extract the street name portion (e.g. 'Fulton Street') from a formatted address."""
+    import re
+    if not address:
+        return ""
+    first_part = address.split(",")[0].strip()
+    without_number = re.sub(r"^\d+\s*", "", first_part).strip()
+    without_dir = re.sub(
+        r"^(?:North|South|East|West|NW|SW|NE|SE|N|S|E|W)\s+",
+        "", without_number, flags=re.IGNORECASE,
+    ).strip()
+    expansions = {
+        r"\bSt\b": "Street", r"\bAve\b": "Avenue", r"\bBlvd\b": "Boulevard",
+        r"\bDr\b": "Drive", r"\bRd\b": "Road", r"\bPl\b": "Place",
+        r"\bCt\b": "Court", r"\bLn\b": "Lane", r"\bPkwy\b": "Parkway",
+    }
+    result = without_dir
+    for pat, rep in expansions.items():
+        result = re.sub(pat, rep, result, flags=re.IGNORECASE)
+    result = result.strip()
+    if len(result) >= 3 and not re.match(r"^\d", result):
+        return result
+    return ""
 
 
 def _build_evidence_text(
@@ -42,9 +76,32 @@ def _build_evidence_text(
     frame: Any,
     rank_score: Any,
     card_index: int,
+    total_cards: int = 0,
 ) -> str:
-    """Render an evidence bundle as structured text for the LLM prompt."""
-    lines = [f"Place {card_index}: {entity.name}"]
+    """Render an evidence bundle as structured text for the LLM prompt.
+
+    Every field exposed here is a grounding anchor for the LLM note.
+    The LLM must only write claims that appear in this evidence block.
+    """
+    lines = [f"Place {card_index}{f'/{total_cards}' if total_cards else ''}: {entity.name}"]
+
+    # Street name — key card-specific anchor
+    addr = entity.formatted_address or ""
+    street = _extract_street_from_address(addr)
+    if street:
+        lines.append(f"  - Street: {street}")
+    if addr:
+        lines.append(f"  - Full address: {addr}")
+
+    # Name signal: does the name mention the concept? (informative to the LLM)
+    primary_concept = ""
+    if getattr(frame, "subtype_concepts", None):
+        primary_concept = frame.subtype_concepts[0].label if frame.subtype_concepts else ""
+    if primary_concept:
+        name_lower = entity.name.lower()
+        concept_tokens = [t for t in primary_concept.lower().split() if len(t) >= 4]
+        if any(t in name_lower for t in concept_tokens):
+            lines.append(f"  - Name signal: name includes '{primary_concept}' concept")
 
     # Google type
     for fact in evidence.structured_facts:
@@ -57,11 +114,6 @@ def _build_evidence_text(
         if "Rating:" in fact:
             lines.append(f"  - {fact}")
             break
-
-    # Address (short)
-    addr = entity.formatted_address or ""
-    if addr:
-        lines.append(f"  - Address: {addr}")
 
     # Concept match signal
     for fact in evidence.structured_facts:
@@ -82,13 +134,13 @@ def _build_evidence_text(
             for f in evidence.uncertainty_flags
         )
         if confirmed:
-            lines.append(f"  - Location: confirmed in {modifier} area")
+            lines.append(f"  - Location: CONFIRMED on {modifier}")
         elif not_confirmed:
-            lines.append(f"  - Location: NOT confirmed on {modifier} (address does not mention it)")
+            lines.append(f"  - Location: NOT confirmed on {modifier} — address does not mention it")
 
     # Geo note
     if evidence.geo_note:
-        lines.append(f"  - Geo: {evidence.geo_note}")
+        lines.append(f"  - Geo note: {evidence.geo_note}")
 
     # Uncertainty flags (redacted to user-safe phrasing)
     safe_flags = []
@@ -126,10 +178,11 @@ def _build_batch_prompt(
     if geo_hints:
         modifier_note += f"\nUser's geography hint: {geo_hints[0]} (soft preference, may not be verifiable)"
 
+    n = len(cards_data)
     evidence_blocks = []
     for i, (entity, evidence, rank_score, _det_reason) in enumerate(cards_data, 1):
         evidence_blocks.append(
-            _build_evidence_text(entity, evidence, frame, rank_score, i)
+            _build_evidence_text(entity, evidence, frame, rank_score, i, total_cards=n)
         )
 
     evidence_text = "\n\n".join(evidence_blocks)
@@ -137,19 +190,22 @@ def _build_batch_prompt(
     prompt = f"""You are writing concierge notes for a travel app. The user asked: "{user_query}"
 Venue concept: {venue_concept or "place"}{modifier_note}
 
-For each place below, write ONE concise sentence (20-50 words) that:
-- Is grounded ONLY in the evidence provided below
-- Answers why this place fits the user's request
-- ONLY mentions the location modifier if evidence says it is confirmed there
-- If NOT confirmed on the modifier, says so honestly (e.g., "not directly on X, but nearby")
-- Does NOT invent waterfront views, ambience, awards, Michelin stars, prices, or hours
-- Does NOT use words: "verified", "Google", "OPERATIONAL", "subtype_fit", "geo_fit"
-- Does NOT repeat the same phrase across all cards
+RULES — read before writing:
+1. Ground every note ONLY in the evidence fields provided (Street, Full address, Rating, Name signal, Geo note, Location confirmed/not confirmed). Do not invent facts.
+2. Each note must name something SPECIFIC to that place: its street name, a rating, its actual name, or a confirmed location. Generic sentences like "A great spot for {concept} lovers" are banned.
+3. BANNED TEMPLATES — never produce these patterns:
+   - "Verified {category} with {rating}★ across {N} reviews."  ← no card specificity
+   - "Strong/Good/Great {concept} match in {city}."  ← generic
+   - "Perfect for {concept} enthusiasts in {city}."  ← generic
+4. If a location modifier is NOT confirmed in the evidence, say so honestly ("not directly on X, but nearby"). Never claim a place IS on the modifier unless evidence says CONFIRMED.
+5. If the only available evidence is name + rating (no street, no confirmed modifier, no geo note), return null for that place — an empty note is better than a generic template.
+6. Notes must VARY across cards — do not repeat the same sentence structure for all places. Each note should read distinctly.
+7. Do NOT use words: "verified", "Google", "OPERATIONAL", "subtype_fit", "geo_fit", "rank_score".
 
 {evidence_text}
 
-Respond with ONLY a valid JSON object mapping place number (as string) to the note:
-{{"1": "note for place 1", "2": "note for place 2", ...}}"""
+Respond with ONLY a valid JSON object mapping place number (as string) to the note (or null for thin evidence):
+{{"1": "note for place 1", "2": null, "3": "note for place 3", ...}}"""
 
     return prompt
 
@@ -181,20 +237,25 @@ def _call_llm(prompt: str, timeout: float) -> Optional[str]:
         return None
 
 
-def _parse_llm_response(response_text: str, expected_count: int) -> Dict[str, str]:
-    """Parse JSON from LLM response. Returns empty dict on any parse error."""
+def _parse_llm_response(response_text: str, expected_count: int) -> Dict[str, Optional[str]]:
+    """Parse JSON from LLM response. Returns empty dict on any parse error.
+
+    Values may be str (note) or None (LLM signaled thin evidence — use deterministic fallback).
+    """
     if not response_text:
         return {}
     try:
-        # Try to extract JSON from the response
+        # Try to extract JSON from the response (handles preamble/postamble from LLM)
         json_match = re.search(r"\{[^{}]+\}", response_text, re.DOTALL)
         if not json_match:
             return {}
         raw = json.loads(json_match.group(0))
-        # Validate structure: must be str→str with numeric keys
-        result = {}
+        # Accept str values (notes) and None (thin-evidence signal)
+        result: Dict[str, Optional[str]] = {}
         for k, v in raw.items():
-            if isinstance(v, str) and v.strip():
+            if v is None:
+                result[str(k)] = None  # thin-evidence: caller will use deterministic fallback
+            elif isinstance(v, str) and v.strip():
                 result[str(k)] = v.strip()
         return result
     except (json.JSONDecodeError, ValueError):
@@ -268,11 +329,15 @@ def build_batched_reasons(
         rejected_reasons: List[str] = []
 
         for idx_str, llm_reason in parsed.items():
-            entity = None
+            # None means LLM signaled thin evidence — stay on deterministic fallback
+            if llm_reason is None:
+                rejected_reasons.append(f"idx={idx_str}:thin_evidence_null")
+                continue
+
             idx_int = None
             try:
                 idx_int = int(idx_str)
-                entity = cards_data[idx_int - 1][0]
+                cards_data[idx_int - 1][0]  # validate index
             except (ValueError, IndexError):
                 continue
 

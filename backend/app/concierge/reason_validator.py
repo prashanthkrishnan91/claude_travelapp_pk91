@@ -104,6 +104,18 @@ _GENERIC_MATCH_IN_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Template-shaped "Verified {category} with {rating}★ across {N} reviews." pattern.
+# This is a fill-in-the-blank note that provides no card-specific differentiation.
+# It does NOT vary by card and must be rejected from both deterministic and LLM paths.
+# Examples:
+#   "Verified Brewery with 4.5★ across 1,234 Google reviews."
+#   "Verified Japanese Restaurant with 4.3★ across 210 reviews."
+#   "Verified Bar with 4.1★."
+_VERIFIED_TEMPLATE_RE = re.compile(
+    r"\bVerified\s+\w[\w\s]*\s+with\s+\d[\d.]*\s*★",
+    re.IGNORECASE,
+)
+
 
 def validate_reason(
     reason: str,
@@ -135,6 +147,10 @@ def validate_reason(
     # These notes provide no grounded information (city name is not evidence).
     if _GENERIC_MATCH_IN_RE.search(reason):
         return False, "generic_match_boilerplate"
+
+    # 1c. "Verified {category} with {rating}★" template — fill-in-the-blank, no differentiation.
+    if _VERIFIED_TEMPLATE_RE.search(reason):
+        return False, "verified_category_template"
 
     # 2. Unsupported physical attribute claims.
     # Allow when (a) evidence bundle confirms it, or (b) the term appears

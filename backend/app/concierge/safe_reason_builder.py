@@ -1,18 +1,21 @@
-"""SafeReasonBuilder v1 — deterministic, honest, ask-anchored reasons.
+"""SafeReasonBuilder v1 — evidence-first, name-anchored deterministic fallback.
 
-Phase 1 reasons must be:
-- Safe (no hallucinated facts)
-- Specific (anchored to the user's actual ask and verified data)
-- Non-hallucinatory (no invented views, awards, ambiance, Michelin mentions)
+This module is the FALLBACK for when LLM-based batched reasoning is unavailable.
+The primary path is batched_reason_builder.py (auto-enabled when ANTHROPIC_API_KEY present).
 
-Banned claims (never generated):
-  - waterfront views / water views (always caveated — cannot be structurally verified)
-  - romantic ambience / quietness / specific vibes
-  - awards or Michelin mentions
-  - "Strong X match in {city}" generic boilerplate
-  - opening hours, prices, booking/reservation details
+Design contract:
+- Notes are anchored to the place's actual NAME and STREET, not to a type-template.
+- "Goose Island Brewery on Fulton Street — 4.5★ from 1,159 reviews." is acceptable.
+- "Verified Brewery with 4.5★ across 1,159 reviews." is BANNED — it is a type-template
+  that provides no card-specific evidence.
+- Returns "" when the only available evidence is venue type + city + rating.
+  An empty note is better than a generic template.
 
-Format: "Verified {type} [on/in {location}] with {rating}★ across {N} Google reviews[; caveat]."
+Banned output patterns (enforced by reason_validator.py):
+  - "Strong {venue} match in {city}."          ← generic match boilerplate
+  - "Verified {category} with {rating}★ across {N} reviews."  ← type template
+  - any claim of waterfront/view/river/award/Michelin/hours/prices
+  - any note that could be generated without card-specific evidence
 """
 
 from __future__ import annotations
@@ -35,9 +38,7 @@ _NON_NEIGHBORHOOD_FRAGMENTS = frozenset({
     "level", "room", "wing", "gate",
 })
 
-# Tokens that are modifier-only (never a true venue head). If the extracted
-# primary concept happens to be one of these, the reason builder treats it
-# as having no concept anchor.
+# Tokens that are modifier-only (never a true venue head).
 _MODIFIER_ONLY_LABELS = {
     "waterfront", "riverwalk", "lakefront", "rooftop", "outdoor", "indoor",
     "patio", "terrace", "view", "views", "river", "lake", "ocean", "sea",
@@ -54,6 +55,14 @@ _WATER_GEO_TOKENS = frozenset({
     "shoreline", "beachfront", "waterside",
 })
 
+# Common street-name suffix abbreviations for expansion
+_STREET_SUFFIX_EXPANSIONS = {
+    r"\bSt\b": "Street", r"\bAve\b": "Avenue", r"\bBlvd\b": "Boulevard",
+    r"\bDr\b": "Drive", r"\bRd\b": "Road", r"\bPl\b": "Place",
+    r"\bCt\b": "Court", r"\bLn\b": "Lane", r"\bFwy\b": "Freeway",
+    r"\bHwy\b": "Highway", r"\bPkwy\b": "Parkway", r"\bMkt\b": "Market",
+}
+
 
 def _clip(text: str, max_chars: int = _MAX_REASON_CHARS) -> str:
     text = text.strip()
@@ -66,10 +75,40 @@ def _clip(text: str, max_chars: int = _MAX_REASON_CHARS) -> str:
     return cut.rstrip() + "…"
 
 
+def _street_name_from_address(address: Optional[str]) -> Optional[str]:
+    """Extract the street name from a formatted address.
+
+    "1800 W Fulton St, Chicago, IL" → "Fulton Street"
+    "4257 N Lincoln Ave, Chicago, IL" → "Lincoln Avenue"
+    "95 W Ontario St, Chicago, IL" → "Ontario Street"
+
+    Returns None when no recognizable street name is found.
+    """
+    if not address:
+        return None
+    first_part = address.split(",")[0].strip()
+    # Remove leading street number
+    without_number = re.sub(r"^\d+\s*", "", first_part).strip()
+    # Remove leading directional (W, E, N, S, NW, SW, NE, SE)
+    without_dir = re.sub(r"^(?:North|South|East|West|NW|SW|NE|SE|N|S|E|W)\s+",
+                         "", without_number, flags=re.IGNORECASE).strip()
+    # Expand common abbreviations
+    result = without_dir
+    for pattern, replacement in _STREET_SUFFIX_EXPANSIONS.items():
+        result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+    result = result.strip()
+    # Must be at least 3 chars and not look like a zip code or state
+    if len(result) >= 3 and not re.match(r"^\d", result):
+        return result
+    return None
+
+
 def _area_from_address(address: Optional[str], destination: str) -> Optional[str]:
     """Extract short neighborhood/area from formatted address.
 
     Skips floor/level/unit fragments and the destination city itself.
+    Only returns a value when there is a meaningful intermediate segment
+    (e.g., a neighborhood like "Wicker Park" if Google includes it).
     """
     if not address:
         return None
@@ -82,7 +121,7 @@ def _area_from_address(address: Optional[str], destination: str) -> Optional[str
         if len(p) <= 2:
             continue
         p_lower = p.lower()
-        if p_lower in {"usa", "us", "il", "ny", "ca", "tx", "fl", "wa", "il 60601"}:
+        if p_lower in {"usa", "us", "il", "ny", "ca", "tx", "fl", "wa"}:
             continue
         if p_lower == dest_lower:
             continue
@@ -99,11 +138,7 @@ def _location_modifier_phrase(
     frame: ExperienceFrame,
     area: Optional[str],
 ) -> tuple:
-    """Return (confirmed_modifier, caveat_text) for location modifiers.
-
-    confirmed_modifier: the modifier string if address confirms it, else "".
-    caveat_text: honest caveat sentence when modifier is requested but unconfirmed.
-    """
+    """Return (confirmed_modifier, caveat_text) for location modifiers."""
     location_modifiers = getattr(frame, "location_modifiers", []) or []
     if not location_modifiers:
         return "", ""
@@ -112,7 +147,10 @@ def _location_modifier_phrase(
 
     for flag in evidence.uncertainty_flags:
         if flag.startswith("location_modifier_not_confirmed:"):
-            caveat = f"Not directly on {modifier} — nearest match in {area or frame.destination or 'the area'}."
+            caveat = (
+                f"Not directly on {modifier} — nearest match in "
+                f"{area or frame.destination or 'the area'}."
+            )
             return "", caveat
 
     for fact in evidence.structured_facts:
@@ -128,24 +166,25 @@ def build_safe_reason(
     frame: ExperienceFrame,
     rank_score: RankScore,
 ) -> str:
-    """Build a deterministic, honest, ask-anchored reason for a ranked entity.
+    """Build an evidence-first, name-anchored deterministic note.
 
-    Format: "Verified {type} [on/in {location}] with {rating}★ across {N} Google reviews."
-    Followed by caveats for unconfirmed geo/location modifiers.
+    This is the FALLBACK for when LLM reasoning is unavailable. It anchors
+    on the place's actual name and street address — not on a type-template.
 
-    Never emits:
-    - "Strong X match in {city}" (generic boilerplate)
-    - Unsupported waterfront/view/riverwalk claims
-    - Invented awards, hours, prices, or ambiance
+    Returns "" when the only available evidence is generic (type + city + rating)
+    and no card-specific differentiator (name signal, street, modifier) is present.
+
+    The banned pattern "Verified {type} with {rating}★ across {N} reviews." is
+    NOT produced here — that tells the user nothing card-specific.
 
     Args:
         entity: Verified PlaceEntity.
         evidence: MinimalEvidenceBundle for this entity.
         frame: ExperienceFrame with the user's ask context.
-        rank_score: RankScore for this entity (used for geo confirmation check).
+        rank_score: RankScore for this entity.
 
     Returns:
-        A short, honest reason string (≤ _MAX_REASON_CHARS characters).
+        A short, evidence-specific note (≤ _MAX_REASON_CHARS chars), or "".
     """
     destination = frame.destination
     primary_concept = frame.subtype_concepts[0].label if frame.subtype_concepts else ""
@@ -154,69 +193,83 @@ def build_safe_reason(
     geo_hints = frame.geography_hints
     ambiguity_flags = getattr(frame, "ambiguity_flags", []) or []
 
-    area = _area_from_address(entity.formatted_address, destination)
+    # ── Gather card-specific evidence ────────────────────────────────────────
 
-    # Location modifier (explicit street/neighborhood in the user's query)
-    confirmed_modifier, loc_modifier_caveat = _location_modifier_phrase(
-        evidence, frame, area
+    # 1. Street name from address (specific to this card)
+    street = _street_name_from_address(entity.formatted_address)
+
+    # 2. Location modifier handling
+    area = _area_from_address(entity.formatted_address, destination)
+    confirmed_modifier, loc_modifier_caveat = _location_modifier_phrase(evidence, frame, area)
+
+    # 3. Does the place name contain the requested concept? (name is informative)
+    concept_in_name = bool(
+        primary_concept
+        and any(
+            tok in entity.name.lower()
+            for tok in primary_concept.lower().split()
+            if len(tok) >= 4
+        )
     )
 
-    # Type label: use concept if present (more specific), else Google type
-    type_label = primary_concept.title() if primary_concept else ""
-    if not type_label:
-        if entity.primary_type:
-            type_label = entity.primary_type.replace("_", " ").title()
-        elif entity.types:
-            type_label = entity.types[0].replace("_", " ").title()
-
-    # Opening: "Verified {type}" or generic "Verified Google place"
-    opening = f"Verified {type_label}" if type_label else "Verified Google place"
-
-    # Add specific location when confirmed
-    if confirmed_modifier:
-        opening += f" on {confirmed_modifier}"
-    elif area and area.strip().lower() != (destination or "").strip().lower():
-        # Use neighborhood/area from address only if it is NOT the destination city.
-        # Never append " in {destination}" — that is generic and useless.
-        opening += f" in {area}"
-
-    # Rating part: use raw facts, no qualitative wrappers
+    # 4. Rating context
     rating = entity.rating
-    review_count = entity.user_rating_count
-    if rating is not None and review_count:
-        rating_part = f"{rating:.1f}★ across {review_count:,} Google reviews"
-    elif rating is not None:
-        rating_part = f"{rating:.1f}★ on Google"
+    review_count = entity.user_rating_count or 0
+    has_rating = rating is not None and review_count >= 50
+
+    # ── Gate: require at least one card-specific differentiator ──────────────
+    # If all we have is type + city + rating, return "" — the LLM path
+    # or a "limited evidence" placeholder is better than a type-template.
+    has_specific_location = bool(street and street.lower() != (destination or "").lower()) or bool(confirmed_modifier)
+    has_name_signal = concept_in_name or len(entity.name.split()) >= 2
+
+    if not has_specific_location and not has_name_signal and not has_rating:
+        return ""
+
+    # ── Build the lead: anchored on name + specific location ─────────────────
+    place_name = entity.name.strip()
+
+    if confirmed_modifier:
+        lead = f"{place_name} on {confirmed_modifier}"
+    elif street:
+        lead = f"{place_name} on {street}"
+    else:
+        # Name alone is specific (still card-specific, not a type-template)
+        lead = place_name
+
+    # ── Rating segment ────────────────────────────────────────────────────────
+    if has_rating:
+        if review_count >= 1000:
+            rating_part = f"{rating:.1f}★ from {review_count:,} reviews"
+        elif review_count >= 200:
+            rating_part = f"{rating:.1f}★ ({review_count:,} reviews)"
+        else:
+            rating_part = f"{rating:.1f}★"
     else:
         rating_part = ""
 
-    # Core note
+    # ── Assemble core note ────────────────────────────────────────────────────
     if rating_part:
-        core = f"{opening} with {rating_part}."
+        core = f"{lead} — {rating_part}."
     else:
-        core = f"{opening}."
+        core = f"{lead}."
 
-    # Geo caveat: honest about what was requested but not confirmed.
-    # We NEVER assert waterfront/river/lake/view proximity — always caveat.
+    # ── Geo caveat: honest about unconfirmed modifiers ────────────────────────
+    # We NEVER positively claim waterfront/river/view proximity.
     geo_caveat = ""
     if geo_hints:
         geo_hint = geo_hints[0]
         hint_lower = geo_hint.lower()
-        is_water_related = any(w in hint_lower for w in _WATER_GEO_TOKENS)
-        if is_water_related:
-            geo_caveat = (
-                f"The requested {geo_hint} setting is not confirmed in available data."
-            )
+        if any(w in hint_lower for w in _WATER_GEO_TOKENS):
+            geo_caveat = f"No {geo_hint} proximity confirmed from address."
 
-    # Also check ambiguity_flags regardless of geo_hints — "taprooms with a view"
-    # sets the flag even though "view" may not appear in geo_hints.
     if not geo_caveat:
         for flag in ambiguity_flags:
-            flag_lower = flag.lower()
-            if "view" in flag_lower or "waterfront" in flag_lower:
-                geo_caveat = "The requested view cannot be structurally verified."
+            if "view" in flag.lower() or "waterfront" in flag.lower():
+                geo_caveat = "The requested view setting is not verified."
                 break
 
+    # ── Location modifier caveat ──────────────────────────────────────────────
     if loc_modifier_caveat:
         core += f" {loc_modifier_caveat}"
     if geo_caveat:

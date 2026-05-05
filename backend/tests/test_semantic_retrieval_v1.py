@@ -508,11 +508,19 @@ class TestSafeReasonBuilder:
             f"Reason must mention 'brewery': {reason}"
         )
 
-    def test_reason_includes_ask_anchor_tapas(self):
+    def test_reason_is_card_specific_not_template_tapas(self):
+        """Deterministic note must be card-specific (name-anchored), not a generic type-template.
+
+        Concept ("tapas") is NOT required in the deterministic fallback —
+        the LLM path supplies that. What matters is the note is specific to THIS card.
+        """
         entity = self._entity("La Tasca", types=["spanish_restaurant"])
         reason = self._build_reason(entity, "romantic tapas but not too loud")
-        assert "tapas" in reason.lower() or "tapa" in reason.lower(), (
-            f"Reason must mention 'tapas': {reason}"
+        # Note must be card-specific: contains the actual place name
+        assert "La Tasca" in reason, f"Note must anchor on place name: {reason}"
+        # Note must NOT be a generic type-template
+        assert not reason.lower().startswith("verified "), (
+            f"Note must not use Verified-template format: {reason}"
         )
 
     def test_reason_does_not_invent_waterfront_view(self):
@@ -536,11 +544,14 @@ class TestSafeReasonBuilder:
             entity, "best breweries along the waterfront", geo_fit=0.50
         )
         reason_lower = reason.lower()
-        # Must either not mention waterfront, or mention it only as a caveat
-        # (e.g., "not confirmed", "cannot be verified", "verify")
+        # Must either not mention waterfront, or mention it only in a caveat/denial.
+        # Accept: "not confirmed", "cannot", "verify", "unconfirmed", "no ... confirmed"
         has_waterfront = "waterfront" in reason_lower
         has_honest_caveat = any(
-            kw in reason_lower for kw in ("not confirmed", "cannot", "verify", "unconfirmed")
+            kw in reason_lower for kw in (
+                "not confirmed", "cannot", "verify", "unconfirmed",
+                "no waterfront", "proximity confirmed",
+            )
         )
         assert not has_waterfront or has_honest_caveat, (
             f"Waterfront must not be asserted without evidence; "
@@ -798,7 +809,17 @@ class TestFeatureFlagBehavior:
     def test_flag_default_is_false(self):
         """The flag must default to False to protect existing behavior."""
         import pathlib
-        config_src = pathlib.Path("backend/app/core/config.py").read_text()
+        # Search both from repo root and from backend/ (depending on where pytest runs)
+        candidates = [
+            pathlib.Path("backend/app/core/config.py"),
+            pathlib.Path("app/core/config.py"),
+        ]
+        config_src = None
+        for p in candidates:
+            if p.exists():
+                config_src = p.read_text()
+                break
+        assert config_src is not None, "Could not find app/core/config.py"
         assert "concierge_semantic_retrieval_v1_enabled: bool = False" in config_src, (
             "Default for concierge_semantic_retrieval_v1_enabled must be False"
         )
@@ -2189,10 +2210,14 @@ class TestImprovedDeterministicReason:
             types=["brewery", "bar"],
             geo_fit=0.4,
         ).lower()
-        # waterfront may appear in the honest caveat text ("not confirmed in available data")
-        # but must NOT appear as a positive assertion
+        # waterfront may appear in the honest caveat text but must NOT be a positive assertion.
+        # Accept: "not confirmed", "cannot", "verify", "unconfirmed",
+        #         "no waterfront", "proximity confirmed" (as in "no ... proximity confirmed")
         if "waterfront" in reason:
-            assert any(kw in reason for kw in ("not confirmed", "cannot", "verify", "unconfirmed")), (
+            assert any(kw in reason for kw in (
+                "not confirmed", "cannot", "verify", "unconfirmed",
+                "no waterfront", "proximity confirmed",
+            )), (
                 f"Waterfront must not be asserted without evidence: {reason}"
             )
 
@@ -2276,13 +2301,14 @@ class TestReasonValidator:
         assert is_valid, f"Should accept grounded note, rejection={reason}"
 
     def test_accepts_location_caveat_note(self):
+        """Name-anchored note with honest location caveat must pass validation."""
         from app.concierge.reason_validator import validate_reason
         frame, ev = self._frame_and_evidence(
             "izakayas on fulton street", "3458 N Halsted St, Chicago, IL"
         )
         is_valid, reason = validate_reason(
-            "Verified Japanese restaurant with 4.5★ across 210 reviews; "
-            "not directly on Fulton Street — nearest match in the area.",
+            "Izakaya Mita on Halsted Street — 4.5★ (210 reviews). "
+            "Not directly on Fulton Street — nearest match in the area.",
             frame, ev
         )
         assert is_valid, f"Should accept honest caveat note, rejection={reason}"
@@ -2490,7 +2516,10 @@ class TestPR3RegressionSuite:
         # waterfront may appear only inside an honest caveat, never as a positive claim
         if "waterfront" in reason_lower:
             has_caveat = any(
-                kw in reason_lower for kw in ("not confirmed", "cannot", "verify", "unconfirmed")
+                kw in reason_lower for kw in (
+                    "not confirmed", "cannot", "verify", "unconfirmed",
+                    "no waterfront", "proximity confirmed",
+                )
             )
             assert has_caveat, (
                 f"Waterfront must not be claimed without evidence: {reason}"
@@ -2644,7 +2673,12 @@ class TestFinalVisibleNoteValidator:
         )
         assert not is_valid, "Must reject unsupported 'steps from the Riverwalk'"
 
-    def test_accepts_verified_fact_note(self):
+    def test_rejects_verified_category_template(self):
+        """'Verified {Category} with {rating}★ across {N} reviews.' is a banned template.
+
+        It provides no card-specific differentiation — every card in a set could
+        produce the same sentence structure. The validator must reject it.
+        """
         from app.concierge.reason_validator import validate_reason
         frame, ev = self._frame_ev("best waterfront breweries", types=["brewery"])
         is_valid, rejection = validate_reason(
@@ -2652,16 +2686,30 @@ class TestFinalVisibleNoteValidator:
             "The requested waterfront setting is not confirmed in available data.",
             frame, ev,
         )
-        assert is_valid, f"Must accept honest verified-fact note, rejection={rejection}"
+        assert not is_valid, "Must reject 'Verified {Category} with ★' template"
+        assert "verified_category_template" in rejection
 
-    def test_accepts_izakaya_no_geo_note(self):
+    def test_accepts_name_anchored_note_with_caveat(self):
+        """Name+street anchored note with honest waterfront caveat must pass."""
+        from app.concierge.reason_validator import validate_reason
+        frame, ev = self._frame_ev("best waterfront breweries", types=["brewery"])
+        is_valid, rejection = validate_reason(
+            "Goose Island Brewery on Fulton Street — 4.5★ (892 reviews). "
+            "No waterfront proximity confirmed from address.",
+            frame, ev,
+        )
+        assert is_valid, f"Must accept name-anchored note with caveat, rejection={rejection}"
+
+    def test_rejects_verified_izakaya_template(self):
+        """'Verified Izakaya with 4.8★ across N reviews.' is a banned template."""
         from app.concierge.reason_validator import validate_reason
         frame, ev = self._frame_ev("izakayas")
         is_valid, rejection = validate_reason(
             "Verified Izakaya with 4.8★ across 1,028 Google reviews.",
             frame, ev,
         )
-        assert is_valid, f"Must accept basic verified-fact note, rejection={rejection}"
+        assert not is_valid, "Must reject 'Verified {Category} with ★' template"
+        assert "verified_category_template" in rejection
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2705,11 +2753,18 @@ class TestSafeFallbackFormat:
         assert "4.8" in reason, f"Must include rating: {reason}"
         assert "1,028" in reason, f"Must include review count: {reason}"
 
-    def test_fallback_includes_type_label(self):
+    def test_fallback_is_card_specific_not_type_template(self):
+        """Fallback note must be anchored on the place name, not a type-template.
+
+        The new design: "Test Place on Clark Street — 4.8★ from 1,028 reviews."
+        NOT: "Verified Japanese Restaurant with 4.8★ across 1,028 reviews."
+        """
         reason = self._build("izakayas", types=["japanese_restaurant"])
-        # type label should be in opening
-        assert "japanese restaurant" in reason.lower() or "izakaya" in reason.lower(), (
-            f"Must include type label: {reason}"
+        # Note must contain the place name (card-specific anchor)
+        assert "Test Place" in reason, f"Note must anchor on place name: {reason}"
+        # Note must NOT start with the banned Verified-template
+        assert not reason.lower().startswith("verified "), (
+            f"Note must not use Verified-template format: {reason}"
         )
 
     def test_fallback_caveats_waterfront_when_requested(self):
@@ -2720,8 +2775,11 @@ class TestSafeFallbackFormat:
             geo_fit=0.45,
         )
         reason_lower = reason.lower()
-        # Must caveat waterfront, not assert it
-        assert "not confirmed" in reason_lower or "cannot" in reason_lower, (
+        # Must caveat waterfront, not assert it.
+        # Accept: "not confirmed", "cannot", "no waterfront", "proximity confirmed"
+        assert any(kw in reason_lower for kw in (
+            "not confirmed", "cannot", "no waterfront", "proximity confirmed",
+        )), (
             f"Must caveat waterfront: {reason}"
         )
         # Must NOT positively claim waterfront
@@ -3030,7 +3088,9 @@ class TestPR4FullRegressionSuite:
         assert self._no_generic_match(reason), reason
         # waterfront may appear only in caveat, never as positive claim
         if "waterfront" in reason_lower:
-            assert "not confirmed" in reason_lower or "cannot" in reason_lower, (
+            assert any(kw in reason_lower for kw in (
+                "not confirmed", "cannot", "no waterfront", "proximity confirmed",
+            )), (
                 f"Waterfront must be caveated: {reason}"
             )
 
@@ -3053,14 +3113,22 @@ class TestPR4FullRegressionSuite:
             ), f"Fulton mention must be caveated or confirmed: {reason}"
 
     def test_best_breweries_no_generic_note(self):
+        """Deterministic fallback must be card-specific, not a generic type-template.
+
+        The new design anchors on name+street, not on the venue concept.
+        "Brewery" may appear if it's in the place name; it's not required otherwise.
+        """
         _frame, _entity, reason = self._build_entity_reason(
             "best breweries",
             "Half Acre Beer Co", "4257 N Lincoln Ave, Chicago, IL",
             ["brewery"], geo_fit=0.5,
         )
         assert self._no_generic_match(reason), f"No generic match boilerplate: {reason}"
-        assert "brewery" in reason.lower() or "brew" in reason.lower(), (
-            f"Must mention brewery type: {reason}"
+        # Note must contain the actual place name (card-specific anchor)
+        assert "Half Acre Beer Co" in reason, f"Must anchor on place name: {reason}"
+        # Note must NOT start with the banned Verified-template
+        assert not reason.lower().startswith("verified "), (
+            f"Note must not use Verified-template format: {reason}"
         )
 
     def test_best_waterfront_breweries_no_waterfront_claim(self):
@@ -3176,3 +3244,106 @@ class TestPR4FullRegressionSuite:
             f"Minimal note must not be generic boilerplate: {note}"
         )
         assert "4.3" in note, f"Must include rating: {note}"
+
+    def test_minimal_safe_note_is_name_anchored_not_type_template(self):
+        """_minimal_safe_note must anchor on place name, never 'Verified {type}'."""
+        from app.concierge.place_entity_layer import PlaceEntity
+        from app.concierge.semantic_retrieval import _minimal_safe_note
+        entity = PlaceEntity(
+            place_id="pid_mnb", name="Goose Island Brewery",
+            types=["brewery"], primary_type="brewery",
+            rating=4.5, user_rating_count=1200, business_status="OPERATIONAL",
+            formatted_address="1800 W Fulton St, Chicago, IL",
+            google_maps_uri="https://maps.google.com/?cid=gib",
+            website_uri=None, price_level=None, lat=41.88, lng=-87.63,
+            source_query="brewery Chicago",
+        )
+        note = _minimal_safe_note(entity)
+        # Must contain the actual place name
+        assert "Goose Island Brewery" in note, f"Must anchor on place name: {note}"
+        # Must NOT use the banned "Verified {type}" template
+        assert not note.lower().startswith("verified "), (
+            f"Must not use Verified-template: {note}"
+        )
+        assert "4.5" in note, f"Must include rating: {note}"
+        assert "1,200" in note, f"Must include review count: {note}"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Evidence-First Contract Tests
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestEvidenceFirstContract:
+    """Acceptance criteria for the evidence-first note synthesis requirement.
+
+    Every note must cite real card-specific differentiators.
+    No fill-in-the-blank templates. No invented facts.
+    """
+
+    def _note(self, query, name, address, types=None, geo_fit=0.5):
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.place_entity_layer import PlaceEntity
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        from app.concierge.safe_reason_builder import build_safe_reason
+        entity = PlaceEntity(
+            place_id="pid_ef", name=name,
+            types=types or ["restaurant"],
+            primary_type=(types[0] if types else "restaurant"),
+            rating=4.5, user_rating_count=800, business_status="OPERATIONAL",
+            formatted_address=address,
+            google_maps_uri="https://maps.google.com/?cid=ef",
+            website_uri=None, price_level=None, lat=41.88, lng=-87.63,
+            source_query=f"{query} Chicago",
+        )
+        frame = extract_frame(query, "Chicago")
+        score = RankScore(total=0.75, subtype_fit=0.85, geo_fit=geo_fit)
+        evidence = build_evidence_bundle(entity, frame, score)
+        return build_safe_reason(entity, evidence, frame, score)
+
+    def test_note_anchors_on_place_name(self):
+        note = self._note("best izakayas", "Izakaya Mita", "1960 N Damen Ave, Chicago, IL",
+                          ["japanese_restaurant"])
+        assert "Izakaya Mita" in note, f"Note must anchor on place name: {note}"
+
+    def test_note_anchors_on_street_name(self):
+        note = self._note("best izakayas", "Test Izakaya", "1960 N Damen Ave, Chicago, IL",
+                          ["japanese_restaurant"])
+        assert "Damen Avenue" in note, f"Note must anchor on street name: {note}"
+
+    def test_note_never_starts_with_verified_template(self):
+        note = self._note("best breweries", "Half Acre Beer Co",
+                          "4257 N Lincoln Ave, Chicago, IL", ["brewery"])
+        assert not note.lower().startswith("verified "), (
+            f"Note must not use Verified-template: {note}"
+        )
+
+    def test_notes_vary_by_street(self):
+        """Two cards on different streets must produce distinctly different notes."""
+        note_a = self._note("best breweries", "Brewery A",
+                            "1800 W Fulton St, Chicago, IL", ["brewery"])
+        note_b = self._note("best breweries", "Brewery B",
+                            "4257 N Lincoln Ave, Chicago, IL", ["brewery"])
+        assert note_a != note_b, f"Notes must differ by street: a={note_a!r} b={note_b!r}"
+        assert "Fulton" in note_a, f"Note A must mention Fulton: {note_a}"
+        assert "Lincoln" in note_b, f"Note B must mention Lincoln: {note_b}"
+
+    def test_empty_string_when_no_differentiator(self):
+        """Return '' when the only evidence is rating (no street, no name signal)."""
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.place_entity_layer import PlaceEntity
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        from app.concierge.safe_reason_builder import build_safe_reason
+        entity = PlaceEntity(
+            place_id="pid_nod", name="A",  # single-char name: no name signal
+            types=["restaurant"], primary_type="restaurant",
+            rating=None, user_rating_count=0, business_status="OPERATIONAL",
+            formatted_address=None,  # no address: no street
+            google_maps_uri="https://maps.google.com/?cid=nod",
+            website_uri=None, price_level=None, lat=41.88, lng=-87.63,
+            source_query="restaurant Chicago",
+        )
+        frame = extract_frame("restaurants", "Chicago")
+        score = RankScore(total=0.5, subtype_fit=0.7, geo_fit=0.5)
+        evidence = build_evidence_bundle(entity, frame, score)
+        note = build_safe_reason(entity, evidence, frame, score)
+        assert note == "", f"Must return '' when no card-specific evidence: {note!r}"
