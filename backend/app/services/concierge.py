@@ -168,7 +168,8 @@ _RESTAURANT_PAT = _kw_pattern(
     "drinks",
 )
 _NIGHTLIFE_PAT = _kw_pattern(
-    "cocktail", "cocktails", "bar", "bars", "wine bar", "brewery", "rooftop bar",
+    "cocktail", "cocktails", "bar", "bars", "wine bar", "brewery", "breweries",
+    "brewpub", "brewpubs", "taproom", "taprooms", "craft beer", "rooftop bar",
     "speakeasy", "nightlife", "nearby drinks", "after dinner drinks", "night out",
 )
 _ATTRACTION_PAT = _kw_pattern(
@@ -635,6 +636,20 @@ class ConciergeService:
         semantic_enabled = bool(
             getattr(self._settings, "concierge_semantic_retrieval_v1_enabled", False)
         )
+        if semantic_enabled:
+            if not destination:
+                logger.info(
+                    "concierge.semantic_skip intent=%s query=%r "
+                    "semantic_skip_reason=no_destination",
+                    intent, user_query,
+                )
+            elif intent not in self._FAST_DYNAMIC_INTENTS:
+                logger.info(
+                    "concierge.semantic_skip intent=%s query=%r destination=%r "
+                    "semantic_skip_reason=intent_not_eligible eligible_intents=%s",
+                    intent, user_query, destination, sorted(self._FAST_DYNAMIC_INTENTS),
+                )
+
         if semantic_enabled and intent in self._FAST_DYNAMIC_INTENTS and destination:
             try:
                 from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
@@ -660,12 +675,15 @@ class ConciergeService:
                 # No verified cards — fall through to fast_dynamic or slow pipeline
                 logger.info(
                     "concierge.semantic_retrieval_v1: no_verified_cards, falling_through "
-                    "intent=%s destination=%r query=%r",
+                    "intent=%s destination=%r query=%r "
+                    "fallback_reason=no_verified_cards fallback_path=fast_dynamic_or_slow",
                     intent, destination, user_query,
                 )
             except Exception as exc:
                 logger.warning(
-                    "concierge.semantic_retrieval_v1 failed, falling_through: %s", exc
+                    "concierge.semantic_retrieval_v1 failed, falling_through: %s "
+                    "fallback_reason=semantic_exception fallback_path=fast_dynamic_or_slow",
+                    exc,
                 )
 
         # ── Fast dynamic path ─────────────────────────────────────────────────
@@ -678,7 +696,8 @@ class ConciergeService:
                 fast_svc = get_fast_dynamic_search()
                 if fast_svc.available:
                     logger.info(
-                        "concierge.fast_dynamic_place_search intent=%s destination=%r query=%r",
+                        "concierge.fast_dynamic_place_search intent=%s destination=%r query=%r "
+                        "fallback_path=fast_dynamic",
                         intent, destination, user_query,
                     )
                     return fast_svc.search(
@@ -689,11 +708,14 @@ class ConciergeService:
                     )
                 logger.info(
                     "concierge.fast_dynamic_place_search: unavailable "
-                    "(no GOOGLE_PLACES_API_KEY), falling through to slow path"
+                    "(no GOOGLE_PLACES_API_KEY), falling through to slow path "
+                    "fallback_path=slow_pipeline"
                 )
             except Exception as exc:
                 logger.warning(
-                    "concierge.fast_dynamic_place_search failed, falling through: %s", exc
+                    "concierge.fast_dynamic_place_search failed, falling through: %s "
+                    "fallback_path=slow_pipeline",
+                    exc,
                 )
         # ── Existing slow pipeline (unchanged when flag OFF) ──────────────────
         try:

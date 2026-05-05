@@ -1,5 +1,61 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-05) — PR-2.5 Semantic Retrieval Coverage + No-Silent-Fallback Fix
+
+### Production finding (post-PR #235 validation)
+`semantic_retrieval_v1.turn` logs appeared for "romantic tapas but not too loud" and "nice sushi restaurants with a waterfront view", but for "best breweries" and "best breweries along the waterfront" only the outer `concierge.request` log appeared with `response_type=place_recommendations` and ~6.7s latency. Semantic retrieval was silently bypassed.
+
+### Root cause
+`_NIGHTLIFE_PAT` in `concierge.py` contained `"brewery"` (singular) but **not** `"breweries"` (plural) or common variants (`brewpub`, `taproom`, `craft beer`). Therefore:
+- `_detect_intent("best breweries")` → fell through all patterns → returned `INTENT_GENERAL`
+- `INTENT_GENERAL` is **not** in `_FAST_DYNAMIC_INTENTS`
+- Semantic retrieval was never triggered; request fell to the slow/LLM path
+- No log explained the skip — silent failure
+
+### Fix (3 files changed)
+
+**`backend/app/services/concierge.py`**
+- Added `"breweries"`, `"brewpub"`, `"brewpubs"`, `"taproom"`, `"taprooms"`, `"craft beer"` to `_NIGHTLIFE_PAT`. This is a plural-form completeness fix, not a closed eligibility bucket — once routed to `INTENT_NIGHTLIFE`, the open-vocabulary semantic pipeline takes over.
+- Added `concierge.semantic_skip` log (with `semantic_skip_reason=intent_not_eligible` or `no_destination`) when the semantic flag is ON but a request bypasses semantic retrieval. This makes silent bypasses observable in production.
+- Added `fallback_reason` and `fallback_path` fields to existing fallthrough/fallback log lines (`fast_dynamic_or_slow`, `slow_pipeline`).
+
+**`backend/app/concierge/retrieval_planner.py`**
+- Added `"breweries"`, `"brewpubs"`, `"taprooms"`, `"craft beer"` as direct synonym expansion keys so that if any of these ever become the primary concept label (e.g., singularization edge case), they expand to the correct brewery variant queries.
+
+### Tests added
+- `TestBreweryIntentRouting` (test_concierge.py): 8 parametrized queries (`"best breweries"`, `"best breweries along the waterfront"`, `"craft beer"`, `"brewpubs"`, `"taprooms"`, etc.) all route to `INTENT_NIGHTLIFE`; existing tapas/sushi routing unaffected.
+- `TestSemanticSkipObservability` (test_concierge.py): `concierge.semantic_skip` logged with `intent_not_eligible` when flag ON and intent not eligible; no spurious skip log when flag OFF.
+- `TestBreweryRetrievalPlannerCoverage` (test_semantic_retrieval_v1.py): brewery queries generate brewery-variant retrieval queries; waterfront ask preserves geo hint; synonym expansion key present.
+- `TestBreweryEntityGating` (test_semantic_retrieval_v1.py): invalid/closed brewery places still rejected; valid OPERATIONAL brewery accepted.
+- `TestBreweryReasonNoUnsupportedClaims` (test_semantic_retrieval_v1.py): no "confirmed waterfront" claim in reason text.
+- `TestMoreOptionsFollowUpBehavior` (test_semantic_retrieval_v1.py): "more options" dedupes prior identity keys; "top 3" (max_cards=3) returns ≤ 3 cards.
+
+### Validation cases (all must pass in production)
+1. "best breweries" Chicago → `semantic_retrieval_v1.turn` log, ≥3 verified brewery cards
+2. "best breweries along the waterfront" Chicago → `semantic_retrieval_v1.turn`, brewery cards, honest waterfront wording
+3. "romantic tapas but not too loud" → unchanged (still semantic, tapas-first)
+4. "nice sushi restaurants with a waterfront view" → unchanged (still semantic, sushi-first)
+5. "more options" after cards → dedupes prior cards
+6. "top 3" follow-up → ≤3 cards returned
+
+### Production log validation after merge
+After enabling `CONCIERGE_SEMANTIC_RETRIEVAL_V1_ENABLED=true` on Railway:
+- **Good path**: `semantic_retrieval_v1.turn ... query='best breweries' ... outcome=ok final_card_count≥3`
+- **Skip path (now visible)**: `concierge.semantic_skip intent=... semantic_skip_reason=intent_not_eligible` (if a new unrecognized query type falls through)
+- **Fallback path (now visible)**: `concierge.semantic_retrieval_v1: no_verified_cards, falling_through ... fallback_reason=no_verified_cards fallback_path=fast_dynamic_or_slow`
+- **Regression check**: No `concierge.semantic_skip` for brewery, sushi, or tapas queries
+
+### Scope (not changed in this PR)
+- No PR-3 LLM batched reasoning
+- No SQL, no schema changes
+- No frontend changes
+- No Yelp/Foursquare
+- No vector search
+
+**Supabase SQL**: No.
+
+---
+
 ## Last change (2026-05-05) — Merge-gate audit hardening for PR #235 semantic retrieval v1
 
 ### Audit fixes applied

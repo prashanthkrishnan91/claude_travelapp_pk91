@@ -809,3 +809,117 @@ def test_clear_cache_removes_persisted_messages_and_invalidates_live_cache():
 
     assert svc._db.deleted_trip_ids == [str(FAKE_TRIP_ID)]
     assert live.calls == [("Chicago", "2026-06-01|2026-06-04")]
+
+
+# ── PR-2.5: Brewery intent routing tests ─────────────────────────────────────
+
+class TestBreweryIntentRouting:
+    """Verify that brewery plural/variant queries route to INTENT_NIGHTLIFE.
+
+    PR-2.5 root-cause fix: 'breweries' (plural) was absent from _NIGHTLIFE_PAT
+    causing _detect_intent to return INTENT_GENERAL, which is not in
+    _FAST_DYNAMIC_INTENTS, so semantic retrieval v1 was never triggered.
+    """
+
+    def _svc(self) -> ConciergeService:
+        return object.__new__(ConciergeService)
+
+    @pytest.mark.parametrize("query", [
+        "best breweries",
+        "best breweries along the waterfront",
+        "breweries in Chicago",
+        "craft beer",
+        "great brewpub nearby",
+        "brewpubs in the West Loop",
+        "taproom options",
+        "best taprooms",
+    ])
+    def test_brewery_variants_route_to_nightlife(self, query):
+        svc = self._svc()
+        result = svc._detect_intent(query)
+        assert result == INTENT_NIGHTLIFE, (
+            f"Expected INTENT_NIGHTLIFE for {query!r}, got {result!r}. "
+            "Check that 'breweries', 'brewpubs', 'taprooms', 'craft beer' are in _NIGHTLIFE_PAT."
+        )
+
+    def test_best_breweries_is_in_fast_dynamic_intents(self):
+        """INTENT_NIGHTLIFE must be in _FAST_DYNAMIC_INTENTS for semantic routing."""
+        svc = self._svc()
+        assert INTENT_NIGHTLIFE in svc._FAST_DYNAMIC_INTENTS, (
+            "INTENT_NIGHTLIFE must be in _FAST_DYNAMIC_INTENTS so semantic retrieval runs."
+        )
+
+    def test_brewery_singular_still_routes_to_nightlife(self):
+        svc = self._svc()
+        assert svc._detect_intent("best brewery in Chicago") == INTENT_NIGHTLIFE
+
+    def test_existing_tapas_still_routes_to_restaurants(self):
+        svc = self._svc()
+        assert svc._detect_intent("romantic tapas but not too loud") == INTENT_ROMANTIC
+
+    def test_existing_sushi_still_routes_to_restaurants(self):
+        svc = self._svc()
+        assert svc._detect_intent("nice sushi restaurants with a waterfront view") == INTENT_RESTAURANTS
+
+
+class TestSemanticSkipObservability:
+    """Verify that semantic_skip_reason is logged when flag ON but intent not eligible."""
+
+    def _settings(self, semantic_on: bool, fast_on: bool = False):
+        return SimpleNamespace(
+            concierge_semantic_retrieval_v1_enabled=semantic_on,
+            concierge_fast_dynamic_place_search_v1_enabled=fast_on,
+            live_research_enabled=False,
+            live_research_cache_ttl_seconds=1800,
+            live_research_timeout_seconds=6.0,
+            research_engine_require_google_verification=False,
+            google_places_api_key="",
+            tavily_api_key="",
+            brave_search_api_key="",
+            serper_api_key="",
+        )
+
+    def _svc(self, semantic_on: bool = True) -> ConciergeService:
+        svc = object.__new__(ConciergeService)
+        svc._settings = self._settings(semantic_on=semantic_on)
+        svc._live_research = None
+        return svc
+
+    def test_semantic_skip_logged_for_ineligible_intent(self, caplog):
+        """When flag ON and intent is INTENT_GENERAL, log semantic_skip_reason."""
+        import logging
+        svc = self._svc(semantic_on=True)
+        # Patch slow pipeline to avoid real DB/HTTP calls
+        svc._get_live_research = lambda: SimpleNamespace(is_live_capable=False)
+        with caplog.at_level(logging.INFO, logger="app.services.concierge"):
+            from app.models.concierge import INTENT_GENERAL
+            svc._fetch_live_research(
+                intent=INTENT_GENERAL,
+                destination="Chicago",
+                user_query="best breweries",
+                trip={},
+            )
+        skip_logs = [r.message for r in caplog.records if "semantic_skip" in r.message]
+        assert skip_logs, (
+            "Expected concierge.semantic_skip log when flag ON and intent=INTENT_GENERAL. "
+            f"Got logs: {[r.message for r in caplog.records]}"
+        )
+        assert any("intent_not_eligible" in m for m in skip_logs), (
+            f"Expected semantic_skip_reason=intent_not_eligible in skip logs: {skip_logs}"
+        )
+
+    def test_no_semantic_skip_log_when_flag_off(self, caplog):
+        """When flag OFF, semantic_skip should NOT be logged (silent by design)."""
+        import logging
+        svc = self._svc(semantic_on=False)
+        svc._get_live_research = lambda: SimpleNamespace(is_live_capable=False)
+        with caplog.at_level(logging.INFO, logger="app.services.concierge"):
+            from app.models.concierge import INTENT_GENERAL
+            svc._fetch_live_research(
+                intent=INTENT_GENERAL,
+                destination="Chicago",
+                user_query="best breweries",
+                trip={},
+            )
+        skip_logs = [r.message for r in caplog.records if "semantic_skip" in r.message]
+        assert not skip_logs, f"No semantic_skip log expected when flag OFF, got: {skip_logs}"
