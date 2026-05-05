@@ -745,19 +745,17 @@ class ConciergeService:
                 )
                 if result.restaurants or result.attractions:
                     return result
-                if result.source_status == SOURCE_UNAVAILABLE:
-                    logger.warning(
-                        "concierge.semantic_retrieval_v1: source_unavailable, skipping fallthrough "
-                        "intent=%s destination=%r query=%r",
-                        intent, destination, user_query,
-                    )
-                    return result
-                # No verified cards — fall through to fast_dynamic or slow pipeline
+                # No verified cards or provider unavailable — fall through to fast_dynamic or slow
+                fallback_reason = (
+                    "source_unavailable"
+                    if result.source_status == SOURCE_UNAVAILABLE
+                    else "no_verified_cards"
+                )
                 logger.info(
-                    "concierge.semantic_retrieval_v1: no_verified_cards, falling_through "
+                    "concierge.semantic_retrieval_v1: falling_through "
                     "intent=%s destination=%r query=%r "
-                    "fallback_reason=no_verified_cards fallback_path=fast_dynamic_or_slow",
-                    intent, destination, user_query,
+                    "fallback_reason=%s fallback_path=fast_dynamic_or_slow",
+                    intent, destination, user_query, fallback_reason,
                 )
             except Exception as exc:
                 logger.warning(

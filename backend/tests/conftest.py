@@ -18,11 +18,18 @@ _fa.status.HTTP_404_NOT_FOUND = 404
 _fa.status.HTTP_503_SERVICE_UNAVAILABLE = 503
 _fa.status.HTTP_502_BAD_GATEWAY = 502
 
-# app.core stubs
+# app.core stubs — make app.core a proper package (with __path__) so submodule
+# imports like app.core.cost_guardrails resolve from disk without error.
+_core_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app", "core")
 for mod_name in ["app.core", "app.core.config", "app.core.deps"]:
     if mod_name not in sys.modules:
         pkg = types.ModuleType(mod_name)
         sys.modules[mod_name] = pkg
+
+_core_pkg = sys.modules["app.core"]
+_core_pkg.__path__ = [_core_dir]
+_core_pkg.__package__ = "app.core"
+_core_pkg.__file__ = os.path.join(_core_dir, "__init__.py")
 
 _settings_mock = MagicMock()
 _settings_mock.anthropic_api_key = "test-key"

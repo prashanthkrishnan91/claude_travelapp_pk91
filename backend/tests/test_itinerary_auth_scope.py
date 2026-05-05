@@ -45,7 +45,8 @@ class _DB:
 def _seed_trip(db, user_id, trip_id): db.tables['trips'].append({'id': str(trip_id), 'user_id': str(user_id)})
 
 def test_itinerary_route_source_includes_user_id_on_handlers():
-    source = Path('backend/app/routes/itinerary.py').read_text()
+    source = Path(__file__).parent.parent / 'app/routes/itinerary.py'
+    source = source.read_text()
     for fn in ['list_days','create_day','get_day','update_day','delete_day','list_items','create_item','create_trip_item','get_item','update_item','delete_item','get_booking_links']:
         assert f'def {fn}(' in source and 'user_id: CurrentUserID' in source.split(f'def {fn}(',1)[1].split('):',1)[0]
 

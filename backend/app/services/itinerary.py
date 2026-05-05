@@ -98,7 +98,7 @@ class ItineraryService:
         trip_id: UUID,
         start_date: date,
         end_date: date,
-        user_id: UUID,
+        user_id: Optional[UUID] = None,
     ) -> List[ItineraryDay]:
         if end_date < start_date:
             raise HTTPException(
