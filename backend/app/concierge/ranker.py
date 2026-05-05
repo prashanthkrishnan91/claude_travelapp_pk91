@@ -47,12 +47,24 @@ _W_VALUE = 0.04
 # the entity matches a clearly different, unrelated category. This is a soft
 # penalty (not a hard reject) so the pipeline can still degrade gracefully
 # when no on-concept results are available.
-_WRONG_CATEGORY_PENALTY = 0.20
+_WRONG_CATEGORY_PENALTY = 0.30
 
 # Subtype-fit threshold below which an entity is treated as wrong-category
 # when the user named a confident venue concept. Above this, no penalty.
 _WRONG_CATEGORY_SUBTYPE_FIT_MAX = 0.30
 _STRONG_CONCEPT_CONFIDENCE_MIN = 0.85
+
+# On-concept threshold: at or above this subtype_fit, the entity is considered
+# a real category match for the user's venue head. Below it, the entity is
+# off-concept (only matched via weak signals like the source query echoing the
+# concept token). Used by the post-rank wrong-category drop filter.
+_ON_CONCEPT_SUBTYPE_FIT_MIN = 0.45
+
+# Minimum number of on-concept candidates required before the post-rank filter
+# drops off-concept entries entirely. With fewer than this, we keep some
+# off-concept candidates so the response degrades gracefully instead of going
+# empty for no good reason.
+_MIN_ON_CONCEPT_FOR_HARD_DROP = 3
 
 # Bayesian prior parameters for quality smoothing
 _BAYESIAN_M = 80.0    # pseudo-count prior
@@ -135,6 +147,17 @@ class MinimalEvidenceBundle:
     uncertainty_flags: List[str] = field(default_factory=list)
 
 
+@dataclass
+class RankerStats:
+    """Side-channel diagnostics from rank_entities for the venue-head filter."""
+    total_input: int = 0
+    on_concept_count: int = 0
+    off_concept_dropped: int = 0
+    primary_label: str = ""
+    concept_is_recognized: bool = False
+    has_strong_concept: bool = False
+
+
 # ── Feature computation ───────────────────────────────────────────────────────
 
 def _concept_synonym_set(label: str) -> Optional[FrozenSet[str]]:
@@ -194,13 +217,17 @@ def _subtype_fit(entity: PlaceEntity, frame: ExperienceFrame) -> float:
                 type_match = max(type_match, 0.75)
                 break
 
-        # Query match: the source query contained the concept
+        # Query match: the source query contained the concept.
+        # Weak evidence — proves the planner targeted the concept, NOT that
+        # this specific entity is on-concept. Kept BELOW the wrong-category
+        # threshold so a brewery-targeted query returning a generic waterfront
+        # restaurant cannot escape the wrong-category penalty by association.
         query_match = 0.0
         if concept_tokens & query_tokens:
-            query_match = 0.6
+            query_match = 0.20
         for syn in all_synonyms:
             if _token_set(syn) & query_tokens:
-                query_match = max(query_match, 0.6)
+                query_match = max(query_match, 0.20)
                 break
 
         # Take the best match signal, weighted by concept confidence
@@ -427,6 +454,17 @@ def build_evidence_bundle(
 
 # ── Ranker ───────────────────────────────────────────────────────────────────
 
+def _has_known_synonym_set(label: str) -> bool:
+    """True when ``label`` belongs to a recognized venue-head synonym set.
+
+    Used by the post-rank filter to decide whether an empty on-concept pool
+    should yield zero cards (recognized concept like "brewery" or "tapas")
+    versus keeping degraded off-concept results (truly open-vocabulary head
+    like "izakaya" where we have no synonym set to confirm category fit).
+    """
+    return _concept_synonym_set(label.lower()) is not None
+
+
 def rank_entities(
     entities: List[PlaceEntity],
     frame: ExperienceFrame,
@@ -437,17 +475,44 @@ def rank_entities(
     Returns top_n ranked entities with their score breakdowns.
     Diversity signal is computed incrementally (each entity scored relative
     to already-accepted entities, avoiding near-duplicate stacking).
+
+    Venue-head-over-modifier contract:
+    - When the user named a strong venue concept, modifier-only matches do
+      not get to dominate the candidate pool. The wrong-category penalty
+      pushes them down in score, and the post-rank filter drops them
+      entirely when enough on-concept candidates are available, or when
+      the venue concept is recognized but no on-concept candidate verified.
     """
+    ranked, _stats = rank_entities_with_stats(entities, frame, top_n=top_n)
+    return ranked
+
+
+def rank_entities_with_stats(
+    entities: List[PlaceEntity],
+    frame: ExperienceFrame,
+    top_n: int = 10,
+) -> Tuple[List[Tuple[PlaceEntity, RankScore]], RankerStats]:
+    """Same as rank_entities but also returns RankerStats for observability."""
+    stats = RankerStats(total_input=len(entities))
     if not entities:
-        return []
+        return [], stats
 
     # Score all entities
     scored: List[Tuple[float, PlaceEntity, RankScore]] = []
     accepted: List[Tuple[PlaceEntity, RankScore]] = []
 
+    primary_concept = (
+        frame.subtype_concepts[0] if frame.subtype_concepts else None
+    )
     has_strong_concept = bool(
-        frame.subtype_concepts
-        and frame.subtype_concepts[0].confidence >= _STRONG_CONCEPT_CONFIDENCE_MIN
+        primary_concept
+        and primary_concept.confidence >= _STRONG_CONCEPT_CONFIDENCE_MIN
+    )
+    primary_label = (primary_concept.label if primary_concept else "").lower()
+    concept_is_recognized = (
+        has_strong_concept
+        and primary_label
+        and _has_known_synonym_set(primary_label)
     )
 
     for entity in entities:
@@ -497,18 +562,51 @@ def rank_entities(
     # Sort descending by total score
     scored.sort(key=lambda x: x[0], reverse=True)
 
+    on_concept_total = sum(
+        1 for _t, _e, rs in scored if rs.subtype_fit >= _ON_CONCEPT_SUBTYPE_FIT_MIN
+    )
+
+    # Post-rank filter: when the user named a strong venue concept, drop
+    # off-concept entries (modifier-only matches such as parks or generic
+    # waterfront restaurants for a brewery ask) once we have enough verified
+    # on-concept candidates. If the concept is recognized but the on-concept
+    # pool is empty, return nothing rather than wrong-category cards.
+    dropped_off_concept = 0
+    if has_strong_concept:
+        on_concept = [t for t in scored if t[2].subtype_fit >= _ON_CONCEPT_SUBTYPE_FIT_MIN]
+        off_concept = [t for t in scored if t[2].subtype_fit < _ON_CONCEPT_SUBTYPE_FIT_MIN]
+        if len(on_concept) >= _MIN_ON_CONCEPT_FOR_HARD_DROP:
+            dropped_off_concept = len(off_concept)
+            scored = on_concept
+        elif not on_concept and concept_is_recognized:
+            # Recognized venue concept (brewery/tapas/sushi/etc.) but no
+            # candidate matched the category. Return no cards rather than
+            # filling with modifier-only off-concept matches.
+            dropped_off_concept = len(off_concept)
+            scored = []
+
     result: List[Tuple[PlaceEntity, RankScore]] = []
     for _total, entity, rs in scored[:top_n]:
         result.append((entity, rs))
 
+    stats.has_strong_concept = has_strong_concept
+    stats.primary_label = primary_label
+    stats.concept_is_recognized = bool(concept_is_recognized)
+    stats.on_concept_count = on_concept_total
+    stats.off_concept_dropped = dropped_off_concept
+
     logger.debug(
-        "ranker: entities=%d ranked=%d top_score=%.4f "
-        "top_subtype_fit=%.4f top_geo_fit=%.4f",
+        "ranker: entities=%d ranked=%d off_concept_dropped=%d "
+        "top_score=%.4f top_subtype_fit=%.4f top_geo_fit=%.4f "
+        "primary_concept=%r recognized_concept=%s",
         len(entities),
         len(result),
+        dropped_off_concept,
         result[0][1].total if result else 0,
         result[0][1].subtype_fit if result else 0,
         result[0][1].geo_fit if result else 0,
+        primary_label,
+        concept_is_recognized,
     )
 
-    return result
+    return result, stats

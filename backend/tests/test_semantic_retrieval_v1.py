@@ -1512,3 +1512,455 @@ def test_entity_to_card_handles_null_rating_without_fabrication():
     assert card.review_count == 321
     assert card.supporting_details is not None
     assert card.supporting_details.meta_line is None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Venue-Head-Over-Modifier Contract — open-language place understanding
+#
+# Modifiers (waterfront, riverwalk, lakefront, rooftop, romantic) must shape
+# query expansion and ranking but never replace the requested venue head. The
+# system prefers partial modifier satisfaction over wrong-category cards, and
+# returns fewer/no cards rather than off-concept ones for recognized venue
+# heads.
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestPlannerNoStandaloneModifierQueries:
+    """For waterfront/riverwalk/lakefront asks with a venue head, the planner
+    must not emit standalone geo-only queries that would flood the candidate
+    pool with parks, landmarks, and generic waterfront restaurants."""
+
+    def _frame(self, query: str, destination: str = "Chicago"):
+        from app.concierge.frame_extractor import extract_frame
+        return extract_frame(query, destination)
+
+    @pytest.mark.parametrize("query,banned_solo", [
+        ("best waterfront breweries", ("waterfront chicago", "riverwalk chicago", "lakefront chicago")),
+        ("breweries near the river", ("river chicago", "riverwalk chicago")),
+        ("taprooms with a view", ("view chicago",)),
+        ("brewpubs by the water", ("water chicago", "waterfront chicago")),
+        ("romantic sushi near the water", ("water chicago", "waterfront chicago")),
+        ("quiet cocktail bars with a view", ("view chicago",)),
+    ])
+    def test_no_standalone_modifier_only_query(self, query, banned_solo):
+        from app.concierge.retrieval_planner import plan_queries
+        frame = self._frame(query)
+        queries = [q.lower() for q in plan_queries(frame)]
+        for banned in banned_solo:
+            assert banned not in queries, (
+                f"Planner must not emit modifier-only query {banned!r} when a "
+                f"venue head exists. Got queries: {queries} for ask: {query!r}"
+            )
+
+    def test_waterfront_breweries_includes_pure_brewery_recall_query(self):
+        """At least one query must be the modifier-free venue+destination
+        form so brewery recall isn't entirely tied to the geo-targeted Google
+        result set."""
+        from app.concierge.retrieval_planner import plan_queries
+        frame = self._frame("best waterfront breweries")
+        queries = [q.lower() for q in plan_queries(frame)]
+        assert "brewery chicago" in queries, (
+            f"Expected pure brewery+destination recall query, got: {queries}"
+        )
+
+    def test_breweries_near_the_river_is_brewery_first(self):
+        from app.concierge.retrieval_planner import plan_queries
+        frame = self._frame("breweries near the river")
+        queries = plan_queries(frame)
+        # All queries must be venue-anchored
+        assert all(
+            any(tok in q.lower() for tok in ("brew", "taproom"))
+            for q in queries
+        ), f"All queries must be venue-anchored: {queries}"
+
+
+class TestRankerVenueHeadDominance:
+    """Brewery candidates with weak waterfront evidence still outrank park /
+    riverwalk attractions / generic restaurants that strongly match the geo
+    modifier but are wrong category for the user's venue head."""
+
+    def _entity(
+        self,
+        name,
+        types,
+        rating=4.0,
+        review_count=200,
+        place_id=None,
+        address="123 Main St, Chicago, IL",
+        source_query="brewery Chicago waterfront",
+    ):
+        from app.concierge.place_entity_layer import PlaceEntity
+        return PlaceEntity(
+            place_id=place_id or f"pid_{abs(hash(name))}",
+            name=name,
+            formatted_address=address,
+            lat=41.88, lng=-87.63,
+            business_status="OPERATIONAL",
+            google_maps_uri=f"https://maps.google.com/?cid={abs(hash(name))}",
+            types=types,
+            primary_type=types[0] if types else None,
+            rating=rating,
+            user_rating_count=review_count,
+            price_level=None,
+            website_uri=None,
+            source_query=source_query,
+        )
+
+    def test_brewery_with_weak_waterfront_beats_park_with_strong_waterfront(self):
+        """Brewery (right category, address has no water) must outrank a
+        riverside park (wrong category, address strongly waterfront)."""
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.ranker import rank_entities
+        brewery = self._entity(
+            "West Loop Brewing Co",
+            ["brewery", "bar"],
+            rating=4.2,
+            review_count=300,
+            address="900 W Randolph St, Chicago, IL",  # no water tokens
+        )
+        riverside_park = self._entity(
+            "Lakefront Riverwalk Park",
+            ["park", "tourist_attraction"],
+            rating=4.8,
+            review_count=5000,
+            address="100 N Riverside Plaza, Chicago, IL",  # has river
+            source_query="brewery Chicago waterfront",
+        )
+        frame = extract_frame("best waterfront breweries", "Chicago")
+        ranked = rank_entities([brewery, riverside_park], frame)
+        names = [e.name for e, _ in ranked]
+        assert names[0] == "West Loop Brewing Co", (
+            f"Brewery (right category) must outrank park (wrong category) "
+            f"even with strong modifier evidence. Got: {names}. "
+            f"Scores: {[(e.name, s.as_dict()) for e, s in ranked]}"
+        )
+
+    def test_source_query_concept_does_not_bypass_wrong_category_penalty(self):
+        """Production bug: a non-brewery entity returned by a brewery-targeted
+        query should not get a free pass on subtype_fit just because the
+        source query echoes 'brewery'. Wrong-category penalty must apply."""
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.ranker import rank_entities
+        brewery = self._entity(
+            "Goose Island Brewing", ["brewery", "bar"], rating=4.3, review_count=400,
+        )
+        # Wrong-category entity returned by the same brewery-targeted query.
+        wrong_cat = self._entity(
+            "Chicago Horizon",
+            ["tourist_attraction", "point_of_interest"],
+            rating=4.6,
+            review_count=2000,
+            source_query="brewery Chicago waterfront",
+        )
+        frame = extract_frame("best waterfront breweries", "Chicago")
+        ranked = rank_entities([brewery, wrong_cat], frame)
+        scores = {e.name: s for e, s in ranked}
+        # Wrong-category entity must NOT be lifted above the threshold by the
+        # mere presence of "brewery" in its source query.
+        assert "Chicago Horizon" in scores, (
+            f"Expected wrong-cat entity in ranked output (only 1 on-concept, "
+            f"so degraded recall keeps it). Got {list(scores.keys())}"
+        )
+        wc_score = scores["Chicago Horizon"]
+        assert wc_score.subtype_fit < 0.30, (
+            f"Source-query echo must not push subtype_fit above the "
+            f"wrong-category threshold. Got {wc_score.subtype_fit:.3f}"
+        )
+        assert wc_score.penalties > 0, (
+            f"Wrong-category entity must carry a penalty. Got {wc_score.as_dict()}"
+        )
+
+    def test_three_breweries_drop_three_wrong_category_modifier_matches(self):
+        """When the user names a venue head AND there are enough on-concept
+        candidates, modifier-only wrong-category candidates must be dropped
+        from the surviving result (returns brewery-only cards)."""
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.ranker import rank_entities_with_stats
+        breweries = [
+            self._entity("Goose Island Brewing", ["brewery", "bar"], rating=4.5, review_count=1200),
+            self._entity("Half Acre Beer Company", ["brewery", "bar"], rating=4.6, review_count=800),
+            self._entity("Revolution Brewing", ["brewery", "bar"], rating=4.4, review_count=900),
+        ]
+        wrong_cat = [
+            self._entity(
+                "Chicago Riverwalk", ["tourist_attraction"],
+                rating=4.7, review_count=10000,
+                address="Riverwalk, Chicago, IL",
+            ),
+            self._entity(
+                "Lakefront Park", ["park"],
+                rating=4.8, review_count=8000,
+                address="Lake Shore Dr, Chicago, IL",
+            ),
+            self._entity(
+                "The Lakefront Restaurant", ["restaurant", "american_restaurant"],
+                rating=4.5, review_count=2500,
+                address="200 N Lake Shore Dr, Chicago, IL",
+            ),
+        ]
+        frame = extract_frame("best waterfront breweries", "Chicago")
+        ranked, stats = rank_entities_with_stats(breweries + wrong_cat, frame)
+        names = {e.name for e, _ in ranked}
+        for wc in wrong_cat:
+            assert wc.name not in names, (
+                f"Wrong-category {wc.name!r} must be dropped when 3+ on-concept "
+                f"candidates exist. Survived: {sorted(names)}"
+            )
+        assert stats.off_concept_dropped == 3
+        assert stats.on_concept_count == 3
+        # All three breweries survive
+        for b in breweries:
+            assert b.name in names
+
+    def test_recognized_concept_with_zero_on_concept_returns_empty(self):
+        """If only modifier-matching wrong-category candidates exist for a
+        recognized venue head (brewery), return zero cards rather than
+        filling the response with parks and lakefront landmarks."""
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.ranker import rank_entities_with_stats
+        wrong_cat = [
+            self._entity("Chicago Riverwalk", ["tourist_attraction"],
+                          rating=4.7, review_count=10000,
+                          address="Riverwalk, Chicago, IL"),
+            self._entity("Lakefront Park", ["park"],
+                          rating=4.8, review_count=8000,
+                          address="Lake Shore Dr, Chicago, IL"),
+        ]
+        frame = extract_frame("best waterfront breweries", "Chicago")
+        ranked, stats = rank_entities_with_stats(wrong_cat, frame)
+        assert ranked == [], (
+            f"Recognized venue head + zero on-concept candidates must yield "
+            f"zero cards. Got: {[e.name for e, _ in ranked]}"
+        )
+        assert stats.off_concept_dropped == 2
+        assert stats.concept_is_recognized is True
+
+    def test_unknown_concept_keeps_partial_results(self):
+        """Open-vocabulary venue heads (no synonym set) are tolerant: if only
+        weak matches exist, keep them rather than dropping to zero. This
+        protects truly novel asks like 'izakaya' from over-aggressive filtering."""
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.ranker import rank_entities
+        weak_match = self._entity(
+            "Mystery Place",
+            ["restaurant"],
+            rating=4.3,
+            review_count=200,
+            source_query="izakaya Chicago",
+        )
+        frame = extract_frame("best izakayas", "Chicago")
+        ranked = rank_entities([weak_match], frame)
+        assert len(ranked) == 1, (
+            f"Open-vocab concept (izakaya) must keep weak matches when no "
+            f"synonym set is registered, got {len(ranked)}"
+        )
+
+
+class TestRegressionExistingVenueHeads:
+    """Regressions: 'best breweries' and izakaya-style open-class asks must
+    keep returning brewery-like / izakaya-like candidates after the contract
+    changes."""
+
+    def _make_brewery_places(self):
+        return [
+            _make_raw_place(
+                name="Goose Island Brewing",
+                place_id="ChIJ_goose",
+                maps_uri="https://maps.google.com/?cid=701",
+                types=["brewery", "bar"],
+                rating=4.5, review_count=1200,
+            ),
+            _make_raw_place(
+                name="Half Acre Beer Company",
+                place_id="ChIJ_halfacre",
+                maps_uri="https://maps.google.com/?cid=702",
+                types=["brewery", "bar"],
+                rating=4.6, review_count=800,
+            ),
+            _make_raw_place(
+                name="Revolution Brewing",
+                place_id="ChIJ_revo",
+                maps_uri="https://maps.google.com/?cid=703",
+                types=["brewery", "bar"],
+                rating=4.4, review_count=900,
+            ),
+        ]
+
+    def test_best_breweries_still_returns_brewery_cards(self):
+        from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
+        from app.concierge.provider_executor import ProviderQueryResult
+        from app.models.concierge import SOURCE_LIVE_SEARCH
+        places = self._make_brewery_places()
+
+        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15):
+            return [ProviderQueryResult(query=q, places=places[:], latency_ms=80) for q in queries]
+
+        with patch("app.concierge.provider_executor.execute_fanout", side_effect=fake_execute):
+            result = run_semantic_retrieval_v1(
+                user_query="best breweries",
+                destination="Chicago",
+                api_key="fake_key",
+            )
+        assert result.source_status == SOURCE_LIVE_SEARCH
+        names = [c.name.lower() for c in result.restaurants]
+        assert names, f"Expected brewery cards, got none"
+        assert all(
+            any(tok in n for tok in ("brew", "beer"))
+            for n in names
+        ), f"All cards should be brewery-like: {names}"
+
+    def test_waterfront_breweries_returns_only_brewery_cards_with_mixed_pool(self):
+        """End-to-end: with a mixed Google response (3 breweries + 3 modifier-
+        only wrong-category places), only breweries surface as cards."""
+        from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
+        from app.concierge.provider_executor import ProviderQueryResult
+        breweries = self._make_brewery_places()
+        wrong_cat = [
+            _make_raw_place(
+                name="Chicago Riverwalk",
+                place_id="ChIJ_riverwalk",
+                maps_uri="https://maps.google.com/?cid=801",
+                types=["tourist_attraction", "point_of_interest"],
+                rating=4.7, review_count=15000,
+                address="Riverwalk, Chicago, IL, USA",
+            ),
+            _make_raw_place(
+                name="Lakefront Park",
+                place_id="ChIJ_lakefront_park",
+                maps_uri="https://maps.google.com/?cid=802",
+                types=["park"],
+                rating=4.8, review_count=12000,
+                address="Lake Shore Dr, Chicago, IL, USA",
+            ),
+            _make_raw_place(
+                name="The Lakefront Restaurant",
+                place_id="ChIJ_lakefront_rest",
+                maps_uri="https://maps.google.com/?cid=803",
+                types=["restaurant", "american_restaurant"],
+                rating=4.6, review_count=2500,
+                address="200 N Lake Shore Dr, Chicago, IL, USA",
+            ),
+        ]
+        all_places = breweries + wrong_cat
+
+        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15):
+            return [
+                ProviderQueryResult(query=q, places=all_places[:], latency_ms=80)
+                for q in queries
+            ]
+
+        with patch("app.concierge.provider_executor.execute_fanout", side_effect=fake_execute):
+            result = run_semantic_retrieval_v1(
+                user_query="best waterfront breweries",
+                destination="Chicago",
+                api_key="fake_key",
+            )
+        names = {c.name for c in result.restaurants}
+        assert names, f"Expected brewery cards, got none"
+        for wc_name in ("Chicago Riverwalk", "Lakefront Park", "The Lakefront Restaurant"):
+            assert wc_name not in names, (
+                f"Modifier-only wrong-category card {wc_name!r} must not "
+                f"appear in 'best waterfront breweries' results. Got: {names}"
+            )
+
+    def test_izakaya_open_class_still_works(self):
+        from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
+        from app.concierge.provider_executor import ProviderQueryResult
+        from app.models.concierge import SOURCE_LIVE_SEARCH
+        places = [
+            _make_raw_place(
+                name="Momotaro Izakaya",
+                place_id="pid_momo",
+                maps_uri="https://maps.google.com/?cid=901",
+                types=["japanese_restaurant", "restaurant"],
+                rating=4.5, review_count=600,
+            ),
+            _make_raw_place(
+                name="Izakaya Mita",
+                place_id="pid_mita",
+                maps_uri="https://maps.google.com/?cid=902",
+                types=["japanese_restaurant", "restaurant"],
+                rating=4.4, review_count=300,
+            ),
+        ]
+
+        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15):
+            return [ProviderQueryResult(query=q, places=places[:], latency_ms=80) for q in queries]
+
+        with patch("app.concierge.provider_executor.execute_fanout", side_effect=fake_execute):
+            result = run_semantic_retrieval_v1(
+                user_query="best izakayas",
+                destination="Chicago",
+                api_key="fake_key",
+            )
+        assert result.source_status == SOURCE_LIVE_SEARCH
+        assert len(result.restaurants) >= 1
+
+
+class TestSafeReasonNoUnsupportedModifierClaim:
+    """Deterministic reasons must not invent waterfront/riverwalk/quiet/etc.
+    when the evidence bundle does not support them. Repetitive
+    'Good waterfront match' style text must not appear."""
+
+    def _build(self, query, geo_fit=0.5, subtype_fit=0.85, name="Goose Island Brewery",
+                types=None, address="100 W Randolph St, Chicago, IL"):
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.place_entity_layer import PlaceEntity
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        from app.concierge.safe_reason_builder import build_safe_reason
+        entity = PlaceEntity(
+            place_id="pid_test",
+            name=name,
+            types=types or ["brewery", "bar"],
+            primary_type=(types[0] if types else "brewery"),
+            rating=4.3,
+            user_rating_count=400,
+            business_status="OPERATIONAL",
+            formatted_address=address,
+            google_maps_uri="https://maps.google.com/?cid=1",
+            website_uri=None,
+            price_level=None,
+            lat=41.88, lng=-87.63,
+            source_query="brewery Chicago waterfront",
+        )
+        frame = extract_frame(query, "Chicago")
+        score = RankScore(total=0.7, subtype_fit=subtype_fit, geo_fit=geo_fit)
+        evidence = build_evidence_bundle(entity, frame, score)
+        return build_safe_reason(entity, evidence, frame, score)
+
+    def test_no_repetitive_good_waterfront_match_for_modifier(self):
+        reason = self._build("best waterfront breweries", geo_fit=0.55).lower()
+        assert "good waterfront match" not in reason, reason
+        assert "waterfront match" not in reason, reason
+
+    def test_no_unsupported_riverwalk_claim_when_address_lacks_river(self):
+        reason = self._build(
+            "breweries near the river",
+            geo_fit=0.50,
+            address="900 W Randolph St, Chicago, IL",
+        ).lower()
+        # Reason must not say "near the river" / "on the river" / etc. as a fact
+        # when geo_fit is weak; it may say "verify" wrapper instead.
+        assert "near river" not in reason
+        assert "near the river" not in reason or "verify" in reason
+        assert "on the river" not in reason
+
+    def test_no_unsupported_quiet_claim(self):
+        reason = self._build(
+            "quiet cocktail bars with a view",
+            geo_fit=0.40,
+            subtype_fit=0.50,
+            name="Some Cocktail Bar",
+            types=["cocktail_bar", "bar"],
+        ).lower()
+        # Banned: claiming "quiet atmosphere" / "definitely quiet" / etc.
+        assert "quiet atmosphere" not in reason
+        assert "guaranteed quiet" not in reason
+
+    def test_brewery_anchor_present_for_waterfront_brewery_ask(self):
+        """The reason must anchor on the venue head (brewery), never on the
+        modifier (waterfront)."""
+        reason = self._build("best waterfront breweries", geo_fit=0.45).lower()
+        assert any(tok in reason for tok in ("brewery", "brew", "taproom")), (
+            f"Reason must anchor on brewery, got: {reason}"
+        )
