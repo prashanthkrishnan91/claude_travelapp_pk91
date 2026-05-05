@@ -1,5 +1,40 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-05) — AI Concierge Semantic Place Intelligence v2 PR-1 (schema-tolerant concierge request logging)
+
+### Problem diagnosed from Railway logs
+Live Supabase schema cache can be missing newly expected columns (for example `intent_classifier_version`) while app code already writes them. `persist_concierge_request_log()` attempted a single insert and logged `concierge.request_log.persist_failed` on every affected request, creating noisy per-turn errors that obscured retrieval/ranking debugging.
+
+### Root-cause fix
+`backend/app/concierge/logging.py` now handles PostgREST missing-column/schema-cache errors (`PGRST204` / `PGRST116`) as runtime schema drift during observability writes:
+
+1. Attempt insert with full payload.
+2. If PostgREST reports missing column, extract offending field name from message/details/hint.
+3. Drop the offending field from payload and retry.
+4. Repeat up to a small cap (4 attempts) so multiple missing columns are handled in one request.
+5. Emit one warning per process per `table+column` pair using `concierge.logging.schema_drift`.
+6. Unexpected/non-schema exceptions still log `concierge.request_log.persist_failed` and never raise to caller.
+
+### Behavior matrix
+
+| Scenario | Behavior |
+|---|---|
+| Missing `intent_classifier_version` (`PGRST204`) | Drop field, retry, insert succeeds if no additional drift |
+| Missing two fields across retries | Drop first missing field, retry, drop second, retry, then succeed |
+| Same missing column repeats across requests | `concierge.logging.schema_drift` emitted once per process for that table+column |
+| Unexpected DB/runtime exception | `concierge.request_log.persist_failed` logged; response path continues |
+
+### Files changed
+- `backend/app/concierge/logging.py`
+- `backend/tests/test_concierge_logging_schema_tolerance.py`
+
+### Operational note
+This PR is runtime-tolerance only (Phase 1 observability hardening). Live Supabase still needs the existing migration 004 applied to align schema permanently.
+
+**Supabase SQL**: No.
+
+---
+
 ## Last change (2026-05-04) — AI Concierge Fast Dynamic Place Search v1
 
 ### Problem diagnosed from wife-testing
