@@ -34,6 +34,16 @@ _PRICE_LEVEL_LABEL = {
 
 _MAX_REASON_CHARS = 220
 
+# Address fragments that indicate floor/unit/level info, NOT a neighborhood.
+# When _area_from_address encounters these, it should skip to the next segment.
+_NON_NEIGHBORHOOD_FRAGMENTS = frozenset({
+    "lower level", "upper level", "ground floor", "ground level",
+    "lobby level", "lobby", "basement", "mezzanine", "concourse",
+    "suite", "ste", "floor", "unit", "apt", "apartment",
+    "building", "bldg", "center", "centre", "mall", "terminal",
+    "level", "room", "wing", "gate",
+})
+
 # Attributes the user might request that cannot be verified structurally
 _WEAK_VERIFY_ATTRIBUTES = {
     "waterfront", "water view", "river view", "lake view", "ocean view",
@@ -67,7 +77,11 @@ def _clip(text: str, max_chars: int = _MAX_REASON_CHARS) -> str:
 
 
 def _area_from_address(address: Optional[str], destination: str) -> Optional[str]:
-    """Extract short neighborhood/area from formatted address."""
+    """Extract short neighborhood/area from formatted address.
+
+    Skips floor/level/unit fragments (e.g., "Lower Level") that are
+    internal building descriptors, not meaningful neighborhood labels.
+    """
     if not address:
         return None
     dest_lower = (destination or "").lower()
@@ -78,9 +92,17 @@ def _area_from_address(address: Optional[str], destination: str) -> Optional[str
             continue
         if len(p) <= 2:
             continue
-        if p.lower() in {"usa", "us", "il", "ny", "ca", "tx", "fl", "wa", "il 60601"}:
+        p_lower = p.lower()
+        if p_lower in {"usa", "us", "il", "ny", "ca", "tx", "fl", "wa", "il 60601"}:
             continue
-        if p.lower() == dest_lower:
+        if p_lower == dest_lower:
+            continue
+        # Skip building-internal descriptors that are not neighborhood names
+        if p_lower in _NON_NEIGHBORHOOD_FRAGMENTS:
+            continue
+        # Skip if any non-neighborhood token is a prefix of this part
+        # (handles "Lower Level" captured as a single segment)
+        if any(p_lower.startswith(frag) for frag in _NON_NEIGHBORHOOD_FRAGMENTS if len(frag) > 4):
             continue
         return p
     return None
@@ -112,6 +134,39 @@ def _verify_wrapper(attributes: List[str]) -> str:
     return f"Verify {joined} before booking."
 
 
+def _location_modifier_phrase(
+    evidence: MinimalEvidenceBundle,
+    frame: ExperienceFrame,
+    area: Optional[str],
+) -> tuple:
+    """Return (confirmed_modifier, caveat_text) for location modifiers.
+
+    confirmed_modifier: the modifier string if address confirms it, else "".
+    caveat_text: honest caveat sentence when modifier is requested but unconfirmed.
+    """
+    location_modifiers = getattr(frame, "location_modifiers", []) or []
+    if not location_modifiers:
+        return "", ""
+
+    modifier = location_modifiers[0]
+
+    # Check whether evidence bundle confirmed the modifier
+    for flag in evidence.uncertainty_flags:
+        if flag.startswith("location_modifier_not_confirmed:"):
+            # Modifier was not confirmed in the address
+            short_mod = modifier  # e.g., "Fulton Street"
+            caveat = f"Not directly on {short_mod} — nearest match in {area or frame.destination or 'the area'}."
+            return "", caveat
+
+    # Check for positive confirmation fact
+    for fact in evidence.structured_facts:
+        if "confirms" in fact and modifier.lower() in fact.lower():
+            return modifier, ""
+
+    # Default: modifier present but not checked yet (shouldn't happen, but be safe)
+    return "", ""
+
+
 def build_safe_reason(
     entity: PlaceEntity,
     evidence: MinimalEvidenceBundle,
@@ -123,9 +178,11 @@ def build_safe_reason(
     The reason:
     1. Mentions the primary ask anchor (brewery, tapas, sushi, etc.)
     2. States the verification basis (Google-verified OPERATIONAL place)
-    3. Mentions geo proximity only when supported by data
-    4. Uses "Verify when booking" only for user-requested weak attributes
-    5. Never invents views, awards, ambiance, quietness, prices, or hours
+    3. Mentions location modifiers (e.g., Fulton Street) with honest caveat
+       when not confirmed in the entity's address
+    4. Mentions geo proximity only when supported by data
+    5. Uses "Verify when booking" only for user-requested weak attributes
+    6. Never invents views, awards, ambiance, quietness, prices, or hours
 
     Args:
         entity: Verified PlaceEntity.
@@ -153,6 +210,14 @@ def build_safe_reason(
 
     rating_phrase = _rating_phrase(entity)
     price_phrase = _price_phrase(entity)
+
+    # Location modifier (explicit street/neighborhood in the user's query)
+    confirmed_modifier, loc_modifier_caveat = _location_modifier_phrase(
+        evidence, frame, area
+    )
+    if confirmed_modifier:
+        # Address confirms the modifier: use it as the location context
+        loc_part = f" on {confirmed_modifier}"
 
     # Determine which user-requested attributes are weakly verified
     weak_attrs: List[str] = []
@@ -194,10 +259,15 @@ def build_safe_reason(
             parts[0] += f", {geo_phrase}"
         parts[0] += "."
 
+        # Location modifier caveat (when user asked for a specific street/area
+        # but the address doesn't confirm it)
+        if loc_modifier_caveat:
+            parts.append(loc_modifier_caveat)
+
         # Add rating/quality signal
         if rating_phrase:
             rating_prefix = f"{price_phrase}, " if price_phrase else ""
-            parts.append(f"Verified Google place; {rating_prefix}{rating_phrase}.")
+            parts.append(f"{rating_prefix}{rating_phrase}.".lstrip(", "))
 
         # Add verify wrapper for weak attributes
         if verify_suffix:
@@ -212,6 +282,8 @@ def build_safe_reason(
             price_prefix = f"{price_phrase}, " if price_phrase else ""
             base += f"; {price_prefix}{rating_phrase}"
         base += "."
+        if loc_modifier_caveat:
+            base += f" {loc_modifier_caveat}"
         if verify_suffix:
             base += f" {verify_suffix}"
         reason = base

@@ -67,10 +67,35 @@ _MODIFIER_SPLIT_RE = re.compile(
 # may contain a real-world location anchor like "Fulton Street", "the West Loop",
 # "Riverwalk", etc. We capture these as location_modifiers so the retrieval
 # planner can include them in queries.
+#
+# Pattern 1: capitalized multi-word location names (e.g., "Fulton Street" typed
+# with capitals as originally written by PR-2 tests).
 _LOCATION_ANCHOR_RE = re.compile(
     r"\b(?:in|on|near|around|by|along|close\s+to|next\s+to)\s+"
     r"(?:the\s+)?"
     r"(?P<loc>[A-Z][A-Za-z'\-]+(?:\s+[A-Z][A-Za-z'\-]+){0,4})"
+)
+
+# Known street/district suffix tokens — used to identify lowercase location
+# names like "fulton street" or "river north" typed without capital letters.
+_STREET_SUFFIXES = frozenset({
+    "street", "st", "avenue", "ave", "boulevard", "blvd", "road", "rd",
+    "lane", "ln", "drive", "dr", "way", "place", "court", "row", "alley",
+    "loop", "market", "plaza", "square", "district", "park", "parkway", "pkwy",
+    "promenade", "walk", "path", "trail", "esplanade", "embankment",
+    "north", "south", "east", "west",
+})
+
+# Pattern 2: lowercase/mixed location names identified by known street suffixes.
+# Captures "fulton street", "river north", "west loop", "fulton market", etc.
+_LOCATION_ANCHOR_LOWERCASE_RE = re.compile(
+    r"\b(?:in|on|near|around|by|along|close\s+to|next\s+to)\s+"
+    r"(?:the\s+)?"
+    r"(?P<loc>[a-z][a-z'\-]+(?:\s+[a-z][a-z'\-]+){0,3}"
+    r"(?:\s+(?:street|st|avenue|ave|boulevard|blvd|road|rd|lane|ln|drive|dr|"
+    r"way|place|court|row|alley|loop|market|plaza|square|district|park|parkway|"
+    r"promenade|walk|path|trail|esplanade|embankment|north|south|east|west)))",
+    re.IGNORECASE,
 )
 
 # Geography concept patterns — waterfront, riverwalk, lake, etc.
@@ -185,7 +210,8 @@ _KEEP_S_WORDS = frozenset(
 
 # Ambiguity flags: attributes the user may ask for that cannot be structurally verified
 _AMBIGUITY_PATTERNS: List[tuple] = [
-    (re.compile(r"\bwaterfront\b|\bwater\s*view\b|\briver\s*view\b|\blake\s*view\b|\bocean\s*view\b", re.I),
+    (re.compile(r"\bwaterfront\b|\bwater\s*view\b|\briver\s*view\b|\blake\s*view\b|\bocean\s*view\b"
+                r"|\bwith\s+a\s+view\b|\ba\s+view\b|\bviews?\b", re.I),
      "view_not_structurally_verifiable"),
     (re.compile(r"\bquiet\b|\bnot\s+too\s+loud\b|\bpeaceful\b", re.I),
      "noise_level_not_verifiable"),
@@ -321,30 +347,40 @@ def _extract_ambiguity_flags(query: str) -> List[str]:
 def _extract_location_modifiers(query: str, destination: str) -> List[str]:
     """Capture concrete location anchors like "Fulton Street" or "West Loop".
 
-    Looks for capitalized phrases following location prepositions in the
-    user's literal query. The destination is excluded so we don't echo the
-    trip city back as a modifier.
+    Looks for phrases following location prepositions in the user's query.
+    Handles both capitalized ("Fulton Street") and lowercase ("fulton street")
+    input — the second via street-suffix detection. The destination is excluded
+    so we don't echo the trip city back as a modifier.
     """
     if not query:
         return []
     dest_lower = (destination or "").strip().lower()
     found: List[str] = []
     seen: set = set()
-    for match in _LOCATION_ANCHOR_RE.finditer(query):
-        loc = match.group("loc").strip()
+
+    def _accept(loc: str) -> None:
         if not loc:
-            continue
+            return
         loc_lower = loc.lower()
-        # Skip if it's just the destination
         if dest_lower and (loc_lower == dest_lower or loc_lower in dest_lower):
-            continue
-        # Skip purely modifier words (e.g., "Waterfront")
+            return
         if loc_lower in _GEO_MODIFIER_TOKENS:
-            continue
+            return
         if loc_lower in seen:
-            continue
+            return
         seen.add(loc_lower)
-        found.append(loc)
+        # Normalize to title-case for consistent downstream use.
+        found.append(loc.title())
+
+    # Pattern 1: capitalized location names
+    for match in _LOCATION_ANCHOR_RE.finditer(query):
+        _accept(match.group("loc").strip())
+
+    # Pattern 2: lowercase names with known street/district suffixes.
+    # Skip if already found via pattern 1 to avoid duplicates.
+    for match in _LOCATION_ANCHOR_LOWERCASE_RE.finditer(query):
+        _accept(match.group("loc").strip())
+
     return found
 
 
