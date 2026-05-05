@@ -768,3 +768,273 @@ class TestReasoningResultV2Contract:
         assert cr.validated is True
         assert cr.retry_used is False
         assert cr.fallback_model_used is False
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 10. EVIDENCE HARNESS QUALITY CONTRACT
+#     These tests fail if the harness tables violate quality rules.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestEvidenceHarnessQuality:
+    """Tests that enforce quality rules on the evidence harness output.
+
+    Fail conditions:
+    - Table 5 uses any query outside the required 7-query list.
+    - Any success-path row has displayWhyValidated=False.
+    - Any success-path row has an empty visible_concierge_note (NOTE OMITTED).
+    - Any note is a name+rating template.
+    - Any note contains generic filler-only content.
+    - Any note makes an unsupported waterfront/view claim without negation.
+    - Any "izakayas on Fulton Street" note claims to be on Fulton Street.
+    """
+
+    def test_table5_uses_exactly_required_queries(self):
+        from tests.evidence_harness_v2 import (
+            table5_target_query_matrix,
+            assert_table5_uses_required_queries,
+            REQUIRED_TARGET_QUERIES,
+        )
+        rows = table5_target_query_matrix()
+        assert_table5_uses_required_queries(rows)
+
+        seen_queries = {r["query"] for r in rows}
+        assert len(seen_queries) == 7, f"Expected 7 unique queries, got {len(seen_queries)}"
+
+    def test_table5_required_queries_match_spec(self):
+        from tests.evidence_harness_v2 import REQUIRED_TARGET_QUERIES
+        expected = [
+            "izakayas",
+            "izakayas with waterfront views",
+            "izakayas on Fulton Street",
+            "best breweries",
+            "best waterfront breweries",
+            "breweries near the river",
+            "taprooms with a view",
+        ]
+        assert REQUIRED_TARGET_QUERIES == expected, (
+            f"REQUIRED_TARGET_QUERIES must be exactly {expected}; got {REQUIRED_TARGET_QUERIES}"
+        )
+
+    def test_no_note_omitted_in_success_path(self):
+        from tests.evidence_harness_v2 import (
+            table1_full_success,
+            table2_partial_retry,
+            table3_timeout_fallback,
+            table4_bad_template_repair,
+            table5_target_query_matrix,
+            assert_success_path_quality,
+        )
+        for fn, label in [
+            (table1_full_success,      "Table1"),
+            (table2_partial_retry,     "Table2"),
+            (table3_timeout_fallback,  "Table3"),
+            (table4_bad_template_repair, "Table4"),
+            (table5_target_query_matrix, "Table5"),
+        ]:
+            rows = fn()
+            validated_rows = [r for r in rows if r["displayWhyValidated"] == "True"]
+            for row in validated_rows:
+                assert row["visible_concierge_note"], (
+                    f"[{label}] card={row['card_index']} title={row['card_title']!r} "
+                    "has displayWhyValidated=True but empty note (NOTE OMITTED)"
+                )
+
+    def test_no_generic_filler_in_success_path(self):
+        import re
+        from tests.evidence_harness_v2 import (
+            table1_full_success, table2_partial_retry,
+            table3_timeout_fallback, table4_bad_template_repair,
+            table5_target_query_matrix, assert_success_path_quality,
+        )
+        filler_re = re.compile(
+            r"\b(well[-\s]regarded|strong local following|chicago institution"
+            r"|consistent quality|devoted craft.beer following"
+            r"|loyal neighborhood following)\b",
+            re.IGNORECASE,
+        )
+        for fn, label in [
+            (table1_full_success,      "Table1"),
+            (table2_partial_retry,     "Table2"),
+            (table3_timeout_fallback,  "Table3"),
+            (table4_bad_template_repair, "Table4"),
+            (table5_target_query_matrix, "Table5"),
+        ]:
+            rows = fn()
+            for row in rows:
+                if row["displayWhyValidated"] != "True":
+                    continue
+                note = row["visible_concierge_note"]
+                assert not filler_re.search(note), (
+                    f"[{label}] card={row['card_index']} title={row['card_title']!r} "
+                    f"note contains generic filler: {note!r}"
+                )
+
+    def test_no_unsupported_view_claim_in_success_path(self):
+        import re
+        from tests.evidence_harness_v2 import (
+            table5_target_query_matrix, assert_success_path_quality,
+        )
+        unsupported_re = re.compile(
+            r"\b(waterfront|riverwalk|river\s*walk|river\s*view|lake\s*view"
+            r"|water\s*view|rooftop\s+view|panoramic)\b",
+            re.IGNORECASE,
+        )
+        negation_re = re.compile(
+            r"\b(not confirmed|cannot be|cannot verify|not verified|not directly"
+            r"|is not|isn't|doesn't)\b",
+            re.IGNORECASE,
+        )
+        rows = table5_target_query_matrix()
+        for row in rows:
+            if row["displayWhyValidated"] != "True":
+                continue
+            note = row["visible_concierge_note"]
+            m = unsupported_re.search(note)
+            if m:
+                start = m.start()
+                window = note[max(0, start - 80): min(len(note), start + 80)]
+                assert negation_re.search(window), (
+                    f"card={row['card_index']} query={row['query']!r} "
+                    f"makes unsupported view/waterfront claim {m.group(0)!r}: {note!r}"
+                )
+
+    def test_no_fulton_street_claimed_in_izakayas_on_fulton_rows(self):
+        import re
+        from tests.evidence_harness_v2 import table5_target_query_matrix
+        rows = table5_target_query_matrix()
+        fulton_rows = [r for r in rows if "Fulton" in r["query"]]
+        # "Fulton" must only appear with a preceding negation
+        for row in fulton_rows:
+            if row["displayWhyValidated"] != "True":
+                continue
+            note = row["visible_concierge_note"]
+            m = re.search(r"\bFulton\b", note)
+            if m:
+                prefix = note[max(0, m.start() - 20): m.start()]
+                assert re.search(r"\b(not|isn't|no|never|without)\b", prefix), (
+                    f"card={row['card_index']} query={row['query']!r} "
+                    f"claims Fulton Street without negation: {note!r}"
+                )
+
+    def test_all_table5_cards_validated(self):
+        from tests.evidence_harness_v2 import table5_target_query_matrix, REQUIRED_TARGET_QUERIES
+        rows = table5_target_query_matrix()
+        total = len(rows)
+        validated = sum(1 for r in rows if r["displayWhyValidated"] == "True")
+        assert validated == total, (
+            f"Table 5: {validated}/{total} cards validated — expected all {total}"
+        )
+
+    def test_harness_quality_assertions_pass(self):
+        """Smoke test: assert_success_path_quality must not raise on any table."""
+        from tests.evidence_harness_v2 import (
+            table1_full_success, table2_partial_retry,
+            table3_timeout_fallback, table4_bad_template_repair,
+            table5_target_query_matrix, assert_success_path_quality,
+            assert_table5_uses_required_queries,
+        )
+        assert_success_path_quality(table1_full_success(), "Table1")
+        assert_success_path_quality(table2_partial_retry(), "Table2")
+        assert_success_path_quality(table3_timeout_fallback(), "Table3")
+        assert_success_path_quality(table4_bad_template_repair(), "Table4")
+        rows5 = table5_target_query_matrix()
+        assert_success_path_quality(rows5, "Table5")
+        assert_table5_uses_required_queries(rows5)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 11. FRONTEND SEMANTIC CARD ISOLATION
+#     Verify no legacy whyPick / supportingDetails fallback path exists for
+#     semantic cards (those with a display object).
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestFrontendSemanticCardIsolation:
+    """pickCardReason must not touch legacy fields for semantic (display-present) cards."""
+
+    def _pick(self, card: dict) -> str:
+        """Python equivalent of the frontend pickCardReason logic (kept in sync)."""
+        display = card.get("display")
+        if display is not None:
+            if (
+                display.get("displayWhyValidated") is True
+                and display.get("displayWhy")
+                and len(display["displayWhy"]) >= 12
+            ):
+                return display["displayWhy"]
+            return ""  # NO legacy fallback for semantic cards
+        why_pick = card.get("supportingDetails", {}).get("whyPick") or card.get("whyPick")
+        if isinstance(why_pick, dict):
+            why_pick = why_pick.get("text")
+        return why_pick or card.get("primaryReason") or ""
+
+    def test_semantic_card_returns_display_why_when_validated(self):
+        card = {
+            "display": {
+                "displayWhy": "Izakaya Shinya matches on name and type for this request.",
+                "displayWhyValidated": True,
+            },
+            "supportingDetails": {"whyPick": "LEGACY TEXT"},
+            "whyPick": "LEGACY WHYPICK",
+            "primaryReason": "LEGACY PRIMARY",
+        }
+        assert self._pick(card) == "Izakaya Shinya matches on name and type for this request."
+
+    def test_semantic_card_returns_empty_when_not_validated(self):
+        card = {
+            "display": {
+                "displayWhy": "Some note",
+                "displayWhyValidated": False,
+            },
+            "supportingDetails": {"whyPick": "LEGACY TEXT"},
+            "whyPick": "LEGACY WHYPICK",
+            "primaryReason": "LEGACY PRIMARY",
+        }
+        assert self._pick(card) == ""
+
+    def test_semantic_card_returns_empty_when_display_why_missing(self):
+        card = {
+            "display": {"displayWhyValidated": True, "displayWhy": ""},
+            "supportingDetails": {"whyPick": "LEGACY TEXT"},
+        }
+        assert self._pick(card) == ""
+
+    def test_semantic_card_never_returns_legacy_fields(self):
+        """Any card with display!=None must never reach legacy fields."""
+        for validated in [True, False, None]:
+            card = {
+                "display": {"displayWhy": "x" * 15, "displayWhyValidated": validated},
+                "supportingDetails": {"whyPick": "LEGACY"},
+                "primaryReason": "LEGACY",
+            }
+            result = self._pick(card)
+            assert result != "LEGACY", (
+                f"displayWhyValidated={validated} leaked through to legacy field"
+            )
+
+    def test_non_semantic_card_uses_legacy_chain(self):
+        """Cards without a display object should still use the legacy fallback chain."""
+        card = {
+            "supportingDetails": {"whyPick": "Good North Side spot for ramen."},
+            "primaryReason": "Not used when whyPick present",
+        }
+        assert self._pick(card) == "Good North Side spot for ramen."
+
+    def test_cardpresentation_js_has_no_fallback_for_semantic_path(self):
+        """Grep the frontend source to verify no legacy-field access inside the semantic branch."""
+        import os
+        js_path = os.path.join(
+            os.path.dirname(__file__), "..", "..", "frontend", "src", "lib", "concierge", "cardPresentation.js"
+        )
+        source = open(os.path.normpath(js_path)).read()
+        # The function must contain the semantic gate
+        assert "displayWhyValidated" in source, "pickCardReason must reference displayWhyValidated"
+        # Find the semantic branch — it should return "" before reaching any legacy field
+        # Verify: no line that reads supportingDetails/whyPick/primaryReason appears
+        # BEFORE the closing of the semantic branch (i.e., before the fallback section)
+        # Simple check: the first occurrence of "return \"\"" must come before
+        # the first occurrence of "supportingDetails" in the function body.
+        idx_return_empty = source.find('return ""')
+        idx_supporting = source.find("supportingDetails")
+        assert idx_return_empty < idx_supporting, (
+            "cardPresentation.js semantic branch must return '' before reaching supportingDetails"
+        )

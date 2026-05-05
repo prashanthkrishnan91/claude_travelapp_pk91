@@ -25,15 +25,33 @@ Per-card `CardReason` dataclass: `note`, `source`, `validated`, `attempt_count`,
 - **No deterministic visible notes**: `deterministic_visible_count` is always 0 in telemetry.
 - **No user UI testing**: evidence is provided via `backend/tests/evidence_harness_v2.py` tables.
 
-### Evidence harness output (2026-05-05)
+### Evidence harness output (2026-05-05) — Table 5 uses 7 required target queries
+
+Required target queries (Table 5 — must not be changed):
+1. `izakayas`
+2. `izakayas with waterfront views`
+3. `izakayas on Fulton Street`
+4. `best breweries`
+5. `best waterfront breweries`
+6. `breweries near the river`
+7. `taprooms with a view`
 
 ```
-Table 1 (full success):      6/6 validated, 0 omitted  — all from llm_evidence_pack_v2_primary
-Table 2 (partial+retry):     6/6 validated, 0 omitted  — 1 primary, 5 retry-recovered
-Table 3 (timeout+fallback):  4/4 validated, 0 omitted  — all from llm_evidence_pack_v2_fallback (sonnet)
-Table 4 (bad-template):      3/3 validated, 0 omitted  — validator rejected pass-1, retry repaired
-Table 5 (query matrix):     21/21 validated, 0 omitted  — 7 queries × 3 cards, all llm_evidence_pack_v2_primary
+Table 1 (full success):      6/6 validated, 0 omitted  — all llm_evidence_pack_v2_primary, quality-checked
+Table 2 (partial+retry):     6/6 validated, 0 omitted  — 1 primary, 5 retry-recovered, quality-checked
+Table 3 (timeout+fallback):  4/4 validated, 0 omitted  — all llm_evidence_pack_v2_fallback (sonnet), quality-checked
+Table 4 (bad-template):      3/3 validated, 0 omitted  — validator rejected pass-1, retry repaired, quality-checked
+Table 5 (target queries):   21/21 validated, 0 omitted  — 7 required queries × 3 cards, quality-checked
+  [QUALITY CHECK PASSED] all 5 tables
 ```
+
+Quality rules enforced in harness and tests:
+- No NOTE OMITTED in success path.
+- No displayWhyValidated=False in success path.
+- No name+rating template notes.
+- No generic filler ("well-regarded", "strong local following", "Chicago institution", "consistent quality").
+- No unsupported waterfront/view claims without explicit negation caveat.
+- "izakayas on Fulton Street" notes must NOT claim to be on Fulton Street (modifier not confirmed by evidence).
 
 ### Files changed (this PR)
 
@@ -43,9 +61,9 @@ Table 5 (query matrix):     21/21 validated, 0 omitted  — 7 queries × 3 cards
 - `backend/app/concierge/logging.py` — schema-tolerant `_extract_missing_column` (handles Supabase schema-cache error format).
 - `frontend/src/lib/concierge/cardPresentation.js` — `pickCardReason` gates on `displayWhyValidated`; no legacy fallback for semantic cards.
 - `frontend/src/components/trips/AIConciergePanel.tsx` — added `displayWhyValidated?` and `displayWhySource?` to `DisplayCard.display` type.
-- `backend/tests/test_reasoning_reliability_v2.py` — 28 new tests: 6 scenario classes + query matrix + display contract + telemetry.
+- `backend/tests/test_reasoning_reliability_v2.py` — **42 tests** (was 28): added `TestEvidenceHarnessQuality` (7 tests) + `TestFrontendSemanticCardIsolation` (6 tests).
 - `backend/tests/test_semantic_retrieval_v1.py` — 9 integration tests updated to use `_MOCK_VALID_REASONS` context manager.
-- `backend/tests/evidence_harness_v2.py` — runnable evidence script; `python -m tests.evidence_harness_v2`.
+- `backend/tests/evidence_harness_v2.py` — runnable evidence script with 7 required target queries, quality assertions, inline `assert_success_path_quality()`.
 
 ### Env vars added (Reasoning Reliability v2)
 

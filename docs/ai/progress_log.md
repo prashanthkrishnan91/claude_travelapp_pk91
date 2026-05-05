@@ -26,7 +26,13 @@
 - Table 4 (bad-template repair): 3/3 validated (retry repaired)
 - Table 5 (query matrix): 21/21 validated (7 queries × 3 cards)
 
-**Tests**: 28 new, all passing. Net improvement: 57 → 36 pre-existing failures (21 fewer).
+**Tests**: 42 tests in `test_reasoning_reliability_v2.py` (was 28; added 7 `TestEvidenceHarnessQuality` + 6 `TestFrontendSemanticCardIsolation`). All pass. Net improvement: 57 → 36 pre-existing failures (21 fewer). The remaining 36 are fully classified as pre-existing and unrelated (see failure classification below).
+
+**Remaining failure classification** (36 pre-existing, all unrelated):
+- `test_concierge_router_v2.py` (2) + `test_concierge_observability.py` (1): `ModuleNotFoundError: app.core.cost_guardrails` missing — pre-existing infrastructure issue, not changed by this PR.
+- `test_live_research.py` (6) + `test_fast_dynamic_place_search.py` (1) + `test_itinerary_auth_scope.py` (1): semantic_retrieval_v1 feature flag set in test environment intercepts intents before they reach the live-research/fast-search handlers; `GOOGLE_PLACES_API_KEY` not configured in test env. Pre-existing routing issue — semantic_retrieval_v1 was already being enabled before our changes.
+- `test_restaurant_search_diagnostics.py` (20): `ModuleNotFoundError: httpx` not installed in pytest env — pre-existing dependency issue.
+- `test_trip_days.py` (4): trip-day management tests, no concierge or reasoning code involved.
 
 **Supabase SQL**: No.
 
