@@ -367,26 +367,28 @@ function ConciergeCard({
         </div>
       )}
 
-      <div className="mt-3 rounded-xl border border-slate-700/80 bg-slate-900/60 px-3 py-2 text-xs leading-relaxed text-slate-200">
-        <span className="font-semibold uppercase tracking-[0.1em] text-[10px] text-amber-200/90">Concierge note</span>
-        <p className="mt-1 break-words">{reasonParts.short}</p>
-        {hasDetail && (
-          <>
-            <button
-              onClick={() => setExpanded((v) => !v)}
-              className="mt-1 inline-flex items-center gap-0.5 text-[11px] font-medium text-amber-200/80 hover:text-amber-100"
-            >
-              {expanded ? "Less" : "More"}
-              <ChevronDown className={`h-3 w-3 transition ${expanded ? "rotate-180" : ""}`} />
-            </button>
-            {expanded && (
-              <div className="mt-1 space-y-1 text-[11px] leading-relaxed text-slate-300/90">
-                {expandableDetail.map((line) => <p key={line}>{line}</p>)}
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      {reasonParts.short && (
+        <div className="mt-3 rounded-xl border border-slate-700/80 bg-slate-900/60 px-3 py-2 text-xs leading-relaxed text-slate-200">
+          <span className="font-semibold uppercase tracking-[0.1em] text-[10px] text-amber-200/90">Concierge note</span>
+          <p className="mt-1 break-words">{reasonParts.short}</p>
+          {hasDetail && (
+            <>
+              <button
+                onClick={() => setExpanded((v) => !v)}
+                className="mt-1 inline-flex items-center gap-0.5 text-[11px] font-medium text-amber-200/80 hover:text-amber-100"
+              >
+                {expanded ? "Less" : "More"}
+                <ChevronDown className={`h-3 w-3 transition ${expanded ? "rotate-180" : ""}`} />
+              </button>
+              {expanded && (
+                <div className="mt-1 space-y-1 text-[11px] leading-relaxed text-slate-300/90">
+                  {expandableDetail.map((line) => <p key={line}>{line}</p>)}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       <div className="mt-2 flex items-center gap-2">
         {canAdd ? (

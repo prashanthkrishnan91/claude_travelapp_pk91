@@ -61,6 +61,11 @@ _GENERIC_BOILERPLATE_RE = re.compile(
     r"|worth\s+(?:a\s+)?visit"
     r"|definitely\s+(?:check\s+(?:it\s+)?out|worth\s+(?:a\s+)?visit)"
     r"|highly\s+recommended\s+(?:by|for)\s+(?:locals?|tourists?|visitors?)"
+    r"|top\s+pick\s+(?:for|because|among|in)\b"
+    r"|worth\s+considering\s+for\s+your\s+trip"
+    r"|a\s+well[-\s]regarded\s+local\s+pick"
+    r"|a\s+great\s+(?:spot|place|choice)\s+for\s+\w+\s+lovers?"
+    r"|perfect\s+for\s+(?:\w+\s+)?enthusiasts?"
     r")",
     re.IGNORECASE,
 )
@@ -116,6 +121,37 @@ _VERIFIED_TEMPLATE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Name-only + rating templates: the entire note is just "{Name} — {rating}★ ..."
+# with no additional content. These repeat only fields already visible on the card.
+#
+# Examples that MUST be rejected:
+#   "The Izakaya — 4.8★ from 1,028 reviews."
+#   "Goose Island Taproom on Fulton Street — 4.8★ from 1,159 reviews."
+#   "Izakaya Shinya on North Avenue — 4.6★ from 1,143 reviews."
+#   "Half Acre — 4.7★."
+#
+# Examples that must NOT be rejected (additional content beyond name+rating):
+#   "Half Acre on Lincoln Ave — 4.7★. No waterfront proximity confirmed from address."
+#   "Izakaya Shinya — 4.6★. Not directly on Fulton Street — nearest match in the area."
+#
+# The regex anchors to the end-of-string ($) to catch ONLY complete notes with
+# no further sentences. A note with additional clauses after the period does not match.
+_NAME_RATING_ONLY_RE = re.compile(
+    r"""^
+    [A-Za-z0-9''’\-&, ()]{3,120}     # name, possibly with "on Street"
+    \s*[—–\-]{1,3}\s*                       # em-dash or hyphen separator
+    \d{1,2}[\d.]*\s*★                       # rating★
+    (?:                                      # optional review count suffix
+        \s+from\s+[\d,]+\s+(?:reviews?|Google\s+reviews?)
+        |\s+with\s+[\d,]+\s+(?:reviews?|Google\s+reviews?)
+        |\s+across\s+[\d,]+\s+(?:reviews?|Google\s+reviews?)
+        |\s*\([\d,]+\s+reviews?\)
+    )?
+    \s*\.?\s*$                               # period and end — no further sentences
+    """,
+    re.IGNORECASE | re.VERBOSE | re.UNICODE,
+)
+
 
 def validate_reason(
     reason: str,
@@ -151,6 +187,14 @@ def validate_reason(
     # 1c. "Verified {category} with {rating}★" template — fill-in-the-blank, no differentiation.
     if _VERIFIED_TEMPLATE_RE.search(reason):
         return False, "verified_category_template"
+
+    # 1d. Pure name+rating templates: notes whose ENTIRE content is just
+    # "{Name} — {rating}★ from {N} reviews." with no further insight.
+    # These repeat only fields already visible on the card (title + meta line).
+    # Notes that add a caveat or second sentence (honest modifier disclosure,
+    # geo note, etc.) do NOT match this regex and are allowed.
+    if _NAME_RATING_ONLY_RE.match(reason):
+        return False, "name_rating_only_template"
 
     # 2. Unsupported physical attribute claims.
     # Allow when (a) evidence bundle confirms it, or (b) the term appears

@@ -208,8 +208,9 @@ def _run_pipeline(
     from app.concierge.reason_validator import validate_reason
 
     # Build evidence bundles, deterministic reasons, and validate each one.
-    # A deterministic reason that fails validation falls back to a minimal
-    # safe note built from verified facts only (rating + type label).
+    # A deterministic reason that fails validation (e.g., pure name+rating template)
+    # is replaced with "" — no note is better than a template. The LLM path will
+    # attempt to produce a better note; if it also fails, the card gets no note.
     cards_data: List[Any] = []  # (entity, evidence, rank_score, det_reason)
     det_reason_rejected_count = 0
 
@@ -217,8 +218,9 @@ def _run_pipeline(
         evidence = build_evidence_bundle(entity, frame, rank_score)
         det_reason = build_safe_reason(entity, evidence, frame, rank_score)
 
-        # Validate the deterministic reason using the same validator applied
-        # to LLM output. If it fails, fall back to a minimal honest note.
+        # Validate the deterministic reason using the same validator applied to
+        # LLM output. If rejected (e.g., pure name+rating template), use ""
+        # so the card assembles with no note rather than a template.
         is_valid, rejection = validate_reason(det_reason, frame, evidence)
         if not is_valid:
             logger.warning(
@@ -226,7 +228,7 @@ def _run_pipeline(
                 "name=%s rejection=%s reason=%r",
                 entity.name, rejection, det_reason,
             )
-            det_reason = _minimal_safe_note(entity)
+            det_reason = ""  # absent note > template
             det_reason_rejected_count += 1
 
         cards_data.append((entity, evidence, rank_score, det_reason))
@@ -235,17 +237,31 @@ def _run_pipeline(
 
     # ── Step 7: Batched grounded reasoning (LLM path, budget-gated) ─────────
     t0 = time.monotonic()
-    from app.concierge.batched_reason_builder import build_batched_reasons, _flag_enabled as _batched_flag
+    from app.concierge.batched_reason_builder import (
+        build_batched_reasons,
+        _flag_enabled as _batched_flag,
+        ReasoningResult,
+    )
 
-    batched_reasons = build_batched_reasons(cards_data, frame)
-    reason_source = "batched_grounded_v1" if _batched_flag() else "deterministic_safe_v1"
+    batched_reasons, reasoning_result = build_batched_reasons(cards_data, frame)
+
+    # reason_source reflects actual LLM success, not just flag status.
+    # "batched_grounded_v1" only when at least one LLM note was accepted.
+    reason_source = (
+        "batched_grounded_v1"
+        if reasoning_result.success
+        else "deterministic_safe_v1"
+    )
     latency["batched_reason_ms"] = int((time.monotonic() - t0) * 1000)
 
     # ── Step 8: Assemble final cards ─────────────────────────────────────────
     cards = []
     rank_debug: List[Dict[str, Any]] = []
+    final_note_omitted_count = 0
     for i, (entity, evidence, rank_score, det_reason) in enumerate(cards_data, 1):
         reason = batched_reasons.get(str(i), det_reason)
+        if not reason:
+            final_note_omitted_count += 1
         card = _entity_to_card(entity, reason, frame, reason_source=reason_source)
         if card is not None:
             cards.append(card)
@@ -276,14 +292,26 @@ def _run_pipeline(
     top_card_name = cards[0].name if cards else ""
     top_card_city = ""
     if cards:
+        # Extract city/area from the top card's formatted address.
+        # Filter out building fragments (Lower Level, Suite, Floor, etc.) so that
+        # "Lower Level, Chicago, IL" returns "Chicago", not "Lower Level".
+        from app.concierge.safe_reason_builder import _NON_NEIGHBORHOOD_FRAGMENTS
         addr = getattr(cards[0], "neighborhood", "") or ""
-        # Extract city segment from formatted address for observability
         addr_parts = [p.strip() for p in addr.split(",")]
+        _ADDR_SKIP = frozenset({"usa", "us", "il", "ny", "ca", "tx", "fl", "wa"})
         for part in addr_parts:
-            if not any(c.isdigit() for c in part) and len(part) > 2:
-                if part.strip().lower() not in {"usa", "us"}:
-                    top_card_city = part.strip()
-                    break
+            p_lower = part.strip().lower()
+            if not part or any(c.isdigit() for c in part) or len(part) <= 2:
+                continue
+            if p_lower in _ADDR_SKIP:
+                continue
+            # Skip building fragments — never report them as city
+            if p_lower in _NON_NEIGHBORHOOD_FRAGMENTS:
+                continue
+            if any(p_lower.startswith(frag) for frag in _NON_NEIGHBORHOOD_FRAGMENTS if len(frag) > 4):
+                continue
+            top_card_city = part.strip()
+            break
 
     rejection_stats = {
         **vars(entity_stats),
@@ -294,8 +322,21 @@ def _run_pipeline(
         "venue_head_recognized": ranker_stats.concept_is_recognized,
         "destination_penalized_count": ranker_stats.destination_penalized_count,
         "det_reason_rejected_count": det_reason_rejected_count,
-        "grounded_reason_attempted": _batched_flag(),
-        "grounded_reason_success": _batched_flag() and reason_source == "batched_grounded_v1",
+        # Truthful telemetry: these reflect actual LLM outcome, not flag state.
+        "reasoning_attempted": reasoning_result.attempted,
+        "reasoning_model": reasoning_result.model,
+        "reasoning_success": reasoning_result.success,
+        "reasoning_failure_reason": reasoning_result.failure_reason,
+        "llm_accepted_count": reasoning_result.accepted_count,
+        "validator_rejected_count": reasoning_result.rejected_count,
+        "note_omitted_count": reasoning_result.omitted_count,
+        "deterministic_visible_count": reasoning_result.fallback_count,
+        "final_note_omitted_count": final_note_omitted_count,
+        "prompt_builder_error": reasoning_result.prompt_error,
+        "diversity_flagged": reasoning_result.diversity_flagged,
+        # Legacy fields for compatibility with existing log parsers
+        "grounded_reason_attempted": reasoning_result.attempted,
+        "grounded_reason_success": reasoning_result.success,
     }
     _log_semantic_turn(
         user_query=user_query,
@@ -328,23 +369,16 @@ def _run_pipeline(
 
 
 def _minimal_safe_note(entity: Any) -> str:
-    """Ultra-safe fallback note when deterministic reason fails validation.
+    """Previously used as a last-resort fallback. Now returns "" (no note).
 
-    Anchored on the place's actual name — never a type-template.
-    "Goose Island Brewery — 4.5★." is acceptable.
-    "Verified Brewery with 4.5★ across reviews." is banned.
+    The format "Name — rating★ from N reviews." is rejected by the validator
+    (name_rating_only_template) because it repeats only visible card fields.
+    An absent note is better than a generic template.
+
+    This function is retained for API compatibility but must not be called
+    for visible output. The caller in _run_pipeline now uses "" directly.
     """
-    name = getattr(entity, "name", None) or "This place"
-    rating = getattr(entity, "rating", None)
-    review_count = getattr(entity, "user_rating_count", None) or 0
-
-    if rating is not None and review_count >= 50:
-        if review_count >= 1000:
-            return f"{name} — {rating:.1f}★ from {review_count:,} reviews."
-        return f"{name} — {rating:.1f}★ ({review_count:,} reviews)."
-    elif rating is not None:
-        return f"{name} — {rating:.1f}★."
-    return f"{name}."
+    return ""
 
 
 def _trust_gate(cards: List[Any]) -> tuple:
