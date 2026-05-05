@@ -316,13 +316,13 @@ def _entity_to_card(
         primary_concept = frame.subtype_concepts[0].label if frame.subtype_concepts else ""
         display_category = _derive_display_category(entity.types, entity.primary_type, primary_concept)
 
-        # Rating display
-        rating_10 = round(entity.rating * 2, 1) if entity.rating is not None else None
+        # Preserve Google native rating scale (0–5) for display.
+        rating_display = float(entity.rating) if entity.rating is not None else None
         meta_line: Optional[str] = None
-        if rating_10 is not None and entity.user_rating_count:
-            meta_line = f"★ {rating_10:.1f} ({entity.user_rating_count:,} reviews)"
-        elif rating_10 is not None:
-            meta_line = f"★ {rating_10:.1f}"
+        if rating_display is not None and entity.user_rating_count:
+            meta_line = f"★ {rating_display:.1f} ({entity.user_rating_count:,} reviews)"
+        elif rating_display is not None:
+            meta_line = f"★ {rating_display:.1f}"
 
         gv = GoogleVerification(
             provider="google_places",
@@ -352,7 +352,7 @@ def _entity_to_card(
             source="Google Places",
             cuisine=display_category,
             neighborhood=entity.formatted_address,
-            rating=rating_10,
+            rating=rating_display,
             review_count=entity.user_rating_count,
             summary=reason,
             primary_reason=reason,

@@ -1450,3 +1450,65 @@ class TestSemanticTurnObservability:
         assert "location_modifiers=" in log
         assert "retrieval_queries=" in log
         assert "wrong_category_low_subtype_fit" in log
+
+
+def test_entity_to_card_preserves_google_rating_native_scale_and_review_count():
+    from app.concierge.frame_extractor import extract_frame
+    from app.concierge.place_entity_layer import PlaceEntity
+    from app.concierge.semantic_retrieval import _entity_to_card
+
+    frame = extract_frame("best cocktail bars", "Chicago")
+    entity = PlaceEntity(
+        place_id="gp-1",
+        name="Kumiko",
+        types=["cocktail_bar", "bar"],
+        primary_type="cocktail_bar",
+        rating=4.6,
+        user_rating_count=1200,
+        business_status="OPERATIONAL",
+        formatted_address="630 W Lake St, Chicago, IL",
+        google_maps_uri="https://maps.google.com/?cid=123",
+        website_uri=None,
+        lat=41.0,
+        lng=-87.0,
+        price_level=None,
+    )
+
+    card = _entity_to_card(entity, "A well-regarded cocktail bar.", frame)
+
+    assert card is not None
+    assert card.rating == 4.6
+    assert card.review_count == 1200
+    assert card.supporting_details is not None
+    assert card.supporting_details.meta_line == "★ 4.6 (1,200 reviews)"
+
+
+def test_entity_to_card_handles_null_rating_without_fabrication():
+    from app.concierge.frame_extractor import extract_frame
+    from app.concierge.place_entity_layer import PlaceEntity
+    from app.concierge.semantic_retrieval import _entity_to_card
+
+    frame = extract_frame("best cocktail bars", "Chicago")
+    entity = PlaceEntity(
+        place_id="gp-2",
+        name="No Rating Bar",
+        types=["bar"],
+        primary_type="bar",
+        rating=None,
+        user_rating_count=321,
+        business_status="OPERATIONAL",
+        formatted_address="100 Main St, Chicago, IL",
+        google_maps_uri="https://maps.google.com/?cid=456",
+        website_uri=None,
+        lat=41.1,
+        lng=-87.1,
+        price_level=None,
+    )
+
+    card = _entity_to_card(entity, "A bar.", frame)
+
+    assert card is not None
+    assert card.rating is None
+    assert card.review_count == 321
+    assert card.supporting_details is not None
+    assert card.supporting_details.meta_line is None
