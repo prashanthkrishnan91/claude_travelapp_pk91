@@ -9,6 +9,7 @@ Use personal skills as optional accelerators. The repo-local files in `docs/ai/s
 | Personal skill | When to invoke it | Repo-local companion |
 |---|---|---|
 | `systematic-debugging` | Repro, root cause, regression, logs, broken behavior | `docs/ai/skills/bugfix.md` |
+| `railway-logs` | Railway/deployment/runtime logs, crashes, recent errors, 4xx/5xx responses, provider failures, backend/UI disagreement, auth/cache/persistence mismatches | `docs/ai/skills/bugfix.md` or `merge_gate.md` |
 | `verification-before-completion` | Before Claude says a task is done; force tests/build/manual verification notes | `docs/ai/skills/merge_gate.md` |
 | `receiving-code-review` | Claude receives Codex/ChatGPT review feedback and must make a minimal fix | `docs/ai/skills/bugfix.md` |
 | `requesting-code-review` | Claude opens a PR and should prepare a concise review packet | `docs/ai/skills/merge_gate.md` |
@@ -17,6 +18,18 @@ Use personal skills as optional accelerators. The repo-local files in `docs/ai/s
 | `test-driven-development` | Changes with clear expected behavior or regression tests | `docs/ai/skills/bugfix.md` or `implementation.md` |
 | `frontend-design` | Focused UI polish with known surface and strict UI budget | `docs/ai/skills/ui_fix.md` |
 | `ui-ux-pro-max` | Higher-polish design direction; use sparingly for capped UI passes | `docs/ai/skills/ui_fix.md` |
+
+## Railway log usage
+
+Use `railway-logs` when a prompt says any of: "fetch the logs", "check the Railway logs", "show me recent errors", "pull the last 200 logs filtered for 500 errors", "why is my app crashing?", "check the deployment", or similar runtime-log language.
+
+Default runtime evidence pattern:
+
+```md
+Use the `railway-logs` personal skill if available. Check recent Railway logs for this repo before coding, focusing on 4xx/5xx errors, crashes, provider failures, auth/cache/persistence mismatches, and request/response shape issues. Summarize only relevant evidence in the final report. Do not ask the user to paste Railway logs unless the skill is unavailable.
+```
+
+Use log evidence to classify severity. Backend logs disagreeing with UI behavior, data existing in logs but disappearing in UI, or symptoms crossing frontend/backend/API/cache/provider/persistence should usually trigger Level 2 full plumbing analysis instead of another patch.
 
 ## Use sparingly
 
@@ -48,7 +61,13 @@ Use the `systematic-debugging` personal skill if available.
 Also follow `docs/ai/skills/bugfix.md` and `docs/ai/HANDOFF.md`.
 ```
 
-Do not stack many personal skills in one prompt. More skill names can increase confusion and token use. One primary skill is the default; two is the maximum when one is implementation and one is verification.
+For runtime issues, `railway-logs` may be paired with one primary work skill:
+
+```md
+Use `railway-logs` if available to fetch current runtime evidence. Follow `docs/ai/skills/bugfix.md`.
+```
+
+Do not stack many personal skills in one prompt. More skill names can increase confusion and token use. One primary skill is the default; two is the maximum when one is runtime evidence and one is implementation/verification.
 
 ## Token-saving rule
 
@@ -59,6 +78,14 @@ Use `systematic-debugging` if available. Follow `docs/ai/skills/bugfix.md`.
 ```
 
 Instead of pasting a full debugging checklist into every prompt.
+
+For runtime evidence, prefer this:
+
+```md
+Use `railway-logs` if available; check recent errors before coding.
+```
+
+Instead of asking the user to paste exported Railway JSON.
 
 ## Safety rule
 
