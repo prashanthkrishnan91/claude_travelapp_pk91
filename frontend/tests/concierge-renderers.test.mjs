@@ -69,7 +69,7 @@ test('sanitizeWhyPick blocks category+rating generic template', () => {
     'Alinea',
     ['Alinea'],
   );
-  assert.equal(result, 'A well-regarded local pick with verified listing details.');
+  assert.equal(result, '');
 });
 
 test('card reason does not render [object Object] when whyPick is string contract', () => {
@@ -79,10 +79,10 @@ test('card reason does not render [object Object] when whyPick is string contrac
 
 test('sanitizeWhyPick blocks awkward fragments and cross-venue leakage', () => {
   const fallback = sanitizeWhyPick('Alinea is backed by rated 4.8 and with rated praise.', 'Alinea', ['Alinea', 'Oriole']);
-  assert.match(fallback, /well-regarded local pick with verified listing details/i);
+  assert.equal(fallback, '');
 
   const leaked = sanitizeWhyPick('Try Oriole first.', 'Alinea', ['Alinea', 'Oriole']);
-  assert.match(leaked, /well-regarded local pick with verified listing details/i);
+  assert.equal(leaked, '');
 });
 
 test('sanitizeWhyPick blocks all listed generic phrases', () => {
@@ -97,7 +97,7 @@ test('sanitizeWhyPick blocks all listed generic phrases', () => {
   ];
   for (const input of genericInputs) {
     const result = sanitizeWhyPick(input, 'Some Place', ['Some Place']);
-    assert.match(result, /well-regarded local pick with verified listing details/i,
+    assert.equal(result, '',
       `Expected fallback for: "${input}", got: "${result}"`);
   }
 });
@@ -112,7 +112,7 @@ test('sanitizeWhyPick replaces all newly banned fragments', () => {
   ];
   for (const input of bannedInputs) {
     const result = sanitizeWhyPick(input, 'Some Place', ['Some Place']);
-    assert.equal(result, 'A well-regarded local pick with verified listing details.');
+    assert.equal(result, '');
   }
 });
 
