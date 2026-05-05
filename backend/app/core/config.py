@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     # PR fast-dynamic: feature-flagged fast pipeline for place searches.
     # Default OFF. Enable after validation.
     concierge_fast_dynamic_place_search_v1_enabled: bool = False
+    # PR semantic-retrieval-v1: open-vocabulary semantic retrieval pipeline.
+    # Default OFF. When ON, replaces fast_dynamic for new_search place asks.
+    # Rollback: set CONCIERGE_SEMANTIC_RETRIEVAL_V1_ENABLED=false.
+    concierge_semantic_retrieval_v1_enabled: bool = False
     yelp_api_key: str = ""
     foursquare_api_key: str = ""
 

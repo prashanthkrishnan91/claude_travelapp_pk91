@@ -1,5 +1,95 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-05) — Merge-gate audit hardening for PR #235 semantic retrieval v1
+
+### Audit fixes applied
+- Enforced strict trust invariant in Place Entity Layer: `businessStatus` is now mandatory and must be `OPERATIONAL`; missing status is rejected (no synthesized default).
+- Preserved deterministic semantic safe reasons (`deterministic_safe_v1`) through concierge response assembly so explicit wrappers like “Verify waterfront before booking.” are not scrubbed by generic banned-copy sanitizer.
+- Tightened outage semantics: when semantic provider fanout fully fails, semantic returns `SOURCE_UNAVAILABLE` and concierge no longer falls through into legacy card-minting paths for that turn.
+- Hardened provider fanout timeout behavior by catching iterator-level `concurrent.futures.TimeoutError` and returning partial successes plus explicit incomplete records instead of aborting the turn.
+- Card assembly now propagates verified provider `business_status` from entity records instead of hardcoding `OPERATIONAL`.
+
+### Tests
+- Updated semantic retrieval test suite assertions for strict OPERATIONAL gating and unavailable-source behavior.
+- Added coverage for missing/closed business status rejection and OPERATIONAL acceptance.
+- Added coverage proving deterministic semantic reason-source preservation helper behavior.
+
+**Supabase SQL**: No.
+
+---
+
+## Last change (2026-05-05) — AI Concierge Semantic Place Intelligence v2 PR-2 (Semantic Retrieval v1 verified-card pipeline)
+
+### Problem
+Chicago + "best breweries along the waterfront" → text-only, no addable cards. Logs showed `card_pool_size=0`, `sources_used=[]`. The classifier recognized a place ask, but the existing bucket/router execution brain could not represent "brewery" as an open-vocabulary concept and returned zero cards.
+
+### Root-cause fix
+Built a new **Semantic Retrieval v1** pipeline behind a feature flag. The new path replaces the category-bucket execution brain with:
+1. Open-vocabulary **ExperienceFrame** extraction (deterministic, no LLM, no closed enum)
+2. **RetrievalPlanner** generating 1–3 provider-friendly Google Text Search queries from the frame
+3. Parallel **provider fanout** (concurrent.futures, per-call deadlines, one failure doesn't kill the turn)
+4. **Verified Place Entity Layer** — hard gates: Google place id + OPERATIONAL + maps URI; NOT rejected for broad types or lower rating
+5. **SemanticRanker v1** — deterministic feature-based score (subtype_fit 0.34 dominates popularity 0.06, no category hard gate)
+6. **MinimalEvidenceBundle** — structured facts only, no invented attributes
+7. **SafeReasonBuilder v1** — honest, ask-anchored, never invents views/ambiance/awards
+8. **TrustGate** final pass — drops any card missing the three identity fields
+9. **Structured observability** — one log line per turn, debuggable in one pass
+
+### Feature flag
+`CONCIERGE_SEMANTIC_RETRIEVAL_V1_ENABLED` (Settings field: `concierge_semantic_retrieval_v1_enabled`)
+- Default: `False` — existing behavior is completely unchanged when flag is OFF
+- When ON: semantic pipeline runs for place-recommendation asks (same intent set as fast_dynamic). Falls back to fast_dynamic or slow pipeline if semantic returns no cards.
+- **Rollback**: set `CONCIERGE_SEMANTIC_RETRIEVAL_V1_ENABLED=false`
+
+### Behavior matrix
+
+| Scenario | Flag OFF | Flag ON |
+|---|---|---|
+| "best breweries" Chicago | Existing pipeline | Semantic pipeline → brewery cards |
+| "best breweries along the waterfront" Chicago | No cards (root-cause bug) | Brewery cards, honest geo wording |
+| "romantic tapas but not too loud" | Existing pipeline | Tapas-first cards, verify-quiet wrapper |
+| "nice sushi restaurants with waterfront view" | Existing pipeline | Sushi-first cards, no invented view |
+| Semantic returns 0 cards | N/A | Falls through to fast_dynamic or slow |
+| All provider queries fail | N/A | Honest empty response, no fake cards |
+| Refine/follow-up turns | Existing pipeline | Existing pipeline (unchanged) |
+
+### Files changed
+- `backend/app/concierge/frame_extractor.py` (NEW) — open-vocabulary ExperienceFrame extraction
+- `backend/app/concierge/retrieval_planner.py` (NEW) — RetrievalPlanner v1
+- `backend/app/concierge/provider_executor.py` (NEW) — parallel Google Text Search fanout
+- `backend/app/concierge/place_entity_layer.py` (NEW) — Verified Place Entity Layer + trust gates
+- `backend/app/concierge/ranker.py` (NEW) — SemanticRanker v1 + MinimalEvidenceBundle
+- `backend/app/concierge/safe_reason_builder.py` (NEW) — SafeReasonBuilder v1
+- `backend/app/concierge/semantic_retrieval.py` (NEW) — pipeline orchestrator + TrustGate + observability
+- `backend/tests/test_semantic_retrieval_v1.py` (NEW) — 46 tests across all pipeline stages
+- `backend/app/core/config.py` (MODIFIED) — added `concierge_semantic_retrieval_v1_enabled: bool = False`
+- `backend/app/services/concierge.py` (MODIFIED) — wired semantic pipeline in `_fetch_live_research()`
+
+### Tests (46 total, all passing)
+- Frame extraction: brewery, waterfront, tapas+quiet, sushi+view, fallback-on-error, open vocabulary
+- Retrieval planner: concept preservation, geo variants, query caps, destination inclusion
+- Provider executor: fanout, one-timeout resilience, all-timeout → empty, no-key fallback
+- Entity layer: missing id/URI/status rejected; duplicates deduped; broad types NOT rejected
+- Ranker: brewery > bar, brewery-near-water > inland-brewery, tapas > cocktail bar, sushi > waterfront generic, popularity cannot overpower subtype_fit
+- Safe reasons: ask anchor present, no invented views, verify wrapper for weak attributes
+- Integration: ≥3 verified brewery cards from mocked Google, honest waterfront wording, tapas first, sushi first, no fake cards on failure
+
+### Explicit scope boundaries (not changed in this PR)
+- No Tavily/editorial card minting
+- No weakened Google trust gates
+- No SQL
+- No frontend UI changes
+- No Supabase schema changes
+- No batched LLM reasoning (PR-3)
+- No Yelp/Foursquare
+- No vector search
+- No personalization
+- Follow-up engine unchanged (existing refine_previous and more_options paths unaffected)
+
+**Supabase SQL**: No.
+
+---
+
 ## Last change (2026-05-05) — AI Concierge Semantic Place Intelligence v2 PR-1 (schema-tolerant concierge request logging)
 
 ### Problem diagnosed from Railway logs

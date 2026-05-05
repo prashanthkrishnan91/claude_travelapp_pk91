@@ -133,6 +133,11 @@ def _clean_reason_text(
     return f"{name} is a strong {cat} option{loc_part}{rating_part}."
 
 
+def _should_preserve_reason_text(*, reason_source: Optional[str], display_why_source: Optional[str]) -> bool:
+    source = (reason_source or display_why_source or "").strip().lower()
+    return source == "deterministic_safe_v1"
+
+
 def _kw_pattern(*keywords: str) -> re.Pattern:
     """Compile keyword alternatives with word boundaries."""
     parts = sorted(keywords, key=len, reverse=True)
@@ -458,15 +463,24 @@ class ConciergeService:
                 or str(getattr(card, "summary", None) or "").strip()
             )
             if reason:
-                reason = _clean_reason_text(
-                    text=reason,
-                    name=getattr(card, "name", "Place"),
-                    category=getattr(card, "cuisine", None),
-                    rating=getattr(card, "rating", None),
-                    review_count=getattr(card, "review_count", None),
-                    neighborhood=getattr(card, "neighborhood", None),
-                    intent=intent,
+                preserve_reason = _should_preserve_reason_text(
+                    reason_source=getattr(card, "reason_source", None),
+                    display_why_source=(
+                        getattr(getattr(card, "display", None), "display_why_source", None)
+                    ),
                 )
+                if preserve_reason:
+                    reason = reason.strip()
+                else:
+                    reason = _clean_reason_text(
+                        text=reason,
+                        name=getattr(card, "name", "Place"),
+                        category=getattr(card, "cuisine", None),
+                        rating=getattr(card, "rating", None),
+                        review_count=getattr(card, "review_count", None),
+                        neighborhood=getattr(card, "neighborhood", None),
+                        intent=intent,
+                    )
                 card.why_pick = reason
                 if getattr(card, "supporting_details", None) is None:
                     card.supporting_details = PlaceSupportingDetails()
@@ -617,6 +631,43 @@ class ConciergeService:
         A failed live-research call must NOT break the concierge flow — fall
         back to existing curated/app-database/sample paths instead.
         """
+        # ── Semantic Retrieval v1 (highest priority when flag ON) ─────────────
+        semantic_enabled = bool(
+            getattr(self._settings, "concierge_semantic_retrieval_v1_enabled", False)
+        )
+        if semantic_enabled and intent in self._FAST_DYNAMIC_INTENTS and destination:
+            try:
+                from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
+                from app.models.concierge import SOURCE_NONE, SOURCE_UNAVAILABLE
+                logger.info(
+                    "concierge.semantic_retrieval_v1 intent=%s destination=%r query=%r",
+                    intent, destination, user_query,
+                )
+                result = run_semantic_retrieval_v1(
+                    user_query=user_query,
+                    destination=destination,
+                    prior_identity_keys=prior_identity_keys if prior_identity_keys else frozenset(),
+                )
+                if result.restaurants or result.attractions:
+                    return result
+                if result.source_status == SOURCE_UNAVAILABLE:
+                    logger.warning(
+                        "concierge.semantic_retrieval_v1: source_unavailable, skipping fallthrough "
+                        "intent=%s destination=%r query=%r",
+                        intent, destination, user_query,
+                    )
+                    return result
+                # No verified cards — fall through to fast_dynamic or slow pipeline
+                logger.info(
+                    "concierge.semantic_retrieval_v1: no_verified_cards, falling_through "
+                    "intent=%s destination=%r query=%r",
+                    intent, destination, user_query,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "concierge.semantic_retrieval_v1 failed, falling_through: %s", exc
+                )
+
         # ── Fast dynamic path ─────────────────────────────────────────────────
         fast_enabled = bool(
             getattr(self._settings, "concierge_fast_dynamic_place_search_v1_enabled", False)

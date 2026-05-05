@@ -1,5 +1,5 @@
 from app.models.concierge import GoogleVerification, UnifiedRestaurantResult
-from app.services.concierge import _clean_reason_text
+from app.services.concierge import _clean_reason_text, _should_preserve_reason_text
 from app.services.live_research import _build_supporting_details, _is_obvious_non_venue
 from app.concierge.contracts import PlaceRecommendationsResponse
 
@@ -82,3 +82,13 @@ def test_banned_fragments_are_removed_from_user_facing_reasons():
         "..",
     ):
         assert fragment not in low
+
+
+def test_deterministic_safe_v1_reasons_are_preserved():
+    assert _should_preserve_reason_text(
+        reason_source="deterministic_safe_v1",
+        display_why_source=None,
+    ) is True
+
+    reason = "Verify waterfront before booking."
+    assert reason == "Verify waterfront before booking."
