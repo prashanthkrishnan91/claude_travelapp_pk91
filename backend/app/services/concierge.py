@@ -434,6 +434,26 @@ class ConciergeService:
             sources.append("Destination research database")
             retrieval_used = True
 
+        elif intent == INTENT_GENERAL:
+            # Open-class / semantic retrieval path: handles unknown venue nouns
+            # like "izakaya", "tea house", "record store" that don't match any
+            # closed keyword bucket. live_result is populated by semantic
+            # retrieval above; consume it here so cards reach the response.
+            if not force_research_only:
+                if live_result.restaurants:
+                    restaurants = live_result.restaurants
+                    source_status = SOURCE_LIVE_SEARCH
+                    cached_response = live_result.cached
+                    if live_result.provider_name:
+                        sources.append(f"Live search · {live_result.provider_name}")
+                elif live_result.attractions:
+                    attractions = live_result.attractions
+                    source_status = SOURCE_LIVE_SEARCH
+                    cached_response = live_result.cached
+                    if live_result.provider_name:
+                        sources.append(f"Live search · {live_result.provider_name}")
+            retrieval_used = bool(restaurants or attractions)
+
         system_prompt = _RETRIEVAL_SYSTEM_PROMPT if retrieval_used else _SYSTEM_PROMPT
         prompt = self._build_search_prompt(
             trip, user_query, intent, restaurants, attractions, hotels, areas, warnings, area_comparisons

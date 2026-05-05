@@ -92,7 +92,8 @@ def persist_concierge_request_log(
         "response_type": response.response_type,
         "stage1_prior": decision.stage1_prior,
         "intent_confidence": decision.stage2_confidence,
-        "intent_classifier_version": INTENT_CLASSIFIER_VERSION,
+        # intent_classifier_version column not yet in DB schema — omitted from
+        # insert to avoid PGRST204; the value is emitted in app logs instead.
         "sources_used": _as_sources(response),
         "llm_model": model,
         "llm_tokens_in": tokens_in,

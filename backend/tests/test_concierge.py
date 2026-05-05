@@ -34,6 +34,7 @@ from app.models.concierge import (
     SOURCE_SAMPLE_DATA,
     SOURCE_UNAVAILABLE,
     PlaceSupportingDetails,
+    UnifiedAttractionResult,
     UnifiedResearchSourceResult,
     UnifiedRestaurantResult,
 )
@@ -610,6 +611,76 @@ class TestConciergeSearch:
             MockSearch.return_value = mock_search
             result = svc.search(FAKE_TRIP_ID, "Seafood restaurants", FAKE_USER_ID)
         assert any("google verification" in (w or "").lower() for w in result.warnings)
+
+    def test_intent_general_semantic_restaurants_reach_response(self):
+        """Root-cause regression guard: INTENT_GENERAL must consume live_result.restaurants.
+
+        Prior to the fix, the search() intent dispatch had no branch for INTENT_GENERAL,
+        so semantic retrieval cards were silently dropped and restaurants stayed [].
+        """
+        svc = self._svc("San Francisco")
+        live_result = LiveResearchResult(
+            restaurants=[
+                UnifiedRestaurantResult(
+                    name="Izakaya Rintaro",
+                    source="Live search",
+                    cuisine="Izakaya",
+                    supporting_details=PlaceSupportingDetails(
+                        why_pick="Authentic Japanese izakaya in the Mission.",
+                        category_label="Izakaya",
+                    ),
+                    primary_reason="Authentic Japanese izakaya in the Mission.",
+                )
+            ],
+            source_status="live_search",
+            provider_name="stub",
+        )
+        with patch.object(svc, "_fetch_live_research", return_value=live_result), \
+             patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            result = svc.search(FAKE_TRIP_ID, "izakayas", FAKE_USER_ID)
+
+        assert result.intent == INTENT_GENERAL
+        assert len(result.restaurants) == 1, (
+            "INTENT_GENERAL must surface semantic retrieval cards; got empty restaurants"
+        )
+        assert result.restaurants[0].name == "Izakaya Rintaro"
+        assert result.source_status == "live_search"
+        assert result.retrieval_used is True
+
+    def test_intent_general_empty_semantic_result_returns_no_cards(self):
+        """When semantic retrieval returns nothing for INTENT_GENERAL, restaurants stays []."""
+        svc = self._svc("San Francisco")
+        live_result = LiveResearchResult(source_status="none", provider_name="stub")
+        with patch.object(svc, "_fetch_live_research", return_value=live_result), \
+             patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            result = svc.search(FAKE_TRIP_ID, "izakayas", FAKE_USER_ID)
+
+        assert result.intent == INTENT_GENERAL
+        assert result.restaurants == []
+        assert result.retrieval_used is False
+
+    def test_intent_general_semantic_attractions_reach_response(self):
+        """INTENT_GENERAL falls back to attractions when restaurants is empty."""
+        svc = self._svc("Kyoto")
+        live_result = LiveResearchResult(
+            restaurants=[],
+            attractions=[
+                UnifiedAttractionResult(
+                    name="Fushimi Inari",
+                    source="Live search",
+                    category="Shrine",
+                )
+            ],
+            source_status="live_search",
+            provider_name="stub",
+        )
+        with patch.object(svc, "_fetch_live_research", return_value=live_result), \
+             patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
+            result = svc.search(FAKE_TRIP_ID, "torii gate paths", FAKE_USER_ID)
+
+        assert result.intent == INTENT_GENERAL
+        assert result.attractions[0].name == "Fushimi Inari"
+        assert result.retrieval_used is True
 
 
 class _FakeMessagesQuery:

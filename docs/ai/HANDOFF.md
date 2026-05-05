@@ -1,6 +1,44 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-05) — Venue-Head-Over-Modifier Contract (semantic retrieval v1 hardening)
+## Last change (2026-05-05) — INTENT_GENERAL card plumbing fix + PGRST204 logging fix
+
+### Root cause
+Two independent bugs were blocking verified place cards from reaching the drawer UI for open-class queries (e.g. "izakayas", "tea houses"):
+
+1. **`backend/app/services/concierge.py` — missing INTENT_GENERAL branch**: `search()` dispatches on intent with `if/elif` branches for every named intent. `INTENT_GENERAL` (returned by `_detect_intent()` when no keyword matches) had **no branch**. Semantic retrieval (`_fetch_live_research`) correctly populated `live_result.restaurants` with 8 verified cards, but `search()` never read them — `restaurants` stayed `[]`, the response was `PlaceRecommendationsResponse(restaurants=[])`, and the drawer UI had nothing to render.
+
+2. **`backend/app/concierge/logging.py` — PGRST204 on every request**: `persist_concierge_request_log()` included `"intent_classifier_version"` in the insert row. That column doesn't exist in the `concierge_request_log` DB table. The existing schema-drift retry mechanism was not catching it, causing a logged exception on every request (non-blocking to response delivery, but noisy).
+
+### Durable fixes
+- **`backend/app/services/concierge.py`**: Added `elif intent == INTENT_GENERAL:` block after the `INTENT_GENERAL_DESTINATION` branch. Reads `live_result.restaurants` (primary) or `live_result.attractions` (fallback) and sets `source_status`, `cached_response`, `sources`, and `retrieval_used` exactly like the nightlife/restaurants paths. Does not fire when `force_research_only=True`.
+- **`backend/app/concierge/logging.py`**: Removed `intent_classifier_version` from `base_row`. Value is already emitted in structured app logs via `request_log_event()`.
+
+### Tests (7 passing)
+- **`test_concierge.py::TestConciergeSearch`** — 3 new tests:
+  - `test_intent_general_semantic_restaurants_reach_response`: asserts `len(result.restaurants) == 1`, `source_status == "live_search"`, `retrieval_used is True` when semantic retrieval returns cards for an "izakayas" query.
+  - `test_intent_general_empty_semantic_result_returns_no_cards`: asserts `restaurants == []`, `retrieval_used is False` when semantic retrieval returns nothing.
+  - `test_intent_general_semantic_attractions_reach_response`: asserts fallback to `attractions` when `restaurants` is empty.
+- **`test_concierge_logging_schema_tolerance.py`** — updated 3 tests:
+  - `test_intent_classifier_version_never_in_insert_row`: replaces old test that expected `intent_classifier_version` in first insert; now asserts it's never present.
+  - `test_two_missing_columns_are_dropped_across_retries`: updated to inject `llm_model` / `pipeline_version` drift (both are real base_row columns).
+  - `test_warning_emitted_once_per_process_per_column`: updated to inject `llm_model` drift.
+
+### Critical invariants preserved
+- No fake addable cards. Google place id + OPERATIONAL + Google Maps URI gates unchanged.
+- No semantic planner / ranker / provider changes.
+- No frontend changes.
+- PR-3 batched grounded reasoning **not** started.
+
+### Production validation checklist
+1. Query "izakayas" or "izakayas on Fulton Street" → drawer shows addable cards, not text-only bubble.
+2. Railway logs: no `concierge.request_log.persist_failed` on concierge requests.
+3. Query "what's the weather like?" → INTENT_GENERAL, no cards expected (semantic retrieval returns nothing for non-place queries).
+
+Supabase SQL: No.
+
+---
+
+## Previous change (2026-05-05) — Venue-Head-Over-Modifier Contract (semantic retrieval v1 hardening)
 
 ### Production finding (post-Semantic Place Understanding v2 validation)
 With `CONCIERGE_SEMANTIC_RETRIEVAL_V1_ENABLED=true`:
