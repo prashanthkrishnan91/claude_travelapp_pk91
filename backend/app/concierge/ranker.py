@@ -393,6 +393,25 @@ def _value_fit(entity: PlaceEntity, frame: ExperienceFrame) -> float:
 
 # ── Evidence bundle ───────────────────────────────────────────────────────────
 
+def _location_modifier_confirmed(modifier: str, entity: PlaceEntity) -> bool:
+    """Return True when the entity's address/name strongly indicates the modifier."""
+    if not modifier:
+        return False
+    mod_tokens = set(re.findall(r"[a-z]+", modifier.lower()))
+    if not mod_tokens:
+        return False
+    address_text = (entity.formatted_address or "").lower()
+    name_text = entity.name.lower()
+    # Remove very common words that add noise ("the", "of", "and")
+    stop = {"the", "of", "and", "a", "an", "in", "on", "at", "by"}
+    sig_tokens = mod_tokens - stop
+    if not sig_tokens:
+        return False
+    # Confirmed if majority of significant modifier tokens appear in address
+    hits = sum(1 for t in sig_tokens if t in address_text or t in name_text)
+    return hits >= max(1, len(sig_tokens) // 2 + len(sig_tokens) % 2)
+
+
 def build_evidence_bundle(
     entity: PlaceEntity,
     frame: ExperienceFrame,
@@ -420,6 +439,15 @@ def build_evidence_bundle(
             facts.append(f"Strong {concept.label} name/type match")
         elif rank_score.subtype_fit >= 0.5:
             facts.append(f"Partial {concept.label} type match")
+
+    # Location modifier fit: explicit street/neighborhood the user named.
+    location_modifiers = getattr(frame, "location_modifiers", []) or []
+    for modifier in location_modifiers[:1]:
+        confirmed = _location_modifier_confirmed(modifier, entity)
+        if confirmed:
+            facts.append(f"Address confirms {modifier} area")
+        else:
+            uncertainty_flags.append(f"location_modifier_not_confirmed:{modifier}")
 
     # Geo note: honest about what was searched vs confirmed
     if frame.geography_hints:

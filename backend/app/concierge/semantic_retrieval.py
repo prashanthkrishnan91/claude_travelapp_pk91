@@ -202,16 +202,33 @@ def _run_pipeline(
     ranked, ranker_stats = rank_entities_with_stats(entities, frame, top_n=max_cards)
     latency["rank_ms"] = int((time.monotonic() - t0) * 1000)
 
-    # ── Step 6+7: Evidence bundles + SafeReasonBuilder ───────────────────────
+    # ── Step 6: Evidence bundles + deterministic SafeReasonBuilder ───────────
     t0 = time.monotonic()
     from app.concierge.safe_reason_builder import build_safe_reason
 
-    cards = []
-    rank_debug: List[Dict[str, Any]] = []
+    # Build evidence bundles and deterministic fallback reasons for all cards.
+    cards_data: List[Any] = []  # (entity, evidence, rank_score, det_reason)
     for entity, rank_score in ranked:
         evidence = build_evidence_bundle(entity, frame, rank_score)
-        reason = build_safe_reason(entity, evidence, frame, rank_score)
-        card = _entity_to_card(entity, reason, frame)
+        det_reason = build_safe_reason(entity, evidence, frame, rank_score)
+        cards_data.append((entity, evidence, rank_score, det_reason))
+
+    latency["det_reason_ms"] = int((time.monotonic() - t0) * 1000)
+
+    # ── Step 7: Batched grounded reasoning (LLM path, budget-gated) ─────────
+    t0 = time.monotonic()
+    from app.concierge.batched_reason_builder import build_batched_reasons, _flag_enabled as _batched_flag
+
+    batched_reasons = build_batched_reasons(cards_data, frame)
+    reason_source = "batched_grounded_v1" if _batched_flag() else "deterministic_safe_v1"
+    latency["batched_reason_ms"] = int((time.monotonic() - t0) * 1000)
+
+    # ── Step 8: Assemble final cards ─────────────────────────────────────────
+    cards = []
+    rank_debug: List[Dict[str, Any]] = []
+    for i, (entity, evidence, rank_score, det_reason) in enumerate(cards_data, 1):
+        reason = batched_reasons.get(str(i), det_reason)
+        card = _entity_to_card(entity, reason, frame, reason_source=reason_source)
         if card is not None:
             cards.append(card)
             rank_debug.append({
@@ -219,16 +236,16 @@ def _run_pipeline(
                 "score": rank_score.as_dict(),
             })
 
-    latency["reason_ms"] = int((time.monotonic() - t0) * 1000)
+    latency["reason_ms"] = latency["det_reason_ms"] + latency["batched_reason_ms"]
 
-    # ── Step 8: TrustGate final pass ─────────────────────────────────────────
+    # ── Step 9: TrustGate final pass ─────────────────────────────────────────
     t0 = time.monotonic()
     cards, trust_rejected = _trust_gate(cards)
     latency["trust_gate_ms"] = int((time.monotonic() - t0) * 1000)
 
     final_card_count = len(cards)
 
-    # ── Step 9: Structured observability ─────────────────────────────────────
+    # ── Step 10: Structured observability ────────────────────────────────────
     # Wrong-category fit diagnostics: count entities whose subtype_fit fell
     # below the wrong-category threshold (used for visibility into ranker
     # behavior, not for any hard gate). off_concept_dropped reports the
@@ -261,6 +278,7 @@ def _run_pipeline(
         t_pipeline_start=t_pipeline_start,
         outcome="ok" if final_card_count > 0 else "no_cards_after_trust_gate",
         rank_top3=rank_debug[:3],
+        reason_source=reason_source,
     )
 
     if not cards:
@@ -308,6 +326,7 @@ def _entity_to_card(
     entity: "PlaceEntity",  # type: ignore[name-defined]
     reason: str,
     frame: "ExperienceFrame",  # type: ignore[name-defined]
+    reason_source: str = "deterministic_safe_v1",
 ) -> Optional[Any]:
     """Convert a verified PlaceEntity to a UnifiedRestaurantResult card."""
     try:
@@ -362,7 +381,7 @@ def _entity_to_card(
             review_count=entity.user_rating_count,
             summary=reason,
             primary_reason=reason,
-            reason_source="deterministic_safe_v1",
+            reason_source=reason_source,
             why_pick=reason,
             verified_place=True,
             google_verification=gv,
@@ -379,7 +398,7 @@ def _entity_to_card(
                 display_why=reason,
                 display_badges=[],
                 addability="addable",
-                display_why_source="deterministic_safe_v1",
+                display_why_source=reason_source,
             ),
             maps_link=entity.google_maps_uri or fallback_map,
             booking_link=entity.website_uri,
@@ -469,6 +488,7 @@ def _log_semantic_turn(
     t_pipeline_start: float,
     outcome: str,
     rank_top3: Optional[List[Dict]] = None,
+    reason_source: str = "deterministic_safe_v1",
 ) -> None:
     """Log one structured semantic turn line for zero-card failure debugging."""
     total_ms = int((time.monotonic() - t_pipeline_start) * 1000)
@@ -506,7 +526,7 @@ def _log_semantic_turn(
         "verified_entities=%d "
         "rejection_stats=%r "
         "final_card_count=%d "
-        "reason_source=deterministic_safe_v1 "
+        "reason_source=%s "
         "latency_by_stage=%r "
         "total_ms=%d "
         "rank_top3=%r "
@@ -532,6 +552,7 @@ def _log_semantic_turn(
         verified_entity_count,
         rejection_stats,
         final_card_count,
+        reason_source,
         latency,
         total_ms,
         rank_top3 or [],

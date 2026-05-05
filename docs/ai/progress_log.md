@@ -53,3 +53,42 @@
 **Not done (explicit scope)**: LLM batched reasoning (PR-3), Tavily, SQL, frontend UI, Yelp/Foursquare, personalization, vector search.
 
 - 2026-05-05: Fixed live semantic retrieval card display contract for AI Concierge drawer. Root cause: frontend `callConciergeSearch` consumed `/ai/concierge/search` typed response without normalizing snake_case fields (`response_type`, `retrieval_used`, `source_status`, etc.), so verified cards were dropped and UI rendered text-only. Added focused contract tests (backend router typed place payload preservation + empty-card honesty; frontend assertion that search path normalizes typed response before mapping). Production validation checklist: Izakayas; Izakayas on Fulton Street; best breweries; best waterfront breweries; breweries near the river; taprooms with a view. PR-3 batched grounded reasoning not started.
+
+---
+
+## 2026-05-05 — PR-3 Batched Grounded Reasoning + Validators + Location Modifier Preservation
+
+**Branch**: `claude/batched-reasoning-validators-xDoQB`
+
+**Root causes fixed**:
+1. `_LOCATION_ANCHOR_RE` required capital letters → "izakayas on fulton street" dropped location modifier → generic notes like "Strong izakaya match in Chicago."
+2. `_area_from_address` returned floor/unit fragments like "Lower Level" as neighborhood labels.
+3. No batched LLM reasoning layer and no validators — notes were purely deterministic with no evidence grounding.
+
+**New files**:
+- `backend/app/concierge/reason_validator.py` — validates LLM and deterministic notes; rejects unsupported attribute claims, internal field leaks, address fragments, and unconfirmed location modifier assertions.
+- `backend/app/concierge/batched_reason_builder.py` — single LLM call for all cards per turn; feature-flagged (`CONCIERGE_BATCHED_REASONING_ENABLED`); timeout/budget guardrails; per-card fallback to deterministic.
+
+**Modified files**:
+- `frame_extractor.py` — lowercase street-suffix location anchor pattern; "a view" ambiguity flag.
+- `ranker.py` — `build_evidence_bundle` adds location modifier confirmed/not_confirmed facts.
+- `safe_reason_builder.py` — `_NON_NEIGHBORHOOD_FRAGMENTS` filter; `_location_modifier_phrase` helper; location modifier caveat in reason text.
+- `semantic_retrieval.py` — restructured steps 6-8; `reason_source` field wired through cards and turn log.
+
+**Tests**: 41 new (total 160 in `test_semantic_retrieval_v1.py`), all passing. Covers: lowercase location modifier extraction, evidence bundle location modifier fit, improved deterministic reason, reason validator rejections/acceptances, batched reason builder with flag/error/JSON fallbacks, regression suite.
+
+**Validator contract**: Rejects waterfront/view/quiet/romantic/Michelin/awards/hours/prices claims; internal metric fields; address fragments as location; unconfirmed location modifier assertions.
+
+**Feature flags**:
+- `CONCIERGE_BATCHED_REASONING_ENABLED=false` (default) — LLM path disabled until ready
+- `BATCHED_REASON_TIMEOUT_S=3.0` — LLM call timeout
+- `BATCHED_REASON_MAX_CARDS=8` — budget gate
+
+**Production validation checklist**:
+1. "izakayas" → cards render with specific notes
+2. "izakayas on fulton street" (lowercase) → location_modifiers=["Fulton Street"] in logs; caveat when address doesn't confirm
+3. "best breweries" → no regression
+4. "best waterfront breweries" → no waterfront claim without evidence
+5. "breweries near the river" → river preserved in geo_hints or location_modifiers
+6. "taprooms with a view" → no invented view claims
+7. No "Lower Level" in any card note

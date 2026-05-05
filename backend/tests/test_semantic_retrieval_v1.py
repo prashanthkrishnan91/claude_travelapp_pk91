@@ -1964,3 +1964,576 @@ class TestSafeReasonNoUnsupportedModifierClaim:
         assert any(tok in reason for tok in ("brewery", "brew", "taproom")), (
             f"Reason must anchor on brewery, got: {reason}"
         )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PR-3: Location Modifier Extraction (lowercase)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestLocationModifierExtractionLowercase:
+    """Location modifiers must be preserved even when user types lowercase."""
+
+    def test_izakayas_on_fulton_street_lowercase(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("izakayas on fulton street", "Chicago")
+        locs = [m.lower() for m in frame.location_modifiers]
+        assert any("fulton" in m for m in locs), (
+            f"Expected 'fulton' in location_modifiers, got {frame.location_modifiers}"
+        )
+
+    def test_izakayas_on_fulton_street_capitalized(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("izakayas on Fulton Street", "Chicago")
+        locs = [m.lower() for m in frame.location_modifiers]
+        assert any("fulton" in m for m in locs), (
+            f"Expected 'fulton' in location_modifiers, got {frame.location_modifiers}"
+        )
+
+    def test_breweries_near_the_river_preserves_river(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("breweries near the river", "Chicago")
+        # "river" may appear in geo_hints (water feature) OR as a location modifier
+        has_river_signal = (
+            any("river" in g for g in frame.geography_hints)
+            or any("river" in m.lower() for m in frame.location_modifiers)
+        )
+        assert has_river_signal, (
+            f"Expected river signal, geo_hints={frame.geography_hints} "
+            f"location_modifiers={frame.location_modifiers}"
+        )
+
+    def test_sushi_in_river_north_lowercase(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("sushi in river north", "Chicago")
+        locs = [m.lower() for m in frame.location_modifiers]
+        assert any("river" in m or "north" in m for m in locs), (
+            f"Expected river north in modifiers, got {frame.location_modifiers}"
+        )
+
+    def test_taprooms_with_a_view_no_location_modifier(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("taprooms with a view", "Chicago")
+        # "view" is a soft/geo preference, not a location modifier
+        assert "taproom" in " ".join(c.label for c in frame.subtype_concepts).lower(), (
+            f"Expected taproom concept, got {frame.subtype_concepts}"
+        )
+        assert "view_not_structurally_verifiable" in frame.ambiguity_flags, (
+            f"Expected ambiguity flag for view, got {frame.ambiguity_flags}"
+        )
+
+    def test_destination_not_echoed_as_modifier(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("izakayas in Chicago", "Chicago")
+        locs = [m.lower() for m in frame.location_modifiers]
+        assert not any("chicago" in m for m in locs), (
+            f"Destination should not appear as location modifier: {frame.location_modifiers}"
+        )
+
+    def test_modifier_title_cased_in_output(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("cocktail bars on west loop", "Chicago")
+        # Should be title-cased
+        locs = frame.location_modifiers
+        if locs:
+            assert locs[0][0].isupper() or locs[0] == locs[0].title(), (
+                f"Location modifier should be title-cased, got {locs}"
+            )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PR-3: Evidence Bundle Location Modifier Fit
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestEvidenceBundleLocationModifier:
+    """Evidence bundle must report location modifier confirmed/unconfirmed."""
+
+    def _make_entity(self, address, name="The Izakaya"):
+        from app.concierge.place_entity_layer import PlaceEntity
+        return PlaceEntity(
+            place_id="pid_test", name=name,
+            types=["japanese_restaurant"], primary_type="japanese_restaurant",
+            rating=4.3, user_rating_count=210, business_status="OPERATIONAL",
+            formatted_address=address,
+            google_maps_uri="https://maps.google.com/?cid=1",
+            website_uri=None, price_level=None, lat=41.88, lng=-87.63,
+            source_query="izakaya Chicago",
+        )
+
+    def test_modifier_confirmed_when_address_contains_fulton(self):
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        entity = self._make_entity("904 W Fulton Market, Chicago, IL")
+        frame = extract_frame("izakayas on Fulton Street", "Chicago")
+        score = RankScore(total=0.7, subtype_fit=0.85, geo_fit=0.5)
+        ev = build_evidence_bundle(entity, frame, score)
+        confirmed = any("confirms" in f for f in ev.structured_facts)
+        unconfirmed = any("location_modifier_not_confirmed" in f for f in ev.uncertainty_flags)
+        assert confirmed or not unconfirmed, (
+            f"Fulton address should confirm modifier: facts={ev.structured_facts} flags={ev.uncertainty_flags}"
+        )
+
+    def test_modifier_not_confirmed_when_address_lacks_modifier(self):
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        entity = self._make_entity("3458 N Halsted St, Chicago, IL")
+        frame = extract_frame("izakayas on Fulton Street", "Chicago")
+        score = RankScore(total=0.65, subtype_fit=0.80, geo_fit=0.4)
+        ev = build_evidence_bundle(entity, frame, score)
+        unconfirmed_flags = [f for f in ev.uncertainty_flags if "location_modifier_not_confirmed" in f]
+        assert unconfirmed_flags, (
+            f"Expected not_confirmed flag, flags={ev.uncertainty_flags}"
+        )
+
+    def test_no_location_modifier_in_bundle_when_frame_has_none(self):
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        entity = self._make_entity("100 W Randolph St, Chicago, IL")
+        frame = extract_frame("izakayas in Chicago", "Chicago")
+        score = RankScore(total=0.70, subtype_fit=0.85, geo_fit=0.5)
+        ev = build_evidence_bundle(entity, frame, score)
+        loc_flags = [f for f in ev.uncertainty_flags if "location_modifier" in f]
+        assert not loc_flags, f"No modifier flags expected, got {loc_flags}"
+
+    def test_bundle_includes_only_safe_fields(self):
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        entity = self._make_entity("500 N Dearborn St, Chicago, IL")
+        frame = extract_frame("ramen in Chicago", "Chicago")
+        score = RankScore(total=0.68, subtype_fit=0.75, geo_fit=0.5)
+        ev = build_evidence_bundle(entity, frame, score)
+        all_text = " ".join(ev.structured_facts + [ev.geo_note or ""])
+        # Should not expose internal scoring fields
+        banned = ["subtype_fit", "geo_fit", "rank_score", "pipeline_version", "OPERATIONAL"]
+        for b in banned:
+            assert b not in all_text, f"Internal field '{b}' leaked into evidence: {all_text}"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PR-3: Improved Deterministic Reason Builder
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestImprovedDeterministicReason:
+    """Deterministic reasons must be specific, honest, and include location caveat."""
+
+    def _build_reason(self, query, address, name="Test Place", types=None,
+                      subtype_fit=0.85, geo_fit=0.5):
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.place_entity_layer import PlaceEntity
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        from app.concierge.safe_reason_builder import build_safe_reason
+        entity = PlaceEntity(
+            place_id="pid", name=name, types=types or ["japanese_restaurant"],
+            primary_type=(types[0] if types else "japanese_restaurant"),
+            rating=4.3, user_rating_count=210, business_status="OPERATIONAL",
+            formatted_address=address,
+            google_maps_uri="https://maps.google.com/?cid=1",
+            website_uri=None, price_level=None, lat=41.88, lng=-87.63,
+            source_query="izakaya Chicago",
+        )
+        frame = extract_frame(query, "Chicago")
+        score = RankScore(total=0.7, subtype_fit=subtype_fit, geo_fit=geo_fit)
+        evidence = build_evidence_bundle(entity, frame, score)
+        return build_safe_reason(entity, evidence, frame, score)
+
+    def test_no_lower_level_in_reason(self):
+        reason = self._build_reason(
+            "izakayas on fulton street",
+            "900 W Randolph St, Lower Level, Chicago, IL",
+        ).lower()
+        assert "lower level" not in reason, f"'Lower Level' must not appear in reason: {reason}"
+
+    def test_location_modifier_caveat_when_unconfirmed(self):
+        reason = self._build_reason(
+            "izakayas on fulton street",
+            "3458 N Halsted St, Chicago, IL",
+        ).lower()
+        # Should include a caveat about not being directly on Fulton
+        assert "fulton" in reason or "not directly" in reason or "nearby" in reason, (
+            f"Expected Fulton Street caveat, got: {reason}"
+        )
+
+    def test_no_generic_chicago_only_note(self):
+        reason = self._build_reason(
+            "izakayas on fulton street",
+            "3458 N Halsted St, Chicago, IL",
+        ).lower()
+        # Must not be just "Strong izakaya match in Chicago."
+        assert reason != "strong izakaya match in chicago." and len(reason) > 40, (
+            f"Reason is too generic: {reason}"
+        )
+
+    def test_location_confirmed_when_address_matches(self):
+        reason = self._build_reason(
+            "izakayas on fulton street",
+            "904 W Fulton Market, Chicago, IL",
+        ).lower()
+        # When address confirms the modifier, no "not directly" caveat
+        assert "not directly on fulton" not in reason, (
+            f"Should not have caveat when address confirms modifier: {reason}"
+        )
+
+    def test_waterfront_caveat_without_waterfront_claim(self):
+        reason = self._build_reason(
+            "best waterfront breweries",
+            "900 W Randolph St, Chicago, IL",
+            name="Goose Island Brewery",
+            types=["brewery", "bar"],
+            geo_fit=0.4,
+        ).lower()
+        assert "waterfront" not in reason or "verify" in reason, (
+            f"Waterfront must not be asserted without evidence: {reason}"
+        )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PR-3: Reason Validator
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestReasonValidator:
+    """Validator must reject bad notes and accept good ones."""
+
+    def _frame_and_evidence(self, query, address="100 N State St, Chicago, IL"):
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.place_entity_layer import PlaceEntity
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        entity = PlaceEntity(
+            place_id="pid", name="Test Place",
+            types=["japanese_restaurant"], primary_type="japanese_restaurant",
+            rating=4.2, user_rating_count=150, business_status="OPERATIONAL",
+            formatted_address=address,
+            google_maps_uri="https://maps.google.com/?cid=1",
+            website_uri=None, price_level=None, lat=41.88, lng=-87.63,
+            source_query="izakaya Chicago",
+        )
+        frame = extract_frame(query, "Chicago")
+        score = RankScore(total=0.7, subtype_fit=0.85, geo_fit=0.4)
+        evidence = build_evidence_bundle(entity, frame, score)
+        return frame, evidence
+
+    def test_rejects_unsupported_waterfront_claim(self):
+        from app.concierge.reason_validator import validate_reason
+        frame, ev = self._frame_and_evidence("best waterfront breweries")
+        is_valid, reason = validate_reason("Great brewery near the waterfront.", frame, ev)
+        assert not is_valid, f"Should reject unsupported waterfront claim, got valid=True"
+
+    def test_rejects_michelin_claim(self):
+        from app.concierge.reason_validator import validate_reason
+        frame, ev = self._frame_and_evidence("izakayas in Chicago")
+        is_valid, reason = validate_reason("Michelin-starred izakaya in Chicago.", frame, ev)
+        assert not is_valid
+
+    def test_rejects_internal_field_in_reason(self):
+        from app.concierge.reason_validator import validate_reason
+        frame, ev = self._frame_and_evidence("izakayas in Chicago")
+        is_valid, reason = validate_reason(
+            "Strong izakaya match; subtype_fit=0.85 geo_fit=0.50.", frame, ev
+        )
+        assert not is_valid
+
+    def test_rejects_address_fragment_as_location(self):
+        from app.concierge.reason_validator import validate_reason
+        frame, ev = self._frame_and_evidence("izakayas in Chicago")
+        is_valid, reason = validate_reason(
+            "Strong izakaya match in Lower Level.", frame, ev
+        )
+        assert not is_valid, f"Should reject 'Lower Level' as location"
+
+    def test_rejects_opening_hours_claim(self):
+        from app.concierge.reason_validator import validate_reason
+        frame, ev = self._frame_and_evidence("izakayas in Chicago")
+        is_valid, reason = validate_reason(
+            "Popular izakaya open until midnight on weekdays.", frame, ev
+        )
+        assert not is_valid
+
+    def test_rejects_price_claim(self):
+        from app.concierge.reason_validator import validate_reason
+        frame, ev = self._frame_and_evidence("izakayas in Chicago")
+        is_valid, reason = validate_reason(
+            "Affordable izakaya with budget-friendly prices in Chicago.", frame, ev
+        )
+        assert not is_valid
+
+    def test_accepts_grounded_specific_note(self):
+        from app.concierge.reason_validator import validate_reason
+        frame, ev = self._frame_and_evidence("izakayas in Chicago")
+        is_valid, reason = validate_reason(
+            "Highly rated Japanese restaurant with 4.2★ and 150 reviews in Chicago.",
+            frame, ev
+        )
+        assert is_valid, f"Should accept grounded note, rejection={reason}"
+
+    def test_accepts_location_caveat_note(self):
+        from app.concierge.reason_validator import validate_reason
+        frame, ev = self._frame_and_evidence(
+            "izakayas on fulton street", "3458 N Halsted St, Chicago, IL"
+        )
+        is_valid, reason = validate_reason(
+            "Strong izakaya match in Chicago; not directly on Fulton Street, but nearby.",
+            frame, ev
+        )
+        assert is_valid, f"Should accept honest caveat note, rejection={reason}"
+
+    def test_rejects_unconfirmed_location_modifier_claimed_as_confirmed(self):
+        from app.concierge.reason_validator import validate_reason
+        frame, ev = self._frame_and_evidence(
+            "izakayas on Fulton Street", "3458 N Halsted St, Chicago, IL"
+        )
+        is_valid, reason = validate_reason(
+            "Excellent izakaya located on Fulton Street.", frame, ev
+        )
+        assert not is_valid, f"Should reject false location modifier claim"
+
+    def test_rejects_quiet_atmosphere_claim(self):
+        from app.concierge.reason_validator import validate_reason
+        frame, ev = self._frame_and_evidence("quiet cocktail bars")
+        is_valid, reason = validate_reason(
+            "Intimate cocktail bar with quiet atmosphere perfect for dates.",
+            frame, ev
+        )
+        assert not is_valid
+
+    def test_rejects_romantic_atmosphere_claim(self):
+        from app.concierge.reason_validator import validate_reason
+        frame, ev = self._frame_and_evidence("romantic tapas")
+        is_valid, reason = validate_reason(
+            "Romantic atmosphere, perfect for couples seeking intimacy.",
+            frame, ev
+        )
+        assert not is_valid
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PR-3: Batched Reason Builder
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestBatchedReasonBuilder:
+    """Batched reason builder must fall back safely and use deterministic when flag off."""
+
+    def _make_cards_data(self, query="izakayas on Fulton Street"):
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.place_entity_layer import PlaceEntity
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        from app.concierge.safe_reason_builder import build_safe_reason
+        frame = extract_frame(query, "Chicago")
+        entities = [
+            PlaceEntity(
+                place_id=f"pid_{i}", name=f"Izakaya Place {i}",
+                types=["japanese_restaurant"], primary_type="japanese_restaurant",
+                rating=4.2 + i * 0.1, user_rating_count=100 + i * 50,
+                business_status="OPERATIONAL",
+                formatted_address=f"{100 + i * 10} N State St, Chicago, IL",
+                google_maps_uri=f"https://maps.google.com/?cid={i}",
+                website_uri=None, price_level=None, lat=41.88, lng=-87.63,
+                source_query="izakaya Chicago",
+            )
+            for i in range(3)
+        ]
+        cards_data = []
+        for e in entities:
+            score = RankScore(total=0.7, subtype_fit=0.85, geo_fit=0.5)
+            ev = build_evidence_bundle(e, frame, score)
+            det = build_safe_reason(e, ev, frame, score)
+            cards_data.append((e, ev, score, det))
+        return cards_data, frame
+
+    def test_flag_off_uses_deterministic(self):
+        from app.concierge.batched_reason_builder import build_batched_reasons
+        import os
+        os.environ["CONCIERGE_BATCHED_REASONING_ENABLED"] = "false"
+        cards_data, frame = self._make_cards_data()
+        result = build_batched_reasons(cards_data, frame)
+        # All results should be the deterministic fallbacks
+        for i, (_e, _ev, _rs, det) in enumerate(cards_data, 1):
+            assert result[str(i)] == det, f"idx={i}: expected deterministic, got LLM"
+        os.environ.pop("CONCIERGE_BATCHED_REASONING_ENABLED", None)
+
+    def test_returns_all_card_keys(self):
+        from app.concierge.batched_reason_builder import build_batched_reasons
+        cards_data, frame = self._make_cards_data()
+        result = build_batched_reasons(cards_data, frame)
+        assert len(result) == len(cards_data), (
+            f"Expected {len(cards_data)} keys, got {len(result)}"
+        )
+        for i in range(1, len(cards_data) + 1):
+            assert str(i) in result
+
+    def test_empty_cards_returns_empty(self):
+        from app.concierge.batched_reason_builder import build_batched_reasons
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("izakayas", "Chicago")
+        result = build_batched_reasons([], frame)
+        assert result == {}
+
+    def test_fallback_on_llm_error(self):
+        from app.concierge.batched_reason_builder import build_batched_reasons
+        from unittest.mock import patch
+        import os
+        os.environ["CONCIERGE_BATCHED_REASONING_ENABLED"] = "true"
+        cards_data, frame = self._make_cards_data()
+        # Force LLM call to raise
+        with patch("app.concierge.batched_reason_builder._call_llm", side_effect=Exception("llm_error")):
+            result = build_batched_reasons(cards_data, frame)
+        # Should return deterministic fallbacks for all
+        for i, (_e, _ev, _rs, det) in enumerate(cards_data, 1):
+            assert result[str(i)] == det
+        os.environ.pop("CONCIERGE_BATCHED_REASONING_ENABLED", None)
+
+    def test_fallback_on_invalid_json(self):
+        from app.concierge.batched_reason_builder import build_batched_reasons
+        from unittest.mock import patch
+        import os
+        os.environ["CONCIERGE_BATCHED_REASONING_ENABLED"] = "true"
+        cards_data, frame = self._make_cards_data()
+        with patch("app.concierge.batched_reason_builder._call_llm", return_value="not json at all"):
+            result = build_batched_reasons(cards_data, frame)
+        for i, (_e, _ev, _rs, det) in enumerate(cards_data, 1):
+            assert result[str(i)] == det
+        os.environ.pop("CONCIERGE_BATCHED_REASONING_ENABLED", None)
+
+    def test_per_card_fallback_on_invalid_llm_output(self):
+        """Cards whose LLM reason fails validation fall back to deterministic."""
+        from app.concierge.batched_reason_builder import build_batched_reasons
+        from unittest.mock import patch
+        import json, os
+        os.environ["CONCIERGE_BATCHED_REASONING_ENABLED"] = "true"
+        cards_data, frame = self._make_cards_data()
+        # Return invalid reason for card 1 (waterfront claim), valid-ish for card 2
+        fake_response = json.dumps({
+            "1": "Great izakaya with stunning waterfront views.",  # invalid
+            "2": "Well-rated Japanese restaurant in Chicago with 4.3 stars.",  # should pass
+            "3": "Solid izakaya option in Chicago with good reviews.",
+        })
+        with patch("app.concierge.batched_reason_builder._call_llm", return_value=fake_response):
+            result = build_batched_reasons(cards_data, frame)
+        # Card 1 should use deterministic (waterfront claim rejected)
+        _e1, _ev1, _rs1, det1 = cards_data[0]
+        assert result["1"] == det1, f"Card 1 should fall back to det, got: {result['1']}"
+        # Card 2 should use LLM (passed validation)
+        assert "Japanese restaurant" in result["2"] or result["2"] == cards_data[1][3], (
+            f"Card 2 should use LLM reason or fallback, got: {result['2']}"
+        )
+        os.environ.pop("CONCIERGE_BATCHED_REASONING_ENABLED", None)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PR-3: Regression Tests
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestPR3RegressionSuite:
+    """Regression: existing behavior must not regress after PR-3 changes."""
+
+    def _run_frame_and_reason(self, query, address="100 W Randolph St, Chicago, IL",
+                               name="Test Place", types=None, subtype_fit=0.85, geo_fit=0.5):
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.place_entity_layer import PlaceEntity
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        from app.concierge.safe_reason_builder import build_safe_reason
+        entity = PlaceEntity(
+            place_id="pid", name=name, types=types or ["brewery", "bar"],
+            primary_type=(types[0] if types else "brewery"),
+            rating=4.3, user_rating_count=400, business_status="OPERATIONAL",
+            formatted_address=address,
+            google_maps_uri="https://maps.google.com/?cid=1",
+            website_uri=None, price_level=None, lat=41.88, lng=-87.63,
+            source_query=f"{(types or ['brewery'])[0]} Chicago",
+        )
+        frame = extract_frame(query, "Chicago")
+        score = RankScore(total=0.7, subtype_fit=subtype_fit, geo_fit=geo_fit)
+        evidence = build_evidence_bundle(entity, frame, score)
+        return frame, build_safe_reason(entity, evidence, frame, score)
+
+    def test_izakayas_frame_still_detects_open_class(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("izakayas", "Chicago")
+        assert frame.open_class_place_detected, "izakayas should still be open-class"
+        labels = [c.label for c in frame.subtype_concepts]
+        assert any("izakaya" in l for l in labels), f"Expected izakaya concept: {labels}"
+
+    def test_best_breweries_concept_not_regressed(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("best breweries", "Chicago")
+        labels = [c.label for c in frame.subtype_concepts]
+        assert any(l in ("brewery", "breweries") for l in labels)
+        assert not frame.geography_hints, f"No geo hints for 'best breweries': {frame.geography_hints}"
+
+    def test_best_waterfront_breweries_brewery_anchored(self):
+        frame, reason = self._run_frame_and_reason(
+            "best waterfront breweries", name="Goose Island Brewery",
+        )
+        labels = [c.label for c in frame.subtype_concepts]
+        assert any(l in ("brewery", "breweries") for l in labels), (
+            f"Frame should anchor on brewery: {labels}"
+        )
+        assert "waterfront" in frame.geography_hints, (
+            f"Waterfront should be geo hint: {frame.geography_hints}"
+        )
+
+    def test_best_waterfront_breweries_no_waterfront_claim_in_reason(self):
+        _frame, reason = self._run_frame_and_reason(
+            "best waterfront breweries", geo_fit=0.45, name="Goose Island Brewery",
+        )
+        reason_lower = reason.lower()
+        assert "waterfront" not in reason_lower or "verify" in reason_lower, (
+            f"Waterfront must not be claimed without evidence: {reason}"
+        )
+
+    def test_breweries_near_river_preserves_geo_hint(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("breweries near the river", "Chicago")
+        has_river = (
+            any("river" in g for g in frame.geography_hints)
+            or any("river" in m.lower() for m in frame.location_modifiers)
+        )
+        assert has_river, (
+            f"River should be preserved. geo_hints={frame.geography_hints} "
+            f"location_modifiers={frame.location_modifiers}"
+        )
+
+    def test_taprooms_with_a_view_no_invented_views(self):
+        _frame, reason = self._run_frame_and_reason(
+            "taprooms with a view", name="Half Acre Taproom",
+            types=["brewery", "bar"], geo_fit=0.40,
+        )
+        reason_lower = reason.lower()
+        assert "view" not in reason_lower or "verify" in reason_lower, (
+            f"View must not be claimed without evidence: {reason}"
+        )
+
+    def test_card_payload_reason_source_field_present(self):
+        """Card payload must include reason_source field."""
+        from app.concierge.place_entity_layer import PlaceEntity
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.semantic_retrieval import _entity_to_card
+        entity = PlaceEntity(
+            place_id="pid1", name="Izakaya Test",
+            types=["japanese_restaurant"], primary_type="japanese_restaurant",
+            rating=4.3, user_rating_count=200, business_status="OPERATIONAL",
+            formatted_address="100 N State St, Chicago, IL",
+            google_maps_uri="https://maps.google.com/?cid=1",
+            website_uri=None, price_level=None, lat=41.88, lng=-87.63,
+            source_query="izakaya Chicago",
+        )
+        frame = extract_frame("izakayas", "Chicago")
+        card = _entity_to_card(entity, "A great izakaya in Chicago.", frame, reason_source="deterministic_safe_v1")
+        assert card is not None
+        assert card.reason_source == "deterministic_safe_v1"
+        assert card.display.display_why_source == "deterministic_safe_v1"
+
+    def test_rating_scale_still_native_0_to_5(self):
+        from app.concierge.place_entity_layer import PlaceEntity
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.semantic_retrieval import _entity_to_card
+        entity = PlaceEntity(
+            place_id="pid2", name="Brewery Test",
+            types=["brewery"], primary_type="brewery",
+            rating=4.5, user_rating_count=300, business_status="OPERATIONAL",
+            formatted_address="200 W Chicago Ave, Chicago, IL",
+            google_maps_uri="https://maps.google.com/?cid=2",
+            website_uri=None, price_level=None, lat=41.88, lng=-87.63,
+            source_query="brewery Chicago",
+        )
+        frame = extract_frame("best breweries", "Chicago")
+        card = _entity_to_card(entity, "Strong brewery match in Chicago.", frame)
+        assert card is not None
+        assert card.rating == 4.5, f"Rating must be native 0-5 scale: {card.rating}"

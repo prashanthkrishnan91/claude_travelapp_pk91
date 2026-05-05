@@ -1,6 +1,108 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-05) — INTENT_GENERAL card plumbing fix + PGRST204 logging fix
+## Last change (2026-05-05) — PR-3 Batched Grounded Reasoning + Validators + Location Modifier Preservation
+
+### Root cause of bad notes
+Two independent bugs were producing generic/wrong card notes:
+
+1. **`_LOCATION_ANCHOR_RE` required capital letters** — "izakayas on fulton street" typed lowercase got `location_modifiers=[]` because the regex matched only `[A-Z]`-anchored phrases. All retrieval queries therefore omitted "Fulton Street" and the deterministic note said "Strong izakaya match in Chicago" with no mention of the user's explicit location ask.
+
+2. **`_area_from_address` returned "Lower Level"** — The address parser took the first non-digit, non-destination segment from the formatted address. For venues inside buildings (airports, malls, concourses), this was a floor/unit descriptor like "Lower Level", producing notes like "Strong izakaya match in Lower Level."
+
+3. **No batched LLM reasoning layer** — Notes were purely deterministic `build_safe_reason` output with no evidence-grounded LLM synthesis and no validators.
+
+### Durable fixes
+
+**`backend/app/concierge/frame_extractor.py`**
+- Added `_LOCATION_ANCHOR_LOWERCASE_RE`: second pattern for lowercase street/district names identified by known street suffixes ("street", "avenue", "loop", "market", "district", etc.). Catches "fulton street", "river north", "west loop" etc.
+- Updated `_extract_location_modifiers` to run both patterns and title-case the output for consistency.
+- Extended `_AMBIGUITY_PATTERNS` to catch standalone "a view" / "views" phrasing (previously only matched compound forms like "waterfront view"), so "taprooms with a view" correctly sets `view_not_structurally_verifiable`.
+
+**`backend/app/concierge/ranker.py`**
+- Added `_location_modifier_confirmed()` helper: checks whether significant tokens from the user's location modifier appear in the entity's address or name.
+- Updated `build_evidence_bundle()`: adds a `"Address confirms {modifier} area"` structured fact when confirmed, or a `"location_modifier_not_confirmed:{modifier}"` uncertainty flag when not.
+
+**`backend/app/concierge/safe_reason_builder.py`**
+- Added `_NON_NEIGHBORHOOD_FRAGMENTS`: frozenset of floor/unit/lobby/level descriptors. `_area_from_address` now skips these instead of returning them as the neighborhood label.
+- Added `_location_modifier_phrase()` helper: reads the evidence bundle's location modifier facts/flags and returns either `(confirmed_modifier, "")` or `("", caveat_text)` for honest reason construction.
+- Updated `build_safe_reason()`: when a location modifier was requested but not confirmed, appends e.g. "Not directly on Fulton Street — nearest match in the area." When confirmed, uses `" on {modifier}"` as the location part.
+
+**`backend/app/concierge/reason_validator.py`** (new)
+- `validate_reason(reason, frame, evidence) → (bool, str)` — rejects notes that:
+  - Mention unsupported physical attributes (waterfront, riverwalk, Michelin, awards, quiet/romantic atmosphere, opening hours, prices)
+  - Expose internal metric names (subtype_fit, geo_fit, OPERATIONAL, place_id, etc.)
+  - Contain generic boilerplate
+  - Use address fragments as location ("in Lower Level")
+  - Claim an unconfirmed location modifier as fact
+- `validate_reasons_batch()` for batch validation.
+
+**`backend/app/concierge/batched_reason_builder.py`** (new)
+- `build_batched_reasons(cards_data, frame, timeout) → Dict[str, str]` — one LLM call for all cards using claude-haiku-4-5-20251001.
+- Feature flag: `CONCIERGE_BATCHED_REASONING_ENABLED` (default `false`). When disabled, returns deterministic fallbacks.
+- Budget gate: skips LLM if card count > `BATCHED_REASON_MAX_CARDS` (default 8).
+- Timeout: `BATCHED_REASON_TIMEOUT_S` (default 3.0 seconds).
+- LLM prompt is grounded in evidence bundle only; LLM may not invent facts.
+- Per-card fallback to deterministic `SafeReasonBuilder` output when LLM fails, times out, returns invalid JSON, or any card fails `validate_reason`.
+- Never raises.
+
+**`backend/app/concierge/semantic_retrieval.py`**
+- Steps 6-8 restructured: (6) build evidence bundles + deterministic reasons, (7) batched LLM reasoning, (8) assemble cards from batched or deterministic reasons.
+- `_entity_to_card()` accepts `reason_source` parameter; sets it on `reason_source` and `display.display_why_source` fields.
+- Turn log now emits `reason_source=deterministic_safe_v1|batched_grounded_v1`.
+
+### Validator contract
+A note passes validation only when it:
+- Does not claim waterfront/riverwalk/view/quiet atmosphere/romantic atmosphere/Michelin/awards/opening hours/prices
+- Does not contain internal metric names or provider debug fields
+- Does not use floor/unit descriptors as location labels
+- Does not assert a location modifier as confirmed unless the evidence bundle confirms it
+
+### Location modifier preservation contract
+- `extract_frame("izakayas on fulton street", "Chicago")` → `location_modifiers=["Fulton Street"]`
+- `extract_frame("breweries near the river", "Chicago")` → river in `geography_hints` or `location_modifiers`
+- `extract_frame("taprooms with a view", "Chicago")` → `ambiguity_flags=["view_not_structurally_verifiable"]`
+- Destination city is never echoed back as a location modifier
+
+### Tests (41 new, total 160 in `test_semantic_retrieval_v1.py`, all passing)
+- `TestLocationModifierExtractionLowercase` — 7 tests: lowercase "fulton street" captured; "Fulton Street" capitalized still works; river in breweries query; "river north" lowercase captured; "taprooms with a view" gets view ambiguity flag; destination not echoed; title-case normalization.
+- `TestEvidenceBundleLocationModifier` — 4 tests: confirmed when address contains modifier; not_confirmed flag when address lacks modifier; no flags when frame has no modifier; no internal fields in bundle.
+- `TestImprovedDeterministicReason` — 5 tests: no "Lower Level" in reason; location modifier caveat when unconfirmed; reason is more specific than "Strong X match in Chicago"; no caveat when address confirms modifier; no waterfront claim without evidence.
+- `TestReasonValidator` — 11 tests: rejects waterfront/Michelin/internal fields/address fragments/opening hours/prices/quiet atmosphere/romantic atmosphere; accepts grounded specific note; accepts honest location caveat note; rejects false location modifier claim.
+- `TestBatchedReasonBuilder` — 7 tests: flag-off uses deterministic; all card keys returned; empty cards; fallback on LLM error; fallback on invalid JSON; per-card fallback on invalid LLM output.
+- `TestPR3RegressionSuite` — 7 tests: izakayas open-class still detected; best breweries not regressed; best waterfront breweries brewery-anchored; no waterfront claim; breweries near river preserves geo hint; taprooms with a view no invented views; card payload reason_source field; rating scale native 0-5.
+
+### Latency / budget guardrails added
+- `BATCHED_REASON_TIMEOUT_S` (default 3.0s) — hard timeout for LLM call
+- `BATCHED_REASON_MAX_CARDS` (default 8) — skip LLM if more cards than this
+- `CONCIERGE_BATCHED_REASONING_ENABLED` (default false) — entire LLM path skipped until explicitly enabled
+- All fallback paths are synchronous deterministic; no latency added when flag is off
+
+### PGRST204 logging schema issue
+Resolved in prior PR (removed `intent_classifier_version` from insert row). Current `persist_concierge_request_log` has `intent_confidence` which maps to `decision.stage2_confidence`. If PGRST204 still appears for `intent_confidence`, the existing schema-drift retry mechanism will drop and retry. No additional change needed in this PR.
+
+### Critical invariants preserved
+- No fake addable cards. Google place id + OPERATIONAL + Google Maps URI gates unchanged.
+- No Tavily / editorial / Yelp / Foursquare. No SQL or schema changes.
+- Google rating displays on native 0–5 scale.
+- No frontend changes. Card rendering contract not regressed.
+- PR-3 batched LLM path is feature-flagged off by default.
+
+### Production validation checklist
+With `CONCIERGE_SEMANTIC_RETRIEVAL_V1_ENABLED=true`:
+1. "izakayas" → cards render, notes include izakaya concept match and rating.
+2. "izakayas on fulton street" (lowercase) → `location_modifiers=["Fulton Street"]` in turn log; cards have location caveat when address doesn't confirm Fulton Street.
+3. "best breweries" → brewery cards, no regression.
+4. "best waterfront breweries" → brewery cards; no "waterfront" claim in notes unless address confirms water proximity.
+5. "breweries near the river" → brewery-anchored; river preserved in geo_hints or location_modifiers.
+6. "taprooms with a view" → taproom cards; no invented view claims.
+7. Railway logs: `reason_source=deterministic_safe_v1` (or `batched_grounded_v1` if flag enabled).
+8. No "Lower Level" appearing as neighborhood in any card note.
+
+Supabase SQL: No.
+
+---
+
+## Previous change (2026-05-05) — INTENT_GENERAL card plumbing fix + PGRST204 logging fix
 
 ### Root cause
 Two independent bugs were blocking verified place cards from reaching the drawer UI for open-class queries (e.g. "izakayas", "tea houses"):
