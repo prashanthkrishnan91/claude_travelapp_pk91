@@ -121,3 +121,4 @@
 - No semantic planner/ranker/provider/category logic changed. PR-3 batched grounded reasoning not started.
 - Production validation checklist for post-deploy manual run: `izakayas`, `izakayas on fulton street`, `best breweries`, `best waterfront breweries`, `breweries near the river`, `taprooms with a view`.
 - PGRST204 (`intent_classifier_version` on `concierge_request_log`) deferred in this PR: not the blocker for 200 semantic responses/cards.
+- 2026-05-05: PR-3 merge-gate audit run completed (Level 1). Verified grounded batched reasoning + validator wiring, modifier preservation/caveat behavior, deterministic fallback safety, and trust-gate/card-contract invariants via focused semantic retrieval tests. No scope drift found (no keyword patching, no UI redesign, no broad semantic rewrite).
