@@ -1760,7 +1760,23 @@ export async function callConciergeSearch(
       warnings: [],
     };
   }
-  return normalized;
+  return {
+    response: normalized.response,
+    intent: normalized.intent,
+    retrievalUsed: normalized.retrievalUsed,
+    sourceStatus: normalized.sourceStatus,
+    cached: normalized.cached,
+    liveProvider: normalized.liveProvider,
+    restaurants: normalized.restaurants as UnifiedRestaurantResult[],
+    attractions: normalized.attractions as UnifiedAttractionResult[],
+    hotels: normalized.hotels as UnifiedHotelResult[],
+    researchSources: normalized.researchSources as UnifiedResearchSourceResult[],
+    areas: normalized.areas,
+    areaComparisons: normalized.areaComparisons as UnifiedAreaComparisonResult[],
+    suggestions: normalized.suggestions,
+    sources: normalized.sources,
+    warnings: normalized.warnings,
+  };
 }
 
 export async function fetchConciergeMessages(tripId: string): Promise<ConciergeMessage[]> {
