@@ -1,5 +1,3 @@
-const FALLBACK_REASON = "A well-regarded local pick with verified listing details.";
-
 export function splitReason(text) {
   const clean = String(text ?? "")
     .replace(/#{1,6}\s*/g, " ")
@@ -9,10 +7,10 @@ export function splitReason(text) {
     .replace(/^\s*why this pick:\s*/i, "")
     .replace(/\s+/g, " ")
     .trim();
-  if (!clean) return { short: FALLBACK_REASON };
+  if (!clean) return { short: "" };
   const parts = clean.split(/(?<=[.!?])\s+/);
   const first = parts[0]?.slice(0, 220).trim() ?? "";
-  return { short: first || FALLBACK_REASON };
+  return { short: first };
 }
 
 function containsAddressSignal(text) {
@@ -32,12 +30,15 @@ function pickWhyText(value) {
 
 // Canonical display contract — check display.displayWhy first.
 // Falls back through legacy fields for old cached messages.
+// Returns "" (empty string) when no meaningful note exists — callers must
+// hide the Concierge Note block when this is empty. Do NOT show a generic
+// fallback reason: absent note > generic template.
 export function pickCardReason(card) {
   return (card?.display?.displayWhy && card.display.displayWhy.length >= 12 ? card.display.displayWhy : undefined)
     ?? pickWhyText(card?.supportingDetails?.whyPick)
     ?? pickWhyText(card?.whyPick)
     ?? card?.primaryReason
-    ?? FALLBACK_REASON;
+    ?? "";
 }
 
 // Display category from canonical display contract, or legacy fallback.
@@ -52,16 +53,16 @@ const BAD_TEMPLATE_RE = /^(?:[A-Z][^.!?]+\s+is\s+a\s+(?:restaurant|bar|hotel|att
 
 export function sanitizeWhyPick(rawReason, title, allPlaceTitles) {
   const reason = splitReason(rawReason).short;
+  if (!reason || reason.length < 12) return "";
   const normalizedReason = reason.toLowerCase();
-  if (containsAddressSignal(reason)) return FALLBACK_REASON;
-  if (/(backed by|available evidence|selected for this|verified restaurant details|verified drinks-focused|verified place details|with rated)/i.test(reason)) return FALLBACK_REASON;
-  if (GENERIC_PHRASES_RE.test(reason)) return FALLBACK_REASON;
-  if (BAD_TEMPLATE_RE.test(reason)) return FALLBACK_REASON;
+  if (containsAddressSignal(reason)) return "";
+  if (/(backed by|available evidence|selected for this|verified restaurant details|verified drinks-focused|verified place details|with rated)/i.test(reason)) return "";
+  if (GENERIC_PHRASES_RE.test(reason)) return "";
+  if (BAD_TEMPLATE_RE.test(reason)) return "";
   const hasOtherVenueName = (allPlaceTitles || [])
     .filter((candidate) => normalizeTitle(candidate) !== normalizeTitle(title))
     .some((candidate) => normalizedReason.includes(normalizeTitle(candidate)));
-  if (hasOtherVenueName) return FALLBACK_REASON;
-  if (!reason || reason.length < 12) return FALLBACK_REASON;
+  if (hasOtherVenueName) return "";
   return reason;
 }
 

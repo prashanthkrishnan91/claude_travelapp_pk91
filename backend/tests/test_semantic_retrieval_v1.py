@@ -2381,16 +2381,18 @@ class TestBatchedReasonBuilder:
         import os
         os.environ["CONCIERGE_BATCHED_REASONING_ENABLED"] = "false"
         cards_data, frame = self._make_cards_data()
-        result = build_batched_reasons(cards_data, frame)
+        result, rr = build_batched_reasons(cards_data, frame)
         # All results should be the deterministic fallbacks
         for i, (_e, _ev, _rs, det) in enumerate(cards_data, 1):
             assert result[str(i)] == det, f"idx={i}: expected deterministic, got LLM"
+        assert not rr.attempted
+        assert not rr.success
         os.environ.pop("CONCIERGE_BATCHED_REASONING_ENABLED", None)
 
     def test_returns_all_card_keys(self):
         from app.concierge.batched_reason_builder import build_batched_reasons
         cards_data, frame = self._make_cards_data()
-        result = build_batched_reasons(cards_data, frame)
+        result, _ = build_batched_reasons(cards_data, frame)
         assert len(result) == len(cards_data), (
             f"Expected {len(cards_data)} keys, got {len(result)}"
         )
@@ -2401,7 +2403,7 @@ class TestBatchedReasonBuilder:
         from app.concierge.batched_reason_builder import build_batched_reasons
         from app.concierge.frame_extractor import extract_frame
         frame = extract_frame("izakayas", "Chicago")
-        result = build_batched_reasons([], frame)
+        result, _ = build_batched_reasons([], frame)
         assert result == {}
 
     def test_fallback_on_llm_error(self):
@@ -2412,10 +2414,12 @@ class TestBatchedReasonBuilder:
         cards_data, frame = self._make_cards_data()
         # Force LLM call to raise
         with patch("app.concierge.batched_reason_builder._call_llm", side_effect=Exception("llm_error")):
-            result = build_batched_reasons(cards_data, frame)
+            result, rr = build_batched_reasons(cards_data, frame)
         # Should return deterministic fallbacks for all
         for i, (_e, _ev, _rs, det) in enumerate(cards_data, 1):
             assert result[str(i)] == det
+        # Telemetry must report failure, not success
+        assert not rr.success, "LLM error must report success=False"
         os.environ.pop("CONCIERGE_BATCHED_REASONING_ENABLED", None)
 
     def test_fallback_on_invalid_json(self):
@@ -2425,9 +2429,10 @@ class TestBatchedReasonBuilder:
         os.environ["CONCIERGE_BATCHED_REASONING_ENABLED"] = "true"
         cards_data, frame = self._make_cards_data()
         with patch("app.concierge.batched_reason_builder._call_llm", return_value="not json at all"):
-            result = build_batched_reasons(cards_data, frame)
+            result, rr = build_batched_reasons(cards_data, frame)
         for i, (_e, _ev, _rs, det) in enumerate(cards_data, 1):
             assert result[str(i)] == det
+        assert not rr.success, "Parse failure must report success=False"
         os.environ.pop("CONCIERGE_BATCHED_REASONING_ENABLED", None)
 
     def test_per_card_fallback_on_invalid_llm_output(self):
@@ -2439,19 +2444,17 @@ class TestBatchedReasonBuilder:
         cards_data, frame = self._make_cards_data()
         # Return invalid reason for card 1 (waterfront claim), valid-ish for card 2
         fake_response = json.dumps({
-            "1": "Great izakaya with stunning waterfront views.",  # invalid
-            "2": "Well-rated Japanese restaurant in Chicago with 4.3 stars.",  # should pass
+            "1": "Great izakaya with stunning waterfront views.",  # invalid — waterfront claim
+            "2": "Not directly on Fulton Street, but Izakaya Sumo on Damen Ave earned its regulars through precise knife work and seasonal omakase options.",
             "3": "Solid izakaya option in Chicago with good reviews.",
         })
         with patch("app.concierge.batched_reason_builder._call_llm", return_value=fake_response):
-            result = build_batched_reasons(cards_data, frame)
+            result, rr = build_batched_reasons(cards_data, frame)
         # Card 1 should use deterministic (waterfront claim rejected)
         _e1, _ev1, _rs1, det1 = cards_data[0]
         assert result["1"] == det1, f"Card 1 should fall back to det, got: {result['1']}"
-        # Card 2 should use LLM (passed validation)
-        assert "Japanese restaurant" in result["2"] or result["2"] == cards_data[1][3], (
-            f"Card 2 should use LLM reason or fallback, got: {result['2']}"
-        )
+        # At least card 2 or 3 may pass (specific enough note)
+        assert rr.rejected_count >= 1, "At least waterfront-claim note must be rejected"
         os.environ.pop("CONCIERGE_BATCHED_REASONING_ENABLED", None)
 
 
@@ -2546,10 +2549,11 @@ class TestBatchedReasonModelConfig:
         score = RankScore(total=0.75, subtype_fit=0.85, geo_fit=0.5)
         ev = build_evidence_bundle(entity, frame, score)
         det = build_safe_reason(entity, ev, frame, score)
-        result = build_batched_reasons([(entity, ev, score, det)], frame)
+        result, rr = build_batched_reasons([(entity, ev, score, det)], frame)
 
         assert "1" in result, "Must return a result even when model env is absent"
         assert result["1"] == det, "Must return deterministic fallback when flag is off"
+        assert not rr.success, "Flag off → success must be False"
         os.environ.pop("CONCIERGE_BATCHED_REASONING_ENABLED", None)
 
 
@@ -2906,15 +2910,20 @@ class TestSafeFallbackFormat:
         # and the note should use the address neighborhood or omit city)
         assert "strong brewery match in milwaukee" not in reason_lower, reason
 
-    def test_fallback_passes_validator(self):
-        """Every deterministic safe reason must pass validate_reason."""
+    def test_fallback_with_geo_or_modifier_passes_validator(self):
+        """Deterministic notes with geo caveats or modifier caveats must pass validator.
+
+        Queries that carry a geo hint or location modifier produce notes with an
+        honest caveat sentence (e.g., "No waterfront proximity confirmed."), which
+        goes beyond name+rating and therefore passes the template validator.
+        """
         from app.concierge.frame_extractor import extract_frame
         from app.concierge.place_entity_layer import PlaceEntity
         from app.concierge.ranker import RankScore, build_evidence_bundle
         from app.concierge.safe_reason_builder import build_safe_reason
         from app.concierge.reason_validator import validate_reason
+        # These queries produce notes with caveat sentences — must pass validator
         test_cases = [
-            ("izakayas", "100 N State St, Chicago, IL", "Izakaya Mita", ["japanese_restaurant"], 0.85, 0.5),
             ("izakayas with waterfront views", "1234 N Clark St, Chicago, IL", "Izakaya Test", ["japanese_restaurant"], 0.85, 0.4),
             ("best waterfront breweries", "900 W Randolph St, Chicago, IL", "Goose Island", ["brewery"], 0.9, 0.45),
             ("breweries near the river", "100 W Kinzie St, Chicago, IL", "Half Acre", ["brewery"], 0.9, 0.5),
@@ -2936,10 +2945,45 @@ class TestSafeFallbackFormat:
             reason = build_safe_reason(entity, evidence, frame, score)
             is_valid, rejection = validate_reason(reason, frame, evidence)
             assert is_valid, (
-                f"Deterministic reason failed validator! "
+                f"Deterministic reason with caveat failed validator! "
                 f"query={query!r} name={name} "
                 f"reason={reason!r} rejection={rejection}"
             )
+
+    def test_fallback_without_modifier_is_rejected_as_template(self):
+        """A plain 'izakayas' query produces a name+rating-only note — rejected as template.
+
+        With no geo hint or location modifier, build_safe_reason produces
+        'Name on Street — rating★.' which is now correctly rejected as a template
+        that repeats only fields visible on the card. An absent note is better.
+        """
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.place_entity_layer import PlaceEntity
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        from app.concierge.safe_reason_builder import build_safe_reason
+        from app.concierge.reason_validator import validate_reason
+        entity = PlaceEntity(
+            place_id="pid_izakaya_mita", name="Izakaya Mita",
+            types=["japanese_restaurant"], primary_type="japanese_restaurant",
+            rating=4.5, user_rating_count=500, business_status="OPERATIONAL",
+            formatted_address="100 N State St, Chicago, IL",
+            google_maps_uri="https://maps.google.com/?cid=test",
+            website_uri=None, price_level=None, lat=41.88, lng=-87.63,
+            source_query="izakaya Chicago",
+        )
+        frame = extract_frame("izakayas", "Chicago")
+        score = RankScore(total=0.7, subtype_fit=0.85, geo_fit=0.5)
+        evidence = build_evidence_bundle(entity, frame, score)
+        reason = build_safe_reason(entity, evidence, frame, score)
+        # The note is "Izakaya Mita on State Street — 4.5★ (500 reviews)." — pure template
+        is_valid, rejection = validate_reason(reason, frame, evidence)
+        assert not is_valid, (
+            f"Pure name+rating note must be rejected as template. "
+            f"reason={reason!r} rejection={rejection}"
+        )
+        assert rejection == "name_rating_only_template", (
+            f"Expected name_rating_only_template rejection, got: {rejection}"
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3085,30 +3129,60 @@ class TestReasoningSourceContract:
         os.environ.pop("CONCIERGE_BATCHED_REASONING_ENABLED", None)
         assert not _flag_enabled(), "Flag must be off by default"
 
-    def test_deterministic_reason_passes_validator(self):
-        """Deterministic reason for each test query must pass validate_reason."""
+    def test_deterministic_reason_with_geo_hint_passes_validator(self):
+        """Deterministic reason for queries WITH geo hints passes validator (has caveat sentence).
+
+        Plain queries like 'best breweries' or 'izakayas' produce name+rating-only
+        templates (correctly rejected). Queries with geo hints / modifiers produce
+        notes with honest caveat sentences that add value and pass validation.
+        """
         from app.concierge.frame_extractor import extract_frame
         from app.concierge.ranker import RankScore, build_evidence_bundle
         from app.concierge.safe_reason_builder import build_safe_reason
         from app.concierge.reason_validator import validate_reason
-        queries = [
-            "izakayas",
+        queries_with_hints = [
             "izakayas with waterfront views",
-            "best breweries",
             "best waterfront breweries",
             "breweries near the river",
             "taprooms with a view",
         ]
         entity = self._make_entity()
-        for query in queries:
+        for query in queries_with_hints:
             frame = extract_frame(query, "Chicago")
             score = RankScore(total=0.7, subtype_fit=0.85, geo_fit=0.45)
             evidence = build_evidence_bundle(entity, frame, score)
             reason = build_safe_reason(entity, evidence, frame, score)
             is_valid, rejection = validate_reason(reason, frame, evidence)
             assert is_valid, (
-                f"Deterministic reason must pass validator for {query!r}. "
+                f"Deterministic reason with geo caveat must pass validator for {query!r}. "
                 f"reason={reason!r} rejection={rejection}"
+            )
+
+    def test_plain_query_deterministic_reason_rejected_as_template(self):
+        """Deterministic reason for plain queries is a template — correctly rejected.
+
+        'best breweries' and 'izakayas' have no geo hint or modifier, so the
+        deterministic path produces 'Name on Street — rating★.' which is a
+        name+rating-only template. The validator rejects it; the card gets no note.
+        """
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        from app.concierge.safe_reason_builder import build_safe_reason
+        from app.concierge.reason_validator import validate_reason
+        plain_queries = ["izakayas", "best breweries"]
+        entity = self._make_entity()
+        for query in plain_queries:
+            frame = extract_frame(query, "Chicago")
+            score = RankScore(total=0.7, subtype_fit=0.85, geo_fit=0.45)
+            evidence = build_evidence_bundle(entity, frame, score)
+            reason = build_safe_reason(entity, evidence, frame, score)
+            is_valid, rejection = validate_reason(reason, frame, evidence)
+            assert not is_valid, (
+                f"Plain query deterministic note must be rejected as template for {query!r}. "
+                f"reason={reason!r}"
+            )
+            assert rejection == "name_rating_only_template", (
+                f"Expected name_rating_only_template, got: {rejection}"
             )
 
     def test_old_generic_patterns_fail_validator(self):
@@ -3265,17 +3339,25 @@ class TestPR4FullRegressionSuite:
         assert "with a view" not in reason_lower, f"Must not claim view: {reason}"
 
     def test_all_notes_pass_validator(self):
-        """All acceptance criteria queries must produce validator-passing notes."""
+        """Non-empty notes from build_safe_reason must pass the validator.
+
+        PR-5 contract: plain queries (no geo/modifier) produce name+rating-only
+        notes which are correctly REJECTED by _NAME_RATING_ONLY_RE → those callers
+        get "" (absent note) which is the desired outcome.  Queries with geo or
+        modifier cues get a second caveat sentence, making them validator-passing.
+        This test asserts the invariant: if build_safe_reason returns a non-empty
+        string, that string must satisfy validate_reason.  Empty return is also
+        acceptable — absent note > generic template.
+        """
         from app.concierge.reason_validator import validate_reason
         from app.concierge.frame_extractor import extract_frame
         from app.concierge.place_entity_layer import PlaceEntity
         from app.concierge.ranker import RankScore, build_evidence_bundle
         from app.concierge.safe_reason_builder import build_safe_reason
+        # Only geo/modifier queries; plain-query notes are intentionally rejected.
         test_cases = [
-            ("izakayas", "Izakaya Mita", "1960 N Damen Ave, Chicago, IL", ["japanese_restaurant"], 0.85, 0.5),
             ("izakayas with waterfront views", "The Izakaya", "1234 N Clark St, Chicago, IL", ["japanese_restaurant"], 0.85, 0.4),
             ("izakayas on fulton street", "Izakaya Test", "3458 N Halsted St, Chicago, IL", ["japanese_restaurant"], 0.85, 0.5),
-            ("best breweries", "Half Acre Beer", "4257 N Lincoln Ave, Chicago, IL", ["brewery"], 0.9, 0.5),
             ("best waterfront breweries", "Goose Island", "1800 W Fulton St, Chicago, IL", ["brewery"], 0.9, 0.45),
             ("breweries near the river", "Empirical Taproom", "95 W Ontario St, Chicago, IL", ["brewery"], 0.9, 0.5),
             ("taprooms with a view", "Maplewood Brewery", "2717 N Paulina St, Chicago, IL", ["brewery"], 0.85, 0.4),
@@ -3294,9 +3376,11 @@ class TestPR4FullRegressionSuite:
             score = RankScore(total=0.7, subtype_fit=sf, geo_fit=gf)
             evidence = build_evidence_bundle(entity, frame, score)
             reason = build_safe_reason(entity, evidence, frame, score)
+            if not reason:
+                continue  # empty is acceptable — absent note > template
             is_valid, rejection = validate_reason(reason, frame, evidence)
             assert is_valid, (
-                f"Note must pass validator for {query!r}: "
+                f"Non-empty note must pass validator for {query!r}: "
                 f"reason={reason!r} rejection={rejection}"
             )
 
@@ -3323,8 +3407,14 @@ class TestPR4FullRegressionSuite:
         assert card is not None
         assert card.rating == 4.7, f"Rating must be native 0-5: {card.rating}"
 
-    def test_minimal_safe_note_never_says_strong_match(self):
-        """The _minimal_safe_note fallback must not produce generic boilerplate."""
+    def test_minimal_safe_note_returns_empty_string(self):
+        """_minimal_safe_note must return "" (PR-5 contract: no template notes).
+
+        The old format "Name — rating★ from N reviews." is rejected by
+        _NAME_RATING_ONLY_RE because it repeats only visible card fields.
+        _minimal_safe_note now always returns "" so callers produce no Concierge
+        Note block rather than a generic template.
+        """
         from app.concierge.place_entity_layer import PlaceEntity
         from app.concierge.semantic_retrieval import _minimal_safe_note
         entity = PlaceEntity(
@@ -3337,14 +3427,10 @@ class TestPR4FullRegressionSuite:
             source_query="brewery Chicago",
         )
         note = _minimal_safe_note(entity)
-        import re
-        assert not re.search(r"\b(Strong|Good|Great)\s+\w+\s+match\b", note, re.IGNORECASE), (
-            f"Minimal note must not be generic boilerplate: {note}"
-        )
-        assert "4.3" in note, f"Must include rating: {note}"
+        assert note == "", f"_minimal_safe_note must return empty string, got: {note!r}"
 
-    def test_minimal_safe_note_is_name_anchored_not_type_template(self):
-        """_minimal_safe_note must anchor on place name, never 'Verified {type}'."""
+    def test_minimal_safe_note_never_shows_template_for_any_entity(self):
+        """_minimal_safe_note must return "" regardless of entity, to prevent template output."""
         from app.concierge.place_entity_layer import PlaceEntity
         from app.concierge.semantic_retrieval import _minimal_safe_note
         entity = PlaceEntity(
@@ -3357,14 +3443,9 @@ class TestPR4FullRegressionSuite:
             source_query="brewery Chicago",
         )
         note = _minimal_safe_note(entity)
-        # Must contain the actual place name
-        assert "Goose Island Brewery" in note, f"Must anchor on place name: {note}"
-        # Must NOT use the banned "Verified {type}" template
-        assert not note.lower().startswith("verified "), (
-            f"Must not use Verified-template: {note}"
+        assert note == "", (
+            f"_minimal_safe_note must return '' to suppress template notes, got: {note!r}"
         )
-        assert "4.5" in note, f"Must include rating: {note}"
-        assert "1,200" in note, f"Must include review count: {note}"
 
 
 # ══════════════════════════════════════════════════════════════════════════════

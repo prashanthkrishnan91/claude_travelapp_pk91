@@ -1,6 +1,136 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-05) — PR-4 STOP-THE-LINE: Evidence-First Note Synthesis + Destination Discipline + Runtime Model Config
+## Last change (2026-05-05) — PR-5 STOP-THE-LINE: Runtime Bug Fix, Truthful Telemetry, Template Elimination
+
+**Status: IN PROGRESS** (this PR)
+
+### Root cause chain (PR-5)
+
+PR-4 merged but production still showed template notes. Three root causes:
+
+1. **`NameError: name 'concept' is not defined`** — `_build_batch_prompt` in `batched_reason_builder.py` used an f-string with `{concept}`, `{category}`, `{rating}`, `{N}`, `{city}` as literal example text in anti-pattern rules. Python evaluated them as Python variables — none existed. Fixed: escaped to `{{concept}}` etc.
+
+2. **False success telemetry** — `reason_source = "batched_grounded_v1"` and `grounded_reason_success=True` were set based on `_flag_enabled()` flag status, NOT on actual LLM output. Even when the NameError caused full fallback to deterministic, telemetry said success. Fixed: `ReasoningResult` typed contract; `success=True` only when `accepted_count >= 1`.
+
+3. **Templates still rendered** — Even with the NameError fixed, `build_safe_reason` emits `"Name on Street — rating★ from N reviews."` which the validator accepted. This repeats only fields already visible on the card. Fixed: `_NAME_RATING_ONLY_RE` validator pattern rejects pure name+rating templates; `_minimal_safe_note` returns `""`.
+
+### Durable fixes (PR-5)
+
+**`backend/app/concierge/batched_reason_builder.py`**
+- Fix: all `{concept}`, `{category}`, `{rating}`, `{N}`, `{city}` escaped as `{{...}}` in the f-string.
+- New `ReasoningResult` dataclass: `attempted`, `success`, `accepted_count`, `rejected_count`, `omitted_count`, `fallback_count`, `prompt_error`, `diversity_flagged`.
+- `build_batched_reasons` returns `Tuple[Dict[str, str], ReasoningResult]`.
+- Prompt builder exception now caught separately → `prompt_error=True`, `success=False`, fallback returned. Previously swallowed by outer except.
+- Improved LLM prompt: analytical framing, explicit anti-pattern list, no template examples.
+- Cross-card diversity check: `_skeleton()` + `_check_note_diversity()`.
+
+**`backend/app/concierge/reason_validator.py`**
+- New `_NAME_RATING_ONLY_RE`: rejects notes where the ENTIRE content is `{Name} — {rating}★ from {N} reviews.` or `{Name} on {Street} — {rating}★ from {N} reviews.` with no further sentences. Notes that add a caveat sentence (geo disclaimer, modifier caveat) are NOT matched.
+- Expanded `_GENERIC_BOILERPLATE_RE`: added "top pick for/because", "worth considering for your trip", "a well-regarded local pick", "perfect for enthusiasts".
+- New rejection code `name_rating_only_template`.
+
+**`backend/app/concierge/semantic_retrieval.py`**
+- Unpacks `(batched_reasons, reasoning_result)` from `build_batched_reasons`.
+- `reason_source = "batched_grounded_v1"` only when `reasoning_result.success` is True.
+- `grounded_reason_success` in telemetry = `reasoning_result.success` (truthful).
+- Det-reason fallback: `det_reason = ""` (not `_minimal_safe_note(entity)`) when deterministic note is rejected.
+- `top_card_city` extraction now filters building fragments (`_NON_NEIGHBORHOOD_FRAGMENTS`) — "Lower Level, Chicago, IL" returns "Chicago", not "Lower Level".
+- New telemetry fields: `reasoning_attempted`, `reasoning_model`, `reasoning_success`, `reasoning_failure_reason`, `llm_accepted_count`, `validator_rejected_count`, `note_omitted_count`, `deterministic_visible_count`, `final_note_omitted_count`, `prompt_builder_error`, `diversity_flagged`.
+
+**`backend/app/concierge/semantic_retrieval.py` — `_minimal_safe_note`**
+- Returns `""` — the `"Name — rating★"` format is now banned by `_NAME_RATING_ONLY_RE`.
+- Function retained for API compatibility but must not be used for visible output.
+
+**`frontend/src/lib/concierge/cardPresentation.js`**
+- Removed `FALLBACK_REASON = "A well-regarded local pick..."` constant.
+- `splitReason("")` returns `{ short: "" }` (not FALLBACK_REASON).
+- `pickCardReason` returns `""` as last resort (not FALLBACK_REASON).
+- `sanitizeWhyPick` returns `""` for rejected/thin notes (not FALLBACK_REASON).
+
+**`frontend/src/components/trips/AIConciergePanel.tsx`**
+- `ConciergeCard` Concierge Note block wrapped in `{reasonParts.short && (...)}` — block is absent when note is empty.
+
+### No-template/no-note contract
+
+A visible Concierge Note must be one of:
+1. A validated, dynamic, card-specific note (from LLM or caveated deterministic path).
+2. **Absent** — frontend hides the block entirely.
+
+It must never be:
+- `{Name} — {rating}★ from {N} reviews.` — repeats visible card fields
+- `{Name} on {Street} — {rating}★ from {N} reviews.` — same
+- `Verified {Category} with {rating}★...` — fill-in-the-blank
+- `Strong/Good/Great {concept} match...` — zero information
+- "A well-regarded local pick with verified listing details." — FALLBACK_REASON gone
+
+### When notes ARE produced by the deterministic path (no LLM)
+
+Notes survive validation when they include additional content beyond name+rating:
+- Geo caveat: `"No waterfront proximity confirmed from address."` (query had geo hint)
+- View caveat: `"The requested view setting is not verified."` (taprooms with a view)
+- Modifier caveat: `"Not directly on Fulton Street — nearest match in the area."` (izakayas on Fulton)
+
+### Deferred (EvidencePack v2 + Google Details enrichment)
+
+Google Place Details enrichment (editorial summaries, more address components) was scoped and assessed. The current pipeline already acquires sufficient structured data for the deterministic path. Full EvidencePack v2 with Google Details enrichment is deferred to PR-6 because:
+- Adds latency (additional API calls per card)
+- Requires TTL cache design to avoid cost blowup
+- LLM path quality is the primary improvement vector (once NameError and templates are fixed)
+
+### Tests (234 passing after PR-5)
+
+New test file: `backend/tests/test_concierge_reasoning_v5.py` (54 tests):
+- `TestPromptBuilderNameError` — 8 tests: all 7 validation queries run without NameError
+- `TestReasoningResultContract` — 7 tests: tuple return, success/failure semantics
+- `TestNameRatingTemplateValidator` — 11 tests: all banned template forms rejected, valid caveated forms pass
+- `TestDeterministicFallbackNoTemplate` — 3 tests: rejected notes → empty string
+- `TestGeographyCleanup` — 3 tests: building fragments never used as city/area
+- `TestEvidenceAdequacy` — 2 tests: thin evidence → omitted, LLM null → omitted_count
+- `TestNoInventedModifierClaims` — 5 tests: no invented waterfront/view/river/Fulton
+- `TestCrossCardDiversity` — 3 tests: skeleton function, identical flagged, diverse passes
+- `TestTruthfulTelemetry` — 3 tests: grounded_success only when LLM accepted
+- `TestFrontendCardPresentation` — 5 tests: no FALLBACK_REASON, conditional rendering
+- `TestFullRegressionSuite` — 4 tests: all 7 queries prompt runs, plain rejected, geo passes, no templates
+
+Updated existing tests:
+- `TestBatchedReasonBuilder` — unpack tuple from `build_batched_reasons` (6 tests updated)
+- `TestBatchedReasonModelConfig` — unpack tuple (1 test updated)
+- `TestSafeFallbackFormat` — split into `test_fallback_with_geo_or_modifier_passes_validator` (geo queries) + `test_fallback_without_modifier_is_rejected_as_template`
+- `TestReasoningSourceContract` — split into `test_deterministic_reason_with_geo_hint_passes_validator` + `test_plain_query_deterministic_reason_rejected_as_template`
+
+### Manual/live-style validation expected results
+
+(After LLM path enabled in production with ANTHROPIC_API_KEY present)
+
+- `"izakayas"` → note **absent** (deterministic template rejected; LLM produces specific note or null)
+- `"izakayas with waterfront views"` → note includes caveat "No waterfront proximity confirmed from address." or LLM-generated honest note
+- `"izakayas on Fulton Street"` → note includes "Not directly on Fulton Street..." caveat if place not on Fulton
+- `"best breweries"` → note **absent** in deterministic path; LLM may produce specific note
+- `"best waterfront breweries"` → note includes "No waterfront proximity confirmed from address." caveat
+- `"breweries near the river"` → note includes "No river proximity confirmed from address." caveat
+- `"taprooms with a view"` → note includes "The requested view setting is not verified." caveat
+
+### Production validation checklist (post-deploy)
+
+1. Check Railway logs: `reasoning_success`, `llm_accepted_count`, `prompt_builder_error` — `prompt_builder_error=False` always; `reasoning_success=True` only when notes accepted.
+2. No `name_rating_only_template` in `grounded_reason_success=True` logs.
+3. `top_card_city` never shows building fragments (Lower Level, Suite, Lobby, etc.).
+4. Visible Concierge Notes are absent OR include meaningful non-template content.
+5. "Goose Island Taproom on Fulton Street — 4.8★ from 1,159 reviews." no longer appears.
+
+### Critical invariants preserved
+- No fake addable cards. Google place id + OPERATIONAL + Google Maps URI gates unchanged.
+- No Tavily / editorial / Yelp / Foursquare.
+- Google rating displays on native 0–5 scale.
+- No SQL or schema changes.
+- No visual redesign — only the Concierge Note block is conditionally hidden when absent.
+
+Supabase SQL: No.
+HANDOFF.md edited: Yes — PR-5 post-merge reasoning failure, runtime bug, telemetry contract, no-template/no-note contract, tests.
+
+---
+
+## Previous change (2026-05-05) — PR-4 STOP-THE-LINE: Evidence-First Note Synthesis + Destination Discipline + Runtime Model Config
 
 **Status: MERGED** (PR #246)
 

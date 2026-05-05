@@ -1,18 +1,22 @@
 """BatchedReasonBuilder — one LLM call for all card reasons in a turn.
 
-Feature flag: CONCIERGE_BATCHED_REASONING_ENABLED (default False)
+Feature flag: CONCIERGE_BATCHED_REASONING_ENABLED (default: auto when ANTHROPIC_API_KEY set)
 
 Design:
 - Builds a single LLM prompt with evidence bundles for all cards.
-- LLM may only write from the provided evidence. No invented facts.
+- LLM must analyze evidence and decide whether a note is useful; it does not fill templates.
 - Validates each output with ReasonValidator before accepting.
-- Per-card fallback to SafeReasonBuilder deterministic output on any failure.
+- Returns ReasoningResult contract alongside the note dict so callers can set truthful telemetry.
 - Hard timeout guardrail: if the LLM call exceeds BATCHED_REASON_TIMEOUT_S,
-  all cards fall back to deterministic reasons.
+  all cards fall back to their deterministic reasons (passed in by caller).
 - Budget gate: skips LLM entirely if card count > MAX_CARDS_FOR_LLM_BATCH
   or if flag is disabled.
 
-Never raises. Always returns a dict of card_key → reason string.
+IMPORTANT: Any exception in the prompt builder or LLM call is reported in
+ReasoningResult.prompt_error / failure_reason. grounded_reason_success in
+telemetry MUST only be True when at least one LLM note was accepted.
+
+Never raises. Always returns (dict, ReasoningResult).
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ import logging
 import os
 import re
 import time
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -35,6 +40,26 @@ CONCIERGE_BATCHED_REASONING_MODEL = os.getenv(
 )
 _REASON_MIN_WORDS = 8
 _REASON_MAX_CHARS = 220
+
+
+@dataclass
+class ReasoningResult:
+    """Typed contract for the outcome of a batched reasoning run.
+
+    Callers MUST use this to set telemetry. Do NOT infer success from
+    reason_source strings or dict presence.
+    """
+    attempted: bool = False
+    model: Optional[str] = None
+    success: bool = False          # True only if accepted_count >= 1
+    failure_reason: Optional[str] = None
+    accepted_count: int = 0        # LLM notes that passed validation
+    rejected_count: int = 0        # LLM notes rejected by validator
+    omitted_count: int = 0         # Cards with no note (thin evidence)
+    fallback_count: int = 0        # Cards using deterministic fallback
+    prompt_error: bool = False     # True if prompt builder threw
+    validator_rejection_reasons: List[str] = field(default_factory=list)
+    diversity_flagged: bool = False
 
 
 def _flag_enabled() -> bool:
@@ -52,7 +77,6 @@ def _flag_enabled() -> bool:
 
 def _extract_street_from_address(address: str) -> str:
     """Extract the street name portion (e.g. 'Fulton Street') from a formatted address."""
-    import re
     if not address:
         return ""
     first_part = address.split(",")[0].strip()
@@ -89,6 +113,7 @@ def _build_evidence_text(
     The LLM must only write claims that appear in this evidence block.
     """
     lines = [f"Place {card_index}{f'/{total_cards}' if total_cards else ''}: {entity.name}"]
+    lines.append(f"  - Rank position: {card_index} of {total_cards or '?'}")
 
     # Street name — key card-specific anchor
     addr = entity.formatted_address or ""
@@ -106,7 +131,11 @@ def _build_evidence_text(
         name_lower = entity.name.lower()
         concept_tokens = [t for t in primary_concept.lower().split() if len(t) >= 4]
         if any(t in name_lower for t in concept_tokens):
-            lines.append(f"  - Name signal: name includes '{primary_concept}' concept")
+            lines.append(f"  - Name signal: name includes concept '{primary_concept}'")
+
+    # Source query used to find this place
+    if getattr(entity, "source_query", None):
+        lines.append(f"  - Found via query: {entity.source_query}")
 
     # Google type
     for fact in evidence.structured_facts:
@@ -141,7 +170,7 @@ def _build_evidence_text(
         if confirmed:
             lines.append(f"  - Location: CONFIRMED on {modifier}")
         elif not_confirmed:
-            lines.append(f"  - Location: NOT confirmed on {modifier} — address does not mention it")
+            lines.append(f"  - Location: NOT confirmed on {modifier} — address does not match")
 
     # Geo note
     if evidence.geo_note:
@@ -166,22 +195,40 @@ def _build_batch_prompt(
     cards_data: List[Tuple[Any, Any, Any, Any]],
     frame: Any,
 ) -> str:
-    """Build the batched LLM prompt for all cards in one turn."""
+    """Build the batched LLM prompt for all cards in one turn.
+
+    IMPORTANT: All {placeholder} examples in the prompt text must use double braces
+    {{placeholder}} because this string is an f-string. Literal braces in the
+    output text must be escaped. Failure to do this causes NameError at runtime.
+    """
     user_query = getattr(frame, "literal_ask", "") or ""
     venue_concept = (
         frame.subtype_concepts[0].label if getattr(frame, "subtype_concepts", None) else ""
     )
     location_modifiers = getattr(frame, "location_modifiers", []) or []
     geo_hints = getattr(frame, "geography_hints", []) or []
+    ambiguity_flags = getattr(frame, "ambiguity_flags", []) or []
 
-    modifier_note = ""
+    # Build user modifier context
+    modifier_lines = []
     if location_modifiers:
-        modifier_note = (
-            f"\nUser's location modifier: {location_modifiers[0]}"
-            " — ONLY mention this as confirmed if the evidence says so."
+        modifier_lines.append(
+            f"  - User asked for places on/near: {location_modifiers[0]}. "
+            "Mention ONLY as confirmed if the evidence says CONFIRMED. "
+            "Otherwise acknowledge it was requested but not confirmed."
         )
     if geo_hints:
-        modifier_note += f"\nUser's geography hint: {geo_hints[0]} (soft preference, may not be verifiable)"
+        modifier_lines.append(
+            f"  - User mentioned geography: {geo_hints[0]}. "
+            "Do NOT claim waterfront/river/lake/view proximity unless evidence confirms it."
+        )
+    if any("view" in f or "waterfront" in f for f in ambiguity_flags):
+        modifier_lines.append(
+            "  - VIEW/WATERFRONT requested: cannot be structurally verified from Google data. "
+            "Be honest about this — do not invent or imply views."
+        )
+    if not modifier_lines:
+        modifier_lines.append("  - No location or geography modifiers.")
 
     n = len(cards_data)
     evidence_blocks = []
@@ -191,26 +238,40 @@ def _build_batch_prompt(
         )
 
     evidence_text = "\n\n".join(evidence_blocks)
+    modifier_text = "\n".join(modifier_lines)
+    concept_label = venue_concept or "place"
 
-    prompt = f"""You are writing concierge notes for a travel app. The user asked: "{user_query}"
-Venue concept: {venue_concept or "place"}{modifier_note}
+    # NOTE: All {example} placeholders below use {{double braces}} to prevent
+    # Python f-string evaluation. These are literal text in the prompt.
+    prompt = f"""You are a travel concierge writing one-sentence notes for {n} places. User asked: "{user_query}"
 
-RULES — read before writing:
-1. Ground every note ONLY in the evidence fields provided (Street, Full address, Rating, Name signal, Geo note, Location confirmed/not confirmed). Do not invent facts.
-2. Each note must name something SPECIFIC to that place: its street name, a rating, its actual name, or a confirmed location. Generic sentences like "A great spot for {concept} lovers" are banned.
-3. BANNED TEMPLATES — never produce these patterns:
-   - "Verified {category} with {rating}★ across {N} reviews."  ← no card specificity
-   - "Strong/Good/Great {concept} match in {city}."  ← generic
-   - "Perfect for {concept} enthusiasts in {city}."  ← generic
-4. If a location modifier is NOT confirmed in the evidence, say so honestly ("not directly on X, but nearby"). Never claim a place IS on the modifier unless evidence says CONFIRMED.
-5. If the only available evidence is name + rating (no street, no confirmed modifier, no geo note), return null for that place — an empty note is better than a generic template.
-6. Notes must VARY across cards — do not repeat the same sentence structure for all places. Each note should read distinctly.
-7. Do NOT use words: "verified", "Google", "OPERATIONAL", "subtype_fit", "geo_fit", "rank_score".
+Your task: analyze each place's evidence and write a note that helps the traveler choose — or return null if the evidence is too thin to say anything useful.
 
+User modifiers to respect:
+{modifier_text}
+
+ANTI-PATTERNS — these will be automatically rejected, do not waste tokens on them:
+- "{{Name}} — {{rating}}★ from {{N}} reviews."                    ← just repeats the visible card
+- "{{Name}} on {{Street}} — {{rating}}★ from {{N}} reviews."     ← same, just repeats fields
+- "Verified {{category}} with {{rating}}★ across {{N}} reviews." ← fill-in-the-blank, no value
+- "Strong/Good/Great {{concept}} match in {{city}}."             ← zero information
+- Any note that claims waterfront/view/river proximity without CONFIRMED in evidence
+- Any note that claims Michelin stars, awards, quiet/romantic atmosphere, price range, or hours
+- Any note that repeats only name + rating + review count with no additional insight
+- Any note so generic it could apply to any {concept_label} in this list
+
+WHAT MAKES A USEFUL NOTE:
+- It tells the traveler something specific they cannot already see from the card title and rating
+- It honestly handles modifiers: confirmed → state it; not confirmed → acknowledge the gap
+- It varies meaningfully across the {n} places — do not reuse the same sentence structure
+- It is concise (one sentence or two short clauses, under {_REASON_MAX_CHARS} characters)
+- Return null when evidence is too thin for a genuinely useful note (null is better than generic)
+
+EVIDENCE — use ONLY what is listed here, do not invent facts:
 {evidence_text}
 
-Respond with ONLY a valid JSON object mapping place number (as string) to the note (or null for thin evidence):
-{{"1": "note for place 1", "2": null, "3": "note for place 3", ...}}"""
+Return ONLY a JSON object mapping place number (string) to note (string) or null:
+{{"1": "...", "2": null, "3": "..."}}"""
 
     return prompt
 
@@ -249,7 +310,7 @@ def _call_llm(prompt: str, timeout: float, model: str = "") -> Optional[str]:
 def _parse_llm_response(response_text: str, expected_count: int) -> Dict[str, Optional[str]]:
     """Parse JSON from LLM response. Returns empty dict on any parse error.
 
-    Values may be str (note) or None (LLM signaled thin evidence — use deterministic fallback).
+    Values may be str (note) or None (LLM signaled thin evidence).
     """
     if not response_text:
         return {}
@@ -259,11 +320,10 @@ def _parse_llm_response(response_text: str, expected_count: int) -> Dict[str, Op
         if not json_match:
             return {}
         raw = json.loads(json_match.group(0))
-        # Accept str values (notes) and None (thin-evidence signal)
         result: Dict[str, Optional[str]] = {}
         for k, v in raw.items():
             if v is None:
-                result[str(k)] = None  # thin-evidence: caller will use deterministic fallback
+                result[str(k)] = None  # thin-evidence: caller will use empty/omitted
             elif isinstance(v, str) and v.strip():
                 result[str(k)] = v.strip()
         return result
@@ -271,11 +331,42 @@ def _parse_llm_response(response_text: str, expected_count: int) -> Dict[str, Op
         return {}
 
 
+def _skeleton(note: str) -> str:
+    """Compute a structural skeleton by stripping names, numbers, and stopwords.
+
+    Used for cross-card diversity checks. Two notes with the same skeleton
+    are structurally identical even if they name different places.
+    """
+    s = re.sub(r"\d[\d.,]*\s*★?", "N", note)
+    s = re.sub(r"\b(from|with|across|at|on|in|the|a|an|for|of|and|or|but)\b", "", s, flags=re.I)
+    s = re.sub(r"\s+", " ", s).strip().lower()
+    return s
+
+
+def _check_note_diversity(accepted: Dict[str, str]) -> bool:
+    """Return True if the accepted note set has adequate structural diversity.
+
+    Returns False when too many notes share the same skeleton — a sign that
+    the LLM is producing templates rather than genuine analysis.
+    """
+    notes = list(accepted.values())
+    if len(notes) < 2:
+        return True
+    skeletons = [_skeleton(n) for n in notes]
+    # Count how many notes share a skeleton prefix (first 50 chars is usually enough)
+    prefixes = [s[:50] for s in skeletons]
+    from collections import Counter
+    prefix_counts = Counter(prefixes)
+    if prefix_counts.most_common(1)[0][1] > 2:
+        return False
+    return True
+
+
 def build_batched_reasons(
     cards_data: List[Tuple[Any, Any, Any, Any]],
     frame: Any,
     timeout: float = BATCHED_REASON_TIMEOUT_S,
-) -> Dict[str, str]:
+) -> Tuple[Dict[str, str], ReasoningResult]:
     """Build grounded concierge notes for all cards in one LLM call.
 
     Args:
@@ -285,8 +376,9 @@ def build_batched_reasons(
         timeout: LLM call timeout in seconds.
 
     Returns:
-        Dict mapping str(card_index_1based) → reason string.
+        (note_dict, ReasoningResult) where note_dict maps str(1-based index) → reason.
         Falls back to deterministic reason per card on any failure.
+        ReasoningResult.success is True ONLY when at least one LLM note was accepted.
         Never raises.
     """
     # Build deterministic fallback map upfront
@@ -294,21 +386,52 @@ def build_batched_reasons(
 
     if not _flag_enabled():
         logger.debug("batched_reason_builder: flag disabled, using deterministic")
-        return fallback
+        result = ReasoningResult(
+            attempted=False,
+            success=False,
+            failure_reason="flag_disabled",
+            fallback_count=len(cards_data),
+        )
+        return fallback, result
 
     if not cards_data:
-        return fallback
+        return fallback, ReasoningResult(attempted=False, failure_reason="no_cards")
 
     if len(cards_data) > MAX_CARDS_FOR_LLM_BATCH:
         logger.info(
             "batched_reason_builder: card_count=%d exceeds max=%d, using deterministic",
             len(cards_data), MAX_CARDS_FOR_LLM_BATCH,
         )
-        return fallback
+        return fallback, ReasoningResult(
+            attempted=False,
+            failure_reason=f"card_count_exceeds_max:{len(cards_data)}",
+            fallback_count=len(cards_data),
+        )
 
     t_start = time.monotonic()
+    reasoning_result = ReasoningResult(
+        attempted=True,
+        model=CONCIERGE_BATCHED_REASONING_MODEL,
+    )
+
     try:
-        prompt = _build_batch_prompt(cards_data, frame)
+        # ── Build prompt ──────────────────────────────────────────────────────
+        # Any exception here is a prompt_error — must NOT be reported as success.
+        try:
+            prompt = _build_batch_prompt(cards_data, frame)
+        except Exception as prompt_exc:
+            elapsed_ms = int((time.monotonic() - t_start) * 1000)
+            logger.error(
+                "batched_reason_builder: prompt_build_error elapsed_ms=%d error=%s",
+                elapsed_ms, prompt_exc,
+            )
+            reasoning_result.prompt_error = True
+            reasoning_result.success = False
+            reasoning_result.failure_reason = f"prompt_build_error:{prompt_exc}"
+            reasoning_result.fallback_count = len(cards_data)
+            return fallback, reasoning_result
+
+        # ── Call LLM ─────────────────────────────────────────────────────────
         raw_response = _call_llm(prompt, timeout=timeout)
         elapsed_ms = int((time.monotonic() - t_start) * 1000)
 
@@ -317,36 +440,42 @@ def build_batched_reasons(
                 "batched_reason_builder: llm_no_response elapsed_ms=%d, using deterministic",
                 elapsed_ms,
             )
-            return fallback
+            reasoning_result.failure_reason = "llm_no_response"
+            reasoning_result.fallback_count = len(cards_data)
+            return fallback, reasoning_result
 
+        # ── Parse LLM response ────────────────────────────────────────────────
         parsed = _parse_llm_response(raw_response, len(cards_data))
         if not parsed:
             logger.warning(
                 "batched_reason_builder: parse_failed elapsed_ms=%d response=%r",
                 elapsed_ms, raw_response[:200],
             )
-            return fallback
+            reasoning_result.failure_reason = "parse_failed"
+            reasoning_result.fallback_count = len(cards_data)
+            return fallback, reasoning_result
 
-        # Validate each LLM reason; fall back per-card if invalid
+        # ── Validate each LLM note ────────────────────────────────────────────
         from app.concierge.reason_validator import validate_reason
         evidence_by_idx = {
             str(i): ev for i, (_e, ev, _rs, _det) in enumerate(cards_data, 1)
         }
 
-        result = dict(fallback)  # start with all deterministic fallbacks
-        accepted = 0
+        result_notes = dict(fallback)  # start with all deterministic fallbacks
+        accepted: Dict[str, str] = {}
         rejected_reasons: List[str] = []
 
         for idx_str, llm_reason in parsed.items():
-            # None means LLM signaled thin evidence — stay on deterministic fallback
+            # None means LLM signaled thin evidence — omit note (use fallback or empty)
             if llm_reason is None:
                 rejected_reasons.append(f"idx={idx_str}:thin_evidence_null")
+                reasoning_result.omitted_count += 1
                 continue
 
             idx_int = None
             try:
                 idx_int = int(idx_str)
-                cards_data[idx_int - 1][0]  # validate index
+                cards_data[idx_int - 1][0]  # validate index in range
             except (ValueError, IndexError):
                 continue
 
@@ -358,36 +487,65 @@ def build_batched_reasons(
             words = llm_reason.split()
             if len(words) < _REASON_MIN_WORDS:
                 rejected_reasons.append(f"idx={idx_str}:too_short")
+                reasoning_result.rejected_count += 1
                 continue
             if len(llm_reason) > _REASON_MAX_CHARS:
                 llm_reason = llm_reason[:_REASON_MAX_CHARS].rsplit(" ", 1)[0] + "…"
 
             is_valid, rejection = validate_reason(llm_reason, frame, ev)
             if is_valid:
-                result[idx_str] = llm_reason
-                accepted += 1
+                result_notes[idx_str] = llm_reason
+                accepted[idx_str] = llm_reason
+                reasoning_result.accepted_count += 1
             else:
                 rejected_reasons.append(f"idx={idx_str}:{rejection}")
+                reasoning_result.rejected_count += 1
 
-        validator_rejected = len([r for r in rejected_reasons if "thin_evidence" not in r])
+        # ── Cross-card diversity check ────────────────────────────────────────
+        if len(accepted) >= 2 and not _check_note_diversity(accepted):
+            logger.warning(
+                "batched_reason_builder: low_diversity accepted=%d, flagging",
+                len(accepted),
+            )
+            reasoning_result.diversity_flagged = True
+            # Don't discard — let them render (per-card validator already blocked worst cases)
+
+        reasoning_result.fallback_count = len(cards_data) - reasoning_result.accepted_count - reasoning_result.omitted_count
+        reasoning_result.validator_rejection_reasons = rejected_reasons
+
+        # success = True only when at least one LLM note was accepted
+        reasoning_result.success = reasoning_result.accepted_count >= 1
+        if not reasoning_result.success:
+            reasoning_result.failure_reason = (
+                "all_llm_notes_rejected_or_thin"
+                if not reasoning_result.failure_reason
+                else reasoning_result.failure_reason
+            )
+
+        validator_rejected = reasoning_result.rejected_count
         logger.info(
             "batched_reason_builder: llm_path "
-            "grounded_reason_model=%s "
-            "grounded_reason_attempted=%d "
-            "grounded_reason_success=%d "
-            "fallback_note_count=%d "
+            "reasoning_model=%s "
+            "reasoning_attempted=true "
+            "reasoning_success=%s "
+            "llm_accepted_count=%d "
             "validator_rejected_count=%d "
+            "note_omitted_count=%d "
+            "fallback_count=%d "
+            "diversity_flagged=%s "
             "elapsed_ms=%d "
             "rejected=%r",
             CONCIERGE_BATCHED_REASONING_MODEL,
-            len(cards_data),
-            accepted,
-            len(cards_data) - accepted,
+            reasoning_result.success,
+            reasoning_result.accepted_count,
             validator_rejected,
+            reasoning_result.omitted_count,
+            reasoning_result.fallback_count,
+            reasoning_result.diversity_flagged,
             elapsed_ms,
             rejected_reasons,
         )
-        return result
+        return result_notes, reasoning_result
 
     except Exception as exc:
         elapsed_ms = int((time.monotonic() - t_start) * 1000)
@@ -395,4 +553,7 @@ def build_batched_reasons(
             "batched_reason_builder: unhandled_error elapsed_ms=%d error=%s",
             elapsed_ms, exc,
         )
-        return fallback
+        reasoning_result.success = False
+        reasoning_result.failure_reason = f"unhandled_error:{exc}"
+        reasoning_result.fallback_count = len(cards_data)
+        return fallback, reasoning_result
