@@ -617,6 +617,36 @@ class ConciergeService:
         A failed live-research call must NOT break the concierge flow — fall
         back to existing curated/app-database/sample paths instead.
         """
+        # ── Semantic Retrieval v1 (highest priority when flag ON) ─────────────
+        semantic_enabled = bool(
+            getattr(self._settings, "concierge_semantic_retrieval_v1_enabled", False)
+        )
+        if semantic_enabled and intent in self._FAST_DYNAMIC_INTENTS and destination:
+            try:
+                from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
+                from app.models.concierge import SOURCE_NONE, SOURCE_UNAVAILABLE
+                logger.info(
+                    "concierge.semantic_retrieval_v1 intent=%s destination=%r query=%r",
+                    intent, destination, user_query,
+                )
+                result = run_semantic_retrieval_v1(
+                    user_query=user_query,
+                    destination=destination,
+                    prior_identity_keys=prior_identity_keys if prior_identity_keys else frozenset(),
+                )
+                if result.restaurants or result.attractions:
+                    return result
+                # No verified cards — fall through to fast_dynamic or slow pipeline
+                logger.info(
+                    "concierge.semantic_retrieval_v1: no_verified_cards, falling_through "
+                    "intent=%s destination=%r query=%r",
+                    intent, destination, user_query,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "concierge.semantic_retrieval_v1 failed, falling_through: %s", exc
+                )
+
         # ── Fast dynamic path ─────────────────────────────────────────────────
         fast_enabled = bool(
             getattr(self._settings, "concierge_fast_dynamic_place_search_v1_enabled", False)
