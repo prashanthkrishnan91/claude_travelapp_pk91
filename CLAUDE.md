@@ -10,7 +10,7 @@ Before work, read only the smallest needed subset of:
 4. `docs/ai/EXECUTION_PRINCIPLES.md` — think-before-coding, simplicity-first, surgical changes, and goal-driven execution for every prompt
 5. `docs/ai/ROOT_CAUSE_QUALITY_BAR.md` — bounded root-cause quality bar for bugs, regressions, complex features, and reviews
 6. `docs/ai/skills/README.md` — task-specific workflow skill router
-7. `docs/ai/CLAUDE_PERSONAL_SKILLS.md` — optional personal Claude skill routing when a prompt names a personal skill
+7. `docs/ai/CLAUDE_PERSONAL_SKILLS.md` — optional personal Claude skill routing when a prompt names a personal skill, including runtime log retrieval with `railway-logs`
 8. `docs/ai/DESIGN_VISION.md` — long-term aspirational UI direction and timing gate when doing major design work
 9. `docs/ai/UI_BASELINE.md` — UI baseline and known visual costs when doing UI work
 10. `docs/ai/CLAUDE_WORKFLOW_KIT.md` — stable project constraints only when needed
@@ -31,6 +31,7 @@ Core rules:
 - No broad discovery. Read primary target files first; fallback reads only if blocked.
 - Classify issue severity before choosing Codex patch, Sonnet full plumbing analysis, or split plan.
 - Do not keep patching after failed patches. After one failed patch, reclassify. After two related patches, escalate to full plumbing analysis or split plan.
+- When runtime evidence matters, use the `railway-logs` personal Claude skill if available before coding. This applies to Railway/deployment errors, crashes, recent errors, 4xx/5xx responses, provider failures, auth/cache/persistence mismatches, and cases where backend logs disagree with UI behavior. Summarize only relevant evidence; do not ask the user to paste Railway JSON/logs unless the skill is unavailable.
 - Smallest safe patch. No unrelated refactors.
 - For non-trivial work, state assumptions and success criteria before coding.
 - Every changed line must trace to the task.
