@@ -59,9 +59,11 @@ def _mock_place_response() -> PlaceRecommendationsResponse:
         sources=["https://example.com/source"],
         warnings=[],
     )
-def test_missing_intent_classifier_version_retries_without_field(caplog):
+def test_intent_classifier_version_never_in_insert_row(caplog):
+    # intent_classifier_version was removed from base_row to avoid PGRST204;
+    # its value is emitted in app logs via request_log_event instead.
     _SCHEMA_DRIFT_WARNED_COLUMNS.clear()
-    db = _FakeDb(errors=[_schema_err("PGRST204", "intent_classifier_version"), None])
+    db = _FakeDb(errors=[])
     decision = route_prompt("best hotels in chicago", confidence_threshold=0.55)
 
     persist_concierge_request_log(
@@ -73,15 +75,14 @@ def test_missing_intent_classifier_version_retries_without_field(caplog):
         latency_ms=10,
     )
 
-    assert len(db.payloads) == 2
-    assert "intent_classifier_version" in db.payloads[0]
-    assert "intent_classifier_version" not in db.payloads[1]
-    assert "concierge.logging.schema_drift" in caplog.text
+    assert len(db.payloads) == 1
+    assert "intent_classifier_version" not in db.payloads[0]
 
 
 def test_two_missing_columns_are_dropped_across_retries():
     _SCHEMA_DRIFT_WARNED_COLUMNS.clear()
-    db = _FakeDb(errors=[_schema_err("PGRST204", "intent_classifier_version"), _schema_err("PGRST116", "pipeline_version"), None])
+    # Simulate two successive schema-drift errors on columns that ARE in base_row.
+    db = _FakeDb(errors=[_schema_err("PGRST204", "llm_model"), _schema_err("PGRST116", "pipeline_version"), None])
     decision = route_prompt("best hotels in chicago", confidence_threshold=0.55)
 
     persist_concierge_request_log(
@@ -94,8 +95,8 @@ def test_two_missing_columns_are_dropped_across_retries():
     )
 
     assert len(db.payloads) == 3
-    assert "intent_classifier_version" not in db.payloads[1]
-    assert "intent_classifier_version" not in db.payloads[2]
+    assert "llm_model" not in db.payloads[1]
+    assert "llm_model" not in db.payloads[2]
     assert "pipeline_version" not in db.payloads[2]
 
 
@@ -104,7 +105,7 @@ def test_warning_emitted_once_per_process_per_column(caplog):
     decision = route_prompt("best hotels in chicago", confidence_threshold=0.55)
 
     for _ in range(2):
-        db = _FakeDb(errors=[_schema_err("PGRST204", "intent_classifier_version"), None])
+        db = _FakeDb(errors=[_schema_err("PGRST204", "llm_model"), None])
         persist_concierge_request_log(
             db=db,
             user_id=UUID("00000000-0000-0000-0000-000000000012"),
