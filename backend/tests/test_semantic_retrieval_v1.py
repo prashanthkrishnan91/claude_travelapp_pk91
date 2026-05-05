@@ -793,3 +793,258 @@ class TestFeatureFlagBehavior:
         assert "concierge_semantic_retrieval_v1_enabled: bool = False" in config_src, (
             "Default for concierge_semantic_retrieval_v1_enabled must be False"
         )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PR-2.5: Brewery Semantic Retrieval Coverage Tests
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestBreweryRetrievalPlannerCoverage:
+    """PR-2.5: RetrievalPlanner synonym expansion for breweries plural/variant forms."""
+
+    def _frame(self, query: str, destination: str = "Chicago"):
+        from app.concierge.frame_extractor import extract_frame
+        return extract_frame(query, destination)
+
+    def test_best_breweries_generates_brewery_queries(self):
+        """'best breweries' → retrieval queries include brewery/taproom/brewpub variants."""
+        from app.concierge.retrieval_planner import plan_queries
+        frame = self._frame("best breweries")
+        queries = plan_queries(frame)
+        assert len(queries) >= 1
+        brew_queries = [q for q in queries if "brew" in q.lower() or "taproom" in q.lower()]
+        assert brew_queries, (
+            f"Expected at least one brewery-related query for 'best breweries', got: {queries}"
+        )
+        assert all("chicago" in q.lower() for q in queries), (
+            f"All queries must include destination Chicago: {queries}"
+        )
+
+    def test_best_breweries_waterfront_preserves_both_concept_and_geo(self):
+        """'best breweries along the waterfront' → queries preserve brewery AND waterfront hint."""
+        from app.concierge.retrieval_planner import plan_queries
+        frame = self._frame("best breweries along the waterfront")
+        queries = plan_queries(frame)
+
+        # At least one query must contain a brewery concept
+        brew_queries = [q for q in queries if "brew" in q.lower() or "taproom" in q.lower()]
+        assert brew_queries, f"Expected brewery concept in queries: {queries}"
+
+        # At least one query must contain a waterfront geo hint
+        geo_queries = [q for q in queries if "waterfront" in q.lower() or "riverwalk" in q.lower()]
+        assert geo_queries, f"Expected waterfront geo hint in at least one query: {queries}"
+
+    def test_breweries_synonym_expansion_key_exists(self):
+        """Synonym expansion must have 'breweries' as a direct key for open-vocab fallback."""
+        from app.concierge.retrieval_planner import _SYNONYM_EXPANSIONS
+        assert "breweries" in _SYNONYM_EXPANSIONS, (
+            "'breweries' must be in _SYNONYM_EXPANSIONS so plural forms expand correctly."
+        )
+        variants = _SYNONYM_EXPANSIONS["breweries"]
+        assert any("brew" in v.lower() for v in variants), (
+            f"'breweries' expansion must include brewery-related variants: {variants}"
+        )
+
+    def test_brewpub_generates_brewery_queries(self):
+        """'best brewpubs' → queries include brewpub and brewery variants."""
+        from app.concierge.retrieval_planner import plan_queries
+        frame = self._frame("best brewpubs")
+        queries = plan_queries(frame)
+        assert any("brew" in q.lower() for q in queries), (
+            f"Expected brewery-related queries for 'best brewpubs': {queries}"
+        )
+
+    def test_taproom_generates_brewery_queries(self):
+        """'taproom options' → queries include taproom/brewery variants."""
+        from app.concierge.retrieval_planner import plan_queries
+        frame = self._frame("taproom options")
+        queries = plan_queries(frame)
+        assert any("taproom" in q.lower() or "brew" in q.lower() for q in queries), (
+            f"Expected taproom-related queries: {queries}"
+        )
+
+
+class TestBreweryEntityGating:
+    """PR-2.5: Brewery candidates still require Google place_id, OPERATIONAL, maps URI."""
+
+    def test_brewery_place_rejected_if_missing_place_id(self):
+        from app.concierge.place_entity_layer import build_entity_layer
+        from app.concierge.provider_executor import ProviderQueryResult
+        place = _make_raw_place(name="No ID Brewery", place_id="", types=["brewery"])
+        result = ProviderQueryResult(query="brewery Chicago", places=[place], latency_ms=10)
+        entities, stats = build_entity_layer([result], frozenset())
+        assert len(entities) == 0, "Brewery with no place_id must be rejected"
+
+    def test_brewery_place_rejected_if_closed(self):
+        from app.concierge.place_entity_layer import build_entity_layer
+        from app.concierge.provider_executor import ProviderQueryResult
+        place = _make_raw_place(
+            name="Closed Brewery", business_status="CLOSED_PERMANENTLY", types=["brewery"]
+        )
+        result = ProviderQueryResult(query="brewery Chicago", places=[place], latency_ms=10)
+        entities, stats = build_entity_layer([result], frozenset())
+        assert len(entities) == 0, "Non-OPERATIONAL brewery must be rejected"
+
+    def test_brewery_place_accepted_when_valid(self):
+        from app.concierge.place_entity_layer import build_entity_layer
+        from app.concierge.provider_executor import ProviderQueryResult
+        place = _make_raw_place(
+            name="Goose Island Brewing", place_id="ChIJ_goose_valid",
+            maps_uri="https://maps.google.com/?cid=999",
+            types=["brewery", "bar"], business_status="OPERATIONAL",
+        )
+        result = ProviderQueryResult(query="brewery Chicago", places=[place], latency_ms=10)
+        entities, stats = build_entity_layer([result], frozenset())
+        assert len(entities) == 1, "Valid OPERATIONAL brewery with place_id and maps URI must pass"
+        assert entities[0].name == "Goose Island Brewing"
+
+
+class TestBreweryReasonNoUnsupportedClaims:
+    """PR-2.5: Brewery reason text must not claim unsupported waterfront view."""
+
+    def _build_reason(self, query: str, types=None, source_query: str = "brewery Chicago"):
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.ranker import rank_entities, build_evidence_bundle, PlaceEntity
+        from app.concierge.safe_reason_builder import build_safe_reason
+
+        frame = extract_frame(query, "Chicago")
+        entity = PlaceEntity(
+            place_id="ChIJ_test",
+            name="Test Brewery",
+            types=types or ["brewery", "bar"],
+            primary_type="brewery",
+            rating=4.3,
+            user_rating_count=400,
+            business_status="OPERATIONAL",
+            formatted_address="100 N Riverside Dr, Chicago, IL",
+            google_maps_uri="https://maps.google.com/?cid=1",
+            website_uri=None,
+            price_level=None,
+            lat=41.88,
+            lng=-87.63,
+            source_query=source_query,
+        )
+        ranked = rank_entities([entity], frame, top_n=1)
+        assert ranked, "Expected ranked entity"
+        entity, score = ranked[0]
+        evidence = build_evidence_bundle(entity, frame, score)
+        return build_safe_reason(entity, evidence, frame, score)
+
+    def test_no_confirmed_waterfront_claim(self):
+        reason = self._build_reason(
+            "best breweries along the waterfront",
+            source_query="brewery Chicago waterfront",
+        )
+        reason_lower = reason.lower()
+        assert "has a waterfront view" not in reason_lower, reason
+        assert "confirmed waterfront" not in reason_lower, reason
+
+    def test_reason_includes_brewery_anchor(self):
+        reason = self._build_reason("best breweries")
+        assert len(reason) >= 10, "Reason must not be empty for brewery ask"
+
+
+class TestMoreOptionsFollowUpBehavior:
+    """PR-2.5: 'more options' follow-up must exclude prior identity keys, top 3 must not regress."""
+
+    def _mock_brewery_places(self) -> List[Dict[str, Any]]:
+        return [
+            _make_raw_place(
+                name="Goose Island Brewing",
+                place_id="ChIJ_goose",
+                maps_uri="https://maps.google.com/?cid=100",
+                types=["brewery", "bar"],
+                rating=4.5, review_count=1200,
+            ),
+            _make_raw_place(
+                name="Half Acre Beer Company",
+                place_id="ChIJ_halfacre",
+                maps_uri="https://maps.google.com/?cid=200",
+                types=["brewery", "bar"],
+                rating=4.6, review_count=800,
+            ),
+            _make_raw_place(
+                name="Revolution Brewing",
+                place_id="ChIJ_revo",
+                maps_uri="https://maps.google.com/?cid=300",
+                types=["brewery", "bar", "restaurant"],
+                rating=4.4, review_count=900,
+            ),
+            _make_raw_place(
+                name="Off Color Brewing",
+                place_id="ChIJ_offcolor",
+                maps_uri="https://maps.google.com/?cid=400",
+                types=["brewery"],
+                rating=4.2, review_count=300,
+            ),
+        ]
+
+    def _mock_fanout(self, places: List[Dict[str, Any]]):
+        from app.concierge.provider_executor import ProviderQueryResult
+        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15):
+            return [ProviderQueryResult(query=q, places=places[:], latency_ms=80) for q in queries]
+        return fake_execute
+
+    def test_more_options_excludes_prior_identity_keys(self):
+        """'more options' follow-up: properly formatted prior_identity_keys cause dedup."""
+        from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
+        from app.concierge.place_entity_layer import _normalize_text
+        from app.models.concierge import SOURCE_LIVE_SEARCH
+
+        places = self._mock_brewery_places()
+
+        with patch("app.concierge.provider_executor.execute_fanout",
+                   side_effect=self._mock_fanout(places)):
+            first_result = run_semantic_retrieval_v1(
+                user_query="best breweries",
+                destination="Chicago",
+                api_key="fake_key",
+            )
+
+        assert first_result.source_status == SOURCE_LIVE_SEARCH
+        first_names = {c.name for c in first_result.restaurants}
+
+        # Build identity keys in the format the entity layer uses (pid:/gmaps: prefixes)
+        first_keys: set = set()
+        for c in first_result.restaurants:
+            gv = c.google_verification
+            if gv:
+                if gv.provider_place_id:
+                    first_keys.add(f"pid:{_normalize_text(gv.provider_place_id)}")
+                if gv.google_maps_uri:
+                    first_keys.add(f"gmaps:{_normalize_text(gv.google_maps_uri)}")
+
+        with patch("app.concierge.provider_executor.execute_fanout",
+                   side_effect=self._mock_fanout(places)):
+            second_result = run_semantic_retrieval_v1(
+                user_query="more options",
+                destination="Chicago",
+                prior_identity_keys=frozenset(first_keys),
+                api_key="fake_key",
+            )
+
+        # Second result must not repeat cards from the first result
+        second_names = {c.name for c in second_result.restaurants}
+        overlap = first_names & second_names
+        assert not overlap, (
+            f"'more options' follow-up must not re-show prior cards. "
+            f"Overlap: {overlap}. prior_keys passed: {first_keys}"
+        )
+
+    def test_top_3_returns_at_most_requested_count(self):
+        """SemanticRanker with max_cards=3 must not return more than 3 cards."""
+        from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
+
+        places = self._mock_brewery_places()
+        with patch("app.concierge.provider_executor.execute_fanout",
+                   side_effect=self._mock_fanout(places)):
+            result = run_semantic_retrieval_v1(
+                user_query="best breweries",
+                destination="Chicago",
+                api_key="fake_key",
+                max_cards=3,
+            )
+
+        assert len(result.restaurants) <= 3, (
+            f"max_cards=3 must return ≤3 cards, got {len(result.restaurants)}"
+        )

@@ -31,9 +31,13 @@ HARD_CAP_QUERIES = 4
 # no expansion and still work via direct name matching.
 _SYNONYM_EXPANSIONS: dict = {
     "brewery": ["brewery", "taproom", "brewpub"],
+    "breweries": ["breweries", "brewery", "taproom", "brewpub"],
     "brewing": ["brewing", "brewery", "taproom"],
     "brewpub": ["brewpub", "brewery", "taproom"],
+    "brewpubs": ["brewpubs", "brewpub", "brewery"],
     "taproom": ["taproom", "brewery", "brewpub"],
+    "taprooms": ["taprooms", "taproom", "brewery"],
+    "craft beer": ["craft beer", "brewery", "taproom"],
     "beer": ["beer", "brewery", "craft beer"],
     "ale": ["ale", "brewery", "craft beer"],
     "winery": ["winery", "wine bar", "vineyard"],
