@@ -1,5 +1,77 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-05) — AI Concierge Semantic Place Understanding v2 (venue head, open-class detector, location modifiers, wrong-category penalty)
+
+### Production finding (post-PR #237 validation)
+With `CONCIERGE_SEMANTIC_RETRIEVAL_V1_ENABLED=true`:
+- "best waterfront breweries" returned mostly waterfront restaurants/parks; reasons repeated "Good waterfront match" on every card.
+- "best izakayas in Fulton Street" did not enter semantic retrieval — only the outer `concierge.request` log appeared.
+
+This proved the system still had legacy closed-intent gates and weak frame extraction.
+
+### Root cause
+1. **Frame extractor treated geo/style modifiers as venue heads.** "best waterfront breweries" has no preposition before the noun, so `_MODIFIER_SPLIT_RE` did not split. After filler removal the candidate tokens were `["waterfront", "breweries"]`. The extractor picked "waterfront" (token order) as the primary concept with confidence 0.95, and "brewery" came in as secondary. Every downstream stage (retrieval planner, ranker, safe-reason builder) anchored on the modifier instead of the venue head, producing cards titled "Good waterfront match …" and surfacing waterfront restaurants/parks.
+2. **`INTENT_GENERAL` was excluded from `_FAST_DYNAMIC_INTENTS`.** "izakaya" is not in any closed-pattern bucket; `_detect_intent("best izakayas in Fulton Street")` returned `INTENT_GENERAL`; `_FAST_DYNAMIC_INTENTS` did not include it; semantic retrieval was skipped silently with `concierge.semantic_skip … intent_not_eligible`. The fix per the spec is **not** to add "izakaya" to a keyword bucket but to add an open-class place-ask detector that admits unknown venue nouns by query shape.
+3. **Safe reason builder repeated "in waterfront-targeted search area" on every card** when geo_fit was between 0.55 and 0.80, producing the visible repetition the user reported.
+
+### Durable fix (one PR, no PR-3 batched LLM reasoning)
+- **`backend/app/concierge/frame_extractor.py`**
+  - New `_GEO_MODIFIER_TOKENS`, `_AMBIENCE_MODIFIER_TOKENS`, `_USE_CASE_TOKENS` sets.
+  - `_classified_modifier_tokens()` builds the union of tokens already classified as geo/ambience/value/use-case modifiers; `_extract_primary_concepts()` excludes them so the venue head wins.
+  - `_extract_location_modifiers()` parses concrete neighborhood/street anchors (e.g., "Fulton Street", "West Loop") from prepositional phrases.
+  - `_extract_use_cases()` captures occasion/use-case tokens ("reading", "groups", "dates").
+  - New `is_open_class_place_ask()` open-vocabulary detector — high-recall positive triggers, hard-negative list for clearly non-place asks (flights, weather, packing, currency, visa, points/miles redemption, budget plans, itinerary edits).
+  - `ExperienceFrame` gains `location_modifiers`, `use_cases`, `open_class_place_detected`. Modifier-split regex extended to include "good for / great for / perfect for".
+- **`backend/app/concierge/retrieval_planner.py`**
+  - `plan_queries()` is now venue-first: each query starts with the primary venue (or a near-synonym) and only then adds destination + concrete location anchor (priority) + geo hint. A fourth query combines venue + location + geo when both are present.
+- **`backend/app/concierge/ranker.py`**
+  - New `_WRONG_CATEGORY_PENALTY = 0.20` applied when the user named a high-confidence venue concept (`confidence ≥ 0.85`) and the entity's `subtype_fit < 0.30`. Prevents wrong-category cards from dominating brewery/sushi asks. Penalty is soft (not a hard reject) so the pipeline degrades gracefully when no on-concept results exist.
+- **`backend/app/concierge/safe_reason_builder.py`**
+  - Modifier-only labels ("waterfront", "rooftop", "river view", "romantic", etc.) are never treated as venue heads in user-visible text — defensive guard against any upstream extraction mistake.
+  - Removed the repetitive "in {hint}-targeted search area" branch; only confirmed proximity (`geo_fit ≥ 0.80`) emits a geo phrase. Verify-suffix already handles unverified attributes.
+- **`backend/app/services/concierge.py`**
+  - New `_OPEN_CLASS_ELIGIBLE_INTENTS = _FAST_DYNAMIC_INTENTS | {INTENT_GENERAL}`. When the semantic flag is on, `INTENT_GENERAL` queries that pass the open-class detector now enter Semantic Retrieval v1 without ever being added to a closed keyword bucket.
+  - New `concierge.semantic_eligible` log line with `eligibility_path=fast_dynamic_intent | open_class` and `open_class_place_detected=true|false`.
+  - `concierge.semantic_skip` log line now also reports `open_class_place_detected`.
+- **`backend/app/concierge/semantic_retrieval.py`**
+  - `semantic_retrieval_v1.turn` log now includes `open_class_place_detected`, `venue_concept`, `location_modifiers`, `soft_preferences`, `negative_constraints`, `use_cases`, `value_signals`, `ambiguity_flags`, and `wrong_category_low_subtype_fit` count.
+
+### Tests (37 new)
+- `TestVenueHeadPreservation` — "waterfront breweries" / "rooftop bars" / "outdoor breweries" / "romantic tapas" yield correct venue heads; modifiers stay in geography_hints / soft_preferences.
+- `TestLocationModifierExtraction` — "izakayas in Fulton Street" → `location_modifiers=["Fulton Street"]`; destination not echoed; "West Loop" captured.
+- `TestOpenClassPlaceAskDetector` — 11 place-like asks (izakaya, tea houses, dessert bars, record stores, arcades, speakeasies, "where to grab drinks", ramen, "coffee shops good for reading", "places to dance") detected; 9 non-place asks (weather, packing, exchange rate, flights, visa, days-count, transfer partner, budget plan) rejected.
+- `TestRetrievalPlannerVenueFirstOpenClass` — izakaya queries start with venue and include "Fulton" anchor; "best waterfront breweries" generates only brewery/taproom-anchored queries; unknown venue nouns ("record stores") still venue-first.
+- `TestWrongCategoryPenalty` — waterfront park/steakhouse does not beat brewery on a brewery ask; `penalties > 0` for wrong-category entity.
+- `TestNonRepetitiveSafeReason` — no "Good waterfront match"; modifier-only labels never become venue heads in reason text; "targeted search area" phrase suppressed when geo_fit weak.
+- `TestSemanticIntegrationOpenClassIzakaya` — "best izakayas in Fulton Street" returns verified izakaya cards via mocked Google.
+- `TestSemanticTurnObservability` — turn log carries `open_class_place_detected`, `venue_concept`, `location_modifiers`, `retrieval_queries`, `wrong_category_low_subtype_fit`.
+- Updated `TestSemanticSkipObservability` — uses a non-place query ("currency exchange rate") to exercise the skip path; new `test_open_class_place_ask_enters_semantic` asserts the open-class path now admits `intent=INTENT_GENERAL` izakaya queries.
+
+### Validation cases (production checklist after deploy)
+With `CONCIERGE_SEMANTIC_RETRIEVAL_V1_ENABLED=true`:
+1. "best waterfront breweries" Chicago → `semantic_retrieval_v1.turn venue_concept='brewery' geo_hints=['waterfront'] outcome=ok`; brewery cards dominate; no "Good waterfront match" repetition.
+2. "best izakayas in Fulton Street" Chicago → `concierge.semantic_eligible … eligibility_path=open_class open_class_place_detected=True`; `semantic_retrieval_v1.turn venue_concept='izakaya' location_modifiers=['Fulton Street']`; izakaya cards (or honest empty result with limited verified matches wording).
+3. "nice sushi restaurants with a waterfront view" Chicago → unchanged tapas/sushi-first behavior; no claimed view; ambiguity_flags include `view_not_structurally_verifiable`.
+4. "romantic tapas but not too loud" Chicago → unchanged; concept=tapas; reasons safe.
+5. Place-like asks "tea houses", "dessert bars", "record stores", "arcades", "coffee shops good for reading" → all enter semantic retrieval.
+6. Non-place asks "what is the currency exchange rate", "what to pack", "how many days" → `concierge.semantic_skip semantic_skip_reason=intent_not_eligible open_class_place_detected=False`.
+
+### Production log validation after merge
+- **Open-class entry**: `concierge.semantic_eligible … open_class_place_detected=True eligibility_path=open_class`
+- **Skip path (non-place)**: `concierge.semantic_skip … open_class_place_detected=False`
+- **Turn log**: `semantic_retrieval_v1.turn … venue_concept='brewery' location_modifiers=[] geo_hints=['waterfront'] retrieval_queries=['brewery Chicago waterfront', …] rejection_stats={..., 'wrong_category_low_subtype_fit': N} outcome=ok`
+
+### Scope (not changed in this PR)
+- No PR-3 batched LLM reasoning.
+- No SQL, no schema changes.
+- No frontend changes.
+- No Yelp/Foursquare, no Tavily card minting, no editorial fabrication.
+- Existing Google verification trust gates (place_id + OPERATIONAL + maps URI) unchanged.
+
+**Supabase SQL**: No.
+
+---
+
 ## Last change (2026-05-05) — PR-2.5 Semantic Retrieval Coverage + No-Silent-Fallback Fix
 
 ### Production finding (post-PR #235 validation)

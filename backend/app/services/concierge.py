@@ -607,6 +607,15 @@ class ConciergeService:
         INTENT_MICHELIN_RESTAURANTS,
     }
 
+    # Intents where we still consider the open-class place-ask detector.
+    # INTENT_GENERAL is included so unknown venue nouns like "izakaya",
+    # "tea house", or "dessert bar" can enter Semantic Retrieval v1 without
+    # being added to a closed keyword bucket. INTENT_ATTRACTIONS is
+    # intentionally excluded — the existing live_research path already
+    # handles attractions and the semantic pipeline's place_kind_hints are
+    # food_and_drink biased in Phase 1.
+    _OPEN_CLASS_ELIGIBLE_INTENTS = _FAST_DYNAMIC_INTENTS | {INTENT_GENERAL}
+
     def _fetch_live_research(
         self,
         intent: str,
@@ -636,21 +645,72 @@ class ConciergeService:
         semantic_enabled = bool(
             getattr(self._settings, "concierge_semantic_retrieval_v1_enabled", False)
         )
+
+        # Open-class place-ask detection: lets unknown venue nouns
+        # (e.g., "izakaya", "tea house", "record store") enter semantic
+        # retrieval without being added to a closed keyword bucket. We import
+        # lazily so the existing slow pipeline keeps working when the
+        # frame_extractor module is unavailable.
+        open_class_detected = False
+        if semantic_enabled and destination:
+            try:
+                from app.concierge.frame_extractor import (
+                    extract_frame as _open_class_extract_frame,
+                    is_open_class_place_ask as _is_open_class_place_ask,
+                )
+                open_class_detected = bool(
+                    _is_open_class_place_ask(
+                        user_query,
+                        _open_class_extract_frame(user_query, destination).subtype_concepts,
+                    )
+                )
+            except Exception as exc:  # never fail eligibility because of detection error
+                logger.warning(
+                    "concierge.open_class_detect_failed: %s query=%r",
+                    exc, user_query,
+                )
+                open_class_detected = False
+
+        semantic_eligible = (
+            semantic_enabled
+            and bool(destination)
+            and (
+                intent in self._FAST_DYNAMIC_INTENTS
+                or (
+                    open_class_detected
+                    and intent in self._OPEN_CLASS_ELIGIBLE_INTENTS
+                )
+            )
+        )
+
         if semantic_enabled:
             if not destination:
                 logger.info(
                     "concierge.semantic_skip intent=%s query=%r "
-                    "semantic_skip_reason=no_destination",
-                    intent, user_query,
+                    "semantic_skip_reason=no_destination "
+                    "open_class_place_detected=%s",
+                    intent, user_query, open_class_detected,
                 )
-            elif intent not in self._FAST_DYNAMIC_INTENTS:
+            elif not semantic_eligible:
                 logger.info(
                     "concierge.semantic_skip intent=%s query=%r destination=%r "
-                    "semantic_skip_reason=intent_not_eligible eligible_intents=%s",
-                    intent, user_query, destination, sorted(self._FAST_DYNAMIC_INTENTS),
+                    "semantic_skip_reason=intent_not_eligible eligible_intents=%s "
+                    "open_class_place_detected=%s",
+                    intent, user_query, destination,
+                    sorted(self._OPEN_CLASS_ELIGIBLE_INTENTS),
+                    open_class_detected,
+                )
+            else:
+                logger.info(
+                    "concierge.semantic_eligible intent=%s query=%r destination=%r "
+                    "open_class_place_detected=%s eligibility_path=%s",
+                    intent, user_query, destination, open_class_detected,
+                    "fast_dynamic_intent"
+                    if intent in self._FAST_DYNAMIC_INTENTS
+                    else "open_class",
                 )
 
-        if semantic_enabled and intent in self._FAST_DYNAMIC_INTENTS and destination:
+        if semantic_eligible:
             try:
                 from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
                 from app.models.concierge import SOURCE_NONE, SOURCE_UNAVAILABLE

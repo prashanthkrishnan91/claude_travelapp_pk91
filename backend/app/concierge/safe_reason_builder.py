@@ -41,6 +41,18 @@ _WEAK_VERIFY_ATTRIBUTES = {
     "intimate", "cozy", "ambiance", "vibe",
 }
 
+# Tokens that are modifier-only (never a true venue head). If the extracted
+# primary concept happens to be one of these, the reason builder will treat
+# it as having no concept anchor instead of saying "Good waterfront match".
+_MODIFIER_ONLY_LABELS = {
+    "waterfront", "riverwalk", "lakefront", "rooftop", "outdoor", "indoor",
+    "patio", "terrace", "view", "views", "river", "lake", "ocean", "sea",
+    "bay", "harbor", "harbour", "coast", "beachfront", "waterside",
+    "downtown", "uptown", "midtown",
+    "romantic", "intimate", "cozy", "cosy", "casual", "quiet", "lively",
+    "trendy", "hip", "fancy", "upscale", "luxury", "modern", "elegant",
+}
+
 
 def _clip(text: str, max_chars: int = _MAX_REASON_CHARS) -> str:
     text = text.strip()
@@ -126,6 +138,11 @@ def build_safe_reason(
     """
     destination = frame.destination
     primary_concept = frame.subtype_concepts[0].label if frame.subtype_concepts else ""
+    # Defensive: never treat a pure modifier word as a venue head in the
+    # user-visible reason text. This prevents repetition like
+    # "Good waterfront match" on every card if upstream extraction misfires.
+    if primary_concept and primary_concept.strip().lower() in _MODIFIER_ONLY_LABELS:
+        primary_concept = ""
     geo_hints = frame.geography_hints
     soft_prefs = frame.soft_preferences
     neg_constraints = frame.negative_constraints
@@ -162,11 +179,13 @@ def build_safe_reason(
         else:
             match_qual = f"Returned for {primary_concept} search"
 
-        # Geo context: honest phrasing
+        # Geo context: honest phrasing. Only state proximity when the entity
+        # address actually confirms it (geo_fit ≥ 0.80). For weaker signals
+        # the verify suffix handles transparency, so we omit the geo phrase
+        # to avoid the same line ("Good waterfront match") repeating on
+        # every card in a turn.
         if geo_hints and rank_score.geo_fit >= 0.80:
             geo_phrase = f"near {geo_hints[0]}"
-        elif geo_hints and rank_score.geo_fit >= 0.55:
-            geo_phrase = f"in {geo_hints[0]}-targeted search area"
         else:
             geo_phrase = ""
 

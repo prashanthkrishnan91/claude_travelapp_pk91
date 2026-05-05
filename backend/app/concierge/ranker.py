@@ -43,6 +43,17 @@ _W_POPULARITY = 0.06
 _W_TRIP_CONTEXT = 0.04
 _W_VALUE = 0.04
 
+# Wrong-category penalty applied when the user named a strong venue type and
+# the entity matches a clearly different, unrelated category. This is a soft
+# penalty (not a hard reject) so the pipeline can still degrade gracefully
+# when no on-concept results are available.
+_WRONG_CATEGORY_PENALTY = 0.20
+
+# Subtype-fit threshold below which an entity is treated as wrong-category
+# when the user named a confident venue concept. Above this, no penalty.
+_WRONG_CATEGORY_SUBTYPE_FIT_MAX = 0.30
+_STRONG_CONCEPT_CONFIDENCE_MIN = 0.85
+
 # Bayesian prior parameters for quality smoothing
 _BAYESIAN_M = 80.0    # pseudo-count prior
 _BAYESIAN_C = 4.0     # prior mean rating
@@ -434,6 +445,11 @@ def rank_entities(
     scored: List[Tuple[float, PlaceEntity, RankScore]] = []
     accepted: List[Tuple[PlaceEntity, RankScore]] = []
 
+    has_strong_concept = bool(
+        frame.subtype_concepts
+        and frame.subtype_concepts[0].confidence >= _STRONG_CONCEPT_CONFIDENCE_MIN
+    )
+
     for entity in entities:
         sf = _subtype_fit(entity, frame)
         gf = _geo_fit(entity, frame)
@@ -444,6 +460,12 @@ def rank_entities(
         tc = 0.5  # neutral trip context (Phase 1 — no hotel plumbing)
         vf = _value_fit(entity, frame)
         pen = 0.0
+
+        # Wrong-category penalty: when the user named a high-confidence venue
+        # type and the entity has very low subtype_fit, suppress the score
+        # so generic restaurants/parks don't dominate brewery/sushi asks.
+        if has_strong_concept and sf < _WRONG_CATEGORY_SUBTYPE_FIT_MAX:
+            pen += _WRONG_CATEGORY_PENALTY
 
         total = (
             _W_SUBTYPE_FIT * sf

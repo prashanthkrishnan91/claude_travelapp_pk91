@@ -1048,3 +1048,405 @@ class TestMoreOptionsFollowUpBehavior:
         assert len(result.restaurants) <= 3, (
             f"max_cards=3 must return ≤3 cards, got {len(result.restaurants)}"
         )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PR Semantic Place Understanding v2 — venue head, open-class detector,
+# location modifiers, wrong-category penalty, non-repetitive safe reasons.
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestVenueHeadPreservation:
+    """Geo / style modifiers must not win over the real venue noun."""
+
+    def test_waterfront_breweries_concept_is_brewery_not_waterfront(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("best waterfront breweries", "Chicago")
+        labels = [c.label for c in frame.subtype_concepts]
+        assert any(l in ("brewery", "breweries") for l in labels), (
+            f"Expected brewery as primary concept, got {labels}"
+        )
+        assert "waterfront" not in labels, (
+            f"'waterfront' must NOT be a venue concept, got {labels}"
+        )
+        assert "waterfront" in frame.geography_hints
+
+    def test_rooftop_bars_concept_is_bar_not_rooftop(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("best rooftop bars in Chicago", "Chicago")
+        labels = [c.label for c in frame.subtype_concepts]
+        assert "rooftop" not in labels, f"rooftop must be a modifier, got {labels}"
+
+    def test_romantic_tapas_concept_is_tapas_not_romantic(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("romantic tapas but not too loud", "Chicago")
+        labels = [c.label for c in frame.subtype_concepts]
+        assert any("tapa" in l for l in labels), f"Expected tapas concept, got {labels}"
+        assert "romantic" not in labels
+
+    def test_outdoor_breweries_concept_is_brewery(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("nice outdoor breweries", "Chicago")
+        labels = [c.label for c in frame.subtype_concepts]
+        assert any(l in ("brewery", "breweries") for l in labels), (
+            f"Expected brewery, got {labels}"
+        )
+
+
+class TestLocationModifierExtraction:
+    """Concrete neighborhood / street anchors get captured as location_modifiers."""
+
+    def test_izakayas_in_fulton_street_extracts_anchor(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("best izakayas in Fulton Street", "Chicago")
+        assert frame.location_modifiers, (
+            f"Expected a location modifier, got: {frame.location_modifiers}"
+        )
+        assert any("Fulton" in loc for loc in frame.location_modifiers), (
+            f"Expected 'Fulton Street' captured, got {frame.location_modifiers}"
+        )
+
+    def test_destination_alone_is_not_a_location_modifier(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("best sushi in Chicago", "Chicago")
+        # The destination itself should not be mirrored as a modifier
+        assert not any(
+            loc.strip().lower() == "chicago" for loc in frame.location_modifiers
+        ), f"Destination must not be echoed as location modifier: {frame.location_modifiers}"
+
+    def test_west_loop_neighborhood_captured(self):
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("dinner spots in West Loop", "Chicago")
+        assert any("West Loop" in loc or "West" in loc for loc in frame.location_modifiers), (
+            f"Expected 'West Loop' captured, got {frame.location_modifiers}"
+        )
+
+
+class TestOpenClassPlaceAskDetector:
+    """High-recall detector for place-like asks; rejects clear non-place asks."""
+
+    @pytest.mark.parametrize("query", [
+        "best izakayas in Fulton Street",
+        "best izakaya near here",
+        "tea houses",
+        "dessert bars",
+        "record stores",
+        "arcades",
+        "great speakeasies",
+        "where to grab drinks",
+        "best ramen shop",
+        "any good coffee shops good for reading",
+        "places to dance",
+    ])
+    def test_open_class_detects_place_like_asks(self, query):
+        from app.concierge.frame_extractor import extract_frame, is_open_class_place_ask
+        frame = extract_frame(query, "Chicago")
+        assert is_open_class_place_ask(query, frame.subtype_concepts), (
+            f"Expected open-class place ask for {query!r}"
+        )
+
+    @pytest.mark.parametrize("query", [
+        "what is the weather in Chicago",
+        "what to pack for Chicago",
+        "exchange rate for euros",
+        "best flights to Chicago",
+        "currency in Chicago",
+        "visa requirements for Chicago",
+        "how many days should I spend",
+        "transfer partner for points",
+        "budget plan for the trip",
+    ])
+    def test_open_class_rejects_non_place_asks(self, query):
+        from app.concierge.frame_extractor import extract_frame, is_open_class_place_ask
+        frame = extract_frame(query, "Chicago")
+        assert not is_open_class_place_ask(query, frame.subtype_concepts), (
+            f"Non-place ask must be rejected: {query!r}"
+        )
+
+
+class TestRetrievalPlannerVenueFirstOpenClass:
+    """Open-vocabulary nouns must produce venue-first queries."""
+
+    def _frame(self, query: str, destination: str = "Chicago"):
+        from app.concierge.frame_extractor import extract_frame
+        return extract_frame(query, destination)
+
+    def test_izakaya_query_is_venue_first(self):
+        from app.concierge.retrieval_planner import plan_queries
+        frame = self._frame("best izakayas in Fulton Street")
+        queries = plan_queries(frame)
+        assert any("izakaya" in q.lower() for q in queries), (
+            f"Expected izakaya in queries: {queries}"
+        )
+        # Concrete location anchor should appear in at least one query
+        assert any("fulton" in q.lower() for q in queries), (
+            f"Expected Fulton Street anchor in queries: {queries}"
+        )
+
+    def test_waterfront_breweries_planner_is_brewery_first(self):
+        from app.concierge.retrieval_planner import plan_queries
+        frame = self._frame("best waterfront breweries")
+        queries = plan_queries(frame)
+        # Each query must reference brewery/taproom as the venue head
+        assert all(
+            any(tok in q.lower() for tok in ("brew", "taproom"))
+            for q in queries
+        ), f"All queries must be venue-first (brewery): {queries}"
+
+    def test_unknown_venue_uses_literal_concept(self):
+        """Unknown venue noun should still produce a venue-first query without
+        requiring synonym expansion."""
+        from app.concierge.retrieval_planner import plan_queries
+        frame = self._frame("best record stores in Chicago")
+        queries = plan_queries(frame)
+        assert any("record" in q.lower() for q in queries), (
+            f"Expected record stores in queries: {queries}"
+        )
+        assert all("chicago" in q.lower() for q in queries), (
+            f"All queries must include destination: {queries}"
+        )
+
+
+class TestWrongCategoryPenalty:
+    """Wrong-category cards must not dominate when a clear venue type is requested."""
+
+    def _entity(
+        self, name, types, rating=4.0, review_count=200,
+        place_id=None, source_query="brewery Chicago waterfront",
+    ):
+        from app.concierge.place_entity_layer import PlaceEntity
+        return PlaceEntity(
+            place_id=place_id or f"pid_{abs(hash(name))}",
+            name=name,
+            formatted_address="123 Main St, Chicago, IL",
+            lat=41.88, lng=-87.63,
+            business_status="OPERATIONAL",
+            google_maps_uri=f"https://maps.google.com/?cid={abs(hash(name))}",
+            types=types,
+            primary_type=types[0] if types else None,
+            rating=rating,
+            user_rating_count=review_count,
+            price_level=None,
+            website_uri=None,
+            source_query=source_query,
+        )
+
+    def test_waterfront_park_does_not_beat_brewery(self):
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.ranker import rank_entities
+        brewery = self._entity(
+            "Goose Island Brewery", ["brewery", "bar"], rating=4.3, review_count=500,
+        )
+        # A waterfront park / restaurant that has nothing to do with breweries
+        # but matches geo from a brewery+waterfront search.
+        wrong_cat = self._entity(
+            "Riverside Steakhouse", ["steak_house", "restaurant"],
+            rating=4.7, review_count=2000,
+        )
+        frame = extract_frame("best waterfront breweries", "Chicago")
+        ranked = rank_entities([brewery, wrong_cat], frame)
+        names = [e.name for e, _ in ranked]
+        assert names[0] == "Goose Island Brewery", (
+            f"Brewery must rank first over wrong-category steakhouse, got {names}. "
+            f"Scores: {[(e.name, s.as_dict()) for e, s in ranked]}"
+        )
+
+    def test_wrong_category_penalty_lowers_score(self):
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.ranker import rank_entities
+        brewery = self._entity(
+            "Goose Island Brewery", ["brewery", "bar"], rating=4.3, review_count=500,
+        )
+        # Wrong-category: name has no brewery tokens, types don't match,
+        # and the source_query doesn't echo the concept either.
+        wrong_cat = self._entity(
+            "Lakeside Garden", ["park"], rating=4.6, review_count=1500,
+            source_query="park Chicago",
+        )
+        frame = extract_frame("best breweries", "Chicago")
+        ranked = rank_entities([brewery, wrong_cat], frame)
+        scores = {e.name: s for e, s in ranked}
+        # Wrong-category entity must have a positive penalty applied.
+        assert scores["Lakeside Garden"].penalties > 0, (
+            f"Expected wrong-category penalty on Lakeside Garden, "
+            f"got {scores['Lakeside Garden'].as_dict()}"
+        )
+        assert scores["Goose Island Brewery"].penalties == 0
+
+
+class TestNonRepetitiveSafeReason:
+    """Safe reasons must not invent a 'Good waterfront match' for every card,
+    and must never treat a modifier (waterfront, rooftop) as the venue head."""
+
+    def _entity(self, name, types, address="100 W Lake St, Chicago, IL"):
+        from app.concierge.place_entity_layer import PlaceEntity
+        return PlaceEntity(
+            place_id=f"pid_{abs(hash(name))}",
+            name=name,
+            formatted_address=address,
+            lat=41.88, lng=-87.63,
+            business_status="OPERATIONAL",
+            google_maps_uri=f"https://maps.google.com/?cid={abs(hash(name))}",
+            types=types,
+            primary_type=types[0] if types else None,
+            rating=4.3,
+            user_rating_count=400,
+            price_level=None,
+            website_uri=None,
+            source_query="brewery Chicago waterfront",
+        )
+
+    def test_reason_does_not_say_good_waterfront_match(self):
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.ranker import rank_entities, build_evidence_bundle
+        from app.concierge.safe_reason_builder import build_safe_reason
+        entity = self._entity("Goose Island Brewery", ["brewery", "bar"])
+        frame = extract_frame("best waterfront breweries", "Chicago")
+        ranked = rank_entities([entity], frame, top_n=1)
+        e, score = ranked[0]
+        evidence = build_evidence_bundle(e, frame, score)
+        reason = build_safe_reason(e, evidence, frame, score)
+        low = reason.lower()
+        # Must NOT say "waterfront match" — that's the modifier-as-venue bug
+        assert "waterfront match" not in low, (
+            f"Reason must not call waterfront a venue concept: {reason}"
+        )
+        # Must mention brewery (the real venue head)
+        assert "brewery" in low or "brew" in low, (
+            f"Reason must anchor on brewery: {reason}"
+        )
+
+    def test_modifier_only_label_does_not_become_venue_match(self):
+        """Defensive: even if the frame's primary concept were forced to be
+        'waterfront', the safe reason must not produce 'waterfront match'."""
+        from app.concierge.frame_extractor import (
+            ExperienceFrame, SubtypeConcept,
+        )
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        from app.concierge.safe_reason_builder import build_safe_reason
+        entity = self._entity("Generic Restaurant", ["restaurant"])
+        # Hand-craft a frame whose primary concept is a modifier-only token.
+        frame = ExperienceFrame(
+            literal_ask="waterfront restaurant",
+            normalized_ask="waterfront restaurant",
+            destination="Chicago",
+            subtype_concepts=[SubtypeConcept(label="waterfront", confidence=0.9, source="literal_primary")],
+            geography_hints=["waterfront"],
+        )
+        score = RankScore(total=0.7, subtype_fit=0.9, geo_fit=0.85)
+        evidence = build_evidence_bundle(entity, frame, score)
+        reason = build_safe_reason(entity, evidence, frame, score)
+        low = reason.lower()
+        assert "waterfront match" not in low, reason
+        assert "good waterfront" not in low, reason
+
+    def test_geo_phrase_omitted_when_unconfirmed(self):
+        """When geo_fit is weak, the visible reason should not echo a
+        geo-targeted-search-area phrase that repeats on every card."""
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        from app.concierge.safe_reason_builder import build_safe_reason
+        entity = self._entity("Goose Island Brewery", ["brewery", "bar"])
+        frame = extract_frame("best waterfront breweries", "Chicago")
+        score = RankScore(total=0.6, subtype_fit=0.9, geo_fit=0.55)
+        evidence = build_evidence_bundle(entity, frame, score)
+        reason = build_safe_reason(entity, evidence, frame, score)
+        low = reason.lower()
+        assert "targeted search area" not in low, (
+            f"Repetitive geo phrase must not appear in reason: {reason}"
+        )
+
+
+class TestSemanticIntegrationOpenClassIzakaya:
+    """Open-class place ask integration: izakayas in Fulton Street."""
+
+    def test_izakaya_in_fulton_street_returns_venue_first_cards(self):
+        from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
+        from app.models.concierge import SOURCE_LIVE_SEARCH
+        from app.concierge.provider_executor import ProviderQueryResult
+
+        izakaya_places = [
+            _make_raw_place(
+                name="Momotaro Izakaya",
+                place_id="pid_momotaro",
+                maps_uri="https://maps.google.com/?cid=901",
+                types=["japanese_restaurant", "restaurant"],
+                rating=4.5, review_count=600,
+                address="820 W Lake St, Chicago, IL, USA",
+            ),
+            _make_raw_place(
+                name="Izakaya Mita",
+                place_id="pid_mita",
+                maps_uri="https://maps.google.com/?cid=902",
+                types=["japanese_restaurant", "restaurant"],
+                rating=4.4, review_count=300,
+                address="1960 N Damen Ave, Chicago, IL, USA",
+            ),
+        ]
+
+        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15):
+            return [
+                ProviderQueryResult(query=q, places=izakaya_places[:], latency_ms=80)
+                for q in queries
+            ]
+
+        with patch("app.concierge.provider_executor.execute_fanout", side_effect=fake_execute):
+            result = run_semantic_retrieval_v1(
+                user_query="best izakayas in Fulton Street",
+                destination="Chicago",
+                api_key="fake_key",
+            )
+
+        assert result.source_status == SOURCE_LIVE_SEARCH, (
+            f"Expected live_search, got {result.source_status}"
+        )
+        assert len(result.restaurants) >= 1, (
+            f"Expected at least 1 izakaya card, got {len(result.restaurants)}"
+        )
+        # Top card name should reference izakaya / japanese context
+        top = result.restaurants[0].name.lower()
+        assert "izakaya" in top or "momotaro" in top or "mita" in top, (
+            f"Expected izakaya-related top card, got: {result.restaurants[0].name}"
+        )
+
+
+class TestSemanticTurnObservability:
+    """Structured semantic turn log must include venue_concept, modifiers, etc."""
+
+    def test_turn_log_contains_open_class_and_venue_fields(self, caplog):
+        import logging
+        from app.concierge.provider_executor import ProviderQueryResult
+        from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
+
+        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15):
+            return [
+                ProviderQueryResult(
+                    query=q,
+                    places=[_make_raw_place(
+                        name="Goose Island Brewery",
+                        place_id="pid_goose",
+                        maps_uri="https://maps.google.com/?cid=900",
+                        types=["brewery", "bar"],
+                        rating=4.5, review_count=1200,
+                    )],
+                    latency_ms=50,
+                )
+                for q in queries
+            ]
+
+        with caplog.at_level(logging.INFO, logger="app.concierge.semantic_retrieval"):
+            with patch("app.concierge.provider_executor.execute_fanout", side_effect=fake_execute):
+                run_semantic_retrieval_v1(
+                    user_query="best waterfront breweries",
+                    destination="Chicago",
+                    api_key="fake_key",
+                )
+        turn_logs = [r.message for r in caplog.records if "semantic_retrieval_v1.turn" in r.message]
+        assert turn_logs, f"Expected semantic_retrieval_v1.turn log, got: {[r.message for r in caplog.records]}"
+        log = turn_logs[0]
+        assert "open_class_place_detected=" in log
+        assert "venue_concept=" in log
+        assert "geo_hints=" in log
+        assert "location_modifiers=" in log
+        assert "retrieval_queries=" in log
+        assert "wrong_category_low_subtype_fit" in log

@@ -886,7 +886,13 @@ class TestSemanticSkipObservability:
         return svc
 
     def test_semantic_skip_logged_for_ineligible_intent(self, caplog):
-        """When flag ON and intent is INTENT_GENERAL, log semantic_skip_reason."""
+        """When flag ON and the query is clearly not a place ask, log semantic_skip_reason.
+
+        Place-like queries with INTENT_GENERAL now enter the semantic pipeline
+        via the open-class detector, so this test uses a non-place query
+        ("currency exchange rate") that the open-class detector explicitly
+        rejects.
+        """
         import logging
         svc = self._svc(semantic_on=True)
         # Patch slow pipeline to avoid real DB/HTTP calls
@@ -896,17 +902,48 @@ class TestSemanticSkipObservability:
             svc._fetch_live_research(
                 intent=INTENT_GENERAL,
                 destination="Chicago",
-                user_query="best breweries",
+                user_query="what is the currency exchange rate",
                 trip={},
             )
         skip_logs = [r.message for r in caplog.records if "semantic_skip" in r.message]
         assert skip_logs, (
-            "Expected concierge.semantic_skip log when flag ON and intent=INTENT_GENERAL. "
+            "Expected concierge.semantic_skip log when flag ON, intent=INTENT_GENERAL, "
+            "and the query is not a place-like ask. "
             f"Got logs: {[r.message for r in caplog.records]}"
         )
         assert any("intent_not_eligible" in m for m in skip_logs), (
             f"Expected semantic_skip_reason=intent_not_eligible in skip logs: {skip_logs}"
         )
+
+    def test_open_class_place_ask_enters_semantic(self, caplog):
+        """When flag ON and the query is an open-class place ask with INTENT_GENERAL,
+        semantic retrieval must be eligible (not skipped)."""
+        import logging
+        svc = self._svc(semantic_on=True)
+        svc._get_live_research = lambda: SimpleNamespace(is_live_capable=False)
+        with caplog.at_level(logging.INFO, logger="app.services.concierge"):
+            from app.models.concierge import INTENT_GENERAL
+            svc._fetch_live_research(
+                intent=INTENT_GENERAL,
+                destination="Chicago",
+                user_query="best izakayas in Fulton Street",
+                trip={},
+            )
+        skip_logs = [
+            r.message for r in caplog.records
+            if "concierge.semantic_skip" in r.message and "intent_not_eligible" in r.message
+        ]
+        eligible_logs = [r.message for r in caplog.records if "semantic_eligible" in r.message]
+        assert not skip_logs, (
+            f"Open-class place ask should NOT be skipped, got skip logs: {skip_logs}"
+        )
+        assert eligible_logs, (
+            f"Expected semantic_eligible log for open-class izakaya ask. "
+            f"Got logs: {[r.message for r in caplog.records]}"
+        )
+        assert any(
+            "open_class_place_detected=True" in m for m in eligible_logs
+        ), f"Expected open_class_place_detected=True in eligible log: {eligible_logs}"
 
     def test_no_semantic_skip_log_when_flag_off(self, caplog):
         """When flag OFF, semantic_skip should NOT be logged (silent by design)."""

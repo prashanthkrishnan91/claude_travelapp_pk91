@@ -82,12 +82,14 @@ This app:
 
 ## Current focus (as of latest PR)
 
-Recent work has focused on improving the **"whyPick" reasoning system**:
+Recent work has focused on **open-language place understanding** for the AI Concierge:
 
-- prioritizing real differentiators (Michelin status, editorial mentions, specialties)
-- rejecting generic "high rating" or "popular" explanations
-- ensuring consistent reasoning across backend and UI fields
-- introducing validation and deterministic fallbacks
+- venue-head preservation so geo/style modifiers ("waterfront", "rooftop", "romantic") never overwrite the real venue noun ("brewery", "tapas", "sushi")
+- open-class place-ask detector that admits unknown venue nouns (izakaya, tea houses, dessert bars, record stores) into Semantic Retrieval v1 without keyword-bucket maintenance
+- venue-first retrieval planning with concrete neighborhood/street anchors (e.g., "Fulton Street") preserved through to provider queries
+- wrong-category penalty so waterfront restaurants/parks no longer dominate brewery/sushi asks just because they share a geo modifier
+- safe-reason builder no longer prints repetitive geo-targeted-search-area copy on every card and never anchors user-visible reasons on a modifier word
+- structured `semantic_retrieval_v1.turn` log line now carries `venue_concept`, `location_modifiers`, `open_class_place_detected`, and wrong-category diagnostics for one-pass debuggability
 
 ---
 
