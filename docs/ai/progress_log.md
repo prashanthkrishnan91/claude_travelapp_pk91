@@ -1,5 +1,37 @@
 # Progress Log
 
+## 2026-05-05 — Reasoning Reliability v2: Three-Pass Orchestrator + Validated Display Contract
+
+**Branch**: `claude/fix-concierge-reasoning-qyJkD`
+
+**Problem**: Production showed 1/6 cards getting LLM notes ("NOTE OMITTED" on 5 of 6). Root cause: single 3s timeout on Sonnet (~10.8s actual), no retry, no fallback model.
+
+**What was built**: `build_reasons_with_retry()` — three-pass cascade (primary haiku → retry primary → fallback sonnet). Per-card `CardReason` dataclass. Cards with `validated=False` after all passes are excluded from the returned set; no deterministic/template notes ever shown. `display_why_validated` field gates the frontend Concierge Note block.
+
+**Files changed**:
+- `backend/app/concierge/batched_reason_builder.py` — new orchestrator, `CardReason`, `ReasoningResultV2`, source constants
+- `backend/app/concierge/semantic_retrieval.py` — uses new orchestrator; excludes unvalidated cards; per-card `reason_validated`
+- `backend/app/models/concierge.py` — `display_why_validated: bool = False` on `ConciergeDisplayFields`
+- `backend/app/concierge/logging.py` — schema-tolerant `_extract_missing_column`
+- `frontend/src/lib/concierge/cardPresentation.js` — `pickCardReason` gates on `displayWhyValidated`
+- `frontend/src/components/trips/AIConciergePanel.tsx` — TypeScript types for new display fields
+- `backend/tests/test_reasoning_reliability_v2.py` — 28 new tests
+- `backend/tests/test_semantic_retrieval_v1.py` — 9 integration tests updated
+- `backend/tests/evidence_harness_v2.py` — runnable evidence harness (5 tables)
+
+**Evidence harness results** (`python -m tests.evidence_harness_v2`):
+- Table 1 (full success): 6/6 validated
+- Table 2 (partial+retry): 6/6 validated (5 retry-recovered)
+- Table 3 (timeout+fallback): 4/4 validated (sonnet fallback)
+- Table 4 (bad-template repair): 3/3 validated (retry repaired)
+- Table 5 (query matrix): 21/21 validated (7 queries × 3 cards)
+
+**Tests**: 28 new, all passing. Net improvement: 57 → 36 pre-existing failures (21 fewer).
+
+**Supabase SQL**: No.
+
+---
+
 ## 2026-05-05 — Venue-Head-Over-Modifier Contract (semantic retrieval v1 hardening)
 
 **Branch**: `claude/fix-venue-head-modifiers-V1fEK`

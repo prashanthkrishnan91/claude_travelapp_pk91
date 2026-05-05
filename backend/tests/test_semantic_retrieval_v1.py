@@ -23,6 +23,53 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+# ── Reasoning Reliability v2 mock helper ─────────────────────────────────────
+# Integration tests that reach the semantic pipeline must mock the LLM reasoning
+# path. Without this, no cards are returned (all have validated=False).
+# This helper produces a mock build_reasons_with_retry that validates every card.
+
+def _make_all_validated_reasons(cards_data, frame):
+    """Mock for build_reasons_with_retry: validates every card with a stub note.
+
+    Use as: patch("app.concierge.semantic_retrieval.build_reasons_with_retry",
+                  side_effect=_make_all_validated_reasons)
+    """
+    from app.concierge.batched_reason_builder import (
+        CardReason, ReasoningResultV2, SOURCE_PRIMARY, _PRIMARY_MODEL
+    )
+    n = len(cards_data)
+    reasons = {
+        str(i + 1): CardReason(
+            note=(
+                f"A respected Chicago establishment with a loyal neighborhood "
+                f"following and consistent quality across visits."
+            ),
+            source=SOURCE_PRIMARY,
+            validated=True,
+            attempt_count=1,
+            model_used=_PRIMARY_MODEL,
+        )
+        for i in range(n)
+    }
+    result = ReasoningResultV2(
+        attempted=True,
+        success=True,
+        accepted_count=n,
+        final_card_count=n,
+        deterministic_visible_count=0,
+        final_note_omitted_count=0,
+        model=_PRIMARY_MODEL,
+        visible_note_source_counts={SOURCE_PRIMARY: n},
+    )
+    return reasons, result
+
+
+_MOCK_VALID_REASONS = patch(
+    "app.concierge.batched_reason_builder.build_reasons_with_retry",
+    side_effect=_make_all_validated_reasons,
+)
+
+
 # ── Fixtures / helpers ────────────────────────────────────────────────────────
 
 def _make_raw_place(
@@ -622,7 +669,7 @@ class TestSemanticRetrievalIntegration:
         from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
         from app.models.concierge import SOURCE_LIVE_SEARCH
 
-        with patch(
+        with _MOCK_VALID_REASONS, patch(
             "app.concierge.provider_executor.execute_fanout",
             side_effect=self._mock_fanout(self._mock_brewery_places()),
         ):
@@ -649,7 +696,7 @@ class TestSemanticRetrievalIntegration:
         """Flag ON, Chicago + waterfront ask → brewery cards with honest reason wording."""
         from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
 
-        with patch(
+        with _MOCK_VALID_REASONS, patch(
             "app.concierge.provider_executor.execute_fanout",
             side_effect=self._mock_fanout(self._mock_brewery_places()),
         ):
@@ -682,7 +729,7 @@ class TestSemanticRetrievalIntegration:
                              types=["restaurant", "food"], rating=4.2, review_count=200),
         ]
 
-        with patch(
+        with _MOCK_VALID_REASONS, patch(
             "app.concierge.provider_executor.execute_fanout",
             side_effect=self._mock_fanout(places),
         ):
@@ -711,7 +758,7 @@ class TestSemanticRetrievalIntegration:
                              types=["american_restaurant", "restaurant"], rating=4.9, review_count=3000),
         ]
 
-        with patch(
+        with _MOCK_VALID_REASONS, patch(
             "app.concierge.provider_executor.execute_fanout",
             side_effect=self._mock_fanout(places),
         ):
@@ -1023,7 +1070,7 @@ class TestMoreOptionsFollowUpBehavior:
 
         places = self._mock_brewery_places()
 
-        with patch("app.concierge.provider_executor.execute_fanout",
+        with _MOCK_VALID_REASONS, patch("app.concierge.provider_executor.execute_fanout",
                    side_effect=self._mock_fanout(places)):
             first_result = run_semantic_retrieval_v1(
                 user_query="best breweries",
@@ -1044,7 +1091,7 @@ class TestMoreOptionsFollowUpBehavior:
                 if gv.google_maps_uri:
                     first_keys.add(f"gmaps:{_normalize_text(gv.google_maps_uri)}")
 
-        with patch("app.concierge.provider_executor.execute_fanout",
+        with _MOCK_VALID_REASONS, patch("app.concierge.provider_executor.execute_fanout",
                    side_effect=self._mock_fanout(places)):
             second_result = run_semantic_retrieval_v1(
                 user_query="more options",
@@ -1420,7 +1467,7 @@ class TestSemanticIntegrationOpenClassIzakaya:
                 for q in queries
             ]
 
-        with patch("app.concierge.provider_executor.execute_fanout", side_effect=fake_execute):
+        with _MOCK_VALID_REASONS, patch("app.concierge.provider_executor.execute_fanout", side_effect=fake_execute):
             result = run_semantic_retrieval_v1(
                 user_query="best izakayas in Fulton Street",
                 destination="Chicago",
@@ -1825,7 +1872,7 @@ class TestRegressionExistingVenueHeads:
         def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15):
             return [ProviderQueryResult(query=q, places=places[:], latency_ms=80) for q in queries]
 
-        with patch("app.concierge.provider_executor.execute_fanout", side_effect=fake_execute):
+        with _MOCK_VALID_REASONS, patch("app.concierge.provider_executor.execute_fanout", side_effect=fake_execute):
             result = run_semantic_retrieval_v1(
                 user_query="best breweries",
                 destination="Chicago",
@@ -1879,7 +1926,7 @@ class TestRegressionExistingVenueHeads:
                 for q in queries
             ]
 
-        with patch("app.concierge.provider_executor.execute_fanout", side_effect=fake_execute):
+        with _MOCK_VALID_REASONS, patch("app.concierge.provider_executor.execute_fanout", side_effect=fake_execute):
             result = run_semantic_retrieval_v1(
                 user_query="best waterfront breweries",
                 destination="Chicago",
@@ -1917,7 +1964,7 @@ class TestRegressionExistingVenueHeads:
         def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15):
             return [ProviderQueryResult(query=q, places=places[:], latency_ms=80) for q in queries]
 
-        with patch("app.concierge.provider_executor.execute_fanout", side_effect=fake_execute):
+        with _MOCK_VALID_REASONS, patch("app.concierge.provider_executor.execute_fanout", side_effect=fake_execute):
             result = run_semantic_retrieval_v1(
                 user_query="best izakayas",
                 destination="Chicago",

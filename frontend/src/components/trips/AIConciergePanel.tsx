@@ -214,6 +214,8 @@ type DisplayCard = {
   } | null;
   display?: {
     displayWhy?: string | null;
+    displayWhyValidated?: boolean | null;
+    displayWhySource?: string | null;
     displayCategory?: string | null;
     displayMetaLine?: string | null;
     displayBadges?: string[];

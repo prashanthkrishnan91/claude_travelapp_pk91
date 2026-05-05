@@ -1,8 +1,67 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-05) — PR-5 STOP-THE-LINE: Runtime Bug Fix, Truthful Telemetry, Template Elimination
+## Last change (2026-05-05) — Reasoning Reliability v2: Three-Pass Orchestrator + Validated Display Contract
 
 **Status: IN PROGRESS** (this PR)
+
+### Root cause (this PR)
+
+PR-5 fixed the NameError and template note problems, but production still showed only 1 of 6 cards getting LLM notes ("NOTE OMITTED" on the other 5). Root cause: single-pass, 3-second timeout on Sonnet (~10.8s actual latency), no retry for partial success, no fallback model.
+
+### Architecture (Reasoning Reliability v2)
+
+Three-pass cascade orchestrator in `build_reasons_with_retry()`:
+- **Pass 1**: Primary model (haiku, 8s timeout), all cards.
+- **Pass 2**: Primary model retry for any cards missing after pass 1.
+- **Pass 3**: Fallback model (sonnet, 16s timeout) for any cards still missing.
+
+Per-card `CardReason` dataclass: `note`, `source`, `validated`, `attempt_count`, `retry_used`, `fallback_model_used`, `model_used`. Cards with `validated=False` after all passes are **excluded** from the returned card set — never shown with a deterministic or template note.
+
+`display_why_validated: bool = False` added to `ConciergeDisplayFields`. Frontend gates Concierge Note block on `displayWhyValidated === true`; no legacy fallback chain for semantic cards.
+
+### Hard contracts
+
+- **No NOTE OMITTED in success path**: cards without a validated note are excluded (not returned with placeholder).
+- **No deterministic visible notes**: `deterministic_visible_count` is always 0 in telemetry.
+- **No user UI testing**: evidence is provided via `backend/tests/evidence_harness_v2.py` tables.
+
+### Evidence harness output (2026-05-05)
+
+```
+Table 1 (full success):      6/6 validated, 0 omitted  — all from llm_evidence_pack_v2_primary
+Table 2 (partial+retry):     6/6 validated, 0 omitted  — 1 primary, 5 retry-recovered
+Table 3 (timeout+fallback):  4/4 validated, 0 omitted  — all from llm_evidence_pack_v2_fallback (sonnet)
+Table 4 (bad-template):      3/3 validated, 0 omitted  — validator rejected pass-1, retry repaired
+Table 5 (query matrix):     21/21 validated, 0 omitted  — 7 queries × 3 cards, all llm_evidence_pack_v2_primary
+```
+
+### Files changed (this PR)
+
+- `backend/app/concierge/batched_reason_builder.py` — `CardReason`, `ReasoningResultV2`, `_validate_and_trim`, `_run_llm_pass`, `build_reasons_with_retry`; env-driven config for primary/fallback model, timeout, retries, batch size.
+- `backend/app/concierge/semantic_retrieval.py` — Step 7 uses `build_reasons_with_retry`; step 8 excludes `validated=False` cards; `_entity_to_card` sets `display_why_validated`.
+- `backend/app/models/concierge.py` — `display_why_validated: bool = False` on `ConciergeDisplayFields`.
+- `backend/app/concierge/logging.py` — schema-tolerant `_extract_missing_column` (handles Supabase schema-cache error format).
+- `frontend/src/lib/concierge/cardPresentation.js` — `pickCardReason` gates on `displayWhyValidated`; no legacy fallback for semantic cards.
+- `frontend/src/components/trips/AIConciergePanel.tsx` — added `displayWhyValidated?` and `displayWhySource?` to `DisplayCard.display` type.
+- `backend/tests/test_reasoning_reliability_v2.py` — 28 new tests: 6 scenario classes + query matrix + display contract + telemetry.
+- `backend/tests/test_semantic_retrieval_v1.py` — 9 integration tests updated to use `_MOCK_VALID_REASONS` context manager.
+- `backend/tests/evidence_harness_v2.py` — runnable evidence script; `python -m tests.evidence_harness_v2`.
+
+### Env vars added (Reasoning Reliability v2)
+
+| Var | Default |
+|-----|---------|
+| `CONCIERGE_CARD_REASONING_PRIMARY_MODEL` | `claude-haiku-4-5-20251001` |
+| `CONCIERGE_CARD_REASONING_FALLBACK_MODEL` | `claude-sonnet-4-6` |
+| `CONCIERGE_CARD_REASONING_TIMEOUT_MS` | `8000` |
+| `CONCIERGE_CARD_REASONING_MAX_RETRIES` | `1` |
+| `CONCIERGE_CARD_REASONING_BATCH_SIZE` | `6` |
+
+---
+
+## Previous change (2026-05-05) — PR-5 STOP-THE-LINE: Runtime Bug Fix, Truthful Telemetry, Template Elimination
+
+**Status: MERGED**
 
 ### Root cause chain (PR-5)
 

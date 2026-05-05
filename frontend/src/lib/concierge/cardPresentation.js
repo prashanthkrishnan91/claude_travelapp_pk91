@@ -29,13 +29,24 @@ function pickWhyText(value) {
 }
 
 // Canonical display contract — check display.displayWhy first.
-// Falls back through legacy fields for old cached messages.
+// For semantic cards (display object present): only render when displayWhyValidated===true.
+// Do NOT fall back to legacy fields for semantic cards — an absent note beats a template.
+// Falls back through legacy fields only for non-semantic (legacy) cards without display.
 // Returns "" (empty string) when no meaningful note exists — callers must
-// hide the Concierge Note block when this is empty. Do NOT show a generic
-// fallback reason: absent note > generic template.
+// hide the Concierge Note block when this is empty.
 export function pickCardReason(card) {
-  return (card?.display?.displayWhy && card.display.displayWhy.length >= 12 ? card.display.displayWhy : undefined)
-    ?? pickWhyText(card?.supportingDetails?.whyPick)
+  if (card?.display !== undefined && card.display !== null) {
+    // Semantic card path: only use the display.displayWhy when validated.
+    if (card.display.displayWhyValidated === true
+        && card.display.displayWhy
+        && card.display.displayWhy.length >= 12) {
+      return card.display.displayWhy;
+    }
+    // validated=false or empty note: return "" — do NOT fall through to legacy fields.
+    return "";
+  }
+  // Legacy (non-semantic) card path: fall back through legacy fields.
+  return pickWhyText(card?.supportingDetails?.whyPick)
     ?? pickWhyText(card?.whyPick)
     ?? card?.primaryReason
     ?? "";
