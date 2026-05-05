@@ -182,13 +182,13 @@ def build_entity_layer(
                 logger.debug("entity_layer: reject missing_place_id name=%s", _extract_name(raw))
                 continue
 
-            # Gate 2: business status must be OPERATIONAL when present
+            # Gate 2: business status must be explicitly OPERATIONAL
             status = (raw.get("businessStatus") or "").upper()
-            if status and status != _OPERATIONAL:
+            if status != _OPERATIONAL:
                 stats.operational_rejected += 1
                 logger.debug(
-                    "entity_layer: reject non_operational place_id=%s status=%s",
-                    place_id, status,
+                    "entity_layer: reject non_operational_or_missing_status place_id=%s status=%s",
+                    place_id, status or "<missing>",
                 )
                 continue
 
@@ -241,7 +241,7 @@ def build_entity_layer(
                 formatted_address=address,
                 lat=lat,
                 lng=lng,
-                business_status=status or _OPERATIONAL,
+                business_status=status,
                 google_maps_uri=maps_uri,
                 types=types,
                 primary_type=primary_type,

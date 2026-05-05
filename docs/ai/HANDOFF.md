@@ -1,5 +1,23 @@
 # AI Handoff — Travel Concierge
 
+## Last change (2026-05-05) — Merge-gate audit hardening for PR #235 semantic retrieval v1
+
+### Audit fixes applied
+- Enforced strict trust invariant in Place Entity Layer: `businessStatus` is now mandatory and must be `OPERATIONAL`; missing status is rejected (no synthesized default).
+- Preserved deterministic semantic safe reasons (`deterministic_safe_v1`) through concierge response assembly so explicit wrappers like “Verify waterfront before booking.” are not scrubbed by generic banned-copy sanitizer.
+- Tightened outage semantics: when semantic provider fanout fully fails, semantic returns `SOURCE_UNAVAILABLE` and concierge no longer falls through into legacy card-minting paths for that turn.
+- Hardened provider fanout timeout behavior by catching iterator-level `concurrent.futures.TimeoutError` and returning partial successes plus explicit incomplete records instead of aborting the turn.
+- Card assembly now propagates verified provider `business_status` from entity records instead of hardcoding `OPERATIONAL`.
+
+### Tests
+- Updated semantic retrieval test suite assertions for strict OPERATIONAL gating and unavailable-source behavior.
+- Added coverage for missing/closed business status rejection and OPERATIONAL acceptance.
+- Added coverage proving deterministic semantic reason-source preservation helper behavior.
+
+**Supabase SQL**: No.
+
+---
+
 ## Last change (2026-05-05) — AI Concierge Semantic Place Intelligence v2 PR-2 (Semantic Retrieval v1 verified-card pipeline)
 
 ### Problem

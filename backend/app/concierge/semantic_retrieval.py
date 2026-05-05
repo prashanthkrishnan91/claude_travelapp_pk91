@@ -103,7 +103,7 @@ def _run_pipeline(
     t_pipeline_start: float,
 ) -> "LiveResearchResult":  # type: ignore[name-defined]
     from app.services.live_research import LiveResearchResult
-    from app.models.concierge import SOURCE_LIVE_SEARCH, SOURCE_NONE
+    from app.models.concierge import SOURCE_LIVE_SEARCH, SOURCE_NONE, SOURCE_UNAVAILABLE
 
     latency: Dict[str, int] = {}
 
@@ -160,7 +160,7 @@ def _run_pipeline(
             t_pipeline_start=t_pipeline_start,
             outcome="all_providers_failed",
         )
-        return LiveResearchResult(source_status=SOURCE_NONE, provider_name=PROVIDER_NAME)
+        return LiveResearchResult(source_status=SOURCE_UNAVAILABLE, provider_name=PROVIDER_NAME)
 
     # ── Step 4: Verified Place Entity Layer ──────────────────────────────────
     t0 = time.monotonic()
@@ -319,7 +319,7 @@ def _entity_to_card(
             formatted_address=entity.formatted_address,
             lat=entity.lat,
             lng=entity.lng,
-            business_status="OPERATIONAL",
+            business_status=entity.business_status,
             google_maps_uri=entity.google_maps_uri,
             website_uri=entity.website_uri,
             rating=entity.rating,

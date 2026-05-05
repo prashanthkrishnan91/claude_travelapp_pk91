@@ -308,14 +308,29 @@ class TestEntityLayer:
             f"Broad type 'bar' must not auto-reject. stats={vars(stats)}"
         )
 
-    def test_operational_status_absent_still_accepted(self):
-        """When businessStatus is not in the API response, the place should pass."""
+    def test_missing_business_status_rejected(self):
+        """businessStatus must be explicit OPERATIONAL for trust safety."""
         from app.concierge.place_entity_layer import build_entity_layer
         raw = _make_raw_place(name="Microbrewery ABC")
         raw.pop("businessStatus", None)
         raw["businessStatus"] = None
         entities, stats = build_entity_layer(self._results([raw]))
+        assert len(entities) == 0
+        assert stats.operational_rejected >= 1
+
+    def test_operational_accepted(self):
+        from app.concierge.place_entity_layer import build_entity_layer
+        raw = _make_raw_place(name="Open Brewery", business_status="OPERATIONAL")
+        entities, _stats = build_entity_layer(self._results([raw]))
         assert len(entities) == 1
+
+    @pytest.mark.parametrize("status", ["CLOSED_TEMPORARILY", "CLOSED_PERMANENTLY"])
+    def test_closed_statuses_rejected(self, status):
+        from app.concierge.place_entity_layer import build_entity_layer
+        raw = _make_raw_place(name="Closed Place", business_status=status)
+        entities, stats = build_entity_layer(self._results([raw]))
+        assert len(entities) == 0
+        assert stats.operational_rejected >= 1
 
     def test_prior_identity_keys_deduped(self):
         from app.concierge.place_entity_layer import build_entity_layer
@@ -700,7 +715,7 @@ class TestSemanticRetrievalIntegration:
         from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
         from app.concierge.provider_executor import ProviderQueryResult
 
-        def all_fail(queries, api_key, timeout, hard_cap, max_results_per_query=15):
+        def all_fail(queries, api_key, timeout, hard_cap=4, max_results_per_query=15):
             return [ProviderQueryResult(query=q, error="timeout") for q in queries]
 
         with patch("app.concierge.provider_executor.execute_fanout", side_effect=all_fail):
@@ -712,6 +727,7 @@ class TestSemanticRetrievalIntegration:
 
         assert len(result.restaurants) == 0
         assert len(result.attractions) == 0
+        assert result.source_status == "unavailable"
 
     def test_no_api_key_returns_empty_not_error(self):
         """Missing API key → empty result, no raised exception."""
@@ -773,7 +789,7 @@ class TestFeatureFlagBehavior:
     def test_flag_default_is_false(self):
         """The flag must default to False to protect existing behavior."""
         import pathlib
-        config_src = pathlib.Path("app/core/config.py").read_text()
+        config_src = pathlib.Path("backend/app/core/config.py").read_text()
         assert "concierge_semantic_retrieval_v1_enabled: bool = False" in config_src, (
             "Default for concierge_semantic_retrieval_v1_enabled must be False"
         )
