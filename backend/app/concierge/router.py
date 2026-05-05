@@ -25,6 +25,18 @@ _PLACE_PATTERNS = [
         r"\bneighborhood(s)?\b",
         r"\barea to stay\b",
         r"\bcompare\b",
+        # Open-vocabulary venue types handled by semantic retrieval v1
+        r"\bizakaya(s)?\b",
+        r"\bbrewer(y|ies)\b",
+        r"\btaproom(s)?\b",
+        r"\bramen\b",
+        r"\bsushi\b",
+        r"\bgastropub(s)?\b",
+        r"\bbistro(s)?\b",
+        r"\btavern(s)?\b",
+        r"\bdiner(s)?\b",
+        r"\bcocktail bar(s)?\b",
+        r"\bwine bar(s)?\b",
     ]
 ]
 
@@ -85,7 +97,7 @@ def route_prompt(prompt: str, confidence_threshold: float = 0.55) -> RouteDecisi
 
     place_score = _score(text, _PLACE_PATTERNS, base=0.18)
     advice_score = _score(text, _ADVICE_PATTERNS, base=0.2)
-    unsupported_score = 0.2
+    unsupported_score = 0.1
 
     total = place_score + advice_score + unsupported_score
     prior = {

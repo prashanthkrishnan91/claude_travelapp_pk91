@@ -27,7 +27,7 @@ routes_pkg.__path__ = [os.path.join(os.path.dirname(__file__), "..", "app", "rou
 sys.modules["app.routes"] = routes_pkg
 
 from app.concierge.contracts import ConciergeTypedResponse, PlaceRecommendationsResponse
-from app.concierge.logging import persist_concierge_request_log, redact_prompt
+from app.concierge.logging import INTENT_CLASSIFIER_VERSION, persist_concierge_request_log, redact_prompt
 from app.concierge.router import route_prompt
 from app.db.mock import get_mock_client
 from app.models.concierge import ConciergeSearchRequest
@@ -162,7 +162,10 @@ def test_request_log_redacts_prompt_and_persists_supabase_row():
     assert "[redacted_email]" in row["prompt"]
     assert "[redacted_phone]" in row["prompt"]
     assert row["response_type"] == "place_recommendations"
-    assert row["intent_classifier_version"]
+    # intent_classifier_version is omitted from DB insert (column not yet in schema);
+    # verify the constant is defined and non-empty instead.
+    assert INTENT_CLASSIFIER_VERSION
+    assert "intent_classifier_version" not in row
 
 
 def test_redact_prompt_noop_for_non_pii_text():

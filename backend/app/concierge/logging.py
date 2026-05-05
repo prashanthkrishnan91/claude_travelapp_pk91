@@ -20,6 +20,8 @@ _SCHEMA_DRIFT_WARNED_COLUMNS: set[tuple[str, str]] = set()
 _EMAIL_RE = re.compile(r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b")
 _PHONE_RE = re.compile(r"(?<!\d)(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}(?!\d)")
 _MISSING_COLUMN_RE = re.compile(r"['\"](?P<column>[a-zA-Z_][a-zA-Z0-9_]*)['\"]")
+# Supabase PostgREST schema-cache message format: "Could not find the 'col' column of 'tbl'"
+_SCHEMA_CACHE_RE = re.compile(r"Could not find the '(?P<column>[a-zA-Z_][a-zA-Z0-9_]*)' column")
 
 
 def redact_prompt(prompt: str) -> str:
@@ -53,9 +55,15 @@ def _extract_missing_column(exc: Exception) -> tuple[str, str] | None:
         code = str(raw.get("code") or "")
         if code in {"PGRST204", "PGRST116"}:
             text = " ".join(str(raw.get(key) or "") for key in ("message", "details", "hint"))
-            match = _MISSING_COLUMN_RE.search(text)
+            # Try Supabase schema-cache format first: "Could not find the 'col' column"
+            match = _SCHEMA_CACHE_RE.search(text) or _MISSING_COLUMN_RE.search(text)
             if match:
                 return code, match.group("column")
+    # Also handle plain string exception messages (some Supabase client versions)
+    exc_str = str(exc)
+    schema_match = _SCHEMA_CACHE_RE.search(exc_str)
+    if schema_match:
+        return "PGRST204", schema_match.group("column")
     return None
 
 

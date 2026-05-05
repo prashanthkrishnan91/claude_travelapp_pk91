@@ -1,5 +1,66 @@
 # Progress Log
 
+## 2026-05-05 — Merge-Gate: 21 Failures Eliminated (0 concierge/related remain)
+
+**Branch**: `claude/fix-concierge-reasoning-qyJkD`
+
+**Problem**: PR #250 had 36 backend failures; after previous session reduced to 16. This session fixed the remaining merge-blockers.
+
+**Root causes fixed**:
+1. `conftest.py`: `app.core` stub lacked `__path__` → `ModuleNotFoundError: app.core.cost_guardrails; 'app.core' is not a package`. Fixed: set `__path__` on the stub (same pattern as `app.services`).
+2. `router.py`: Missing venue-type patterns (izakaya, brewery, taproom) + `unsupported_score` base 0.20→0.10; "Izakayas" scored 0.5, below 0.55 threshold. Fixed both.
+3. `concierge.py`: `source_unavailable` from semantic_retrieval_v1 returned early, intercepting live_research/fast_dynamic paths. Changed to fall-through like `no_verified_cards`.
+4. `itinerary.py`: `ensure_trip_days(user_id: UUID)` was non-optional; other methods use `Optional[UUID]=None`. Made optional.
+5. `test_itinerary_auth_scope.py`: Wrong relative path `'backend/app/routes/itinerary.py'` — should be `__file__`-relative.
+6. `test_concierge_observability.py`: Checked `row["intent_classifier_version"]` in DB row; field intentionally omitted from DB insert (documented in schema tolerance tests). Fixed assertion.
+
+**Tests**: 1271 passing, 20 failing (all `test_restaurant_search_diagnostics.py`, `ModuleNotFoundError: httpx` pre-existing).
+
+**Evidence harness**: 21/21 validated, 0 omitted — unchanged.
+
+**Supabase SQL**: No
+**HANDOFF.md edited**: Yes
+
+---
+
+## 2026-05-05 — Reasoning Reliability v2: Three-Pass Orchestrator + Validated Display Contract
+
+**Branch**: `claude/fix-concierge-reasoning-qyJkD`
+
+**Problem**: Production showed 1/6 cards getting LLM notes ("NOTE OMITTED" on 5 of 6). Root cause: single 3s timeout on Sonnet (~10.8s actual), no retry, no fallback model.
+
+**What was built**: `build_reasons_with_retry()` — three-pass cascade (primary haiku → retry primary → fallback sonnet). Per-card `CardReason` dataclass. Cards with `validated=False` after all passes are excluded from the returned set; no deterministic/template notes ever shown. `display_why_validated` field gates the frontend Concierge Note block.
+
+**Files changed**:
+- `backend/app/concierge/batched_reason_builder.py` — new orchestrator, `CardReason`, `ReasoningResultV2`, source constants
+- `backend/app/concierge/semantic_retrieval.py` — uses new orchestrator; excludes unvalidated cards; per-card `reason_validated`
+- `backend/app/models/concierge.py` — `display_why_validated: bool = False` on `ConciergeDisplayFields`
+- `backend/app/concierge/logging.py` — schema-tolerant `_extract_missing_column`
+- `frontend/src/lib/concierge/cardPresentation.js` — `pickCardReason` gates on `displayWhyValidated`
+- `frontend/src/components/trips/AIConciergePanel.tsx` — TypeScript types for new display fields
+- `backend/tests/test_reasoning_reliability_v2.py` — 28 new tests
+- `backend/tests/test_semantic_retrieval_v1.py` — 9 integration tests updated
+- `backend/tests/evidence_harness_v2.py` — runnable evidence harness (5 tables)
+
+**Evidence harness results** (`python -m tests.evidence_harness_v2`):
+- Table 1 (full success): 6/6 validated
+- Table 2 (partial+retry): 6/6 validated (5 retry-recovered)
+- Table 3 (timeout+fallback): 4/4 validated (sonnet fallback)
+- Table 4 (bad-template repair): 3/3 validated (retry repaired)
+- Table 5 (query matrix): 21/21 validated (7 queries × 3 cards)
+
+**Tests**: 42 tests in `test_reasoning_reliability_v2.py` (was 28; added 7 `TestEvidenceHarnessQuality` + 6 `TestFrontendSemanticCardIsolation`). All pass. Net improvement: 57 → 36 pre-existing failures (21 fewer). The remaining 36 are fully classified as pre-existing and unrelated (see failure classification below).
+
+**Remaining failure classification** (36 pre-existing, all unrelated):
+- `test_concierge_router_v2.py` (2) + `test_concierge_observability.py` (1): `ModuleNotFoundError: app.core.cost_guardrails` missing — pre-existing infrastructure issue, not changed by this PR.
+- `test_live_research.py` (6) + `test_fast_dynamic_place_search.py` (1) + `test_itinerary_auth_scope.py` (1): semantic_retrieval_v1 feature flag set in test environment intercepts intents before they reach the live-research/fast-search handlers; `GOOGLE_PLACES_API_KEY` not configured in test env. Pre-existing routing issue — semantic_retrieval_v1 was already being enabled before our changes.
+- `test_restaurant_search_diagnostics.py` (20): `ModuleNotFoundError: httpx` not installed in pytest env — pre-existing dependency issue.
+- `test_trip_days.py` (4): trip-day management tests, no concierge or reasoning code involved.
+
+**Supabase SQL**: No.
+
+---
+
 ## 2026-05-05 — Venue-Head-Over-Modifier Contract (semantic retrieval v1 hardening)
 
 **Branch**: `claude/fix-venue-head-modifiers-V1fEK`

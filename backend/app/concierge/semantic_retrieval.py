@@ -235,34 +235,34 @@ def _run_pipeline(
 
     latency["det_reason_ms"] = int((time.monotonic() - t0) * 1000)
 
-    # ── Step 7: Batched grounded reasoning (LLM path, budget-gated) ─────────
+    # ── Step 7: Reasoning Reliability v2 — three-pass orchestrator ───────────
     t0 = time.monotonic()
     from app.concierge.batched_reason_builder import (
-        build_batched_reasons,
-        _flag_enabled as _batched_flag,
-        ReasoningResult,
+        build_reasons_with_retry,
+        CardReason,
+        ReasoningResultV2,
+        SOURCE_OMITTED,
     )
 
-    batched_reasons, reasoning_result = build_batched_reasons(cards_data, frame)
-
-    # reason_source reflects actual LLM success, not just flag status.
-    # "batched_grounded_v1" only when at least one LLM note was accepted.
-    reason_source = (
-        "batched_grounded_v1"
-        if reasoning_result.success
-        else "deterministic_safe_v1"
-    )
+    card_reasons, reasoning_result = build_reasons_with_retry(cards_data, frame)
     latency["batched_reason_ms"] = int((time.monotonic() - t0) * 1000)
 
-    # ── Step 8: Assemble final cards ─────────────────────────────────────────
+    # ── Step 8: Assemble final cards — only validated cards are returned ───────
+    # Cards without a validated LLM note are EXCLUDED from the returned set.
+    # Deterministic text is NEVER used as a visible Concierge Note.
     cards = []
     rank_debug: List[Dict[str, Any]] = []
-    final_note_omitted_count = 0
-    for i, (entity, evidence, rank_score, det_reason) in enumerate(cards_data, 1):
-        reason = batched_reasons.get(str(i), det_reason)
-        if not reason:
-            final_note_omitted_count += 1
-        card = _entity_to_card(entity, reason, frame, reason_source=reason_source)
+    excluded_unvalidated = 0
+    for i, (entity, evidence, rank_score, _det_reason) in enumerate(cards_data, 1):
+        cr = card_reasons.get(str(i), CardReason())
+        if not cr.validated:
+            excluded_unvalidated += 1
+            continue
+        card = _entity_to_card(
+            entity, cr.note, frame,
+            reason_source=cr.source,
+            reason_validated=True,
+        )
         if card is not None:
             cards.append(card)
             rank_debug.append({
@@ -322,18 +322,20 @@ def _run_pipeline(
         "venue_head_recognized": ranker_stats.concept_is_recognized,
         "destination_penalized_count": ranker_stats.destination_penalized_count,
         "det_reason_rejected_count": det_reason_rejected_count,
-        # Truthful telemetry: these reflect actual LLM outcome, not flag state.
+        # Truthful telemetry: Reasoning Reliability v2 fields.
         "reasoning_attempted": reasoning_result.attempted,
         "reasoning_model": reasoning_result.model,
         "reasoning_success": reasoning_result.success,
         "reasoning_failure_reason": reasoning_result.failure_reason,
         "llm_accepted_count": reasoning_result.accepted_count,
-        "validator_rejected_count": reasoning_result.rejected_count,
-        "note_omitted_count": reasoning_result.omitted_count,
-        "deterministic_visible_count": reasoning_result.fallback_count,
-        "final_note_omitted_count": final_note_omitted_count,
+        "retry_recovered_count": reasoning_result.retry_recovered_count,
+        "fallback_model_used_count": reasoning_result.fallback_model_used_count,
+        "deterministic_visible_count": 0,  # invariant: always 0
+        "final_note_omitted_count": reasoning_result.final_note_omitted_count,
+        "excluded_unvalidated_count": excluded_unvalidated,
         "prompt_builder_error": reasoning_result.prompt_error,
         "diversity_flagged": reasoning_result.diversity_flagged,
+        "visible_note_source_counts": reasoning_result.visible_note_source_counts,
         # Legacy fields for compatibility with existing log parsers
         "grounded_reason_attempted": reasoning_result.attempted,
         "grounded_reason_success": reasoning_result.success,
@@ -353,7 +355,7 @@ def _run_pipeline(
         t_pipeline_start=t_pipeline_start,
         outcome="ok" if final_card_count > 0 else "no_cards_after_trust_gate",
         rank_top3=rank_debug[:3],
-        reason_source=reason_source,
+        reason_source=reasoning_result.visible_note_source_counts and "llm_evidence_pack_v2" or "none",
         top_card_name=top_card_name,
         top_card_city=top_card_city,
     )
@@ -417,6 +419,7 @@ def _entity_to_card(
     reason: str,
     frame: "ExperienceFrame",  # type: ignore[name-defined]
     reason_source: str = "deterministic_safe_v1",
+    reason_validated: bool = False,
 ) -> Optional[Any]:
     """Convert a verified PlaceEntity to a UnifiedRestaurantResult card."""
     try:
@@ -489,6 +492,7 @@ def _entity_to_card(
                 display_badges=[],
                 addability="addable",
                 display_why_source=reason_source,
+                display_why_validated=reason_validated,
             ),
             maps_link=entity.google_maps_uri or fallback_map,
             booking_link=entity.website_uri,

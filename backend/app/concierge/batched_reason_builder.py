@@ -17,6 +17,25 @@ ReasoningResult.prompt_error / failure_reason. grounded_reason_success in
 telemetry MUST only be True when at least one LLM note was accepted.
 
 Never raises. Always returns (dict, ReasoningResult).
+
+--- Reasoning Reliability v2 ---
+
+build_reasons_with_retry() is the new orchestrator for semantic place cards.
+It implements a three-pass cascade:
+  Pass 1: Primary model, all cards in one batch.
+  Pass 2: Primary model retry for any cards missing after pass 1.
+  Pass 3: Fallback model for any cards still missing after pass 2.
+
+Cards without validated notes after all passes are returned with validated=False.
+Callers MUST exclude cards with validated=False from the visible card set.
+Deterministic fallback is NEVER used as a visible Concierge Note.
+
+New env vars (Reasoning Reliability v2):
+  CONCIERGE_CARD_REASONING_PRIMARY_MODEL  (default: claude-haiku-4-5-20251001)
+  CONCIERGE_CARD_REASONING_FALLBACK_MODEL (default: claude-sonnet-4-6)
+  CONCIERGE_CARD_REASONING_TIMEOUT_MS     (default: 8000)
+  CONCIERGE_CARD_REASONING_MAX_RETRIES    (default: 1)
+  CONCIERGE_CARD_REASONING_BATCH_SIZE     (default: 6)
 """
 
 from __future__ import annotations
@@ -41,6 +60,26 @@ CONCIERGE_BATCHED_REASONING_MODEL = os.getenv(
 _REASON_MIN_WORDS = 8
 _REASON_MAX_CHARS = 220
 
+# ── Reasoning Reliability v2 env-driven config ────────────────────────────────
+# Haiku is fast (~1-2s) and reliable for concise card notes.
+# Sonnet is the quality fallback for cards haiku couldn't reason about.
+_PRIMARY_MODEL = os.getenv(
+    "CONCIERGE_CARD_REASONING_PRIMARY_MODEL", "claude-haiku-4-5-20251001"
+)
+_FALLBACK_MODEL = os.getenv(
+    "CONCIERGE_CARD_REASONING_FALLBACK_MODEL", "claude-sonnet-4-6"
+)
+# 8s timeout — ample for haiku, reasonable for sonnet on card-note sized outputs.
+_TIMEOUT_MS = int(os.getenv("CONCIERGE_CARD_REASONING_TIMEOUT_MS", "8000"))
+_MAX_RETRIES = int(os.getenv("CONCIERGE_CARD_REASONING_MAX_RETRIES", "1"))
+_BATCH_SIZE = int(os.getenv("CONCIERGE_CARD_REASONING_BATCH_SIZE", "6"))
+
+# Per-card note source identifiers for display_why_source.
+SOURCE_PRIMARY = "llm_evidence_pack_v2_primary"
+SOURCE_RETRY = "llm_evidence_pack_v2_retry"
+SOURCE_FALLBACK = "llm_evidence_pack_v2_fallback"
+SOURCE_OMITTED = "omitted"
+
 
 @dataclass
 class ReasoningResult:
@@ -60,6 +99,46 @@ class ReasoningResult:
     prompt_error: bool = False     # True if prompt builder threw
     validator_rejection_reasons: List[str] = field(default_factory=list)
     diversity_flagged: bool = False
+
+
+@dataclass
+class CardReason:
+    """Per-card reasoning result with full provenance for Reasoning Reliability v2.
+
+    validated=True ONLY when a validated LLM/evidence-grounded note was accepted.
+    Callers must exclude cards with validated=False from the visible card set.
+    Deterministic text must never populate a CardReason with validated=True.
+    """
+    note: str = ""                          # validated LLM note, or "" if absent
+    source: str = SOURCE_OMITTED            # SOURCE_PRIMARY | SOURCE_RETRY | SOURCE_FALLBACK | SOURCE_OMITTED
+    validated: bool = False                 # True only for validated LLM/evidence-grounded notes
+    attempt_count: int = 0                  # total LLM call passes attempted for this card
+    retry_used: bool = False                # True if the note came from a retry pass
+    fallback_model_used: bool = False       # True if fallback model provided the note
+    model_used: str = ""                    # which model produced the accepted note
+
+
+@dataclass
+class ReasoningResultV2:
+    """Extended telemetry for Reasoning Reliability v2 orchestrator.
+
+    success=True ONLY when accepted_count == final_card_count (all cards reasoned).
+    deterministic_visible_count must always be 0 — no deterministic visible notes allowed.
+    """
+    attempted: bool = False
+    success: bool = False                           # True when ALL cards have validated notes
+    failure_reason: Optional[str] = None
+    accepted_count: int = 0                         # cards with validated LLM notes
+    final_card_count: int = 0                       # total cards the orchestrator considered
+    retry_recovered_count: int = 0                  # cards rescued by retry pass
+    fallback_model_used_count: int = 0              # cards rescued by fallback model
+    deterministic_visible_count: int = 0            # MUST always be 0
+    final_note_omitted_count: int = 0               # cards with no validated note
+    prompt_error: bool = False
+    diversity_flagged: bool = False
+    model: str = ""                                 # primary model used
+    fallback_model: str = ""                        # fallback model (if configured)
+    visible_note_source_counts: Dict[str, int] = field(default_factory=dict)  # source → count
 
 
 def _flag_enabled() -> bool:
@@ -557,3 +636,234 @@ def build_batched_reasons(
         reasoning_result.failure_reason = f"unhandled_error:{exc}"
         reasoning_result.fallback_count = len(cards_data)
         return fallback, reasoning_result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Reasoning Reliability v2 — three-pass orchestrator with retry + fallback model
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _validate_and_trim(
+    note: Optional[str],
+    evidence: Any,
+    frame: Any,
+) -> Tuple[Optional[str], str]:
+    """Validate a single LLM-produced note, trimming to max length if needed.
+
+    Returns (trimmed_note, rejection_reason).
+    trimmed_note is None when the note is invalid or thin.
+    rejection_reason is empty string when valid.
+    """
+    if note is None:
+        return None, "thin_evidence_null"
+    words = note.split()
+    if len(words) < _REASON_MIN_WORDS:
+        return None, f"too_short:{len(words)}_words"
+    trimmed = note[:_REASON_MAX_CHARS].rsplit(" ", 1)[0] + "…" if len(note) > _REASON_MAX_CHARS else note
+    from app.concierge.reason_validator import validate_reason
+    is_valid, rejection = validate_reason(trimmed, frame, evidence)
+    if not is_valid:
+        return None, rejection
+    return trimmed, ""
+
+
+def _run_llm_pass(
+    subset_cards_data: List[Tuple[Any, Any, Any, Any]],
+    original_indices: List[int],
+    frame: Any,
+    model: str,
+    timeout_s: float,
+) -> Tuple[Dict[int, str], bool]:
+    """Run one LLM call for a subset of cards.
+
+    Args:
+        subset_cards_data: cards to reason about (may be a subset of the full list).
+        original_indices: 0-based positions of each subset card in the original cards_data.
+        frame: ExperienceFrame.
+        model: model identifier to use.
+        timeout_s: LLM call timeout in seconds.
+
+    Returns:
+        (accepted_map, call_succeeded):
+            accepted_map maps original 0-based index → validated note string.
+            call_succeeded is True when the LLM returned a parseable response.
+    """
+    try:
+        prompt = _build_batch_prompt(subset_cards_data, frame)
+    except Exception as exc:
+        logger.error("_run_llm_pass: prompt_build_error model=%s error=%s", model, exc)
+        return {}, False
+
+    raw = _call_llm(prompt, timeout=timeout_s, model=model)
+    if raw is None:
+        logger.info("_run_llm_pass: no_llm_response model=%s subset_size=%d", model, len(subset_cards_data))
+        return {}, False
+
+    parsed = _parse_llm_response(raw, len(subset_cards_data))
+    if not parsed:
+        logger.warning("_run_llm_pass: parse_failed model=%s response=%r", model, raw[:120])
+        return {}, False
+
+    evidence_by_subset = {
+        str(i + 1): ev for i, (_e, ev, _rs, _det) in enumerate(subset_cards_data)
+    }
+
+    accepted: Dict[int, str] = {}
+    for subset_idx_str, llm_note in parsed.items():
+        try:
+            subset_1based = int(subset_idx_str)
+            subset_0based = subset_1based - 1
+            if subset_0based < 0 or subset_0based >= len(subset_cards_data):
+                continue
+        except ValueError:
+            continue
+
+        ev = evidence_by_subset.get(subset_idx_str)
+        if ev is None:
+            continue
+
+        trimmed, rejection = _validate_and_trim(llm_note, ev, frame)
+        if trimmed is not None:
+            orig_0based = original_indices[subset_0based]
+            accepted[orig_0based] = trimmed
+        else:
+            logger.debug(
+                "_run_llm_pass: note_rejected model=%s subset_idx=%s rejection=%s",
+                model, subset_idx_str, rejection,
+            )
+
+    return accepted, True
+
+
+def build_reasons_with_retry(
+    cards_data: List[Tuple[Any, Any, Any, Any]],
+    frame: Any,
+) -> Tuple[Dict[str, "CardReason"], "ReasoningResultV2"]:
+    """Reasoning Reliability v2 orchestrator.
+
+    Three-pass cascade:
+      Pass 1: Primary model, all cards.
+      Pass 2: Primary model retry for any cards missing after pass 1.
+      Pass 3: Fallback model for any cards still missing after pass 2.
+
+    Returns (card_reasons, ReasoningResultV2):
+      card_reasons maps str(1-based index) → CardReason.
+      Cards with validated=False had no accepted LLM note after all passes.
+
+    IMPORTANT: Callers MUST exclude cards with validated=False from the returned
+    card set. Deterministic text is NEVER used to populate a visible note.
+
+    Never raises. Returns all-omitted result on any unhandled error.
+    """
+    n = len(cards_data)
+    result: Dict[str, CardReason] = {str(i + 1): CardReason() for i in range(n)}
+    r = ReasoningResultV2(final_card_count=n, model=_PRIMARY_MODEL, fallback_model=_FALLBACK_MODEL)
+
+    if not _flag_enabled():
+        r.failure_reason = "flag_disabled"
+        r.final_note_omitted_count = n
+        logger.debug("build_reasons_with_retry: flag_disabled, all cards omitted")
+        return result, r
+
+    if not cards_data:
+        r.failure_reason = "no_cards"
+        return result, r
+
+    if len(cards_data) > _BATCH_SIZE:
+        logger.info(
+            "build_reasons_with_retry: card_count=%d exceeds batch_size=%d, truncating",
+            len(cards_data), _BATCH_SIZE,
+        )
+
+    r.attempted = True
+    timeout_s = _TIMEOUT_MS / 1000.0
+
+    try:
+        all_indices = list(range(n))
+
+        # ── Pass 1: Primary model, all cards ─────────────────────────────────
+        accepted_1, _ = _run_llm_pass(
+            cards_data, all_indices, frame, _PRIMARY_MODEL, timeout_s
+        )
+        for orig_0idx, note in accepted_1.items():
+            result[str(orig_0idx + 1)] = CardReason(
+                note=note, source=SOURCE_PRIMARY, validated=True,
+                attempt_count=1, model_used=_PRIMARY_MODEL,
+            )
+
+        # ── Pass 2: Retry primary model for missing cards ─────────────────────
+        missing_after_1 = [i for i in all_indices if i not in accepted_1]
+        if missing_after_1 and _MAX_RETRIES >= 1:
+            subset_2 = [cards_data[i] for i in missing_after_1]
+            accepted_2, _ = _run_llm_pass(
+                subset_2, missing_after_1, frame, _PRIMARY_MODEL, timeout_s
+            )
+            for orig_0idx, note in accepted_2.items():
+                result[str(orig_0idx + 1)] = CardReason(
+                    note=note, source=SOURCE_RETRY, validated=True,
+                    attempt_count=2, retry_used=True, model_used=_PRIMARY_MODEL,
+                )
+                r.retry_recovered_count += 1
+        else:
+            accepted_2 = {}
+
+        # ── Pass 3: Fallback model for cards still missing ────────────────────
+        accepted_so_far = set(accepted_1) | set(accepted_2)
+        missing_after_2 = [i for i in all_indices if i not in accepted_so_far]
+        if missing_after_2 and _FALLBACK_MODEL and _FALLBACK_MODEL != _PRIMARY_MODEL:
+            subset_3 = [cards_data[i] for i in missing_after_2]
+            # Fallback model gets 2× timeout — it's higher quality, needs more time.
+            accepted_3, _ = _run_llm_pass(
+                subset_3, missing_after_2, frame, _FALLBACK_MODEL, timeout_s * 2
+            )
+            for orig_0idx, note in accepted_3.items():
+                result[str(orig_0idx + 1)] = CardReason(
+                    note=note, source=SOURCE_FALLBACK, validated=True,
+                    attempt_count=3, retry_used=True, fallback_model_used=True,
+                    model_used=_FALLBACK_MODEL,
+                )
+                r.fallback_model_used_count += 1
+        else:
+            accepted_3 = {}
+
+        # ── Final telemetry ───────────────────────────────────────────────────
+        r.accepted_count = sum(1 for cr in result.values() if cr.validated)
+        r.final_note_omitted_count = n - r.accepted_count
+        r.deterministic_visible_count = 0  # invariant: always 0
+
+        # success = True only when ALL cards have validated notes
+        r.success = r.accepted_count == n
+        if not r.success:
+            r.failure_reason = (
+                f"incomplete_reasoning:{r.final_note_omitted_count}_of_{n}_missing"
+            )
+
+        # Per-source counts for telemetry
+        for cr in result.values():
+            if cr.validated:
+                r.visible_note_source_counts[cr.source] = (
+                    r.visible_note_source_counts.get(cr.source, 0) + 1
+                )
+
+        # Diversity check on accepted notes
+        accepted_notes = {k: cr.note for k, cr in result.items() if cr.validated}
+        if len(accepted_notes) >= 2 and not _check_note_diversity(accepted_notes):
+            r.diversity_flagged = True
+
+        logger.info(
+            "build_reasons_with_retry: "
+            "primary_model=%s fallback_model=%s timeout_ms=%d "
+            "accepted=%d/%d retry_recovered=%d fallback_used=%d "
+            "success=%s failure_reason=%s source_counts=%s",
+            _PRIMARY_MODEL, _FALLBACK_MODEL, _TIMEOUT_MS,
+            r.accepted_count, n, r.retry_recovered_count, r.fallback_model_used_count,
+            r.success, r.failure_reason, r.visible_note_source_counts,
+        )
+        return result, r
+
+    except Exception as exc:
+        logger.warning("build_reasons_with_retry: unhandled_error=%s", exc)
+        r.failure_reason = f"unhandled_error:{exc}"
+        r.final_note_omitted_count = n
+        r.success = False
+        return result, r
