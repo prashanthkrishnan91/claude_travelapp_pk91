@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -96,16 +96,22 @@ def execute_fanout(
             for q in capped
         }
         # Wait up to timeout + buffer for all futures
-        for future in as_completed(future_to_query, timeout=timeout + 2.0):
-            q = future_to_query[future]
-            try:
-                result = future.result(timeout=0)
-                results.append(result)
-            except Exception as exc:
-                logger.warning(
-                    "provider_executor: query=%r future failed: %s", q, exc
-                )
-                results.append(ProviderQueryResult(query=q, error=str(exc)[:120]))
+        try:
+            for future in as_completed(future_to_query, timeout=timeout + 2.0):
+                q = future_to_query[future]
+                try:
+                    result = future.result(timeout=0)
+                    results.append(result)
+                except Exception as exc:
+                    logger.warning(
+                        "provider_executor: query=%r future failed: %s", q, exc
+                    )
+                    results.append(ProviderQueryResult(query=q, error=str(exc)[:120]))
+        except TimeoutError:
+            logger.warning(
+                "provider_executor: fanout_timeout timeout=%.2fs; returning partial results",
+                timeout + 2.0,
+            )
 
     # Add error records for any queries that didn't complete (edge case)
     completed_queries = {r.query for r in results}
