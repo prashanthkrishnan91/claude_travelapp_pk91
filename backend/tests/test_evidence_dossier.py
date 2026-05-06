@@ -671,6 +671,31 @@ class TestDossierDeadlineBudgetGating:
         )
         assert dossiers == []
 
+    def test_category_fn_failure_does_not_raise(self):
+        entity = _make_entity()
+        dossiers = build_dossiers_for_ranked_cards(
+            ranked=[(entity, _make_rank_score())],
+            frame=_make_frame(),
+            enrichment_map={},
+            deadline=None,
+            top_n=6,
+            category_fn=lambda _e: (_ for _ in ()).throw(ValueError("bad category")),
+        )
+        assert dossiers == []
+
+
+class TestThemeExtractionDeterminism:
+    def test_repeated_extraction_stable_order_with_more_than_three_hits(self):
+        text = " ".join(
+            ["beer", "wine", "cocktail", "pizza", "sushi", "brunch", "burger", "ramen"]
+        )
+        enrichment = _make_enrichment(editorial_summary=text)
+        first = extract_review_themes(enrichment=enrichment, entity_name="A")
+        for _ in range(5):
+            nxt = extract_review_themes(enrichment=enrichment, entity_name="A")
+            assert nxt.food_drink == first.food_drink
+            assert len(nxt.food_drink) == 3
+
 
 # ── Test 9: Dossier source/theme telemetry emitted ────────────────────────────
 

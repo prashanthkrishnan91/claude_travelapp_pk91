@@ -45,7 +45,7 @@ CONFIDENCE_WEAK = "weak"
 # snippets. NOT applied to formatted_address or google_types for theme inference.
 # Conservative: false positives erode downstream reasoning trust.
 
-_FOOD_DRINK_KEYWORDS: frozenset = frozenset({
+_FOOD_DRINK_KEYWORDS: Tuple[str, ...] = tuple(sorted({
     "food", "menu", "beer", "cocktail", "wine", "drink", "cuisine", "dish",
     "burger", "pizza", "steak", "seafood", "sushi", "brunch", "breakfast",
     "lunch", "dinner", "chef", "kitchen", "craft", "seasonal", "fresh",
@@ -55,47 +55,47 @@ _FOOD_DRINK_KEYWORDS: frozenset = frozenset({
     "french", "japanese", "chinese", "korean", "vietnamese", "oyster",
     "lobster", "crab", "sashimi", "omakase", "sommelier", "tasting",
     "pairing", "flight", "ipa", "lager", "ale", "draft", "tap",
-})
+}))
 
-_AMBIANCE_KEYWORDS: frozenset = frozenset({
+_AMBIANCE_KEYWORDS: Tuple[str, ...] = tuple(sorted({
     "vibe", "atmosphere", "ambiance", "ambience", "cozy", "intimate",
     "lively", "upscale", "casual", "trendy", "rustic", "elegant", "stylish",
     "hip", "warm", "inviting", "modern", "classic", "vintage", "historic",
     "industrial", "relaxed", "energetic", "buzzy", "chill", "relaxing",
     "romantic", "sophisticated", "charming", "welcoming", "festive",
     "vibrant", "laid-back",
-})
+}))
 
-_SERVICE_KEYWORDS: frozenset = frozenset({
+_SERVICE_KEYWORDS: Tuple[str, ...] = tuple(sorted({
     "service", "staff", "friendly", "knowledgeable", "attentive", "helpful",
     "server", "waiter", "bartender", "host", "professional", "experienced",
-})
+}))
 
-_CROWD_NOISE_KEYWORDS: frozenset = frozenset({
+_CROWD_NOISE_KEYWORDS: Tuple[str, ...] = tuple(sorted({
     "loud", "noisy", "quiet", "packed", "crowded", "busy", "rowdy",
     "neighborhood", "regulars", "locals", "sports", "college", "late night",
-})
+}))
 
 # View/outdoor terms: extracted ONLY from explicit enrichment evidence
 # (amenity flags, editorial text, review snippets).
 # Name matches → "listing_context:" prefix (lower trust).
 # Address matches → NOT used for this theme at all.
-_VIEW_OUTDOOR_KEYWORDS: frozenset = frozenset({
+_VIEW_OUTDOOR_KEYWORDS: Tuple[str, ...] = tuple(sorted({
     "view", "rooftop", "patio", "outdoor", "terrace", "waterfront",
     "riverwalk", "garden", "balcony", "deck", "scenic", "skyline",
     "lake view", "river view", "lakefront", "riverfront", "al fresco",
-})
+}))
 
-_OCCASION_KEYWORDS: frozenset = frozenset({
+_OCCASION_KEYWORDS: Tuple[str, ...] = tuple(sorted({
     "date", "anniversary", "birthday", "celebration", "romantic",
     "special occasion", "business", "family", "happy hour",
-})
+}))
 
-_NEGATIVE_KEYWORDS: frozenset = frozenset({
+_NEGATIVE_KEYWORDS: Tuple[str, ...] = tuple(sorted({
     "expensive", "overpriced", "disappointing", "inconsistent",
     "mediocre", "skip", "not worth", "overcrowded", "terrible",
     "cold food", "dry", "bland",
-})
+}))
 
 # Name tokens that indicate outdoor/view listing context (not enrichment proof).
 _VIEW_NAME_TOKENS: frozenset = frozenset({
@@ -252,7 +252,7 @@ def _extract_text_themes(text: str, themes: ReviewThemeEvidence) -> None:
     text_lower = text.lower()
     tokens = _text_tokens(text)
 
-    def _hits(keywords: frozenset) -> List[str]:
+    def _hits(keywords: Tuple[str, ...]) -> List[str]:
         found: List[str] = []
         for kw in keywords:
             if len(found) >= 3:
@@ -613,10 +613,9 @@ def build_dossiers_for_ranked_cards(
 
     dossiers: List[PlaceEvidenceDossier] = []
     for entity, rank_score in targets:
-        enrichment = None if low_budget else enrichment_map.get(entity.place_id)
-        category = category_fn(entity) if category_fn is not None else None
-
         try:
+            enrichment = None if low_budget else enrichment_map.get(entity.place_id)
+            category = category_fn(entity) if category_fn is not None else None
             dossier = build_place_evidence_dossier(
                 entity=entity,
                 frame=frame,
