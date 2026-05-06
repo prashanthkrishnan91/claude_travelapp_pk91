@@ -1,5 +1,34 @@
 # Progress Log
 
+## 2026-05-06 — EvidencePack v3: Quality Critic, Place Details Enrichment, Per-Card Observability
+
+**Branch**: `claude/fix-concierge-reasoning-qyJkD`
+
+**Problem**: PR #250 delivered validated LLM notes (no "NOTE OMITTED"), but notes could still be thin concept-fit-only phrases ("matches the taproom concept", "solid brewery signals") that pass the safety validator while providing zero user value.
+
+**Root causes fixed**:
+1. No evidence enrichment: only name/type/address/rating/reviews were grounding anchors → LLM wrote concept-fit phrases because that's all it had.
+2. No quality gate: safety validator caught fabricated claims but not thin-but-valid generic phrasing.
+3. No per-card production observability: couldn't see exact visible note text, evidence quality, or modifier status per card.
+
+**What was built**:
+- `place_details_provider.py` — Google Places API v1 enrichment (editorial_summary, review_snippets, amenity flags). urllib.request (no httpx). Top-4 budget gate. Concurrent ThreadPoolExecutor.
+- `ranker.py` — `MinimalEvidenceBundle` gets `evidence_adequacy` (STRONG/OK/THIN) and `enrichment_facts`.
+- `batched_reason_builder.py` — `_QUALITY_THIN_RE` + `_assess_quality()` quality gate; repair hints wired into Pass 2+3 prompts (`REPAIR GUIDANCE` section); enrichment_facts + adequacy hint in evidence text per card.
+- `semantic_retrieval.py` — Step 5.5 enrichment call; `_log_per_card_notes()` per-card structured log.
+- `evidence_harness_v3.py` — 3 production queries (breweries/taprooms/izakayas) with enrichment mock scenarios.
+- `test_evidence_quality_v3.py` — 30 new tests.
+- `evidence_harness_v2.py` — `_TARGET_NOTES` upgraded: all thin concept-fit phrases replaced with specific differentiating notes.
+
+**Tests**: 1290 passing (excludes pre-existing httpx-only 20). New: 30. All suites clean.
+
+**Evidence harness v3**: 9/9 validated across 3 production queries. 3 taproom cards rescued by quality-gate retry (quality critic rejected Pass 1 generic notes; Pass 2 repair prompt produced specific notes).
+
+**Supabase SQL**: No
+**HANDOFF.md edited**: Yes
+
+---
+
 ## 2026-05-05 — Merge-Gate: 21 Failures Eliminated (0 concierge/related remain)
 
 **Branch**: `claude/fix-concierge-reasoning-qyJkD`

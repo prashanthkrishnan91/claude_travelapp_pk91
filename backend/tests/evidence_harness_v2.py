@@ -375,18 +375,18 @@ _TARGET_CARD_DATA: Dict[str, List[Tuple[str, str, List[str], float, int]]] = {
 #     or a specific fit to the query that helps the traveler choose.
 _TARGET_NOTES: Dict[str, Dict[str, str]] = {
     "izakayas": {
-        "1": "Izakaya Shinya matches on both name and Japanese-restaurant-type signals, a direct concept fit for this izakaya request.",
+        "1": "Izakaya Shinya on Green Street is a Japanese restaurant whose name and category both point directly to izakaya-style dining, with a menu focused on skewers and small plates.",
         "2": "Gaijin is listed as a Japanese restaurant whose menu signals align closely to izakaya-style small plates and skewers.",
         "3": "En Hakkinen offers Japanese small plates and a compact menu consistent with izakaya-style dining in Chicago.",
     },
     "izakayas with waterfront views": {
-        "1": "Izakaya Shinya delivers a strong izakaya concept fit on restaurant type and name; waterfront proximity cannot be confirmed from the available address data.",
-        "2": "Gaijin is a solid Japanese-restaurant match for this izakaya request; waterfront positioning cannot be confirmed from listing data, so treat it as a concept fit near the requested area rather than a guaranteed view.",
-        "3": "En Hakkinen carries izakaya-style signals in both name and category; a waterfront view cannot be verified from listing data, but the concept match is direct.",
+        "1": "Izakaya Shinya's name and Japanese-restaurant category both align with the izakaya request; waterfront proximity cannot be confirmed from the available address data.",
+        "2": "Gaijin is a Japanese-restaurant type match for this izakaya request; waterfront positioning cannot be confirmed from listing data, but the category aligns with izakaya-style dining.",
+        "3": "En Hakkinen carries izakaya-style signals in both name and category; a waterfront view cannot be verified from listing data, so approach it as an izakaya pick rather than a riverside seat.",
     },
     "izakayas on Fulton Street": {
-        "1": "Izakaya Shinya is a strong izakaya concept match; not directly on Fulton Street per available address data, but within the area covering the izakaya request.",
-        "2": "Gaijin matches on Japanese-restaurant type for this izakaya request; the address does not confirm a Fulton Street location, so treat it as the closest available concept match.",
+        "1": "Izakaya Shinya's Japanese-restaurant type and name align with this izakaya request; the address shows Green Street, not Fulton Street, so it's the closest verified option nearby.",
+        "2": "Gaijin's Japanese-restaurant type aligns with this izakaya request; the address confirms Western Avenue, not Fulton Street, so it's the closest verified izakaya-style option available.",
         "3": "En Hakkinen carries izakaya-style signals in name and category; not on Fulton Street per the address data, but a solid candidate for izakaya dining in this part of the city.",
     },
     "best breweries": {
@@ -395,19 +395,19 @@ _TARGET_NOTES: Dict[str, Dict[str, str]] = {
         "3": "Revolution Brewing operates one of Chicago's largest purpose-built taprooms, with a strong seasonal IPA program and one of the highest review volumes of any city brewery.",
     },
     "best waterfront breweries": {
-        "1": "An established Chicago taproom with solid brewery signals; waterfront proximity is not verified from available data, so visit for the tap list rather than a confirmed river view.",
-        "2": "One of Chicago's highest-review-count breweries; waterfront access cannot be confirmed from listing data, but a strong brewery fit for this request.",
-        "3": "A brewery with strong name-and-type concept signals for this request; waterfront seating cannot be confirmed from the available address, but the tap quality is well-supported.",
+        "1": "Goose Island Brewhouse is an established Chicago taproom with a wide tap rotation; waterfront proximity is not verified from available data, so plan for the beer selection rather than a river view.",
+        "2": "One of Chicago's highest-review-count breweries; waterfront access cannot be confirmed from listing data, but the tap quality and neighborhood location make it a worthwhile visit.",
+        "3": "Revolution Brewing is one of Chicago's largest independent breweries; waterfront seating cannot be confirmed from the available address, but the tap quality and review volume are well-supported.",
     },
     "breweries near the river": {
-        "1": "Goose Island Brewhouse anchors the Clybourn Corridor with a comprehensive tap list covering core seasonals and limited releases, a reliable stop for beer exploration.",
+        "1": "Goose Island Brewhouse anchors the Clybourn Corridor with a comprehensive tap list covering core seasonals and limited releases, a worthwhile stop for beer exploration.",
         "2": "Half Acre is a Lincoln Square taproom prizing small-batch releases over volume, one of Chicago's more consistent neighborhood brewing destinations.",
         "3": "Revolution Brewing brings a large-format taproom and citywide distribution from its Northwest Side base, with a well-established seasonal rotation.",
     },
     "taprooms with a view": {
-        "1": "Goose Island Taproom matches on brewery type and name for a taproom request; a view cannot be structurally confirmed from listing data, but the tap quality and review volume are well-supported.",
-        "2": "Half Acre is a reliable taproom destination with an inviting format; an outdoor or elevated view is not confirmed from the listing, but the brewery concept fit is strong.",
-        "3": "Empirical Taproom matches the taproom concept with a local-distribution focus; a confirmed scenic view cannot be verified from available data, but the taproom fit is solid.",
+        "1": "Goose Island Taproom on Clybourn Ave is a well-reviewed brewery taproom; a scenic view cannot be structurally confirmed from listing data, but the tap quality and review volume are well-supported.",
+        "2": "Half Acre on Lincoln Ave is an established neighborhood taproom with a consistent small-batch release program; an outdoor or elevated view is not confirmed from the listing, so plan for the beer.",
+        "3": "Empirical Taproom on Foster Ave focuses on local distribution and experimental fermentation; a confirmed scenic view cannot be verified from available data, but it's a distinctive taproom option.",
     },
 }
 

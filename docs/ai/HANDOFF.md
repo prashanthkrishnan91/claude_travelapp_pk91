@@ -1,8 +1,68 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-05) — Reasoning Reliability v2: Three-Pass Orchestrator + Validated Display Contract
+## Last change (2026-05-06) — EvidencePack v3: Quality Critic, Place Details Enrichment, Per-Card Observability
 
-**Status: MERGE-READY** — 0 concierge failures; 20 pre-existing httpx-only remain (unrelated)
+**Status: MERGE-READY** — 1290 passing, 20 pre-existing httpx-only remain (unrelated)
+
+### Problem solved
+
+Production showed validated LLM notes passing all safety checks but providing no user value — phrases like "matches the taproom concept with solid signals" passed the validator but are meaningless to the traveler. Root causes:
+1. No evidence enrichment: only name/type/address/rating/reviews were grounding anchors.
+2. No quality gate: safety validator caught fabricated claims, not thin concept-fit-only phrasing.
+3. No production observability: couldn't see what the exact visible note was per card.
+
+### What was built
+
+**EvidencePack v3** (`ranker.py`): `MinimalEvidenceBundle` now carries `evidence_adequacy` (STRONG/OK/THIN) and `enrichment_facts` from Place Details. Adequacy grading: STRONG when enrichment_facts present or subtype_fit≥0.9+500+ reviews; OK when subtype_fit≥0.6; THIN otherwise.
+
+**Place Details Provider** (`place_details_provider.py`): Fetches `editorialSummary`, `reviews`, `servesBeer/Wine/Cocktails`, `outdoorSeating`, `liveMusic`, `goodForGroups` via Google Places API v1. Uses urllib.request (no httpx dep). Top-4 cards enriched per turn (budget gate). Concurrent via ThreadPoolExecutor.
+
+**Quality Critic** (`batched_reason_builder.py`): `_assess_quality()` + `_QUALITY_THIN_RE` pattern set. Catches thin notes that pass the safety validator: "matches the taproom concept", "solid brewery signals", "reliable taproom destination", "izakaya concept fit", etc. Quality-failed cards get per-card repair hints injected into the Pass 2 prompt as `REPAIR GUIDANCE`.
+
+**Repair pass wiring** (`build_reasons_with_retry()`): Quality-failed cards from Pass 1 are tracked in `quality_failed_1`. Pass 2 gets 1-based repair hints in `per_card_hints`. Pass 3 (fallback model) also gets repair hints from Pass 1+2 quality failures.
+
+**Enrichment integration** (`semantic_retrieval.py`): Step 5.5 calls `enrich_top_cards()` after ranking; enrichment passed to `build_evidence_bundle()` per entity. Falls back silently when Places API unavailable.
+
+**Per-card observability** (`semantic_retrieval.py`): New `_log_per_card_notes()` emits one structured log line per turn with `semantic_retrieval_v1.per_card_notes` key — exact visible note text, evidence_adequacy, modifier_status, displayWhyValidated, displayWhySource per card.
+
+### Files changed
+
+- `backend/app/concierge/ranker.py` — `MinimalEvidenceBundle` gains `evidence_adequacy` + `enrichment_facts`; `build_evidence_bundle()` accepts `enrichment` param
+- `backend/app/concierge/place_details_provider.py` — **new**: `PlaceDetailsResult`, `fetch_place_details()`, `enrich_top_cards()`
+- `backend/app/concierge/batched_reason_builder.py` — `_QUALITY_THIN_RE`, `_assess_quality()`, repair hints in `_build_batch_prompt()`, quality gate in `_run_llm_pass()`, repair wiring in `build_reasons_with_retry()`
+- `backend/app/concierge/semantic_retrieval.py` — Step 5.5 enrichment, `_log_per_card_notes()`, per-card log call
+- `backend/tests/evidence_harness_v3.py` — **new**: 3 production queries × enrichment scenarios
+- `backend/tests/test_evidence_quality_v3.py` — **new**: 30 tests (quality critic, adequacy, enrichment, observability, repair hints, quality matrix)
+- `backend/tests/evidence_harness_v2.py` — `_TARGET_NOTES` updated to use specific differentiating notes (quality bar raised)
+
+### Test results
+
+```
+1290 passed (excludes test_restaurant_search_diagnostics.py — pre-existing httpx absence)
+  test_evidence_quality_v3.py:        30 new tests, all pass
+  test_reasoning_reliability_v2.py:   42 tests, all pass (including Table 5 21/21 with upgraded notes)
+  test_semantic_retrieval_v1.py:     160 tests, all pass
+  evidence_harness_v3.py:             9/9 validated (3 taprooms rescued via quality-gate retry)
+```
+
+### Hard contracts preserved from PR #250
+
+- Cards with `validated=False` excluded from response (never shown)
+- `deterministic_visible_count` always 0 in telemetry
+- No NOTE OMITTED / placeholder in success path
+- No thin concept-fit-only phrases in validated notes (new)
+
+### Env vars added (EvidencePack v3)
+
+None. Place Details enrichment uses existing `GOOGLE_PLACES_API_KEY`. Gracefully degrades to THIN adequacy when key absent.
+
+### Supabase SQL: No
+
+---
+
+## Previous change (2026-05-05) — Reasoning Reliability v2: Three-Pass Orchestrator + Validated Display Contract
+
+**Status: MERGED** — 0 concierge failures; 20 pre-existing httpx-only remain (unrelated)
 
 ### Root cause (this PR)
 

@@ -157,11 +157,24 @@ class RankScore:
 
 @dataclass
 class MinimalEvidenceBundle:
-    """Lightweight structured evidence for one verified entity."""
+    """Lightweight structured evidence for one verified entity.
+
+    evidence_adequacy grades how much grounding is available for LLM reasoning:
+      STRONG — at least one specific differentiator beyond name/type/address/rating
+               (editorial summary, amenity flags, or strong name-concept + high review count)
+      OK     — concept fit confirmed + useful location context (geo proximity or modifier)
+      THIN   — only name/type/address/rating/review-count visible on card
+      UNSAFE — evidence conflicts with requested modifier (e.g. address contradicts claim)
+
+    enrichment_facts hold Place Details fields (editorial_summary, amenity flags,
+    review_snippets) when available. Empty list when enrichment was not fetched.
+    """
     entity: PlaceEntity
     structured_facts: List[str] = field(default_factory=list)
     geo_note: Optional[str] = None
     uncertainty_flags: List[str] = field(default_factory=list)
+    evidence_adequacy: str = "THIN"           # STRONG | OK | THIN | UNSAFE
+    enrichment_facts: List[str] = field(default_factory=list)  # from Place Details
 
 
 @dataclass
@@ -492,11 +505,19 @@ def build_evidence_bundle(
     entity: PlaceEntity,
     frame: ExperienceFrame,
     rank_score: RankScore,
+    enrichment: "Optional[Any]" = None,  # Optional[PlaceDetailsResult] — avoids import cycle
 ) -> MinimalEvidenceBundle:
-    """Build a minimal, reliable evidence bundle for a verified entity."""
+    """Build a reliable evidence bundle for a verified entity.
+
+    Args:
+        enrichment: Optional PlaceDetailsResult from the Place Details provider.
+                    When provided, enrichment_facts are populated and evidence_adequacy
+                    can upgrade from THIN to OK/STRONG.
+    """
     facts: List[str] = []
     uncertainty_flags: List[str] = []
     geo_note: Optional[str] = None
+    enrichment_facts: List[str] = []
 
     # Structured fact: name + primary type
     if entity.primary_type or entity.types:
@@ -548,11 +569,54 @@ def build_evidence_bundle(
         if "ambiance" in flag and "ambiance_not_verifiable" not in uncertainty_flags:
             uncertainty_flags.append("ambiance_not_verifiable")
 
+    # ── Place Details enrichment (EvidencePack v3) ────────────────────────────
+    if enrichment is not None:
+        editorial = getattr(enrichment, "editorial_summary", None)
+        if editorial:
+            enrichment_facts.append(f"Editorial summary: {editorial[:160]}")
+        for snippet in (getattr(enrichment, "review_snippets", None) or [])[:2]:
+            if snippet:
+                enrichment_facts.append(f"Review mention: {snippet[:120]}")
+        amenity_map = {
+            "serves_beer": "serves beer",
+            "outdoor_seating": "outdoor seating available",
+            "live_music": "live music listed",
+            "good_for_groups": "good for groups",
+        }
+        for attr, label in amenity_map.items():
+            val = getattr(enrichment, attr, None)
+            if val is True:
+                enrichment_facts.append(f"Amenity confirmed: {label}")
+
+    # ── Evidence adequacy grading ─────────────────────────────────────────────
+    # STRONG: has specific differentiator beyond name/type/address/rating
+    # OK    : concept fit confirmed + location/geo context
+    # THIN  : only name/type/address/rating — nothing extra
+    # UNSAFE: not used here (conflicts handled by validator uncertainty_flags)
+    adequacy = "THIN"
+    has_strong_name_match = rank_score.subtype_fit >= 0.9
+    high_review_count = (entity.user_rating_count or 0) >= 500
+    has_location_context = bool(geo_note) or any(
+        "confirms" in f for f in facts
+    )
+
+    if enrichment_facts:
+        adequacy = "STRONG"
+    elif has_strong_name_match and high_review_count:
+        # Name itself strongly signals the concept + well-reviewed = distinguishable
+        adequacy = "STRONG"
+    elif rank_score.subtype_fit >= 0.6 and has_location_context:
+        adequacy = "OK"
+    elif rank_score.subtype_fit >= 0.6:
+        adequacy = "OK"
+
     return MinimalEvidenceBundle(
         entity=entity,
         structured_facts=facts,
         geo_note=geo_note,
         uncertainty_flags=uncertainty_flags,
+        evidence_adequacy=adequacy,
+        enrichment_facts=enrichment_facts,
     )
 
 
