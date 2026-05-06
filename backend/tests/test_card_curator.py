@@ -214,6 +214,7 @@ class TestRoleAssignmentHighConceptFit:
             concept_fit=0.85,
             geo_fit=0.4,
             modifier_fit="none",
+            modifier_requested=False,
             source_confidence=CONFIDENCE_STRONG,
             theme_count=3,
             has_place_details=True,
@@ -233,6 +234,7 @@ class TestRoleAssignmentHighConceptFit:
             concept_fit=0.75,
             geo_fit=0.3,
             modifier_fit="none",
+            modifier_requested=False,
             source_confidence=CONFIDENCE_MIXED,
             theme_count=2,
             has_place_details=True,
@@ -252,6 +254,7 @@ class TestRoleAssignmentHighConceptFit:
             concept_fit=0.9,
             geo_fit=0.5,
             modifier_fit="none",
+            modifier_requested=False,
             source_confidence=CONFIDENCE_MIXED,
             theme_count=1,
             has_place_details=False,
@@ -294,6 +297,7 @@ class TestModifierConfirmedRole:
             concept_fit=0.55,
             geo_fit=0.5,
             modifier_fit="confirmed",
+            modifier_requested=True,
             source_confidence=CONFIDENCE_MIXED,
             theme_count=0,
             has_place_details=False,
@@ -313,6 +317,7 @@ class TestModifierConfirmedRole:
             concept_fit=0.5,
             geo_fit=0.6,
             modifier_fit="not_confirmed",
+            modifier_requested=True,
             source_confidence=CONFIDENCE_MIXED,
             theme_count=1,
             has_place_details=True,
@@ -331,6 +336,7 @@ class TestModifierConfirmedRole:
             concept_fit=0.55,
             geo_fit=0.5,
             modifier_fit="not_confirmed",
+            modifier_requested=True,
             source_confidence=CONFIDENCE_MIXED,
             theme_count=0,
             has_place_details=False,
@@ -350,6 +356,7 @@ class TestModifierConfirmedRole:
             concept_fit=0.3,  # below 0.4 threshold
             geo_fit=0.8,
             modifier_fit="confirmed",
+            modifier_requested=True,
             source_confidence=CONFIDENCE_MIXED,
             theme_count=0,
             has_place_details=False,
@@ -774,6 +781,7 @@ class TestDeterministicOrdering:
             concept_fit=0.65,
             geo_fit=0.45,
             modifier_fit="none",
+            modifier_requested=False,
             source_confidence=CONFIDENCE_MIXED,
             theme_count=2,
             has_place_details=True,
@@ -891,6 +899,7 @@ class TestNoBroadReorderByThemeCount:
         # Directly verify score ordering
         signals_high = CardCurationSignals(
             concept_fit=0.8, geo_fit=0.2, modifier_fit="none",
+            modifier_requested=False,
             source_confidence=CONFIDENCE_WEAK, theme_count=0,
             has_place_details=False, has_explicit_modifier_evidence=False,
             has_listing_context_only=False, negative_caveat_count=0,
@@ -898,6 +907,7 @@ class TestNoBroadReorderByThemeCount:
         )
         signals_low = CardCurationSignals(
             concept_fit=0.3, geo_fit=0.2, modifier_fit="none",
+            modifier_requested=False,
             source_confidence=CONFIDENCE_STRONG, theme_count=10,
             has_place_details=True, has_explicit_modifier_evidence=False,
             has_listing_context_only=False, negative_caveat_count=0,
@@ -1119,3 +1129,65 @@ class TestPR259DossierContractsUnchanged:
         signals = _build_curation_signals(dossier, original_rank_index=0)
         assert signals.has_listing_context_only is True
         assert signals.has_explicit_modifier_evidence is False
+
+
+class TestPR261ArchitectureCorrections:
+    def test_no_modifier_query_with_explicit_outdoor_does_not_assign_modifier_confirmed(self):
+        dossier = _make_details_dossier(
+            concept_fit=0.55,
+            modifier_fit="none",
+            view_patio=["outdoor seating (amenity)"],
+            source_confidence=CONFIDENCE_MIXED,
+        )
+        role, _ = _assign_role(_build_curation_signals(dossier, 0), is_minimal=False)
+        assert role != ROLE_MODIFIER_CONFIRMED
+
+    def test_modifier_requested_with_explicit_evidence_can_assign_modifier_confirmed(self):
+        dossier = _make_details_dossier(
+            concept_fit=0.55,
+            modifier_fit="not_confirmed",
+            view_patio=["outdoor seating (amenity)"],
+        )
+        role, _ = _assign_role(_build_curation_signals(dossier, 0), is_minimal=False)
+        assert role == ROLE_MODIFIER_CONFIRMED
+
+    def test_modifier_requested_listing_context_only_does_not_assign_modifier_confirmed(self):
+        dossier = _make_dossier(
+            concept_fit=0.55,
+            modifier_fit="not_confirmed",
+            review_themes=ReviewThemeEvidence(view_patio_waterfront=["listing_context:rooftop"]),
+        )
+        role, _ = _assign_role(_build_curation_signals(dossier, 0), is_minimal=False)
+        assert role != ROLE_MODIFIER_CONFIRMED
+
+    def test_tiny_curation_advantage_does_not_reorder(self):
+        ranked = [(_make_entity(place_id="places/a", name="A"), _make_rank_score()), (_make_entity(place_id="places/b", name="B"), _make_rank_score())]
+        dossiers = [
+            _make_dossier(place_id="places/a", concept_fit=0.60, geo_fit=0.30, source_confidence=CONFIDENCE_MIXED),
+            _make_dossier(place_id="places/b", concept_fit=0.61, geo_fit=0.30, source_confidence=CONFIDENCE_MIXED),
+        ]
+        result = curate_cards(ranked=ranked, dossiers=dossiers, first_card_limit=6)
+        assert [c.entity.name for c in result.curated_cards[:2]] == ["A", "B"]
+
+    def test_lower_concept_with_many_themes_cannot_jump_materially_stronger_concept(self):
+        ranked = [(_make_entity(place_id="places/high", name="High"), _make_rank_score()), (_make_entity(place_id="places/low", name="Low"), _make_rank_score())]
+        dossiers = [
+            _make_dossier(place_id="places/high", concept_fit=0.80, source_confidence=CONFIDENCE_WEAK, is_minimal=True),
+            _make_details_dossier(place_id="places/low", concept_fit=0.55, source_confidence=CONFIDENCE_STRONG, food_drink=["a","b","c"], ambiance=["d"]),
+        ]
+        result = curate_cards(ranked=ranked, dossiers=dossiers, first_card_limit=6)
+        assert result.curated_cards[0].entity.name == "High"
+
+    def test_best_overall_still_counts_modifier_confirmed_signal(self):
+        ranked = [(_make_entity(place_id="places/x", name="X"), _make_rank_score())]
+        dossiers = [_make_details_dossier(place_id="places/x", concept_fit=0.85, modifier_fit="confirmed", source_confidence=CONFIDENCE_STRONG)]
+        result = curate_cards(ranked=ranked, dossiers=dossiers, first_card_limit=6)
+        assert result.curated_cards[0].role == ROLE_BEST_OVERALL
+        assert result.modifier_confirmed_count == 1
+
+    def test_best_overall_still_counts_evidence_rich_signal(self):
+        ranked = [(_make_entity(place_id="places/y", name="Y"), _make_rank_score())]
+        dossiers = [_make_details_dossier(place_id="places/y", concept_fit=0.85, source_confidence=CONFIDENCE_STRONG, food_drink=["craft"]) ]
+        result = curate_cards(ranked=ranked, dossiers=dossiers, first_card_limit=6)
+        assert result.curated_cards[0].role == ROLE_BEST_OVERALL
+        assert result.evidence_rich_count == 1
