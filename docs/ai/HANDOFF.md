@@ -1,6 +1,103 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-06) — PR #258: Parallel retrieval + critical/non-critical path split
+## Last change (2026-05-06) — PR #259: Evidence Dossier v1 + review/theme extraction
+
+**Status: MERGE-READY** — 54 new evidence-dossier tests pass; 28 PR #258 tests pass; 64 PR #257 SLA tests pass; 19 pre-existing pydantic env failures remain (unrelated)
+
+### What was built
+
+Evidence Dossier v1 — typed, structured place intelligence for top Concierge cards. No UI, SQL, provider additions, or frontend changes.
+
+**Problem**: AI Concierge note generation received thin name/category/rating/address evidence. PR #259 normalizes available evidence from Google Places identity + Place Details enrichment into a compact, tested PlaceEvidenceDossier contract for use by the PR #260+ writer/reviewer. The dossier is internal reasoning context only — never exposed as visible prose.
+
+**Changes made**:
+
+1. **`backend/app/concierge/evidence_dossier.py`** (new):
+   - `QueryFitEvidence`: concept_fit, modifier_fit, geo_fit, vibe_fit from RankScore + ExperienceFrame.
+   - `ProviderEvidenceItem`: source + facts list. Only "google_places" and "google_place_details" populated today (no Yelp/Foursquare stubs — honest absence).
+   - `ReviewThemeEvidence`: food_drink, ambiance, service, crowd_noise, view_patio_waterfront, occasion_fit, negative_caveats. View/outdoor themes populated ONLY from explicit enrichment evidence (amenity flags, editorial/review text) or entity name listing context. NOT from formatted_address.
+   - `PlaceEvidenceDossier`: full typed contract. `is_minimal=True` when built from critical-path data only.
+   - `EvidenceDossierTelemetry`: aggregated turn-level telemetry with `as_log_dict()`.
+   - `extract_review_themes()`: deterministic conservative keyword matching from enrichment data. No LLM. No review-count reasoning.
+   - `build_place_evidence_dossier()`: builds one dossier from entity + frame + rank_score + optional enrichment.
+   - `build_dossiers_for_ranked_cards()`: builds top-N dossiers with deadline/budget gating. Minimal dossiers (no enrichment lookup) when remaining_ms < 100ms.
+   - `get_dossier_telemetry()`: aggregates dossier batch into `EvidenceDossierTelemetry`.
+
+2. **`backend/app/concierge/semantic_retrieval.py`** (modified):
+   - Step 5.6 added after enrichment, before evidence bundles: calls `build_dossiers_for_ranked_cards` + `get_dossier_telemetry`.
+   - `_log_semantic_turn` gains optional `dossier_telemetry` parameter.
+   - Dossier telemetry emitted as a separate structured log line (`semantic_retrieval_v1.dossier_telemetry`) to preserve existing log parsers.
+
+3. **`backend/tests/test_evidence_dossier.py`** (new, 54 tests):
+   - All 13 required test scenarios from PR #259 spec.
+   - `TestDossierBuildsPerCard` — one dossier per top card; minimal when no enrichment; required fields present.
+   - `TestDossierCannotMintCards` — no card/result/verified_place fields; Google facts readable but not card-minting.
+   - `TestPlaceDetailsEnrichmentInProviderEvidence` — enrichment creates place_details bucket; upgrades confidence; not minimal.
+   - `TestMissingEnrichmentMinimalDossier` — is_minimal=True; WEAK confidence for low fit; MIXED for high fit; gap recorded.
+   - `TestReviewThemeExtraction` — review count never produces themes; amenity flags → explicit themes; editorial + snippets → themes.
+   - `TestViewOutdoorThemeExplicitOnly` — address "Riverwalk" does NOT → theme; outdoor_seating=True → explicit theme; name token → listing_context only.
+   - `TestInternalEvidenceGapsNotVisible` — gaps stored internally only; not in themes, not in provider facts.
+   - `TestDossierDeadlineBudgetGating` — low budget → minimal; sufficient budget → enrichment used; None deadline → enrichment used.
+   - `TestDossierTelemetry` — built_count, confidence_counts, place_details_count, minimal_count, skipped_count, review_theme_counts_per_card, as_log_dict keys.
+   - `TestCardCapUnchanged` — default first_card_limit = 6 unchanged.
+   - `TestFallbackNoteInvariant` — dossier has no note/reason/display_why fields.
+   - `TestGoogleVerificationInvariantsUnchanged` — OPERATIONAL status in facts; no card minting from enrichment; no non-Google sources.
+   - `TestExistingContractsUnchanged` — PR #257, #258, #259 contracts all importable; PR #258 invariants hold.
+
+### Hard contracts preserved
+
+- `fallback_note_visible_count` always 0 (structural invariant from PR #257 — unchanged)
+- `deterministic_visible_count` always 0 (unchanged)
+- Google verification trust gate: place_id + OPERATIONAL + maps_uri required (unchanged)
+- Card cap: default 6, range 5–7 (unchanged)
+- Non-Google enrichment cannot mint addable cards (structural — unchanged)
+- View/patio/waterfront themes require explicit enrichment evidence (new invariant)
+- Internal evidence gaps never surface as visible note prose (new invariant)
+- No SQL, no new providers, no UI changes
+
+### Telemetry added (PR #259)
+
+Emitted as `semantic_retrieval_v1.dossier_telemetry` structured log:
+```
+dossier_built_count                  — dossiers built this turn
+dossier_confidence_counts            — {strong/mixed/weak: count}
+dossier_source_counts                — evidence facts per source
+dossier_theme_counts                 — theme signals per theme type
+dossier_with_place_details_count     — cards with place_details bucket
+dossier_minimal_count                — minimal dossiers (no enrichment)
+dossier_skipped_due_to_budget_count  — skipped enrichment lookups (low budget)
+```
+Plus per-card fields on `EvidenceDossierTelemetry`:
+```
+review_theme_count_per_card          — theme count per dossier
+evidence_sources_used_per_card       — source list per dossier
+```
+
+### Remaining limitations
+
+- `more_options_cursor_present` is always `False` — cursor lives in router layer (PR #263).
+- Dossier not yet wired to note generation (PR #260 will use dossier as writer input).
+- Card roles / curated ranker not built (PR #260).
+- Set-level writer not built (PR #261).
+- LLM reviewer gate not built (PR #262).
+- Hard cutoff interrupt of in-flight HTTP calls: deferred (same as PR #258).
+
+### Supabase SQL: No
+
+### Test counts
+
+```
+test_evidence_dossier.py:     54 tests, all pass (new)
+test_parallel_retrieval.py:   28 tests, all pass (unchanged — PR #258)
+test_sla_card_cap.py:         64 tests, all pass (unchanged — PR #257)
+test_evidence_quality_v3.py:  53 tests, all pass (unchanged)
+test_evidence_quality_v4.py:  37 tests, all pass (unchanged)
+test_evidence_quality_v5.py:  37 tests, all pass (unchanged)
+```
+
+---
+
+## Previous change (2026-05-06) — PR #258: Parallel retrieval + critical/non-critical path split
 
 **Status: MERGE-READY** — 28 new parallel-retrieval tests pass; 64 PR #257 SLA tests pass; 19 pre-existing pydantic env failures remain (unrelated)
 

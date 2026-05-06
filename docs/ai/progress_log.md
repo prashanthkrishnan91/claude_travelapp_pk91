@@ -1,5 +1,30 @@
 # Progress Log
 
+## 2026-05-06 — PR #259: Evidence Dossier v1 + review/theme extraction
+
+**Branch**: `claude/ai-concierge-dossier-v1-bFSdI`
+
+**Severity**: Level 3 architecture correction — v2 amendment PR #259 evidence-intelligence slice.
+
+**Problem**: AI Concierge note generation received thin evidence (name/category/rating/address only). PR #259 normalizes available Google Places + Place Details data into a typed PlaceEvidenceDossier contract for PR #260+ writer/reviewer use.
+
+**What was built**:
+- `evidence_dossier.py` (new): `PlaceEvidenceDossier` v1 contract; `QueryFitEvidence`, `ProviderEvidenceItem`, `ReviewThemeEvidence`, `EvidenceDossierTelemetry` dataclasses. `build_place_evidence_dossier()`, `build_dossiers_for_ranked_cards()` (deadline-gated), `extract_review_themes()` (deterministic), `get_dossier_telemetry()`.
+- `semantic_retrieval.py`: Step 5.6 dossier building after enrichment. `_log_semantic_turn` extended with `dossier_telemetry`. Emits `semantic_retrieval_v1.dossier_telemetry` structured log.
+- `test_evidence_dossier.py` (new, 54 tests): all 13 required test scenarios.
+
+**Key invariants introduced**:
+- View/patio/waterfront themes require explicit enrichment evidence; address not used.
+- Internal evidence gaps never surface as visible note prose.
+- No Yelp/Foursquare/Tavily stubs — honest absence.
+- Dossier is internal context only; never exposed as visible card prose.
+
+**Tests**: 54 new tests pass. 28 PR #258 tests pass. 64 PR #257 SLA tests pass.
+**Supabase SQL**: No
+**HANDOFF.md edited**: Yes
+
+---
+
 ## 2026-05-06 — PR #258: Parallel retrieval + critical/non-critical path split
 
 **Branch**: `claude/concierge-parallel-retrieval-aQd14`
