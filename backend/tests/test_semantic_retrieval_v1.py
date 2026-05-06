@@ -817,6 +817,26 @@ class TestSemanticRetrievalIntegration:
         )
         assert len(result.restaurants) == 0
 
+    def test_dossier_build_failure_does_not_block_cards(self):
+        """Step 5.6 failures must not block card return."""
+        from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
+        from app.concierge.provider_executor import ProviderQueryResult
+
+        def one_ok(*_args, **_kwargs):
+            return [ProviderQueryResult(query="q1", places=[_make_raw_place(name="Test Brewery", place_id="p1")])]
+
+        with patch("app.concierge.provider_executor.execute_fanout", side_effect=one_ok), patch(
+            "app.concierge.evidence_dossier.build_dossiers_for_ranked_cards",
+            side_effect=RuntimeError("dossier explode"),
+        ):
+            result = run_semantic_retrieval_v1(
+                user_query="best breweries",
+                destination="Chicago",
+                api_key="fake_key",
+            )
+
+        assert result is not None
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 8. Feature flag behavior

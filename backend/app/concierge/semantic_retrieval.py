@@ -243,23 +243,43 @@ def _run_pipeline(
     # Does not block card return. Minimal dossiers built if budget is too low.
     t0 = time.monotonic()
     from app.concierge.evidence_dossier import (
+        DOSSIER_BUDGET_RESERVE_MS,
+        EvidenceDossierTelemetry,
         build_dossiers_for_ranked_cards,
         get_dossier_telemetry,
     )
-    _primary_concept = (
-        frame.subtype_concepts[0].label if frame.subtype_concepts else ""
-    )
-    dossiers = build_dossiers_for_ranked_cards(
-        ranked=ranked,
-        frame=frame,
-        enrichment_map=enrichment_map,
-        deadline=deadline,
-        top_n=first_card_limit,
-        category_fn=lambda e: _derive_display_category(
-            e.types, e.primary_type, _primary_concept
-        ),
-    )
-    dossier_tel = get_dossier_telemetry(dossiers)
+    dossiers = []
+    try:
+        _primary_concept = (
+            frame.subtype_concepts[0].label if frame.subtype_concepts else ""
+        )
+        low_budget = deadline.remaining_ms() < DOSSIER_BUDGET_RESERVE_MS
+        skipped_due_to_budget = 0
+        if low_budget:
+            for entity, _ in ranked[:first_card_limit]:
+                if enrichment_map.get(entity.place_id) is not None:
+                    skipped_due_to_budget += 1
+        dossiers = build_dossiers_for_ranked_cards(
+            ranked=ranked,
+            frame=frame,
+            enrichment_map=enrichment_map,
+            deadline=deadline,
+            top_n=first_card_limit,
+            category_fn=lambda e: _derive_display_category(
+                e.types, e.primary_type, _primary_concept
+            ),
+        )
+        dossier_tel = get_dossier_telemetry(
+            dossiers,
+            skipped_due_to_budget=skipped_due_to_budget,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "semantic_retrieval_v1: dossier_build_failed query=%r error=%s",
+            user_query,
+            exc,
+        )
+        dossier_tel = EvidenceDossierTelemetry()
     latency["dossier_ms"] = int((time.monotonic() - t0) * 1000)
 
     # ── Step 6: Evidence bundles + deterministic SafeReasonBuilder ───────────
