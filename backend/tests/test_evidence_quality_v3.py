@@ -209,10 +209,12 @@ class TestEvidenceAdequacy:
         ev = self._build(entity, subtype_fit=0.65, review_count=200)
         assert ev.evidence_adequacy == "OK"
 
-    def test_strong_with_high_subtype_and_reviews(self):
+    def test_high_subtype_and_reviews_without_enrichment_is_ok(self):
+        # rating/review count alone NEVER upgrades to STRONG — that requires enrichment.
+        # subtype_fit=0.92 ≥ 0.6 → OK (concept fit confirmed, no concrete differentiator).
         entity = _make_entity(review_count=600)
         ev = self._build(entity, subtype_fit=0.92, review_count=600)
-        assert ev.evidence_adequacy == "STRONG"
+        assert ev.evidence_adequacy == "OK"
 
     def test_strong_with_enrichment(self):
         entity = _make_entity()
