@@ -528,3 +528,112 @@ class TestDeadlineBudgetForEnrichment:
         default_budget = deadline.budget_for_enrichment_s(reserve_ms=500)
         higher_reserve = deadline.budget_for_enrichment_s(reserve_ms=1000)
         assert higher_reserve <= default_budget
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Blocker fix tests: fanout_timeout parameter closes the +2s buffer issue
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestFanoutTimeoutBoundedByDeadline:
+    """Prove execute_fanout does not add an unbounded +2s buffer when called
+    via run_critical_google_fanout with a deadline-bounded effective_timeout."""
+
+    def test_execute_fanout_uses_fanout_timeout_not_default_buffer(self):
+        # When fanout_timeout is passed, as_completed must use it — not timeout+2.
+        # Capture what timeout value as_completed receives.
+        from app.concierge.provider_executor import execute_fanout
+        from concurrent.futures import as_completed as real_as_completed
+
+        captured_timeout = []
+
+        def mock_as_completed(futures, timeout=None):
+            captured_timeout.append(timeout)
+            return iter([])  # return no futures — zero queries complete
+
+        with patch("app.concierge.provider_executor.as_completed", side_effect=mock_as_completed):
+            execute_fanout(["q1"], api_key="key", timeout=3.0, fanout_timeout=1.5)
+
+        assert len(captured_timeout) == 1
+        assert captured_timeout[0] == 1.5, (
+            f"expected fanout_timeout=1.5, got {captured_timeout[0]}; "
+            "execute_fanout must not add +2s when fanout_timeout is provided"
+        )
+
+    def test_execute_fanout_default_buffer_preserved_when_no_fanout_timeout(self):
+        # Legacy callers without fanout_timeout still get timeout + 2.0.
+        from app.concierge.provider_executor import execute_fanout
+
+        captured_timeout = []
+
+        def mock_as_completed(futures, timeout=None):
+            captured_timeout.append(timeout)
+            return iter([])
+
+        with patch("app.concierge.provider_executor.as_completed", side_effect=mock_as_completed):
+            execute_fanout(["q1"], api_key="key", timeout=3.0)
+
+        assert len(captured_timeout) == 1
+        assert captured_timeout[0] == pytest.approx(5.0), (
+            f"legacy callers should still get timeout+2.0=5.0, got {captured_timeout[0]}"
+        )
+
+    def test_run_critical_fanout_passes_fanout_timeout_to_execute_fanout(self):
+        # run_critical_google_fanout must forward a deadline-bounded fanout_timeout.
+        deadline = _make_deadline(elapsed_ms=1000)  # ~5s remaining
+        remaining_s = deadline.remaining_ms() / 1000.0
+
+        captured_kwargs = {}
+
+        def mock_execute_fanout(queries, api_key, timeout, fanout_timeout=None, **kwargs):
+            captured_kwargs["timeout"] = timeout
+            captured_kwargs["fanout_timeout"] = fanout_timeout
+            return [_make_provider_result("q1")]
+
+        with patch(
+            "app.concierge.provider_executor.execute_fanout",
+            side_effect=mock_execute_fanout,
+        ):
+            run_critical_google_fanout(["q1"], api_key="key", deadline=deadline, timeout=5.0)
+
+        assert "fanout_timeout" in captured_kwargs, "fanout_timeout must be forwarded"
+        ft = captured_kwargs["fanout_timeout"]
+        assert ft is not None
+        # fanout_timeout must not exceed remaining_s (the deadline budget).
+        assert ft <= remaining_s, (
+            f"fanout_timeout={ft:.3f}s must be <= remaining_s={remaining_s:.3f}s; "
+            "fanout cannot overrun the deadline budget"
+        )
+        # fanout_timeout must be less than per-call timeout + 2.0 (old buffer).
+        per_call = captured_kwargs["timeout"]
+        assert ft < per_call + 2.0, (
+            f"fanout_timeout={ft:.3f}s must be < per_call+2.0={per_call+2.0:.3f}s"
+        )
+
+    def test_fanout_timeout_bounded_when_little_budget_remains(self):
+        # With only 2s remaining, fanout_timeout must stay well under 2s.
+        remaining_ms = 2000
+        elapsed_ms = DEFAULT_SLA.hard_cutoff_ms - remaining_ms
+        deadline = _make_deadline(elapsed_ms=elapsed_ms)
+        remaining_s = deadline.remaining_ms() / 1000.0
+
+        captured = {}
+
+        def mock_execute_fanout(queries, api_key, timeout, fanout_timeout=None, **kwargs):
+            captured["fanout_timeout"] = fanout_timeout
+            captured["per_call_timeout"] = timeout
+            return [_make_provider_result("q1")]
+
+        with patch(
+            "app.concierge.provider_executor.execute_fanout",
+            side_effect=mock_execute_fanout,
+        ):
+            run_critical_google_fanout(["q1"], api_key="key", deadline=deadline, timeout=5.0)
+
+        ft = captured["fanout_timeout"]
+        assert ft is not None
+        # Must never exceed remaining_s — that would overrun the deadline.
+        assert ft <= remaining_s, (
+            f"fanout_timeout={ft:.3f}s must be <= remaining_s={remaining_s:.3f}s"
+        )
+        # Must also be less than timeout+2.0 (old unbounded buffer = 7.0s here).
+        assert ft < 5.0 + 2.0

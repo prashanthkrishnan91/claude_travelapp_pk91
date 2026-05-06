@@ -83,7 +83,11 @@ def run_critical_google_fanout(
 ) -> CriticalPathResult:
     """Execute Google Text Search queries with deadline-bounded timeout.
 
-    The effective per-call timeout = min(timeout, remaining_deadline_s - 0.2s).
+    Per-call HTTP timeout = min(timeout, remaining_deadline_s - 0.2s).
+    Total fanout wait   = min(effective_timeout + 0.5s, remaining_s - 0.1s).
+
+    The total fanout wait is always <= remaining deadline budget, preventing
+    the legacy execute_fanout `timeout + 2.0` buffer from overrunning the SLA.
     Returns an empty failure result immediately when remaining budget < 0.5 s.
     """
     from app.concierge.provider_executor import execute_fanout
@@ -92,6 +96,9 @@ def run_critical_google_fanout(
 
     remaining_s = deadline.remaining_ms() / 1000.0
     effective_timeout = min(timeout, max(ENRICHMENT_MIN_TIMEOUT_S, remaining_s - 0.2))
+    # Total as_completed wait: per-call timeout + 0.5s thread overhead, capped
+    # at remaining_s - 0.1s so the fanout never overruns the deadline budget.
+    fanout_timeout = min(effective_timeout + 0.5, max(effective_timeout, remaining_s - 0.1))
 
     if remaining_s < ENRICHMENT_MIN_TIMEOUT_S:
         logger.warning(
@@ -106,7 +113,9 @@ def run_critical_google_fanout(
             success=False,
         )
 
-    provider_results = execute_fanout(queries, api_key=api_key, timeout=effective_timeout)
+    provider_results = execute_fanout(
+        queries, api_key=api_key, timeout=effective_timeout, fanout_timeout=fanout_timeout
+    )
     elapsed_ms = int((time.monotonic() - t0) * 1000)
 
     timeout_count = sum(1 for r in provider_results if r.error is not None)
