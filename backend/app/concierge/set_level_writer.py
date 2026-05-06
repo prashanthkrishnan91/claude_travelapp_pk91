@@ -583,6 +583,36 @@ def _count_repeated_skeletons(validated_notes: Dict[str, str]) -> int:
     return repeated
 
 
+def _enforce_repeated_skeleton_diversity(
+    notes_by_place_id: Dict[str, SetWriterNote],
+    validated_notes_for_diversity: Dict[str, str],
+) -> int:
+    """Hide repeated-skeleton notes, preserving only first note per skeleton.
+
+    Returns number of notes hidden due to repeated skeletons.
+    """
+    from collections import defaultdict
+
+    groups: Dict[str, List[str]] = defaultdict(list)
+    for place_id, note in validated_notes_for_diversity.items():
+        groups[_skeleton(note)[:50]].append(place_id)
+
+    hidden_due_to_repeated = 0
+    for place_ids in groups.values():
+        if len(place_ids) <= 1:
+            continue
+        # Keep first visible; hide the rest.
+        for repeated_place_id in place_ids[1:]:
+            note_obj = notes_by_place_id[repeated_place_id]
+            note_obj.validated = False
+            note_obj.note = ""
+            note_obj.source = SOURCE_OMITTED
+            note_obj.rejection_reason = "repeated_skeleton"
+            hidden_due_to_repeated += 1
+
+    return hidden_due_to_repeated
+
+
 # ── Main entry point ──────────────────────────────────────────────────────────
 
 def write_set_notes(
@@ -749,15 +779,29 @@ def write_set_notes(
                 )
                 notes_by_place_id[place_id] = note_obj
 
-        visible_count = len(validated_notes_for_diversity)
-
         # ── Cross-card diversity check ─────────────────────────────────────────
-        repeated_skeleton_count = _count_repeated_skeletons(validated_notes_for_diversity)
+        repeated_skeleton_count = _enforce_repeated_skeleton_diversity(
+            notes_by_place_id,
+            validated_notes_for_diversity,
+        )
         if repeated_skeleton_count > 0:
             logger.warning(
-                "set_level_writer: repeated_skeletons count=%d visible=%d",
-                repeated_skeleton_count, visible_count,
+                "set_level_writer: repeated_skeletons_hidden count=%d pre_enforcement_visible=%d",
+                repeated_skeleton_count, len(validated_notes_for_diversity),
             )
+
+        visible_count = sum(1 for note in notes_by_place_id.values() if note.validated)
+        hidden_count = sum(1 for note in notes_by_place_id.values() if not note.validated)
+        rejected_count += repeated_skeleton_count
+
+        role_note_counts = {}
+        note_source_counts: Dict[str, int] = {}
+        for note in notes_by_place_id.values():
+            if note.validated:
+                role_note_counts[note.role_used_internal] = (
+                    role_note_counts.get(note.role_used_internal, 0) + 1
+                )
+            note_source_counts[note.source] = note_source_counts.get(note.source, 0) + 1
 
         elapsed_ms = int((time.monotonic() - t_start) * 1000)
         logger.info(
@@ -775,7 +819,7 @@ def write_set_notes(
             timed_out=False,
             fallback_note_visible_count=0,  # structural invariant
             role_note_counts=role_note_counts,
-            note_source_counts={SOURCE_SET_WRITER: visible_count} if visible_count else {},
+            note_source_counts=note_source_counts,
             repeated_skeleton_count=repeated_skeleton_count,
             unsupported_claim_count=unsupported_claim_count,
         )

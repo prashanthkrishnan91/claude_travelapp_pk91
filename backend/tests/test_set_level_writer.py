@@ -227,6 +227,7 @@ from app.concierge.set_level_writer import (
     _validate_set_writer_note,
     write_set_notes,
 )
+from app.concierge.batched_reason_builder import SOURCE_OMITTED
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -668,6 +669,83 @@ class TestNoteDistinctness:
     def test_single_note_has_zero_repeated_skeletons(self):
         count = _count_repeated_skeletons({"pid1": "Solid rotating tap selection."})
         assert count == 0
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test_key"})
+    def test_enforces_repeated_skeleton_hiding_with_distinct_third(self):
+        card1 = _make_card("pid11a", "Brew One", role="evidence_rich")
+        card2 = _make_card("pid11b", "Brew Two", role="distinctive_theme")
+        card3 = _make_card("pid11c", "Brew Three", role="geographic_fit")
+        curated = _CuratedSetResult(curated_cards=[card1, card2, card3], output_count=3)
+
+        repeated_1 = "Serves house cocktails with 1,200 reviews in River North."
+        repeated_2 = "Serves house cocktails with 800 reviews in River North."
+        distinct = "Known for wood-fired flatbreads and a cozy patio on Milwaukee Avenue."
+
+        with patch("app.concierge.set_level_writer._call_set_writer_llm") as mock_llm:
+            mock_llm.return_value = (
+                f'{{"1": "{repeated_1}", "2": "{repeated_2}", "3": "{distinct}"}}'
+            )
+            result = write_set_notes(curated, _Frame())
+
+        n1 = result.notes_by_place_id["pid11a"]
+        n2 = result.notes_by_place_id["pid11b"]
+        n3 = result.notes_by_place_id["pid11c"]
+        assert n1.validated
+        assert n2.validated is False
+        assert n2.rejection_reason == "repeated_skeleton"
+        assert n2.note == ""
+        assert n2.source == SOURCE_OMITTED
+        assert n2.role_used_internal == "distinctive_theme"
+        assert n3.validated
+        assert result.repeated_skeleton_count == 1
+        assert result.visible_note_count == 2
+        assert result.hidden_note_count == 1
+        assert result.rejected_note_count == 1
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test_key"})
+    def test_enforces_three_same_skeletons_keeps_only_one(self):
+        card1 = _make_card("pid11d", "Spot One")
+        card2 = _make_card("pid11e", "Spot Two")
+        card3 = _make_card("pid11f", "Spot Three")
+        curated = _CuratedSetResult(curated_cards=[card1, card2, card3], output_count=3)
+
+        s1 = "Serves craft lagers with 900 reviews near Wicker Park."
+        s2 = "Serves craft lagers with 700 reviews near Wicker Park."
+        s3 = "Serves craft lagers with 500 reviews near Wicker Park."
+        with patch("app.concierge.set_level_writer._call_set_writer_llm") as mock_llm:
+            mock_llm.return_value = f'{{"1": "{s1}", "2": "{s2}", "3": "{s3}"}}'
+            result = write_set_notes(curated, _Frame())
+
+        visible = [n for n in result.notes_by_place_id.values() if n.validated]
+        hidden = [n for n in result.notes_by_place_id.values() if not n.validated]
+        assert len(visible) == 1
+        assert len(hidden) == 2
+        assert result.repeated_skeleton_count == 2
+        assert result.visible_note_count == 1
+        assert result.hidden_note_count == 2
+        assert result.rejected_note_count == 2
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test_key"})
+    def test_role_and_source_counts_reflect_post_diversity_visibility(self):
+        card1 = _make_card("pid11g", "Role One", role="evidence_rich")
+        card2 = _make_card("pid11h", "Role Two", role="evidence_rich")
+        card3 = _make_card("pid11i", "Role Three", role="geographic_fit")
+        curated = _CuratedSetResult(curated_cards=[card1, card2, card3], output_count=3)
+
+        repeated_1 = "Serves craft ales with 1,100 reviews in Logan Square."
+        repeated_2 = "Serves craft ales with 700 reviews in Logan Square."
+        distinct = "Popular for weekday jazz sets and late-night small plates."
+        with patch("app.concierge.set_level_writer._call_set_writer_llm") as mock_llm:
+            mock_llm.return_value = (
+                f'{{"1": "{repeated_1}", "2": "{repeated_2}", "3": "{distinct}"}}'
+            )
+            result = write_set_notes(curated, _Frame())
+
+        assert result.visible_note_count == 2
+        assert result.hidden_note_count == 1
+        assert result.role_note_counts == {"evidence_rich": 1, "geographic_fit": 1}
+        assert result.note_source_counts[SOURCE_SET_WRITER] == 2
+        assert result.note_source_counts[SOURCE_OMITTED] == 1
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
