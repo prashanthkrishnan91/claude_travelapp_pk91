@@ -70,6 +70,18 @@ _QUALITY_THIN_RE = re.compile(
     r"|\bstrong\s+local\s+following\b"                      # "strong local following"
     r"|\bconsistent\s+quality\b"                            # "consistent quality"
     r"|\bchicago\s+institution\b"                           # "Chicago institution"
+    # Rating/review-count as primary differentiator — never concierge-grade on their own
+    r"|\bhighest[\s\-]rated\b"                              # "highest-rated taproom in this set"
+    r"|\bmost[\s\-]reviewed\b"                              # "most-reviewed brewery"
+    r"|\breview\s+base\b"                                   # "second-largest review base"
+    r"|\bsmallest\s+review\b"                               # "smallest review base"
+    r"|\bsolid\s+mid[\s\-]tier\b"                           # "solid mid-tier option"
+    r"|\bstrong\s+on\s+volume\b"                            # "strong on volume of feedback"
+    r"|\bconsistent\s+crowd\s+draw\b"                       # "consistent crowd draw"
+    r"|\bstrong\s+flagship\s+choice\b"                      # "strong flagship choice"
+    r"|\bestablished\s+reputation\b"                        # "established reputation"
+    r"|\bvolume\s+of\s+feedback\b"                          # "volume of feedback"
+    r"|\bordinal\s+rank\b"                                  # generic rank phrase
     r")",
     re.IGNORECASE,
 )
@@ -364,14 +376,26 @@ def _build_batch_prompt(
             "Otherwise acknowledge it was requested but not confirmed."
         )
     if geo_hints:
+        geo_h = geo_hints[0]
         modifier_lines.append(
-            f"  - User mentioned geography: {geo_hints[0]}. "
-            "Do NOT claim waterfront/river/lake/view proximity unless evidence confirms it."
+            f"  - User mentioned geography: {geo_h}. "
+            "THREE-WAY DISTINCTION required for each card:\n"
+            f"    a) LISTING CONTEXT: if the venue's verified Google NAME or address "
+            f"contains '{geo_h}', 'Riverwalk', 'riverfront', or a similar term, "
+            "you may say: 'The verified listing places this venue in [river/Riverwalk] "
+            "context.' This is a listing-name fact, not a scenic claim.\n"
+            "    b) VERIFIED FEATURE: only if evidence explicitly confirms outdoor "
+            "seating, patio, or views — you may mention that amenity.\n"
+            "    c) UNKNOWN: if neither (a) nor (b) applies, say the requested "
+            f"'{geo_h}' proximity is not confirmed from available listing data.\n"
+            "DO NOT claim waterfront/river/lake/view proximity unless evidence confirms it. "
+            "DO NOT claim scenic seating or views unless confirmed by amenity evidence."
         )
     if any("view" in f or "waterfront" in f for f in ambiguity_flags):
         modifier_lines.append(
-            "  - VIEW/WATERFRONT requested: cannot be structurally verified from Google data. "
-            "Be honest about this — do not invent or imply views."
+            "  - VIEW/WATERFRONT requested: scenic views cannot be structurally verified "
+            "from Google data. Be honest — do not invent or imply views or seating. "
+            "Provide useful venue-specific content instead."
         )
     if not modifier_lines:
         modifier_lines.append("  - No location or geography modifiers.")
@@ -392,13 +416,22 @@ def _build_batch_prompt(
     if per_card_hints:
         hint_lines = []
         for card_1based, reason in sorted(per_card_hints.items()):
-            hint_lines.append(
+            base_hint = (
                 f"  - Card {card_1based}: previous note rejected ({reason}). "
                 "Write a more specific note using the place's street/address, "
                 "what the name implies about its specialty, or an honest caveat — "
-                "avoid generic concept-fit phrases."
+                "avoid generic concept-fit phrases and rating/review-count comparisons."
             )
-        repair_section = "\nREPAIR GUIDANCE — previous notes for these cards were too generic:\n" + "\n".join(hint_lines) + "\n"
+            # Riverwalk-specific repair: guide the LLM to use safe listing-context wording
+            if "unsupported_attribute_claim:riverwalk" in reason or "riverwalk" in reason.lower():
+                base_hint += (
+                    " RIVERWALK REPAIR: if the venue name contains 'Riverwalk', "
+                    "you may say 'The verified listing places this venue in Riverwalk context' "
+                    "or similar. Do NOT claim river views, scenic seating, or waterfront "
+                    "amenities unless amenity evidence confirms them."
+                )
+            hint_lines.append(base_hint)
+        repair_section = "\nREPAIR GUIDANCE — previous notes for these cards were rejected:\n" + "\n".join(hint_lines) + "\n"
 
     # NOTE: All {example} placeholders below use {{double braces}} to prevent
     # Python f-string evaluation. These are literal text in the prompt.
@@ -415,14 +448,23 @@ ANTI-PATTERNS — these will be automatically rejected, do not waste tokens on t
 - "Verified {{category}} with {{rating}}★ across {{N}} reviews." ← fill-in-the-blank, no value
 - "Strong/Good/Great {{concept}} match in {{city}}."             ← zero information
 - Any phrase like "matches the {{concept}} concept", "solid {{concept}} signals", or "established {{concept}} with solid..." ← all too generic
-- Any note that claims waterfront/view/river proximity without CONFIRMED in evidence
+- Any note where the PRIMARY differentiator is rating or review count:
+  "highest-rated taproom in this set", "second-most-reviewed", "review base",
+  "strong on volume of feedback", "solid mid-tier option" — these are never concierge-grade
+- Any note that mainly compares cards by rating rank or review count rank
+- Any note that claims waterfront/view/river scenic proximity without CONFIRMED in evidence
+  (EXCEPTION: if the verified Google NAME contains 'Riverwalk'/'riverfront'/etc., you may
+  say "The verified listing places this venue in Riverwalk context" — that is a listing fact)
 - Any note that claims Michelin stars, awards, quiet/romantic atmosphere, price range, or hours
 - Any note that repeats only name + rating + review count with no additional insight
 - Any note so generic it could apply to any {concept_label} in this list
 
 WHAT MAKES A USEFUL NOTE:
 - It tells the traveler something specific they cannot already see from the card title and rating
+- DO NOT lead with or center on rating (★) or review count — these are already visible on the card
+- Rating/reviews may appear only as SECONDARY context after a concrete differentiator
 - For THIN evidence: anchor on the place's name (what does the name itself imply?) and street/address
+- For river/view queries: use the THREE-WAY DISTINCTION above (listing context / verified / unknown)
 - It honestly handles modifiers: confirmed → state it; not confirmed → acknowledge the gap
 - It varies meaningfully across the {n} places — do not reuse the same sentence structure
 - It is concise (one sentence or two short clauses, under {_REASON_MAX_CHARS} characters)

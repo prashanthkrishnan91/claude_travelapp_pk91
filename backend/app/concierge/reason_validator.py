@@ -25,9 +25,13 @@ from app.concierge.ranker import MinimalEvidenceBundle
 
 # Claims about physical attributes we cannot verify from Google structured fields.
 _UNSUPPORTED_ATTRIBUTE_RE = re.compile(
-    r"\b(waterfront|water\s*front|riverwalk|river\s*walk|lakefront|lake\s*front"
-    r"|water\s*view|river\s*view|lake\s*view|ocean\s*view|sea\s*view"
-    r"|rooftop\s+view|stunning\s+view|beautiful\s+view|panoramic"
+    # NOTE: Compound view/front terms use \s+ (one or more spaces) to avoid
+    # false-matching Chicago neighborhood names like "Lakeview" (no space).
+    # The standalone compound forms (waterfront, riverwalk, lakefront) are kept
+    # as-is and handled via entity-name context in _evidence_supports_claim.
+    r"\b(waterfront|water\s+front|riverwalk|river\s+walk|lakefront|lake\s+front"
+    r"|water\s+views?|river\s+views?|lake\s+views?|ocean\s+views?|sea\s+views?"
+    r"|rooftop\s+views?|stunning\s+views?|beautiful\s+views?|panoramic"
     r"|michelin|bib\s+gourmand|james\s+beard|award[-\s]winning"
     r"|quiet\s+atmosphere|peaceful\s+atmosphere|romantic\s+atmosphere"
     r"|intimate\s+atmosphere|cozy\s+atmosphere|guaranteed\s+quiet"
@@ -69,6 +73,9 @@ _GENERIC_BOILERPLATE_RE = re.compile(
     r"|\bstrong\s+local\s+following\b"
     r"|\bconsistent\s+quality\b"
     r"|\bchicago\s+institution\b"
+    r"|\bconsistent\s+crowd\s+draw\b"
+    r"|\bstrong\s+flagship\s+choice\b"
+    r"|\bestablished\s+reputation\b"
     r")",
     re.IGNORECASE,
 )
@@ -236,10 +243,34 @@ def validate_reason(
 
 
 def _evidence_supports_claim(claim: str, evidence: MinimalEvidenceBundle) -> bool:
-    """Return True when the evidence bundle contains a fact supporting this claim."""
+    """Return True when the evidence bundle contains a fact supporting this claim.
+
+    Checks structured_facts AND the entity's verified Google name/address (listing context).
+    This allows notes to safely mention 'Riverwalk' when the verified Google listing
+    name itself contains 'Riverwalk' — it is not a fabricated scenic claim, it is a
+    literal listing name fact. The same logic applies to any term in the verified name.
+
+    A note claiming "riverfront views" or "waterfront seating" is still blocked
+    because those tokens ('views', 'seating') are not in the entity name/address.
+    """
     claim_lower = claim.lower()
+    tokens = [tok for tok in re.findall(r"[a-z]+", claim_lower) if len(tok) > 4]
+    if not tokens:
+        return False
+    # Check structured_facts (existing behavior)
     for fact in evidence.structured_facts:
-        if any(tok in fact.lower() for tok in re.findall(r"[a-z]+", claim_lower) if len(tok) > 4):
+        fact_tokens = set(re.findall(r"[a-z]+", fact.lower()))
+        if any(tok in fact_tokens for tok in tokens):
+            return True
+    # Check entity's verified name and address (listing context).
+    # Uses word-boundary tokenization so "riverwalk" in the name does NOT
+    # accidentally support the token "river" from a "river view" claim.
+    entity = getattr(evidence, "entity", None)
+    if entity is not None:
+        name_tokens = set(re.findall(r"[a-z]+", (getattr(entity, "name", "") or "").lower()))
+        addr_tokens = set(re.findall(r"[a-z]+", (getattr(entity, "formatted_address", "") or "").lower()))
+        combined = name_tokens | addr_tokens
+        if any(tok in combined for tok in tokens):
             return True
     return False
 

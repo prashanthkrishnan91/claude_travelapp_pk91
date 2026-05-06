@@ -1,8 +1,109 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-06) — EvidencePack v3 Production-Bar Hardening
+## Last change (2026-05-06) — EvidencePack v4: Modifier Evidence Contract v1 + Riverwalk safe-evidence
 
-**Status: MERGE-READY** — 1313 passing, 20 pre-existing httpx-only remain (unrelated)
+**Status: MERGE-READY** — 127 concierge tests pass, 19 pre-existing pydantic/httpx env failures remain (unrelated)
+
+### Problem solved (Level 3 production blockers on PR #251 logs)
+
+Production Railway logs showed (post-PR #251):
+- `breweries near the river`: 7/8 accepted, 1 card omitted — "The Northman Beer & Cider Garden on the Riverwalk" rejected because "Riverwalk" in its name triggered the unsupported-attribute validator
+- `taprooms with a view`: notes were rating/review-primary ("highest-rated", "second-largest review base", etc.)
+- `izakayas`: notes were rating/review-primary despite venue_head_recognized=True fix
+
+Root causes fixed:
+1. `_evidence_supports_claim` checked only `structured_facts` — not the entity's verified Google name/address. So "Riverwalk" in the verified name was not recognized as listing-context evidence
+2. `lake\s*view` in `_UNSUPPORTED_ATTRIBUTE_RE` falsely matched "Lakeview" (Chicago neighborhood), blocking valid notes
+3. Plural scenic terms (`river views`, `beautiful views`) were not caught because trailing `\b` blocks plural forms → added `s?` to all view patterns
+4. Rating/review-count as primary differentiator was not in quality gate — added patterns for "highest-rated", "review base", "solid mid-tier", "established reputation", "consistent crowd draw", "strong flagship choice"
+5. Evidence adequacy: `has_strong_name_match and high_review_count → STRONG` was wrong (rating+reviews is NOT a concrete differentiator) — only `enrichment_facts` upgrades to STRONG now
+6. Retry/repair prompt lacked Riverwalk-specific guidance for rejected cards
+7. LLM prompt lacked THREE-WAY DISTINCTION for geo/river modifier (listing context / verified feature / unknown)
+8. Harness v3 had only 3-card izakaya table and no Northman fixture; v4 adds 8-card scenarios for all queries
+
+### What was built
+
+**Riverwalk safe-evidence** (`reason_validator.py`): `_evidence_supports_claim` now checks entity name and address (word-boundary tokenized). "Riverwalk" in the verified Google name supports a listing-context mention. "river view" / "waterfront seating" are still blocked (tokens not in name). Fixed `lake\s*view` → `lake\s+view` (no more "Lakeview" neighborhood false match). Added `s?` to plural view patterns.
+
+**New boilerplate patterns** (`reason_validator.py`): Added "consistent crowd draw", "strong flagship choice", "established reputation" to `_GENERIC_BOILERPLATE_RE`.
+
+**Rating-primary quality gate** (`batched_reason_builder.py`): Extended `_QUALITY_THIN_RE` with: `highest-rated`, `most-reviewed`, `review base`, `smallest review`, `solid mid-tier`, `strong on volume`, `consistent crowd draw`, `strong flagship choice`, `established reputation`, `volume of feedback`.
+
+**Updated prompt** (`batched_reason_builder.py`): Added THREE-WAY DISTINCTION for geo/river modifier (listing context / verified / unknown). Added RIVERWALK REPAIR guidance in retry pass. Explicit anti-pattern for rating/review as primary differentiator.
+
+**Evidence adequacy v4** (`ranker.py`): Removed `has_strong_name_match and high_review_count → STRONG`. Only `enrichment_facts` (editorial, amenity, review snippet) upgrades to STRONG. Added `modifier_in_name` check — entity name/address contains a user-requested modifier term → OK.
+
+**Harness v4** (`tests/evidence_harness_v4.py`): Complete rewrite with 8-card scenarios:
+- Table 1: "breweries near the river" — 8 cards including Northman (card 4), 8/8 validated
+- Table 2: "taprooms with a view" — 8 cards with enrichment, 8/8 validated, no rating-primary notes
+- Table 3: "izakayas" — 8 cards with editorial, 8/8 validated, venue_head_recognized=True
+- New columns: `user_modifier`, `modifier_status` (confirmed_listing_context / unknown / none)
+- Per-card `_compute_modifier_status` function with river/view term lookup
+
+**New tests** (`tests/test_evidence_quality_v4.py`): 37 new tests:
+- `TestRiverwalkSafeEvidence` — 6 tests: entity-name support, listing note validates, scenic claims rejected, batch orchestrator test
+- `TestLakeviewNeighborhood` — 2 tests: neighborhood name allowed, "lake view" (with space) still blocked
+- `TestRatingPrimaryRejection` — 9 tests: highest-rated, most-reviewed, review-base, solid-mid-tier, established-reputation, strong-flagship rejected; specific differentiator passes; rating as secondary passes
+- `TestEvidenceAdequacyV4` — 6 tests: high subtype_fit+reviews = OK (not STRONG); editorial/amenity = STRONG; modifier-in-name upgrades
+- `TestModifierEvidenceContract` — 5 tests: Northman=confirmed_listing_context, regular brewery=unknown, no-modifier=none
+- `TestHarnessV4Integration` — 9 tests: 8/8 for all tables, Northman validated, no scenic claims, izakaya venue_head
+
+**Updated test** (`tests/test_evidence_quality_v3.py`): Renamed `test_strong_with_high_subtype_and_reviews` → `test_high_subtype_and_reviews_without_enrichment_is_ok` (now expects OK, not STRONG).
+
+### Files changed
+
+- `backend/app/concierge/reason_validator.py` — `_evidence_supports_claim`: entity name/address check; `lake\s*view` → `lake\s+view`; plural `s?` for view patterns; boilerplate patterns added
+- `backend/app/concierge/batched_reason_builder.py` — Rating-primary patterns in `_QUALITY_THIN_RE`; THREE-WAY geo/river prompt; RIVERWALK REPAIR hint in retry; anti-pattern list updated
+- `backend/app/concierge/ranker.py` — Evidence adequacy: `enrichment_facts` only upgrades to STRONG; added `modifier_in_name` path for OK; removed `high_subtype+reviews → STRONG`
+- `backend/tests/test_evidence_quality_v3.py` — Updated one test expectation (STRONG → OK)
+- `backend/tests/evidence_harness_v4.py` — New harness with Northman, 8-card izakaya, modifier_status columns
+- `backend/tests/test_evidence_quality_v4.py` — 37 new tests across 6 test classes
+
+### Test results
+
+```
+test_evidence_quality_v3.py:        53 tests, all pass (unchanged count)
+test_evidence_quality_v4.py:        37 tests, all pass (new)
+test_reasoning_reliability_v2.py:   38 tests pass (4 pre-existing pydantic env failures)
+evidence_harness_v3.py:            19/19 validated STRICT (unchanged)
+evidence_harness_v4.py:            24/24 validated STRICT (new)
+  Table 1: 8/8 validated (Northman confirmed_listing_context, no scenic claims)
+  Table 2: 8/8 validated (Lakeview neighborhood allowed, no rating-primary)
+  Table 3: 8/8 validated (izakaya venue_head_recognized=True)
+```
+
+### Production contract verification
+
+| Query | Result |
+|---|---|
+| breweries near the river | 8/8 accepted, Northman validated, no omissions, no unsupported scenic claim |
+| taprooms with a view | 8/8 accepted, no rating/review-primary notes, honest view caveats |
+| izakayas | 8/8 accepted, venue_head_recognized=True, no rating-primary notes |
+
+### Hard contracts preserved from PR #250/#251
+
+- Cards with `validated=False` excluded from response (never shown)
+- `deterministic_visible_count` always 0 in telemetry
+- No NOTE OMITTED / placeholder in success path
+- No thin concept-fit-only phrases in validated notes
+- No rating-lead or pure-caveat-only notes
+- per_card_notes production logging preserved
+- No legacy whyPick fallback
+- Izakaya venue-head recognition preserved
+
+### Supabase SQL: No
+
+### Remaining limitations
+
+- "view" as a user modifier is an ambiguity_flag in the frame (not a location_modifier or geography_hint), so modifier_status remains "none" for "taprooms with a view" queries — honest, but doesn't produce confirmed/unknown distinction per card
+- Riverwalk safe-evidence relies on entity name containing "Riverwalk" — if Google changes the listing name, the safe-evidence logic still works (entity name is always verified Google data)
+- Evidence adequacy STRONG now requires enrichment (Place Details); without enrichment, even a perfect name match is OK. This is correct but means some notes will be OK-grade with good editorial not fetched yet
+
+---
+
+## Previous change (2026-05-06) — EvidencePack v3 Production-Bar Hardening
+
+**Status: MERGED**
 
 ### Problem solved (Level 3 production blockers on PR #251)
 

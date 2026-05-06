@@ -590,23 +590,34 @@ def build_evidence_bundle(
                 enrichment_facts.append(f"Amenity confirmed: {label}")
 
     # ── Evidence adequacy grading ─────────────────────────────────────────────
-    # STRONG: has specific differentiator beyond name/type/address/rating
-    # OK    : concept fit confirmed + location/geo context
-    # THIN  : only name/type/address/rating — nothing extra
-    # UNSAFE: not used here (conflicts handled by validator uncertainty_flags)
+    # STRONG: has at least one concrete differentiator beyond name/type/address/rating/reviews.
+    #         Only enrichment_facts (editorial summary, amenity flags, review snippets)
+    #         qualify — rating and review count alone NEVER make evidence STRONG.
+    # OK    : concept fit confirmed (subtype_fit >= 0.6) or name/address contains a
+    #         user-requested modifier term (listing-context match).
+    # THIN  : only name/type/address/rating/review-count — nothing extra.
+    # UNSAFE: not used here (conflicts handled by validator uncertainty_flags).
     adequacy = "THIN"
-    has_strong_name_match = rank_score.subtype_fit >= 0.9
-    high_review_count = (entity.user_rating_count or 0) >= 500
     has_location_context = bool(geo_note) or any(
         "confirms" in f for f in facts
     )
 
+    # Check whether the entity name/address contains a user-requested modifier term.
+    # This upgrades adequacy to OK (listing context) even without enrichment.
+    name_addr_lower = (
+        (entity.name or "").lower() + " " + (entity.formatted_address or "").lower()
+    )
+    modifier_in_name = any(
+        mod_tok in name_addr_lower
+        for modifier in (location_modifiers or []) + (frame.geography_hints or [])
+        for mod_tok in re.findall(r"[a-z]+", modifier.lower())
+        if len(mod_tok) > 3
+    )
+
     if enrichment_facts:
+        # Concrete differentiator available (editorial, amenity, review snippet)
         adequacy = "STRONG"
-    elif has_strong_name_match and high_review_count:
-        # Name itself strongly signals the concept + well-reviewed = distinguishable
-        adequacy = "STRONG"
-    elif rank_score.subtype_fit >= 0.6 and has_location_context:
+    elif rank_score.subtype_fit >= 0.6 and (has_location_context or modifier_in_name):
         adequacy = "OK"
     elif rank_score.subtype_fit >= 0.6:
         adequacy = "OK"
