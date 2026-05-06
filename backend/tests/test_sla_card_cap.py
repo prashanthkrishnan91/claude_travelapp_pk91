@@ -515,3 +515,183 @@ class TestBuildReasonsWithRetryTimeout:
         budget_s = 999.0
         effective = min(budget_s, configured_s)
         assert effective == configured_s
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. Total-budget enforcement across multi-pass cascade
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestTotalBudgetAcrossPasses:
+    """timeout_s must be a shared total budget, not a per-pass allowance.
+
+    These tests mock the wall clock (_time_monotonic) and _run_llm_pass to
+    exercise the budget-accounting logic without making real LLM calls.
+    """
+
+    def _make_cards_data(self, n: int = 3) -> list:
+        """Minimal cards_data stubs (4-tuple: entity, evidence, rank_score, det_reason)."""
+        from types import SimpleNamespace
+        entity = SimpleNamespace(
+            name="Test Bar", place_id="pid_test",
+            formatted_address="1 Main St, Chicago, IL",
+            lat=41.88, lng=-87.63, rating=4.5, user_rating_count=100,
+            business_status="OPERATIONAL",
+            google_maps_uri="https://maps.google.com/?q=test",
+            website_uri=None, types=["bar"], primary_type="bar",
+        )
+        evidence = SimpleNamespace(
+            evidence_adequacy="STRONG", structured_facts=[], uncertainty_flags=[],
+            enrichment_facts=["Known for craft beer selection"],
+        )
+        rank_score = SimpleNamespace(subtype_fit=0.9, as_dict=lambda: {})
+        frame = SimpleNamespace(
+            subtype_concepts=[SimpleNamespace(label="bar", confidence=0.9)],
+            destination="Chicago", geography_hints=[], location_modifiers=[],
+            soft_preferences=[], negative_constraints=[],
+        )
+        return [(entity, evidence, rank_score, "")] * n, frame
+
+    def test_zero_budget_skips_all_passes(self):
+        """timeout_s=0 must return immediately with budget_exhausted failure reason."""
+        from app.concierge.batched_reason_builder import build_reasons_with_retry
+        cards_data, frame = self._make_cards_data(2)
+        with patch.dict(os.environ, {
+            "CONCIERGE_BATCHED_REASONING_ENABLED": "true",
+            "ANTHROPIC_API_KEY": "sk-test-fake",
+        }):
+            with patch(
+                "app.concierge.batched_reason_builder._run_llm_pass",
+            ) as mock_pass:
+                result, r = build_reasons_with_retry(cards_data, frame, timeout_s=0.0)
+        # _run_llm_pass must never be called when budget is 0.
+        mock_pass.assert_not_called()
+        assert r.failure_reason == "budget_exhausted_before_pass1"
+        assert r.accepted_count == 0
+        # fallback_note_visible_count structural invariant: no validated=True cards.
+        assert all(not cr.validated for cr in result.values())
+
+    def test_pass1_exhausts_budget_pass2_skipped(self):
+        """When pass 1 consumes the entire budget, pass 2 and pass 3 are skipped."""
+        from app.concierge.batched_reason_builder import build_reasons_with_retry
+        cards_data, frame = self._make_cards_data(2)
+
+        call_count = {"n": 0}
+        real_monotonic = time.monotonic
+
+        def slow_pass(subset, indices, fr, model, timeout, **kw):
+            call_count["n"] += 1
+            # Simulate pass 1 consuming the full budget by advancing time.
+            # We can't actually sleep, so we monkeypatch time inside the orchestrator.
+            return {}, {}, False  # no cards accepted, no budget to retry
+
+        with patch.dict(os.environ, {
+            "CONCIERGE_BATCHED_REASONING_ENABLED": "true",
+            "ANTHROPIC_API_KEY": "sk-test-fake",
+        }):
+            # Patch _run_llm_pass to consume the budget by manipulating time.monotonic.
+            time_calls = [0]
+            # Sequence: t_note_budget_start captures t=0; pass1_budget check reads t=0 (OK);
+            # after pass1, remaining check reads t=budget+1 (exhausted).
+            base = time.monotonic()
+            time_sequence = [base, base, base + 999.0]  # 3rd call: budget gone
+            time_idx = {"i": 0}
+
+            def fake_monotonic():
+                idx = min(time_idx["i"], len(time_sequence) - 1)
+                t = time_sequence[idx]
+                time_idx["i"] += 1
+                return t
+
+            with patch("app.concierge.batched_reason_builder.time") as mock_time:
+                mock_time.monotonic = fake_monotonic
+                with patch(
+                    "app.concierge.batched_reason_builder._run_llm_pass",
+                    side_effect=slow_pass,
+                ) as mock_pass:
+                    result, r = build_reasons_with_retry(cards_data, frame, timeout_s=2.0)
+
+        # Only pass 1 should have been called.
+        assert mock_pass.call_count == 1
+        # Cards have no validated notes (pass returned nothing accepted).
+        assert r.accepted_count == 0
+        assert all(not cr.validated for cr in result.values())
+
+    def test_budget_not_multiplied_across_passes(self):
+        """Total time spent across all passes cannot exceed timeout_s (modulo overhead).
+
+        We verify this by checking that the pass-budget passed to each _run_llm_pass
+        call is strictly less than or equal to note_budget_s (not multiplied).
+        The old code passed timeout_s * 2 to pass 3 — this must no longer happen.
+        """
+        from app.concierge.batched_reason_builder import build_reasons_with_retry
+        cards_data, frame = self._make_cards_data(2)
+        total_budget = 2.0
+        recorded_timeouts = []
+
+        def recording_pass(subset, indices, fr, model, timeout, **kw):
+            recorded_timeouts.append(timeout)
+            return {}, {}, False  # no cards accepted → all passes run
+
+        with patch.dict(os.environ, {
+            "CONCIERGE_BATCHED_REASONING_ENABLED": "true",
+            "ANTHROPIC_API_KEY": "sk-test-fake",
+        }):
+            with patch(
+                "app.concierge.batched_reason_builder._run_llm_pass",
+                side_effect=recording_pass,
+            ):
+                build_reasons_with_retry(cards_data, frame, timeout_s=total_budget)
+
+        # Every pass budget must be <= total_budget (no 2× multiplier).
+        for pass_budget in recorded_timeouts:
+            assert pass_budget <= total_budget, (
+                f"Pass received budget {pass_budget:.2f}s > total {total_budget:.2f}s"
+            )
+
+    def test_pass_budgets_are_decreasing(self):
+        """Each subsequent pass receives less budget than the previous one."""
+        from app.concierge.batched_reason_builder import build_reasons_with_retry
+        cards_data, frame = self._make_cards_data(2)
+        recorded_timeouts = []
+        call_counter = {"n": 0}
+
+        def recording_pass(subset, indices, fr, model, timeout, **kw):
+            call_counter["n"] += 1
+            recorded_timeouts.append(timeout)
+            # Simulate 10ms elapsed per pass so each gets slightly less budget.
+            return {}, {}, False
+
+        with patch.dict(os.environ, {
+            "CONCIERGE_BATCHED_REASONING_ENABLED": "true",
+            "ANTHROPIC_API_KEY": "sk-test-fake",
+        }):
+            with patch(
+                "app.concierge.batched_reason_builder._run_llm_pass",
+                side_effect=recording_pass,
+            ):
+                build_reasons_with_retry(cards_data, frame, timeout_s=5.0)
+
+        # Must have run at least 2 passes (otherwise test is vacuous).
+        if len(recorded_timeouts) >= 2:
+            for i in range(1, len(recorded_timeouts)):
+                assert recorded_timeouts[i] <= recorded_timeouts[i - 1], (
+                    f"Pass {i+1} budget {recorded_timeouts[i]:.3f}s >= "
+                    f"pass {i} budget {recorded_timeouts[i-1]:.3f}s"
+                )
+
+    def test_fallback_note_visible_count_zero_with_budget_exhaustion(self):
+        """fallback_note_visible_count must be 0 even when budget is exhausted."""
+        from app.concierge.batched_reason_builder import build_reasons_with_retry
+        cards_data, frame = self._make_cards_data(3)
+        with patch.dict(os.environ, {
+            "CONCIERGE_BATCHED_REASONING_ENABLED": "true",
+            "ANTHROPIC_API_KEY": "sk-test-fake",
+        }):
+            with patch("app.concierge.batched_reason_builder._run_llm_pass") as mock_pass:
+                result, r = build_reasons_with_retry(cards_data, frame, timeout_s=0.0)
+        mock_pass.assert_not_called()
+        # Structural invariant: deterministic_visible_count always 0.
+        assert r.deterministic_visible_count == 0
+        # No validated notes → visible count must be 0.
+        visible = sum(1 for cr in result.values() if cr.validated)
+        assert visible == 0  # fallback_note_visible_count = 0

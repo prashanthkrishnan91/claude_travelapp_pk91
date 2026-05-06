@@ -991,16 +991,33 @@ def build_reasons_with_retry(
     # so a generous budget override never pushes past the env-configured maximum.
     configured_timeout_s = _TIMEOUT_MS / 1000.0
     if timeout_s is not None:
-        timeout_s = min(timeout_s, configured_timeout_s)
+        note_budget_s = min(timeout_s, configured_timeout_s)
     else:
-        timeout_s = configured_timeout_s
+        note_budget_s = configured_timeout_s
+
+    # Single shared timer for the entire multi-pass cascade.
+    # Each pass receives only what's left of the total budget — not the full
+    # original value. This prevents pass 1 + retry + fallback from each
+    # independently consuming the full timeout_s.
+    t_note_budget_start = time.monotonic()
+
+    def _remaining_note_s() -> float:
+        """Seconds left in the total note-generation budget. Never negative."""
+        return max(0.0, note_budget_s - (time.monotonic() - t_note_budget_start))
 
     try:
         all_indices = list(range(n))
 
         # ── Pass 1: Primary model, all cards ─────────────────────────────────
+        pass1_budget = _remaining_note_s()
+        if pass1_budget <= 0:
+            logger.info("build_reasons_with_retry: budget_exhausted_before_pass1, skipping all passes")
+            r.failure_reason = "budget_exhausted_before_pass1"
+            r.final_note_omitted_count = n
+            return result, r
+
         accepted_1, quality_failed_1, _ = _run_llm_pass(
-            cards_data, all_indices, frame, _PRIMARY_MODEL, timeout_s
+            cards_data, all_indices, frame, _PRIMARY_MODEL, pass1_budget
         )
         for orig_0idx, note in accepted_1.items():
             result[str(orig_0idx + 1)] = CardReason(
@@ -1012,7 +1029,8 @@ def build_reasons_with_retry(
         # missing_after_1 includes both validator-rejected and quality-failed cards.
         # Build repair hints for quality-failed cards so Pass 2 can write better notes.
         missing_after_1 = [i for i in all_indices if i not in accepted_1]
-        if missing_after_1 and _MAX_RETRIES >= 1:
+        pass2_budget = _remaining_note_s()
+        if missing_after_1 and _MAX_RETRIES >= 1 and pass2_budget > 0:
             subset_2 = [cards_data[i] for i in missing_after_1]
             repair_hints_2: Dict[int, str] = {
                 subset_0idx + 1: quality_failed_1[orig_0idx]
@@ -1020,7 +1038,7 @@ def build_reasons_with_retry(
                 if orig_0idx in quality_failed_1
             }
             accepted_2, quality_failed_2, _ = _run_llm_pass(
-                subset_2, missing_after_1, frame, _PRIMARY_MODEL, timeout_s,
+                subset_2, missing_after_1, frame, _PRIMARY_MODEL, pass2_budget,
                 quality_hints=repair_hints_2 or None,
             )
             for orig_0idx, note in accepted_2.items():
@@ -1030,22 +1048,29 @@ def build_reasons_with_retry(
                 )
                 r.retry_recovered_count += 1
         else:
+            if missing_after_1 and pass2_budget <= 0:
+                logger.info(
+                    "build_reasons_with_retry: budget_exhausted_before_pass2 "
+                    "missing=%d skipping_retry_and_fallback",
+                    len(missing_after_1),
+                )
             accepted_2 = {}
             quality_failed_2: Dict[int, str] = {}
 
         # ── Pass 3: Fallback model for cards still missing ────────────────────
         accepted_so_far = set(accepted_1) | set(accepted_2)
         missing_after_2 = [i for i in all_indices if i not in accepted_so_far]
-        if missing_after_2 and _FALLBACK_MODEL and _FALLBACK_MODEL != _PRIMARY_MODEL:
+        pass3_budget = _remaining_note_s()
+        if missing_after_2 and _FALLBACK_MODEL and _FALLBACK_MODEL != _PRIMARY_MODEL and pass3_budget > 0:
             subset_3 = [cards_data[i] for i in missing_after_2]
-            # Fallback model gets 2× timeout and repair hints from earlier quality failures.
+            # Fallback model gets remaining budget (no multiplier — budget is shared).
             repair_hints_3: Dict[int, str] = {
                 subset_0idx + 1: (quality_failed_2.get(orig_0idx) or quality_failed_1.get(orig_0idx, ""))
                 for subset_0idx, orig_0idx in enumerate(missing_after_2)
                 if orig_0idx in quality_failed_2 or orig_0idx in quality_failed_1
             }
             accepted_3, _, _ = _run_llm_pass(
-                subset_3, missing_after_2, frame, _FALLBACK_MODEL, timeout_s * 2,
+                subset_3, missing_after_2, frame, _FALLBACK_MODEL, pass3_budget,
                 quality_hints=repair_hints_3 or None,
             )
             for orig_0idx, note in accepted_3.items():
@@ -1056,6 +1081,12 @@ def build_reasons_with_retry(
                 )
                 r.fallback_model_used_count += 1
         else:
+            if missing_after_2 and pass3_budget <= 0:
+                logger.info(
+                    "build_reasons_with_retry: budget_exhausted_before_pass3 "
+                    "missing=%d",
+                    len(missing_after_2),
+                )
             accepted_3 = {}
 
         # ── Final telemetry ───────────────────────────────────────────────────
@@ -1084,10 +1115,10 @@ def build_reasons_with_retry(
 
         logger.info(
             "build_reasons_with_retry: "
-            "primary_model=%s fallback_model=%s timeout_ms=%d "
+            "primary_model=%s fallback_model=%s note_budget_ms=%d "
             "accepted=%d/%d retry_recovered=%d fallback_used=%d "
             "success=%s failure_reason=%s source_counts=%s",
-            _PRIMARY_MODEL, _FALLBACK_MODEL, _TIMEOUT_MS,
+            _PRIMARY_MODEL, _FALLBACK_MODEL, int(note_budget_s * 1000),
             r.accepted_count, n, r.retry_recovered_count, r.fallback_model_used_count,
             r.success, r.failure_reason, r.visible_note_source_counts,
         )
