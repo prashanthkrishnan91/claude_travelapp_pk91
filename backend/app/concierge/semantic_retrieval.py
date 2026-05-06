@@ -293,8 +293,9 @@ def _run_pipeline(
         curate_cards,
     )
     curator_tel: dict = {"curated_fallback_to_original_order": True, "curated_ms": 0}
+    curated_result: Optional[CuratedSetResult] = None
     try:
-        curated_result: CuratedSetResult = curate_cards(
+        curated_result = curate_cards(
             ranked=ranked,
             dossiers=dossiers,
             first_card_limit=first_card_limit,
@@ -318,6 +319,45 @@ def _run_pipeline(
             exc,
         )
     latency["curator_ms"] = int((time.monotonic() - t0) * 1000)
+
+    # ── Step 5.8: Set-Level Writer v1 (PR #261) ──────────────────────────────
+    # Uses CuratedSetResult + PlaceEvidenceDossier to generate evidence-grounded,
+    # set-aware notes. Runs before the deadline check and before Step 6 evidence
+    # bundles so it can use richer dossier evidence.
+    # Falls back to the existing batched_reason_builder path on any failure.
+    # Never blocks card return.
+    t0 = time.monotonic()
+    from app.concierge.set_level_writer import (
+        SetWriterResult,
+        write_set_notes,
+    )
+    set_writer_result: Optional[SetWriterResult] = None
+    set_writer_tel: Dict[str, Any] = {"set_writer_fallback_to_existing_path": True}
+    if curated_result is not None and curated_result.output_count > 0:
+        try:
+            set_writer_result = write_set_notes(
+                curated_result=curated_result,
+                frame=frame,
+                deadline=deadline,
+                first_card_limit=first_card_limit,
+            )
+            set_writer_tel = set_writer_result.as_telemetry_dict(
+                elapsed_ms=int((time.monotonic() - t0) * 1000)
+            )
+            set_writer_tel["set_writer_fallback_to_existing_path"] = (
+                set_writer_result.timed_out
+                or set_writer_result.visible_note_count == 0
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "semantic_retrieval_v1: set_writer_failed query=%r error=%s — "
+                "falling back to existing note path",
+                user_query,
+                exc,
+            )
+            set_writer_result = None
+            set_writer_tel = {"set_writer_fallback_to_existing_path": True}
+    latency["set_writer_ms"] = int((time.monotonic() - t0) * 1000)
 
     # ── Step 6: Evidence bundles + deterministic SafeReasonBuilder ───────────
     t0 = time.monotonic()
@@ -353,7 +393,10 @@ def _run_pipeline(
 
     latency["det_reason_ms"] = int((time.monotonic() - t0) * 1000)
 
-    # ── Step 7: Reasoning Reliability v2 — three-pass orchestrator ───────────
+    # ── Step 7: Note generation — set-level writer (primary) or three-pass LLM ─
+    # Primary path: use set-writer notes when the writer ran and produced results.
+    # Fallback: existing three-pass build_reasons_with_retry cascade.
+    # Budget gate: skip all note generation when past the SLA soft ceiling.
     t0 = time.monotonic()
     from app.concierge.batched_reason_builder import (
         build_reasons_with_retry,
@@ -384,7 +427,55 @@ def _run_pipeline(
             final_card_count=n_cards,
             final_note_omitted_count=n_cards,
         )
+    elif (
+        set_writer_result is not None
+        and not set_writer_result.timed_out
+        and set_writer_result.visible_note_count > 0
+    ):
+        # ── Set-writer primary path ───────────────────────────────────────────
+        # Convert set-writer notes to the existing CardReason dict format so the
+        # rest of the pipeline (Step 8 assembly) is unchanged.
+        card_reasons = {}
+        for idx, (entity, _ev, _rs, _det) in enumerate(cards_data, 1):
+            pid = getattr(entity, "place_id", None)
+            sw_note = set_writer_result.notes_by_place_id.get(pid) if pid else None
+            if sw_note and sw_note.validated:
+                card_reasons[str(idx)] = CardReason(
+                    note=sw_note.note,
+                    source=sw_note.source,
+                    validated=True,
+                    attempt_count=1,
+                    model_used="set_level_writer_v1",
+                )
+
+        n = len(cards_data)
+        accepted = sum(1 for cr in card_reasons.values() if cr.validated)
+        src_counts: Dict[str, int] = {}
+        for cr in card_reasons.values():
+            if cr.validated:
+                src_counts[cr.source] = src_counts.get(cr.source, 0) + 1
+
+        reasoning_result = ReasoningResultV2(
+            attempted=True,
+            success=(accepted == n),
+            accepted_count=accepted,
+            final_card_count=n,
+            final_note_omitted_count=n - accepted,
+            deterministic_visible_count=0,  # invariant: always 0
+            failure_reason=(
+                None if accepted == n
+                else f"set_writer_partial:{n - accepted}_missing"
+            ),
+            model="set_level_writer_v1",
+            fallback_model="",
+            visible_note_source_counts=src_counts,
+        )
+        logger.info(
+            "semantic_retrieval_v1: set_writer_primary accepted=%d/%d",
+            accepted, n,
+        )
     else:
+        # ── Fallback: existing three-pass cascade ─────────────────────────────
         card_reasons, reasoning_result = build_reasons_with_retry(
             cards_data, frame, timeout_s=note_generation_budget_s
         )
@@ -522,6 +613,16 @@ def _run_pipeline(
         # Legacy fields for compatibility with existing log parsers
         "grounded_reason_attempted": reasoning_result.attempted,
         "grounded_reason_success": reasoning_result.success,
+        # PR #261 set-level writer
+        "set_writer_used": (
+            set_writer_result is not None
+            and not set_writer_result.timed_out
+            and set_writer_result.visible_note_count > 0
+        ),
+        "set_writer_visible_note_count": (
+            set_writer_result.visible_note_count
+            if set_writer_result is not None else 0
+        ),
     }
     _log_semantic_turn(
         user_query=user_query,
@@ -569,6 +670,8 @@ def _run_pipeline(
         dossier_telemetry=dossier_tel,
         # PR #260 curator telemetry
         curator_telemetry=curator_tel,
+        # PR #261 set-level writer telemetry
+        set_writer_telemetry=set_writer_tel,
     )
 
     if not cards:
@@ -929,6 +1032,8 @@ def _log_semantic_turn(
     dossier_telemetry: Optional[Any] = None,  # Optional[EvidenceDossierTelemetry]
     # PR #260 curator telemetry
     curator_telemetry: Optional[Dict[str, Any]] = None,
+    # PR #261 set-level writer telemetry
+    set_writer_telemetry: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Log one structured semantic turn line for zero-card failure debugging."""
     total_ms = int((time.monotonic() - t_pipeline_start) * 1000)
@@ -1069,4 +1174,10 @@ def _log_semantic_turn(
         logger.info(
             "semantic_retrieval_v1.curated_set_telemetry %r",
             curator_telemetry,
+        )
+    # PR #261 set-level writer telemetry — separate log line.
+    if set_writer_telemetry is not None:
+        logger.info(
+            "semantic_retrieval_v1.set_writer_telemetry %r",
+            set_writer_telemetry,
         )
