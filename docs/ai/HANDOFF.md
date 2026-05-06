@@ -1,6 +1,94 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-06) — PR #257: SLA + first-response card cap + no-visible-fallback-note contract
+## Last change (2026-05-06) — PR #258: Parallel retrieval + critical/non-critical path split
+
+**Status: MERGE-READY** — 28 new parallel-retrieval tests pass; 64 PR #257 SLA tests pass; 19 pre-existing pydantic env failures remain (unrelated)
+
+### What was built
+
+Critical vs non-critical retrieval stage separation with deadline propagation. No UI, SQL, or provider additions.
+
+**Problem**: Google Text Search fanout used a fixed timeout unaware of the SLA deadline. Place Details enrichment was silently never running (pre-existing NameError bug: `_api_key` vs `api_key` in `_run_pipeline`). No formal critical/non-critical separation existed; slow or failing enrichment could in principle delay the response.
+
+**Changes made**:
+
+1. **`backend/app/concierge/parallel_retrieval.py`** (new):
+   - Formalizes critical vs non-critical path separation from v2 amendment §5.
+   - `CriticalPathResult`: wraps Google Text Search provider results + timing + timeout count.
+   - `NonCriticalEnrichmentResult`: wraps enrichment map + timing + used/skipped counts + skip reason.
+   - `ParallelRetrievalResult`: combines both with all 11 PR #258 telemetry fields.
+   - `run_critical_google_fanout(queries, api_key, deadline, timeout)`: bounds effective per-call timeout to `min(timeout, remaining_deadline_s - 0.2s)`. Returns empty failure result immediately when remaining < 0.5 s.
+   - `run_non_critical_enrichment(entities, api_key, deadline, budget_n)`: skips `enrich_top_cards` entirely when `deadline.budget_for_enrichment_s() == 0.0`. Spreads remaining budget evenly across batch as per-card timeout. Catches all enrichment errors — never propagates.
+
+2. **`backend/app/concierge/deadline_manager.py`** (modified):
+   - `budget_for_enrichment_s(reserve_ms=500)`: returns 0.0 when past soft ceiling or when remaining budget ≤ reserve_ms; otherwise returns available seconds. Protects note generation + assembly headroom downstream.
+
+3. **`backend/app/concierge/semantic_retrieval.py`** (modified):
+   - Step 3: replaced `execute_fanout` with `run_critical_google_fanout` — deadline-bounded.
+   - Step 5.5: replaced `enrich_top_cards` (which was silently failing due to `_api_key` NameError) with `run_non_critical_enrichment` using correct `api_key` parameter. Enrichment now actually runs when budget allows.
+   - Captures `critical_path_ms` (total time through frame + plan + fanout + entity + rank) after step 5.
+   - Captures `remaining_budget_before_reasoning_ms` before step 7 (note generation).
+   - `_log_semantic_turn` extended with 11 new PR #258 telemetry fields (listed below).
+
+4. **`backend/tests/test_parallel_retrieval.py`** (new, 28 tests):
+   - Covers all 10 required test scenarios from PR #258 spec.
+   - `TestNonCriticalSkippedPastSoftCeiling` — enrichment skipped past soft ceiling; skipped on budget exhausted; elapsed_ms is small (fast exit).
+   - `TestCriticalGoogleRetrieval` — fanout calls execute_fanout; bails when budget < 0.5s; timeout_count tracks failures.
+   - `TestEnrichmentCannotMintCards` — result types have no card/identity fields; evidence-only structure enforced.
+   - `TestDeadlinePropagationToFanout` — effective timeout bounded by remaining budget; never inflated beyond it.
+   - `TestEnrichmentSkippedOnLowBudget` — skipped when budget exactly 0; not skipped when budget sufficient.
+   - `TestEnrichmentWithBudget` — enrichment map keyed by place_id; failure returns empty map (no exception).
+   - `TestFirstResponseCardCap` — card cap is not applied in parallel_retrieval layer; default remains 6.
+   - `TestNoVisibleFallbackNotes` — enrichment/critical result types have no note/reason fields.
+   - `TestTelemetryFields` — all 11 ParallelRetrievalResult fields present; timeout_count accurate; skip_count accurate.
+   - `TestDeadlineBudgetForEnrichment` — 0 past soft ceiling; 0 when remaining < reserve; positive when sufficient; shrinks over time.
+
+### Hard contracts preserved
+
+- `fallback_note_visible_count` always 0 (structural invariant from PR #257 — unchanged)
+- `deterministic_visible_count` always 0 (unchanged)
+- Google verification trust gate: place_id + OPERATIONAL + maps_uri required (unchanged)
+- Card cap: default 6, range 5–7 (unchanged)
+- Non-Google enrichment cannot mint addable cards (structural: only critical Google path produces cards)
+- No SQL, no new providers, no UI changes
+
+### Telemetry added (PR #258)
+
+```
+critical_path_ms                       — total time through frame+plan+fanout+entity+rank
+non_critical_enrichment_ms             — time for place_details enrichment stage
+provider_fanout_ms                     — time for Google Text Search fanout only
+provider_timeout_counts                — provider queries that errored/timed out
+provider_skipped_due_to_budget_counts  — non-critical cards skipped due to budget
+google_critical_success                — at least one Google query returned places
+google_critical_candidate_count        — total raw places from successful queries
+google_verified_count                  — verified entity count post-entity layer
+non_critical_enrichment_used_count     — enrichment results actually used
+non_critical_enrichment_skipped_count  — enrichment cards skipped/failed
+remaining_budget_before_reasoning_ms   — deadline budget just before note generation
+```
+
+### Remaining limitations
+
+- `more_options_cursor_present` is always `False` — cursor lives in router layer (PR #263).
+- Evidence Dossier not yet implemented (PR #259).
+- Hard cutoff interrupt of in-flight HTTP calls: critical fanout timeout is now deadline-bounded (this PR), but a true kill signal for already-running threads requires OS-level interrupt — deferred.
+
+### Supabase SQL: No
+
+### Test counts
+
+```
+test_parallel_retrieval.py:   28 tests, all pass (new)
+test_sla_card_cap.py:         64 tests, all pass (unchanged — 5 added in PR #257 batch)
+test_evidence_quality_v3.py:  53 tests, all pass (unchanged)
+test_evidence_quality_v4.py:  37 tests, all pass (unchanged)
+test_evidence_quality_v5.py:  37 tests, all pass (unchanged)
+```
+
+---
+
+## Previous change (2026-05-06) — PR #257: SLA + first-response card cap + no-visible-fallback-note contract
 
 **Status: MERGE-READY** — 59 new SLA/cap tests pass; 127 prior quality tests pass; 5 pre-existing pydantic env failures remain (unrelated)
 
@@ -49,9 +137,9 @@ Foundation slice of the v2 amendment architecture. No provider, UI, or SQL chang
 ### Remaining limitations
 
 - `more_options_cursor_present` is always `False` in this PR — cursor lives in the router layer (addressed in PR #263).
-- Parallel retrieval not yet implemented (PR #258).
+- Parallel retrieval critical/non-critical split implemented in PR #258.
 - Evidence Dossier not yet implemented (PR #259).
-- Hard cutoff guard (kill at 6000ms) is soft-enforced via soft_ceiling skip; a true interrupt of in-flight HTTP calls comes in PR #258.
+- Hard cutoff guard (kill at 6000ms) is soft-enforced via soft_ceiling skip; deadline-bounded fanout timeout implemented in PR #258.
 
 ### Supabase SQL: No
 
