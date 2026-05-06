@@ -90,6 +90,20 @@ class RequestDeadline:
         available = max(0, self.remaining_ms() - headroom_ms)
         return available / 1000.0
 
+    def budget_for_enrichment_s(self, reserve_ms: int = 500) -> float:
+        """Seconds available for non-critical enrichment after the critical path.
+
+        Returns 0.0 when past the soft ceiling or when remaining budget is too
+        small to safely run enrichment without starving note generation and
+        response assembly.
+
+        reserve_ms: headroom kept for note generation + assembly downstream.
+        """
+        if self.is_past_soft_ceiling():
+            return 0.0
+        available = max(0, self.remaining_ms() - reserve_ms)
+        return available / 1000.0
+
     # ── Stage timing ─────────────────────────────────────────────────────────
 
     def stage_start(self, name: str) -> None:

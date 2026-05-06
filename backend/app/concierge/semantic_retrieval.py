@@ -137,15 +137,25 @@ def _run_pipeline(
     queries = plan_queries(frame)
     latency["plan_ms"] = int((time.monotonic() - t0) * 1000)
 
-    # ── Step 3: Provider fanout (parallel Google Text Search) ────────────────
-    t0 = time.monotonic()
-    from app.concierge.provider_executor import execute_fanout
-    provider_results = execute_fanout(queries, api_key=api_key, timeout=timeout)
-    latency["provider_ms"] = int((time.monotonic() - t0) * 1000)
+    # ── Step 3: Critical path — Google Text Search fanout (deadline-bounded) ──
+    # Uses remaining deadline budget to bound per-call timeout so the critical
+    # path cannot overrun the SLA hard cutoff.
+    from app.concierge.parallel_retrieval import (
+        run_critical_google_fanout,
+        run_non_critical_enrichment,
+    )
+    critical_result = run_critical_google_fanout(
+        queries, api_key=api_key, deadline=deadline, timeout=timeout
+    )
+    provider_results = critical_result.provider_results
+    latency["provider_ms"] = critical_result.elapsed_ms
 
     provider_call_count = len(provider_results)
     provider_success_count = sum(1 for r in provider_results if r.succeeded)
     per_query_latencies = {r.query: r.latency_ms for r in provider_results}
+    google_critical_candidate_count = sum(
+        len(r.places) for r in provider_results if r.succeeded
+    )
 
     # If all providers failed: return honest no-card result
     if provider_success_count == 0:
@@ -209,22 +219,24 @@ def _run_pipeline(
     ranked, ranker_stats = rank_entities_with_stats(entities, frame, top_n=max_cards)
     latency["rank_ms"] = int((time.monotonic() - t0) * 1000)
 
-    # ── Step 5.5: Place Details enrichment (EvidencePack v3) ─────────────────
-    # Budget-gated: enrich only the top N cards to stay within API budget.
-    # Falls back gracefully to empty dict when API key is absent or calls fail.
+    # Critical path ends here — capture total time through Google + entity + rank.
+    critical_path_ms = deadline.elapsed_ms()
+
+    # ── Step 5.5: Non-critical enrichment (deadline-bounded, skipped if low budget) ─
+    # Google Place Details enrichment improves note reasoning evidence only.
+    # Skipped when remaining deadline budget is insufficient (< 500 ms reserve).
+    # Cannot change card identity or addable status — those are critical-path only.
+    # Fixes prior silent bug: enrich_top_cards was never called due to _api_key NameError.
     t0 = time.monotonic()
-    try:
-        from app.concierge.place_details_provider import enrich_top_cards
-        enrichment_map = enrich_top_cards(
-            [e for e, _ in ranked],
-            api_key=_api_key,
-            budget_n=4,
-            timeout=2.0,
-        )
-    except Exception as enrich_exc:
-        logger.debug("semantic_retrieval_v1: place_details_enrich_error error=%s", enrich_exc)
-        enrichment_map = {}
-    latency["enrich_ms"] = int((time.monotonic() - t0) * 1000)
+    remaining_budget_before_enrichment_ms = deadline.remaining_ms()
+    enrich_result = run_non_critical_enrichment(
+        [e for e, _ in ranked],
+        api_key=api_key,
+        deadline=deadline,
+        budget_n=4,
+    )
+    enrichment_map = enrich_result.enrichment_map
+    latency["enrich_ms"] = enrich_result.elapsed_ms
 
     # ── Step 6: Evidence bundles + deterministic SafeReasonBuilder ───────────
     t0 = time.monotonic()
@@ -270,6 +282,7 @@ def _run_pipeline(
     )
 
     # Check SLA before committing to LLM note generation.
+    remaining_budget_before_reasoning_ms = deadline.remaining_ms()
     note_generation_budget_s = deadline.budget_for_note_generation_s()
     note_generation_timed_out = note_generation_budget_s <= 0.0
 
@@ -459,6 +472,18 @@ def _run_pipeline(
         note_generation_timed_out=note_generation_timed_out,
         cards_without_notes=cards_without_notes_count,
         more_options_cursor_present=False,  # cursor lives in router layer
+        # PR #258 parallel retrieval telemetry
+        critical_path_ms=critical_path_ms,
+        non_critical_enrichment_ms=enrich_result.elapsed_ms,
+        provider_fanout_ms=latency["provider_ms"],
+        provider_timeout_counts=critical_result.timeout_count,
+        provider_skipped_due_to_budget_counts=enrich_result.skipped_count if enrich_result.skip_reason else 0,
+        google_critical_success=critical_result.success,
+        google_critical_candidate_count=google_critical_candidate_count,
+        google_verified_count=verified_count,
+        non_critical_enrichment_used_count=enrich_result.used_count,
+        non_critical_enrichment_skipped_count=enrich_result.skipped_count,
+        remaining_budget_before_reasoning_ms=remaining_budget_before_reasoning_ms,
     )
 
     if not cards:
@@ -803,6 +828,18 @@ def _log_semantic_turn(
     note_generation_timed_out: bool = False,
     cards_without_notes: int = 0,
     more_options_cursor_present: bool = False,
+    # PR #258 parallel retrieval telemetry
+    critical_path_ms: int = 0,
+    non_critical_enrichment_ms: int = 0,
+    provider_fanout_ms: int = 0,
+    provider_timeout_counts: int = 0,
+    provider_skipped_due_to_budget_counts: int = 0,
+    google_critical_success: bool = True,
+    google_critical_candidate_count: int = 0,
+    google_verified_count: int = 0,
+    non_critical_enrichment_used_count: int = 0,
+    non_critical_enrichment_skipped_count: int = 0,
+    remaining_budget_before_reasoning_ms: int = 0,
 ) -> None:
     """Log one structured semantic turn line for zero-card failure debugging."""
     total_ms = int((time.monotonic() - t_pipeline_start) * 1000)
@@ -862,7 +899,18 @@ def _log_semantic_turn(
         "fallback_note_visible_count=%d "
         "note_generation_timed_out=%s "
         "cards_without_notes=%d "
-        "more_options_cursor_present=%s",
+        "more_options_cursor_present=%s "
+        "critical_path_ms=%d "
+        "non_critical_enrichment_ms=%d "
+        "provider_fanout_ms=%d "
+        "provider_timeout_counts=%d "
+        "provider_skipped_due_to_budget_counts=%d "
+        "google_critical_success=%s "
+        "google_critical_candidate_count=%d "
+        "google_verified_count=%d "
+        "non_critical_enrichment_used_count=%d "
+        "non_critical_enrichment_skipped_count=%d "
+        "remaining_budget_before_reasoning_ms=%d",
         PIPELINE_VERSION,
         user_query,
         getattr(frame, "destination", ""),
@@ -908,4 +956,16 @@ def _log_semantic_turn(
         note_generation_timed_out,
         cards_without_notes,
         more_options_cursor_present,
+        # PR #258 parallel retrieval telemetry values
+        critical_path_ms,
+        non_critical_enrichment_ms,
+        provider_fanout_ms,
+        provider_timeout_counts,
+        provider_skipped_due_to_budget_counts,
+        google_critical_success,
+        google_critical_candidate_count,
+        google_verified_count,
+        non_critical_enrichment_used_count,
+        non_critical_enrichment_skipped_count,
+        remaining_budget_before_reasoning_ms,
     )

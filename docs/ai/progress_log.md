@@ -1,5 +1,25 @@
 # Progress Log
 
+## 2026-05-06 — PR #258: Parallel retrieval + critical/non-critical path split
+
+**Branch**: `claude/concierge-parallel-retrieval-aQd14`
+
+**Severity**: Level 3 architecture correction — v2 amendment PR #258 orchestration slice.
+
+**Problem**: Google Text Search fanout used a fixed timeout unaware of the SLA deadline. Place Details enrichment was silently never running (pre-existing NameError bug). No formal critical/non-critical stage separation existed.
+
+**What was built**:
+- `parallel_retrieval.py` (new): `run_critical_google_fanout` with deadline-bounded timeout; `run_non_critical_enrichment` with budget-gated skip. `CriticalPathResult`, `NonCriticalEnrichmentResult`, `ParallelRetrievalResult` dataclasses.
+- `deadline_manager.py`: `budget_for_enrichment_s(reserve_ms=500)` — returns 0.0 past soft ceiling or when budget ≤ reserve.
+- `semantic_retrieval.py`: Step 3 uses `run_critical_google_fanout`; Step 5.5 uses `run_non_critical_enrichment` (fixes silent NameError). 11 new PR #258 telemetry fields. `critical_path_ms` and `remaining_budget_before_reasoning_ms` captured.
+- `test_parallel_retrieval.py` (new, 28 tests): all 10 required scenarios covered.
+
+**Tests**: 28 new tests pass. 64 PR #257 SLA tests pass. Pre-existing pydantic env failures unchanged.
+**Supabase SQL**: No
+**HANDOFF.md edited**: Yes
+
+---
+
 ## 2026-05-06 — PR #257: SLA + first-response card cap + no-visible-fallback-note contract
 
 **Branch**: `claude/ai-concierge-sla-capping-YmaZ2`
