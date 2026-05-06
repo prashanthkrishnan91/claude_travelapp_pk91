@@ -1,8 +1,101 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-06) — EvidencePack v4: Modifier Evidence Contract v1 + Riverwalk safe-evidence
+## Last change (2026-05-06) — EvidencePack v5: Tighter rating/review rejection + modifier telemetry fix
 
-**Status: MERGE-READY** — 127 concierge tests pass, 19 pre-existing pydantic/httpx env failures remain (unrelated)
+**Status: MERGE-READY** — 156 concierge tests pass, 5 pre-existing pydantic env failures remain (unrelated)
+
+### Problem solved (Level 2 production note quality failures on PR #252 logs)
+
+Post-PR #252 production logs showed remaining failures:
+1. Rating/review-primary notes still passed when phrased indirectly (e.g., "notably high ratings", "draws consistently high engagement", "strongest review volume", "smaller review count", "steady review volume", "lightest review footprint")
+2. `modifier_status='none'` logged for all "breweries near the river" cards including Northman (should be `confirmed_listing_context` for Northman, `unknown` for others)
+3. "taprooms with a view" notes not always addressing the view request honestly
+4. "izakayas" notes still sometimes using review volume instead of concept/menu/style fit
+
+Root causes fixed:
+1. `_QUALITY_THIN_RE` did not cover indirect rating phrasings — added 11 new patterns: `notably high ratings`, `high engagement`, `review volume`, `review footprint`, `review count`, `feedback volume`, `steady review`, `lightest review`, `carries review`, `strongest review`, `smaller review`
+2. `_log_per_card_notes` in `semantic_retrieval.py` only checked `location_modifiers` (empty for geo-hint queries like "breweries near the river"); now checks `geography_hints` too and maps entity name/address to `confirmed_listing_context` / `confirmed_address_context` / `unknown`
+3. LLM prompt updated with: explicit view guidance (confirmed or deny honestly), izakaya concept/menu/style anchors, expanded anti-pattern list covering all new indirect phrasings
+4. Harness v2 mock note updated: "tap quality and review volume are well-supported" → "tap selection and Bourbon County program are well-documented" (now complies with new gate)
+
+### What was built
+
+**Strengthened `_QUALITY_THIN_RE`** (`batched_reason_builder.py`): Added 11 new rating/review patterns that cover indirect phrasings from PR #252 production logs.
+
+**Improved prompt guidance** (`batched_reason_builder.py`): Extended anti-pattern list; added view-query guidance (confirm or deny explicitly); added izakaya guidance (use name/menu/category/style clues, not review rank).
+
+**Fixed modifier_status telemetry** (`semantic_retrieval.py`): `_log_per_card_notes` now checks both `location_modifiers` and `geography_hints`; maps entity name/address against river/view term sets to produce `confirmed_listing_context`, `confirmed_address_context`, or `unknown` (not `none`) for modifier queries.
+
+**Harness v5** (`tests/evidence_harness_v5.py`): New harness with:
+- Exact visible notes printed for all three queries
+- PR #252 bad-note rejection proof section (all 6 exact failing notes rejected)
+- Northman modifier_status=confirmed_listing_context asserted
+- Taproom-view notes checked for view-honest handling
+- Izakaya notes checked for concept/menu/style (not review rank)
+
+**Tests v5** (`tests/test_evidence_quality_v5.py`): 29 new tests across 5 classes:
+- `TestPR252BadNoteRejection` — 6 tests: exact PR #252 failing notes all rejected
+- `TestRatingPrimaryV5` — 7 tests: new indirect phrasings rejected, good differentiators pass
+- `TestModifierTelemetryV5` — 5 tests: Northman=confirmed_listing_context, regular=unknown, izakaya=none
+- `TestTaproomViewQualityV5` — 3 tests: 8/8 validated, no rating-primary, all notes address view
+- `TestIzakayaQualityV5` — 3 tests: 8/8 validated, no review-volume notes, venue_head recognized
+- `TestHarnessV5Integration` — 5 tests: full end-to-end for all three queries + PR #252 rejection
+
+**Updated harness v2 mock note** (`tests/evidence_harness_v2.py`): Taproom-with-view card 1 note updated to avoid "review volume" (now complies with stricter gate).
+
+### Files changed
+
+- `backend/app/concierge/batched_reason_builder.py` — 11 new `_QUALITY_THIN_RE` patterns; expanded anti-pattern list in prompt; view and izakaya repair guidance added
+- `backend/app/concierge/semantic_retrieval.py` — `_log_per_card_notes`: checks geography_hints; entity name/address → confirmed_listing_context/confirmed_address_context/unknown
+- `backend/tests/evidence_harness_v2.py` — 1 mock note updated (review volume → tap selection/program)
+- `backend/tests/evidence_harness_v5.py` — New v5 harness (24/24 validated, PR #252 bad-note proof)
+- `backend/tests/test_evidence_quality_v5.py` — 29 new tests
+
+### Test results
+
+```
+test_evidence_quality_v3.py:       53 tests, all pass (unchanged)
+test_evidence_quality_v4.py:       37 tests, all pass (unchanged)
+test_evidence_quality_v5.py:       29 tests, all pass (new)
+test_reasoning_reliability_v2.py:  38 tests pass (5 pre-existing pydantic env failures)
+evidence_harness_v3.py:           19/19 validated STRICT (unchanged)
+evidence_harness_v4.py:           24/24 validated STRICT (unchanged)
+evidence_harness_v5.py:           24/24 validated STRICT (new)
+  Table 1: 8/8 validated (Northman confirmed_listing_context, non-river=unknown)
+  Table 2: 8/8 validated (all notes address view honestly, no rating-primary)
+  Table 3: 8/8 validated (izakaya concept/menu/style anchors, no review volume)
+  PR #252 bad notes: all 6 rejected ✓
+frontend tests (concierge-renderers + trust-contract): 45/45 pass
+```
+
+### Production contract verification
+
+| Query | Result |
+|---|---|
+| breweries near the river | 8/8 accepted, Northman modifier_status=confirmed_listing_context, non-river=unknown, no rating-primary notes |
+| taprooms with a view | 8/8 accepted, every note addresses view as confirmed or explicitly denied, no rating-primary notes |
+| izakayas | 8/8 accepted, venue_head_recognized=True, notes use concept/menu/style anchors |
+| PR #252 bad notes | All 6 indirect phrasings rejected by quality gate |
+
+### Hard contracts preserved
+
+- Cards with `validated=False` excluded from response (never shown)
+- `deterministic_visible_count` always 0 in telemetry
+- No NOTE OMITTED / placeholder in success path
+- No rating-lead or pure-caveat-only notes
+- per_card_notes production logging preserved and improved
+- No legacy whyPick fallback
+- Izakaya venue-head recognition preserved
+- Northman Riverwalk safe-evidence preserved (not weakened)
+
+### Supabase SQL: No
+
+### Remaining limitations
+
+- "view" as a user modifier goes into `ambiguity_flags` in the frame (not `location_modifiers` or `geography_hints`), so modifier_status for "taprooms with a view" remains "none" per card — this is honest, since Google data cannot structurally verify scenic views
+- New `review volume` pattern is broad; if a future editorial note uses "review volume" as secondary context, it will be rejected. Notes should avoid the phrase entirely.
+
+---
 
 ### Problem solved (Level 3 production blockers on PR #251 logs)
 

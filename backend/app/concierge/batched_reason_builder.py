@@ -75,6 +75,7 @@ _QUALITY_THIN_RE = re.compile(
     r"|\bmost[\s\-]reviewed\b"                              # "most-reviewed brewery"
     r"|\breview\s+base\b"                                   # "second-largest review base"
     r"|\bsmallest\s+review\b"                               # "smallest review base"
+    r"|\bsmaller\s+review\b"                                # "smaller review count (313)"
     r"|\bsolid\s+mid[\s\-]tier\b"                           # "solid mid-tier option"
     r"|\bstrong\s+on\s+volume\b"                            # "strong on volume of feedback"
     r"|\bconsistent\s+crowd\s+draw\b"                       # "consistent crowd draw"
@@ -82,6 +83,18 @@ _QUALITY_THIN_RE = re.compile(
     r"|\bestablished\s+reputation\b"                        # "established reputation"
     r"|\bvolume\s+of\s+feedback\b"                          # "volume of feedback"
     r"|\bordinal\s+rank\b"                                  # generic rank phrase
+    # New v5 patterns — indirect rating/review phrasings that still lead with metrics
+    r"|\bnotably\s+high\s+ratings?\b"                       # "notably high ratings (4.8★)"
+    r"|\bhigh\s+engagement\b"                               # "draws consistently high engagement"
+    r"|\breview\s+volume\b"                                  # "review volume" in any context
+    r"|\breview\s+footprint\b"                              # "lightest/smaller review footprint"
+    r"|\breview\s+count\b"                                  # "smaller review count"
+    r"|\bfeedback\s+volume\b"                               # "feedback volume"
+    r"|\bsteady\s+review\b"                                 # "steady review volume"
+    r"|\blightest\s+review\b"                               # "lightest review footprint"
+    r"|\bcarr(?:y|ies|ying|ied)\s+review\b"                # "carries/carrying review volume"
+    r"|\bstrongest\s+review\b"                              # "strongest review volume"
+    r"|\brating[\s\-]+lead\b"                               # explicit rating lead
     r")",
     re.IGNORECASE,
 )
@@ -448,10 +461,15 @@ ANTI-PATTERNS — these will be automatically rejected, do not waste tokens on t
 - "Verified {{category}} with {{rating}}★ across {{N}} reviews." ← fill-in-the-blank, no value
 - "Strong/Good/Great {{concept}} match in {{city}}."             ← zero information
 - Any phrase like "matches the {{concept}} concept", "solid {{concept}} signals", or "established {{concept}} with solid..." ← all too generic
-- Any note where the PRIMARY differentiator is rating or review count:
-  "highest-rated taproom in this set", "second-most-reviewed", "review base",
-  "strong on volume of feedback", "solid mid-tier option" — these are never concierge-grade
-- Any note that mainly compares cards by rating rank or review count rank
+- Any note where the PRIMARY differentiator is rating or review count — even if phrased indirectly:
+  "highest-rated", "most-reviewed", "review base", "review volume", "review footprint",
+  "review count", "feedback volume", "notably high ratings", "high engagement",
+  "steady review volume", "lightest review footprint", "strongest review volume",
+  "smaller review count", "draws high engagement", "carries review volume",
+  "solid mid-tier option", "strong on volume of feedback" — all rejected
+- Any note that compares cards by rating rank or review count rank
+- Any note where the FIRST clause (before any ; — , or .) is only about rating/reviews —
+  ratings and review counts may only appear as SECONDARY context after a concrete differentiator
 - Any note that claims waterfront/view/river scenic proximity without CONFIRMED in evidence
   (EXCEPTION: if the verified Google NAME contains 'Riverwalk'/'riverfront'/etc., you may
   say "The verified listing places this venue in Riverwalk context" — that is a listing fact)
@@ -465,6 +483,12 @@ WHAT MAKES A USEFUL NOTE:
 - Rating/reviews may appear only as SECONDARY context after a concrete differentiator
 - For THIN evidence: anchor on the place's name (what does the name itself imply?) and street/address
 - For river/view queries: use the THREE-WAY DISTINCTION above (listing context / verified / unknown)
+- For VIEW queries (e.g., "taprooms with a view"): if no view/outdoor/scenic evidence is confirmed,
+  explicitly say the view is not verified AND then give a concrete venue-specific reason (specialty,
+  neighborhood, name implication). Do NOT use ratings as the replacement differentiator.
+- For IZAKAYA queries: use name/menu/category clues — izakaya, ramen, sushi, omakase, bar format,
+  gastropub style, sake/whisky selection, shared plates/drinks framing, late-night format,
+  neighborhood fit, or concept-specific specialty. Do NOT use review volume as a differentiator.
 - It honestly handles modifiers: confirmed → state it; not confirmed → acknowledge the gap
 - It varies meaningfully across the {n} places — do not reuse the same sentence structure
 - It is concise (one sentence or two short clauses, under {_REASON_MAX_CHARS} characters)

@@ -405,7 +405,7 @@ _TARGET_NOTES: Dict[str, Dict[str, str]] = {
         "3": "Revolution Brewing brings a large-format taproom and citywide distribution from its Northwest Side base, with a well-established seasonal rotation.",
     },
     "taprooms with a view": {
-        "1": "Goose Island Taproom on Clybourn Ave is a well-reviewed brewery taproom; a scenic view cannot be structurally confirmed from listing data, but the tap quality and review volume are well-supported.",
+        "1": "Goose Island Taproom on Clybourn Ave is Chicago's heritage craft brewery taproom; a scenic view cannot be structurally confirmed from listing data, but the tap selection and Bourbon County program are well-documented.",
         "2": "Half Acre on Lincoln Ave is an established neighborhood taproom with a consistent small-batch release program; an outdoor or elevated view is not confirmed from the listing, so plan for the beer.",
         "3": "Empirical Taproom on Foster Ave focuses on local distribution and experimental fermentation; a confirmed scenic view cannot be verified from available data, but it's a distinctive taproom option.",
     },

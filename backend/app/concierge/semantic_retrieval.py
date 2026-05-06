@@ -606,7 +606,26 @@ def _log_per_card_notes(
       - visible_note (first 220 chars of the accepted note, or "" if omitted)
     """
     location_modifiers = getattr(frame, "location_modifiers", []) or []
-    primary_modifier = location_modifiers[0] if location_modifiers else ""
+    geo_hints = getattr(frame, "geography_hints", []) or []
+    # Use location_modifiers first; fall back to geography_hints (e.g. "river" from geo)
+    primary_modifier = location_modifiers[0] if location_modifiers else (geo_hints[0] if geo_hints else "")
+
+    # River/water terms for listing-context detection when modifier is a geo hint
+    _RIVER_CONTEXT_TERMS = frozenset({
+        "river", "riverwalk", "riverfront", "riverbank", "riverside",
+        "waterfront", "lakefront",
+    })
+    _VIEW_CONTEXT_TERMS = frozenset({
+        "view", "rooftop", "panoramic", "scenic", "terrace", "overlook",
+    })
+    mod_lower = primary_modifier.lower()
+    # Determine which geo-terms to match for listing-context checks
+    if any(r in mod_lower for r in ("river", "waterfront", "riverwalk")):
+        _geo_check_terms = _RIVER_CONTEXT_TERMS
+    elif "view" in mod_lower or "scenic" in mod_lower:
+        _geo_check_terms = _VIEW_CONTEXT_TERMS
+    else:
+        _geo_check_terms = frozenset()
 
     per_card_entries = []
     for i, (entity, evidence, _rank_score, _det_reason) in enumerate(cards_data, 1):
@@ -614,23 +633,34 @@ def _log_per_card_notes(
         if cr is None:
             continue
 
-        # Modifier status for this card
+        # Modifier status for this card — distinguishes listing-context from unknown
         modifier_status = "none"
         if primary_modifier:
-            confirmed = any(
+            # Check structured_facts first (explicit location_modifier_confirmed)
+            loc_confirmed = any(
                 "confirms" in f and primary_modifier.lower() in f.lower()
                 for f in (evidence.structured_facts or [])
             )
-            not_confirmed = any(
+            loc_not_confirmed = any(
                 f.startswith(f"location_modifier_not_confirmed:{primary_modifier}")
                 for f in (evidence.uncertainty_flags or [])
             )
-            if confirmed:
+            if loc_confirmed:
                 modifier_status = "confirmed"
-            elif not_confirmed:
+            elif loc_not_confirmed:
                 modifier_status = "not_confirmed"
+            elif _geo_check_terms:
+                # For geo hints (river, view, etc.), check entity name/address
+                name_lower = (getattr(entity, "name", "") or "").lower()
+                addr_lower = (getattr(entity, "formatted_address", "") or "").lower()
+                if any(term in name_lower for term in _geo_check_terms):
+                    modifier_status = "confirmed_listing_context"
+                elif any(term in addr_lower for term in _geo_check_terms):
+                    modifier_status = "confirmed_address_context"
+                else:
+                    modifier_status = "unknown"
             else:
-                modifier_status = "requested_unresolved"
+                modifier_status = "unknown"
 
         per_card_entries.append({
             "i": i,
