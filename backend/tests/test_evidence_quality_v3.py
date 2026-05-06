@@ -614,3 +614,368 @@ class TestQualityMatrix:
                 assert not _QUALITY_THIN_RE.search(cr.note), (
                     f"Validated note contains thin concept-fit phrase: {cr.note!r}"
                 )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TestQualityCriticExtended
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestQualityCriticExtended:
+    """Regression tests for new quality gate patterns (v3 additions)."""
+
+    def _ev(self, adequacy: str = "OK"):
+        from app.concierge.ranker import MinimalEvidenceBundle
+        entity = _make_entity()
+        return MinimalEvidenceBundle(entity=entity, evidence_adequacy=adequacy)
+
+    def test_well_regarded_rejected(self):
+        from app.concierge.batched_reason_builder import _assess_quality
+        ev = self._ev()
+        notes = [
+            "Revolution Brewing is a well-regarded Chicago craft brewery with a great tap list.",
+            "Half Acre Beer Company is well-regarded in the Lincoln Square neighborhood.",
+            "Goose Island is a well regarded institution on the North Side.",
+        ]
+        for note in notes:
+            ok, reason = _assess_quality(note, ev)
+            assert not ok, f"Expected rejection for well-regarded note: {note!r}"
+
+    def test_highly_rated_rejected(self):
+        from app.concierge.batched_reason_builder import _assess_quality
+        ev = self._ev()
+        notes = [
+            "Goose Island Taproom is a highly rated spot on Clybourn Ave with a great selection.",
+            "Revolution Brewing is highly-rated among Chicago craft beer fans.",
+        ]
+        for note in notes:
+            ok, reason = _assess_quality(note, ev)
+            assert not ok, f"Expected rejection for highly-rated note: {note!r}"
+
+    def test_great_option_rejected(self):
+        from app.concierge.batched_reason_builder import _assess_quality
+        ev = self._ev()
+        note = "Half Acre Beer Company is a great option for craft beer fans in Chicago's North Side."
+        ok, reason = _assess_quality(note, ev)
+        assert not ok, f"Expected rejection for 'great option' note: {note!r}"
+
+    def test_top_pick_rejected(self):
+        from app.concierge.batched_reason_builder import _assess_quality
+        ev = self._ev()
+        note = "Revolution Brewing is the top pick for craft beer lovers visiting Chicago this season."
+        ok, reason = _assess_quality(note, ev)
+        assert not ok, f"Expected rejection for 'top pick' note: {note!r}"
+
+    def test_strong_local_following_rejected(self):
+        from app.concierge.batched_reason_builder import _assess_quality
+        ev = self._ev()
+        note = "Goose Island Brewhouse has a strong local following in the Clybourn area among locals."
+        ok, reason = _assess_quality(note, ev)
+        assert not ok, f"Expected rejection for 'strong local following' note: {note!r}"
+
+    def test_consistent_quality_rejected(self):
+        from app.concierge.batched_reason_builder import _assess_quality
+        ev = self._ev()
+        note = "Metropolitan Brewing is known for consistent quality German-style lagers in Chicago."
+        ok, reason = _assess_quality(note, ev)
+        assert not ok, f"Expected rejection for 'consistent quality' note: {note!r}"
+
+    def test_chicago_institution_rejected(self):
+        from app.concierge.batched_reason_builder import _assess_quality
+        ev = self._ev()
+        note = "Goose Island Brewhouse is a Chicago institution in the craft beer scene."
+        ok, reason = _assess_quality(note, ev)
+        assert not ok, f"Expected rejection for 'Chicago institution' note: {note!r}"
+
+    def test_rating_lead_rejected(self):
+        from app.concierge.batched_reason_builder import _assess_quality
+        ev = self._ev("THIN")
+        rating_lead_notes = [
+            "4.7★ from 1,344 reviews. The requested view setting is not verified.",
+            "4.5★ with 800 reviews, this is a solid taproom concept fit.",
+            "4.3★ from 290 reviews; outdoor views not confirmed.",
+        ]
+        for note in rating_lead_notes:
+            ok, reason = _assess_quality(note, ev)
+            assert not ok, f"Expected rating_residue_lead rejection: {note!r}"
+            assert "rating" in reason, f"Expected 'rating' in rejection reason, got: {reason!r}"
+
+    def test_pure_caveat_rejected(self):
+        from app.concierge.batched_reason_builder import _assess_quality
+        ev = self._ev("THIN")
+        pure_caveat_notes = [
+            "The requested view setting is not verified.",
+            "Outdoor views are not confirmed from the available address.",
+            "A scenic view cannot be verified from available data.",
+            "Views cannot be confirmed from the available address.",
+        ]
+        for note in pure_caveat_notes:
+            ok, reason = _assess_quality(note, ev)
+            assert not ok, f"Expected pure_caveat rejection: {note!r}"
+            assert "caveat" in reason or "pure" in reason, (
+                f"Expected 'caveat' or 'pure' in rejection reason for {note!r}, got: {reason!r}"
+            )
+
+    def test_caveat_with_differentiator_passes(self):
+        """Notes combining a positive differentiator + honest view caveat must pass."""
+        from app.concierge.batched_reason_builder import _assess_quality
+        ev = self._ev("OK")
+        notes_with_differentiator = [
+            "Corridor Brewery & Provisions on Southport Ave is a Lakeview taproom; a scenic view is not confirmed from the address.",
+            "Dovetail Brewery on Belle Plaine Ave focuses on European lagers; outdoor views are not confirmed from the available data.",
+            "Spiteful Brewing on Berteau Ave is a compact Avondale taproom; outdoor views are not confirmed.",
+        ]
+        for note in notes_with_differentiator:
+            ok, reason = _assess_quality(note, ev)
+            assert ok, (
+                f"Expected quality pass for mixed-content note: {note!r}, got reason={reason!r}"
+            )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TestIzakayaVenueHead
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestIzakayaVenueHead:
+    """venue_head_recognized=True for izakaya queries after adding to _SYNONYM_SETS."""
+
+    def test_izakaya_in_synonym_sets(self):
+        from app.concierge.ranker import _SYNONYM_SETS
+        found = any("izakaya" in s for s in _SYNONYM_SETS)
+        assert found, "Expected 'izakaya' in _SYNONYM_SETS for venue-head recognition"
+
+    def test_izakayas_plural_in_synonym_sets(self):
+        from app.concierge.ranker import _SYNONYM_SETS
+        found = any("izakayas" in s for s in _SYNONYM_SETS)
+        assert found, "Expected 'izakayas' in _SYNONYM_SETS"
+
+    def test_izakaya_has_known_synonym_set(self):
+        from app.concierge.ranker import _has_known_synonym_set
+        assert _has_known_synonym_set("izakaya"), "Expected True for 'izakaya'"
+        assert _has_known_synonym_set("izakayas"), "Expected True for 'izakayas'"
+
+    def test_brewery_still_recognized(self):
+        from app.concierge.ranker import _has_known_synonym_set
+        assert _has_known_synonym_set("brewery"), "Regression: brewery must still be recognized"
+        assert _has_known_synonym_set("taproom"), "Regression: taproom must still be recognized"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TestProductionShapeScenarios
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestProductionShapeScenarios:
+    """8-card production-shape scenarios proving retry fills missing cards."""
+
+    def _make_8_cards(self, query: str):
+        from app.concierge.frame_extractor import extract_frame
+        from app.concierge.ranker import RankScore, build_evidence_bundle
+        from app.concierge.safe_reason_builder import build_safe_reason
+
+        frame = extract_frame(query, "Chicago")
+        names = [
+            "Goose Island Brewhouse", "Revolution Brewing", "Half Acre Beer Company",
+            "Forbidden Root Brewery", "Empirical Brewery", "Spiteful Brewing",
+            "Metropolitan Brewing", "Off Color Brewing",
+        ]
+        addrs = [
+            "1800 N Clybourn Ave, Chicago, IL", "2323 N Milwaukee Ave, Chicago, IL",
+            "4257 N Lincoln Ave, Chicago, IL", "1746 W Chicago Ave, Chicago, IL",
+            "1801 W Foster Ave, Chicago, IL", "1815 W Berteau Ave, Chicago, IL",
+            "3057 N Rockwell St, Chicago, IL", "3925 W Belmont Ave, Chicago, IL",
+        ]
+        cards_data = []
+        for i in range(8):
+            entity = _make_entity(
+                name=names[i],
+                place_id=f"pid_{i}",
+                rating=4.5,
+                review_count=500 + i * 100,
+                address=addrs[i],
+                source_query="brewery Chicago",
+            )
+            score = RankScore(total=0.75, subtype_fit=0.90, geo_fit=0.6)
+            ev = build_evidence_bundle(entity, frame, score)
+            det = build_safe_reason(entity, ev, frame, score)
+            cards_data.append((entity, ev, score, det))
+        return cards_data, frame
+
+    def test_brewery_8_card_7_pass1_1_retry(self):
+        """8 cards: 7 good in pass1, 1 rescued in pass2."""
+        from app.concierge.batched_reason_builder import build_reasons_with_retry
+
+        # 7 specific notes + 1 thin (card 8)
+        pass1_json = json.dumps({
+            "1": "Goose Island Brewhouse on Clybourn Ave is Chicago's heritage craft brewery, home to the Bourbon County stout series.",
+            "2": "Revolution Brewing on Milwaukee Ave is one of Chicago's largest independent taprooms with outdoor seating.",
+            "3": "Half Acre on Lincoln Ave emphasizes small-batch experimental styles with limited releases.",
+            "4": "Forbidden Root on Chicago Ave pairs botanical beers with a gastropub kitchen.",
+            "5": "Empirical Brewery on Foster Ave features outdoor seating and a rotating fermentation-forward tap program.",
+            "6": "Spiteful Brewing on Berteau Ave is a compact neighborhood taproom on a residential stretch.",
+            "7": "Metropolitan Brewing on Rockwell Street specializes in German lagers with a North Side taproom and outdoor patio seating.",
+            "8": "Off Color Brewing has solid brewery signals and strong concept fit in Chicago.",  # thin
+        })
+        pass2_json = json.dumps({
+            "1": "Off Color Brewing on Belmont Ave brews eccentric small-batch farmhouse ales — an unusual specialty in Chicago's craft scene.",
+        })
+
+        call_count = 0
+
+        def mock_llm(prompt, timeout, model=""):
+            nonlocal call_count
+            call_count += 1
+            return pass1_json if call_count == 1 else pass2_json
+
+        cards_data, frame = self._make_8_cards("breweries near the river")
+        _ENABLE = patch("app.concierge.batched_reason_builder._flag_enabled", return_value=True)
+        with _ENABLE, patch("app.concierge.batched_reason_builder._call_llm", side_effect=mock_llm):
+            reasons, result = build_reasons_with_retry(cards_data, frame)
+
+        assert result.accepted_count == 8, f"Expected 8 accepted, got {result.accepted_count}"
+        assert result.final_note_omitted_count == 0
+        assert result.deterministic_visible_count == 0
+        assert result.retry_recovered_count == 1, f"Expected 1 retry-recovered, got {result.retry_recovered_count}"
+        for key, cr in reasons.items():
+            assert cr.validated, f"Card {key} not validated"
+
+    def test_taproom_8_card_3_pass1_5_retry(self):
+        """8 cards: 3 good in pass1, 5 rescued in pass2."""
+        from app.concierge.batched_reason_builder import build_reasons_with_retry
+
+        pass1_json = json.dumps({
+            "1": "Corridor Brewery & Provisions on Southport Ave is a Lakeview neighborhood taproom; a view is not confirmed from the address.",
+            "2": "Spiteful Brewing on Berteau Ave is a compact Avondale taproom; outdoor views are not confirmed from the available data.",
+            "3": "Dovetail Brewery on Belle Plaine Ave focuses on European-style lagers — an unusual specialty in Chicago's IPA-heavy scene.",
+            "4": "Hopewell Brewing Company has solid taproom signals and strong concept fit for this query.",
+            "5": "Metropolitan Brewing matches the taproom concept with solid brewery signals.",
+            "6": "Off Color Brewing is a reliable taproom destination with solid concept fit in Chicago.",
+            "7": "Empirical Brewery matches on taproom type and name with established taproom signals.",
+            "8": "Spiteful Brewing has solid taproom signals and an established brewery concept fit here.",
+        })
+        pass2_json = json.dumps({
+            "1": "Hopewell Brewing Company on Milwaukee Ave is a Logan Square taproom; outdoor views are not confirmed.",
+            "2": "Metropolitan Brewing on Rockwell St specializes in German lagers with a North Side taproom and patio seating.",
+            "3": "Off Color Brewing on Belmont Ave brews eccentric farmhouse ales — an unusual niche in Chicago.",
+            "4": "Empirical Brewery on Foster Ave offers a rotating fermentation-forward program with outdoor seating.",
+            "5": "Spiteful Brewing on Berteau Ave is a compact neighborhood taproom; a view is not confirmed.",
+        })
+
+        call_count = 0
+
+        def mock_llm(prompt, timeout, model=""):
+            nonlocal call_count
+            call_count += 1
+            return pass1_json if call_count == 1 else pass2_json
+
+        cards_data, frame = self._make_8_cards("taprooms with a view")
+        _ENABLE = patch("app.concierge.batched_reason_builder._flag_enabled", return_value=True)
+        with _ENABLE, patch("app.concierge.batched_reason_builder._call_llm", side_effect=mock_llm):
+            reasons, result = build_reasons_with_retry(cards_data, frame)
+
+        assert result.accepted_count == 8, f"Expected 8 accepted, got {result.accepted_count}"
+        assert result.final_note_omitted_count == 0
+        assert result.deterministic_visible_count == 0
+        assert result.retry_recovered_count == 5, f"Expected 5 retry-recovered, got {result.retry_recovered_count}"
+
+    def test_no_truncating_log_for_8_cards(self, caplog):
+        """Log must say 'reasoning all cards' not 'truncating' when card_count > batch_size."""
+        import logging
+        from app.concierge.batched_reason_builder import build_reasons_with_retry
+
+        good_notes = json.dumps({
+            str(i + 1): f"Place {i + 1} on Clybourn Ave is a craft brewery with a rotating tap program and seasonal specialties."
+            for i in range(8)
+        })
+
+        cards_data, frame = self._make_8_cards("breweries near the river")
+        _ENABLE = patch("app.concierge.batched_reason_builder._flag_enabled", return_value=True)
+        with caplog.at_level(logging.INFO, logger="app.concierge.batched_reason_builder"), \
+             _ENABLE, patch("app.concierge.batched_reason_builder._call_llm", return_value=good_notes):
+            build_reasons_with_retry(cards_data, frame)
+
+        over_batch_logs = [
+            r.message for r in caplog.records
+            if "card_count" in r.message and "batch_size" in r.message
+        ]
+        for msg in over_batch_logs:
+            assert "truncating" not in msg.lower(), (
+                f"Found misleading 'truncating' in log: {msg!r}"
+            )
+
+    def test_telemetry_cardinality_invariants(self):
+        """accepted_count == final_card_count, omitted=0, deterministic=0 for success path."""
+        from app.concierge.batched_reason_builder import build_reasons_with_retry
+
+        good_notes = json.dumps({
+            str(i + 1): f"Place {i + 1} on Clybourn Ave is a craft brewery with a seasonal tap program and outdoor seating."
+            for i in range(8)
+        })
+
+        cards_data, frame = self._make_8_cards("breweries near the river")
+        _ENABLE = patch("app.concierge.batched_reason_builder._flag_enabled", return_value=True)
+        with _ENABLE, patch("app.concierge.batched_reason_builder._call_llm", return_value=good_notes):
+            _reasons, result = build_reasons_with_retry(cards_data, frame)
+
+        assert result.final_note_omitted_count == 0
+        assert result.deterministic_visible_count == 0
+        assert result.accepted_count == result.final_card_count
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TestHarnessV3Strict
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestHarnessV3Strict:
+    """Harness v3 scenarios must all validate (zero omitted)."""
+
+    def test_table1_brewery_all_validated(self):
+        from tests.evidence_harness_v3 import table1_breweries_8card
+        rows, result_meta = table1_breweries_8card()
+        omitted = [r for r in rows if r["displayWhyValidated"] != "True"]
+        assert not omitted, (
+            f"Table 1: {len(omitted)} cards NOT validated: "
+            + ", ".join(f"card {r['card_index']} ({r['card_title']})" for r in omitted)
+        )
+        assert result_meta.final_note_omitted_count == 0
+        assert result_meta.deterministic_visible_count == 0
+
+    def test_table2_taproom_all_validated(self):
+        from tests.evidence_harness_v3 import table2_taprooms_8card
+        rows, result_meta = table2_taprooms_8card()
+        omitted = [r for r in rows if r["displayWhyValidated"] != "True"]
+        assert not omitted, (
+            f"Table 2: {len(omitted)} cards NOT validated: "
+            + ", ".join(f"card {r['card_index']} ({r['card_title']})" for r in omitted)
+        )
+        assert result_meta.final_note_omitted_count == 0
+        assert result_meta.deterministic_visible_count == 0
+
+    def test_table3_izakaya_all_validated(self):
+        from tests.evidence_harness_v3 import table3_izakayas_editorial
+        rows, result_meta = table3_izakayas_editorial()
+        omitted = [r for r in rows if r["displayWhyValidated"] != "True"]
+        assert not omitted, (
+            f"Table 3: {len(omitted)} cards NOT validated: "
+            + ", ".join(f"card {r['card_index']} ({r['card_title']})" for r in omitted)
+        )
+        assert result_meta.deterministic_visible_count == 0
+
+    def test_table1_retry_count(self):
+        """Table 1 must have exactly 1 retry-rescued card (card 8)."""
+        from tests.evidence_harness_v3 import table1_breweries_8card
+        rows, result_meta = table1_breweries_8card()
+        retry_rescued = [r for r in rows if r["quality_gate_result"] == "retry_rescued"]
+        assert len(retry_rescued) == 1, (
+            f"Table 1: expected 1 retry-rescued, got {len(retry_rescued)}: {retry_rescued}"
+        )
+        assert result_meta.retry_recovered_count == 1
+
+    def test_table2_retry_count(self):
+        """Table 2 must have exactly 5 retry-rescued cards (cards 4–8)."""
+        from tests.evidence_harness_v3 import table2_taprooms_8card
+        rows, result_meta = table2_taprooms_8card()
+        retry_rescued = [r for r in rows if r["quality_gate_result"] == "retry_rescued"]
+        assert len(retry_rescued) == 5, (
+            f"Table 2: expected 5 retry-rescued, got {len(retry_rescued)}: "
+            + str([r["card_title"] for r in retry_rescued])
+        )
+        assert result_meta.retry_recovered_count == 5

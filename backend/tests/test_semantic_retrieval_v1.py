@@ -1815,7 +1815,12 @@ class TestRankerVenueHeadDominance:
     def test_unknown_concept_keeps_partial_results(self):
         """Open-vocabulary venue heads (no synonym set) are tolerant: if only
         weak matches exist, keep them rather than dropping to zero. This
-        protects truly novel asks like 'izakaya' from over-aggressive filtering."""
+        protects truly novel asks like 'kaiseki' from over-aggressive filtering.
+
+        Note: 'izakaya' is now in _SYNONYM_SETS (recognized concept). Tests
+        for izakaya venue-head recognition live in TestIzakayaVenueHead
+        (test_evidence_quality_v3.py).
+        """
         from app.concierge.frame_extractor import extract_frame
         from app.concierge.ranker import rank_entities
         weak_match = self._entity(
@@ -1823,12 +1828,12 @@ class TestRankerVenueHeadDominance:
             ["restaurant"],
             rating=4.3,
             review_count=200,
-            source_query="izakaya Chicago",
+            source_query="kaiseki Chicago",
         )
-        frame = extract_frame("best izakayas", "Chicago")
+        frame = extract_frame("best kaiseki", "Chicago")
         ranked = rank_entities([weak_match], frame)
         assert len(ranked) == 1, (
-            f"Open-vocab concept (izakaya) must keep weak matches when no "
+            f"Open-vocab concept (kaiseki) must keep weak matches when no "
             f"synonym set is registered, got {len(ranked)}"
         )
 

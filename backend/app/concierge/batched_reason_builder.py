@@ -63,7 +63,36 @@ _QUALITY_THIN_RE = re.compile(
     r"|\ban?\s+established\s+\w+\s+with\s+solid\b"          # "an established taproom with solid..."
     r"|\bhas\s+(?:solid|strong)\s+\w+\s+(?:signals?|fit)\b" # "has solid concept fit"
     r"|\b\w+\s+concept\s+(?:fit|match|signals?)\b"          # "izakaya concept fit"
+    r"|\bwell[\s\-]regarded\b"                              # "well-regarded" / "well regarded"
+    r"|\bhighly[\s\-]rated\b"                               # "highly rated" / "highly-rated"
+    r"|\bgreat\s+option\b"                                  # "great option"
+    r"|\btop\s+pick\b"                                      # "top pick"
+    r"|\bstrong\s+local\s+following\b"                      # "strong local following"
+    r"|\bconsistent\s+quality\b"                            # "consistent quality"
+    r"|\bchicago\s+institution\b"                           # "Chicago institution"
     r")",
+    re.IGNORECASE,
+)
+
+# Detects notes whose ENTIRE content is a view/setting denial with no positive differentiator.
+# Anchored at start (^) and end ($) — only matches notes with NO useful positive content before the caveat.
+# This prevents pure "X is not confirmed." notes from reaching the user while allowing
+# notes that combine a positive differentiator (e.g. address, specialty) with an honest view caveat.
+_PURE_CAVEAT_FULL_NOTE_RE = re.compile(
+    r"^"
+    # Subject: various forms of "view(s)" as the note's only subject
+    r"(?:"
+    r"(?:the\s+)?(?:requested\s+)?(?:outdoor\s+)?(?:scenic\s+)?views?"
+    r"|(?:the\s+)?(?:requested\s+)?view(?:\s+setting)?"
+    r"|(?:a\s+)?(?:scenic|waterfront|river|outdoor|panoramic)\s+views?"
+    r")"
+    r"\s+"
+    # Predicate: denial of verification in any form
+    r"(?:(?:are|is)\s+not\s+|cannot\s+be\s+|can(?:not|'t)\s+be\s+|isn'?t\s+)"
+    r"(?:confirmed|verified)"
+    # Optional trailing "from X" clause (e.g. "from the available address")
+    r"(?:\s+from\s+.+?)?"
+    r"[.,!?]?\s*$",
     re.IGNORECASE,
 )
 
@@ -470,6 +499,12 @@ def _assess_quality(note: str, evidence: Any) -> Tuple[bool, str]:
     passes_quality=True means the note provides genuine differentiating value.
     Called after the safety validator passes — only catches thin-but-valid notes.
     """
+    # Rating-lead: note begins with a rating number (e.g. "4.7★ from 1,344 reviews.")
+    if re.match(r"^\s*\d[\d.]*\s*★", note):
+        return False, "rating_residue_lead"
+    # Pure-caveat: entire note is a view/setting denial with no positive differentiator
+    if _PURE_CAVEAT_FULL_NOTE_RE.match(note):
+        return False, "pure_caveat_no_differentiator"
     if _QUALITY_THIN_RE.search(note):
         return False, "thin_concept_fit_only"
     # Reject notes that are pure negation with no actionable content
@@ -860,7 +895,7 @@ def build_reasons_with_retry(
 
     if len(cards_data) > _BATCH_SIZE:
         logger.info(
-            "build_reasons_with_retry: card_count=%d exceeds batch_size=%d, truncating",
+            "build_reasons_with_retry: card_count=%d exceeds batch_size=%d, reasoning all cards",
             len(cards_data), _BATCH_SIZE,
         )
 

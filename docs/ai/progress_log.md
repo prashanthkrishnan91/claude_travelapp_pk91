@@ -1,5 +1,28 @@
 # Progress Log
 
+## 2026-05-06 — EvidencePack v3 Production-Bar Hardening (PR #251 Level 3 Blockers)
+
+**Branch**: `claude/fix-concierge-reasoning-qyJkD`
+
+**Problem**: PR #251 opened but not merge-ready. Production Railway logs showed: breweries 7/8 accepted (1 omitted), taprooms 3/8 accepted (5 omitted), izakayas `venue_head_recognized=False`, bad note "4.7★ from 1,344 reviews. The requested view setting is not verified."
+
+**Root causes fixed**:
+1. `ranker.py`: `frozenset({"izakaya", "izakayas"})` missing from `_SYNONYM_SETS` → `venue_head_recognized=False` in production
+2. `batched_reason_builder.py`: Quality gate too narrow — "well-regarded", "highly rated/highly-rated", "great option", "top pick", "strong local following", "consistent quality", "Chicago institution" all slipped through. Added `_PURE_CAVEAT_FULL_NOTE_RE` (anchored regex) to catch notes whose ENTIRE content is a view denial. Added rating-lead check ("4.7★ from N reviews." as first token). Fixed misleading "truncating" log when reasoning 8 cards at batch_size=6.
+3. `reason_validator.py`: Added "strong local following", "consistent quality", "chicago institution" to `_GENERIC_BOILERPLATE_RE`.
+4. `evidence_harness_v3.py`: Rewritten with 8-card production-shape scenarios (7/8+1/8 brewery, 3/8+5/8 taproom) and STRICT assertions — all cards must validate, `final_note_omitted_count=0`, `deterministic_visible_count=0`.
+5. Test mock notes in `test_reasoning_reliability_v2.py` and `_mock_llm_for_query` updated to not use banned phrases (they were using "well-regarded", "Chicago institution" etc. as supposedly-valid mock notes).
+6. `test_semantic_retrieval_v1.py`: `test_unknown_concept_keeps_partial_results` updated to use "kaiseki" as the open-vocab example (izakaya is now a recognized concept).
+
+**Tests**: 1313 passing (excludes pre-existing httpx-only 20). Added 23 new tests in `test_evidence_quality_v3.py` (53 total). `TestIzakayaVenueHead`, `TestQualityCriticExtended`, `TestProductionShapeScenarios`, `TestHarnessV3Strict`.
+
+**Evidence harness v3**: 19/19 STRICT validated. Table 1: 8/8 (7 pass1, 1 retry). Table 2: 8/8 (3 pass1, 5 retry). Table 3: 3/3 (all pass1). telemetry: omitted=0, deterministic=0 across all tables.
+
+**Supabase SQL**: No
+**HANDOFF.md edited**: Yes
+
+---
+
 ## 2026-05-06 — EvidencePack v3: Quality Critic, Place Details Enrichment, Per-Card Observability
 
 **Branch**: `claude/fix-concierge-reasoning-qyJkD`

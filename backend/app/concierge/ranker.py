@@ -106,6 +106,7 @@ _SYNONYM_SETS: List[FrozenSet[str]] = [
     frozenset({"winery", "wine", "vineyard", "wine bar", "winebar"}),
     frozenset({"distillery", "whiskey", "whisky", "bourbon", "spirits", "spirit"}),
     frozenset({"tapas", "small plates", "spanish", "pintxos"}),
+    frozenset({"izakaya", "izakayas"}),
     frozenset({"sushi", "sashimi", "omakase", "japanese"}),
     frozenset({"ramen", "noodle", "japanese"}),
     frozenset({"dim sum", "chinese", "dumpling"}),
