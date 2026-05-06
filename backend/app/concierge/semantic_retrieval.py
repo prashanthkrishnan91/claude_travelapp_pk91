@@ -238,6 +238,30 @@ def _run_pipeline(
     enrichment_map = enrich_result.enrichment_map
     latency["enrich_ms"] = enrich_result.elapsed_ms
 
+    # ── Step 5.6: Evidence Dossier v1 (PR #259) ─────────────────────────────
+    # Build structured dossiers for top cards using critical + enrichment data.
+    # Does not block card return. Minimal dossiers built if budget is too low.
+    t0 = time.monotonic()
+    from app.concierge.evidence_dossier import (
+        build_dossiers_for_ranked_cards,
+        get_dossier_telemetry,
+    )
+    _primary_concept = (
+        frame.subtype_concepts[0].label if frame.subtype_concepts else ""
+    )
+    dossiers = build_dossiers_for_ranked_cards(
+        ranked=ranked,
+        frame=frame,
+        enrichment_map=enrichment_map,
+        deadline=deadline,
+        top_n=first_card_limit,
+        category_fn=lambda e: _derive_display_category(
+            e.types, e.primary_type, _primary_concept
+        ),
+    )
+    dossier_tel = get_dossier_telemetry(dossiers)
+    latency["dossier_ms"] = int((time.monotonic() - t0) * 1000)
+
     # ── Step 6: Evidence bundles + deterministic SafeReasonBuilder ───────────
     t0 = time.monotonic()
     from app.concierge.safe_reason_builder import build_safe_reason
@@ -484,6 +508,8 @@ def _run_pipeline(
         non_critical_enrichment_used_count=enrich_result.used_count,
         non_critical_enrichment_skipped_count=enrich_result.skipped_count,
         remaining_budget_before_reasoning_ms=remaining_budget_before_reasoning_ms,
+        # PR #259 evidence dossier telemetry
+        dossier_telemetry=dossier_tel,
     )
 
     if not cards:
@@ -840,6 +866,8 @@ def _log_semantic_turn(
     non_critical_enrichment_used_count: int = 0,
     non_critical_enrichment_skipped_count: int = 0,
     remaining_budget_before_reasoning_ms: int = 0,
+    # PR #259 evidence dossier telemetry
+    dossier_telemetry: Optional[Any] = None,  # Optional[EvidenceDossierTelemetry]
 ) -> None:
     """Log one structured semantic turn line for zero-card failure debugging."""
     total_ms = int((time.monotonic() - t_pipeline_start) * 1000)
@@ -969,3 +997,10 @@ def _log_semantic_turn(
         non_critical_enrichment_skipped_count,
         remaining_budget_before_reasoning_ms,
     )
+    # PR #259 dossier telemetry — emitted as a separate structured log line
+    # so it does not break existing log parsers expecting the turn line format.
+    if dossier_telemetry is not None:
+        logger.info(
+            "semantic_retrieval_v1.dossier_telemetry %r",
+            dossier_telemetry.as_log_dict(),
+        )
