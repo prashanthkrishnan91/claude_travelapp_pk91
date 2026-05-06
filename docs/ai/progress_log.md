@@ -1,5 +1,25 @@
 # Progress Log
 
+## 2026-05-06 — PR #257: SLA + first-response card cap + no-visible-fallback-note contract
+
+**Branch**: `claude/ai-concierge-sla-capping-YmaZ2`
+
+**Severity**: Level 3 architecture correction — v2 amendment foundation slice.
+
+**Problem**: No hard latency boundary, no first-response card cap, no enforcement of timed-out note behavior (cards without notes could not return; no SLA telemetry).
+
+**What was built**:
+- `deadline_manager.py`: `RequestDeadline` + `SLAConfig` + `clamp_first_card_limit`. SLA: target=3s, soft=4s, hard=6s, cap=6 cards (range 5–7).
+- `semantic_retrieval.py`: Deadline integrated at pipeline start. If past soft ceiling before note generation, skip LLM; return cards without notes. Apply cap (`cards[:6]`) after trust gate. 12 new SLA telemetry fields emitted.
+- `batched_reason_builder.py`: `build_reasons_with_retry` accepts `timeout_s` override from caller's deadline budget.
+- `test_sla_card_cap.py`: 59 tests (all pass). Covers deadline helper, card cap, deadline enforcement, fallback-note-visible invariant, Google verification, telemetry fields.
+
+**Tests**: 59 new tests pass. 127 prior quality tests pass.
+**Supabase SQL**: No
+**HANDOFF.md edited**: Yes
+
+---
+
 ## 2026-05-06 — EvidencePack v3 Production-Bar Hardening (PR #251 Level 3 Blockers)
 
 **Branch**: `claude/fix-concierge-reasoning-qyJkD`
