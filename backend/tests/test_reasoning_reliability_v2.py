@@ -197,8 +197,9 @@ class TestPartialFirstPassRetryFills:
             "known for its extensive cider and beer selection."
         )})
         # Pass 2 (retry) provides the remaining 5 cards — the subset is [1..5] in the retry call
+        addr_list = ["Clybourn Ave", "Milwaukee Ave", "North Ave", "Foster Ave", "Damen Ave"]
         retry_notes = {
-            str(i + 1): f"{names[i + 1]} is a well-regarded Chicago brewery with a distinctive tap list and loyal neighborhood following."
+            str(i + 1): f"{names[i + 1]} on {addr_list[i]} is a neighborhood craft brewery with a rotating seasonal tap program and a dedicated taproom."
             for i in range(5)
         }
         retry_response = json.dumps(retry_notes)
@@ -269,8 +270,9 @@ class TestPrimaryTimeoutFallbackSucceeds:
         cards_data, frame = _make_brewery_cards(4)
         names = [e.name for e, *_ in cards_data]
 
+        addr_list2 = ["Clybourn Ave", "Milwaukee Ave", "North Ave", "Lincoln Ave"]
         fallback_notes = {
-            str(i + 1): f"{names[i]} is a Chicago institution with a devoted craft-beer following and consistent quality."
+            str(i + 1): f"{names[i]} on {addr_list2[i]} is a craft brewery with an established barrel-aged program and group-friendly taproom format."
             for i in range(4)
         }
         fallback_json = json.dumps(fallback_notes)
@@ -301,7 +303,7 @@ class TestPrimaryTimeoutFallbackSucceeds:
         names = [e.name for e, *_ in cards_data]
 
         fallback_json = json.dumps({
-            str(i + 1): f"{names[i]} is a well-regarded craft brewery in Chicago with a reliable neighborhood following."
+            str(i + 1): f"{names[i]} on {['Clybourn Ave', 'Milwaukee Ave', 'Lincoln Ave'][i]} is a neighborhood craft brewery with a rotating tap program and a dedicated local taproom."
             for i in range(3)
         })
 
@@ -567,18 +569,22 @@ class TestTargetQueryMatrix:
         - No generic boilerplate
         """
         notes = {}
+        addr_cycle = ["Clybourn Ave", "Milwaukee Ave", "North Ave"]
+        fulton_addr_cycle = ["Lake Street", "North Ave", "Damen Ave"]
         for i in range(1, n + 1):
+            addr = addr_cycle[(i - 1) % len(addr_cycle)]
             if "waterfront" in query or "river" in query or "view" in query:
                 # Honest caveat: mention that the waterfront/view cannot be confirmed
                 notes[str(i)] = (
-                    f"Place {i} is a highly-rated local establishment; "
+                    f"Place {i} on {addr} is a neighborhood taproom; "
                     f"no waterfront setting is confirmed from the Google listing data."
                 )
             elif "Fulton" in query:
-                # Do NOT mention "Fulton" — avoids triggering modifier_confirmed validator
+                # Use negation before "Fulton" to satisfy the modifier_confirmed validator
+                fulton_addr = fulton_addr_cycle[(i - 1) % len(fulton_addr_cycle)]
                 notes[str(i)] = (
-                    f"Place {i} is a well-regarded Japanese dining option in the West Loop "
-                    f"neighborhood with a strong local following and consistent quality."
+                    f"Place {i} on {fulton_addr} is a modern izakaya; "
+                    f"not directly on Fulton Street based on available listing data."
                 )
             else:
                 notes[str(i)] = (

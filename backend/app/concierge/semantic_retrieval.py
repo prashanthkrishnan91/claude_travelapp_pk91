@@ -202,6 +202,23 @@ def _run_pipeline(
     ranked, ranker_stats = rank_entities_with_stats(entities, frame, top_n=max_cards)
     latency["rank_ms"] = int((time.monotonic() - t0) * 1000)
 
+    # ── Step 5.5: Place Details enrichment (EvidencePack v3) ─────────────────
+    # Budget-gated: enrich only the top N cards to stay within API budget.
+    # Falls back gracefully to empty dict when API key is absent or calls fail.
+    t0 = time.monotonic()
+    try:
+        from app.concierge.place_details_provider import enrich_top_cards
+        enrichment_map = enrich_top_cards(
+            [e for e, _ in ranked],
+            api_key=_api_key,
+            budget_n=4,
+            timeout=2.0,
+        )
+    except Exception as enrich_exc:
+        logger.debug("semantic_retrieval_v1: place_details_enrich_error error=%s", enrich_exc)
+        enrichment_map = {}
+    latency["enrich_ms"] = int((time.monotonic() - t0) * 1000)
+
     # ── Step 6: Evidence bundles + deterministic SafeReasonBuilder ───────────
     t0 = time.monotonic()
     from app.concierge.safe_reason_builder import build_safe_reason
@@ -215,7 +232,8 @@ def _run_pipeline(
     det_reason_rejected_count = 0
 
     for entity, rank_score in ranked:
-        evidence = build_evidence_bundle(entity, frame, rank_score)
+        enrichment = enrichment_map.get(entity.place_id)
+        evidence = build_evidence_bundle(entity, frame, rank_score, enrichment=enrichment)
         det_reason = build_safe_reason(entity, evidence, frame, rank_score)
 
         # Validate the deterministic reason using the same validator applied to
@@ -271,6 +289,9 @@ def _run_pipeline(
             })
 
     latency["reason_ms"] = latency["det_reason_ms"] + latency["batched_reason_ms"]
+
+    # ── Step 8.5: Per-card observability log ─────────────────────────────────
+    _log_per_card_notes(user_query, cards_data, card_reasons, frame)
 
     # ── Step 9: TrustGate final pass ─────────────────────────────────────────
     t0 = time.monotonic()
@@ -564,6 +585,69 @@ def _derive_display_category(
         return f"{c} Restaurant"
 
     return "Restaurant"
+
+
+def _log_per_card_notes(
+    user_query: str,
+    cards_data: List[Any],
+    card_reasons: Dict[str, Any],
+    frame: Any,
+) -> None:
+    """Emit one structured log line per card with exact visible note and evidence quality.
+
+    Log key: semantic_retrieval_v1.per_card_notes
+    Fields per card:
+      - card_index (1-based)
+      - card_name
+      - evidence_adequacy (STRONG/OK/THIN)
+      - modifier_status (confirmed/not_confirmed/none)
+      - display_why_validated (bool)
+      - display_why_source (str)
+      - visible_note (first 220 chars of the accepted note, or "" if omitted)
+    """
+    location_modifiers = getattr(frame, "location_modifiers", []) or []
+    primary_modifier = location_modifiers[0] if location_modifiers else ""
+
+    per_card_entries = []
+    for i, (entity, evidence, _rank_score, _det_reason) in enumerate(cards_data, 1):
+        cr = card_reasons.get(str(i))
+        if cr is None:
+            continue
+
+        # Modifier status for this card
+        modifier_status = "none"
+        if primary_modifier:
+            confirmed = any(
+                "confirms" in f and primary_modifier.lower() in f.lower()
+                for f in (evidence.structured_facts or [])
+            )
+            not_confirmed = any(
+                f.startswith(f"location_modifier_not_confirmed:{primary_modifier}")
+                for f in (evidence.uncertainty_flags or [])
+            )
+            if confirmed:
+                modifier_status = "confirmed"
+            elif not_confirmed:
+                modifier_status = "not_confirmed"
+            else:
+                modifier_status = "requested_unresolved"
+
+        per_card_entries.append({
+            "i": i,
+            "name": entity.name,
+            "adequacy": getattr(evidence, "evidence_adequacy", "THIN"),
+            "modifier_status": modifier_status,
+            "validated": cr.validated,
+            "source": cr.source,
+            "note": cr.note[:220] if cr.note else "",
+        })
+
+    logger.info(
+        "semantic_retrieval_v1.per_card_notes "
+        "query=%r cards=%r",
+        user_query,
+        per_card_entries,
+    )
 
 
 def _log_semantic_turn(

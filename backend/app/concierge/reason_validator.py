@@ -66,6 +66,9 @@ _GENERIC_BOILERPLATE_RE = re.compile(
     r"|a\s+well[-\s]regarded\s+local\s+pick"
     r"|a\s+great\s+(?:spot|place|choice)\s+for\s+\w+\s+lovers?"
     r"|perfect\s+for\s+(?:\w+\s+)?enthusiasts?"
+    r"|\bstrong\s+local\s+following\b"
+    r"|\bconsistent\s+quality\b"
+    r"|\bchicago\s+institution\b"
     r")",
     re.IGNORECASE,
 )

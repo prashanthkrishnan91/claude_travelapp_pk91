@@ -50,6 +50,52 @@ from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+# ── Quality critic patterns ───────────────────────────────────────────────────
+# These pass the validator (no fabricated claims, no banned attributes) but
+# are too shallow to be useful concierge notes. Reject and retry.
+_QUALITY_THIN_RE = re.compile(
+    r"(?:"
+    r"matches?\s+(?:the\s+)?\w+\s+concept\b"               # "matches the taproom concept"
+    r"|\bsolid\s+\w+\s+signals?\b"                          # "solid brewery signals"
+    r"|\bstrong\s+name[\s\-]+and[\s\-]+type\b"              # "strong name-and-type concept signals"
+    r"|\bmatches?\s+on\s+\w+\s+type\s+and\s+name\b"         # "matches on taproom type and name"
+    r"|\breliable\s+\w+\s+destination\b"                    # "a reliable taproom destination"
+    r"|\ban?\s+established\s+\w+\s+with\s+solid\b"          # "an established taproom with solid..."
+    r"|\bhas\s+(?:solid|strong)\s+\w+\s+(?:signals?|fit)\b" # "has solid concept fit"
+    r"|\b\w+\s+concept\s+(?:fit|match|signals?)\b"          # "izakaya concept fit"
+    r"|\bwell[\s\-]regarded\b"                              # "well-regarded" / "well regarded"
+    r"|\bhighly[\s\-]rated\b"                               # "highly rated" / "highly-rated"
+    r"|\bgreat\s+option\b"                                  # "great option"
+    r"|\btop\s+pick\b"                                      # "top pick"
+    r"|\bstrong\s+local\s+following\b"                      # "strong local following"
+    r"|\bconsistent\s+quality\b"                            # "consistent quality"
+    r"|\bchicago\s+institution\b"                           # "Chicago institution"
+    r")",
+    re.IGNORECASE,
+)
+
+# Detects notes whose ENTIRE content is a view/setting denial with no positive differentiator.
+# Anchored at start (^) and end ($) — only matches notes with NO useful positive content before the caveat.
+# This prevents pure "X is not confirmed." notes from reaching the user while allowing
+# notes that combine a positive differentiator (e.g. address, specialty) with an honest view caveat.
+_PURE_CAVEAT_FULL_NOTE_RE = re.compile(
+    r"^"
+    # Subject: various forms of "view(s)" as the note's only subject
+    r"(?:"
+    r"(?:the\s+)?(?:requested\s+)?(?:outdoor\s+)?(?:scenic\s+)?views?"
+    r"|(?:the\s+)?(?:requested\s+)?view(?:\s+setting)?"
+    r"|(?:a\s+)?(?:scenic|waterfront|river|outdoor|panoramic)\s+views?"
+    r")"
+    r"\s+"
+    # Predicate: denial of verification in any form
+    r"(?:(?:are|is)\s+not\s+|cannot\s+be\s+|can(?:not|'t)\s+be\s+|isn'?t\s+)"
+    r"(?:confirmed|verified)"
+    # Optional trailing "from X" clause (e.g. "from the available address")
+    r"(?:\s+from\s+.+?)?"
+    r"[.,!?]?\s*$",
+    re.IGNORECASE,
+)
+
 BATCHED_REASON_TIMEOUT_S = float(os.getenv("BATCHED_REASON_TIMEOUT_S", "3.0"))
 MAX_CARDS_FOR_LLM_BATCH = int(os.getenv("BATCHED_REASON_MAX_CARDS", "8"))
 # Default: sonnet for production validation quality. Downgrade to haiku only after
@@ -255,6 +301,10 @@ def _build_evidence_text(
     if evidence.geo_note:
         lines.append(f"  - Geo note: {evidence.geo_note}")
 
+    # Enrichment facts from Place Details (editorial summary, amenity flags, review snippets)
+    for fact in getattr(evidence, "enrichment_facts", []):
+        lines.append(f"  - {fact}")
+
     # Uncertainty flags (redacted to user-safe phrasing)
     safe_flags = []
     for flag in evidence.uncertainty_flags:
@@ -267,14 +317,31 @@ def _build_evidence_text(
     if safe_flags:
         lines.append(f"  - Cannot verify: {', '.join(safe_flags)}")
 
+    # Evidence adequacy hint for the LLM
+    adequacy = getattr(evidence, "evidence_adequacy", "THIN")
+    if adequacy == "THIN":
+        lines.append(
+            "  - Evidence quality: THIN — use name/street/address/type as your only anchors; "
+            "be specific about what the name/address tells you; do not use generic concept-fit phrasing"
+        )
+    elif adequacy == "OK":
+        lines.append("  - Evidence quality: OK — concept match + location context available")
+    elif adequacy == "STRONG":
+        lines.append("  - Evidence quality: STRONG — specific differentiating details above")
+
     return "\n".join(lines)
 
 
 def _build_batch_prompt(
     cards_data: List[Tuple[Any, Any, Any, Any]],
     frame: Any,
+    per_card_hints: Optional[Dict[int, str]] = None,
 ) -> str:
     """Build the batched LLM prompt for all cards in one turn.
+
+    Args:
+        per_card_hints: Optional 1-based card index → quality rejection reason.
+                        When provided (repair pass), adds targeted guidance per card.
 
     IMPORTANT: All {placeholder} examples in the prompt text must use double braces
     {{placeholder}} because this string is an f-string. Literal braces in the
@@ -320,6 +387,19 @@ def _build_batch_prompt(
     modifier_text = "\n".join(modifier_lines)
     concept_label = venue_concept or "place"
 
+    # Build per-card repair guidance when retrying quality-failed notes
+    repair_section = ""
+    if per_card_hints:
+        hint_lines = []
+        for card_1based, reason in sorted(per_card_hints.items()):
+            hint_lines.append(
+                f"  - Card {card_1based}: previous note rejected ({reason}). "
+                "Write a more specific note using the place's street/address, "
+                "what the name implies about its specialty, or an honest caveat — "
+                "avoid generic concept-fit phrases."
+            )
+        repair_section = "\nREPAIR GUIDANCE — previous notes for these cards were too generic:\n" + "\n".join(hint_lines) + "\n"
+
     # NOTE: All {example} placeholders below use {{double braces}} to prevent
     # Python f-string evaluation. These are literal text in the prompt.
     prompt = f"""You are a travel concierge writing one-sentence notes for {n} places. User asked: "{user_query}"
@@ -328,12 +408,13 @@ Your task: analyze each place's evidence and write a note that helps the travele
 
 User modifiers to respect:
 {modifier_text}
-
+{repair_section}
 ANTI-PATTERNS — these will be automatically rejected, do not waste tokens on them:
 - "{{Name}} — {{rating}}★ from {{N}} reviews."                    ← just repeats the visible card
 - "{{Name}} on {{Street}} — {{rating}}★ from {{N}} reviews."     ← same, just repeats fields
 - "Verified {{category}} with {{rating}}★ across {{N}} reviews." ← fill-in-the-blank, no value
 - "Strong/Good/Great {{concept}} match in {{city}}."             ← zero information
+- Any phrase like "matches the {{concept}} concept", "solid {{concept}} signals", or "established {{concept}} with solid..." ← all too generic
 - Any note that claims waterfront/view/river proximity without CONFIRMED in evidence
 - Any note that claims Michelin stars, awards, quiet/romantic atmosphere, price range, or hours
 - Any note that repeats only name + rating + review count with no additional insight
@@ -341,6 +422,7 @@ ANTI-PATTERNS — these will be automatically rejected, do not waste tokens on t
 
 WHAT MAKES A USEFUL NOTE:
 - It tells the traveler something specific they cannot already see from the card title and rating
+- For THIN evidence: anchor on the place's name (what does the name itself imply?) and street/address
 - It honestly handles modifiers: confirmed → state it; not confirmed → acknowledge the gap
 - It varies meaningfully across the {n} places — do not reuse the same sentence structure
 - It is concise (one sentence or two short clauses, under {_REASON_MAX_CHARS} characters)
@@ -408,6 +490,33 @@ def _parse_llm_response(response_text: str, expected_count: int) -> Dict[str, Op
         return result
     except (json.JSONDecodeError, ValueError):
         return {}
+
+
+def _assess_quality(note: str, evidence: Any) -> Tuple[bool, str]:
+    """Quality gate: is this validated note concierge-grade (useful, not just valid)?
+
+    Returns (passes_quality, rejection_reason).
+    passes_quality=True means the note provides genuine differentiating value.
+    Called after the safety validator passes — only catches thin-but-valid notes.
+    """
+    # Rating-lead: note begins with a rating number (e.g. "4.7★ from 1,344 reviews.")
+    if re.match(r"^\s*\d[\d.]*\s*★", note):
+        return False, "rating_residue_lead"
+    # Pure-caveat: entire note is a view/setting denial with no positive differentiator
+    if _PURE_CAVEAT_FULL_NOTE_RE.match(note):
+        return False, "pure_caveat_no_differentiator"
+    if _QUALITY_THIN_RE.search(note):
+        return False, "thin_concept_fit_only"
+    # Reject notes that are pure negation with no actionable content
+    # ("not confirmed", "cannot be verified", etc. covering >60% of the note)
+    words = note.lower().split()
+    neg_count = sum(1 for w in words if w in {
+        "not", "cannot", "no", "unavailable", "unconfirmed", "unverified",
+        "isn't", "doesn't", "don't",
+    })
+    if len(words) >= 6 and neg_count / len(words) > 0.45:
+        return False, "mostly_negation_no_positive_content"
+    return True, ""
 
 
 def _skeleton(note: str) -> str:
@@ -673,7 +782,8 @@ def _run_llm_pass(
     frame: Any,
     model: str,
     timeout_s: float,
-) -> Tuple[Dict[int, str], bool]:
+    quality_hints: Optional[Dict[int, str]] = None,
+) -> Tuple[Dict[int, str], Dict[int, str], bool]:
     """Run one LLM call for a subset of cards.
 
     Args:
@@ -682,33 +792,38 @@ def _run_llm_pass(
         frame: ExperienceFrame.
         model: model identifier to use.
         timeout_s: LLM call timeout in seconds.
+        quality_hints: Optional 1-based card index → rejection reason from previous pass.
+                       When provided, passed to the prompt builder as repair guidance.
 
     Returns:
-        (accepted_map, call_succeeded):
+        (accepted_map, quality_failed_map, call_succeeded):
             accepted_map maps original 0-based index → validated note string.
+            quality_failed_map maps original 0-based index → quality rejection reason
+              for notes that passed the safety validator but failed the quality gate.
             call_succeeded is True when the LLM returned a parseable response.
     """
     try:
-        prompt = _build_batch_prompt(subset_cards_data, frame)
+        prompt = _build_batch_prompt(subset_cards_data, frame, per_card_hints=quality_hints)
     except Exception as exc:
         logger.error("_run_llm_pass: prompt_build_error model=%s error=%s", model, exc)
-        return {}, False
+        return {}, {}, False
 
     raw = _call_llm(prompt, timeout=timeout_s, model=model)
     if raw is None:
         logger.info("_run_llm_pass: no_llm_response model=%s subset_size=%d", model, len(subset_cards_data))
-        return {}, False
+        return {}, {}, False
 
     parsed = _parse_llm_response(raw, len(subset_cards_data))
     if not parsed:
         logger.warning("_run_llm_pass: parse_failed model=%s response=%r", model, raw[:120])
-        return {}, False
+        return {}, {}, False
 
     evidence_by_subset = {
         str(i + 1): ev for i, (_e, ev, _rs, _det) in enumerate(subset_cards_data)
     }
 
     accepted: Dict[int, str] = {}
+    quality_failed: Dict[int, str] = {}
     for subset_idx_str, llm_note in parsed.items():
         try:
             subset_1based = int(subset_idx_str)
@@ -724,15 +839,24 @@ def _run_llm_pass(
 
         trimmed, rejection = _validate_and_trim(llm_note, ev, frame)
         if trimmed is not None:
+            # Apply quality gate after safety validator
+            quality_ok, quality_reason = _assess_quality(trimmed, ev)
             orig_0based = original_indices[subset_0based]
-            accepted[orig_0based] = trimmed
+            if quality_ok:
+                accepted[orig_0based] = trimmed
+            else:
+                quality_failed[orig_0based] = quality_reason
+                logger.debug(
+                    "_run_llm_pass: quality_rejected model=%s subset_idx=%s reason=%s note=%r",
+                    model, subset_idx_str, quality_reason, trimmed[:80],
+                )
         else:
             logger.debug(
                 "_run_llm_pass: note_rejected model=%s subset_idx=%s rejection=%s",
                 model, subset_idx_str, rejection,
             )
 
-    return accepted, True
+    return accepted, quality_failed, True
 
 
 def build_reasons_with_retry(
@@ -771,7 +895,7 @@ def build_reasons_with_retry(
 
     if len(cards_data) > _BATCH_SIZE:
         logger.info(
-            "build_reasons_with_retry: card_count=%d exceeds batch_size=%d, truncating",
+            "build_reasons_with_retry: card_count=%d exceeds batch_size=%d, reasoning all cards",
             len(cards_data), _BATCH_SIZE,
         )
 
@@ -782,7 +906,7 @@ def build_reasons_with_retry(
         all_indices = list(range(n))
 
         # ── Pass 1: Primary model, all cards ─────────────────────────────────
-        accepted_1, _ = _run_llm_pass(
+        accepted_1, quality_failed_1, _ = _run_llm_pass(
             cards_data, all_indices, frame, _PRIMARY_MODEL, timeout_s
         )
         for orig_0idx, note in accepted_1.items():
@@ -792,11 +916,19 @@ def build_reasons_with_retry(
             )
 
         # ── Pass 2: Retry primary model for missing cards ─────────────────────
+        # missing_after_1 includes both validator-rejected and quality-failed cards.
+        # Build repair hints for quality-failed cards so Pass 2 can write better notes.
         missing_after_1 = [i for i in all_indices if i not in accepted_1]
         if missing_after_1 and _MAX_RETRIES >= 1:
             subset_2 = [cards_data[i] for i in missing_after_1]
-            accepted_2, _ = _run_llm_pass(
-                subset_2, missing_after_1, frame, _PRIMARY_MODEL, timeout_s
+            repair_hints_2: Dict[int, str] = {
+                subset_0idx + 1: quality_failed_1[orig_0idx]
+                for subset_0idx, orig_0idx in enumerate(missing_after_1)
+                if orig_0idx in quality_failed_1
+            }
+            accepted_2, quality_failed_2, _ = _run_llm_pass(
+                subset_2, missing_after_1, frame, _PRIMARY_MODEL, timeout_s,
+                quality_hints=repair_hints_2 or None,
             )
             for orig_0idx, note in accepted_2.items():
                 result[str(orig_0idx + 1)] = CardReason(
@@ -806,15 +938,22 @@ def build_reasons_with_retry(
                 r.retry_recovered_count += 1
         else:
             accepted_2 = {}
+            quality_failed_2: Dict[int, str] = {}
 
         # ── Pass 3: Fallback model for cards still missing ────────────────────
         accepted_so_far = set(accepted_1) | set(accepted_2)
         missing_after_2 = [i for i in all_indices if i not in accepted_so_far]
         if missing_after_2 and _FALLBACK_MODEL and _FALLBACK_MODEL != _PRIMARY_MODEL:
             subset_3 = [cards_data[i] for i in missing_after_2]
-            # Fallback model gets 2× timeout — it's higher quality, needs more time.
-            accepted_3, _ = _run_llm_pass(
-                subset_3, missing_after_2, frame, _FALLBACK_MODEL, timeout_s * 2
+            # Fallback model gets 2× timeout and repair hints from earlier quality failures.
+            repair_hints_3: Dict[int, str] = {
+                subset_0idx + 1: (quality_failed_2.get(orig_0idx) or quality_failed_1.get(orig_0idx, ""))
+                for subset_0idx, orig_0idx in enumerate(missing_after_2)
+                if orig_0idx in quality_failed_2 or orig_0idx in quality_failed_1
+            }
+            accepted_3, _, _ = _run_llm_pass(
+                subset_3, missing_after_2, frame, _FALLBACK_MODEL, timeout_s * 2,
+                quality_hints=repair_hints_3 or None,
             )
             for orig_0idx, note in accepted_3.items():
                 result[str(orig_0idx + 1)] = CardReason(

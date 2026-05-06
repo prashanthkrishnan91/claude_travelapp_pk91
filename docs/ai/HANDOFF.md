@@ -1,8 +1,86 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-05) — Reasoning Reliability v2: Three-Pass Orchestrator + Validated Display Contract
+## Last change (2026-05-06) — EvidencePack v3 Production-Bar Hardening
 
-**Status: MERGE-READY** — 0 concierge failures; 20 pre-existing httpx-only remain (unrelated)
+**Status: MERGE-READY** — 1313 passing, 20 pre-existing httpx-only remain (unrelated)
+
+### Problem solved (Level 3 production blockers on PR #251)
+
+Production Railway logs showed:
+- `breweries near the river`: 7/8 accepted, reasoning_success=False, 1 card omitted
+- `taprooms with a view`: 3/8 accepted, reasoning_success=False, 5 cards omitted
+- `izakayas`: 8/8 accepted but `venue_head_recognized=False`
+- Bad note in production: "4.7★ from 1,344 reviews. The requested view setting is not verified."
+
+Root causes fixed:
+1. Quality gate too narrow — "well-regarded", "highly rated", "great option", "Chicago institution", rating-lead notes, and pure-caveat-only notes all slipped through
+2. Safety validator too narrow — "strong local following", "consistent quality", "Chicago institution" not blocked
+3. Izakaya not in `_SYNONYM_SETS` → `venue_head_recognized=False` in production logs
+4. Misleading "truncating" log in `build_reasons_with_retry` (8 cards processed but log said "truncating" at batch_size=6)
+5. Harness v3 had weak assertions (allowed partial validation) and 3-card scenarios (not production-shape)
+
+### What was built
+
+**Izakaya venue-head recognition** (`ranker.py`): Added `frozenset({"izakaya", "izakayas"})` to `_SYNONYM_SETS`. Now `venue_head_recognized=True` for izakaya queries. `TestIzakayaVenueHead` in `test_evidence_quality_v3.py` covers this.
+
+**Strengthened quality gate** (`batched_reason_builder.py`): Extended `_QUALITY_THIN_RE` with: `well-regarded`, `highly-rated`/`highly rated`, `great option`, `top pick`, `strong local following`, `consistent quality`, `Chicago institution`. Added `_PURE_CAVEAT_FULL_NOTE_RE` (anchored regex) to reject notes whose ENTIRE content is a view denial with no differentiator. Added rating-lead check in `_assess_quality()` — notes starting with `\d.★` are rejected as "rating_residue_lead". Fixed misleading "truncating" log → "reasoning all cards".
+
+**Strengthened safety validator** (`reason_validator.py`): Added `strong local following`, `consistent quality`, `Chicago institution` to `_GENERIC_BOILERPLATE_RE`.
+
+**Production-shape harness v3** (`evidence_harness_v3.py`): Complete rewrite with 8-card scenarios:
+- Table 1: "breweries near the river" — 8 cards, pass1=7/8 good, 1 thin quality-rejected, retry rescues 1/8
+- Table 2: "taprooms with a view" — 8 cards, pass1=3/8 good, 5 thin quality-rejected, retry rescues 5/8
+- Table 3: "izakayas" — 3 cards, all pass1, STRONG editorial enrichment
+- STRICT assertions: ALL cards `displayWhyValidated=True`, `final_note_omitted_count=0`, `deterministic_visible_count=0`
+
+**New tests** (`test_evidence_quality_v3.py`): 23 new tests added (total 53):
+- `TestQualityCriticExtended` — 9 tests for new rejection patterns + caveat-with-differentiator pass
+- `TestIzakayaVenueHead` — 4 tests proving synonym-set recognition
+- `TestProductionShapeScenarios` — 4 tests: 7/8+1/8, 3/8+5/8, no-truncating-log, telemetry invariants
+- `TestHarnessV3Strict` — 5 tests: all-validated per table, exact retry counts
+
+### Files changed
+
+- `backend/app/concierge/ranker.py` — Added `frozenset({"izakaya", "izakayas"})` to `_SYNONYM_SETS`
+- `backend/app/concierge/batched_reason_builder.py` — Extended `_QUALITY_THIN_RE`; added `_PURE_CAVEAT_FULL_NOTE_RE`; rating-lead + pure-caveat checks in `_assess_quality()`; fixed "truncating" log
+- `backend/app/concierge/reason_validator.py` — Added `strong local following`, `consistent quality`, `chicago institution` to `_GENERIC_BOILERPLATE_RE`
+- `backend/tests/evidence_harness_v3.py` — Complete rewrite: 8-card scenarios, strict assertions, telemetry verification
+- `backend/tests/test_evidence_quality_v3.py` — 23 new tests (53 total)
+- `backend/tests/test_reasoning_reliability_v2.py` — Updated mock notes that used "well-regarded", "Chicago institution", "consistent quality" to use non-generic specific notes
+- `backend/tests/test_semantic_retrieval_v1.py` — Updated `test_unknown_concept_keeps_partial_results` to use "kaiseki" (izakaya is now a recognized concept)
+
+### Test results
+
+```
+1313 passed (excludes test_restaurant_search_diagnostics.py — pre-existing httpx absence)
+  test_evidence_quality_v3.py:        53 tests, all pass (23 new)
+  test_reasoning_reliability_v2.py:   42 tests, all pass
+  test_semantic_retrieval_v1.py:     208 tests, all pass
+  evidence_harness_v3.py:            19/19 validated STRICT
+    Table 1: 8/8 validated (7 pass1 + 1 retry)
+    Table 2: 8/8 validated (3 pass1 + 5 retry)
+    Table 3: 3/3 validated (all pass1)
+```
+
+### Hard contracts preserved from PR #250
+
+- Cards with `validated=False` excluded from response (never shown)
+- `deterministic_visible_count` always 0 in telemetry
+- No NOTE OMITTED / placeholder in success path
+- No thin concept-fit-only phrases in validated notes
+- No rating-lead or pure-caveat-only notes (new enforcement)
+
+### Env vars
+
+No new env vars. All config from previous sessions unchanged.
+
+### Supabase SQL: No
+
+---
+
+## Previous change (2026-05-05) — Reasoning Reliability v2: Three-Pass Orchestrator + Validated Display Contract
+
+**Status: MERGED** — 0 concierge failures; 20 pre-existing httpx-only remain (unrelated)
 
 ### Root cause (this PR)
 
