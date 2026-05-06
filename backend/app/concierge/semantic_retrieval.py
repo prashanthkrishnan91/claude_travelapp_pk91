@@ -30,7 +30,10 @@ logger = logging.getLogger(__name__)
 
 PROVIDER_NAME = "semantic_retrieval_v1"
 PIPELINE_VERSION = "semantic_retrieval_v1"
-_MAX_CARDS = 8
+_MAX_CARDS = 8  # pool/ranking size; first response is capped separately by SLA config
+
+# SLA contract (v2 amendment §4 and §6)
+from app.concierge.deadline_manager import RequestDeadline, DEFAULT_SLA, clamp_first_card_limit
 
 
 def run_semantic_retrieval_v1(
@@ -104,6 +107,10 @@ def _run_pipeline(
 ) -> "LiveResearchResult":  # type: ignore[name-defined]
     from app.services.live_research import LiveResearchResult
     from app.models.concierge import SOURCE_LIVE_SEARCH, SOURCE_NONE, SOURCE_UNAVAILABLE
+
+    # ── SLA deadline: governs all remaining stages ───────────────────────────
+    deadline = RequestDeadline(sla=DEFAULT_SLA, t_start=t_pipeline_start)
+    first_card_limit = clamp_first_card_limit(DEFAULT_SLA.first_card_limit)
 
     latency: Dict[str, int] = {}
 
@@ -262,25 +269,65 @@ def _run_pipeline(
         SOURCE_OMITTED,
     )
 
-    card_reasons, reasoning_result = build_reasons_with_retry(cards_data, frame)
+    # Check SLA before committing to LLM note generation.
+    note_generation_budget_s = deadline.budget_for_note_generation_s()
+    note_generation_timed_out = note_generation_budget_s <= 0.0
+
+    if note_generation_timed_out:
+        # Past soft ceiling — skip note generation entirely.
+        # Cards will be assembled without notes; the frontend must not render
+        # a Concierge Note block when display_why_validated=False.
+        logger.warning(
+            "semantic_retrieval_v1: note_generation_skipped_past_soft_ceiling "
+            "query=%r elapsed_ms=%d soft_ceiling_ms=%d",
+            user_query, deadline.elapsed_ms(), deadline.sla.soft_ceiling_ms,
+        )
+        card_reasons: Dict[str, CardReason] = {}
+        n_cards = len(cards_data)
+        reasoning_result = ReasoningResultV2(
+            attempted=False,
+            failure_reason="skipped_past_soft_ceiling",
+            final_card_count=n_cards,
+            final_note_omitted_count=n_cards,
+        )
+    else:
+        card_reasons, reasoning_result = build_reasons_with_retry(
+            cards_data, frame, timeout_s=note_generation_budget_s
+        )
     latency["batched_reason_ms"] = int((time.monotonic() - t0) * 1000)
 
-    # ── Step 8: Assemble final cards — only validated cards are returned ───────
-    # Cards without a validated LLM note are EXCLUDED from the returned set.
+    # ── Step 8: Assemble final cards ─────────────────────────────────────────
+    # When note generation was skipped (deadline): include all trust-gate-passing
+    # cards without notes (display_why_validated=False hides the note block).
+    # Normal path: include only cards with validated LLM notes; exclude the rest
+    # to maintain note quality — unvalidated cards go to the more-options pool.
     # Deterministic text is NEVER used as a visible Concierge Note.
     cards = []
     rank_debug: List[Dict[str, Any]] = []
     excluded_unvalidated = 0
+    visible_note_count = 0
+    cards_without_notes_count = 0
     for i, (entity, evidence, rank_score, _det_reason) in enumerate(cards_data, 1):
-        cr = card_reasons.get(str(i), CardReason())
-        if not cr.validated:
-            excluded_unvalidated += 1
-            continue
-        card = _entity_to_card(
-            entity, cr.note, frame,
-            reason_source=cr.source,
-            reason_validated=True,
-        )
+        if note_generation_timed_out:
+            # Include card; note is absent — frontend must not render note block.
+            card = _entity_to_card(
+                entity, "", frame,
+                reason_source="timed_out",
+                reason_validated=False,
+            )
+            cards_without_notes_count += 1
+        else:
+            cr = card_reasons.get(str(i), CardReason())
+            if not cr.validated:
+                excluded_unvalidated += 1
+                continue
+            card = _entity_to_card(
+                entity, cr.note, frame,
+                reason_source=cr.source,
+                reason_validated=True,
+            )
+            if card is not None:
+                visible_note_count += 1
         if card is not None:
             cards.append(card)
             rank_debug.append({
@@ -298,7 +345,28 @@ def _run_pipeline(
     cards, trust_rejected = _trust_gate(cards)
     latency["trust_gate_ms"] = int((time.monotonic() - t0) * 1000)
 
+    # ── Step 9.5: First-response card cap (v2 amendment §4 invariant 3) ──────
+    # Cap at first_card_limit (default 6, range 5–7) for the first response.
+    # The upstream ranked pool of up to _MAX_CARDS remains available for
+    # continuation/more-options turns via the result pool (managed by router).
+    # fallback_note_visible_count is always 0 — enforced structurally because
+    # reason_validated=False hides the note block; no deterministic text is
+    # ever written with reason_validated=True.
+    pre_cap_count = len(cards)
+    cards = cards[:first_card_limit]
     final_card_count = len(cards)
+
+    # Recount note counts post-cap to match returned card set.
+    if note_generation_timed_out:
+        visible_note_count = 0
+        cards_without_notes_count = final_card_count
+    else:
+        # Recalculate for the capped set (cards with validated notes only).
+        visible_note_count = sum(
+            1 for c in cards
+            if getattr(getattr(c, "display", None), "display_why_validated", False)
+        )
+        cards_without_notes_count = final_card_count - visible_note_count
 
     # ── Step 10: Structured observability ────────────────────────────────────
     # Wrong-category fit diagnostics: count entities whose subtype_fit fell
@@ -379,6 +447,18 @@ def _run_pipeline(
         reason_source=reasoning_result.visible_note_source_counts and "llm_evidence_pack_v2" or "none",
         top_card_name=top_card_name,
         top_card_city=top_card_city,
+        # SLA telemetry (v2 amendment §12)
+        target_response_ms=DEFAULT_SLA.target_ms,
+        soft_ceiling_ms=DEFAULT_SLA.soft_ceiling_ms,
+        hard_cutoff_ms=DEFAULT_SLA.hard_cutoff_ms,
+        first_return_card_limit=first_card_limit,
+        pre_cap_card_count=pre_cap_count,
+        visible_note_count=visible_note_count,
+        hidden_note_count=cards_without_notes_count,
+        fallback_note_visible_count=0,  # structural invariant: always 0
+        note_generation_timed_out=note_generation_timed_out,
+        cards_without_notes=cards_without_notes_count,
+        more_options_cursor_present=False,  # cursor lives in router layer
     )
 
     if not cards:
@@ -711,6 +791,18 @@ def _log_semantic_turn(
     reason_source: str = "deterministic_safe_v1",
     top_card_name: str = "",
     top_card_city: str = "",
+    # SLA telemetry (v2 amendment §12)
+    target_response_ms: int = DEFAULT_SLA.target_ms,
+    soft_ceiling_ms: int = DEFAULT_SLA.soft_ceiling_ms,
+    hard_cutoff_ms: int = DEFAULT_SLA.hard_cutoff_ms,
+    first_return_card_limit: int = DEFAULT_SLA.first_card_limit,
+    pre_cap_card_count: int = 0,
+    visible_note_count: int = 0,
+    hidden_note_count: int = 0,
+    fallback_note_visible_count: int = 0,  # must always be 0
+    note_generation_timed_out: bool = False,
+    cards_without_notes: int = 0,
+    more_options_cursor_present: bool = False,
 ) -> None:
     """Log one structured semantic turn line for zero-card failure debugging."""
     total_ms = int((time.monotonic() - t_pipeline_start) * 1000)
@@ -758,7 +850,19 @@ def _log_semantic_turn(
         "latency_by_stage=%r "
         "total_ms=%d "
         "rank_top3=%r "
-        "outcome=%s",
+        "outcome=%s "
+        "turn_total_ms=%d "
+        "target_response_ms=%d "
+        "soft_ceiling_ms=%d "
+        "hard_cutoff_ms=%d "
+        "first_return_card_limit=%d "
+        "pre_cap_card_count=%d "
+        "visible_note_count=%d "
+        "hidden_note_count=%d "
+        "fallback_note_visible_count=%d "
+        "note_generation_timed_out=%s "
+        "cards_without_notes=%d "
+        "more_options_cursor_present=%s",
         PIPELINE_VERSION,
         user_query,
         getattr(frame, "destination", ""),
@@ -791,4 +895,17 @@ def _log_semantic_turn(
         total_ms,
         rank_top3 or [],
         outcome,
+        # SLA telemetry — appended last for backwards-compatible log parsing
+        total_ms,
+        target_response_ms,
+        soft_ceiling_ms,
+        hard_cutoff_ms,
+        first_return_card_limit,
+        pre_cap_card_count,
+        visible_note_count,
+        hidden_note_count,
+        fallback_note_visible_count,
+        note_generation_timed_out,
+        cards_without_notes,
+        more_options_cursor_present,
     )

@@ -941,6 +941,7 @@ def _run_llm_pass(
 def build_reasons_with_retry(
     cards_data: List[Tuple[Any, Any, Any, Any]],
     frame: Any,
+    timeout_s: Optional[float] = None,
 ) -> Tuple[Dict[str, "CardReason"], "ReasoningResultV2"]:
     """Reasoning Reliability v2 orchestrator.
 
@@ -948,6 +949,13 @@ def build_reasons_with_retry(
       Pass 1: Primary model, all cards.
       Pass 2: Primary model retry for any cards missing after pass 1.
       Pass 3: Fallback model for any cards still missing after pass 2.
+
+    Args:
+        cards_data: List of (entity, evidence, rank_score, det_reason) tuples.
+        frame: ExperienceFrame for the current turn.
+        timeout_s: Optional deadline-budget override in seconds. When provided,
+            capped to _TIMEOUT_MS to prevent exceeding the configured ceiling.
+            Pass 0.0 (or omit and check upstream) to skip note generation.
 
     Returns (card_reasons, ReasoningResultV2):
       card_reasons maps str(1-based index) → CardReason.
@@ -979,7 +987,13 @@ def build_reasons_with_retry(
         )
 
     r.attempted = True
-    timeout_s = _TIMEOUT_MS / 1000.0
+    # Use caller-supplied deadline budget when provided; cap at configured ceiling
+    # so a generous budget override never pushes past the env-configured maximum.
+    configured_timeout_s = _TIMEOUT_MS / 1000.0
+    if timeout_s is not None:
+        timeout_s = min(timeout_s, configured_timeout_s)
+    else:
+        timeout_s = configured_timeout_s
 
     try:
         all_indices = list(range(n))

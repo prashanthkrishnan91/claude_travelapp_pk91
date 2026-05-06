@@ -1,6 +1,72 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-06) — EvidencePack v5 (arch alignment): Concept-generic prompt + unseen-concept tests
+## Last change (2026-05-06) — PR #257: SLA + first-response card cap + no-visible-fallback-note contract
+
+**Status: MERGE-READY** — 59 new SLA/cap tests pass; 127 prior quality tests pass; 5 pre-existing pydantic env failures remain (unrelated)
+
+### What was built
+
+Foundation slice of the v2 amendment architecture. No provider, UI, or SQL changes.
+
+**Problem**: AI Concierge search had no hard latency boundary, no limit on first-response card count, and no enforcement that timed-out note generation returns cards without notes (rather than blocking or returning fallback prose).
+
+**Changes made**:
+
+1. **`backend/app/concierge/deadline_manager.py`** (new):
+   - `SLAConfig` dataclass: target_ms=3000, soft_ceiling_ms=4000, hard_cutoff_ms=6000, first_card_limit=6, range 5–7.
+   - `RequestDeadline`: tracks pipeline start time, exposes `elapsed_ms()`, `remaining_ms()`, `is_past_soft_ceiling()`, `is_past_hard_cutoff()`, `budget_for_note_generation_s()`, and per-stage timing.
+   - `clamp_first_card_limit(n)`: clamps to [5, 7].
+   - `DEFAULT_SLA` singleton for pipeline use.
+
+2. **`backend/app/concierge/semantic_retrieval.py`** (modified):
+   - Creates `RequestDeadline(t_start=t_pipeline_start)` at pipeline start.
+   - Before note generation: checks `deadline.budget_for_note_generation_s()`. If 0.0 (past soft ceiling), skips LLM entirely and sets `note_generation_timed_out=True`. Cards still assemble without notes (`reason_validated=False`).
+   - When timed out: all trust-gate-passing cards are included without notes (frontend hides note block via `display_why_validated=False`).
+   - Normal path: existing behavior (include only validated-note cards; exclude unvalidated).
+   - Post-trust-gate: applies `first_card_limit=6` cap (`cards = cards[:first_card_limit]`). Ranked pool of up to 8 remains available for continuation.
+   - `_log_semantic_turn` extended with 12 new SLA telemetry fields: `turn_total_ms`, `target_response_ms`, `soft_ceiling_ms`, `hard_cutoff_ms`, `first_return_card_limit`, `pre_cap_card_count`, `visible_note_count`, `hidden_note_count`, `fallback_note_visible_count` (always 0), `note_generation_timed_out`, `cards_without_notes`, `more_options_cursor_present`.
+
+3. **`backend/app/concierge/batched_reason_builder.py`** (modified):
+   - `build_reasons_with_retry` gains optional `timeout_s: Optional[float] = None`. When provided, effective timeout = `min(timeout_s, configured_ceiling)`. Caller passes `deadline.budget_for_note_generation_s()`.
+
+4. **`backend/tests/test_sla_card_cap.py`** (new, 59 tests):
+   - `TestSLAConfig`, `TestClampFirstCardLimit`, `TestRequestDeadline` — deadline helper unit tests.
+   - `TestFirstResponseCardCap` — card cap is 6 default; 5/7 allowed; outside clamped; upstream pool unaffected.
+   - `TestDeadlineEnforcesNoteGeneration` — past soft ceiling → budget=0; timed-out cards have validated=False.
+   - `TestNoVisibleFallbackNote` — fallback_note_visible_count invariant; note block hidden when validated=False.
+   - `TestGoogleVerificationPreserved` — trust gate requirements unchanged; cap applied after gate.
+   - `TestSLATelemetryFields` — all 12 required telemetry fields present; invariants hold.
+   - `TestBuildReasonsWithRetryTimeout` — optional timeout_s accepted correctly.
+
+### Hard contracts preserved
+
+- `fallback_note_visible_count` always 0 (structural: no deterministic text ever has `reason_validated=True`)
+- `deterministic_visible_count` always 0 (existing invariant, unchanged)
+- Google verification trust gate: place_id + OPERATIONAL + maps_uri required (unchanged)
+- No SQL, no provider changes, no UI changes
+- Ranked pool size stays at 8 for continuation/more-options
+
+### Remaining limitations
+
+- `more_options_cursor_present` is always `False` in this PR — cursor lives in the router layer (addressed in PR #263).
+- Parallel retrieval not yet implemented (PR #258).
+- Evidence Dossier not yet implemented (PR #259).
+- Hard cutoff guard (kill at 6000ms) is soft-enforced via soft_ceiling skip; a true interrupt of in-flight HTTP calls comes in PR #258.
+
+### Supabase SQL: No
+
+### Test counts
+
+```
+test_sla_card_cap.py:         59 tests, all pass (new)
+test_evidence_quality_v3.py:  53 tests, all pass (unchanged)
+test_evidence_quality_v4.py:  37 tests, all pass (unchanged)
+test_evidence_quality_v5.py:  37 tests, all pass (unchanged)
+```
+
+---
+
+## Previous change (2026-05-06) — EvidencePack v5 (arch alignment): Concept-generic prompt + unseen-concept tests
 
 **Status: MERGE-READY** — 164 concierge tests pass, 5 pre-existing pydantic env failures remain (unrelated)
 
