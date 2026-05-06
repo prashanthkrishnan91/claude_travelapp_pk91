@@ -1,6 +1,129 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-06) — PR #260: Card Role + Curated Set Ranker v1
+## Last change (2026-05-06) — PR #261: Set-Level Writer v1
+
+**Status: MERGE-READY** — 56 new set-level-writer tests pass; 51 PR #260 curator tests pass; 54 PR #259 dossier tests pass; 28 PR #258 tests pass; 64 PR #257 SLA tests pass; 127 evidence-quality tests pass; 19 pre-existing pydantic env failures remain (unrelated)
+
+### What was built
+
+Set-Level Writer v1 — evidence-grounded, set-aware note generation for AI Concierge v2. No UI, SQL, provider additions, or frontend changes.
+
+**Problem**: AI Concierge note generation was isolated per-card: generic one-offs without role awareness, cross-card distinctness enforcement, or dossier-based evidence. Notes were often repetitive, thin, and rating/review-count primary. PR #261 creates a coordinated set-level writer that uses `CuratedSetResult` + `PlaceEvidenceDossier` to generate notes as a set, not in isolation.
+
+**Changes made**:
+
+1. **`backend/app/concierge/set_level_writer.py`** (new):
+   - `SetWriterCardInput`: entity + rank_score + dossier + role + curation_signals + original_rank_index.
+   - `SetWriterNote`: place_id + note + validated + rejection_reason + source + role_used_internal + evidence_terms_used + caveat_type. No visible card payload fields.
+   - `SetWriterResult`: notes_by_place_id + visible_note_count + hidden_note_count + rejected_note_count + timed_out + fallback_note_visible_count (always 0) + role_note_counts + note_source_counts + repeated_skeleton_count + unsupported_claim_count + `as_telemetry_dict()`.
+   - `_EvidenceStub`: minimal evidence adapter for `validate_reason()` built from dossier fields (structured_facts, uncertainty_flags, entity).
+   - `_build_card_evidence_block()`: per-card evidence text from dossier — explicit themes vs listing-context distinguished; role converted to user-friendly hint (never raw label); internal_evidence_gaps never included.
+   - `_build_set_level_prompt()`: set-level prompt with cross-card distinctness requirement, rating/review anti-patterns, modifier three-way distinction, evidence-only grounding.
+   - `_validate_set_writer_note()`: safety gate via `validate_reason` + quality gate via `_QUALITY_THIN_RE`/`_PURE_CAVEAT_FULL_NOTE_RE` (re-used from batched_reason_builder).
+   - `_count_repeated_skeletons()`: cross-card skeleton diversity check using `_skeleton()` from batched_reason_builder.
+   - `write_set_notes()`: main entry point. Budget-gated via `deadline.budget_for_note_generation_s()`; catches all exceptions; returns `SetWriterResult(timed_out=True)` on any failure. Never raises.
+
+2. **`backend/app/concierge/semantic_retrieval.py`** (modified):
+   - Step 5.8 added after Step 5.7 curator: calls `write_set_notes`; emits `set_writer_telemetry`; catches exceptions and falls back.
+   - Step 7 modified: set-writer primary path converts `SetWriterNote` objects to `CardReason` dict when writer succeeded with visible notes; creates `ReasoningResultV2` from writer output; falls back to existing `build_reasons_with_retry` cascade when writer timed out or produced zero notes.
+   - `_log_semantic_turn` gains `set_writer_telemetry` parameter.
+   - `rejection_stats` gains `set_writer_used` and `set_writer_visible_note_count` fields.
+   - `semantic_retrieval_v1.set_writer_telemetry` emitted as a separate structured log line.
+
+3. **`backend/tests/test_set_level_writer.py`** (new, 56 tests):
+   - All 20 required test scenarios from PR #261 spec.
+   - `TestSetWriterInputBuilding` — builds inputs from curated cards; no visible payload fields.
+   - `TestNoRoleLabelInNote` — raw role strings not in evidence block or note text.
+   - `TestNoInternalEvidenceGapsExposed` — gaps not in block, not in note fields.
+   - `TestNoRatingReviewPrimary` — 10 parametrized bad notes all rejected.
+   - `TestExplicitThemeEvidenceUsed` — Place Details themes in evidence block; STRONG quality signal.
+   - `TestListingContextLowerTrust` — listing-context vs explicit labels differ in block.
+   - `TestNoViewFromAddressAlone` — 4 parametrized scenic claims rejected without evidence.
+   - `TestRequestedConfirmedModifierAllowed` — confirmed modifier note tested.
+   - `TestUnconfirmedModifierCaveat` — false claim rejected; honest caveat (negation before modifier) passes.
+   - `TestUnrequestedThemeNotMisattributed` — outdoor theme allowed without claiming waterfront match.
+   - `TestNoteDistinctness` — repeated skeletons counted; distinct notes have zero count.
+   - `TestFailedValidationHidesNote` — rejected note → validated=False, note="", fallback_note=0.
+   - `TestLowEvidenceCardPreserved` — thin note produces hidden SetWriterNote, not dropped card.
+   - `TestTimeoutNoBudgetPath` — no budget → timed_out=True, visible=0, fallback=0.
+   - `TestExceptionPathSafe` — LLM/prompt/empty exceptions all return safely.
+   - `TestTelemetryAccuracy` — telemetry counts match result; all required keys present.
+   - `TestPR257FallbackNoteInvariant` — fallback_note_visible_count always 0.
+   - `TestPR258ContractsUnchanged` — parallel_retrieval and deadline_manager unchanged.
+   - `TestPR259DossierContractsUnchanged` — dossier classes importable; no note fields.
+   - `TestPR260CuratorContractsUnchanged` — curator importable; CuratedCard no visible payload.
+   - `TestSemanticRetrievalIntegration` — set_writer importable from retrieval context; empty/capped correctly.
+   - `TestPromptStructure` — no raw role labels in prompt; anti-patterns present; distinctness mentioned.
+
+### Hard contracts preserved
+
+- `fallback_note_visible_count` always 0 (structural invariant from PR #257 — unchanged)
+- `deterministic_visible_count` always 0 (unchanged)
+- Google verification trust gate: place_id + OPERATIONAL + maps_uri required (unchanged)
+- Card cap: default 6, range 5–7 (unchanged)
+- Non-Google enrichment cannot mint addable cards (structural — unchanged)
+- View/patio/waterfront themes require explicit enrichment evidence (PR #259 invariant — unchanged)
+- Internal evidence gaps never surface as visible note prose (PR #259 invariant — unchanged)
+- Curator failure cannot block card return (PR #260 invariant — unchanged)
+- Role labels are internal only — never surfaced in visible card payload or user-facing text (new enforcement point)
+- Writer failure cannot block card return (new invariant — write_set_notes never raises)
+- Failed note validation produces hidden note (validated=False), not fallback prose
+- No SQL, no new providers, no UI changes, no frontend payload shape changes
+
+### Set-level writer note rules
+
+1. Evidence-grounded: only dossier-supplied facts may be used; fabrication blocked by reason_validator.
+2. Distinct across set: cross-card skeleton diversity checked; prompt enforces structural variation.
+3. Role-aware: internal role converted to user-friendly hint in prompt; raw label never in note.
+4. Honest modifier caveats: confirmed → may state; not_confirmed → negation required.
+5. Listing context lower trust: view entries prefixed "listing_context:" labeled differently from amenity-confirmed entries.
+6. Rating/review count forbidden as primary differentiator: blocked in prompt + quality gate.
+7. Failed validation hides note block: card still returned; note block hidden (display_why_validated=False).
+8. Low-evidence cards: SetWriterNote with validated=False included in notes_by_place_id; card not dropped.
+
+### Telemetry added (PR #261)
+
+Emitted as `semantic_retrieval_v1.set_writer_telemetry` structured log:
+```
+set_writer_input_count           — cards fed to writer
+set_writer_output_count          — cards processed (should equal input)
+set_writer_visible_note_count    — notes that passed validation
+set_writer_hidden_note_count     — notes hidden (failed validation or null)
+set_writer_rejected_note_count   — notes that had content but failed validator
+set_writer_timed_out             — True if deadline gate fired
+set_writer_fallback_to_existing_path — True if writer was skipped/failed
+set_writer_fallback_note_visible_count — always 0 (invariant)
+set_writer_role_note_counts      — {role: visible_note_count}
+set_writer_note_source_counts    — {source: count}
+set_writer_repeated_skeleton_count — notes sharing a structural skeleton
+set_writer_unsupported_claim_count — notes rejected for unsupported attribute claims
+set_writer_ms                    — writer stage elapsed ms
+```
+
+### Remaining limitations
+
+- `more_options_cursor_present` is always `False` — cursor lives in router layer (PR #263).
+- LLM reviewer gate not built (PR #262) — set-writer notes are not re-reviewed.
+- Set-writer uses primary model only (no retry cascade for the writer itself); the existing `build_reasons_with_retry` three-pass cascade is used as fallback on writer failure.
+
+### Supabase SQL: No
+
+### Test counts
+
+```
+test_set_level_writer.py:     56 tests, all pass (new)
+test_card_curator.py:         51 tests, all pass (unchanged — PR #260)
+test_evidence_dossier.py:     54 tests, all pass (unchanged — PR #259)
+test_parallel_retrieval.py:   28 tests, all pass (unchanged — PR #258)
+test_sla_card_cap.py:         64 tests, all pass (unchanged — PR #257)
+test_evidence_quality_v3.py:  53 tests, all pass (unchanged)
+test_evidence_quality_v4.py:  37 tests, all pass (unchanged)
+test_evidence_quality_v5.py:  37 tests, all pass (unchanged)
+```
+
+---
+
+## Previous change (2026-05-06) — PR #260: Card Role + Curated Set Ranker v1
 
 **Status: MERGE-READY** — 51 new card-curator tests pass; 54 PR #259 dossier tests pass; 28 PR #258 tests pass; 64 PR #257 SLA tests pass; 19 pre-existing pydantic env failures remain (unrelated)
 

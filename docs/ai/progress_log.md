@@ -1,5 +1,26 @@
 # Progress Log
 
+## 2026-05-06 — PR #261: Set-Level Writer v1
+
+**Branch**: `claude/set-level-writer-v1-AkIL5`
+
+**Severity**: Level 3 architecture slice — v2 amendment PR #261 set-level writer foundation.
+
+**Problem**: Note generation was isolated per-card with no role awareness, cross-card distinctness, or dossier-based evidence. Notes were repetitive, thin, and rating/review-count primary.
+
+**What was built**:
+- `set_level_writer.py` (new): `SetWriterCardInput`, `SetWriterNote`, `SetWriterResult`, `write_set_notes()` — evidence-grounded, set-aware note generation using `CuratedSetResult` + `PlaceEvidenceDossier`. Evidence stub adapter for `validate_reason`. Cross-card skeleton diversity check. Budget-gated. Never raises.
+- `semantic_retrieval.py`: Step 5.8 wired after curator (Step 5.7). Step 7 uses set-writer primary path when writer succeeds; falls back to `build_reasons_with_retry` cascade. `semantic_retrieval_v1.set_writer_telemetry` log line added.
+- `test_set_level_writer.py` (new, 56 tests): all 20 required scenarios + integration tests + prompt structure tests.
+
+**Key invariants preserved**: fallback_note_visible_count=0, deterministic_visible_count=0, Google verification trust gate, card cap=6, no role labels exposed, no internal_evidence_gaps exposed, no visible fallback prose, writer failure cannot block card return.
+
+**Tests**: 56 new tests pass. 51 PR #260 + 54 PR #259 + 28 PR #258 + 64 PR #257 + 127 evidence quality tests all pass.
+**Supabase SQL**: No
+**HANDOFF.md edited**: Yes
+
+---
+
 ## 2026-05-06 — PR #260: Card Role + Curated Set Ranker v1
 
 **Branch**: `claude/card-role-ranker-v1-fCGg6`
