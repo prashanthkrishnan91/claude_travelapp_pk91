@@ -96,13 +96,19 @@ def execute_fanout(
     _fanout_timeout = fanout_timeout if fanout_timeout is not None else timeout + 2.0
 
     results: List[ProviderQueryResult] = []
-    with ThreadPoolExecutor(max_workers=len(capped)) as executor:
-        future_to_query = {
-            executor.submit(
-                _single_google_query, q, api_key, timeout, max_results_per_query
-            ): q
-            for q in capped
-        }
+    # Explicit lifecycle instead of `with` block so that on as_completed
+    # TimeoutError we can shut down without wait=True blocking on in-flight
+    # HTTP requests.  shutdown(wait=False, cancel_futures=True) returns
+    # immediately; threads running open HTTP connections will finish on their
+    # own once the per-call timeout fires — we just don't block the caller.
+    executor = ThreadPoolExecutor(max_workers=len(capped))
+    future_to_query = {
+        executor.submit(
+            _single_google_query, q, api_key, timeout, max_results_per_query
+        ): q
+        for q in capped
+    }
+    try:
         # Wait up to _fanout_timeout for all futures
         try:
             for future in as_completed(future_to_query, timeout=_fanout_timeout):
@@ -120,6 +126,17 @@ def execute_fanout(
                 "provider_executor: fanout_timeout timeout=%.2fs; returning partial results",
                 _fanout_timeout,
             )
+    finally:
+        # Cancel any futures that haven't started (no-op for running ones).
+        for fut in future_to_query:
+            fut.cancel()
+        # Shut down without blocking; cancel_futures=True (Python 3.9+) prevents
+        # the executor from starting any pending work still in its queue.
+        try:
+            executor.shutdown(wait=False, cancel_futures=True)
+        except TypeError:
+            # Python < 3.9 does not have cancel_futures.
+            executor.shutdown(wait=False)
 
     # Add error records for any queries that didn't complete (edge case)
     completed_queries = {r.query for r in results}

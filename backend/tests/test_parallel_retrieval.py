@@ -637,3 +637,140 @@ class TestFanoutTimeoutBoundedByDeadline:
         )
         # Must also be less than timeout+2.0 (old unbounded buffer = 7.0s here).
         assert ft < 5.0 + 2.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Blocker fix 2: executor.shutdown(wait=False) on timeout — no blocking wait
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestExecutorShutdownNonBlocking:
+    """Prove execute_fanout does not block on executor shutdown after as_completed
+    times out.  The `with ThreadPoolExecutor` implicit wait=True is replaced by
+    an explicit shutdown(wait=False) so unfinished HTTP threads do not delay the
+    deadline-aware caller."""
+
+    def _make_mock_executor_cls(self, shutdown_calls: list, future_factory):
+        """Return a MockExecutor class that records shutdown() invocations."""
+        class MockFuture:
+            def __init__(self):
+                self._cancelled = False
+            def cancel(self):
+                self._cancelled = True
+
+        class MockExecutor:
+            def __init__(self, *args, **kwargs):
+                pass
+            def submit(self, fn, *args, **kwargs):
+                return future_factory()
+            def shutdown(self, wait=True, cancel_futures=False):
+                shutdown_calls.append({"wait": wait, "cancel_futures": cancel_futures})
+
+        return MockExecutor
+
+    def test_shutdown_uses_wait_false_on_fanout_timeout(self):
+        from app.concierge.provider_executor import execute_fanout
+
+        shutdown_calls = []
+        mock_future = MagicMock()
+        mock_future.cancel = MagicMock()
+
+        MockExecutor = self._make_mock_executor_cls(shutdown_calls, lambda: mock_future)
+
+        with patch("app.concierge.provider_executor.ThreadPoolExecutor", MockExecutor):
+            with patch(
+                "app.concierge.provider_executor.as_completed",
+                side_effect=TimeoutError("fanout timed out"),
+            ):
+                execute_fanout(["q1", "q2"], api_key="key", timeout=1.0, fanout_timeout=0.5)
+
+        assert shutdown_calls, "executor.shutdown() must be called"
+        assert shutdown_calls[-1]["wait"] is False, (
+            "shutdown(wait=False) required on timeout; got wait=True which blocks the caller"
+        )
+
+    def test_shutdown_uses_wait_false_on_success_path(self):
+        # On success all futures are done, so wait=False is equally safe and
+        # ensures the executor lifecycle is consistently non-blocking.
+        from app.concierge.provider_executor import execute_fanout
+
+        shutdown_calls = []
+        good_future = MagicMock()
+        good_future.cancel = MagicMock()
+        good_future.result.return_value = _make_provider_result("q1", n_places=3)
+
+        class MockExecutor:
+            def __init__(self, *args, **kwargs): pass
+            def submit(self, fn, *args, **kwargs): return good_future
+            def shutdown(self, wait=True, cancel_futures=False):
+                shutdown_calls.append({"wait": wait})
+
+        def mock_as_completed(futures, timeout=None):
+            yield good_future
+
+        with patch("app.concierge.provider_executor.ThreadPoolExecutor", MockExecutor):
+            with patch("app.concierge.provider_executor.as_completed", side_effect=mock_as_completed):
+                execute_fanout(["q1"], api_key="key", timeout=1.0, fanout_timeout=2.0)
+
+        assert shutdown_calls, "executor.shutdown() must be called"
+        assert shutdown_calls[-1]["wait"] is False
+
+    def test_futures_cancelled_before_shutdown_on_timeout(self):
+        # All pending futures must have .cancel() called before shutdown.
+        from app.concierge.provider_executor import execute_fanout
+
+        cancel_calls = []
+
+        class TrackingFuture:
+            def __init__(self, query):
+                self.query = query
+            def cancel(self):
+                cancel_calls.append(self.query)
+            def result(self, timeout=None):
+                raise TimeoutError()
+
+        futures_submitted = []
+
+        class MockExecutor:
+            def __init__(self, *args, **kwargs): pass
+            def submit(self, fn, query, *args, **kwargs):
+                f = TrackingFuture(query)
+                futures_submitted.append(f)
+                return f
+            def shutdown(self, wait=True, cancel_futures=False): pass
+
+        with patch("app.concierge.provider_executor.ThreadPoolExecutor", MockExecutor):
+            with patch(
+                "app.concierge.provider_executor.as_completed",
+                side_effect=TimeoutError("timed out"),
+            ):
+                execute_fanout(["q1", "q2", "q3"], api_key="key", timeout=1.0, fanout_timeout=0.5)
+
+        # cancel() must have been called on all submitted futures.
+        assert len(cancel_calls) == len(futures_submitted), (
+            f"Expected cancel() on all {len(futures_submitted)} futures; "
+            f"got {len(cancel_calls)}"
+        )
+
+    def test_incomplete_queries_get_error_records_after_timeout(self):
+        # Queries that did not complete must appear in results with error != None.
+        from app.concierge.provider_executor import execute_fanout
+
+        class MockExecutor:
+            def __init__(self, *args, **kwargs): pass
+            def submit(self, fn, *args, **kwargs): return MagicMock(cancel=MagicMock())
+            def shutdown(self, wait=True, cancel_futures=False): pass
+
+        with patch("app.concierge.provider_executor.ThreadPoolExecutor", MockExecutor):
+            with patch(
+                "app.concierge.provider_executor.as_completed",
+                side_effect=TimeoutError("timed out"),
+            ):
+                results = execute_fanout(
+                    ["q1", "q2"], api_key="key", timeout=1.0, fanout_timeout=0.5
+                )
+
+        # Both queries must appear in results with errors.
+        assert len(results) == 2
+        assert all(r.error is not None for r in results), (
+            "Timed-out queries must have error records, not be silently dropped"
+        )
