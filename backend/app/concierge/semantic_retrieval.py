@@ -610,22 +610,34 @@ def _log_per_card_notes(
     # Use location_modifiers first; fall back to geography_hints (e.g. "river" from geo)
     primary_modifier = location_modifiers[0] if location_modifiers else (geo_hints[0] if geo_hints else "")
 
-    # River/water terms for listing-context detection when modifier is a geo hint
-    _RIVER_CONTEXT_TERMS = frozenset({
+    # Generic modifier evidence term sets — used ONLY for telemetry/observability.
+    # These are NOT retrieval eligibility gates, candidate inclusion filters, or ranking
+    # signals. They simply expand the listing-context check for known geographic/setting
+    # synonym clusters so per-card modifier_status telemetry is accurate.
+    # New clusters can be added here without touching retrieval, routing, or ranking.
+    _WATER_GEO_MODIFIER_TERMS = frozenset({
         "river", "riverwalk", "riverfront", "riverbank", "riverside",
-        "waterfront", "lakefront",
+        "waterfront", "lakefront", "waterside",
     })
-    _VIEW_CONTEXT_TERMS = frozenset({
+    _SCENIC_VIEW_MODIFIER_TERMS = frozenset({
         "view", "rooftop", "panoramic", "scenic", "terrace", "overlook",
     })
+    _GARDEN_MODIFIER_TERMS = frozenset({
+        "garden", "courtyard", "patio", "terrace", "outdoor",
+    })
     mod_lower = primary_modifier.lower()
-    # Determine which geo-terms to match for listing-context checks
-    if any(r in mod_lower for r in ("river", "waterfront", "riverwalk")):
-        _geo_check_terms = _RIVER_CONTEXT_TERMS
-    elif "view" in mod_lower or "scenic" in mod_lower:
-        _geo_check_terms = _VIEW_CONTEXT_TERMS
+    # Map modifier → synonym cluster for listing-context evidence check.
+    # This is a generic pattern: modifier → related terms that might appear in
+    # the venue's verified listing name or address.
+    if any(r in mod_lower for r in ("river", "waterfront", "riverwalk", "waterside")):
+        _geo_check_terms = _WATER_GEO_MODIFIER_TERMS
+    elif any(r in mod_lower for r in ("view", "scenic", "rooftop", "panoramic", "overlook")):
+        _geo_check_terms = _SCENIC_VIEW_MODIFIER_TERMS
+    elif any(r in mod_lower for r in ("garden", "courtyard", "terrace", "patio")):
+        _geo_check_terms = _GARDEN_MODIFIER_TERMS
     else:
-        _geo_check_terms = frozenset()
+        # For any other modifier, do a simple word-token match against the modifier itself
+        _geo_check_terms = frozenset(w for w in mod_lower.split() if len(w) >= 3)
 
     per_card_entries = []
     for i, (entity, evidence, _rank_score, _det_reason) in enumerate(cards_data, 1):

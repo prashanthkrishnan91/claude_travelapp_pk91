@@ -409,3 +409,129 @@ class TestHarnessV5Integration:
             assert not ok, (
                 f"PR #252 bad note NOT rejected: pattern={pattern_name!r} note={bad_note!r}"
             )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TestUnseenConceptGenericRules
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestUnseenConceptGenericRules:
+    """Quality and modifier rules apply to any venue concept, not just known categories.
+
+    Proves the system is concept-generic: no production keyword branch is needed
+    for 'kaiseki', 'listening bar', 'tea house with a garden', or 'natural wine
+    bar near the water'. The same semantic-frame quality gate and modifier evidence
+    logic handle them automatically.
+    """
+
+    def _ev(self):
+        return _thin_ev()
+
+    # ── Rating/review-primary rejection is concept-agnostic ─────────────────
+
+    def test_kaiseki_review_volume_rejected(self):
+        """'review volume' is rejected even when describing a kaiseki spot."""
+        from app.concierge.batched_reason_builder import _assess_quality
+        note = "Kaiseki Den has the highest review volume among kaiseki spots in this set."
+        ok, reason = _assess_quality(note, self._ev())
+        assert not ok, "Expected rejection: review volume primary in kaiseki context"
+
+    def test_listening_bar_rating_lead_rejected(self):
+        """Rating as primary differentiator is rejected for listening bars too."""
+        from app.concierge.batched_reason_builder import _assess_quality
+        note = "Needle & Vinyl is the highest-rated listening bar in Chicago with 4.9 stars."
+        ok, reason = _assess_quality(note, self._ev())
+        assert not ok, "Expected rejection: highest-rated primary in listening bar context"
+
+    def test_natural_wine_bar_engagement_rejected(self):
+        """'high engagement' is rejected for natural wine bars just as for breweries."""
+        from app.concierge.batched_reason_builder import _assess_quality
+        note = "Pét-Nat draws consistently high engagement (4.7★, 890 reviews) in its category."
+        ok, reason = _assess_quality(note, self._ev())
+        assert not ok, "Expected rejection: high engagement primary for natural wine bar"
+
+    # ── Concept/name/specialty differentiators pass for unseen concepts ──────
+
+    def test_kaiseki_specialty_note_passes(self):
+        """A note anchored on kaiseki-concept specialty passes the quality gate."""
+        from app.concierge.batched_reason_builder import _assess_quality
+        note = (
+            "Kaiseki Den on Wabash Ave presents a multi-course seasonal Japanese tasting menu "
+            "— the only kaiseki format in this set focused strictly on hyper-seasonal produce."
+        )
+        ok, reason = _assess_quality(note, self._ev())
+        assert ok, f"Expected pass for kaiseki specialty note, got reason={reason!r}"
+
+    def test_listening_bar_concept_note_passes(self):
+        """A note anchored on the listening bar format and record collection passes."""
+        from app.concierge.batched_reason_builder import _assess_quality
+        note = (
+            "Needle & Vinyl on Milwaukee Ave is a listening bar with a curated vinyl collection "
+            "and audiophile-grade speakers — a format distinct from standard cocktail bars."
+        )
+        ok, reason = _assess_quality(note, self._ev())
+        assert ok, f"Expected pass for listening bar format note, got reason={reason!r}"
+
+    def test_tea_house_garden_modifier_note_passes(self):
+        """An honest 'garden not confirmed' note for a tea house passes validation."""
+        from app.concierge.reason_validator import validate_reason
+        entity = _make_entity(
+            name="Wabi-Sabi Tea House",
+            address="2200 N Clark St, Chicago, IL",
+            types=["cafe"],
+            source_query="tea houses with a garden Chicago",
+        )
+        frame = _make_frame("tea houses with a garden")
+        ev = _make_bundle(entity, frame)
+        note = (
+            "Wabi-Sabi Tea House on Clark Street specializes in Japanese ceremonial teas "
+            "and seasonal wagashi; a garden setting is not confirmed from listing data."
+        )
+        is_valid, rejection = validate_reason(note, frame, ev)
+        assert is_valid, f"Expected valid for tea house honest garden caveat, got {rejection!r}"
+
+    # ── Modifier evidence is concept-agnostic ────────────────────────────────
+
+    def test_water_modifier_status_for_natural_wine_bar(self):
+        """modifier_status is computed generically for 'natural wine bars near the river'."""
+        from tests.evidence_harness_v4 import _compute_modifier_status
+        # A wine bar on the Riverwalk should get confirmed_listing_context
+        # (same logic as the brewery case — no category-specific branch)
+        entity_river = _make_entity(
+            name="Ancre Natural Wine Bar on the Riverwalk",
+            address="Riverwalk, Chicago, IL",
+            types=["bar"],
+            source_query="natural wine bars near the river Chicago",
+        )
+        frame_river = _make_frame("natural wine bars near the river")
+        _, status_river = _compute_modifier_status(entity_river, frame_river)
+        assert status_river == "confirmed_listing_context", (
+            f"Wine bar with Riverwalk in name should be confirmed_listing_context, got {status_river!r}"
+        )
+
+        # A wine bar without water-related terms in name/address → unknown (not none)
+        entity_inland = _make_entity(
+            name="Ancre Natural Wine Bar",
+            address="1400 W Randolph St, Chicago, IL",
+            types=["bar"],
+            source_query="natural wine bars near the river Chicago",
+        )
+        _, status_inland = _compute_modifier_status(entity_inland, frame_river)
+        assert status_inland == "unknown", (
+            f"Wine bar without river terms should be unknown, got {status_inland!r}"
+        )
+
+    def test_garden_modifier_status_for_tea_house(self):
+        """modifier_status logic for 'tea houses with a garden' uses ambiguity_flags, not branches."""
+        from tests.evidence_harness_v4 import _compute_modifier_status
+        entity = _make_entity(
+            name="Wabi-Sabi Tea House",
+            address="2200 N Clark St, Chicago, IL",
+        )
+        frame = _make_frame("tea houses with a garden")
+        # 'garden' lands in ambiguity_flags (view_not_structurally_verifiable),
+        # not in geo_hints or location_modifiers → modifier_status is none/unknown (honest)
+        _, status = _compute_modifier_status(entity, frame)
+        assert status in ("none", "unknown"), (
+            f"Tea house garden modifier should be none/unknown (ambiguity_flag), got {status!r}"
+        )

@@ -391,25 +391,31 @@ def _build_batch_prompt(
     if geo_hints:
         geo_h = geo_hints[0]
         modifier_lines.append(
-            f"  - User mentioned geography: {geo_h}. "
+            f"  - User mentioned a geographic/setting modifier: '{geo_h}'. "
             "THREE-WAY DISTINCTION required for each card:\n"
             f"    a) LISTING CONTEXT: if the venue's verified Google NAME or address "
-            f"contains '{geo_h}', 'Riverwalk', 'riverfront', or a similar term, "
-            "you may say: 'The verified listing places this venue in [river/Riverwalk] "
-            "context.' This is a listing-name fact, not a scenic claim.\n"
-            "    b) VERIFIED FEATURE: only if evidence explicitly confirms outdoor "
-            "seating, patio, or views — you may mention that amenity.\n"
+            f"contains '{geo_h}' or a related term, you may say: "
+            f"'The verified listing places this venue in {geo_h} context.' "
+            "This is a listing-name fact, not a scenic or amenity claim.\n"
+            "    b) VERIFIED FEATURE: only if evidence explicitly confirms the relevant "
+            "amenity (outdoor seating, patio, garden, terrace, etc.) — you may mention it.\n"
             "    c) UNKNOWN: if neither (a) nor (b) applies, say the requested "
-            f"'{geo_h}' proximity is not confirmed from available listing data.\n"
-            "DO NOT claim waterfront/river/lake/view proximity unless evidence confirms it. "
-            "DO NOT claim scenic seating or views unless confirmed by amenity evidence."
+            f"'{geo_h}' attribute is not confirmed from available listing data.\n"
+            "DO NOT claim unverified proximity or setting unless evidence confirms it. "
+            "DO NOT claim scenic or physical attributes unless confirmed by amenity evidence."
         )
-    if any("view" in f or "waterfront" in f for f in ambiguity_flags):
-        modifier_lines.append(
-            "  - VIEW/WATERFRONT requested: scenic views cannot be structurally verified "
-            "from Google data. Be honest — do not invent or imply views or seating. "
-            "Provide useful venue-specific content instead."
-        )
+    if ambiguity_flags:
+        unverifiable = [
+            f for f in ambiguity_flags
+            if "not_structurally_verifiable" in f or "not_verifiable" in f
+        ]
+        if unverifiable:
+            modifier_lines.append(
+                "  - UNVERIFIABLE ATTRIBUTE requested: the requested setting or ambiance "
+                "cannot be structurally confirmed from Google listing data. Be honest — "
+                "do not invent or imply the attribute. Provide a concrete venue-specific "
+                "reason instead (name implication, specialty, neighborhood, concept format)."
+            )
     if not modifier_lines:
         modifier_lines.append("  - No location or geography modifiers.")
 
@@ -435,13 +441,19 @@ def _build_batch_prompt(
                 "what the name implies about its specialty, or an honest caveat — "
                 "avoid generic concept-fit phrases and rating/review-count comparisons."
             )
-            # Riverwalk-specific repair: guide the LLM to use safe listing-context wording
-            if "unsupported_attribute_claim:riverwalk" in reason or "riverwalk" in reason.lower():
+            # Listing-context repair: if the rejection was for an unsupported attribute claim,
+            # guide the LLM to use safe listing-name language rather than inventing amenities.
+            # This is generic — applies to any geographic/setting term (Riverwalk, waterfront,
+            # garden, rooftop, etc.) found in the verified Google listing name or address.
+            if "unsupported_attribute_claim" in reason:
+                claim_match = re.search(r"unsupported_attribute_claim:([^\s,]+)", reason)
+                claimed_term = claim_match.group(1) if claim_match else "the requested term"
                 base_hint += (
-                    " RIVERWALK REPAIR: if the venue name contains 'Riverwalk', "
-                    "you may say 'The verified listing places this venue in Riverwalk context' "
-                    "or similar. Do NOT claim river views, scenic seating, or waterfront "
-                    "amenities unless amenity evidence confirms them."
+                    f" LISTING CONTEXT REPAIR: if the venue's verified Google NAME or address "
+                    f"contains '{claimed_term}' or a related term, you may note that as a "
+                    f"listing fact — e.g., 'The verified listing places this venue in "
+                    f"{claimed_term} context.' Do NOT claim scenic views, seating, or physical "
+                    "amenities unless amenity evidence explicitly confirms them."
                 )
             hint_lines.append(base_hint)
         repair_section = "\nREPAIR GUIDANCE — previous notes for these cards were rejected:\n" + "\n".join(hint_lines) + "\n"
@@ -482,13 +494,14 @@ WHAT MAKES A USEFUL NOTE:
 - DO NOT lead with or center on rating (★) or review count — these are already visible on the card
 - Rating/reviews may appear only as SECONDARY context after a concrete differentiator
 - For THIN evidence: anchor on the place's name (what does the name itself imply?) and street/address
-- For river/view queries: use the THREE-WAY DISTINCTION above (listing context / verified / unknown)
-- For VIEW queries (e.g., "taprooms with a view"): if no view/outdoor/scenic evidence is confirmed,
-  explicitly say the view is not verified AND then give a concrete venue-specific reason (specialty,
-  neighborhood, name implication). Do NOT use ratings as the replacement differentiator.
-- For IZAKAYA queries: use name/menu/category clues — izakaya, ramen, sushi, omakase, bar format,
-  gastropub style, sake/whisky selection, shared plates/drinks framing, late-night format,
-  neighborhood fit, or concept-specific specialty. Do NOT use review volume as a differentiator.
+- For geographic/setting modifier queries: use the THREE-WAY DISTINCTION above (listing context / verified / unknown)
+- For UNVERIFIABLE MODIFIER queries (scenic views, waterfront, garden, quiet, etc.): if the
+  attribute is not confirmed by evidence, explicitly say it is not verified AND give a concrete
+  venue-specific reason (name implication, concept/specialty, neighborhood). Do NOT substitute
+  rating or review count as the differentiator.
+- For CONCEPT/SPECIALTY queries: use name/menu/format/style clues from the evidence — the venue's
+  concept-specific specialty, format (bar, tasting menu, casual, late-night), neighborhood fit,
+  or category-specific detail. Do NOT use review volume as a differentiator.
 - It honestly handles modifiers: confirmed → state it; not confirmed → acknowledge the gap
 - It varies meaningfully across the {n} places — do not reuse the same sentence structure
 - It is concise (one sentence or two short clauses, under {_REASON_MAX_CHARS} characters)

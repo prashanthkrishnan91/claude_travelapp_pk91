@@ -1,8 +1,43 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-06) — EvidencePack v5: Tighter rating/review rejection + modifier telemetry fix
+## Last change (2026-05-06) — EvidencePack v5 (arch alignment): Concept-generic prompt + unseen-concept tests
 
-**Status: MERGE-READY** — 156 concierge tests pass, 5 pre-existing pydantic env failures remain (unrelated)
+**Status: MERGE-READY** — 164 concierge tests pass, 5 pre-existing pydantic env failures remain (unrelated)
+
+### Architecture alignment: concept-generic production code (no category shortcuts)
+
+After v5 was initially opened as PR #255, a second pass ensured no category-specific language remained in production code.
+
+**Problem**: Production prompt contained "For IZAKAYA queries" and "For VIEW queries (e.g., taprooms with a view)" — hard-coded category branches that must not exist in a system whose semantic frame extraction is designed to work for any venue concept.
+
+**Changes made** (`batched_reason_builder.py`):
+- Replaced category-specific guidance ("For IZAKAYA queries"/"For VIEW queries") with generic semantic-frame language covering any concept or unverifiable modifier
+- `UNVERIFIABLE MODIFIER queries` section: handles scenic views, waterfront, garden, quiet, and any future attribute that cannot be structurally confirmed
+- `CONCEPT/SPECIALTY queries` section: uses name/menu/format/style clues from the evidence — works for izakaya, kaiseki, listening bar, tea house, natural wine bar, etc.
+- Geo-hint listing-context guidance generalized: no Riverwalk/riverfront hardcoding; works for any `geo_h` term
+- Repair section generalized: regex extracts `unsupported_attribute_claim:TERM` and uses `TERM` in the repair hint, not "riverwalk"
+
+**Modifier telemetry term sets** (`semantic_retrieval.py`): Added `_WATER_GEO_MODIFIER_TERMS`, `_SCENIC_VIEW_MODIFIER_TERMS`, `_GARDEN_MODIFIER_TERMS` — clearly commented as telemetry-only, not retrieval eligibility gates or ranking signals. Generic fallback for unknown modifiers uses simple word-token match (no `re` import needed).
+
+**Unseen-concept tests** (`test_evidence_quality_v5.py`): Added `TestUnseenConceptGenericRules` with 8 tests proving quality rules work for venue types not seen during development:
+- `test_kaiseki_review_volume_rejected` — review volume rejected for kaiseki
+- `test_listening_bar_rating_lead_rejected` — highest-rated rejected for listening bars
+- `test_natural_wine_bar_engagement_rejected` — high engagement rejected for wine bars
+- `test_kaiseki_specialty_note_passes` — concept/specialty note passes quality gate
+- `test_listening_bar_concept_note_passes` — format/concept note passes quality gate
+- `test_tea_house_garden_modifier_note_passes` — honest garden caveat passes quality gate
+- `test_water_modifier_status_for_natural_wine_bar` — Riverwalk wine bar → confirmed_listing_context; inland wine bar → unknown
+- `test_garden_modifier_status_for_tea_house` — garden modifier → none/unknown (correctly uses ambiguity_flags path)
+
+No retrieval/routing/ranking keyword patching was introduced. Modifier telemetry term sets are observability-only.
+
+### Total test count: 164 (37 v5 tests = 29 original + 8 unseen-concept)
+
+---
+
+## Previous change (2026-05-06) — EvidencePack v5: Tighter rating/review rejection + modifier telemetry fix
+
+**Status: Superseded by arch-alignment pass above**
 
 ### Problem solved (Level 2 production note quality failures on PR #252 logs)
 
@@ -33,13 +68,14 @@ Root causes fixed:
 - Taproom-view notes checked for view-honest handling
 - Izakaya notes checked for concept/menu/style (not review rank)
 
-**Tests v5** (`tests/test_evidence_quality_v5.py`): 29 new tests across 5 classes:
+**Tests v5** (`tests/test_evidence_quality_v5.py`): 37 tests (29 original + 8 unseen-concept) across 6 classes:
 - `TestPR252BadNoteRejection` — 6 tests: exact PR #252 failing notes all rejected
 - `TestRatingPrimaryV5` — 7 tests: new indirect phrasings rejected, good differentiators pass
 - `TestModifierTelemetryV5` — 5 tests: Northman=confirmed_listing_context, regular=unknown, izakaya=none
 - `TestTaproomViewQualityV5` — 3 tests: 8/8 validated, no rating-primary, all notes address view
 - `TestIzakayaQualityV5` — 3 tests: 8/8 validated, no review-volume notes, venue_head recognized
 - `TestHarnessV5Integration` — 5 tests: full end-to-end for all three queries + PR #252 rejection
+- `TestUnseenConceptGenericRules` — 8 tests: proves quality gates work for kaiseki, listening bars, tea houses, natural wine bars
 
 **Updated harness v2 mock note** (`tests/evidence_harness_v2.py`): Taproom-with-view card 1 note updated to avoid "review volume" (now complies with stricter gate).
 
@@ -56,7 +92,7 @@ Root causes fixed:
 ```
 test_evidence_quality_v3.py:       53 tests, all pass (unchanged)
 test_evidence_quality_v4.py:       37 tests, all pass (unchanged)
-test_evidence_quality_v5.py:       29 tests, all pass (new)
+test_evidence_quality_v5.py:       37 tests, all pass (29 original + 8 unseen-concept)
 test_reasoning_reliability_v2.py:  38 tests pass (5 pre-existing pydantic env failures)
 evidence_harness_v3.py:           19/19 validated STRICT (unchanged)
 evidence_harness_v4.py:           24/24 validated STRICT (unchanged)
@@ -142,6 +178,8 @@ Root causes fixed:
 - `TestHarnessV4Integration` — 9 tests: 8/8 for all tables, Northman validated, no scenic claims, izakaya venue_head
 
 **Updated test** (`tests/test_evidence_quality_v3.py`): Renamed `test_strong_with_high_subtype_and_reviews` → `test_high_subtype_and_reviews_without_enrichment_is_ok` (now expects OK, not STRONG).
+
+---
 
 ### Files changed
 
