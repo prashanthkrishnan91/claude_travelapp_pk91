@@ -60,6 +60,7 @@ class CardCurationSignals:
     concept_fit: float               # 0.0–1.0 from dossier.query_fit.concept_fit
     geo_fit: float                   # 0.0–1.0 from dossier.query_fit.geo_fit
     modifier_fit: str                # "confirmed" | "not_confirmed" | "none"
+    modifier_requested: bool         # query explicitly requested a modifier
     source_confidence: str           # "strong" | "mixed" | "weak"
     theme_count: int                 # explicit (non-listing-context) positive themes
     has_place_details: bool          # google_place_details in provider_evidence
@@ -177,6 +178,7 @@ def _build_curation_signals(
         concept_fit=getattr(query_fit, "concept_fit", 0.0),
         geo_fit=getattr(query_fit, "geo_fit", 0.0),
         modifier_fit=getattr(query_fit, "modifier_fit", None) or "none",
+        modifier_requested=(getattr(query_fit, "modifier_fit", None) in {"confirmed", "not_confirmed"}),
         source_confidence=dossier.source_confidence,
         theme_count=theme_count,
         has_place_details=has_place_details,
@@ -224,8 +226,8 @@ def _assign_role(
     # Requires: confirmed modifier (ranker or explicit enrichment), concept >= 0.4,
     # and listing_context alone is NOT sufficient.
     modifier_confirmed = (
-        signals.modifier_fit == "confirmed"
-        or signals.has_explicit_modifier_evidence
+        signals.modifier_requested
+        and (signals.modifier_fit == "confirmed" or signals.has_explicit_modifier_evidence)
     )
     if concept >= 0.4 and modifier_confirmed and not signals.has_listing_context_only:
         reasons.append(
@@ -293,7 +295,8 @@ def _compute_curation_score(signals: CardCurationSignals) -> float:
     # Modifier bonus: only when confirmed and not listing_context-only
     modifier_bonus = (
         0.15
-        if (signals.modifier_fit == "confirmed" or signals.has_explicit_modifier_evidence)
+        if signals.modifier_requested
+        and (signals.modifier_fit == "confirmed" or signals.has_explicit_modifier_evidence)
         and not signals.has_listing_context_only
         else 0.0
     )
@@ -319,6 +322,43 @@ def _compute_curation_score(signals: CardCurationSignals) -> float:
     )
     return max(0.0, min(1.0, score))
 
+
+def _is_modifier_confirmed_signal(signals: CardCurationSignals) -> bool:
+    return (
+        signals.modifier_requested
+        and (signals.modifier_fit == "confirmed" or signals.has_explicit_modifier_evidence)
+        and not signals.has_listing_context_only
+    )
+
+
+def _has_strong_support_reason(signals: CardCurationSignals) -> bool:
+    return (
+        _is_modifier_confirmed_signal(signals)
+        or signals.source_confidence == _CONF_STRONG
+        or (signals.has_place_details and signals.theme_count >= 1)
+        or signals.concept_fit >= 0.75
+    )
+
+
+def _can_promote_above(challenger: CuratedCard, incumbent: CuratedCard) -> bool:
+    """Conservative re-ranker gate: preserve original order unless advantage is clear."""
+    c = challenger.curation_signals
+    i = incumbent.curation_signals
+
+    score_adv = challenger.curation_score - incumbent.curation_score
+    concept_adv = c.concept_fit - i.concept_fit
+    modifier_edge = _is_modifier_confirmed_signal(c) and not _is_modifier_confirmed_signal(i)
+
+    if not (score_adv >= 0.08 or concept_adv >= 0.15 or modifier_edge):
+        return False
+    if challenger.role == ROLE_LOW_EVIDENCE_HOLDBACK:
+        return False
+    concept_not_materially_worse = c.concept_fit >= (i.concept_fit - 0.10)
+    if not concept_not_materially_worse and not modifier_edge:
+        return False
+    if not (_has_strong_support_reason(c) or concept_adv >= 0.20):
+        return False
+    return True
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
@@ -387,6 +427,7 @@ def curate_cards(
                     concept_fit=getattr(rank_score, "subtype_fit", 0.0),
                     geo_fit=getattr(rank_score, "geo_fit", 0.0),
                     modifier_fit="none",
+                    modifier_requested=False,
                     source_confidence=_CONF_WEAK,
                     theme_count=0,
                     has_place_details=False,
@@ -424,6 +465,7 @@ def curate_cards(
                     concept_fit=getattr(rank_score, "subtype_fit", 0.0),
                     geo_fit=getattr(rank_score, "geo_fit", 0.0),
                     modifier_fit="none",
+                    modifier_requested=False,
                     source_confidence=_CONF_WEAK,
                     theme_count=0,
                     has_place_details=False,
@@ -471,15 +513,23 @@ def curate_cards(
     beyond_cap = [c for c in curated if c.original_rank_index >= first_card_limit]
 
     in_cap_original_order = sorted(in_cap, key=lambda c: c.original_rank_index)
-    sorted_cap = sorted(in_cap, key=lambda c: (-c.curation_score, c.original_rank_index))
+
+    # Conservative re-ranker (NOT a ranker replacement):
+    # keep original spine, then apply only gated pairwise promotions.
+    gated_cap = list(in_cap_original_order)
+    for idx in range(1, len(gated_cap)):
+        pos = idx
+        while pos > 0 and _can_promote_above(gated_cap[pos], gated_cap[pos - 1]):
+            gated_cap[pos - 1], gated_cap[pos] = gated_cap[pos], gated_cap[pos - 1]
+            pos -= 1
 
     reordered_count = sum(
         1
-        for orig, new in zip(in_cap_original_order, sorted_cap)
+        for orig, new in zip(in_cap_original_order, gated_cap)
         if orig.original_rank_index != new.original_rank_index
     )
 
-    final_cards = sorted_cap + sorted(beyond_cap, key=lambda c: c.original_rank_index)
+    final_cards = gated_cap + sorted(beyond_cap, key=lambda c: c.original_rank_index)
 
     # ── Aggregate telemetry ────────────────────────────────────────────────────
     role_counts: Dict[str, int] = {}
@@ -505,10 +555,13 @@ def curate_cards(
         role_counts=role_counts,
         source_confidence_counts=conf_counts,
         low_evidence_holdback_count=role_counts.get(ROLE_LOW_EVIDENCE_HOLDBACK, 0),
-        modifier_confirmed_count=role_counts.get(ROLE_MODIFIER_CONFIRMED, 0),
-        evidence_rich_count=(
-            role_counts.get(ROLE_EVIDENCE_RICH, 0)
-            + role_counts.get(ROLE_DISTINCTIVE_THEME, 0)
+        modifier_confirmed_count=sum(
+            1 for c in final_cards if _is_modifier_confirmed_signal(c.curation_signals)
+        ),
+        evidence_rich_count=sum(
+            1
+            for c in final_cards
+            if c.curation_signals.has_place_details and c.curation_signals.theme_count >= 1
         ),
         reordered_count=reordered_count,
         input_count=len(ranked),
