@@ -1,6 +1,131 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-06) — PR #259: Evidence Dossier v1 + review/theme extraction
+## Last change (2026-05-06) — PR #260: Card Role + Curated Set Ranker v1
+
+**Status: MERGE-READY** — 51 new card-curator tests pass; 54 PR #259 dossier tests pass; 28 PR #258 tests pass; 64 PR #257 SLA tests pass; 19 pre-existing pydantic env failures remain (unrelated)
+
+### What was built
+
+Card Role + Curated Set Ranker v1 — deterministic, typed internal substrate for AI Concierge v2 card selection. No UI, SQL, LLM calls, provider additions, or visible behavior changes.
+
+**Problem**: AI Concierge v2 had no typed layer between ranked verified candidates and future note writing (PR #261). The card set could feel random or repetitive because roles, evidence richness, and modifier confirmation were not formally computed or used for ordering. PR #260 creates this substrate.
+
+**Changes made**:
+
+1. **`backend/app/concierge/card_curator.py`** (new):
+   - `CardRole` string constants: `best_overall`, `strongest_query_match`, `modifier_confirmed`, `evidence_rich`, `distinctive_theme`, `geographic_fit`, `safe_popular_fallback`, `interesting_but_weaker`, `low_evidence_holdback`.
+   - `CardCurationSignals`: 12 deterministic signals from dossier — concept_fit, geo_fit, modifier_fit, source_confidence, theme_count, has_place_details, has_explicit_modifier_evidence, has_listing_context_only, negative_caveat_count, evidence_gap_count, diversity_key, original_rank_index.
+   - `CuratedCard`: entity + rank_score + dossier + role + curation_score + signals + reasons + original_rank_index. No visible card payload fields.
+   - `CuratedSetResult`: curated_cards + role_counts + source_confidence_counts + low_evidence_holdback_count + modifier_confirmed_count + evidence_rich_count + reordered_count + input_count + output_count + `as_telemetry_dict()`.
+   - `_build_curation_signals()`: extracts signals from PlaceEvidenceDossier. Protected against bad dossier with per-card try/except.
+   - `_assign_role()`: deterministic 9-priority role assignment. No category hardcoding.
+   - `_compute_curation_score()`: concept_fit=0.50 dominant; theme contribution capped at 0.04 (requires place_details).
+   - `curate_cards()`: processes ranked + dossiers; assigns roles; conservatively reorders within first_card_limit. Never raises — bad dossiers fall back to ROLE_INTERESTING_BUT_WEAKER.
+
+2. **`backend/app/concierge/semantic_retrieval.py`** (modified):
+   - Step 5.7 added after Step 5.6 dossier build: calls `curate_cards`; applies reordered cap if `reordered_count > 0`; falls back to original ranked order on any exception.
+   - `_log_semantic_turn` gains optional `curator_telemetry` parameter.
+   - Curator telemetry emitted as separate log line `semantic_retrieval_v1.curated_set_telemetry`.
+
+3. **`backend/tests/test_card_curator.py`** (new, 51 tests):
+   - All 17 required test scenarios from PR #260 spec.
+   - `TestRoleAssignmentHighConceptFit` — best_overall/strongest_query_match assignment.
+   - `TestModifierConfirmedRole` — modifier_confirmed requires confirmed or explicit evidence.
+   - `TestNoModifierConfirmedFromAddress` — address alone cannot create modifier_confirmed.
+   - `TestListingContextLowerTrust` — listing_context entries are lower-trust; explicit enrichment wins.
+   - `TestReviewCountAloneInsufficientForHighRoles` — review count is card stat, not theme.
+   - `TestPlaceDetailsEnrichmentCreatesRichRoles` — place_details + themes → evidence_rich/distinctive_theme.
+   - `TestLowEvidenceCardsPreserved` — no cards dropped; low evidence → safe_popular_fallback or low_evidence_holdback.
+   - `TestCardCapPreserved` — output count never exceeds input.
+   - `TestCuratorNeverMintsCards` — CuratedCard has no addable/display/note/gv fields; entity is same object.
+   - `TestCuratorFallbackPath` — bad dossier handled gracefully; integration fallback preserves original order.
+   - `TestDeterministicOrdering` — stable output across repeated runs.
+   - `TestConservativeReorder` — clearly stronger card can move up within cap.
+   - `TestNoBroadReorderByThemeCount` — low concept-fit card cannot jump above high concept via theme count.
+   - `TestTelemetryCounts` — role_counts, confidence_counts, reordered_count all accurate.
+   - `TestPR257InvariantUnchanged` — fallback_note_visible_count=0 structurally unchanged.
+   - `TestPR258InvariantsUnchanged` — parallel_retrieval contracts unchanged.
+   - `TestPR259DossierContractsUnchanged` — dossier contracts unchanged.
+
+### Hard contracts preserved
+
+- `fallback_note_visible_count` always 0 (structural invariant from PR #257 — unchanged)
+- `deterministic_visible_count` always 0 (unchanged)
+- Google verification trust gate: place_id + OPERATIONAL + maps_uri required (unchanged)
+- Card cap: default 6, range 5–7 (unchanged)
+- Non-Google enrichment cannot mint addable cards (structural — unchanged)
+- View/patio/waterfront themes require explicit enrichment evidence (PR #259 invariant — unchanged)
+- Internal evidence gaps never surface as visible note prose (PR #259 invariant — unchanged)
+- Curator failure cannot block card return (new invariant — integration try/except)
+- Role labels are internal only — never surfaced in visible card payload or user-facing text
+- No SQL, no new providers, no UI changes, no LLM calls, no category-specific keyword patches
+
+### Role assignment rules (deterministic, generic)
+
+1. `best_overall` — concept_fit >= 0.8 AND source_confidence == "strong"
+2. `strongest_query_match` — concept_fit >= 0.7
+3. `modifier_confirmed` — (modifier_fit == "confirmed" OR has_explicit_modifier_evidence) AND concept_fit >= 0.4 AND NOT listing_context_only
+4. `distinctive_theme` — has_place_details AND theme_count >= 3 AND concept_fit >= 0.5
+5. `evidence_rich` — has_place_details AND theme_count >= 1 AND concept_fit >= 0.4
+6. `geographic_fit` — geo_fit >= 0.7 AND concept_fit >= 0.3
+7. `safe_popular_fallback` — concept_fit >= 0.25
+8. `low_evidence_holdback` — is_minimal OR concept_fit < 0.25
+9. `interesting_but_weaker` — catch-all
+
+### Curation score formula
+
+```
+score = 0.50 * concept_fit
+      + 0.20 * geo_fit
+      + 0.15 * (1 if modifier_confirmed and not listing_context_only else 0)
+      + 0.08 * (conf_strong=1.0 | conf_mixed=0.5 | conf_weak=0.0)
+      + min(theme_count/5.0, 1.0) * 0.04  (only if has_place_details)
+      - min(negative_caveat_count * 0.03, 0.09)
+      - min(evidence_gap_count * 0.02, 0.06)
+```
+
+concept_fit dominance ensures no low-concept card can overrank a strong-concept card via theme count alone (theme max = 0.04 vs concept_fit 0.50 weight).
+
+### Telemetry added (PR #260)
+
+Emitted as `semantic_retrieval_v1.curated_set_telemetry` structured log:
+```
+curated_input_count           — cards fed to curator
+curated_output_count          — cards after curator (should equal input)
+curated_role_counts           — {role: count} per assignment
+curated_confidence_counts     — {strong/mixed/weak: count}
+curated_reordered_count       — positions changed from original order
+curated_modifier_confirmed_count
+curated_evidence_rich_count   — evidence_rich + distinctive_theme combined
+curated_low_evidence_holdback_count
+curated_fallback_to_original_order — True if curator raised
+curated_ms                    — curator stage elapsed ms
+```
+
+### Remaining limitations
+
+- `more_options_cursor_present` is always `False` — cursor lives in router layer (PR #263).
+- Set-level writer not built (PR #261 will use `CuratedSetResult` as input substrate).
+- LLM reviewer gate not built (PR #262).
+- Hard cutoff interrupt of in-flight HTTP calls: deferred (same as PR #258).
+
+### Supabase SQL: No
+
+### Test counts
+
+```
+test_card_curator.py:         51 tests, all pass (new)
+test_evidence_dossier.py:     54 tests, all pass (unchanged — PR #259)
+test_parallel_retrieval.py:   28 tests, all pass (unchanged — PR #258)
+test_sla_card_cap.py:         64 tests, all pass (unchanged — PR #257)
+test_evidence_quality_v3.py:  53 tests, all pass (unchanged)
+test_evidence_quality_v4.py:  37 tests, all pass (unchanged)
+test_evidence_quality_v5.py:  37 tests, all pass (unchanged)
+```
+
+---
+
+## Previous change (2026-05-06) — PR #259: Evidence Dossier v1 + review/theme extraction
 
 **Status: MERGE-READY** — 54 new evidence-dossier tests pass; 28 PR #258 tests pass; 64 PR #257 SLA tests pass; 19 pre-existing pydantic env failures remain (unrelated)
 

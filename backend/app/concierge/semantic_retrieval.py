@@ -282,6 +282,43 @@ def _run_pipeline(
         dossier_tel = EvidenceDossierTelemetry()
     latency["dossier_ms"] = int((time.monotonic() - t0) * 1000)
 
+    # ── Step 5.7: Card Role + Curated Set Ranker v1 (PR #260) ───────────────
+    # Assigns internal roles and computes curation scores using dossier data.
+    # Optionally reorders the first-response set within conservative bounds.
+    # Does not change visible card payload, note generation, or card cap.
+    # Failure is fully isolated: original ranked order is preserved on error.
+    t0 = time.monotonic()
+    from app.concierge.card_curator import (
+        CuratedSetResult,
+        curate_cards,
+    )
+    curator_tel: dict = {"curated_fallback_to_original_order": True, "curated_ms": 0}
+    try:
+        curated_result: CuratedSetResult = curate_cards(
+            ranked=ranked,
+            dossiers=dossiers,
+            first_card_limit=first_card_limit,
+        )
+        if curated_result.reordered_count > 0:
+            # Rebuild ranked: curated order for the dossier-covered cap, original
+            # order for the rest (entries beyond dossier coverage are unchanged).
+            n_curated = curated_result.output_count
+            curated_entities = [
+                (cc.entity, cc.rank_score) for cc in curated_result.curated_cards
+            ]
+            ranked = curated_entities + ranked[n_curated:]
+        curator_tel = curated_result.as_telemetry_dict(
+            elapsed_ms=int((time.monotonic() - t0) * 1000)
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "semantic_retrieval_v1: curator_failed query=%r error=%s — "
+            "falling back to original ranked order",
+            user_query,
+            exc,
+        )
+    latency["curator_ms"] = int((time.monotonic() - t0) * 1000)
+
     # ── Step 6: Evidence bundles + deterministic SafeReasonBuilder ───────────
     t0 = time.monotonic()
     from app.concierge.safe_reason_builder import build_safe_reason
@@ -530,6 +567,8 @@ def _run_pipeline(
         remaining_budget_before_reasoning_ms=remaining_budget_before_reasoning_ms,
         # PR #259 evidence dossier telemetry
         dossier_telemetry=dossier_tel,
+        # PR #260 curator telemetry
+        curator_telemetry=curator_tel,
     )
 
     if not cards:
@@ -888,6 +927,8 @@ def _log_semantic_turn(
     remaining_budget_before_reasoning_ms: int = 0,
     # PR #259 evidence dossier telemetry
     dossier_telemetry: Optional[Any] = None,  # Optional[EvidenceDossierTelemetry]
+    # PR #260 curator telemetry
+    curator_telemetry: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Log one structured semantic turn line for zero-card failure debugging."""
     total_ms = int((time.monotonic() - t_pipeline_start) * 1000)
@@ -1017,10 +1058,15 @@ def _log_semantic_turn(
         non_critical_enrichment_skipped_count,
         remaining_budget_before_reasoning_ms,
     )
-    # PR #259 dossier telemetry — emitted as a separate structured log line
-    # so it does not break existing log parsers expecting the turn line format.
+    # PR #259 dossier telemetry — separate log line to preserve turn-line parsers.
     if dossier_telemetry is not None:
         logger.info(
             "semantic_retrieval_v1.dossier_telemetry %r",
             dossier_telemetry.as_log_dict(),
+        )
+    # PR #260 curator telemetry — separate log line.
+    if curator_telemetry is not None:
+        logger.info(
+            "semantic_retrieval_v1.curated_set_telemetry %r",
+            curator_telemetry,
         )
