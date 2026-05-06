@@ -606,7 +606,38 @@ def _log_per_card_notes(
       - visible_note (first 220 chars of the accepted note, or "" if omitted)
     """
     location_modifiers = getattr(frame, "location_modifiers", []) or []
-    primary_modifier = location_modifiers[0] if location_modifiers else ""
+    geo_hints = getattr(frame, "geography_hints", []) or []
+    # Use location_modifiers first; fall back to geography_hints (e.g. "river" from geo)
+    primary_modifier = location_modifiers[0] if location_modifiers else (geo_hints[0] if geo_hints else "")
+
+    # Generic modifier evidence term sets — used ONLY for telemetry/observability.
+    # These are NOT retrieval eligibility gates, candidate inclusion filters, or ranking
+    # signals. They simply expand the listing-context check for known geographic/setting
+    # synonym clusters so per-card modifier_status telemetry is accurate.
+    # New clusters can be added here without touching retrieval, routing, or ranking.
+    _WATER_GEO_MODIFIER_TERMS = frozenset({
+        "river", "riverwalk", "riverfront", "riverbank", "riverside",
+        "waterfront", "lakefront", "waterside",
+    })
+    _SCENIC_VIEW_MODIFIER_TERMS = frozenset({
+        "view", "rooftop", "panoramic", "scenic", "terrace", "overlook",
+    })
+    _GARDEN_MODIFIER_TERMS = frozenset({
+        "garden", "courtyard", "patio", "terrace", "outdoor",
+    })
+    mod_lower = primary_modifier.lower()
+    # Map modifier → synonym cluster for listing-context evidence check.
+    # This is a generic pattern: modifier → related terms that might appear in
+    # the venue's verified listing name or address.
+    if any(r in mod_lower for r in ("river", "waterfront", "riverwalk", "waterside")):
+        _geo_check_terms = _WATER_GEO_MODIFIER_TERMS
+    elif any(r in mod_lower for r in ("view", "scenic", "rooftop", "panoramic", "overlook")):
+        _geo_check_terms = _SCENIC_VIEW_MODIFIER_TERMS
+    elif any(r in mod_lower for r in ("garden", "courtyard", "terrace", "patio")):
+        _geo_check_terms = _GARDEN_MODIFIER_TERMS
+    else:
+        # For any other modifier, do a simple word-token match against the modifier itself
+        _geo_check_terms = frozenset(w for w in mod_lower.split() if len(w) >= 3)
 
     per_card_entries = []
     for i, (entity, evidence, _rank_score, _det_reason) in enumerate(cards_data, 1):
@@ -614,23 +645,34 @@ def _log_per_card_notes(
         if cr is None:
             continue
 
-        # Modifier status for this card
+        # Modifier status for this card — distinguishes listing-context from unknown
         modifier_status = "none"
         if primary_modifier:
-            confirmed = any(
+            # Check structured_facts first (explicit location_modifier_confirmed)
+            loc_confirmed = any(
                 "confirms" in f and primary_modifier.lower() in f.lower()
                 for f in (evidence.structured_facts or [])
             )
-            not_confirmed = any(
+            loc_not_confirmed = any(
                 f.startswith(f"location_modifier_not_confirmed:{primary_modifier}")
                 for f in (evidence.uncertainty_flags or [])
             )
-            if confirmed:
+            if loc_confirmed:
                 modifier_status = "confirmed"
-            elif not_confirmed:
+            elif loc_not_confirmed:
                 modifier_status = "not_confirmed"
+            elif _geo_check_terms:
+                # For geo hints (river, view, etc.), check entity name/address
+                name_lower = (getattr(entity, "name", "") or "").lower()
+                addr_lower = (getattr(entity, "formatted_address", "") or "").lower()
+                if any(term in name_lower for term in _geo_check_terms):
+                    modifier_status = "confirmed_listing_context"
+                elif any(term in addr_lower for term in _geo_check_terms):
+                    modifier_status = "confirmed_address_context"
+                else:
+                    modifier_status = "unknown"
             else:
-                modifier_status = "requested_unresolved"
+                modifier_status = "unknown"
 
         per_card_entries.append({
             "i": i,
