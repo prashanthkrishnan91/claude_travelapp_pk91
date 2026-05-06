@@ -1,6 +1,106 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-06) — PR #261: Set-Level Writer v1
+## Last change (2026-05-06) — PR this: AI Concierge v2 Semantic Query Frame Hardening
+
+**Status: MERGE-READY** — 59 new semantic-query-frame tests pass; 56 set-level-writer tests pass; 51 curator tests pass; 54 dossier tests pass; 28 parallel-retrieval tests pass; 64 SLA tests pass; 127 evidence-quality tests pass; 20 pre-existing pydantic env failures remain (unrelated, same as before)
+
+### What was built
+
+Semantic Query Frame Hardening — deterministic frame-finalization layer that prevents travel preference nouns (e.g., "gem" in "hidden gem restaurants") from overriding explicit venue heads. Also fixes a card-count bug where the set-writer primary path was silently dropping Google-verified cards with hidden notes.
+
+**Problem 1 (root cause)**: "hidden gem restaurants" extracted `venue_concept='gem'` and searched `['gem Chicago']`, returning jewelry/gem shops instead of restaurants. Root cause: `gem` was not classified as a modifier token, so it beat `restaurants` (filtered as a `_GENERIC_PLACE_NOUN`).
+
+**Problem 2 (card count)**: The set-writer primary path in `semantic_retrieval.py` Step 8 dropped Google-verified cards whose set-writer notes failed validation, contradicting the PR #261 contract ("hide invalid notes, not valid cards"). This caused 3–4 visible cards when 5–7 were available.
+
+**Changes made**:
+
+1. **`backend/app/concierge/frame_extractor.py`** (modified):
+   - `_TRAVEL_PREFERENCE_NOUNS`: new frozenset of nouns that function as soft preference descriptors in compound travel phrases (`gem`, `gems`, `find`, `finds`, `haunt`, `haunts`, `sleeper`, `sleepers`, `discovery`, `discoveries`, `treasure`, `treasures`, `jewel`, `jewels`, `diamond`, `diamonds`). Generalised — not a per-keyword hack.
+   - `_classified_modifier_tokens()`: now includes `_TRAVEL_PREFERENCE_NOUNS`, ensuring these tokens are excluded from venue-concept candidates when a concrete venue noun exists.
+   - `_find_suppressed_preference_nouns()`: new helper that returns preference nouns found in the query's main clause. Backend-only telemetry — never surfaced in UI.
+   - `ExperienceFrame`: new field `suppressed_preference_nouns: List[str]` populated by `_extract_frame_impl`. Backend telemetry only.
+   - `_extract_frame_impl()`: computes and populates `suppressed_preference_nouns`; extends debug log to include the field.
+
+2. **`backend/app/concierge/semantic_retrieval.py`** (modified):
+   - Step 7 set-writer primary path: now populates `card_reasons` for ALL cards (including those with hidden/unvalidated notes as `CardReason(validated=False)`). Previously only validated notes were added, causing hidden-note cards to be silently dropped in Step 8.
+   - `set_writer_primary_active` flag: initialized to `False`; set `True` only in the set-writer primary branch. Used in Step 8 to distinguish the two paths.
+   - Step 8 assembly: when `set_writer_primary_active=True`, cards with `cr.validated=False` are included without a note block (`reason_validated=False`) instead of being excluded. LLM fallback path behavior unchanged.
+   - `rejection_stats`: added `insufficient_verified_candidates` (bool, True when `final_card_count < 5`) and `insufficient_verified_candidates_count`.
+   - `_log_semantic_turn()`: added `frame_finalization_telemetry` parameter; emits as `semantic_retrieval_v1.frame_finalization_telemetry` separate log line containing raw concepts, finalized venue head, suppressed preference nouns, soft preferences, geography hints, retrieval queries, and insufficient_verified_candidates flag.
+
+3. **`backend/tests/test_semantic_query_frame.py`** (new, 59 tests):
+   - `TestTravelPreferenceNounsClassified` (5 tests): preference nouns in set, in classified tokens.
+   - `TestHiddenGemRestaurants` (7 tests): venue head=restaurant; no gem/jewelry queries; suppressed_preference_nouns populated.
+   - `TestRomanticCocktailBars` (4 tests): cocktail wins; romantic is soft preference.
+   - `TestBestWaterfrontBreweries` (5 tests): brewery wins; waterfront is geo hint + ambiguity flag.
+   - `TestIzakayas` (3 tests): izakaya unchanged; open_class_detected=True.
+   - `TestTaproomsWithAView` (5 tests): taproom wins; view is ambiguity flag; view not standalone query entity.
+   - `TestInvariantsPreserved` (11 tests): frame never raises; suppressed nouns tracking; generic noun preferred over preference noun; preference nouns don't leak into concepts.
+   - `TestSetWriterCardCountContract` (4 tests): fallback_note_visible_count=0; hidden note card not dropped.
+   - `TestTelemetryFields` (6 tests): suppressed_preference_nouns populated; clean queries have empty list.
+   - `TestPRContractRegression` (8 tests): PR #257–#261 structural invariants unchanged; new frame field exists; card-count 5–7 contract preserved.
+
+### Hard contracts preserved
+
+- `fallback_note_visible_count` always 0 (PR #257 invariant — unchanged)
+- `deterministic_visible_count` always 0 (unchanged)
+- Google verification trust gate: place_id + OPERATIONAL + maps_uri required (unchanged)
+- Card cap: default 6, range 5–7 (unchanged)
+- Non-Google enrichment cannot mint addable cards (structural — unchanged)
+- Card count contract: valid Google-verified cards with hidden notes are now INCLUDED without a note block (not dropped) — fixes the 3–4 card bug
+- Internal evidence gaps, role labels, preference nouns never surfaced in UI (unchanged + new enforcement for suppressed_preference_nouns)
+- `suppressed_preference_nouns` is frame-only telemetry — not in any card payload field
+- No SQL, no UI changes, no new providers, no LLM calls added
+
+### Frame finalization telemetry added
+
+Emitted as `semantic_retrieval_v1.frame_finalization_telemetry` structured log:
+```
+raw_concepts                       — [(label, confidence)] list before venue-head finalization
+finalized_venue_head               — frame.subtype_concepts[0].label
+suppressed_preference_nouns        — preference nouns found and demoted (e.g. ["gem"])
+soft_preferences                   — ambience/occasion preferences (e.g. ["romantic"])
+geography_hints                    — geo modifiers (e.g. ["waterfront"])
+retrieval_queries                  — final Google Text Search queries sent
+insufficient_verified_candidates   — True when final_card_count < 5
+final_card_count                   — count after trust gate and cap
+```
+
+Also added to `rejection_stats`:
+```
+insufficient_verified_candidates        — bool flag
+insufficient_verified_candidates_count  — int
+```
+
+### Card-count findings
+
+The 3–4 visible card issue was caused by the set-writer primary path in Step 8 dropping cards whose notes failed validation. Fixed: in set-writer primary mode, cards with hidden notes are now included without a note block rather than excluded. The LLM fallback path behavior is unchanged (cards without validated LLM notes are still excluded in that path).
+
+### Remaining limitations
+
+- `more_options_cursor_present` is always `False` — cursor lives in router layer (PR #263).
+- LLM reviewer gate not built (PR #262).
+- `_TRAVEL_PREFERENCE_NOUNS` covers 8 common travel preference descriptor nouns; future expansion possible if new problematic nouns are identified.
+
+### Supabase SQL: No
+
+### Test counts
+
+```
+test_semantic_query_frame.py:   59 tests, all pass (new)
+test_set_level_writer.py:       56 tests, all pass (unchanged)
+test_card_curator.py:           51 tests, all pass (unchanged)
+test_evidence_dossier.py:       54 tests, all pass (unchanged)
+test_parallel_retrieval.py:     28 tests, all pass (unchanged)
+test_sla_card_cap.py:           64 tests, all pass (unchanged)
+test_evidence_quality_v3.py:    53 tests, all pass (unchanged)
+test_evidence_quality_v4.py:    37 tests, all pass (unchanged)
+test_evidence_quality_v5.py:    37 tests, all pass (unchanged)
+```
+
+---
+
+## Previous change (2026-05-06) — PR #261: Set-Level Writer v1
 
 **Status: MERGE-READY** — 56 new set-level-writer tests pass; 51 PR #260 curator tests pass; 54 PR #259 dossier tests pass; 28 PR #258 tests pass; 64 PR #257 SLA tests pass; 127 evidence-quality tests pass; 19 pre-existing pydantic env failures remain (unrelated)
 
