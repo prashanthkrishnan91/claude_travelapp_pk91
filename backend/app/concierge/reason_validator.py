@@ -260,7 +260,7 @@ def _evidence_supports_claim(claim: str, evidence: MinimalEvidenceBundle) -> boo
     # Check structured_facts (existing behavior)
     for fact in evidence.structured_facts:
         fact_tokens = set(re.findall(r"[a-z]+", fact.lower()))
-        if any(tok in fact_tokens for tok in tokens):
+        if all(tok in fact_tokens for tok in tokens):
             return True
     # Check entity's verified name and address (listing context).
     # Uses word-boundary tokenization so "riverwalk" in the name does NOT
@@ -270,7 +270,7 @@ def _evidence_supports_claim(claim: str, evidence: MinimalEvidenceBundle) -> boo
         name_tokens = set(re.findall(r"[a-z]+", (getattr(entity, "name", "") or "").lower()))
         addr_tokens = set(re.findall(r"[a-z]+", (getattr(entity, "formatted_address", "") or "").lower()))
         combined = name_tokens | addr_tokens
-        if any(tok in combined for tok in tokens):
+        if all(tok in combined for tok in tokens):
             return True
     return False
 
