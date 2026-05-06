@@ -1,5 +1,26 @@
 # Progress Log
 
+## 2026-05-06 — PR #260: Card Role + Curated Set Ranker v1
+
+**Branch**: `claude/card-role-ranker-v1-fCGg6`
+
+**Severity**: Level 3 architecture slice — v2 amendment PR #260 card-role/curated-ranker foundation.
+
+**Problem**: No typed role or curation layer existed between ranked verified candidates and future note writing (PR #261). Card sets could feel random or repetitive.
+
+**What was built**:
+- `card_curator.py` (new): `CardCurationSignals`, `CuratedCard`, `CuratedSetResult`, `curate_cards()` — deterministic role assignment + conservative reordering within first_card_limit. No LLM, no new providers.
+- `semantic_retrieval.py`: Step 5.7 wired after dossier build; try/except fallback preserves original order on failure; `semantic_retrieval_v1.curated_set_telemetry` log line added.
+- `test_card_curator.py` (new, 51 tests): all 17 required scenarios.
+
+**Key invariants preserved**: fallback_note_visible_count=0, Google verification trust gate, card cap=6, no visible role labels, no new providers/SQL/UI.
+
+**Tests**: 51 new tests pass. 54 PR #259 + 28 PR #258 + 64 PR #257 tests all pass.
+**Supabase SQL**: No
+**HANDOFF.md edited**: Yes
+
+---
+
 ## 2026-05-06 — PR #259: Evidence Dossier v1 + review/theme extraction
 
 **Branch**: `claude/ai-concierge-dossier-v1-bFSdI`
