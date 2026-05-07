@@ -2,22 +2,39 @@
 
 Use this repo through a browser/mobile Claude + Codex workflow unless the user explicitly says CLI is available.
 
+## AI Repo Operating System v1
+
+For every non-trivial implementation, bug fix, UI change, provider/runtime change, migration, PR review, or workflow update, use the repo AI Operating System before coding:
+
+1. Read `docs/ai/AI_REPO_OPERATING_SYSTEM.md`.
+2. Read `docs/ai/KNOWN_FAILURE_MODES.md`.
+3. Use `docs/ai/TEST_SELECTOR.md` for test selection.
+4. Use `.claude/skills/ai-repo-os/SKILL.md` or the matching `.claude/commands/*` alias.
+5. Fill `.github/pull_request_template.md` honestly before PR summary.
+6. Stop and propose a split if the durable fix exceeds scope.
+
+Do not paste repeated workflow rules into every prompt. The short prompt should define the task, severity, success criteria, and scope; the repo OS owns the repeated process.
+
 Before work, read only the smallest needed subset of:
 
 1. `docs/ai/HANDOFF.md` — current state
-2. `docs/ai/PROMPT_LIBRARY.md` — workflow, budget, prompt, UI, and review rules
-3. `docs/ai/ISSUE_SEVERITY_ROUTING.md` — choose patch vs focused root-cause fix vs full plumbing analysis vs split plan
-4. `docs/ai/EXECUTION_PRINCIPLES.md` — think-before-coding, simplicity-first, surgical changes, and goal-driven execution for every prompt
-5. `docs/ai/ROOT_CAUSE_QUALITY_BAR.md` — bounded root-cause quality bar for bugs, regressions, complex features, and reviews
-6. `docs/ai/skills/README.md` — task-specific workflow skill router
-7. `docs/ai/CLAUDE_PERSONAL_SKILLS.md` — optional personal Claude skill routing when a prompt names a personal skill, including runtime log retrieval with `railway-logs`
-8. `docs/ai/DESIGN_VISION.md` — long-term aspirational UI direction and timing gate when doing major design work
-9. `docs/ai/UI_BASELINE.md` — UI baseline and known visual costs when doing UI work
-10. `docs/ai/CLAUDE_WORKFLOW_KIT.md` — stable project constraints only when needed
-11. `README.md` — public/setup context only when needed
+2. `docs/ai/AI_REPO_OPERATING_SYSTEM.md` — required non-trivial task workflow
+3. `docs/ai/KNOWN_FAILURE_MODES.md` — project-specific ways AI PRs fail
+4. `docs/ai/TEST_SELECTOR.md` — changed area to required tests
+5. `docs/ai/PROMPT_LIBRARY.md` — workflow, budget, prompt, UI, and review rules
+6. `docs/ai/ISSUE_SEVERITY_ROUTING.md` — choose patch vs focused root-cause fix vs full plumbing analysis vs split plan
+7. `docs/ai/EXECUTION_PRINCIPLES.md` — think-before-coding, simplicity-first, surgical changes, and goal-driven execution for every prompt
+8. `docs/ai/ROOT_CAUSE_QUALITY_BAR.md` — bounded root-cause quality bar for bugs, regressions, complex features, and reviews
+9. `docs/ai/skills/README.md` — task-specific workflow skill router
+10. `docs/ai/CLAUDE_PERSONAL_SKILLS.md` — optional personal Claude skill routing when a prompt names a personal skill, including runtime log retrieval with `railway-logs`
+11. `docs/ai/DESIGN_VISION.md` — long-term aspirational UI direction and timing gate when doing major design work
+12. `docs/ai/UI_BASELINE.md` — UI baseline and known visual costs when doing UI work
+13. `docs/ai/CLAUDE_WORKFLOW_KIT.md` — stable project constraints only when needed
+14. `README.md` — public/setup context only when needed
 
 Use one primary workflow skill when it matches the task:
 
+- `.claude/skills/ai-repo-os/SKILL.md` — default non-trivial task planner, audit, test, and PR evidence workflow
 - `docs/ai/skills/discovery.md` — map unknown files or visual surfaces before implementation
 - `docs/ai/skills/bugfix.md` — focused bug fix or small behavior correction
 - `docs/ai/skills/ui_fix.md` — capped UI polish or visual consistency pass
@@ -25,6 +42,16 @@ Use one primary workflow skill when it matches the task:
 - `docs/ai/skills/merge_gate.md` — cheap PR review before merge
 - `docs/ai/skills/workflow_update.md` — workflow/documentation updates
 - `docs/ai/skills/supabase_change.md` — any Supabase SQL, schema, RLS, auth, or persistence-contract change
+
+Useful command aliases:
+
+- `/test-selector`
+- `/contract-audit`
+- `/latency-gate`
+- `/claim-safety-gate`
+- `/pre-pr-self-audit`
+- `/pr-summary`
+- `/update-handoff`
 
 Core rules:
 
