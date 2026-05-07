@@ -757,7 +757,10 @@ def _run_pipeline(
     final_card_count = len(cards)
 
     # Recount note counts post-cap to match returned card set.
-    if note_generation_timed_out:
+    # When set_writer_primary_active=True, set-writer notes survived into the cards
+    # even if the SLA budget was exceeded — so we must re-scan the actual card objects
+    # rather than assuming all notes are absent.
+    if note_generation_timed_out and not set_writer_primary_active:
         visible_note_count = 0
         cards_without_notes_count = final_card_count
     else:
@@ -1032,8 +1035,11 @@ def _assemble_card_set(
     visible_note_count = 0
     cards_without_notes_count = 0
     for i, (entity, _evidence, rank_score, _det_reason) in enumerate(cards_data, 1):
-        if note_generation_timed_out:
-            # Include card; note is absent — frontend must not render note block.
+        if note_generation_timed_out and not set_writer_primary_active:
+            # SLA exceeded AND no set-writer notes available — include card without note.
+            # When set_writer_primary_active=True the set-writer already ran at Step 5.8
+            # and card_reasons holds its pre-computed notes; skip this branch so those
+            # notes are used in the else path below.
             card = _entity_to_card(
                 entity, "", frame,
                 reason_source="timed_out",

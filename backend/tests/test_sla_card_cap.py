@@ -924,3 +924,294 @@ class TestTotalBudgetAcrossPasses:
         # No validated notes → visible count must be 0.
         visible = sum(1 for cr in result.values() if cr.validated)
         assert visible == 0  # fallback_note_visible_count = 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. _assemble_card_set end-to-end contract (regression for missed fix in PR #280)
+#
+# Root cause: PR #277 fixed _assemble_card_reasons (Step 7) ordering so
+# set_writer_primary_active=True is returned when notes exist.  But
+# _assemble_card_set (Step 8) had a parallel `if note_generation_timed_out:`
+# guard that fired BEFORE checking set_writer_primary_active, discarding the
+# card_reasons assembled in Step 7 and producing display_why_validated=False
+# for every card — the drop point confirmed by raw Hoppscotch API evidence.
+#
+# Fix: changed `if note_generation_timed_out:` →
+#      `if note_generation_timed_out and not set_writer_primary_active:` in both
+#      the per-card loop and the post-cap recount in _assemble_card_set.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_IZAKAYA_PLACE_ID = "ChIJ_izakaya_chicago_001"
+_IZAKAYA_NOTE = (
+    "Basement bar setting serves Japanese street food and small bites with cocktails."
+)
+
+
+def _make_izakaya_entity() -> SimpleNamespace:
+    return SimpleNamespace(
+        name="The Izakaya",
+        place_id=_IZAKAYA_PLACE_ID,
+        formatted_address="123 N Clark St, Chicago, IL 60601",
+        lat=41.8827,
+        lng=-87.6323,
+        rating=4.6,
+        user_rating_count=312,
+        business_status="OPERATIONAL",
+        google_maps_uri="https://maps.google.com/?cid=izakaya_chicago",
+        website_uri=None,
+        types=["bar", "restaurant"],
+        primary_type="bar",
+    )
+
+
+def _make_izakaya_cards_data(n_extra: int = 2) -> list:
+    """The Izakaya as card 1, plus n_extra generic places."""
+    izakaya = (
+        _make_izakaya_entity(),
+        SimpleNamespace(evidence_adequacy="STRONG", structured_facts=[], enrichment_facts=[]),
+        SimpleNamespace(total=0.98, as_dict=lambda: {}),
+        "",
+    )
+    extras = [
+        (
+            SimpleNamespace(
+                name=f"Extra Place {i}",
+                place_id=f"ChIJ_extra_{i:03d}",
+                formatted_address=f"{i} W Madison St, Chicago, IL",
+                lat=41.88 + i * 0.001,
+                lng=-87.63,
+                rating=4.3,
+                user_rating_count=150,
+                business_status="OPERATIONAL",
+                google_maps_uri=f"https://maps.google.com/?q=extra_{i}",
+                website_uri=None,
+                types=["restaurant"],
+                primary_type="restaurant",
+            ),
+            SimpleNamespace(evidence_adequacy="ADEQUATE", structured_facts=[], enrichment_facts=[]),
+            SimpleNamespace(total=0.85 - i * 0.05, as_dict=lambda: {}),
+            "",
+        )
+        for i in range(1, n_extra + 1)
+    ]
+    return [izakaya] + extras
+
+
+def _make_izakaya_card_reasons(cards_data: list) -> Dict[str, Any]:
+    """Build card_reasons dict as _assemble_card_reasons would produce for izakaya set."""
+    from app.concierge.batched_reason_builder import CardReason
+    reasons: Dict[str, Any] = {}
+    for i, (entity, _ev, _rs, _det) in enumerate(cards_data, 1):
+        if entity.place_id == _IZAKAYA_PLACE_ID:
+            reasons[str(i)] = CardReason(
+                note=_IZAKAYA_NOTE,
+                source="set_level_writer_v1",
+                validated=True,
+            )
+        else:
+            reasons[str(i)] = CardReason(
+                note="",
+                source="set_level_writer_v1",
+                validated=False,
+            )
+    return reasons
+
+
+def _make_frame() -> SimpleNamespace:
+    return SimpleNamespace(
+        subtype_concepts=[SimpleNamespace(label="izakaya", confidence=0.92)],
+        destination="Chicago",
+        geography_hints=[],
+        location_modifiers=[],
+    )
+
+
+def _stub_entity_to_card(entity, note, frame, reason_source="", reason_validated=False):
+    """Test double for _entity_to_card — returns a lightweight stub card.
+
+    Mirrors the display fields that pickCardReason() and the frontend card
+    renderer inspect, without requiring the full pydantic model stack.
+    """
+    return SimpleNamespace(
+        name=entity.name,
+        display=SimpleNamespace(
+            display_why=note,
+            display_why_validated=reason_validated,
+            display_why_source=reason_source,
+        ),
+    )
+
+
+class TestAssembleCardSetWithSetWriterPrimary:
+    """
+    End-to-end contract tests for _assemble_card_set (Step 8).
+
+    _entity_to_card is patched to avoid the pydantic dependency that is absent
+    in this test environment.  The stub faithfully mirrors the three display
+    fields that pickCardReason() reads: display_why, display_why_validated,
+    display_why_source.
+
+    These tests exercise the exact production branch the Hoppscotch evidence
+    identified: note_generation_timed_out=True + set_writer_primary_active=True
+    must produce display_why_validated=True and non-empty display_why for every
+    card that has a validated set-writer note.
+    """
+
+    def test_izakaya_note_survives_sla_timeout_in_final_card(self):
+        """
+        REGRESSION TEST — the primary failure mode confirmed by raw API evidence.
+
+        When note_generation_timed_out=True AND set_writer_primary_active=True,
+        _assemble_card_set must place the validated set-writer note into the
+        returned card's display.display_why and set display_why_validated=True.
+
+        Before the fix: the `if note_generation_timed_out:` branch fired first
+        and returned _entity_to_card(entity, "", ..., reason_validated=False),
+        so every card in the Hoppscotch response had display_why="" and
+        display_why_validated=false regardless of card_reasons content.
+        """
+        from app.concierge.semantic_retrieval import _assemble_card_set
+
+        cards_data = _make_izakaya_cards_data()
+        card_reasons = _make_izakaya_card_reasons(cards_data)
+        frame = _make_frame()
+
+        with patch(
+            "app.concierge.semantic_retrieval._entity_to_card",
+            side_effect=_stub_entity_to_card,
+        ):
+            cards, _rank_debug, excluded, visible_count, without_count = _assemble_card_set(
+                cards_data=cards_data,
+                card_reasons=card_reasons,
+                frame=frame,
+                note_generation_timed_out=True,   # SLA budget exhausted by enrichment
+                set_writer_primary_active=True,    # set-writer already ran at Step 5.8
+            )
+
+        # At least The Izakaya card must be present.
+        assert len(cards) >= 1, "No cards returned from _assemble_card_set"
+
+        izakaya_card = next(
+            (c for c in cards if getattr(c, "name", None) == "The Izakaya"), None
+        )
+        assert izakaya_card is not None, "The Izakaya card missing from assembled cards"
+
+        display = getattr(izakaya_card, "display", None)
+        assert display is not None, "Card has no display field"
+
+        assert display.display_why_validated is True, (
+            "display_why_validated must be True for The Izakaya even when "
+            "note_generation_timed_out=True. pickCardReason() on the frontend "
+            "checks card.display.displayWhyValidated === true — False causes "
+            "the Concierge Note block to be skipped."
+        )
+        assert display.display_why == _IZAKAYA_NOTE, (
+            f"display_why mismatch. Expected: {_IZAKAYA_NOTE!r}. "
+            f"Got: {display.display_why!r}"
+        )
+        assert len(display.display_why) >= 12, (
+            "display_why is too short to pass pickCardReason length gate (>= 12 chars)"
+        )
+
+    def test_visible_note_count_nonzero_when_set_writer_active(self):
+        """visible_note_count return value must reflect validated notes, not be forced to 0."""
+        from app.concierge.semantic_retrieval import _assemble_card_set
+
+        cards_data = _make_izakaya_cards_data()
+        card_reasons = _make_izakaya_card_reasons(cards_data)
+        frame = _make_frame()
+
+        with patch(
+            "app.concierge.semantic_retrieval._entity_to_card",
+            side_effect=_stub_entity_to_card,
+        ):
+            _cards, _rd, _excl, visible_count, without_count = _assemble_card_set(
+                cards_data=cards_data,
+                card_reasons=card_reasons,
+                frame=frame,
+                note_generation_timed_out=True,
+                set_writer_primary_active=True,
+            )
+
+        assert visible_count >= 1, (
+            "visible_note_count must be >= 1 when set_writer_primary_active=True "
+            "and at least one card has a validated note."
+        )
+
+    def test_timed_out_without_set_writer_produces_no_visible_notes(self):
+        """
+        Negative test: when set_writer_primary_active=False and timed_out=True,
+        all cards must still be returned (no drops) but with display_why_validated=False.
+        """
+        from app.concierge.semantic_retrieval import _assemble_card_set
+
+        cards_data = _make_izakaya_cards_data(n_extra=2)
+        card_reasons: Dict[str, Any] = {}
+        frame = _make_frame()
+
+        with patch(
+            "app.concierge.semantic_retrieval._entity_to_card",
+            side_effect=_stub_entity_to_card,
+        ):
+            cards, _rd, excluded, visible_count, without_count = _assemble_card_set(
+                cards_data=cards_data,
+                card_reasons=card_reasons,
+                frame=frame,
+                note_generation_timed_out=True,
+                set_writer_primary_active=False,
+            )
+
+        total = len(cards_data)
+        assert len(cards) == total, (
+            f"All {total} cards must be returned even when timed_out — cards are not dropped"
+        )
+        assert visible_count == 0, "No visible notes expected when timed_out and no set-writer"
+        assert without_count == total
+        assert excluded == 0
+
+        for card in cards:
+            display = getattr(card, "display", None)
+            assert display is not None
+            assert display.display_why_validated is False
+            assert display.display_why == ""
+
+    def test_card_reasons_note_text_reaches_display_why_field(self):
+        """
+        Contract guard: note text placed in card_reasons[str(i)].note must appear
+        unchanged in the corresponding card's display.display_why.
+        """
+        from app.concierge.semantic_retrieval import _assemble_card_set
+        from app.concierge.batched_reason_builder import CardReason
+
+        entity = _make_izakaya_entity()
+        cards_data = [
+            (
+                entity,
+                SimpleNamespace(evidence_adequacy="STRONG", structured_facts=[], enrichment_facts=[]),
+                SimpleNamespace(total=0.99, as_dict=lambda: {}),
+                "",
+            )
+        ]
+        expected_note = _IZAKAYA_NOTE
+        card_reasons = {
+            "1": CardReason(note=expected_note, source="set_level_writer_v1", validated=True)
+        }
+        frame = _make_frame()
+
+        with patch(
+            "app.concierge.semantic_retrieval._entity_to_card",
+            side_effect=_stub_entity_to_card,
+        ):
+            cards, *_ = _assemble_card_set(
+                cards_data=cards_data,
+                card_reasons=card_reasons,
+                frame=frame,
+                note_generation_timed_out=False,
+                set_writer_primary_active=True,
+            )
+
+        assert len(cards) == 1
+        assert cards[0].display.display_why == expected_note, (
+            "Note text from card_reasons must survive into the final card's "
+            "display.display_why without truncation or substitution."
+        )
