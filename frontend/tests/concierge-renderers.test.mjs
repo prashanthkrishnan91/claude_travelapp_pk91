@@ -336,3 +336,116 @@ test('toCamel correctly converts display_why_validated to displayWhyValidated', 
   assert.equal(snakeToCamel('display_why'), 'displayWhy');
   assert.equal(snakeToCamel('display_category'), 'displayCategory');
 });
+
+// ── End-to-end snake→camel normalization (PR #regression contract) ────────────
+// Simulates the full apiFetch toCamel transform on a raw backend card object.
+// Verifies that display_why_validated (snake_case from backend) becomes
+// displayWhyValidated (camelCase) and that pickCardReason reads it correctly.
+
+function transformKeys(obj, transform) {
+  if (Array.isArray(obj)) return obj.map((item) => transformKeys(item, transform));
+  if (obj !== null && typeof obj === 'object') {
+    return Object.fromEntries(
+      Object.entries(obj).map(([k, v]) => [transform(k), transformKeys(v, transform)]),
+    );
+  }
+  return obj;
+}
+
+function snakeToCamelStr(str) {
+  return str.replace(/_([a-z])/g, (_, ch) => ch.toUpperCase());
+}
+
+function toCamel(data) {
+  return transformKeys(data, snakeToCamelStr);
+}
+
+test('end-to-end: snake_case backend card becomes camelCase and pickCardReason returns validated note', () => {
+  const snakeCaseCard = {
+    name: 'Izakaya Mita',
+    type: 'verified_place',
+    place_id: 'ChIJtest123',
+    display: {
+      display_why: 'Basement bar setting with Japanese street food and small bites in a casual West Loop space.',
+      display_why_validated: true,
+      display_category: 'Izakaya',
+      display_badges: [],
+      addability: 'addable',
+    },
+    supporting_details: { why_pick: 'legacy fallback — must not be used' },
+    primary_reason: 'legacy fallback — must not be used',
+  };
+  const card = toCamel(snakeCaseCard);
+
+  assert.equal(card.display.displayWhyValidated, true,
+    'display_why_validated must become displayWhyValidated=true after toCamel');
+  assert.equal(card.display.displayWhy,
+    'Basement bar setting with Japanese street food and small bites in a casual West Loop space.',
+    'display_why must become displayWhy unchanged after toCamel');
+  assert.equal(card.placeId, 'ChIJtest123',
+    'place_id must become placeId after toCamel — required for add-to-day identity');
+
+  const reason = pickCardReason(card);
+  assert.equal(reason,
+    'Basement bar setting with Japanese street food and small bites in a casual West Loop space.',
+    'pickCardReason must return displayWhy when displayWhyValidated=true');
+});
+
+test('end-to-end: snake_case card with display_why_validated=false yields no note', () => {
+  const snakeCaseCard = {
+    name: 'Test Place',
+    type: 'verified_place',
+    display: {
+      display_why: 'A note that must not appear.',
+      display_why_validated: false,
+      display_category: 'Bar',
+      display_badges: [],
+      addability: 'addable',
+    },
+    supporting_details: { why_pick: 'legacy note — must not leak' },
+    primary_reason: 'legacy fallback — must not leak',
+  };
+  const card = toCamel(snakeCaseCard);
+  assert.equal(pickCardReason(card), '',
+    'Semantic card with validated=false must produce empty reason — no legacy fallback');
+});
+
+test('production fixture: izakaya note with Chicago W Lake St address passes sanitizeWhyPick', () => {
+  // Production log note from semantic_retrieval_v1 set_writer_primary accepted=4/8.
+  // "820 W Lake St" has two words (W + Lake) between the number and "St", so
+  // containsAddressSignal must NOT block it (regex only catches N WORD SUFFIX form).
+  const note = 'Basement bar setting with Japanese street food and small bites in a Lower Level space at 820 W Lake St.';
+  const result = sanitizeWhyPick(note, 'Izakaya Test', ['Izakaya Test']);
+  assert.equal(result, note,
+    'Production izakaya note must pass sanitizeWhyPick — Chicago W Lake St should not be treated as address signal');
+});
+
+test('production fixture: full semantic card render path for izakaya note', () => {
+  const note = 'Basement bar setting with Japanese street food and small bites in a Lower Level space at 820 W Lake St.';
+  const card = {
+    name: 'Izakaya Mita',
+    type: 'verified_place',
+    display: {
+      displayWhy: note,
+      displayWhyValidated: true,
+      displayCategory: 'Izakaya',
+      displayBadges: [],
+      addability: 'addable',
+    },
+  };
+  const allTitles = ['Izakaya Mita', 'Yugen', 'Etta', 'Maple & Ash'];
+  const picked = pickCardReason(card);
+  const rendered = sanitizeWhyPick(picked, card.name, allTitles);
+  assert.equal(rendered, note,
+    'Full render path must preserve izakaya production note unchanged');
+});
+
+test('cache version bump: AIConciergePanel declares CONCIERGE_CACHE_VERSION >= 5', () => {
+  // Version must be >= 5 to evict pre-PR#277 cached messages that had
+  // displayWhyValidated=false for all cards (set-writer notes were dropped on SLA timeout).
+  const match = aiConciergePanel.match(/CONCIERGE_CACHE_VERSION\s*=\s*(\d+)/);
+  assert.ok(match, 'CONCIERGE_CACHE_VERSION must be declared in AIConciergePanel');
+  const version = parseInt(match[1], 10);
+  assert.ok(version >= 5,
+    `CONCIERGE_CACHE_VERSION must be >= 5 to evict stale pre-validation cache; found ${version}`);
+});

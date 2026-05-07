@@ -59,6 +59,34 @@ def _mock_place_response() -> PlaceRecommendationsResponse:
         sources=["https://example.com/source"],
         warnings=[],
     )
+def test_prompt_redacted_column_in_insert_payload():
+    # DB column is "prompt_redacted" (NOT NULL). The base_row must use that key,
+    # not "prompt". A wrong key causes a NOT NULL constraint violation on every request.
+    _SCHEMA_DRIFT_WARNED_COLUMNS.clear()
+    _KNOWN_UNSUPPORTED_COLUMNS.clear()
+    db = _FakeDb(errors=[])
+    decision = route_prompt("best hotels in chicago", confidence_threshold=0.55)
+
+    persist_concierge_request_log(
+        db=db,
+        user_id=UUID("00000000-0000-0000-0000-000000000099"),
+        prompt="izakayas in chicago",
+        decision=decision,
+        response=_mock_place_response(),
+        latency_ms=10,
+    )
+
+    assert len(db.payloads) == 1
+    payload = db.payloads[0]
+    assert "prompt_redacted" in payload, (
+        f"'prompt_redacted' missing from insert payload; found keys: {list(payload.keys())}"
+    )
+    assert "prompt" not in payload, (
+        "'prompt' must not appear in insert payload — DB column is 'prompt_redacted'"
+    )
+    assert payload["prompt_redacted"] is not None, "prompt_redacted must not be None"
+
+
 def test_intent_classifier_version_never_in_insert_row(caplog):
     # intent_classifier_version was removed from base_row to avoid PGRST204;
     # its value is emitted in app logs via request_log_event instead.
