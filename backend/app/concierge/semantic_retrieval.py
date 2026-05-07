@@ -969,9 +969,10 @@ def _run_pipeline(
             "pre_assembly_verified_count": verified_count,
             "final_card_count": final_card_count,
         },
-        # Latency Architecture v1: consolidated budget/timeout telemetry
+        # Latency Observability v1: consolidated budget/timeout/note-preservation telemetry
         timeout_budget_consumed_pct=_timeout_budget_consumed_pct,
         timeout_branches_triggered=_timeout_branches_triggered,
+        set_writer_primary_active=set_writer_primary_active,
     )
 
     if not cards:
@@ -1423,6 +1424,11 @@ def _log_semantic_turn(
     # Latency Architecture v1: consolidated budget/timeout telemetry
     timeout_budget_consumed_pct: int = 0,
     timeout_branches_triggered: Optional[List[str]] = None,
+    # Latency Observability: set_writer_notes_in_final_cards is True only when
+    # the set-writer ran as primary AND at least one post-cap card has a
+    # validated note with source="set_level_writer_v1".  Derived from
+    # set_writer_primary_active (path gate) + visible_note_count (final state).
+    set_writer_primary_active: bool = False,
 ) -> None:
     """Log one structured semantic turn line for zero-card failure debugging."""
     total_ms = int((time.monotonic() - t_pipeline_start) * 1000)
@@ -1578,7 +1584,7 @@ def _log_semantic_turn(
         "cards_returned=%d "
         "cards_with_notes=%d "
         "cards_without_notes=%d "
-        "set_writer_notes_preserved=%s",
+        "set_writer_notes_in_final_cards=%s",
         total_ms,
         latency.get("provider_ms", 0),
         latency.get("entity_ms", 0) + latency.get("rank_ms", 0),
@@ -1596,7 +1602,9 @@ def _log_semantic_turn(
         final_card_count,
         visible_note_count,
         hidden_note_count,
-        rejection_stats.get("set_writer_used", False),
+        # True only when set-writer was primary AND at least one post-cap card
+        # has a validated note (visible_note_count derived from actual card objects).
+        set_writer_primary_active and visible_note_count > 0,
     )
     # PR #259 dossier telemetry — separate log line to preserve turn-line parsers.
     if dossier_telemetry is not None:
