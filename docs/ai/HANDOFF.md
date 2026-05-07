@@ -1,6 +1,53 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-07) — PR #277: Fix set-writer notes discarded by SLA timeout (Level 2 production regression)
+## Last change (2026-05-07) — Fix: _assemble_card_set drops set-writer notes when SLA timed out (Level 2 escalated regression)
+
+**Status: IN PROGRESS (branch: claude/fix-travel-concierge-regression-Cu3R5)** — Backend + test fix. No SQL. No UI changes. No new endpoints. No provider changes.
+
+### Root cause (confirmed by raw Hoppscotch API evidence)
+
+PR #277 fixed `_assemble_card_reasons` (Step 7) ordering so `set_writer_primary_active=True` is returned correctly when set-writer notes are present. However `_assemble_card_set` (Step 8) had a **parallel** `if note_generation_timed_out:` guard at the top of its per-card loop that fired **before** checking `set_writer_primary_active`. This discarded the validated `card_reasons` assembled by Step 7 and called `_entity_to_card(entity, "", ..., reason_validated=False)` for every card.
+
+Result confirmed by raw API call (Hoppscotch): every card in `/ai/concierge/search` response had `display.display_why=""`, `display.display_why_source="timed_out"`, `display.display_why_validated=false` — even though backend logs correctly showed `set_writer_visible_note_count=1` and `visible_note_source_counts={set_level_writer_v1: 1}`. The backend logs reflect `_assemble_card_reasons` output only; the actual final card objects were assembled by the unfixed branch in `_assemble_card_set`.
+
+A second identical bug existed in the post-cap recount block: `if note_generation_timed_out: visible_note_count = 0` — same fix needed there.
+
+**Two drop points, both in `_assemble_card_set`:**
+1. Per-card loop: `if note_generation_timed_out:` → was calling `_entity_to_card(..., reason_validated=False)` ignoring card_reasons
+2. Post-cap recount: `if note_generation_timed_out: visible_note_count = 0` → forcing note count to 0 even when set-writer notes existed
+
+### Fix
+
+**`backend/app/concierge/semantic_retrieval.py`** — Two edits, both in `_assemble_card_set`:
+1. Per-card loop condition: `if note_generation_timed_out:` → `if note_generation_timed_out and not set_writer_primary_active:`
+2. Post-cap recount condition: `if note_generation_timed_out:` → `if note_generation_timed_out and not set_writer_primary_active:`
+
+When `set_writer_primary_active=True`, the timed-out branch is skipped entirely and the `else` path reads the pre-computed notes from `card_reasons` as intended.
+
+### Tests added
+
+**Backend (`backend/tests/test_sla_card_cap.py`)** — 4 new tests in `TestAssembleCardSetWithSetWriterPrimary` (Section 9):
+- `test_izakaya_note_survives_sla_timeout_in_final_card` — REGRESSION TEST: timed_out=True + sw_active=True → The Izakaya card has `display_why_validated=True` and `display_why = "Basement bar setting serves Japanese street food and small bites with cocktails."`
+- `test_visible_note_count_nonzero_when_set_writer_active` — visible_note_count >= 1 when notes exist
+- `test_timed_out_without_set_writer_produces_no_visible_notes` — negative: timed_out=True, sw_active=False → all cards returned, all `display_why_validated=False`
+- `test_card_reasons_note_text_reaches_display_why_field` — contract guard: note text in card_reasons survives to final card's display.display_why
+
+Production fixture: name="The Izakaya", place_id="ChIJ_izakaya_chicago_001", note="Basement bar setting serves Japanese street food and small bites with cocktails.", validated=True.
+
+### Test results
+- Backend: 72/73 in `test_sla_card_cap.py` PASS; 1 pre-existing failure (`test_display_why_validated_true_for_surviving_notes` — calls `_entity_to_card` without pydantic mock; was failing before this session)
+- Frontend: 31/31 in `concierge-renderers.test.mjs` PASS (no changes needed; existing tests already cover the semantic card render path)
+
+### Invariants confirmed
+- No deterministic note templates inserted
+- No fallback notes
+- Google remains only source for addable cards
+- Yelp/Foursquare/Tavily/Serper remain enrichment-only
+- No SQL, cache, ranking, or UI changes
+
+---
+
+## Previous change (2026-05-07) — PR #277: Fix set-writer notes discarded by SLA timeout (Level 2 production regression)
 
 **Status: OPEN** — Backend + frontend type contract fix. No SQL. No UI changes. No new endpoints.
 
