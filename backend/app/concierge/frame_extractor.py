@@ -145,6 +145,21 @@ _AMBIENCE_MODIFIER_TOKENS = frozenset({
     "instagrammable",
 })
 
+# Nouns that act as soft preference descriptors in compound travel phrases
+# ("hidden gem", "local secret", "neighborhood haunt") and must NOT win as the
+# venue head when an explicit venue noun is present.  When the user asks for
+# "hidden gem restaurants", the venue head is "restaurant", not "gem".
+_TRAVEL_PREFERENCE_NOUNS: frozenset = frozenset({
+    "gem", "gems",
+    "find", "finds",
+    "haunt", "haunts",
+    "sleeper", "sleepers",
+    "discovery", "discoveries",
+    "treasure", "treasures",
+    "jewel", "jewels",
+    "diamond", "diamonds",
+})
+
 _USE_CASE_TOKENS = frozenset({
     "reading", "studying", "working", "remote", "wifi", "laptop",
     "groups", "group", "couples", "solo", "kids", "children",
@@ -274,6 +289,11 @@ class ExperienceFrame:
     # Did the open-class place-ask detector fire for this query?
     # When True, semantic retrieval is eligible even if legacy intent is GENERAL.
     open_class_place_detected: bool = False
+
+    # Frame finalization telemetry (backend-only — never surfaced to UI).
+    # Preference modifier nouns that were found in the query but suppressed so
+    # a concrete venue head could win (e.g. "gem" from "hidden gem restaurants").
+    suppressed_preference_nouns: List[str] = field(default_factory=list)
 
     # Meta
     confidence: float = 0.8
@@ -414,6 +434,7 @@ def _classified_modifier_tokens(
     classified |= _GEO_MODIFIER_TOKENS
     classified |= _AMBIENCE_MODIFIER_TOKENS
     classified |= _USE_CASE_TOKENS
+    classified |= _TRAVEL_PREFERENCE_NOUNS
     # Add geo hint labels themselves (already lowercase)
     for hint in geo_hints:
         for tok in _tokenize_words(hint):
@@ -427,6 +448,27 @@ def _classified_modifier_tokens(
     for uc in use_cases:
         classified.add(uc.lower())
     return classified
+
+
+def _find_suppressed_preference_nouns(query: str) -> List[str]:
+    """Return travel-preference nouns found in the query's main clause.
+
+    These nouns were classified as soft-preference modifiers (not venue heads)
+    by _classified_modifier_tokens, so they never win primary-concept extraction
+    when a concrete venue noun is present.  Returned for telemetry only — the
+    list is backend-internal and never surfaced in UI.
+    """
+    q = query.strip()
+    parts = _MODIFIER_SPLIT_RE.split(q, maxsplit=1)
+    main_clause = parts[0].strip()
+    tokens = _tokenize_words(main_clause)
+    found: List[str] = []
+    seen: set = set()
+    for tok in tokens:
+        if tok in _TRAVEL_PREFERENCE_NOUNS and tok not in seen:
+            found.append(tok)
+            seen.add(tok)
+    return found
 
 
 def _extract_primary_concepts(query: str, modifier_tokens: Optional[set] = None) -> List[SubtypeConcept]:
@@ -581,6 +623,10 @@ def _extract_frame_impl(
     subtype_concepts = _extract_primary_concepts(q, modifier_tokens=modifier_tokens)
     place_kind_hints = _derive_place_kind_hints(subtype_concepts)
 
+    # Frame finalization telemetry: track which travel-preference nouns were
+    # found in the query and suppressed so a concrete venue head could win.
+    suppressed_preference_nouns = _find_suppressed_preference_nouns(q)
+
     # Normalized ask: lowercase, remove extra whitespace
     normalized = re.sub(r"\s+", " ", q.lower()).strip()
 
@@ -601,11 +647,11 @@ def _extract_frame_impl(
     confidence = 0.9 if subtype_concepts and subtype_concepts[0].confidence >= 0.8 else 0.7
 
     logger.debug(
-        "frame_extractor: query=%r destination=%r concepts=%r geo=%r locs=%r prefs=%r neg=%r use_cases=%r open_class=%s",
+        "frame_extractor: query=%r destination=%r concepts=%r geo=%r locs=%r prefs=%r neg=%r use_cases=%r open_class=%s suppressed_pref_nouns=%r",
         q, destination,
         [(c.label, c.confidence) for c in subtype_concepts],
         geo_hints, location_modifiers, soft_prefs, negative_constraints,
-        use_cases, open_class_detected,
+        use_cases, open_class_detected, suppressed_preference_nouns,
     )
 
     return ExperienceFrame(
@@ -626,6 +672,7 @@ def _extract_frame_impl(
         value_signals=value_signals,
         ambiguity_flags=ambiguity_flags,
         open_class_place_detected=open_class_detected,
+        suppressed_preference_nouns=suppressed_preference_nouns,
         confidence=confidence,
         needs_provider_call=True,
     )

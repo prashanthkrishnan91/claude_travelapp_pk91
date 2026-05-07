@@ -410,6 +410,7 @@ def _run_pipeline(
     note_generation_budget_s = deadline.budget_for_note_generation_s()
     note_generation_timed_out = note_generation_budget_s <= 0.0
 
+    set_writer_primary_active = False  # set True only in the set-writer primary branch
     if note_generation_timed_out:
         # Past soft ceiling — skip note generation entirely.
         # Cards will be assembled without notes; the frontend must not render
@@ -433,8 +434,11 @@ def _run_pipeline(
         and set_writer_result.visible_note_count > 0
     ):
         # ── Set-writer primary path ───────────────────────────────────────────
-        # Convert set-writer notes to the existing CardReason dict format so the
-        # rest of the pipeline (Step 8 assembly) is unchanged.
+        # Convert set-writer notes to the existing CardReason dict format.
+        # Cards with hidden notes (validated=False) are also added so Step 8
+        # can include them without a note block — preserving the contract:
+        # "hide invalid notes, not valid Google-verified cards."
+        set_writer_primary_active = True
         card_reasons = {}
         for idx, (entity, _ev, _rs, _det) in enumerate(cards_data, 1):
             pid = getattr(entity, "place_id", None)
@@ -444,6 +448,17 @@ def _run_pipeline(
                     note=sw_note.note,
                     source=sw_note.source,
                     validated=True,
+                    attempt_count=1,
+                    model_used="set_level_writer_v1",
+                )
+            else:
+                # Note hidden but card is still Google-verified — keep the slot
+                # so Step 8 can include the card without a note rather than
+                # dropping it from the response.
+                card_reasons[str(idx)] = CardReason(
+                    note="",
+                    source="set_level_writer_v1",
+                    validated=False,
                     attempt_count=1,
                     model_used="set_level_writer_v1",
                 )
@@ -482,43 +497,15 @@ def _run_pipeline(
     latency["batched_reason_ms"] = int((time.monotonic() - t0) * 1000)
 
     # ── Step 8: Assemble final cards ─────────────────────────────────────────
-    # When note generation was skipped (deadline): include all trust-gate-passing
-    # cards without notes (display_why_validated=False hides the note block).
-    # Normal path: include only cards with validated LLM notes; exclude the rest
-    # to maintain note quality — unvalidated cards go to the more-options pool.
-    # Deterministic text is NEVER used as a visible Concierge Note.
-    cards = []
-    rank_debug: List[Dict[str, Any]] = []
-    excluded_unvalidated = 0
-    visible_note_count = 0
-    cards_without_notes_count = 0
-    for i, (entity, evidence, rank_score, _det_reason) in enumerate(cards_data, 1):
-        if note_generation_timed_out:
-            # Include card; note is absent — frontend must not render note block.
-            card = _entity_to_card(
-                entity, "", frame,
-                reason_source="timed_out",
-                reason_validated=False,
-            )
-            cards_without_notes_count += 1
-        else:
-            cr = card_reasons.get(str(i), CardReason())
-            if not cr.validated:
-                excluded_unvalidated += 1
-                continue
-            card = _entity_to_card(
-                entity, cr.note, frame,
-                reason_source=cr.source,
-                reason_validated=True,
-            )
-            if card is not None:
-                visible_note_count += 1
-        if card is not None:
-            cards.append(card)
-            rank_debug.append({
-                "name": entity.name,
-                "score": rank_score.as_dict(),
-            })
+    cards, rank_debug, excluded_unvalidated, visible_note_count, cards_without_notes_count = (
+        _assemble_card_set(
+            cards_data=cards_data,
+            card_reasons=card_reasons,
+            frame=frame,
+            note_generation_timed_out=note_generation_timed_out,
+            set_writer_primary_active=set_writer_primary_active,
+        )
+    )
 
     latency["reason_ms"] = latency["det_reason_ms"] + latency["batched_reason_ms"]
 
@@ -623,6 +610,15 @@ def _run_pipeline(
             set_writer_result.visible_note_count
             if set_writer_result is not None else 0
         ),
+        # Honest card-count telemetry (split into distinct signals):
+        # - insufficient_verified_candidates: true when Google returned too few
+        #   verified places before note assembly — genuinely not enough supply.
+        # - below_first_card_limit: true when the returned set is smaller than
+        #   the configured default (may be caused by note validation, cap, or
+        #   trust gate — not necessarily insufficient Google supply).
+        "insufficient_verified_candidates": verified_count < 5,
+        "below_first_card_limit": final_card_count < first_card_limit,
+        "pre_assembly_verified_count": verified_count,
     }
     _log_semantic_turn(
         user_query=user_query,
@@ -672,6 +668,19 @@ def _run_pipeline(
         curator_telemetry=curator_tel,
         # PR #261 set-level writer telemetry
         set_writer_telemetry=set_writer_tel,
+        # PR this: semantic frame finalization telemetry
+        frame_finalization_telemetry={
+            "raw_concepts": [(c.label, round(c.confidence, 2)) for c in frame.subtype_concepts],
+            "finalized_venue_head": frame.subtype_concepts[0].label if frame.subtype_concepts else "",
+            "suppressed_preference_nouns": getattr(frame, "suppressed_preference_nouns", []),
+            "soft_preferences": getattr(frame, "soft_preferences", []),
+            "geography_hints": getattr(frame, "geography_hints", []),
+            "retrieval_queries": queries,
+            "insufficient_verified_candidates": verified_count < 5,
+            "below_first_card_limit": final_card_count < first_card_limit,
+            "pre_assembly_verified_count": verified_count,
+            "final_card_count": final_card_count,
+        },
     )
 
     if not cards:
@@ -726,6 +735,76 @@ def _trust_gate(cards: List[Any]) -> tuple:
             continue
         passed.append(card)
     return passed, rejected
+
+
+def _assemble_card_set(
+    cards_data: List[Any],
+    card_reasons: Dict[str, Any],
+    frame: Any,
+    note_generation_timed_out: bool,
+    set_writer_primary_active: bool,
+) -> tuple:
+    """Assemble the final ordered card list from ranked entities and note reasons.
+
+    Extracted from Step 8 so it can be unit-tested independently.
+
+    Rules:
+    - Deadline-exceeded path: include all entities without a note block.
+    - Set-writer primary path: include all entities; hide note block for any
+      card whose set-writer note failed validation (validated=False).  Do NOT
+      drop the card — "hide invalid notes, not valid cards."
+    - LLM fallback path: exclude entities without a validated note so that
+      unvalidated cards flow to the more-options pool instead.
+
+    Returns:
+        (cards, rank_debug, excluded_unvalidated, visible_note_count,
+         cards_without_notes_count)
+    """
+    from app.concierge.batched_reason_builder import CardReason
+    cards: List[Any] = []
+    rank_debug: List[Dict[str, Any]] = []
+    excluded_unvalidated = 0
+    visible_note_count = 0
+    cards_without_notes_count = 0
+    for i, (entity, _evidence, rank_score, _det_reason) in enumerate(cards_data, 1):
+        if note_generation_timed_out:
+            # Include card; note is absent — frontend must not render note block.
+            card = _entity_to_card(
+                entity, "", frame,
+                reason_source="timed_out",
+                reason_validated=False,
+            )
+            cards_without_notes_count += 1
+        else:
+            cr = card_reasons.get(str(i), CardReason())
+            if not cr.validated:
+                if set_writer_primary_active:
+                    # Card is Google-verified; set-writer note was hidden.
+                    # Include the card without a note rather than dropping it.
+                    card = _entity_to_card(
+                        entity, "", frame,
+                        reason_source="set_level_writer_v1",
+                        reason_validated=False,
+                    )
+                    cards_without_notes_count += 1
+                else:
+                    excluded_unvalidated += 1
+                    continue
+            else:
+                card = _entity_to_card(
+                    entity, cr.note, frame,
+                    reason_source=cr.source,
+                    reason_validated=True,
+                )
+                if card is not None:
+                    visible_note_count += 1
+        if card is not None:
+            cards.append(card)
+            rank_debug.append({
+                "name": entity.name,
+                "score": rank_score.as_dict(),
+            })
+    return cards, rank_debug, excluded_unvalidated, visible_note_count, cards_without_notes_count
 
 
 def _entity_to_card(
@@ -1034,6 +1113,8 @@ def _log_semantic_turn(
     curator_telemetry: Optional[Dict[str, Any]] = None,
     # PR #261 set-level writer telemetry
     set_writer_telemetry: Optional[Dict[str, Any]] = None,
+    # PR this: semantic frame finalization telemetry
+    frame_finalization_telemetry: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Log one structured semantic turn line for zero-card failure debugging."""
     total_ms = int((time.monotonic() - t_pipeline_start) * 1000)
@@ -1180,4 +1261,10 @@ def _log_semantic_turn(
         logger.info(
             "semantic_retrieval_v1.set_writer_telemetry %r",
             set_writer_telemetry,
+        )
+    # PR this: frame finalization telemetry — separate log line (backend-only).
+    if frame_finalization_telemetry is not None:
+        logger.info(
+            "semantic_retrieval_v1.frame_finalization_telemetry %r",
+            frame_finalization_telemetry,
         )
