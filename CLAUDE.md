@@ -2,16 +2,17 @@
 
 Use this repo through a browser/mobile Claude + Codex workflow unless the user explicitly says CLI is available.
 
-## AI Repo Operating System v1
+## AI Repo Operating System v2
 
 For every non-trivial implementation, bug fix, UI change, provider/runtime change, migration, PR review, or workflow update, use the repo AI Operating System before coding:
 
 1. Read `docs/ai/AI_REPO_OPERATING_SYSTEM.md`.
 2. Read `docs/ai/KNOWN_FAILURE_MODES.md`.
-3. Use `docs/ai/TEST_SELECTOR.md` for test selection.
-4. Use `.claude/skills/ai-repo-os/SKILL.md` or the matching `.claude/commands/*` alias.
-5. Fill `.github/pull_request_template.md` honestly before PR summary.
-6. Stop and propose a split if the durable fix exceeds scope.
+3. Use focused skills in `.claude/skills/*/SKILL.md` for planning, contract audit, test selection, runtime/latency gates, claim-safety, self-audit, PR summary, and failure recovery.
+4. Use read-only reviewer agents in `.claude/agents/*.md` for independent contract, test, place-authority, latency, evidence/prose, and PR review when applicable.
+5. Treat `.claude/hooks/ai_os_advisory.py` reminders as advisory prompts to run the relevant skill or reviewer, not as proof.
+6. Fill `.github/pull_request_template.md` honestly before PR summary.
+7. Stop and propose a split if the durable fix exceeds scope.
 
 Do not paste repeated workflow rules into every prompt. The short prompt should define the task, severity, success criteria, and scope; the repo OS owns the repeated process.
 
@@ -35,6 +36,14 @@ Before work, read only the smallest needed subset of:
 Use one primary workflow skill when it matches the task:
 
 - `.claude/skills/ai-repo-os/SKILL.md` — default non-trivial task planner, audit, test, and PR evidence workflow
+- `.claude/skills/task-planner/SKILL.md` — severity, assumptions, success criteria, contracts, stop/split plan
+- `.claude/skills/contract-audit/SKILL.md` — changed contracts and downstream consumers
+- `.claude/skills/test-selector/SKILL.md` — smallest sufficient tests and adversarial invariant coverage
+- `.claude/skills/runtime-gate/SKILL.md` — provider/runtime/latency evidence
+- `.claude/skills/claim-safety-gate/SKILL.md` — visible text/data/evidence safety
+- `.claude/skills/pre-pr-self-audit/SKILL.md` — acceptance criteria to file/function/test/evidence mapping
+- `.claude/skills/pr-summary/SKILL.md` — PR template evidence
+- `.claude/skills/failure-recovery/SKILL.md` — failed patch/review/runtime recovery
 - `docs/ai/skills/discovery.md` — map unknown files or visual surfaces before implementation
 - `docs/ai/skills/bugfix.md` — focused bug fix or small behavior correction
 - `docs/ai/skills/ui_fix.md` — capped UI polish or visual consistency pass
