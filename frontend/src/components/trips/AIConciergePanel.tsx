@@ -32,7 +32,7 @@ import type {
 } from "@/lib/api";
 import type { ItineraryDay, ItineraryItem } from "@/types";
 import { pickCardReason, pickCardCategory, sanitizeWhyPick, shouldShowCollapsedSources, splitReason, normalizeTitle } from "@/lib/concierge/cardPresentation";
-import { ACTION, parseRefinementAction, applyRefinementToMessage, buildContextualSearchQuery, selectBestCard, looksLikeFreshSearch } from "@/lib/concierge/refinementInterpreter";
+import { ACTION, parseRefinementAction, applyRefinementToMessage, buildContextualSearchQuery, selectBestCard, looksLikeFreshSearch, dedupeCardsAgainstCurrentSet } from "@/lib/concierge/refinementInterpreter";
 
 type MessageRole = "user" | "assistant";
 
@@ -546,7 +546,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
       )
     );
     if (!hasCards) return null;
-    return ["Show only casual", "Compare top 2", "Find cheaper nearby", "Add best to Day 1"];
+    return ["Show only casual", "Compare top 2", "Find more like these", "Add best to Day 1"];
   }, [messages]);
 
   useEffect(() => {
@@ -917,15 +917,47 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
     }
 
     if (action.type === ACTION.SEARCH_MORE_WITH_CONTEXT) {
+      // Fix C: cheaper/budget/affordable queries cannot claim cheaper results.
+      // Current data does not reliably prove live pricing — show honest response.
+      const isCheaperQuery = /\bcheap(er)?\b|\bbudget\b|\baffordable\b/i.test(query);
+      if (isCheaperQuery) {
+        setMessages((prev) => [...prev, {
+          role: "assistant",
+          text: "I can look for more options like these, but I don't have reliable live price data for these venues yet. Try \"Find more like these\" to search for additional options.",
+          isRefinement: true,
+          refinementAction: ACTION.SEARCH_MORE_WITH_CONTEXT,
+          restaurants: [], attractions: [], hotels: [],
+          researchSources: [], areaComparisons: [],
+          retrievalUsed: false, sourceStatus: "none",
+        }]);
+        return true;
+      }
+
       const originalQuery = getOriginalQuery(messages, latestCardMsg);
       const contextualQuery = buildContextualSearchQuery(originalQuery, query, { destination });
+      // Collect current visible cards for de-dupe after backend returns.
+      const currentVisibleCards = getCardsWithKind(latestCardMsg).map((c) => c.place);
       setLoading(true);
       try {
         const requestId = typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
         const result = await callConciergeSearch(tripId, contextualQuery, requestId);
-        setMessages((prev) => [...prev, fromSearchResult(result)]);
+        // Fix D: de-dupe against current visible card set before rendering.
+        const deduped = dedupeCardsAgainstCurrentSet(fromSearchResult(result), currentVisibleCards) as Message & { allDuplicates: boolean };
+        if (deduped.allDuplicates) {
+          setMessages((prev) => [...prev, {
+            role: "assistant",
+            text: "I mostly found the same top options. Try specifying a different area or a vibe like quiet, lively, or late-night to discover different places.",
+            isRefinement: true,
+            refinementAction: ACTION.SEARCH_MORE_WITH_CONTEXT,
+            restaurants: [], attractions: [], hotels: [],
+            researchSources: [], areaComparisons: [],
+            retrievalUsed: false, sourceStatus: "none",
+          }]);
+        } else {
+          setMessages((prev) => [...prev, deduped]);
+        }
       } catch (err) {
         console.error("[concierge] refinement search failed", err);
         setMessages((prev) => [...prev, { role: "assistant", text: "I hit a temporary issue. Please try again." }]);
@@ -1095,17 +1127,16 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                   )}
 
                   {msg.refinementAction === ACTION.COMPARE_CURRENT_SET && msg.refinementComparison && msg.refinementComparison.length > 0 && (
-                    <div className="space-y-2">
-                      {msg.refinementComparison.map((card) => (
-                        <div key={card.name} className="rounded-2xl border border-slate-700/60 bg-slate-800/70 p-3">
-                          <p className="text-sm font-semibold text-slate-100">{card.name}</p>
-                          {card.category && <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-slate-400">{card.category}</p>}
-                          {card.meta && <p className="mt-1 text-xs text-slate-300">{card.meta}</p>}
-                          {card.note && (
-                            <p className="mt-2 rounded-xl border border-slate-700/80 bg-slate-900/60 px-3 py-2 text-xs leading-relaxed text-slate-200">
-                              {card.note}
-                            </p>
-                          )}
+                    <div className="rounded-xl border border-slate-600/40 bg-slate-800/30 px-3 py-2.5 text-xs">
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">Quick comparison</p>
+                      {msg.refinementComparison.map((card, i) => (
+                        <div key={card.name} className={i > 0 ? "mt-2 border-t border-slate-700/40 pt-2" : ""}>
+                          <p className="font-semibold text-slate-200">
+                            {card.name}
+                            {card.category && <span className="ml-1 font-normal text-slate-400">· {card.category}</span>}
+                          </p>
+                          {card.meta && <p className="mt-0.5 text-slate-400">{card.meta}</p>}
+                          {card.note && <p className="mt-1 italic text-slate-300">{card.note}</p>}
                         </div>
                       ))}
                     </div>
@@ -1236,12 +1267,12 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
             </div>
           )}
           {messages.length > 1 && !loadingHistory && (
-            <div className="mb-2 flex flex-wrap gap-1.5">
+            <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               {(refinementChips ?? followUpActions).map((prompt) => (
                 <button
                   key={prompt}
                   onClick={() => refinementChips ? handleUserInput(prompt) : sendQuery(prompt)}
-                  className="rounded-full border border-slate-600 bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-700"
+                  className="shrink-0 rounded-full border border-slate-600 bg-slate-800 px-3 py-1.5 text-[11px] font-medium text-slate-200 hover:bg-slate-700"
                 >
                   {prompt}
                 </button>

@@ -9,6 +9,7 @@ import {
   compareCards,
   selectBestCard,
   looksLikeFreshSearch,
+  dedupeCardsAgainstCurrentSet,
 } from '../src/lib/concierge/refinementInterpreter.js';
 
 // ---------------------------------------------------------------------------
@@ -304,10 +305,14 @@ test('COMPARE: response text names both cards', () => {
   assert.match(result.text, /La Paloma/);
 });
 
-test('COMPARE: card arrays are empty (comparison is displayed separately)', () => {
-  const msg = makeMsg();
+test('COMPARE: card arrays contain top 2 canonical cards for action-capable rendering', () => {
+  // Fix A: top 2 original cards returned so ConciergeCard renders them with
+  // Add to Day, Save, map/source links, and Google verified badge.
+  const msg = makeMsg(); // 3 restaurants: Sushi Nami, La Paloma, Trattoria Milano
   const result = applyRefinementToMessage({ type: ACTION.COMPARE_CURRENT_SET }, msg);
-  assert.equal(result.restaurants.length, 0);
+  assert.equal(result.restaurants.length, 2, 'top 2 canonical cards must be in restaurants array');
+  assert.equal(result.restaurants[0].name, 'Sushi Nami');
+  assert.equal(result.restaurants[1].name, 'La Paloma');
   assert.equal(result.attractions.length, 0);
   assert.equal(result.hotels.length, 0);
 });
@@ -464,7 +469,7 @@ test('chips and typed follow-ups use the same action constants', () => {
   const chipMappings = [
     ['Show only casual', ACTION.FILTER_CURRENT_SET],
     ['Compare top 2', ACTION.COMPARE_CURRENT_SET],
-    ['Find cheaper nearby', ACTION.SEARCH_MORE_WITH_CONTEXT],
+    ['Find more like these', ACTION.SEARCH_MORE_WITH_CONTEXT], // renamed from "Find cheaper nearby"
     ['Add best to Day 1', ACTION.ADD_SELECTED_TO_DAY],
   ];
   for (const [chip, expectedAction] of chipMappings) {
@@ -655,3 +660,219 @@ test('AIConciergePanel: ADD_SELECTED_TO_DAY cannot emit "Added" when addItem fai
   assert.match(aiConciergePanel, /didAdd\s*\?\s*`Added/);
   assert.doesNotMatch(aiConciergePanel, /text:\s*`Added\s/);
 });
+
+// ---------------------------------------------------------------------------
+// Fix A — Compare top 2 returns canonical cards for action-capable rendering
+// ---------------------------------------------------------------------------
+
+test('COMPARE: top 2 canonical cards are present in result for ConciergeCard rendering', () => {
+  // The top 2 cards must be in restaurants/attractions/hotels so the existing
+  // ConciergeCard renderer shows Add to Day, Save, map/source links, and badge.
+  const msg = makeMsg();
+  const result = applyRefinementToMessage({ type: ACTION.COMPARE_CURRENT_SET }, msg);
+  assert.ok(result.restaurants.length >= 2, 'at least 2 canonical cards required for compare');
+  // Canonical card objects retain googleVerification for addability
+  for (const r of result.restaurants) {
+    assert.ok(r.googleVerification, 'compare cards must retain googleVerification');
+    assert.equal(r.type, 'verified_place', 'compare cards must remain verified_place');
+  }
+});
+
+test('COMPARE: refinementComparison summary data still present alongside canonical cards', () => {
+  // Both the text comparison summary AND the canonical cards must be in the result.
+  const msg = makeMsg();
+  const result = applyRefinementToMessage({ type: ACTION.COMPARE_CURRENT_SET }, msg);
+  assert.ok(result.refinementComparison, 'comparison summary required');
+  assert.equal(result.refinementComparison.length, 2, 'summary must cover top 2 cards');
+  // Canonical cards are also present
+  assert.ok(result.restaurants.length > 0, 'canonical cards must be non-empty');
+});
+
+test('AIConciergePanel: compare rendering uses text-based block, not card-shaped tiles', () => {
+  // The comparison block must not use rounded-2xl with border on individual card divs
+  // (which would look like place cards without actions). Instead it uses a plain text layout.
+  assert.match(aiConciergePanel, /Quick comparison/);
+  // The comparison block should not contain individual rounded-2xl card borders per item
+  assert.doesNotMatch(
+    aiConciergePanel,
+    /refinementComparison\.map\([\s\S]{0,300}rounded-2xl border border-slate-700\/60/,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Fix B/D — dedupeCardsAgainstCurrentSet
+// ---------------------------------------------------------------------------
+
+test('dedupeCardsAgainstCurrentSet: de-dupes by Google place ID', () => {
+  const current = [makePlace('Sushi Nami', { reviewCount: 1200 })];
+  // current[0] has providerPlaceId: 'abc123' from makePlace fixture
+  const newMsg = {
+    restaurants: [makePlace('Sushi Nami', { reviewCount: 1200 })], // same place ID
+    attractions: [],
+    hotels: [],
+  };
+  const result = dedupeCardsAgainstCurrentSet(newMsg, current);
+  assert.equal(result.restaurants.length, 0, 'duplicate by place ID must be removed');
+  assert.equal(result.allDuplicates, true);
+});
+
+test('dedupeCardsAgainstCurrentSet: de-dupes by normalized name+address when no place ID', () => {
+  const current = [{ name: 'Bar X', neighborhood: 'West Loop' }]; // no googleVerification
+  const newMsg = {
+    restaurants: [{ name: 'Bar X', neighborhood: 'West Loop' }], // same name+addr
+    attractions: [],
+    hotels: [],
+  };
+  const result = dedupeCardsAgainstCurrentSet(newMsg, current);
+  assert.equal(result.restaurants.length, 0, 'duplicate by name+address must be removed');
+  assert.equal(result.allDuplicates, true);
+});
+
+test('dedupeCardsAgainstCurrentSet: preserves cards not in current set', () => {
+  const current = [makePlace('Sushi Nami')];
+  const newMsg = {
+    restaurants: [
+      makePlace('Sushi Nami'),   // duplicate
+      makePlace('La Paloma'),    // new — different providerPlaceId? No — makePlace always uses abc123
+    ],
+    attractions: [],
+    hotels: [],
+  };
+  // Both have same providerPlaceId ('abc123') from makePlace, so both dedupe.
+  // Use a card with a unique place ID instead.
+  const unique = { name: 'New Bar', googleVerification: { providerPlaceId: 'xyz999', businessStatus: 'OPERATIONAL', confidence: 'high' } };
+  const newMsg2 = {
+    restaurants: [makePlace('Sushi Nami'), unique],
+    attractions: [],
+    hotels: [],
+  };
+  const result = dedupeCardsAgainstCurrentSet(newMsg2, current);
+  assert.equal(result.restaurants.length, 1, 'non-duplicate must survive');
+  assert.equal(result.restaurants[0].name, 'New Bar');
+  assert.equal(result.allDuplicates, false);
+});
+
+test('dedupeCardsAgainstCurrentSet: allDuplicates false when no new cards had matches', () => {
+  const current = [makePlace('Old Place', { reviewCount: 100 })];
+  const newMsg = {
+    restaurants: [{ name: 'Brand New', googleVerification: { providerPlaceId: 'zzz001', businessStatus: 'OPERATIONAL', confidence: 'high' } }],
+    attractions: [],
+    hotels: [],
+  };
+  const result = dedupeCardsAgainstCurrentSet(newMsg, current);
+  assert.equal(result.allDuplicates, false);
+  assert.equal(result.restaurants.length, 1);
+});
+
+test('dedupeCardsAgainstCurrentSet: empty currentCards returns all new cards unchanged', () => {
+  const newMsg = { restaurants: [makePlace('A'), makePlace('B')], attractions: [], hotels: [] };
+  const result = dedupeCardsAgainstCurrentSet(newMsg, []);
+  assert.equal(result.restaurants.length, 2, 'all cards preserved when no current set');
+  assert.equal(result.allDuplicates, false);
+});
+
+// ---------------------------------------------------------------------------
+// Fix C — cheaper chip renamed; cheaper queries get honest response
+// ---------------------------------------------------------------------------
+
+test('AIConciergePanel: refinementChips does not contain "Find cheaper nearby"', () => {
+  // The misleading chip must be removed/renamed to avoid implying price support.
+  assert.doesNotMatch(aiConciergePanel, /"Find cheaper nearby"/);
+});
+
+test('AIConciergePanel: refinementChips contains "Find more like these"', () => {
+  assert.match(aiConciergePanel, /"Find more like these"/);
+});
+
+test('AIConciergePanel: cheaper queries show honest response, not cheaper results claim', () => {
+  // The isCheaperQuery guard must exist in the SEARCH_MORE branch.
+  assert.match(aiConciergePanel, /isCheaperQuery/);
+  assert.match(aiConciergePanel, /reliable live price data/);
+});
+
+test('AIConciergePanel: cheaper guard uses regex covering cheaper/budget/affordable', () => {
+  assert.match(aiConciergePanel, /cheap\(er\)\?.*budget.*affordable/s);
+});
+
+// ---------------------------------------------------------------------------
+// Fix D — de-dupe applied in SEARCH_MORE; honest message for all-duplicates
+// ---------------------------------------------------------------------------
+
+test('AIConciergePanel: imports dedupeCardsAgainstCurrentSet from refinementInterpreter', () => {
+  assert.match(aiConciergePanel, /dedupeCardsAgainstCurrentSet/);
+});
+
+test('AIConciergePanel: SEARCH_MORE applies de-dupe before rendering results', () => {
+  assert.match(aiConciergePanel, /dedupeCardsAgainstCurrentSet\(fromSearchResult\(result\)/);
+});
+
+test('AIConciergePanel: all-duplicate SEARCH_MORE shows honest "mostly found the same" message', () => {
+  assert.match(aiConciergePanel, /mostly found the same top options/);
+  assert.match(aiConciergePanel, /allDuplicates/);
+});
+
+// ---------------------------------------------------------------------------
+// Fix G — existing card actions preserved after refinement (structural)
+// ---------------------------------------------------------------------------
+
+test('AIConciergePanel: ConciergeCard renders Add to Day, Save, map link, Google verified badge', () => {
+  assert.match(aiConciergePanel, /Add to Day/);
+  assert.match(aiConciergePanel, /Save to trip ideas/);
+  assert.match(aiConciergePanel, /Google verified/);
+  assert.match(aiConciergePanel, /MapPin/);
+});
+
+test('AIConciergePanel: canonical cards still rendered after refinement via isRenderableVerifiedPlace filter', () => {
+  // The card renderer block uses isRenderableVerifiedPlace to filter — ensuring
+  // only addable verified cards are shown.
+  assert.match(aiConciergePanel, /isRenderableVerifiedPlace/);
+  assert.match(aiConciergePanel, /addablePlaces/);
+});
+
+// ---------------------------------------------------------------------------
+// Fix H — concierge note fields preserved when present; missing notes allowed
+// ---------------------------------------------------------------------------
+
+test('AIConciergePanel: pickCardDetail reads conciergeNote from supportingDetails', () => {
+  // Note fields must be read from canonical card objects and passed to ConciergeCard.
+  assert.match(aiConciergePanel, /pickCardDetail/);
+  assert.match(aiConciergePanel, /conciergeNote/);
+});
+
+test('AIConciergePanel: missing concierge notes are allowed — pickCardDetail returns empty array', () => {
+  // pickCardDetail must return an empty array (not throw) when no note is present.
+  assert.match(aiConciergePanel, /return note \? \[note\] : \[\]/);
+});
+
+// ---------------------------------------------------------------------------
+// Fix J — no internal labels exposed in rendered UI (structural)
+// ---------------------------------------------------------------------------
+
+test('AIConciergePanel: refinementAction values are not rendered as visible UI text', () => {
+  // Internal refinementAction constants must be used only as data/conditions,
+  // never rendered as visible JSX text content (e.g., not {msg.refinementAction}).
+  assert.doesNotMatch(aiConciergePanel, /\{msg\.refinementAction\}/);
+  // The comparison block label must be a user-visible label, not an internal class name
+  assert.match(aiConciergePanel, /Quick comparison/);
+  assert.doesNotMatch(aiConciergePanel, />COMPARE_CURRENT_SET</);
+  assert.doesNotMatch(aiConciergePanel, />FILTER_CURRENT_SET</);
+});
+
+test('AIConciergePanel: no fallback_note_visible_count or deterministic_visible_count in JSX render', () => {
+  assert.doesNotMatch(aiConciergePanel, /fallback_note_visible_count/);
+  assert.doesNotMatch(aiConciergePanel, /deterministic_visible_count/);
+});
+
+// ---------------------------------------------------------------------------
+// Fix I — mobile chip/input layout (structural)
+// ---------------------------------------------------------------------------
+
+test('AIConciergePanel: chip container uses overflow-x-auto to prevent cramping on narrow screens', () => {
+  assert.match(aiConciergePanel, /overflow-x-auto/);
+});
+
+test('AIConciergePanel: chip buttons use shrink-0 to prevent compression and py-1.5 for tap target', () => {
+  assert.match(aiConciergePanel, /shrink-0/);
+  assert.match(aiConciergePanel, /py-1\.5/);
+});
+
