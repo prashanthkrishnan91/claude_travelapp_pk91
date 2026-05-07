@@ -73,6 +73,155 @@ def _format_display_price(
 from app.concierge.deadline_manager import RequestDeadline, DEFAULT_SLA, clamp_first_card_limit
 
 
+def _assemble_card_reasons(
+    cards_data: list,
+    set_writer_result: Any,
+    note_generation_timed_out: bool,
+    note_generation_low_budget: bool,
+    note_generation_budget_s: float,
+    frame: Any = None,
+    user_query: str = "",
+    deadline: Any = None,
+    remaining_budget_before_reasoning_ms: int = 0,
+) -> tuple:
+    """Step 7: Assemble card reasons from set-writer output or fallback cascade.
+
+    Set-writer primary path is checked FIRST — before SLA timeout and low-budget
+    guards — because set-writer notes are already computed at Step 5.8 and cost
+    zero additional LLM calls.  Without this ordering, the note_generation_timed_out
+    branch fires first and discards validated notes that were already computed when
+    enrichment steps (Yelp/FSQ, editorial) consumed budget past the 4000ms soft ceiling.
+
+    Returns (card_reasons, set_writer_primary_active, reasoning_result).
+    cards_data must be a list of (entity, evidence, rank_score, det_reason) 4-tuples.
+    """
+    from app.concierge.batched_reason_builder import (
+        build_reasons_with_retry,
+        CardReason,
+        ReasoningResultV2,
+    )
+
+    set_writer_primary_active = False
+    if (
+        set_writer_result is not None
+        and not set_writer_result.timed_out
+        and set_writer_result.visible_note_count > 0
+    ):
+        # ── Set-writer primary path — checked FIRST (before SLA timeout check) ─
+        # The set-writer LLM already ran at Step 5.8.  Assembling its pre-computed
+        # notes costs zero additional LLM calls.  Cards with hidden notes
+        # (validated=False) are also added so Step 8 can include them without a
+        # note block — preserving the contract:
+        # "hide invalid notes, not valid Google-verified cards."
+        set_writer_primary_active = True
+        card_reasons: Dict[str, Any] = {}
+        for idx, (entity, _ev, _rs, _det) in enumerate(cards_data, 1):
+            pid = getattr(entity, "place_id", None)
+            sw_note = set_writer_result.notes_by_place_id.get(pid) if pid else None
+            if sw_note and sw_note.validated:
+                card_reasons[str(idx)] = CardReason(
+                    note=sw_note.note,
+                    source=sw_note.source,
+                    validated=True,
+                    attempt_count=1,
+                    model_used="set_level_writer_v1",
+                )
+            else:
+                # Note hidden but card is still Google-verified — keep the slot
+                # so Step 8 can include the card without a note rather than
+                # dropping it from the response.
+                card_reasons[str(idx)] = CardReason(
+                    note="",
+                    source="set_level_writer_v1",
+                    validated=False,
+                    attempt_count=1,
+                    model_used="set_level_writer_v1",
+                )
+
+        n = len(cards_data)
+        accepted = sum(1 for cr in card_reasons.values() if cr.validated)
+        src_counts: Dict[str, int] = {}
+        for cr in card_reasons.values():
+            if cr.validated:
+                src_counts[cr.source] = src_counts.get(cr.source, 0) + 1
+
+        reasoning_result = ReasoningResultV2(
+            attempted=True,
+            success=(accepted == n),
+            accepted_count=accepted,
+            final_card_count=n,
+            final_note_omitted_count=n - accepted,
+            deterministic_visible_count=0,  # invariant: always 0
+            failure_reason=(
+                None if accepted == n
+                else f"set_writer_partial:{n - accepted}_missing"
+            ),
+            model="set_level_writer_v1",
+            fallback_model="",
+            visible_note_source_counts=src_counts,
+        )
+        logger.info(
+            "semantic_retrieval_v1: set_writer_primary accepted=%d/%d",
+            accepted, n,
+        )
+    elif note_generation_timed_out:
+        # Only fires when set-writer produced no usable notes — see ordering above.
+        # Cards will be assembled without notes; the frontend must not render a
+        # Concierge Note block when display_why_validated=False.
+        if deadline is not None:
+            logger.warning(
+                "semantic_retrieval_v1: note_generation_skipped_past_soft_ceiling "
+                "query=%r elapsed_ms=%d soft_ceiling_ms=%d",
+                user_query, deadline.elapsed_ms(), deadline.sla.soft_ceiling_ms,
+            )
+        card_reasons = {}
+        n_cards = len(cards_data)
+        reasoning_result = ReasoningResultV2(
+            attempted=False,
+            failure_reason="skipped_past_soft_ceiling",
+            final_card_count=n_cards,
+            final_note_omitted_count=n_cards,
+        )
+    elif note_generation_low_budget:
+        # Budget positive but below the minimum useful threshold — skip before
+        # calling the writer so we don't waste a marginal LLM call.
+        if deadline is not None:
+            logger.info(
+                "semantic_retrieval_v1: note_generation_skipped_low_budget "
+                "query=%r remaining_ms=%d budget_s=%.2f",
+                user_query, remaining_budget_before_reasoning_ms, note_generation_budget_s,
+            )
+        card_reasons = {}
+        n_cards = len(cards_data)
+        reasoning_result = ReasoningResultV2(
+            attempted=False,
+            failure_reason="skipped_low_budget",
+            final_card_count=n_cards,
+            final_note_omitted_count=n_cards,
+        )
+    elif not cards_data:
+        # No verified cards reached note assembly — skip LLM cascade entirely.
+        if deadline is not None:
+            logger.info(
+                "semantic_retrieval_v1: note_writer_skipped_no_valid_cards query=%r",
+                user_query,
+            )
+        card_reasons = {}
+        reasoning_result = ReasoningResultV2(
+            attempted=False,
+            failure_reason="skipped_no_valid_cards",
+            final_card_count=0,
+            final_note_omitted_count=0,
+        )
+    else:
+        # ── Fallback: existing three-pass cascade ─────────────────────────────
+        card_reasons, reasoning_result = build_reasons_with_retry(
+            cards_data, frame, timeout_s=note_generation_budget_s
+        )
+
+    return card_reasons, set_writer_primary_active, reasoning_result
+
+
 def run_semantic_retrieval_v1(
     user_query: str,
     destination: str,
@@ -542,149 +691,29 @@ def _run_pipeline(
     latency["det_reason_ms"] = int((time.monotonic() - t0) * 1000)
 
     # ── Step 7: Note generation — set-level writer (primary) or three-pass LLM ─
-    # Primary path: use set-writer notes when the writer ran and produced results.
-    # Fallback: existing three-pass build_reasons_with_retry cascade.
-    # Budget gate: skip all note generation when past the SLA soft ceiling.
     t0 = time.monotonic()
-    from app.concierge.batched_reason_builder import (
-        build_reasons_with_retry,
-        CardReason,
-        ReasoningResultV2,
-        SOURCE_OMITTED,
-    )
 
     # Check SLA before committing to LLM note generation.
     remaining_budget_before_reasoning_ms = deadline.remaining_ms()
     note_generation_budget_s = deadline.budget_for_note_generation_s()
     note_generation_timed_out = note_generation_budget_s <= 0.0
     # Pre-skip when budget is positive but below the minimum useful window.
-    # Avoids submitting an LLM call that cannot complete meaningfully.
     note_generation_low_budget = (
         not note_generation_timed_out
         and note_generation_budget_s < _MIN_NOTE_GENERATION_BUDGET_S
     )
 
-    set_writer_primary_active = False  # set True only in the set-writer primary branch
-    if (
-        set_writer_result is not None
-        and not set_writer_result.timed_out
-        and set_writer_result.visible_note_count > 0
-    ):
-        # ── Set-writer primary path — checked FIRST (before SLA timeout check) ─
-        # The set-writer LLM already ran at Step 5.8. Assembling its pre-computed
-        # notes costs zero additional LLM calls. Checking this first ensures that
-        # notes produced before the SLA soft ceiling are preserved even when the
-        # enrichment steps (5.55 Yelp/FSQ, 5.56 editorial) consumed significant
-        # budget, pushing elapsed time past the soft ceiling before Step 7.
-        # Without this ordering, the note_generation_timed_out branch would fire
-        # first and discard validated notes that were already computed.
-        # Convert set-writer notes to the existing CardReason dict format.
-        # Cards with hidden notes (validated=False) are also added so Step 8
-        # can include them without a note block — preserving the contract:
-        # "hide invalid notes, not valid Google-verified cards."
-        set_writer_primary_active = True
-        card_reasons = {}
-        for idx, (entity, _ev, _rs, _det) in enumerate(cards_data, 1):
-            pid = getattr(entity, "place_id", None)
-            sw_note = set_writer_result.notes_by_place_id.get(pid) if pid else None
-            if sw_note and sw_note.validated:
-                card_reasons[str(idx)] = CardReason(
-                    note=sw_note.note,
-                    source=sw_note.source,
-                    validated=True,
-                    attempt_count=1,
-                    model_used="set_level_writer_v1",
-                )
-            else:
-                # Note hidden but card is still Google-verified — keep the slot
-                # so Step 8 can include the card without a note rather than
-                # dropping it from the response.
-                card_reasons[str(idx)] = CardReason(
-                    note="",
-                    source="set_level_writer_v1",
-                    validated=False,
-                    attempt_count=1,
-                    model_used="set_level_writer_v1",
-                )
-
-        n = len(cards_data)
-        accepted = sum(1 for cr in card_reasons.values() if cr.validated)
-        src_counts: Dict[str, int] = {}
-        for cr in card_reasons.values():
-            if cr.validated:
-                src_counts[cr.source] = src_counts.get(cr.source, 0) + 1
-
-        reasoning_result = ReasoningResultV2(
-            attempted=True,
-            success=(accepted == n),
-            accepted_count=accepted,
-            final_card_count=n,
-            final_note_omitted_count=n - accepted,
-            deterministic_visible_count=0,  # invariant: always 0
-            failure_reason=(
-                None if accepted == n
-                else f"set_writer_partial:{n - accepted}_missing"
-            ),
-            model="set_level_writer_v1",
-            fallback_model="",
-            visible_note_source_counts=src_counts,
-        )
-        logger.info(
-            "semantic_retrieval_v1: set_writer_primary accepted=%d/%d",
-            accepted, n,
-        )
-    elif note_generation_timed_out:
-        # Past soft ceiling AND no set-writer notes available — skip fallback LLM.
-        # Cards will be assembled without notes; the frontend must not render
-        # a Concierge Note block when display_why_validated=False.
-        logger.warning(
-            "semantic_retrieval_v1: note_generation_skipped_past_soft_ceiling "
-            "query=%r elapsed_ms=%d soft_ceiling_ms=%d",
-            user_query, deadline.elapsed_ms(), deadline.sla.soft_ceiling_ms,
-        )
-        card_reasons: Dict[str, CardReason] = {}
-        n_cards = len(cards_data)
-        reasoning_result = ReasoningResultV2(
-            attempted=False,
-            failure_reason="skipped_past_soft_ceiling",
-            final_card_count=n_cards,
-            final_note_omitted_count=n_cards,
-        )
-    elif note_generation_low_budget:
-        # Budget positive but below the minimum useful threshold — skip before
-        # calling the writer so we don't waste a marginal LLM call.
-        logger.info(
-            "semantic_retrieval_v1: note_generation_skipped_low_budget "
-            "query=%r remaining_ms=%d budget_s=%.2f",
-            user_query, remaining_budget_before_reasoning_ms, note_generation_budget_s,
-        )
-        card_reasons = {}
-        n_cards = len(cards_data)
-        reasoning_result = ReasoningResultV2(
-            attempted=False,
-            failure_reason="skipped_low_budget",
-            final_card_count=n_cards,
-            final_note_omitted_count=n_cards,
-        )
-    elif not cards_data:
-        # No verified cards reached note assembly — skip LLM cascade entirely.
-        # This guards latency: note work must not run when it has no valid inputs.
-        logger.info(
-            "semantic_retrieval_v1: note_writer_skipped_no_valid_cards query=%r",
-            user_query,
-        )
-        card_reasons = {}
-        reasoning_result = ReasoningResultV2(
-            attempted=False,
-            failure_reason="skipped_no_valid_cards",
-            final_card_count=0,
-            final_note_omitted_count=0,
-        )
-    else:
-        # ── Fallback: existing three-pass cascade ─────────────────────────────
-        card_reasons, reasoning_result = build_reasons_with_retry(
-            cards_data, frame, timeout_s=note_generation_budget_s
-        )
+    card_reasons, set_writer_primary_active, reasoning_result = _assemble_card_reasons(
+        cards_data=cards_data,
+        set_writer_result=set_writer_result,
+        note_generation_timed_out=note_generation_timed_out,
+        note_generation_low_budget=note_generation_low_budget,
+        note_generation_budget_s=note_generation_budget_s,
+        frame=frame,
+        user_query=user_query,
+        deadline=deadline,
+        remaining_budget_before_reasoning_ms=remaining_budget_before_reasoning_ms,
+    )
     latency["batched_reason_ms"] = int((time.monotonic() - t0) * 1000)
     # optional_reasoning_ms covers all non-critical optional work (dossier, curator,
     # set-writer, batched-reason). Tracked for latency profiling only.

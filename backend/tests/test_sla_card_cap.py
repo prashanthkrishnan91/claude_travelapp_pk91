@@ -520,64 +520,13 @@ def _make_set_writer_result(notes: dict, visible_count: int) -> SimpleNamespace:
     )
 
 
-def _run_note_assembly_step(
-    cards_data: list,
-    set_writer_result: Any,
-    note_generation_timed_out: bool,
-    note_generation_budget_s: float,
-) -> tuple:
-    """
-    Pure-Python simulation of the Step 7 if/elif note assembly from
-    semantic_retrieval.py.  Mirrors the FIXED ordering (set-writer first).
-
-    Returns (card_reasons, set_writer_primary_active).
-    """
-    from app.concierge.batched_reason_builder import CardReason, ReasoningResultV2
-
-    set_writer_primary_active = False
-    card_reasons: Dict[str, Any] = {}
-
-    # Set-writer primary path — checked FIRST (the fix).
-    if (
-        set_writer_result is not None
-        and not set_writer_result.timed_out
-        and set_writer_result.visible_note_count > 0
-    ):
-        set_writer_primary_active = True
-        for idx, (entity, _) in enumerate(cards_data, 1):
-            pid = getattr(entity, "place_id", None)
-            sw_note = set_writer_result.notes_by_place_id.get(pid) if pid else None
-            if sw_note and sw_note.validated:
-                card_reasons[str(idx)] = CardReason(
-                    note=sw_note.note,
-                    source=sw_note.source,
-                    validated=True,
-                    attempt_count=1,
-                    model_used="set_level_writer_v1",
-                )
-            else:
-                card_reasons[str(idx)] = CardReason(
-                    note="",
-                    source="set_level_writer_v1",
-                    validated=False,
-                    attempt_count=1,
-                    model_used="set_level_writer_v1",
-                )
-    elif note_generation_timed_out:
-        # Only fires when set-writer produced no notes.
-        pass  # card_reasons stays {}
-    # (other branches omitted for brevity)
-
-    return card_reasons, set_writer_primary_active
-
-
 class TestSetWriterNotesSurviveSLATimeout:
     """
     Regression tests for the fix in semantic_retrieval.py Step 7.
 
-    These tests verify that set-writer validated notes are preserved and
-    assembled into cards with display_why_validated=True even when
-    note_generation_timed_out=True (i.e., enrichment steps consumed budget).
+    These tests call _assemble_card_reasons() — the production helper extracted
+    from the Step 7 if/elif block — directly, so they exercise real production
+    code and will fail if the ordering in that function regresses.
 
     The FAILING behavior (before the fix): note_generation_timed_out=True
     caused card_reasons={} regardless of set_writer_result, producing all
@@ -585,7 +534,7 @@ class TestSetWriterNotesSurviveSLATimeout:
     """
 
     def _make_cards_data(self, n: int) -> list:
-        """Build (entity, rank_score) tuples with unique place_ids."""
+        """Build (entity, evidence, rank_score, det_reason) 4-tuples with unique place_ids."""
         return [
             (
                 SimpleNamespace(
@@ -602,13 +551,16 @@ class TestSetWriterNotesSurviveSLATimeout:
                     types=["restaurant"],
                     primary_type="restaurant",
                 ),
+                SimpleNamespace(evidence_adequacy="STRONG", structured_facts=[], enrichment_facts=[]),
                 SimpleNamespace(total=0.9 - i * 0.05),
+                "",  # det_reason
             )
             for i in range(n)
         ]
 
     def test_set_writer_notes_used_when_sla_not_timed_out(self):
         """Baseline: notes are assembled when budget is within SLA."""
+        from app.concierge.semantic_retrieval import _assemble_card_reasons
         cards_data = self._make_cards_data(4)
         sw_notes = {
             f"ChIJ_place_{i:03d}": _make_set_writer_note(
@@ -619,10 +571,11 @@ class TestSetWriterNotesSurviveSLATimeout:
         }
         sw_result = _make_set_writer_result(sw_notes, visible_count=4)
 
-        card_reasons, sw_active = _run_note_assembly_step(
+        card_reasons, sw_active, _ = _assemble_card_reasons(
             cards_data=cards_data,
             set_writer_result=sw_result,
             note_generation_timed_out=False,
+            note_generation_low_budget=False,
             note_generation_budget_s=2.0,
         )
 
@@ -638,7 +591,11 @@ class TestSetWriterNotesSurviveSLATimeout:
         AND set_writer_result.visible_note_count > 0, the set-writer primary
         path must still execute.  card_reasons must have validated=True entries
         for each place that the set-writer produced a note for.
+
+        Before the fix: _assemble_card_reasons checked note_generation_timed_out
+        FIRST, so this test returned card_reasons={} and sw_active=False.
         """
+        from app.concierge.semantic_retrieval import _assemble_card_reasons
         cards_data = self._make_cards_data(4)
         sw_notes = {
             f"ChIJ_place_{i:03d}": _make_set_writer_note(
@@ -650,10 +607,11 @@ class TestSetWriterNotesSurviveSLATimeout:
         sw_result = _make_set_writer_result(sw_notes, visible_count=4)
 
         # note_generation_timed_out=True simulates enrichment consuming SLA budget
-        card_reasons, sw_active = _run_note_assembly_step(
+        card_reasons, sw_active, _ = _assemble_card_reasons(
             cards_data=cards_data,
             set_writer_result=sw_result,
             note_generation_timed_out=True,   # ← SLA would have discarded notes before fix
+            note_generation_low_budget=False,
             note_generation_budget_s=0.0,
         )
 
@@ -672,12 +630,14 @@ class TestSetWriterNotesSurviveSLATimeout:
 
     def test_timed_out_without_set_writer_notes_returns_empty(self):
         """When SLA timed out AND no set-writer notes, card_reasons stays empty."""
+        from app.concierge.semantic_retrieval import _assemble_card_reasons
         cards_data = self._make_cards_data(4)
         # No set-writer result (e.g., writer timed out or wasn't run).
-        card_reasons, sw_active = _run_note_assembly_step(
+        card_reasons, sw_active, _ = _assemble_card_reasons(
             cards_data=cards_data,
             set_writer_result=None,
             note_generation_timed_out=True,
+            note_generation_low_budget=False,
             note_generation_budget_s=0.0,
         )
         assert sw_active is False
@@ -685,6 +645,7 @@ class TestSetWriterNotesSurviveSLATimeout:
 
     def test_set_writer_partial_notes_survive_sla_timeout(self):
         """Only validated notes are assembled; unvalidated slots get validated=False."""
+        from app.concierge.semantic_retrieval import _assemble_card_reasons
         cards_data = self._make_cards_data(4)
         sw_notes = {
             # Cards 0–2 have validated notes; card 3 has no note (rejected).
@@ -695,10 +656,11 @@ class TestSetWriterNotesSurviveSLATimeout:
         }
         sw_result = _make_set_writer_result(sw_notes, visible_count=3)
 
-        card_reasons, sw_active = _run_note_assembly_step(
+        card_reasons, sw_active, _ = _assemble_card_reasons(
             cards_data=cards_data,
             set_writer_result=sw_result,
             note_generation_timed_out=True,
+            note_generation_low_budget=False,
             note_generation_budget_s=0.0,
         )
 
