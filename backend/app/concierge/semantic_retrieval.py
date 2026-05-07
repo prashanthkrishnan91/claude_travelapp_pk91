@@ -274,6 +274,46 @@ def _run_pipeline(
     enrichment_map = enrich_result.enrichment_map
     latency["enrich_ms"] = enrich_result.elapsed_ms
 
+    # ── Step 5.55: Cross-source evidence enrichment v1 (PR #275) ────────────
+    # Yelp + Foursquare enrichment for already Google-verified cards only.
+    # Deadline-bounded and parallel. Never blocks card return.
+    # Yelp/Foursquare cannot mint cards, override Google identity/addability/
+    # operational status, or directly create visible prose.
+    # Keys gracefully absent → no enrichment, cards still returned.
+    from app.concierge.cross_source_enrichment import (
+        CrossSourceEnrichmentResult,
+        CrossSourceTelemetry,
+        get_foursquare_key,
+        get_yelp_key,
+        run_cross_source_enrichment,
+    )
+    t0 = time.monotonic()
+    cross_source_result: CrossSourceEnrichmentResult
+    cross_source_tel: Dict[str, Any] = {}
+    try:
+        _yelp_key = get_yelp_key()
+        _fsq_key = get_foursquare_key()
+        cross_source_result = run_cross_source_enrichment(
+            [e for e, _ in ranked],
+            deadline=deadline,
+            yelp_key=_yelp_key,
+            fsq_key=_fsq_key,
+            budget_n=first_card_limit,
+        )
+        cross_source_tel = cross_source_result.telemetry.as_log_dict()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "semantic_retrieval_v1: cross_source_enrichment_failed query=%r error=%s",
+            user_query, exc,
+        )
+        cross_source_result = CrossSourceEnrichmentResult(
+            atoms_by_place_id={},
+            telemetry=CrossSourceTelemetry(enrichment_enabled=True, enrichment_attempted=False),
+            elapsed_ms=0,
+        )
+        cross_source_tel = cross_source_result.telemetry.as_log_dict()
+    latency["cross_source_ms"] = cross_source_result.elapsed_ms
+
     # ── Step 5.6: Evidence Dossier v1 (PR #259) ─────────────────────────────
     # Build structured dossiers for top cards using critical + enrichment data.
     # Does not block card return. Minimal dossiers built if budget is too low.
@@ -304,6 +344,7 @@ def _run_pipeline(
             category_fn=lambda e: _derive_display_category(
                 e.types, e.primary_type, _primary_concept
             ),
+            cross_source_map=cross_source_result.atoms_by_place_id,
         )
         dossier_tel = get_dossier_telemetry(
             dossiers,
@@ -774,6 +815,8 @@ def _run_pipeline(
         remaining_budget_before_reasoning_ms=remaining_budget_before_reasoning_ms,
         # PR #259 evidence dossier telemetry
         dossier_telemetry=dossier_tel,
+        # PR #275 cross-source enrichment telemetry
+        cross_source_enrichment_telemetry=cross_source_tel,
         # PR #260 curator telemetry
         curator_telemetry=curator_tel,
         # PR #261 set-level writer telemetry
@@ -1229,6 +1272,8 @@ def _log_semantic_turn(
     remaining_budget_before_reasoning_ms: int = 0,
     # PR #259 evidence dossier telemetry
     dossier_telemetry: Optional[Any] = None,  # Optional[EvidenceDossierTelemetry]
+    # PR #275 cross-source enrichment telemetry
+    cross_source_enrichment_telemetry: Optional[Dict[str, Any]] = None,
     # PR #260 curator telemetry
     curator_telemetry: Optional[Dict[str, Any]] = None,
     # PR #261 set-level writer telemetry
@@ -1369,6 +1414,12 @@ def _log_semantic_turn(
         logger.info(
             "semantic_retrieval_v1.dossier_telemetry %r",
             dossier_telemetry.as_log_dict(),
+        )
+    # PR #275 cross-source enrichment telemetry — separate log line.
+    if cross_source_enrichment_telemetry:
+        logger.info(
+            "semantic_retrieval_v1.cross_source_enrichment_telemetry %r",
+            cross_source_enrichment_telemetry,
         )
     # PR #260 curator telemetry — separate log line.
     if curator_telemetry is not None:
