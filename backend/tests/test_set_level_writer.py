@@ -1234,8 +1234,14 @@ class TestAllowedClaimsPacketDistiller:
         assert packet.evidence_strength == "thin"
         # Thin evidence → no concrete claim atoms from provider/themes
         assert len(packet.allowed_claim_atoms) == 0
-        # Caveats mention thin evidence
-        assert any("thin" in c.lower() for c in packet.safe_caveats)
+        # Caveats must use stricter null-default language, not permissive "anchor on name"
+        caveat_text = " ".join(packet.safe_caveats).lower()
+        assert "thin" in caveat_text
+        assert "return null" in caveat_text, (
+            f"Thin evidence caveat must say 'return null', got: {caveat_text!r}"
+        )
+        # Must NOT say "anchor on name/category/address" (too permissive)
+        assert "anchor on name" not in caveat_text
 
     def test_rating_and_review_count_excluded_as_claim_atoms(self):
         """rating: and review_count: provider facts must not become claim atoms."""
@@ -1372,24 +1378,36 @@ class TestAllowedClaimsPacketDistiller:
         atoms_text = " ".join(packet.allowed_claim_atoms).lower()
         assert "outdoor" in atoms_text or "amenity" in atoms_text
 
-    def test_packet_char_count_smaller_than_evidence_block(self):
-        """Packet rendering must produce fewer characters than legacy evidence block."""
-        card = _make_card(
-            "pid_d11", "Half Acre Beer",
-            food_drink=["house IPA", "barrel-aged stout"],
-            ambiance=["lively", "communal"],
-        )
+    def test_full_prompt_smaller_than_legacy_prompt(self):
+        """Full micro prompt (6 cards with blocked_claims) must be smaller than legacy prompt.
+
+        The relevant comparison is the full prompt because _MICRO_POLICY is a shared
+        static constant while legacy _build_set_level_prompt repeats critical rules per
+        call. Individual packet rendering may be similar to an evidence block for generic
+        cards (blocked_claims adds lines), but the full prompt remains materially smaller.
+        """
+        cards = [
+            _make_card(
+                f"pid_d11_{i}", f"Half Acre Beer {i}",
+                food_drink=["house IPA", "barrel-aged stout"],
+                ambiance=["lively", "communal"],
+            )
+            for i in range(6)
+        ]
         frame = _Frame()
-        ci = SetWriterCardInput(
-            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
-            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
-        )
-        packet = _distill_allowed_claims_packet(ci, frame)
-        packet_text = _render_packet(packet, 1, 1)
-        legacy_block = _build_card_evidence_block(ci, 1, 1, frame)
-        assert len(packet_text) < len(legacy_block), (
-            f"Packet ({len(packet_text)} chars) not smaller than legacy block "
-            f"({len(legacy_block)} chars)"
+        inputs = [
+            SetWriterCardInput(
+                entity=c.entity, rank_score=c.rank_score, dossier=c.dossier,
+                role=c.role, curation_signals=c.curation_signals, original_rank_index=i,
+            )
+            for i, c in enumerate(cards)
+        ]
+        packets = [_distill_allowed_claims_packet(ci, frame) for ci in inputs]
+        micro_prompt = _build_micro_set_prompt(packets, frame)
+        legacy_prompt = _build_set_level_prompt(inputs, frame)
+        assert len(micro_prompt) < len(legacy_prompt), (
+            f"Micro prompt ({len(micro_prompt)} chars) not smaller than "
+            f"legacy prompt ({len(legacy_prompt)} chars)"
         )
 
     def test_strong_evidence_sets_evidence_strength_strong(self):
@@ -1545,6 +1563,62 @@ class TestMicroSetPrompt:
         assert "name" in prompt.lower()
         assert "identity" in prompt.lower() or "name alone" in prompt.lower() or "infer" in prompt.lower()
 
+    def test_micro_prompt_says_return_null_when_no_allowed_claims(self):
+        """Micro prompt must instruct model to return null when allowed_claims is none."""
+        thin_packet = AllowedClaimsPacket(
+            place_id="pid_thin",
+            display_name="Late Night Riverwalk Speakeasy",
+            category="bar",
+            neighborhood="123 River St, Chicago",
+            allowed_claim_atoms=[],  # no evidence
+            safe_caveats=["thin evidence — no supported differentiator; return null unless a claim atom is present"],
+            disallowed_boundaries=list(["rating/review-count prose", "hidden-gem", "hours"]),
+            evidence_strength="thin",
+            modifier_support="not_applicable",
+        )
+        frame = _Frame()
+        rendered = _render_packet(thin_packet, 1, 1)
+        # Must tell model to return null, not write from name/category/location
+        assert "return null" in rendered.lower()
+        assert "name/category/location identify" in rendered or "do not support a note" in rendered
+
+    def test_render_packet_includes_blocked_claims(self):
+        """_render_packet must include a blocked_claims line from disallowed_boundaries."""
+        packet = AllowedClaimsPacket(
+            place_id="pid_blk",
+            display_name="Some Brewery",
+            category="brewery",
+            neighborhood="Chicago",
+            allowed_claim_atoms=["craft IPA on tap"],
+            safe_caveats=[],
+            disallowed_boundaries=[
+                "rating/review-count prose",
+                "hidden-gem/local-favorite",
+                "hours/late-night",
+                "outdoor-seating/patio/view (no amenity evidence)",
+            ],
+            evidence_strength="ok",
+            modifier_support="not_applicable",
+        )
+        rendered = _render_packet(packet, 1, 1)
+        assert "blocked_claims:" in rendered
+        assert "rating/review-count prose" in rendered
+
+    def test_render_packet_includes_unconfirmed_modifier_boundary(self):
+        """Unconfirmed modifier → specific boundary appears in rendered blocked_claims."""
+        card = _make_card("pid_blk2", "Brewery X", modifier_fit="not_confirmed")
+        card.dossier.query_fit.modifier_fit = "not_confirmed"
+        frame = _Frame(location_modifiers=["Riverwalk"])
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        packet = _distill_allowed_claims_packet(ci, frame)
+        rendered = _render_packet(packet, 1, 1)
+        assert "blocked_claims:" in rendered
+        # The modifier-specific boundary must appear
+        assert "Riverwalk" in rendered
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PR #273 Tests: Writer Telemetry
@@ -1598,7 +1672,7 @@ class TestWriterTelemetry:
 
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test_key"})
     def test_telemetry_fields_populate_on_parse_failure(self):
-        """Parse failure still records llm_call_ms, model, max_tokens."""
+        """Parse failure must record parse_ms, llm_call_ms, model, max_tokens, dynamic_prompt_char_count."""
         card = _make_card("pid_tel2", "Test Bar")
         curated = _CuratedSetResult(curated_cards=[card], output_count=1)
         frame = _Frame()
@@ -1607,8 +1681,17 @@ class TestWriterTelemetry:
             mock_llm.return_value = ("not valid json at all", {"model": "claude-haiku-4-5-20251001", "max_tokens": 384})
             result = write_set_notes(curated, frame)
 
-        # Parse failure returns empty result — writer_telemetry is None (returned before wtel populated)
         assert result.visible_note_count == 0
+        # writer_telemetry must be present on parse failure
+        assert result.writer_telemetry is not None, "writer_telemetry must not be None on parse failure"
+        tel = result.writer_telemetry
+        assert tel.get("model") == "claude-haiku-4-5-20251001"
+        assert tel.get("max_tokens") == 384
+        assert "llm_call_ms" in tel
+        assert "parse_ms" in tel
+        assert "set_writer_total_ms" in tel
+        assert tel.get("dynamic_prompt_char_count", 0) > 0
+        assert tel.get("writer_failure_reason") == "parse_failed"
 
     def test_max_tokens_reduced_from_prior_default(self):
         """max_tokens in the writer must be materially lower than the old 1024 default."""
@@ -1635,7 +1718,7 @@ class TestWriterTelemetry:
         assert result.writer_telemetry["dynamic_prompt_char_count"] > 0
 
     def test_telemetry_on_no_budget_timeout(self):
-        """Timed-out result (no budget) has set_writer_timed_out=True in as_telemetry_dict."""
+        """Timed-out result (no budget) has writer_telemetry present and consistent."""
         class _Deadline:
             def budget_for_note_generation_s(self):
                 return 0.0
@@ -1646,6 +1729,11 @@ class TestWriterTelemetry:
         curated = _CuratedSetResult(curated_cards=[card], output_count=1)
         result = write_set_notes(curated, _Frame(), deadline=_Deadline())
         assert result.timed_out is True
+        # writer_telemetry must be present even on no-budget timeout
+        assert result.writer_telemetry is not None, "writer_telemetry must not be None on timeout"
+        assert result.writer_telemetry.get("set_writer_timed_out") is True
+        assert result.writer_telemetry.get("notes_visible_count", -1) == 0
+        # as_telemetry_dict includes the flag
         tel = result.as_telemetry_dict()
         assert tel["set_writer_timed_out"] is True
 
@@ -1691,7 +1779,8 @@ class TestImprovedParsing:
         from app.concierge.set_level_writer import _parse_set_writer_response
         prose = 'Here are the notes: {"1": "A cozy tap room on Milwaukee Ave.", "2": null}'
         result = _parse_set_writer_response(prose, 2)
-        assert "1" in result or len(result) >= 0  # parse succeeds or returns {}
+        assert result.get("1") == "A cozy tap room on Milwaukee Ave."
+        assert result.get("2") is None
 
     def test_invalid_json_returns_empty_dict(self):
         """Malformed response returns empty dict, not an exception."""
@@ -1871,7 +1960,9 @@ class TestRegressionPR273:
         )
         assert note.place_id == "pid1"
         assert note.validated is True
-        assert note.fallback_note_visible_count if False else True  # field doesn't exist on note, not result
+        assert note.source == SOURCE_SET_WRITER
+        assert note.rejection_reason == ""
+        assert not hasattr(note, "fallback_note_visible_count")
 
     def test_set_writer_result_fallback_always_zero(self):
         """SetWriterResult.fallback_note_visible_count is always 0."""

@@ -392,7 +392,9 @@ def _distill_allowed_claims_packet(
     # Safe caveats
     safe_caveats: List[str] = []
     if evidence_strength == "thin":
-        safe_caveats.append("thin evidence — anchor on name/category/address only; prefer null")
+        safe_caveats.append(
+            "thin evidence — no supported differentiator; return null unless a claim atom is present"
+        )
     if modifier_support == "not_confirmed" and requested_mod:
         safe_caveats.append(
             f"modifier '{requested_mod}' requested but NOT confirmed — "
@@ -460,6 +462,7 @@ unless the packet lists it as allowed_claim_atom with "(confirmed)".
 - DO NOT claim: Michelin, awards, hours, "open late", romantic, price/reservations.
 - DO NOT infer late-night, hidden-gem, waterfront, romantic, cheaper, local-favorite, \
 scenic, patio, or speakeasy from a business name alone — name is identity, not evidence.
+- If allowed_claims is none, return null — name/category/location are identity, not copy.
 - RETURN null (not "") when evidence is thin or no concrete differentiator exists.
 - One sentence or two short clauses. Under 220 characters.
 
@@ -481,9 +484,15 @@ def _render_packet(packet: AllowedClaimsPacket, idx_1based: int, total: int) -> 
     if packet.allowed_claim_atoms:
         lines.append(f"  allowed_claims: {'; '.join(packet.allowed_claim_atoms)}")
     else:
-        lines.append("  allowed_claims: none — use name/category/location only")
+        lines.append(
+            "  allowed_claims: none — return null; "
+            "name/category/location identify the place but do not support a note"
+        )
     if packet.safe_caveats:
         lines.append(f"  caveats: {'; '.join(packet.safe_caveats)}")
+    # Render card-specific blocked claims (cap to 5 to avoid prompt bloat)
+    if packet.disallowed_boundaries:
+        lines.append(f"  blocked_claims: {'; '.join(packet.disallowed_boundaries[:5])}")
     return "\n".join(lines)
 
 
@@ -999,10 +1008,23 @@ def write_set_notes(
     """
     t_start = time.monotonic()
 
-    def _empty(timed_out: bool = False, reason: str = "") -> SetWriterResult:
+    def _empty(
+        timed_out: bool = False,
+        reason: str = "",
+        tel: Optional[Dict[str, Any]] = None,
+    ) -> SetWriterResult:
         logger.debug(
             "set_level_writer: empty_result timed_out=%s reason=%s", timed_out, reason
         )
+        if tel is not None:
+            tel.setdefault("notes_visible_count", 0)
+            tel.setdefault("notes_hidden_count", 0)
+            tel.setdefault("notes_rejected_count", 0)
+            tel.setdefault("set_writer_timed_out", timed_out)
+            if "set_writer_total_ms" not in tel:
+                tel["set_writer_total_ms"] = int((time.monotonic() - t_start) * 1000)
+            if reason:
+                tel["writer_failure_reason"] = reason
         return SetWriterResult(
             notes_by_place_id={},
             visible_note_count=0,
@@ -1015,7 +1037,7 @@ def write_set_notes(
             repeated_skeleton_count=0,
             unsupported_claim_count=0,
             reviewer_telemetry=None,
-            writer_telemetry=None,
+            writer_telemetry=tel,
         )
 
     # Accumulated writer telemetry
@@ -1045,7 +1067,7 @@ def write_set_notes(
                     deadline.remaining_ms(),
                 )
                 wtel["set_writer_timed_out"] = True
-                return _empty(timed_out=True, reason="no_budget")
+                return _empty(timed_out=True, reason="no_budget", tel=wtel)
         else:
             budget_s = float(
                 os.getenv("CONCIERGE_CARD_REASONING_TIMEOUT_MS", "8000")
@@ -1056,7 +1078,7 @@ def write_set_notes(
         target_cards = curated_cards[:first_card_limit]
 
         if not target_cards:
-            return _empty(reason="no_curated_cards")
+            return _empty(reason="no_curated_cards", tel=wtel)
 
         card_inputs: List[SetWriterCardInput] = []
         for cc in target_cards:
@@ -1073,7 +1095,7 @@ def write_set_notes(
         api_key = os.getenv("ANTHROPIC_API_KEY", "")
         if not api_key:
             logger.info("set_level_writer: no_api_key — writer unavailable")
-            return _empty(timed_out=False, reason="no_api_key")
+            return _empty(timed_out=False, reason="no_api_key", tel=wtel)
 
         # ── Distill AllowedClaimsPackets ──────────────────────────────────────
         t_distill = time.monotonic()
@@ -1086,7 +1108,8 @@ def write_set_notes(
             logger.error(
                 "set_level_writer: distill_error error=%s", dist_exc
             )
-            return _empty(reason=f"distill_error:{dist_exc}")
+            wtel["evidence_distill_ms"] = int((time.monotonic() - t_distill) * 1000)
+            return _empty(reason=f"distill_error:{dist_exc}", tel=wtel)
         wtel["evidence_distill_ms"] = int((time.monotonic() - t_distill) * 1000)
 
         # ── Build micro prompt ────────────────────────────────────────────────
@@ -1097,7 +1120,8 @@ def write_set_notes(
             logger.error(
                 "set_level_writer: prompt_build_error error=%s", prompt_exc
             )
-            return _empty(reason=f"prompt_build_error:{prompt_exc}")
+            wtel["prompt_build_ms"] = int((time.monotonic() - t_prompt) * 1000)
+            return _empty(reason=f"prompt_build_error:{prompt_exc}", tel=wtel)
         wtel["prompt_build_ms"] = int((time.monotonic() - t_prompt) * 1000)
 
         # Packet/prompt size telemetry
@@ -1121,7 +1145,7 @@ def write_set_notes(
                 int((time.monotonic() - t_start) * 1000),
             )
             wtel["set_writer_total_ms"] = int((time.monotonic() - t_start) * 1000)
-            return _empty(reason="llm_no_response")
+            return _empty(reason="llm_no_response", tel=wtel)
 
         # ── Parse response ────────────────────────────────────────────────────
         t_parse = time.monotonic()
@@ -1134,7 +1158,7 @@ def write_set_notes(
                 int((time.monotonic() - t_start) * 1000), raw[:200],
             )
             wtel["set_writer_total_ms"] = int((time.monotonic() - t_start) * 1000)
-            return _empty(reason="parse_failed")
+            return _empty(reason="parse_failed", tel=wtel)
 
         # ── Validate notes ────────────────────────────────────────────────────
         t_validate = time.monotonic()
