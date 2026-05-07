@@ -5,9 +5,9 @@ import logging
 import re
 import time
 from typing import Any, Dict, List, Literal, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from app.concierge.contracts import (
@@ -247,11 +247,17 @@ def build_typed_concierge_response(
 ) -> tuple[ConciergeTypedResponse, RouteDecision]:
     """Build and validate the typed concierge response contract."""
     settings = get_settings()
+    _t_btcr_start = time.perf_counter()
+    _ctx_ms = 0
+    _route_prompt_ms = 0
+    _service_search_ms = 0
+    _typed_val_ms = 0
 
     # Context classification — classifies and logs. PR 2: may skip provider call.
     turn_mode = "new_search"
     rerank_rule = "none"
     ctx = None
+    _t_ctx = time.perf_counter()
     try:
         ctx = build_context_window(service._db, payload.trip_id)
         turn_mode, rerank_rule = classify_turn(payload.user_query, ctx)
@@ -275,6 +281,7 @@ def build_typed_concierge_response(
         logger.exception(
             "concierge.context.classify_failed trip_id=%s", payload.trip_id
         )
+    _ctx_ms = int((time.perf_counter() - _t_ctx) * 1000)
 
     # PR 2: attempt card reuse when flag is ON and turn qualifies.
     # getattr guard: safe when settings is a SimpleNamespace/stub without the field.
@@ -579,7 +586,9 @@ def build_typed_concierge_response(
             )
 
     if not settings.concierge_router_v2:
+        _t_ss = time.perf_counter()
         legacy = service.search(payload.trip_id, payload.user_query, user_id, payload.client_message_id)
+        _service_search_ms = int((time.perf_counter() - _t_ss) * 1000)
         typed_payload = PlaceRecommendationsResponse(**legacy.model_dump())
         decision = RouteDecision(
             response_type="place_recommendations",
@@ -588,10 +597,12 @@ def build_typed_concierge_response(
             code="router_v2_disabled",
         )
     else:
+        _t_rp = time.perf_counter()
         decision = route_prompt(
             payload.user_query,
             confidence_threshold=settings.concierge_router_v2_confidence_threshold,
         )
+        _route_prompt_ms = int((time.perf_counter() - _t_rp) * 1000)
         logger.info(
             "concierge.router.stage2 decision=%s confidence=%.4f code=%s",
             decision.response_type,
@@ -600,7 +611,9 @@ def build_typed_concierge_response(
         )
 
         if decision.response_type == "place_recommendations":
+            _t_ss = time.perf_counter()
             legacy = service.search(payload.trip_id, payload.user_query, user_id, payload.client_message_id)
+            _service_search_ms = int((time.perf_counter() - _t_ss) * 1000)
             typed_payload = PlaceRecommendationsResponse(**legacy.model_dump())
         elif decision.response_type == "trip_advice":
             if not getattr(settings, "trip_advice_builder_enabled", False):
@@ -629,15 +642,29 @@ def build_typed_concierge_response(
                 message="I couldn't confidently route this request yet. Please rephrase with more travel detail.",
             )
 
+    _t_tv = time.perf_counter()
     try:
         validated = _typed_response_adapter.validate_python(typed_payload)
-        return validated, decision
     except ValidationError as exc:
         logger.exception("concierge.typed_response_validation_failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Concierge typed response validation failed",
         ) from exc
+    _typed_val_ms = int((time.perf_counter() - _t_tv) * 1000)
+    _total_btcr_ms = int((time.perf_counter() - _t_btcr_start) * 1000)
+    logger.info(
+        "concierge.search.build_typed_timing trip_id=%s context_window_ms=%d "
+        "route_prompt_ms=%d service_search_ms=%d typed_validation_ms=%d "
+        "total_build_typed_ms=%d",
+        payload.trip_id,
+        _ctx_ms,
+        _route_prompt_ms,
+        _service_search_ms,
+        _typed_val_ms,
+        _total_btcr_ms,
+    )
+    return validated, decision
 
 
 @router.post("/concierge", response_model=ConciergeResponse)
@@ -657,8 +684,42 @@ def concierge(payload: ConciergeRequest, db: DB, user_id: CurrentUserID) -> Conc
     return ConciergeService(db).answer(payload.trip_id, payload.user_query, user_id, payload.day_number)
 
 
+def _persist_request_log_task(
+    *,
+    db: Any,
+    user_id: UUID,
+    request_id: UUID,
+    prompt: str,
+    decision: RouteDecision,
+    response: Any,
+    latency_ms: int,
+) -> None:
+    """Background task wrapper — persistence failures must never propagate."""
+    try:
+        persist_concierge_request_log(
+            db=db,
+            user_id=user_id,
+            prompt=prompt,
+            decision=decision,
+            response=response,
+            latency_ms=latency_ms,
+            request_id=request_id,
+        )
+    except Exception as exc:
+        logger.warning(
+            "concierge.request_log.background_task_failed request_id=%s error=%s",
+            request_id,
+            exc,
+        )
+
+
 @router.post("/concierge/search", response_model=ConciergeTypedResponse)
-def concierge_search(payload: ConciergeSearchRequest, db: DB, user_id: CurrentUserID) -> ConciergeTypedResponse:
+def concierge_search(
+    payload: ConciergeSearchRequest,
+    db: DB,
+    user_id: CurrentUserID,
+    background_tasks: BackgroundTasks,
+) -> ConciergeTypedResponse:
     """Retrieval-first concierge with typed response routing contract."""
     settings = get_settings()
     guardrails.enforce(
@@ -671,35 +732,61 @@ def concierge_search(payload: ConciergeSearchRequest, db: DB, user_id: CurrentUs
         ),
         dedupe_payload={"trip_id": payload.trip_id, "query": payload.user_query.strip().lower(), "client_message_id": payload.client_message_id},
     )
+    # Generate request_id upfront so both the synchronous log event and the
+    # background DB persistence share the same identifier.
+    request_id = uuid4()
     service = ConciergeService(db)
-    start = time.perf_counter()
-    response, decision = build_typed_concierge_response(service, payload, user_id)
-    latency_ms = int((time.perf_counter() - start) * 1000)
 
-    request_id = persist_concierge_request_log(
-        db=db,
-        user_id=user_id,
-        prompt=payload.user_query,
-        decision=decision,
-        response=response,
-        latency_ms=latency_ms,
-    )
+    _t_route_start = time.perf_counter()
+    response, decision = build_typed_concierge_response(service, payload, user_id)
+    _build_typed_ms = int((time.perf_counter() - _t_route_start) * 1000)
 
     llm_usage = getattr(response, "metadata", {}).get("llm_usage", {}) if hasattr(response, "metadata") else {}
     tokens_in = llm_usage.get("tokens_in") if isinstance(llm_usage, dict) else None
     tokens_out = llm_usage.get("tokens_out") if isinstance(llm_usage, dict) else None
     sources_used = response.sources if hasattr(response, "sources") else [c.url for c in getattr(response, "citations", [])]
 
+    # Synchronous: cheap structured app log — always emitted before response.
+    _t_log_event = time.perf_counter()
     request_log_event(
         request_id=request_id,
         prompt=payload.user_query,
         decision=decision,
         response=response,
-        latency_ms=latency_ms,
+        latency_ms=_build_typed_ms,
         sources_used=sources_used,
         llm_tokens_in=tokens_in,
         llm_tokens_out=tokens_out,
     )
+    _log_event_ms = int((time.perf_counter() - _t_log_event) * 1000)
+
+    # Async: DB persistence is best-effort and must not delay the response.
+    _t_sched = time.perf_counter()
+    background_tasks.add_task(
+        _persist_request_log_task,
+        db=db,
+        user_id=user_id,
+        request_id=request_id,
+        prompt=payload.user_query,
+        decision=decision,
+        response=response,
+        latency_ms=_build_typed_ms,
+    )
+    _persist_sched_ms = int((time.perf_counter() - _t_sched) * 1000)
+
+    _route_total_ms = int((time.perf_counter() - _t_route_start) * 1000)
+    logger.info(
+        "concierge.search.route_timing request_id=%s trip_id=%s "
+        "build_typed_concierge_response_ms=%d request_log_event_ms=%d "
+        "persist_scheduled_ms=%d route_total_before_return_ms=%d",
+        request_id,
+        payload.trip_id,
+        _build_typed_ms,
+        _log_event_ms,
+        _persist_sched_ms,
+        _route_total_ms,
+    )
+
     return response
 
 

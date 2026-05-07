@@ -14,8 +14,11 @@ logger = logging.getLogger(__name__)
 
 INTENT_CLASSIFIER_VERSION = "router_v2.1"
 PIPELINE_VERSION = "concierge_typed_v2"
-_MAX_SCHEMA_RETRY_ATTEMPTS = 4
 _SCHEMA_DRIFT_WARNED_COLUMNS: set[tuple[str, str]] = set()
+# Process-level cache: table_name -> set of column names known to be absent from DB schema.
+# Populated on first schema drift; subsequent inserts strip these columns before the first attempt,
+# eliminating retry storms after the first request discovers the drift.
+_KNOWN_UNSUPPORTED_COLUMNS: dict[str, set[str]] = {}
 
 _EMAIL_RE = re.compile(r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b")
 _PHONE_RE = re.compile(r"(?<!\d)(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}(?!\d)")
@@ -112,23 +115,54 @@ def persist_concierge_request_log(
 
     table_name = "concierge_request_log"
     row = dict(base_row)
-    for _ in range(_MAX_SCHEMA_RETRY_ATTEMPTS):
+
+    # Strip columns already known to be unsupported in this process lifetime.
+    # Avoids schema-drift retries on every subsequent request after the first discovery.
+    known_bad = _KNOWN_UNSUPPORTED_COLUMNS.get(table_name, set())
+    for _col in known_bad:
+        row.pop(_col, None)
+
+    # Bounded retry loop: at most len(row) attempts so we can't loop forever even if
+    # the DB reports a new missing column on every attempt.
+    for _ in range(len(row) + 1):
+        if not row:
+            logger.warning(
+                "concierge.request_log.persist_failed request_id=%s reason=all_columns_unsupported",
+                row_id,
+            )
+            return row_id
         try:
             db.table(table_name).insert(row).execute()
             return row_id
         except Exception as exc:
             missing = _extract_missing_column(exc)
             if missing is None:
+                # Unexpected non-schema error — log with traceback and give up.
                 logger.exception("concierge.request_log.persist_failed request_id=%s", row_id)
                 return row_id
             code, column = missing
             if column not in row:
-                logger.exception("concierge.request_log.persist_failed request_id=%s", row_id)
+                # Column already absent from row (stripped by cache or prior iteration).
+                # Log a terse warning; no retry needed.
+                logger.warning(
+                    "concierge.request_log.schema_drift_unexpected "
+                    "request_id=%s column=%s already_absent=true",
+                    row_id,
+                    column,
+                )
                 return row_id
+            # Cache the unsupported column at process level so future requests skip it immediately.
+            _KNOWN_UNSUPPORTED_COLUMNS.setdefault(table_name, set()).add(column)
             _warn_schema_drift_once(table=table_name, column=column, code=code)
             row.pop(column, None)
 
-    logger.exception("concierge.request_log.persist_failed request_id=%s", row_id)
+    # All retry attempts exhausted (many missing columns).  Persistence is best-effort;
+    # emit a warning (not exception — no active exception context here).
+    logger.warning(
+        "concierge.request_log.persist_failed request_id=%s reason=schema_drift_exhausted remaining_row_len=%d",
+        row_id,
+        len(row),
+    )
     return row_id
 
 
