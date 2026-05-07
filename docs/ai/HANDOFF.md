@@ -35,7 +35,7 @@ When `set_writer_primary_active=True`, the timed-out branch is skipped entirely 
 Production fixture: name="The Izakaya", place_id="ChIJ_izakaya_chicago_001", note="Basement bar setting serves Japanese street food and small bites with cocktails.", validated=True.
 
 ### Test results
-- Backend: 72/73 in `test_sla_card_cap.py` PASS; 1 pre-existing failure (`test_display_why_validated_true_for_surviving_notes` — calls `_entity_to_card` without pydantic mock; was failing before this session)
+- Backend: 73/73 in `test_sla_card_cap.py` PASS. The previously failing `test_display_why_validated_true_for_surviving_notes` was a local env issue — the pytest venv was missing `pydantic[email]`, which is already declared in `requirements.txt`. No code changes needed; CI installs from requirements.txt.
 - Frontend: 31/31 in `concierge-renderers.test.mjs` PASS (no changes needed; existing tests already cover the semantic card render path)
 
 ### Invariants confirmed
