@@ -2,7 +2,11 @@
 
 ## Last change (2026-05-06) — PR this: AI Concierge v2 Semantic Query Frame Hardening
 
-**Status: MERGE-READY** — 59 new semantic-query-frame tests pass; 56 set-level-writer tests pass; 51 curator tests pass; 54 dossier tests pass; 28 parallel-retrieval tests pass; 64 SLA tests pass; 127 evidence-quality tests pass; 20 pre-existing pydantic env failures remain (unrelated, same as before)
+**Status: MERGE-READY** — 68 new semantic-query-frame tests pass (updated from 59 after review fixes); 56 set-level-writer tests pass; 51 curator tests pass; 54 dossier tests pass; 28 parallel-retrieval tests pass; 64 SLA tests pass; 127 evidence-quality tests pass; 20 pre-existing pydantic env failures remain (unrelated, same as before)
+
+**Review fixes (PR #265 update)**:
+- Step 8 assembly extracted into testable `_assemble_card_set()` helper; focused integration tests now exercise the actual assembly path with mocked `_entity_to_card` — old `continue` branch would return 1 card, new path returns 2.
+- Telemetry split: `insufficient_verified_candidates` now uses `verified_count < 5` (Google trust gate count) instead of `final_card_count < 5`; added `below_first_card_limit` (final count vs configured limit) and `pre_assembly_verified_count`.
 
 ### What was built
 
