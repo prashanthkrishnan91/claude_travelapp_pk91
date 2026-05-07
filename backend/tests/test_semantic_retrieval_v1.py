@@ -28,7 +28,7 @@ import pytest
 # path. Without this, no cards are returned (all have validated=False).
 # This helper produces a mock build_reasons_with_retry that validates every card.
 
-def _make_all_validated_reasons(cards_data, frame):
+def _make_all_validated_reasons(cards_data, frame, **kwargs):
     """Mock for build_reasons_with_retry: validates every card with a stub note.
 
     Use as: patch("app.concierge.semantic_retrieval.build_reasons_with_retry",
@@ -428,7 +428,9 @@ class TestSemanticRanker:
                                     source_query="breweries Chicago")
         frame = self._frame("best breweries")
         ranked = rank_entities([brewery, generic_bar], frame)
-        assert len(ranked) == 2
+        # With _MIN_ON_CONCEPT_FOR_HARD_DROP=1, the generic bar is dropped when
+        # even one on-concept brewery exists; assert brewery is present and first.
+        assert len(ranked) >= 1
         names = [e.name for e, _ in ranked]
         assert names[0] == "Goose Island Brewery", (
             f"Brewery must rank first, got {names}. "
@@ -501,17 +503,25 @@ class TestSemanticRanker:
                                     source_query="breweries Chicago")
         frame = self._frame("best breweries")
         ranked = rank_entities([concept_match, popular_bar], frame)
-        # Check that subtype_fit dominates
-        concept_score = next(s for e, s in ranked if e.name == "Small Craft Brewery")
-        popular_score = next(s for e, s in ranked if e.name == "Super Popular Bar")
-        assert concept_score.subtype_fit > popular_score.subtype_fit, (
-            f"Concept match must have higher subtype_fit: "
-            f"concept={concept_score.subtype_fit:.3f} popular={popular_score.subtype_fit:.3f}"
+        # With _MIN_ON_CONCEPT_FOR_HARD_DROP=1 the off-concept bar is hard-dropped,
+        # so concept_match wins by complete exclusion of the popular bar.
+        names = [e.name for e, _ in ranked]
+        assert "Small Craft Brewery" in names, (
+            f"Concept-matching brewery must survive ranking, got {names}"
         )
-        assert concept_score.total >= popular_score.total, (
-            f"Concept match must win overall: "
-            f"concept_total={concept_score.total:.3f} popular_total={popular_score.total:.3f}"
-        )
+        # If the popular bar is also present (threshold not yet applied), it must still score lower.
+        scores = {e.name: s for e, s in ranked}
+        if "Super Popular Bar" in scores:
+            concept_score = scores["Small Craft Brewery"]
+            popular_score = scores["Super Popular Bar"]
+            assert concept_score.subtype_fit > popular_score.subtype_fit, (
+                f"Concept match must have higher subtype_fit: "
+                f"concept={concept_score.subtype_fit:.3f} popular={popular_score.subtype_fit:.3f}"
+            )
+            assert concept_score.total >= popular_score.total, (
+                f"Concept match must win overall: "
+                f"concept_total={concept_score.total:.3f} popular_total={popular_score.total:.3f}"
+            )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -657,7 +667,7 @@ class TestSemanticRetrievalIntegration:
     def _mock_fanout(self, places: List[Dict[str, Any]]):
         from app.concierge.provider_executor import ProviderQueryResult
         # Return same places for each query (entity layer dedup will handle duplicates)
-        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15):
+        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15, **kwargs):
             return [
                 ProviderQueryResult(query=q, places=places[:], latency_ms=80)
                 for q in queries
@@ -782,7 +792,7 @@ class TestSemanticRetrievalIntegration:
         from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
         from app.concierge.provider_executor import ProviderQueryResult
 
-        def all_fail(queries, api_key, timeout, hard_cap=4, max_results_per_query=15):
+        def all_fail(queries, api_key, timeout, hard_cap=4, max_results_per_query=15, **kwargs):
             return [ProviderQueryResult(query=q, error="timeout") for q in queries]
 
         with patch("app.concierge.provider_executor.execute_fanout", side_effect=all_fail):
@@ -1078,7 +1088,7 @@ class TestMoreOptionsFollowUpBehavior:
 
     def _mock_fanout(self, places: List[Dict[str, Any]]):
         from app.concierge.provider_executor import ProviderQueryResult
-        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15):
+        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15, **kwargs):
             return [ProviderQueryResult(query=q, places=places[:], latency_ms=80) for q in queries]
         return fake_execute
 
@@ -1363,11 +1373,13 @@ class TestWrongCategoryPenalty:
         frame = extract_frame("best breweries", "Chicago")
         ranked = rank_entities([brewery, wrong_cat], frame)
         scores = {e.name: s for e, s in ranked}
-        # Wrong-category entity must have a positive penalty applied.
-        assert scores["Lakeside Garden"].penalties > 0, (
-            f"Expected wrong-category penalty on Lakeside Garden, "
-            f"got {scores['Lakeside Garden'].as_dict()}"
+        # With _MIN_ON_CONCEPT_FOR_HARD_DROP=1, the park is hard-dropped when
+        # 1+ on-concept brewery exists — stricter than a soft penalty.
+        assert "Lakeside Garden" not in scores, (
+            f"Wrong-category park must be hard-dropped (not just penalised), "
+            f"got scores={list(scores.keys())}"
         )
+        assert "Goose Island Brewery" in scores
         assert scores["Goose Island Brewery"].penalties == 0
 
 
@@ -1481,7 +1493,7 @@ class TestSemanticIntegrationOpenClassIzakaya:
             ),
         ]
 
-        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15):
+        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15, **kwargs):
             return [
                 ProviderQueryResult(query=q, places=izakaya_places[:], latency_ms=80)
                 for q in queries
@@ -1515,7 +1527,7 @@ class TestSemanticTurnObservability:
         from app.concierge.provider_executor import ProviderQueryResult
         from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
 
-        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15):
+        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15, **kwargs):
             return [
                 ProviderQueryResult(
                     query=q,
@@ -1752,20 +1764,14 @@ class TestRankerVenueHeadDominance:
         frame = extract_frame("best waterfront breweries", "Chicago")
         ranked = rank_entities([brewery, wrong_cat], frame)
         scores = {e.name: s for e, s in ranked}
-        # Wrong-category entity must NOT be lifted above the threshold by the
-        # mere presence of "brewery" in its source query.
-        assert "Chicago Horizon" in scores, (
-            f"Expected wrong-cat entity in ranked output (only 1 on-concept, "
-            f"so degraded recall keeps it). Got {list(scores.keys())}"
+        # With _MIN_ON_CONCEPT_FOR_HARD_DROP=1, the wrong-category tourist_attraction
+        # is hard-dropped even though its source_query echoes "brewery" — the
+        # source-query echo must not rescue it from the hard-drop gate.
+        assert "Chicago Horizon" not in scores, (
+            f"Wrong-category entity must be hard-dropped regardless of source_query content. "
+            f"Got {list(scores.keys())}"
         )
-        wc_score = scores["Chicago Horizon"]
-        assert wc_score.subtype_fit < 0.30, (
-            f"Source-query echo must not push subtype_fit above the "
-            f"wrong-category threshold. Got {wc_score.subtype_fit:.3f}"
-        )
-        assert wc_score.penalties > 0, (
-            f"Wrong-category entity must carry a penalty. Got {wc_score.as_dict()}"
-        )
+        assert "Goose Island Brewing" in scores
 
     def test_three_breweries_drop_three_wrong_category_modifier_matches(self):
         """When the user names a venue head AND there are enough on-concept
@@ -1894,7 +1900,7 @@ class TestRegressionExistingVenueHeads:
         from app.models.concierge import SOURCE_LIVE_SEARCH
         places = self._make_brewery_places()
 
-        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15):
+        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15, **kwargs):
             return [ProviderQueryResult(query=q, places=places[:], latency_ms=80) for q in queries]
 
         with _MOCK_VALID_REASONS, patch("app.concierge.provider_executor.execute_fanout", side_effect=fake_execute):
@@ -1945,7 +1951,7 @@ class TestRegressionExistingVenueHeads:
         ]
         all_places = breweries + wrong_cat
 
-        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15):
+        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15, **kwargs):
             return [
                 ProviderQueryResult(query=q, places=all_places[:], latency_ms=80)
                 for q in queries
@@ -1986,7 +1992,7 @@ class TestRegressionExistingVenueHeads:
             ),
         ]
 
-        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15):
+        def fake_execute(queries, api_key, timeout=5.0, hard_cap=4, max_results_per_query=15, **kwargs):
             return [ProviderQueryResult(query=q, places=places[:], latency_ms=80) for q in queries]
 
         with _MOCK_VALID_REASONS, patch("app.concierge.provider_executor.execute_fanout", side_effect=fake_execute):

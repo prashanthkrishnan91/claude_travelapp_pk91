@@ -866,16 +866,13 @@ def rank_entities_with_stats(
             dropped_off_concept = len(off_concept)
             scored = []
 
-    result: List[Tuple[PlaceEntity, RankScore]] = []
-    for _total, entity, rs in scored[:top_n]:
-        result.append((entity, rs))
-
-    # Value-aware post-rank sort: when the frame signals budget/cheaper intent,
-    # sort the result set by price tier ascending (cheaper first), using total
-    # score as tiebreaker. Unknown price sorts last — never treated as cheap.
-    # Mirrors fast_dynamic_place_search._filter_and_rank prefer_lower_price logic.
+    # Value-aware pre-truncation sort: apply BEFORE scored[:top_n] so lower-priced
+    # candidates ranked just outside top_n can surface when a budget/cheaper signal
+    # is active. Unknown price sorts last — never treated as cheap/moderate.
+    # Preserves category fit: off-concept cards already carry heavy penalties so they
+    # remain below on-concept cards within the same price tier.
     _value_sigs = getattr(frame, "value_signals", []) or []
-    if result and any(s in _value_sigs for s in ("budget", "not_expensive")):
+    if _value_sigs and any(s in _value_sigs for s in ("budget", "not_expensive")):
         _PRICE_ORD: Dict[str, int] = {
             "PRICE_LEVEL_FREE": 0,
             "PRICE_LEVEL_INEXPENSIVE": 1,
@@ -884,12 +881,14 @@ def rank_entities_with_stats(
             "PRICE_LEVEL_VERY_EXPENSIVE": 4,
         }
         _UNKNOWN_PRICE_ORD = len(_PRICE_ORD)  # 5 — absent price never treated as cheap
-        result.sort(
-            key=lambda x: (
-                _PRICE_ORD.get((x[0].price_level or "").upper(), _UNKNOWN_PRICE_ORD),
-                -x[1].total,
-            )
-        )
+        scored.sort(key=lambda x: (
+            _PRICE_ORD.get((x[1].price_level or "").upper(), _UNKNOWN_PRICE_ORD),
+            -x[0],  # descending by total score within same price tier
+        ))
+
+    result: List[Tuple[PlaceEntity, RankScore]] = []
+    for _total, entity, rs in scored[:top_n]:
+        result.append((entity, rs))
 
     stats.has_strong_concept = has_strong_concept
     stats.primary_label = primary_label

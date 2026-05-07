@@ -84,8 +84,10 @@ class PlaceEntity:
     rating: Optional[float]
     user_rating_count: Optional[int]
     price_level: Optional[str]
-    price_range: Optional[Dict[str, Any]]
-    website_uri: Optional[str]
+    website_uri: Optional[str] = None
+    # price_range is optional with a safe default so existing callers that do not
+    # yet pass price_range (test factories, older code) continue to work unchanged.
+    price_range: Optional[Dict[str, Any]] = None
     # Identity keys for deduplication (same scheme as routes/ai.py)
     identity_keys: FrozenSet[str] = field(default_factory=frozenset)
     # Which retrieval query returned this entity

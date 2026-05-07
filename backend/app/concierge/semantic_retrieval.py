@@ -31,6 +31,10 @@ logger = logging.getLogger(__name__)
 PROVIDER_NAME = "semantic_retrieval_v1"
 PIPELINE_VERSION = "semantic_retrieval_v1"
 _MAX_CARDS = 8  # pool/ranking size; first response is capped separately by SLA config
+# Minimum remaining budget (seconds) required to attempt LLM note generation.
+# Below this threshold, skip the writer before calling it rather than submitting
+# a call that cannot complete usefully within the remaining window.
+_MIN_NOTE_GENERATION_BUDGET_S = 0.5
 
 # Google priceLevel → UI symbol (mirrors fast_dynamic_place_search._PRICE_LEVEL_SYMBOL)
 _PRICE_LEVEL_SYMBOL: Dict[str, str] = {
@@ -441,6 +445,12 @@ def _run_pipeline(
     remaining_budget_before_reasoning_ms = deadline.remaining_ms()
     note_generation_budget_s = deadline.budget_for_note_generation_s()
     note_generation_timed_out = note_generation_budget_s <= 0.0
+    # Pre-skip when budget is positive but below the minimum useful window.
+    # Avoids submitting an LLM call that cannot complete meaningfully.
+    note_generation_low_budget = (
+        not note_generation_timed_out
+        and note_generation_budget_s < _MIN_NOTE_GENERATION_BUDGET_S
+    )
 
     set_writer_primary_active = False  # set True only in the set-writer primary branch
     if note_generation_timed_out:
@@ -457,6 +467,22 @@ def _run_pipeline(
         reasoning_result = ReasoningResultV2(
             attempted=False,
             failure_reason="skipped_past_soft_ceiling",
+            final_card_count=n_cards,
+            final_note_omitted_count=n_cards,
+        )
+    elif note_generation_low_budget:
+        # Budget positive but below the minimum useful threshold — skip before
+        # calling the writer so we don't waste a marginal LLM call.
+        logger.info(
+            "semantic_retrieval_v1: note_generation_skipped_low_budget "
+            "query=%r remaining_ms=%d budget_s=%.2f",
+            user_query, remaining_budget_before_reasoning_ms, note_generation_budget_s,
+        )
+        card_reasons = {}
+        n_cards = len(cards_data)
+        reasoning_result = ReasoningResultV2(
+            attempted=False,
+            failure_reason="skipped_low_budget",
             final_card_count=n_cards,
             final_note_omitted_count=n_cards,
         )
@@ -677,9 +703,14 @@ def _run_pipeline(
         "note_writer_skipped_no_valid_cards": (
             reasoning_result.failure_reason == "skipped_no_valid_cards"
         ),
-        "note_writer_skipped_low_budget": note_generation_timed_out,
+        # True only when budget was positive but below the minimum useful window
+        # (pre-skip before calling the LLM writer).
+        "note_writer_skipped_low_budget": note_generation_low_budget,
+        # True when past the SLA soft ceiling (budget already exhausted).
+        "note_writer_skipped_past_soft_ceiling": note_generation_timed_out,
         "note_writer_skipped_below_card_threshold": (
             not note_generation_timed_out
+            and not note_generation_low_budget
             and not cards_data
         ),
         "optional_reasoning_ms": latency.get("optional_reasoning_ms", 0),

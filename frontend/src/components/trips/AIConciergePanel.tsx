@@ -573,16 +573,18 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
   }, [messages]);
 
   // Contextual refinement chips shown after a card result is present.
+  // "Find cheaper nearby" only appears when the latest card set has usable Google
+  // price signals; otherwise "Find more like these" avoids inviting a dead action.
   const refinementChips = useMemo(() => {
-    const hasCards = messages.some(
-      (m) => m.role === "assistant" && !m.isRefinement && (
-        (m.restaurants?.length ?? 0) > 0 ||
-        (m.attractions?.length ?? 0) > 0 ||
-        (m.hotels?.length ?? 0) > 0
-      )
-    );
-    if (!hasCards) return null;
-    return ["Show only casual", "Compare top 2", "Find cheaper nearby", "Add best to Day 1"];
+    const latestCardMsg = getLatestCardMessage(messages);
+    if (!latestCardMsg) return null;
+    const currentCards = [
+      ...(latestCardMsg.restaurants ?? []),
+      ...(latestCardMsg.attractions ?? []),
+      ...(latestCardMsg.hotels ?? []),
+    ].filter(isRenderableVerifiedPlace);
+    const cheaperChip = hasGooglePriceSignals(currentCards) ? "Find cheaper nearby" : "Find more like these";
+    return ["Show only casual", "Compare top 2", cheaperChip, "Add best to Day 1"];
   }, [messages]);
 
   useEffect(() => {

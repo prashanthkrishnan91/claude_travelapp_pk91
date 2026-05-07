@@ -787,9 +787,9 @@ test('AIConciergePanel: refinementChips contains "Find cheaper nearby"', () => {
   assert.match(aiConciergePanel, /"Find cheaper nearby"/);
 });
 
-test('AIConciergePanel: refinementChips does not contain "Find more like these"', () => {
-  // Old renamed chip text must be replaced.
-  assert.doesNotMatch(aiConciergePanel, /"Find more like these"/);
+test('AIConciergePanel: refinementChips contains "Find more like these" as no-price-signal fallback', () => {
+  // "Find more like these" is the honest fallback chip when cards have no Google price signals.
+  assert.match(aiConciergePanel, /"Find more like these"/);
 });
 
 test('AIConciergePanel: cheaper guard uses isCheaperQuery regex covering cheaper/budget/affordable', () => {
