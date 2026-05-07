@@ -233,7 +233,8 @@ export function hasGooglePriceSignals(cards) {
   return cards.some((card) => {
     return !!(
       card?.display?.displayPrice ||
-      card?.supportingDetails?.priceLevel
+      card?.supportingDetails?.priceLevel ||
+      formatDisplayPrice(null, card?.supportingDetails?.priceRange ?? null)
     );
   });
 }

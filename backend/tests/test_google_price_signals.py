@@ -298,6 +298,36 @@ class TestValueAwareRanking:
             assert card.source == "Google Places"
             assert card.verified_place is True
 
+    def test_missing_price_sorts_after_known_prices_in_value_aware_ranking(self) -> None:
+        """Unknown priceLevel must NOT default to MODERATE (order 2).
+
+        It must sort after all known-price candidates so places without a price
+        signal are never treated as cheaper than genuinely expensive ones.
+        """
+        places = [
+            _make_place(name="No Price Place", price_level=None,
+                        rating=4.9, review_count=5000, place_id="pid_no_price"),
+            _make_place(name="Cheap Place", price_level="PRICE_LEVEL_INEXPENSIVE",
+                        rating=4.0, review_count=200, place_id="pid_cheap"),
+            _make_place(name="Expensive Place", price_level="PRICE_LEVEL_EXPENSIVE",
+                        rating=4.5, review_count=1000, place_id="pid_expensive"),
+        ]
+        svc = FastDynamicPlaceSearch.__new__(FastDynamicPlaceSearch)
+        svc._api_key = "fake"
+        svc._timeout = 6.0
+        svc._max_candidates = 15
+        parsed = parse_place_query("find cheaper restaurants", "Chicago")
+        assert parsed.prefer_lower_price is True
+        ranked = svc._filter_and_rank(places, parsed=parsed, prior_identity_keys=None)
+        names = [p["displayName"]["text"] for p in ranked]
+        assert names[0] == "Cheap Place", f"Cheapest known price must be first, got {names}"
+        cheap_idx = names.index("Cheap Place")
+        expensive_idx = names.index("Expensive Place")
+        no_price_idx = names.index("No Price Place")
+        assert cheap_idx < expensive_idx, f"INEXPENSIVE must rank before EXPENSIVE, got {names}"
+        assert expensive_idx < no_price_idx, \
+            f"Known EXPENSIVE must rank before unknown price, got {names}"
+
 
 # ── 6. prefer_lower_price detection ─────────────────────────────────────────
 

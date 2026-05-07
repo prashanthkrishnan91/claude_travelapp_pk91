@@ -1141,3 +1141,69 @@ test('AIConciergePanel: keeps canonical actionable cards below comparison', () =
   assert.match(aiConciergePanel, /ConciergeCard/);
 });
 
+// ---------------------------------------------------------------------------
+// Follow-up fixes — pickCardMeta, hasGooglePriceSignals priceRange, baseline
+// ---------------------------------------------------------------------------
+
+test('hasGooglePriceSignals: true when at least one card has a usable priceRange', () => {
+  const card = {
+    type: 'verified_place',
+    name: 'PriceRange Only',
+    supportingDetails: {
+      priceLevel: null,
+      priceRange: {
+        startPrice: { currencyCode: 'USD', units: '10', nanos: 0 },
+        endPrice: { currencyCode: 'USD', units: '25', nanos: 0 },
+      },
+    },
+    display: { displayCategory: 'Restaurant', displayPrice: null },
+    googleVerification: { businessStatus: 'OPERATIONAL', confidence: 'high', providerPlaceId: 'pr1' },
+  };
+  assert.equal(hasGooglePriceSignals([card]), true);
+});
+
+test('hasGooglePriceSignals: false for priceRange with all zero units', () => {
+  const card = {
+    type: 'verified_place',
+    name: 'Zero Range',
+    supportingDetails: {
+      priceLevel: null,
+      priceRange: {
+        startPrice: { currencyCode: 'USD', units: '0', nanos: 0 },
+        endPrice: { currencyCode: 'USD', units: '0', nanos: 0 },
+      },
+    },
+    display: { displayCategory: 'Restaurant', displayPrice: null },
+    googleVerification: { businessStatus: 'OPERATIONAL', confidence: 'high', providerPlaceId: 'pr2' },
+  };
+  assert.equal(hasGooglePriceSignals([card]), false);
+});
+
+test('AIConciergePanel: pickCardMeta no longer early-returns displayMetaLine (price always appended)', () => {
+  // The old early-return pattern "if displayMetaLine return [displayMetaLine]" is gone.
+  // Instead ratingBase is used so price is always appended.
+  assert.doesNotMatch(aiConciergePanel, /if \(card\.display\?\.displayMetaLine\) return \[card\.display\.displayMetaLine\]/);
+  assert.match(aiConciergePanel, /ratingBase/);
+});
+
+test('AIConciergePanel: pickCardMeta guards against duplicate price in pre-formatted meta base', () => {
+  assert.match(aiConciergePanel, /metaAlreadyHasPrice/);
+});
+
+test('AIConciergePanel: imports getBaselinePriceLevel from refinementInterpreter', () => {
+  assert.match(aiConciergePanel, /getBaselinePriceLevel/);
+});
+
+test('AIConciergePanel: cheaper follow-up computes baseline and checks if results are cheaper', () => {
+  assert.match(aiConciergePanel, /getBaselinePriceLevel\(currentVisibleCards\)/);
+  assert.match(aiConciergePanel, /hasActuallyCheaper/);
+});
+
+test('AIConciergePanel: cheaper follow-up shows honest caveat when returned cards not lower than baseline', () => {
+  assert.match(aiConciergePanel, /Google price data does not prove they.*re cheaper than the current picks/s);
+});
+
+test('AIConciergePanel: cheaper follow-up shows honest caveat when lacking price signals in results', () => {
+  assert.match(aiConciergePanel, /not enough Google price data to prove they.*re cheaper/s);
+});
+

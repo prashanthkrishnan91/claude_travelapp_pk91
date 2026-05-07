@@ -84,6 +84,9 @@ _PRICE_LEVEL_ORDER: Dict[str, int] = {
     "PRICE_LEVEL_EXPENSIVE": 3,
     "PRICE_LEVEL_VERY_EXPENSIVE": 4,
 }
+# Unknown / absent price sorts AFTER all known tiers so missing data is never
+# treated as a cheaper signal (do not default to MODERATE = 2).
+_UNKNOWN_PRICE_ORDER = len(_PRICE_LEVEL_ORDER)  # 5
 _OPERATIONAL = "OPERATIONAL"
 
 # Cuisine/subtype keywords that should be passed through literally to Google.
@@ -831,7 +834,7 @@ class FastDynamicPlaceSearch:
             def _value_sort_key(item: tuple) -> tuple:
                 combined, place = item
                 pl = place.get("priceLevel")
-                price_order = _PRICE_LEVEL_ORDER.get(pl, 2)  # missing → MODERATE default
+                price_order = _PRICE_LEVEL_ORDER.get(pl, _UNKNOWN_PRICE_ORDER)
                 return (price_order, -combined)
             scored.sort(key=_value_sort_key)
         else:

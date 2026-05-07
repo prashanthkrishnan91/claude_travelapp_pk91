@@ -32,7 +32,7 @@ import type {
 } from "@/lib/api";
 import type { ItineraryDay, ItineraryItem } from "@/types";
 import { pickCardReason, pickCardCategory, sanitizeWhyPick, shouldShowCollapsedSources, splitReason, normalizeTitle } from "@/lib/concierge/cardPresentation";
-import { ACTION, parseRefinementAction, applyRefinementToMessage, buildContextualSearchQuery, selectBestCard, looksLikeFreshSearch, dedupeCardsAgainstCurrentSet, hasGooglePriceSignals } from "@/lib/concierge/refinementInterpreter";
+import { ACTION, parseRefinementAction, applyRefinementToMessage, buildContextualSearchQuery, selectBestCard, looksLikeFreshSearch, dedupeCardsAgainstCurrentSet, hasGooglePriceSignals, getBaselinePriceLevel } from "@/lib/concierge/refinementInterpreter";
 import { formatDisplayPrice } from "@/lib/concierge/priceFormatter";
 
 type MessageRole = "user" | "assistant";
@@ -246,12 +246,8 @@ type DisplayCard = {
 // Address is intentionally *included* here so the card has one consolidated
 // info line and the expanded view doesn't need to repeat it.
 function pickCardMeta(card: DisplayCard): string[] {
-  if (card.display?.displayMetaLine) return [card.display.displayMetaLine];
   const details = card.supportingDetails;
-  if (details?.metaLine) return [details.metaLine];
-  const rating = details?.rating ?? (typeof card.rating === "number" ? card.rating.toFixed(1) : undefined);
-  const reviewCount = details?.reviewCount ?? card.reviewCount;
-  const address = details?.address ?? card.address ?? card.neighborhood;
+
   const price =
     card.display?.displayPrice ??
     formatDisplayPrice(
@@ -259,6 +255,23 @@ function pickCardMeta(card: DisplayCard): string[] {
       (details?.priceRange as Record<string, unknown> | null | undefined) ?? null,
     ) ??
     undefined;
+  const address = details?.address ?? card.address ?? card.neighborhood;
+
+  // Use pre-formatted meta line as the rating/review base when available,
+  // then append price and address — never early-return before appending price.
+  const ratingBase = card.display?.displayMetaLine ?? details?.metaLine;
+  if (ratingBase) {
+    // Avoid duplicate price if the base already contains a price symbol.
+    const metaAlreadyHasPrice = /\$|Free\b|EUR/.test(ratingBase);
+    const parts: string[] = [ratingBase];
+    if (price && !metaAlreadyHasPrice) parts.push(price);
+    if (address) parts.push(address);
+    return [parts.join(" · ")];
+  }
+
+  // No pre-formatted line — build from raw fields.
+  const rating = details?.rating ?? (typeof card.rating === "number" ? card.rating.toFixed(1) : undefined);
+  const reviewCount = details?.reviewCount ?? card.reviewCount;
   const parts: string[] = [];
   if (rating) {
     parts.push(reviewCount ? `★ ${rating} (${Number(reviewCount).toLocaleString()} reviews)` : `★ ${rating}`);
@@ -979,13 +992,34 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
           ];
           const newHasPriceSignals = hasGooglePriceSignals(newCards);
           if (!newHasPriceSignals) {
-            // Results exist but no price data to prove they're cheaper — honest disclosure.
+            // No price data in returned cards — honest disclosure.
             setMessages((prev) => [...prev, {
               ...deduped,
-              text: "I found more verified options, but not enough Google price data to confirm they're cheaper. Showing them below — check their price tiers before deciding.",
+              text: "I found more verified options, but not enough Google price data to prove they're cheaper. Showing them below — check their price tiers before deciding.",
             }]);
           } else {
-            setMessages((prev) => [...prev, deduped]);
+            // Price signals present — check if any returned card is actually cheaper
+            // than the current visible baseline. Never claim cheaper without proof.
+            const baseline = getBaselinePriceLevel(currentVisibleCards);
+            const PRICE_ORD = { PRICE_LEVEL_FREE: 0, PRICE_LEVEL_INEXPENSIVE: 1, PRICE_LEVEL_MODERATE: 2, PRICE_LEVEL_EXPENSIVE: 3, PRICE_LEVEL_VERY_EXPENSIVE: 4 } as const;
+            type PriceLevelKey = keyof typeof PRICE_ORD;
+            let minNewLevel: number | null = null;
+            for (const c of newCards) {
+              const lvl = (c as { supportingDetails?: { priceLevel?: string } }).supportingDetails?.priceLevel;
+              if (lvl && lvl in PRICE_ORD) {
+                const ord = PRICE_ORD[lvl as PriceLevelKey];
+                minNewLevel = minNewLevel === null ? ord : Math.min(minNewLevel, ord);
+              }
+            }
+            const hasActuallyCheaper = baseline !== null && minNewLevel !== null && minNewLevel < baseline;
+            if (!hasActuallyCheaper) {
+              setMessages((prev) => [...prev, {
+                ...deduped,
+                text: "I found more verified options, but Google price data does not prove they're cheaper than the current picks. Showing them below for comparison.",
+              }]);
+            } else {
+              setMessages((prev) => [...prev, deduped]);
+            }
           }
         } else {
           setMessages((prev) => [...prev, deduped]);
