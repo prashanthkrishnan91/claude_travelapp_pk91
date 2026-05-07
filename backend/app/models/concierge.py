@@ -122,6 +122,9 @@ class ConciergeDisplayFields(BaseModel):
     display_source_summary: Optional[str] = None
     display_badges: List[str] = []
     addability: Literal["addable", "research_only", "closed"] = "addable"
+    # Google-backed price display string — ready for UI, null when unavailable.
+    # Formatted from priceRange first ("$10–20"), then priceLevel ("$$"), then null.
+    display_price: Optional[str] = None
     # Debug trace fields — not shown in UI, used for pipeline observability
     display_category_source: Optional[str] = None  # "google_types" | "name_signal" | "intent_fallback"
     display_why_source: Optional[str] = None  # "llm_evidence_pack_v2_primary" | "llm_evidence_pack_v2_retry" | ...
@@ -141,6 +144,9 @@ class PlaceSupportingDetails(BaseModel):
     why_pick: Optional[str] = None
     concierge_note: Optional[str] = None
     category_label: Optional[str] = None
+    # Google-backed price signals — absent when Google didn't return them.
+    price_level: Optional[str] = None   # e.g. "PRICE_LEVEL_MODERATE"
+    price_range: Optional[Dict[str, Any]] = None  # Google PriceRange {startPrice, endPrice}
 
 
 class UnifiedRestaurantResult(BaseModel):

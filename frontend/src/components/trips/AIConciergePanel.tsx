@@ -32,15 +32,18 @@ import type {
 } from "@/lib/api";
 import type { ItineraryDay, ItineraryItem } from "@/types";
 import { pickCardReason, pickCardCategory, sanitizeWhyPick, shouldShowCollapsedSources, splitReason, normalizeTitle } from "@/lib/concierge/cardPresentation";
-import { ACTION, parseRefinementAction, applyRefinementToMessage, buildContextualSearchQuery, selectBestCard, looksLikeFreshSearch, dedupeCardsAgainstCurrentSet } from "@/lib/concierge/refinementInterpreter";
+import { ACTION, parseRefinementAction, applyRefinementToMessage, buildContextualSearchQuery, selectBestCard, looksLikeFreshSearch, dedupeCardsAgainstCurrentSet, hasGooglePriceSignals } from "@/lib/concierge/refinementInterpreter";
+import { formatDisplayPrice } from "@/lib/concierge/priceFormatter";
 
 type MessageRole = "user" | "assistant";
 
 interface RefinementComparisonCard {
   name: string;
   category: string;
-  meta: string;
-  note: string;
+  rating: string | null;
+  price: string | null;
+  area: string | null;
+  bestFor: string | null;
 }
 
 interface Message {
@@ -223,6 +226,8 @@ type DisplayCard = {
     whyPick?: { text?: string | null; generationMethod?: string | null } | string | null;
     conciergeNote?: string | null;
     categoryLabel?: string | null;
+    priceLevel?: string | null;
+    priceRange?: Record<string, unknown> | null;
   } | null;
   display?: {
     displayWhy?: string | null;
@@ -232,10 +237,12 @@ type DisplayCard = {
     displayMetaLine?: string | null;
     displayBadges?: string[];
     addability?: string | null;
+    displayPrice?: string | null;
   } | null;
 };
 
-// Compose the subheader/meta line: `★ 4.8 (9,483 reviews) · Address`.
+// Compose the subheader/meta line: `★ 4.8 (9,483 reviews) · $$ · Address`.
+// Price appears after reviews and before address when a Google price signal is present.
 // Address is intentionally *included* here so the card has one consolidated
 // info line and the expanded view doesn't need to repeat it.
 function pickCardMeta(card: DisplayCard): string[] {
@@ -245,10 +252,18 @@ function pickCardMeta(card: DisplayCard): string[] {
   const rating = details?.rating ?? (typeof card.rating === "number" ? card.rating.toFixed(1) : undefined);
   const reviewCount = details?.reviewCount ?? card.reviewCount;
   const address = details?.address ?? card.address ?? card.neighborhood;
+  const price =
+    card.display?.displayPrice ??
+    formatDisplayPrice(
+      (details?.priceLevel as string | null | undefined) ?? null,
+      (details?.priceRange as Record<string, unknown> | null | undefined) ?? null,
+    ) ??
+    undefined;
   const parts: string[] = [];
   if (rating) {
     parts.push(reviewCount ? `★ ${rating} (${Number(reviewCount).toLocaleString()} reviews)` : `★ ${rating}`);
   }
+  if (price) parts.push(price);
   if (address) parts.push(address);
   return parts.length > 0 ? [parts.join(" · ")] : [];
 }
@@ -546,7 +561,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
       )
     );
     if (!hasCards) return null;
-    return ["Show only casual", "Compare top 2", "Find more like these", "Add best to Day 1"];
+    return ["Show only casual", "Compare top 2", "Find cheaper nearby", "Add best to Day 1"];
   }, [messages]);
 
   useEffect(() => {
@@ -917,13 +932,13 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
     }
 
     if (action.type === ACTION.SEARCH_MORE_WITH_CONTEXT) {
-      // Fix C: cheaper/budget/affordable queries cannot claim cheaper results.
-      // Current data does not reliably prove live pricing — show honest response.
-      const isCheaperQuery = /\bcheap(er)?\b|\bbudget\b|\baffordable\b/i.test(query);
-      if (isCheaperQuery) {
+      const isCheaperQuery = /\bcheap(er)?\b|\bbudget\b|\baffordable\b|\blower[- ]price\b/i.test(query);
+      const currentVisibleCards = getCardsWithKind(latestCardMsg).map((c) => c.place);
+      if (isCheaperQuery && !hasGooglePriceSignals(currentVisibleCards)) {
+        // No Google price signals for the current set — give honest message.
         setMessages((prev) => [...prev, {
           role: "assistant",
-          text: "I can look for more options like these, but I don't have reliable live price data for these venues yet. Try \"Find more like these\" to search for additional options.",
+          text: "I don't have Google price signals for these places yet, so I can't honestly rank cheaper options. I can still find more options like these — try \"Find more like these\" to search for additional venues.",
           isRefinement: true,
           refinementAction: ACTION.SEARCH_MORE_WITH_CONTEXT,
           restaurants: [], attractions: [], hotels: [],
@@ -932,18 +947,19 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
         }]);
         return true;
       }
+      // isCheaperQuery with price signals: falls through to value-aware search.
+      // The backend detects cheaper/budget/affordable in the contextual query and
+      // sorts results by priceLevel ascending as a post-retrieval modifier.
 
       const originalQuery = getOriginalQuery(messages, latestCardMsg);
       const contextualQuery = buildContextualSearchQuery(originalQuery, query, { destination });
-      // Collect current visible cards for de-dupe after backend returns.
-      const currentVisibleCards = getCardsWithKind(latestCardMsg).map((c) => c.place);
       setLoading(true);
       try {
         const requestId = typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
         const result = await callConciergeSearch(tripId, contextualQuery, requestId);
-        // Fix D: de-dupe against current visible card set before rendering.
+        // De-dupe against current visible card set before rendering.
         const deduped = dedupeCardsAgainstCurrentSet(fromSearchResult(result), currentVisibleCards) as Message & { allDuplicates: boolean };
         if (deduped.allDuplicates) {
           setMessages((prev) => [...prev, {
@@ -955,6 +971,22 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
             researchSources: [], areaComparisons: [],
             retrievalUsed: false, sourceStatus: "none",
           }]);
+        } else if (isCheaperQuery) {
+          const newCards = [
+            ...(deduped.restaurants ?? []),
+            ...(deduped.attractions ?? []),
+            ...(deduped.hotels ?? []),
+          ];
+          const newHasPriceSignals = hasGooglePriceSignals(newCards);
+          if (!newHasPriceSignals) {
+            // Results exist but no price data to prove they're cheaper — honest disclosure.
+            setMessages((prev) => [...prev, {
+              ...deduped,
+              text: "I found more verified options, but not enough Google price data to confirm they're cheaper. Showing them below — check their price tiers before deciding.",
+            }]);
+          } else {
+            setMessages((prev) => [...prev, deduped]);
+          }
         } else {
           setMessages((prev) => [...prev, deduped]);
         }
@@ -1129,16 +1161,53 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                   {msg.refinementAction === ACTION.COMPARE_CURRENT_SET && msg.refinementComparison && msg.refinementComparison.length > 0 && (
                     <div className="rounded-xl border border-slate-600/40 bg-slate-800/30 px-3 py-2.5 text-xs">
                       <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">Quick comparison</p>
-                      {msg.refinementComparison.map((card, i) => (
-                        <div key={card.name} className={i > 0 ? "mt-2 border-t border-slate-700/40 pt-2" : ""}>
-                          <p className="font-semibold text-slate-200">
-                            {card.name}
-                            {card.category && <span className="ml-1 font-normal text-slate-400">· {card.category}</span>}
-                          </p>
-                          {card.meta && <p className="mt-0.5 text-slate-400">{card.meta}</p>}
-                          {card.note && <p className="mt-1 italic text-slate-300">{card.note}</p>}
-                        </div>
-                      ))}
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr>
+                            <th className="w-16 pb-1.5 pr-3 text-left text-[10px] font-normal text-slate-500" />
+                            {msg.refinementComparison.map((card) => (
+                              <th key={card.name} className="pb-1.5 text-left">
+                                <span className="font-semibold text-slate-200">{card.name}</span>
+                                {card.category && <span className="ml-1 font-normal text-slate-400">· {card.category}</span>}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {msg.refinementComparison.some((c) => c.rating) && (
+                            <tr className="border-t border-slate-700/40">
+                              <td className="py-1 pr-3 text-slate-500">Rating</td>
+                              {msg.refinementComparison.map((card) => (
+                                <td key={card.name} className="py-1 text-slate-300">{card.rating ?? "—"}</td>
+                              ))}
+                            </tr>
+                          )}
+                          {msg.refinementComparison.some((c) => c.price) && (
+                            <tr className="border-t border-slate-700/40">
+                              <td className="py-1 pr-3 text-slate-500">Price</td>
+                              {msg.refinementComparison.map((card) => (
+                                <td key={card.name} className="py-1 text-slate-300">{card.price ?? "—"}</td>
+                              ))}
+                            </tr>
+                          )}
+                          {msg.refinementComparison.some((c) => c.area) && (
+                            <tr className="border-t border-slate-700/40">
+                              <td className="py-1 pr-3 text-slate-500">Area</td>
+                              {msg.refinementComparison.map((card) => (
+                                <td key={card.name} className="py-1 text-slate-300 leading-snug">{card.area ?? "—"}</td>
+                              ))}
+                            </tr>
+                          )}
+                          {msg.refinementComparison.some((c) => c.bestFor) && (
+                            <tr className="border-t border-slate-700/40">
+                              <td className="py-1 pr-3 text-slate-500">Best for</td>
+                              {msg.refinementComparison.map((card) => (
+                                <td key={card.name} className="py-1 italic text-slate-300 leading-snug">{card.bestFor ?? "—"}</td>
+                              ))}
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   )}
 

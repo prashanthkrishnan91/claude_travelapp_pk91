@@ -13,6 +13,8 @@
  *  - All returned card arrays remain Google-verified and addable.
  */
 
+import { formatDisplayPrice } from './priceFormatter.js';
+
 export const ACTION = {
   FILTER_CURRENT_SET: 'FILTER_CURRENT_SET',
   REMOVE_FROM_CURRENT_SET: 'REMOVE_FROM_CURRENT_SET',
@@ -222,8 +224,48 @@ export function selectBestCard(cardsWithKind) {
 }
 
 /**
+ * Return true when at least one card in the flat array has a usable Google
+ * price signal (priceLevel or displayPrice).
+ * @param {Array} cards - flat array of place objects
+ */
+export function hasGooglePriceSignals(cards) {
+  if (!Array.isArray(cards)) return false;
+  return cards.some((card) => {
+    return !!(
+      card?.display?.displayPrice ||
+      card?.supportingDetails?.priceLevel
+    );
+  });
+}
+
+/**
+ * Return the median priceLevel numeric order for the visible card set.
+ * Returns null when no cards have price signals.
+ * 0=Free, 1=Inexpensive, 2=Moderate, 3=Expensive, 4=VeryExpensive.
+ * @param {Array} cards - flat array of place objects
+ * @returns {number|null}
+ */
+export function getBaselinePriceLevel(cards) {
+  const ORDER = {
+    PRICE_LEVEL_FREE: 0,
+    PRICE_LEVEL_INEXPENSIVE: 1,
+    PRICE_LEVEL_MODERATE: 2,
+    PRICE_LEVEL_EXPENSIVE: 3,
+    PRICE_LEVEL_VERY_EXPENSIVE: 4,
+  };
+  const levels = (cards ?? [])
+    .map((c) => c?.supportingDetails?.priceLevel)
+    .filter(Boolean)
+    .map((l) => ORDER[l] ?? 2);
+  if (!levels.length) return null;
+  levels.sort((a, b) => a - b);
+  return levels[Math.floor(levels.length / 2)];
+}
+
+/**
  * Build a comparison summary for the first two cards.
  * Returns { text, comparisonCards } using only visible, safe fields.
+ * comparisonCards shape: { name, category, rating, price, area, bestFor }
  */
 export function compareCards(cardsWithKind) {
   const cards = (cardsWithKind ?? []).slice(0, 2);
@@ -235,14 +277,21 @@ export function compareCards(cardsWithKind) {
   const summaries = cards.map(({ place, kind }) => {
     const rating = getNumericRating(place);
     const reviewCount = getReviewCount(place);
-    const metaParts = [];
-    if (rating > 0) {
-      metaParts.push(reviewCount > 0
+
+    const ratingStr = rating > 0
+      ? (reviewCount > 0
         ? `★ ${rating.toFixed(1)} (${reviewCount.toLocaleString()} reviews)`
-        : `★ ${rating.toFixed(1)}`);
-    }
-    const area = place?.neighborhood ?? place?.address ?? place?.supportingDetails?.address ?? '';
-    if (area) metaParts.push(area);
+        : `★ ${rating.toFixed(1)}`)
+      : null;
+
+    // Google-backed price signal — prefer formatted display_price, then format from raw fields.
+    const price = place?.display?.displayPrice
+      ?? formatDisplayPrice(
+        place?.supportingDetails?.priceLevel ?? null,
+        place?.supportingDetails?.priceRange ?? null,
+      ) ?? null;
+
+    const area = place?.neighborhood ?? place?.address ?? place?.supportingDetails?.address ?? null;
 
     const category = place?.display?.displayCategory
       ?? place?.cuisine
@@ -250,14 +299,17 @@ export function compareCards(cardsWithKind) {
       ?? place?.supportingDetails?.categoryLabel
       ?? (kind === 'hotel' ? 'Hotel' : kind === 'attraction' ? 'Attraction' : 'Restaurant');
 
-    const rawNote = (place?.display?.displayWhyValidated === true && place?.display?.displayWhy)
+    // bestFor: use up to 80 chars from displayWhy/whyPick without mid-sentence truncation.
+    const rawWhy = (place?.display?.displayWhyValidated === true && place?.display?.displayWhy)
       ? place.display.displayWhy
       : (typeof place?.supportingDetails?.whyPick === 'string'
         ? place.supportingDetails.whyPick
         : (place?.supportingDetails?.whyPick?.text ?? ''));
-    const note = rawNote ? rawNote.slice(0, 130) + (rawNote.length > 130 ? '…' : '') : '';
+    const bestFor = rawWhy
+      ? (rawWhy.length <= 90 ? rawWhy : rawWhy.slice(0, 90).replace(/\s+\S*$/, '') + '…')
+      : null;
 
-    return { name: place.name, category, meta: metaParts.join(' · '), note };
+    return { name: place.name, category, rating: ratingStr, price, area, bestFor };
   });
 
   const [a, b] = summaries;

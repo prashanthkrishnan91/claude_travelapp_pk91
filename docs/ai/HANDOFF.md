@@ -1,6 +1,101 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-07) — PR #270: AI Concierge Conversational Refinement UX Contract Fix
+## Last change (2026-05-07) — PR #271: AI Concierge Google-backed price/value refinement + compare polish
+
+**Status: OPEN** — 36 new backend price-signal tests pass; all 48 existing backend tests pass; 127 frontend refinement tests pass (97 from PR #270 + 30 new/updated); 16 concierge-renderers tests pass (unchanged); no SQL changes.
+
+### What was built
+
+Level 1 UX/data-contract gap fix: carry Google-backed `priceLevel` and `priceRange` through verified place cards to frontend, show price in card subheader, replace truncated note comparison with structured comparison table, and restore value-aware "Find cheaper nearby" chip backed by real Google price signals.
+
+**Root cause**: `fast_dynamic_place_search.py` retrieved `priceLevel` from Google (Basic SKU) but never stored it in `PlaceSupportingDetails`, never mapped it to a display symbol, and never surfaced it through `ConciergeDisplayFields`. The PR #270 comparison block used raw note text rather than structured fields, and the "Find cheaper nearby" chip was renamed to "Find more like these" because there was no actual price data to back it.
+
+**Changes made**:
+
+1. **`backend/app/models/concierge.py`** (modified):
+   - Added `price_level: Optional[str]` and `price_range: Optional[Dict[str, Any]]` to `PlaceSupportingDetails`
+   - Added `display_price: Optional[str]` to `ConciergeDisplayFields`
+
+2. **`backend/app/services/fast_dynamic_place_search.py`** (modified):
+   - Added `places.priceRange` to `_PLACES_FIELD_MASK` (triggers Atmosphere SKU when available)
+   - Added `_PRICE_LEVEL_SYMBOL` dict (enum → `$`/`$$`/`$$$`/`$$$$`/`Free`) and `_PRICE_LEVEL_ORDER` dict (enum → int 0–4)
+   - Added `_format_display_price(price_level, price_range)` — priceRange compact `"$10–20"` wins over priceLevel symbol; zero-unit ranges fall through to priceLevel; non-USD uses currency code
+   - Added `prefer_lower_price: bool = False` to `ParsedPlaceQuery`
+   - `parse_place_query()` detects `cheaper/budget/affordable/lower-price` keywords and sets `prefer_lower_price=True`
+   - `_to_card()` now extracts `price_range` from Google response and passes both `price_level`/`price_range` to `PlaceSupportingDetails` and `display_price` to `ConciergeDisplayFields`
+   - `_filter_and_rank()` now sorts by `(price_order, -combined_score)` ascending when `parsed.prefer_lower_price` is True; normal path unchanged
+   - Added telemetry logging: `cards_with_price_level`, `cards_with_price_range`, `cards_without_price_signal`, `prefer_lower_price`
+
+3. **`backend/tests/test_google_price_signals.py`** (new — 36 tests):
+   - TestPriceLevelMapping: all 5 priceLevel values stored and display symbols correct
+   - TestPriceRangeMapping: priceRange stored, beats priceLevel for display, non-USD currency code used
+   - TestMissingPriceFields: cards not dropped, fields None when absent
+   - TestFormatDisplayPrice: USD compact format, priceLevel fallback, zero-unit guard, never exposes raw enum names
+   - TestValueAwareRanking: cheaper-first sort verified, normal sort highest-rated-first verified
+   - TestPreferLowerPriceDetection: 5 trigger keywords detected; normal/upscale queries not triggered
+   - TestContractIntegrity: typed payload shape, model serialization
+
+4. **`frontend/src/lib/concierge/priceFormatter.js`** (new):
+   - `formatDisplayPrice(priceLevel, priceRange)` — mirrors backend logic; priceRange compact format wins, priceLevel symbol fallback, null when neither
+
+5. **`frontend/src/lib/api.ts`** (modified):
+   - Added `displayPrice?: string | null` to `ConciergeDisplayFields` interface
+   - Added `priceLevel?: string | null` and `priceRange?: Record<string, unknown> | null` to `supportingDetails` shape on all three result types
+
+6. **`frontend/src/lib/concierge/refinementInterpreter.js`** (modified):
+   - Added `hasGooglePriceSignals(cards)` export — returns true if any card has `display.displayPrice` or `supportingDetails.priceLevel`
+   - Added `getBaselinePriceLevel(cards)` export — returns median price level order (0–4) or null
+   - Updated `compareCards()` to return structured `{ name, category, rating, price, area, bestFor }` instead of `{ name, category, meta, note }`
+
+7. **`frontend/src/components/trips/AIConciergePanel.tsx`** (modified):
+   - Updated `RefinementComparisonCard` interface: `{ name, category, rating, price, area, bestFor }`
+   - Updated `DisplayCard` type: `display.displayPrice`, `supportingDetails.priceLevel/priceRange`
+   - `pickCardMeta()` now inserts price between reviews and address: `★ 4.7 (1,540 reviews) · $ · Address`
+   - Comparison rendering changed from plain text block to structured 4-row table (Rating, Price, Area, Best for) with conditional rows — row omitted if no card has that field
+   - Restored "Find cheaper nearby" chip (was "Find more like these" in PR #270)
+   - `SEARCH_MORE_WITH_CONTEXT` cheaper-query path: if no price signals → honest "I don't have Google price signals…" message; if price signals → value-aware backend search; if result cards lack price signals → honest "found more verified options but not enough price data to confirm cheaper"
+
+8. **`frontend/tests/concierge-refinement.test.mjs`** (modified):
+   - Updated chip mapping test: "Find cheaper nearby" restored
+   - Updated 3 tests (30, 33, 36) for new `compareCards` output shape
+   - Added ~30 new tests: priceFormatter, hasGooglePriceSignals, getBaselinePriceLevel, compareCards structured shape, comparison table rendering, value-aware chip flow
+
+### Hard contracts preserved
+
+- No SQL changes
+- No new providers (Google Places already in use; `priceRange` uses existing Atmosphere SKU)
+- No new LLM calls
+- No note/prose hardening
+- No venue keyword patches
+- Canonical card action contract unchanged (Add to Day, Save, Map, Google verified badge)
+- `fallback_note_visible_count` / `deterministic_visible_count` always 0 (unchanged)
+- `fast_dynamic_place_search.py` field mask only — `google_places.py` (verification gate) unchanged
+
+### Test counts
+
+```
+test_google_price_signals.py:           36 tests, all pass (new)
+all other backend tests:                48 tests, all pass (unchanged)
+concierge-refinement.test.mjs:         127 tests, all pass (97 from PR #270 + 30 new/updated)
+concierge-renderers.test.mjs:           16 tests, all pass (unchanged)
+```
+
+### Google price fields SKU note
+
+- `priceLevel` — Basic SKU (already in `_PLACES_FIELD_MASK` before this PR via `places.priceLevel`)
+- `priceRange` — Atmosphere SKU (added to field mask in this PR); will only return data for places where Google provides it; absent fields gracefully fall through to `priceLevel` symbol
+
+### Supabase SQL: No
+
+### Remaining limitations
+
+- `priceRange` data coverage depends on Google's Atmosphere SKU availability per-place; many places return only `priceLevel`
+- Value-aware ranking sorts entire result set by price ascending; does not filter out expensive places
+- `isCheaperQuery` honest-fallback path fires when no current visible cards have price signals — covers the cold-start case; will naturally improve as Google price signal coverage increases
+
+---
+
+## Previous: PR #270: AI Concierge Conversational Refinement UX Contract Fix
 
 **Status: OPEN** — 97 frontend refinement tests pass (74 from PR #269 + 23 new for this PR); 16 concierge-renderers tests pass (unchanged); no backend/SQL changes.
 

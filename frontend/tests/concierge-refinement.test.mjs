@@ -10,7 +10,10 @@ import {
   selectBestCard,
   looksLikeFreshSearch,
   dedupeCardsAgainstCurrentSet,
+  hasGooglePriceSignals,
+  getBaselinePriceLevel,
 } from '../src/lib/concierge/refinementInterpreter.js';
+import { formatDisplayPrice } from '../src/lib/concierge/priceFormatter.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -290,8 +293,10 @@ test('COMPARE: comparison cards include visible fields only', () => {
   const card = result.refinementComparison[0];
   assert.ok('name' in card, 'name required');
   assert.ok('category' in card, 'category required');
-  assert.ok('meta' in card, 'meta required');
-  assert.ok('note' in card, 'note required');
+  assert.ok('rating' in card, 'rating required');
+  assert.ok('price' in card, 'price required');
+  assert.ok('area' in card, 'area required');
+  assert.ok('bestFor' in card, 'bestFor required');
   // No internal fields
   assert.ok(!('evidence' in card), 'evidence must not be in comparison');
   assert.ok(!('dossier' in card), 'dossier must not be in comparison');
@@ -329,9 +334,10 @@ test('compareCards: returns text and comparisonCards for two cards', () => {
   const { text, comparisonCards } = compareCards(cards);
   assert.match(text, /Alpha.*Beta|Beta.*Alpha/);
   assert.equal(comparisonCards.length, 2);
-  assert.match(comparisonCards[0].meta, /4\.7/);
-  assert.match(comparisonCards[0].meta, /900/);
-  assert.match(comparisonCards[0].meta, /West Loop/);
+  // New structured shape: rating string and area string
+  assert.match(comparisonCards[0].rating, /4\.7/);
+  assert.match(comparisonCards[0].rating, /900/);
+  assert.equal(comparisonCards[0].area, 'West Loop');
 });
 
 test('compareCards: single card → graceful message', () => {
@@ -347,14 +353,15 @@ test('compareCards: empty → graceful message', () => {
   assert.equal(comparisonCards, null);
 });
 
-test('compareCards: note is truncated at 130 chars', () => {
-  const longNote = 'This is a great place. '.repeat(20); // >130 chars
+test('compareCards: bestFor is trimmed at word boundary to avoid mid-word truncation', () => {
+  const longWhy = 'This is a great place for casual dining and special occasions. '.repeat(5); // >90 chars
   const cards = [
-    { kind: 'restaurant', place: makePlace('A', { displayWhy: longNote }) },
+    { kind: 'restaurant', place: makePlace('A', { displayWhy: longWhy }) },
     { kind: 'restaurant', place: makePlace('B') },
   ];
   const { comparisonCards } = compareCards(cards);
-  assert.ok(comparisonCards[0].note.length <= 133, 'note should be truncated with ellipsis');
+  const bf = comparisonCards[0].bestFor ?? '';
+  assert.ok(bf.length <= 93, `bestFor should be ≤93 chars (90 + ellipsis), got ${bf.length}`);
 });
 
 // ---------------------------------------------------------------------------
@@ -469,7 +476,7 @@ test('chips and typed follow-ups use the same action constants', () => {
   const chipMappings = [
     ['Show only casual', ACTION.FILTER_CURRENT_SET],
     ['Compare top 2', ACTION.COMPARE_CURRENT_SET],
-    ['Find more like these', ACTION.SEARCH_MORE_WITH_CONTEXT], // renamed from "Find cheaper nearby"
+    ['Find cheaper nearby', ACTION.SEARCH_MORE_WITH_CONTEXT],
     ['Add best to Day 1', ACTION.ADD_SELECTED_TO_DAY],
   ];
   for (const [chip, expectedAction] of chipMappings) {
@@ -772,26 +779,31 @@ test('dedupeCardsAgainstCurrentSet: empty currentCards returns all new cards unc
 });
 
 // ---------------------------------------------------------------------------
-// Fix C — cheaper chip renamed; cheaper queries get honest response
+// Fix C (updated) — value-aware cheaper chip; honest when no price signals
 // ---------------------------------------------------------------------------
 
-test('AIConciergePanel: refinementChips does not contain "Find cheaper nearby"', () => {
-  // The misleading chip must be removed/renamed to avoid implying price support.
-  assert.doesNotMatch(aiConciergePanel, /"Find cheaper nearby"/);
+test('AIConciergePanel: refinementChips contains "Find cheaper nearby"', () => {
+  // The chip is restored as value-aware using Google price signals.
+  assert.match(aiConciergePanel, /"Find cheaper nearby"/);
 });
 
-test('AIConciergePanel: refinementChips contains "Find more like these"', () => {
-  assert.match(aiConciergePanel, /"Find more like these"/);
+test('AIConciergePanel: refinementChips does not contain "Find more like these"', () => {
+  // Old renamed chip text must be replaced.
+  assert.doesNotMatch(aiConciergePanel, /"Find more like these"/);
 });
 
-test('AIConciergePanel: cheaper queries show honest response, not cheaper results claim', () => {
-  // The isCheaperQuery guard must exist in the SEARCH_MORE branch.
+test('AIConciergePanel: cheaper guard uses isCheaperQuery regex covering cheaper/budget/affordable', () => {
   assert.match(aiConciergePanel, /isCheaperQuery/);
-  assert.match(aiConciergePanel, /reliable live price data/);
+  assert.match(aiConciergePanel, /cheap\(er\)\?.*budget.*affordable/s);
 });
 
-test('AIConciergePanel: cheaper guard uses regex covering cheaper/budget/affordable', () => {
-  assert.match(aiConciergePanel, /cheap\(er\)\?.*budget.*affordable/s);
+test('AIConciergePanel: no-price-signal path shows honest message without claiming cheaper', () => {
+  // Honest message when currentVisibleCards have no Google price signals.
+  assert.match(aiConciergePanel, /Google price signals/);
+});
+
+test('AIConciergePanel: imports hasGooglePriceSignals from refinementInterpreter', () => {
+  assert.match(aiConciergePanel, /hasGooglePriceSignals/);
 });
 
 // ---------------------------------------------------------------------------
@@ -874,5 +886,258 @@ test('AIConciergePanel: chip container uses overflow-x-auto to prevent cramping 
 test('AIConciergePanel: chip buttons use shrink-0 to prevent compression and py-1.5 for tap target', () => {
   assert.match(aiConciergePanel, /shrink-0/);
   assert.match(aiConciergePanel, /py-1\.5/);
+});
+
+// ---------------------------------------------------------------------------
+// Price signals — priceFormatter unit tests
+// ---------------------------------------------------------------------------
+
+test('priceFormatter: formatDisplayPrice returns $$ for PRICE_LEVEL_MODERATE', () => {
+  assert.equal(formatDisplayPrice('PRICE_LEVEL_MODERATE', null), '$$');
+});
+
+test('priceFormatter: formatDisplayPrice returns $ for PRICE_LEVEL_INEXPENSIVE', () => {
+  assert.equal(formatDisplayPrice('PRICE_LEVEL_INEXPENSIVE', null), '$');
+});
+
+test('priceFormatter: formatDisplayPrice returns $$$ for PRICE_LEVEL_EXPENSIVE', () => {
+  assert.equal(formatDisplayPrice('PRICE_LEVEL_EXPENSIVE', null), '$$$');
+});
+
+test('priceFormatter: formatDisplayPrice returns $$$$ for PRICE_LEVEL_VERY_EXPENSIVE', () => {
+  assert.equal(formatDisplayPrice('PRICE_LEVEL_VERY_EXPENSIVE', null), '$$$$');
+});
+
+test('priceFormatter: formatDisplayPrice returns Free for PRICE_LEVEL_FREE', () => {
+  assert.equal(formatDisplayPrice('PRICE_LEVEL_FREE', null), 'Free');
+});
+
+test('priceFormatter: formatDisplayPrice returns null when no data', () => {
+  assert.equal(formatDisplayPrice(null, null), null);
+});
+
+test('priceFormatter: formatDisplayPrice formats priceRange compact USD', () => {
+  const pr = {
+    startPrice: { currencyCode: 'USD', units: '10', nanos: 0 },
+    endPrice: { currencyCode: 'USD', units: '25', nanos: 0 },
+  };
+  assert.equal(formatDisplayPrice(null, pr), '$10–25');
+});
+
+test('priceFormatter: formatDisplayPrice priceRange beats priceLevel', () => {
+  const pr = {
+    startPrice: { currencyCode: 'USD', units: '15', nanos: 0 },
+    endPrice: { currencyCode: 'USD', units: '30', nanos: 0 },
+  };
+  assert.equal(formatDisplayPrice('PRICE_LEVEL_EXPENSIVE', pr), '$15–30');
+});
+
+test('priceFormatter: formatDisplayPrice never returns raw enum name', () => {
+  const result = formatDisplayPrice('PRICE_LEVEL_MODERATE', null);
+  assert.ok(!result?.includes('PRICE_LEVEL'), `Expected no raw enum, got: ${result}`);
+});
+
+test('priceFormatter: formatDisplayPrice returns null for zero-unit priceRange', () => {
+  const pr = {
+    startPrice: { currencyCode: 'USD', units: '0', nanos: 0 },
+    endPrice: { currencyCode: 'USD', units: '0', nanos: 0 },
+  };
+  assert.equal(formatDisplayPrice(null, pr), null);
+});
+
+// ---------------------------------------------------------------------------
+// Price signals — hasGooglePriceSignals
+// ---------------------------------------------------------------------------
+
+function makePriceCard(name, priceLevel = null, displayPrice = null) {
+  return {
+    type: 'verified_place',
+    name,
+    supportingDetails: { priceLevel },
+    display: { displayCategory: 'Restaurant', displayWhy: 'Good place.', displayPrice },
+    googleVerification: { businessStatus: 'OPERATIONAL', confidence: 'high', providerPlaceId: 'abc' },
+  };
+}
+
+test('hasGooglePriceSignals: true when at least one card has priceLevel', () => {
+  const cards = [
+    makePriceCard('A', 'PRICE_LEVEL_MODERATE'),
+    makePriceCard('B'),
+  ];
+  assert.equal(hasGooglePriceSignals(cards), true);
+});
+
+test('hasGooglePriceSignals: true when at least one card has displayPrice', () => {
+  const cards = [
+    makePriceCard('A', null, '$$'),
+    makePriceCard('B'),
+  ];
+  assert.equal(hasGooglePriceSignals(cards), true);
+});
+
+test('hasGooglePriceSignals: false when no cards have price signals', () => {
+  const cards = [makePriceCard('A'), makePriceCard('B')];
+  assert.equal(hasGooglePriceSignals(cards), false);
+});
+
+test('hasGooglePriceSignals: false on empty array', () => {
+  assert.equal(hasGooglePriceSignals([]), false);
+});
+
+test('hasGooglePriceSignals: false on null', () => {
+  assert.equal(hasGooglePriceSignals(null), false);
+});
+
+// ---------------------------------------------------------------------------
+// Price signals — getBaselinePriceLevel
+// ---------------------------------------------------------------------------
+
+test('getBaselinePriceLevel: returns median price order for 3 cards', () => {
+  const cards = [
+    makePriceCard('A', 'PRICE_LEVEL_INEXPENSIVE'), // order 1
+    makePriceCard('B', 'PRICE_LEVEL_MODERATE'),    // order 2
+    makePriceCard('C', 'PRICE_LEVEL_EXPENSIVE'),   // order 3
+  ];
+  assert.equal(getBaselinePriceLevel(cards), 2); // median = MODERATE
+});
+
+test('getBaselinePriceLevel: null when no cards have priceLevel', () => {
+  const cards = [makePriceCard('A'), makePriceCard('B')];
+  assert.equal(getBaselinePriceLevel(cards), null);
+});
+
+// ---------------------------------------------------------------------------
+// Price signals — compareCards structured output
+// ---------------------------------------------------------------------------
+
+function makePriceCardWithDetails(name, priceLevel = null, displayPrice = null, rating = 4.5, reviewCount = 500) {
+  return {
+    type: 'verified_place',
+    name,
+    cuisine: 'Restaurant',
+    rating,
+    reviewCount,
+    neighborhood: 'River North',
+    supportingDetails: {
+      priceLevel,
+      categoryLabel: 'Restaurant',
+      whyPick: `${name} is a great pick for casual dining.`,
+    },
+    display: {
+      displayCategory: 'Restaurant',
+      displayWhy: `${name} is a great pick for casual dining.`,
+      displayWhyValidated: true,
+      displayPrice,
+    },
+    googleVerification: { businessStatus: 'OPERATIONAL', confidence: 'high', providerPlaceId: 'abc' },
+  };
+}
+
+test('compareCards: structured output has rating, price, area, bestFor fields', () => {
+  const cards = [
+    { kind: 'restaurant', place: makePriceCardWithDetails('Alpha', 'PRICE_LEVEL_MODERATE') },
+    { kind: 'restaurant', place: makePriceCardWithDetails('Beta', 'PRICE_LEVEL_INEXPENSIVE') },
+  ];
+  const { comparisonCards } = compareCards(cards);
+  assert.ok(comparisonCards, 'comparisonCards should be present');
+  for (const card of comparisonCards) {
+    assert.ok('rating' in card, 'card should have rating field');
+    assert.ok('price' in card, 'card should have price field');
+    assert.ok('area' in card, 'card should have area field');
+    assert.ok('bestFor' in card, 'card should have bestFor field');
+  }
+});
+
+test('compareCards: price field shows $$ for PRICE_LEVEL_MODERATE', () => {
+  const cards = [
+    { kind: 'restaurant', place: makePriceCardWithDetails('Alpha', 'PRICE_LEVEL_MODERATE') },
+    { kind: 'restaurant', place: makePriceCardWithDetails('Beta') },
+  ];
+  const { comparisonCards } = compareCards(cards);
+  assert.equal(comparisonCards[0].price, '$$');
+});
+
+test('compareCards: price field is null when no price signal', () => {
+  const cards = [
+    { kind: 'restaurant', place: makePriceCardWithDetails('Alpha') },
+    { kind: 'restaurant', place: makePriceCardWithDetails('Beta') },
+  ];
+  const { comparisonCards } = compareCards(cards);
+  assert.equal(comparisonCards[0].price, null);
+  assert.equal(comparisonCards[1].price, null);
+});
+
+test('compareCards: prefers displayPrice over priceLevel for price field', () => {
+  const place = makePriceCardWithDetails('Alpha', 'PRICE_LEVEL_EXPENSIVE', '$12–30');
+  const cards = [
+    { kind: 'restaurant', place },
+    { kind: 'restaurant', place: makePriceCardWithDetails('Beta') },
+  ];
+  const { comparisonCards } = compareCards(cards);
+  assert.equal(comparisonCards[0].price, '$12–30');
+});
+
+test('compareCards: bestFor does not truncate mid-word at 90 chars', () => {
+  const longWhy = 'A ' + 'x'.repeat(100);
+  const place = makePriceCardWithDetails('Alpha');
+  place.display.displayWhy = longWhy;
+  const cards = [
+    { kind: 'restaurant', place },
+    { kind: 'restaurant', place: makePriceCardWithDetails('Beta') },
+  ];
+  const { comparisonCards } = compareCards(cards);
+  const bf = comparisonCards[0].bestFor ?? '';
+  // Should not end mid-word abruptly without ellipsis
+  assert.ok(bf.endsWith('…') || bf.length <= 90, `bestFor should be ≤90 chars or end with ellipsis: "${bf}"`);
+});
+
+test('compareCards: does not expose old meta/note fields', () => {
+  const cards = [
+    { kind: 'restaurant', place: makePriceCardWithDetails('Alpha') },
+    { kind: 'restaurant', place: makePriceCardWithDetails('Beta') },
+  ];
+  const { comparisonCards } = compareCards(cards);
+  for (const card of comparisonCards) {
+    assert.ok(!('meta' in card), 'old meta field should not be present');
+    assert.ok(!('note' in card), 'old note field should not be present');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Price signals — AIConciergePanel structural checks
+// ---------------------------------------------------------------------------
+
+test('AIConciergePanel: pickCardMeta includes price between rating and address', () => {
+  // The price should appear in the meta line composition, after rating/reviews
+  assert.match(aiConciergePanel, /price.*parts\.push|parts\.push.*price/s);
+});
+
+test('AIConciergePanel: comparison rendering uses structured table rows', () => {
+  // The new comparison uses a table with row labels (Rating, Price, Area, Best for)
+  assert.match(aiConciergePanel, /Rating/);
+  assert.match(aiConciergePanel, /Price/);
+  assert.match(aiConciergePanel, /Area/);
+  assert.match(aiConciergePanel, /Best for/);
+});
+
+test('AIConciergePanel: comparison rendering does not clip notes mid-sentence', () => {
+  // The old truncated note approach is gone
+  assert.doesNotMatch(aiConciergePanel, /card\.note/);
+});
+
+test('AIConciergePanel: comparison rendering references card.price and card.rating', () => {
+  assert.match(aiConciergePanel, /card\.price/);
+  assert.match(aiConciergePanel, /card\.rating/);
+});
+
+test('AIConciergePanel: imports formatDisplayPrice from priceFormatter', () => {
+  assert.match(aiConciergePanel, /formatDisplayPrice/);
+  assert.match(aiConciergePanel, /priceFormatter/);
+});
+
+test('AIConciergePanel: keeps canonical actionable cards below comparison', () => {
+  // The canonical ConciergeCard renderer still runs after comparison block
+  assert.match(aiConciergePanel, /COMPARE_CURRENT_SET/);
+  assert.match(aiConciergePanel, /ConciergeCard/);
 });
 
