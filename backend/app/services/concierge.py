@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import time
 from datetime import date, timedelta
 from typing import List, Optional, Sequence
 from uuid import UUID
@@ -258,9 +259,25 @@ class ConciergeService:
         client_message_id: Optional[str] = None,
         prior_identity_keys: Optional[frozenset] = None,
     ) -> ConciergeSearchResponse:
+        _t_search_start = time.perf_counter()
+
+        _t0 = time.perf_counter()
         trip = self._fetch_trip(trip_id, user_id)
+        _fetch_trip_ms = int((time.perf_counter() - _t0) * 1000)
+
         request_id = (client_message_id or "").strip() or str(uuid4())
+
+        # Concierge message persistence (user + assistant) stays synchronous.
+        # Immediate follow-ups like "compare top 2" require the prior card pool
+        # to be fully persisted before the next search begins. Only the optional
+        # request-log observability record is moved to a background task (see
+        # _persist_request_log_task in routes/ai.py). If save_user_message_ms or
+        # save_assistant_message_ms prove slow in production logs, a later PR can
+        # add safe deferred persistence with an in-memory immediate-context fallback.
+        _t0 = time.perf_counter()
         self._save_message(trip_id, "user", user_query, client_message_id=request_id)
+        _save_user_message_ms = int((time.perf_counter() - _t0) * 1000)
+
         destination = trip.get("destination", "")
         intent = self._detect_intent(user_query)
 
@@ -279,10 +296,13 @@ class ConciergeService:
 
         search_svc = SearchService(self._db)
 
+        _t0 = time.perf_counter()
         live_result = self._fetch_live_research(
             intent, destination, user_query, trip,
             prior_identity_keys=prior_identity_keys,
         )
+        _fetch_live_research_ms = int((time.perf_counter() - _t0) * 1000)
+
         research_sources = list(live_result.research_sources)
         live_provider_name = live_result.provider_name
         require_google = getattr(self._settings, "research_engine_require_google_verification", False) is True
@@ -480,26 +500,46 @@ class ConciergeService:
                         sources.append(f"Live search · {live_result.provider_name}")
             retrieval_used = bool(restaurants or attractions)
 
-        system_prompt = _RETRIEVAL_SYSTEM_PROMPT if retrieval_used else _SYSTEM_PROMPT
-        prompt = self._build_search_prompt(
-            trip, user_query, intent, restaurants, attractions, hotels, areas, warnings, area_comparisons
+        # PART 1 — Detect semantic card-first path.
+        # When semantic_retrieval_v1 produced the live cards (not Michelin curated or DB fallback),
+        # source_status is SOURCE_LIVE_SEARCH and live_provider_name identifies the pipeline.
+        # For this path we skip the legacy summary LLM entirely: the set-writer (PR #273) already
+        # produced per-card notes and there is no prose summary needed.
+        _semantic_card_first = (
+            live_provider_name == "semantic_retrieval_v1"
+            and source_status == SOURCE_LIVE_SEARCH
+            and bool(restaurants or attractions)
         )
-        raw = self._call_claude(prompt, system_prompt=system_prompt)
-        base = self._parse_response(raw)
-        concise_response = self._concise_response(base.response, intent)
-        concise_response = self._align_summary_with_ranked_cards(
-            concise_response,
-            intent=intent,
-            restaurants=restaurants,
-            attractions=attractions,
-            hotels=hotels,
-        )
-        # PR #267 claim-safety gate: review visible summary before serialization.
-        # Must run after all summary processing; before ConciergeSearchResponse.
-        # Fail closed: reviewer timeout or error → omit summary, never fail open.
-        # Cards are unaffected — only the response text may be sanitized/omitted.
-        if retrieval_used:
-            concise_response = _gate_summary_claim_safety(concise_response)
+
+        _t_legacy_llm = time.perf_counter()
+        if _semantic_card_first:
+            # Bypass legacy summary LLM — cards are the product.
+            concise_response = ""
+            base_suggestions: List = []
+        else:
+            system_prompt = _RETRIEVAL_SYSTEM_PROMPT if retrieval_used else _SYSTEM_PROMPT
+            prompt = self._build_search_prompt(
+                trip, user_query, intent, restaurants, attractions, hotels, areas, warnings, area_comparisons
+            )
+            raw = self._call_claude(prompt, system_prompt=system_prompt)
+            base = self._parse_response(raw)
+            concise_response = self._concise_response(base.response, intent)
+            concise_response = self._align_summary_with_ranked_cards(
+                concise_response,
+                intent=intent,
+                restaurants=restaurants,
+                attractions=attractions,
+                hotels=hotels,
+            )
+            # PR #267 claim-safety gate: review visible summary before serialization.
+            # Fail closed: reviewer timeout or error → omit summary, never fail open.
+            # Cards are unaffected — only the response text may be sanitized/omitted.
+            if retrieval_used:
+                concise_response = _gate_summary_claim_safety(concise_response)
+            base_suggestions = base.suggestions
+        _legacy_summary_llm_ms = int((time.perf_counter() - _t_legacy_llm) * 1000)
+
+        _t_assembly = time.perf_counter()
 
         source_status = self._derive_response_source_status(
             initial_status=source_status,
@@ -563,10 +603,13 @@ class ConciergeService:
             research_sources=research_sources,
             areas=areas,
             area_comparisons=area_comparisons,
-            suggestions=base.suggestions,
+            suggestions=base_suggestions,
             sources=sources,
             warnings=warnings,
         )
+        _response_assembly_ms = int((time.perf_counter() - _t_assembly) * 1000)
+
+        _t0 = time.perf_counter()
         self._save_message(
             trip_id,
             "assistant",
@@ -574,6 +617,28 @@ class ConciergeService:
             structured_results=response.model_dump(mode="json"),
             client_message_id=f"{request_id}:assistant",
         )
+        _save_assistant_message_ms = int((time.perf_counter() - _t0) * 1000)
+
+        _total_search_ms = int((time.perf_counter() - _t_search_start) * 1000)
+        logger.info(
+            "concierge.service.search_timing trip_id=%s "
+            "fetch_trip_ms=%d save_user_message_ms=%d fetch_live_research_ms=%d "
+            "legacy_summary_llm_ms=%d legacy_summary_skipped=%s "
+            "response_assembly_ms=%d save_assistant_message_ms=%d "
+            "total_search_ms=%d live_provider=%s semantic_card_first_path=%s",
+            trip_id,
+            _fetch_trip_ms,
+            _save_user_message_ms,
+            _fetch_live_research_ms,
+            _legacy_summary_llm_ms,
+            _semantic_card_first,
+            _response_assembly_ms,
+            _save_assistant_message_ms,
+            _total_search_ms,
+            live_provider_name,
+            _semantic_card_first,
+        )
+
         return response
 
     def _align_summary_with_ranked_cards(

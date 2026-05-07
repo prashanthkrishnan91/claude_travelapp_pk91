@@ -1,6 +1,113 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-07) — PR #273: Fast LLM Set Writer Core (Level 2 performance architecture fix)
+## Last change (2026-05-07) — PR #274: AI Concierge Critical Path Hardening v1 (Level 2 latency architecture fix)
+
+**Status: OPEN** — Backend-only. No SQL. No UI changes. No new endpoints. No cache implemented.
+
+### Root cause fixed
+
+After PR #273, total latency for `/ai/concierge/search` was still 8.9–12.1 s. Two hidden bottlenecks remained:
+
+1. **Legacy summary LLM** (`_call_claude` in `ConciergeService.search()`) ran synchronously on **every** path, including `semantic_retrieval_v1` card-first responses. Since PR #273's set-writer already produces fully-populated cards for those paths, this second LLM call added 2–5 s of pure overhead with no output consumed.
+
+2. **`persist_concierge_request_log`** ran synchronously on the response critical path, adding 100–600 ms of DB I/O per request. Schema-drift (PGRST204/PGRST116) triggered up to 4 retry attempts and called `logger.exception` outside an except context (logging "NoneType: None").
+
+### What was built
+
+**PART 1 — Semantic card-first LLM bypass** (`backend/app/services/concierge.py`):
+- Added `_semantic_card_first` flag: `live_provider_name == "semantic_retrieval_v1" AND source_status == SOURCE_LIVE_SEARCH AND bool(restaurants or attractions)`.
+- When true: sets `concise_response = ""` and `base_suggestions = []` — skips `_call_claude`, `_parse_response`, `_concise_response`, `_align_summary_with_ranked_cards`, `_gate_summary_claim_safety`.
+- When false: all legacy LLM logic runs exactly as before.
+- Detection is safe: Michelin curated data uses `SOURCE_CURATED_STATIC` / `SOURCE_APP_DATABASE`, never `SOURCE_LIVE_SEARCH`, so it is never bypassed.
+
+**PART 2 — Non-blocking persistence** (`backend/app/routes/ai.py`):
+- `request_id = uuid4()` generated upfront before response construction.
+- `persist_concierge_request_log` moved to `background_tasks.add_task(_persist_request_log_task, ...)` — runs after response is sent.
+- `request_log_event` remains synchronous (observability, no I/O).
+- `_persist_request_log_task` wrapper catches and logs any exception so background failures never surface to the caller.
+
+**PART 3 — Schema drift hardening** (`backend/app/concierge/logging.py`):
+- Added process-level `_KNOWN_UNSUPPORTED_COLUMNS: dict[str, set[str]] = {}` cache.
+- Before first insert attempt, strip all columns already known to be unsupported in this process lifetime — eliminates retry storm on repeated requests.
+- Loop bound changed from fixed `_MAX_SCHEMA_RETRY_ATTEMPTS` to `len(row) + 1` — bounded by actual row size.
+- Added empty-row early-exit guard: if `not row` at loop start, emit `logger.warning(...reason=all_columns_unsupported...)` and return — prevents silent success with empty dict.
+- Post-loop log changed from `logger.exception` (called outside except context → "NoneType: None") to `logger.warning` with `reason=schema_drift_exhausted`.
+- When column reported missing is already absent from row: emits `logger.warning(...already_absent=true...)` and returns instead of retrying.
+
+**PART 4 — End-to-end timing spans** (all three files):
+- Service: `fetch_trip_ms`, `save_user_message_ms`, `fetch_live_research_ms`, `legacy_summary_llm_ms`, `legacy_summary_skipped`, `response_assembly_ms`, `save_assistant_message_ms`, `total_search_ms`, `live_provider`, `semantic_card_first_path` emitted at log level INFO via `concierge.service.search_timing`.
+- Route/build: `context_window_ms`, `route_prompt_ms`, `service_search_ms`, `typed_validation_ms`, `total_build_typed_ms` emitted via `concierge.search.build_typed_timing`.
+- Route: `build_typed_concierge_response_ms`, `request_log_event_ms`, `persist_scheduled_ms`, `route_total_before_return_ms` emitted via `concierge.search.route_timing`.
+
+### Synchronous message persistence — intentional, documented
+
+`ConciergeService.search()` still saves user and assistant messages synchronously. This is intentional: immediate follow-ups like "compare top 2" require the prior card pool to be fully persisted before the next search begins. The optional observability record (`persist_concierge_request_log`) is the only piece moved to a background task — it has no correctness dependency on ordering. If `save_user_message_ms` or `save_assistant_message_ms` prove slow in production logs, a later PR can introduce safe deferred persistence with an in-memory immediate-context fallback. Both spans are now explicitly measured via timing logs.
+
+### Files changed
+
+1. **`backend/app/services/concierge.py`** — LLM bypass (PART 1) + service timing (PART 4) + synchronous message persistence comment.
+2. **`backend/app/routes/ai.py`** — Background persistence (PART 2) + route/build timing (PART 4).
+3. **`backend/app/concierge/logging.py`** — Schema drift hardening (PART 3).
+4. **`backend/tests/test_concierge_critical_path_hardening.py`** — NEW: 22 tests across all 4 parts.
+5. **`backend/tests/test_concierge_logging_schema_tolerance.py`** — Updated: added `_KNOWN_UNSUPPORTED_COLUMNS.clear()` to all 4 tests.
+
+### Test results (review follow-up)
+
+- `test_concierge_critical_path_hardening.py`: 22/22 PASSED (includes 4 new tests added in review follow-up: `test_real_persist_request_log_task_swallows_exceptions`, `test_route_level_background_tasks_scheduling_contract`, `test_semantic_path_saves_structured_results_with_cards`, `test_semantic_path_response_text_is_empty`)
+- `test_concierge_logging_schema_tolerance.py`: 4/4 PASSED
+- `test_set_level_writer.py` + `test_concierge.py` + `test_semantic_retrieval_v1.py` + `test_sla_card_cap.py`: 491/491 PASSED
+- Full suite: 2066 passed, 20 pre-existing failures in `test_restaurant_search_diagnostics.py` (missing `httpx` module — unrelated, confirmed pre-existing).
+
+### Validation plan
+
+After deploy, check Railway logs for:
+- `semantic_card_first_path=True` and `legacy_summary_skipped=True` on restaurant/attraction queries.
+- `legacy_summary_llm_ms` near 0 on semantic paths.
+- `total_search_ms` materially reduced (target: sub-6 s on semantic path, was 8.9–12.1 s).
+- No `concierge.request_log.persist_failed` from schema drift.
+- No `NoneType: None` in logging exceptions.
+
+### PR #274 cache remains deferred
+
+Cache design from PR #273 HANDOFF remains valid. Gate on PR #274 runtime telemetry (`legacy_summary_skipped=True` confirmed, `total_search_ms` reduced) before implementing.
+
+### Safety invariants preserved
+
+- `fallback_note_visible_count=0` — untouched.
+- `_should_preserve_reason_text` / `deterministic_safe_v1` reason source — untouched.
+- All existing claim validators (`reason_validator`, `claim_safety_reviewer`) — untouched.
+- Non-semantic paths (Michelin curated, trip advice, general with no live cards) call `_call_claude` exactly as before.
+
+### PR #274 self-audit
+
+| Acceptance criterion | Status |
+|---|---|
+| Backend-only | ✓ No UI files changed |
+| No SQL | ✓ |
+| No new endpoint | ✓ |
+| No new LLM calls | ✓ |
+| LLM calls removed on semantic path | ✓ `_semantic_card_first` bypass |
+| Persistence moved off critical path | ✓ BackgroundTasks |
+| Schema drift: retry storm eliminated | ✓ Process-level column cache |
+| Schema drift: NoneType exception fixed | ✓ `logger.warning` not `logger.exception` outside except |
+| Empty-row silent success fixed | ✓ Early-exit guard |
+| Timing fields added | ✓ 3 log lines across service/route/build |
+| Cards never blocked by logging/summary | ✓ |
+| PR #273 invariants preserved | ✓ |
+| Real `_persist_request_log_task` tested (not recreated wrapper) | ✓ `test_real_persist_request_log_task_swallows_exceptions` |
+| Route-level BackgroundTasks scheduling tested | ✓ `test_route_level_background_tasks_scheduling_contract` |
+| Semantic path saves structured_results with cards | ✓ `test_semantic_path_saves_structured_results_with_cards` |
+| Semantic path response text empty (no unsafe LLM summary) | ✓ `test_semantic_path_response_text_is_empty` |
+| Synchronous message persistence documented as intentional | ✓ Code comment + HANDOFF note |
+
+### Supabase SQL: No
+### UI changed: No
+### New endpoint: No
+### Cache: No (deferred)
+
+---
+
+## Previous: PR #273: Fast LLM Set Writer Core (Level 2 performance architecture fix)
 
 **Status: OPEN** — Backend-only. No SQL. No UI changes. No new endpoints. No cache implemented.
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from app.concierge.logging import persist_concierge_request_log, _SCHEMA_DRIFT_WARNED_COLUMNS
+from app.concierge.logging import persist_concierge_request_log, _SCHEMA_DRIFT_WARNED_COLUMNS, _KNOWN_UNSUPPORTED_COLUMNS
 from app.concierge.router import route_prompt
 
 from app.concierge.contracts import PlaceRecommendationsResponse
@@ -63,6 +63,7 @@ def test_intent_classifier_version_never_in_insert_row(caplog):
     # intent_classifier_version was removed from base_row to avoid PGRST204;
     # its value is emitted in app logs via request_log_event instead.
     _SCHEMA_DRIFT_WARNED_COLUMNS.clear()
+    _KNOWN_UNSUPPORTED_COLUMNS.clear()
     db = _FakeDb(errors=[])
     decision = route_prompt("best hotels in chicago", confidence_threshold=0.55)
 
@@ -81,6 +82,7 @@ def test_intent_classifier_version_never_in_insert_row(caplog):
 
 def test_two_missing_columns_are_dropped_across_retries():
     _SCHEMA_DRIFT_WARNED_COLUMNS.clear()
+    _KNOWN_UNSUPPORTED_COLUMNS.clear()
     # Simulate two successive schema-drift errors on columns that ARE in base_row.
     db = _FakeDb(errors=[_schema_err("PGRST204", "llm_model"), _schema_err("PGRST116", "pipeline_version"), None])
     decision = route_prompt("best hotels in chicago", confidence_threshold=0.55)
@@ -102,6 +104,7 @@ def test_two_missing_columns_are_dropped_across_retries():
 
 def test_warning_emitted_once_per_process_per_column(caplog):
     _SCHEMA_DRIFT_WARNED_COLUMNS.clear()
+    _KNOWN_UNSUPPORTED_COLUMNS.clear()
     decision = route_prompt("best hotels in chicago", confidence_threshold=0.55)
 
     for _ in range(2):
@@ -120,6 +123,7 @@ def test_warning_emitted_once_per_process_per_column(caplog):
 
 def test_unexpected_exception_is_logged_and_not_raised(caplog):
     _SCHEMA_DRIFT_WARNED_COLUMNS.clear()
+    _KNOWN_UNSUPPORTED_COLUMNS.clear()
     db = _FakeDb(errors=[RuntimeError("boom")])
     decision = route_prompt("best hotels in chicago", confidence_threshold=0.55)
 
