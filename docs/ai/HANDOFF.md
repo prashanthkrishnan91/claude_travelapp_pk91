@@ -1,6 +1,141 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-07) — PR #275: Cross-Source Evidence Enrichment v1 (Level 2 product-quality architecture improvement)
+## Last change (2026-05-07) — PR #276: Editorial Corroboration v1 (Level 2 product-quality architecture improvement)
+
+**Status: OPEN** — Backend-only. No SQL. No UI changes. No new endpoints. No cache. Tavily + Serper editorial enrichment for already Google-verified cards only.
+
+### Root cause / architecture gap fixed
+
+After PR #275, AI Concierge cards had Google identity plus Yelp/Foursquare local-category enrichment, but no mechanism to bring in trusted editorial corroboration (Michelin, Eater, Time Out, The Infatuation, etc.) as structured evidence. Editorial evidence remained unstructured and unused. This PR builds a provider-agnostic editorial enrichment layer that converts trusted web-search results into structured evidence atoms, gated by strict entity-match and trust-score policies.
+
+### What was built
+
+**NEW `backend/app/concierge/editorial_enrichment.py`:**
+- `TRUSTED_EDITORIAL_DOMAINS` frozenset: 30+ high-authority food/travel/city sources (Michelin, Eater, The Infatuation, Time Out, Condé Nast Traveler, local city mags).
+- `_source_trust_score()` — returns 1.0 for trusted domains (including subdomains), 0.5 for others.
+- `_entity_match_score()` — computes entity-match confidence using normalized venue name presence in article title (0.88–0.95), snippet+URL (0.82), snippet alone (0.75). Returns 0.0 when venue not found → discard.
+- `_DISALLOWED_CLAIM_PATTERNS` + `_is_disallowed_claim()` — word-boundary regex matching for prohibited superlatives/generic praise (best/top/famous/hidden gem/must-visit/reviewers say/etc.). Prevents unsupported claims entering the writer path.
+- `_SPECIALTY_KEYWORDS` (80+ curated phrases): only these explicit phrases may produce specialty_context atoms (cocktail bar, izakaya, omakase, natural wine, rooftop bar, outdoor seating, etc.).
+- `_atoms_from_article()` — evaluates one article vs. one entity: entity-match gate → source trust → editorial_mention atom (trusted domains only) + specialty_context atoms. No free-text snippets passed. Returns [] on any ambiguity.
+- `_make_editorial_mention_atom()` — produces editorial_mention EnrichmentAtom only for trusted domains with entity_match >= EDITORIAL_WRITER_ALLOW_THRESHOLD (0.75).
+- `_extract_specialty_atoms()` — extracts specialty_context atoms from explicit keyword matches in title/snippet. Disallowed claims blocked. At most 2 per article.
+- `_fetch_tavily_atoms()` — POST to Tavily `/search` with bounded entity-specific query (`"{name}" {destination}`), search_depth=basic, max_results=3. Uses urllib.request (no httpx dependency).
+- `_fetch_serper_atoms()` — POST to Serper `/search` with same bounded query. Parses organic results.
+- `_enrich_one_card_editorial()` — Tavily + Serper calls run sequentially per card. Failure of one provider is isolated.
+- `run_editorial_enrichment()` — deadline-bounded parallel enrichment. Non-blocking ThreadPoolExecutor lifecycle (same pattern as PR #275). Budget gate: skip when remaining < EDITORIAL_BUDGET_RESERVE_MS (400ms). Never raises. Returns `EditorialEnrichmentResult`.
+- `EditorialEnrichmentTelemetry` typed dataclass with full telemetry fields.
+- `get_tavily_key()` / `get_serper_key()` — settings + env fallback helpers.
+
+**MODIFIED `backend/app/concierge/semantic_retrieval.py`:**
+- Added Step 5.56 between Step 5.55 (Yelp/FSQ) and Step 5.6 (Evidence Dossier).
+- Calls `run_editorial_enrichment()` with Tavily/Serper keys from settings, deadline, `first_card_limit` budget, and `destination`.
+- Merges editorial atoms into `cross_source_result.atoms_by_place_id` (extending the PR #275 dict). The existing dossier builder consumes all atoms in one pass.
+- Adds `editorial_enrichment_telemetry` parameter to `_log_semantic_turn()`.
+- Emits `semantic_retrieval_v1.editorial_enrichment_telemetry` log line.
+- Updated module docstring to reflect Tavily/Serper are now called when the flag is on.
+
+**NEW `backend/tests/test_editorial_enrichment.py`:** 59 tests across 14 required scenarios.
+
+### Provider behavior implemented
+
+- **Tavily**: POST `https://api.tavily.com/search` with `{"query": '"{name}" {destination}', "search_depth": "basic", "max_results": 3}`. Parses `results[].title/url/content`. Fail closed: low entity-match articles discarded. Tavily cannot mint cards, override Google status, or create prose.
+- **Serper**: POST `https://google.serper.dev/search` with `{"q": '"{name}" {destination}', "num": 3}`. Parses `organic[].title/link/snippet`. Same entity-match and trust gates. Serper cannot mint cards, override Google status, or create prose.
+- Both use `urllib.request` (no httpx dependency). Both have per-provider timeout and error isolation.
+
+### Trust-gate invariants preserved
+
+- Only Google-verified entities receive editorial enrichment. `atoms_by_place_id` keyed only by input entity place_ids.
+- Entity-match gate: articles not naming the specific venue are discarded (threshold 0.70). Only articles with entity_match >= 0.75 produce writer-allowed atoms.
+- Source trust gate: editorial_mention atoms only for TRUSTED_EDITORIAL_DOMAINS. Unknown domains produce specialty_context atoms only if entity match is strong.
+- Disallowed claims (best/top/famous/hidden gem/award-winning/etc.) blocked via word-boundary regex — `allowed_into_writer=False` even if entity match is strong.
+- No raw snippets reach the writer — all editorial data is converted to structured atoms first.
+- Conflict detection from PR #275 still runs; editorial atoms with conflict_status != "ok" excluded from dossier.
+- Google identity, addability, operational status never touched.
+
+### Performance / deadline behavior
+
+- Step 5.56 budget gate: skipped entirely when remaining budget < 400ms (`EDITORIAL_BUDGET_RESERVE_MS`).
+- Per-provider timeout calculated from remaining budget / card count, capped at 1.5s.
+- ThreadPoolExecutor (max 4 workers); non-blocking `shutdown(wait=False)` in finally block.
+- Fanout deadline = `remaining_ms/1000 - 0.1s`.
+- No editorial enrichment result blocks card return.
+- p90 target: <5–6s end-to-end (editorial step adds ~1.5s when providers responsive and budget allows).
+
+### Tests run and results
+
+- `test_editorial_enrichment.py`: **59/59 PASSED** (14 required scenarios + supplementary unit tests)
+- `test_cross_source_enrichment.py`: **41/41 PASSED**
+- `test_set_level_writer.py` + `test_sla_card_cap.py` + `test_evidence_dossier.py`: **235/235 PASSED**
+- `test_semantic_retrieval_v1.py`: 465 passed / 20 pre-existing pydantic-missing failures (pre-existing, confirmed same failures exist on main before this PR)
+- Pre-existing failures: 20 in `test_semantic_retrieval_v1.py` (missing pydantic module — confirmed pre-existing, unchanged); same class as httpx failures noted in PR #275.
+
+### Telemetry fields added
+
+Log line: `semantic_retrieval_v1.editorial_enrichment_telemetry`
+Fields: `editorial_enrichment_attempted`, `editorial_skipped_reason`, `tavily_attempted`, `tavily_accepted`, `tavily_discarded_low_confidence`, `tavily_errors`, `tavily_timeouts`, `serper_attempted`, `serper_accepted`, `serper_discarded_low_confidence`, `serper_errors`, `serper_timeouts`, `editorial_atoms_by_provider`, `editorial_atoms_by_type`, `trusted_domain_counts`, `editorial_conflict_or_downgrade_count`.
+
+### Files changed
+
+1. **`backend/app/concierge/editorial_enrichment.py`** — NEW: full editorial corroboration spine.
+2. **`backend/app/concierge/semantic_retrieval.py`** — MODIFIED: Step 5.56 added; `_log_semantic_turn()` extended; module docstring updated.
+3. **`backend/tests/test_editorial_enrichment.py`** — NEW: 59 tests across 14 required scenarios.
+4. **`docs/ai/HANDOFF.md`** — MODIFIED: this entry.
+
+### Self-audit
+
+| Acceptance criterion | Status |
+|---|---|
+| Backend-only | ✓ |
+| No SQL | ✓ |
+| No UI changes | ✓ |
+| No cache | ✓ |
+| No new LLM calls | ✓ |
+| No deterministic note templates | ✓ |
+| No fallback visible notes | ✓ |
+| No unsupported claims | ✓ |
+| Google identity/addability/operational never overridden | ✓ |
+| Tavily/Serper cannot mint cards | ✓ tests prove it |
+| Low-confidence matches discarded | ✓ entity-match gate + trust gate |
+| Disallowed claims blocked | ✓ word-boundary regex |
+| Editorial snippets not directly to writer | ✓ structured atoms only |
+| Cards return if editorial providers fail | ✓ |
+| Deadline-bounded enrichment | ✓ 400ms reserve gate |
+| Existing card contract preserved | ✓ |
+| Existing Yelp/Foursquare enrichment unaffected | ✓ |
+| Supabase SQL required | No |
+| New env vars | No (uses existing TAVILY_API_KEY / SERPER_API_KEY) |
+| UI changes | No |
+
+### Risks and limitations
+
+- Tavily/Serper are live HTTP calls — provider downtime or rate limits silently degrade enrichment (cards still return).
+- Entity-match uses keyword presence, not semantic embedding — venues with short/common names (e.g., "Bar Roma") may produce false matches for unrelated articles. Tunable via entity_match threshold.
+- Specialty keyword list is static (v1 curated list). New venue-type terminology requires manual addition.
+- "rooftop bar" and similar compound keywords pass the disallowed filter correctly (word-boundary regex prevents "top" from matching inside "rooftop").
+- Trusted domain list is v1 explicit only — new high-authority sources require manual addition.
+- No deduplication between Tavily and Serper atoms for the same place (both may return specialty context facts — dossier writer sees both, picks most relevant).
+
+### Out of scope
+
+- Semantic entity matching (embedding-based).
+- Source reputation inference (ML-based domain scoring).
+- Neighborhood/venue_context atom types (reserved for v2 after telemetry validation).
+- UI changes.
+- SQL/migrations.
+- Cache.
+- New visible diagnostics.
+
+### Recommended next PR
+
+Monitor Railway logs for `editorial_enrichment_attempted=True`, `tavily_accepted > 0 OR serper_accepted > 0`, `trusted_domain_counts > 0`, and p90 route latency below 5–6s. If entity-match quality is low (high discarded counts relative to attempted), raise `EDITORIAL_ENTITY_MATCH_THRESHOLD` or narrow specialty keyword list. If latency is acceptable, consider venue_context and neighborhood_context atom types in v2.
+
+### Note: no user UI validation requested
+
+Backend evidence in this PR summary. Editorial enrichment produces structured atoms visible to the set-level LLM writer; improved note specificity is expected when providers return matching articles, but no UI validation or A/B measurement is expected from this PR.
+
+---
+
+## Previous change (2026-05-07) — PR #275: Cross-Source Evidence Enrichment v1 (Level 2 product-quality architecture improvement)
 
 **Status: OPEN** — Backend-only. No SQL. No UI changes. No new endpoints. No cache. No Tavily/Serper/editorial.
 

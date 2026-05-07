@@ -15,7 +15,8 @@ Pipeline (when flag ON, new_search, place-recommendation asks):
   10. Return LiveResearchResult with verified UnifiedRestaurantResult cards
 
 When flag OFF: this module is never called. Existing pipeline is unchanged.
-No Tavily, editorial, Yelp, or Foursquare calls in this module.
+Yelp/Foursquare (Step 5.55) and Tavily/Serper editorial (Step 5.56) enrichment
+run only when this module is active and API keys are present.
 No SQL. No frontend changes. No personalization. No vector search.
 """
 
@@ -313,6 +314,56 @@ def _run_pipeline(
         )
         cross_source_tel = cross_source_result.telemetry.as_log_dict()
     latency["cross_source_ms"] = cross_source_result.elapsed_ms
+
+    # ── Step 5.56: Editorial Corroboration v1 (PR #276) ──────────────────────
+    # Tavily + Serper editorial enrichment for already Google-verified cards only.
+    # Deadline-bounded and parallel (non-blocking executor lifecycle).
+    # Never blocks card return. Atoms merged into cross_source_result.atoms_by_place_id
+    # so the existing dossier builder consumes them naturally.
+    # Tavily/Serper cannot mint cards, override Google identity/addability/
+    # operational status, or directly create visible prose.
+    # Editorial data becomes structured evidence atoms first.
+    # Low-confidence entity/article matches are discarded (fail closed).
+    # Keys gracefully absent → no enrichment, cards still returned.
+    from app.concierge.editorial_enrichment import (
+        EditorialEnrichmentResult,
+        EditorialEnrichmentTelemetry,
+        get_serper_key,
+        get_tavily_key,
+        run_editorial_enrichment,
+    )
+    t0 = time.monotonic()
+    editorial_result: EditorialEnrichmentResult
+    editorial_tel: Dict[str, Any] = {}
+    try:
+        _tavily_key = get_tavily_key()
+        _serper_key = get_serper_key()
+        editorial_result = run_editorial_enrichment(
+            [e for e, _ in ranked],
+            deadline=deadline,
+            tavily_key=_tavily_key,
+            serper_key=_serper_key,
+            destination=destination,
+            budget_n=first_card_limit,
+        )
+        editorial_tel = editorial_result.telemetry.as_log_dict()
+        # Merge editorial atoms into cross_source atoms_by_place_id so the
+        # existing dossier builder sees all enrichment in one pass.
+        for pid, atoms in editorial_result.atoms_by_place_id.items():
+            existing = cross_source_result.atoms_by_place_id.get(pid, [])
+            cross_source_result.atoms_by_place_id[pid] = existing + atoms
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "semantic_retrieval_v1: editorial_enrichment_failed query=%r error=%s",
+            user_query, exc,
+        )
+        editorial_result = EditorialEnrichmentResult(
+            atoms_by_place_id={},
+            telemetry=EditorialEnrichmentTelemetry(enrichment_attempted=False),
+            elapsed_ms=0,
+        )
+        editorial_tel = editorial_result.telemetry.as_log_dict()
+    latency["editorial_ms"] = editorial_result.elapsed_ms
 
     # ── Step 5.6: Evidence Dossier v1 (PR #259) ─────────────────────────────
     # Build structured dossiers for top cards using critical + enrichment data.
@@ -817,6 +868,8 @@ def _run_pipeline(
         dossier_telemetry=dossier_tel,
         # PR #275 cross-source enrichment telemetry
         cross_source_enrichment_telemetry=cross_source_tel,
+        # PR #276 editorial enrichment telemetry
+        editorial_enrichment_telemetry=editorial_tel,
         # PR #260 curator telemetry
         curator_telemetry=curator_tel,
         # PR #261 set-level writer telemetry
@@ -1274,6 +1327,8 @@ def _log_semantic_turn(
     dossier_telemetry: Optional[Any] = None,  # Optional[EvidenceDossierTelemetry]
     # PR #275 cross-source enrichment telemetry
     cross_source_enrichment_telemetry: Optional[Dict[str, Any]] = None,
+    # PR #276 editorial enrichment telemetry
+    editorial_enrichment_telemetry: Optional[Dict[str, Any]] = None,
     # PR #260 curator telemetry
     curator_telemetry: Optional[Dict[str, Any]] = None,
     # PR #261 set-level writer telemetry
@@ -1420,6 +1475,12 @@ def _log_semantic_turn(
         logger.info(
             "semantic_retrieval_v1.cross_source_enrichment_telemetry %r",
             cross_source_enrichment_telemetry,
+        )
+    # PR #276 editorial enrichment telemetry — separate log line.
+    if editorial_enrichment_telemetry:
+        logger.info(
+            "semantic_retrieval_v1.editorial_enrichment_telemetry %r",
+            editorial_enrichment_telemetry,
         )
     # PR #260 curator telemetry — separate log line.
     if curator_telemetry is not None:
