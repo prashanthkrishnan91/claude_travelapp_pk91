@@ -1265,6 +1265,14 @@ def _log_semantic_turn(
             "semantic_retrieval_v1.set_writer_telemetry %r",
             set_writer_telemetry,
         )
+        # PR #267 reviewer telemetry — emitted as sub-key of set_writer_telemetry
+        # if the reviewer ran this turn. Backend-only; never surfaced to users.
+        reviewer_tel = set_writer_telemetry.get("reviewer_telemetry")
+        if reviewer_tel:
+            logger.info(
+                "semantic_retrieval_v1.reviewer_telemetry %r",
+                reviewer_tel,
+            )
     # PR this: frame finalization telemetry — separate log line (backend-only).
     if frame_finalization_telemetry is not None:
         logger.info(
