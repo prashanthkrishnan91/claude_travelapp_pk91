@@ -59,10 +59,14 @@ def _format_display_price(
             try:
                 start_units = int(start.get("units") or 0)
                 end_units = int(end.get("units") or 0)
-                if start_units > 0 or end_units > 0:
-                    currency = start.get("currencyCode") or end.get("currencyCode") or "USD"
-                    symbol = "$" if currency == "USD" else currency
+                currency = start.get("currencyCode") or end.get("currencyCode") or "USD"
+                symbol = "$" if currency == "USD" else currency
+                if start_units > 0 and end_units > 0:
                     return f"{symbol}{start_units}–{end_units}"
+                elif start_units > 0:
+                    return f"From {symbol}{start_units}"
+                elif end_units > 0:
+                    return f"Up to {symbol}{end_units}"
             except (TypeError, ValueError):
                 pass
     if price_level:
@@ -881,6 +885,22 @@ def _run_pipeline(
         ),
         "semantic_price_signal_path": "semantic_retrieval_v1",
     }
+
+    # ── Latency summary fields ────────────────────────────────────────────────
+    _elapsed_ms_final = int((time.monotonic() - t_pipeline_start) * 1000)
+    _timeout_budget_consumed_pct = min(100, int(_elapsed_ms_final * 100 / DEFAULT_SLA.hard_cutoff_ms))
+    _timeout_branches_triggered: List[str] = []
+    if note_generation_timed_out:
+        _timeout_branches_triggered.append("note_generation_timed_out")
+    if note_generation_low_budget:
+        _timeout_branches_triggered.append("note_generation_low_budget")
+    _editorial_skip = getattr(getattr(editorial_result, "telemetry", None), "skipped_reason", None)
+    if _editorial_skip:
+        _timeout_branches_triggered.append(f"editorial_skipped:{_editorial_skip}")
+    _cross_source_skip = getattr(getattr(cross_source_result, "telemetry", None), "skipped_reason", None)
+    if _cross_source_skip:
+        _timeout_branches_triggered.append(f"cross_source_skipped:{_cross_source_skip}")
+
     _log_semantic_turn(
         user_query=user_query,
         frame=frame,
@@ -949,6 +969,9 @@ def _run_pipeline(
             "pre_assembly_verified_count": verified_count,
             "final_card_count": final_card_count,
         },
+        # Latency Architecture v1: consolidated budget/timeout telemetry
+        timeout_budget_consumed_pct=_timeout_budget_consumed_pct,
+        timeout_branches_triggered=_timeout_branches_triggered,
     )
 
     if not cards:
@@ -1397,6 +1420,9 @@ def _log_semantic_turn(
     set_writer_telemetry: Optional[Dict[str, Any]] = None,
     # PR this: semantic frame finalization telemetry
     frame_finalization_telemetry: Optional[Dict[str, Any]] = None,
+    # Latency Architecture v1: consolidated budget/timeout telemetry
+    timeout_budget_consumed_pct: int = 0,
+    timeout_branches_triggered: Optional[List[str]] = None,
 ) -> None:
     """Log one structured semantic turn line for zero-card failure debugging."""
     total_ms = int((time.monotonic() - t_pipeline_start) * 1000)
@@ -1467,7 +1493,9 @@ def _log_semantic_turn(
         "google_verified_count=%d "
         "non_critical_enrichment_used_count=%d "
         "non_critical_enrichment_skipped_count=%d "
-        "remaining_budget_before_reasoning_ms=%d",
+        "remaining_budget_before_reasoning_ms=%d "
+        "timeout_budget_consumed_pct=%d "
+        "timeout_branches_triggered=%r",
         PIPELINE_VERSION,
         user_query,
         getattr(frame, "destination", ""),
@@ -1525,6 +1553,50 @@ def _log_semantic_turn(
         non_critical_enrichment_used_count,
         non_critical_enrichment_skipped_count,
         remaining_budget_before_reasoning_ms,
+        # Latency Architecture v1 values
+        timeout_budget_consumed_pct,
+        timeout_branches_triggered or [],
+    )
+    # Latency Architecture v1: single-line latency summary for easy grep diagnosis.
+    # Key: semantic_retrieval_v1.latency_summary
+    logger.info(
+        "semantic_retrieval_v1.latency_summary "
+        "total_ms=%d "
+        "google_retrieval_ms=%d "
+        "entity_rank_ms=%d "
+        "google_place_details_ms=%d "
+        "cross_source_enrichment_ms=%d "
+        "editorial_enrichment_ms=%d "
+        "dossier_ms=%d "
+        "curator_ms=%d "
+        "set_writer_ms=%d "
+        "note_assembly_ms=%d "
+        "trust_gate_ms=%d "
+        "optional_reasoning_ms=%d "
+        "timeout_budget_consumed_pct=%d "
+        "timeout_branches=%r "
+        "cards_returned=%d "
+        "cards_with_notes=%d "
+        "cards_without_notes=%d "
+        "set_writer_notes_preserved=%s",
+        total_ms,
+        latency.get("provider_ms", 0),
+        latency.get("entity_ms", 0) + latency.get("rank_ms", 0),
+        latency.get("enrich_ms", 0),
+        latency.get("cross_source_ms", 0),
+        latency.get("editorial_ms", 0),
+        latency.get("dossier_ms", 0),
+        latency.get("curator_ms", 0),
+        latency.get("set_writer_ms", 0),
+        latency.get("batched_reason_ms", 0),
+        latency.get("trust_gate_ms", 0),
+        latency.get("optional_reasoning_ms", 0),
+        timeout_budget_consumed_pct,
+        timeout_branches_triggered or [],
+        final_card_count,
+        visible_note_count,
+        hidden_note_count,
+        rejection_stats.get("set_writer_used", False),
     )
     # PR #259 dossier telemetry — separate log line to preserve turn-line parsers.
     if dossier_telemetry is not None:

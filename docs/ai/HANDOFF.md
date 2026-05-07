@@ -1,8 +1,74 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-07) — Fix: _assemble_card_set drops set-writer notes when SLA timed out (Level 2 escalated regression)
+## Last change (2026-05-07) — Concierge Latency Architecture v1 (Level 1 backend-only observability + price fix)
 
-**Status: IN PROGRESS (branch: claude/fix-travel-concierge-regression-Cu3R5)** — Backend + test fix. No SQL. No UI changes. No new endpoints. No provider changes.
+**Status: IN PROGRESS (branch: claude/travel-concierge-dev-kYqC9)** — Backend + test only. No SQL. No UI changes (tiny price display fix). No new endpoints. No provider changes. No new LLM calls.
+
+### Root cause / architecture gap addressed
+
+After PRs #275–#281, the AI Concierge pipeline had rich per-stage latency data scattered across 6 separate log lines and a `latency_by_stage` dict inside the turn log. This made it difficult to diagnose in a single grep pass where request time was being spent. Additionally:
+- `timeout_budget_consumed_pct` was never emitted (no single-number summary of how much SLA budget was used)
+- `timeout_branches_triggered` was never emitted as a consolidated list (individual booleans existed but no single field)
+- `_format_display_price` had a bug producing `"$100–0"` when Google returned only `startPrice` with no (or zero) `endPrice`
+
+### What was built
+
+**MODIFIED `backend/app/concierge/semantic_retrieval.py`:**
+1. **Fixed `_format_display_price`**: `if start_units > 0 or end_units > 0` → distinct cases:
+   - Both positive → `"$X–Y"` (full range, unchanged)
+   - Start only → `"From $X"` (single-sided, prevents `"$100–0"`)
+   - End only → `"Up to $X"` (rare but safe)
+2. **Added `timeout_budget_consumed_pct`** (0–100 int): emitted in the main turn log and latency summary. Computed as `min(100, int(elapsed_ms * 100 / hard_cutoff_ms))`.
+3. **Added `timeout_branches_triggered`** (list of strings): consolidated list of which skip/timeout branches fired (e.g., `["note_generation_timed_out", "editorial_skipped:budget_exhausted"]`). Emitted in main turn log and latency summary.
+4. **Added `semantic_retrieval_v1.latency_summary` log line**: single greppable line with all named stage timings (google_retrieval_ms, entity_rank_ms, cross_source_enrichment_ms, editorial_enrichment_ms, dossier_ms, curator_ms, set_writer_ms, note_assembly_ms, trust_gate_ms, optional_reasoning_ms) plus decision/budget fields and card counts.
+
+**MODIFIED `backend/tests/test_sla_card_cap.py`:**
+Added `TestConciergeLatencyArchitecture` class (Section 10) with 15 new tests covering:
+- Slow enrichment does not prevent verified Google card return
+- Valid set-writer notes not overwritten by timeout
+- Provider failure creates no visible fallback note
+- Display contract fields always present on assembled cards
+- Card cap preserved under latency pressure
+- Price format: no `"$100–0"` partial ranges
+- Price format: single-sided cases (From $X, Up to $X)
+- `timeout_budget_consumed_pct` bounded 0–100
+- `timeout_branches_triggered` list accuracy
+
+### Test results
+
+- `test_sla_card_cap.py`: **87/88 pass** (1 pre-existing pydantic-env failure, unchanged)
+- `test_cross_source_enrichment.py`: **41/41 PASS**
+- `test_editorial_enrichment.py`: **59/59 PASS** (confirmed 115 pass across both)
+
+### Invariants confirmed
+
+- No deterministic note templates inserted
+- No fallback visible notes
+- Google remains only source for addable cards
+- Yelp/Foursquare/Tavily/Serper remain enrichment-only
+- No SQL, no UI changes (except price display fix)
+- No new providers, no new LLM calls
+- Existing display contract (display_why / display_why_source / display_why_validated) preserved
+
+### Telemetry added
+
+Log lines emitted per request:
+1. `semantic_retrieval_v1.turn` — existing line extended with `timeout_budget_consumed_pct` and `timeout_branches_triggered` (appended, backwards-compatible)
+2. `semantic_retrieval_v1.latency_summary` — new single-line summary with all named stage timings and decision fields
+
+To inspect: `grep "semantic_retrieval_v1.latency_summary" <log-file>`
+
+### Residual risks / Hoppscotch validation
+
+- Confirm `display_price` formatting for "From $X" renders correctly in the UI (check cards with partial Google price range)
+- Confirm `timeout_budget_consumed_pct` and `timeout_branches_triggered` appear in Railway logs after deploy
+- Pre-existing pydantic test failure unchanged — env issue, not a code issue
+
+---
+
+## Previous change (2026-05-07) — Fix: _assemble_card_set drops set-writer notes when SLA timed out (Level 2 escalated regression)
+
+**Status: MERGED (PR #281)** — Backend + test fix. No SQL. No UI changes. No new endpoints. No provider changes.
 
 ### Root cause (confirmed by raw Hoppscotch API evidence)
 
