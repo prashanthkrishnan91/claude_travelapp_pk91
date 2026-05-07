@@ -1218,8 +1218,10 @@ class TestHiddenGemSuperlativeSanitization:
         frame = _Frame()
         result = review_summary(summary, frame)
         assert "under-the-radar" not in result.summary.lower()
-        if result.summary:
-            assert "Chicago" in result.summary or "Google-verified" in result.summary
+        # First sentence ("hidden gem bars in Chicago") is safe user-intent framing
+        # and must survive; only the editorial-claim sentence is removed.
+        assert result.summary
+        assert "Chicago" in result.summary
 
     def test_summary_sanitizes_best_kept_secret(self):
         from app.concierge.claim_safety_reviewer import review_summary
@@ -1242,16 +1244,71 @@ class TestHiddenGemSuperlativeSanitization:
         result = gate_summary_claim_safety(summary)
         assert "under-the-radar" not in result.lower()
 
-    def test_hidden_gem_terms_regex_wired_into_review_summary(self):
-        """_HIDDEN_GEM_TERMS_RE is now active in review_summary, not just defined."""
+    def test_summary_localness_claim_re_wired_into_review_summary(self):
+        """_SUMMARY_LOCALNESS_CLAIM_RE blocks editorial claims in review_summary."""
         from app.concierge.claim_safety_reviewer import (
-            _HIDDEN_GEM_TERMS_RE, review_summary,
+            _SUMMARY_LOCALNESS_CLAIM_RE, review_summary,
         )
         text = "These are the under-the-radar picks."
-        assert _HIDDEN_GEM_TERMS_RE.search(text)
+        # "under-the-radar picks" is a noun-phrase editorial claim → blocked
+        assert _SUMMARY_LOCALNESS_CLAIM_RE.search(text)
         result = review_summary(text, _Frame())
-        # Previously would pass; now must be sanitized or rejected
         assert "under-the-radar" not in result.summary.lower()
+
+    def test_safe_hidden_gem_intent_framing_passes_review_summary(self):
+        """'hidden gem bars' as user-intent framing is NOT blocked by review_summary."""
+        from app.concierge.claim_safety_reviewer import (
+            _SUMMARY_LOCALNESS_CLAIM_RE, review_summary,
+        )
+        text = "For hidden gem bars in Chicago, these are the strongest matches from the current evidence."
+        # Should NOT match the localness-claim pattern (no editorial assertion)
+        assert not _SUMMARY_LOCALNESS_CLAIM_RE.search(text)
+        result = review_summary(text, _Frame())
+        assert result.passed
+        assert not result.sanitized
+        assert result.summary == text
+
+    def test_safe_hidden_gem_search_set_framing_passes(self):
+        """'hidden gem bar matches from the search set' passes unchanged."""
+        from app.concierge.claim_safety_reviewer import review_summary
+        text = "These are hidden gem bar matches from the current search set in Chicago."
+        result = review_summary(text, _Frame())
+        assert result.passed
+        assert not result.sanitized
+        assert "hidden gem" in result.summary.lower()
+
+    def test_mixed_summary_safe_sentence_survives_unsafe_removed(self):
+        """Mixed summary: safe user-intent sentence survives; editorial-claim sentence removed."""
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = (
+            "For hidden gem bars in Chicago, these are the strongest matches from the current evidence. "
+            "The Corner Bar is a best-kept secret locals love."
+        )
+        result = review_summary(summary, _Frame())
+        # Editorial claim sentence removed
+        assert "best-kept secret" not in result.summary.lower()
+        assert "locals love" not in result.summary.lower()
+        # Safe first sentence survives
+        assert result.summary
+        assert "For hidden gem bars in Chicago" in result.summary
+
+    def test_summary_localness_claim_re_allows_hidden_gem_noun(self):
+        """_SUMMARY_LOCALNESS_CLAIM_RE does not match 'hidden gem bars/spots/places'."""
+        from app.concierge.claim_safety_reviewer import _SUMMARY_LOCALNESS_CLAIM_RE
+        # Allow: user-intent framing
+        assert not _SUMMARY_LOCALNESS_CLAIM_RE.search("hidden gem bars in Chicago")
+        assert not _SUMMARY_LOCALNESS_CLAIM_RE.search("hidden gem bar matches")
+        assert not _SUMMARY_LOCALNESS_CLAIM_RE.search("hidden-gem-style options")
+        assert not _SUMMARY_LOCALNESS_CLAIM_RE.search("lower-profile bar matches")
+        assert not _SUMMARY_LOCALNESS_CLAIM_RE.search("neighborhood-bar angle")
+        # Block: overconfident editorial claims
+        assert _SUMMARY_LOCALNESS_CLAIM_RE.search("under-the-radar picks")
+        assert _SUMMARY_LOCALNESS_CLAIM_RE.search("most authentically local")
+        assert _SUMMARY_LOCALNESS_CLAIM_RE.search("authentically local")
+        assert _SUMMARY_LOCALNESS_CLAIM_RE.search("locals love")
+        assert _SUMMARY_LOCALNESS_CLAIM_RE.search("best-kept secrets")
+        assert _SUMMARY_LOCALNESS_CLAIM_RE.search("only locals know")
+        assert _SUMMARY_LOCALNESS_CLAIM_RE.search("tourists rarely find")
 
 
 # ── Test 19: Unsupported view/scenic claims in summaries ─────────────────────

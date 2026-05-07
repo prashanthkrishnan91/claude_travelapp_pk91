@@ -89,6 +89,47 @@ _HIDDEN_GEM_TERMS_RE = re.compile(
     re.IGNORECASE,
 )
 
+# ── Unsupported localness/hidden-gem editorial claims in summaries ─────────────
+# Narrower than _HIDDEN_GEM_TERMS_RE: targets overconfident editorial assertions
+# that cannot be supported in a set-level summary context. Deliberately does NOT
+# block user-intent framing like "hidden gem bars" or "hidden-gem-style matches"
+# — these are the user's query phrasing and do not constitute an editorial claim.
+#
+# Blocked (unsupported editorial assertions):
+#   "most authentically local", "authentically local"
+#   "under-the-radar picks/spots/bars/..." (noun-phrase form)
+#   "are/is/the most under-the-radar" (predicate form)
+#   "locals love/know/favor", "only locals know"
+#   "best-kept secret(s)"
+#   "tourists rarely/never find/know"
+#   "true local secret", "true hidden gem"
+#   "undiscovered gem/spot/..." or "truly undiscovered"
+#   "off-the-beaten-path/track"
+#
+# Allowed (safe user-intent framing):
+#   "For hidden gem bars in Chicago..."
+#   "hidden gem bar matches from the search set"
+#   "hidden-gem-style bars"
+_SUMMARY_LOCALNESS_CLAIM_RE = re.compile(
+    r"(?:"
+    r"\bmost\s+authentically\s+local\b"
+    r"|\bauthentically\s+local\b"
+    # "under-the-radar [noun]" — editorial noun-phrase positioning
+    r"|\bunder[-\s]the[-\s]radar\s+(?:picks?|spots?|bars?|restaurants?|finds?|gems?|options?|places?|choices?|selections?)\b"
+    # "are/is/the most/truly under-the-radar" — predicate form
+    r"|\b(?:are|is|the\s+most|truly|most)\s+under[-\s]the[-\s]radar\b"
+    r"|\blocals?\s+(?:love|know|frequent|haunt|favor|find|visit)\b"
+    r"|\bonly\s+locals?\s+(?:know|find|visit)\b"
+    r"|\bbest[-\s]kept\s+secrets?\b"
+    r"|\btourists?\s+(?:rarely|never)\s+(?:find|know|visit|discover)\b"
+    r"|\btrue\s+(?:local\s+secret|hidden\s+gem)\b"
+    r"|\b(?:truly|largely|mostly)\s+undiscovered\b"
+    r"|\bundiscovered\s+(?:gem|spot|bar|restaurant|place)\b"
+    r"|\boff[-\s]the[-\s]beaten[-\s](?:path|track)\b"
+    r")",
+    re.IGNORECASE,
+)
+
 _ROMANTIC_TERMS_RE = re.compile(
     r"\b(?:romantic\s+(?:spot|setting|bar|restaurant|date|evening)|"
     r"perfect\s+for\s+(?:a\s+)?date|great\s+for\s+(?:a\s+)?date|"
@@ -499,18 +540,21 @@ def review_summary(
         if _elapsed_s() >= timeout_s:
             return _reject("reviewer_timeout")
 
-        # 3. Hidden-gem/localness superlatives (PR #268) — sanitize sentence.
-        #    "most authentically local", "under-the-radar picks" without evidence.
-        if _HIDDEN_GEM_TERMS_RE.search(working_text):
-            cleaned = _remove_sentence_with_pattern(working_text, _HIDDEN_GEM_TERMS_RE)
+        # 3. Hidden-gem/localness editorial claims (PR #268) — sanitize sentence.
+        #    Uses _SUMMARY_LOCALNESS_CLAIM_RE (narrower than _HIDDEN_GEM_TERMS_RE)
+        #    so that user-intent framing like "hidden gem bars" is NOT removed —
+        #    only unsupported editorial claims like "most authentically local",
+        #    "under-the-radar picks", "locals love", "best-kept secrets" are blocked.
+        if _SUMMARY_LOCALNESS_CLAIM_RE.search(working_text):
+            cleaned = _remove_sentence_with_pattern(working_text, _SUMMARY_LOCALNESS_CLAIM_RE)
             if cleaned and cleaned.strip():
                 logger.info(
-                    "claim_safety_reviewer.review_summary: sanitized hidden_gem_overconfidence"
+                    "claim_safety_reviewer.review_summary: sanitized localness_editorial_claim"
                 )
                 working_text = cleaned
                 was_sanitized = True
             else:
-                return _reject("hidden_gem_overconfidence")
+                return _reject("localness_editorial_claim")
 
         if _elapsed_s() >= timeout_s:
             return _reject("reviewer_timeout")
