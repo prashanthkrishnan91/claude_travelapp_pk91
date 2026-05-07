@@ -15,11 +15,24 @@ Architecture invariants (immutable):
 
 Performance:
 - Deadline-bounded: skipped when remaining budget < EDITORIAL_BUDGET_RESERVE_MS.
+- Opportunistic: skipped with budget_after_cross_source_too_low when the
+  remaining budget after Step 5.55 (Yelp/FSQ) is below
+  EDITORIAL_POST_CROSS_SOURCE_MIN_MS (checked in semantic_retrieval.py).
+- Hard wall budget: total fanout capped at EDITORIAL_MAX_WALL_BUDGET_MS (800ms)
+  so editorial never adds more than ~0.8s to route latency.
 - Cards parallelized via ThreadPoolExecutor with non-blocking lifecycle
   (same pattern as PR #275 cross_source_enrichment.py).
 - Tavily and Serper run sequentially within each card task.
 - Request count: at most budget_n cards × 2 providers per pipeline turn.
 - Max 3 search results per provider per card; only matched articles yield atoms.
+
+Writer-visible vs internal-only atoms:
+- specialty_context atoms: allowed_into_writer=True when confidence is high and
+  the extracted keyword is not a disallowed claim. These are concrete structured
+  facts (e.g., "craft cocktail", "izakaya", "waterfront dining").
+- editorial_mention atoms: always allowed_into_writer=False. These are internal
+  provenance/telemetry only. Source-name mentions ("mentioned by Time Out") are
+  not premium concierge evidence and must not reach the writer path.
 
 Provider roles:
 - Tavily: entity-specific bounded queries → trusted editorial source atoms.
@@ -58,11 +71,23 @@ EDITORIAL_ENTITY_MATCH_THRESHOLD: float = 0.70
 # Minimum entity-match confidence to set allowed_into_writer=True.
 EDITORIAL_WRITER_ALLOW_THRESHOLD: float = 0.75
 
-# Minimum remaining deadline budget (ms) to attempt editorial enrichment.
+# Minimum remaining deadline budget (ms) to attempt editorial enrichment
+# (generic gate checked inside run_editorial_enrichment).
 EDITORIAL_BUDGET_RESERVE_MS: int = 400
 
-# Per-provider HTTP timeout in seconds.
-_DEFAULT_EDITORIAL_TIMEOUT: float = 1.5
+# Minimum remaining budget (ms) after Step 5.55 cross-source enrichment to
+# justify running editorial enrichment. Checked in semantic_retrieval.py before
+# calling run_editorial_enrichment. Prevents editorial from stacking latency on
+# top of a slow Yelp/FSQ pass. Caller sets skipped_reason accordingly.
+EDITORIAL_POST_CROSS_SOURCE_MIN_MS: int = 700
+
+# Hard wall budget (ms) for the entire editorial fanout across all cards.
+# Caps the ThreadPoolExecutor fanout deadline regardless of remaining pipeline
+# budget. Ensures editorial never adds more than ~0.8s to route latency.
+EDITORIAL_MAX_WALL_BUDGET_MS: int = 800
+
+# Per-provider HTTP timeout in seconds (lowered from 1.5 to reduce tail latency).
+_DEFAULT_EDITORIAL_TIMEOUT: float = 1.0
 
 # Maximum search results to fetch per provider per card.
 _MAX_SEARCH_RESULTS: int = 3
@@ -333,8 +358,12 @@ def _make_editorial_mention_atom(
     """Create an editorial_mention atom for a strong trusted-source match.
 
     An editorial_mention signals that the venue was explicitly named by an
-    editorial source. Only produced for trusted domains with strong entity match.
-    Allowed into writer only when confidence is high enough.
+    editorial source. Used for internal provenance tracking and telemetry only.
+
+    ALWAYS allowed_into_writer=False: source-name mentions ("mentioned by Time Out")
+    are not premium concierge evidence and must not reach the set-level writer.
+    Writer-visible editorial atoms are specialty_context only (concrete structured
+    facts like "craft cocktail", "izakaya", "waterfront dining").
 
     Returns None when conditions are not met (fail closed).
     """
@@ -354,7 +383,7 @@ def _make_editorial_mention_atom(
         normalized_value=normalized_value,
         confidence=confidence,
         provenance=provenance,
-        allowed_into_writer=True,
+        allowed_into_writer=False,  # internal/provenance only — never reaches writer
         conflict_status="ok",
     )
 
@@ -889,7 +918,12 @@ def run_editorial_enrichment(
         ): entity
         for entity in targets
     }
-    fanout_deadline = max(0.1, remaining_ms / 1000.0 - 0.1)
+    # Cap fanout to EDITORIAL_MAX_WALL_BUDGET_MS so editorial never adds more
+    # than ~0.8s to route latency even when remaining pipeline budget is large.
+    fanout_deadline = min(
+        EDITORIAL_MAX_WALL_BUDGET_MS / 1000.0,
+        max(0.1, remaining_ms / 1000.0 - 0.1),
+    )
     try:
         try:
             for future in as_completed(futures, timeout=fanout_deadline):

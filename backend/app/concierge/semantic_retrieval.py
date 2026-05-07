@@ -326,6 +326,7 @@ def _run_pipeline(
     # Low-confidence entity/article matches are discarded (fail closed).
     # Keys gracefully absent → no enrichment, cards still returned.
     from app.concierge.editorial_enrichment import (
+        EDITORIAL_POST_CROSS_SOURCE_MIN_MS,
         EditorialEnrichmentResult,
         EditorialEnrichmentTelemetry,
         get_serper_key,
@@ -335,17 +336,36 @@ def _run_pipeline(
     t0 = time.monotonic()
     editorial_result: EditorialEnrichmentResult
     editorial_tel: Dict[str, Any] = {}
+    _remaining_after_cross_source_ms = deadline.remaining_ms()
     try:
         _tavily_key = get_tavily_key()
         _serper_key = get_serper_key()
-        editorial_result = run_editorial_enrichment(
-            [e for e, _ in ranked],
-            deadline=deadline,
-            tavily_key=_tavily_key,
-            serper_key=_serper_key,
-            destination=destination,
-            budget_n=first_card_limit,
-        )
+        # Opportunistic budget gate: if Step 5.55 (Yelp/FSQ) consumed too much budget,
+        # skip editorial entirely to protect dossier/writer latency. This is separate
+        # from the generic EDITORIAL_BUDGET_RESERVE_MS gate inside run_editorial_enrichment.
+        if _remaining_after_cross_source_ms < EDITORIAL_POST_CROSS_SOURCE_MIN_MS:
+            logger.info(
+                "semantic_retrieval_v1: editorial_skipped "
+                "reason=budget_after_cross_source_too_low remaining_ms=%d",
+                _remaining_after_cross_source_ms,
+            )
+            editorial_result = EditorialEnrichmentResult(
+                atoms_by_place_id={},
+                telemetry=EditorialEnrichmentTelemetry(
+                    enrichment_attempted=False,
+                    skipped_reason="budget_after_cross_source_too_low",
+                ),
+                elapsed_ms=0,
+            )
+        else:
+            editorial_result = run_editorial_enrichment(
+                [e for e, _ in ranked],
+                deadline=deadline,
+                tavily_key=_tavily_key,
+                serper_key=_serper_key,
+                destination=destination,
+                budget_n=first_card_limit,
+            )
         editorial_tel = editorial_result.telemetry.as_log_dict()
         # Merge editorial atoms into cross_source atoms_by_place_id so the
         # existing dossier builder sees all enrichment in one pass.

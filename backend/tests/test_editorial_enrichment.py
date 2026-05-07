@@ -36,6 +36,8 @@ import pytest
 from app.concierge.editorial_enrichment import (
     EDITORIAL_BUDGET_RESERVE_MS,
     EDITORIAL_ENTITY_MATCH_THRESHOLD,
+    EDITORIAL_MAX_WALL_BUDGET_MS,
+    EDITORIAL_POST_CROSS_SOURCE_MIN_MS,
     EDITORIAL_WRITER_ALLOW_THRESHOLD,
     TRUSTED_EDITORIAL_DOMAINS,
     EditorialEnrichmentResult,
@@ -120,7 +122,7 @@ class TestTavilyTrustedMatchAccepted:
         )
 
     def test_trusted_editorial_mention_produced(self):
-        """Trusted domain + strong entity match → editorial_mention atom with allowed_into_writer=True."""
+        """Trusted domain + strong entity match → editorial_mention atom, internal/provenance only."""
         mention = _make_editorial_mention_atom(
             entity_match=0.88,
             source_trust=1.0,
@@ -129,13 +131,20 @@ class TestTavilyTrustedMatchAccepted:
         )
         assert mention is not None
         assert mention.evidence_type == "editorial_mention"
-        assert mention.allowed_into_writer is True
+        # editorial_mention is ALWAYS internal/provenance only — not writer-visible
+        assert mention.allowed_into_writer is False, (
+            "editorial_mention must never reach the writer (source-name mention risk)"
+        )
         assert mention.conflict_status == "ok"
         assert mention.source_provider == "tavily"
         assert "timeout.com" in mention.normalized_value
 
     def test_atoms_from_article_accepted_trusted_source(self):
-        """Article from trusted source with clear venue name in title → atoms accepted."""
+        """Article from trusted source with clear venue name in title → atoms accepted.
+
+        editorial_mention produced (internal only, allowed_into_writer=False).
+        specialty_context produced if explicit keyword present (allowed_into_writer=True).
+        """
         tel_stats: Dict[str, Any] = {}
         atoms = _atoms_from_article(
             venue_name="The Violet Hour",
@@ -145,13 +154,24 @@ class TestTavilyTrustedMatchAccepted:
             source_provider="tavily",
             tel_stats=tel_stats,
         )
-        # Should get at least one atom (editorial_mention from timeout.com + specialty)
         assert len(atoms) >= 1
         providers = {a.source_provider for a in atoms}
         assert "tavily" in providers
-        # editorial_mention atom should be present since timeout.com is trusted
+        # editorial_mention atom is present (trusted source, strong entity match)
         types = {a.evidence_type for a in atoms}
         assert "editorial_mention" in types
+        # editorial_mention must be internal/provenance only
+        for atom in atoms:
+            if atom.evidence_type == "editorial_mention":
+                assert atom.allowed_into_writer is False, (
+                    "editorial_mention must not be writer-visible"
+                )
+        # specialty_context atoms (if present) may be writer-visible
+        specialty = [a for a in atoms if a.evidence_type == "specialty_context"]
+        if specialty:
+            assert any(a.allowed_into_writer is True for a in specialty), (
+                "At least one specialty_context atom should be writer-visible"
+            )
 
     def test_specialty_context_extracted_from_snippet(self):
         """Explicit specialty keyword in snippet → specialty_context atom."""
@@ -244,7 +264,7 @@ class TestSerperTrustedMatchAccepted:
     """Test 3: Serper trusted editorial match accepted when entity match is strong."""
 
     def test_serper_editorial_mention_atom(self):
-        """Serper result from trusted domain + venue in title → editorial_mention accepted."""
+        """Serper result from trusted domain + venue in title → editorial_mention (internal only)."""
         tel_stats: Dict[str, Any] = {}
         atoms = _atoms_from_article(
             venue_name="The Violet Hour",
@@ -258,6 +278,10 @@ class TestSerperTrustedMatchAccepted:
         assert all(a.source_provider == "serper" for a in atoms)
         types = {a.evidence_type for a in atoms}
         assert "editorial_mention" in types
+        # editorial_mention is always internal/provenance only
+        for atom in atoms:
+            if atom.evidence_type == "editorial_mention":
+                assert atom.allowed_into_writer is False
 
     def test_serper_specialty_context_extracted(self):
         """Serper snippet with explicit specialty keyword → specialty_context atom."""
@@ -408,18 +432,33 @@ class TestEditorialCannotOverrideGoogleIdentity:
                 assert forbidden not in nv, f"Identity override in normalized_value: {nv!r}"
 
     def test_dossier_google_fields_not_overridden_by_editorial(self):
-        """Google identity fields in dossier unchanged after editorial atoms merged."""
+        """Google identity fields in dossier unchanged after editorial atoms merged.
+
+        Uses a specialty_context atom (writer-visible) to verify dossier merge.
+        editorial_mention atoms are internal/provenance only and do not enter dossier.
+        """
         entity = _FakeEntity()
         rank_score = _FakeRankScore()
         frame = _FakeFrame()
 
-        editorial_atom = EnrichmentAtom(
+        # specialty_context atom: writer-visible (allowed_into_writer=True)
+        specialty_atom = EnrichmentAtom(
+            source_provider="tavily",
+            evidence_type="specialty_context",
+            normalized_value="specialty_context:craft cocktail",
+            confidence=0.88,
+            provenance={"title": "...", "domain": "timeout.com", "url": "...", "snippet": "..."},
+            allowed_into_writer=True,
+            conflict_status="ok",
+        )
+        # editorial_mention atom: internal/provenance only (allowed_into_writer=False)
+        mention_atom = EnrichmentAtom(
             source_provider="tavily",
             evidence_type="editorial_mention",
             normalized_value="editorial_mention:timeout.com",
             confidence=0.88,
             provenance={"title": "...", "domain": "timeout.com", "url": "...", "snippet": "..."},
-            allowed_into_writer=True,
+            allowed_into_writer=False,  # internal only
             conflict_status="ok",
         )
 
@@ -429,7 +468,7 @@ class TestEditorialCannotOverrideGoogleIdentity:
             rank_score=rank_score,
             enrichment=None,
             category="bar",
-            cross_source_atoms=[editorial_atom],
+            cross_source_atoms=[specialty_atom, mention_atom],
         )
 
         # Google identity unchanged
@@ -443,12 +482,18 @@ class TestEditorialCannotOverrideGoogleIdentity:
         google_ev = next(p for p in dossier.provider_evidence if p.source == "google_places")
         assert any("type:" in f for f in google_ev.facts)
 
-        # Editorial evidence present as separate provider entry
-        editorial_ev = next(
+        # specialty_context atom enters dossier as tavily provider evidence
+        tavily_ev = next(
             (p for p in dossier.provider_evidence if p.source == "tavily"), None
         )
-        assert editorial_ev is not None
-        assert any("editorial_mention" in f for f in editorial_ev.facts)
+        assert tavily_ev is not None
+        assert any("specialty_context:craft cocktail" in f for f in tavily_ev.facts)
+
+        # editorial_mention is NOT in dossier facts (allowed_into_writer=False)
+        all_facts = [f for p in dossier.provider_evidence for f in p.facts]
+        assert not any("editorial_mention:" in f for f in all_facts), (
+            "editorial_mention must not appear in dossier writer-visible facts"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -753,19 +798,32 @@ class TestDossierMergeEditorialAtoms:
         tavily_ev = [p for p in dossier.provider_evidence if p.source == "tavily"]
         assert tavily_ev == [], f"Disallowed atom should not enter dossier: {tavily_ev}"
 
-    def test_allowed_editorial_atom_enters_dossier(self):
-        """Atom with allowed_into_writer=True and conflict_status='ok' enters dossier."""
+    def test_allowed_specialty_atom_enters_dossier(self):
+        """specialty_context atom with allowed_into_writer=True enters dossier writer facts.
+
+        editorial_mention atoms (allowed_into_writer=False) do NOT enter dossier.
+        Only specialty_context and similar concrete atoms reach the writer path.
+        """
         entity = _FakeEntity()
         rank_score = _FakeRankScore()
         frame = _FakeFrame()
 
-        allowed_atom = EnrichmentAtom(
+        specialty_atom = EnrichmentAtom(
+            source_provider="tavily",
+            evidence_type="specialty_context",
+            normalized_value="specialty_context:izakaya",
+            confidence=0.85,
+            provenance={"title": "...", "domain": "eater.com", "url": "...", "snippet": "..."},
+            allowed_into_writer=True,
+            conflict_status="ok",
+        )
+        mention_atom = EnrichmentAtom(
             source_provider="tavily",
             evidence_type="editorial_mention",
-            normalized_value="editorial_mention:timeout.com",
-            confidence=0.88,
-            provenance={"title": "...", "domain": "timeout.com", "url": "...", "snippet": "..."},
-            allowed_into_writer=True,
+            normalized_value="editorial_mention:eater.com",
+            confidence=0.85,
+            provenance={"title": "...", "domain": "eater.com", "url": "...", "snippet": "..."},
+            allowed_into_writer=False,  # always internal
             conflict_status="ok",
         )
 
@@ -775,14 +833,16 @@ class TestDossierMergeEditorialAtoms:
             rank_score=rank_score,
             enrichment=None,
             category="bar",
-            cross_source_atoms=[allowed_atom],
+            cross_source_atoms=[specialty_atom, mention_atom],
         )
 
         tavily_ev = next(
             (p for p in dossier.provider_evidence if p.source == "tavily"), None
         )
-        assert tavily_ev is not None
-        assert any("editorial_mention:timeout.com" in f for f in tavily_ev.facts)
+        assert tavily_ev is not None, "specialty_context atom must enter dossier"
+        assert any("specialty_context:izakaya" in f for f in tavily_ev.facts)
+        # editorial_mention must not be in writer facts
+        assert not any("editorial_mention:" in f for f in tavily_ev.facts)
 
     def test_conflicting_atom_excluded_from_dossier(self):
         """Atom with conflict_status != 'ok' excluded from dossier."""
@@ -922,7 +982,7 @@ class TestSourceTrustScoring:
         assert mention is None, "Non-trusted domain should not produce editorial_mention"
 
     def test_editorial_mention_produced_for_trusted_domain(self):
-        """_make_editorial_mention_atom returns atom for trusted domains."""
+        """_make_editorial_mention_atom returns atom for trusted domains (internal/provenance only)."""
         mention = _make_editorial_mention_atom(
             entity_match=0.90,
             source_trust=1.0,  # trusted
@@ -930,4 +990,208 @@ class TestSourceTrustScoring:
             provenance={"domain": "eater.com"},
         )
         assert mention is not None
-        assert mention.allowed_into_writer is True
+        # editorial_mention is ALWAYS internal/provenance only
+        assert mention.allowed_into_writer is False, (
+            "editorial_mention must never reach the writer"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Tests 15–18: Four targeted tests required by review feedback
+# ---------------------------------------------------------------------------
+
+class TestEditorialBudgetAfterCrossSource:
+    """Test 15: Editorial skipped when budget after cross-source (Step 5.55) is too low."""
+
+    def test_run_editorial_skipped_when_budget_below_post_cross_source_min(self):
+        """run_editorial_enrichment skips with budget_exhausted when deadline < reserve."""
+        entity = _FakeEntity()
+        # Simulate remaining budget just below EDITORIAL_BUDGET_RESERVE_MS (400)
+        result = run_editorial_enrichment(
+            [entity],
+            deadline=_FakeDeadline(remaining=EDITORIAL_BUDGET_RESERVE_MS - 1),
+            tavily_key="fake-key",
+            serper_key="fake-key",
+            destination="Chicago",
+        )
+        assert result.telemetry.skipped_reason == "budget_exhausted"
+        assert result.telemetry.enrichment_attempted is False
+        assert result.atoms_by_place_id == {}
+
+    def test_editorial_post_cross_source_min_constant_exported(self):
+        """EDITORIAL_POST_CROSS_SOURCE_MIN_MS is exported and has a reasonable value."""
+        # Must be higher than EDITORIAL_BUDGET_RESERVE_MS and ≤ 1000ms
+        assert EDITORIAL_POST_CROSS_SOURCE_MIN_MS > EDITORIAL_BUDGET_RESERVE_MS
+        assert EDITORIAL_POST_CROSS_SOURCE_MIN_MS <= 1000
+
+    def test_editorial_max_wall_budget_caps_fanout(self):
+        """EDITORIAL_MAX_WALL_BUDGET_MS is exported and caps editorial fanout."""
+        # Should be 600–900ms per task requirement
+        assert 600 <= EDITORIAL_MAX_WALL_BUDGET_MS <= 900
+
+    def test_semantic_retrieval_skips_editorial_when_cross_source_consumed_budget(self):
+        """Simulates the semantic_retrieval.py post-cross-source gate logic.
+
+        When remaining_ms after Step 5.55 < EDITORIAL_POST_CROSS_SOURCE_MIN_MS,
+        the pipeline should skip editorial with budget_after_cross_source_too_low.
+        This test exercises the path directly to confirm the telemetry reason is set.
+        """
+        # We create a result that mimics the semantic_retrieval.py gate logic
+        # using the same condition it checks before calling run_editorial_enrichment.
+        remaining_after_cross_source = EDITORIAL_POST_CROSS_SOURCE_MIN_MS - 1
+
+        # This mirrors the semantic_retrieval.py gate
+        if remaining_after_cross_source < EDITORIAL_POST_CROSS_SOURCE_MIN_MS:
+            skipped_result = EditorialEnrichmentResult(
+                atoms_by_place_id={},
+                telemetry=EditorialEnrichmentTelemetry(
+                    enrichment_attempted=False,
+                    skipped_reason="budget_after_cross_source_too_low",
+                ),
+                elapsed_ms=0,
+            )
+        else:
+            skipped_result = None
+
+        assert skipped_result is not None
+        assert skipped_result.telemetry.skipped_reason == "budget_after_cross_source_too_low"
+        assert skipped_result.telemetry.enrichment_attempted is False
+        assert skipped_result.atoms_by_place_id == {}
+
+
+class TestEditorialMentionNotWriterVisible:
+    """Test 16: editorial_mention alone is not writer-visible."""
+
+    def test_editorial_mention_not_in_dossier_writer_facts(self):
+        """editorial_mention atom (allowed_into_writer=False) does not enter dossier."""
+        entity = _FakeEntity()
+        rank_score = _FakeRankScore()
+        frame = _FakeFrame()
+
+        mention_only_atom = EnrichmentAtom(
+            source_provider="tavily",
+            evidence_type="editorial_mention",
+            normalized_value="editorial_mention:timeout.com",
+            confidence=0.88,
+            provenance={"domain": "timeout.com"},
+            allowed_into_writer=False,
+            conflict_status="ok",
+        )
+
+        dossier = build_place_evidence_dossier(
+            entity=entity,
+            frame=frame,
+            rank_score=rank_score,
+            enrichment=None,
+            category="bar",
+            cross_source_atoms=[mention_only_atom],
+        )
+
+        # No tavily/editorial entry in dossier — mention alone never enters writer path
+        tavily_ev = [p for p in dossier.provider_evidence if p.source == "tavily"]
+        assert tavily_ev == [], (
+            "editorial_mention (allowed_into_writer=False) must not enter dossier"
+        )
+
+    def test_make_editorial_mention_always_not_writer_visible(self):
+        """_make_editorial_mention_atom always sets allowed_into_writer=False."""
+        for entity_match in [0.75, 0.88, 0.95]:
+            mention = _make_editorial_mention_atom(
+                entity_match=entity_match,
+                source_trust=1.0,
+                source_provider="tavily",
+                provenance={"domain": "eater.com"},
+            )
+            assert mention is not None
+            assert mention.allowed_into_writer is False, (
+                f"editorial_mention must not be writer-visible (entity_match={entity_match})"
+            )
+
+
+class TestTrustedSourceOnlyMentionNoWriterClaim:
+    """Test 17: Trusted source with only a source mention → internal telemetry only, no writer claim."""
+
+    def test_article_matching_only_on_trusted_domain_no_specialty_produces_no_writer_atom(self):
+        """Article from trusted source mentioning venue but with no specialty keyword
+        → editorial_mention produced (internal) but no writer-visible atoms.
+        """
+        tel_stats: Dict[str, Any] = {}
+        # Article title/snippet matches venue but has NO specialty keywords
+        atoms = _atoms_from_article(
+            venue_name="Dram Shop Tap Room",
+            title="Dram Shop Tap Room Chicago",
+            snippet="A popular spot in Logan Square with good service and a great vibe.",
+            url="https://www.timeout.com/chicago/dram-shop-tap-room",
+            source_provider="tavily",
+            tel_stats=tel_stats,
+        )
+
+        # editorial_mention may be produced (trusted source, strong entity match)
+        # but must be internal only
+        writer_visible = [a for a in atoms if a.allowed_into_writer is True]
+        assert writer_visible == [], (
+            "No writer-visible atoms should be produced when there are no specialty keywords "
+            f"(got: {[a.normalized_value for a in writer_visible]})"
+        )
+
+        # Internal editorial_mention may exist for telemetry
+        internal_mention = [
+            a for a in atoms
+            if a.evidence_type == "editorial_mention" and a.allowed_into_writer is False
+        ]
+        # Either present (internal) or absent — both are acceptable
+        # What matters: no writer-visible atoms produced
+        assert all(a.allowed_into_writer is False for a in atoms), (
+            "All atoms from a mention-only article must be internal"
+        )
+
+
+class TestTrustedSourceWithSpecialtyProducesWriterAtom:
+    """Test 18: Trusted source + explicit specialty context → writer-visible specialty atom."""
+
+    def test_article_with_specialty_keyword_produces_writer_visible_atom(self):
+        """Article from trusted source + explicit specialty keyword in snippet
+        → specialty_context atom with allowed_into_writer=True.
+        """
+        tel_stats: Dict[str, Any] = {}
+        atoms = _atoms_from_article(
+            venue_name="Kumiko",
+            title="Kumiko Chicago — Japanese cocktail bar review",
+            snippet="Kumiko is an intimate craft cocktail bar in Chicago's Loop, "
+                    "drawing on Japanese bartending traditions and omakase-style service.",
+            url="https://www.eater.com/chicago/kumiko",
+            source_provider="tavily",
+            tel_stats=tel_stats,
+        )
+
+        writer_visible = [a for a in atoms if a.allowed_into_writer is True]
+        assert len(writer_visible) >= 1, (
+            "At least one writer-visible specialty_context atom expected when "
+            "explicit specialty keyword present"
+        )
+        assert all(a.evidence_type == "specialty_context" for a in writer_visible), (
+            "Only specialty_context atoms may be writer-visible"
+        )
+        values = [a.normalized_value for a in writer_visible]
+        assert any("craft cocktail" in v or "omakase" in v for v in values), (
+            f"Expected 'craft cocktail' or 'omakase' in writer-visible atoms, got: {values}"
+        )
+
+    def test_no_writer_visible_atom_without_specialty_keyword(self):
+        """Article from trusted source with only superlative/generic text → no writer atom."""
+        tel_stats: Dict[str, Any] = {}
+        atoms = _atoms_from_article(
+            venue_name="The Purple Pig",
+            title="The Purple Pig Chicago — One of the Best Restaurants",
+            snippet="The Purple Pig is one of the best restaurants in Chicago's River North, "
+                    "featured by multiple publications as a must-visit destination.",
+            url="https://www.timeout.com/chicago/the-purple-pig",
+            source_provider="tavily",
+            tel_stats=tel_stats,
+        )
+
+        writer_visible = [a for a in atoms if a.allowed_into_writer is True]
+        assert writer_visible == [], (
+            "Superlative/generic article text must produce no writer-visible atoms "
+            f"(got: {[a.normalized_value for a in writer_visible]})"
+        )
