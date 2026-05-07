@@ -32,8 +32,16 @@ import type {
 } from "@/lib/api";
 import type { ItineraryDay, ItineraryItem } from "@/types";
 import { pickCardReason, pickCardCategory, sanitizeWhyPick, shouldShowCollapsedSources, splitReason, normalizeTitle } from "@/lib/concierge/cardPresentation";
+import { ACTION, parseRefinementAction, applyRefinementToMessage, buildContextualSearchQuery, selectBestCard, looksLikeFreshSearch } from "@/lib/concierge/refinementInterpreter";
 
 type MessageRole = "user" | "assistant";
+
+interface RefinementComparisonCard {
+  name: string;
+  category: string;
+  meta: string;
+  note: string;
+}
 
 interface Message {
   role: MessageRole;
@@ -50,6 +58,10 @@ interface Message {
   liveProvider?: string | null;
   sources?: string[];
   warnings?: string[];
+  // Conversational refinement fields
+  isRefinement?: boolean;
+  refinementAction?: string;
+  refinementComparison?: RefinementComparisonCard[] | null;
 }
 
 interface Props {
@@ -524,6 +536,19 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
     return ["Best restaurants near my hotel", "Attractions for Day 2", "Compare neighborhoods"];
   }, [messages]);
 
+  // Contextual refinement chips shown after a card result is present.
+  const refinementChips = useMemo(() => {
+    const hasCards = messages.some(
+      (m) => m.role === "assistant" && !m.isRefinement && (
+        (m.restaurants?.length ?? 0) > 0 ||
+        (m.attractions?.length ?? 0) > 0 ||
+        (m.hotels?.length ?? 0) > 0
+      )
+    );
+    if (!hasCards) return null;
+    return ["Show only casual", "Compare top 2", "Find cheaper nearby", "Add best to Day 1"];
+  }, [messages]);
+
   useEffect(() => {
     if (!isOpen) return;
     setTimeout(() => inputRef.current?.focus(), 100);
@@ -694,43 +719,47 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
     kind: "restaurant" | "attraction" | "hotel",
     item: UnifiedRestaurantResult | UnifiedAttractionResult | UnifiedHotelResult,
     reason?: string,
-  ) {
-    if (!selectedDayId) {
+    targetDayId?: string,
+  ): Promise<boolean> {
+    const effectiveDayId = targetDayId ?? selectedDayId;
+    if (!effectiveDayId) {
       setError("Select a day before adding this item.");
-      return;
+      return false;
     }
-    const key = cardKey(name, selectedDayId || undefined);
-    if (addingItems.has(key) || addedItems.has(key)) return;
+    const key = cardKey(name, effectiveDayId || undefined);
+    if (addingItems.has(key) || addedItems.has(key)) return true;
 
     const duplicate = itineraryItems.some((it) => {
       const titleMatch = normalizeTitle(it.title) === normalizeTitle(name);
       if (!titleMatch) return false;
-      if (selectedDayId) return it.dayId === selectedDayId;
+      if (effectiveDayId) return it.dayId === effectiveDayId;
       return it.tripId === tripId;
     });
 
     if (duplicate) {
       setAddedItems((prev) => new Set(prev).add(key));
-      return;
+      return true;
     }
 
     setAddingItems((prev) => new Set(prev).add(key));
     setError(null);
+    let success = false;
     try {
       const added = await addStructuredConciergeItemToTrip(tripId, item, kind, {
-        dayId: selectedDayId || undefined,
+        dayId: effectiveDayId || undefined,
         reason,
       });
       setAddedItems((prev) => new Set(prev).add(key));
       setItineraryItems((prev) => [...prev, added]);
       setTripDays((prev) =>
         prev.map((day) =>
-          day.id === selectedDayId
+          day.id === effectiveDayId
             ? { ...day, items: [...(day.items ?? []), added] }
             : day
         )
       );
       onItemAdded?.();
+      success = true;
     } catch (err) {
       console.error("[concierge] add item failed", err);
       setError("Could not add item to trip.");
@@ -741,6 +770,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
         return next;
       });
     }
+    return success;
   }
 
   async function saveIdea(
@@ -769,6 +799,177 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
         return next;
       });
     }
+  }
+
+  // Returns the most recent assistant message that has verified cards (non-refinement).
+  function getLatestCardMessage(msgs: Message[]): Message | null {
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (m.role === "assistant" && !m.isRefinement && (
+        (m.restaurants?.length ?? 0) > 0 ||
+        (m.attractions?.length ?? 0) > 0 ||
+        (m.hotels?.length ?? 0) > 0
+      )) return m;
+    }
+    return null;
+  }
+
+  // Returns the user query that immediately preceded the latest card message.
+  function getOriginalQuery(msgs: Message[], latestCardMsg: Message): string {
+    const idx = msgs.indexOf(latestCardMsg);
+    for (let i = idx - 1; i >= 0; i--) {
+      if (msgs[i].role === "user") return msgs[i].text;
+    }
+    return destination;
+  }
+
+  // Flat array of addable cards with their kind, for passing to the refinement interpreter.
+  function getCardsWithKind(msg: Message) {
+    return [
+      ...(msg.restaurants ?? []).filter(isRenderableVerifiedPlace).map((place) => ({ kind: "restaurant" as const, place })),
+      ...(msg.attractions ?? []).filter(isRenderableVerifiedPlace).map((place) => ({ kind: "attraction" as const, place })),
+      ...(msg.hotels ?? []).filter(isRenderableVerifiedPlace).map((place) => ({ kind: "hotel" as const, place })),
+    ];
+  }
+
+  // Main entry point for typed input and refinement chips.
+  // Routes to refinement only when a card set exists AND the query is not a
+  // fresh destination/category search. Falls back to sendQuery if the action
+  // parser returns CLARIFY_UNSUPPORTED (handleRefinement returns false).
+  async function handleUserInput(query: string) {
+    const q = query.trim();
+    if (!q || loading) return;
+    const latestCardMsg = getLatestCardMessage(messages);
+    if (latestCardMsg && !looksLikeFreshSearch(q)) {
+      const handled = await handleRefinement(q, latestCardMsg);
+      if (!handled) await sendQuery(q);
+    } else {
+      await sendQuery(q);
+    }
+  }
+
+  // Returns false when the query should fall through to sendQuery instead
+  // (CLARIFY_UNSUPPORTED — caller handles without double-appending user message).
+  async function handleRefinement(query: string, latestCardMsg: Message): Promise<boolean> {
+    const cardsWithKind = getCardsWithKind(latestCardMsg);
+    const action = parseRefinementAction(query, cardsWithKind.map((c) => c.place)) as {
+      type: string;
+      modifier?: string;
+      dayNumber?: number | null;
+      isTemporal?: boolean;
+      clarificationText?: string;
+    };
+
+    // CLARIFY_UNSUPPORTED: don't intercept — tell caller to use sendQuery.
+    if (action.type === ACTION.CLARIFY_UNSUPPORTED) {
+      return false;
+    }
+
+    // Confirmed refinement action — append user message and process.
+    setInput("");
+    setError(null);
+    setMessages((prev) => [...prev, { role: "user", text: query }]);
+
+    if (action.type === ACTION.ADD_SELECTED_TO_DAY) {
+      const best = selectBestCard(cardsWithKind);
+      if (!best) {
+        setMessages((prev) => [...prev, {
+          role: "assistant",
+          text: "No cards available to add.",
+          isRefinement: true, refinementAction: ACTION.ADD_SELECTED_TO_DAY,
+          restaurants: [], attractions: [], hotels: [],
+          researchSources: [], areaComparisons: [],
+          retrievalUsed: false, sourceStatus: "none",
+        }]);
+        return true;
+      }
+      // Resolve the target day deterministically — never rely on async state.
+      const resolvedDayId = action.dayNumber
+        ? (tripDays.find((d) => d.dayNumber === action.dayNumber)?.id ?? selectedDayId)
+        : selectedDayId;
+      if (!resolvedDayId) {
+        setMessages((prev) => [...prev, {
+          role: "assistant",
+          text: `Select a day first, then say "add the best one to Day X".`,
+          isRefinement: true, refinementAction: ACTION.ADD_SELECTED_TO_DAY,
+          restaurants: [], attractions: [], hotels: [],
+          researchSources: [], areaComparisons: [],
+          retrievalUsed: false, sourceStatus: "none",
+        }]);
+        return true;
+      }
+      const bestReason = pickCardReason(best.place);
+      const sanitized = sanitizeWhyPick(bestReason, best.place.name, cardsWithKind.map((c) => c.place.name));
+      // Pass resolvedDayId explicitly so addItem does not read from async state.
+      const didAdd = await addItem(best.place.name, best.kind, best.place, sanitized, resolvedDayId);
+      const dayLabel = action.dayNumber ? `Day ${action.dayNumber}` : "your selected day";
+      setMessages((prev) => [...prev, {
+        role: "assistant",
+        text: didAdd
+          ? `Added ${best.place.name} to ${dayLabel}.`
+          : `I couldn't add ${best.place.name} to ${dayLabel}. Please try again.`,
+        isRefinement: true, refinementAction: ACTION.ADD_SELECTED_TO_DAY,
+        restaurants: [], attractions: [], hotels: [],
+        researchSources: [], areaComparisons: [],
+        retrievalUsed: false, sourceStatus: "none",
+      }]);
+      return true;
+    }
+
+    if (action.type === ACTION.SEARCH_MORE_WITH_CONTEXT) {
+      const originalQuery = getOriginalQuery(messages, latestCardMsg);
+      const contextualQuery = buildContextualSearchQuery(originalQuery, query, { destination });
+      setLoading(true);
+      try {
+        const requestId = typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const result = await callConciergeSearch(tripId, contextualQuery, requestId);
+        setMessages((prev) => [...prev, fromSearchResult(result)]);
+      } catch (err) {
+        console.error("[concierge] refinement search failed", err);
+        setMessages((prev) => [...prev, { role: "assistant", text: "I hit a temporary issue. Please try again." }]);
+        setError("Failed to send message.");
+      } finally {
+        setLoading(false);
+      }
+      return true;
+    }
+
+    // FILTER, REMOVE, RERANK, COMPARE — apply locally.
+    const synthetic = applyRefinementToMessage(action, latestCardMsg);
+    if (!synthetic) {
+      // Filter returned no matches → tell user and fall through to contextual search.
+      const originalQuery = getOriginalQuery(messages, latestCardMsg);
+      const contextualQuery = buildContextualSearchQuery(originalQuery, query, { destination });
+      setMessages((prev) => [...prev, {
+        role: "assistant",
+        text: `No matches for "${action.modifier ?? query}" in the current set. Searching for more options…`,
+        isRefinement: true,
+        refinementAction: action.type,
+        restaurants: [], attractions: [], hotels: [],
+        researchSources: [], areaComparisons: [],
+        retrievalUsed: false, sourceStatus: "none",
+      }]);
+      setLoading(true);
+      try {
+        const requestId = typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const result = await callConciergeSearch(tripId, contextualQuery, requestId);
+        setMessages((prev) => [...prev, fromSearchResult(result)]);
+      } catch (err) {
+        console.error("[concierge] refinement fallback search failed", err);
+        setMessages((prev) => [...prev, { role: "assistant", text: "I hit a temporary issue. Please try again." }]);
+        setError("Failed to send message.");
+      } finally {
+        setLoading(false);
+      }
+      return true;
+    }
+
+    setMessages((prev) => [...prev, synthetic as Message]);
+    return true;
   }
 
   if (!isOpen) return null;
@@ -893,6 +1094,23 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                     </>
                   )}
 
+                  {msg.refinementAction === ACTION.COMPARE_CURRENT_SET && msg.refinementComparison && msg.refinementComparison.length > 0 && (
+                    <div className="space-y-2">
+                      {msg.refinementComparison.map((card) => (
+                        <div key={card.name} className="rounded-2xl border border-slate-700/60 bg-slate-800/70 p-3">
+                          <p className="text-sm font-semibold text-slate-100">{card.name}</p>
+                          {card.category && <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-slate-400">{card.category}</p>}
+                          {card.meta && <p className="mt-1 text-xs text-slate-300">{card.meta}</p>}
+                          {card.note && (
+                            <p className="mt-2 rounded-xl border border-slate-700/80 bg-slate-900/60 px-3 py-2 text-xs leading-relaxed text-slate-200">
+                              {card.note}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {msg.intent !== "compare" && (msg.restaurants?.length || msg.attractions?.length || msg.hotels?.length || msg.researchSources?.length) ? (
                     <div className="space-y-2">
                       {(() => {
@@ -990,7 +1208,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
               {quickActions.map((prompt) => (
                 <button
                   key={prompt}
-                  onClick={() => sendQuery(prompt)}
+                  onClick={() => handleUserInput(prompt)}
                   className="rounded-full border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700"
                 >
                   {prompt}
@@ -1019,10 +1237,10 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
           )}
           {messages.length > 1 && !loadingHistory && (
             <div className="mb-2 flex flex-wrap gap-1.5">
-              {followUpActions.map((prompt) => (
+              {(refinementChips ?? followUpActions).map((prompt) => (
                 <button
                   key={prompt}
-                  onClick={() => sendQuery(prompt)}
+                  onClick={() => refinementChips ? handleUserInput(prompt) : sendQuery(prompt)}
                   className="rounded-full border border-slate-600 bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-700"
                 >
                   {prompt}
@@ -1036,13 +1254,13 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendQuery(input.trim())}
-              placeholder="Ask for restaurants, hotels, attractions..."
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleUserInput(input.trim())}
+              placeholder="Ask, refine, or compare the results…"
               disabled={loading}
               className="flex-1 rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-300/60 disabled:opacity-60"
             />
             <button
-              onClick={() => sendQuery(input.trim())}
+              onClick={() => handleUserInput(input.trim())}
               disabled={loading || !input.trim()}
               className="rounded-xl bg-amber-200/20 px-3 py-2 text-amber-100 ring-1 ring-amber-300/40 transition hover:bg-amber-200/30 disabled:opacity-50"
               aria-label="Send"
