@@ -11,7 +11,11 @@ Architecture invariants (immutable):
 
 Performance:
 - Deadline-bounded: skipped when remaining budget < CROSS_SOURCE_BUDGET_RESERVE_MS.
-- Parallel: both providers run concurrently per card via ThreadPoolExecutor.
+- Cards parallelized via ThreadPoolExecutor; Yelp and Foursquare run sequentially
+  within each card task (2 HTTP calls per card at most).
+- Non-blocking executor lifecycle: futures are cancelled and executor is shut down
+  with wait=False so a hung provider call does not delay card return beyond the
+  fanout budget. Mirrors the pattern in provider_executor.py.
 - Request count: at most budget_n cards × 2 providers (Yelp + FSQ) per pipeline turn.
 
 No SQL. No UI. No new LLM calls. No cache.
@@ -29,7 +33,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError, as_completed
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -660,8 +664,9 @@ def _enrich_one_card(
 ) -> Tuple[str, List[EnrichmentAtom], Dict[str, Any]]:
     """Fetch Yelp + Foursquare enrichment for one Google-verified card.
 
-    Both providers run sequentially within this function (caller runs cards
-    in parallel via ThreadPoolExecutor). Returns (place_id, atoms, stats).
+    Yelp and Foursquare calls run sequentially within this function.
+    The caller (run_cross_source_enrichment) runs multiple card tasks in parallel.
+    Returns (place_id, atoms, stats).
 
     Failure from any provider is isolated — the other provider still runs.
     """
@@ -788,15 +793,19 @@ def run_cross_source_enrichment(
 
     atoms_by_place_id: Dict[str, List[EnrichmentAtom]] = {}
 
-    # Run all card enrichment in parallel
-    with ThreadPoolExecutor(max_workers=min(len(targets), 4)) as executor:
-        futures = {
-            executor.submit(
-                _enrich_one_card, entity, yelp_key, fsq_key, per_card_timeout
-            ): entity
-            for entity in targets
-        }
-        fanout_deadline = max(0.1, remaining_ms / 1000.0 - 0.1)
+    # Non-blocking executor lifecycle — mirrors provider_executor.py.
+    # Do NOT use `with ThreadPoolExecutor` here: its __exit__ calls shutdown(wait=True)
+    # which blocks until all in-flight HTTP threads finish, defeating the fanout deadline.
+    # Instead: explicit creation, cancel pending futures, shutdown(wait=False) in finally.
+    executor = ThreadPoolExecutor(max_workers=min(len(targets), 4))
+    futures = {
+        executor.submit(
+            _enrich_one_card, entity, yelp_key, fsq_key, per_card_timeout
+        ): entity
+        for entity in targets
+    }
+    fanout_deadline = max(0.1, remaining_ms / 1000.0 - 0.1)
+    try:
         try:
             for future in as_completed(futures, timeout=fanout_deadline):
                 try:
@@ -810,8 +819,21 @@ def run_cross_source_enrichment(
                         "cross_source_enrichment: future_error name=%r error=%s",
                         getattr(entity, "name", "?"), exc,
                     )
-        except Exception:
-            logger.debug("cross_source_enrichment: fanout_timeout")
+        except FutureTimeoutError:
+            logger.debug(
+                "cross_source_enrichment: fanout_timeout deadline=%.2fs",
+                fanout_deadline,
+            )
+    finally:
+        # Cancel any futures not yet started; return immediately without blocking
+        # on in-flight HTTP threads (they will finish in the background).
+        for fut in futures:
+            fut.cancel()
+        try:
+            executor.shutdown(wait=False, cancel_futures=True)
+        except TypeError:
+            # Python < 3.9 does not have cancel_futures.
+            executor.shutdown(wait=False)
 
     # Aggregate telemetry
     all_atoms: List[EnrichmentAtom] = [a for atoms in atoms_by_place_id.values() for a in atoms]
@@ -871,10 +893,34 @@ def _merge_card_stats(tel: CrossSourceTelemetry, stats: Dict[str, Any]) -> None:
 # ── API key helpers ────────────────────────────────────────────────────────────
 
 def get_yelp_key() -> str:
-    """Return the Yelp API key from environment."""
+    """Return the Yelp API key from settings config, with env fallback.
+
+    Reads from app.core.config.get_settings().yelp_api_key first (the repo-standard
+    pydantic-settings path, already backed by YELP_API_KEY env var).
+    Falls back to os.getenv("YELP_API_KEY") for compatibility in test/minimal setups.
+    """
+    try:
+        from app.core.config import get_settings
+        key = get_settings().yelp_api_key
+        if key:
+            return key.strip()
+    except Exception:
+        pass
     return os.getenv("YELP_API_KEY", "").strip()
 
 
 def get_foursquare_key() -> str:
-    """Return the Foursquare API key from environment."""
+    """Return the Foursquare API key from settings config, with env fallback.
+
+    Reads from app.core.config.get_settings().foursquare_api_key first (the
+    repo-standard pydantic-settings path, already backed by FOURSQUARE_API_KEY env var).
+    Falls back to os.getenv("FOURSQUARE_API_KEY") for compatibility.
+    """
+    try:
+        from app.core.config import get_settings
+        key = get_settings().foursquare_api_key
+        if key:
+            return key.strip()
+    except Exception:
+        pass
     return os.getenv("FOURSQUARE_API_KEY", "").strip()

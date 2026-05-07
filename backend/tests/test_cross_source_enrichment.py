@@ -991,3 +991,115 @@ class TestScoreProviderMatch:
 
     def test_normalize_match_name_lowercases(self):
         assert _normalize_match_name("AVIARY") == "aviary"
+
+
+# ---------------------------------------------------------------------------
+# Fix #1: Non-blocking executor lifecycle
+# ---------------------------------------------------------------------------
+
+class TestNonBlockingExecutorLifecycle:
+    """Verify that a hung provider call does not block run_cross_source_enrichment
+    beyond the fanout budget. This test would fail with the old 'with ThreadPoolExecutor'
+    pattern (shutdown(wait=True) would block until the hung thread finishes).
+    """
+
+    def test_hung_provider_does_not_block_beyond_budget(self):
+        """Non-blocking executor: hung provider call must not delay card return."""
+        import threading
+        import time as _time
+        import urllib.error as _uerr
+
+        unblock = threading.Event()
+
+        def _slow_urlopen(*args, **kwargs):
+            # Simulate a provider that hangs until told to unblock.
+            # With the old `with` lifecycle this would block shutdown for 15s.
+            unblock.wait(timeout=15)
+            raise _uerr.URLError("simulated_slow")
+
+        entity = _FakeEntity(name="Some Place")
+        # 500ms budget → fanout timeout ≈ 0.4s
+        deadline = _FakeDeadline(remaining=500)
+
+        t0 = _time.monotonic()
+        with patch("urllib.request.urlopen", side_effect=_slow_urlopen):
+            result = run_cross_source_enrichment(
+                [entity],
+                deadline=deadline,
+                yelp_key="fake",
+                fsq_key="",
+            )
+        elapsed = _time.monotonic() - t0
+
+        # With explicit non-blocking shutdown, must return well within 2s
+        # even though the hung thread hasn't finished.
+        assert elapsed < 2.5, (
+            f"run_cross_source_enrichment blocked for {elapsed:.2f}s — "
+            "executor lifecycle is not non-blocking"
+        )
+        assert result is not None  # result always returned
+
+        # Allow background thread to exit cleanly during teardown
+        unblock.set()
+
+
+# ---------------------------------------------------------------------------
+# Fix #2: Settings-backed API key retrieval
+# ---------------------------------------------------------------------------
+
+class TestSettingsBackedKeyRetrieval:
+    """Verify get_yelp_key() / get_foursquare_key() read from settings config first."""
+
+    def test_get_yelp_key_prefers_settings(self):
+        """get_yelp_key() returns settings.yelp_api_key when settings is importable."""
+        from app.concierge.cross_source_enrichment import get_yelp_key
+        mock_settings = MagicMock()
+        mock_settings.yelp_api_key = "settings-yelp-key"
+
+        with patch("app.core.config.get_settings", return_value=mock_settings):
+            result = get_yelp_key()
+
+        assert result == "settings-yelp-key"
+
+    def test_get_foursquare_key_prefers_settings(self):
+        """get_foursquare_key() returns settings.foursquare_api_key when available."""
+        from app.concierge.cross_source_enrichment import get_foursquare_key
+        mock_settings = MagicMock()
+        mock_settings.foursquare_api_key = "settings-fsq-key"
+
+        with patch("app.core.config.get_settings", return_value=mock_settings):
+            result = get_foursquare_key()
+
+        assert result == "settings-fsq-key"
+
+    def test_get_yelp_key_falls_back_to_env(self, monkeypatch):
+        """When settings import fails, get_yelp_key() falls back to os.getenv."""
+        from app.concierge.cross_source_enrichment import get_yelp_key
+        monkeypatch.setenv("YELP_API_KEY", "env-yelp-key")
+
+        with patch("app.core.config.get_settings", side_effect=RuntimeError("unavailable")):
+            result = get_yelp_key()
+
+        assert result == "env-yelp-key"
+
+    def test_get_foursquare_key_falls_back_to_env(self, monkeypatch):
+        """When settings import fails, get_foursquare_key() falls back to os.getenv."""
+        from app.concierge.cross_source_enrichment import get_foursquare_key
+        monkeypatch.setenv("FOURSQUARE_API_KEY", "env-fsq-key")
+
+        with patch("app.core.config.get_settings", side_effect=RuntimeError("unavailable")):
+            result = get_foursquare_key()
+
+        assert result == "env-fsq-key"
+
+    def test_get_yelp_key_empty_settings_falls_back_to_env(self, monkeypatch):
+        """Empty settings key → fall through to env var."""
+        from app.concierge.cross_source_enrichment import get_yelp_key
+        monkeypatch.setenv("YELP_API_KEY", "env-fallback-yelp")
+        mock_settings = MagicMock()
+        mock_settings.yelp_api_key = ""  # empty in settings
+
+        with patch("app.core.config.get_settings", return_value=mock_settings):
+            result = get_yelp_key()
+
+        assert result == "env-fallback-yelp"
