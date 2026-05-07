@@ -3,8 +3,9 @@
 PR #259: Normalizes available evidence into compact, typed dossiers for use by
 the future card-role writer and set-level reviewer (PR #260+).
 
-This PR builds and logs the dossier contract. It does not yet change note
-generation or card roles — those are PR #260+.
+PR #275 (Cross-Source Evidence Enrichment v1): Extends dossier building to merge
+structured EnrichmentAtoms from Yelp/Foursquare into provider_evidence and
+review_themes. Google remains canonical; Yelp/Foursquare are enrichment only.
 
 Architecture invariants:
 - Dossier is internal reasoning evidence only. NEVER expose internal_evidence_gaps
@@ -13,8 +14,10 @@ Architecture invariants:
   editorial text, review snippets). Formatted_address containing "Riverwalk" does
   NOT populate the view_patio_waterfront theme; it is listing context only.
 - Source confidence reflects actual data availability — not fabricated confidence.
-- No Yelp/Foursquare/Tavily data exists in this pipeline today. Those buckets are
-  not stubbed as empty stubs (which would be misleading); they are simply absent.
+- Cross-source atoms (Yelp/Foursquare) are evidence only — they cannot mint cards,
+  override Google identity/addability/operational status, or directly create prose.
+- Only atoms with allowed_into_writer=True and conflict_status="ok" are merged
+  into provider_evidence facts visible to the set-level writer.
 - Review count is a visible card stat, not a theme signal.
 - Dossier building is CPU-only. Budget reserve is 100 ms (generous for pure Python).
 - Do not block card return on dossier completeness.
@@ -432,15 +435,20 @@ def build_place_evidence_dossier(
     rank_score: Any,
     enrichment: Optional[Any] = None,
     category: Optional[str] = None,
+    cross_source_atoms: Optional[List[Any]] = None,
 ) -> PlaceEvidenceDossier:
     """Build one PlaceEvidenceDossier for a verified ranked entity.
 
     Args:
-        entity:     Verified PlaceEntity from the critical Google path.
-        frame:      ExperienceFrame (query signals).
-        rank_score: RankScore from semantic ranker.
-        enrichment: Optional PlaceDetailsResult from non-critical enrichment.
-        category:   Derived display category (from _derive_display_category).
+        entity:              Verified PlaceEntity from the critical Google path.
+        frame:               ExperienceFrame (query signals).
+        rank_score:          RankScore from semantic ranker.
+        enrichment:          Optional PlaceDetailsResult from non-critical enrichment.
+        category:            Derived display category (from _derive_display_category).
+        cross_source_atoms:  Optional list of EnrichmentAtoms from Yelp/Foursquare
+                             (PR #275). Only atoms with allowed_into_writer=True and
+                             conflict_status="ok" are merged. Google identity,
+                             addability, and operational status are never overridden.
 
     Returns:
         PlaceEvidenceDossier with all available evidence structured.
@@ -547,11 +555,48 @@ def build_place_evidence_dossier(
     # ── Evidence gaps (internal — never surface as prose) ────────────────────
     internal_evidence_gaps = _build_evidence_gaps(entity, enrichment)
 
+    # ── Cross-source enrichment atoms (PR #275: Yelp / Foursquare) ────────────
+    # Merge accepted, non-conflicting atoms into provider_evidence as structured
+    # facts. Only atoms with allowed_into_writer=True and conflict_status="ok"
+    # are added. Google identity/addability/operational status is never touched.
+    _atoms = cross_source_atoms or []
+    _cs_facts_by_provider: Dict[str, List[str]] = {}
+    _cs_conflict_count: int = 0
+    for atom in _atoms:
+        # Double-check — only allowed, non-conflicting atoms enter provider_evidence
+        if not getattr(atom, "allowed_into_writer", False):
+            continue
+        if getattr(atom, "conflict_status", "ok") not in ("ok",):
+            _cs_conflict_count += 1
+            continue
+        provider = getattr(atom, "source_provider", "unknown")
+        nv = getattr(atom, "normalized_value", "")
+        if nv:
+            if provider not in _cs_facts_by_provider:
+                _cs_facts_by_provider[provider] = []
+            _cs_facts_by_provider[provider].append(nv)
+
+    for provider_name, facts in _cs_facts_by_provider.items():
+        if facts:
+            provider_evidence.append(
+                ProviderEvidenceItem(source=provider_name, facts=facts)
+            )
+
+    if _cs_conflict_count > 0:
+        logger.info(
+            "evidence_dossier: cross_source_conflict_discarded "
+            "name=%s count=%d",
+            entity.name, _cs_conflict_count,
+        )
+
     # ── Telemetry counts ──────────────────────────────────────────────────────
     evidence_source_counts: Dict[str, int] = {
         "google_places": len(google_facts),
         "google_place_details": len(details_facts),
     }
+    for prov, facts in _cs_facts_by_provider.items():
+        evidence_source_counts[prov] = len(facts)
+
     theme_counts = review_themes.as_counts_dict()
 
     return PlaceEvidenceDossier(
@@ -581,6 +626,7 @@ def build_dossiers_for_ranked_cards(
     deadline: Optional[Any] = None,
     top_n: int = 6,
     category_fn: Optional[Callable[[Any], str]] = None,
+    cross_source_map: Optional[Dict[str, List[Any]]] = None,
 ) -> List[PlaceEvidenceDossier]:
     """Build PlaceEvidenceDossier for the top-N ranked cards.
 
@@ -591,12 +637,14 @@ def build_dossiers_for_ranked_cards(
     Never blocks card return. Any per-dossier exception is caught and logged.
 
     Args:
-        ranked:        List of (PlaceEntity, RankScore) in ranked order.
-        frame:         ExperienceFrame for query signals.
-        enrichment_map: place_id → PlaceDetailsResult from non-critical enrichment.
-        deadline:      Optional RequestDeadline. None = no budget check.
-        top_n:         Maximum dossiers to build (default 6).
-        category_fn:   Optional callable(entity) → display category string.
+        ranked:           List of (PlaceEntity, RankScore) in ranked order.
+        frame:            ExperienceFrame for query signals.
+        enrichment_map:   place_id → PlaceDetailsResult from non-critical enrichment.
+        deadline:         Optional RequestDeadline. None = no budget check.
+        top_n:            Maximum dossiers to build (default 6).
+        category_fn:      Optional callable(entity) → display category string.
+        cross_source_map: Optional place_id → List[EnrichmentAtom] from PR #275
+                          cross-source enrichment. None = no cross-source enrichment.
 
     Returns:
         List of PlaceEvidenceDossier in ranked order, at most top_n entries.
@@ -611,17 +659,21 @@ def build_dossiers_for_ranked_cards(
         and deadline.remaining_ms() < DOSSIER_BUDGET_RESERVE_MS
     )
 
+    _cross_map: Dict[str, List[Any]] = cross_source_map or {}
+
     dossiers: List[PlaceEvidenceDossier] = []
     for entity, rank_score in targets:
         try:
             enrichment = None if low_budget else enrichment_map.get(entity.place_id)
             category = category_fn(entity) if category_fn is not None else None
+            cs_atoms = _cross_map.get(entity.place_id)
             dossier = build_place_evidence_dossier(
                 entity=entity,
                 frame=frame,
                 rank_score=rank_score,
                 enrichment=enrichment,
                 category=category,
+                cross_source_atoms=cs_atoms,
             )
             dossiers.append(dossier)
         except Exception as exc:  # noqa: BLE001

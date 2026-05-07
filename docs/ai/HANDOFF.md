@@ -1,6 +1,134 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-07) — PR #274: AI Concierge Critical Path Hardening v1 (Level 2 latency architecture fix)
+## Last change (2026-05-07) — PR #275: Cross-Source Evidence Enrichment v1 (Level 2 product-quality architecture improvement)
+
+**Status: OPEN** — Backend-only. No SQL. No UI changes. No new endpoints. No cache. No Tavily/Serper/editorial.
+
+### Root cause / architecture gap fixed
+
+AI Concierge v2 semantic card intelligence is fast and mostly accurate, but notes and categories remain limited by thin Google-only evidence. There was no structured spine to bring in Yelp/Foursquare category specificity, price, and attribute evidence for already Google-verified cards. This PR builds the provider-agnostic enrichment spine and wires in Yelp + Foursquare as the first providers.
+
+### What was built
+
+**NEW `backend/app/concierge/cross_source_enrichment.py`:**
+- `EnrichmentAtom` typed dataclass: `source_provider`, `evidence_type`, `normalized_value`, `confidence`, `provenance`, `allowed_into_writer`, `conflict_status`.
+- `ProviderMatchScore` typed dataclass with composite scoring.
+- `score_provider_match()` — reusable provider match scorer using SequenceMatcher name similarity (not substring-only), haversine distance, phone match, and domain match. Hard name gate at 0.50; composite threshold at 0.65.
+- `_fetch_yelp_atoms()` — Yelp Fusion API search by name+lat/lng; extracts category, price, rating_context atoms.
+- `_fetch_foursquare_atoms()` — Foursquare Places API v3 search by name+lat/lng; extracts category, price, popularity_context atoms.
+- `run_cross_source_enrichment()` — deadline-bounded parallel enrichment for up to `budget_n` Google-verified cards. Uses ThreadPoolExecutor. Never raises. Returns `CrossSourceEnrichmentResult` with `atoms_by_place_id` and `CrossSourceTelemetry`.
+- `_check_category_conflict()` — category conflict detection by venue-type group. Conflicting atoms are logged and blocked.
+
+**MODIFIED `backend/app/concierge/evidence_dossier.py`:**
+- `build_place_evidence_dossier()` — new `cross_source_atoms` param (Optional[List[EnrichmentAtom]]). Merges accepted atoms (allowed_into_writer=True, conflict_status="ok") into `provider_evidence` as typed `ProviderEvidenceItem` entries grouped by provider.
+- `build_dossiers_for_ranked_cards()` — new `cross_source_map` param (Optional[Dict[str, List[EnrichmentAtom]]]). Passes atoms to each card's dossier build.
+
+**MODIFIED `backend/app/concierge/semantic_retrieval.py`:**
+- Added Step 5.55 between Google Place Details enrichment (Step 5.5) and Evidence Dossier build (Step 5.6).
+- Calls `run_cross_source_enrichment()` with Yelp/FSQ keys from env, deadline, and `first_card_limit` budget.
+- Passes `cross_source_result.atoms_by_place_id` to `build_dossiers_for_ranked_cards()`.
+- Adds `cross_source_enrichment_telemetry=cross_source_tel` to `_log_semantic_turn()`.
+- `_log_semantic_turn()` signature extended with `cross_source_enrichment_telemetry` param.
+- Telemetry emitted as `semantic_retrieval_v1.cross_source_enrichment_telemetry` log line.
+
+**NEW `backend/tests/test_cross_source_enrichment.py`:** 41 tests covering all 10 required scenarios.
+
+### Provider behavior implemented
+
+- **Yelp**: Yelp Fusion `/v3/businesses/search` by name+lat/lng. Extracts: categories (taxonomy), price ($/$$/$$$/$$$$), rating_context (internal only). `rating_context` atoms have `allowed_into_writer=False` — never create visible prose. Yelp cannot mint cards, override Google status, or override addability.
+- **Foursquare**: Foursquare Places API v3 `/v3/places/search` by name+lat/lng. Extracts: categories (taxonomy), price (1–4 → human label), popularity_context (internal only). `popularity_context` atoms have `allowed_into_writer=False`. Foursquare cannot mint cards, override Google status, or override addability.
+
+### Trust-gate invariants preserved
+
+- Only Google-verified entities produce dossiers. `atoms_by_place_id` keyed only by input entity place_ids.
+- Conflicting category atoms (e.g., Yelp says "Shopping" for a Google restaurant) are logged with `conflict_status="conflict_logged"` and `allowed_into_writer=False`.
+- `allowed_into_writer=False` atoms are excluded from `provider_evidence` in dossiers.
+- `set_level_writer.py` unchanged — it already iterates over all `provider_evidence` entries, so yelp/foursquare facts appear naturally.
+- `fallback_note_visible_count=0` invariant untouched.
+- No deterministic note templates added.
+- No unsupported claims added.
+
+### Performance / deadline behavior
+
+- Step 5.55 is skipped entirely when remaining budget < 300ms (`CROSS_SOURCE_BUDGET_RESERVE_MS`).
+- Per-provider HTTP timeout calculated from remaining budget / card count, capped at 1.5s.
+- ThreadPoolExecutor runs all card enrichment in parallel (max 4 workers).
+- Fanout timeout bounded by remaining deadline budget - 0.1s.
+- No enrichment result blocks card return.
+- Both providers run sequentially within each card task (2 HTTP calls per card), all cards run in parallel.
+- Target: enrichment completes in ~1.5s wall time when providers are responsive; skipped entirely when budget is tight.
+
+### Tests run and results
+
+- `test_cross_source_enrichment.py`: **41/41 PASSED** (10 required scenarios + supplementary unit tests)
+- `test_set_level_writer.py` + `test_concierge.py` + `test_semantic_retrieval_v1.py` + `test_sla_card_cap.py` + `test_evidence_dossier.py` + `test_concierge_critical_path_hardening.py` + `test_concierge_logging_schema_tolerance.py`: **547/547 PASSED**
+- Full suite (excluding pre-existing): **2100/2100 PASSED**
+- Pre-existing failures: 20 in `test_restaurant_search_diagnostics.py` (missing `httpx` module — confirmed pre-existing, unchanged)
+
+### Telemetry fields added
+
+Log line: `semantic_retrieval_v1.cross_source_enrichment_telemetry`
+Fields: `cross_source_enrichment_enabled`, `cross_source_enrichment_attempted`, `cross_source_skipped_reason`, `yelp_attempted`, `yelp_accepted`, `yelp_discarded_low_confidence`, `yelp_conflict_downgrade`, `yelp_errors`, `yelp_timeouts`, `foursquare_attempted`, `foursquare_accepted`, `foursquare_discarded_low_confidence`, `foursquare_conflict_downgrade`, `foursquare_errors`, `foursquare_timeouts`, `evidence_atom_count_before`, `evidence_atom_count_after`, `atoms_by_provider`, `atoms_by_type`.
+
+### Files changed
+
+1. **`backend/app/concierge/cross_source_enrichment.py`** — NEW: full enrichment spine.
+2. **`backend/app/concierge/evidence_dossier.py`** — MODIFIED: `build_place_evidence_dossier()` + `build_dossiers_for_ranked_cards()` extended with cross-source atom params.
+3. **`backend/app/concierge/semantic_retrieval.py`** — MODIFIED: Step 5.55 added; `_log_semantic_turn()` extended.
+4. **`backend/tests/test_cross_source_enrichment.py`** — NEW: 41 tests.
+5. **`docs/ai/HANDOFF.md`** — MODIFIED: this entry.
+
+### Self-audit
+
+| Acceptance criterion | Status |
+|---|---|
+| Backend-only | ✓ |
+| No SQL | ✓ |
+| No UI changes | ✓ |
+| No cache | ✓ |
+| No Tavily/Serper/editorial | ✓ |
+| No deterministic note templates | ✓ |
+| No fallback visible notes | ✓ |
+| No unsupported claims | ✓ |
+| Google identity/addability/operational never overridden | ✓ |
+| Yelp/FSQ cannot mint cards | ✓ tests prove it |
+| Low-confidence matches discarded | ✓ |
+| Conflicts logged/downgraded/discarded | ✓ |
+| Cards return if enrichment fails/times out | ✓ |
+| Deadline-bounded enrichment | ✓ 300ms reserve gate |
+| Existing card contract preserved | ✓ |
+| Supabase SQL required | No |
+| New env vars | No (uses existing YELP_API_KEY / FOURSQUARE_API_KEY) |
+| New LLM calls | No |
+| HANDOFF.md updated | ✓ |
+
+### Risks and limitations
+
+- Yelp/Foursquare APIs are live HTTP calls — provider downtime or rate limits silently degrade enrichment (cards still return).
+- Composite match threshold (0.65) is conservative; may occasionally reject valid matches for venues with abbreviated names in one source. Tunable via telemetry.
+- No venue deduplication between Yelp and Foursquare (both may return category facts for same place — downstream writer sees both, picks the most relevant).
+- Performance: adds up to ~1.5s per turn when providers are responsive and budget allows. Gate on `cross_source_skipped_reason` telemetry; if providers slow p90 above 5s, lower `budget_n` or `_DEFAULT_PROVIDER_TIMEOUT`.
+
+### Out of scope
+
+- Tavily/Serper/editorial enrichment (next PR after validation).
+- UI changes.
+- SQL/migrations.
+- Cache.
+- New visible diagnostics.
+- Prose hardening/templates.
+
+### Recommended next PR
+
+Tavily/Serper editorial corroboration v1 — only after Railway logs confirm `cross_source_enrichment_attempted=True`, `yelp_accepted > 0 OR foursquare_accepted > 0`, and p90 route latency remains below 5–6s. Spine from this PR is reusable; new providers just add a new `_fetch_*_atoms()` function and hook into `run_cross_source_enrichment()`.
+
+### Note: no user UI validation requested
+
+Backend evidence in this PR summary. Visible category specificity and note quality improvement is expected when providers match, but no UI validation or A/B measurement is expected from this PR.
+
+---
+
+## Previous change (2026-05-07) — PR #274: AI Concierge Critical Path Hardening v1 (Level 2 latency architecture fix)
 
 **Status: OPEN** — Backend-only. No SQL. No UI changes. No new endpoints. No cache implemented.
 
