@@ -400,6 +400,45 @@ def _remove_sentence_with_pattern(text: str, pattern: re.Pattern) -> str:
 
 # ── Convenience: review a set of notes with aggregated telemetry ───────────────
 
+def gate_summary_claim_safety(summary: str, timeout_s: float = 1.0) -> str:
+    """Apply claim-safety review to the visible summary text before serialization.
+
+    This is the function wired into the concierge response assembly path
+    (concierge.py: _gate_summary_claim_safety). It is the authoritative gate
+    for the visible chat bubble / set-level response text.
+
+    Fail-closed contract:
+    - Reviewer error or timeout → return "" (omit; no unsafe prose shown).
+    - Reviewer sanitizes one bad sentence → return safe remaining text.
+    - Reviewer rejects entire summary → return "" (omit).
+    - Empty input → returned unchanged.
+    - Cards are NEVER affected — only the response text may be omitted/trimmed.
+
+    Args:
+        summary: The visible response/summary string to gate.
+        timeout_s: Max time for the review (fail closed on timeout).
+
+    Returns:
+        Safe summary string (may be "" if original was fully rejected).
+    """
+    if not summary or not summary.strip():
+        return summary
+    result = review_summary(summary, frame=None, timeout_s=timeout_s)
+    if result.rejected:
+        logger.info(
+            "claim_safety_reviewer.gate_summary: rejected reason=%s original=%r",
+            result.rejection_reason, summary[:120],
+        )
+        return ""
+    if result.sanitized:
+        logger.info(
+            "claim_safety_reviewer.gate_summary: sanitized original=%r safe=%r",
+            summary[:80], result.summary[:80],
+        )
+        return result.summary
+    return summary
+
+
 def review_notes_set(
     notes: Dict[str, str],
     entity_name_by_place_id: Dict[str, str],

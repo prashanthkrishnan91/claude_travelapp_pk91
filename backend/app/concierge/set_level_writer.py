@@ -877,9 +877,30 @@ def write_set_notes(
         except Exception as rev_exc:
             logger.warning(
                 "set_level_writer: reviewer_gate_error error=%s — "
-                "notes visible as-is (fail open for already-validated notes)",
+                "hiding all validated notes (fail closed for text, cards kept)",
                 rev_exc,
             )
+            # Fail closed: hide every validated note that was queued for review.
+            # Cards are NOT dropped — only text visibility is affected.
+            _hidden_on_error = 0
+            for _note_obj in notes_by_place_id.values():
+                if _note_obj.validated:
+                    _note_obj.validated = False
+                    _note_obj.note = ""
+                    _note_obj.source = SOURCE_OMITTED
+                    _note_obj.rejection_reason = "reviewer_error:fail_closed"
+                    _hidden_on_error += 1
+            visible_count = 0
+            hidden_count = len(notes_by_place_id)
+            reviewer_telemetry_dict = {
+                "reviewer_used": True,
+                "reviewer_timed_out": True,
+                "reviewer_rejected_note_count": 0,
+                "reviewer_hidden_note_count": _hidden_on_error,
+                "reviewer_error": str(rev_exc)[:200],
+                "fallback_note_visible_count": 0,   # invariant
+                "deterministic_visible_count": 0,   # invariant
+            }
 
         elapsed_ms = int((time.monotonic() - t_start) * 1000)
         logger.info(

@@ -138,6 +138,32 @@ def _should_preserve_reason_text(*, reason_source: Optional[str], display_why_so
     return source == "deterministic_safe_v1"
 
 
+def _gate_summary_claim_safety(summary: str) -> str:
+    """Apply claim-safety review to visible summary text before serialization.
+
+    PR #267: Thin wrapper that delegates to claim_safety_reviewer.gate_summary_claim_safety().
+    Wired into the concierge response assembly path before ConciergeSearchResponse is built.
+    Fail-closed: any reviewer error or timeout omits the summary rather than showing unsafe prose.
+    Cards are NEVER affected — only the response text string may be trimmed/omitted.
+    """
+    try:
+        from app.concierge.claim_safety_reviewer import gate_summary_claim_safety
+        result = gate_summary_claim_safety(summary)
+        if result != summary:
+            logger.info(
+                "concierge.summary_reviewer: summary changed "
+                "original_len=%d result_len=%d",
+                len(summary), len(result),
+            )
+        return result
+    except Exception as exc:
+        logger.warning(
+            "concierge.summary_reviewer: error=%s — omitting summary (fail closed)",
+            exc,
+        )
+        return ""
+
+
 def _kw_pattern(*keywords: str) -> re.Pattern:
     """Compile keyword alternatives with word boundaries."""
     parts = sorted(keywords, key=len, reverse=True)
@@ -468,6 +494,12 @@ class ConciergeService:
             attractions=attractions,
             hotels=hotels,
         )
+        # PR #267 claim-safety gate: review visible summary before serialization.
+        # Must run after all summary processing; before ConciergeSearchResponse.
+        # Fail closed: reviewer timeout or error → omit summary, never fail open.
+        # Cards are unaffected — only the response text may be sanitized/omitted.
+        if retrieval_used:
+            concise_response = _gate_summary_claim_safety(concise_response)
 
         source_status = self._derive_response_source_status(
             initial_status=source_status,
