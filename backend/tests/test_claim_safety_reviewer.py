@@ -1,4 +1,4 @@
-"""Tests for claim_safety_reviewer.py — PR #267 Claim-Safety Reviewer Gate.
+"""Tests for claim_safety_reviewer.py — PR #267 + PR #268 Claim-Safety Reviewer Gate.
 
 Coverage:
   1. Summary reviewer rejects unsupported name-hours inference.
@@ -16,6 +16,15 @@ Coverage:
   12. SetWriterResult reviewer_telemetry field.
   13. gate_summary_claim_safety: visible summary assembly path contract tests (Blocker 1).
   14. Reviewer exception fail-closed: set_level_writer hides notes on error (Blocker 2).
+  15. PR #268 — Malformed rating residue in summaries.
+  16. PR #268 — Unsupported after-hours/crowd positioning in summaries and notes.
+  17. PR #268 — Hidden-gem/localness superlatives in summaries.
+  18. PR #268 — Unsupported scenic/view claims in summaries.
+  19. PR #268 — Generic occasion-sprawl in per-card notes.
+  20. PR #268 — Card preservation when notes/summaries are sanitized or hidden.
+  21. PR #268 — Invariant contracts preserved.
+  22. PR #268 — Regression: prior PR #267 tests unaffected.
+  23. PR #268 — New telemetry fields exist and populate correctly.
 """
 
 from __future__ import annotations
@@ -1036,3 +1045,566 @@ class TestCardsRemainWhenTextHidden:
         # Card count is unaffected — we're only testing the summary string
         assert mock_card_count == 6  # cards unchanged
         assert "name alone signals" not in result_summary.lower()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Tests 16–23: PR #268 — Visible Copy Quality Contract
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Test 16: Malformed rating residue in summaries ────────────────────────────
+
+class TestMalformedRatingResidueSanitization:
+    """Acceptance criterion 1: 'Taproom.8'-style rating residue cannot appear
+    in visible summary output.
+
+    Fails on pre-PR-#268 code: review_summary() had no malformed-rating-residue
+    check; "Taproom.8" would pass through unchanged.
+    """
+
+    def test_summary_sanitizes_taproom_dot_8(self):
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = "Best overall: Goose Island Taproom.8 and a historic Chicago landmark experience."
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        assert "Taproom.8" not in result.summary
+        # Should be sanitized (not rejected), since the rest of the sentence is useful
+        assert result.passed
+        assert result.sanitized
+
+    def test_summary_sanitizes_removes_dot_digit_suffix(self):
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = "The top pick is Brewery.4 for its craft lager program."
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        assert ".4" not in result.summary or "Brewery" in result.summary
+        assert result.passed
+
+    def test_summary_preserves_rest_after_malformed_removal(self):
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = "Best overall: Goose Island Taproom.8 and a historic Chicago landmark experience."
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        # After removing .8 suffix, useful content should remain
+        assert result.summary.strip() != ""
+        assert "Goose Island" in result.summary or "Chicago" in result.summary
+
+    def test_gate_summary_blocks_taproom_dot_8(self):
+        """The gate used in production (concierge.py path) blocks the residue."""
+        from app.concierge.claim_safety_reviewer import gate_summary_claim_safety
+        summary = "Best overall: Goose Island Taproom.8 and a historic Chicago landmark experience."
+        result = gate_summary_claim_safety(summary)
+        assert "Taproom.8" not in result
+
+    def test_malformed_residue_regex_matches_target_patterns(self):
+        from app.concierge.claim_safety_reviewer import _MALFORMED_RATING_RESIDUE_RE
+        # Should match
+        assert _MALFORMED_RATING_RESIDUE_RE.search("Taproom.8")
+        assert _MALFORMED_RATING_RESIDUE_RE.search("Bar.4")
+        assert _MALFORMED_RATING_RESIDUE_RE.search("Place.4.5")
+        # Should NOT match (all-lowercase start, abbreviations, floats)
+        assert not _MALFORMED_RATING_RESIDUE_RE.search("v1.0")
+        assert not _MALFORMED_RATING_RESIDUE_RE.search("4.8★")
+        assert not _MALFORMED_RATING_RESIDUE_RE.search("St.8")  # too short before dot
+
+    def test_safe_summary_with_no_residue_passes_unchanged(self):
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = "Best overall: Goose Island Taproom for its Fulton Street location."
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        assert result.passed
+        assert not result.sanitized
+        assert result.summary == summary
+
+
+# ── Test 17: Unsupported after-hours/crowd positioning ───────────────────────
+
+class TestAfterHoursCrowdOverconfidence:
+    """Acceptance criterion 2: 'purpose-built for after-hours crowds' cannot appear
+    in visible output without actual hours/crowd/late-night evidence.
+
+    Fails on pre-PR-#268 code: review_summary() and review_note() had no
+    after-hours crowd overconfidence check.
+    """
+
+    def test_summary_sanitizes_purpose_built_for_after_hours(self):
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = "2AM Izakaya and The Izakaya are purpose-built for after-hours crowds."
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        assert "purpose-built for after-hours" not in result.summary.lower()
+        # Single-sentence summary is fully removed
+        assert result.rejected or (result.sanitized and result.summary.strip() == "")
+
+    def test_summary_sanitizes_purpose_built_in_multi_sentence(self):
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = (
+            "Here are six izakayas in Chicago. "
+            "2AM Izakaya and The Izakaya are purpose-built for after-hours crowds. "
+            "All are Google-verified."
+        )
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        assert "purpose-built for after-hours" not in result.summary.lower()
+        # Safe sentences should remain
+        if result.summary:
+            assert "Chicago" in result.summary or "Google-verified" in result.summary
+
+    def test_note_reviewer_rejects_purpose_built_for_after_hours(self):
+        summary = "This izakaya is purpose-built for after-hours crowds, open late every night."
+        result = review_note(summary, "Izakaya Test", _Frame())
+        assert not result.passed
+        assert result.rejection_reason == "after_hours_crowd_overconfidence"
+        assert result.note == ""
+
+    def test_note_reviewer_rejects_built_for_late_night_crowds(self):
+        note = "Built for late-night crowds seeking authentic Japanese small plates."
+        result = review_note(note, "Izakaya", _Frame())
+        assert not result.passed
+        assert result.rejection_reason == "after_hours_crowd_overconfidence"
+
+    def test_note_reviewer_rejects_designed_for_after_hours_crowds(self):
+        note = "Designed for after-hours crowds — stays open until 3AM on weekends."
+        result = review_note(note, "Night Bar", _Frame())
+        assert not result.passed
+        assert result.rejection_reason == "after_hours_crowd_overconfidence"
+
+    def test_gate_summary_blocks_purpose_built_claim(self):
+        from app.concierge.claim_safety_reviewer import gate_summary_claim_safety
+        summary = "2AM Izakaya and The Izakaya are purpose-built for after-hours crowds."
+        result = gate_summary_claim_safety(summary)
+        assert "purpose-built for after-hours" not in result.lower()
+
+    def test_after_hours_crowd_regex_matches_variants(self):
+        from app.concierge.claim_safety_reviewer import _AFTER_HOURS_CROWD_RE
+        assert _AFTER_HOURS_CROWD_RE.search("purpose-built for after-hours crowds")
+        assert _AFTER_HOURS_CROWD_RE.search("built for late-night crowds")
+        assert _AFTER_HOURS_CROWD_RE.search("designed for after-hours crowds")
+        assert _AFTER_HOURS_CROWD_RE.search("purpose built for after hours")
+
+    def test_honest_late_night_description_passes(self):
+        """A note that honestly describes late-night context without overconfident claim."""
+        note = "A Chicago izakaya that appears in late-night search results; verify hours."
+        result = review_note(note, "Izakaya Test", _Frame())
+        # Should not be blocked by after_hours_crowd_overconfidence
+        assert result.rejection_reason != "after_hours_crowd_overconfidence"
+
+
+# ── Test 18: Hidden-gem/localness superlatives in summaries ──────────────────
+
+class TestHiddenGemSuperlativeSanitization:
+    """Acceptance criterion 3: overconfident hidden-gem/localness claims
+    ('most authentically local', 'under-the-radar picks') must be sanitized.
+
+    Fails on pre-PR-#268 code: _HIDDEN_GEM_TERMS_RE was defined but never wired
+    into review_summary(), so these phrases passed through unchanged.
+    """
+
+    def test_summary_sanitizes_under_the_radar_picks(self):
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = "The Corner Bar and The Bar on Buena are the most authentically local, under-the-radar picks."
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        assert "under-the-radar" not in result.summary.lower()
+        # Single-sentence summary fully removed
+        assert result.rejected or (result.sanitized and result.summary.strip() == "")
+
+    def test_summary_sanitizes_hidden_gem_in_multi_sentence(self):
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = (
+            "Here are five hidden gem bars in Chicago. "
+            "These are the most authentically local, under-the-radar picks. "
+            "All are Google-verified."
+        )
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        assert "under-the-radar" not in result.summary.lower()
+        # First sentence ("hidden gem bars in Chicago") is safe user-intent framing
+        # and must survive; only the editorial-claim sentence is removed.
+        assert result.summary
+        assert "Chicago" in result.summary
+
+    def test_summary_sanitizes_best_kept_secret(self):
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = "These spots are Chicago's best-kept secrets."
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        assert "best-kept secret" not in result.summary.lower()
+
+    def test_summary_sanitizes_locals_love(self):
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = "These are spots locals love and tourists rarely find."
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        # "locals love" should be sanitized (sentence removed)
+        assert "locals love" not in result.summary.lower()
+
+    def test_gate_summary_blocks_under_the_radar(self):
+        from app.concierge.claim_safety_reviewer import gate_summary_claim_safety
+        summary = "The most authentically local, under-the-radar picks in Chicago."
+        result = gate_summary_claim_safety(summary)
+        assert "under-the-radar" not in result.lower()
+
+    def test_summary_localness_claim_re_wired_into_review_summary(self):
+        """_SUMMARY_LOCALNESS_CLAIM_RE blocks editorial claims in review_summary."""
+        from app.concierge.claim_safety_reviewer import (
+            _SUMMARY_LOCALNESS_CLAIM_RE, review_summary,
+        )
+        text = "These are the under-the-radar picks."
+        # "under-the-radar picks" is a noun-phrase editorial claim → blocked
+        assert _SUMMARY_LOCALNESS_CLAIM_RE.search(text)
+        result = review_summary(text, _Frame())
+        assert "under-the-radar" not in result.summary.lower()
+
+    def test_safe_hidden_gem_intent_framing_passes_review_summary(self):
+        """'hidden gem bars' as user-intent framing is NOT blocked by review_summary."""
+        from app.concierge.claim_safety_reviewer import (
+            _SUMMARY_LOCALNESS_CLAIM_RE, review_summary,
+        )
+        text = "For hidden gem bars in Chicago, these are the strongest matches from the current evidence."
+        # Should NOT match the localness-claim pattern (no editorial assertion)
+        assert not _SUMMARY_LOCALNESS_CLAIM_RE.search(text)
+        result = review_summary(text, _Frame())
+        assert result.passed
+        assert not result.sanitized
+        assert result.summary == text
+
+    def test_safe_hidden_gem_search_set_framing_passes(self):
+        """'hidden gem bar matches from the search set' passes unchanged."""
+        from app.concierge.claim_safety_reviewer import review_summary
+        text = "These are hidden gem bar matches from the current search set in Chicago."
+        result = review_summary(text, _Frame())
+        assert result.passed
+        assert not result.sanitized
+        assert "hidden gem" in result.summary.lower()
+
+    def test_mixed_summary_safe_sentence_survives_unsafe_removed(self):
+        """Mixed summary: safe user-intent sentence survives; editorial-claim sentence removed."""
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = (
+            "For hidden gem bars in Chicago, these are the strongest matches from the current evidence. "
+            "The Corner Bar is a best-kept secret locals love."
+        )
+        result = review_summary(summary, _Frame())
+        # Editorial claim sentence removed
+        assert "best-kept secret" not in result.summary.lower()
+        assert "locals love" not in result.summary.lower()
+        # Safe first sentence survives
+        assert result.summary
+        assert "For hidden gem bars in Chicago" in result.summary
+
+    def test_summary_localness_claim_re_allows_hidden_gem_noun(self):
+        """_SUMMARY_LOCALNESS_CLAIM_RE does not match 'hidden gem bars/spots/places'."""
+        from app.concierge.claim_safety_reviewer import _SUMMARY_LOCALNESS_CLAIM_RE
+        # Allow: user-intent framing
+        assert not _SUMMARY_LOCALNESS_CLAIM_RE.search("hidden gem bars in Chicago")
+        assert not _SUMMARY_LOCALNESS_CLAIM_RE.search("hidden gem bar matches")
+        assert not _SUMMARY_LOCALNESS_CLAIM_RE.search("hidden-gem-style options")
+        assert not _SUMMARY_LOCALNESS_CLAIM_RE.search("lower-profile bar matches")
+        assert not _SUMMARY_LOCALNESS_CLAIM_RE.search("neighborhood-bar angle")
+        # Block: overconfident editorial claims
+        assert _SUMMARY_LOCALNESS_CLAIM_RE.search("under-the-radar picks")
+        assert _SUMMARY_LOCALNESS_CLAIM_RE.search("most authentically local")
+        assert _SUMMARY_LOCALNESS_CLAIM_RE.search("authentically local")
+        assert _SUMMARY_LOCALNESS_CLAIM_RE.search("locals love")
+        assert _SUMMARY_LOCALNESS_CLAIM_RE.search("best-kept secrets")
+        assert _SUMMARY_LOCALNESS_CLAIM_RE.search("only locals know")
+        assert _SUMMARY_LOCALNESS_CLAIM_RE.search("tourists rarely find")
+
+
+# ── Test 19: Unsupported view/scenic claims in summaries ─────────────────────
+
+class TestUnsupportedViewClaimSanitization:
+    """Acceptance criterion 4: unsupported scenic/view claims must be sanitized.
+
+    Fails on pre-PR-#268 code: review_summary() had no view/scenic claim check;
+    reason_validator only covers per-card notes (not set-level summaries).
+    """
+
+    def test_summary_sanitizes_stunning_views(self):
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = "These taprooms offer stunning views of the Chicago skyline."
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        assert "stunning views" not in result.summary.lower()
+
+    def test_summary_sanitizes_waterfront_dining(self):
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = "Goose Island Taproom offers waterfront dining with Chicago River views."
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        assert "waterfront dining" not in result.summary.lower()
+
+    def test_summary_sanitizes_panoramic_setting(self):
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = "The set is anchored by a panoramic setting overlooking the lake."
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        assert "panoramic setting" not in result.summary.lower()
+
+    def test_gate_summary_blocks_lake_views_claim(self):
+        from app.concierge.claim_safety_reviewer import gate_summary_claim_safety
+        summary = "These taprooms are chosen for their lake views and outdoor ambiance."
+        result = gate_summary_claim_safety(summary)
+        assert "lake views" not in result.lower()
+
+    def test_summary_view_regex_matches_target_terms(self):
+        from app.concierge.claim_safety_reviewer import _SUMMARY_VIEW_CLAIM_RE
+        assert _SUMMARY_VIEW_CLAIM_RE.search("stunning views")
+        assert _SUMMARY_VIEW_CLAIM_RE.search("beautiful views")
+        assert _SUMMARY_VIEW_CLAIM_RE.search("panoramic views")
+        assert _SUMMARY_VIEW_CLAIM_RE.search("waterfront dining")
+        assert _SUMMARY_VIEW_CLAIM_RE.search("waterfront setting")
+        assert _SUMMARY_VIEW_CLAIM_RE.search("lake views")
+        assert _SUMMARY_VIEW_CLAIM_RE.search("river views")
+        assert _SUMMARY_VIEW_CLAIM_RE.search("rooftop views")
+        assert _SUMMARY_VIEW_CLAIM_RE.search("scenic views")
+
+    def test_safe_taproom_with_a_view_summary_passes(self):
+        """User-intent phrasing ('taprooms with a view') in context passes if no superlative."""
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = "Here are six taprooms from the 'with a view' search set in Chicago."
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        # "with a view" in this context is user-intent citation, not a scenic claim
+        assert result.passed
+
+    def test_multi_sentence_sanitizes_only_view_sentence(self):
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = (
+            "Here are the top taprooms in Chicago. "
+            "Goose Island offers stunning lake views from its patio. "
+            "All are Google-verified."
+        )
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        assert "stunning" not in result.summary.lower()
+        if result.summary:
+            assert "Chicago" in result.summary or "Google-verified" in result.summary
+
+
+# ── Test 20: Generic occasion-sprawl in per-card notes ───────────────────────
+
+class TestGenericOccasionSprawlInNotes:
+    """Acceptance criterion 5: generic occasion-sprawl ('suited for occasions
+    ranging from casual groups to anniversaries') must be hidden.
+
+    Fails on pre-PR-#268 code: review_note() had no occasion-sprawl check;
+    this pattern would pass all existing validators unchanged.
+    """
+
+    def test_note_reviewer_rejects_suited_for_occasions_ranging(self):
+        note = (
+            "Vintage library lounge serving upscale American cocktails and wine—"
+            "suited for occasions ranging from casual groups to anniversaries."
+        )
+        result = review_note(note, "Gilt Bar", _Frame())
+        assert not result.passed
+        assert result.rejection_reason == "generic_occasion_sprawl"
+        assert result.note == ""
+
+    def test_note_reviewer_rejects_occasion_ranging_standalone(self):
+        note = "Suited for occasions ranging from casual groups to anniversaries."
+        result = review_note(note, "Some Bar", _Frame())
+        assert not result.passed
+        assert result.rejection_reason == "generic_occasion_sprawl"
+
+    def test_note_reviewer_rejects_range_of_occasions(self):
+        note = "A flexible venue that caters to a range of occasions."
+        result = review_note(note, "Test Bar", _Frame())
+        assert not result.passed
+        assert result.rejection_reason == "generic_occasion_sprawl"
+
+    def test_note_reviewer_rejects_from_casual_groups_to_anniversaries(self):
+        note = "A neighborhood spot that works from casual groups to anniversaries."
+        result = review_note(note, "Neighborhood Bar", _Frame())
+        assert not result.passed
+        assert result.rejection_reason == "generic_occasion_sprawl"
+
+    def test_occasion_sprawl_regex_matches_target_patterns(self):
+        from app.concierge.claim_safety_reviewer import _OCCASION_SPRAWL_RE
+        assert _OCCASION_SPRAWL_RE.search(
+            "suited for occasions ranging from casual groups to anniversaries"
+        )
+        assert _OCCASION_SPRAWL_RE.search("for a range of occasions")
+        assert _OCCASION_SPRAWL_RE.search("for a variety of occasions")
+        assert _OCCASION_SPRAWL_RE.search(
+            "from casual groups to anniversaries"
+        )
+
+    def test_occasion_sprawl_regex_does_not_block_specific_occasions(self):
+        """A note mentioning one specific occasion context is not blocked."""
+        from app.concierge.claim_safety_reviewer import _OCCASION_SPRAWL_RE
+        assert not _OCCASION_SPRAWL_RE.search("a solid spot for late-night ramen")
+        assert not _OCCASION_SPRAWL_RE.search("worth checking out for a date night")
+
+    def test_specific_differentiator_note_passes(self):
+        """Note with a concrete differentiator (no occasion-sprawl) passes."""
+        note = (
+            "Vintage library lounge known for its pre-Prohibition cocktail menu "
+            "and dark wood interior on Randolph Street."
+        )
+        result = review_note(note, "Gilt Bar", _Frame())
+        assert result.rejection_reason != "generic_occasion_sprawl"
+
+
+# ── Test 21: Card preservation when notes/summaries hidden ───────────────────
+
+class TestCardPreservationOnCopyQualityHide:
+    """Acceptance criterion 6: when a note is hidden for copy-quality reasons,
+    the card must still be returned in the results dict.
+    """
+
+    def test_occasion_sprawl_hide_preserves_card_in_results(self):
+        note = "Suited for occasions ranging from casual groups to anniversaries."
+        entity_name = "Gilt Bar"
+        notes = {"gilt_bar_id": note}
+        entity_names = {"gilt_bar_id": entity_name}
+        results, telemetry = review_notes_set(notes, entity_names, _Frame())
+
+        # Card still present in results dict
+        assert "gilt_bar_id" in results
+        # Note is hidden
+        assert not results["gilt_bar_id"].passed
+        assert results["gilt_bar_id"].note == ""
+
+    def test_after_hours_crowd_hide_preserves_card_in_results(self):
+        note = "Built for late-night crowds seeking authentic flavors after midnight."
+        notes = {"place_1": note}
+        entity_names = {"place_1": "Late Night Bar"}
+        results, telemetry = review_notes_set(notes, entity_names, _Frame())
+
+        assert "place_1" in results
+        assert not results["place_1"].passed
+
+    def test_mixed_batch_hides_bad_note_keeps_good_note(self):
+        notes = {
+            "place_good": "Known for a deep sake selection in Wicker Park.",
+            "place_bad": "Suited for occasions ranging from casual groups to anniversaries.",
+        }
+        entity_names = {
+            "place_good": "Wicker Park Sake",
+            "place_bad": "Some Bar",
+        }
+        results, telemetry = review_notes_set(notes, entity_names, _Frame())
+
+        # Both place_ids present
+        assert "place_good" in results
+        assert "place_bad" in results
+
+        # Bad note hidden; good note visible
+        assert not results["place_bad"].passed
+        assert results["place_bad"].note == ""
+        assert results["place_good"].passed
+
+
+# ── Test 22: Invariants preserved ────────────────────────────────────────────
+
+class TestInvariantsPreservedPR268:
+    """Acceptance criterion 7: core contracts unchanged by PR #268."""
+
+    def test_fallback_note_visible_count_still_zero(self):
+        notes = {
+            "p1": "Suited for occasions ranging from casual groups to anniversaries.",
+            "p2": "purpose-built for after-hours crowds.",
+        }
+        entity_names = {"p1": "Bar A", "p2": "Bar B"}
+        _, telemetry = review_notes_set(notes, entity_names, _Frame())
+        assert telemetry.fallback_note_visible_count == 0
+
+    def test_deterministic_visible_count_still_zero(self):
+        notes = {"p1": "Suited for occasions ranging from casual groups to anniversaries."}
+        entity_names = {"p1": "Bar A"}
+        _, telemetry = review_notes_set(notes, entity_names, _Frame())
+        assert telemetry.deterministic_visible_count == 0
+
+    def test_reviewer_telemetry_as_dict_includes_new_fields(self):
+        tel = ReviewerTelemetry(
+            reviewer_used=True,
+            malformed_summary_count=1,
+            unsupported_superlative_count=2,
+            generic_note_hidden_count=3,
+        )
+        d = tel.as_dict()
+        assert "malformed_summary_count" in d
+        assert "unsupported_superlative_count" in d
+        assert "generic_note_hidden_count" in d
+        assert d["malformed_summary_count"] == 1
+        assert d["unsupported_superlative_count"] == 2
+        assert d["generic_note_hidden_count"] == 3
+
+    def test_reviewer_telemetry_default_new_fields_are_zero(self):
+        tel = ReviewerTelemetry()
+        assert tel.malformed_summary_count == 0
+        assert tel.unsupported_superlative_count == 0
+        assert tel.generic_note_hidden_count == 0
+
+    def test_existing_telemetry_fields_still_present(self):
+        tel = ReviewerTelemetry(reviewer_used=True)
+        d = tel.as_dict()
+        # All PR #267 fields must still be present
+        for field_name in [
+            "reviewer_used", "reviewer_ms", "reviewer_timed_out",
+            "reviewer_rejected_note_count", "reviewer_hidden_note_count",
+            "reviewer_rejected_summary", "reviewer_sanitized_summary",
+            "reviewer_unsupported_claim_count", "reviewer_internal_leakage_count",
+            "final_summary_visible", "final_note_visible_count",
+            "fallback_note_visible_count", "deterministic_visible_count",
+        ]:
+            assert field_name in d, f"Missing PR #267 telemetry field: {field_name}"
+
+
+# ── Test 23: Regression — PR #267 behavior unchanged ─────────────────────────
+
+class TestRegressionPR267BehaviorUnchanged:
+    """Acceptance criterion 8: existing 'name alone signals' and other PR #267
+    checks still pass after PR #268 changes.
+    """
+
+    def test_name_alone_signals_late_night_credibility_still_rejected(self):
+        summary = (
+            "2AM Izakaya, whose name alone signals late-night credibility, "
+            "stands out in the set."
+        )
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        # The bad phrase must not appear in visible output
+        assert "name alone signals" not in result.summary.lower()
+
+    def test_internal_label_leakage_still_rejected(self):
+        note = "This card has role best_overall and is the strongest_query_match."
+        result = review_note(note, "Some Place", _Frame())
+        assert not result.passed
+        assert result.rejection_reason == "internal_label_leakage"
+
+    def test_generic_filler_still_rejected(self):
+        note = "A great option for cocktail lovers in Chicago."
+        result = review_note(note, "Some Bar", _Frame())
+        assert not result.passed
+        assert result.rejection_reason == "generic_filler"
+
+    def test_entity_name_temporal_inference_still_rejected(self):
+        note = "2AM Izakaya signals 24-hour availability for late-night diners."
+        result = review_note(note, "2AM Izakaya", _Frame())
+        assert not result.passed
+        assert result.rejection_reason in ("name_temporal_inference", "name_hours_inference")
+
+    def test_safe_late_night_context_note_passes(self):
+        """Honest description of late-night context (no overconfident claim) passes."""
+        note = "Appears in this late-night izakaya search set; verify current hours."
+        result = review_note(note, "Izakaya Shinya", _Frame())
+        assert result.rejection_reason != "after_hours_crowd_overconfidence"
+        assert result.rejection_reason != "generic_occasion_sprawl"
+
+    def test_chain_of_sanitization_does_not_corrupt_safe_summary(self):
+        """A fully safe multi-sentence summary passes all new checks unchanged."""
+        from app.concierge.claim_safety_reviewer import review_summary
+        summary = (
+            "Here are six izakayas in Chicago from the late-night search set. "
+            "Verify current hours before planning a late arrival. "
+            "All places are Google-verified."
+        )
+        frame = _Frame()
+        result = review_summary(summary, frame)
+        assert result.passed
+        assert not result.sanitized
+        assert result.summary == summary

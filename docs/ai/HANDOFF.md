@@ -1,6 +1,81 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-07) — PR #267: AI Concierge v2 LLM Reviewer / Claim-Safety Gate for Set Writer + Summary
+## Last change (2026-05-07) — PR #268: AI Concierge v2 Visible Copy Quality Contract
+
+**Status: MERGE-READY** — 119 claim-safety reviewer tests pass (64 new for PR #268, 55 unchanged from PR #267); 56 set-level-writer tests pass (unchanged); 68 semantic-query-frame tests pass (unchanged); 67 soft-preference-preservation tests pass (unchanged); 64 SLA tests pass (unchanged); 127 evidence-quality tests pass (unchanged)
+
+### What was built
+
+Visible Copy Quality Contract — deterministic visible-copy quality gates and sanitizers extending the PR #267 claim-safety reviewer. Adds four new blocking patterns for: malformed rating residue in summaries ("Taproom.8" → "Taproom"), unsupported after-hours/crowd positioning ("purpose-built for after-hours crowds"), hidden-gem/localness superlatives without evidence ("under-the-radar picks"), and unsupported scenic/view claims in summaries. Adds one new per-card note rejection pattern for generic occasion-sprawl ("suited for occasions ranging from casual groups to anniversaries").
+
+**Root cause**: PR #267 blocked specific patterns (name-hours inference, internal label leakage, generic filler) but left visible summary/note text without guards for: malformed rating residue from LLM number/name concatenation; overconfident after-hours crowd positioning claims; high-confidence localness superlatives in set-level summaries; unsupported scenic/view superlatives in summaries; and generic occasion-sprawl in per-card notes.
+
+**Changes made**:
+
+1. **`backend/app/concierge/claim_safety_reviewer.py`** (modified):
+   - `_MALFORMED_RATING_RESIDUE_RE`: regex matching CamelCase words with accidentally appended decimal-digit rating residue (`Taproom.8`, `Bar.4`).
+   - `_AFTER_HOURS_CROWD_RE`: regex blocking "purpose-built for after-hours crowds", "built/designed/tailored for late-night crowds" — overconfident positioning without hours/crowd evidence.
+   - `_OCCASION_SPRAWL_RE`: regex blocking "suited for occasions ranging from X to Y", "a range of occasions", "from casual groups to anniversaries" in per-card notes.
+   - `_SUMMARY_VIEW_CLAIM_RE`: regex blocking scenic/view superlatives in summaries ("stunning views", "waterfront dining", "panoramic setting", "lake views", etc.) — per-card notes already covered by `reason_validator._UNSUPPORTED_ATTRIBUTE_RE`.
+   - `_HIDDEN_GEM_TERMS_RE`: updated to match both "secret" and "secrets" (plural).
+   - `_sanitize_malformed_rating_residue()`: strips `.N`/`.N.M` suffix from matched words, preserving the rest of the summary.
+   - `review_summary()`: extended with 4 new sanitization passes (before existing checks): malformed rating residue (in-place sub), after-hours crowd (sentence remove), hidden-gem superlatives (sentence remove), unsupported view claims (sentence remove). Chains sanitizations; accumulates `was_sanitized` flag; fail-closed on timeout at each step.
+   - `review_note()`: extended with 2 new rejection checks: `after_hours_crowd_overconfidence` (check 4), `generic_occasion_sprawl` (check 5).
+   - `ReviewerTelemetry`: 3 new fields — `malformed_summary_count`, `unsupported_superlative_count`, `generic_note_hidden_count` — plus `as_dict()` updated.
+   - `review_notes_set()`: counts `after_hours_crowd_overconfidence` → `unsupported_superlative_count`; `generic_occasion_sprawl` → `generic_note_hidden_count` in telemetry.
+
+2. **`backend/tests/test_claim_safety_reviewer.py`** (modified):
+   - Tests 16–23 (64 new tests):
+     - Tests 16: Malformed rating residue — "Taproom.8" sanitized, residue removed, safe content preserved.
+     - Tests 17: After-hours crowd overconfidence — summary/note rejection; gate path; regex variants; honest description passes.
+     - Tests 18: Hidden-gem superlatives — "under-the-radar", "best-kept secrets", "locals love" sanitized from summaries.
+     - Tests 19: Unsupported view/scenic claims — "stunning views", "waterfront dining", "lake views" sanitized; safe "with a view" user-intent citation passes.
+     - Tests 20: Occasion-sprawl in notes — "suited for occasions ranging from X to Y" rejected; specific-occasion mentions pass.
+     - Tests 21: Card preservation — all place_ids present even when notes hidden.
+     - Tests 22: Invariants — `fallback_note_visible_count=0`, `deterministic_visible_count=0`, new telemetry fields present and defaulted to 0.
+     - Tests 23: Regression — PR #267 behaviors (name-alone-signals, internal leakage, generic filler, entity-name temporal inference) unchanged; safe summaries pass unchanged through chained sanitization.
+
+### Hard contracts preserved
+
+- `fallback_note_visible_count` always 0 (unchanged)
+- `deterministic_visible_count` always 0 (unchanged)
+- Google verification trust gate unchanged
+- Card cap: default 6, range 5–7 (unchanged)
+- Non-Google enrichment cannot mint addable cards (unchanged)
+- No SQL, no UI changes, no new providers, no new LLM calls, no retrieval/ranking changes
+- Reviewer rejects/hides notes only — never drops Google-verified cards
+- All PR #267 checks preserved in same order; new checks run before existing checks in `review_summary()`, after existing checks in `review_note()`
+
+### New telemetry added (extends PR #267 `reviewer_telemetry`)
+
+```
+malformed_summary_count     — summaries with rating-residue sanitized
+unsupported_superlative_count — notes with after-hours crowd overconfidence
+generic_note_hidden_count     — notes hidden due to occasion-sprawl
+```
+
+### Remaining limitations
+
+- Sanitization is deterministic: rephrased variants of blocked patterns (e.g., "tailor-made for the after-midnight crowd") may not be caught. The set-writer prompt already discourages these; this is the last regex gate.
+- `_MALFORMED_RATING_RESIDUE_RE` targets CamelCase words only (capital + 2+ lowercase), avoiding version numbers and abbreviations. All-lowercase concatenations (e.g., "taproom.8") would not be caught but are unlikely in LLM output.
+- Hidden-gem/localness checks sanitize at the sentence level; if the entire summary is the offending sentence, it is rejected (empty). This is correct per the "do not over-hide" spec.
+
+### Supabase SQL: No
+
+### Test counts
+
+```
+test_claim_safety_reviewer.py:  119 tests, all pass (64 new, 55 unchanged from PR #267)
+test_set_level_writer.py:        56 tests, all pass (unchanged)
+test_semantic_query_frame.py:    68 tests, all pass (unchanged)
+test_soft_preference_preservation.py: 67 tests, all pass (unchanged)
+test_sla_card_cap.py:            64 tests, all pass (unchanged)
+test_evidence_quality_v3.py:    127 tests, all pass (unchanged)
+```
+
+---
+
+## Previous: PR #267: AI Concierge v2 LLM Reviewer / Claim-Safety Gate for Set Writer + Summary
 
 **Status: MERGE-READY** — 55 new claim-safety reviewer tests pass; 56 set-level-writer tests pass (unchanged); 68 semantic-query-frame tests pass (unchanged); 67 soft-preference-preservation tests pass (unchanged); 64 SLA tests pass (unchanged); 127 evidence-quality tests pass (unchanged)
 

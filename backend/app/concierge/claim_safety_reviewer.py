@@ -4,6 +4,14 @@ PR #267: Guards per-card concierge notes and set-level summary text against
 unsupported claims before response serialization. All checks are regex-based
 (deterministic) with a configurable timeout for fail-closed behavior.
 
+PR #268: Extends with visible copy-quality gates:
+  - Malformed rating residue in summaries (e.g. "Taproom.8" → "Taproom").
+  - Unsupported after-hours/crowd positioning claims ("purpose-built for
+    after-hours crowds").
+  - Hidden-gem/localness superlatives in summaries without evidence support.
+  - Unsupported scenic/view claims in summaries.
+  - Generic occasion-sprawl in per-card notes.
+
 Hard rule: A business name is NEVER sufficient evidence for a temporal claim.
 "2AM Izakaya, whose name alone signals late-night credibility" is rejected
 regardless of evidence. Only actual hours, provider metadata, review snippets,
@@ -19,6 +27,8 @@ Telemetry fields emitted:
   reviewer_rejected_note_count, reviewer_hidden_note_count,
   reviewer_rejected_summary, reviewer_sanitized_summary,
   reviewer_unsupported_claim_count, reviewer_internal_leakage_count,
+  malformed_summary_count, unsupported_superlative_count,
+  generic_note_hidden_count,
   final_summary_visible, final_note_visible_count,
   fallback_note_visible_count (invariant: 0),
   deterministic_visible_count (invariant: 0).
@@ -74,8 +84,49 @@ _NAME_HOURS_INFERENCE_RE = re.compile(
 # The reviewer checks frame soft_preferences and evidence for support.
 _HIDDEN_GEM_TERMS_RE = re.compile(
     r"\b(?:hidden\s+gem|local\s+favorite|locals?\s+love|locals?\s+know|"
-    r"underrated|undiscovered|off[-\s]the[-\s]beaten|best[-\s]kept\s+secret"
+    r"underrated|undiscovered|off[-\s]the[-\s]beaten|best[-\s]kept\s+secrets?"
     r"|under[-\s]the[-\s]radar|sleeper\s+(?:hit|spot|pick))\b",
+    re.IGNORECASE,
+)
+
+# ── Unsupported localness/hidden-gem editorial claims in summaries ─────────────
+# Narrower than _HIDDEN_GEM_TERMS_RE: targets overconfident editorial assertions
+# that cannot be supported in a set-level summary context. Deliberately does NOT
+# block user-intent framing like "hidden gem bars" or "hidden-gem-style matches"
+# — these are the user's query phrasing and do not constitute an editorial claim.
+#
+# Blocked (unsupported editorial assertions):
+#   "most authentically local", "authentically local"
+#   "under-the-radar picks/spots/bars/..." (noun-phrase form)
+#   "are/is/the most under-the-radar" (predicate form)
+#   "locals love/know/favor", "only locals know"
+#   "best-kept secret(s)"
+#   "tourists rarely/never find/know"
+#   "true local secret", "true hidden gem"
+#   "undiscovered gem/spot/..." or "truly undiscovered"
+#   "off-the-beaten-path/track"
+#
+# Allowed (safe user-intent framing):
+#   "For hidden gem bars in Chicago..."
+#   "hidden gem bar matches from the search set"
+#   "hidden-gem-style bars"
+_SUMMARY_LOCALNESS_CLAIM_RE = re.compile(
+    r"(?:"
+    r"\bmost\s+authentically\s+local\b"
+    r"|\bauthentically\s+local\b"
+    # "under-the-radar [noun]" — editorial noun-phrase positioning
+    r"|\bunder[-\s]the[-\s]radar\s+(?:picks?|spots?|bars?|restaurants?|finds?|gems?|options?|places?|choices?|selections?)\b"
+    # "are/is/the most/truly under-the-radar" — predicate form
+    r"|\b(?:are|is|the\s+most|truly|most)\s+under[-\s]the[-\s]radar\b"
+    r"|\blocals?\s+(?:love|know|frequent|haunt|favor|find|visit)\b"
+    r"|\bonly\s+locals?\s+(?:know|find|visit)\b"
+    r"|\bbest[-\s]kept\s+secrets?\b"
+    r"|\btourists?\s+(?:rarely|never)\s+(?:find|know|visit|discover)\b"
+    r"|\btrue\s+(?:local\s+secret|hidden\s+gem)\b"
+    r"|\b(?:truly|largely|mostly)\s+undiscovered\b"
+    r"|\bundiscovered\s+(?:gem|spot|bar|restaurant|place)\b"
+    r"|\boff[-\s]the[-\s]beaten[-\s](?:path|track)\b"
+    r")",
     re.IGNORECASE,
 )
 
@@ -94,6 +145,73 @@ _SCENIC_TERMS_RE = re.compile(
 
 _BEST_VALUE_TERMS_RE = re.compile(
     r"\b(?:best\s+value(?:\s+in\s+\w+)?|great\s+value(?:\s+for\s+money)?)\b",
+    re.IGNORECASE,
+)
+
+
+# ── Malformed rating residue ───────────────────────────────────────────────────
+# Blocks strings like "Taproom.8" where a decimal rating is accidentally
+# concatenated to the last word of a business name. Pattern: a capitalized word
+# (3+ chars, CamelCase) immediately followed by "." and a digit.
+# e.g. "Taproom.8", "Bar.4", "Place.4.5" → sanitize to "Taproom", "Bar", "Place".
+_MALFORMED_RATING_RESIDUE_RE = re.compile(
+    r"\b[A-Z][a-z]{2,}\.\d(?:\.\d+)?\b",
+    re.UNICODE,
+)
+
+
+# ── Unsupported after-hours/crowd positioning ─────────────────────────────────
+# Rejects overconfident claims that a venue is "purpose-built for after-hours
+# crowds" or equivalently positioned for late-night audiences without actual
+# hours, crowd-density, or late-night editorial evidence. This is distinct from
+# name-inference (blocked by _NAME_HOURS_INFERENCE_RE) and covers superlative
+# capability-positioning language in set-level summaries and per-card notes.
+_AFTER_HOURS_CROWD_RE = re.compile(
+    r"\b(?:"
+    r"purpose[-\s]?built\s+for\s+(?:after[-\s]?hours?|late[-\s]?night)"
+    r"|built\s+for\s+(?:after[-\s]?hours?|late[-\s]?night)\s+crowds?"
+    r"|designed\s+for\s+(?:after[-\s]?hours?|late[-\s]?night)\s+crowds?"
+    r"|catered?\s+to(?:ward)?\s+(?:after[-\s]?hours?|late[-\s]?night)\s+crowds?"
+    r"|tailored\s+(?:to|for)\s+(?:after[-\s]?hours?|late[-\s]?night)\s+crowds?"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+# ── Generic occasion-sprawl in per-card notes ─────────────────────────────────
+# Rejects notes claiming suitability for a vague range of occasions without
+# evidence. E.g. "suited for occasions ranging from casual groups to
+# anniversaries" provides no concrete differentiator and is rejected.
+_OCCASION_SPRAWL_RE = re.compile(
+    r"\b(?:"
+    # "suited for occasions ranging from X to Y"
+    r"suited\s+for\s+occasions?\s+ranging\s+from"
+    # "suited for [groups/dinners/etc.] ranging from X to Y"
+    r"|suited\s+for\s+\w+(?:\s+\w+)?\s+ranging\s+from\s+\w+(?:\s+\w+)?\s+to\s+\w+"
+    # "a range/variety of occasions" (with or without preceding "for"/"to")
+    r"|(?:a\s+)?(?:range|variety)\s+of\s+occasions?"
+    # "from casual [groups/dinners] to anniversaries/weddings/special occasions"
+    r"|from\s+casual\s+(?:\w+\s+)?(?:groups?|hangouts?|dinners?|gatherings?|evenings?)"
+    r"\s+to\s+(?:anniversaries?|weddings?|special\s+occasions?|romantic\s+\w+)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+# ── Unsupported scenic/view claims in summaries ────────────────────────────────
+# For per-card notes, reason_validator._UNSUPPORTED_ATTRIBUTE_RE handles
+# view/waterfront evidence-gating. For set-level summaries, this reviewer
+# enforces the same constraint via sentence-level sanitization.
+# Superlatives and explicit venue-feature claims are targeted; general phrases
+# like "with a view" (user-intent language) are not blocked here.
+_SUMMARY_VIEW_CLAIM_RE = re.compile(
+    r"\b(?:"
+    r"stunning\s+views?|beautiful\s+views?|panoramic\s+(?:views?|setting)"
+    r"|scenic\s+(?:views?|setting|spot|backdrop|experience|waterfront)"
+    r"|waterfront\s+(?:dining|seating|setting|views?|bar|spot|experience)"
+    r"|lakefront\s+(?:dining|seating|views?|bar|spot)"
+    r"|rooftop\s+views?|lake\s+views?|river\s+views?|ocean\s+views?|sea\s+views?"
+    r")\b",
     re.IGNORECASE,
 )
 
@@ -166,6 +284,10 @@ class ReviewerTelemetry:
     reviewer_sanitized_summary: bool = False
     reviewer_unsupported_claim_count: int = 0
     reviewer_internal_leakage_count: int = 0
+    # PR #268 copy-quality telemetry
+    malformed_summary_count: int = 0       # summaries with malformed rating residue
+    unsupported_superlative_count: int = 0 # notes with unsupported after-hours/crowd claims
+    generic_note_hidden_count: int = 0     # notes hidden due to occasion-sprawl
     final_summary_visible: bool = False
     final_note_visible_count: int = 0
     fallback_note_visible_count: int = 0  # structural invariant: always 0
@@ -182,6 +304,9 @@ class ReviewerTelemetry:
             "reviewer_sanitized_summary": self.reviewer_sanitized_summary,
             "reviewer_unsupported_claim_count": self.reviewer_unsupported_claim_count,
             "reviewer_internal_leakage_count": self.reviewer_internal_leakage_count,
+            "malformed_summary_count": self.malformed_summary_count,
+            "unsupported_superlative_count": self.unsupported_superlative_count,
+            "generic_note_hidden_count": self.generic_note_hidden_count,
             "final_summary_visible": self.final_summary_visible,
             "final_note_visible_count": self.final_note_visible_count,
             "fallback_note_visible_count": self.fallback_note_visible_count,
@@ -286,6 +411,32 @@ def review_note(
             )
             return _reject("generic_filler")
 
+        if _elapsed_s() >= timeout_s:
+            return _reject("reviewer_timeout")
+
+        # 4. Unsupported after-hours/crowd positioning (PR #268).
+        #    "purpose-built for after-hours crowds" is not supported unless
+        #    actual hours, late-night editorial, or crowd evidence is present.
+        if _AFTER_HOURS_CROWD_RE.search(note):
+            logger.info(
+                "claim_safety_reviewer: after_hours_crowd_overconfidence name=%r note=%r",
+                entity_name, note[:120],
+            )
+            return _reject("after_hours_crowd_overconfidence")
+
+        if _elapsed_s() >= timeout_s:
+            return _reject("reviewer_timeout")
+
+        # 5. Generic occasion-sprawl (PR #268).
+        #    "suited for occasions ranging from casual groups to anniversaries"
+        #    provides no concrete differentiator and is rejected.
+        if _OCCASION_SPRAWL_RE.search(note):
+            logger.info(
+                "claim_safety_reviewer: generic_occasion_sprawl name=%r note=%r",
+                entity_name, note[:120],
+            )
+            return _reject("generic_occasion_sprawl")
+
         return _pass()
 
     except Exception as exc:
@@ -353,15 +504,86 @@ def review_summary(
             logger.warning("claim_safety_reviewer.review_summary: timed_out")
             return _reject("reviewer_timeout")
 
-        # 1. Name-based hours inference — hard rejection for any sentence containing it.
-        if _NAME_HOURS_INFERENCE_RE.search(summary):
+        # Working text accumulates sanitizations across all passes.
+        working_text = summary
+        was_sanitized = False
+
+        # 1. Malformed rating residue (PR #268) — sanitize in-place.
+        #    "Taproom.8" → "Taproom"; preserves the rest of the summary.
+        if _MALFORMED_RATING_RESIDUE_RE.search(working_text):
+            cleaned = _sanitize_malformed_rating_residue(working_text)
+            if cleaned and cleaned.strip():
+                logger.info(
+                    "claim_safety_reviewer.review_summary: sanitized malformed_rating_residue"
+                )
+                working_text = cleaned
+                was_sanitized = True
+            else:
+                return _reject("malformed_rating_residue")
+
+        if _elapsed_s() >= timeout_s:
+            return _reject("reviewer_timeout")
+
+        # 2. Unsupported after-hours/crowd positioning (PR #268) — sanitize sentence.
+        #    "purpose-built for after-hours crowds" without hours/crowd evidence.
+        if _AFTER_HOURS_CROWD_RE.search(working_text):
+            cleaned = _remove_sentence_with_pattern(working_text, _AFTER_HOURS_CROWD_RE)
+            if cleaned and cleaned.strip():
+                logger.info(
+                    "claim_safety_reviewer.review_summary: sanitized after_hours_crowd_overconfidence"
+                )
+                working_text = cleaned
+                was_sanitized = True
+            else:
+                return _reject("after_hours_crowd_overconfidence")
+
+        if _elapsed_s() >= timeout_s:
+            return _reject("reviewer_timeout")
+
+        # 3. Hidden-gem/localness editorial claims (PR #268) — sanitize sentence.
+        #    Uses _SUMMARY_LOCALNESS_CLAIM_RE (narrower than _HIDDEN_GEM_TERMS_RE)
+        #    so that user-intent framing like "hidden gem bars" is NOT removed —
+        #    only unsupported editorial claims like "most authentically local",
+        #    "under-the-radar picks", "locals love", "best-kept secrets" are blocked.
+        if _SUMMARY_LOCALNESS_CLAIM_RE.search(working_text):
+            cleaned = _remove_sentence_with_pattern(working_text, _SUMMARY_LOCALNESS_CLAIM_RE)
+            if cleaned and cleaned.strip():
+                logger.info(
+                    "claim_safety_reviewer.review_summary: sanitized localness_editorial_claim"
+                )
+                working_text = cleaned
+                was_sanitized = True
+            else:
+                return _reject("localness_editorial_claim")
+
+        if _elapsed_s() >= timeout_s:
+            return _reject("reviewer_timeout")
+
+        # 4. Unsupported scenic/view claims in summaries (PR #268) — sanitize sentence.
+        #    "stunning lake views", "waterfront dining" without amenity evidence.
+        if _SUMMARY_VIEW_CLAIM_RE.search(working_text):
+            cleaned = _remove_sentence_with_pattern(working_text, _SUMMARY_VIEW_CLAIM_RE)
+            if cleaned and cleaned.strip():
+                logger.info(
+                    "claim_safety_reviewer.review_summary: sanitized unsupported_view_claim"
+                )
+                working_text = cleaned
+                was_sanitized = True
+            else:
+                return _reject("unsupported_view_claim")
+
+        if _elapsed_s() >= timeout_s:
+            return _reject("reviewer_timeout")
+
+        # 5. Name-based hours inference — hard rejection for any sentence containing it.
+        if _NAME_HOURS_INFERENCE_RE.search(working_text):
             # Attempt to sanitize by removing the offending sentence.
-            sanitized = _remove_sentence_with_pattern(summary, _NAME_HOURS_INFERENCE_RE)
-            if sanitized and sanitized.strip():
+            cleaned = _remove_sentence_with_pattern(working_text, _NAME_HOURS_INFERENCE_RE)
+            if cleaned and cleaned.strip():
                 logger.info(
                     "claim_safety_reviewer.review_summary: sanitized name_hours_inference"
                 )
-                return _pass(sanitized, sanitized=True)
+                return _pass(cleaned, sanitized=True)
             # Cannot sanitize — reject outright.
             logger.info(
                 "claim_safety_reviewer.review_summary: rejected name_hours_inference"
@@ -371,15 +593,15 @@ def review_summary(
         if _elapsed_s() >= timeout_s:
             return _reject("reviewer_timeout")
 
-        # 2. Internal label leakage — always reject (no sanitization attempted).
-        if _INTERNAL_LABEL_RE.search(summary):
+        # 6. Internal label leakage — always reject (no sanitization attempted).
+        if _INTERNAL_LABEL_RE.search(working_text):
             logger.info("claim_safety_reviewer.review_summary: rejected internal_label_leakage")
             return _reject("internal_label_leakage")
 
         if _elapsed_s() >= timeout_s:
             return _reject("reviewer_timeout")
 
-        return _pass(summary)
+        return _pass(working_text, sanitized=was_sanitized)
 
     except Exception as exc:
         logger.warning("claim_safety_reviewer.review_summary: error=%s", exc)
@@ -396,6 +618,19 @@ def _remove_sentence_with_pattern(text: str, pattern: re.Pattern) -> str:
     parts = re.split(r"(?<=[.!?])\s+", text.strip())
     safe_parts = [p for p in parts if not pattern.search(p)]
     return " ".join(safe_parts)
+
+
+def _sanitize_malformed_rating_residue(text: str) -> str:
+    """Strip decimal-digit suffix accidentally attached to a business name word.
+
+    Transforms "Taproom.8" → "Taproom", "Bar.4.5" → "Bar".
+    Only applies to CamelCase words (capital + 2+ lowercase) to avoid
+    false positives with version numbers or abbreviations.
+    """
+    return _MALFORMED_RATING_RESIDUE_RE.sub(
+        lambda m: re.sub(r"\.\d(?:\.\d+)?$", "", m.group(0)),
+        text,
+    )
 
 
 # ── Convenience: review a set of notes with aggregated telemetry ───────────────
@@ -462,6 +697,8 @@ def review_notes_set(
     hidden = 0
     unsupported_claim = 0
     internal_leakage = 0
+    unsupported_superlative = 0
+    generic_note_hidden = 0
     timed_out = False
 
     for place_id, note in notes.items():
@@ -482,10 +719,15 @@ def review_notes_set(
         if not result.passed:
             rejected += 1
             hidden += 1
-            if result.rejection_reason == "name_hours_inference":
+            reason = result.rejection_reason
+            if reason == "name_hours_inference":
                 unsupported_claim += 1
-            elif result.rejection_reason == "internal_label_leakage":
+            elif reason == "internal_label_leakage":
                 internal_leakage += 1
+            elif reason == "after_hours_crowd_overconfidence":
+                unsupported_superlative += 1
+            elif reason == "generic_occasion_sprawl":
+                generic_note_hidden += 1
 
     total_ms = int((time.monotonic() - t0) * 1000)
 
@@ -499,6 +741,8 @@ def review_notes_set(
         reviewer_sanitized_summary=False,
         reviewer_unsupported_claim_count=unsupported_claim,
         reviewer_internal_leakage_count=internal_leakage,
+        unsupported_superlative_count=unsupported_superlative,
+        generic_note_hidden_count=generic_note_hidden,
         final_summary_visible=False,
         final_note_visible_count=len(notes) - hidden,
         fallback_note_visible_count=0,  # invariant
