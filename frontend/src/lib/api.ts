@@ -1488,6 +1488,8 @@ export interface ConciergeDisplayFields {
   displaySourceSummary?: string | null;
   displayBadges: string[];
   addability: "addable" | "research_only" | "closed";
+  /** Google-backed price display string ("$$", "$10–20", "Free"). Null when unavailable. */
+  displayPrice?: string | null;
 }
 
 export interface ConciergeSuggestion {
@@ -1580,6 +1582,10 @@ export interface UnifiedRestaurantResult {
     whyPick?: string | null;
     conciergeNote?: string | null;
     categoryLabel?: string | null;
+    /** Google priceLevel enum (e.g. "PRICE_LEVEL_MODERATE"). Use displayPrice for UI. */
+    priceLevel?: string | null;
+    /** Google PriceRange object {startPrice, endPrice}. Use displayPrice for UI. */
+    priceRange?: Record<string, unknown> | null;
   } | null;
   display?: ConciergeDisplayFields | null;
 }
@@ -1620,6 +1626,10 @@ export interface UnifiedAttractionResult {
     whyPick?: string | null;
     conciergeNote?: string | null;
     categoryLabel?: string | null;
+    /** Google priceLevel enum (e.g. "PRICE_LEVEL_MODERATE"). Use displayPrice for UI. */
+    priceLevel?: string | null;
+    /** Google PriceRange object {startPrice, endPrice}. Use displayPrice for UI. */
+    priceRange?: Record<string, unknown> | null;
   } | null;
   display?: ConciergeDisplayFields | null;
 }
@@ -1660,6 +1670,10 @@ export interface UnifiedHotelResult {
     whyPick?: string | null;
     conciergeNote?: string | null;
     categoryLabel?: string | null;
+    /** Google priceLevel enum (e.g. "PRICE_LEVEL_MODERATE"). Use displayPrice for UI. */
+    priceLevel?: string | null;
+    /** Google PriceRange object {startPrice, endPrice}. Use displayPrice for UI. */
+    priceRange?: Record<string, unknown> | null;
   } | null;
   display?: ConciergeDisplayFields | null;
 }

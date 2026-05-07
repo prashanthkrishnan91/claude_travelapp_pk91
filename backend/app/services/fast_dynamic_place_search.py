@@ -50,10 +50,14 @@ _PLACES_FIELD_MASK = ",".join(
         "places.rating",
         "places.userRatingCount",
         "places.priceLevel",
+        "places.priceRange",
         "places.googleMapsUri",
         "places.websiteUri",
     ]
 )
+# SKU note: priceLevel is Basic data (no extra cost). priceRange is Atmosphere
+# data (higher SKU tier). Both are safe to request; absent fields are silently
+# omitted by Google — no card is dropped when priceRange is unavailable.
 
 # Google priceLevel → human label (used to prefix reasons when relevant)
 _PRICE_LEVEL_LABEL: Dict[str, str] = {
@@ -62,6 +66,27 @@ _PRICE_LEVEL_LABEL: Dict[str, str] = {
     "PRICE_LEVEL_EXPENSIVE": "upscale",
     "PRICE_LEVEL_VERY_EXPENSIVE": "fine-dining",
 }
+
+# Google priceLevel → UI symbol (shown in card subheader)
+_PRICE_LEVEL_SYMBOL: Dict[str, str] = {
+    "PRICE_LEVEL_FREE": "Free",
+    "PRICE_LEVEL_INEXPENSIVE": "$",
+    "PRICE_LEVEL_MODERATE": "$$",
+    "PRICE_LEVEL_EXPENSIVE": "$$$",
+    "PRICE_LEVEL_VERY_EXPENSIVE": "$$$$",
+}
+
+# Numeric sort order for value-aware ranking (lower = cheaper)
+_PRICE_LEVEL_ORDER: Dict[str, int] = {
+    "PRICE_LEVEL_FREE": 0,
+    "PRICE_LEVEL_INEXPENSIVE": 1,
+    "PRICE_LEVEL_MODERATE": 2,
+    "PRICE_LEVEL_EXPENSIVE": 3,
+    "PRICE_LEVEL_VERY_EXPENSIVE": 4,
+}
+# Unknown / absent price sorts AFTER all known tiers so missing data is never
+# treated as a cheaper signal (do not default to MODERATE = 2).
+_UNKNOWN_PRICE_ORDER = len(_PRICE_LEVEL_ORDER)  # 5
 _OPERATIONAL = "OPERATIONAL"
 
 # Cuisine/subtype keywords that should be passed through literally to Google.
@@ -198,6 +223,33 @@ _CUISINE_TO_GOOGLE_TYPES: Dict[str, Set[str]] = {
 }
 
 
+def _format_display_price(
+    price_level: Optional[str],
+    price_range: Optional[Dict[str, Any]],
+) -> Optional[str]:
+    """Return a compact UI price string from Google price fields, or None.
+
+    Prefers priceRange ("$10–20") over priceLevel ("$$").
+    Never exposes raw enum names.
+    """
+    if price_range and isinstance(price_range, dict):
+        start = price_range.get("startPrice") or {}
+        end = price_range.get("endPrice") or {}
+        if isinstance(start, dict) and isinstance(end, dict):
+            try:
+                start_units = int(start.get("units") or 0)
+                end_units = int(end.get("units") or 0)
+                if start_units > 0 or end_units > 0:
+                    currency = start.get("currencyCode") or end.get("currencyCode") or "USD"
+                    symbol = "$" if currency == "USD" else currency
+                    return f"{symbol}{start_units}–{end_units}"
+            except (TypeError, ValueError):
+                pass
+    if price_level:
+        return _PRICE_LEVEL_SYMBOL.get(price_level)
+    return None
+
+
 @dataclass
 class ParsedPlaceQuery:
     """Structured representation of a natural-language place query.
@@ -215,6 +267,7 @@ class ParsedPlaceQuery:
     vibe: Optional[str] = None
     constraint: Optional[str] = None
     negative_constraint: Optional[str] = None
+    prefer_lower_price: bool = False  # True when query signals cheaper/budget/affordable intent
 
 
 _WHITESPACE_RE = re.compile(r"\s+")
@@ -289,6 +342,10 @@ def parse_place_query(user_query: str, destination: str) -> ParsedPlaceQuery:
     core = _WHITESPACE_RE.sub(" ", core).strip()
     search_query = f"{core} {destination}".strip()
 
+    prefer_lower_price = bool(
+        re.search(r"\b(?:cheap(?:er)?|budget|affordable|lower[- ]price)\b", q_low)
+    )
+
     return ParsedPlaceQuery(
         canonical_query=q,
         destination=destination,
@@ -298,6 +355,7 @@ def parse_place_query(user_query: str, destination: str) -> ParsedPlaceQuery:
         vibe=vibe,
         constraint=constraint,
         negative_constraint=negative,
+        prefer_lower_price=prefer_lower_price,
     )
 
 
@@ -664,6 +722,17 @@ class FastDynamicPlaceSearch:
 
         total_ms = int((time.monotonic() - t_start) * 1000)
 
+        # Price signal telemetry — internal only, never surfaced in UI.
+        cards_with_price_level = sum(
+            1 for r in restaurants
+            if getattr(getattr(r, "supporting_details", None), "price_level", None)
+        )
+        cards_with_price_range = sum(
+            1 for r in restaurants
+            if getattr(getattr(r, "supporting_details", None), "price_range", None)
+        )
+        cards_without_price_signal = filtered_count - cards_with_price_level
+
         logger.info(
             "fast_dynamic_place_search.timing "
             "fast_dynamic_enabled=true "
@@ -679,11 +748,17 @@ class FastDynamicPlaceSearch:
             "final_unique_count=%d "
             "pool_hit=false "
             "provider_call=true "
-            "reason_mode=deterministic",
+            "reason_mode=deterministic "
+            "cards_with_price_level=%d "
+            "cards_with_price_range=%d "
+            "cards_without_price_signal=%d "
+            "prefer_lower_price=%s",
             extraction_ms, google_search_ms, verify_ms,
             reason_ms, total_ms,
             candidate_count, verified_count,
             filtered_count, filtered_count,
+            cards_with_price_level, cards_with_price_range, cards_without_price_signal,
+            parsed.prefer_lower_price,
         )
 
         return LiveResearchResult(
@@ -753,7 +828,17 @@ class FastDynamicPlaceSearch:
             combined = (0.7 * cat) + (0.3 * min(1.0, bayesian / 5.0))
             scored.append((combined, place))
 
-        scored.sort(key=lambda x: x[0], reverse=True)
+        if parsed.prefer_lower_price:
+            # Post-retrieval value-aware sort: prefer lower price tier first,
+            # then by combined quality score within the same tier.
+            def _value_sort_key(item: tuple) -> tuple:
+                combined, place = item
+                pl = place.get("priceLevel")
+                price_order = _PRICE_LEVEL_ORDER.get(pl, _UNKNOWN_PRICE_ORDER)
+                return (price_order, -combined)
+            scored.sort(key=_value_sort_key)
+        else:
+            scored.sort(key=lambda x: x[0], reverse=True)
         return [p for _, p in scored]
 
     def _build_cards(
@@ -794,6 +879,7 @@ class FastDynamicPlaceSearch:
         rating = place.get("rating")
         review_count = place.get("userRatingCount")
         price_level: Optional[str] = place.get("priceLevel")
+        price_range: Optional[Dict[str, Any]] = place.get("priceRange") or None
         address = (place.get("formattedAddress") or "").strip() or None
         maps_uri = place.get("googleMapsUri")
         website = place.get("websiteUri")
@@ -839,6 +925,8 @@ class FastDynamicPlaceSearch:
             f"{dest.replace(' ', '+')}"
         )
 
+        display_price = _format_display_price(price_level, price_range)
+
         return UnifiedRestaurantResult(
             name=name,
             source="Google Places",
@@ -856,12 +944,15 @@ class FastDynamicPlaceSearch:
                 meta_line=meta_line,
                 address=address,
                 category_label=cuisine_label,
+                price_level=price_level or None,
+                price_range=price_range or None,
             ),
             display=ConciergeDisplayFields(
                 display_name=name,
                 display_category=cuisine_label,
                 display_meta_line=meta_line,
                 display_why=why,
+                display_price=display_price,
                 display_badges=[],
                 addability="addable",
                 display_why_source="fast_dynamic_deterministic",
