@@ -1,8 +1,60 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-07) — PR #269: AI Concierge Conversational Refinement v1
+## Last change (2026-05-07) — PR #270: AI Concierge Conversational Refinement UX Contract Fix
 
-**Status: OPEN** — 67 new frontend refinement tests pass (was 55; 12 added for Blocker 1 and Blocker 2 fixes); 16 existing concierge-renderers tests pass (unchanged); no backend/SQL changes.
+**Status: OPEN** — 97 frontend refinement tests pass (74 from PR #269 + 23 new for this PR); 16 concierge-renderers tests pass (unchanged); no backend/SQL changes.
+
+### What was fixed
+
+Level 1 UX contract bug: production validation on a Chicago trip found 6 interaction-contract failures in the PR #269 refinement layer. This PR fixes all of them surgically with no backend changes.
+
+**Root cause**: The frontend refinement layer created UI states that looked like place recommendations but broke the canonical card action contract (no Add/Save/Map) or made unsupported claims (cheaper pricing, nearby proximity).
+
+**Changes made**:
+
+1. **`frontend/src/lib/concierge/refinementInterpreter.js`** (modified):
+   - **Fix A**: `applyRefinementToMessage` COMPARE branch now returns top 2 canonical cards in `restaurants/attractions/hotels` instead of empty arrays. The existing `ConciergeCard` renderer shows them with full Add to Day, Save, map/source links, and Google verified badge.
+   - **Fix B/D**: Added `dedupeCardsAgainstCurrentSet(newMsg, currentCards)` — de-dupes backend search results against current visible card set by Google place ID first, fallback to normalized name+address. Returns `allDuplicates: true` when all returned cards were already visible.
+   - Added `_normalizeNameAddr` internal helper for name+address de-dupe.
+
+2. **`frontend/src/components/trips/AIConciergePanel.tsx`** (modified):
+   - **Fix A**: Comparison rendering changed from card-shaped tiles (which dropped Add/Save/Map/badge) to a plain text comparison block (`rounded-xl bg-slate-800/30` with "Quick comparison" label). Canonical cards below it are rendered by the existing `ConciergeCard` renderer with full actions.
+   - **Fix C**: Renamed `"Find cheaper nearby"` chip to `"Find more like these"`. Added `isCheaperQuery` guard in `SEARCH_MORE_WITH_CONTEXT` branch — cheaper/budget/affordable queries get an honest response: "I can look for more options like these, but I don't have reliable live price data…" without any backend call or false pricing claims.
+   - **Fix D**: `SEARCH_MORE_WITH_CONTEXT` now calls `dedupeCardsAgainstCurrentSet` before rendering backend results. `allDuplicates=true` triggers honest "I mostly found the same top options…" message instead of re-showing duplicate cards.
+   - **Fix I**: Chip container changed from `flex-wrap gap-1.5` to `overflow-x-auto` with hidden scrollbar for clean horizontal scroll on narrow screens. Chip buttons gain `shrink-0` and `py-1.5` for better tap targets (>44px effective height).
+
+3. **`frontend/tests/concierge-refinement.test.mjs`** (modified):
+   - Updated `COMPARE: card arrays are empty` → `COMPARE: card arrays contain top 2 canonical cards for action-capable rendering`.
+   - Updated chip mapping test to reflect renamed chip `"Find more like these"`.
+   - 23 new tests covering all 14 acceptance criteria.
+
+### Hard contracts preserved
+
+- Canonical card action contract: Add to Day, Save, Map, Google verified badge all preserved via existing `ConciergeCard` renderer
+- No false "cheaper" claims: `isCheaperQuery` guard intercepts before any backend call
+- De-dupe by Google place ID primary, name+address fallback — no card re-minting
+- No backend/SQL/LLM/provider changes
+- `fallback_note_visible_count` / `deterministic_visible_count` always 0 (unchanged)
+- Note rendering unchanged — missing notes still allowed when backend sends none
+
+### Test counts
+
+```
+concierge-refinement.test.mjs:   97 tests, all pass (74 from PR #269 + 23 new)
+concierge-renderers.test.mjs:    16 tests, all pass (unchanged)
+```
+
+### Supabase SQL: No
+
+### Remaining limitations
+
+- De-dupe threshold is "all duplicates" (not "mostly"). If 1 new card emerges from a mostly-duplicate result, it is shown. This is intentionally conservative.
+- `isCheaperQuery` intercepts typed cheaper queries in `SEARCH_MORE_WITH_CONTEXT` only. Filter-level "cheap options" still works as before (FILTER_CURRENT_SET).
+- Comparison text block shows note excerpts from `refinementComparison`; canonical ConciergeCard below shows full note from `supportingDetails.conciergeNote`.
+
+---
+
+## Previous: PR #269: AI Concierge Conversational Refinement v1
 
 ### What was built
 

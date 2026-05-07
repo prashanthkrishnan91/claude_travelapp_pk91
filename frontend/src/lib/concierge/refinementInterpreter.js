@@ -424,15 +424,20 @@ export function applyRefinementToMessage(action, latestCardMsg) {
       ...hotels.map((p) => ({ kind: 'hotel', place: p })),
     ];
     const { text, comparisonCards } = compareCards(allWithKind);
+
+    // Return top 2 canonical cards in the card arrays so the existing
+    // ConciergeCard renderer shows them with Add to Day, Save, and map/source
+    // links. The comparison text summary is shown separately above.
+    const top2 = allWithKind.slice(0, 2);
     return {
       role: 'assistant',
       text,
       isRefinement: true,
       refinementAction: ACTION.COMPARE_CURRENT_SET,
       refinementComparison: comparisonCards,
-      restaurants: [],
-      attractions: [],
-      hotels: [],
+      restaurants: top2.filter((c) => c.kind === 'restaurant').map((c) => c.place),
+      attractions: top2.filter((c) => c.kind === 'attraction').map((c) => c.place),
+      hotels: top2.filter((c) => c.kind === 'hotel').map((c) => c.place),
       researchSources: [],
       areaComparisons: [],
       retrievalUsed: false,
@@ -458,4 +463,59 @@ function _refinementMsg(text, refinementAction, cards) {
     retrievalUsed: false,
     sourceStatus: 'none',
   };
+}
+
+function _normalizeNameAddr(card) {
+  const name = (card?.name ?? '').trim().toLowerCase();
+  const addr = (
+    card?.supportingDetails?.address ?? card?.address ?? card?.neighborhood ?? ''
+  ).trim().toLowerCase();
+  if (!name) return null;
+  return `${name}::${addr}`;
+}
+
+/**
+ * De-dupe a new search result message against the current visible card set.
+ *
+ * Prefer Google place ID; fallback to normalized name + address.
+ * Returns the message with duplicate cards removed, plus an `allDuplicates`
+ * flag that is true when every returned card was already visible.
+ *
+ * @param {object} newMsg  - Message object from fromSearchResult
+ * @param {Array}  currentCards - Flat array of current visible card place objects
+ * @returns {object} Modified message with allDuplicates boolean
+ */
+export function dedupeCardsAgainstCurrentSet(newMsg, currentCards) {
+  if (!currentCards || currentCards.length === 0) {
+    return { ...newMsg, allDuplicates: false };
+  }
+
+  const currentIds = new Set();
+  const currentNameAddrs = new Set();
+  for (const card of currentCards) {
+    const placeId = card?.googleVerification?.providerPlaceId;
+    if (placeId) currentIds.add(placeId);
+    const na = _normalizeNameAddr(card);
+    if (na) currentNameAddrs.add(na);
+  }
+
+  function isNew(card) {
+    const placeId = card?.googleVerification?.providerPlaceId;
+    if (placeId && currentIds.has(placeId)) return false;
+    const na = _normalizeNameAddr(card);
+    return !(na && currentNameAddrs.has(na));
+  }
+
+  const restaurants = (newMsg.restaurants ?? []).filter(isNew);
+  const attractions = (newMsg.attractions ?? []).filter(isNew);
+  const hotels = (newMsg.hotels ?? []).filter(isNew);
+
+  const totalNew =
+    (newMsg.restaurants?.length ?? 0) +
+    (newMsg.attractions?.length ?? 0) +
+    (newMsg.hotels?.length ?? 0);
+  const totalFresh = restaurants.length + attractions.length + hotels.length;
+  const allDuplicates = totalFresh === 0 && totalNew > 0;
+
+  return { ...newMsg, restaurants, attractions, hotels, allDuplicates };
 }
