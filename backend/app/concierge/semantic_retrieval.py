@@ -32,6 +32,38 @@ PROVIDER_NAME = "semantic_retrieval_v1"
 PIPELINE_VERSION = "semantic_retrieval_v1"
 _MAX_CARDS = 8  # pool/ranking size; first response is capped separately by SLA config
 
+# Google priceLevel → UI symbol (mirrors fast_dynamic_place_search._PRICE_LEVEL_SYMBOL)
+_PRICE_LEVEL_SYMBOL: Dict[str, str] = {
+    "PRICE_LEVEL_FREE": "Free",
+    "PRICE_LEVEL_INEXPENSIVE": "$",
+    "PRICE_LEVEL_MODERATE": "$$",
+    "PRICE_LEVEL_EXPENSIVE": "$$$",
+    "PRICE_LEVEL_VERY_EXPENSIVE": "$$$$",
+}
+
+
+def _format_display_price(
+    price_level: Optional[str],
+    price_range: Optional[Dict[str, Any]],
+) -> Optional[str]:
+    """Compact UI price string from Google price fields, or None. Mirrors fast_dynamic path."""
+    if price_range and isinstance(price_range, dict):
+        start = price_range.get("startPrice") or {}
+        end = price_range.get("endPrice") or {}
+        if isinstance(start, dict) and isinstance(end, dict):
+            try:
+                start_units = int(start.get("units") or 0)
+                end_units = int(end.get("units") or 0)
+                if start_units > 0 or end_units > 0:
+                    currency = start.get("currencyCode") or end.get("currencyCode") or "USD"
+                    symbol = "$" if currency == "USD" else currency
+                    return f"{symbol}{start_units}–{end_units}"
+            except (TypeError, ValueError):
+                pass
+    if price_level:
+        return _PRICE_LEVEL_SYMBOL.get(price_level)
+    return None
+
 # SLA contract (v2 amendment §4 and §6)
 from app.concierge.deadline_manager import RequestDeadline, DEFAULT_SLA, clamp_first_card_limit
 
@@ -489,12 +521,34 @@ def _run_pipeline(
             "semantic_retrieval_v1: set_writer_primary accepted=%d/%d",
             accepted, n,
         )
+    elif not cards_data:
+        # No verified cards reached note assembly — skip LLM cascade entirely.
+        # This guards latency: note work must not run when it has no valid inputs.
+        logger.info(
+            "semantic_retrieval_v1: note_writer_skipped_no_valid_cards query=%r",
+            user_query,
+        )
+        card_reasons = {}
+        reasoning_result = ReasoningResultV2(
+            attempted=False,
+            failure_reason="skipped_no_valid_cards",
+            final_card_count=0,
+            final_note_omitted_count=0,
+        )
     else:
         # ── Fallback: existing three-pass cascade ─────────────────────────────
         card_reasons, reasoning_result = build_reasons_with_retry(
             cards_data, frame, timeout_s=note_generation_budget_s
         )
     latency["batched_reason_ms"] = int((time.monotonic() - t0) * 1000)
+    # optional_reasoning_ms covers all non-critical optional work (dossier, curator,
+    # set-writer, batched-reason). Tracked for latency profiling only.
+    latency["optional_reasoning_ms"] = (
+        latency.get("dossier_ms", 0)
+        + latency.get("curator_ms", 0)
+        + latency.get("set_writer_ms", 0)
+        + latency["batched_reason_ms"]
+    )
 
     # ── Step 8: Assemble final cards ─────────────────────────────────────────
     cards, rank_debug, excluded_unvalidated, visible_note_count, cards_without_notes_count = (
@@ -619,6 +673,31 @@ def _run_pipeline(
         "insufficient_verified_candidates": verified_count < 5,
         "below_first_card_limit": final_card_count < first_card_limit,
         "pre_assembly_verified_count": verified_count,
+        # Note-writer skip telemetry (E — latency regression fix)
+        "note_writer_skipped_no_valid_cards": (
+            reasoning_result.failure_reason == "skipped_no_valid_cards"
+        ),
+        "note_writer_skipped_low_budget": note_generation_timed_out,
+        "note_writer_skipped_below_card_threshold": (
+            not note_generation_timed_out
+            and not cards_data
+        ),
+        "optional_reasoning_ms": latency.get("optional_reasoning_ms", 0),
+        # Semantic price signal telemetry (internal only, never surfaced in UI)
+        "semantic_cards_with_price_level": sum(
+            1 for c in cards
+            if getattr(getattr(c, "supporting_details", None), "price_level", None)
+        ),
+        "semantic_cards_with_price_range": sum(
+            1 for c in cards
+            if getattr(getattr(c, "supporting_details", None), "price_range", None)
+        ),
+        "semantic_cards_without_price_signal": sum(
+            1 for c in cards
+            if not getattr(getattr(c, "supporting_details", None), "price_level", None)
+            and not getattr(getattr(c, "supporting_details", None), "price_range", None)
+        ),
+        "semantic_price_signal_path": "semantic_retrieval_v1",
     }
     _log_semantic_turn(
         user_query=user_query,
@@ -861,6 +940,10 @@ def _entity_to_card(
             f"{frame.destination.replace(' ', '+')}"
         )
 
+        entity_price_level: Optional[str] = getattr(entity, "price_level", None) or None
+        entity_price_range: Optional[Dict[str, Any]] = getattr(entity, "price_range", None) or None
+        display_price = _format_display_price(entity_price_level, entity_price_range)
+
         return UnifiedRestaurantResult(
             name=entity.name,
             source="Google Places",
@@ -879,12 +962,15 @@ def _entity_to_card(
                 meta_line=meta_line,
                 address=entity.formatted_address,
                 category_label=display_category,
+                price_level=entity_price_level,
+                price_range=entity_price_range,
             ),
             display=ConciergeDisplayFields(
                 display_name=entity.name,
                 display_category=display_category,
                 display_meta_line=meta_line,
                 display_why=reason,
+                display_price=display_price,
                 display_badges=[],
                 addability="addable",
                 display_why_source=reason_source,

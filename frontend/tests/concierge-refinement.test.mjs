@@ -1207,3 +1207,43 @@ test('AIConciergePanel: cheaper follow-up shows honest caveat when lacking price
   assert.match(aiConciergePanel, /not enough Google price data to prove they.*re cheaper/s);
 });
 
+// ---------------------------------------------------------------------------
+// Sev1 regression — address deduplication in pickCardMeta
+// ---------------------------------------------------------------------------
+
+test('AIConciergePanel: pickCardMeta strips address from ratingBase before re-appending (no duplicate)', () => {
+  // The strip logic must detect address in the pre-built meta string and remove it
+  // before re-appending address in correct position (rating · price · address).
+  assert.match(aiConciergePanel, /ratingBase\.includes\(addrTrimmed\)/);
+  assert.match(aiConciergePanel, /ratingBase\.slice\(0, ratingBase\.indexOf\(addrTrimmed\)\)/);
+});
+
+test('AIConciergePanel: pickCardMeta calls formatDisplayPrice with priceLevel and priceRange as fallback', () => {
+  // When display.displayPrice is absent, pickCardMeta must fall back to
+  // formatDisplayPrice(priceLevel, priceRange) so priceRange data reaches the UI.
+  assert.match(aiConciergePanel, /details\?\.priceRange/);
+});
+
+test('AIConciergePanel: pickCardMeta price always goes through formatDisplayPrice, never raw enum', () => {
+  // In pickCardMeta, the `price` variable is sourced from display.displayPrice OR
+  // formatDisplayPrice(), which maps enums to $ symbols.  The raw PRICE_LEVEL_ enum
+  // strings are only used as keys in PRICE_ORD for numeric comparison, never as
+  // displayable text.  Confirm the price derivation chain passes through formatDisplayPrice.
+  assert.match(aiConciergePanel, /display\?\.displayPrice.*\?\?[\s\S]{0,60}formatDisplayPrice/);
+});
+
+// ---------------------------------------------------------------------------
+// Sev1 regression — compare table mobile stacked layout
+// ---------------------------------------------------------------------------
+
+test('AIConciergePanel: compare table has sm:hidden stacked layout for narrow screens', () => {
+  // The table must be hidden on mobile; a stacked-card layout must replace it.
+  assert.match(aiConciergePanel, /hidden w-full border-collapse sm:table/);
+  assert.match(aiConciergePanel, /flex flex-col gap-3 sm:hidden/);
+});
+
+test('AIConciergePanel: compare stacked cards use break-words to prevent text overflow', () => {
+  // Each stacked card must use break-words so long venue names don't clip.
+  assert.match(aiConciergePanel, /break-words/);
+});
+

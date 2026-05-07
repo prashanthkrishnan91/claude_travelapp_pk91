@@ -229,7 +229,7 @@ _NEGATIVE_PATTERNS: List[tuple] = [
     (re.compile(r"\bnot\s+too\s+loud\b|\bnot\s+loud\b|\bnon[-\s]?loud\b", re.I), "not_loud"),
     (re.compile(r"\bnot\s+too\s+crowded\b|\bnot\s+crowded\b", re.I), "not_crowded"),
     (re.compile(r"\bnot\s+too\s+touristy\b|\bnot\s+touristy\b", re.I), "not_touristy"),
-    (re.compile(r"\bnot\s+too\s+expensive\b|\bnot\s+expensive\b|\baffordable\b|\bcheap\b|\bbudget\b", re.I), "not_expensive"),
+    (re.compile(r"\bnot\s+too\s+expensive\b|\bnot\s+expensive\b|\baffordable\b|\bcheap(?:er)?\b|\bbudget\b|\blower[-\s]?price\b", re.I), "not_expensive"),
     (re.compile(r"\bnot\s+too\s+fancy\b|\bnot\s+formal\b", re.I), "not_formal"),
     (re.compile(r"\bno\s+chains?\b|\bnot\s+(?:a\s+)?chain\b", re.I), "no_chains"),
 ]
@@ -237,7 +237,11 @@ _NEGATIVE_PATTERNS: List[tuple] = [
 # Value signal patterns
 _VALUE_PATTERNS: List[tuple] = [
     (re.compile(r"\bluxury\b|\bluxe\b|\bpremium\b|\bsplurge\b|\bhigh[-\s]?end\b", re.I), "luxury"),
-    (re.compile(r"\baffordable\b|\bbargain\b|\bbudget\b|\bcheap\b|\bvalue\b|\binexpensive\b", re.I), "budget"),
+    (re.compile(
+        r"\baffordable\b|\bbargain\b|\bbudget\b|\bcheap(?:er)?\b"
+        r"|\bvalue\b|\binexpensive\b|\blower[-\s]?price\b",
+        re.I,
+    ), "budget"),
     (re.compile(r"\bbest\s+value\b|\bgood\s+value\b|\bvalue\s+for\s+money\b", re.I), "value_for_money"),
 ]
 

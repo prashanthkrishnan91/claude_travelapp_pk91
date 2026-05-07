@@ -84,6 +84,7 @@ class PlaceEntity:
     rating: Optional[float]
     user_rating_count: Optional[int]
     price_level: Optional[str]
+    price_range: Optional[Dict[str, Any]]
     website_uri: Optional[str]
     # Identity keys for deduplication (same scheme as routes/ai.py)
     identity_keys: FrozenSet[str] = field(default_factory=frozenset)
@@ -221,6 +222,7 @@ def build_entity_layer(
             rating = raw.get("rating")
             review_count = raw.get("userRatingCount")
             price_level = raw.get("priceLevel")
+            price_range: Optional[Dict[str, Any]] = raw.get("priceRange") or None
             website = (raw.get("websiteUri") or "").strip() or None
 
             identity_keys = _build_identity_keys(place_id, maps_uri, name, address)
@@ -248,6 +250,7 @@ def build_entity_layer(
                 rating=rating,
                 user_rating_count=review_count,
                 price_level=price_level,
+                price_range=price_range,
                 website_uri=website,
                 identity_keys=identity_keys,
                 source_query=result.query,
