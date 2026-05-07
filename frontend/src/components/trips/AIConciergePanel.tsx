@@ -257,13 +257,21 @@ function pickCardMeta(card: DisplayCard): string[] {
     undefined;
   const address = details?.address ?? card.address ?? card.neighborhood;
 
-  // Use pre-formatted meta line as the rating/review base when available,
-  // then append price and address — never early-return before appending price.
+  // Use pre-formatted meta line as the rating/review base when available.
+  // live_research.py builds meta_line WITH address already included
+  // ("★ 4.8 (280 reviews) · 2207 W Montrose Ave"). Strip the address from the
+  // stem before rebuilding so address never appears twice, and so price is
+  // inserted in the correct position (rating · price · address).
   const ratingBase = card.display?.displayMetaLine ?? details?.metaLine;
   if (ratingBase) {
-    // Avoid duplicate price if the base already contains a price symbol.
-    const metaAlreadyHasPrice = /\$|Free\b|EUR/.test(ratingBase);
-    const parts: string[] = [ratingBase];
+    const addrTrimmed = address?.trim() ?? "";
+    let stem = ratingBase;
+    if (addrTrimmed && ratingBase.includes(addrTrimmed)) {
+      const stripped = ratingBase.slice(0, ratingBase.indexOf(addrTrimmed)).replace(/\s*·\s*$/, "").trim();
+      if (stripped) stem = stripped;
+    }
+    const parts: string[] = [stem];
+    const metaAlreadyHasPrice = /\$|Free\b|EUR/.test(stem);
     if (price && !metaAlreadyHasPrice) parts.push(price);
     if (address) parts.push(address);
     return [parts.join(" · ")];
@@ -565,16 +573,18 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
   }, [messages]);
 
   // Contextual refinement chips shown after a card result is present.
+  // "Find cheaper nearby" only appears when the latest card set has usable Google
+  // price signals; otherwise "Find more like these" avoids inviting a dead action.
   const refinementChips = useMemo(() => {
-    const hasCards = messages.some(
-      (m) => m.role === "assistant" && !m.isRefinement && (
-        (m.restaurants?.length ?? 0) > 0 ||
-        (m.attractions?.length ?? 0) > 0 ||
-        (m.hotels?.length ?? 0) > 0
-      )
-    );
-    if (!hasCards) return null;
-    return ["Show only casual", "Compare top 2", "Find cheaper nearby", "Add best to Day 1"];
+    const latestCardMsg = getLatestCardMessage(messages);
+    if (!latestCardMsg) return null;
+    const currentCards = [
+      ...(latestCardMsg.restaurants ?? []),
+      ...(latestCardMsg.attractions ?? []),
+      ...(latestCardMsg.hotels ?? []),
+    ].filter(isRenderableVerifiedPlace);
+    const cheaperChip = hasGooglePriceSignals(currentCards) ? "Find cheaper nearby" : "Find more like these";
+    return ["Show only casual", "Compare top 2", cheaperChip, "Add best to Day 1"];
   }, [messages]);
 
   useEffect(() => {
@@ -1195,7 +1205,8 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                   {msg.refinementAction === ACTION.COMPARE_CURRENT_SET && msg.refinementComparison && msg.refinementComparison.length > 0 && (
                     <div className="rounded-xl border border-slate-600/40 bg-slate-800/30 px-3 py-2.5 text-xs">
                       <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">Quick comparison</p>
-                      <table className="w-full border-collapse">
+                      {/* Wide screens: side-by-side table */}
+                      <table className="hidden w-full border-collapse sm:table">
                         <thead>
                           <tr>
                             <th className="w-16 pb-1.5 pr-3 text-left text-[10px] font-normal text-slate-500" />
@@ -1242,6 +1253,20 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                           )}
                         </tbody>
                       </table>
+                      {/* Narrow screens: stacked cards — prevents column crush */}
+                      <div className="flex flex-col gap-3 sm:hidden">
+                        {msg.refinementComparison.map((card) => (
+                          <div key={card.name} className="rounded-lg border border-slate-700/40 px-2.5 py-2">
+                            <p className="mb-1.5 font-semibold text-slate-200 break-words">{card.name}
+                              {card.category && <span className="ml-1 font-normal text-slate-400">· {card.category}</span>}
+                            </p>
+                            {card.rating && <p className="text-slate-300"><span className="text-slate-500 mr-1">Rating</span>{card.rating}</p>}
+                            {card.price && <p className="text-slate-300"><span className="text-slate-500 mr-1">Price</span>{card.price}</p>}
+                            {card.area && <p className="text-slate-300 leading-snug break-words"><span className="text-slate-500 mr-1">Area</span>{card.area}</p>}
+                            {card.bestFor && <p className="italic text-slate-300 leading-snug break-words"><span className="not-italic text-slate-500 mr-1">Best for</span>{card.bestFor}</p>}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 

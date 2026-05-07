@@ -82,10 +82,11 @@ _STRONG_CONCEPT_CONFIDENCE_MIN = 0.85
 _ON_CONCEPT_SUBTYPE_FIT_MIN = 0.45
 
 # Minimum number of on-concept candidates required before the post-rank filter
-# drops off-concept entries entirely. With fewer than this, we keep some
-# off-concept candidates so the response degrades gracefully instead of going
-# empty for no good reason.
-_MIN_ON_CONCEPT_FOR_HARD_DROP = 3
+# drops off-concept entries entirely.
+# Set to 1: as soon as a single verified on-concept card exists, off-concept
+# cards (e.g., Japanese/American restaurants for a "cocktail bar" query) are
+# dropped. Fewer correct cards is better than wrong-category fill.
+_MIN_ON_CONCEPT_FOR_HARD_DROP = 1
 
 # Bayesian prior parameters for quality smoothing
 _BAYESIAN_M = 80.0    # pseudo-count prior
@@ -864,6 +865,26 @@ def rank_entities_with_stats(
             # filling with modifier-only off-concept matches.
             dropped_off_concept = len(off_concept)
             scored = []
+
+    # Value-aware pre-truncation sort: apply BEFORE scored[:top_n] so lower-priced
+    # candidates ranked just outside top_n can surface when a budget/cheaper signal
+    # is active. Unknown price sorts last — never treated as cheap/moderate.
+    # Preserves category fit: off-concept cards already carry heavy penalties so they
+    # remain below on-concept cards within the same price tier.
+    _value_sigs = getattr(frame, "value_signals", []) or []
+    if _value_sigs and any(s in _value_sigs for s in ("budget", "not_expensive")):
+        _PRICE_ORD: Dict[str, int] = {
+            "PRICE_LEVEL_FREE": 0,
+            "PRICE_LEVEL_INEXPENSIVE": 1,
+            "PRICE_LEVEL_MODERATE": 2,
+            "PRICE_LEVEL_EXPENSIVE": 3,
+            "PRICE_LEVEL_VERY_EXPENSIVE": 4,
+        }
+        _UNKNOWN_PRICE_ORD = len(_PRICE_ORD)  # 5 — absent price never treated as cheap
+        scored.sort(key=lambda x: (
+            _PRICE_ORD.get((x[1].price_level or "").upper(), _UNKNOWN_PRICE_ORD),
+            -x[0],  # descending by total score within same price tier
+        ))
 
     result: List[Tuple[PlaceEntity, RankScore]] = []
     for _total, entity, rs in scored[:top_n]:

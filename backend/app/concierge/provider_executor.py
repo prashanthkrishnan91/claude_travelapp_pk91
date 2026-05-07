@@ -35,10 +35,14 @@ _FIELD_MASK = ",".join(
         "places.rating",
         "places.userRatingCount",
         "places.priceLevel",
+        "places.priceRange",
         "places.googleMapsUri",
         "places.websiteUri",
     ]
 )
+# SKU note: priceLevel is Basic data (no extra cost).
+# priceRange is Atmosphere data (higher SKU tier); absent fields are silently
+# omitted by Google — no card is dropped when priceRange is unavailable.
 
 DEFAULT_TIMEOUT = 5.0
 MAX_RESULTS_PER_QUERY = 15

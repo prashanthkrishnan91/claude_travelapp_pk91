@@ -1,6 +1,77 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-07) — PR #271: AI Concierge Google-backed price/value refinement + compare polish
+## Last change (2026-05-07) — PR #272: Sev1 regression fix — semantic_retrieval_v1 price wiring, address dedup, category rejection, cheaper chip
+
+**Status: OPEN** — 31 new backend regression tests pass; 140 frontend refinement tests pass (127 from PR #271 + 13 new); 45 other frontend tests pass; no SQL changes.
+
+### What was fixed
+
+Sev1 production regression introduced by PR #271 (merged): 5 distinct bugs on the semantic_retrieval_v1 path (used for bar/cocktail queries and other live searches).
+
+**Root causes**:
+
+- **(A) Address appears twice in card subheader**: `_format_meta_line()` in `live_research.py` already embeds address in `meta_line`; PR #271's `pickCardMeta()` then appended address unconditionally, producing `"★ 4.8 (280 reviews) · 2207 W Montrose Ave · 2207 W Montrose Ave"`.
+- **(B) Price not appearing on semantic_retrieval_v1 path**: PR #271 wired price ONLY through `fast_dynamic_place_search._to_card()`. The semantic retrieval path (`_entity_to_card()`) never read `entity.price_level`/`entity.price_range`. Also, `PlaceEntity` had no `price_range` field and `provider_executor.py` didn't request `priceRange` from Google.
+- **(C) "Find cheaper nearby" chip → "no Google price signals" even after PR #271**: `frame_extractor.py` used `\bcheap\b` (no `cheaper` match), so "find cheaper nearby" contextual query never set `value_signals = ["budget"]`. Also, semantic ranker had no price-aware post-rank sort.
+- **(D) Wrong-category cards in results** (Chicago "cocktail bars" returning Japanese/American restaurants): `_MIN_ON_CONCEPT_FOR_HARD_DROP = 3` kept off-concept cards when only 1–2 on-concept cards existed.
+- **(E) Latency / LLM work wasted when no valid cards**: Note writer / `build_reasons_with_retry` was called even when `cards_data` was empty.
+
+### Files changed
+
+1. **`backend/app/concierge/provider_executor.py`** — Added `places.priceRange` to `_FIELD_MASK` (was missing from semantic retrieval Google Text Search).
+
+2. **`backend/app/concierge/place_entity_layer.py`** — Added `price_range: Optional[Dict[str, Any]]` to `PlaceEntity` dataclass; added extraction of `raw.get("priceRange")` in `build_entity_layer()`.
+
+3. **`backend/app/concierge/semantic_retrieval.py`** — Added `_PRICE_LEVEL_SYMBOL` dict and `_format_display_price()` helper; wired `price_level`/`price_range`/`display_price` through `_entity_to_card()`; added `elif not cards_data:` guard to skip LLM note writer; added telemetry fields (`semantic_cards_with_price_level`, `semantic_cards_with_price_range`, `optional_reasoning_ms`, `note_writer_skipped_no_valid_cards`).
+
+4. **`backend/app/concierge/ranker.py`** — Changed `_MIN_ON_CONCEPT_FOR_HARD_DROP = 3` → `1`; added value-aware post-rank sort (ascending by priceLevel order when `value_signals` has "budget"/"not_expensive").
+
+5. **`backend/app/concierge/frame_extractor.py`** — Updated `_VALUE_PATTERNS` budget pattern to match `cheaper` and `lower-price` (was `\bcheap\b`-only); updated `_NEGATIVE_PATTERNS` similarly.
+
+6. **`frontend/src/components/trips/AIConciergePanel.tsx`** — Fixed `pickCardMeta()`: strips address from `ratingBase` before rebuilding so address never appears twice; added `metaAlreadyHasPrice` guard; added mobile stacked-card layout (`sm:hidden`) for compare table to prevent column crush on narrow screens; added `metaAlreadyHasPrice` named variable for readability.
+
+7. **`backend/tests/test_concierge_sev1_regression.py`** (new — 31 tests):
+   - `TestSemanticCardPriceWiring` (7): priceLevel/priceRange/displayPrice wiring through `_entity_to_card()`
+   - `TestPlaceEntityPriceExtraction` (3): `price_range` extracted from raw Google response
+   - `TestValueSignalDetection` (6): `cheaper`/`lower-price`/`find cheaper nearby` all trigger budget signal
+   - `TestValueAwareRankingSemanticPath` (3): cheaper-first sort, unknown-last, normal path uses score order
+   - `TestWrongCategoryRejection` (4): Japanese/American dropped when cocktail bar present
+   - `TestNoteWriterSkipOnEmptyCards` (2): LLM skip guard, assembled card has no fallback note count
+   - `TestFormatDisplayPriceSemanticHelper` (6): compact format, range beats level, zero-unit guard, none-on-absent
+
+8. **`frontend/tests/concierge-refinement.test.mjs`** (modified — +13 tests):
+   - `pickCardMeta` address stripping structural tests (no duplicate in rebuilt meta line)
+   - `pickCardMeta` priceRange fallback via `formatDisplayPrice`
+   - `pickCardMeta` price chain through `formatDisplayPrice` (not raw enum)
+   - Mobile stacked compare layout: `hidden w-full sm:table` + `flex flex-col gap-3 sm:hidden`
+   - `break-words` guard for long venue names in mobile stacked cards
+
+9. **`frontend/package.json`** — Added `concierge-refinement.test.mjs` to the `test` script (was omitted).
+
+### Hard contracts preserved
+
+- No SQL changes
+- No new providers (Google Places already in use; `priceRange` uses existing Atmosphere SKU)
+- No new LLM calls added
+- No venue keyword patches
+- Canonical card action contract unchanged (Add to Day, Save, Map, Google verified badge)
+
+### Test counts
+
+```
+test_concierge_sev1_regression.py:     31 tests, all pass (new)
+test_google_price_signals.py:          36 tests, all pass (unchanged from PR #271)
+all other backend tests:               48 tests, all pass (unchanged)
+concierge-refinement.test.mjs:        140 tests, all pass (127 from PR #271 + 13 new)
+concierge-renderers.test.mjs:          16 tests, all pass (unchanged)
+explore-restaurants-trust-contract:    45 tests, all pass (unchanged)
+```
+
+### Supabase SQL: No
+
+---
+
+## Previous: PR #271: AI Concierge Google-backed price/value refinement + compare polish
 
 **Status: OPEN** — 36 new backend price-signal tests pass; all 48 existing backend tests pass; 127 frontend refinement tests pass (97 from PR #270 + 30 new/updated); 16 concierge-renderers tests pass (unchanged); no SQL changes.
 
