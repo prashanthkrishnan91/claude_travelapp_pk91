@@ -1,6 +1,55 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-07) — PR #276: Editorial Corroboration v1 (Level 2 product-quality architecture improvement)
+## Last change (2026-05-07) — PR #277: Fix set-writer notes discarded by SLA timeout (Level 2 production regression)
+
+**Status: OPEN** — Backend + frontend type contract fix. No SQL. No UI changes. No new endpoints.
+
+### Root cause
+
+After PRs #275 (Yelp/FSQ enrichment) and #276 (Tavily/Serper editorial enrichment), the new HTTP calls at Steps 5.55 and 5.56 added latency that could push elapsed pipeline time past the 4000ms SLA soft ceiling before Step 7. The Step 7 `if/elif` chain checked `note_generation_timed_out` **first**, discarding already-completed set-writer validated notes and assembling all cards with `display_why_validated=False`. `pickCardReason()` on the frontend returned `""` for all semantic cards because `card.display.displayWhyValidated === true` was the only gate to show a note.
+
+The backend correctly logged `set_writer_visible_note_count=4` (notes were generated at Step 5.8) but `display_why_validated` was `False` on all assembled cards (Step 7 discarded them).
+
+**Exact dropped field/path:** `display.display_why_validated` was set to `False` in `_entity_to_card(reason_validated=False)` because the `note_generation_timed_out` branch at Step 7 set `card_reasons={}` before the set-writer primary path was ever reached.
+
+### Fix
+
+**`backend/app/concierge/semantic_retrieval.py`** — Reordered Step 7 `if/elif` chain:
+- Set-writer primary path now checked **first** (before `note_generation_timed_out` check). The set-writer LLM already ran at Step 5.8; assembling its pre-computed notes costs zero additional LLM calls.
+- `note_generation_timed_out` and `note_generation_low_budget` branches now only fire when the set-writer produced no usable notes. They still correctly guard the expensive fallback three-pass LLM cascade.
+
+**`frontend/src/lib/api.ts`** — Added `displayWhyValidated?: boolean | null` to `ConciergeDisplayFields` TypeScript interface. Previously missing, causing a type contract drift (runtime was correct but TS type did not document the field).
+
+### Tests added
+
+**Backend (`backend/tests/test_sla_card_cap.py`)** — 5 new tests in `TestSetWriterNotesSurviveSLATimeout`:
+- `test_set_writer_notes_survive_sla_timeout` — FAILS on old code (returns `sw_active=False, validated=0`), PASSES after fix
+- `test_set_writer_notes_used_when_sla_not_timed_out` — baseline
+- `test_timed_out_without_set_writer_notes_returns_empty` — still empty when no set-writer notes
+- `test_set_writer_partial_notes_survive_sla_timeout` — partial notes survive
+- `test_display_why_validated_true_for_surviving_notes` — end-to-end `_entity_to_card` contract
+
+**Frontend (`frontend/tests/concierge-renderers.test.mjs`)** — 10 new tests:
+- Semantic card note rendering: `displayWhyValidated=true` returns note, `false`/absent returns `""`
+- No legacy fallback for semantic cards (no deterministic/fallback text)
+- `sanitizeWhyPick` passes well-formed LLM note, rejects cross-venue name
+- `toCamel` correctly converts `display_why_validated` → `displayWhyValidated`
+- `api.ts` ConciergeDisplayFields declares `displayWhyValidated`
+
+### Test results
+- Backend: 69/69 in `test_sla_card_cap.py` PASS; 1550/1551 overall (1 pre-existing httpx-only failure)
+- Frontend: 26/26 in `concierge-renderers.test.mjs` PASS (was 16/16, +10 new)
+
+### Invariants confirmed
+- No deterministic note templates inserted
+- No fallback notes
+- Google remains only source for addable cards
+- Yelp/Foursquare/Tavily/Serper remain enrichment-only
+- No SQL, cache, ranking, or UI changes
+
+---
+
+## Previous change (2026-05-07) — PR #276: Editorial Corroboration v1 (Level 2 product-quality architecture improvement)
 
 **Status: OPEN** — Backend-only. No SQL. No UI changes. No new endpoints. No cache. Tavily + Serper editorial enrichment for already Google-verified cards only.
 
