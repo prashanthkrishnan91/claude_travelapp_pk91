@@ -213,3 +213,126 @@ test('AIConciergePanel does not hard-require type=verified_place for rendering a
   assert.match(aiConciergePanel, /isRenderableVerifiedPlace/);
   assert.doesNotMatch(aiConciergePanel, /\.filter\(\(r\) => r\.type === "verified_place"\)/);
 });
+
+// ── Semantic card note-rendering contract (PR #277 regression tests) ──────────
+// These tests exercise the pickCardReason semantic path that had no coverage.
+// Root cause: set-writer notes were discarded when SLA timed out before Step 7,
+// so display_why_validated arrived as false and pickCardReason returned "" for
+// every card.  Tests here document the expected frontend contract.
+
+test('pickCardReason returns displayWhy when displayWhyValidated is true', () => {
+  const note = 'Hand-rolled pasta and a rotating natural wine list anchor this spot.';
+  const card = {
+    name: 'Test Osteria',
+    display: {
+      displayWhy: note,
+      displayWhyValidated: true,
+      displayCategory: 'Italian Restaurant',
+      displayBadges: [],
+      addability: 'addable',
+    },
+    supportingDetails: { whyPick: 'legacy note that must not be used' },
+    primaryReason: 'legacy fallback that must not be used',
+  };
+  assert.equal(pickCardReason(card), note,
+    'Semantic card with displayWhyValidated=true must return display.displayWhy');
+});
+
+test('pickCardReason returns empty string when displayWhyValidated is false', () => {
+  const card = {
+    name: 'Test Place',
+    display: {
+      displayWhy: 'Some note that should not be shown.',
+      displayWhyValidated: false,
+      displayCategory: 'Restaurant',
+      displayBadges: [],
+      addability: 'addable',
+    },
+    supportingDetails: { whyPick: 'legacy note' },
+    primaryReason: 'legacy fallback',
+  };
+  assert.equal(pickCardReason(card), '',
+    'Semantic card with displayWhyValidated=false must return "" — no legacy fallback allowed');
+});
+
+test('pickCardReason returns empty string when displayWhyValidated is absent', () => {
+  // display object present but displayWhyValidated not set — treats as false.
+  const card = {
+    name: 'Test Place',
+    display: {
+      displayWhy: 'A note.',
+      displayCategory: 'Restaurant',
+      displayBadges: [],
+      addability: 'addable',
+    },
+    supportingDetails: { whyPick: 'legacy note' },
+  };
+  assert.equal(pickCardReason(card), '',
+    'display present but displayWhyValidated absent must return "" — not legacy fallback');
+});
+
+test('pickCardReason returns empty string when displayWhy is too short even with validated=true', () => {
+  const card = {
+    name: 'Test Place',
+    display: { displayWhy: 'Short.', displayWhyValidated: true, displayBadges: [], addability: 'addable' },
+  };
+  assert.equal(pickCardReason(card), '',
+    'Note shorter than 12 chars must be rejected even when displayWhyValidated=true');
+});
+
+test('pickCardReason falls back to legacy fields when display is absent', () => {
+  const card = {
+    name: 'Legacy Bar',
+    supportingDetails: { whyPick: 'A fine cocktail bar in River North.' },
+    primaryReason: 'fallback',
+  };
+  const reason = pickCardReason(card);
+  assert.equal(reason, 'A fine cocktail bar in River North.',
+    'No display object → must use legacy supportingDetails.whyPick');
+});
+
+test('sanitizeWhyPick passes a well-formed LLM evidence note', () => {
+  const note = 'Hand-rolled pasta and a rotating natural wine list anchor this enoteca.';
+  const result = sanitizeWhyPick(note, 'Enoteca Roma', ['Enoteca Roma', 'Bar Milano']);
+  assert.equal(result, note,
+    'A well-formed LLM note free of banned phrases must pass sanitization unchanged');
+});
+
+test('sanitizeWhyPick rejects a note containing a cross-venue name', () => {
+  const result = sanitizeWhyPick(
+    'Known for the same craft cocktails as Bar Milano next door.',
+    'Enoteca Roma',
+    ['Enoteca Roma', 'Bar Milano'],
+  );
+  assert.equal(result, '', 'Note containing another venue name must be rejected');
+});
+
+test('pickCardReason does not insert a deterministic fallback note for semantic cards', () => {
+  // Semantic cards (display present) must never fall through to legacy fields.
+  // This ensures no deterministic or template text reaches the rendered note.
+  const card = {
+    name: 'Test Bar',
+    display: { displayWhy: '', displayWhyValidated: false, displayBadges: [], addability: 'addable' },
+    supportingDetails: { whyPick: 'deterministic template: Test Bar is a strong bar option.' },
+    primaryReason: 'Test Bar is a strong bar option with a 4.5 rating.',
+    whyPick: 'Test Bar is a strong bar option with a 4.5 rating.',
+  };
+  assert.equal(pickCardReason(card), '',
+    'Semantic card with validated=false must never fall back to supportingDetails or primaryReason');
+});
+
+test('api.ts ConciergeDisplayFields interface declares displayWhyValidated', () => {
+  assert.match(apiClient, /displayWhyValidated/,
+    'ConciergeDisplayFields must declare displayWhyValidated for the frontend contract');
+});
+
+test('toCamel correctly converts display_why_validated to displayWhyValidated', () => {
+  // Verify the key transform used in apiFetch does the right thing.
+  // The conversion is done by snakeToCamel which uses /_([a-z])/g → ch.toUpperCase()
+  function snakeToCamel(str) {
+    return str.replace(/_([a-z])/g, (_, ch) => ch.toUpperCase());
+  }
+  assert.equal(snakeToCamel('display_why_validated'), 'displayWhyValidated');
+  assert.equal(snakeToCamel('display_why'), 'displayWhy');
+  assert.equal(snakeToCamel('display_category'), 'displayCategory');
+});

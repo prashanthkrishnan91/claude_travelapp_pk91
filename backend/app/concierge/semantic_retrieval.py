@@ -565,45 +565,19 @@ def _run_pipeline(
     )
 
     set_writer_primary_active = False  # set True only in the set-writer primary branch
-    if note_generation_timed_out:
-        # Past soft ceiling — skip note generation entirely.
-        # Cards will be assembled without notes; the frontend must not render
-        # a Concierge Note block when display_why_validated=False.
-        logger.warning(
-            "semantic_retrieval_v1: note_generation_skipped_past_soft_ceiling "
-            "query=%r elapsed_ms=%d soft_ceiling_ms=%d",
-            user_query, deadline.elapsed_ms(), deadline.sla.soft_ceiling_ms,
-        )
-        card_reasons: Dict[str, CardReason] = {}
-        n_cards = len(cards_data)
-        reasoning_result = ReasoningResultV2(
-            attempted=False,
-            failure_reason="skipped_past_soft_ceiling",
-            final_card_count=n_cards,
-            final_note_omitted_count=n_cards,
-        )
-    elif note_generation_low_budget:
-        # Budget positive but below the minimum useful threshold — skip before
-        # calling the writer so we don't waste a marginal LLM call.
-        logger.info(
-            "semantic_retrieval_v1: note_generation_skipped_low_budget "
-            "query=%r remaining_ms=%d budget_s=%.2f",
-            user_query, remaining_budget_before_reasoning_ms, note_generation_budget_s,
-        )
-        card_reasons = {}
-        n_cards = len(cards_data)
-        reasoning_result = ReasoningResultV2(
-            attempted=False,
-            failure_reason="skipped_low_budget",
-            final_card_count=n_cards,
-            final_note_omitted_count=n_cards,
-        )
-    elif (
+    if (
         set_writer_result is not None
         and not set_writer_result.timed_out
         and set_writer_result.visible_note_count > 0
     ):
-        # ── Set-writer primary path ───────────────────────────────────────────
+        # ── Set-writer primary path — checked FIRST (before SLA timeout check) ─
+        # The set-writer LLM already ran at Step 5.8. Assembling its pre-computed
+        # notes costs zero additional LLM calls. Checking this first ensures that
+        # notes produced before the SLA soft ceiling are preserved even when the
+        # enrichment steps (5.55 Yelp/FSQ, 5.56 editorial) consumed significant
+        # budget, pushing elapsed time past the soft ceiling before Step 7.
+        # Without this ordering, the note_generation_timed_out branch would fire
+        # first and discard validated notes that were already computed.
         # Convert set-writer notes to the existing CardReason dict format.
         # Cards with hidden notes (validated=False) are also added so Step 8
         # can include them without a note block — preserving the contract:
@@ -658,6 +632,39 @@ def _run_pipeline(
         logger.info(
             "semantic_retrieval_v1: set_writer_primary accepted=%d/%d",
             accepted, n,
+        )
+    elif note_generation_timed_out:
+        # Past soft ceiling AND no set-writer notes available — skip fallback LLM.
+        # Cards will be assembled without notes; the frontend must not render
+        # a Concierge Note block when display_why_validated=False.
+        logger.warning(
+            "semantic_retrieval_v1: note_generation_skipped_past_soft_ceiling "
+            "query=%r elapsed_ms=%d soft_ceiling_ms=%d",
+            user_query, deadline.elapsed_ms(), deadline.sla.soft_ceiling_ms,
+        )
+        card_reasons: Dict[str, CardReason] = {}
+        n_cards = len(cards_data)
+        reasoning_result = ReasoningResultV2(
+            attempted=False,
+            failure_reason="skipped_past_soft_ceiling",
+            final_card_count=n_cards,
+            final_note_omitted_count=n_cards,
+        )
+    elif note_generation_low_budget:
+        # Budget positive but below the minimum useful threshold — skip before
+        # calling the writer so we don't waste a marginal LLM call.
+        logger.info(
+            "semantic_retrieval_v1: note_generation_skipped_low_budget "
+            "query=%r remaining_ms=%d budget_s=%.2f",
+            user_query, remaining_budget_before_reasoning_ms, note_generation_budget_s,
+        )
+        card_reasons = {}
+        n_cards = len(cards_data)
+        reasoning_result = ReasoningResultV2(
+            attempted=False,
+            failure_reason="skipped_low_budget",
+            final_card_count=n_cards,
+            final_note_omitted_count=n_cards,
         )
     elif not cards_data:
         # No verified cards reached note assembly — skip LLM cascade entirely.

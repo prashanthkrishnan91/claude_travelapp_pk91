@@ -1490,6 +1490,9 @@ export interface ConciergeDisplayFields {
   addability: "addable" | "research_only" | "closed";
   /** Google-backed price display string ("$$", "$10–20", "Free"). Null when unavailable. */
   displayPrice?: string | null;
+  /** True only when displayWhy was produced by the LLM/evidence-grounded path and passed the
+   *  claim-safety reviewer. Frontend must NOT render a Concierge Note block when false/absent. */
+  displayWhyValidated?: boolean | null;
 }
 
 export interface ConciergeSuggestion {
