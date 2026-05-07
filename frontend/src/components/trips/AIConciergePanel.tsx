@@ -77,7 +77,7 @@ interface Props {
   onIdeaSaved?: () => void;
 }
 
-const CONCIERGE_CACHE_VERSION = 4;
+const CONCIERGE_CACHE_VERSION = 5;
 const CLOSED_SIGNAL_PATTERNS = [
   "permanently closed",
   "closed permanently",

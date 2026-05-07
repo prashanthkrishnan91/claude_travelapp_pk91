@@ -99,7 +99,7 @@ def persist_concierge_request_log(
     base_row = {
         "request_id": str(row_id),
         "user_id": str(user_id),
-        "prompt": redact_prompt(prompt),
+        "prompt_redacted": redact_prompt(prompt),
         "response_type": response.response_type,
         "stage1_prior": decision.stage1_prior,
         "intent_confidence": decision.stage2_confidence,
