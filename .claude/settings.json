@@ -32,6 +32,16 @@
             "timeout": 10000
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c 'python3 \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/ai_os_advisory.py\" post-tool-use'",
+            "timeout": 3000
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -79,6 +89,11 @@
             "type": "command",
             "command": "sh -c 'exec node \"${CLAUDE_PROJECT_DIR:-.}/.claude/helpers/auto-memory-hook.mjs\" sync'",
             "timeout": 10000
+          },
+          {
+            "type": "command",
+            "command": "sh -c 'python3 \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/ai_os_advisory.py\" stop'",
+            "timeout": 3000
           }
         ]
       }
