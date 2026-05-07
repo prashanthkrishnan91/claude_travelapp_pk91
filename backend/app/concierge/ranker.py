@@ -34,14 +34,18 @@ from app.concierge.place_entity_layer import PlaceEntity
 logger = logging.getLogger(__name__)
 
 # Score weights — must sum to 1.0
+# _W_PREFERENCE_FIT added (PR #266); _W_POPULARITY and _W_TRIP_CONTEXT and _W_VALUE
+# reduced to keep the sum at 1.0.  Popularity deliberately reduced so raw review
+# volume has less dominance, especially for hidden_gem preference queries.
 _W_SUBTYPE_FIT = 0.34
 _W_GEO_FIT = 0.22
 _W_QUALITY = 0.12
 _W_EVIDENCE = 0.10
 _W_DIVERSITY = 0.08
-_W_POPULARITY = 0.06
-_W_TRIP_CONTEXT = 0.04
-_W_VALUE = 0.04
+_W_POPULARITY = 0.04   # reduced from 0.06 — raw review volume less dominant
+_W_PREFERENCE_FIT = 0.06  # new — soft preference alignment
+_W_TRIP_CONTEXT = 0.02   # reduced from 0.04 — neutral placeholder
+_W_VALUE = 0.02          # reduced from 0.04 — still active when value signals present
 
 # Wrong-category penalty applied when the user named a strong venue type and
 # the entity matches a clearly different, unrelated category. This is a soft
@@ -137,6 +141,7 @@ class RankScore:
     evidence_strength: float = 0.0
     diversity_signal: float = 0.0
     popularity_signal: float = 0.0
+    preference_fit: float = 0.5   # neutral when no soft preference active
     trip_context_fit: float = 0.5
     value_fit: float = 0.5
     penalties: float = 0.0
@@ -150,6 +155,7 @@ class RankScore:
             "evidence_strength": round(self.evidence_strength, 4),
             "diversity_signal": round(self.diversity_signal, 4),
             "popularity_signal": round(self.popularity_signal, 4),
+            "preference_fit": round(self.preference_fit, 4),
             "trip_context_fit": round(self.trip_context_fit, 4),
             "value_fit": round(self.value_fit, 4),
             "penalties": round(self.penalties, 4),
@@ -421,6 +427,87 @@ def _value_fit(entity: PlaceEntity, frame: ExperienceFrame) -> float:
     if wants_luxury and price in _CHEAP:
         return 0.3
     return 0.5  # unknown price level → neutral
+
+
+def _preference_fit(entity: PlaceEntity, frame: ExperienceFrame) -> float:
+    """Soft preference alignment score: 0.0–1.0.
+
+    Active only when frame.normalized_soft_preferences is non-empty.
+    Returns 0.5 (neutral) when no preference is active or the preference
+    cannot be assessed without richer evidence.
+
+    hidden_gem: prefers moderate-visibility (local-scale) places over mega-popular
+        ones.  Does NOT penalise quality — a well-reviewed local restaurant still
+        scores well.  Places with review counts suggesting national-brand scale
+        receive a mild penalty; moderate-count local-scale places receive a bonus.
+
+    romantic / intimate: boosts only when name contains explicit romantic
+        vocabulary (cozy, date, intimate, romantic, candlelight).  Conservative
+        without evidence so we do not overclaim.
+
+    late_night: boosts only when the name contains explicit late-night indicators
+        ("Late Night", "Midnight", "After Hours", "All Night", "24 Hour", "Open
+        Late").  "2AM" in a business name does NOT trigger a boost — the task
+        spec explicitly prohibits inferring hours from name tokens that happen to
+        resemble a time.
+
+    view_or_geo: geo_fit already carries the view/outdoor signal; this function
+        returns neutral (0.5) so as not to double-count.
+
+    Design invariants:
+    - subtype_fit (weight 0.34) >> preference_fit (weight 0.06): preference can
+      reorder within same-concept candidates but cannot override category trust.
+    - Google operational/addable trust gate is upstream of ranking — this function
+      only runs on already-verified entities.
+    - No new LLM calls; no new provider calls.
+    """
+    normalized_prefs: List[str] = getattr(frame, "normalized_soft_preferences", []) or []
+    if not normalized_prefs:
+        return 0.5  # neutral — no active preference
+
+    name_lower = entity.name.lower()
+    score = 0.5
+
+    # ── hidden_gem ────────────────────────────────────────────────────────────
+    if "hidden_gem" in normalized_prefs:
+        review_count = entity.user_rating_count or 0
+        if review_count > 0:
+            if review_count < 20:
+                # Very few reviews → likely low evidence quality; slight penalty
+                score += -0.05
+            elif review_count <= 500:
+                # Local-scale visibility — well-suited for hidden-gem preference
+                score += 0.10
+            elif review_count <= 2000:
+                # Moderate visibility — acceptable
+                score += 0.03
+            else:
+                # High review volume signals mass-popular place — mild penalty
+                score += -0.05
+
+    # ── romantic / intimate ───────────────────────────────────────────────────
+    if "romantic" in normalized_prefs or "intimate" in normalized_prefs:
+        romantic_terms = {"romantic", "intimate", "cozy", "date", "candlelight", "lovers"}
+        if any(t in name_lower for t in romantic_terms):
+            score += 0.08
+
+    # ── late_night ────────────────────────────────────────────────────────────
+    if "late_night" in normalized_prefs:
+        # Only boost with EXPLICIT late-night indicators in the name.
+        # "2AM" in a business name is intentionally excluded (per task spec —
+        # inferring hours from a name token is unsupported without actual hours
+        # evidence).
+        explicit_late = {
+            "late night", "midnight", "after hours", "all night",
+            "24 hour", "24hr", "open late", "24-hour", "24 hours",
+        }
+        if any(t in name_lower for t in explicit_late):
+            score += 0.08
+
+    # ── view_or_geo ───────────────────────────────────────────────────────────
+    # geo_fit already carries the view/outdoor evidence signal; no double-count.
+
+    return max(0.0, min(1.0, score))
 
 
 def _destination_penalty(entity: PlaceEntity, frame: ExperienceFrame) -> float:
@@ -704,6 +791,7 @@ def rank_entities_with_stats(
         es = _evidence_strength(entity)
         ds = _diversity_signal(entity, accepted)
         ps = _popularity_signal(entity)
+        pf = _preference_fit(entity, frame)
         tc = 0.5  # neutral trip context (Phase 1 — no hotel plumbing)
         vf = _value_fit(entity, frame)
         pen = 0.0
@@ -729,6 +817,7 @@ def rank_entities_with_stats(
             + _W_EVIDENCE * es
             + _W_DIVERSITY * ds
             + _W_POPULARITY * ps
+            + _W_PREFERENCE_FIT * pf
             + _W_TRIP_CONTEXT * tc
             + _W_VALUE * vf
             - pen
@@ -742,6 +831,7 @@ def rank_entities_with_stats(
             evidence_strength=es,
             diversity_signal=ds,
             popularity_signal=ps,
+            preference_fit=pf,
             trip_context_fit=tc,
             value_fit=vf,
             penalties=pen,

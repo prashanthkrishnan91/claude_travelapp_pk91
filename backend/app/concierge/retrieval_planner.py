@@ -75,6 +75,25 @@ _SYNONYM_EXPANSIONS: dict = {
     "spanish": ["spanish restaurant", "tapas"],
 }
 
+# Preference query modifiers: canonical soft-preference label → list of query
+# modifier phrases.  Each phrase is prepended to the venue head to generate a
+# preference-aware, venue-anchored Google Text Search query.  Phrases are tried
+# in order; the first cap-1 produce pref queries, the last cap slot is the broad
+# venue-only fallback for recall.
+#
+# Design invariants:
+# - Every entry is a natural-language phrase (not a single ambiguous word).
+# - "gem" is intentionally absent: the word triggers gem-shop searches without
+#   a strong venue noun.  Use "local favorite", "neighborhood", "underrated" instead.
+# - "hidden gem" omitted for same reason.
+_PREFERENCE_QUERY_MODIFIERS: dict = {
+    "hidden_gem": ["local favorite", "neighborhood", "underrated"],
+    "romantic": ["romantic", "date night", "intimate"],
+    "intimate": ["intimate", "cozy"],
+    "late_night": ["late night", "open late"],
+    "view_or_geo": ["rooftop", "with a view", "outdoor"],
+}
+
 # Geography anchors for Chicago — used when geo hints reference water features.
 # This maps abstract geography hints to provider-query-friendly terms.
 _GEO_QUERY_TERMS: dict = {
@@ -125,6 +144,13 @@ def plan_queries(
     queries like "brewery Chicago waterfront" instead of "waterfront Chicago"
     that would surface arbitrary waterfront restaurants/parks.
 
+    Preference-aware path: when frame.normalized_soft_preferences is non-empty
+    (e.g., "hidden_gem", "romantic", "late_night") and no location anchor/geo
+    hint is present, preference modifier phrases are prepended to the venue head
+    so all queries carry the user's intent (e.g., "local favorite restaurant
+    Chicago" instead of generic "restaurant Chicago").  A broad venue-only
+    fallback query is always included for recall.
+
     Args:
         frame: Extracted ExperienceFrame from the user ask.
         max_queries: Soft cap. Hard capped at HARD_CAP_QUERIES.
@@ -152,41 +178,85 @@ def plan_queries(
     geo_term = _geo_query_term(geo_hints[0], destination) if geo_hints else ""
     loc_anchor = location_modifiers[0] if location_modifiers else ""
 
-    # Query 1: venue + destination + (location modifier OR geo hint).
-    # Concrete location anchors (e.g., "Fulton Street") take priority over
-    # abstract geo hints because they constrain the search far more tightly.
-    if loc_anchor:
-        _add(f"{primary} {loc_anchor} {destination}".strip())
-    elif geo_term:
-        _add(f"{primary} {destination} {geo_term}")
-    else:
-        _add(f"{primary} {destination}")
+    # Collect preference query modifiers from frame.normalized_soft_preferences.
+    # Each modifier phrase is prepended to the venue head for targeted queries.
+    normalized_soft_prefs: List[str] = getattr(frame, "normalized_soft_preferences", []) or []
+    pref_modifiers: List[str] = []
+    seen_pm: set = set()
+    for pref in normalized_soft_prefs:
+        for pm in _PREFERENCE_QUERY_MODIFIERS.get(pref, []):
+            if pm not in seen_pm:
+                pref_modifiers.append(pm)
+                seen_pm.add(pm)
 
-    # Query 2: pure venue + destination — broader recall so the venue head
-    # always has at least one modifier-free query. Ensures a brewery ask
-    # captures real breweries even when the geo-targeted query mostly returns
-    # modifier-y waterfront/riverwalk results.
-    _add(f"{primary} {destination}")
-
-    # Query 3: venue synonym variant + destination + (loc anchor or geo).
-    # Synonyms widen recall while staying venue-anchored ("brewery" → "taproom",
-    # "tapas" → "small plates"). Modifier is preserved when present.
+    # Use the first synonym as the "preference primary" for pref queries when it
+    # is a more descriptive variant (e.g., "cocktail bar" for concept "cocktail").
+    pref_primary = primary
     if frame.subtype_concepts:
         variants = _synonym_variants(frame.subtype_concepts[0])
-        for variant in variants[1:3]:
+        if variants and variants[0] and variants[0].lower() != primary.lower():
+            pref_primary = variants[0]
+
+    if pref_modifiers and not geo_term and not loc_anchor:
+        # Preference-only path: generate preference-aware, venue-anchored queries.
+        # Each is still venue-anchored so Google targets the right place type.
+        for pm in pref_modifiers:
             if len(queries) >= cap:
                 break
-            if loc_anchor:
-                _add(f"{variant} {loc_anchor} {destination}".strip())
-            elif geo_term:
-                _add(f"{variant} {destination} {geo_term}")
-            else:
-                _add(f"{variant} {destination}")
+            _add(f"{pm} {pref_primary} {destination}")
+        # Broad venue-only fallback for maximal recall (if cap not yet reached)
+        _add(f"{primary} {destination}")
 
-    # Query 4 (only if room): venue + location anchor + geo hint together.
-    # Useful for asks like "best izakayas near Fulton Street waterfront".
-    if len(queries) < cap and loc_anchor and geo_term:
-        _add(f"{primary} {loc_anchor} {geo_term}")
+    elif pref_modifiers and (geo_term or loc_anchor):
+        # Geo/location + preference path.
+        # Q1: venue + destination + (loc or geo) — precision-targeted
+        if loc_anchor:
+            _add(f"{primary} {loc_anchor} {destination}".strip())
+        elif geo_term:
+            _add(f"{primary} {destination} {geo_term}")
+        # Q2: preference-aware, venue-anchored
+        _add(f"{pref_modifiers[0]} {pref_primary} {destination}")
+        # Q3: broad fallback or synonym + geo
+        _add(f"{primary} {destination}")
+        if frame.subtype_concepts:
+            variants = _synonym_variants(frame.subtype_concepts[0])
+            for variant in variants[1:2]:
+                if len(queries) >= cap:
+                    break
+                if geo_term:
+                    _add(f"{variant} {destination} {geo_term}")
+                else:
+                    _add(f"{variant} {destination}")
+
+    else:
+        # Original path (no soft preferences): venue + destination + geo/loc + synonyms.
+        # Query 1: venue + destination + (location modifier OR geo hint).
+        if loc_anchor:
+            _add(f"{primary} {loc_anchor} {destination}".strip())
+        elif geo_term:
+            _add(f"{primary} {destination} {geo_term}")
+        else:
+            _add(f"{primary} {destination}")
+
+        # Query 2: pure venue + destination — broader recall.
+        _add(f"{primary} {destination}")
+
+        # Query 3: venue synonym variant + destination + (loc anchor or geo).
+        if frame.subtype_concepts:
+            variants = _synonym_variants(frame.subtype_concepts[0])
+            for variant in variants[1:3]:
+                if len(queries) >= cap:
+                    break
+                if loc_anchor:
+                    _add(f"{variant} {loc_anchor} {destination}".strip())
+                elif geo_term:
+                    _add(f"{variant} {destination} {geo_term}")
+                else:
+                    _add(f"{variant} {destination}")
+
+        # Query 4 (only if room): venue + location anchor + geo hint together.
+        if len(queries) < cap and loc_anchor and geo_term:
+            _add(f"{primary} {loc_anchor} {geo_term}")
 
     # Fallback: if nothing generated, use normalized ask + destination
     if not queries:
@@ -194,8 +264,8 @@ def plan_queries(
         queries.append(_clean_query(fallback))
 
     logger.debug(
-        "retrieval_planner: query=%r destination=%r geo=%r locs=%r → queries=%r",
-        frame.literal_ask, destination, geo_hints, location_modifiers, queries,
+        "retrieval_planner: query=%r destination=%r geo=%r locs=%r pref_modifiers=%r → queries=%r",
+        frame.literal_ask, destination, geo_hints, location_modifiers, pref_modifiers, queries,
     )
 
     return queries[:cap]

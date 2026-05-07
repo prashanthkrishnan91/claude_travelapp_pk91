@@ -1,6 +1,102 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-06) — PR this: AI Concierge v2 Semantic Query Frame Hardening
+## Last change (2026-05-07) — PR #266: AI Concierge v2 Preference-Aware Retrieval and Ranking for Soft Modifiers
+
+**Status: MERGE-READY** — 67 new soft-preference-preservation tests pass; 68 semantic-query-frame tests pass (unchanged); 56 set-level-writer tests pass; 51 curator tests pass; 54 dossier tests pass; 28 parallel-retrieval tests pass; 64 SLA tests pass; 127 evidence-quality tests pass; pre-existing pydantic env failures remain (unrelated, same as before)
+
+### What was built
+
+Soft Preference Preservation — deterministic backend-only layer that preserves travel modifiers ("hidden gem", "romantic", "late night", "with a view") as normalized soft preferences flowing through retrieval query generation and ranking. Fixes the remaining product gap where "hidden gem restaurants" searched too generically (bare `restaurant Chicago`) after PR #265 correctly fixed the venue head but discarded the user's preference intent.
+
+**Root cause**: PR #265 suppressed "gem" as a `_TRAVEL_PREFERENCE_NOUN` so it no longer became the venue head. However, the `ExperienceFrame` only tracked `suppressed_preference_nouns` as telemetry — neither the retrieval planner nor the ranker used those preserved signals to shape queries or ranking. Result: "hidden gem restaurants" produced only `restaurant Chicago` (generic), returning The Purple Pig and Aba rather than credibly local/neighborhood places.
+
+**Changes made**:
+
+1. **`backend/app/concierge/frame_extractor.py`** (modified):
+   - `_HIDDEN_GEM_CONTEXT_PATTERN`: new regex detecting hidden-gem/local-favorite/underrated phrases (`hidden gem`, `local favorite`, `neighborhood haunt`, `underrated`, `undiscovered`, `off the beaten`, `low profile`). Generalised — not per-keyword.
+   - `_VIEW_PREFERENCE_PATTERN`: detects `with a view`, `rooftop`, `patio`, `terrace`, `outdoor` for the case where geo_hints is empty (e.g., "taprooms with a view").
+   - `_TEMPORAL_PATTERNS`: detects `late night`, `open late`, `after hours`, `night owl` → `late_night` label.
+   - `_TEMPORAL_QUALIFIER_TOKENS`: frozenset of words that form temporal phrases ("late", "night", "midnight", "after", "hours", etc.) that must NOT win as primary venue concepts. Prevents "late night izakayas" from extracting "late" as the venue head.
+   - `_classified_modifier_tokens()`: now accepts optional `temporal_constraints` parameter; `_TEMPORAL_QUALIFIER_TOKENS` added to exclusion set so temporal words never beat venue heads.
+   - `_extract_temporal_constraints(query)`: new function populating `temporal_constraints`.
+   - `_extract_normalized_soft_preferences(query, suppressed_nouns, soft_prefs, temporal, geo_hints)`: new function normalizing raw signals into canonical labels (`hidden_gem`, `romantic`, `intimate`, `late_night`, `view_or_geo`). `view_or_geo` only added when `geo_hints` is empty (to avoid double-counting the existing geo_term retrieval path).
+   - `ExperienceFrame`: new field `normalized_soft_preferences: List[str]` — canonical preference labels for retrieval/ranking. Backend-only, never surfaced to UI.
+   - `temporal_constraints` now populated (was always `[]` before).
+
+2. **`backend/app/concierge/retrieval_planner.py`** (modified):
+   - `_PREFERENCE_QUERY_MODIFIERS`: new dict mapping canonical preference → list of query modifier phrases. "hidden_gem" uses ["local favorite", "neighborhood", "underrated"] (not "gem" or "hidden gem" which risk jewelry-shop results). "romantic" uses ["romantic", "date night", "intimate"]. "late_night" uses ["late night", "open late"]. "view_or_geo" uses ["rooftop", "with a view", "outdoor"].
+   - `plan_queries()`: new preference-aware path. When `normalized_soft_preferences` is non-empty and no geo_term/loc_anchor present, generates up to cap preference-aware venue-anchored queries (e.g., `local favorite restaurant Chicago`, `neighborhood restaurant Chicago`, `underrated restaurant Chicago`) instead of the generic bare `restaurant Chicago`. Uses first synonym variant as `pref_primary` when more descriptive (e.g., "cocktail bar" for concept "cocktail"). Fallback to original path when geo/loc constraints dominate.
+
+3. **`backend/app/concierge/ranker.py`** (modified):
+   - Weight adjustment: `_W_POPULARITY` reduced from 0.06 → 0.04; `_W_TRIP_CONTEXT` from 0.04 → 0.02; `_W_VALUE` from 0.04 → 0.02; new `_W_PREFERENCE_FIT = 0.06`. Weights still sum to 1.0.
+   - `RankScore`: new field `preference_fit: float = 0.5` (neutral default); added to `as_dict()`.
+   - `_preference_fit(entity, frame)`: new function. Returns 0.5 neutral when no soft preferences active. For `hidden_gem`: prefers moderate-visibility (50–500 reviews = +0.10) over mega-popular (>2000 = -0.05). For `romantic`/`intimate`: +0.08 when name contains romantic vocabulary. For `late_night`: +0.08 when name has EXPLICIT late-night indicators ("Late Night", "Midnight", "After Hours", "All Night", "24 Hour"); "2AM" in a business name deliberately excluded per claim-safety spec. `view_or_geo`: neutral — `geo_fit` already carries the signal.
+
+4. **`backend/app/concierge/semantic_retrieval.py`** (modified):
+   - `frame_finalization_telemetry`: added `normalized_soft_preferences`, `hidden_gem_preference_active`, `temporal_constraints`.
+
+5. **`backend/tests/test_soft_preference_preservation.py`** (new, 67 tests):
+   - Tests 1–5: Frame extraction for hidden gem restaurants, hidden gem bars, romantic cocktail bars, taprooms with a view, late night izakayas.
+   - Tests 6–10: Retrieval query shapes — venue-anchored, preference-aware, no bare gem.
+   - Tests 11–14: Ranking signal tests — hidden_gem local-scale vs mega-popular, weights invariant, subtype_fit dominance.
+   - Tests 15–17: Claim safety — "2AM Izakaya" no late_night boost, view/waterfront neutrality, contract invariants.
+   - Tests 18–20+: Telemetry field coverage, `_PREFERENCE_QUERY_MODIFIERS` structure, weight sum, temporal extraction.
+
+### Hard contracts preserved
+
+- `fallback_note_visible_count` always 0 (unchanged)
+- `deterministic_visible_count` always 0 (unchanged)
+- Google verification trust gate unchanged
+- Card cap: default 6, range 5–7 (unchanged)
+- Non-Google enrichment cannot mint addable cards (unchanged)
+- No SQL, no UI changes, no new providers, no new LLM calls
+- `normalized_soft_preferences` is frame-only backend telemetry — never in any card payload field
+- `_W_SUBTYPE_FIT` (0.34) >> `_W_PREFERENCE_FIT` (0.06) — preference cannot override category trust
+
+### New telemetry added to `frame_finalization_telemetry`
+
+```
+normalized_soft_preferences    — canonical labels ["hidden_gem", "romantic", "late_night", "view_or_geo"]
+hidden_gem_preference_active   — bool shortcut
+temporal_constraints           — e.g. ["late_night"]
+```
+
+### Query output examples (Chicago)
+
+```
+"hidden gem restaurants"  → local favorite restaurant Chicago / neighborhood restaurant Chicago / underrated restaurant Chicago
+"hidden gem bars"         → local favorite bar Chicago / neighborhood bar Chicago / underrated bar Chicago
+"romantic cocktail bars"  → romantic cocktail bar Chicago / date night cocktail bar Chicago / intimate cocktail bar Chicago
+"taprooms with a view"    → rooftop taproom Chicago / with a view taproom Chicago / outdoor taproom Chicago
+"late night izakayas"     → late night izakaya Chicago / open late izakaya Chicago / izakaya Chicago
+"best waterfront breweries" → brewery Chicago waterfront / brewery Chicago / taproom Chicago waterfront  (geo path unchanged)
+```
+
+### Remaining limitations
+
+- Preference-aware ranking boost is modest (max ±0.10 on a 0.06-weight signal). Strong concept candidates are still dominant; this correctly tilts tie-breaks without overriding category trust.
+- `_HIDDEN_GEM_CONTEXT_PATTERN` captures the most common phrasings. New phrasings ("sleeper hit", "under the radar spots") are not yet detected by the pattern but will still get `hidden_gem` if they contain a suppressed `_TRAVEL_PREFERENCE_NOUN` like "sleeper".
+- `more_options_cursor_present` is always `False` — cursor lives in router layer (PR #263).
+- LLM reviewer gate not built (PR #262).
+
+### Supabase SQL: No
+
+### Test counts
+
+```
+test_soft_preference_preservation.py:  67 tests, all pass (new)
+test_semantic_query_frame.py:          68 tests, all pass (unchanged)
+test_set_level_writer.py:              56 tests, all pass (unchanged)
+test_card_curator.py:                  51 tests, all pass (unchanged)
+test_evidence_dossier.py:              54 tests, all pass (unchanged)
+test_parallel_retrieval.py:            28 tests, all pass (unchanged)
+test_sla_card_cap.py:                  64 tests, all pass (unchanged)
+test_evidence_quality_v3.py:          127 tests, all pass (unchanged)
+```
+
+---
+
+## Previous: PR #265 — AI Concierge v2 Semantic Query Frame Hardening
 
 **Status: MERGE-READY** — 68 new semantic-query-frame tests pass (updated from 59 after review fixes); 56 set-level-writer tests pass; 51 curator tests pass; 54 dossier tests pass; 28 parallel-retrieval tests pass; 64 SLA tests pass; 127 evidence-quality tests pass; 20 pre-existing pydantic env failures remain (unrelated, same as before)
 

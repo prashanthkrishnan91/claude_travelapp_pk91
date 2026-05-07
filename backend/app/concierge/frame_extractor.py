@@ -180,6 +180,50 @@ _SOFT_PREF_PATTERNS: List[tuple] = [
     (re.compile(r"\bwell[-\s]?known\b|\bpopular\b|\biconic\b", re.I), "popular"),
 ]
 
+# Patterns that signal a hidden-gem / local-favorite / low-profile preference.
+# Detected from query text to complement suppressed_preference_nouns (which only
+# catches nouns like "gem"/"haunt"). Covers phrasing like "local favorite", "underrated",
+# "off the beaten path", "neighborhood" + qualifier.
+_HIDDEN_GEM_CONTEXT_PATTERN = re.compile(
+    r"\bhidden\s+gem\b"
+    r"|\blocal\s+(?:favorite|favourite|gem|secret|haunt|find|spot)\b"
+    r"|\bneighborhood\s+(?:haunt|gem|find|favorite|favourite|spot)\b"
+    r"|\bunderrated\b"
+    r"|\bunder[-\s](?:the[-\s])?radar\b"
+    r"|\boff[-\s](?:the[-\s])?beaten\b"
+    r"|\bundiscovered\b"
+    r"|\blow[-\s]?profile\b",
+    re.I,
+)
+
+# Detects view/outdoor preference when NOT already captured as a geo_hint.
+# Used to add "view_or_geo" to normalized_soft_preferences for queries like
+# "taprooms with a view" where bare "view" doesn't match _GEO_PATTERNS.
+_VIEW_PREFERENCE_PATTERN = re.compile(
+    r"\bwith\s+(?:a\s+)?views?\b"
+    r"|\brooftop\b"
+    r"|\bpatio\b"
+    r"|\bterrace\b"
+    r"|\boutdoor(?:\s+seating)?\b",
+    re.I,
+)
+
+# Temporal preference patterns — mapped to canonical labels.
+_TEMPORAL_PATTERNS: List[tuple] = [
+    (re.compile(r"\blate[-\s]?night\b|\bopen\s+late\b|\bafter\s+hours?\b|\bnight\s+owl\b", re.I), "late_night"),
+]
+
+# Temporal qualifier words that act as time modifiers in compound phrases
+# ("late night izakayas") and must NOT win as the primary venue concept.
+# These are the individual tokens that make up temporal phrases — they are
+# excluded from concept extraction via _classified_modifier_tokens so that
+# "late night izakayas" yields venue_head="izakaya", not "late".
+_TEMPORAL_QUALIFIER_TOKENS: frozenset = frozenset({
+    "late", "night", "midnight", "after", "hours", "hour",
+    "early", "morning", "dawn", "dusk", "evening",
+    "open", "owl", "hours",
+})
+
 # Negative constraint patterns
 _NEGATIVE_PATTERNS: List[tuple] = [
     (re.compile(r"\bnot\s+too\s+loud\b|\bnot\s+loud\b|\bnon[-\s]?loud\b", re.I), "not_loud"),
@@ -294,6 +338,13 @@ class ExperienceFrame:
     # Preference modifier nouns that were found in the query but suppressed so
     # a concrete venue head could win (e.g. "gem" from "hidden gem restaurants").
     suppressed_preference_nouns: List[str] = field(default_factory=list)
+
+    # Normalized soft preferences (canonical labels) derived from suppressed_preference_nouns,
+    # soft_preferences, temporal_constraints, and explicit query patterns.
+    # Used by retrieval_planner for preference-aware query generation and by ranker
+    # for preference-fit scoring. Examples: "hidden_gem", "romantic", "late_night", "view_or_geo".
+    # Backend-only telemetry — never surfaced to UI.
+    normalized_soft_preferences: List[str] = field(default_factory=list)
 
     # Meta
     confidence: float = 0.8
@@ -424,17 +475,20 @@ def _classified_modifier_tokens(
     soft_prefs: List[str],
     value_signals: List[str],
     use_cases: List[str],
+    temporal_constraints: Optional[List[str]] = None,
 ) -> set:
     """Return the set of tokens already classified as modifiers.
 
     Any token in this set must NOT be selected as the primary venue concept
-    (otherwise "waterfront breweries" picks "waterfront" as the venue head).
+    (otherwise "waterfront breweries" picks "waterfront" as the venue head,
+    or "late night izakayas" picks "late" as the venue head).
     """
     classified: set = set()
     classified |= _GEO_MODIFIER_TOKENS
     classified |= _AMBIENCE_MODIFIER_TOKENS
     classified |= _USE_CASE_TOKENS
     classified |= _TRAVEL_PREFERENCE_NOUNS
+    classified |= _TEMPORAL_QUALIFIER_TOKENS
     # Add geo hint labels themselves (already lowercase)
     for hint in geo_hints:
         for tok in _tokenize_words(hint):
@@ -447,6 +501,9 @@ def _classified_modifier_tokens(
             classified.add(tok)
     for uc in use_cases:
         classified.add(uc.lower())
+    for tc in (temporal_constraints or []):
+        for tok in _tokenize_words(tc.replace("_", " ")):
+            classified.add(tok)
     return classified
 
 
@@ -469,6 +526,66 @@ def _find_suppressed_preference_nouns(query: str) -> List[str]:
             found.append(tok)
             seen.add(tok)
     return found
+
+
+def _extract_temporal_constraints(query: str) -> List[str]:
+    """Detect temporal preferences in a user query (late night, open late, etc.)."""
+    if not query:
+        return []
+    constraints: List[str] = []
+    for pattern, label in _TEMPORAL_PATTERNS:
+        if pattern.search(query):
+            constraints.append(label)
+    return constraints
+
+
+def _extract_normalized_soft_preferences(
+    query: str,
+    suppressed_preference_nouns: List[str],
+    soft_prefs: List[str],
+    temporal_constraints: List[str],
+    geo_hints: List[str],
+) -> List[str]:
+    """Normalize raw preference signals into canonical labels for retrieval and ranking.
+
+    Returns deduplicated canonical labels:
+    - hidden_gem: suppressed preference nouns present OR hidden/local/underrated patterns
+    - romantic: soft_pref "romantic" detected
+    - intimate: soft_pref "intimate" detected
+    - late_night: temporal constraint "late_night" detected
+    - view_or_geo: view/outdoor pattern detected AND not already covered by geo_hints
+
+    Backend-only — never surfaced to UI.
+    """
+    result: List[str] = []
+    seen: set = set()
+
+    def _add(label: str) -> None:
+        if label not in seen:
+            result.append(label)
+            seen.add(label)
+
+    # hidden_gem: from suppressed preference nouns OR explicit hidden/local/underrated patterns
+    if suppressed_preference_nouns or _HIDDEN_GEM_CONTEXT_PATTERN.search(query):
+        _add("hidden_gem")
+
+    # romantic: from existing soft_prefs detection
+    if "romantic" in soft_prefs:
+        _add("romantic")
+
+    # intimate: from soft_prefs
+    if "intimate" in soft_prefs:
+        _add("intimate")
+
+    # late_night: from temporal constraints
+    if "late_night" in temporal_constraints:
+        _add("late_night")
+
+    # view_or_geo: only when not already covered by geo_hints (which handle waterfront/rooftop/etc.)
+    if not geo_hints and _VIEW_PREFERENCE_PATTERN.search(query):
+        _add("view_or_geo")
+
+    return result
 
 
 def _extract_primary_concepts(query: str, modifier_tokens: Optional[set] = None) -> List[SubtypeConcept]:
@@ -612,11 +729,13 @@ def _extract_frame_impl(
     ambiguity_flags = _extract_ambiguity_flags(q)
     location_modifiers = _extract_location_modifiers(q, destination)
     use_cases = _extract_use_cases(q)
+    temporal_constraints = _extract_temporal_constraints(q)
 
     # Build the set of tokens already classified as modifiers, so they are
     # excluded from primary-concept candidates (venue-head preservation).
     modifier_tokens = _classified_modifier_tokens(
         q, geo_hints, soft_prefs, value_signals, use_cases,
+        temporal_constraints=temporal_constraints,
     )
 
     # Open-vocabulary concept extraction (core of this module)
@@ -626,6 +745,11 @@ def _extract_frame_impl(
     # Frame finalization telemetry: track which travel-preference nouns were
     # found in the query and suppressed so a concrete venue head could win.
     suppressed_preference_nouns = _find_suppressed_preference_nouns(q)
+
+    # Normalized soft preferences: canonical labels for retrieval and ranking.
+    normalized_soft_preferences = _extract_normalized_soft_preferences(
+        q, suppressed_preference_nouns, soft_prefs, temporal_constraints, geo_hints,
+    )
 
     # Normalized ask: lowercase, remove extra whitespace
     normalized = re.sub(r"\s+", " ", q.lower()).strip()
@@ -647,11 +771,13 @@ def _extract_frame_impl(
     confidence = 0.9 if subtype_concepts and subtype_concepts[0].confidence >= 0.8 else 0.7
 
     logger.debug(
-        "frame_extractor: query=%r destination=%r concepts=%r geo=%r locs=%r prefs=%r neg=%r use_cases=%r open_class=%s suppressed_pref_nouns=%r",
+        "frame_extractor: query=%r destination=%r concepts=%r geo=%r locs=%r prefs=%r "
+        "neg=%r use_cases=%r temporal=%r open_class=%s suppressed_pref_nouns=%r normalized_soft_prefs=%r",
         q, destination,
         [(c.label, c.confidence) for c in subtype_concepts],
         geo_hints, location_modifiers, soft_prefs, negative_constraints,
-        use_cases, open_class_detected, suppressed_preference_nouns,
+        use_cases, temporal_constraints, open_class_detected,
+        suppressed_preference_nouns, normalized_soft_preferences,
     )
 
     return ExperienceFrame(
@@ -668,11 +794,12 @@ def _extract_frame_impl(
         geography_hints=geo_hints,
         location_modifiers=location_modifiers,
         use_cases=use_cases,
-        temporal_constraints=[],
+        temporal_constraints=temporal_constraints,
         value_signals=value_signals,
         ambiguity_flags=ambiguity_flags,
         open_class_place_detected=open_class_detected,
         suppressed_preference_nouns=suppressed_preference_nouns,
+        normalized_soft_preferences=normalized_soft_preferences,
         confidence=confidence,
         needs_provider_call=True,
     )
