@@ -1,6 +1,81 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-07) — PR #268: AI Concierge v2 Visible Copy Quality Contract
+## Last change (2026-05-07) — PR #269: AI Concierge Conversational Refinement v1
+
+**Status: OPEN** — 55 new frontend refinement tests pass; 16 existing concierge-renderers tests pass (unchanged); 45-test npm suite passes (unchanged); no backend/SQL changes.
+
+### What was built
+
+Conversational Refinement v1 — a lightweight frontend refinement layer that lets users filter, remove, compare, rerank, and act on the returned card set without starting a new search. Adds contextual follow-up chips ("Show only casual", "Compare top 2", "Find cheaper nearby", "Add best to Day 1") and routes typed messages through a deterministic action interpreter before falling back to the existing backend search path.
+
+**Root cause / product gap**: After AI Concierge v2 backend semantic card intelligence closed, the next value unlock was making the returned card set interactive. Users had no way to filter, compare, or act on the current set without restarting — only generic intent-based follow-up chips existed.
+
+**Changes made**:
+
+1. **`frontend/src/lib/concierge/refinementInterpreter.js`** (new):
+   - `ACTION` constants: 7 action classes (FILTER, REMOVE, RERANK, COMPARE, ADD, SEARCH_MORE, CLARIFY).
+   - `parseRefinementAction(message, currentCards)`: deterministic pattern matcher routing follow-ups to action classes. Ordered by specificity; COMPARE beats RERANK; SEARCH_MORE as final pre-CLARIFY fallback.
+   - `applyRefinementToMessage(action, latestCardMsg)`: applies FILTER/REMOVE/RERANK/COMPARE locally to existing card arrays. Returns synthetic assistant message or null (null = fall through to backend search). FILTER with no matches returns null. RERANK with temporal modifier returns a "can't confirm hours" message and empty card arrays. COMPARE returns comparison card summary data.
+   - `buildContextualSearchQuery(originalQuery, followUpMessage, context)`: combines original query context with new modifier for SEARCH_MORE calls.
+   - `compareCards(cardsWithKind)`: builds compact comparison using safe visible fields (name, category, rating/reviews, area, note excerpt ≤130 chars). No internal metadata.
+   - `selectBestCard(cardsWithKind)`: selects top card by rating, then review count.
+   - All helpers operate on visible fields only; never access internal metadata.
+
+2. **`frontend/src/components/trips/AIConciergePanel.tsx`** (modified):
+   - `RefinementComparisonCard` interface and `isRefinement`/`refinementAction`/`refinementComparison` added to `Message` type.
+   - `getLatestCardMessage(msgs)`: returns the most recent non-refinement assistant message with cards.
+   - `getOriginalQuery(msgs, latestCardMsg)`: finds user message preceding the latest card result.
+   - `getCardsWithKind(msg)`: flattens verified cards with kind (restaurant/attraction/hotel).
+   - `handleUserInput(query)`: main entry point for all user input; routes to `handleRefinement` when cards are present, else to `sendQuery`.
+   - `handleRefinement(query, latestCardMsg)`: interprets action, applies locally or routes to backend, appends synthetic messages.
+   - `refinementChips` memo: shows 4 contextual chips ("Show only casual", "Compare top 2", "Find cheaper nearby", "Add best to Day 1") when any card result is present; replaces generic intent chips.
+   - JSX: comparison rendering block added below message text; shows compact card tiles with name, category, meta, and note excerpt.
+   - All existing chip/button click handlers updated to `handleUserInput`.
+   - Input placeholder updated to reflect refinement capability.
+
+3. **`frontend/tests/concierge-refinement.test.mjs`** (new, 55 tests):
+   - Tests 1–18: `parseRefinementAction` routing for all 7 action types, temporal modifier detection, day number extraction, chip text routing.
+   - Tests 19–38: `applyRefinementToMessage` for FILTER (match, no-match/null, card count), REMOVE (match, no-match, count), RERANK (sort order, temporal fallback), COMPARE (data shape, no cards, single card, note truncation).
+   - Tests 39–44: `buildContextualSearchQuery` (append modifier, destination pass-through, fallback to dest).
+   - Tests 45–47: `selectBestCard` (rating, tie-breaking by review count, null on empty).
+   - Tests 43–47: Contract regressions — no research sources promoted, cards not re-minted, googleVerification retained, no internal metadata in compare output, CLARIFY returns null not empty-card result.
+   - Tests 48–55: AIConciergePanel structural — imports, routing, chip handler, comparison render, ADD uses existing addItem, SEARCH_MORE uses callConciergeSearch, no fallback_note/deterministic fields.
+
+### Hard contracts preserved
+
+- `fallback_note_visible_count` always 0 (no change — backend untouched)
+- `deterministic_visible_count` always 0 (no change — backend untouched)
+- Google verification trust gate unchanged
+- Card cap: default 6, range 5–7 (unchanged)
+- Non-Google enrichment cannot mint addable cards (refinement only subsets existing cards)
+- No SQL, no new providers, no new LLM calls, no backend changes
+- All refinement card results are subsets of original Google-verified set
+- No internal metadata (dossiers, evidence, reviewer labels) exposed
+
+### Remaining limitations
+
+- Action parser is deterministic (pattern-based). Complex paraphrases not matching any pattern fall to CLARIFY_UNSUPPORTED or SEARCH_MORE. Coverage is sufficient for v1 UX goals.
+- RERANK with temporal modifier (late-night, after-dinner) defers to search rather than guessing — this is the correct behavior per spec.
+- Compare shows first two cards from the current set; multi-card comparison not in scope for v1.
+- "Add best to Day 1" works when `dayNumber` is extracted; "Add best to my trip" uses selected day.
+
+### Supabase SQL: No
+
+### Test counts
+
+```
+concierge-refinement.test.mjs:   55 tests, all pass (new)
+concierge-renderers.test.mjs:    16 tests, all pass (unchanged)
+npm test (full suite):           45 tests, all pass (unchanged)
+```
+
+### Recommended next step
+
+PR #270: Conversational Refinement v2 — multi-turn context accumulation (chain filter → remove → compare in one session without resetting to the original card set), or improve the chip suggestion set based on session data (e.g., show "Remove [detected cuisine]" chip when the current set has one dominant cuisine).
+
+---
+
+## Previous: PR #268: AI Concierge v2 Visible Copy Quality Contract
 
 **Status: MERGE-READY** — 119 claim-safety reviewer tests pass (64 new for PR #268, 55 unchanged from PR #267); 56 set-level-writer tests pass (unchanged); 68 semantic-query-frame tests pass (unchanged); 67 soft-preference-preservation tests pass (unchanged); 64 SLA tests pass (unchanged); 127 evidence-quality tests pass (unchanged)
 
