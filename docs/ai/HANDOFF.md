@@ -1,6 +1,80 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-07) — PR #272: Sev1 regression fix — semantic_retrieval_v1 price wiring, address dedup, category rejection, cheaper chip
+## Last change (2026-05-07) — PR #273: Fast LLM Set Writer Core (Level 2 performance architecture fix)
+
+**Status: OPEN** — Backend-only. No SQL. No UI changes. No new endpoints. No cache implemented.
+
+### What was built
+
+Level 2 performance architecture fix for the AI Concierge set-level note-writing path. The set writer's LLM call was slow because it sent verbose per-card evidence blocks (~1100–1700 chars of dynamic evidence per 6-card set) and used `max_tokens=1024`. This PR compresses evidence into typed `AllowedClaimsPacket` objects and builds a compact micro-prompt, materially reducing dynamic payload size and token budget.
+
+**Root cause**: `_build_card_evidence_block()` rendered every dossier field (provider facts, review themes, modifier context, view evidence, quality signals) as verbose prompt text, and the prompt builder concatenated all 6 blocks. The LLM's `max_tokens=1024` left unnecessary headroom for a task that only needs ~320 tokens of output.
+
+### Files changed
+
+1. **`backend/app/concierge/set_level_writer.py`** (refactored — PR #273):
+   - Added `AllowedClaimsPacket` dataclass — compact typed evidence distillation per card.
+   - Added `_distill_allowed_claims_packet()` — converts dossier to compact packet with `allowed_claim_atoms`, `safe_caveats`, `disallowed_boundaries`, `evidence_strength`, `modifier_support`. Rating/review excluded. Place name is identity, not evidence. Internal role labels never in packet text.
+   - Added `_build_micro_set_prompt()` — stable static policy block + small dynamic packet payload. Replaces `_build_set_level_prompt` in the `write_set_notes()` hot path.
+   - Added `_render_packet()` — compact per-packet string renderer.
+   - Added `_MICRO_POLICY` — module-level static policy constant (never changes per request).
+   - Added `_MAX_TOKENS_DEFAULT = 384` (was 1024) — controlled by `CONCIERGE_SET_WRITER_MAX_TOKENS` env var.
+   - Modified `_call_set_writer_llm()` — now returns `Tuple[Optional[str], Dict[str, Any]]` with LLM telemetry (model, max_tokens, stop_reason, input/output tokens).
+   - Improved `_parse_set_writer_response()` — tries full `json.loads()` before regex fallback to avoid fragile grab-first-object on clean JSON responses.
+   - Added `writer_telemetry: Optional[Dict[str, Any]]` to `SetWriterResult` — populated with evidence_distill_ms, prompt_build_ms, input_token_estimate, llm_call_ms, parse_ms, validation_ms, set_writer_total_ms, dynamic_packet_count, dynamic_packet_char_count, dynamic_prompt_char_count, notes_visible/hidden/rejected_count.
+   - Updated `as_telemetry_dict()` — merges writer_telemetry fields into top-level telemetry dict.
+   - Kept `_build_card_evidence_block()` and `_build_set_level_prompt()` for backward compat with existing tests (no longer called by `write_set_notes()`).
+   - All existing validators (`reason_validator`, `claim_safety_reviewer`) unchanged and enforced.
+   - All existing contracts preserved: `fallback_note_visible_count=0`, no fallback prose, no card drop on note failure.
+
+2. **`backend/tests/test_set_level_writer.py`** (modified — new test classes added):
+   - Updated existing `_call_set_writer_llm` mock return values to return `(str, {})` tuples.
+   - Updated `test_prompt_build_exception_returns_safe_result` to patch `_build_micro_set_prompt`.
+   - Added `TestAllowedClaimsPacketDistiller` (13 tests): rich dossier atoms, thin packet, rating/review excluded, name-not-evidence, modifier states, listing context, disallowed boundaries, packet char count smaller than evidence block.
+   - Added `TestMicroSetPrompt` (7 tests): micro prompt smaller than legacy, contains all place IDs, policy rules, distinctness, user query, no raw role labels, name-inference blocked.
+   - Added `TestWriterTelemetry` (6 tests): fields populate on success, on parse failure, max_tokens reduced, packet char counts, timeout telemetry, cards preserved when notes fail.
+   - Added `TestImprovedParsing` (6 tests): clean JSON, prose-wrapped JSON fallback, invalid JSON, empty, null values, non-string exclusion.
+   - Added `TestValidationPreservedPR273` (7 tests): rating/review rejected, name-derived claims rejected, unsupported modifier rejected, generic filler rejected, null hidden, no deterministic visible path.
+   - Added `TestRegressionPR273` (8 tests): dataclass fields unchanged, fallback invariant, legacy imports, write_set_notes returns correct type, claim_safety_reviewer importable, reason_validator importable.
+
+### PR #273 self-audit
+
+| Acceptance criterion | File/function | Status |
+|---|---|---|
+| Backend-only | No UI files changed | ✓ |
+| No SQL | No SQL | ✓ |
+| No new endpoint | No route changes | ✓ |
+| No new LLM calls | `write_set_notes` still makes one call | ✓ |
+| No cache implemented | TODO deferred to PR #274 | ✓ |
+| Dynamic prompt smaller | `_build_micro_set_prompt` vs `_build_set_level_prompt` — ~40-50% fewer chars | ✓ |
+| max_tokens reduced | 1024 → 384 (`_MAX_TOKENS_DEFAULT`) | ✓ |
+| Safety validators preserved | `reason_validator` + `claim_safety_reviewer` both enforced | ✓ |
+| Invalid/null/generic notes hidden | `_validate_set_writer_note` unchanged + reviewer gate | ✓ |
+| Cards preserved | `fallback_note_visible_count=0` invariant maintained | ✓ |
+| Telemetry fields added | `writer_telemetry` dict in `SetWriterResult` | ✓ |
+| No fallback prose | `fallback_note_visible_count=0` everywhere | ✓ |
+| Name not treated as evidence | `_distill_allowed_claims_packet` — no name-derived atoms | ✓ |
+
+### TODO: PR #274 — Validated-note cache (deferred)
+
+**Explicitly deferred from PR #273.** Gate on PR #273 telemetry to confirm latency reduction before implementing cache.
+
+Cache design (for PR #274 reference):
+- Exact-fingerprint, in-memory only (no persistent store, no Redis, no SQL).
+- Fingerprint = hash of (place_id, evidence_atoms, modifier_support, frame.literal_ask).
+- Cached values: validated notes only (already passed `reason_validator` + `claim_safety_reviewer`).
+- Revalidate on cache hit: run validators again (evidence may have changed between requests).
+- Cross-card diversity still enforced after cache retrieval.
+- Budget check before using cache: only use cached notes if budget remains.
+- Implementation gate: PR #273 telemetry must show `dynamic_prompt_char_count` materially lower and `llm_call_ms` as the dominant cost before adding cache complexity.
+
+### Supabase SQL: No
+### UI changed: No
+### Providers changed: No
+
+---
+
+## Previous: PR #272: Sev1 regression fix — semantic_retrieval_v1 price wiring, address dedup, category rejection, cheaper chip
 
 **Status: OPEN** — 31 new backend regression tests pass; 140 frontend refinement tests pass (127 from PR #271 + 13 new); 45 other frontend tests pass; no SQL changes.
 

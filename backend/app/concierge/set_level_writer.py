@@ -1,22 +1,32 @@
-"""Set-Level Writer v1 — evidence-grounded, set-aware note generation.
+"""Set-Level Writer v2 — fast evidence-compressed, set-aware note generation.
 
-PR #261: Uses CuratedSetResult and PlaceEvidenceDossier to generate per-card
-notes as a coordinated set, replacing isolated generic one-offs.
+PR #273 (Fast LLM Set Writer Core): Replaces verbose per-card evidence blocks
+with compact AllowedClaimsPackets and a Micro Set Writer prompt. One LLM call,
+materially smaller dynamic payload, max_tokens reduced from 1024 → 384.
 
-Architecture invariants:
+Architecture invariants (unchanged from PR #261):
 - Evidence-grounded: notes use only dossier-supplied evidence; fabricated claims
   are blocked by the same reason_validator already used in batched_reason_builder.
-- Set-aware: notes are generated together with cross-card distinctness enforced
-  in both the prompt and a post-generation skeleton-diversity check.
-- Role-aware: internal roles are converted to user-friendly LLM hints; raw
-  role labels (best_overall, evidence_rich, etc.) are NEVER written to notes.
+- Set-aware: notes generated together with cross-card distinctness enforced.
+- Role-aware: internal roles NEVER written to notes.
 - Never surfaces: internal_evidence_gaps, role names, dossier internals.
-- Never mints fallback visible prose: failed validation hides the note; no
-  deterministic text is ever written with validated=True.
+- Never mints fallback visible prose: failed validation hides the note.
 - fallback_note_visible_count is always 0 (structural invariant from PR #257).
-- Failure cannot block card return: all exceptions are caught; caller receives
+- Failure cannot block card return: all exceptions caught; caller receives
   timed_out=True / empty notes_by_place_id on any error.
 - Preserves deadline: respects deadline.budget_for_note_generation_s().
+
+Performance changes (PR #273):
+- AllowedClaimsPacket: compact typed distillation replaces verbose evidence blocks.
+- Micro Set Writer prompt: stable static policy + small dynamic packet payload.
+- max_tokens: 384 (was 1024) — sufficient for 6 × 180-char notes + JSON overhead.
+- Improved parse: tries full json.loads() before regex fallback.
+- Structured telemetry: evidence_distill_ms, prompt_build_ms, llm_call_ms,
+  parse_ms, validation_ms, dynamic_packet_count/char_count, dynamic_prompt_char_count.
+
+TODO (PR #274): Validated-note cache — exact-fingerprint, in-memory only,
+validated notes only, revalidated on cache hit, cross-card diversity still
+enforced. Gate on PR #273 telemetry to confirm packet size reduction and latency.
 """
 
 from __future__ import annotations
@@ -43,6 +53,11 @@ from app.concierge.batched_reason_builder import (
 
 # Source identifier for notes produced by this module.
 SOURCE_SET_WRITER = "set_level_writer_v1"
+
+# ── Token budget ───────────────────────────────────────────────────────────────
+# 384 covers 6 × ~45-token notes + JSON wrapper + stop margin.
+# Increase to 512 only if empirical telemetry shows output truncation at 384.
+_MAX_TOKENS_DEFAULT = int(os.getenv("CONCIERGE_SET_WRITER_MAX_TOKENS", "384"))
 
 # ── Role → user-friendly LLM hint (NEVER exposes raw role label) ──────────────
 _ROLE_PROMPT_HINTS: Dict[str, str] = {
@@ -129,6 +144,8 @@ class SetWriterResult:
     unsupported_claim_count: int
     # PR #267 reviewer telemetry (optional — None when reviewer was not run)
     reviewer_telemetry: Optional[Dict[str, Any]] = None
+    # PR #273 writer telemetry (timing, token, packet size data)
+    writer_telemetry: Optional[Dict[str, Any]] = None
 
     def as_telemetry_dict(self, elapsed_ms: int = 0) -> Dict[str, Any]:
         """Telemetry dict for semantic_retrieval_v1.set_writer_telemetry log."""
@@ -149,12 +166,12 @@ class SetWriterResult:
         }
         if self.reviewer_telemetry:
             d["reviewer_telemetry"] = self.reviewer_telemetry
+        if self.writer_telemetry:
+            d.update(self.writer_telemetry)
         return d
 
 
 # ── Evidence stub for reason_validator ───────────────────────────────────────
-# reason_validator.validate_reason() needs an evidence-like object with
-# structured_facts, uncertainty_flags, and optionally an entity sub-object.
 
 @dataclass
 class _EvidenceStub:
@@ -222,65 +239,285 @@ def _make_evidence_stub(
     )
 
 
-# ── LLM call ──────────────────────────────────────────────────────────────────
+# ── AllowedClaimsPacket — compact evidence distillation (PR #273) ─────────────
 
-_SET_WRITER_MODEL = os.getenv(
-    "CONCIERGE_SET_WRITER_MODEL",
-    os.getenv("CONCIERGE_CARD_REASONING_PRIMARY_MODEL", "claude-haiku-4-5-20251001"),
-)
+@dataclass
+class AllowedClaimsPacket:
+    """Compact typed distillation of evidence for one card.
+
+    This is NOT prose generation and NOT templating.
+    It is evidence compression + safety boundary construction.
+    Thin evidence produces sparse packets that make null output likely.
+    Rating/review counts are never claim atoms.
+    Place name is identity, not evidence — never used to infer vibe/temporal claims.
+    Internal role labels are never included in packet text sent to the LLM.
+    """
+    place_id: str
+    display_name: str
+    category: str                     # e.g. "Brewery / Taproom" or "bar"
+    neighborhood: str                 # address/location hint, may be ""
+    allowed_claim_atoms: List[str]    # 2–4 concrete allowed claim atoms from evidence
+    safe_caveats: List[str]           # 0–2 honest caveats (modifier unconfirmed, etc.)
+    disallowed_boundaries: List[str]  # claim types blocked for this card
+    evidence_strength: str            # "strong" | "ok" | "thin"
+    modifier_support: str             # "confirmed" | "listing_context_only" | "not_confirmed" | "not_applicable"
 
 
-def _call_set_writer_llm(prompt: str, timeout_s: float) -> Optional[str]:
-    """Call Claude API for set-level note generation. Returns raw text or None."""
-    try:
-        import anthropic  # type: ignore[import]
-    except ImportError:
-        logger.warning("set_level_writer: anthropic SDK not installed")
-        return None
+# Claim boundaries that always apply regardless of evidence.
+_DISALLOWED_ALWAYS = [
+    "rating/review-count prose",
+    "hidden-gem/local-favorite/underrated",
+    "hours/open-late/late-night (name alone is not evidence)",
+    "waterfront/scenic-view/river-lake (unless amenity-confirmed)",
+    "romantic/date-night",
+    "Michelin/awards",
+    "price/reservations",
+]
 
-    api_key = os.getenv("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        logger.warning("set_level_writer: ANTHROPIC_API_KEY not set")
-        return None
 
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        message = client.messages.create(
-            model=_SET_WRITER_MODEL,
-            max_tokens=1024,
-            timeout=timeout_s,
-            messages=[{"role": "user", "content": prompt}],
+def _distill_allowed_claims_packet(
+    card_input: SetWriterCardInput,
+    frame: Any,
+) -> AllowedClaimsPacket:
+    """Convert one card's dossier into a compact AllowedClaimsPacket.
+
+    Rating and review counts are excluded as note-writing angles.
+    Place name is treated as identity only — never inferred as evidence
+    for hidden-gem, late-night, waterfront, romantic, cheaper, speakeasy,
+    cocktail-forward, local-favorite, scenic, or patio claims.
+    """
+    dossier = card_input.dossier
+    entity = card_input.entity
+
+    place_id = getattr(entity, "place_id", "") or ""
+    display_name = (
+        (dossier.name if dossier else None)
+        or getattr(entity, "name", "Unknown")
+    )
+
+    # Category
+    if dossier:
+        category = dossier.category or (
+            (dossier.primary_type or "").replace("_", " ")
+        ) or ""
+    else:
+        category = (getattr(entity, "primary_type", "") or "").replace("_", " ")
+
+    # Neighborhood / location hint
+    if dossier:
+        neighborhood = dossier.neighborhood or getattr(entity, "formatted_address", "") or ""
+    else:
+        neighborhood = getattr(entity, "formatted_address", "") or ""
+
+    # Evidence strength
+    if dossier is None:
+        evidence_strength = "thin"
+    elif dossier.is_minimal:
+        evidence_strength = "thin"
+    elif dossier.source_confidence == "strong":
+        evidence_strength = "strong"
+    else:
+        evidence_strength = "ok"
+
+    # Modifier support
+    mfit = ""
+    location_modifiers = getattr(frame, "location_modifiers", []) or []
+    geo_hints = getattr(frame, "geography_hints", []) or []
+    requested_mod = location_modifiers[0] if location_modifiers else (
+        geo_hints[0] if geo_hints else ""
+    )
+
+    if dossier and requested_mod:
+        mfit = getattr(getattr(dossier, "query_fit", None), "modifier_fit", "") or ""
+        if mfit == "confirmed":
+            modifier_support = "confirmed"
+        elif mfit == "not_confirmed":
+            modifier_support = "not_confirmed"
+        else:
+            # Check for listing context on view entries
+            view_entries = getattr(
+                getattr(dossier, "review_themes", None), "view_patio_waterfront", []
+            ) or []
+            if any(e.startswith("listing_context:") for e in view_entries):
+                modifier_support = "listing_context_only"
+            else:
+                modifier_support = "not_applicable"
+    elif requested_mod:
+        modifier_support = "not_confirmed"
+    else:
+        modifier_support = "not_applicable"
+
+    # Allowed claim atoms — from evidence only, not from name
+    allowed_claim_atoms: List[str] = []
+    if dossier and not dossier.is_minimal:
+        # Provider evidence facts (non-rating/review)
+        for pev in (dossier.provider_evidence or []):
+            facts = getattr(pev, "facts", []) or []
+            for f in facts[:6]:
+                if (
+                    not f.startswith("rating:")
+                    and not f.startswith("review_count:")
+                    and not f.startswith("status:")
+                    and len(allowed_claim_atoms) < 4
+                ):
+                    allowed_claim_atoms.append(f)
+
+        # Review themes (concrete evidence)
+        themes = dossier.review_themes
+        if themes:
+            for item in (themes.food_drink or [])[:2]:
+                if len(allowed_claim_atoms) < 4:
+                    allowed_claim_atoms.append(f"food/drink: {item}")
+            for item in (themes.ambiance or [])[:1]:
+                if len(allowed_claim_atoms) < 4:
+                    allowed_claim_atoms.append(f"ambiance: {item}")
+            for item in (themes.service or [])[:1]:
+                if len(allowed_claim_atoms) < 4:
+                    allowed_claim_atoms.append(f"service: {item}")
+
+            # View/outdoor: explicit amenity evidence only (not listing context)
+            view_explicit = [
+                e for e in (themes.view_patio_waterfront or [])
+                if not e.startswith("listing_context:")
+            ]
+            for item in view_explicit[:1]:
+                if len(allowed_claim_atoms) < 4:
+                    allowed_claim_atoms.append(f"outdoor/amenity (confirmed): {item}")
+
+        # Modifier confirmed
+        if modifier_support == "confirmed" and requested_mod:
+            if len(allowed_claim_atoms) < 4:
+                allowed_claim_atoms.append(f"modifier '{requested_mod}': confirmed in evidence")
+
+    # Safe caveats
+    safe_caveats: List[str] = []
+    if evidence_strength == "thin":
+        safe_caveats.append("thin evidence — anchor on name/category/address only; prefer null")
+    if modifier_support == "not_confirmed" and requested_mod:
+        safe_caveats.append(
+            f"modifier '{requested_mod}' requested but NOT confirmed — "
+            "do not claim it; honest caveat required"
         )
-        return message.content[0].text if message.content else None
-    except Exception as exc:
-        logger.warning("set_level_writer: llm_call_failed model=%s error=%s", _SET_WRITER_MODEL, exc)
-        return None
+    elif modifier_support == "listing_context_only" and requested_mod:
+        safe_caveats.append(
+            f"modifier '{requested_mod}': listing context only — "
+            "may reference listing context; do not claim scenic feature"
+        )
+    if dossier:
+        themes = getattr(dossier, "review_themes", None)
+        if themes:
+            for nc in (getattr(themes, "negative_caveats", None) or [])[:1]:
+                safe_caveats.append(f"caveat: {nc}")
+    safe_caveats = safe_caveats[:2]
+
+    # Disallowed boundaries: always-on + card-specific
+    disallowed_boundaries = list(_DISALLOWED_ALWAYS)
+    if modifier_support in ("not_confirmed", "listing_context_only", "not_applicable"):
+        if requested_mod:
+            disallowed_boundaries.append(
+                f"claiming '{requested_mod}' as confirmed physical attribute"
+            )
+
+    # View/waterfront blocked unless explicitly confirmed
+    if modifier_support != "confirmed":
+        view_entries = []
+        if dossier:
+            themes = getattr(dossier, "review_themes", None)
+            if themes:
+                view_entries = getattr(themes, "view_patio_waterfront", []) or []
+        explicit_view = [e for e in view_entries if not e.startswith("listing_context:")]
+        if not explicit_view:
+            disallowed_boundaries.append("outdoor-seating/patio/view (no amenity evidence)")
+
+    return AllowedClaimsPacket(
+        place_id=place_id,
+        display_name=display_name,
+        category=category,
+        neighborhood=neighborhood,
+        allowed_claim_atoms=allowed_claim_atoms,
+        safe_caveats=safe_caveats,
+        disallowed_boundaries=disallowed_boundaries,
+        evidence_strength=evidence_strength,
+        modifier_support=modifier_support,
+    )
 
 
-def _parse_set_writer_response(
-    response_text: str,
-    expected_count: int,
-) -> Dict[str, Optional[str]]:
-    """Parse JSON from LLM response. Returns empty dict on any parse error."""
-    if not response_text:
-        return {}
-    try:
-        json_match = re.search(r"\{[^{}]+\}", response_text, re.DOTALL)
-        if not json_match:
-            return {}
-        raw = json.loads(json_match.group(0))
-        result: Dict[str, Optional[str]] = {}
-        for k, v in raw.items():
-            if v is None:
-                result[str(k)] = None
-            elif isinstance(v, str) and v.strip():
-                result[str(k)] = v.strip()
-        return result
-    except (json.JSONDecodeError, ValueError):
-        return {}
+# ── Micro Set Prompt builder (PR #273) ────────────────────────────────────────
+
+# Static policy block — never changes; only dynamic packet section varies.
+_MICRO_POLICY = """\
+RULES (violations → note hidden):
+- DO NOT use: rating/review count, "highly rated", "most-reviewed", "review base", \
+"review volume", "review footprint", "notable review", "high engagement", \
+"steady review volume", "consistent quality", "established reputation".
+- DO NOT use: "hidden gem", "local favorite", "locals love", "under-the-radar", \
+"underrated", "best-kept secret", "off-the-beaten-path".
+- DO NOT use: "great option", "top pick", "well-regarded", "strong match", \
+"matches the concept", "solid signals", "worth a visit", "perfect for", \
+"a must-try", "great choice".
+- DO NOT claim: waterfront, scenic view, river/lake view, patio/outdoor seating \
+unless the packet lists it as allowed_claim_atom with "(confirmed)".
+- DO NOT claim: Michelin, awards, hours, "open late", romantic, price/reservations.
+- DO NOT infer late-night, hidden-gem, waterfront, romantic, cheaper, local-favorite, \
+scenic, patio, or speakeasy from a business name alone — name is identity, not evidence.
+- RETURN null (not "") when evidence is thin or no concrete differentiator exists.
+- One sentence or two short clauses. Under 220 characters.
+
+DISTINCTNESS: Each note must differ in opening, angle, and specific detail. Do not reuse sentence structure across cards.\
+"""
 
 
-# ── Evidence block builder ─────────────────────────────────────────────────────
+def _render_packet(packet: AllowedClaimsPacket, idx_1based: int, total: int) -> str:
+    """Render one AllowedClaimsPacket as a compact string for the prompt."""
+    lines = [f"[{idx_1based}/{total}] id={packet.place_id!r}"]
+    lines.append(f"  name: {packet.display_name}")
+    if packet.category:
+        lines.append(f"  type: {packet.category}")
+    if packet.neighborhood:
+        lines.append(f"  location: {packet.neighborhood}")
+    lines.append(f"  evidence_strength: {packet.evidence_strength}")
+    if packet.modifier_support != "not_applicable":
+        lines.append(f"  modifier_support: {packet.modifier_support}")
+    if packet.allowed_claim_atoms:
+        lines.append(f"  allowed_claims: {'; '.join(packet.allowed_claim_atoms)}")
+    else:
+        lines.append("  allowed_claims: none — use name/category/location only")
+    if packet.safe_caveats:
+        lines.append(f"  caveats: {'; '.join(packet.safe_caveats)}")
+    return "\n".join(lines)
+
+
+def _build_micro_set_prompt(
+    packets: List[AllowedClaimsPacket],
+    frame: Any,
+) -> str:
+    """Build compact micro set writer prompt from AllowedClaimsPackets.
+
+    Static policy text is a module-level constant.
+    Only the dynamic packet payload varies per request.
+    """
+    user_query = getattr(frame, "literal_ask", "") or ""
+    n = len(packets)
+
+    packet_text = "\n\n".join(
+        _render_packet(p, i + 1, n)
+        for i, p in enumerate(packets)
+    )
+
+    # Build index → place_id map for the output instruction
+    id_map = ", ".join(f'"{i + 1}": note_or_null' for i in range(n))
+
+    return (
+        f'Write one concise note per place (or null) for a traveler choosing.\n'
+        f'Query: "{user_query}"\n\n'
+        f"{_MICRO_POLICY}\n\n"
+        f"EVIDENCE PACKETS (use ONLY what is listed — do not invent facts):\n\n"
+        f"{packet_text}\n\n"
+        f'Return ONLY strict JSON: {{{id_map}}}'
+    )
+
+
+# ── Legacy evidence block builder (kept for backward compat / existing tests) ──
 
 def _build_card_evidence_block(
     card_input: SetWriterCardInput,
@@ -288,7 +525,11 @@ def _build_card_evidence_block(
     total: int,
     frame: Any,
 ) -> str:
-    """Render one card's dossier evidence as structured text for the LLM prompt."""
+    """Render one card's dossier evidence as structured text for the LLM prompt.
+
+    Kept for backward compatibility with existing tests. The primary writer
+    path now uses _distill_allowed_claims_packet + _build_micro_set_prompt.
+    """
     dossier = card_input.dossier
     entity = card_input.entity
 
@@ -351,7 +592,6 @@ def _build_card_evidence_block(
             if themes.occasion_fit:
                 lines.append(f"  - Occasion: {', '.join(themes.occasion_fit[:2])}")
 
-            # View/outdoor: explicit vs listing-context — different trust levels
             view_explicit = [
                 e for e in (themes.view_patio_waterfront or [])
                 if not e.startswith("listing_context:")
@@ -366,7 +606,6 @@ def _build_card_evidence_block(
                     f"{', '.join(view_explicit[:2])}"
                 )
             elif view_listing:
-                # Listing context only — lower trust
                 tokens = [e.replace("listing_context:", "") for e in view_listing[:2]]
                 lines.append(
                     f"  - Outdoor/view (listing name context ONLY — not amenity-confirmed): "
@@ -390,7 +629,6 @@ def _build_card_evidence_block(
             lines.append("  - Evidence quality: OK — moderate evidence available")
 
     else:
-        # No dossier — minimal fallback
         addr = getattr(entity, "formatted_address", "") or ""
         if addr:
             lines.append(f"  - Location: {addr}")
@@ -402,13 +640,17 @@ def _build_card_evidence_block(
     return "\n".join(lines)
 
 
-# ── Prompt builder ─────────────────────────────────────────────────────────────
+# ── Legacy prompt builder (kept for backward compat / existing tests) ──────────
 
 def _build_set_level_prompt(
     card_inputs: List[SetWriterCardInput],
     frame: Any,
 ) -> str:
-    """Build the set-level LLM prompt for all cards in one turn."""
+    """Build the set-level LLM prompt for all cards in one turn.
+
+    Kept for backward compatibility with existing tests. The primary writer
+    path now uses _build_micro_set_prompt with AllowedClaimsPackets.
+    """
     user_query = getattr(frame, "literal_ask", "") or ""
     venue_concept = ""
     if getattr(frame, "subtype_concepts", None):
@@ -420,13 +662,11 @@ def _build_set_level_prompt(
 
     n = len(card_inputs)
 
-    # Per-card evidence blocks
     evidence_text = "\n\n".join(
         _build_card_evidence_block(ci, i + 1, n, frame)
         for i, ci in enumerate(card_inputs)
     )
 
-    # Modifier handling section
     modifier_lines: List[str] = []
     if location_modifiers:
         modifier_lines.append(
@@ -511,6 +751,119 @@ Return ONLY a JSON object mapping the place number (string key) to a note string
 {{"1": "...", "2": null, "3": "..."}}"""
 
     return prompt
+
+
+# ── LLM call ──────────────────────────────────────────────────────────────────
+
+_SET_WRITER_MODEL = os.getenv(
+    "CONCIERGE_SET_WRITER_MODEL",
+    os.getenv("CONCIERGE_CARD_REASONING_PRIMARY_MODEL", "claude-haiku-4-5-20251001"),
+)
+
+
+def _call_set_writer_llm(
+    prompt: str,
+    timeout_s: float,
+    max_tokens: int = _MAX_TOKENS_DEFAULT,
+) -> Tuple[Optional[str], Dict[str, Any]]:
+    """Call Claude API for set-level note generation.
+
+    Returns (raw_text_or_None, llm_telemetry_dict).
+    llm_telemetry_dict always present; contains model, max_tokens, and optionally
+    output_stop_reason, input_tokens, output_tokens.
+    """
+    tel: Dict[str, Any] = {
+        "model": _SET_WRITER_MODEL,
+        "max_tokens": max_tokens,
+    }
+    try:
+        import anthropic  # type: ignore[import]
+    except ImportError:
+        logger.warning("set_level_writer: anthropic SDK not installed")
+        return None, tel
+
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        logger.warning("set_level_writer: ANTHROPIC_API_KEY not set")
+        return None, tel
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        message = client.messages.create(
+            model=_SET_WRITER_MODEL,
+            max_tokens=max_tokens,
+            timeout=timeout_s,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        # Capture available SDK telemetry fields
+        tel["output_stop_reason"] = getattr(message, "stop_reason", None)
+        usage = getattr(message, "usage", None)
+        if usage is not None:
+            tel["input_tokens"] = getattr(usage, "input_tokens", None)
+            tel["output_tokens"] = getattr(usage, "output_tokens", None)
+            # Cache tokens — only include if present (requires prompt caching, deferred PR #274)
+            crit = getattr(usage, "cache_read_input_tokens", None)
+            ccrt = getattr(usage, "cache_creation_input_tokens", None)
+            if crit is not None:
+                tel["cache_read_input_tokens"] = crit
+            if ccrt is not None:
+                tel["cache_creation_input_tokens"] = ccrt
+        raw_text = message.content[0].text if message.content else None
+        return raw_text, tel
+    except Exception as exc:
+        logger.warning(
+            "set_level_writer: llm_call_failed model=%s error=%s",
+            _SET_WRITER_MODEL, exc,
+        )
+        tel["llm_error"] = str(exc)[:200]
+        return None, tel
+
+
+# ── Parse response ─────────────────────────────────────────────────────────────
+
+def _parse_set_writer_response(
+    response_text: str,
+    expected_count: int,
+) -> Dict[str, Optional[str]]:
+    """Parse JSON from LLM response. Returns empty dict on any parse error.
+
+    Tries full json.loads() first (clean JSON response), then falls back to
+    regex extraction (prose-wrapped JSON) to avoid fragile grab-first-object.
+    """
+    if not response_text:
+        return {}
+
+    def _validate_map(raw: Any) -> Dict[str, Optional[str]]:
+        if not isinstance(raw, dict):
+            return {}
+        result: Dict[str, Optional[str]] = {}
+        for k, v in raw.items():
+            if v is None:
+                result[str(k)] = None
+            elif isinstance(v, str) and v.strip():
+                result[str(k)] = v.strip()
+        return result
+
+    # Attempt 1: full parse (handles clean JSON with no surrounding prose)
+    stripped = response_text.strip()
+    if stripped.startswith("{"):
+        try:
+            raw = json.loads(stripped)
+            parsed = _validate_map(raw)
+            if parsed is not None:
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+    # Attempt 2: regex extraction (handles JSON embedded in prose)
+    try:
+        json_match = re.search(r"\{[^{}]+\}", response_text, re.DOTALL)
+        if not json_match:
+            return {}
+        raw = json.loads(json_match.group(0))
+        return _validate_map(raw)
+    except (json.JSONDecodeError, ValueError):
+        return {}
 
 
 # ── Per-note validation ────────────────────────────────────────────────────────
@@ -606,7 +959,6 @@ def _enforce_repeated_skeleton_diversity(
     for place_ids in groups.values():
         if len(place_ids) <= 1:
             continue
-        # Keep first visible; hide the rest.
         for repeated_place_id in place_ids[1:]:
             note_obj = notes_by_place_id[repeated_place_id]
             note_obj.validated = False
@@ -648,7 +1000,9 @@ def write_set_notes(
     t_start = time.monotonic()
 
     def _empty(timed_out: bool = False, reason: str = "") -> SetWriterResult:
-        logger.debug("set_level_writer: empty_result timed_out=%s reason=%s", timed_out, reason)
+        logger.debug(
+            "set_level_writer: empty_result timed_out=%s reason=%s", timed_out, reason
+        )
         return SetWriterResult(
             notes_by_place_id={},
             visible_note_count=0,
@@ -661,7 +1015,25 @@ def write_set_notes(
             repeated_skeleton_count=0,
             unsupported_claim_count=0,
             reviewer_telemetry=None,
+            writer_telemetry=None,
         )
+
+    # Accumulated writer telemetry
+    wtel: Dict[str, Any] = {
+        "model": _SET_WRITER_MODEL,
+        "max_tokens": _MAX_TOKENS_DEFAULT,
+        "evidence_distill_ms": 0,
+        "prompt_build_ms": 0,
+        "input_token_estimate": 0,
+        "llm_call_ms": 0,
+        "parse_ms": 0,
+        "validation_ms": 0,
+        "set_writer_total_ms": 0,
+        "dynamic_packet_count": 0,
+        "dynamic_packet_char_count": 0,
+        "dynamic_prompt_char_count": 0,
+        "set_writer_timed_out": False,
+    }
 
     try:
         # ── Budget gate ───────────────────────────────────────────────────────
@@ -672,9 +1044,12 @@ def write_set_notes(
                     "set_level_writer: skipped_no_budget remaining_ms=%d",
                     deadline.remaining_ms(),
                 )
+                wtel["set_writer_timed_out"] = True
                 return _empty(timed_out=True, reason="no_budget")
         else:
-            budget_s = float(os.getenv("CONCIERGE_CARD_REASONING_TIMEOUT_MS", "8000")) / 1000.0
+            budget_s = float(
+                os.getenv("CONCIERGE_CARD_REASONING_TIMEOUT_MS", "8000")
+            ) / 1000.0
 
         # ── Build card inputs from curated result ─────────────────────────────
         curated_cards = getattr(curated_result, "curated_cards", []) or []
@@ -700,31 +1075,69 @@ def write_set_notes(
             logger.info("set_level_writer: no_api_key — writer unavailable")
             return _empty(timed_out=False, reason="no_api_key")
 
-        # ── Build prompt ──────────────────────────────────────────────────────
+        # ── Distill AllowedClaimsPackets ──────────────────────────────────────
+        t_distill = time.monotonic()
         try:
-            prompt = _build_set_level_prompt(card_inputs, frame)
+            packets = [
+                _distill_allowed_claims_packet(ci, frame)
+                for ci in card_inputs
+            ]
+        except Exception as dist_exc:
+            logger.error(
+                "set_level_writer: distill_error error=%s", dist_exc
+            )
+            return _empty(reason=f"distill_error:{dist_exc}")
+        wtel["evidence_distill_ms"] = int((time.monotonic() - t_distill) * 1000)
+
+        # ── Build micro prompt ────────────────────────────────────────────────
+        t_prompt = time.monotonic()
+        try:
+            prompt = _build_micro_set_prompt(packets, frame)
         except Exception as prompt_exc:
-            logger.error("set_level_writer: prompt_build_error error=%s", prompt_exc)
+            logger.error(
+                "set_level_writer: prompt_build_error error=%s", prompt_exc
+            )
             return _empty(reason=f"prompt_build_error:{prompt_exc}")
+        wtel["prompt_build_ms"] = int((time.monotonic() - t_prompt) * 1000)
+
+        # Packet/prompt size telemetry
+        wtel["dynamic_packet_count"] = len(packets)
+        wtel["dynamic_packet_char_count"] = sum(
+            len(_render_packet(p, i + 1, len(packets)))
+            for i, p in enumerate(packets)
+        )
+        wtel["dynamic_prompt_char_count"] = len(prompt)
+        wtel["input_token_estimate"] = len(prompt) // 4
 
         # ── LLM call ──────────────────────────────────────────────────────────
-        raw = _call_set_writer_llm(prompt, timeout_s=budget_s)
-        elapsed_ms = int((time.monotonic() - t_start) * 1000)
+        t_llm = time.monotonic()
+        raw, llm_tel = _call_set_writer_llm(prompt, timeout_s=budget_s)
+        wtel["llm_call_ms"] = int((time.monotonic() - t_llm) * 1000)
+        wtel.update(llm_tel)  # model, max_tokens, stop_reason, token counts
 
         if raw is None:
-            logger.info("set_level_writer: no_llm_response elapsed_ms=%d", elapsed_ms)
+            logger.info(
+                "set_level_writer: no_llm_response elapsed_ms=%d",
+                int((time.monotonic() - t_start) * 1000),
+            )
+            wtel["set_writer_total_ms"] = int((time.monotonic() - t_start) * 1000)
             return _empty(reason="llm_no_response")
 
         # ── Parse response ────────────────────────────────────────────────────
+        t_parse = time.monotonic()
         parsed = _parse_set_writer_response(raw, len(card_inputs))
+        wtel["parse_ms"] = int((time.monotonic() - t_parse) * 1000)
+
         if not parsed:
             logger.warning(
                 "set_level_writer: parse_failed elapsed_ms=%d response=%r",
-                elapsed_ms, raw[:200],
+                int((time.monotonic() - t_start) * 1000), raw[:200],
             )
+            wtel["set_writer_total_ms"] = int((time.monotonic() - t_start) * 1000)
             return _empty(reason="parse_failed")
 
         # ── Validate notes ────────────────────────────────────────────────────
+        t_validate = time.monotonic()
         notes_by_place_id: Dict[str, SetWriterNote] = {}
         validated_notes_for_diversity: Dict[str, str] = {}
         rejected_count = 0
@@ -744,14 +1157,15 @@ def write_set_notes(
 
             if passes and raw_note is not None:
                 trimmed = _trim_note(raw_note)
-                # Determine caveat type for telemetry
                 caveat_type = ""
                 signals = ci.curation_signals
                 if getattr(signals, "has_listing_context_only", False):
                     caveat_type = "listing_context"
                 elif getattr(signals, "modifier_fit", "") == "not_confirmed":
                     caveat_type = "unconfirmed_modifier"
-                elif getattr(ci, "dossier", None) and getattr(ci.dossier, "is_minimal", False):
+                elif getattr(ci, "dossier", None) and getattr(
+                    ci.dossier, "is_minimal", False
+                ):
                     caveat_type = "low_evidence"
 
                 note_obj = SetWriterNote(
@@ -761,7 +1175,7 @@ def write_set_notes(
                     rejection_reason="",
                     source=SOURCE_SET_WRITER,
                     role_used_internal=ci.role,
-                    evidence_terms_used=[],  # telemetry detail; not exposed
+                    evidence_terms_used=[],
                     caveat_type=caveat_type,
                 )
                 notes_by_place_id[place_id] = note_obj
@@ -785,6 +1199,8 @@ def write_set_notes(
                 )
                 notes_by_place_id[place_id] = note_obj
 
+        wtel["validation_ms"] = int((time.monotonic() - t_validate) * 1000)
+
         # ── Cross-card diversity check ─────────────────────────────────────────
         repeated_skeleton_count = _enforce_repeated_skeleton_diversity(
             notes_by_place_id,
@@ -792,7 +1208,8 @@ def write_set_notes(
         )
         if repeated_skeleton_count > 0:
             logger.warning(
-                "set_level_writer: repeated_skeletons_hidden count=%d pre_enforcement_visible=%d",
+                "set_level_writer: repeated_skeletons_hidden count=%d "
+                "pre_enforcement_visible=%d",
                 repeated_skeleton_count, len(validated_notes_for_diversity),
             )
 
@@ -810,9 +1227,6 @@ def write_set_notes(
             note_source_counts[note.source] = note_source_counts.get(note.source, 0) + 1
 
         # ── Claim-safety reviewer gate (PR #267) ──────────────────────────────
-        # Additional deterministic review pass on all validated notes. Reviewer
-        # fails closed: rejected notes are hidden but cards are NOT dropped.
-        # Budget: up to remaining time budget minus a small reserve, capped at 2s.
         reviewer_telemetry_dict: Optional[Dict[str, Any]] = None
         try:
             from app.concierge.claim_safety_reviewer import review_notes_set
@@ -837,7 +1251,6 @@ def write_set_notes(
                     frame=frame,
                     timeout_s=reviewer_budget_s,
                 )
-                # Apply reviewer decisions: hide rejected notes; cards remain.
                 for place_id, r_result in reviewer_results.items():
                     if not r_result.passed and place_id in notes_by_place_id:
                         note_obj = notes_by_place_id[place_id]
@@ -849,7 +1262,6 @@ def write_set_notes(
                         )
                         unsupported_claim_count += 1
 
-                # Recount after reviewer gate
                 visible_count = sum(
                     1 for note in notes_by_place_id.values() if note.validated
                 )
@@ -880,8 +1292,6 @@ def write_set_notes(
                 "hiding all validated notes (fail closed for text, cards kept)",
                 rev_exc,
             )
-            # Fail closed: hide every validated note that was queued for review.
-            # Cards are NOT dropped — only text visibility is affected.
             _hidden_on_error = 0
             for _note_obj in notes_by_place_id.values():
                 if _note_obj.validated:
@@ -903,11 +1313,20 @@ def write_set_notes(
             }
 
         elapsed_ms = int((time.monotonic() - t_start) * 1000)
+        wtel["set_writer_total_ms"] = elapsed_ms
+        wtel["notes_visible_count"] = visible_count
+        wtel["notes_hidden_count"] = hidden_count
+        wtel["notes_rejected_count"] = rejected_count
+
         logger.info(
             "set_level_writer: complete input=%d visible=%d hidden=%d "
-            "rejected=%d repeated_skeleton=%d unsupported_claim=%d elapsed_ms=%d",
+            "rejected=%d repeated_skeleton=%d unsupported_claim=%d "
+            "elapsed_ms=%d llm_call_ms=%d prompt_chars=%d packet_count=%d",
             len(card_inputs), visible_count, hidden_count,
-            rejected_count, repeated_skeleton_count, unsupported_claim_count, elapsed_ms,
+            rejected_count, repeated_skeleton_count, unsupported_claim_count,
+            elapsed_ms, wtel.get("llm_call_ms", 0),
+            wtel.get("dynamic_prompt_char_count", 0),
+            wtel.get("dynamic_packet_count", 0),
         )
 
         return SetWriterResult(
@@ -922,6 +1341,7 @@ def write_set_notes(
             repeated_skeleton_count=repeated_skeleton_count,
             unsupported_claim_count=unsupported_claim_count,
             reviewer_telemetry=reviewer_telemetry_dict,
+            writer_telemetry=wtel,
         )
 
     except Exception as exc:

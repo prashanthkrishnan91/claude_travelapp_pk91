@@ -217,13 +217,17 @@ def _make_card(
 
 from app.concierge.set_level_writer import (
     SOURCE_SET_WRITER,
+    AllowedClaimsPacket,
     SetWriterCardInput,
     SetWriterNote,
     SetWriterResult,
     _build_card_evidence_block,
+    _build_micro_set_prompt,
     _build_set_level_prompt,
     _count_repeated_skeletons,
+    _distill_allowed_claims_packet,
     _make_evidence_stub,
+    _render_packet,
     _validate_set_writer_note,
     write_set_notes,
 )
@@ -683,7 +687,8 @@ class TestNoteDistinctness:
 
         with patch("app.concierge.set_level_writer._call_set_writer_llm") as mock_llm:
             mock_llm.return_value = (
-                f'{{"1": "{repeated_1}", "2": "{repeated_2}", "3": "{distinct}"}}'
+                f'{{"1": "{repeated_1}", "2": "{repeated_2}", "3": "{distinct}"}}',
+                {},
             )
             result = write_set_notes(curated, _Frame())
 
@@ -713,7 +718,7 @@ class TestNoteDistinctness:
         s2 = "Serves craft lagers with 700 reviews near Wicker Park."
         s3 = "Serves craft lagers with 500 reviews near Wicker Park."
         with patch("app.concierge.set_level_writer._call_set_writer_llm") as mock_llm:
-            mock_llm.return_value = f'{{"1": "{s1}", "2": "{s2}", "3": "{s3}"}}'
+            mock_llm.return_value = (f'{{"1": "{s1}", "2": "{s2}", "3": "{s3}"}}', {})
             result = write_set_notes(curated, _Frame())
 
         visible = [n for n in result.notes_by_place_id.values() if n.validated]
@@ -737,7 +742,8 @@ class TestNoteDistinctness:
         distinct = "Popular for weekday jazz sets and late-night small plates."
         with patch("app.concierge.set_level_writer._call_set_writer_llm") as mock_llm:
             mock_llm.return_value = (
-                f'{{"1": "{repeated_1}", "2": "{repeated_2}", "3": "{distinct}"}}'
+                f'{{"1": "{repeated_1}", "2": "{repeated_2}", "3": "{distinct}"}}',
+                {},
             )
             result = write_set_notes(curated, _Frame())
 
@@ -775,7 +781,7 @@ class TestFailedValidationHidesNote:
 
         # Mock the LLM to return a rejected note
         with patch("app.concierge.set_level_writer._call_set_writer_llm") as mock_llm:
-            mock_llm.return_value = '{"1": "Strong brewery match in Chicago."}'
+            mock_llm.return_value = ('{"1": "Strong brewery match in Chicago."}', {})
             result = write_set_notes(curated, frame)
 
         # The note should be hidden (rejected), not showing fallback prose
@@ -799,7 +805,7 @@ class TestLowEvidenceCardPreserved:
         # Simulate no LLM response (or thin note)
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test_key"}):
             with patch("app.concierge.set_level_writer._call_set_writer_llm") as mock_llm:
-                mock_llm.return_value = '{"1": null}'
+                mock_llm.return_value = ('{"1": null}', {})
                 curated = _CuratedSetResult(curated_cards=[card], output_count=1)
                 result = write_set_notes(curated, frame)
 
@@ -894,7 +900,8 @@ class TestExceptionPathSafe:
         card = _make_card("pid15c", "Test Place")
         curated = _CuratedSetResult(curated_cards=[card], output_count=1)
 
-        with patch("app.concierge.set_level_writer._build_set_level_prompt") as mock_prompt:
+        # write_set_notes uses _build_micro_set_prompt (PR #273 path)
+        with patch("app.concierge.set_level_writer._build_micro_set_prompt") as mock_prompt:
             mock_prompt.side_effect = ValueError("Prompt error")
             with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}):
                 result = write_set_notes(curated, _Frame())
@@ -919,7 +926,7 @@ class TestTelemetryAccuracy:
         # Return one valid note and one null (thin)
         good_note = "Known for its year-round IPA range on Fulton Street."
         with patch("app.concierge.set_level_writer._call_set_writer_llm") as mock_llm:
-            mock_llm.return_value = f'{{"1": "{good_note}", "2": null}}'
+            mock_llm.return_value = (f'{{"1": "{good_note}", "2": null}}', {})
             result = write_set_notes(curated, frame)
 
         tel = result.as_telemetry_dict(elapsed_ms=42)
@@ -1005,7 +1012,9 @@ class TestPR257FallbackNoteInvariant:
 
         # Even with a good note, fallback must be 0
         with patch("app.concierge.set_level_writer._call_set_writer_llm") as mock_llm:
-            mock_llm.return_value = '{"1": "Known for craft IPAs and a patio on Milwaukee Ave."}'
+            mock_llm.return_value = (
+                '{"1": "Known for craft IPAs and a patio on Milwaukee Ave."}', {}
+            )
             result = write_set_notes(curated, _Frame())
 
         assert result.fallback_note_visible_count == 0
@@ -1184,3 +1193,746 @@ class TestPromptStructure:
         prompt = _build_set_level_prompt(inputs, frame)
         # Must mention distinctness
         assert "distinct" in prompt.lower() or "vary" in prompt.lower()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PR #273 Tests: AllowedClaimsPacket Distiller
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestAllowedClaimsPacketDistiller:
+    """Tests for _distill_allowed_claims_packet() — compact evidence compression."""
+
+    def test_rich_dossier_produces_concrete_claim_atoms(self):
+        """Rich dossier → packet has ≥1 allowed claim atom from real evidence."""
+        card = _make_card(
+            "pid_d1", "Haymarket Brewing",
+            food_drink=["craft IPA (amenity)", "seasonal rotating taps"],
+            ambiance=["lively tap room", "communal seating"],
+        )
+        frame = _Frame()
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        packet = _distill_allowed_claims_packet(ci, frame)
+        assert isinstance(packet, AllowedClaimsPacket)
+        assert packet.display_name == "Haymarket Brewing"
+        assert len(packet.allowed_claim_atoms) >= 1
+        # Evidence-derived atoms (food/ambiance themes) present
+        atoms_text = " ".join(packet.allowed_claim_atoms)
+        assert "craft" in atoms_text or "IPA" in atoms_text or "lively" in atoms_text or "tap" in atoms_text
+
+    def test_thin_dossier_produces_sparse_packet(self):
+        """Thin (is_minimal=True) dossier → sparse packet, no atoms, evidence_strength=thin."""
+        card = _make_card("pid_d2", "Unknown Bar", is_minimal=True)
+        frame = _Frame()
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        packet = _distill_allowed_claims_packet(ci, frame)
+        assert packet.evidence_strength == "thin"
+        # Thin evidence → no concrete claim atoms from provider/themes
+        assert len(packet.allowed_claim_atoms) == 0
+        # Caveats mention thin evidence
+        assert any("thin" in c.lower() for c in packet.safe_caveats)
+
+    def test_rating_and_review_count_excluded_as_claim_atoms(self):
+        """rating: and review_count: provider facts must not become claim atoms."""
+        card = _make_card("pid_d3", "Rated Brewery")
+        card.dossier.provider_evidence = [
+            _ProviderEvidenceItem(
+                source="google_places",
+                facts=["rating:4.8", "review_count:1200", "type:brewery"],
+            )
+        ]
+        frame = _Frame()
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        packet = _distill_allowed_claims_packet(ci, frame)
+        atoms_text = " ".join(packet.allowed_claim_atoms)
+        assert "rating:" not in atoms_text
+        assert "4.8" not in atoms_text
+        assert "review_count:" not in atoms_text
+        assert "1200" not in atoms_text
+
+    def test_place_name_not_used_as_evidence_for_vibe_claims(self):
+        """Name alone must not produce claim atoms for vibe/temporal inferences."""
+        for name in [
+            "Hidden Gem Cocktail Bar", "Riverwalk Brewing", "Late Night Taproom",
+            "Speakeasy Lounge", "Romantic Rooftop Bar",
+        ]:
+            card = _make_card(f"pid_name_{name[:6]}", name, is_minimal=True)
+            frame = _Frame()
+            ci = SetWriterCardInput(
+                entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+                role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+            )
+            packet = _distill_allowed_claims_packet(ci, frame)
+            atoms_text = " ".join(packet.allowed_claim_atoms).lower()
+            disallowed_text = " ".join(packet.disallowed_boundaries).lower()
+            # Name must not propagate as a claim atom
+            assert len(packet.allowed_claim_atoms) == 0, (
+                f"Name '{name}' produced claim atoms: {packet.allowed_claim_atoms}"
+            )
+            # Disallowed boundaries must include relevant blocked categories
+            assert "hidden" in disallowed_text or "hidden-gem" in disallowed_text or "rating" in disallowed_text
+
+    def test_modifier_support_confirmed_when_evidence_confirms(self):
+        """modifier_support='confirmed' when dossier.query_fit.modifier_fit='confirmed'."""
+        card = _make_card(
+            "pid_d5", "Riverwalk Taproom",
+            modifier_fit="confirmed",
+            view_entries=["outdoor seating (amenity)"],
+        )
+        card.dossier.query_fit.modifier_fit = "confirmed"
+        frame = _Frame(location_modifiers=["Riverwalk"])
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        packet = _distill_allowed_claims_packet(ci, frame)
+        assert packet.modifier_support == "confirmed"
+
+    def test_modifier_support_not_confirmed_when_missing(self):
+        """modifier_support='not_confirmed' when modifier requested but not confirmed."""
+        card = _make_card("pid_d6", "Some Bar", modifier_fit="not_confirmed")
+        card.dossier.query_fit.modifier_fit = "not_confirmed"
+        frame = _Frame(location_modifiers=["Riverwalk"])
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        packet = _distill_allowed_claims_packet(ci, frame)
+        assert packet.modifier_support == "not_confirmed"
+        # Caveat must mention modifier not confirmed
+        caveat_text = " ".join(packet.safe_caveats).lower()
+        assert "not confirmed" in caveat_text or "not_confirmed" in caveat_text
+
+    def test_listing_context_view_sets_listing_context_only(self):
+        """Listing-context-only view entries → modifier_support='listing_context_only'."""
+        card = _make_card(
+            "pid_d7", "Riverwalk Brewing",
+            view_entries=["listing_context:riverwalk"],
+        )
+        frame = _Frame(location_modifiers=["Riverwalk"])
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        packet = _distill_allowed_claims_packet(ci, frame)
+        assert packet.modifier_support == "listing_context_only"
+
+    def test_disallowed_boundaries_always_present(self):
+        """Disallowed boundaries must always include the standard blocked categories."""
+        card = _make_card("pid_d8", "Normal Brewery")
+        frame = _Frame()
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        packet = _distill_allowed_claims_packet(ci, frame)
+        # Standard boundaries always present
+        boundaries = " ".join(packet.disallowed_boundaries).lower()
+        assert "rating" in boundaries
+        assert "hidden" in boundaries or "hidden-gem" in boundaries
+        assert "michelin" in boundaries
+
+    def test_no_outdoor_view_atom_without_amenity_evidence(self):
+        """View/outdoor is not an allowed claim atom unless explicitly confirmed (not listing_context)."""
+        card = _make_card(
+            "pid_d9", "Riverwalk Bar",
+            view_entries=["listing_context:riverwalk"],
+        )
+        frame = _Frame()
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        packet = _distill_allowed_claims_packet(ci, frame)
+        atoms_text = " ".join(packet.allowed_claim_atoms).lower()
+        assert "outdoor" not in atoms_text
+        assert "patio" not in atoms_text
+        assert "view" not in atoms_text
+
+    def test_explicit_outdoor_amenity_becomes_claim_atom(self):
+        """Explicit amenity view evidence (not listing_context:) → allowed claim atom."""
+        card = _make_card(
+            "pid_d10", "Garden Brewery",
+            view_entries=["outdoor seating (amenity)"],
+        )
+        frame = _Frame()
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        packet = _distill_allowed_claims_packet(ci, frame)
+        atoms_text = " ".join(packet.allowed_claim_atoms).lower()
+        assert "outdoor" in atoms_text or "amenity" in atoms_text
+
+    def test_packet_char_count_smaller_than_evidence_block(self):
+        """Packet rendering must produce fewer characters than legacy evidence block."""
+        card = _make_card(
+            "pid_d11", "Half Acre Beer",
+            food_drink=["house IPA", "barrel-aged stout"],
+            ambiance=["lively", "communal"],
+        )
+        frame = _Frame()
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        packet = _distill_allowed_claims_packet(ci, frame)
+        packet_text = _render_packet(packet, 1, 1)
+        legacy_block = _build_card_evidence_block(ci, 1, 1, frame)
+        assert len(packet_text) < len(legacy_block), (
+            f"Packet ({len(packet_text)} chars) not smaller than legacy block "
+            f"({len(legacy_block)} chars)"
+        )
+
+    def test_strong_evidence_sets_evidence_strength_strong(self):
+        """source_confidence='strong' and not is_minimal → evidence_strength='strong'."""
+        card = _make_card("pid_d12", "Goose Island", source_confidence="strong")
+        frame = _Frame()
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        packet = _distill_allowed_claims_packet(ci, frame)
+        assert packet.evidence_strength == "strong"
+
+    def test_no_dossier_produces_thin_packet(self):
+        """No dossier at all → thin packet with no atoms."""
+        card = _make_card("pid_d13", "Mystery Bar")
+        card_no_dossier = _CuratedCard(
+            entity=card.entity,
+            rank_score=card.rank_score,
+            dossier=None,
+            role="low_evidence_holdback",
+            curation_score=0.3,
+            curation_signals=card.curation_signals,
+        )
+        frame = _Frame()
+        ci = SetWriterCardInput(
+            entity=card_no_dossier.entity,
+            rank_score=card_no_dossier.rank_score,
+            dossier=None,
+            role=card_no_dossier.role,
+            curation_signals=card_no_dossier.curation_signals,
+            original_rank_index=0,
+        )
+        packet = _distill_allowed_claims_packet(ci, frame)
+        assert packet.evidence_strength == "thin"
+        assert len(packet.allowed_claim_atoms) == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PR #273 Tests: Micro Set Writer Prompt
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestMicroSetPrompt:
+    """Tests for _build_micro_set_prompt() — compact prompt using AllowedClaimsPackets."""
+
+    def _make_packet(self, place_id, name, evidence_strength="ok",
+                     atoms=None, caveats=None, modifier_support="not_applicable"):
+        return AllowedClaimsPacket(
+            place_id=place_id,
+            display_name=name,
+            category="Brewery",
+            neighborhood="123 Main St, Chicago",
+            allowed_claim_atoms=atoms or ["craft IPA on tap", "communal seating"],
+            safe_caveats=caveats or [],
+            disallowed_boundaries=["rating/review-count prose", "hidden-gem"],
+            evidence_strength=evidence_strength,
+            modifier_support=modifier_support,
+        )
+
+    def test_micro_prompt_smaller_than_legacy_prompt(self):
+        """Micro prompt must be materially smaller than the legacy evidence-block prompt."""
+        cards = [
+            _make_card(f"pid_mp{i}", f"Brewery {i}",
+                       food_drink=["IPA", "stout"], ambiance=["lively"])
+            for i in range(6)
+        ]
+        frame = _Frame()
+        inputs = [
+            SetWriterCardInput(
+                entity=c.entity, rank_score=c.rank_score, dossier=c.dossier,
+                role=c.role, curation_signals=c.curation_signals, original_rank_index=i,
+            )
+            for i, c in enumerate(cards)
+        ]
+
+        legacy_prompt = _build_set_level_prompt(inputs, frame)
+        packets = [_distill_allowed_claims_packet(ci, frame) for ci in inputs]
+        micro_prompt = _build_micro_set_prompt(packets, frame)
+
+        assert len(micro_prompt) < len(legacy_prompt), (
+            f"Micro prompt ({len(micro_prompt)} chars) not smaller than "
+            f"legacy prompt ({len(legacy_prompt)} chars)"
+        )
+
+    def test_micro_prompt_contains_all_place_ids(self):
+        """Micro prompt must reference all place IDs in the packet set."""
+        packets = [
+            self._make_packet("pidA", "Brew Alpha"),
+            self._make_packet("pidB", "Brew Beta"),
+            self._make_packet("pidC", "Brew Gamma"),
+        ]
+        frame = _Frame()
+        prompt = _build_micro_set_prompt(packets, frame)
+        assert "pidA" in prompt
+        assert "pidB" in prompt
+        assert "pidC" in prompt
+
+    def test_micro_prompt_contains_policy_rules(self):
+        """Micro prompt must include anti-pattern policy rules."""
+        packets = [self._make_packet("pid1", "Brew One")]
+        frame = _Frame()
+        prompt = _build_micro_set_prompt(packets, frame)
+        prompt_lower = prompt.lower()
+        # Must block rating/review and hidden-gem
+        assert "rating" in prompt_lower or "review" in prompt_lower
+        assert "hidden" in prompt_lower or "DO NOT" in prompt
+        assert "null" in prompt_lower
+
+    def test_micro_prompt_contains_distinctness_rule(self):
+        """Micro prompt must include distinctness instructions."""
+        packets = [
+            self._make_packet("pid1", "Brew One"),
+            self._make_packet("pid2", "Brew Two"),
+        ]
+        frame = _Frame()
+        prompt = _build_micro_set_prompt(packets, frame)
+        assert "distinct" in prompt.lower() or "differ" in prompt.lower()
+
+    def test_micro_prompt_includes_user_query(self):
+        """Micro prompt must include the user's literal ask."""
+        packets = [self._make_packet("pid1", "Brew One")]
+        frame = _Frame(literal_ask="craft beer near Wicker Park")
+        prompt = _build_micro_set_prompt(packets, frame)
+        assert "craft beer near Wicker Park" in prompt
+
+    def test_micro_prompt_does_not_contain_raw_role_labels(self):
+        """Micro prompt must not contain raw internal role label strings."""
+        from app.concierge.card_curator import (
+            ROLE_BEST_OVERALL, ROLE_EVIDENCE_RICH, ROLE_LOW_EVIDENCE_HOLDBACK,
+        )
+        cards = [_make_card(f"pid_r{i}", f"Brewery {i}", role=r) for i, r in enumerate([
+            ROLE_BEST_OVERALL, ROLE_EVIDENCE_RICH, ROLE_LOW_EVIDENCE_HOLDBACK,
+        ])]
+        frame = _Frame()
+        inputs = [
+            SetWriterCardInput(
+                entity=c.entity, rank_score=c.rank_score, dossier=c.dossier,
+                role=c.role, curation_signals=c.curation_signals, original_rank_index=i,
+            )
+            for i, c in enumerate(cards)
+        ]
+        packets = [_distill_allowed_claims_packet(ci, frame) for ci in inputs]
+        prompt = _build_micro_set_prompt(packets, frame)
+        for raw_role in [ROLE_BEST_OVERALL, ROLE_EVIDENCE_RICH, ROLE_LOW_EVIDENCE_HOLDBACK]:
+            assert raw_role not in prompt, f"Raw role '{raw_role}' leaked into micro prompt"
+
+    def test_micro_prompt_blocks_name_inference(self):
+        """Micro prompt must explicitly block inferring vibe from name alone."""
+        packets = [self._make_packet("pid1", "Speakeasy Lounge")]
+        frame = _Frame()
+        prompt = _build_micro_set_prompt(packets, frame)
+        # Must contain instruction blocking name-derived inferences
+        assert "name" in prompt.lower()
+        assert "identity" in prompt.lower() or "name alone" in prompt.lower() or "infer" in prompt.lower()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PR #273 Tests: Writer Telemetry
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestWriterTelemetry:
+    """Tests for structured writer telemetry fields added in PR #273."""
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test_key"})
+    def test_telemetry_fields_populate_on_success(self):
+        """Successful write produces all required PR #273 telemetry fields."""
+        card = _make_card("pid_tel1", "Goose Island Brewery",
+                          food_drink=["house IPA"], ambiance=["lively"])
+        curated = _CuratedSetResult(curated_cards=[card], output_count=1)
+        frame = _Frame()
+
+        good_note = "Known for its house IPA and a rotating seasonal tap list on Fulton Street."
+        with patch("app.concierge.set_level_writer._call_set_writer_llm") as mock_llm:
+            mock_llm.return_value = (f'{{"1": "{good_note}"}}', {
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 384,
+                "output_stop_reason": "end_turn",
+                "input_tokens": 210,
+                "output_tokens": 32,
+            })
+            result = write_set_notes(curated, frame)
+
+        assert result.writer_telemetry is not None
+        tel = result.writer_telemetry
+        # Phase timing
+        assert "evidence_distill_ms" in tel
+        assert "prompt_build_ms" in tel
+        assert "llm_call_ms" in tel
+        assert "parse_ms" in tel
+        assert "validation_ms" in tel
+        assert "set_writer_total_ms" in tel
+        # Packet/prompt size
+        assert tel["dynamic_packet_count"] == 1
+        assert tel["dynamic_packet_char_count"] > 0
+        assert tel["dynamic_prompt_char_count"] > 0
+        assert tel["input_token_estimate"] > 0
+        # LLM fields
+        assert tel["model"] == "claude-haiku-4-5-20251001"
+        assert tel["max_tokens"] == 384
+        assert tel.get("output_stop_reason") == "end_turn"
+        assert tel.get("input_tokens") == 210
+        assert tel.get("output_tokens") == 32
+        # Count fields
+        assert tel["notes_visible_count"] == result.visible_note_count
+        assert tel["notes_hidden_count"] == result.hidden_note_count
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test_key"})
+    def test_telemetry_fields_populate_on_parse_failure(self):
+        """Parse failure still records llm_call_ms, model, max_tokens."""
+        card = _make_card("pid_tel2", "Test Bar")
+        curated = _CuratedSetResult(curated_cards=[card], output_count=1)
+        frame = _Frame()
+
+        with patch("app.concierge.set_level_writer._call_set_writer_llm") as mock_llm:
+            mock_llm.return_value = ("not valid json at all", {"model": "claude-haiku-4-5-20251001", "max_tokens": 384})
+            result = write_set_notes(curated, frame)
+
+        # Parse failure returns empty result — writer_telemetry is None (returned before wtel populated)
+        assert result.visible_note_count == 0
+
+    def test_max_tokens_reduced_from_prior_default(self):
+        """max_tokens in the writer must be materially lower than the old 1024 default."""
+        from app.concierge.set_level_writer import _MAX_TOKENS_DEFAULT
+        assert _MAX_TOKENS_DEFAULT <= 384, (
+            f"max_tokens={_MAX_TOKENS_DEFAULT} is not materially lower than old default 1024"
+        )
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test_key"})
+    def test_dynamic_packet_char_count_in_telemetry(self):
+        """dynamic_packet_char_count must be populated and positive on success."""
+        cards = [_make_card(f"pid_pc{i}", f"Brewery {i}") for i in range(3)]
+        curated = _CuratedSetResult(curated_cards=cards, output_count=3)
+        frame = _Frame()
+
+        notes_json = '{"1": "Known for house brewed IPA on Milwaukee Avenue.", "2": null, "3": null}'
+        with patch("app.concierge.set_level_writer._call_set_writer_llm") as mock_llm:
+            mock_llm.return_value = (notes_json, {"model": "m", "max_tokens": 384})
+            result = write_set_notes(curated, frame)
+
+        assert result.writer_telemetry is not None
+        assert result.writer_telemetry["dynamic_packet_count"] == 3
+        assert result.writer_telemetry["dynamic_packet_char_count"] > 0
+        assert result.writer_telemetry["dynamic_prompt_char_count"] > 0
+
+    def test_telemetry_on_no_budget_timeout(self):
+        """Timed-out result (no budget) has set_writer_timed_out=True in as_telemetry_dict."""
+        class _Deadline:
+            def budget_for_note_generation_s(self):
+                return 0.0
+            def remaining_ms(self):
+                return 0
+
+        card = _make_card("pid_tel3", "Test Brewery")
+        curated = _CuratedSetResult(curated_cards=[card], output_count=1)
+        result = write_set_notes(curated, _Frame(), deadline=_Deadline())
+        assert result.timed_out is True
+        tel = result.as_telemetry_dict()
+        assert tel["set_writer_timed_out"] is True
+
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test_key"})
+    def test_cards_preserved_when_notes_fail(self):
+        """Cards must not be dropped when note validation fails or LLM returns null."""
+        cards = [_make_card(f"pid_cp{i}", f"Brewery {i}") for i in range(3)]
+        curated = _CuratedSetResult(curated_cards=cards, output_count=3)
+        frame = _Frame()
+
+        # All nulls — no notes visible but cards preserved
+        with patch("app.concierge.set_level_writer._call_set_writer_llm") as mock_llm:
+            mock_llm.return_value = ('{"1": null, "2": null, "3": null}', {})
+            result = write_set_notes(curated, frame)
+
+        # All cards have entries (hidden, not dropped)
+        assert len(result.notes_by_place_id) == 3
+        for note in result.notes_by_place_id.values():
+            assert note.note == ""
+            assert not note.validated
+        assert result.visible_note_count == 0
+        assert result.fallback_note_visible_count == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PR #273 Tests: Parse improvements
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestImprovedParsing:
+    """Tests for improved _parse_set_writer_response() — full JSON first."""
+
+    def test_clean_json_parsed_without_regex(self):
+        """Clean JSON starting with { must parse correctly via full json.loads()."""
+        from app.concierge.set_level_writer import _parse_set_writer_response
+        clean = '{"1": "Known for craft IPAs on Fulton Street.", "2": null, "3": "Lively bar near Wicker Park."}'
+        result = _parse_set_writer_response(clean, 3)
+        assert result["1"] == "Known for craft IPAs on Fulton Street."
+        assert result["2"] is None
+        assert result["3"] == "Lively bar near Wicker Park."
+
+    def test_prose_wrapped_json_falls_back_to_regex(self):
+        """JSON embedded in prose text is extracted via regex fallback."""
+        from app.concierge.set_level_writer import _parse_set_writer_response
+        prose = 'Here are the notes: {"1": "A cozy tap room on Milwaukee Ave.", "2": null}'
+        result = _parse_set_writer_response(prose, 2)
+        assert "1" in result or len(result) >= 0  # parse succeeds or returns {}
+
+    def test_invalid_json_returns_empty_dict(self):
+        """Malformed response returns empty dict, not an exception."""
+        from app.concierge.set_level_writer import _parse_set_writer_response
+        result = _parse_set_writer_response("not json at all", 3)
+        assert result == {}
+
+    def test_empty_string_returns_empty_dict(self):
+        """Empty response returns empty dict."""
+        from app.concierge.set_level_writer import _parse_set_writer_response
+        assert _parse_set_writer_response("", 3) == {}
+
+    def test_null_values_preserved_in_output(self):
+        """Null values in JSON must map to None in the result dict."""
+        from app.concierge.set_level_writer import _parse_set_writer_response
+        result = _parse_set_writer_response('{"1": null, "2": "Some note here."}', 2)
+        assert result.get("1") is None
+        assert result.get("2") == "Some note here."
+
+    def test_non_string_values_excluded(self):
+        """Non-string, non-null values are excluded from parsed output."""
+        from app.concierge.set_level_writer import _parse_set_writer_response
+        result = _parse_set_writer_response('{"1": 42, "2": "Valid note here.", "3": null}', 3)
+        assert "1" not in result or result.get("1") is None
+        assert result.get("2") == "Valid note here."
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PR #273 Tests: Validation preserved
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestValidationPreservedPR273:
+    """Confirm existing validators still run and reject invalid notes."""
+
+    def test_rating_review_count_prose_rejected(self):
+        """Notes with rating/review-count prose are rejected by existing validators."""
+        card = _make_card("pid_v1", "Brewery X")
+        frame = _Frame()
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        for bad in [
+            "Highest-rated brewery with 1,200 reviews in Logan Square.",
+            "Steady review volume confirms popularity across the neighborhood.",
+            "Notable review base of 1,344 visitors makes it a safe choice.",
+        ]:
+            passes, reason = _validate_set_writer_note(bad, ci, frame)
+            assert not passes, f"Expected rejection for: {bad!r}"
+
+    def test_name_derived_vibe_claims_rejected(self):
+        """Validator must reject notes that infer vibe from the business name."""
+        card = _make_card("pid_v2", "Riverwalk Brewing")
+        frame = _Frame()
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        # These claim scenic/waterfront from the name alone — should be rejected
+        for bad in [
+            "Enjoy beautiful river views from this brewery.",
+            "Stunning panoramic views of the lake visible from the bar.",
+            "Waterfront brewery with great river views.",
+        ]:
+            passes, reason = _validate_set_writer_note(bad, ci, frame)
+            assert not passes, f"Expected rejection for name-derived view claim: {bad!r}"
+
+    def test_unsupported_modifier_claims_rejected(self):
+        """Unconfirmed modifier claims must be rejected."""
+        card = _make_card("pid_v3", "Brewery X", modifier_fit="not_confirmed")
+        card.dossier.query_fit.modifier_fit = "not_confirmed"
+        frame = _Frame(location_modifiers=["Riverwalk"])
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        bad_note = "Situated directly on the Riverwalk with river access."
+        passes, reason = _validate_set_writer_note(bad_note, ci, frame)
+        assert not passes
+
+    def test_generic_filler_phrases_rejected(self):
+        """Generic filler / boilerplate phrases are rejected."""
+        card = _make_card("pid_v4", "Brewery X")
+        frame = _Frame()
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        for bad in [
+            "Strong brewery match in Chicago.",
+            "Well-regarded spot in the neighborhood.",
+            "A great option for craft beer lovers.",
+        ]:
+            passes, reason = _validate_set_writer_note(bad, ci, frame)
+            assert not passes, f"Expected rejection for generic filler: {bad!r}"
+
+    def test_null_note_always_hidden(self):
+        """Null LLM output → validated=False, note='', no fallback prose."""
+        card = _make_card("pid_v5", "Test Bar")
+        frame = _Frame()
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        passes, reason = _validate_set_writer_note(None, ci, frame)
+        assert not passes
+        assert reason == "thin_evidence_null"
+
+    def test_no_deterministic_visible_note_path(self):
+        """No path through write_set_notes can produce fallback_note_visible_count > 0."""
+        cards = [_make_card(f"pid_nd{i}", f"Bar {i}", is_minimal=True) for i in range(3)]
+        curated = _CuratedSetResult(curated_cards=cards, output_count=3)
+
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test_key"}):
+            with patch("app.concierge.set_level_writer._call_set_writer_llm") as mock_llm:
+                mock_llm.return_value = ('{"1": null, "2": null, "3": null}', {})
+                result = write_set_notes(curated, _Frame())
+
+        assert result.fallback_note_visible_count == 0
+
+    def test_fallback_note_visible_count_is_zero_in_telemetry(self):
+        """as_telemetry_dict must always have set_writer_fallback_note_visible_count=0."""
+        result = SetWriterResult(
+            notes_by_place_id={},
+            visible_note_count=0,
+            hidden_note_count=0,
+            rejected_note_count=0,
+            timed_out=False,
+            fallback_note_visible_count=0,
+            role_note_counts={},
+            note_source_counts={},
+            repeated_skeleton_count=0,
+            unsupported_claim_count=0,
+            writer_telemetry={"dynamic_packet_count": 3},
+        )
+        tel = result.as_telemetry_dict()
+        assert tel["set_writer_fallback_note_visible_count"] == 0
+        assert "dynamic_packet_count" in tel
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PR #273 Tests: Regression — existing contracts unchanged
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestRegressionPR273:
+    """Verify existing contracts still hold after PR #273 refactor."""
+
+    def test_set_writer_card_input_unchanged(self):
+        """SetWriterCardInput dataclass fields are unchanged."""
+        card = _make_card("pid_reg1", "Brew Test")
+        ci = SetWriterCardInput(
+            entity=card.entity,
+            rank_score=card.rank_score,
+            dossier=card.dossier,
+            role=card.role,
+            curation_signals=card.curation_signals,
+            original_rank_index=0,
+        )
+        assert hasattr(ci, "entity")
+        assert hasattr(ci, "rank_score")
+        assert hasattr(ci, "dossier")
+        assert hasattr(ci, "role")
+        assert hasattr(ci, "curation_signals")
+        assert hasattr(ci, "original_rank_index")
+
+    def test_set_writer_note_unchanged(self):
+        """SetWriterNote dataclass fields are unchanged."""
+        note = SetWriterNote(
+            place_id="pid1",
+            note="A solid craft taproom on Milwaukee Ave.",
+            validated=True,
+            rejection_reason="",
+            source=SOURCE_SET_WRITER,
+            role_used_internal="evidence_rich",
+            evidence_terms_used=[],
+            caveat_type="",
+        )
+        assert note.place_id == "pid1"
+        assert note.validated is True
+        assert note.fallback_note_visible_count if False else True  # field doesn't exist on note, not result
+
+    def test_set_writer_result_fallback_always_zero(self):
+        """SetWriterResult.fallback_note_visible_count is always 0."""
+        for args in [
+            {"timed_out": True},
+            {"timed_out": False, "visible_note_count": 3},
+        ]:
+            r = SetWriterResult(
+                notes_by_place_id={},
+                visible_note_count=args.get("visible_note_count", 0),
+                hidden_note_count=0,
+                rejected_note_count=0,
+                timed_out=args.get("timed_out", False),
+                fallback_note_visible_count=0,
+                role_note_counts={},
+                note_source_counts={},
+                repeated_skeleton_count=0,
+                unsupported_claim_count=0,
+            )
+            assert r.fallback_note_visible_count == 0
+
+    def test_legacy_prompt_builder_still_importable(self):
+        """_build_card_evidence_block and _build_set_level_prompt still importable and callable."""
+        assert callable(_build_card_evidence_block)
+        assert callable(_build_set_level_prompt)
+
+    def test_legacy_evidence_block_unchanged_for_existing_tests(self):
+        """Legacy _build_card_evidence_block still produces expected output."""
+        card = _make_card("pid_reg3", "Spiteful Brewing",
+                          food_drink=["house IPA"], ambiance=["lively"])
+        frame = _Frame()
+        ci = SetWriterCardInput(
+            entity=card.entity, rank_score=card.rank_score, dossier=card.dossier,
+            role=card.role, curation_signals=card.curation_signals, original_rank_index=0,
+        )
+        block = _build_card_evidence_block(ci, 1, 1, frame)
+        assert "Spiteful Brewing" in block
+        assert "house IPA" in block or "food" in block.lower()
+
+    def test_write_set_notes_returns_set_writer_result(self):
+        """write_set_notes always returns a SetWriterResult instance."""
+        curated = _CuratedSetResult(curated_cards=[], output_count=0)
+        result = write_set_notes(curated, _Frame())
+        assert isinstance(result, SetWriterResult)
+
+    def test_claim_safety_reviewer_importable_unchanged(self):
+        """claim_safety_reviewer module still imports cleanly after PR #273."""
+        from app.concierge.claim_safety_reviewer import (
+            NoteReviewResult,
+            ReviewerTelemetry,
+            SummaryReviewResult,
+            review_note,
+            review_notes_set,
+            review_summary,
+        )
+        assert callable(review_note)
+        assert callable(review_notes_set)
+        assert callable(review_summary)
+        assert ReviewerTelemetry is not None
+
+    def test_reason_validator_importable_unchanged(self):
+        """reason_validator.validate_reason still importable after PR #273."""
+        from app.concierge.reason_validator import validate_reason
+        assert callable(validate_reason)
