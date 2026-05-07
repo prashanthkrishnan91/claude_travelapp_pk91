@@ -131,6 +131,24 @@ _VERIFIED_TEMPLATE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Name-based hours inference: inferring operating hours from a business name alone.
+# Hard rule: "2AM Izakaya, whose name alone signals late-night credibility" is
+# rejected even if actual evidence is thin. Only explicit hours, provider
+# metadata, review snippets, or editorial facts may support a temporal claim.
+_NAME_HOURS_INFERENCE_RE = re.compile(
+    r"\b(?:"
+    r"name\s+(?:alone\s+)?(?:signals?|implies?|suggests?|indicates?)\s+"
+    r"(?:late[-\s]?night|24[-\s]?hour|open[-\s]?late|after[-\s]?hours?"
+    r"|overnight|all[-\s]?night|credibility|late[-\s]?night\s+\w+)"
+    r"|name\s+itself\s+(?:signals?|implies?|suggests?|indicates?)\s+"
+    r"(?:late[-\s]?night|24[-\s]?hour|open[-\s]?late|after[-\s]?hours?)"
+    r"|whose\s+name\s+(?:alone\s+)?(?:signals?|implies?|suggests?|indicates?)"
+    r"|the\s+name\s+alone\s+(?:signals?|implies?|suggests?|indicates?|conveys?|hints?)"
+    r")",
+    re.IGNORECASE,
+)
+
+
 # Name-only + rating templates: the entire note is just "{Name} — {rating}★ ..."
 # with no additional content. These repeat only fields already visible on the card.
 #
@@ -205,6 +223,11 @@ def validate_reason(
     # geo note, etc.) do NOT match this regex and are allowed.
     if _NAME_RATING_ONLY_RE.match(reason):
         return False, "name_rating_only_template"
+
+    # 1e. Name-based hours inference: inferring operating hours from a business
+    #     name alone is never acceptable, regardless of evidence support.
+    if _NAME_HOURS_INFERENCE_RE.search(reason):
+        return False, "name_hours_inference"
 
     # 2. Unsupported physical attribute claims.
     # Allow when (a) evidence bundle confirms it, or (b) the term appears

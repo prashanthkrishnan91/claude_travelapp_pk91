@@ -127,10 +127,12 @@ class SetWriterResult:
     note_source_counts: Dict[str, int]   # source → count
     repeated_skeleton_count: int
     unsupported_claim_count: int
+    # PR #267 reviewer telemetry (optional — None when reviewer was not run)
+    reviewer_telemetry: Optional[Dict[str, Any]] = None
 
     def as_telemetry_dict(self, elapsed_ms: int = 0) -> Dict[str, Any]:
         """Telemetry dict for semantic_retrieval_v1.set_writer_telemetry log."""
-        return {
+        d: Dict[str, Any] = {
             "set_writer_input_count": len(self.notes_by_place_id),
             "set_writer_output_count": self.visible_note_count + self.hidden_note_count,
             "set_writer_visible_note_count": self.visible_note_count,
@@ -145,6 +147,9 @@ class SetWriterResult:
             "set_writer_unsupported_claim_count": self.unsupported_claim_count,
             "set_writer_ms": elapsed_ms,
         }
+        if self.reviewer_telemetry:
+            d["reviewer_telemetry"] = self.reviewer_telemetry
+        return d
 
 
 # ── Evidence stub for reason_validator ───────────────────────────────────────
@@ -655,6 +660,7 @@ def write_set_notes(
             note_source_counts={},
             repeated_skeleton_count=0,
             unsupported_claim_count=0,
+            reviewer_telemetry=None,
         )
 
     try:
@@ -803,6 +809,78 @@ def write_set_notes(
                 )
             note_source_counts[note.source] = note_source_counts.get(note.source, 0) + 1
 
+        # ── Claim-safety reviewer gate (PR #267) ──────────────────────────────
+        # Additional deterministic review pass on all validated notes. Reviewer
+        # fails closed: rejected notes are hidden but cards are NOT dropped.
+        # Budget: up to remaining time budget minus a small reserve, capped at 2s.
+        reviewer_telemetry_dict: Optional[Dict[str, Any]] = None
+        try:
+            from app.concierge.claim_safety_reviewer import review_notes_set
+            reviewer_budget_s = min(
+                2.0,
+                (budget_s - (time.monotonic() - t_start)),
+            )
+            if reviewer_budget_s > 0.05:
+                _validated_for_review: Dict[str, str] = {
+                    note.place_id: note.note
+                    for note in notes_by_place_id.values()
+                    if note.validated and note.note
+                }
+                _entity_names: Dict[str, str] = {
+                    ci.entity.place_id: getattr(ci.entity, "name", "")
+                    for ci in card_inputs
+                    if getattr(ci.entity, "place_id", None)
+                }
+                reviewer_results, reviewer_tel = review_notes_set(
+                    notes=_validated_for_review,
+                    entity_name_by_place_id=_entity_names,
+                    frame=frame,
+                    timeout_s=reviewer_budget_s,
+                )
+                # Apply reviewer decisions: hide rejected notes; cards remain.
+                for place_id, r_result in reviewer_results.items():
+                    if not r_result.passed and place_id in notes_by_place_id:
+                        note_obj = notes_by_place_id[place_id]
+                        note_obj.validated = False
+                        note_obj.note = ""
+                        note_obj.source = SOURCE_OMITTED
+                        note_obj.rejection_reason = (
+                            f"reviewer:{r_result.rejection_reason}"
+                        )
+                        unsupported_claim_count += 1
+
+                # Recount after reviewer gate
+                visible_count = sum(
+                    1 for note in notes_by_place_id.values() if note.validated
+                )
+                hidden_count = sum(
+                    1 for note in notes_by_place_id.values() if not note.validated
+                )
+                rejected_count += reviewer_tel.reviewer_rejected_note_count
+                reviewer_tel.final_note_visible_count = visible_count
+                reviewer_tel.fallback_note_visible_count = 0   # invariant
+                reviewer_tel.deterministic_visible_count = 0   # invariant
+                reviewer_telemetry_dict = reviewer_tel.as_dict()
+
+                if reviewer_tel.reviewer_rejected_note_count > 0:
+                    logger.info(
+                        "set_level_writer: reviewer_gate_applied "
+                        "reviewer_rejected=%d reviewer_ms=%d",
+                        reviewer_tel.reviewer_rejected_note_count,
+                        reviewer_tel.reviewer_ms,
+                    )
+            else:
+                logger.info(
+                    "set_level_writer: reviewer_gate_skipped_no_budget "
+                    "remaining_s=%.3f", reviewer_budget_s
+                )
+        except Exception as rev_exc:
+            logger.warning(
+                "set_level_writer: reviewer_gate_error error=%s — "
+                "notes visible as-is (fail open for already-validated notes)",
+                rev_exc,
+            )
+
         elapsed_ms = int((time.monotonic() - t_start) * 1000)
         logger.info(
             "set_level_writer: complete input=%d visible=%d hidden=%d "
@@ -822,6 +900,7 @@ def write_set_notes(
             note_source_counts=note_source_counts,
             repeated_skeleton_count=repeated_skeleton_count,
             unsupported_claim_count=unsupported_claim_count,
+            reviewer_telemetry=reviewer_telemetry_dict,
         )
 
     except Exception as exc:

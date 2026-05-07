@@ -1,6 +1,104 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-07) — PR #266: AI Concierge v2 Preference-Aware Retrieval and Ranking for Soft Modifiers
+## Last change (2026-05-07) — PR #267: AI Concierge v2 LLM Reviewer / Claim-Safety Gate for Set Writer + Summary
+
+**Status: MERGE-READY** — 55 new claim-safety reviewer tests pass; 56 set-level-writer tests pass (unchanged); 68 semantic-query-frame tests pass (unchanged); 67 soft-preference-preservation tests pass (unchanged); 64 SLA tests pass (unchanged); 127 evidence-quality tests pass (unchanged)
+
+### What was built
+
+Claim-Safety Reviewer Gate — deterministic (regex-based) claim-safety layer that gates set-writer visible output (per-card concierge notes and set-level summary text) before response serialization. Fixes the visible quality failure where the set-writer produced "2AM Izakaya, whose name alone signals late-night credibility" — an unsupported inference from the business name that escaped existing validation.
+
+**Root cause**: The existing `reason_validator.py` correctly blocked hard hour claims ("open until") but had no pattern for name-based temporal inference ("name alone signals late-night credibility"). The LLM set-writer was generating creative inferences from business names that passed all existing checks.
+
+**Changes made**:
+
+1. **`backend/app/concierge/claim_safety_reviewer.py`** (new):
+   - `_NAME_HOURS_INFERENCE_RE`: regex blocking "name (alone) signals/implies/suggests late-night/24-hour/open-late" and "whose name (alone) signals/implies/suggests."
+   - `_INTERNAL_LABEL_RE`: blocks internal role labels (best_overall, evidence_rich, etc.), dossier internals, and reviewer diagnostics from user-visible output.
+   - `_FILLER_SKELETON_RE`: blocks generic filler phrases.
+   - `NoteReviewResult`, `SummaryReviewResult`, `ReviewerTelemetry`: typed contracts for reviewer output.
+   - `review_note(note, entity_name, frame, evidence, timeout_s)`: per-card deterministic reviewer with entity-name-as-subject temporal inference check ("2AM Izakaya signals 24-hour availability" → rejected).
+   - `review_summary(summary, frame, timeout_s)`: set-level summary reviewer with sanitization attempt (removes offending sentence before full rejection).
+   - `review_notes_set(notes, entity_names, frame, timeout_s)`: batch reviewer with aggregated `ReviewerTelemetry`.
+   - Fail-closed contract: timeout → hide note but keep card; no card drop on any reviewer failure.
+
+2. **`backend/app/concierge/reason_validator.py`** (modified):
+   - `_NAME_HOURS_INFERENCE_RE`: same pattern added at the universal per-note level so ALL validation paths (set-writer, batched builder) catch name-hours inference.
+   - Check added at step 1e in `validate_reason()`, before the unsupported-attribute check.
+
+3. **`backend/app/concierge/set_level_writer.py`** (modified):
+   - `SetWriterResult.reviewer_telemetry`: new optional field for reviewer telemetry dict.
+   - `as_telemetry_dict()`: includes `reviewer_telemetry` key when reviewer ran.
+   - `write_set_notes()`: calls `review_notes_set()` after existing validation + diversity check. Reviewer budget is capped at 2s and the remaining time budget. Notes rejected by reviewer are hidden (validated=False); cards are NOT dropped.
+
+4. **`backend/app/concierge/semantic_retrieval.py`** (modified):
+   - `_log_semantic_turn()`: emits `semantic_retrieval_v1.reviewer_telemetry` log line when reviewer ran this turn (sub-key of set_writer_telemetry).
+
+5. **`backend/tests/test_claim_safety_reviewer.py`** (new, 55 tests):
+   - Tests 1–8: Summary reviewer rejects name-hours inference; multi-sentence sanitization; allows honest caveats.
+   - Tests 9–11: Allows evidence-backed late-night claims; direct hours statements pass.
+   - Tests 12–17: Per-card reviewer rejects name-signals temporal claims; allows honest mention; reviewer_ms populated.
+   - Tests 18–20: Hidden note does not drop card; telemetry counts correctly.
+   - Tests 21–24: Waterfront/view scope boundary (reason_validator owns; reviewer does not double-block).
+   - Tests 25–27: Hidden-gem regex coverage; reviewer scope boundary.
+   - Tests 28–33: Internal label leakage — role names, dossier fields, reviewer diagnostics rejected.
+   - Tests 34–36: Generic filler / repeated skeleton rejected.
+   - Tests 37–41: Timeout fail-closed — note hidden, card kept; telemetry reports timed_out.
+   - Tests 42–47: Existing contracts — fallback_note_visible_count=0; deterministic_visible_count=0; required telemetry fields.
+   - Tests 48–52: reason_validator integration — validate_reason rejects all name-hours inference variants.
+   - Tests 53–55: SetWriterResult reviewer_telemetry field; as_telemetry_dict with/without reviewer.
+
+### Hard contracts preserved
+
+- `fallback_note_visible_count` always 0 (unchanged)
+- `deterministic_visible_count` always 0 (unchanged)
+- Google verification trust gate unchanged
+- Card cap: default 6, range 5–7 (unchanged)
+- Non-Google enrichment cannot mint addable cards (unchanged)
+- No SQL, no UI changes, no new providers, no new LLM calls, no retrieval/ranking changes
+- Reviewer rejects/hides notes only — never drops Google-verified cards
+
+### New telemetry added
+
+```
+reviewer_telemetry (sub-key of set_writer_telemetry):
+  reviewer_used              — bool
+  reviewer_ms                — int
+  reviewer_timed_out         — bool
+  reviewer_rejected_note_count  — int
+  reviewer_hidden_note_count    — int
+  reviewer_rejected_summary     — bool
+  reviewer_sanitized_summary    — bool
+  reviewer_unsupported_claim_count  — int
+  reviewer_internal_leakage_count   — int
+  final_summary_visible      — bool
+  final_note_visible_count   — int
+  fallback_note_visible_count — int (invariant: 0)
+  deterministic_visible_count — int (invariant: 0)
+```
+
+### Remaining limitations
+
+- Reviewer is deterministic (regex-based), not LLM-backed. Complex paraphrases of unsupported claims that don't match the regex patterns may still pass. The set-writer prompt already discourages these patterns; this gate is the last line of defense.
+- `review_summary()` is available but no set-level intro summary is currently generated; the reviewer is applied only to per-card notes in this PR.
+- Waterfront/view/hidden-gem evidence-based checks remain in `reason_validator.py`; the reviewer adds name-inference and internal-label checks as an independent layer.
+
+### Supabase SQL: No
+
+### Test counts
+
+```
+test_claim_safety_reviewer.py:   55 tests, all pass (new)
+test_set_level_writer.py:        56 tests, all pass (unchanged)
+test_semantic_query_frame.py:    68 tests, all pass (unchanged)
+test_soft_preference_preservation.py: 67 tests, all pass (unchanged)
+test_sla_card_cap.py:            64 tests, all pass (unchanged)
+test_evidence_quality_v3.py:    127 tests, all pass (unchanged)
+```
+
+---
+
+## Previous: PR #266: AI Concierge v2 Preference-Aware Retrieval and Ranking for Soft Modifiers
 
 **Status: MERGE-READY** — 67 new soft-preference-preservation tests pass; 68 semantic-query-frame tests pass (unchanged); 56 set-level-writer tests pass; 51 curator tests pass; 54 dossier tests pass; 28 parallel-retrieval tests pass; 64 SLA tests pass; 127 evidence-quality tests pass; pre-existing pydantic env failures remain (unrelated, same as before)
 
