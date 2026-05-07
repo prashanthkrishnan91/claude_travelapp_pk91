@@ -720,14 +720,14 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
     item: UnifiedRestaurantResult | UnifiedAttractionResult | UnifiedHotelResult,
     reason?: string,
     targetDayId?: string,
-  ) {
+  ): Promise<boolean> {
     const effectiveDayId = targetDayId ?? selectedDayId;
     if (!effectiveDayId) {
       setError("Select a day before adding this item.");
-      return;
+      return false;
     }
     const key = cardKey(name, effectiveDayId || undefined);
-    if (addingItems.has(key) || addedItems.has(key)) return;
+    if (addingItems.has(key) || addedItems.has(key)) return true;
 
     const duplicate = itineraryItems.some((it) => {
       const titleMatch = normalizeTitle(it.title) === normalizeTitle(name);
@@ -738,11 +738,12 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
     if (duplicate) {
       setAddedItems((prev) => new Set(prev).add(key));
-      return;
+      return true;
     }
 
     setAddingItems((prev) => new Set(prev).add(key));
     setError(null);
+    let success = false;
     try {
       const added = await addStructuredConciergeItemToTrip(tripId, item, kind, {
         dayId: effectiveDayId || undefined,
@@ -758,6 +759,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
         )
       );
       onItemAdded?.();
+      success = true;
     } catch (err) {
       console.error("[concierge] add item failed", err);
       setError("Could not add item to trip.");
@@ -768,6 +770,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
         return next;
       });
     }
+    return success;
   }
 
   async function saveIdea(
@@ -898,11 +901,13 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
       const bestReason = pickCardReason(best.place);
       const sanitized = sanitizeWhyPick(bestReason, best.place.name, cardsWithKind.map((c) => c.place.name));
       // Pass resolvedDayId explicitly so addItem does not read from async state.
-      await addItem(best.place.name, best.kind, best.place, sanitized, resolvedDayId);
+      const didAdd = await addItem(best.place.name, best.kind, best.place, sanitized, resolvedDayId);
       const dayLabel = action.dayNumber ? `Day ${action.dayNumber}` : "your selected day";
       setMessages((prev) => [...prev, {
         role: "assistant",
-        text: `Added ${best.place.name} to ${dayLabel}.`,
+        text: didAdd
+          ? `Added ${best.place.name} to ${dayLabel}.`
+          : `I couldn't add ${best.place.name} to ${dayLabel}. Please try again.`,
         isRefinement: true, refinementAction: ACTION.ADD_SELECTED_TO_DAY,
         restaurants: [], attractions: [], hotels: [],
         researchSources: [], areaComparisons: [],

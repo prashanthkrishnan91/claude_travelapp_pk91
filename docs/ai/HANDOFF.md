@@ -59,6 +59,8 @@ Conversational Refinement v1 — a lightweight frontend refinement layer that le
 
 **Blocker 2 — fresh searches trapped in refinement loop**: `handleUserInput` now guards with `looksLikeFreshSearch(q)` before routing to `handleRefinement`. `looksLikeFreshSearch` catches destination-qualified queries ("Best hotels in Tokyo"), "for Day N" patterns, and neighborhood-compare queries. `handleRefinement` now returns `Promise<boolean>`; returns `false` for `CLARIFY_UNSUPPORTED` so the caller falls through cleanly to `sendQuery` without double-appending the user message. `followUpActions` chips call `sendQuery` directly (bypassing the refinement guard) since they are fresh searches by design.
 
+**Blocker 3 — false success message when `addItem` fails**: `addItem` now returns `Promise<boolean>` instead of `void`. Returns `false` when no effective day ID, `true` for duplicates (already-added is a success), `true` after a successful API call, `false` in the catch block. The `ADD_SELECTED_TO_DAY` branch awaits the result in `didAdd` and uses a ternary: success → "Added [name] to Day X", failure → "I couldn't add [name] to [day]. Please try again." API failure can no longer produce a false "Added" assistant message. Manual card Add button behavior is unchanged.
+
 ### Remaining limitations
 
 - Action parser is deterministic (pattern-based). Complex paraphrases not matching any pattern fall to CLARIFY_UNSUPPORTED or SEARCH_MORE. Coverage is sufficient for v1 UX goals.
@@ -72,7 +74,7 @@ Conversational Refinement v1 — a lightweight frontend refinement layer that le
 ### Test counts
 
 ```
-concierge-refinement.test.mjs:   67 tests, all pass (55 original + 12 blocker-fix tests)
+concierge-refinement.test.mjs:   74 tests, all pass (55 original + 12 blocker 1&2 tests + 7 blocker 3 tests)
 concierge-renderers.test.mjs:    16 tests, all pass (unchanged)
 ```
 

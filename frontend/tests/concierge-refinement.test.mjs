@@ -608,3 +608,50 @@ test('AIConciergePanel: followUpActions chips call sendQuery directly, not handl
   // When refinementChips is false (followUpActions chip), onClick uses sendQuery.
   assert.match(aiConciergePanel, /refinementChips\s*\?\s*handleUserInput\(prompt\)\s*:\s*sendQuery\(prompt\)/);
 });
+
+// ---------------------------------------------------------------------------
+// False success message fix — addItem returns boolean; ADD_SELECTED_TO_DAY gates on it
+// ---------------------------------------------------------------------------
+
+test('AIConciergePanel: addItem return type is Promise<boolean>', () => {
+  // addItem must declare a boolean return type so TypeScript enforces all paths return a value.
+  assert.match(aiConciergePanel, /\): Promise<boolean> \{/);
+});
+
+test('AIConciergePanel: addItem returns false when no effectiveDayId', () => {
+  assert.match(aiConciergePanel, /return false;\s*\n\s*\}/);
+  // The no-day path explicitly returns false (not void/undefined).
+  assert.match(aiConciergePanel, /setError\("Select a day before adding this item\."\);\s*\n\s*return false/);
+});
+
+test('AIConciergePanel: addItem returns true for duplicate', () => {
+  // Duplicate detection is treated as success (item already on day).
+  assert.match(aiConciergePanel, /setAddedItems\(.*new Set.*\);\s*\n\s*return true/s);
+});
+
+test('AIConciergePanel: addItem tracks success with local flag and returns it', () => {
+  // success flag is set to true only after the API call completes without throwing.
+  assert.match(aiConciergePanel, /let success = false/);
+  assert.match(aiConciergePanel, /success = true/);
+  assert.match(aiConciergePanel, /return success/);
+});
+
+test('AIConciergePanel: ADD_SELECTED_TO_DAY awaits boolean result from addItem', () => {
+  // The branch must use the return value — not just fire-and-forget.
+  assert.match(aiConciergePanel, /const didAdd = await addItem\(best\.place\.name/);
+});
+
+test('AIConciergePanel: ADD_SELECTED_TO_DAY success message gated on didAdd', () => {
+  // "Added..." text must only appear when didAdd is truthy.
+  assert.match(aiConciergePanel, /didAdd/);
+  assert.match(aiConciergePanel, /Added.*to.*dayLabel/s);
+  // Failure path must produce a distinct message — not the success text.
+  assert.match(aiConciergePanel, /I couldn't add.*Please try again/);
+});
+
+test('AIConciergePanel: ADD_SELECTED_TO_DAY cannot emit "Added" when addItem fails', () => {
+  // The text "Added" must always be conditional on didAdd, never unconditional.
+  // Confirm the ternary structure: didAdd ? `Added...` : `I couldn't add...`
+  assert.match(aiConciergePanel, /didAdd\s*\?\s*`Added/);
+  assert.doesNotMatch(aiConciergePanel, /text:\s*`Added\s/);
+});
