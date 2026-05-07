@@ -267,6 +267,13 @@ class ConciergeService:
 
         request_id = (client_message_id or "").strip() or str(uuid4())
 
+        # Concierge message persistence (user + assistant) stays synchronous.
+        # Immediate follow-ups like "compare top 2" require the prior card pool
+        # to be fully persisted before the next search begins. Only the optional
+        # request-log observability record is moved to a background task (see
+        # _persist_request_log_task in routes/ai.py). If save_user_message_ms or
+        # save_assistant_message_ms prove slow in production logs, a later PR can
+        # add safe deferred persistence with an in-memory immediate-context fallback.
         _t0 = time.perf_counter()
         self._save_message(trip_id, "user", user_query, client_message_id=request_id)
         _save_user_message_ms = int((time.perf_counter() - _t0) * 1000)

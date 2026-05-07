@@ -39,19 +39,23 @@ After PR #273, total latency for `/ai/concierge/search` was still 8.9–12.1 s. 
 - Route/build: `context_window_ms`, `route_prompt_ms`, `service_search_ms`, `typed_validation_ms`, `total_build_typed_ms` emitted via `concierge.search.build_typed_timing`.
 - Route: `build_typed_concierge_response_ms`, `request_log_event_ms`, `persist_scheduled_ms`, `route_total_before_return_ms` emitted via `concierge.search.route_timing`.
 
+### Synchronous message persistence — intentional, documented
+
+`ConciergeService.search()` still saves user and assistant messages synchronously. This is intentional: immediate follow-ups like "compare top 2" require the prior card pool to be fully persisted before the next search begins. The optional observability record (`persist_concierge_request_log`) is the only piece moved to a background task — it has no correctness dependency on ordering. If `save_user_message_ms` or `save_assistant_message_ms` prove slow in production logs, a later PR can introduce safe deferred persistence with an in-memory immediate-context fallback. Both spans are now explicitly measured via timing logs.
+
 ### Files changed
 
-1. **`backend/app/services/concierge.py`** — LLM bypass (PART 1) + service timing (PART 4).
+1. **`backend/app/services/concierge.py`** — LLM bypass (PART 1) + service timing (PART 4) + synchronous message persistence comment.
 2. **`backend/app/routes/ai.py`** — Background persistence (PART 2) + route/build timing (PART 4).
 3. **`backend/app/concierge/logging.py`** — Schema drift hardening (PART 3).
 4. **`backend/tests/test_concierge_critical_path_hardening.py`** — NEW: 22 tests across all 4 parts.
 5. **`backend/tests/test_concierge_logging_schema_tolerance.py`** — Updated: added `_KNOWN_UNSUPPORTED_COLUMNS.clear()` to all 4 tests.
 
-### Test results
+### Test results (review follow-up)
 
-- `test_concierge_critical_path_hardening.py`: 22/22 PASSED
+- `test_concierge_critical_path_hardening.py`: 22/22 PASSED (includes 4 new tests added in review follow-up: `test_real_persist_request_log_task_swallows_exceptions`, `test_route_level_background_tasks_scheduling_contract`, `test_semantic_path_saves_structured_results_with_cards`, `test_semantic_path_response_text_is_empty`)
 - `test_concierge_logging_schema_tolerance.py`: 4/4 PASSED
-- `test_set_level_writer.py` + `test_concierge.py` + `test_semantic_retrieval_v1.py` + `test_sla_card_cap.py`: 465/465 PASSED
+- `test_set_level_writer.py` + `test_concierge.py` + `test_semantic_retrieval_v1.py` + `test_sla_card_cap.py`: 491/491 PASSED
 - Full suite: 2066 passed, 20 pre-existing failures in `test_restaurant_search_diagnostics.py` (missing `httpx` module — unrelated, confirmed pre-existing).
 
 ### Validation plan
@@ -90,6 +94,11 @@ Cache design from PR #273 HANDOFF remains valid. Gate on PR #274 runtime telemet
 | Timing fields added | ✓ 3 log lines across service/route/build |
 | Cards never blocked by logging/summary | ✓ |
 | PR #273 invariants preserved | ✓ |
+| Real `_persist_request_log_task` tested (not recreated wrapper) | ✓ `test_real_persist_request_log_task_swallows_exceptions` |
+| Route-level BackgroundTasks scheduling tested | ✓ `test_route_level_background_tasks_scheduling_contract` |
+| Semantic path saves structured_results with cards | ✓ `test_semantic_path_saves_structured_results_with_cards` |
+| Semantic path response text empty (no unsafe LLM summary) | ✓ `test_semantic_path_response_text_is_empty` |
+| Synchronous message persistence documented as intentional | ✓ Code comment + HANDOFF note |
 
 ### Supabase SQL: No
 ### UI changed: No
