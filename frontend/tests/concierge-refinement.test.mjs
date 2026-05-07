@@ -8,6 +8,7 @@ import {
   buildContextualSearchQuery,
   compareCards,
   selectBestCard,
+  looksLikeFreshSearch,
 } from '../src/lib/concierge/refinementInterpreter.js';
 
 // ---------------------------------------------------------------------------
@@ -517,4 +518,93 @@ test('AIConciergePanel: no fallback note or deterministic note fields exposed vi
   // Refinement messages must not carry fallback_note_visible_count or deterministic_visible_count
   assert.doesNotMatch(aiConciergePanel, /fallback_note_visible_count.*refinement/s);
   assert.doesNotMatch(aiConciergePanel, /deterministic_visible_count.*refinement/s);
+});
+
+// ---------------------------------------------------------------------------
+// Blocker 1 — addItem targetDayId (async state safety)
+// ---------------------------------------------------------------------------
+
+test('looksLikeFreshSearch: destination-qualified queries return true', () => {
+  assert.equal(looksLikeFreshSearch('Best restaurants in Tokyo'), true);
+  assert.equal(looksLikeFreshSearch('Hotels near Paris'), true);
+  assert.equal(looksLikeFreshSearch('Things to do around Osaka'), true);
+  assert.equal(looksLikeFreshSearch('Cocktail bars in River North'), true);
+});
+
+test('looksLikeFreshSearch: "for Day N" pattern returns true', () => {
+  assert.equal(looksLikeFreshSearch('Attractions for Day 2'), true);
+  assert.equal(looksLikeFreshSearch('dinner for day 3'), true);
+});
+
+test('looksLikeFreshSearch: "compare neighborhoods/areas" returns true', () => {
+  assert.equal(looksLikeFreshSearch('compare neighborhoods'), true);
+  assert.equal(looksLikeFreshSearch('Compare areas'), true);
+  assert.equal(looksLikeFreshSearch('compare districts'), true);
+});
+
+test('looksLikeFreshSearch: refinement commands return false', () => {
+  assert.equal(looksLikeFreshSearch('Show only 4 star and above'), false);
+  assert.equal(looksLikeFreshSearch('Remove the first one'), false);
+  assert.equal(looksLikeFreshSearch('Sort by rating'), false);
+  assert.equal(looksLikeFreshSearch('Compare them'), false);
+  assert.equal(looksLikeFreshSearch('Add best to Day 2'), false);
+  assert.equal(looksLikeFreshSearch('find more options'), false);
+  assert.equal(looksLikeFreshSearch(''), false);
+  assert.equal(looksLikeFreshSearch(null), false);
+});
+
+test('AIConciergePanel: addItem accepts targetDayId parameter', () => {
+  // addItem must accept an explicit targetDayId so ADD_SELECTED_TO_DAY
+  // does not rely on async selectedDayId state.
+  assert.match(aiConciergePanel, /targetDayId\?:\s*string/);
+  assert.match(aiConciergePanel, /effectiveDayId\s*=\s*targetDayId\s*\?\?\s*selectedDayId/);
+});
+
+test('AIConciergePanel: ADD_SELECTED_TO_DAY passes resolvedDayId to addItem, no setSelectedDayId', () => {
+  // The branch must synchronously resolve the day and pass it to addItem
+  // rather than calling setSelectedDayId and then reading async state.
+  assert.match(aiConciergePanel, /resolvedDayId/);
+  assert.match(aiConciergePanel, /addItem\(best\.place\.name,\s*best\.kind,\s*best\.place,\s*sanitized,\s*resolvedDayId\)/);
+  // setSelectedDayId must not be called in the ADD_SELECTED_TO_DAY code path
+  // (the only safe pattern is to pass the day id directly into addItem).
+  assert.doesNotMatch(aiConciergePanel, /ADD_SELECTED_TO_DAY[\s\S]{0,400}setSelectedDayId\(dayId\)/);
+});
+
+test('AIConciergePanel: effectiveDayId is used throughout addItem, not selectedDayId directly', () => {
+  assert.match(aiConciergePanel, /effectiveDayId/);
+  // cardKey should use effectiveDayId inside addItem body
+  assert.match(aiConciergePanel, /cardKey\(name,\s*effectiveDayId/);
+});
+
+// ---------------------------------------------------------------------------
+// Blocker 2 — fresh-search pass-through after cards exist
+// ---------------------------------------------------------------------------
+
+test('AIConciergePanel: looksLikeFreshSearch is imported', () => {
+  assert.match(aiConciergePanel, /looksLikeFreshSearch/);
+});
+
+test('AIConciergePanel: handleUserInput guards with looksLikeFreshSearch before routing to refinement', () => {
+  // handleUserInput must bail out of the refinement path when query looks like a fresh search
+  assert.match(aiConciergePanel, /looksLikeFreshSearch\(q\)/);
+  assert.match(aiConciergePanel, /!looksLikeFreshSearch\(q\)/);
+});
+
+test('AIConciergePanel: handleRefinement returns false for CLARIFY_UNSUPPORTED', () => {
+  // When refinement cannot handle the action it must signal the caller via false
+  // so the caller can fall through to sendQuery without showing a confusing message.
+  assert.match(aiConciergePanel, /CLARIFY_UNSUPPORTED/);
+  assert.match(aiConciergePanel, /return false/);
+});
+
+test('AIConciergePanel: handleRefinement returns Promise<boolean>', () => {
+  // The return type must be Promise<boolean> so handleUserInput can await it.
+  assert.match(aiConciergePanel, /Promise<boolean>/);
+});
+
+test('AIConciergePanel: followUpActions chips call sendQuery directly, not handleUserInput', () => {
+  // followUpActions are fresh-search prompts; they must bypass the refinement guard.
+  assert.match(aiConciergePanel, /followUpActions/);
+  // When refinementChips is false (followUpActions chip), onClick uses sendQuery.
+  assert.match(aiConciergePanel, /refinementChips\s*\?\s*handleUserInput\(prompt\)\s*:\s*sendQuery\(prompt\)/);
 });

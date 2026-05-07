@@ -32,7 +32,7 @@ import type {
 } from "@/lib/api";
 import type { ItineraryDay, ItineraryItem } from "@/types";
 import { pickCardReason, pickCardCategory, sanitizeWhyPick, shouldShowCollapsedSources, splitReason, normalizeTitle } from "@/lib/concierge/cardPresentation";
-import { ACTION, parseRefinementAction, applyRefinementToMessage, buildContextualSearchQuery, selectBestCard } from "@/lib/concierge/refinementInterpreter";
+import { ACTION, parseRefinementAction, applyRefinementToMessage, buildContextualSearchQuery, selectBestCard, looksLikeFreshSearch } from "@/lib/concierge/refinementInterpreter";
 
 type MessageRole = "user" | "assistant";
 
@@ -719,18 +719,20 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
     kind: "restaurant" | "attraction" | "hotel",
     item: UnifiedRestaurantResult | UnifiedAttractionResult | UnifiedHotelResult,
     reason?: string,
+    targetDayId?: string,
   ) {
-    if (!selectedDayId) {
+    const effectiveDayId = targetDayId ?? selectedDayId;
+    if (!effectiveDayId) {
       setError("Select a day before adding this item.");
       return;
     }
-    const key = cardKey(name, selectedDayId || undefined);
+    const key = cardKey(name, effectiveDayId || undefined);
     if (addingItems.has(key) || addedItems.has(key)) return;
 
     const duplicate = itineraryItems.some((it) => {
       const titleMatch = normalizeTitle(it.title) === normalizeTitle(name);
       if (!titleMatch) return false;
-      if (selectedDayId) return it.dayId === selectedDayId;
+      if (effectiveDayId) return it.dayId === effectiveDayId;
       return it.tripId === tripId;
     });
 
@@ -743,14 +745,14 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
     setError(null);
     try {
       const added = await addStructuredConciergeItemToTrip(tripId, item, kind, {
-        dayId: selectedDayId || undefined,
+        dayId: effectiveDayId || undefined,
         reason,
       });
       setAddedItems((prev) => new Set(prev).add(key));
       setItineraryItems((prev) => [...prev, added]);
       setTripDays((prev) =>
         prev.map((day) =>
-          day.id === selectedDayId
+          day.id === effectiveDayId
             ? { ...day, items: [...(day.items ?? []), added] }
             : day
         )
@@ -827,20 +829,25 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
     ];
   }
 
-  // Main entry point for all user input (typed or chip). Routes refinement
-  // follow-ups to handleRefinement when a card set is already visible.
+  // Main entry point for typed input and refinement chips.
+  // Routes to refinement only when a card set exists AND the query is not a
+  // fresh destination/category search. Falls back to sendQuery if the action
+  // parser returns CLARIFY_UNSUPPORTED (handleRefinement returns false).
   async function handleUserInput(query: string) {
     const q = query.trim();
     if (!q || loading) return;
     const latestCardMsg = getLatestCardMessage(messages);
-    if (latestCardMsg) {
-      await handleRefinement(q, latestCardMsg);
+    if (latestCardMsg && !looksLikeFreshSearch(q)) {
+      const handled = await handleRefinement(q, latestCardMsg);
+      if (!handled) await sendQuery(q);
     } else {
       await sendQuery(q);
     }
   }
 
-  async function handleRefinement(query: string, latestCardMsg: Message) {
+  // Returns false when the query should fall through to sendQuery instead
+  // (CLARIFY_UNSUPPORTED — caller handles without double-appending user message).
+  async function handleRefinement(query: string, latestCardMsg: Message): Promise<boolean> {
     const cardsWithKind = getCardsWithKind(latestCardMsg);
     const action = parseRefinementAction(query, cardsWithKind.map((c) => c.place)) as {
       type: string;
@@ -850,23 +857,15 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
       clarificationText?: string;
     };
 
-    // Append user message first.
+    // CLARIFY_UNSUPPORTED: don't intercept — tell caller to use sendQuery.
+    if (action.type === ACTION.CLARIFY_UNSUPPORTED) {
+      return false;
+    }
+
+    // Confirmed refinement action — append user message and process.
     setInput("");
     setError(null);
     setMessages((prev) => [...prev, { role: "user", text: query }]);
-
-    if (action.type === ACTION.CLARIFY_UNSUPPORTED) {
-      setMessages((prev) => [...prev, {
-        role: "assistant",
-        text: action.clarificationText ?? "Could you clarify what you'd like?",
-        isRefinement: true,
-        refinementAction: ACTION.CLARIFY_UNSUPPORTED,
-        restaurants: [], attractions: [], hotels: [],
-        researchSources: [], areaComparisons: [],
-        retrievalUsed: false, sourceStatus: "none",
-      }]);
-      return;
-    }
 
     if (action.type === ACTION.ADD_SELECTED_TO_DAY) {
       const best = selectBestCard(cardsWithKind);
@@ -879,13 +878,13 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
           researchSources: [], areaComparisons: [],
           retrievalUsed: false, sourceStatus: "none",
         }]);
-        return;
+        return true;
       }
-      // Determine day: use day from action if specified, else current selectedDayId.
-      const dayId = action.dayNumber
+      // Resolve the target day deterministically — never rely on async state.
+      const resolvedDayId = action.dayNumber
         ? (tripDays.find((d) => d.dayNumber === action.dayNumber)?.id ?? selectedDayId)
         : selectedDayId;
-      if (!dayId) {
+      if (!resolvedDayId) {
         setMessages((prev) => [...prev, {
           role: "assistant",
           text: `Select a day first, then say "add the best one to Day X".`,
@@ -894,16 +893,13 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
           researchSources: [], areaComparisons: [],
           retrievalUsed: false, sourceStatus: "none",
         }]);
-        return;
+        return true;
       }
       const bestReason = pickCardReason(best.place);
       const sanitized = sanitizeWhyPick(bestReason, best.place.name, cardsWithKind.map((c) => c.place.name));
-      const prevSelectedDayId = selectedDayId;
-      setSelectedDayId(dayId);
-      await addItem(best.place.name, best.kind, best.place, sanitized);
-      // Restore day selection only if we changed it.
-      if (dayId !== prevSelectedDayId) setSelectedDayId(prevSelectedDayId);
-      const dayLabel = action.dayNumber ? `Day ${action.dayNumber}` : "your trip";
+      // Pass resolvedDayId explicitly so addItem does not read from async state.
+      await addItem(best.place.name, best.kind, best.place, sanitized, resolvedDayId);
+      const dayLabel = action.dayNumber ? `Day ${action.dayNumber}` : "your selected day";
       setMessages((prev) => [...prev, {
         role: "assistant",
         text: `Added ${best.place.name} to ${dayLabel}.`,
@@ -912,7 +908,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
         researchSources: [], areaComparisons: [],
         retrievalUsed: false, sourceStatus: "none",
       }]);
-      return;
+      return true;
     }
 
     if (action.type === ACTION.SEARCH_MORE_WITH_CONTEXT) {
@@ -932,7 +928,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
       } finally {
         setLoading(false);
       }
-      return;
+      return true;
     }
 
     // FILTER, REMOVE, RERANK, COMPARE — apply locally.
@@ -964,10 +960,11 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
       } finally {
         setLoading(false);
       }
-      return;
+      return true;
     }
 
     setMessages((prev) => [...prev, synthetic as Message]);
+    return true;
   }
 
   if (!isOpen) return null;
@@ -1238,7 +1235,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
               {(refinementChips ?? followUpActions).map((prompt) => (
                 <button
                   key={prompt}
-                  onClick={() => handleUserInput(prompt)}
+                  onClick={() => refinementChips ? handleUserInput(prompt) : sendQuery(prompt)}
                   className="rounded-full border border-slate-600 bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-700"
                 >
                   {prompt}

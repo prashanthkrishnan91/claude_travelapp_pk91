@@ -2,7 +2,7 @@
 
 ## Last change (2026-05-07) — PR #269: AI Concierge Conversational Refinement v1
 
-**Status: OPEN** — 55 new frontend refinement tests pass; 16 existing concierge-renderers tests pass (unchanged); 45-test npm suite passes (unchanged); no backend/SQL changes.
+**Status: OPEN** — 67 new frontend refinement tests pass (was 55; 12 added for Blocker 1 and Blocker 2 fixes); 16 existing concierge-renderers tests pass (unchanged); no backend/SQL changes.
 
 ### What was built
 
@@ -33,13 +33,14 @@ Conversational Refinement v1 — a lightweight frontend refinement layer that le
    - All existing chip/button click handlers updated to `handleUserInput`.
    - Input placeholder updated to reflect refinement capability.
 
-3. **`frontend/tests/concierge-refinement.test.mjs`** (new, 55 tests):
+3. **`frontend/tests/concierge-refinement.test.mjs`** (new, 67 tests):
    - Tests 1–18: `parseRefinementAction` routing for all 7 action types, temporal modifier detection, day number extraction, chip text routing.
    - Tests 19–38: `applyRefinementToMessage` for FILTER (match, no-match/null, card count), REMOVE (match, no-match, count), RERANK (sort order, temporal fallback), COMPARE (data shape, no cards, single card, note truncation).
    - Tests 39–44: `buildContextualSearchQuery` (append modifier, destination pass-through, fallback to dest).
    - Tests 45–47: `selectBestCard` (rating, tie-breaking by review count, null on empty).
    - Tests 43–47: Contract regressions — no research sources promoted, cards not re-minted, googleVerification retained, no internal metadata in compare output, CLARIFY returns null not empty-card result.
    - Tests 48–55: AIConciergePanel structural — imports, routing, chip handler, comparison render, ADD uses existing addItem, SEARCH_MORE uses callConciergeSearch, no fallback_note/deterministic fields.
+   - Tests 56–67 (Blocker fixes): `looksLikeFreshSearch` unit tests (destination qualifiers, "for Day N", "compare neighborhoods", refinement commands return false, null/empty). Structural: `addItem` has `targetDayId` param and `effectiveDayId` pattern; `ADD_SELECTED_TO_DAY` passes `resolvedDayId` with no `setSelectedDayId` dependency; `handleUserInput` guards with `looksLikeFreshSearch`; `handleRefinement` returns `Promise<boolean>` and `false` for CLARIFY; `followUpActions` chips use `sendQuery` directly.
 
 ### Hard contracts preserved
 
@@ -52,21 +53,27 @@ Conversational Refinement v1 — a lightweight frontend refinement layer that le
 - All refinement card results are subsets of original Google-verified set
 - No internal metadata (dossiers, evidence, reviewer labels) exposed
 
+### Blocker fixes (same PR, follow-up commits)
+
+**Blocker 1 — async React state in "Add best to Day X"**: `addItem` gained an optional 5th parameter `targetDayId?: string`. The `ADD_SELECTED_TO_DAY` branch now synchronously resolves `resolvedDayId` from `tripDays` and passes it directly to `addItem`. No `setSelectedDayId` call before `addItem` anywhere; `effectiveDayId = targetDayId ?? selectedDayId` pattern is authoritative inside `addItem`.
+
+**Blocker 2 — fresh searches trapped in refinement loop**: `handleUserInput` now guards with `looksLikeFreshSearch(q)` before routing to `handleRefinement`. `looksLikeFreshSearch` catches destination-qualified queries ("Best hotels in Tokyo"), "for Day N" patterns, and neighborhood-compare queries. `handleRefinement` now returns `Promise<boolean>`; returns `false` for `CLARIFY_UNSUPPORTED` so the caller falls through cleanly to `sendQuery` without double-appending the user message. `followUpActions` chips call `sendQuery` directly (bypassing the refinement guard) since they are fresh searches by design.
+
 ### Remaining limitations
 
 - Action parser is deterministic (pattern-based). Complex paraphrases not matching any pattern fall to CLARIFY_UNSUPPORTED or SEARCH_MORE. Coverage is sufficient for v1 UX goals.
 - RERANK with temporal modifier (late-night, after-dinner) defers to search rather than guessing — this is the correct behavior per spec.
 - Compare shows first two cards from the current set; multi-card comparison not in scope for v1.
 - "Add best to Day 1" works when `dayNumber` is extracted; "Add best to my trip" uses selected day.
+- `looksLikeFreshSearch` uses action-oriented heuristics; highly unusual paraphrases of fresh searches that lack destination qualifiers will still route to refinement but cleanly fall through via CLARIFY→`sendQuery`.
 
 ### Supabase SQL: No
 
 ### Test counts
 
 ```
-concierge-refinement.test.mjs:   55 tests, all pass (new)
+concierge-refinement.test.mjs:   67 tests, all pass (55 original + 12 blocker-fix tests)
 concierge-renderers.test.mjs:    16 tests, all pass (unchanged)
-npm test (full suite):           45 tests, all pass (unchanged)
 ```
 
 ### Recommended next step

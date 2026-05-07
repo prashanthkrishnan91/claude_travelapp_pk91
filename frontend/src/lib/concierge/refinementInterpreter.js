@@ -268,6 +268,29 @@ export function compareCards(cardsWithKind) {
 }
 
 /**
+ * Returns true when a follow-up query looks like a fresh category/destination
+ * search rather than a refinement of the current card set.
+ *
+ * Criteria (generic / action-oriented, no venue keyword patching):
+ *  1. Explicit destination qualifier: "in Tokyo", "near Paris", "around Kyoto"
+ *  2. "for Day N" concierge starter: "Attractions for Day 2"
+ *  3. Neighborhood/area comparison: "Compare neighborhoods", "Compare areas"
+ *
+ * If this returns false but the action parser returns CLARIFY_UNSUPPORTED, the
+ * caller (handleUserInput) falls through to sendQuery as a safety net.
+ */
+export function looksLikeFreshSearch(query) {
+  const q = (query ?? '').trim();
+  // Destination qualifier: "in Tokyo", "near Paris", "around Osaka"
+  if (/\b(?:in|near|around)\s+[A-Z][a-z]/.test(q)) return true;
+  // "for Day X" pattern: "Attractions for Day 2", "Restaurants for Day 3"
+  if (/\bfor\s+day\s+\d+\b/i.test(q)) return true;
+  // Neighborhood/area comparison (not a card-set comparison)
+  if (/^compare\s+(?:neighborhoods?|areas?|districts?)\b/i.test(q)) return true;
+  return false;
+}
+
+/**
  * Build a contextual search query for SEARCH_MORE_WITH_CONTEXT.
  * Combines the original query context with the user's new modifier.
  */
