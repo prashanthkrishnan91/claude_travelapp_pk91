@@ -147,6 +147,55 @@ def _log_legacy_product_mock_event(
         returned_count,
     )
 
+
+# Cache namespaces whose ``research_cache`` rows can only have come from the
+# legacy mock fixtures.  ``restaurants`` is intentionally **excluded**: it is
+# served by the canonical Google Places provider with fail-closed semantics
+# and already has its own stale-mock cache eviction in ``search_restaurants``.
+_LEGACY_MOCK_DEPENDENT_NAMESPACES: frozenset = frozenset({
+    "flights",
+    "hotels",
+    "attractions",
+})
+
+# Per-row ``source`` attributions that positively identify a cached row as
+# coming from a real, non-mock provider.  Cached rows whose every entry is in
+# this set are trusted under ``BLOCK_LEGACY_PRODUCT_MOCK``; everything else
+# (mock, missing, mixed) fails closed.
+_CANONICAL_CACHE_SOURCES: frozenset = frozenset({
+    "google_places",
+})
+
+
+def _suppress_legacy_mock_cache(
+    namespace: str,
+    cached: Optional[List[Dict[str, Any]]],
+) -> bool:
+    """Decide whether a cached row set must be suppressed under the v1A
+    operator block.
+
+    The cache-side companion to the per-fixture block in ``_mock_*``.  When
+    ``BLOCK_LEGACY_PRODUCT_MOCK`` is truthy the cache itself can still hold a
+    legacy mock payload from before the flag was flipped, and a naive
+    ``cache hit → return`` would silently keep emitting fabricated data.
+
+    Returns True when the operator flag is on AND the namespace is in
+    ``_LEGACY_MOCK_DEPENDENT_NAMESPACES`` AND the cached rows are not
+    unambiguously attributed to a canonical (non-mock) provider.  In other
+    words: under the flag, only positively-identified non-mock cache rows
+    are allowed through; ambiguous or mock rows fail closed.
+    """
+    if not _legacy_product_mock_blocked():
+        return False
+    if namespace not in _LEGACY_MOCK_DEPENDENT_NAMESPACES:
+        return False
+    if not cached:
+        return False
+    return not all(
+        item.get("source") in _CANONICAL_CACHE_SOURCES for item in cached
+    )
+
+
 # Known city centres for coordinate generation
 _CITY_CENTERS: Dict[str, tuple] = {
     "honolulu": (21.3069, -157.8583),
@@ -1105,10 +1154,17 @@ class SearchService:
             query = sub_req.model_dump(mode="json")
             key = _cache_key("flights", query)
             cached = self._get_cache(key)
+            if cached and _suppress_legacy_mock_cache("flights", cached):
+                logger.warning(
+                    "[legacy_product_mock.cache_blocked] namespace=flights cached_rows=%d — discarding suspect cache",
+                    len(cached),
+                )
+                cached = None
             if cached:
                 return [FlightResult(**item) for item in cached]
             results = _mock_flights(sub_req)
-            self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
+            if not _legacy_product_mock_blocked():
+                self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
             return results
 
         # Multi-airport: cartesian product of all origin × destination pairs
@@ -1126,11 +1182,18 @@ class SearchService:
                 query = sub_req.model_dump(mode="json")
                 key = _cache_key("flights", query)
                 cached = self._get_cache(key)
+                if cached and _suppress_legacy_mock_cache("flights", cached):
+                    logger.warning(
+                        "[legacy_product_mock.cache_blocked] namespace=flights cached_rows=%d — discarding suspect cache",
+                        len(cached),
+                    )
+                    cached = None
                 if cached:
                     all_results.extend([FlightResult(**item) for item in cached])
                 else:
                     results = _mock_flights(sub_req)
-                    self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
+                    if not _legacy_product_mock_blocked():
+                        self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
                     all_results.extend(results)
 
         # Deduplicate by (airline, rounded price, duration)
@@ -1192,17 +1255,30 @@ class SearchService:
         query = req.model_dump(mode="json")
         key = _cache_key("hotels", query)
         cached = self._get_cache(key)
+        if cached and _suppress_legacy_mock_cache("hotels", cached):
+            logger.warning(
+                "[legacy_product_mock.cache_blocked] namespace=hotels location=%s cached_rows=%d — discarding suspect cache",
+                req.location, len(cached),
+            )
+            cached = None
         if cached:
             return [HotelResult(**item) for item in cached]
 
         results = _mock_hotels(req)
-        self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
+        if not _legacy_product_mock_blocked():
+            self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
         return results
 
     def search_attractions(self, req: AttractionSearchRequest) -> List[AttractionResult]:
         query = req.model_dump(mode="json")
         key = _cache_key("attractions", query)
         cached = self._get_cache(key)
+        if cached and _suppress_legacy_mock_cache("attractions", cached):
+            logger.warning(
+                "[legacy_product_mock.cache_blocked] namespace=attractions location=%s cached_rows=%d — discarding suspect cache",
+                req.location, len(cached),
+            )
+            cached = None
         if cached:
             results = []
             for item in cached:
@@ -1213,7 +1289,8 @@ class SearchService:
             return results
 
         results = _mock_attractions(req)
-        self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
+        if not _legacy_product_mock_blocked():
+            self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
         return results
 
     def search_restaurants(self, req: RestaurantSearchRequest) -> List[RestaurantResult]:

@@ -23,7 +23,8 @@ Migrating those frontend callers off the mock surface requires either real-provi
 
 1. **`backend/app/services/search.py`** — added a single quarantine seam:
    - Module-level `BLOCK_LEGACY_PRODUCT_MOCK` env flag handler (`_legacy_product_mock_blocked`).  When set, every `_mock_*` helper short-circuits to `[]` and emits `[legacy_product_mock.blocked]` structured telemetry (operator opt-in fail-closed switch — verifiable in staging before v1B flip).
-   - `_log_legacy_product_mock_event(event=..., namespace=..., location=..., requested=..., returned=...)` always-on telemetry.  Every unblocked emission logs `[legacy_product_mock.emitted]` with the returned count so production logs expose the leakage rate while v1B migrates the frontend callers.
+   - **Cache-side companion** (`_suppress_legacy_mock_cache(namespace, cached)`) — the `_mock_*` block alone is not enough because `SearchService` is cache-first; if `research_cache` already holds legacy mock-backed rows from before the flag was flipped, a naive cache-hit would silently keep emitting fabricated data.  The helper is invoked at every cache-hit site in `search_flights` (single + multi-airport), `search_hotels`, and `search_attractions`.  When `BLOCK_LEGACY_PRODUCT_MOCK` is on AND the namespace is in `_LEGACY_MOCK_DEPENDENT_NAMESPACES` (= `{flights, hotels, attractions}`), the helper suppresses any cache row whose `source` is not in `_CANONICAL_CACHE_SOURCES` (= `{google_places}`).  Mock-attributed, ambiguous, and missing-source rows all fail closed; positively-attributed canonical rows survive.  Cache writes in the legacy paths are also skipped while the flag is on, so an empty mock result cannot outlive a flag flip.  `/search/restaurants` is intentionally **excluded** from `_LEGACY_MOCK_DEPENDENT_NAMESPACES` because it is canonical Google Places and already has its own stale-mock cache eviction.
+   - `_log_legacy_product_mock_event(event=..., namespace=..., location=..., requested=..., returned=...)` always-on telemetry.  Every unblocked emission logs `[legacy_product_mock.emitted]` with the returned count so production logs expose the leakage rate while v1B migrates the frontend callers.  Cache-side suppression emits `[legacy_product_mock.cache_blocked]` so operators can distinguish a fresh-generation block from a cache-hit block.
    - `_mark_legacy_product_mock(fn)` decorator + `is_legacy_product_mock(fn)` predicate + `LEGACY_PRODUCT_MOCK_FUNCTIONS` registry tuple — explicit, enumerable surface for the regression tests so future drift fails the build instead of growing silently.
    - All four mock generators (`_mock_flights`, `_mock_hotels`, `_mock_attractions`, `_mock_restaurants`) honor the block flag and emit telemetry; their docstrings document the v1A quarantine.
    - Default behavior unchanged when the flag is unset (the only operator-facing change in this PR is the telemetry log).
@@ -35,7 +36,7 @@ Migrating those frontend callers off the mock surface requires either real-provi
 
 3. **`frontend/src/lib/api.ts`** — added v1A deprecation comments above the five legacy callers (`searchFlights`, `searchHotels`, `searchAttractions`, `searchClusters`, `fetchBestArea`).  No behavior change; comments only — they document the `BLOCK_LEGACY_PRODUCT_MOCK` flag and the v1B migration intent so future contributors do not extend the surface.
 
-4. **`backend/tests/test_product_surface_pruning_v1a.py`** (new, 26 tests) — comprehensive contract test for the v1A surface:
+4. **`backend/tests/test_product_surface_pruning_v1a.py`** (new, 36 tests) — comprehensive contract test for the v1A surface:
    - Block-flag truthiness parser parametrize (8 forms).
    - Each `_mock_*` returns `[]` and emits `[legacy_product_mock.blocked]` when blocked.
    - Unblocked emission still logs the leak telemetry with returned count.
@@ -44,6 +45,14 @@ Migrating those frontend callers off the mock surface requires either real-provi
    - Route classification: parses `routes/search.py` from disk (FastAPI is mocked under test), asserts every `/search/*` route is in `LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES ∪ CANONICAL_PRODUCT_ROUTES`, and asserts the partition is exhaustive and non-overlapping.
    - **Frontend caller registry**: walks `frontend/` and asserts only the four current files (`api.ts`, `TripBuilder.tsx`, `OptimizeTripModal.tsx`, `tests/explore-hydration.test.mjs`) reference the legacy `/search/{flights,hotels,attractions,best-area,clusters,round-trip-flights}` routes or the typed wrappers.  Adding a new caller (or removing a migrated one) without updating `_KNOWN_LEGACY_SEARCH_CALLERS` fails the test.
    - Stale-entry drift guard the other way: every entry in `_KNOWN_LEGACY_SEARCH_CALLERS` must still contain a legacy token; v1B removals are forced to update the list.
+   - **Cache-side block (10 new tests)**:
+     - Cached `source="mock"` attractions / hotels / flights are suppressed under the operator flag and emit `[legacy_product_mock.cache_blocked]` telemetry.
+     - Default behavior is unchanged when the flag is unset — cached mock attractions / hotels still flow through.
+     - Cached `source="google_places"` attractions are **not** suppressed under the flag (positive non-mock attribution survives).
+     - Ambiguous cached rows (no `source` field) on a legacy namespace fail closed under the flag.
+     - `/search/restaurants` is excluded from `_LEGACY_MOCK_DEPENDENT_NAMESPACES`; the helper short-circuits to `False` for the restaurants namespace regardless of cached row source — the canonical Google Places fail-closed path is left untouched.
+     - Cache writes are skipped on legacy paths when the flag is on (an empty mock result cannot outlive a flag flip).
+     - Cache writes proceed normally when the flag is unset.
    - `/ai/concierge/search` is asserted to remain mounted as the canonical seam.
 
 ### Route / caller map
@@ -87,9 +96,9 @@ Each v1B step must also: (a) preserve Add-to-Day / Save / Maps / itinerary / sav
 
 ### Test results
 
-- `tests/test_product_surface_pruning_v1a.py`: **26/26 PASS** (new file)
+- `tests/test_product_surface_pruning_v1a.py`: **36/36 PASS** (new file — 26 original + 10 new cache-side block tests)
 - Concierge regression band (`test_concierge_card_contract.py`, `test_concierge.py`, `test_live_research.py`, `test_explore_snapshot.py`, `test_concierge_display_contract.py`): **362/362 PASS**
-- Full backend test suite: **2496 passed, 4 pre-existing env-only failures unchanged from base** (`test_concierge_critical_path_hardening.py` x2, `test_concierge_observability.py` x1, `test_set_level_writer.py` x1 — all assert on attributes the test setup itself does not provide; identical to the failures noted in the PR #287 entry below).
+- Full backend test suite: **2506 passed, 4 pre-existing env-only failures unchanged from base** (`test_concierge_critical_path_hardening.py` x2, `test_concierge_observability.py` x1, `test_set_level_writer.py` x1 — all assert on attributes the test setup itself does not provide; identical to the failures noted in the PR #287 entry below).
 - Frontend `npm test` (`concierge-renderers.test.mjs`, `explore-restaurants-trust-contract.test.mjs`, `concierge-refinement.test.mjs`): **200/200 PASS**.
 - Frontend `tests/explore-hydration.test.mjs` (run separately, not in `npm test`): **46/47 PASS** — the single failure (`Explore restaurants require verified Google place identity before rendering/persisting`) is pre-existing on the base commit before this PR; it is unrelated to v1A and is a regex match on `searchRestaurants` source that does not match the current implementation's structure.  No code in this PR touches `searchRestaurants` or the Explore restaurants Google-identity guard.
 
@@ -106,14 +115,14 @@ Each v1B step must also: (a) preserve Add-to-Day / Save / Maps / itinerary / sav
 ### Self-audit (acceptance criteria mapping)
 
 1. **Concrete route/caller map in PR summary** — Route / caller map table above; classification table above; v1B plan documents action taken vs deferred per route.
-2. **No user-facing surface relies on SearchService mock data unguarded** — every legacy mock fixture now honors `BLOCK_LEGACY_PRODUCT_MOCK`; every leak emission logs `[legacy_product_mock.emitted]`; the frontend caller registry test fails on any new caller.
+2. **No user-facing surface relies on SearchService mock data unguarded** — every legacy mock fixture honors `BLOCK_LEGACY_PRODUCT_MOCK` at fresh-generation; the cache-side `_suppress_legacy_mock_cache` companion makes the operator block fail closed even when `research_cache` already holds legacy mock-backed rows; cache writes on legacy paths are skipped while the flag is on; every leak emission logs `[legacy_product_mock.emitted]` and every cache-side suppression logs `[legacy_product_mock.cache_blocked]`; the frontend caller registry test fails on any new caller.
 3. **Preserved legacy routes are quarantined / documented** — `LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES` enumerates them; `CANONICAL_PRODUCT_ROUTES` separates `/search/restaurants`; `test_every_search_route_is_classified` asserts the partition is exhaustive.
 4. **Add to Day / Save / Maps / itinerary / saved-card flows remain compatible** — no code path on those flows was changed; default behavior is preserved when the env flag is unset.
 5. **PR #287 card contract tests still pass** — `test_concierge_card_contract.py` 29/29 pass; full Concierge band 362/362 pass.
-6. **Focused regression coverage for new pruning/guarding behavior** — `test_product_surface_pruning_v1a.py` 26 tests covering each guard + caller registry.
+6. **Focused regression coverage for new pruning/guarding behavior** — `test_product_surface_pruning_v1a.py` 36 tests covering each guard + caller registry + cache-side block (cached mock suppressed, cached canonical preserved, ambiguous fail-closed, restaurants exempt, cache-write skipped under flag).
 7-10. **No SQL, no new providers, no new LLM calls, no semantic retrieval/ranking/note changes** — confirmed; quarantine is module-level python + classification frozensets + tests.
 11. **No manual UI testing required** — audit-first PR; all assertions are automated tests.
-12. **Full relevant automated tests pass** — backend 2496 pass; the 4 failures are the documented pre-existing env-only failures, identical to the PR #287 baseline.
+12. **Full relevant automated tests pass** — backend 2506 pass; the 4 failures are the documented pre-existing env-only failures, identical to the PR #287 baseline.
 
 ### Stop / split decision
 
