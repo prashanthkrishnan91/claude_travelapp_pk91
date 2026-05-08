@@ -53,6 +53,11 @@ _W_VALUE = 0.02          # reduced from 0.04 — still active when value signals
 # when no on-concept results are available.
 _WRONG_CATEGORY_PENALTY = 0.30
 
+# Minimum casual-compatible candidates required before the pre-truncation sort
+# activates. Below this threshold there are not enough casual alternatives to
+# justify pushing fine-dining/expensive entities out of the top-N window.
+_MIN_CASUAL_COMPAT_FOR_SORT = 2
+
 # Destination mismatch penalty: applied when the entity's formatted_address
 # contains no token from the destination city/destination words. This ensures
 # that a Milwaukee brewery cannot rank above Chicago breweries for a Chicago
@@ -199,6 +204,7 @@ class RankerStats:
     modifier_filter_applied: bool = False
     casual_downranked_count: int = 0    # entities that received a casual direct penalty
     casual_excluded_count: int = 0      # entities that fell out of top_n due to casual penalty
+    casual_sort_applied: bool = False   # True when casual pre-truncation sort ran
 
 
 # ── Feature computation ───────────────────────────────────────────────────────
@@ -972,6 +978,31 @@ def rank_entities_with_stats(
             -x[0],  # descending by total score within same price tier
         ))
 
+    # Casual-aware pre-truncation sort: when casual is active and enough casual-
+    # compatible candidates exist, tier-sort so casual-compatible entities (no
+    # fine_dining type, not expensive/very_expensive by price_level or price_range)
+    # fill the top-N window before upscale entities. Within each tier the sort is
+    # score-descending, preserving the penalty-adjusted ordering.
+    # Only activates when _MIN_CASUAL_COMPAT_FOR_SORT or more casual-friendly
+    # candidates exist — ensures we never suppress the only good result.
+    _casual_sort_applied = False
+    if _casual_active:
+        def _casual_tier(item: Tuple[float, PlaceEntity, RankScore]) -> int:
+            ent = item[1]
+            _p = (ent.price_level or "").upper()
+            _eu = _entity_price_range_end_units(ent)
+            _tl = {t.lower() for t in (ent.types or [])}
+            if "fine_dining_restaurant" in _tl or _p == "PRICE_LEVEL_VERY_EXPENSIVE" or _eu >= 100:
+                return 2  # upscale — prefer below casual
+            if _p == "PRICE_LEVEL_EXPENSIVE" or _eu >= 80:
+                return 1  # moderate-upscale
+            return 0  # casual-compatible
+
+        _compat_count = sum(1 for item in scored if _casual_tier(item) == 0)
+        if _compat_count >= _MIN_CASUAL_COMPAT_FOR_SORT:
+            scored.sort(key=lambda x: (_casual_tier(x), -x[0]))
+            _casual_sort_applied = True
+
     result: List[Tuple[PlaceEntity, RankScore]] = []
     for _total, entity, rs in scored[:top_n]:
         result.append((entity, rs))
@@ -985,6 +1016,7 @@ def rank_entities_with_stats(
     stats.modifier_intent = "casual" if _casual_active else ("upscale" if _upscale_active else "")
     stats.modifier_filter_applied = _casual_active or _upscale_active
     stats.casual_downranked_count = casual_downranked_count
+    stats.casual_sort_applied = _casual_sort_applied
     # casual_excluded_count: penalized entities that did not make the final top_n.
     if _casual_active and casual_downranked_count > 0:
         result_place_ids = {e.place_id for e, _ in result}
@@ -1003,7 +1035,8 @@ def rank_entities_with_stats(
     logger.debug(
         "ranker: entities=%d ranked=%d off_concept_dropped=%d "
         "top_score=%.4f top_subtype_fit=%.4f top_geo_fit=%.4f "
-        "primary_concept=%r recognized_concept=%s",
+        "primary_concept=%r recognized_concept=%s "
+        "casual_active=%s casual_downranked=%d casual_sort_applied=%s",
         len(entities),
         len(result),
         dropped_off_concept,
@@ -1012,6 +1045,9 @@ def rank_entities_with_stats(
         result[0][1].geo_fit if result else 0,
         primary_label,
         concept_is_recognized,
+        _casual_active,
+        casual_downranked_count,
+        _casual_sort_applied,
     )
 
     return result, stats

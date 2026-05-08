@@ -601,6 +601,232 @@ class TestCasualFreshSearchRanking:
         assert names.count("Sinya Mediterranean") == 1
 
 
+# ── Retrieval planner: casual query generation ───────────────────────────────
+
+from app.concierge.retrieval_planner import plan_queries, _PREFERENCE_QUERY_MODIFIERS
+
+
+class TestCasualRetrievalPlannerQueries:
+    """Verify 'casual' in normalized_soft_preferences triggers casual-specific queries.
+
+    These tests FAIL before the fix (no 'casual' entry in _PREFERENCE_QUERY_MODIFIERS)
+    and PASS after (casual generates preference-aware queries).
+    """
+
+    def test_casual_has_entry_in_preference_modifiers(self):
+        """'casual' must be registered in _PREFERENCE_QUERY_MODIFIERS."""
+        assert "casual" in _PREFERENCE_QUERY_MODIFIERS, (
+            "'casual' must have an entry in _PREFERENCE_QUERY_MODIFIERS so the retrieval "
+            "planner generates casual-specific queries instead of the same plain queries "
+            "as a broad search."
+        )
+
+    def test_casual_generates_multiple_queries(self):
+        """'casual Mediterranean restaurants' must generate 2+ queries.
+
+        Without the fix, pref_modifiers is empty for 'casual', so the planner falls
+        into the plain-synonym branch and produces only 1 query: 'mediterranean
+        restaurant Chicago'. This causes the same candidate pool as a broad search.
+        """
+        frame = extract_frame("casual Mediterranean restaurants", "Chicago")
+        queries = plan_queries(frame)
+        assert len(queries) >= 2, (
+            f"casual Mediterranean should generate ≥2 queries, got: {queries}"
+        )
+
+    def test_casual_query_contains_casual_or_neighborhood_prefix(self):
+        """At least one generated query must have a casual-intent prefix.
+
+        This directly verifies that Google receives a query signal for casual dining
+        rather than a generic 'mediterranean restaurant' query.
+        """
+        frame = extract_frame("casual Mediterranean restaurants", "Chicago")
+        queries = plan_queries(frame)
+        casual_prefixes = {"casual", "neighborhood", "relaxed"}
+        has_casual_prefix = any(
+            any(q.lower().startswith(prefix) for prefix in casual_prefixes)
+            for q in queries
+        )
+        assert has_casual_prefix, (
+            f"At least one query must start with a casual-intent prefix; got: {queries}"
+        )
+
+    def test_broad_query_unchanged(self):
+        """'Mediterranean restaurants' (no casual) generates plain queries without casual prefix."""
+        broad_frame = extract_frame("Mediterranean restaurants", "Chicago")
+        casual_frame = extract_frame("casual Mediterranean restaurants", "Chicago")
+        broad_queries = plan_queries(broad_frame)
+        casual_queries = plan_queries(casual_frame)
+        # Broad must not have casual prefix
+        casual_prefixes = {"casual", "neighborhood", "relaxed"}
+        broad_has_casual = any(
+            any(q.lower().startswith(p) for p in casual_prefixes)
+            for q in broad_queries
+        )
+        assert not broad_has_casual, (
+            f"Broad query must not have casual prefix: {broad_queries}"
+        )
+        # The query sets must differ
+        assert set(broad_queries) != set(casual_queries), (
+            f"Casual and broad must produce different query sets: broad={broad_queries} "
+            f"casual={casual_queries}"
+        )
+
+    def test_casual_queries_still_include_broad_fallback(self):
+        """Casual queries must include a plain venue+destination fallback for recall."""
+        frame = extract_frame("casual Mediterranean restaurants", "Chicago")
+        queries = plan_queries(frame)
+        # The broad fallback "mediterranean restaurant Chicago" must be present
+        has_broad_fallback = any(
+            "mediterranean" in q.lower() and "chicago" in q.lower()
+            and not any(q.lower().startswith(p) for p in {"casual", "neighborhood", "relaxed"})
+            for q in queries
+        )
+        assert has_broad_fallback, (
+            f"Casual queries must include a broad fallback for recall; got: {queries}"
+        )
+
+
+# ── Ranker: casual pre-truncation sort ───────────────────────────────────────
+
+class TestCasualPreTruncationSort:
+    """Verify casual pre-sort bubbles casual-compatible entities above fine-dining.
+
+    These tests cover the scenario where fine-dining entities have very high
+    quality/popularity scores that could otherwise numerically beat casual
+    alternatives despite the direct penalty — the sort guarantees casual entities
+    surface to top-N when ≥2 casual-compatible candidates exist.
+    """
+
+    def _make_pool_fine_dining_no_price_level(self) -> List[PlaceEntity]:
+        """Production-equivalent pool: Greek Islands (fine_dining, NO price_level).
+
+        This is the real production failure: Google types include fine_dining_restaurant
+        but no price_level is set, so only pen=0.10 applies from the direct penalty.
+        With very high quality/popularity, Greek Islands could outscore casual
+        alternatives without the pre-sort.
+        """
+        return [
+            # Upscale — fine_dining only (no price_level), very high quality
+            _make_place_entity(
+                "Greek Islands", "pid_greek",
+                types=["fine_dining_restaurant", "greek_restaurant"],
+                price_level="",  # no price_level — production scenario
+                rating=4.8, review_count=5000,
+                source_query="casual mediterranean restaurants chicago",
+            ),
+            # Upscale — expensive price_range, no fine_dining type
+            _make_place_entity(
+                "Aba", "pid_aba",
+                types=["mediterranean_restaurant", "restaurant"],
+                price_level="",
+                price_range={"endPrice": {"units": "100"}},
+                rating=4.6, review_count=2000,
+                source_query="casual mediterranean restaurants chicago",
+            ),
+            # Casual-compatible — moderate price
+            _make_place_entity(
+                "Sinya Mediterranean N Damen", "pid_sinya",
+                types=["mediterranean_restaurant", "restaurant"],
+                price_level="PRICE_LEVEL_MODERATE",
+                rating=4.3, review_count=800,
+                source_query="casual mediterranean restaurants chicago",
+            ),
+            # Casual-compatible — moderate price
+            _make_place_entity(
+                "Yasemi", "pid_yasemi",
+                types=["mediterranean_restaurant", "restaurant"],
+                price_level="PRICE_LEVEL_MODERATE",
+                rating=4.2, review_count=600,
+                source_query="casual mediterranean restaurants chicago",
+            ),
+            # Casual-compatible — inexpensive
+            _make_place_entity(
+                "Cafe Med", "pid_cafe_med",
+                types=["cafe", "mediterranean_restaurant"],
+                price_level="PRICE_LEVEL_INEXPENSIVE",
+                rating=4.0, review_count=300,
+                source_query="casual mediterranean restaurants chicago",
+            ),
+        ]
+
+    def test_casual_sort_applied_when_enough_compat_entities(self):
+        """casual_sort_applied must be True when ≥2 casual-compatible entities exist."""
+        entities = self._make_pool_fine_dining_no_price_level()
+        frame = extract_frame("casual Mediterranean restaurants", "Chicago")
+        _, stats = rank_entities_with_stats(entities, frame, top_n=5)
+        assert stats.casual_sort_applied, (
+            "casual_sort_applied must be True when pool has ≥2 casual-compatible candidates"
+        )
+
+    def test_casual_sort_not_applied_for_broad(self):
+        """Broad 'Mediterranean restaurants' must NOT trigger the casual sort."""
+        entities = self._make_pool_fine_dining_no_price_level()
+        broad_frame = extract_frame("Mediterranean restaurants", "Chicago")
+        _, stats = rank_entities_with_stats(entities, broad_frame, top_n=5)
+        assert not stats.casual_sort_applied, (
+            "Broad Mediterranean query must not trigger casual pre-sort"
+        )
+
+    def test_greek_islands_fine_dining_no_price_level_not_first_with_alternatives(self):
+        """Greek Islands (fine_dining, NO price_level) must not rank #1 when casual alternatives exist."""
+        entities = self._make_pool_fine_dining_no_price_level()
+        frame = extract_frame("casual Mediterranean restaurants", "Chicago")
+        casual_ranked, _ = rank_entities_with_stats(entities, frame, top_n=5)
+        casual_names = [e.name for e, _ in casual_ranked]
+        if "Greek Islands" in casual_names:
+            greek_pos = casual_names.index("Greek Islands")
+            assert greek_pos > 0, (
+                f"Greek Islands (fine_dining, no price_level) must not rank first "
+                f"when casual alternatives exist. Ranked order: {casual_names}"
+            )
+
+    def test_aba_expensive_range_not_first_with_casual_alternatives(self):
+        """Aba ($100 range) must not rank #1 when casual alternatives exist."""
+        entities = self._make_pool_fine_dining_no_price_level()
+        frame = extract_frame("casual Mediterranean restaurants", "Chicago")
+        casual_ranked, _ = rank_entities_with_stats(entities, frame, top_n=5)
+        casual_names = [e.name for e, _ in casual_ranked]
+        if "Aba" in casual_names:
+            aba_pos = casual_names.index("Aba")
+            assert aba_pos > 0, (
+                f"Aba ($100 range) must not rank first when casual alternatives exist. "
+                f"Ranked order: {casual_names}"
+            )
+
+    def test_casual_top2_are_casual_compatible(self):
+        """Top 2 results for casual must both be casual-compatible (not fine_dining/expensive)."""
+        entities = self._make_pool_fine_dining_no_price_level()
+        frame = extract_frame("casual Mediterranean restaurants", "Chicago")
+        casual_ranked, _ = rank_entities_with_stats(entities, frame, top_n=5)
+        top2 = casual_ranked[:2]
+        for entity, _ in top2:
+            is_fine_dining = "fine_dining_restaurant" in {t.lower() for t in (entity.types or [])}
+            price_end = int((entity.price_range or {}).get("endPrice", {}).get("units", 0) or 0)
+            is_v_expensive = (entity.price_level or "").upper() == "PRICE_LEVEL_VERY_EXPENSIVE" or price_end >= 100
+            assert not is_fine_dining, (
+                f"Top-2 entity '{entity.name}' has fine_dining type — must not rank in top-2 "
+                f"for casual query when casual alternatives exist"
+            )
+            assert not is_v_expensive, (
+                f"Top-2 entity '{entity.name}' is very expensive — must not rank in top-2 "
+                f"for casual query when casual alternatives exist"
+            )
+
+    def test_broad_top2_unchanged_by_casual_fix(self):
+        """Broad 'Mediterranean restaurants' top-2 must not be penalized by casual logic."""
+        entities = self._make_pool_fine_dining_no_price_level()
+        broad_frame = extract_frame("Mediterranean restaurants", "Chicago")
+        broad_ranked, broad_stats = rank_entities_with_stats(entities, broad_frame, top_n=5)
+        # Broad should not apply casual sort, penalties, or exclusions
+        assert broad_stats.modifier_intent != "casual"
+        assert not broad_stats.casual_sort_applied
+        assert broad_stats.casual_downranked_count == 0
+        # Broad can include upscale entities (Greek Islands, Aba) in top results
+        broad_names = [e.name for e, _ in broad_ranked]
+        assert len(broad_names) > 0, "Broad query must return results"
+
+
 # ── Safety invariants ─────────────────────────────────────────────────────────
 
 from app.concierge.semantic_retrieval import _is_food_incompatible_entity
