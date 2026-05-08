@@ -1,4 +1,18 @@
-"""Smart day planning — selects top attractions and restaurants for a trip day."""
+"""Smart day planning — selects top attractions and restaurants for a trip day.
+
+Internal Attraction Mock Dependency Cleanup v1D
+-----------------------------------------------
+``POST /plan/day`` previously synthesised attraction rows from the legacy
+``_mock_attractions`` fixture via ``SearchService.search_attractions``.
+The mock-backed attraction surface has been retired (PRs #287–#292), and
+this endpoint now fails closed for attractions: the no-cluster path
+returns an empty ``attractions`` list rather than fabricating cards.
+
+Restaurants remain canonical (Google Places via
+``SearchService.search_restaurants``).  When ``payload.places`` carries
+cluster places (a canonical seam fed by the trip itinerary), those
+attractions are still surfaced — so the cluster-driven flow is unchanged.
+"""
 
 import logging
 
@@ -12,7 +26,7 @@ from app.models.plan import (
     PlannedAttraction,
     PlannedRestaurant,
 )
-from app.models.search import AttractionSearchRequest, RestaurantSearchRequest
+from app.models.search import RestaurantSearchRequest
 from app.services import TripsService
 from app.services.search import SearchService
 
@@ -23,10 +37,13 @@ router = APIRouter(prefix="/plan", tags=["plan"])
 
 @router.post("/day", response_model=DayPlanResponse)
 def plan_day(payload: DayPlanRequest, db: DB) -> DayPlanResponse:
-    """Generate a smart day plan: top 3 attractions + 1 lunch + 1 dinner restaurant.
+    """Generate a smart day plan: lunch + dinner from canonical restaurants,
+    plus any cluster-supplied attractions.
 
     When ``cluster_id`` and ``places`` are provided the plan is built from
-    those cluster places instead of fetching all results for the destination.
+    those cluster places (canonical seam).  Without cluster places the
+    endpoint fails closed for attractions — there is no canonical
+    attraction provider here and ``_mock_attractions`` was retired.
     """
     trip = TripsService(db).get_trip(payload.trip_id)
     destination = trip.destination
@@ -35,7 +52,6 @@ def plan_day(payload: DayPlanRequest, db: DB) -> DayPlanResponse:
         return _plan_from_cluster(payload, destination, db)
 
     search = SearchService(db)
-    attractions = search.search_attractions(AttractionSearchRequest(location=destination))
     restaurants = search.search_restaurants(RestaurantSearchRequest(location=destination))
 
     if len(restaurants) < 2:
@@ -43,8 +59,6 @@ def plan_day(payload: DayPlanRequest, db: DB) -> DayPlanResponse:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Not enough restaurant data for this destination.",
         )
-
-    top_attractions = sorted(attractions, key=lambda a: a.ai_score or 0, reverse=True)[:3]
 
     sorted_restaurants = sorted(restaurants, key=lambda r: r.ai_score or 0, reverse=True)
     lunch = sorted_restaurants[0]
@@ -57,25 +71,7 @@ def plan_day(payload: DayPlanRequest, db: DB) -> DayPlanResponse:
         trip_id=payload.trip_id,
         day_number=payload.day_number,
         destination=destination,
-        attractions=[
-            PlannedAttraction(
-                id=a.id,
-                name=a.name,
-                category=a.category,
-                description=a.description,
-                location=a.location,
-                address=a.address,
-                rating=a.rating,
-                num_reviews=a.num_reviews,
-                duration_minutes=a.duration_minutes,
-                ai_score=a.ai_score,
-                tags=a.tags,
-                price_level=a.price_level,
-                opening_hours=a.opening_hours,
-                booking_url=a.booking_url,
-            )
-            for a in top_attractions
-        ],
+        attractions=[],
         lunch=PlannedRestaurant(
             id=lunch.id,
             name=lunch.name,

@@ -50,7 +50,6 @@ from app.models.concierge import (
     UnifiedRestaurantResult,
 )
 from app.models.search import (
-    AttractionSearchRequest,
     HotelSearchRequest,
     RestaurantSearchRequest,
 )
@@ -400,21 +399,18 @@ class ConciergeService:
                 cached_response = live_result.cached
                 sources.append(f"Live search · {live_result.provider_name}")
             else:
-                raw_attr = search_svc.search_attractions(AttractionSearchRequest(location=destination))
-                source_status = self._infer_source_status(raw_attr)
-                is_day_request = intent == INTENT_PLAN_DAY or bool(_DAY_NUMBER_PAT.search(user_query))
-                attractions = [
-                    self._to_unified_attraction(
-                        a,
-                        destination=destination,
-                        limited_coverage=source_status == SOURCE_SAMPLE_DATA,
-                        is_day_request=is_day_request,
-                    )
-                    for a in raw_attr[:6]
-                ]
-                sources.append("Attraction search database")
+                # v1D fail-closed: legacy `_mock_attractions` was retired.
+                # When live research yields no canonical attraction cards we
+                # surface no cards rather than fabricating mock-derived ones.
+                source_status = SOURCE_UNAVAILABLE
+                warnings.append(
+                    f"No verified attraction cards are available right now for {destination}. "
+                    "Try a more specific query or check Maps directly."
+                )
+                sources.append("Attraction data unavailable")
             retrieval_used = True
             if intent == INTENT_PLAN_DAY:
+                # Restaurants stay canonical (Google Places); no mock attractions.
                 raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
                 restaurants = [
                     self._to_unified_restaurant(r, intent=INTENT_RESTAURANTS, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
@@ -445,13 +441,12 @@ class ConciergeService:
                 retrieval_used = bool(hotels)
 
         elif intent in {INTENT_BEST_AREA, INTENT_AREA_ADVICE}:
+            # v1D: derive areas from canonical hotel labels only; the legacy
+            # mock-attractions secondary signal is gone.
             best = self._derive_best_area(search_svc, destination, trip)
             if best:
                 areas = [best]
-            raw_attr = search_svc.search_attractions(AttractionSearchRequest(location=destination))
-            extra = list({a.location for a in raw_attr[:10] if a.location and a.location != best})
-            areas += extra[:4]
-            source_status = self._infer_source_status(raw_attr)
+            source_status = SOURCE_NONE if not areas else source_status
             sources.append("Neighborhood analysis")
             retrieval_used = bool(areas)
 
@@ -466,13 +461,10 @@ class ConciergeService:
             retrieval_used = True
 
         elif intent == INTENT_GENERAL_DESTINATION:
-            raw_attr = search_svc.search_attractions(AttractionSearchRequest(location=destination))
+            # v1D: attractions fail closed (mock fixture retired); restaurants
+            # stay canonical via Google-Places-backed search_restaurants.
             raw_rest = search_svc.search_restaurants(RestaurantSearchRequest(location=destination))
-            source_status = self._infer_source_status([*raw_attr, *raw_rest])
-            attractions = [
-                self._to_unified_attraction(a, destination=destination, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
-                for a in raw_attr[:4]
-            ]
+            source_status = self._infer_source_status(raw_rest)
             restaurants = [
                 self._to_unified_restaurant(r, intent=INTENT_RESTAURANTS, limited_coverage=source_status == SOURCE_SAMPLE_DATA)
                 for r in raw_rest[:3]
@@ -1527,14 +1519,15 @@ class ConciergeService:
         items = self._fetch_itinerary_items(trip_id, day_number)
         destination = trip.get("destination", "")
         search = SearchService(self._db)
-        attractions = search.search_attractions(AttractionSearchRequest(location=destination))
+        # v1D: attraction context omitted — legacy `_mock_attractions` retired
+        # and there is no canonical attraction provider in this seam.
         restaurants = search.search_restaurants(RestaurantSearchRequest(location=destination))
         best_area = self._derive_best_area(search, destination, trip)
         preferences = self._fetch_preferences(user_id)
         return {
             "trip": trip,
             "items": items,
-            "attractions": attractions[:5],
+            "attractions": [],
             "restaurants": restaurants[:5],
             "best_area": best_area,
             "preferences": preferences,

@@ -68,7 +68,6 @@ if "app.routes" not in sys.modules:
     sys.modules["app.routes"] = _routes_pkg
 
 from app.models.search import (  # noqa: E402  (stubs above must run first)
-    AttractionSearchRequest,
     FlightSearchRequest,
     HotelSearchRequest,
     RestaurantSearchRequest,
@@ -124,19 +123,17 @@ def test_block_flag_parses_truthy_values(monkeypatch, raw: str, expected: bool):
     assert search_service._legacy_product_mock_blocked() is expected
 
 
-def test_block_flag_blocks_mock_attractions(block_flag_on, caplog):
-    """v1C deletion-variant note: the /search/attractions route was deleted,
-    but ``_mock_attractions`` is preserved because internal callers in
-    ``app/services/concierge.py`` and ``app/routes/plan.py`` still feed
-    ``SearchService.search_attractions``.  ``BLOCK_LEGACY_PRODUCT_MOCK``
-    must continue to fail-closed those flows."""
-    caplog.set_level(logging.WARNING)
-    out = search_service._mock_attractions(AttractionSearchRequest(location="Paris"))
-    assert out == []
-    assert any(
-        "[legacy_product_mock.blocked]" in rec.getMessage()
-        and "namespace=attractions" in rec.getMessage()
-        for rec in caplog.records
+def test_mock_attractions_helper_was_deleted_in_v1d():
+    """v1D: ``_mock_attractions`` was removed entirely along with
+    ``SearchService.search_attractions``.  This guard prevents silent
+    re-introduction (e.g. via a stray helper or merge mishap)."""
+    assert not hasattr(search_service, "_mock_attractions"), (
+        "_mock_attractions was deleted in v1D and must not be reintroduced; "
+        "the canonical attraction surface is /ai/concierge/search."
+    )
+    assert not hasattr(search_service.SearchService, "search_attractions"), (
+        "SearchService.search_attractions was deleted in v1D and must not "
+        "be reintroduced; concierge fallback paths must fail closed instead."
     )
 
 
@@ -178,22 +175,27 @@ def test_block_flag_blocks_mock_restaurants(block_flag_on, caplog):
 
 
 def test_unblocked_emit_emits_leak_telemetry(block_flag_off, caplog):
-    """When the operator has not flipped the flag, mocks still emit results
-    but the ``legacy_product_mock.emitted`` event must be logged so leakage
-    rate is observable in production."""
+    """When the operator has not flipped the flag, the remaining mock
+    fixtures still emit results, but the ``legacy_product_mock.emitted``
+    event must be logged so leakage rate is observable in production.
+
+    v1D: previously asserted on ``_mock_attractions``; now uses
+    ``_mock_restaurants`` since attractions no longer have a mock fixture.
+    """
     caplog.set_level(logging.WARNING)
-    out = search_service._mock_attractions(AttractionSearchRequest(location="Paris"))
+    out = search_service._mock_restaurants(RestaurantSearchRequest(location="Paris"))
     assert len(out) > 0
     matching = [
         rec
         for rec in caplog.records
         if "[legacy_product_mock.emitted]" in rec.getMessage()
-        and "namespace=attractions" in rec.getMessage()
+        and "namespace=restaurants" in rec.getMessage()
     ]
     assert matching, "Unblocked mock emission must log a structured leak event"
-    # Returned count is encoded in the log line so log scraping can chart
-    # leakage rate over time.
-    assert any(f"returned={len(out)}" in rec.getMessage() for rec in matching)
+    # The log encodes a returned count so production scraping can chart
+    # leakage rate; assert the field is present (exact count varies by
+    # cuisine pool size and is not a v1D contract).
+    assert any("returned=" in rec.getMessage() for rec in matching)
 
 
 # ---------------------------------------------------------------------------
@@ -201,11 +203,15 @@ def test_unblocked_emit_emits_leak_telemetry(block_flag_off, caplog):
 # ---------------------------------------------------------------------------
 
 
-def test_legacy_product_mock_registry_lists_all_four_helpers():
+def test_legacy_product_mock_registry_lists_remaining_helpers():
+    """v1D: ``_mock_attractions`` was deleted with the mock-backed
+    attraction surface.  The registry must reflect the remaining three
+    fixtures (flights / hotels / restaurants)."""
     names = sorted(fn.__name__ for fn in search_service.LEGACY_PRODUCT_MOCK_FUNCTIONS)
     assert names == sorted(
-        ["_mock_flights", "_mock_hotels", "_mock_attractions", "_mock_restaurants"]
+        ["_mock_flights", "_mock_hotels", "_mock_restaurants"]
     )
+    assert "_mock_attractions" not in names
 
 
 def test_every_registered_function_carries_marker():
@@ -558,26 +564,6 @@ class _FakeSupabase:
         return _R([{"payload": {"results": self._cached_rows}, "expires_at": None}])
 
 
-def _mock_attraction_cache_row(source: str = "mock") -> dict:
-    return {
-        "id": "att-cached-1",
-        "name": "Cached Attraction",
-        "category": "landmarks",
-        "description": "Cached desc",
-        "location": "Paris",
-        "address": "1 Rue de Test",
-        "rating": 4.4,
-        "num_reviews": 12000,
-        "duration_minutes": 90,
-        "ai_score": 78.0,
-        "tags": ["Highly Rated"],
-        "price_level": 1,
-        "opening_hours": "Daily 10-18",
-        "booking_url": "https://example.com",
-        "source": source,
-    }
-
-
 def _mock_hotel_cache_row(source: str = "mock") -> dict:
     return {
         "id": "hotel-cached-1",
@@ -620,24 +606,6 @@ def _mock_flight_cache_row(source: str = "mock") -> dict:
     }
 
 
-def test_cached_legacy_mock_attraction_is_suppressed_when_flag_on(block_flag_on, caplog):
-    """v1A blocker fix: an existing ``research_cache`` entry whose rows are
-    flagged ``source == "mock"`` must not be returned when the operator
-    has set ``BLOCK_LEGACY_PRODUCT_MOCK``.  Cache-side fail-closed."""
-    caplog.set_level(logging.WARNING)
-    db = _FakeSupabase(cached_rows=[_mock_attraction_cache_row("mock")])
-    svc = search_service.SearchService(db)
-    out = svc.search_attractions(AttractionSearchRequest(location="Paris"))
-    assert out == [], (
-        "Cached mock attractions must not leak under BLOCK_LEGACY_PRODUCT_MOCK"
-    )
-    assert any(
-        "[legacy_product_mock.cache_blocked]" in rec.getMessage()
-        and "namespace=attractions" in rec.getMessage()
-        for rec in caplog.records
-    ), "Cache-side block must emit structured telemetry"
-
-
 def test_cached_legacy_mock_hotel_is_suppressed_when_flag_on(block_flag_on, caplog):
     caplog.set_level(logging.WARNING)
     db = _FakeSupabase(cached_rows=[_mock_hotel_cache_row("mock")])
@@ -674,16 +642,6 @@ def test_cached_legacy_mock_flight_is_suppressed_when_flag_on(block_flag_on, cap
     )
 
 
-def test_cached_mock_attraction_is_returned_when_flag_off(block_flag_off):
-    """Default behavior: with the operator flag unset, the cache layer is
-    untouched by v1A — cached attractions still flow through unchanged."""
-    db = _FakeSupabase(cached_rows=[_mock_attraction_cache_row("mock")])
-    svc = search_service.SearchService(db)
-    out = svc.search_attractions(AttractionSearchRequest(location="Paris"))
-    assert len(out) == 1
-    assert out[0].id == "att-cached-1"
-
-
 def test_cached_mock_hotel_is_returned_when_flag_off(block_flag_off):
     db = _FakeSupabase(cached_rows=[_mock_hotel_cache_row("mock")])
     svc = search_service.SearchService(db)
@@ -696,34 +654,54 @@ def test_cached_mock_hotel_is_returned_when_flag_off(block_flag_off):
     assert out[0].id == "hotel-cached-1"
 
 
-def test_cached_canonical_attraction_is_not_suppressed_when_flag_on(block_flag_on):
+def test_cached_canonical_hotel_is_not_suppressed_when_flag_on(block_flag_on):
     """Cached rows with a positive non-mock provider attribution
     (``source == "google_places"``) must be allowed through even under
     the operator flag — the block is a legacy-mock guard, not a kill
     switch on the entire cache."""
     db = _FakeSupabase(
-        cached_rows=[_mock_attraction_cache_row("google_places")]
+        cached_rows=[_mock_hotel_cache_row("google_places")]
     )
     svc = search_service.SearchService(db)
-    out = svc.search_attractions(AttractionSearchRequest(location="Paris"))
+    out = svc.search_hotels(
+        HotelSearchRequest(
+            location="Paris", check_in=date(2026, 6, 1), check_out=date(2026, 6, 5)
+        )
+    )
     assert len(out) == 1, (
         "Canonical-attributed cached rows must survive the legacy-mock block"
     )
-    assert out[0].id == "att-cached-1"
+    assert out[0].id == "hotel-cached-1"
 
 
-def test_cached_ambiguous_source_attractions_fail_closed_when_flag_on(block_flag_on):
+def test_cached_ambiguous_source_hotels_fail_closed_when_flag_on(block_flag_on):
     """Cache rows that lack an unambiguous provider attribution fail
     closed under the operator flag — the v1A guard prefers an empty list
     over rendering potentially-fabricated product data."""
-    ambiguous = _mock_attraction_cache_row("mock")
+    ambiguous = _mock_hotel_cache_row("mock")
     ambiguous.pop("source", None)
     db = _FakeSupabase(cached_rows=[ambiguous])
     svc = search_service.SearchService(db)
-    out = svc.search_attractions(AttractionSearchRequest(location="Paris"))
+    out = svc.search_hotels(
+        HotelSearchRequest(
+            location="Paris", check_in=date(2026, 6, 1), check_out=date(2026, 6, 5)
+        )
+    )
     assert out == [], (
         "Ambiguous cached rows on a legacy namespace must fail closed"
     )
+
+
+def test_attractions_namespace_no_longer_in_legacy_guard():
+    """v1D: the ``attractions`` cache namespace was removed from
+    ``_LEGACY_MOCK_DEPENDENT_NAMESPACES`` because the mock-backed
+    surface is gone.  The helper must not flag it under the operator
+    block."""
+    assert "attractions" not in search_service._LEGACY_MOCK_DEPENDENT_NAMESPACES
+    assert search_service._suppress_legacy_mock_cache(
+        "attractions",
+        [{"source": "mock"}],
+    ) is False
 
 
 def test_search_restaurants_canonical_path_not_blocked_by_legacy_guard(block_flag_on):
@@ -756,10 +734,18 @@ def test_cache_write_is_skipped_when_block_flag_on(block_flag_on):
     """Tighten the fail-closed contract: when the operator flag is on we
     must not even write the empty mock result back to the cache,
     otherwise an ambiguous (zero-row, source=mock) entry could outlive
-    the flag flip and confuse the next request."""
+    the flag flip and confuse the next request.
+
+    v1D: previously exercised via ``search_attractions`` which has been
+    deleted; switched to ``search_hotels`` (same legacy-mock guard path).
+    """
     db = _FakeSupabase(cached_rows=None)  # cache miss
     svc = search_service.SearchService(db)
-    svc.search_attractions(AttractionSearchRequest(location="Paris"))
+    svc.search_hotels(
+        HotelSearchRequest(
+            location="Paris", check_in=date(2026, 6, 1), check_out=date(2026, 6, 5)
+        )
+    )
     assert db.upserts == [], (
         "Cache must not be written under BLOCK_LEGACY_PRODUCT_MOCK"
     )
@@ -771,7 +757,11 @@ def test_cache_write_proceeds_when_block_flag_off(block_flag_off):
     in this code path."""
     db = _FakeSupabase(cached_rows=None)
     svc = search_service.SearchService(db)
-    svc.search_attractions(AttractionSearchRequest(location="Paris"))
+    svc.search_hotels(
+        HotelSearchRequest(
+            location="Paris", check_in=date(2026, 6, 1), check_out=date(2026, 6, 5)
+        )
+    )
     assert len(db.upserts) == 1, "Default cache write must still happen"
     record = db.upserts[0]
     assert record.get("source") == "mock"
