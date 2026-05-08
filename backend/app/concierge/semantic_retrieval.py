@@ -73,8 +73,13 @@ def _format_display_price(
         return _PRICE_LEVEL_SYMBOL.get(price_level)
     return None
 
-# SLA contract (v2 amendment §4 and §6)
-from app.concierge.deadline_manager import RequestDeadline, DEFAULT_SLA, clamp_first_card_limit
+# SLA contract (v2 amendment §4 and §6); Latency Architecture v1 constants
+from app.concierge.deadline_manager import (
+    RequestDeadline,
+    DEFAULT_SLA,
+    SET_WRITER_MIN_BUDGET_MS,
+    clamp_first_card_limit,
+)
 
 
 def _assemble_card_reasons(
@@ -168,8 +173,36 @@ def _assemble_card_reasons(
             "semantic_retrieval_v1: set_writer_primary accepted=%d/%d",
             accepted, n,
         )
+    elif set_writer_result is not None and (
+        set_writer_result.timed_out
+        or (
+            set_writer_result.visible_note_count == 0
+            and len(set_writer_result.notes_by_place_id) > 0
+        )
+    ):
+        # Set-writer was invoked at Step 5.8 but produced no validated visible notes
+        # (either timed out against the SET_WRITER_LLM_MAX_S cap, or all notes failed
+        # validation). Do NOT fall through to build_reasons_with_retry — that would
+        # spend another LLM budget on the same request and undo the latency benefit of
+        # the cap. Return verified Google cards without notes instead.
+        logger.info(
+            "semantic_retrieval_v1: set_writer_attempted_no_fallback "
+            "query=%r timed_out=%s visible_notes=%d",
+            user_query,
+            set_writer_result.timed_out,
+            set_writer_result.visible_note_count,
+        )
+        card_reasons = {}
+        n_cards = len(cards_data)
+        reasoning_result = ReasoningResultV2(
+            attempted=False,
+            failure_reason="set_writer_attempted_no_fallback",
+            final_card_count=n_cards,
+            final_note_omitted_count=n_cards,
+        )
     elif note_generation_timed_out:
-        # Only fires when set-writer produced no usable notes — see ordering above.
+        # Only fires when set-writer was NOT attempted (set_writer_result is None)
+        # and we are past the SLA soft ceiling.
         # Cards will be assembled without notes; the frontend must not render a
         # Concierge Note block when display_why_validated=False.
         if deadline is not None:
@@ -627,6 +660,12 @@ def _run_pipeline(
     # bundles so it can use richer dossier evidence.
     # Falls back to the existing batched_reason_builder path on any failure.
     # Never blocks card return.
+    #
+    # Latency Architecture v1: budget gate added. If remaining budget when we
+    # reach this step is below SET_WRITER_MIN_BUDGET_MS, the writer is skipped
+    # entirely before any LLM call is made. Inside write_set_notes, the LLM
+    # timeout is capped at SET_WRITER_LLM_MAX_S so it cannot consume the full
+    # remaining note-gen budget even when budget appears large.
     t0 = time.monotonic()
     from app.concierge.set_level_writer import (
         SetWriterResult,
@@ -634,7 +673,20 @@ def _run_pipeline(
     )
     set_writer_result: Optional[SetWriterResult] = None
     set_writer_tel: Dict[str, Any] = {"set_writer_fallback_to_existing_path": True}
-    if curated_result is not None and curated_result.output_count > 0:
+    _set_writer_remaining_ms = deadline.remaining_ms()
+    _set_writer_skipped_budget = _set_writer_remaining_ms < SET_WRITER_MIN_BUDGET_MS
+    if _set_writer_skipped_budget:
+        logger.info(
+            "semantic_retrieval_v1: set_writer_skipped_budget "
+            "remaining_ms=%d threshold_ms=%d query=%r",
+            _set_writer_remaining_ms, SET_WRITER_MIN_BUDGET_MS, user_query,
+        )
+        set_writer_tel = {
+            "set_writer_fallback_to_existing_path": True,
+            "set_writer_skipped_budget": True,
+            "set_writer_remaining_ms_at_skip": _set_writer_remaining_ms,
+        }
+    elif curated_result is not None and curated_result.output_count > 0:
         try:
             set_writer_result = write_set_notes(
                 curated_result=curated_result,
@@ -729,12 +781,20 @@ def _run_pipeline(
     )
 
     # ── Step 8: Assemble final cards ─────────────────────────────────────────
+    # set_writer_attempted_no_fallback means: set-writer ran but produced nothing,
+    # no LLM fallback will be attempted. Treat it the same as note_generation_timed_out
+    # so _assemble_card_set includes Google-verified cards without notes instead of
+    # dropping them via the excluded_unvalidated path.
+    _effective_note_gen_skipped = (
+        note_generation_timed_out
+        or reasoning_result.failure_reason == "set_writer_attempted_no_fallback"
+    )
     cards, rank_debug, excluded_unvalidated, visible_note_count, cards_without_notes_count = (
         _assemble_card_set(
             cards_data=cards_data,
             card_reasons=card_reasons,
             frame=frame,
-            note_generation_timed_out=note_generation_timed_out,
+            note_generation_timed_out=_effective_note_gen_skipped,
             set_writer_primary_active=set_writer_primary_active,
         )
     )
@@ -764,7 +824,7 @@ def _run_pipeline(
     # When set_writer_primary_active=True, set-writer notes survived into the cards
     # even if the SLA budget was exceeded — so we must re-scan the actual card objects
     # rather than assuming all notes are absent.
-    if note_generation_timed_out and not set_writer_primary_active:
+    if _effective_note_gen_skipped and not set_writer_primary_active:
         visible_note_count = 0
         cards_without_notes_count = final_card_count
     else:
@@ -890,6 +950,10 @@ def _run_pipeline(
     _elapsed_ms_final = int((time.monotonic() - t_pipeline_start) * 1000)
     _timeout_budget_consumed_pct = min(100, int(_elapsed_ms_final * 100 / DEFAULT_SLA.hard_cutoff_ms))
     _timeout_branches_triggered: List[str] = []
+    if _set_writer_skipped_budget:
+        _timeout_branches_triggered.append("set_writer_skipped_budget")
+    if reasoning_result.failure_reason == "set_writer_attempted_no_fallback":
+        _timeout_branches_triggered.append("set_writer_attempted_no_fallback")
     if note_generation_timed_out:
         _timeout_branches_triggered.append("note_generation_timed_out")
     if note_generation_low_budget:
