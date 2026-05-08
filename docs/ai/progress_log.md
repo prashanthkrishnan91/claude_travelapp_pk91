@@ -1,5 +1,38 @@
 # Progress Log
 
+## 2026-05-08 — Final Mock-Leak Closeout
+
+**Branch**: `claude/final-cleanup-mocks-vQ0VS`
+
+**Severity**: Level 1 — final product-surface closeout PR closing the urgent mock/fallback cleanup chain (PRs #287–#295). Not a new product build; not a new multi-PR cleanup chain.
+
+**What was done**:
+- **Deleted `_mock_restaurants`** in `backend/app/services/search.py`. It had zero live callers — `SearchService.search_restaurants` runs canonical Google Places fail-closed (no provider key → empty list). Updated `LEGACY_PRODUCT_MOCK_FUNCTIONS` registry to `(_mock_flights, _mock_hotels)`. Added a do-not-resurrect guard in `test_product_surface_pruning_v1a.py`.
+- **Preserved `_mock_flights` / `_mock_hotels`** quarantined behind `BLOCK_LEGACY_PRODUCT_MOCK` and the PR #295 `_any_mock_derived` fail-closed guard. These remain for the future provider-backed Flights/Hotels v1 product track — the helpers are the slot real provider implementations replace.
+- **Deleted orphan frontend components**: `frontend/src/components/concierge/ConciergeResponse.tsx`, `PlaceRecommendationsView.tsx`, and `PlaceRecommendationsView.stories.tsx`. None were imported by any page or live component (AIConciergePanel does its own canonical card rendering; `normalizeConciergeResponse` and the TYPE `ConciergeResponse` in `lib/concierge/types.ts` are the canonical live surface and remain untouched).
+- **Trimmed directly-related rescue-test sprawl**:
+  - `backend/tests/test_product_surface_pruning_v1a.py`: dropped the two `_mock_restaurants` cases that exercised a now-deleted helper, rewired the leak-telemetry test to `_mock_hotels`, and added a do-not-resurrect guard. 38 pass.
+  - `frontend/tests/concierge-renderers.test.mjs`: dropped the static-content contract test that read `PlaceRecommendationsView.tsx` (file deleted; the contract is exercised via `cardPresentation` helpers and the AIConciergePanel render checks already in this file). 50 pass.
+
+**Decision on `_mock_restaurants`**: deleted (orphan; no live caller; canonical Google Places fail-closed path is the live surface).
+
+**`ConciergeResponse` / `PlaceRecommendationsView` classification summary**:
+- TYPE `ConciergeResponse` + `normalizeConciergeResponse` (lib/concierge/types.ts) — canonical live path, KEEP.
+- Backend model `ConciergeResponse` — canonical live path, KEEP.
+- Frontend component `ConciergeResponse.tsx` — dead orphan, DELETED.
+- Frontend component `PlaceRecommendationsView.tsx` — dead orphan, DELETED.
+- `PlaceRecommendationsView.stories.tsx` — orphan Storybook (target deleted), DELETED.
+
+**Future tracks (documentation only)**: provider-backed Flights v1, provider-backed Hotels v1, optional historical mock-row cleanup, optional canonical Areas/Best Area rebuild, optional broader test-suite consolidation.
+
+**Tests**: 38 + 16 + 64 backend pass; 50 frontend pass; 4 baseline-unchanged failures in explore-hydration/explore-concierge-migration (pre-existing, reproduced on branch baseline).
+
+**Supabase SQL**: No. **Providers added**: No. **LLM calls added**: No. **UI redesign**: No.
+
+**Urgent mock-leak cleanup is COMPLETE.** Future work is product-track work, not cleanup.
+
+---
+
 ## 2026-05-08 — Fail-Closed UX v1: flights/hotels mock-backed surface
 
 **Branch**: `claude/fail-closed-ux-flights-hotels-XBsgp`

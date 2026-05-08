@@ -1,6 +1,70 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-08) — Fail-Closed UX v1: flights/hotels mock-backed surface (Level 2)
+## Last change (2026-05-08) — Final Mock-Leak Closeout (Level 1)
+
+**Status: PR-ready (branch: claude/final-cleanup-mocks-vQ0VS)** — Closes the urgent mock/fallback cleanup chain (PRs #287–#295) with a single focused product-surface sweep. Deletes the orphan `_mock_restaurants` helper and the orphan frontend `ConciergeResponse` / `PlaceRecommendationsView` components. Preserves `_mock_flights` / `_mock_hotels` quarantined behind `BLOCK_LEGACY_PRODUCT_MOCK` and the `_any_mock_derived` fail-closed guard so future provider-backed Flights/Hotels v1 can slot in real implementations. No SQL. No providers. No LLM calls. No schema changes. No UI redesign.
+
+### Findings — final product-surface sweep
+
+- **`_mock_flights` / `_mock_hotels`** — quarantined; live callers `OptimizeTripModal` and `/trips/create-with-search` already fail closed on any mock-derived row (`source ∈ {mock,demo,fixture}` or `book.example.com` booking URL) under PR #295. **Preserved** for future provider-backed Flights/Hotels v1.
+- **`_mock_restaurants`** — **deleted**. `SearchService.search_restaurants` runs canonical Google Places fail-closed (no provider key → empty list); the helper had **zero live callers** before this PR. Do-not-resurrect guard added in `test_product_surface_pruning_v1a.py::test_mock_restaurants_helper_was_deleted_in_closeout`.
+- **`_mock_attractions`** — already deleted in PR #293; do-not-resurrect guard preserved.
+- **`/search/attractions`, `/search/clusters`, `/search/best-area`** — already deleted in PR #292; do-not-resurrect guards preserved.
+
+### Findings — `ConciergeResponse` / `PlaceRecommendationsView` classification
+
+- **TYPE `ConciergeResponse` + `normalizeConciergeResponse`** (`frontend/src/lib/concierge/types.ts`) — **canonical live path**. Imported by `frontend/src/lib/api.ts` (calls `normalizeConciergeResponse` on every concierge response) and by backend `app/services/concierge.py` / `app/routes/ai.py`. KEEP.
+- **Backend model `ConciergeResponse`** (`backend/app/models/concierge.py`) — canonical, live (mounted at `POST /ai/concierge`). KEEP.
+- **Frontend component `ConciergeResponse.tsx`** (`frontend/src/components/concierge/ConciergeResponse.tsx`) — **dead orphan**. Never imported by any page or component; AIConciergePanel does its own canonical card rendering. **Deleted.**
+- **Frontend component `PlaceRecommendationsView.tsx`** — **dead orphan**. Only imported by the orphan `ConciergeResponse.tsx` and its Storybook stories file. **Deleted.**
+- **`PlaceRecommendationsView.stories.tsx`** — orphan Storybook file (component is gone). **Deleted.**
+- The canonical card display contract from PR #287 is enforced by `cardPresentation` helpers and `AIConciergePanel` — both are unaffected.
+
+### Test cleanup
+
+- **`backend/tests/test_product_surface_pruning_v1a.py`**: removed `_mock_restaurants` block-flag and unblocked-emit cases; added `test_mock_restaurants_helper_was_deleted_in_closeout` do-not-resurrect guard; rewired `test_unblocked_emit_emits_leak_telemetry` to `_mock_hotels` (the remaining quarantined surface); updated registry expectation to `["_mock_flights", "_mock_hotels"]`. 38 pass.
+- **`frontend/tests/concierge-renderers.test.mjs`**: dropped the `PlaceRecommendationsView` static-contract test (target file deleted; the contract is exercised by `cardPresentation` helpers + the AIConciergePanel render checks already in this file). 50 pass.
+
+### Future tracks (documentation only)
+
+- **Provider-backed Flights v1** — replace `_mock_flights` body with a real provider call; remove the helper from `LEGACY_PRODUCT_MOCK_FUNCTIONS` and the registry guards.
+- **Provider-backed Hotels v1** — same shape for `_mock_hotels`.
+- **Optional historical mock-row cleanup** — sweep `itinerary_items` rows whose `details.booking_url` contains `book.example.com` (out of scope here — no historical data cleanup).
+- **Optional canonical Areas/Best Area rebuild** — `/search/clusters` and `/search/best-area` were deleted; if Areas comes back it must flow through `/ai/concierge/search`.
+- **Optional broader test-suite consolidation** — only directly related rescue tests were trimmed in this PR; broad consolidation is a separate task.
+
+### Files changed
+
+- `backend/app/services/search.py` (deleted `_mock_restaurants`; updated module docstring + registry)
+- `backend/tests/test_product_surface_pruning_v1a.py` (rescue-test consolidation + do-not-resurrect guard)
+- `frontend/src/components/concierge/ConciergeResponse.tsx` (deleted — orphan)
+- `frontend/src/components/concierge/PlaceRecommendationsView.tsx` (deleted — orphan)
+- `frontend/src/components/concierge/PlaceRecommendationsView.stories.tsx` (deleted — orphan)
+- `frontend/tests/concierge-renderers.test.mjs` (drop orphan-target contract test)
+- `docs/ai/HANDOFF.md` (this entry)
+- `docs/ai/progress_log.md` (one entry)
+
+### Tests run
+
+- `backend/tests/test_product_surface_pruning_v1a.py` — 38 pass.
+- `backend/tests/test_create_with_search_fail_closed.py` + `test_cost_guardrails.py` — 16 pass.
+- `backend/tests/test_explore_snapshot.py` + `test_concierge_card_contract.py` + `test_concierge_display_contract.py` — 64 pass.
+- `frontend/tests/concierge-renderers.test.mjs` + `fail-closed-flights-hotels.test.mjs` — 50 pass.
+- `frontend/tests/explore-concierge-migration.test.mjs` + `explore-hydration.test.mjs` — 54 pass / 4 fail (same 4 pre-existing failures as the baseline; unrelated TripBuilder/Explore snapshot drift).
+- Lint/typecheck skipped: not part of standard repo workflow for backend Python; frontend TS would require a Next/Node build pipeline that's not exercised in this branch's normal review loop.
+
+**Supabase SQL**: No
+**Providers added**: No
+**LLM calls added**: No
+**UI redesign**: No
+**HANDOFF.md edited**: Yes (this entry)
+**README.md edited**: No (no public/setup contract change)
+
+**Urgent mock-leak cleanup is COMPLETE as of this PR.** Remaining flights/hotels work is product-track (provider-backed v1), not cleanup.
+
+---
+
+## Previous change (2026-05-08) — Fail-Closed UX v1: flights/hotels mock-backed surface (Level 2)
 
 **Status: PR-ready (branch: claude/fail-closed-ux-flights-hotels-XBsgp)** — Closes the last live mock-backed flights/hotels persistence path (PR #294 risk row 1 + 2). The route now fails closed on **two** conditions: (a) all empty results (BLOCK_LEGACY_PRODUCT_MOCK on / true unavailability) and (b) any non-empty *mock-derived* row (`source="mock"` or `book.example.com` booking URL — covers the BLOCK_LEGACY_PRODUCT_MOCK *off* leak path). No SQL. No providers. No LLM calls. No schema changes. Preserves the future flights/hotels product capability — routes, models, and frontend wrappers stay quarantined; only unsafe mock-derived persistence is fail-closed.
 

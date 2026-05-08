@@ -11,7 +11,6 @@ import {
 } from '../src/lib/concierge/cardPresentation.js';
 
 const aiConciergePanel = readFileSync(new URL('../src/components/trips/AIConciergePanel.tsx', import.meta.url), 'utf8');
-const placeRecommendationsView = readFileSync(new URL('../src/components/concierge/PlaceRecommendationsView.tsx', import.meta.url), 'utf8');
 const apiClient = readFileSync(new URL('../src/lib/api.ts', import.meta.url), 'utf8');
 
 const blockedGenericPhrases = [
@@ -187,13 +186,6 @@ test('AIConciergePanel keeps compact Sources used disclosure path', () => {
   assert.match(aiConciergePanel, /Sources used/);
   assert.match(aiConciergePanel, /<details/);
   assert.match(aiConciergePanel, /shouldShowCollapsedSources\(msg\)/);
-});
-
-test('PlaceRecommendationsView sanitizes reasons via shared cardPresentation helpers', () => {
-  assert.match(placeRecommendationsView, /pickCardReason/);
-  assert.match(placeRecommendationsView, /sanitizeWhyPick/);
-  assert.match(placeRecommendationsView, /pickCardReason\(card\)/);
-  assert.doesNotMatch(placeRecommendationsView, /Strong fit for this trip based on trusted place signals\./);
 });
 
 test('AIConciergePanel does not render research sources as ConciergeCard', () => {

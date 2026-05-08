@@ -70,7 +70,6 @@ if "app.routes" not in sys.modules:
 from app.models.search import (  # noqa: E402  (stubs above must run first)
     FlightSearchRequest,
     HotelSearchRequest,
-    RestaurantSearchRequest,
 )
 from app.routes import search as search_routes  # noqa: E402
 from app.services import search as search_service  # noqa: E402
@@ -163,14 +162,16 @@ def test_block_flag_blocks_mock_flights(block_flag_on, caplog):
     )
 
 
-def test_block_flag_blocks_mock_restaurants(block_flag_on, caplog):
-    caplog.set_level(logging.WARNING)
-    out = search_service._mock_restaurants(RestaurantSearchRequest(location="Paris"))
-    assert out == []
-    assert any(
-        "[legacy_product_mock.blocked]" in rec.getMessage()
-        and "namespace=restaurants" in rec.getMessage()
-        for rec in caplog.records
+def test_mock_restaurants_helper_was_deleted_in_closeout():
+    """Final mock-leak closeout: ``_mock_restaurants`` was removed entirely.
+    ``SearchService.search_restaurants`` runs canonical Google Places with
+    fail-closed semantics (no provider key → empty list); the mock fixture
+    had no live caller and was deleted.  This guard prevents silent
+    re-introduction (e.g. via a stray helper or merge mishap)."""
+    assert not hasattr(search_service, "_mock_restaurants"), (
+        "_mock_restaurants was deleted in the final mock-leak closeout and "
+        "must not be reintroduced; the canonical restaurant surface is "
+        "SearchService.search_restaurants → Google Places."
     )
 
 
@@ -179,22 +180,26 @@ def test_unblocked_emit_emits_leak_telemetry(block_flag_off, caplog):
     fixtures still emit results, but the ``legacy_product_mock.emitted``
     event must be logged so leakage rate is observable in production.
 
-    v1D: previously asserted on ``_mock_attractions``; now uses
-    ``_mock_restaurants`` since attractions no longer have a mock fixture.
+    Final mock-leak closeout: previously asserted on ``_mock_restaurants``
+    (deleted as orphan); switched to ``_mock_hotels`` which is the
+    quarantined helper still preserved for provider-backed Hotels v1.
     """
+    from datetime import date as _date
+
     caplog.set_level(logging.WARNING)
-    out = search_service._mock_restaurants(RestaurantSearchRequest(location="Paris"))
+    out = search_service._mock_hotels(
+        HotelSearchRequest(
+            location="Paris", check_in=_date(2026, 6, 1), check_out=_date(2026, 6, 5)
+        )
+    )
     assert len(out) > 0
     matching = [
         rec
         for rec in caplog.records
         if "[legacy_product_mock.emitted]" in rec.getMessage()
-        and "namespace=restaurants" in rec.getMessage()
+        and "namespace=hotels" in rec.getMessage()
     ]
     assert matching, "Unblocked mock emission must log a structured leak event"
-    # The log encodes a returned count so production scraping can chart
-    # leakage rate; assert the field is present (exact count varies by
-    # cuisine pool size and is not a v1D contract).
     assert any("returned=" in rec.getMessage() for rec in matching)
 
 
@@ -204,14 +209,14 @@ def test_unblocked_emit_emits_leak_telemetry(block_flag_off, caplog):
 
 
 def test_legacy_product_mock_registry_lists_remaining_helpers():
-    """v1D: ``_mock_attractions`` was deleted with the mock-backed
-    attraction surface.  The registry must reflect the remaining three
-    fixtures (flights / hotels / restaurants)."""
+    """v1D removed ``_mock_attractions``; the final mock-leak closeout
+    removed ``_mock_restaurants`` (orphan).  The registry must reflect the
+    remaining two quarantined fixtures (flights / hotels), preserved for a
+    future provider-backed Flights/Hotels v1."""
     names = sorted(fn.__name__ for fn in search_service.LEGACY_PRODUCT_MOCK_FUNCTIONS)
-    assert names == sorted(
-        ["_mock_flights", "_mock_hotels", "_mock_restaurants"]
-    )
+    assert names == sorted(["_mock_flights", "_mock_hotels"])
     assert "_mock_attractions" not in names
+    assert "_mock_restaurants" not in names
 
 
 def test_every_registered_function_carries_marker():
