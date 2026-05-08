@@ -7,6 +7,10 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
+from app.contracts.flights import (
+    MOCK_BOOKING_HOST as _CONTRACT_MOCK_BOOKING_HOST,
+    is_mock_derived_flight as _contract_is_mock_derived_flight,
+)
 from app.core.deps import DB, CurrentUserID
 from app.models import Trip, TripCreate, TripUpdate, ItineraryItem
 from app.models.itinerary import ItineraryItemDirectCreate
@@ -330,21 +334,21 @@ def _enrich_hotels_with_intelligence(hotels: List[HotelResult]) -> None:
 
 # Sentinel substring stamped into every ``_mock_*`` booking URL in
 # ``backend/app/services/search.py``.  Any URL containing this host is, by
-# construction, fabricated and must never be persisted.
-_MOCK_BOOKING_HOST = "book.example.com"
+# construction, fabricated and must never be persisted.  Sourced from the
+# Flights Product Contract v1 module so the value lives in one place.
+_MOCK_BOOKING_HOST = _CONTRACT_MOCK_BOOKING_HOST
 
 
 def _is_mock_flight(flight: FlightResult) -> bool:
     """True if a flight row came from ``_mock_flights`` (or any future mock
-    fixture that follows the same source/booking-URL convention)."""
-    if (flight.source or "").lower() in {"mock", "demo", "fixture"}:
-        return True
-    if flight.booking_url and _MOCK_BOOKING_HOST in flight.booking_url:
-        return True
-    for opt in flight.booking_options or []:
-        if opt.url and _MOCK_BOOKING_HOST in opt.url:
-            return True
-    return False
+    fixture that follows the same source/booking-URL convention).
+
+    Delegates to ``app.contracts.flights.is_mock_derived_flight`` — the
+    single source of truth for the Flights Product Contract v1 mock
+    detection rules.  Kept as a thin wrapper to preserve the existing import
+    surface used by ``backend/tests/test_create_with_search_fail_closed.py``.
+    """
+    return _contract_is_mock_derived_flight(flight)
 
 
 def _is_mock_hotel(hotel: HotelResult) -> bool:

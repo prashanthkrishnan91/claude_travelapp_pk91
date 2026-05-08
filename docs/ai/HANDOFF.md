@@ -1,6 +1,71 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-08) — Final Mock-Leak Closeout (Level 1)
+## Last change (2026-05-08) — Flights Product Contract v1 (Level 2)
+
+**Status: PR-ready (branch: claude/cleanup-mock-fallback-F0aHD)** — Bridge from urgent mock cleanup (PRs #292–#296) to the upcoming provider-backed Flights v1 product track. Defines the durable real-data / user-entered flight surface, round-trip leg→day mapping, persistence rules, fail-closed source-status, and the provider seam — without integrating any provider, adding API keys, SQL, LLM calls, or fixture rows. Preserves the flights product capability (round-trip search, outbound→Day 1, return→final day, hotel/lodging trip add) so the next PR is a drop-in adapter.
+
+### Contract summary
+
+- **Module**: `backend/app/contracts/flights.py` (transport-agnostic; no FastAPI/Supabase imports).
+- **Allowed sources**: `FlightSource{PROVIDER_BACKED, USER_ENTERED}`; concrete value list in `ALLOWED_SOURCE_VALUES = PROVIDER_BACKED_SOURCE_VALUES ∪ USER_ENTERED_SOURCE_VALUES` covering `amadeus|duffel|google_flights|kiwi|skyscanner|provider_backed|user_entered|manual`. Extending requires a contract-test update.
+- **Disallowed**: `DISALLOWED_SOURCES = {mock, demo, fixture, sample, placeholder}` plus `FABRICATED_BOOKING_HOSTS = {book.example.com, example.com, example.org}`. `MOCK_BOOKING_HOST` is the canonical sentinel re-exported to `routes/trips.py`.
+- **Required persistable fields**: `source, airline, origin, destination, departure_time, arrival_time` (`REQUIRED_PERSIST_FIELDS`).
+- **Round-trip mapping**: `FlightLeg{OUTBOUND, RETURN}` + `outbound_day_index() == 0` + `return_day_index(num_days) == num_days - 1` + `leg_day_index(leg, num_days)`. Same-day round-trip collapses both legs onto day 0. One-way is supported when only the outbound leg is present; the contract has no helper that fabricates a missing return leg (asserted by `test_partial_round_trip_does_not_invent_return_leg`).
+- **Source status**: `FlightSourceStatus{OK, EMPTY, UNAVAILABLE, ERROR}` — `UNAVAILABLE` / `ERROR` MUST surface as fail-closed in UI and MUST NOT be coerced to `EMPTY` or trigger fake-row fallback.
+- **Persistability**: `is_persistable_flight` / `assert_persistable_flight` (raises typed `FlightContractViolation` carrying a structured `PersistabilityFailure{code, field, message}`); `is_mock_derived_flight` is the narrow legacy-fail-closed predicate that `routes/trips.py::_is_mock_flight` now delegates to.
+
+### Provider seam summary
+
+- **Module**: `backend/app/services/flights_provider.py`.
+- `FlightProvider` Protocol — `search_flights(req: FlightSearchRequest) -> FlightProviderResult`; adapters MUST never raise.
+- `FlightProviderResult{status: FlightSourceStatus, rows: List[FlightResult], reason: str}` — `rows` is empty whenever `status != OK`; each row MUST satisfy `is_persistable_flight`.
+- `NullFlightProvider` is the default registry binding (`get_flight_provider()`); it always returns `UNAVAILABLE` with empty `rows` and a non-empty reason. The legacy `_mock_flights` is deliberately NOT bound to this seam.
+- Future Flights v1 adds a registry that resolves a real adapter (e.g. Amadeus/Duffel) gated by an env flag; until then the seam is fail-closed by construction.
+
+### UI behaviour summary
+
+- No redesign. `OptimizeTripModal` already shows `"Flights & hotels search is temporarily unavailable"` with a clear "Provider-backed flight and hotel search is not enabled yet" subtitle when `/search/flights` or `/search/hotels` returns no results or any mock-derived row — that copy is now the canonical fail-closed message specified by `FlightSourceStatus.UNAVAILABLE`.
+- `TripBuilder` continues to allow the user to proceed without flights (manual blank-trip creation via `POST /trips`).
+
+### Refactor
+
+- `backend/app/routes/trips.py::_is_mock_flight` delegates to `app.contracts.flights.is_mock_derived_flight`. `_MOCK_BOOKING_HOST` is now sourced from the contract module.
+- `_any_mock_derived`, `_is_mock_hotel`, and the `/trips/create-with-search` 503 fail-closed branch are unchanged; PR #295's persistence guarantees are preserved.
+
+### Tests
+
+- New: `backend/tests/test_flights_product_contract_v1.py` (31 tests). Covers: every `DISALLOWED_SOURCES` value blocks persistence with `disallowed_source` code; `book.example.com` in primary URL or any booking option blocks with `fabricated_*` codes; `assert_persistable_flight` raises typed `FlightContractViolation`; unrecognised source blocked; every allowed source passes when clean; `user_entered` with empty booking URL is persistable; `NullFlightProvider.search_flights` returns typed `UNAVAILABLE`/empty/non-empty reason; `FlightProviderUnavailable` rejects `OK`; `outbound_day_index() == 0`; `return_day_index(7) == 6`; same-day collapses to 0; `trip_num_days` inclusive + rejects inverted ranges; contract surface contains no leg-fabricating helper; `routes/trips._is_mock_flight` delegates to contract; `MOCK_BOOKING_HOST ∈ FABRICATED_BOOKING_HOSTS`. **Result: 31/31 pass.**
+- Regression: `tests/test_create_with_search_fail_closed.py` (10/10 pass) and `tests/test_product_surface_pruning_v1a.py` (38/38 pass) — the refactored `_is_mock_flight` preserves PR #295's persistence guard.
+
+### Out of scope
+
+- Real provider integration (next track: Provider-backed Flights v1).
+- Hotels (separate track).
+- SQL, LLM calls, broad cleanup, broad test consolidation, frontend type expansion, UI redesign.
+
+### Self-audit — acceptance criteria → evidence
+
+| Acceptance criterion | Evidence |
+|---|---|
+| Flight capability preserved as product shell | `OptimizeTripModal`, `/search/flights`, `/search/round-trip-flights`, `/search/hotels`, `/trips/create-with-search`, `addRoundTripOutboundToDay/addRoundTripReturnToDay` untouched |
+| No mock/demo/sample row can be emitted, displayed real, or persisted | `DISALLOWED_SOURCES` + `FABRICATED_BOOKING_HOSTS` + `is_mock_derived_flight` (single source of truth); `_is_mock_flight` delegates; `_any_mock_derived` 503 path still blocks; `tests/test_flights_product_contract_v1.py::test_mock_marker_blocks_persistence` (parametrized over every disallowed marker) + `test_book_example_*` |
+| Provider-backed Flights v1 has clear adapter seam | `backend/app/services/flights_provider.py` (`FlightProvider` Protocol + `FlightProviderResult` + `NullFlightProvider` + `get_flight_provider`); `test_default_flight_provider_is_null` |
+| Round-trip outbound/return day mapping specified and tested | `outbound_day_index`/`return_day_index`/`leg_day_index`; `test_outbound_maps_to_day_one`/`test_return_maps_to_final_day`/same-day collapse |
+| UI honest unavailable behaviour without fake fallback rows | `OptimizeTripModal` `PROVIDER_UNAVAILABLE_TITLE/SUBTITLE` (existing); `FlightSourceStatus{UNAVAILABLE,ERROR}` typed; `NullFlightProvider` returns `UNAVAILABLE` |
+| Partial round-trip data does not invent the missing leg | `test_partial_round_trip_does_not_invent_return_leg` asserts the contract surface has no leg-fabricating helper |
+| Provider seam returns typed unavailable state without fake rows | `test_null_provider_returns_typed_unavailable`/`test_null_provider_unavailable_dataclass`/`test_provider_unavailable_rejects_ok_status` |
+| Existing fail-closed behaviour from PR #295 intact | `test_trips_route_is_mock_flight_delegates_to_contract` + `test_create_with_search_fail_closed.py` 10/10 pass + `test_product_surface_pruning_v1a.py` 38/38 pass |
+| No provider, SQL, LLM, hotels build, redesign, or broad cleanup | None added; diff scoped to `backend/app/contracts/{__init__,flights}.py`, `backend/app/services/flights_provider.py`, `backend/app/routes/trips.py` (8-line delegation), tests, docs |
+
+### Risks
+
+- The contract enumerates concrete provider source values up-front (`amadeus|duffel|google_flights|kiwi|skyscanner`); if Flights v1 picks a provider not on the list, the v1 PR has to add it AND a matching contract test — by design.
+- `_legacy_product_mock_blocked()` and the legacy `_mock_flights` are still callable; the contract does not enforce its predicate at the `SearchService` layer (only at the `/trips/create-with-search` persistence boundary). Closing that gap is the v1 PR's job.
+- `is_persistable_flight` enforces non-empty `airline`/`origin`/`destination`/`departure_time`/`arrival_time`; user-entered flights must populate these. Frontend manual-entry flow (not in this PR) needs to honour the contract when it ships.
+
+---
+
+## Previous change (2026-05-08) — Final Mock-Leak Closeout (Level 1)
 
 **Status: PR-ready (branch: claude/final-cleanup-mocks-vQ0VS)** — Closes the urgent mock/fallback cleanup chain (PRs #287–#295) with a single focused product-surface sweep. Deletes the orphan `_mock_restaurants` helper and the orphan frontend `ConciergeResponse` / `PlaceRecommendationsView` components. Preserves `_mock_flights` / `_mock_hotels` quarantined behind `BLOCK_LEGACY_PRODUCT_MOCK` and the `_any_mock_derived` fail-closed guard so future provider-backed Flights/Hotels v1 can slot in real implementations. No SQL. No providers. No LLM calls. No schema changes. No UI redesign.
 
