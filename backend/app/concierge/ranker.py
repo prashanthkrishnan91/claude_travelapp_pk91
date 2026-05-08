@@ -197,7 +197,8 @@ class RankerStats:
     destination_penalized_count: int = 0
     modifier_intent: str = ""           # "casual"|"upscale"|"" when modifier active
     modifier_filter_applied: bool = False
-    casual_downranked_count: int = 0    # entities penalized for casual mismatch
+    casual_downranked_count: int = 0    # entities that received a casual direct penalty
+    casual_excluded_count: int = 0      # entities that fell out of top_n due to casual penalty
 
 
 # ── Feature computation ───────────────────────────────────────────────────────
@@ -752,6 +753,24 @@ def build_evidence_bundle(
 
 # ── Ranker ───────────────────────────────────────────────────────────────────
 
+def _entity_price_range_end_units(entity: PlaceEntity) -> int:
+    """Return the price range end amount in currency units (e.g. 100 for $100).
+
+    Used to detect expensive-range places (e.g. $40–100) that lack a
+    PRICE_LEVEL_EXPENSIVE field. Returns 0 when price_range is absent.
+    """
+    pr = getattr(entity, "price_range", None) or {}
+    if not isinstance(pr, dict):
+        return 0
+    end = pr.get("endPrice") or {}
+    if isinstance(end, dict):
+        try:
+            return int(end.get("units") or 0)
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
 def _has_known_synonym_set(label: str) -> bool:
     """True when ``label`` belongs to a recognized venue-head synonym set.
 
@@ -845,11 +864,38 @@ def rank_entities_with_stats(
             pen += dest_pen
             dest_penalized_count += 1
 
-        # Casual modifier telemetry: track entities that received a preference_fit
-        # penalty due to casual modifier (pf < 0.5 means the preference_fit function
-        # applied a negative adjustment for fine-dining/expensive signals).
-        if _casual_active and pf < 0.5:
-            casual_downranked_count += 1
+        # Casual modifier: apply a direct score penalty (in addition to preference_fit
+        # weight) strong enough to materially alter the result set when enough casual-
+        # friendly alternatives exist. The preference_fit weight alone (0.06) is too
+        # small (~0.015 max score change) to overcome rating/subtype differences.
+        # Uses price_level AND price_range end units to catch expensive-range places
+        # that lack a PRICE_LEVEL_EXPENSIVE field (e.g. $40–100 range).
+        if _casual_active:
+            _ptype_lower = {t.lower() for t in (entity.types or [])}
+            _eprice = (entity.price_level or "").upper()
+            _end_units = _entity_price_range_end_units(entity)
+            _is_fine_dining = "fine_dining_restaurant" in _ptype_lower
+            _is_v_expensive = (
+                _eprice == "PRICE_LEVEL_VERY_EXPENSIVE" or _end_units >= 100
+            )
+            _is_expensive = (
+                _eprice == "PRICE_LEVEL_EXPENSIVE" or _end_units >= 80
+            )
+            if _is_fine_dining and _is_v_expensive:
+                pen += 0.18
+                casual_downranked_count += 1
+            elif _is_fine_dining and _is_expensive:
+                pen += 0.14
+                casual_downranked_count += 1
+            elif _is_fine_dining:
+                pen += 0.10
+                casual_downranked_count += 1
+            elif _is_v_expensive:
+                pen += 0.10
+                casual_downranked_count += 1
+            elif _is_expensive:
+                pen += 0.06
+                casual_downranked_count += 1
 
         total = (
             _W_SUBTYPE_FIT * sf
@@ -939,6 +985,20 @@ def rank_entities_with_stats(
     stats.modifier_intent = "casual" if _casual_active else ("upscale" if _upscale_active else "")
     stats.modifier_filter_applied = _casual_active or _upscale_active
     stats.casual_downranked_count = casual_downranked_count
+    # casual_excluded_count: penalized entities that did not make the final top_n.
+    if _casual_active and casual_downranked_count > 0:
+        result_place_ids = {e.place_id for e, _ in result}
+        def _has_casual_signal(e: PlaceEntity) -> bool:
+            p = (e.price_level or "").upper()
+            return (
+                p in ("PRICE_LEVEL_EXPENSIVE", "PRICE_LEVEL_VERY_EXPENSIVE")
+                or _entity_price_range_end_units(e) >= 80
+                or "fine_dining_restaurant" in {t.lower() for t in (e.types or [])}
+            )
+        stats.casual_excluded_count = sum(
+            1 for _t, e, _rs in scored
+            if e.place_id not in result_place_ids and _has_casual_signal(e)
+        )
 
     logger.debug(
         "ranker: entities=%d ranked=%d off_concept_dropped=%d "
