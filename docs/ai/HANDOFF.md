@@ -1,6 +1,42 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-08) — Internal Attraction Mock Dependency Cleanup v1D (Level 3 — internal mock leakage closure)
+## Last change (2026-05-08) — Legacy Flights/Hotels Strategy v1 (Level 2 — audit/spec)
+
+**Status: PR-ready (branch: claude/audit-flights-hotels-strategy-KoptK)** — Doc-only. Adds `docs/ai/LEGACY_FLIGHTS_HOTELS_STRATEGY.md`. No code change. No SQL. No new providers. No new LLM calls. No UI change.
+
+### Problem
+
+Post-PR #293, the remaining live mock-backed product surfaces are flights/hotels: `/search/flights`, `/search/hotels`, `/search/round-trip-flights`, `/trips/create-with-search`, `OptimizeTripModal`, and `TripBuilderForm.createTripWithSearch`. The post-PR-#290 product-surface audit deferred these to a "real-provider strategy PR." This PR is that strategy artifact.
+
+### Findings (summary)
+
+- Backend routes are quarantined behind `BLOCK_LEGACY_PRODUCT_MOCK`; cache-side suppression in `_suppress_legacy_mock_cache` prevents stale-mock leakage on flag flip.
+- `_mock_flights` and `_mock_hotels` emit fake `book.example.com` booking URLs; with the flag off, these are persisted into `itinerary_items.details.booking_url` / `details.booking_options[]` via both `OptimizeTripModal.handleSelect` and `/trips/create-with-search` (`backend/app/routes/trips.py:504-580`). This is the highest persistence-risk path in the repo today.
+- `OptimizeTripModal` fails closed cleanly on empty results (`OptimizeTripModal.tsx:114-115`).
+- `/trips/create-with-search` does **not** fail closed: it creates a trip unconditionally (`backend/app/routes/trips.py:488`) even when both flight and hotel arrays are empty, leaving the user on a blank itinerary screen.
+- Caller-registry guard `test_only_known_frontend_files_reference_legacy_search` is the live drift sentry; current callers are `OptimizeTripModal.tsx` and `TripBuilderForm.tsx` only.
+
+### Recommended next PR
+
+**Option A — Fail-Closed UX v1 for `OptimizeTripModal` + `/trips/create-with-search`.** Default `BLOCK_LEGACY_PRODUCT_MOCK=on` in production deploy config; `/trips/create-with-search` refuses to create a trip when no provider data is available; `TripBuilderForm` shows an honest "provider integration pending" empty-state. No new providers, no LLM, no SQL. Preserves the flights/hotels capability for a future provider PR. See §7 of the strategy doc for full acceptance criteria.
+
+### Tests
+
+Doc-only PR. No new tests. Existing flag/cache/caller-registry guards in `backend/tests/test_product_surface_pruning_v1a.py` continue to cover the contracts.
+
+### Files changed
+
+- `docs/ai/LEGACY_FLIGHTS_HOTELS_STRATEGY.md` (new)
+- `docs/ai/HANDOFF.md` (this entry)
+- `docs/ai/progress_log.md` (one entry)
+
+**Supabase SQL**: No
+**HANDOFF.md edited**: Yes (this entry)
+**README.md edited**: No (not relevant — internal strategy artifact)
+
+---
+
+## Previous change (2026-05-08) — Internal Attraction Mock Dependency Cleanup v1D (Level 3 — internal mock leakage closure)
 
 **Status: PR-ready (branch: claude/cleanup-attraction-mock-ERKeU)** — Eliminates the remaining internal dependency on `_mock_attractions`. No SQL. No new providers. No new LLM calls. No UI change.
 
