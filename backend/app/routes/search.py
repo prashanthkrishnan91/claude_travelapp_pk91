@@ -1,4 +1,39 @@
-"""Search endpoints — /search/flights, /search/hotels, /search/attractions."""
+"""Search endpoints — /search/flights, /search/hotels, /search/attractions.
+
+Product Surface Pruning v1A — route classification
+--------------------------------------------------
+These routes predate the canonical AI Concierge display contract and still
+back several frontend product surfaces.  The ``LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES``
+registry below is the single source of truth for which routes still depend on
+the quarantined ``SearchService`` mock fixtures (see
+``backend/app/services/search.py`` and ``docs/ai/HANDOFF.md`` v1A entry).
+
+Classification (A=user-facing must preserve / B=migrate to AI Concierge /
+C=internal/test/demo / D=dead / E=unclear):
+
+- ``POST /search/flights`` — class A, mock-backed, called by
+  ``OptimizeTripModal`` and ``/trips/create-with-search``.  v1B replaces with
+  real provider.  Quarantine via ``BLOCK_LEGACY_PRODUCT_MOCK`` until then.
+- ``POST /search/round-trip-flights`` — class C, no direct frontend caller,
+  invoked by ``/trips/create-with-search``.  Same quarantine path.
+- ``POST /search/hotels`` — class A, mock-backed, called by
+  ``OptimizeTripModal`` and ``/trips/create-with-search``.  Same quarantine
+  path.
+- ``POST /search/attractions`` — class A, mock-backed, called by
+  ``TripBuilder`` Explore.  v1B migrates to AI Concierge.  Quarantine via
+  ``BLOCK_LEGACY_PRODUCT_MOCK``.
+- ``POST /search/restaurants`` — class A, real Google Places provider,
+  fail-closed when no API key.  Already canonical; **not** quarantined.
+- ``POST /search/clusters`` — class A, partial mock (uses
+  ``_mock_attractions`` for the attractions side, real Google Places for
+  restaurants).  Same quarantine path.
+- ``POST /search/best-area`` — class A, derived from clusters; inherits the
+  partial-mock dependency.
+
+The ``/ai/concierge*`` family (see ``backend/app/routes/ai.py``) is the
+canonical place-card surface and goes through
+``backend/app/concierge/display_contract.py`` at the response boundary.
+"""
 
 import logging
 from typing import List
@@ -30,6 +65,32 @@ from app.services.search import SearchService
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/search", tags=["search"])
+
+
+# ---------------------------------------------------------------------------
+# Product Surface Pruning v1A — route classification registries
+# ---------------------------------------------------------------------------
+
+# Routes whose response data still depends (directly or transitively) on the
+# legacy ``SearchService`` mock fixtures.  Keep this registry in sync with
+# ``LEGACY_PRODUCT_MOCK_FUNCTIONS`` in ``backend/app/services/search.py``.
+LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES: frozenset = frozenset({
+    "/search/flights",
+    "/search/round-trip-flights",
+    "/search/hotels",
+    "/search/attractions",
+    # /search/clusters and /search/best-area derive from search_attractions
+    # (mock) plus search_restaurants (real Google Places); the attractions
+    # side keeps them on the dependent list until v1B migration.
+    "/search/clusters",
+    "/search/best-area",
+})
+
+# Routes that are already canonical (do not depend on legacy mocks).  Listed
+# here so the v1A regression tests can assert the partition is exhaustive.
+CANONICAL_PRODUCT_ROUTES: frozenset = frozenset({
+    "/search/restaurants",
+})
 
 
 @router.post("/flights", response_model=List[FlightResult])

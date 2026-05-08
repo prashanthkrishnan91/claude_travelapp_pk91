@@ -1,6 +1,131 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-08) — Architecture Rescue: Canonical Card Display Contract (Level 3)
+## Last change (2026-05-08) — Product Surface Pruning v1A: Legacy Mock Quarantine + Caller Registry (Level 3)
+
+**Status: IN PROGRESS (branch: claude/prune-product-surface-AdT8z)** — Backend + frontend (comments only) + tests only. No SQL. No new providers. No new LLM calls. No semantic retrieval / ranking / note changes.
+
+### Problem (architectural gap left by PR #287)
+
+PR #287 closed the AI Concierge place-card response contract at `backend/app/routes/ai.py` via `normalize_place_recommendations(...)`.  But the audit pre-commissioned for that PR also flagged that the legacy `/search/*` routes in `backend/app/routes/search.py` are still mock-backed and still feed user-facing Trip Builder / Optimize Trip / Trip-creation flows directly — bypassing the canonical display contract.
+
+Concretely:
+
+| caller | route | backend producer | risk |
+|---|---|---|---|
+| `frontend/src/components/trips/OptimizeTripModal.tsx` | `POST /search/flights`, `POST /search/hotels` | `SearchService._mock_flights`, `SearchService._mock_hotels` | mock data renders as "Best Value / Runner-Up / Budget Pick" + persisted to itinerary via `addOptimizedFlightToDay` / `addOptimizedHotelToTrip` |
+| `frontend/src/components/trips/TripBuilder.tsx` | `POST /search/attractions`, `POST /search/clusters`, `POST /search/best-area` | `SearchService._mock_attractions` (+ Google Places for restaurants) | mock attractions render as Add-to-Trip cards in Explore |
+| `frontend/src/components/trips/TripBuilderForm.tsx` (via `createTripWithSearch`) | `POST /trips/create-with-search` → `search_flights` + `search_round_trip_flights` + `search_hotels` | `_mock_flights` / `_mock_hotels` | mock flights+hotels persisted as itinerary items at trip creation |
+| `frontend/src/components/trips/AIConciergePanel.tsx` | `POST /ai/concierge/search` | normalized via PR #287 seam | already canonical — unchanged |
+
+Migrating those frontend callers off the mock surface requires either real-provider integration (no new providers allowed in this PR) or rewriting Add-to-Day / saved-card flows (out of scope for this PR per the task constraints).  The remaining safe move is to **quarantine the legacy mock surface** so it is observable and operator-blockable, then ship the migration as a follow-up **v1B**.
+
+### Fix — quarantine seam, classification, caller registry
+
+1. **`backend/app/services/search.py`** — added a single quarantine seam:
+   - Module-level `BLOCK_LEGACY_PRODUCT_MOCK` env flag handler (`_legacy_product_mock_blocked`).  When set, every `_mock_*` helper short-circuits to `[]` and emits `[legacy_product_mock.blocked]` structured telemetry (operator opt-in fail-closed switch — verifiable in staging before v1B flip).
+   - `_log_legacy_product_mock_event(event=..., namespace=..., location=..., requested=..., returned=...)` always-on telemetry.  Every unblocked emission logs `[legacy_product_mock.emitted]` with the returned count so production logs expose the leakage rate while v1B migrates the frontend callers.
+   - `_mark_legacy_product_mock(fn)` decorator + `is_legacy_product_mock(fn)` predicate + `LEGACY_PRODUCT_MOCK_FUNCTIONS` registry tuple — explicit, enumerable surface for the regression tests so future drift fails the build instead of growing silently.
+   - All four mock generators (`_mock_flights`, `_mock_hotels`, `_mock_attractions`, `_mock_restaurants`) honor the block flag and emit telemetry; their docstrings document the v1A quarantine.
+   - Default behavior unchanged when the flag is unset (the only operator-facing change in this PR is the telemetry log).
+
+2. **`backend/app/routes/search.py`** — added the static classification:
+   - `LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES` frozenset enumerates the six legacy-mock routes.
+   - `CANONICAL_PRODUCT_ROUTES` frozenset holds `/search/restaurants` (Google Places, fail-closed; already canonical and unchanged by this PR).
+   - The module docstring carries the route classification table that the v1A regression test enforces.
+
+3. **`frontend/src/lib/api.ts`** — added v1A deprecation comments above the five legacy callers (`searchFlights`, `searchHotels`, `searchAttractions`, `searchClusters`, `fetchBestArea`).  No behavior change; comments only — they document the `BLOCK_LEGACY_PRODUCT_MOCK` flag and the v1B migration intent so future contributors do not extend the surface.
+
+4. **`backend/tests/test_product_surface_pruning_v1a.py`** (new, 26 tests) — comprehensive contract test for the v1A surface:
+   - Block-flag truthiness parser parametrize (8 forms).
+   - Each `_mock_*` returns `[]` and emits `[legacy_product_mock.blocked]` when blocked.
+   - Unblocked emission still logs the leak telemetry with returned count.
+   - Registry parity: `LEGACY_PRODUCT_MOCK_FUNCTIONS` matches every `_mock_*` callable in the module (drift guard against silently adding new mocks).
+   - Marker is set on every registered function and not on unrelated callables (`SearchService`, helpers).
+   - Route classification: parses `routes/search.py` from disk (FastAPI is mocked under test), asserts every `/search/*` route is in `LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES ∪ CANONICAL_PRODUCT_ROUTES`, and asserts the partition is exhaustive and non-overlapping.
+   - **Frontend caller registry**: walks `frontend/` and asserts only the four current files (`api.ts`, `TripBuilder.tsx`, `OptimizeTripModal.tsx`, `tests/explore-hydration.test.mjs`) reference the legacy `/search/{flights,hotels,attractions,best-area,clusters,round-trip-flights}` routes or the typed wrappers.  Adding a new caller (or removing a migrated one) without updating `_KNOWN_LEGACY_SEARCH_CALLERS` fails the test.
+   - Stale-entry drift guard the other way: every entry in `_KNOWN_LEGACY_SEARCH_CALLERS` must still contain a legacy token; v1B removals are forced to update the list.
+   - `/ai/concierge/search` is asserted to remain mounted as the canonical seam.
+
+### Route / caller map
+
+| route | classification (A/B/C/D/E) | frontend callers | backend producer | mock-backed | action this PR | next move (v1B) |
+|---|---|---|---|---|---|---|
+| `POST /ai/concierge/search` | canonical | `AIConciergePanel` | semantic retrieval + `display_contract` normalizer (PR #287) | no | unchanged | — |
+| `POST /ai/concierge` | C (legacy, no UI caller) | none | `ConciergeService.answer` | no | unchanged | candidate for deletion in v1B once `display_contract` reuse is verified for any non-UI integrations |
+| `POST /ai/concierge/debug-trace` | C (dev-only) | `app/debug/concierge/page.tsx` | `LiveResearchService` directly | no | unchanged | keep |
+| `GET /ai/concierge/{trip_id}/messages` | A (canonical persistence read) | `AIConciergePanel` | persisted messages | no | unchanged | — |
+| `DELETE /ai/concierge/cache` | A (canonical UX) | `AIConciergePanel` | cache reset | no | unchanged | — |
+| `POST /search/flights` | A (user-facing, mock-backed) | `OptimizeTripModal`; internal `/trips/create-with-search` | `_mock_flights` | **yes** | quarantine seam + telemetry + frontend caller registry | replace with real flight provider OR migrate `OptimizeTripModal` + `TripBuilderForm` to call AI Concierge |
+| `POST /search/round-trip-flights` | C (no direct frontend caller; internal-only via `/trips/create-with-search`) | none direct | `_mock_flights` (via `search_round_trip_flights`) | **yes** | quarantine seam + telemetry | follows `/search/flights` migration in v1B |
+| `POST /search/hotels` | A (user-facing, mock-backed) | `OptimizeTripModal`; internal `/trips/create-with-search` | `_mock_hotels` | **yes** | quarantine seam + telemetry + frontend caller registry | replace with real hotel provider OR migrate `OptimizeTripModal` + `TripBuilderForm` to call AI Concierge |
+| `POST /search/attractions` | A (user-facing, mock-backed) | `TripBuilder` Explore | `_mock_attractions` | **yes** | quarantine seam + telemetry + frontend caller registry | migrate Explore to call `/ai/concierge/search` with attraction intent OR replace `_mock_attractions` with Google Places attractions |
+| `POST /search/restaurants` | A (user-facing, **canonical**) | `TripBuilder` Explore | Google Places (real, fail-closed) | no | unchanged | — |
+| `POST /search/clusters` | A (user-facing, partial mock) | `TripBuilder` grouped view | `_mock_attractions` + Google Places restaurants | partial | quarantine seam + telemetry + frontend caller registry | follows `/search/attractions` migration |
+| `POST /search/best-area` | A (user-facing, partial mock) | `TripBuilder` "best area" panel | derived from clusters | partial | quarantine seam + telemetry + frontend caller registry | follows `/search/clusters` migration |
+
+(A = active user-facing, must preserve / B = active user-facing, can migrate now / C = internal/test/demo / D = dead, removable / E = unclear, no deletion this PR.  Nothing was removed in v1A.)
+
+### v1B migration plan (recommended next PR — Product Surface Migration v1B)
+
+Goal: bring the six `LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES` to either real providers or the canonical AI Concierge surface, then remove the quarantine seam.
+
+Suggested split (smallest-safe steps; each is its own PR, gated on the prior):
+
+1. **v1B-attractions** — migrate `TripBuilder` Explore attractions section: replace `searchAttractions(destination)` with a thin wrapper around `/ai/concierge/search` (intent: `attractions in {destination}`), adapt the AI Concierge card list to the existing `AttractionSearchResult` shape via a frontend mapper.  Remove `OptimizeTripModal`'s dependence on `/search/attractions`.  Drop `_mock_attractions` + remove `/search/attractions` + `/search/clusters` + `/search/best-area` from `LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES` once the grouped view + best-area panel are off it.
+2. **v1B-flights+hotels** — replace `_mock_flights` / `_mock_hotels` with a real provider (Google Flights / Hotels API or Amadeus) or migrate `OptimizeTripModal` + `TripBuilderForm.createTripWithSearch` to a Concierge-backed itinerary scaffold.  Remove the four mock helpers + `/search/flights` + `/search/hotels` + `/search/round-trip-flights` from the registry.
+3. **v1B-cleanup** — once both above ship, delete `LEGACY_PRODUCT_MOCK_FUNCTIONS`, `BLOCK_LEGACY_PRODUCT_MOCK`, the v1A telemetry, and the caller-registry test. The contract test in `test_concierge_card_contract.py` covers the canonical AI Concierge surface from then on.
+
+Each v1B step must also: (a) preserve Add-to-Day / Save / Maps / itinerary / saved-card flows; (b) not change the persisted itinerary-item schema; (c) keep the Concierge regression band green.
+
+### Files changed
+
+- `backend/app/services/search.py` — quarantine seam (env-flag block + structured leak telemetry), legacy-mock marker + registry, docstrings on the four mock generators
+- `backend/app/routes/search.py` — `LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES` + `CANONICAL_PRODUCT_ROUTES` frozensets, classification docstring
+- `frontend/src/lib/api.ts` — v1A deprecation comments above `searchFlights`, `searchHotels`, `searchAttractions`, `searchClusters`, `fetchBestArea` (no behavior change)
+- `backend/tests/test_product_surface_pruning_v1a.py` (new) — 26-test contract suite (env-flag, telemetry, registry parity, route classification, frontend caller registry, canonical seam preservation)
+- `docs/ai/HANDOFF.md` — this entry
+
+### Test results
+
+- `tests/test_product_surface_pruning_v1a.py`: **26/26 PASS** (new file)
+- Concierge regression band (`test_concierge_card_contract.py`, `test_concierge.py`, `test_live_research.py`, `test_explore_snapshot.py`, `test_concierge_display_contract.py`): **362/362 PASS**
+- Full backend test suite: **2496 passed, 4 pre-existing env-only failures unchanged from base** (`test_concierge_critical_path_hardening.py` x2, `test_concierge_observability.py` x1, `test_set_level_writer.py` x1 — all assert on attributes the test setup itself does not provide; identical to the failures noted in the PR #287 entry below).
+- Frontend `npm test` (`concierge-renderers.test.mjs`, `explore-restaurants-trust-contract.test.mjs`, `concierge-refinement.test.mjs`): **200/200 PASS**.
+- Frontend `tests/explore-hydration.test.mjs` (run separately, not in `npm test`): **46/47 PASS** — the single failure (`Explore restaurants require verified Google place identity before rendering/persisting`) is pre-existing on the base commit before this PR; it is unrelated to v1A and is a regex match on `searchRestaurants` source that does not match the current implementation's structure.  No code in this PR touches `searchRestaurants` or the Explore restaurants Google-identity guard.
+
+### Hard-constraint compliance
+
+- Supabase SQL: **no**.
+- New providers: **no**.
+- New LLM calls: **no**.
+- Semantic retrieval / ranking / note changes: **no**.
+- Visible product behavior changed: **no** when `BLOCK_LEGACY_PRODUCT_MOCK` is unset (the default).  Only telemetry log lines are added in the unblocked path.  The block path is operator-opt-in and intended for staging verification.
+- Add to Day / Save / Maps / itinerary / saved-card flows: **structurally unchanged** (no code path on these flows was touched).
+- Manual UI testing: **not required** (audit-first PR; all guards are automated tests).
+
+### Self-audit (acceptance criteria mapping)
+
+1. **Concrete route/caller map in PR summary** — Route / caller map table above; classification table above; v1B plan documents action taken vs deferred per route.
+2. **No user-facing surface relies on SearchService mock data unguarded** — every legacy mock fixture now honors `BLOCK_LEGACY_PRODUCT_MOCK`; every leak emission logs `[legacy_product_mock.emitted]`; the frontend caller registry test fails on any new caller.
+3. **Preserved legacy routes are quarantined / documented** — `LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES` enumerates them; `CANONICAL_PRODUCT_ROUTES` separates `/search/restaurants`; `test_every_search_route_is_classified` asserts the partition is exhaustive.
+4. **Add to Day / Save / Maps / itinerary / saved-card flows remain compatible** — no code path on those flows was changed; default behavior is preserved when the env flag is unset.
+5. **PR #287 card contract tests still pass** — `test_concierge_card_contract.py` 29/29 pass; full Concierge band 362/362 pass.
+6. **Focused regression coverage for new pruning/guarding behavior** — `test_product_surface_pruning_v1a.py` 26 tests covering each guard + caller registry.
+7-10. **No SQL, no new providers, no new LLM calls, no semantic retrieval/ranking/note changes** — confirmed; quarantine is module-level python + classification frozensets + tests.
+11. **No manual UI testing required** — audit-first PR; all assertions are automated tests.
+12. **Full relevant automated tests pass** — backend 2496 pass; the 4 failures are the documented pre-existing env-only failures, identical to the PR #287 baseline.
+
+### Stop / split decision
+
+The audit demonstrated that `/search/*` is deeply embedded across `TripBuilder` (Explore + grouped + best-area), `OptimizeTripModal` (Optimize My Trip), and `TripBuilderForm.createTripWithSearch` (initial trip creation).  Migrating any one of these on the same PR would (a) require Concierge-shape adapters that change visible product behavior, (b) touch Add-to-Day / itinerary persistence — which the task constraints forbid changing, and (c) need a real flight/hotel provider for the OptimizeTripModal path — which the task constraints forbid (no new providers).  Per the v1A stop condition, this PR ships only the safe quarantine seam, classification, and caller-registry guard, and explicitly defers each frontend migration to a v1B sub-PR per the plan above.
+
+### Supabase SQL
+
+None.
+
+---
+
+## Previous change (2026-05-08) — Architecture Rescue: Canonical Card Display Contract (Level 3)
 
 **Status: IN PROGRESS (branch: claude/travel-app-architecture-rescue-IiFDz)** — Backend + frontend (1 line) + tests only. No SQL. No new providers. No new LLM calls.
 

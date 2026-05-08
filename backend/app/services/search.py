@@ -8,6 +8,27 @@ Architecture
    mock data; swap in real provider clients when API keys are available).
 4. Persist the result set to research_cache with a configurable TTL.
 5. Return the normalised result list to the route handler.
+
+Product Surface Pruning v1A — legacy mock quarantine
+----------------------------------------------------
+The ``_mock_flights`` / ``_mock_hotels`` / ``_mock_attractions`` /
+``_mock_restaurants`` helpers in this module are **legacy test/demo-only
+fixtures**.  They predate the canonical AI Concierge display contract
+(see ``backend/app/concierge/display_contract.py``) and they are still
+reachable through the legacy ``/search/*`` routes that
+``frontend/src/components/trips/{TripBuilder,OptimizeTripModal,TripBuilderForm}``
+have not yet migrated off.  Until the v1B migration replaces those callers,
+these helpers must be:
+
+- explicitly marked as legacy via the ``__legacy_product_mock__`` attribute
+  (``is_legacy_product_mock(fn)`` and ``LEGACY_PRODUCT_MOCK_FUNCTIONS``);
+- runtime-blockable via the ``BLOCK_LEGACY_PRODUCT_MOCK`` env flag so an
+  operator can fail-closed in production without a redeploy;
+- traceable via the ``legacy_product_mock`` structured log channel so we can
+  measure leakage rate in production logs before/after the v1B migration.
+
+Do not extend or grow new mock fixtures.  All new place data must flow
+through ``/ai/concierge/search`` and the canonical display contract.
 """
 
 import hashlib
@@ -17,7 +38,7 @@ import math
 import os
 import random
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from uuid import uuid4
 
 try:
@@ -49,6 +70,82 @@ from app.models.search import (
 CACHE_TABLE = "research_cache"
 logger = logging.getLogger(__name__)
 CACHE_TTL_HOURS = 1
+
+
+# ---------------------------------------------------------------------------
+# Product Surface Pruning v1A — legacy mock quarantine seam
+# ---------------------------------------------------------------------------
+
+# Operator-flippable production guard.  When this env var is truthy, the four
+# legacy mock generators below return an empty list instead of fabricating
+# product data.  This is the safe production switch the v1B migration plan
+# uses to verify each frontend caller can survive without mock data before
+# the route is removed.
+_LEGACY_PRODUCT_MOCK_BLOCK_ENV = "BLOCK_LEGACY_PRODUCT_MOCK"
+
+
+def _truthy(value: Optional[str]) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _legacy_product_mock_blocked() -> bool:
+    """Return True when the operator has set the production block flag."""
+    return _truthy(os.getenv(_LEGACY_PRODUCT_MOCK_BLOCK_ENV))
+
+
+def _mark_legacy_product_mock(fn: "Callable[..., Any]") -> "Callable[..., Any]":
+    """Tag a callable as a legacy product-surface mock fixture.
+
+    The ``__legacy_product_mock__`` attribute is read by
+    ``is_legacy_product_mock`` and the v1A regression tests so the module's
+    quarantine surface can be enumerated without string-matching function
+    names.  Callers should not rely on this attribute for runtime decisions —
+    use the explicit ``_legacy_product_mock_blocked()`` check instead.
+    """
+    setattr(fn, "__legacy_product_mock__", True)
+    return fn
+
+
+def is_legacy_product_mock(fn: "Callable[..., Any]") -> bool:
+    """Public predicate: True iff ``fn`` is a legacy mock fixture.
+
+    Used by ``backend/tests/test_product_surface_pruning_v1a.py`` to assert the
+    quarantine surface stays in sync with this module.
+    """
+    return bool(getattr(fn, "__legacy_product_mock__", False))
+
+
+def _log_legacy_product_mock_event(
+    *,
+    event: str,
+    namespace: str,
+    location: str,
+    requested_count: int,
+    returned_count: int,
+) -> None:
+    """Structured telemetry for legacy mock emission and blocking.
+
+    Two events:
+
+    - ``legacy_product_mock_blocked`` — the operator set
+      ``BLOCK_LEGACY_PRODUCT_MOCK`` and we returned an empty list instead of
+      fabricated data.
+    - ``legacy_product_mock_emitted`` — mock data was returned to the caller.
+      Useful as a leakage rate gauge while v1B migrates frontend surfaces.
+
+    Both events use the ``legacy_product_mock.<event>`` log key so they can
+    be grep'd from a single Railway query.
+    """
+    logger.warning(
+        "[legacy_product_mock.%s] namespace=%s location=%s requested=%d returned=%d",
+        event,
+        namespace,
+        location,
+        requested_count,
+        returned_count,
+    )
 
 # Known city centres for coordinate generation
 _CITY_CENTERS: Dict[str, tuple] = {
@@ -238,7 +335,23 @@ def _walkability_label(cluster: List[Dict[str, Any]]) -> str:
 # ---------------------------------------------------------------------------
 
 def _mock_flights(req: FlightSearchRequest) -> List[FlightResult]:
-    """Generate realistic-looking flight options for the requested route."""
+    """Generate realistic-looking flight options for the requested route.
+
+    Legacy product-surface mock fixture (Product Surface Pruning v1A).  The
+    ``BLOCK_LEGACY_PRODUCT_MOCK`` env flag short-circuits this helper to an
+    empty list so production operators can fail-closed before the v1B
+    migration replaces ``/search/flights`` callers.
+    """
+    if _legacy_product_mock_blocked():
+        _log_legacy_product_mock_event(
+            event="blocked",
+            namespace="flights",
+            location=f"{(req.origin or req.destination or '?')!s}",
+            requested_count=req.passengers or 1,
+            returned_count=0,
+        )
+        return []
+
     airlines = [
         ("AA", "American Airlines"),
         ("UA", "United Airlines"),
@@ -304,11 +417,33 @@ def _mock_flights(req: FlightSearchRequest) -> List[FlightResult]:
         )
 
     results.sort(key=lambda r: r.price or 0)
+    _log_legacy_product_mock_event(
+        event="emitted",
+        namespace="flights",
+        location=f"{(req.origin or req.destination or '?')!s}",
+        requested_count=req.passengers or 1,
+        returned_count=len(results),
+    )
     return results, "ok" if results else "empty"
 
 
 def _mock_hotels(req: HotelSearchRequest) -> List[HotelResult]:
-    """Generate realistic hotel options for the requested location and dates."""
+    """Generate realistic hotel options for the requested location and dates.
+
+    Legacy product-surface mock fixture (Product Surface Pruning v1A).  See
+    module docstring for the quarantine seam.  Honors the
+    ``BLOCK_LEGACY_PRODUCT_MOCK`` env flag.
+    """
+    if _legacy_product_mock_blocked():
+        _log_legacy_product_mock_event(
+            event="blocked",
+            namespace="hotels",
+            location=req.location,
+            requested_count=req.guests or 1,
+            returned_count=0,
+        )
+        return []
+
     nights = (req.check_out - req.check_in).days or 1
     hotel_templates = [
         ("Grand Hyatt {loc}", 5, ["pool", "spa", "gym", "restaurant", "concierge"]),
@@ -376,6 +511,13 @@ def _mock_hotels(req: HotelSearchRequest) -> List[HotelResult]:
         )
 
     results.sort(key=lambda r: r.price or 0)
+    _log_legacy_product_mock_event(
+        event="emitted",
+        namespace="hotels",
+        location=req.location,
+        requested_count=req.guests or 1,
+        returned_count=len(results),
+    )
     return results
 
 
@@ -406,7 +548,22 @@ def _compute_attraction_tags(ai_score: float, rating: float, num_reviews: int) -
 
 
 def _mock_attractions(req: AttractionSearchRequest) -> List[AttractionResult]:
-    """Generate realistic attraction options simulating Google Places data."""
+    """Generate realistic attraction options simulating Google Places data.
+
+    Legacy product-surface mock fixture (Product Surface Pruning v1A).  See
+    module docstring for the quarantine seam.  Honors the
+    ``BLOCK_LEGACY_PRODUCT_MOCK`` env flag.
+    """
+    if _legacy_product_mock_blocked():
+        _log_legacy_product_mock_event(
+            event="blocked",
+            namespace="attractions",
+            location=req.location,
+            requested_count=0,
+            returned_count=0,
+        )
+        return []
+
     # (category, name_template, description, duration_min, base_reviews_range, price_level)
     ATTRACTION_POOL: List[tuple] = [
         # Top attractions / landmarks
@@ -522,6 +679,13 @@ def _mock_attractions(req: AttractionSearchRequest) -> List[AttractionResult]:
         )
 
     results.sort(key=lambda r: r.ai_score or 0, reverse=True)
+    _log_legacy_product_mock_event(
+        event="emitted",
+        namespace="attractions",
+        location=req.location,
+        requested_count=0,
+        returned_count=len(results),
+    )
     return results
 
 
@@ -562,7 +726,24 @@ def _compute_restaurant_tags(
 
 
 def _mock_restaurants(req: RestaurantSearchRequest) -> List[RestaurantResult]:
-    """Generate realistic restaurant options simulating Google Places data."""
+    """Generate realistic restaurant options simulating Google Places data.
+
+    Legacy product-surface mock fixture (Product Surface Pruning v1A).  This
+    helper currently has no production callers — ``search_restaurants`` calls
+    Google Places directly with fail-closed semantics — but it is retained as
+    a quarantined fixture and honors the ``BLOCK_LEGACY_PRODUCT_MOCK`` env
+    flag so the v1A regression tests can enumerate the full legacy surface.
+    """
+    if _legacy_product_mock_blocked():
+        _log_legacy_product_mock_event(
+            event="blocked",
+            namespace="restaurants",
+            location=req.location,
+            requested_count=0,
+            returned_count=0,
+        )
+        return []
+
     # (cuisine, name_template, description, price_level, reviews_range)
     RESTAURANT_POOL: List[tuple] = [
         ("Italian", "La Trattoria", "Authentic Neapolitan pizza and housemade pastas in a warm, family-run setting.", 2, (8_000, 60_000)),
@@ -655,6 +836,13 @@ def _mock_restaurants(req: RestaurantSearchRequest) -> List[RestaurantResult]:
         )
 
     results.sort(key=lambda r: r.ai_score or 0, reverse=True)
+    _log_legacy_product_mock_event(
+        event="emitted",
+        namespace="restaurants",
+        location=req.location,
+        requested_count=0,
+        returned_count=len(results),
+    )
     return results, "ok" if results else "empty"
 
 
@@ -858,6 +1046,31 @@ def _fetch_restaurants_google_places(
 
     results.sort(key=lambda r: r.ai_score or 0.0, reverse=True)
     return results, "ok" if results else "empty"
+
+
+# ---------------------------------------------------------------------------
+# Product Surface Pruning v1A — legacy mock registry
+# ---------------------------------------------------------------------------
+
+# Tag the four legacy mock generators so the v1A regression suite can
+# enumerate the quarantined surface without string-matching identifiers.
+_mark_legacy_product_mock(_mock_flights)
+_mark_legacy_product_mock(_mock_hotels)
+_mark_legacy_product_mock(_mock_attractions)
+_mark_legacy_product_mock(_mock_restaurants)
+
+# Public, ordered registry of every legacy product-surface mock fixture in
+# this module.  ``backend/tests/test_product_surface_pruning_v1a.py`` reads
+# from this registry to enforce the quarantine envelope; new mock fixtures
+# must either be added here (and explicitly classified in
+# ``backend/app/routes/search.py``) or implemented through the canonical
+# AI Concierge display contract instead.
+LEGACY_PRODUCT_MOCK_FUNCTIONS: tuple = (
+    _mock_flights,
+    _mock_hotels,
+    _mock_attractions,
+    _mock_restaurants,
+)
 
 
 # ---------------------------------------------------------------------------

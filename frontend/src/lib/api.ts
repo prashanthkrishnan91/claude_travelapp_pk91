@@ -531,6 +531,15 @@ export async function resolveAirports(query: string): Promise<AirportResolveResp
 
 // ─── Flight Search ────────────────────────────────────────────────────────────
 
+/**
+ * Product Surface Pruning v1A — legacy mock-backed product route.
+ * Calls `POST /search/flights`, which is currently fed by
+ * `_mock_flights` in the backend `SearchService`.  The
+ * `BLOCK_LEGACY_PRODUCT_MOCK` env flag will short-circuit the backend to an
+ * empty list; do **not** add new callers of this function.  The v1B
+ * migration plan (see `docs/ai/HANDOFF.md`) replaces this with a real
+ * provider or routes the call through the canonical AI Concierge surface.
+ */
 export async function searchFlights(
   origin: string | string[],
   destination: string | string[],
@@ -670,7 +679,13 @@ function mapHotelToResult(h: RawHotelResult): ResearchResult {
   };
 }
 
-/** Fetch hotels for a destination and date range. */
+/**
+ * Fetch hotels for a destination and date range.
+ *
+ * Product Surface Pruning v1A — legacy mock-backed product route.  Calls
+ * `POST /search/hotels`, fed by `_mock_hotels`.  Honors the
+ * `BLOCK_LEGACY_PRODUCT_MOCK` env flag.  Do not add new callers.
+ */
 export async function searchHotels(
   location: string,
   checkIn: string,
@@ -689,7 +704,13 @@ export async function searchHotels(
   }
 }
 
-/** Fetch attractions/activities for a location, sorted by AI score DESC. */
+/**
+ * Fetch attractions/activities for a location, sorted by AI score DESC.
+ *
+ * Product Surface Pruning v1A — legacy mock-backed product route.  Calls
+ * `POST /search/attractions`, fed by `_mock_attractions`.  Honors the
+ * `BLOCK_LEGACY_PRODUCT_MOCK` env flag.  Do not add new callers.
+ */
 export async function searchAttractions(
   location: string,
   date?: string
@@ -846,7 +867,15 @@ export async function searchRestaurants(
   }
 }
 
-/** Fetch attractions and restaurants grouped into proximity clusters. */
+/**
+ * Fetch attractions and restaurants grouped into proximity clusters.
+ *
+ * Product Surface Pruning v1A — legacy mock-dependent product route.  Calls
+ * `POST /search/clusters`, which derives the attractions side from
+ * `_mock_attractions`.  Honors the `BLOCK_LEGACY_PRODUCT_MOCK` env flag.
+ * Do not add new callers; v1B routes this through the canonical AI
+ * Concierge surface.
+ */
 export async function searchClusters(
   location: string,
   radiusKm: number = 1.5
@@ -1128,7 +1157,14 @@ export async function saveExploreSnapshot(
   }
 }
 
-/** Fetch the best area recommendation for a destination. */
+/**
+ * Fetch the best area recommendation for a destination.
+ *
+ * Product Surface Pruning v1A — legacy mock-dependent product route.  Calls
+ * `POST /search/best-area`, which derives from clusters that include
+ * `_mock_attractions`.  Honors the `BLOCK_LEGACY_PRODUCT_MOCK` env flag.
+ * Do not add new callers.
+ */
 export async function fetchBestArea(
   location: string,
   radiusKm: number = 1.5
