@@ -980,14 +980,18 @@ class TestConciergeWithLiveResearch:
         svc = self._make_concierge("Chicago", live_hits)
         with patch("app.services.concierge.SearchService") as MockSearch, \
              patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
-            mock_search = MagicMock()
-            mock_search.search_attractions.return_value = []
+            # v1D: SearchService.search_attractions was deleted; spec_set
+            # rejects any access to it, proving the live-result path no
+            # longer falls back to the legacy mock-backed seam.
+            mock_search = MagicMock(spec_set=["search_restaurants", "search_hotels"])
             MockSearch.return_value = mock_search
             result = svc.search(FAKE_TRIP_ID, "things to do in Chicago", FAKE_USER_ID)
         assert result.intent == INTENT_ATTRACTIONS
         assert result.source_status == SOURCE_LIVE_SEARCH
         assert any(a.name == "Art Institute of Chicago" for a in result.attractions)
-        mock_search.search_attractions.assert_not_called()
+        assert not hasattr(mock_search, "search_attractions"), (
+            "SearchService.search_attractions was deleted in v1D"
+        )
 
     def test_hotels_intent_uses_live_results(self):
         live_hits = [_hit("Pendry Chicago", "https://ex.com/pendry", "Luxury hotel near Mag Mile.")]

@@ -263,10 +263,13 @@ class TestConciergeSearch:
         return ConciergeService(_make_mock_db(destination))
 
     def _mock_search_svc(self):
-        """Return a SearchService mock with empty results."""
-        m = MagicMock()
+        """Return a SearchService mock with empty results.
+
+        v1D: ``search_attractions`` was deleted with the mock-backed
+        surface — only canonical seams (restaurants, hotels) remain.
+        """
+        m = MagicMock(spec_set=["search_restaurants", "search_hotels"])
         m.search_restaurants.return_value = []
-        m.search_attractions.return_value = []
         m.search_hotels.return_value = []
         return m
 
@@ -302,7 +305,10 @@ class TestConciergeSearch:
         assert result.source_status == SOURCE_NONE
         mock_svc.search_restaurants.assert_called_once()
 
-    def test_attractions_query_uses_retrieval(self):
+    def test_attractions_query_fails_closed_when_no_live_results(self):
+        """v1D: attraction intent fails closed (SOURCE_UNAVAILABLE) when
+        live research returns no attractions; the mock-backed
+        ``search_attractions`` fallback was removed."""
         svc = self._svc("Rome")
         with patch("app.services.concierge.SearchService") as MockSearch, \
              patch.object(svc, "_call_claude", return_value=_FAKE_CLAUDE_JSON):
@@ -311,8 +317,13 @@ class TestConciergeSearch:
             result = svc.search(FAKE_TRIP_ID, "best attractions in Rome", FAKE_USER_ID)
         assert result.retrieval_used is True
         assert result.intent == INTENT_ATTRACTIONS
-        assert result.source_status == SOURCE_NONE
-        mock_svc.search_attractions.assert_called_once()
+        assert result.attractions == []
+        assert result.source_status == SOURCE_UNAVAILABLE
+        assert any("Rome" in (w or "") for w in result.warnings)
+        assert not hasattr(mock_svc, "search_attractions"), (
+            "SearchService.search_attractions was deleted in v1D — concierge "
+            "fallback paths must not call it"
+        )
 
     def test_response_has_all_required_fields(self):
         svc = self._svc("Tokyo")
@@ -552,19 +563,8 @@ class TestConciergeSearch:
                     num_reviews=500,
                 )
             ]
-            mock_svc.search_attractions.return_value = [
-                SimpleNamespace(
-                    name="Millennium Park",
-                    category="landmark",
-                    location="The Loop",
-                    rating=4.7,
-                    ai_score=89.0,
-                    num_reviews=15000,
-                    tags=["Must Visit"],
-                    description="Iconic downtown park.",
-                    duration_minutes=90,
-                )
-            ]
+            # v1D: SearchService.search_attractions deleted; concierge
+            # attraction-intent fallback now fails closed (no mock cards).
             MockSearch.return_value = mock_svc
             result = svc.search(FAKE_TRIP_ID, query, FAKE_USER_ID)
         assert result.intent == expected_intent

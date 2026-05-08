@@ -196,13 +196,13 @@ test('api.ts saveExploreSnapshot enriches candidates with computed score before 
   assert.match(apiClient, /ai_score: aiScore/, 'saveExploreSnapshot must serialize enriched aiScore as ai_score');
 });
 
-test('Backend search_attractions re-scores stale cache hits with null ai_score', () => {
+test('Backend SearchService.search_attractions was deleted in v1D (no mock-backed attraction surface)', () => {
   const searchService = readFileSync(
     new URL('../../backend/app/services/search.py', import.meta.url),
     'utf8',
   );
-  assert.match(searchService, /if r\.ai_score is None and r\.rating is not None and r\.num_reviews is not None/, 'search_attractions must re-score stale cache hits where ai_score is None');
-  assert.match(searchService, /_compute_attraction_ai_score\(r\.rating, r\.num_reviews, r\.category/, 'search_attractions must call _compute_attraction_ai_score for re-scoring');
+  assert.doesNotMatch(searchService, /def search_attractions\(/, 'SearchService.search_attractions must remain deleted; canonical surface is /ai/concierge/search');
+  assert.doesNotMatch(searchService, /def _mock_attractions\(/, '_mock_attractions must remain deleted; do not reintroduce a mock attraction fixture');
 });
 
 test('Backend search_restaurants re-scores stale cache hits with null ai_score', () => {

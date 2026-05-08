@@ -1,6 +1,72 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-08) — Product Surface Cleanup v1C: orphaned legacy place routes deleted (Level 2 — architecture cleanup)
+## Last change (2026-05-08) — Internal Attraction Mock Dependency Cleanup v1D (Level 3 — internal mock leakage closure)
+
+**Status: PR-ready (branch: claude/cleanup-attraction-mock-ERKeU)** — Eliminates the remaining internal dependency on `_mock_attractions`. No SQL. No new providers. No new LLM calls. No UI change.
+
+### Problem
+
+After PR #292 deleted the orphaned `/search/{attractions,clusters,best-area}` routes, `SearchService.search_attractions` and `_mock_attractions` were intentionally preserved because two live server-side flows still consumed them: `POST /plan/day` (called from `TripBuilder.handlePlanDay` via `fetchDayPlan`) and four sites inside `app/services/concierge.py` (`search()` ATTRACTION/BEST_AREA/GENERAL_DESTINATION fallbacks plus `_load_context`). That left a Level-3 mock-leakage path: `/plan/day` synthesised mock-derived attraction rows for the user-facing `DayPlanModal`, and the canonical `/ai/concierge/search` ATTRACTION fallback emitted mock cards whenever live research returned no attractions.
+
+### Fix (internal mock dependency removed)
+
+- **`backend/app/routes/plan.py`**: removed the `search_attractions` call and the mock-derived `PlannedAttraction` block from `POST /plan/day`. The no-cluster path now fails closed for attractions (`attractions=[]`) while keeping canonical Google-Places-backed restaurants for lunch/dinner. The cluster-driven path (`payload.places`) is unchanged — it surfaces caller-supplied attractions, which originate from canonical seams.
+- **`backend/app/services/concierge.py`**: stripped four `search_attractions` callsites: (a) ATTRACTION/PLAN_DAY intent fallback now sets `source_status=SOURCE_UNAVAILABLE` and adds a clear "no verified attraction cards" warning when live research returns no attractions; (b) BEST_AREA/AREA_ADVICE intent now derives areas from canonical hotel labels only; (c) GENERAL_DESTINATION intent emits canonical restaurants only; (d) `_load_context` returns `attractions=[]`. Removed the unused `AttractionSearchRequest` import.
+- **`backend/app/services/search.py`**: deleted `_mock_attractions`, `_compute_attraction_ai_score`, `_compute_attraction_tags`, and `SearchService.search_attractions`. Removed `_mark_legacy_product_mock(_mock_attractions)`, `_mock_attractions` from `LEGACY_PRODUCT_MOCK_FUNCTIONS`, and `attractions` from `_LEGACY_MOCK_DEPENDENT_NAMESPACES`. Removed the now-unused `AttractionResult` / `AttractionSearchRequest` imports. Module docstring updated.
+- **`backend/tests/test_product_surface_pruning_v1a.py`**: replaced the `_mock_attractions` block/cache tests with a strict reintroduction guard (`test_mock_attractions_helper_was_deleted_in_v1d`) that asserts both `_mock_attractions` and `SearchService.search_attractions` are absent. Updated the registry test to expect three remaining helpers (`flights`, `hotels`, `restaurants`). Switched the leak-telemetry, cache-write-skip, cache-write-on, canonical-pass-through, and ambiguous-fail-closed tests onto the hotels namespace (same legacy-mock guard path). Added `test_attractions_namespace_no_longer_in_legacy_guard`.
+- **`backend/tests/test_concierge.py`**: tightened `_mock_search_svc` to `spec_set=["search_restaurants","search_hotels"]` so any access to `search_attractions` raises immediately. Replaced `test_attractions_query_uses_retrieval` with `test_attractions_query_fails_closed_when_no_live_results` (asserts empty attractions, `SOURCE_UNAVAILABLE`, warning present, and `not hasattr(mock_svc, "search_attractions")`). Removed the obsolete `mock_svc.search_attractions` setup in the chip-prompts parameterized test.
+- **`backend/tests/test_explore_snapshot.py`**: deleted the two stale `search_attractions` cache-rescoring tests (`_compute_attraction_ai_score` was removed with the helper). Restaurant cache-rescoring tests retained.
+- **`backend/tests/test_live_research.py`**: replaced the `mock_search.search_attractions.return_value = []` / `assert_not_called()` setup in `test_attractions_intent_uses_live_results` with a `spec_set` mock that proves the deleted seam cannot be called.
+- **`frontend/tests/explore-hydration.test.mjs`**: replaced the `search_attractions`/`_compute_attraction_ai_score` source-grep test with a deletion guard asserting both definitions remain absent from `backend/app/services/search.py`.
+
+### Dependency graph findings
+
+Repo-wide audit before edits:
+
+- `_mock_attractions` callers: only `SearchService.search_attractions` (cache-miss path).
+- `SearchService.search_attractions` callers: `app/routes/plan.py` (live — frontend `fetchDayPlan`), and four sites in `app/services/concierge.py` (`search()` ATTRACTION fallback, BEST_AREA/AREA_ADVICE, GENERAL_DESTINATION, `_load_context`).
+- `_load_context` is used only by `ConciergeService.answer()`, which is reachable via `POST /ai/concierge` but has **no live frontend caller** (`callConcierge` is unreferenced; the live UI path is `callConciergeSearch` → `/ai/concierge/search`). Even so, `_load_context` is patched to return `attractions=[]` rather than rely on the absent route remaining unreached.
+- `AttractionSearchRequest` / `AttractionResult` Pydantic models are retained — model-only references in tests; safe to leave.
+
+### Reference classification (after this PR)
+
+- `search_attractions` runtime references: **none**.
+- `_mock_attractions` runtime references: **none**.
+- `AttractionSearchRequest` / `AttractionResult`: model definitions in `app/models/search.py` and re-exports in `app/models/__init__.py` (test/contract imports only).
+- `UnifiedAttractionResult`: canonical Concierge card type — unchanged.
+- Doc/handoff references: this entry, `progress_log.md`, `docs/ai/PRODUCT_SURFACE_AUDIT.md` (refreshed below). Older HANDOFF history sections retain their original text as a record of the v1A/B/C state.
+- Test guards: `test_product_surface_pruning_v1a::test_mock_attractions_helper_was_deleted_in_v1d`, `frontend/tests/explore-hydration::"deleted in v1D"`, `test_concierge::test_attractions_query_fails_closed_when_no_live_results`, `test_live_research::test_attractions_intent_uses_live_results`.
+
+### Tests run
+
+- `backend/tests/test_product_surface_pruning_v1a.py`: 38/38 pass.
+- `backend/tests/test_concierge.py`, `test_explore_snapshot.py`, `test_live_research.py`, `test_provider_cache.py`, `test_concierge_card_contract.py`, `test_cost_guardrails.py`: pass (excluding the same 4 pre-existing unrelated failures that reproduce on the unmodified base branch — `test_concierge_critical_path_hardening::test_pii_redaction_still_works`, `test_concierge_critical_path_hardening::test_schema_drift_exhausted_emits_warning_not_exception`, `test_concierge_observability::test_request_log_redacts_prompt_and_persists_supabase_row`, `test_set_level_writer::TestWriterTelemetry::test_telemetry_on_no_budget_timeout`, `test_live_research::TestFrontendSourceEvidenceRendering::test_panel_uses_pick_card_reason_helper`).
+- Frontend `tests/explore-concierge-migration.test.mjs` + `tests/explore-hydration.test.mjs`: 54/58 pass; the same 4 pre-existing snapshot/hydration failures remain on base. The previously-failing `Backend search_attractions re-scores stale cache hits` test was rewritten as a deletion guard and now passes.
+
+### Remaining legacy/mock product surfaces after this PR
+
+`/search/flights`, `/search/round-trip-flights`, `/search/hotels` and the `_mock_flights` / `_mock_hotels` / `_mock_restaurants` fixtures (the last is unused by `/search/restaurants`, which is canonical Google Places). Quarantined by `BLOCK_LEGACY_PRODUCT_MOCK` + cache-side suppression. Migration deferred to a real-provider strategy PR.
+
+### Risks / limitations
+
+- `POST /plan/day` no longer surfaces attraction suggestions in the no-cluster path. `DayPlanModal` already renders `plan.attractions.length`, so an empty list shrinks the modal to lunch + dinner without errors. Cluster-driven calls (`payload.places` non-empty) keep their attraction rows.
+- `ConciergeService.answer()` (legacy `/ai/concierge` endpoint) remains mounted but has no live frontend caller; this PR does not delete it.
+- `_to_unified_attraction` is preserved (still asserted by `test_concierge_card_contract::test_legacy_to_unified_attraction_emits_5point_rating_directly`); no callers within `concierge.py` after this PR.
+
+### PR summary checklist
+
+- Severity classification: Level 3 — internal mock leakage closure (live `/plan/day` rows + canonical-fallback leakage into `/ai/concierge/search`).
+- Root risk: mock-derived attraction rows reaching live users via `/plan/day` and concierge ATTRACTION fallback.
+- Files changed: `backend/app/routes/plan.py`, `backend/app/services/concierge.py`, `backend/app/services/search.py`, `backend/tests/test_product_surface_pruning_v1a.py`, `backend/tests/test_concierge.py`, `backend/tests/test_explore_snapshot.py`, `backend/tests/test_live_research.py`, `frontend/tests/explore-hydration.test.mjs`, `docs/ai/HANDOFF.md`, `progress_log.md`, `docs/ai/PRODUCT_SURFACE_AUDIT.md`.
+- Supabase SQL required: No.
+- UI changes: No backend-driven UI redesign; `DayPlanModal` no-cluster path now shows zero attractions (already supported by the existing modal layout).
+- New providers / LLM calls: No.
+- HANDOFF.md edited: Yes.
+- README.md edited: No.
+
+---
+
+## Previous change (2026-05-08) — Product Surface Cleanup v1C: orphaned legacy place routes deleted (Level 2 — architecture cleanup)
 
 **Status: PR-ready (branch: claude/cleanup-legacy-routes-meyzy)** — Structural deletion of orphaned mock-backed `/search/*` routes. No SQL. No new providers. No new LLM calls. No UI change.
 
