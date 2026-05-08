@@ -1149,7 +1149,8 @@ def write_set_notes(
                 int((time.monotonic() - t_start) * 1000),
             )
             wtel["set_writer_total_ms"] = int((time.monotonic() - t_start) * 1000)
-            return _empty(reason="llm_no_response", tel=wtel)
+            wtel["set_writer_timed_out"] = True
+            return _empty(timed_out=True, reason="llm_no_response", tel=wtel)
 
         # ── Parse response ────────────────────────────────────────────────────
         t_parse = time.monotonic()

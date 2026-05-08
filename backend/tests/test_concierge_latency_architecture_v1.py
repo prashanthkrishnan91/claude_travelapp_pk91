@@ -718,3 +718,302 @@ class TestTimeoutBranchesObservability:
             "semantic_retrieval.py must track 'set_writer_skipped_budget' "
             "in timeout_branches_triggered"
         )
+
+    def test_set_writer_attempted_no_fallback_label_in_semantic_retrieval(self):
+        """semantic_retrieval.py must emit set_writer_attempted_no_fallback label."""
+        import inspect
+        from app.concierge import semantic_retrieval
+        source = inspect.getsource(semantic_retrieval)
+        assert "set_writer_attempted_no_fallback" in source, (
+            "semantic_retrieval.py must track 'set_writer_attempted_no_fallback' "
+            "in timeout_branches_triggered"
+        )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 9. set_writer_attempted_no_fallback — no double LLM call after cap fires
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestSetWriterAttemptedNoFallback:
+    """When set-writer was invoked but produced no notes, build_reasons_with_retry
+    must NOT be called.  These tests fail a weak implementation that omits the
+    blocking branch in _assemble_card_reasons.
+    """
+
+    def _make_timed_out_result(self) -> Any:
+        from app.concierge.set_level_writer import SetWriterResult
+        return SetWriterResult(
+            notes_by_place_id={},
+            visible_note_count=0,
+            hidden_note_count=0,
+            rejected_note_count=0,
+            timed_out=True,
+            fallback_note_visible_count=0,
+            role_note_counts={},
+            note_source_counts={},
+            repeated_skeleton_count=0,
+            unsupported_claim_count=0,
+        )
+
+    def _make_zero_visible_result(self) -> Any:
+        """Set-writer ran but all notes failed validation (timed_out=False, visible=0)."""
+        from app.concierge.set_level_writer import SetWriterResult, SetWriterNote
+        from app.concierge.batched_reason_builder import SOURCE_OMITTED
+        note = SetWriterNote(
+            place_id="ChIJtest_a",
+            note="",
+            validated=False,
+            rejection_reason="thin_evidence_null",
+            source=SOURCE_OMITTED,
+            role_used_internal="safe_popular_fallback",
+            evidence_terms_used=[],
+            caveat_type="",
+        )
+        return SetWriterResult(
+            notes_by_place_id={"ChIJtest_a": note},
+            visible_note_count=0,
+            hidden_note_count=1,
+            rejected_note_count=1,
+            timed_out=False,
+            fallback_note_visible_count=0,
+            role_note_counts={},
+            note_source_counts={},
+            repeated_skeleton_count=0,
+            unsupported_claim_count=0,
+        )
+
+    def _make_cards_data_stub(self, place_id: str = "ChIJtest_a"):
+        entity = MagicMock()
+        entity.place_id = place_id
+        entity.name = "Stub Venue"
+        rank_score = MagicMock()
+        rank_score.subtype_fit = 0.85
+        rank_score.as_dict.return_value = {"subtype_fit": 0.85}
+        return [(entity, MagicMock(), rank_score, "")]
+
+    def test_build_reasons_with_retry_not_called_when_set_writer_timed_out(self):
+        """When set_writer_result.timed_out=True, build_reasons_with_retry must not run.
+
+        The blocking branch in _assemble_card_reasons fires before the `else` clause,
+        so failure_reason=='set_writer_attempted_no_fallback' and card_reasons is empty.
+        We verify behavior via the output contract: if build_reasons_with_retry had run,
+        failure_reason would be None and card_reasons would be non-empty.
+        """
+        from app.concierge.semantic_retrieval import _assemble_card_reasons
+        from app.concierge.frame_extractor import extract_frame
+
+        frame = extract_frame("tacos", "Chicago")
+        cards_data = self._make_cards_data_stub()
+        sw_result = self._make_timed_out_result()
+
+        # Patch build_reasons_with_retry at its source to detect if it runs
+        from app.concierge import batched_reason_builder
+        with patch.object(
+            batched_reason_builder,
+            "build_reasons_with_retry",
+            wraps=batched_reason_builder.build_reasons_with_retry,
+        ) as mock_b:
+            card_reasons, set_writer_primary_active, reasoning_result = (
+                _assemble_card_reasons(
+                    cards_data=cards_data,
+                    set_writer_result=sw_result,
+                    note_generation_timed_out=False,  # still before soft ceiling
+                    note_generation_low_budget=False,
+                    note_generation_budget_s=2.5,      # large budget still available
+                    frame=frame,
+                    user_query="tacos",
+                )
+            )
+
+        assert not mock_b.called, (
+            "build_reasons_with_retry must NOT be called when set_writer timed out; "
+            f"failure_reason={reasoning_result.failure_reason!r}"
+        )
+        assert reasoning_result.failure_reason == "set_writer_attempted_no_fallback"
+        assert card_reasons == {}
+
+    def test_failure_reason_is_set_writer_attempted_no_fallback_on_timeout(self):
+        """ReasoningResult.failure_reason must be set_writer_attempted_no_fallback."""
+        from app.concierge.semantic_retrieval import _assemble_card_reasons
+        from app.concierge.frame_extractor import extract_frame
+
+        frame = extract_frame("tacos", "Chicago")
+        cards_data = self._make_cards_data_stub()
+        sw_result = self._make_timed_out_result()
+
+        _, _, reasoning_result = _assemble_card_reasons(
+            cards_data=cards_data,
+            set_writer_result=sw_result,
+            note_generation_timed_out=False,
+            note_generation_low_budget=False,
+            note_generation_budget_s=2.5,
+            frame=frame,
+            user_query="tacos",
+        )
+
+        assert reasoning_result.failure_reason == "set_writer_attempted_no_fallback", (
+            f"Expected failure_reason='set_writer_attempted_no_fallback', "
+            f"got {reasoning_result.failure_reason!r}"
+        )
+        assert reasoning_result.attempted is False
+
+    def test_failure_reason_no_fallback_when_zero_visible_notes(self):
+        """Zero visible notes (timed_out=False) also blocks build_reasons_with_retry."""
+        from app.concierge.semantic_retrieval import _assemble_card_reasons
+        from app.concierge.frame_extractor import extract_frame
+
+        frame = extract_frame("ramen", "Chicago")
+        cards_data = self._make_cards_data_stub("ChIJtest_a")
+        sw_result = self._make_zero_visible_result()
+
+        _, _, reasoning_result = _assemble_card_reasons(
+            cards_data=cards_data,
+            set_writer_result=sw_result,
+            note_generation_timed_out=False,
+            note_generation_low_budget=False,
+            note_generation_budget_s=2.5,
+            frame=frame,
+            user_query="ramen",
+        )
+
+        assert reasoning_result.failure_reason == "set_writer_attempted_no_fallback", (
+            "Zero visible notes with timed_out=False must also produce "
+            "set_writer_attempted_no_fallback, not fall through to build_reasons_with_retry"
+        )
+
+    def test_no_card_reasons_returned_on_no_fallback_path(self):
+        """card_reasons must be empty (no notes) on the no-fallback path."""
+        from app.concierge.semantic_retrieval import _assemble_card_reasons
+        from app.concierge.frame_extractor import extract_frame
+
+        frame = extract_frame("tacos", "Chicago")
+        cards_data = self._make_cards_data_stub()
+        sw_result = self._make_timed_out_result()
+
+        card_reasons, set_writer_primary_active, _ = _assemble_card_reasons(
+            cards_data=cards_data,
+            set_writer_result=sw_result,
+            note_generation_timed_out=False,
+            note_generation_low_budget=False,
+            note_generation_budget_s=2.5,
+            frame=frame,
+            user_query="tacos",
+        )
+
+        assert card_reasons == {}, (
+            "card_reasons must be empty on the no-fallback path — no notes injected"
+        )
+        assert set_writer_primary_active is False
+
+    def test_cards_still_returned_via_assemble_card_set_on_no_fallback_path(self):
+        """Verified Google cards must still appear in the assembled card set."""
+        from app.concierge.semantic_retrieval import _assemble_card_reasons, _assemble_card_set
+        from app.concierge.frame_extractor import extract_frame
+
+        frame = extract_frame("tacos", "Chicago")
+
+        entity = MagicMock()
+        entity.place_id = "ChIJtest_nofallback"
+        entity.name = "Taco No-Fallback"
+        entity.types = ["restaurant"]
+        entity.primary_type = "restaurant"
+        entity.formatted_address = "42 W Chicago Ave, Chicago, IL"
+        entity.lat = 41.896
+        entity.lng = -87.635
+        entity.rating = 4.1
+        entity.user_rating_count = 180
+        entity.business_status = "OPERATIONAL"
+        entity.google_maps_uri = "https://maps.google.com/?cid=42"
+        entity.website_uri = None
+        entity.price_level = None
+        entity.price_range = None
+
+        rank_score = MagicMock()
+        rank_score.subtype_fit = 0.9
+        rank_score.as_dict.return_value = {"subtype_fit": 0.9}
+
+        cards_data = [(entity, MagicMock(), rank_score, "")]
+        sw_result = self._make_timed_out_result()
+
+        card_reasons, set_writer_primary_active, reasoning_result = _assemble_card_reasons(
+            cards_data=cards_data,
+            set_writer_result=sw_result,
+            note_generation_timed_out=False,
+            note_generation_low_budget=False,
+            note_generation_budget_s=2.5,
+            frame=frame,
+            user_query="tacos",
+        )
+
+        # Now assemble the card set (Step 8)
+        cards, _, _, visible_note_count, without_notes = _assemble_card_set(
+            cards_data=cards_data,
+            card_reasons=card_reasons,
+            frame=frame,
+            note_generation_timed_out=reasoning_result.failure_reason in (
+                "skipped_past_soft_ceiling", "set_writer_attempted_no_fallback"
+            ),
+            set_writer_primary_active=set_writer_primary_active,
+        )
+
+        assert len(cards) == 1, (
+            "Verified Google card must still appear even when set-writer timed out "
+            "and no fallback LLM was run"
+        )
+        assert visible_note_count == 0
+        assert without_notes == 1
+        assert cards[0].display.display_why_validated is False
+
+    def test_validated_set_writer_notes_not_affected_by_no_fallback_branch(self):
+        """The no-fallback branch only fires when visible_note_count==0. A result
+        with validated notes still takes the primary path."""
+        from app.concierge.semantic_retrieval import _assemble_card_reasons
+        from app.concierge.set_level_writer import SetWriterResult, SetWriterNote
+        from app.concierge.frame_extractor import extract_frame
+
+        frame = extract_frame("ramen", "Chicago")
+
+        note = SetWriterNote(
+            place_id="ChIJtest_good",
+            note="Tonkotsu ramen with house-made noodles and a 12-hour broth.",
+            validated=True,
+            rejection_reason="",
+            source="set_level_writer_v1",
+            role_used_internal="best_overall",
+            evidence_terms_used=["tonkotsu", "house-made noodles"],
+            caveat_type="",
+        )
+        sw_result_with_notes = SetWriterResult(
+            notes_by_place_id={"ChIJtest_good": note},
+            visible_note_count=1,
+            hidden_note_count=0,
+            rejected_note_count=0,
+            timed_out=False,
+            fallback_note_visible_count=0,
+            role_note_counts={"best_overall": 1},
+            note_source_counts={"set_level_writer_v1": 1},
+            repeated_skeleton_count=0,
+            unsupported_claim_count=0,
+        )
+
+        entity = MagicMock()
+        entity.place_id = "ChIJtest_good"
+        rank_score = MagicMock()
+        rank_score.subtype_fit = 0.9
+        rank_score.as_dict.return_value = {"subtype_fit": 0.9}
+        cards_data = [(entity, MagicMock(), rank_score, "")]
+
+        _, set_writer_primary_active, reasoning_result = _assemble_card_reasons(
+            cards_data=cards_data,
+            set_writer_result=sw_result_with_notes,
+            note_generation_timed_out=False,
+            note_generation_low_budget=False,
+            note_generation_budget_s=2.5,
+            frame=frame,
+            user_query="ramen",
+        )
+
+        # Primary path must fire, not the no-fallback branch
+        assert set_writer_primary_active is True
+        assert reasoning_result.failure_reason != "set_writer_attempted_no_fallback"
+        assert reasoning_result.attempted is True

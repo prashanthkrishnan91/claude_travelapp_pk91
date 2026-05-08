@@ -173,8 +173,36 @@ def _assemble_card_reasons(
             "semantic_retrieval_v1: set_writer_primary accepted=%d/%d",
             accepted, n,
         )
+    elif set_writer_result is not None and (
+        set_writer_result.timed_out
+        or (
+            set_writer_result.visible_note_count == 0
+            and len(set_writer_result.notes_by_place_id) > 0
+        )
+    ):
+        # Set-writer was invoked at Step 5.8 but produced no validated visible notes
+        # (either timed out against the SET_WRITER_LLM_MAX_S cap, or all notes failed
+        # validation). Do NOT fall through to build_reasons_with_retry — that would
+        # spend another LLM budget on the same request and undo the latency benefit of
+        # the cap. Return verified Google cards without notes instead.
+        logger.info(
+            "semantic_retrieval_v1: set_writer_attempted_no_fallback "
+            "query=%r timed_out=%s visible_notes=%d",
+            user_query,
+            set_writer_result.timed_out,
+            set_writer_result.visible_note_count,
+        )
+        card_reasons = {}
+        n_cards = len(cards_data)
+        reasoning_result = ReasoningResultV2(
+            attempted=False,
+            failure_reason="set_writer_attempted_no_fallback",
+            final_card_count=n_cards,
+            final_note_omitted_count=n_cards,
+        )
     elif note_generation_timed_out:
-        # Only fires when set-writer produced no usable notes — see ordering above.
+        # Only fires when set-writer was NOT attempted (set_writer_result is None)
+        # and we are past the SLA soft ceiling.
         # Cards will be assembled without notes; the frontend must not render a
         # Concierge Note block when display_why_validated=False.
         if deadline is not None:
@@ -753,12 +781,20 @@ def _run_pipeline(
     )
 
     # ── Step 8: Assemble final cards ─────────────────────────────────────────
+    # set_writer_attempted_no_fallback means: set-writer ran but produced nothing,
+    # no LLM fallback will be attempted. Treat it the same as note_generation_timed_out
+    # so _assemble_card_set includes Google-verified cards without notes instead of
+    # dropping them via the excluded_unvalidated path.
+    _effective_note_gen_skipped = (
+        note_generation_timed_out
+        or reasoning_result.failure_reason == "set_writer_attempted_no_fallback"
+    )
     cards, rank_debug, excluded_unvalidated, visible_note_count, cards_without_notes_count = (
         _assemble_card_set(
             cards_data=cards_data,
             card_reasons=card_reasons,
             frame=frame,
-            note_generation_timed_out=note_generation_timed_out,
+            note_generation_timed_out=_effective_note_gen_skipped,
             set_writer_primary_active=set_writer_primary_active,
         )
     )
@@ -788,7 +824,7 @@ def _run_pipeline(
     # When set_writer_primary_active=True, set-writer notes survived into the cards
     # even if the SLA budget was exceeded — so we must re-scan the actual card objects
     # rather than assuming all notes are absent.
-    if note_generation_timed_out and not set_writer_primary_active:
+    if _effective_note_gen_skipped and not set_writer_primary_active:
         visible_note_count = 0
         cards_without_notes_count = final_card_count
     else:
@@ -916,6 +952,8 @@ def _run_pipeline(
     _timeout_branches_triggered: List[str] = []
     if _set_writer_skipped_budget:
         _timeout_branches_triggered.append("set_writer_skipped_budget")
+    if reasoning_result.failure_reason == "set_writer_attempted_no_fallback":
+        _timeout_branches_triggered.append("set_writer_attempted_no_fallback")
     if note_generation_timed_out:
         _timeout_branches_triggered.append("note_generation_timed_out")
     if note_generation_low_budget:
