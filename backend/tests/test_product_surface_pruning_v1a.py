@@ -125,6 +125,11 @@ def test_block_flag_parses_truthy_values(monkeypatch, raw: str, expected: bool):
 
 
 def test_block_flag_blocks_mock_attractions(block_flag_on, caplog):
+    """v1C deletion-variant note: the /search/attractions route was deleted,
+    but ``_mock_attractions`` is preserved because internal callers in
+    ``app/services/concierge.py`` and ``app/routes/plan.py`` still feed
+    ``SearchService.search_attractions``.  ``BLOCK_LEGACY_PRODUCT_MOCK``
+    must continue to fail-closed those flows."""
     caplog.set_level(logging.WARNING)
     out = search_service._mock_attractions(AttractionSearchRequest(location="Paris"))
     assert out == []
@@ -283,16 +288,71 @@ def test_classifications_do_not_overlap():
 
 
 def test_legacy_dependent_set_contains_known_mock_routes():
+    """v1C deletion-variant: /search/attractions, /search/clusters, and
+    /search/best-area were removed.  The remaining mock-backed routes
+    (flights / hotels / round-trip-flights) must still be classified as
+    legacy-dependent."""
     expected = {
         "/search/flights",
         "/search/round-trip-flights",
         "/search/hotels",
-        "/search/attractions",
-        "/search/clusters",
-        "/search/best-area",
     }
     missing = expected - search_routes.LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES
     assert not missing, f"LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES is missing: {missing}"
+
+
+# ---------------------------------------------------------------------------
+# 3b. v1C deletion-variant: orphaned routes are gone and stay gone
+# ---------------------------------------------------------------------------
+
+
+_V1C_DELETED_ROUTES: frozenset = frozenset({
+    "/search/attractions",
+    "/search/clusters",
+    "/search/best-area",
+})
+
+
+def test_v1c_deleted_routes_are_not_registered_in_route_source():
+    """Product Surface Cleanup v1C — orphaned mock-backed routes were
+    deleted from ``backend/app/routes/search.py``.  The route source must
+    not register them again under any HTTP verb."""
+    actual = _route_paths_in_search_router()
+    resurrected = _V1C_DELETED_ROUTES & actual
+    assert not resurrected, (
+        "v1C-deleted routes were re-added to backend/app/routes/search.py: "
+        f"{sorted(resurrected)}.  Do not restore mock-backed attraction / "
+        "cluster / best-area handlers; the canonical seam is "
+        "/ai/concierge/search."
+    )
+
+
+def test_v1c_deleted_routes_not_in_legacy_mock_dependent_registry():
+    """Stale-entry guard — once a route is deleted, it must also be
+    pruned from ``LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES``.  Otherwise the
+    classification registry drifts away from the route source and the
+    quarantine surface becomes a lie."""
+    stale = _V1C_DELETED_ROUTES & search_routes.LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES
+    assert not stale, (
+        "Deleted v1C routes are still listed in LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES: "
+        f"{sorted(stale)}.  Remove them — the route source no longer mounts these handlers."
+    )
+
+
+def test_v1c_deleted_routes_explicitly_tracked_as_deleted():
+    """The route file ships an explicit ``DELETED_LEGACY_PRODUCT_ROUTES``
+    "do not resurrect" set covering the v1C deletions.  This test wires
+    that set to the same constant the regression suite uses so a future
+    edit to the route file cannot silently shrink the deletion record."""
+    assert hasattr(search_routes, "DELETED_LEGACY_PRODUCT_ROUTES"), (
+        "backend/app/routes/search.py must export DELETED_LEGACY_PRODUCT_ROUTES "
+        "as the structural record of v1C deletions."
+    )
+    missing = _V1C_DELETED_ROUTES - search_routes.DELETED_LEGACY_PRODUCT_ROUTES
+    assert not missing, (
+        "DELETED_LEGACY_PRODUCT_ROUTES must contain every v1C-deleted route: "
+        f"missing {sorted(missing)}"
+    )
 
 
 def test_search_restaurants_is_canonical_not_legacy():

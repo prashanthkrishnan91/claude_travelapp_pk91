@@ -1,34 +1,36 @@
-"""Search endpoints — /search/flights, /search/hotels, /search/attractions.
+"""Search endpoints — /search/flights, /search/hotels, /search/restaurants.
 
-Product Surface Pruning v1A — route classification
---------------------------------------------------
-These routes predate the canonical AI Concierge display contract and still
-back several frontend product surfaces.  The ``LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES``
-registry below is the single source of truth for which routes still depend on
-the quarantined ``SearchService`` mock fixtures (see
-``backend/app/services/search.py`` and ``docs/ai/HANDOFF.md`` v1A entry).
+Product Surface Pruning v1A → v1C — route classification
+--------------------------------------------------------
+These routes predate the canonical AI Concierge display contract.  The
+``LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES`` registry below is the single source
+of truth for which routes still depend on the quarantined ``SearchService``
+mock fixtures (see ``backend/app/services/search.py`` and
+``docs/ai/HANDOFF.md``).
 
 Classification (A=user-facing must preserve / B=migrate to AI Concierge /
 C=internal/test/demo / D=dead / E=unclear):
 
 - ``POST /search/flights`` — class A, mock-backed, called by
-  ``OptimizeTripModal`` and ``/trips/create-with-search``.  v1B replaces with
-  real provider.  Quarantine via ``BLOCK_LEGACY_PRODUCT_MOCK`` until then.
+  ``OptimizeTripModal`` and ``/trips/create-with-search``.  Quarantined via
+  ``BLOCK_LEGACY_PRODUCT_MOCK`` until a real provider lands.
 - ``POST /search/round-trip-flights`` — class C, no direct frontend caller,
   invoked by ``/trips/create-with-search``.  Same quarantine path.
 - ``POST /search/hotels`` — class A, mock-backed, called by
   ``OptimizeTripModal`` and ``/trips/create-with-search``.  Same quarantine
   path.
-- ``POST /search/attractions`` — class A, mock-backed, called by
-  ``TripBuilder`` Explore.  v1B migrates to AI Concierge.  Quarantine via
-  ``BLOCK_LEGACY_PRODUCT_MOCK``.
 - ``POST /search/restaurants`` — class A, real Google Places provider,
   fail-closed when no API key.  Already canonical; **not** quarantined.
-- ``POST /search/clusters`` — class A, partial mock (uses
-  ``_mock_attractions`` for the attractions side, real Google Places for
-  restaurants).  Same quarantine path.
-- ``POST /search/best-area`` — class A, derived from clusters; inherits the
-  partial-mock dependency.
+
+Routes deleted in v1C (Product Surface Cleanup deletion variant — orphaned
+after PR #289 migrated TripBuilder Explore onto ``/ai/concierge/search``):
+
+- ``POST /search/attractions`` — removed.  Frontend now uses
+  ``searchAttractionsViaConcierge(...)`` against ``/ai/concierge/search``.
+- ``POST /search/clusters`` — removed.  Grouped/Areas view was deleted in
+  PR #289; no canonical replacement exists.
+- ``POST /search/best-area`` — removed.  Best Area card was deleted in PR
+  #289; no canonical replacement exists.
 
 The ``/ai/concierge*`` family (see ``backend/app/routes/ai.py``) is the
 canonical place-card surface and goes through
@@ -44,21 +46,14 @@ from app.core.config import get_settings
 from app.core.cost_guardrails import GuardrailRule, guardrails
 from app.core.deps import DB, CurrentUserID
 from app.models.search import (
-    AttractionResult,
-    AttractionSearchRequest,
-    BestAreaRecommendation,
-    BestAreaRequest,
-    ClusterSearchRequest,
     FlightResult,
     FlightSearchRequest,
     HotelResult,
     HotelSearchRequest,
-    LocationCluster,
     RestaurantResult,
     RestaurantSearchRequest,
     RoundTripFlightPair,
 )
-from typing import Optional
 
 from app.services.search import SearchService
 
@@ -68,28 +63,35 @@ router = APIRouter(prefix="/search", tags=["search"])
 
 
 # ---------------------------------------------------------------------------
-# Product Surface Pruning v1A — route classification registries
+# Product Surface Pruning v1A/v1C — route classification registries
 # ---------------------------------------------------------------------------
 
 # Routes whose response data still depends (directly or transitively) on the
 # legacy ``SearchService`` mock fixtures.  Keep this registry in sync with
 # ``LEGACY_PRODUCT_MOCK_FUNCTIONS`` in ``backend/app/services/search.py``.
+#
+# v1C deletion variant (this file): /search/attractions, /search/clusters,
+# and /search/best-area were removed.  Their entries must NOT reappear here;
+# the v1A regression suite enforces that via a stale-entry guard test.
 LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES: frozenset = frozenset({
     "/search/flights",
     "/search/round-trip-flights",
     "/search/hotels",
-    "/search/attractions",
-    # /search/clusters and /search/best-area derive from search_attractions
-    # (mock) plus search_restaurants (real Google Places); the attractions
-    # side keeps them on the dependent list until v1B migration.
-    "/search/clusters",
-    "/search/best-area",
 })
 
 # Routes that are already canonical (do not depend on legacy mocks).  Listed
 # here so the v1A regression tests can assert the partition is exhaustive.
 CANONICAL_PRODUCT_ROUTES: frozenset = frozenset({
     "/search/restaurants",
+})
+
+# Routes deleted in v1C — kept here as an explicit "do not resurrect" list.
+# The v1A regression suite asserts none of these reappear in the route source
+# or in ``LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES``.
+DELETED_LEGACY_PRODUCT_ROUTES: frozenset = frozenset({
+    "/search/attractions",
+    "/search/clusters",
+    "/search/best-area",
 })
 
 
@@ -173,28 +175,6 @@ def search_hotels(payload: HotelSearchRequest, db: DB, user_id: CurrentUserID) -
     return SearchService(db).search_hotels(payload)
 
 
-@router.post("/attractions", response_model=List[AttractionResult])
-def search_attractions(payload: AttractionSearchRequest, db: DB, user_id: CurrentUserID) -> List[AttractionResult]:
-    """Search for attractions, tours, and activities.
-
-    Returns a list of attraction options normalised to a consistent schema plus
-    attraction-specific fields (category, description, duration_minutes, address).
-    Results are cached in Supabase for 1 hour.
-    """
-    settings = get_settings()
-    guardrails.enforce(
-        endpoint_key="search.search_attractions",
-        user_id=user_id,
-        rule=GuardrailRule(
-            requests=settings.guardrail_search_requests,
-            window_seconds=settings.guardrail_search_window_seconds,
-            dedupe_seconds=settings.guardrail_search_dedupe_seconds,
-        ),
-        dedupe_payload={"location": payload.location, "category": payload.category, "date": payload.date},
-    )
-    return SearchService(db).search_attractions(payload)
-
-
 @router.post("/restaurants", response_model=List[RestaurantResult])
 def search_restaurants(payload: RestaurantSearchRequest, db: DB, user_id: CurrentUserID) -> List[RestaurantResult]:
     """Search for restaurants, cafes, and local dining options.
@@ -216,48 +196,3 @@ def search_restaurants(payload: RestaurantSearchRequest, db: DB, user_id: Curren
         dedupe_payload={"location": payload.location, "cuisine": payload.cuisine, "date": payload.date},
     )
     return SearchService(db).search_restaurants(payload)
-
-
-@router.post("/clusters", response_model=List[LocationCluster])
-def search_clusters(payload: ClusterSearchRequest, db: DB, user_id: CurrentUserID) -> List[LocationCluster]:
-    """Group attractions and restaurants by proximity.
-
-    Returns location clusters where each cluster contains nearby attractions
-    and restaurants. Each cluster includes an area name and a walkability label
-    (e.g. 'Walkable cluster', '5 min apart').
-    """
-    logger.info("[search_clusters] location=%s radius_km=%.1f", payload.location, payload.radius_km)
-    settings = get_settings()
-    guardrails.enforce(
-        endpoint_key="search.search_clusters",
-        user_id=user_id,
-        rule=GuardrailRule(
-            requests=settings.guardrail_search_requests,
-            window_seconds=settings.guardrail_search_window_seconds,
-            dedupe_seconds=settings.guardrail_search_dedupe_seconds,
-        ),
-        dedupe_payload={"location": payload.location, "radius_km": payload.radius_km},
-    )
-    return SearchService(db).search_clusters(payload)
-
-
-@router.post("/best-area", response_model=Optional[BestAreaRecommendation])
-def get_best_area(payload: BestAreaRequest, db: DB, user_id: CurrentUserID) -> Optional[BestAreaRecommendation]:
-    """Recommend the best neighborhood to stay for a destination.
-
-    Scores clusters by density (40%), average rating (35%), and centrality (25%).
-    Returns the top-scored cluster with a human-readable reason and composite score.
-    """
-    logger.info("[get_best_area] location=%s radius_km=%.1f", payload.location, payload.radius_km)
-    settings = get_settings()
-    guardrails.enforce(
-        endpoint_key="search.get_best_area",
-        user_id=user_id,
-        rule=GuardrailRule(
-            requests=settings.guardrail_search_requests,
-            window_seconds=settings.guardrail_search_window_seconds,
-            dedupe_seconds=settings.guardrail_search_dedupe_seconds,
-        ),
-        dedupe_payload={"location": payload.location, "radius_km": payload.radius_km},
-    )
-    return SearchService(db).get_best_area(payload)

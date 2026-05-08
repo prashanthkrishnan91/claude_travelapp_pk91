@@ -79,6 +79,7 @@ def test_search_routes_do_not_access_invalid_attraction_restaurant_fields():
 
 
 def test_search_routes_use_model_safe_dedupe_payload_fields_for_explore_endpoints():
+    """Product Surface Cleanup v1C deleted ``/search/attractions``; only the
+    canonical ``/search/restaurants`` dedupe shape is asserted now."""
     src = (Path(__file__).resolve().parents[1] / "app" / "routes" / "search.py").read_text()
-    assert 'dedupe_payload={"location": payload.location, "category": payload.category, "date": payload.date}' in src
     assert 'dedupe_payload={"location": payload.location, "cuisine": payload.cuisine, "date": payload.date}' in src

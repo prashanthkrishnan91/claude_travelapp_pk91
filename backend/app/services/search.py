@@ -51,17 +51,11 @@ from supabase import Client
 from app.models.search import (
     AttractionResult,
     AttractionSearchRequest,
-    BestAreaRecommendation,
-    BestAreaRequest,
     BookingOption,
-    ClusterCounts,
-    ClusterSearchRequest,
     FlightResult,
     FlightSearchRequest,
     HotelResult,
     HotelSearchRequest,
-    LocationCluster,
-    PlaceInCluster,
     RestaurantResult,
     RestaurantSearchRequest,
     RoundTripFlightPair,
@@ -235,15 +229,6 @@ _CITY_CENTERS: Dict[str, tuple] = {
     "mumbai": (19.0760, 72.8777),
 }
 
-_AREA_NAMES = [
-    "Central District", "Waterfront Area", "Old Town Quarter",
-    "Market District", "Riverfront Side", "Heritage Zone",
-    "Arts Quarter", "Garden District", "Royal Mile Area",
-    "Bay Area", "Cultural Zone", "Riverside Quarter",
-    "Hilltop Area", "Beachfront Strip", "Historic Core",
-]
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -290,26 +275,6 @@ def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return R * 2 * math.asin(math.sqrt(max(0.0, min(1.0, a))))
 
 
-def _cluster_places(places: List[Dict[str, Any]], radius_km: float) -> List[List[Dict[str, Any]]]:
-    """Greedy radius-based clustering: seed on first unassigned, pull in neighbours within radius."""
-    unassigned = list(range(len(places)))
-    clusters: List[List[int]] = []
-    while unassigned:
-        seed_idx = unassigned[0]
-        seed = places[seed_idx]
-        cluster_indices = [seed_idx]
-        remaining: List[int] = []
-        for i in unassigned[1:]:
-            p = places[i]
-            if _haversine_km(seed["lat"], seed["lng"], p["lat"], p["lng"]) <= radius_km:
-                cluster_indices.append(i)
-            else:
-                remaining.append(i)
-        clusters.append(cluster_indices)
-        unassigned = remaining
-    return [[places[i] for i in cluster] for cluster in clusters]
-
-
 def _compute_hotel_location_intelligence(
     hotel_lat: float,
     hotel_lng: float,
@@ -342,41 +307,6 @@ def _compute_hotel_location_intelligence(
         area_label = "Far from action"
 
     return location_score, proximity_label, area_label, round(avg_km, 2)
-
-
-def _avg_distance_label(cluster: List[Dict[str, Any]]) -> str:
-    """Return average pairwise walking-time label for a cluster."""
-    if len(cluster) < 2:
-        return "Solo stop"
-    total_dist = 0.0
-    pairs = 0
-    for i in range(len(cluster)):
-        for j in range(i + 1, len(cluster)):
-            total_dist += _haversine_km(cluster[i]["lat"], cluster[i]["lng"], cluster[j]["lat"], cluster[j]["lng"])
-            pairs += 1
-    avg_km = total_dist / pairs
-    avg_min = round(avg_km * 15.0)  # walking ~4 km/h
-    if avg_min <= 5:
-        return "5 min apart"
-    if avg_min <= 10:
-        return "10 min apart"
-    return f"{avg_min} min apart"
-
-
-def _walkability_label(cluster: List[Dict[str, Any]]) -> str:
-    if len(cluster) < 2:
-        return "Solo stop"
-    max_dist = 0.0
-    for i in range(len(cluster)):
-        for j in range(i + 1, len(cluster)):
-            d = _haversine_km(cluster[i]["lat"], cluster[i]["lng"], cluster[j]["lat"], cluster[j]["lng"])
-            if d > max_dist:
-                max_dist = d
-    if max_dist <= 0.5:
-        return "Walkable cluster"
-    if max_dist <= 1.0:
-        return "5 min apart"
-    return "10 min apart"
 
 
 # ---------------------------------------------------------------------------
@@ -602,6 +532,15 @@ def _mock_attractions(req: AttractionSearchRequest) -> List[AttractionResult]:
     Legacy product-surface mock fixture (Product Surface Pruning v1A).  See
     module docstring for the quarantine seam.  Honors the
     ``BLOCK_LEGACY_PRODUCT_MOCK`` env flag.
+
+    v1C deletion-variant note: the ``POST /search/attractions`` route was
+    removed in v1C, but this helper is **preserved** because
+    ``SearchService.search_attractions`` is still consumed internally by
+    ``backend/app/services/concierge.py`` (intent fallback paths) and
+    ``backend/app/routes/plan.py`` (POST /plan/day).  Removing the helper
+    here would break those server-side flows.  Migrating those internal
+    callers off the mock fixture is tracked separately and is out of scope
+    for v1C (deletion of orphaned route handlers only).
     """
     if _legacy_product_mock_blocked():
         _log_legacy_product_mock_event(
@@ -1270,6 +1209,15 @@ class SearchService:
         return results
 
     def search_attractions(self, req: AttractionSearchRequest) -> List[AttractionResult]:
+        """Mock-backed attraction search.
+
+        v1C preservation note: the ``POST /search/attractions`` route was
+        deleted in v1C (no live frontend caller after PR #289), but this
+        method is preserved because it is still consumed internally by
+        ``app/services/concierge.py`` intent fallbacks and ``app/routes/
+        plan.py`` (POST /plan/day).  ``BLOCK_LEGACY_PRODUCT_MOCK``
+        continues to fail-closed those flows in production.
+        """
         query = req.model_dump(mode="json")
         key = _cache_key("attractions", query)
         cached = self._get_cache(key)
@@ -1361,152 +1309,13 @@ class SearchService:
         )
         return results
 
-    def search_clusters(self, req: ClusterSearchRequest) -> List[LocationCluster]:
-        """Fetch all attractions + restaurants for a location and group them by proximity."""
-        center_lat, center_lng = _get_city_center(req.location)
-
-        attractions = self.search_attractions(AttractionSearchRequest(location=req.location))
-        restaurants = self.search_restaurants(RestaurantSearchRequest(location=req.location))
-
-        total = len(attractions) + len(restaurants)
-        all_places: List[Dict[str, Any]] = []
-
-        for i, a in enumerate(attractions):
-            lat, lng = _spread_coordinates(center_lat, center_lng, i, total)
-            all_places.append({
-                "id": a.id,
-                "name": a.name,
-                "place_type": "attraction",
-                "category": a.category,
-                "address": a.address,
-                "rating": a.rating,
-                "ai_score": a.ai_score,
-                "tags": a.tags,
-                "lat": lat,
-                "lng": lng,
-                "booking_url": a.booking_url,
-                "booking_options": [o.model_dump() for o in a.booking_options],
-            })
-
-        for i, r in enumerate(restaurants):
-            lat, lng = _spread_coordinates(center_lat, center_lng, len(attractions) + i, total)
-            all_places.append({
-                "id": r.id,
-                "name": r.name,
-                "place_type": "restaurant",
-                "category": r.cuisine,
-                "address": r.address,
-                "rating": r.rating,
-                "ai_score": r.ai_score,
-                "tags": r.tags,
-                "lat": lat,
-                "lng": lng,
-                "booking_url": r.booking_url,
-                "booking_options": [o.model_dump() for o in r.booking_options],
-            })
-
-        raw_clusters = _cluster_places(all_places, req.radius_km)
-
-        result: List[LocationCluster] = []
-        for idx, cluster in enumerate(raw_clusters):
-            c_lat = sum(p["lat"] for p in cluster) / len(cluster)
-            c_lng = sum(p["lng"] for p in cluster) / len(cluster)
-            area_name = _AREA_NAMES[idx % len(_AREA_NAMES)]
-            label = _walkability_label(cluster)
-            avg_distance = _avg_distance_label(cluster)
-            attraction_count = sum(1 for p in cluster if p["place_type"] == "attraction")
-            restaurant_count = sum(1 for p in cluster if p["place_type"] == "restaurant")
-            places = [PlaceInCluster(**p) for p in cluster]
-            result.append(LocationCluster(
-                cluster_id=f"cluster-{idx}",
-                area_name=area_name,
-                label=label,
-                center_lat=round(c_lat, 6),
-                center_lng=round(c_lng, 6),
-                places=places,
-                counts=ClusterCounts(attractions=attraction_count, restaurants=restaurant_count),
-                avg_distance=avg_distance,
-            ))
-
-        return result
-
-    def get_best_area(self, req: BestAreaRequest) -> Optional[BestAreaRecommendation]:
-        """Score clusters by density, avg rating, walkability, and variety to find the best area."""
-        clusters = self.search_clusters(ClusterSearchRequest(location=req.location, radius_km=req.radius_km))
-        if not clusters:
-            return None
-
-        max_places = max(len(c.places) for c in clusters)
-
-        # Pre-compute avg pairwise distances for walkability normalisation
-        def _avg_pairwise_km(places: list) -> float:
-            if len(places) < 2:
-                return 0.0
-            total, pairs = 0.0, 0
-            for i in range(len(places)):
-                for j in range(i + 1, len(places)):
-                    total += _haversine_km(places[i].lat, places[i].lng, places[j].lat, places[j].lng)
-                    pairs += 1
-            return total / pairs
-
-        avg_distances = [_avg_pairwise_km(c.places) for c in clusters]
-        max_avg_dist = max(avg_distances) if avg_distances else 1.0
-
-        scored = []
-        for cluster, avg_dist_km in zip(clusters, avg_distances):
-            # 35%: how many places relative to densest cluster
-            density = len(cluster.places) / max(max_places, 1)
-
-            # 30%: average rating normalised to 0-1
-            ratings = [p.rating for p in cluster.places if p.rating is not None]
-            avg_rating = (sum(ratings) / len(ratings) / 5.0) if ratings else 0.5
-
-            # 20%: walkability — lower avg distance = more walkable
-            walkability = 1.0 - (avg_dist_km / max(max_avg_dist, 0.001))
-
-            # 15%: variety — balanced mix of attractions and restaurants
-            att = sum(1 for p in cluster.places if p.place_type == "attraction")
-            rest = sum(1 for p in cluster.places if p.place_type == "restaurant")
-            total = att + rest
-            variety = (2 * min(att, rest) / total) if total > 0 else 0.0
-
-            score = density * 0.35 + avg_rating * 0.30 + walkability * 0.20 + variety * 0.15
-            scored.append((score, cluster, avg_dist_km))
-
-        scored.sort(key=lambda x: x[0], reverse=True)
-        best_score, best, best_avg_dist = scored[0]
-
-        ratings = [p.rating for p in best.places if p.rating is not None]
-        avg_r = sum(ratings) / len(ratings) if ratings else None
-        att_count = sum(1 for p in best.places if p.place_type == "attraction")
-        rest_count = sum(1 for p in best.places if p.place_type == "restaurant")
-
-        parts = []
-        if best.label == "Walkable cluster":
-            parts.append("Most attractions within walking distance")
-        elif best.label == "5 min apart":
-            parts.append("Compact area, 5 min between spots")
-        else:
-            avg_walk_min = round(best_avg_dist * 15.0)
-            parts.append(f"Places ~{avg_walk_min} min apart")
-        if avg_r is not None and avg_r >= 4.0:
-            parts.append(f"top-rated ({avg_r:.1f}★)")
-        elif avg_r is not None:
-            parts.append(f"avg rating {avg_r:.1f}★")
-        if att_count > 0 and rest_count > 0:
-            parts.append("best mix of sightseeing and dining")
-        elif rest_count > 0:
-            parts.append("top-rated dining")
-
-        return BestAreaRecommendation(
-            area_name=best.area_name,
-            reason=" · ".join(parts),
-            score=round(best_score * 100, 1),
-            center_lat=best.center_lat,
-            center_lng=best.center_lng,
-            radius_km=req.radius_km,
-            cluster_id=best.cluster_id,
-        )
+    # ------------------------------------------------------------------
+    # search_clusters / get_best_area / _cluster_places / _AREA_NAMES /
+    # _walkability_label / _avg_distance_label were deleted in Product
+    # Surface Cleanup v1C (deletion variant).  The /search/clusters and
+    # /search/best-area routes were orphaned after PR #289 removed the
+    # grouped/Areas view and Best Area card; deletion is structural.
+    # ------------------------------------------------------------------
 
     # ------------------------------------------------------------------
     # Cache helpers
