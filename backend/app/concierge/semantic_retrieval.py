@@ -73,8 +73,13 @@ def _format_display_price(
         return _PRICE_LEVEL_SYMBOL.get(price_level)
     return None
 
-# SLA contract (v2 amendment §4 and §6)
-from app.concierge.deadline_manager import RequestDeadline, DEFAULT_SLA, clamp_first_card_limit
+# SLA contract (v2 amendment §4 and §6); Latency Architecture v1 constants
+from app.concierge.deadline_manager import (
+    RequestDeadline,
+    DEFAULT_SLA,
+    SET_WRITER_MIN_BUDGET_MS,
+    clamp_first_card_limit,
+)
 
 
 def _assemble_card_reasons(
@@ -627,6 +632,12 @@ def _run_pipeline(
     # bundles so it can use richer dossier evidence.
     # Falls back to the existing batched_reason_builder path on any failure.
     # Never blocks card return.
+    #
+    # Latency Architecture v1: budget gate added. If remaining budget when we
+    # reach this step is below SET_WRITER_MIN_BUDGET_MS, the writer is skipped
+    # entirely before any LLM call is made. Inside write_set_notes, the LLM
+    # timeout is capped at SET_WRITER_LLM_MAX_S so it cannot consume the full
+    # remaining note-gen budget even when budget appears large.
     t0 = time.monotonic()
     from app.concierge.set_level_writer import (
         SetWriterResult,
@@ -634,7 +645,20 @@ def _run_pipeline(
     )
     set_writer_result: Optional[SetWriterResult] = None
     set_writer_tel: Dict[str, Any] = {"set_writer_fallback_to_existing_path": True}
-    if curated_result is not None and curated_result.output_count > 0:
+    _set_writer_remaining_ms = deadline.remaining_ms()
+    _set_writer_skipped_budget = _set_writer_remaining_ms < SET_WRITER_MIN_BUDGET_MS
+    if _set_writer_skipped_budget:
+        logger.info(
+            "semantic_retrieval_v1: set_writer_skipped_budget "
+            "remaining_ms=%d threshold_ms=%d query=%r",
+            _set_writer_remaining_ms, SET_WRITER_MIN_BUDGET_MS, user_query,
+        )
+        set_writer_tel = {
+            "set_writer_fallback_to_existing_path": True,
+            "set_writer_skipped_budget": True,
+            "set_writer_remaining_ms_at_skip": _set_writer_remaining_ms,
+        }
+    elif curated_result is not None and curated_result.output_count > 0:
         try:
             set_writer_result = write_set_notes(
                 curated_result=curated_result,
@@ -890,6 +914,8 @@ def _run_pipeline(
     _elapsed_ms_final = int((time.monotonic() - t_pipeline_start) * 1000)
     _timeout_budget_consumed_pct = min(100, int(_elapsed_ms_final * 100 / DEFAULT_SLA.hard_cutoff_ms))
     _timeout_branches_triggered: List[str] = []
+    if _set_writer_skipped_budget:
+        _timeout_branches_triggered.append("set_writer_skipped_budget")
     if note_generation_timed_out:
         _timeout_branches_triggered.append("note_generation_timed_out")
     if note_generation_low_budget:

@@ -1,6 +1,63 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-07) — Concierge Latency Observability v1 + price fix (Level 1 backend-only)
+## Last change (2026-05-08) — Actual Concierge Latency Architecture v1 (Level 2 backend-only)
+
+**Status: IN PROGRESS (branch: claude/concierge-latency-architecture-yppql)** — Backend + test only. No SQL. No UI changes. No new providers. No new LLM calls. No API contract changes.
+
+### Root cause / production evidence
+
+POST /ai/concierge/search returned total_ms=5300 with timeout_budget_consumed_pct=88%.
+Pipeline breakdown: google_retrieval_ms=229, entity_rank_ms=9, google_place_details_ms=156, cross_source_enrichment_ms=1482, editorial_enrichment_ms=802, **set_writer_ms=2580**, optional_reasoning_ms=2592.
+
+The set-writer's LLM call received ~3.1 seconds as its timeout (from `budget_for_note_generation_s()` which returned the full remaining note-gen budget). With 384 max_tokens on Haiku, the LLM still took 2580ms consuming nearly all available budget.
+
+### What was built
+
+**Architecture fix: two-layer set-writer budget gate**
+
+1. **Pre-skip gate in `semantic_retrieval.py` Step 5.8**: Before calling `write_set_notes`, check `deadline.remaining_ms() < SET_WRITER_MIN_BUDGET_MS (1200ms)`. If too low, skip the writer entirely and log `set_writer_skipped_budget`. Cards return as Google-verified without notes. Label added to `timeout_branches_triggered`.
+
+2. **LLM call cap in `set_level_writer.py`**: Changed `deadline.budget_for_note_generation_s()` → `deadline.budget_for_set_writer_s()`. The new method caps the LLM timeout at `SET_WRITER_LLM_MAX_S (1.5s)` regardless of remaining budget. Prevents the writer from consuming the full note-gen window even when budget appears large.
+
+3. **New constants/method in `deadline_manager.py`**:
+   - `SET_WRITER_LLM_MAX_S = 1.5` — hard cap on set-writer LLM call
+   - `SET_WRITER_MIN_BUDGET_MS = 1200` — minimum remaining ms to start writer at all
+   - `budget_for_set_writer_s(max_cap_s)` — capped version of note-gen budget
+
+**Predicted latency improvement**: With set-writer capped at 1.5s, projected total drops from ~5300ms to ~4000-4200ms (timeout_budget_consumed_pct ~70% vs 88%).
+
+### Files changed
+
+- `backend/app/concierge/deadline_manager.py` — 2 new constants, 1 new method
+- `backend/app/concierge/semantic_retrieval.py` — pre-skip gate in Step 5.8, `SET_WRITER_MIN_BUDGET_MS` import, `set_writer_skipped_budget` in timeout_branches_triggered
+- `backend/app/concierge/set_level_writer.py` — use `budget_for_set_writer_s()` instead of `budget_for_note_generation_s()`
+- `backend/tests/test_concierge_latency_architecture_v1.py` — 30 new tests
+
+### Test results
+
+- `test_concierge_latency_architecture_v1.py`: **30/30 PASS**
+- `test_semantic_retrieval_v1.py`: PASS (no regression)
+- `test_cross_source_enrichment.py`: PASS (no regression)
+- `test_editorial_enrichment.py`: PASS (no regression)
+- Pre-existing failures (unrelated to this PR): 3 tests in test_concierge_observability.py / test_concierge_critical_path_hardening.py (mock DB `prompt` key issue, exists on main before this PR)
+
+### Invariants confirmed
+
+- Google remains only source for addable cards
+- Yelp/Foursquare/Tavily/Serper remain enrichment-only
+- No deterministic note templates; no fallback visible notes
+- No SQL, no UI changes, no new providers, no new LLM calls
+- Existing display contract preserved: display_why, display_why_source, display_why_validated
+- Cards without notes remain addable (display_why_validated=False)
+- Validated set-writer notes are preserved when budget allows
+
+### Production validation plan
+
+After deploy: grep Railway logs for `semantic_retrieval_v1.latency_summary` to confirm `set_writer_ms` reduced to ≤1500ms and `timeout_budget_consumed_pct` reduced from 88% to ~70%.
+
+---
+
+## Previous change (2026-05-07) — Concierge Latency Observability v1 + price fix (Level 1 backend-only)
 
 **Status: IN PROGRESS (branch: claude/travel-concierge-dev-kYqC9, PR #282)** — Backend + test only. No SQL. No UI changes (price display fix only). No new endpoints. No provider changes. No new LLM calls.
 

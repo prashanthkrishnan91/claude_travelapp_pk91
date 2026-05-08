@@ -1059,8 +1059,12 @@ def write_set_notes(
 
     try:
         # ── Budget gate ───────────────────────────────────────────────────────
+        # Latency Architecture v1: use budget_for_set_writer_s() which caps the
+        # LLM timeout at SET_WRITER_LLM_MAX_S (1.5s) regardless of how much
+        # budget remains on paper. This prevents the set-writer from consuming
+        # the full remaining note-gen window on slow requests.
         if deadline is not None:
-            budget_s = deadline.budget_for_note_generation_s()
+            budget_s = deadline.budget_for_set_writer_s()
             if budget_s <= 0.0:
                 logger.info(
                     "set_level_writer: skipped_no_budget remaining_ms=%d",
