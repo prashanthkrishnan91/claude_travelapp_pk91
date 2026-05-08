@@ -31,6 +31,7 @@ enforced. Gate on PR #273 telemetry to confirm packet size reduction and latency
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import logging
 import os
@@ -770,20 +771,16 @@ _SET_WRITER_MODEL = os.getenv(
 )
 
 
-def _call_set_writer_llm(
+def _call_set_writer_llm_inner(
     prompt: str,
     timeout_s: float,
-    max_tokens: int = _MAX_TOKENS_DEFAULT,
+    max_tokens: int,
 ) -> Tuple[Optional[str], Dict[str, Any]]:
-    """Call Claude API for set-level note generation.
-
-    Returns (raw_text_or_None, llm_telemetry_dict).
-    llm_telemetry_dict always present; contains model, max_tokens, and optionally
-    output_stop_reason, input_tokens, output_tokens.
-    """
+    """Inner LLM call — runs in a thread. Passes SDK-level timeout as first layer."""
     tel: Dict[str, Any] = {
         "model": _SET_WRITER_MODEL,
         "max_tokens": max_tokens,
+        "llm_timeout_enforced": False,
     }
     try:
         import anthropic  # type: ignore[import]
@@ -804,13 +801,11 @@ def _call_set_writer_llm(
             timeout=timeout_s,
             messages=[{"role": "user", "content": prompt}],
         )
-        # Capture available SDK telemetry fields
         tel["output_stop_reason"] = getattr(message, "stop_reason", None)
         usage = getattr(message, "usage", None)
         if usage is not None:
             tel["input_tokens"] = getattr(usage, "input_tokens", None)
             tel["output_tokens"] = getattr(usage, "output_tokens", None)
-            # Cache tokens — only include if present (requires prompt caching, deferred PR #274)
             crit = getattr(usage, "cache_read_input_tokens", None)
             ccrt = getattr(usage, "cache_creation_input_tokens", None)
             if crit is not None:
@@ -826,6 +821,54 @@ def _call_set_writer_llm(
         )
         tel["llm_error"] = str(exc)[:200]
         return None, tel
+
+
+def _call_set_writer_llm(
+    prompt: str,
+    timeout_s: float,
+    max_tokens: int = _MAX_TOKENS_DEFAULT,
+) -> Tuple[Optional[str], Dict[str, Any]]:
+    """Call Claude API for set-level note generation with a durable wall-clock cap.
+
+    Two-layer timeout enforcement:
+    1. SDK-level: passes timeout_s to the Anthropic client (first layer).
+    2. Thread-level: future.result(timeout=timeout_s) enforces a hard wall-clock cap
+       even when the SDK timeout fails to cancel an in-flight request (second layer).
+
+    The background thread continues to run after a wall-clock timeout (cannot be
+    cancelled mid-request) but the caller returns immediately with raw=None.
+    executor.shutdown(wait=False) releases the thread pool without blocking.
+
+    Returns (raw_text_or_None, llm_telemetry_dict).
+    """
+    tel: Dict[str, Any] = {
+        "model": _SET_WRITER_MODEL,
+        "max_tokens": max_tokens,
+        "set_writer_timeout_cap_s": timeout_s,
+        "set_writer_timeout_source": "budget_for_set_writer_s",
+        "llm_timeout_enforced": False,
+    }
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(_call_set_writer_llm_inner, prompt, timeout_s, max_tokens)
+        try:
+            raw, inner_tel = future.result(timeout=timeout_s)
+            tel.update(inner_tel)
+            tel["llm_timeout_enforced"] = True
+            return raw, tel
+        except concurrent.futures.TimeoutError:
+            logger.warning(
+                "set_level_writer: wall_clock_timeout_enforced cap_s=%.2f model=%s",
+                timeout_s, _SET_WRITER_MODEL,
+            )
+            tel["llm_error"] = f"wall_clock_timeout:{timeout_s:.2f}s"
+            tel["llm_timeout_enforced"] = True
+            return None, tel
+        except Exception as exc:
+            tel["llm_error"] = str(exc)[:200]
+            return None, tel
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 # ── Parse response ─────────────────────────────────────────────────────────────
@@ -1065,17 +1108,25 @@ def write_set_notes(
         # the full remaining note-gen window on slow requests.
         if deadline is not None:
             budget_s = deadline.budget_for_set_writer_s()
+            _budget_source = "budget_for_set_writer_s"
             if budget_s <= 0.0:
                 logger.info(
                     "set_level_writer: skipped_no_budget remaining_ms=%d",
                     deadline.remaining_ms(),
                 )
                 wtel["set_writer_timed_out"] = True
+                wtel["set_writer_budget_s"] = 0.0
+                wtel["set_writer_timeout_cap_s"] = 0.0
+                wtel["set_writer_timeout_source"] = _budget_source
                 return _empty(timed_out=True, reason="no_budget", tel=wtel)
         else:
             budget_s = float(
                 os.getenv("CONCIERGE_CARD_REASONING_TIMEOUT_MS", "8000")
             ) / 1000.0
+            _budget_source = "env_fallback"
+        wtel["set_writer_budget_s"] = round(budget_s, 3)
+        wtel["set_writer_timeout_cap_s"] = round(budget_s, 3)
+        wtel["set_writer_timeout_source"] = _budget_source
 
         # ── Build card inputs from curated result ─────────────────────────────
         curated_cards = getattr(curated_result, "curated_cards", []) or []

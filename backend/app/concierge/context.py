@@ -23,7 +23,9 @@ logger = logging.getLogger(__name__)
 TurnMode = Literal["new_search", "refine_previous", "anchor_new", "reset"]
 RerankRule = Literal[
     "top_n", "best_one", "compare", "date_night",
-    "cheapest", "most_upscale", "filter_constraint", "none",
+    "cheapest", "most_upscale", "filter_constraint",
+    "modifier_filter",  # style/price/geo modifier-only follow-up
+    "none",
 ]
 
 # ── ContextWindow ─────────────────────────────────────────────────────────────
@@ -111,6 +113,53 @@ _CONTINUATION_PATTERNS = [
     re.compile(r"\bgive me more\b", re.IGNORECASE),
     re.compile(r"\banother batch\b", re.IGNORECASE),
 ]
+
+# Venue category words — when any of these appear in the query, it is a new search
+# even if it looks like a modifier-only phrase. This prevents "casual restaurants"
+# from being misclassified as a modifier-only refinement of prior hotel cards.
+_VENUE_CATEGORY_RE = re.compile(
+    r"\b(restaurants?|bar|bars|cafe|cafes|cocktail|ramen|sushi|tacos?|taqueria|"
+    r"hotels?|attraction|attractions|museum|museums|nightlife|"
+    r"brewery|breweries|winery|wineries|taproom|bistro|tavern|diner|lounge)\b",
+    re.IGNORECASE,
+)
+
+# Modifier-only utterances that should refine prior cards rather than trigger a
+# fresh provider search. These patterns match SHORT follow-ups that contain only
+# style/price/geo modifiers and NO venue category words.
+#
+# Examples that must route as refine_previous/modifier_filter:
+#   "show only casual", "only casual", "just casual ones", "more casual",
+#   "less fancy", "make it cheaper", "show cheaper ones", "near the river",
+#   "with a view", "more affordable", "fancier ones".
+#
+# The pattern is intentionally narrow: it must not match queries containing
+# venue category words (restaurants, bars, hotels, etc.) — those remain new_search.
+_MODIFIER_ONLY_UTTERANCE_RE = re.compile(
+    r"^\s*"
+    # Optional leading refinement command words
+    r"(?:show\s+(?:me\s+)?(?:only\s+)?|only\s+|just\s+|filter\s+(?:to\s+)?|"
+    r"make\s+it\s+|get\s+(?:me\s+)?(?:the\s+)?|switch\s+to\s+)?"
+    # Optional intensifier
+    r"(?:(?:the\s+)?(?:more\s+|less\s+|even\s+(?:more\s+)?|"
+    r"a\s+(?:bit\s+|little\s+)?|somewhat\s+))?"
+    # Optional "only/just" before the modifier
+    r"(?:only\s+|just\s+)?"
+    # Core modifier: style, price, or geo (no venue category words allowed)
+    r"(?:casual|chill|relaxed|laid[\s-]?back"
+    r"|fancy|fancier|upscale|formal|elegant|fine[\s-]?dining"
+    r"|cheap(?:er)?|budget|affordable|inexpensive|less[\s-]?expensive"
+    r"|expensive|pricey|luxury|luxurious|pricier"
+    r"|outdoor|outside"
+    r"|nearby|closer"
+    r"|with\s+a?\s+(?:view|patio|outdoor(?:\s+seating)?|terrace|rooftop)"
+    r"|near\s+the\s+(?:river|lake|water|park|bay|ocean|harbor|waterfront)"
+    r")"
+    # Optional trailing nouns (ones, options, places, restaurants)
+    r"(?:\s+(?:ones?|options?|places?|restaurants?|spots?|choices?|picks?))?"
+    r"\s*$",
+    re.IGNORECASE,
+)
 
 # Maps prior card pool intent to a provider-facing category phrase.
 # Only intents that map cleanly to a searchable category are included.
@@ -222,6 +271,19 @@ def classify_turn(
         for pat in _ANCHOR_PATTERNS:
             if pat.search(text):
                 return "anchor_new", "none"
+
+        # Modifier-only utterances: check BEFORE new_search_override so that
+        # short follow-ups like "show only casual", "near the river", "cheaper ones"
+        # route as refine_previous/modifier_filter instead of falling through to
+        # a fresh provider search.
+        # Guard: must not contain venue category words to avoid mis-classifying real new searches.
+        if not _VENUE_CATEGORY_RE.search(text) and _MODIFIER_ONLY_UTTERANCE_RE.match(text):
+            logger.debug(
+                "concierge.context.modifier_only_refinement query=%r "
+                "turn_mode=refine_previous rule=modifier_filter",
+                text,
+            )
+            return "refine_previous", "modifier_filter"
 
         # New_search override signals block refine classification.
         has_new_search_signal = any(

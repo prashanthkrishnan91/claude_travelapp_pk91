@@ -50,6 +50,10 @@ _FILLER_WORDS: frozenset = frozenset(
         "unique", "special", "fun", "relaxing", "vibrant", "classy",
         "family", "kid", "hidden", "secret", "undiscovered", "off-the-beaten",
         "outdoor", "indoor", "open",
+        # Refinement command words — these are follow-up/filter verbs and restrictors
+        # that must NEVER become a venue head. "show only casual" must yield
+        # concept=None (filtered to prior results), not concept="only".
+        "only", "just", "make", "filter", "switch", "change", "fewer",
     }
 )
 
@@ -572,6 +576,14 @@ def _extract_normalized_soft_preferences(
     # hidden_gem: from suppressed preference nouns OR explicit hidden/local/underrated patterns
     if suppressed_preference_nouns or _HIDDEN_GEM_CONTEXT_PATTERN.search(query):
         _add("hidden_gem")
+
+    # casual: from soft_prefs — used by ranker to downrank fine-dining/expensive entities
+    if "casual" in soft_prefs:
+        _add("casual")
+
+    # upscale: from soft_prefs — used by ranker to boost formal/expensive entities
+    if "upscale" in soft_prefs:
+        _add("upscale")
 
     # romantic: from existing soft_prefs detection
     if "romantic" in soft_prefs:

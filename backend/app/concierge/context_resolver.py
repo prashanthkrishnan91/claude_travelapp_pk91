@@ -23,8 +23,37 @@ from app.concierge.context import ContextWindow, RerankRule
 
 logger = logging.getLogger(__name__)
 
-_SUPPORTED_RULES: frozenset[str] = frozenset({"top_n", "best_one", "compare"})
+_SUPPORTED_RULES: frozenset[str] = frozenset({"top_n", "best_one", "compare", "modifier_filter"})
 _MAX_COMPARE_CARDS = 6
+
+# Modifier words that indicate a desired casualness/price/formality direction.
+# Used by modifier_filter to score and reorder prior verified cards.
+_CASUAL_SIGNALS = frozenset({
+    "casual", "chill", "relaxed", "laid-back", "laid back", "laidback",
+    "informal", "low-key", "lowkey",
+})
+_FORMAL_SIGNALS = frozenset({
+    "fancy", "fancier", "upscale", "elegant", "formal", "fine dining",
+    "fine-dining", "luxury", "luxurious", "posh", "sophisticated",
+})
+_CHEAP_SIGNALS = frozenset({
+    "cheap", "cheaper", "budget", "affordable", "inexpensive",
+    "less expensive", "lower price", "economical",
+})
+_EXPENSIVE_SIGNALS = frozenset({
+    "expensive", "pricey", "pricier", "luxury", "luxurious",
+    "splurge", "high end", "high-end",
+})
+
+# Thresholds for modifier-based filtering of prior verified cards.
+# casual: keep cards with casual_fit_score >= this (fine_dining/expensive score ~0.0–0.35)
+# formal: keep cards with casual_fit_score <= this (excludes actively casual places)
+_CASUAL_FIT_MIN = 0.4
+_FORMAL_FIT_MAX = 0.55
+
+# Price levels that qualify as "expensive" or must be excluded for "cheap".
+_EXPENSIVE_PRICES: frozenset = frozenset({"PRICE_LEVEL_EXPENSIVE", "PRICE_LEVEL_VERY_EXPENSIVE"})
+_CHEAP_EXCLUDE_PRICES: frozenset = frozenset({"PRICE_LEVEL_EXPENSIVE", "PRICE_LEVEL_VERY_EXPENSIVE"})
 
 _TOP_N_WORD_MAP: Dict[str, int] = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
@@ -113,6 +142,119 @@ def _reassemble_buckets(
     return restaurants, attractions, hotels
 
 
+def _detect_modifier_intent(user_query: str) -> str:
+    """Detect the dominant modifier intent from a modifier-only follow-up query.
+
+    Returns one of: "casual", "formal", "cheap", "expensive", "none".
+    """
+    q = (user_query or "").lower()
+    if any(s in q for s in _CASUAL_SIGNALS):
+        return "casual"
+    if any(s in q for s in _CHEAP_SIGNALS):
+        return "cheap"
+    if any(s in q for s in _FORMAL_SIGNALS):
+        return "formal"
+    if any(s in q for s in _EXPENSIVE_SIGNALS):
+        return "expensive"
+    return "none"
+
+
+def _card_price_level(card: Dict[str, Any]) -> str:
+    """Read price level from real card payload locations (not gv.types).
+
+    Priority: supporting_details.price_level → root price_level → "".
+    """
+    sd = card.get("supporting_details") or {}
+    return (sd.get("price_level") or card.get("price_level") or "").upper()
+
+
+def _casual_fit_score(card: Dict[str, Any]) -> float:
+    """Score how 'casual-friendly' a prior verified card appears (0.0–1.0).
+
+    Uses Google entity types (for fine_dining signal) and price level from
+    supporting_details (canonical card payload location — not gv.types).
+    Higher = more casual-compatible.
+    """
+    gv = card.get("google_verification") or {}
+    types = gv.get("types") or []
+    types_lower = [t.lower() for t in types]
+    price = _card_price_level(card)
+
+    # Fine-dining and expensive markers reduce casual fit
+    penalty = 0.0
+    if "fine_dining_restaurant" in types_lower:
+        penalty += 0.4
+    if price == "PRICE_LEVEL_VERY_EXPENSIVE":
+        penalty += 0.3
+    elif price == "PRICE_LEVEL_EXPENSIVE":
+        penalty += 0.15
+
+    # Casual-compatible markers boost casual fit
+    boost = 0.0
+    casual_type_terms = {
+        "cafe", "coffee_shop", "fast_food_restaurant", "sandwich_shop",
+        "pizza_restaurant", "burger_restaurant", "diner",
+    }
+    if any(t in types_lower for t in casual_type_terms):
+        boost += 0.2
+    if price in ("PRICE_LEVEL_INEXPENSIVE", "PRICE_LEVEL_FREE"):
+        boost += 0.15
+
+    return max(0.0, min(1.0, 0.5 + boost - penalty))
+
+
+def _reorder_for_modifier(
+    verified: List[Tuple[str, Dict[str, Any]]],
+    modifier_intent: str,
+) -> List[Tuple[str, Dict[str, Any]]]:
+    """Reorder verified cards to surface those that best match the modifier."""
+    if modifier_intent == "casual":
+        return sorted(verified, key=lambda bc: _casual_fit_score(bc[1]), reverse=True)
+    if modifier_intent == "cheap":
+        _price_order = {
+            "PRICE_LEVEL_FREE": 0,
+            "PRICE_LEVEL_INEXPENSIVE": 1,
+            "PRICE_LEVEL_MODERATE": 2,
+            "PRICE_LEVEL_EXPENSIVE": 3,
+            "PRICE_LEVEL_VERY_EXPENSIVE": 4,
+        }
+        def _price_key(bc: Tuple[str, Dict[str, Any]]) -> int:
+            return _price_order.get(_card_price_level(bc[1]), 2)
+        return sorted(verified, key=_price_key)
+    if modifier_intent == "formal":
+        return sorted(verified, key=lambda bc: _casual_fit_score(bc[1]))
+    if modifier_intent == "expensive":
+        return sorted(verified, key=lambda bc: _casual_fit_score(bc[1]))
+    return list(verified)
+
+
+def _filter_for_modifier(
+    cards: List[Tuple[str, Dict[str, Any]]],
+    modifier_intent: str,
+) -> List[Tuple[str, Dict[str, Any]]]:
+    """Filter cards by modifier threshold.
+
+    Returns only cards that plausibly match the modifier intent.
+    Returns empty list when no cards pass (caller must fall through to provider).
+    For "none" intent, returns all cards unchanged.
+    """
+    if modifier_intent == "casual":
+        return [bc for bc in cards if _casual_fit_score(bc[1]) >= _CASUAL_FIT_MIN]
+    if modifier_intent == "cheap":
+        return [bc for bc in cards if _card_price_level(bc[1]) not in _CHEAP_EXCLUDE_PRICES]
+    if modifier_intent == "formal":
+        return [bc for bc in cards if _casual_fit_score(bc[1]) <= _FORMAL_FIT_MAX]
+    if modifier_intent == "expensive":
+        return [
+            bc for bc in cards
+            if _card_price_level(bc[1]) in _EXPENSIVE_PRICES
+            or "fine_dining_restaurant" in [
+                t.lower() for t in ((bc[1].get("google_verification") or {}).get("types") or [])
+            ]
+        ]
+    return list(cards)  # "none" — no filter applied
+
+
 def resolve_refine_previous(
     ctx: ContextWindow,
     rerank_rule: RerankRule,
@@ -163,11 +305,36 @@ def resolve_refine_previous(
         )
         return None
 
+    modifier_intent = "none"
     if rerank_rule == "best_one":
         selected = verified[:1]
     elif rerank_rule == "top_n":
         n = _parse_top_n(user_query, len(verified))
         selected = verified[:n]
+    elif rerank_rule == "modifier_filter":
+        modifier_intent = _detect_modifier_intent(user_query)
+        reordered = _reorder_for_modifier(verified, modifier_intent)
+        filtered = _filter_for_modifier(reordered, modifier_intent)
+
+        if modifier_intent != "none" and not filtered:
+            # All prior cards failed the modifier threshold — fall through so the
+            # provider can search for matching places (e.g. a casual query against a
+            # pool of purely fine-dining places).
+            logger.info(
+                "concierge.context_resolver.modifier_filter_all_filtered trip_id=%s "
+                "modifier_intent=%s query=%r pool_before=%d "
+                "fall_through_reason=no_prior_cards_match_modifier provider_call=true",
+                ctx.trip_id, modifier_intent, user_query, pool_size_before,
+            )
+            return None
+
+        selected = filtered
+        logger.info(
+            "concierge.context_resolver.modifier_filter trip_id=%s "
+            "modifier_intent=%s query=%r pool_before=%d pool_after=%d "
+            "context_reuse=true provider_call_skipped=true",
+            ctx.trip_id, modifier_intent, user_query, pool_size_before, len(selected),
+        )
     else:  # compare
         selected = verified[:_MAX_COMPARE_CARDS]
 
@@ -177,12 +344,20 @@ def resolve_refine_previous(
 
     logger.info(
         "concierge.context_resolver.resolved trip_id=%s turn_mode=refine_previous "
-        "rerank_rule=%s provider_call=false pool_size_before=%d pool_size_after=%d "
+        "rerank_rule=%s modifier_intent=%s provider_call=false "
+        "pool_size_before=%d pool_size_after=%d "
+        "context_reuse=true prior_cards_reused_count=%d "
+        "provider_call_skipped_for_refinement=true "
+        "refinement_modifier_detected=%s refinement_rule_applied=%s "
         "source_message_id=%s feature_flag_enabled=true",
         ctx.trip_id,
         rerank_rule,
+        modifier_intent,
         pool_size_before,
         pool_size_after,
+        pool_size_after,
+        modifier_intent if rerank_rule == "modifier_filter" else "",
+        rerank_rule,
         ctx.source_message_id,
     )
     return RefineResolved(
