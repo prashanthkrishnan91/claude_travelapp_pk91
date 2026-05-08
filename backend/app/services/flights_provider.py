@@ -23,7 +23,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Protocol
 
-from app.contracts.flights import FlightProviderUnavailable, FlightSourceStatus
+from app.contracts.flights import (
+    FlightProviderUnavailable,
+    FlightSourceStatus,
+    assert_persistable_flight,
+)
 from app.models.search import FlightResult, FlightSearchRequest
 
 
@@ -31,11 +35,17 @@ from app.models.search import FlightResult, FlightSearchRequest
 class FlightProviderResult:
     """Typed response for any flight provider adapter.
 
-    Invariants:
+    Invariants (enforced in ``__post_init__``):
 
-    - ``rows`` is empty whenever ``status`` is not ``OK``.
-    - Each row in ``rows`` MUST satisfy
-      ``app.contracts.flights.is_persistable_flight``.
+    - ``rows`` MUST be empty whenever ``status`` is not ``OK``
+      (``EMPTY``/``UNAVAILABLE``/``ERROR`` cannot carry rows).
+    - When ``status == OK``, every row MUST satisfy
+      ``app.contracts.flights.is_persistable_flight``.  Mock/demo/sample
+      sources, fabricated booking hosts, and rows missing required fields
+      are rejected via ``assert_persistable_flight``.
+    - ``OK`` with zero rows is intentionally NOT allowed: callers should
+      use ``EMPTY`` for the "valid query, no results" case so the typed
+      status remains the single source of truth for UI fail-closed copy.
     - Adapters never raise on transport / API errors; they translate to
       ``status = ERROR`` with a non-empty ``reason``.
     """
@@ -43,6 +53,28 @@ class FlightProviderResult:
     status: FlightSourceStatus
     rows: List[FlightResult] = field(default_factory=list)
     reason: str = ""
+
+    def __post_init__(self) -> None:
+        if self.status is FlightSourceStatus.OK:
+            if not self.rows:
+                raise ValueError(
+                    "FlightProviderResult(status=OK) must carry at least one "
+                    "row; use FlightSourceStatus.EMPTY for zero-result queries"
+                )
+            for idx, row in enumerate(self.rows):
+                try:
+                    assert_persistable_flight(row)
+                except Exception as exc:
+                    raise ValueError(
+                        f"FlightProviderResult(status=OK).rows[{idx}] failed "
+                        f"the Flights Product Contract v1: {exc}"
+                    ) from exc
+        else:
+            if self.rows:
+                raise ValueError(
+                    f"FlightProviderResult(status={self.status.value}) must "
+                    f"carry zero rows; got {len(self.rows)}"
+                )
 
 
 class FlightProvider(Protocol):

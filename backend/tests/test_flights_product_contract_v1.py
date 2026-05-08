@@ -191,6 +191,71 @@ def test_provider_unavailable_rejects_ok_status():
 
 
 # ---------------------------------------------------------------------------
+# FlightProviderResult invariant enforcement
+# ---------------------------------------------------------------------------
+
+
+def test_provider_result_unavailable_with_rows_is_rejected():
+    clean = _flight(source="amadeus", booking_url="https://amadeus.example/x")
+    with pytest.raises(ValueError, match="must carry zero rows"):
+        FlightProviderResult(
+            status=FlightSourceStatus.UNAVAILABLE,
+            rows=[clean],
+            reason="bug",
+        )
+
+
+def test_provider_result_error_with_rows_is_rejected():
+    clean = _flight(source="amadeus", booking_url="https://amadeus.example/x")
+    with pytest.raises(ValueError, match="must carry zero rows"):
+        FlightProviderResult(
+            status=FlightSourceStatus.ERROR,
+            rows=[clean],
+            reason="upstream 500",
+        )
+
+
+def test_provider_result_empty_with_rows_is_rejected():
+    clean = _flight(source="amadeus", booking_url="https://amadeus.example/x")
+    with pytest.raises(ValueError, match="must carry zero rows"):
+        FlightProviderResult(status=FlightSourceStatus.EMPTY, rows=[clean])
+
+
+def test_provider_result_ok_with_mock_source_is_rejected():
+    bad = _flight(source="mock", booking_url="https://amadeus.example/x")
+    with pytest.raises(ValueError, match="Flights Product Contract"):
+        FlightProviderResult(status=FlightSourceStatus.OK, rows=[bad])
+
+
+def test_provider_result_ok_with_book_example_url_is_rejected():
+    bad = _flight(
+        source="amadeus",
+        booking_url=f"https://{MOCK_BOOKING_HOST}/flights/aa/jfk/cdg",
+    )
+    with pytest.raises(ValueError, match="Flights Product Contract"):
+        FlightProviderResult(status=FlightSourceStatus.OK, rows=[bad])
+
+
+def test_provider_result_ok_with_clean_provider_row_is_accepted():
+    clean = _flight(source="amadeus", booking_url="https://amadeus.example/x")
+    result = FlightProviderResult(status=FlightSourceStatus.OK, rows=[clean])
+    assert result.status is FlightSourceStatus.OK
+    assert result.rows == [clean]
+
+
+def test_provider_result_empty_with_no_rows_is_accepted():
+    result = FlightProviderResult(status=FlightSourceStatus.EMPTY)
+    assert result.status is FlightSourceStatus.EMPTY
+    assert result.rows == []
+
+
+def test_provider_result_ok_with_zero_rows_is_rejected():
+    """OK + zero rows is a contract bug: callers must use EMPTY instead."""
+    with pytest.raises(ValueError, match="EMPTY"):
+        FlightProviderResult(status=FlightSourceStatus.OK, rows=[])
+
+
+# ---------------------------------------------------------------------------
 # 3 & 4. Round-trip leg → day mapping
 # ---------------------------------------------------------------------------
 
