@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from typing import Any, Dict, FrozenSet, List, Optional, Set
 
@@ -93,6 +94,53 @@ _PRICE_LEVEL_SYMBOL: Dict[str, str] = {
     "PRICE_LEVEL_EXPENSIVE": "$$$",
     "PRICE_LEVEL_VERY_EXPENSIVE": "$$$$",
 }
+
+
+def _normalize_brand_name(name: str) -> str:
+    """Lowercase, apostrophe-stripped name for same-brand detection.
+
+    Used only to detect identical chains/locations (e.g. two "Sinya Mediterranean"
+    entries). Does NOT collapse genuinely different named places.
+    """
+    if not name:
+        return ""
+    normalized = name.lower().strip()
+    # Remove apostrophes/curly-quotes that don't change identity
+    normalized = re.sub(r"['''‘’]", "", normalized)
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized
+
+
+def _deduplicate_brand_names(
+    ranked: List[Any],
+) -> tuple:
+    """Remove same-brand duplicates keeping the highest-ranked card per brand.
+
+    Takes list of (PlaceEntity, RankScore) tuples — already sorted by rank score.
+    For identical normalized names (same brand, different locations), keeps only
+    the first occurrence (best-fit card). Returns (deduplicated_list, count_suppressed).
+
+    Conservative: only collapses entities with IDENTICAL normalized names.
+    Different names are never collapsed regardless of similarity.
+    """
+    seen_brands: Dict[str, str] = {}  # brand_name → place_id of kept entity
+    result = []
+    suppressed = 0
+    for entity, rs in ranked:
+        brand = _normalize_brand_name(entity.name)
+        if brand in seen_brands:
+            suppressed += 1
+            logger.info(
+                "semantic_retrieval_v1.brand_dedup: suppressed name=%r place_id=%s "
+                "kept_place_id=%s",
+                entity.name,
+                entity.place_id,
+                seen_brands[brand],
+            )
+        else:
+            seen_brands[brand] = entity.place_id
+            result.append((entity, rs))
+    return result, suppressed
 
 
 def _is_food_incompatible_entity(types: List[str]) -> bool:
@@ -532,6 +580,19 @@ def _run_pipeline(
     # Critical path ends here — capture total time through Google + entity + rank.
     critical_path_ms = deadline.elapsed_ms()
 
+    # ── Step 5.05: Brand-name diversity dedup ────────────────────────────────
+    # After ranking, suppress duplicate-chain entries that share an identical
+    # normalized brand name (e.g. two "Sinya Mediterranean" locations). The
+    # highest-ranked entry for each brand is kept; the rest are suppressed.
+    # This is conservative: only identical names are collapsed.
+    ranked, _brand_dedup_suppressed = _deduplicate_brand_names(ranked)
+    if _brand_dedup_suppressed > 0:
+        logger.info(
+            "semantic_retrieval_v1: brand_dedup_suppressed=%d query=%r "
+            "ranked_after=%d",
+            _brand_dedup_suppressed, user_query, len(ranked),
+        )
+
     # ── Step 5.5: Non-critical enrichment (deadline-bounded, skipped if low budget) ─
     # Google Place Details enrichment improves note reasoning evidence only.
     # Skipped when remaining deadline budget is insufficient (< 500 ms reserve).
@@ -967,6 +1028,7 @@ def _run_pipeline(
         "modifier_intent": ranker_stats.modifier_intent,
         "modifier_filter_applied": ranker_stats.modifier_filter_applied,
         "casual_downranked_count": ranker_stats.casual_downranked_count,
+        "casual_excluded_count": ranker_stats.casual_excluded_count,
         "det_reason_rejected_count": det_reason_rejected_count,
         # Truthful telemetry: Reasoning Reliability v2 fields.
         "reasoning_attempted": reasoning_result.attempted,
@@ -997,6 +1059,7 @@ def _run_pipeline(
         ),
         # Entity type gate telemetry (Step 4.5)
         "entity_type_gate_rejected": _entity_type_gate_rejected,
+        "brand_duplicate_suppressed_count": _brand_dedup_suppressed,
         # Honest card-count telemetry (split into distinct signals):
         # - insufficient_verified_candidates: true when Google returned too few
         #   verified places before note assembly — genuinely not enough supply.
@@ -1036,6 +1099,32 @@ def _run_pipeline(
             and not getattr(getattr(c, "supporting_details", None), "price_range", None)
         ),
         "semantic_price_signal_path": "semantic_retrieval_v1",
+        # Synthesized note-absence diagnostic. Inspect this field when
+        # display_why_source=="timed_out" or display_why_validated==False.
+        # Possible values:
+        #   "wall_clock_timeout"    → set_writer thread cap fired (set_writer_timed_out=True)
+        #   "no_budget"             → writer skipped before attempt (set_writer_skipped_budget=True)
+        #   "all_notes_rejected"    → writer ran, all notes failed validation
+        #   "past_soft_ceiling"     → SLA soft ceiling exceeded before writer ran
+        #   "low_budget"            → budget positive but below minimum useful threshold
+        #   "no_valid_cards"        → no verified cards reached note assembly
+        #   "ok"                    → notes present
+        "note_absent_reason": (
+            "ok" if visible_note_count > 0
+            else "no_budget" if _set_writer_skipped_budget
+            else "wall_clock_timeout" if (
+                set_writer_result is not None and set_writer_result.timed_out
+            )
+            else "all_notes_rejected" if (
+                set_writer_result is not None
+                and not set_writer_result.timed_out
+                and set_writer_result.visible_note_count == 0
+            )
+            else "past_soft_ceiling" if note_generation_timed_out
+            else "low_budget" if note_generation_low_budget
+            else "no_valid_cards" if not cards_data
+            else "unknown"
+        ),
     }
 
     # ── Latency summary fields ────────────────────────────────────────────────

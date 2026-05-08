@@ -46,9 +46,11 @@ _EXPENSIVE_SIGNALS = frozenset({
 })
 
 # Thresholds for modifier-based filtering of prior verified cards.
-# casual: keep cards with casual_fit_score >= this (fine_dining/expensive score ~0.0–0.35)
+# casual: keep cards with casual_fit_score >= this.
+#   Strengthened to 0.45 (was 0.4) so that PRICE_LEVEL_EXPENSIVE cards (~0.30)
+#   are excluded even without a fine_dining_restaurant type.
 # formal: keep cards with casual_fit_score <= this (excludes actively casual places)
-_CASUAL_FIT_MIN = 0.4
+_CASUAL_FIT_MIN = 0.45
 _FORMAL_FIT_MAX = 0.55
 
 # Price levels that qualify as "expensive" or must be excluded for "cheap".
@@ -76,6 +78,12 @@ class RefineResolved:
     rerank_rule: str = "none"
     source_message_id: Optional[str] = None
     prior_intent: Optional[str] = None
+    # Modifier filter metadata (populated when rerank_rule == "modifier_filter")
+    modifier_intent: str = "none"
+    cards_before_filter: int = 0
+    cards_after_filter: int = 0
+    excluded_for_modifier_count: int = 0
+    duplicate_brand_suppressed_count: int = 0
 
 
 def _card_passes_trust_gate(card: Any) -> bool:
@@ -168,26 +176,53 @@ def _card_price_level(card: Dict[str, Any]) -> str:
     return (sd.get("price_level") or card.get("price_level") or "").upper()
 
 
+def _card_price_range_end_units(card: Dict[str, Any]) -> int:
+    """Return price range end amount (e.g. 100 for $40–100). 0 if unavailable.
+
+    Reads from supporting_details.price_range (canonical card field). Used to
+    detect expensive-range cards (e.g. Purple Pig $40–100) that lack a
+    PRICE_LEVEL_EXPENSIVE field but are clearly not casual options.
+    """
+    sd = card.get("supporting_details") or {}
+    pr = sd.get("price_range") or card.get("price_range") or {}
+    if not isinstance(pr, dict):
+        return 0
+    end = pr.get("endPrice") or {}
+    if isinstance(end, dict):
+        try:
+            return int(end.get("units") or 0)
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
 def _casual_fit_score(card: Dict[str, Any]) -> float:
     """Score how 'casual-friendly' a prior verified card appears (0.0–1.0).
 
-    Uses Google entity types (for fine_dining signal) and price level from
-    supporting_details (canonical card payload location — not gv.types).
-    Higher = more casual-compatible.
+    Uses Google entity types (for fine_dining signal), price level, AND
+    price_range end units from supporting_details. Higher = more casual-compatible.
+
+    Strengthened vs PR #284: now also penalises cards with price_range end >= $80
+    that lack an explicit PRICE_LEVEL_EXPENSIVE field (e.g. Purple Pig $40–100).
     """
     gv = card.get("google_verification") or {}
     types = gv.get("types") or []
     types_lower = [t.lower() for t in types]
     price = _card_price_level(card)
+    end_units = _card_price_range_end_units(card)
 
     # Fine-dining and expensive markers reduce casual fit
     penalty = 0.0
     if "fine_dining_restaurant" in types_lower:
-        penalty += 0.4
+        penalty += 0.45  # strengthened from 0.4 — fine dining never casual
     if price == "PRICE_LEVEL_VERY_EXPENSIVE":
-        penalty += 0.3
+        penalty += 0.35
     elif price == "PRICE_LEVEL_EXPENSIVE":
-        penalty += 0.15
+        penalty += 0.20  # strengthened from 0.15 — expensive shouldn't pass casual
+    elif end_units >= 100:
+        penalty += 0.25  # $100+ end range → treat as expensive
+    elif end_units >= 80:
+        penalty += 0.15  # $80+ end range → borderline expensive
 
     # Casual-compatible markers boost casual fit
     boost = 0.0
@@ -201,6 +236,50 @@ def _casual_fit_score(card: Dict[str, Any]) -> float:
         boost += 0.15
 
     return max(0.0, min(1.0, 0.5 + boost - penalty))
+
+
+def _normalize_card_brand_name(card: Dict[str, Any]) -> str:
+    """Return a normalized brand name for same-chain detection in card dicts."""
+    name = (
+        card.get("name")
+        or (card.get("display") or {}).get("display_name")
+        or (card.get("google_verification") or {}).get("name")
+        or ""
+    )
+    if not name:
+        return ""
+    normalized = name.lower().strip()
+    normalized = re.sub(r"[''''']", "", normalized)
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized
+
+
+def _deduplicate_brands(
+    cards: List[Tuple[str, Dict[str, Any]]],
+) -> Tuple[List[Tuple[str, Dict[str, Any]]], int]:
+    """Remove same-brand duplicates from a list of (bucket, card_dict) pairs.
+
+    Keeps the first occurrence of each normalized brand name (highest-ranked).
+    Returns (deduplicated_list, count_suppressed).
+    """
+    seen: Dict[str, str] = {}  # brand_name → first-seen card name
+    result: List[Tuple[str, Dict[str, Any]]] = []
+    suppressed = 0
+    for bucket, card in cards:
+        brand = _normalize_card_brand_name(card)
+        if brand and brand in seen:
+            suppressed += 1
+            logger.info(
+                "concierge.context_resolver.brand_dedup: suppressed name=%r "
+                "kept_name=%r",
+                card.get("name"),
+                seen[brand],
+            )
+        else:
+            if brand:
+                seen[brand] = card.get("name") or brand
+            result.append((bucket, card))
+    return result, suppressed
 
 
 def _reorder_for_modifier(
@@ -306,6 +385,9 @@ def resolve_refine_previous(
         return None
 
     modifier_intent = "none"
+    _cards_before_filter = 0
+    _excluded_for_modifier = 0
+    _brand_dedup_suppressed = 0
     if rerank_rule == "best_one":
         selected = verified[:1]
     elif rerank_rule == "top_n":
@@ -315,6 +397,8 @@ def resolve_refine_previous(
         modifier_intent = _detect_modifier_intent(user_query)
         reordered = _reorder_for_modifier(verified, modifier_intent)
         filtered = _filter_for_modifier(reordered, modifier_intent)
+        _cards_before_filter = len(reordered)
+        _excluded_for_modifier = _cards_before_filter - len(filtered)
 
         if modifier_intent != "none" and not filtered:
             # All prior cards failed the modifier threshold — fall through so the
@@ -328,12 +412,19 @@ def resolve_refine_previous(
             )
             return None
 
+        # Apply brand-name diversity dedup after modifier filtering.
+        filtered, _brand_dedup_suppressed = _deduplicate_brands(filtered)
+
         selected = filtered
         logger.info(
             "concierge.context_resolver.modifier_filter trip_id=%s "
-            "modifier_intent=%s query=%r pool_before=%d pool_after=%d "
+            "modifier_intent=%s query=%r pool_before=%d "
+            "cards_before_filter=%d cards_after_filter=%d "
+            "excluded_for_modifier=%d brand_dedup_suppressed=%d "
             "context_reuse=true provider_call_skipped=true",
-            ctx.trip_id, modifier_intent, user_query, pool_size_before, len(selected),
+            ctx.trip_id, modifier_intent, user_query, pool_size_before,
+            _cards_before_filter, len(selected),
+            _excluded_for_modifier, _brand_dedup_suppressed,
         )
     else:  # compare
         selected = verified[:_MAX_COMPARE_CARDS]
@@ -369,4 +460,9 @@ def resolve_refine_previous(
         rerank_rule=rerank_rule,
         source_message_id=ctx.source_message_id,
         prior_intent=prior_intent,
+        modifier_intent=modifier_intent,
+        cards_before_filter=_cards_before_filter,
+        cards_after_filter=len(selected) if rerank_rule == "modifier_filter" else 0,
+        excluded_for_modifier_count=_excluded_for_modifier,
+        duplicate_brand_suppressed_count=_brand_dedup_suppressed,
     )

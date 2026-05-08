@@ -1,6 +1,71 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-08) — Sev 1 Catastrophic Fix: Modifier Routing + Entity Gate + Category Safety + Timeout Cap (Level 2 / Sev 1)
+## Last change (2026-05-08) — Result Quality Fix: Brand Dedup + Stronger Casual + Context Reuse Metadata (Level 2 / Sev 1.5)
+
+**Status: IN PROGRESS (branch: claude/travel-concierge-dev-LO0yn)** — Backend + tests only. No SQL. No UI changes. No new providers. No new LLM calls. Preserves full display_why/display_why_source/display_why_validated API contract.
+
+### Root causes of four post-PR #284 production failures
+
+**Failure 1 — Duplicate Sinya Mediterranean in same result set**
+- Root cause: `_diversity_signal` weight (0.08) was not strong enough to push the 2nd identical-name entity below the 6-card cap when the entity had strong subtype_fit and quality scores.
+- Fix: Added `_deduplicate_brand_names()` post-rank pass in `semantic_retrieval.py` (Step 5.05). For identical normalized names, keeps the highest-ranked card; suppresses the rest. Logs `brand_dedup_suppressed_count`. Same dedup applied in `context_resolver.py` modifier_filter path.
+
+**Failure 2 — "show only casual" still returned Purple Pig ($40–100) and duplicate Sinya**
+- Root cause 1: `_casual_fit_score` only checked `price_level` field, not `price_range.endPrice.units`. Purple Pig has no `price_level` but its price_range end is $100.
+- Root cause 2: `_CASUAL_FIT_MIN` threshold (0.4) was too low — `PRICE_LEVEL_EXPENSIVE` alone produced score ~0.35, which is below 0.4 but only barely.
+- Root cause 3: Brand dedup was not applied in the modifier_filter path after filtering.
+- Fix: Added `_card_price_range_end_units()` helper. Strengthened `_casual_fit_score` to penalize end_units >= $80/100. Raised `_CASUAL_FIT_MIN` from 0.4 to 0.45. Applied `_deduplicate_brands()` after modifier filtering.
+
+**Failure 3 — context_reuse.filter_applied=null and misleading response text**
+- Root cause: `filter_applied` was hardcoded to `None` in ai.py. `_build_reuse_summary` had no modifier_filter branch.
+- Fix: `RefineResolved` now carries `modifier_intent`, `cards_before_filter`, `cards_after_filter`, `excluded_for_modifier_count`, `duplicate_brand_suppressed_count`. `context_reuse` dict in ai.py populates all fields. `_build_reuse_summary` returns "I filtered your previous picks toward the more casual options." for modifier_filter+casual.
+
+**Failure 4 — "casual Mediterranean restaurants" fresh search nearly identical to broad search**
+- Root cause: Casual modifier was handled only through `preference_fit` weight (0.06), giving max penalty of 0.015 score points — far too small to reorder fine_dining/expensive places below casual-friendly alternatives.
+- Fix: Added a direct `pen` addition in the ranker scoring loop for `_casual_active` (mirrors wrong_category_penalty pattern). Uses price_level AND price_range end units. Fine_dining+very_expensive: +0.18 pen; fine_dining+expensive: +0.14; fine_dining: +0.10; very_expensive: +0.10; expensive: +0.06.
+
+### Note timeout telemetry (informational — no code change needed)
+
+All post-PR-284 payloads show `display_why_source="timed_out"` and `display_why_validated=false`. The existing telemetry in `rejection_stats` already explains the root cause:
+
+Inspect these fields in Railway logs (`semantic_retrieval_v1.turn`):
+- **`note_absent_reason`** (new synthesized field): `"wall_clock_timeout"` | `"no_budget"` | `"all_notes_rejected"` | `"past_soft_ceiling"` | `"low_budget"` | `"no_valid_cards"` | `"ok"`
+- `set_writer_skipped_budget` → writer never attempted (budget < 1200ms threshold)
+- `note_writer_skipped_past_soft_ceiling` → SLA soft ceiling exceeded before writer ran
+- `set_writer_timed_out` (in `set_writer_telemetry`) → thread wall-clock cap fired
+- `note_writer_skipped_low_budget` → budget positive but < 0.5s minimum
+
+### Files changed
+
+- `backend/app/concierge/semantic_retrieval.py` — added `re` import; `_normalize_brand_name()`; `_deduplicate_brand_names()`; Step 5.05 brand dedup call; `brand_duplicate_suppressed_count` + `casual_excluded_count` + `note_absent_reason` telemetry
+- `backend/app/concierge/ranker.py` — `RankerStats.casual_excluded_count` field; `_entity_price_range_end_units()` helper; direct `pen` additions for casual modifier in scoring loop; `casual_excluded_count` calculation
+- `backend/app/concierge/context_resolver.py` — `_CASUAL_FIT_MIN` raised 0.4 → 0.45; `_card_price_range_end_units()` helper; strengthened `_casual_fit_score` with price_range; `_normalize_card_brand_name()` + `_deduplicate_brands()`; brand dedup in modifier_filter path; `RefineResolved` 5 new metadata fields; richer modifier_filter log
+- `backend/app/routes/ai.py` — `_build_reuse_summary()` modifier_intent param + modifier_filter branch; `context_reuse` dict enriched with all new fields
+- `backend/tests/test_concierge_result_quality.py` — 41 new tests
+
+### Test results
+
+- `test_concierge_result_quality.py`: **41/41 PASS**
+- `test_concierge_sev1_catastrophic_fix.py`: **120/120 PASS** (no regression)
+- `test_concierge_context_resolver.py`: **50/50 PASS** (no regression)
+- `test_semantic_retrieval_v1.py`: **PASS** (no regression)
+- `test_concierge_latency_architecture_v1.py`: **PASS** (no regression)
+- `test_concierge_sev1_regression.py`: **PASS** (no regression)
+
+### Expected Hoppscotch validation after deploy
+
+1. POST "Mediterranean restaurants" → `rejection_stats.brand_duplicate_suppressed_count >= 0`; only one Sinya Mediterranean in response
+2. Follow-up "show only casual" → `context_reuse.filter_applied="casual"`, `context_reuse.modifier_intent="casual"`, `context_reuse.excluded_for_modifier_count > 0`, no Purple Pig, no Greek Islands, no duplicate Sinya; response text = "I filtered your previous picks toward the more casual options."
+3. POST "casual Mediterranean restaurants" → `casual_downranked_count > 0`; Greek Islands/Aba ranked lower than in broad search; brand_duplicate_suppressed_count >= 0
+4. Check `note_absent_reason` in Railway `semantic_retrieval_v1.turn` log to diagnose ongoing timed_out pattern
+
+### Supabase SQL
+
+None.
+
+---
+
+## Previous change (2026-05-08) — Sev 1 Catastrophic Fix: Modifier Routing + Entity Gate + Category Safety + Timeout Cap (Level 2 / Sev 1)
 
 **Status: IN PROGRESS (branch: claude/travel-concierge-dev-xPJH2)** — Backend + tests only. No SQL. No UI changes. No new providers. No new LLM calls. Preserves full display_why/display_why_source/display_why_validated API contract.
 

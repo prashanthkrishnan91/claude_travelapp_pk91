@@ -67,11 +67,23 @@ def _validate_reused_cards(raw_cards: List[Any], model_cls: Any) -> List[Any]:
     return result
 
 
-def _build_reuse_summary(rerank_rule: str, n: int) -> str:
+def _build_reuse_summary(
+    rerank_rule: str,
+    n: int,
+    modifier_intent: str = "none",
+) -> str:
     if rerank_rule == "best_one":
         return "Here is the top pick from your previous search results."
     if rerank_rule == "compare":
         return "Here are your previous search results for comparison."
+    if rerank_rule == "modifier_filter" and modifier_intent not in ("none", ""):
+        _label = {
+            "casual": "casual",
+            "cheap": "budget-friendly",
+            "formal": "upscale",
+            "expensive": "upscale",
+        }.get(modifier_intent, modifier_intent)
+        return f"I filtered your previous picks toward the more {_label} options."
     # top_n
     return f"Here are the top {n} picks from your previous search results."
 
@@ -300,7 +312,9 @@ def build_typed_concierge_response(
 
                 n_after = len(restaurants) + len(attractions) + len(hotels)
                 if n_after > 0:
-                    summary = _build_reuse_summary(rerank_rule, n_after)
+                    summary = _build_reuse_summary(
+                        rerank_rule, n_after, modifier_intent=resolved.modifier_intent
+                    )
                     typed_payload = PlaceRecommendationsResponse(
                         response=summary,
                         intent=resolved.prior_intent or "general",
@@ -317,7 +331,16 @@ def build_typed_concierge_response(
                             "cards_returned": n_after,
                             "source_message_id": resolved.source_message_id,
                             "rerank_rule": resolved.rerank_rule,
-                            "filter_applied": None,
+                            "filter_applied": (
+                                resolved.modifier_intent
+                                if resolved.modifier_intent not in ("none", "")
+                                else None
+                            ),
+                            "modifier_intent": resolved.modifier_intent,
+                            "cards_before_filter": resolved.cards_before_filter,
+                            "cards_after_filter": resolved.cards_after_filter,
+                            "excluded_for_modifier_count": resolved.excluded_for_modifier_count,
+                            "duplicate_brand_suppressed_count": resolved.duplicate_brand_suppressed_count,
                         },
                     )
                     decision = RouteDecision(
