@@ -1215,3 +1215,428 @@ class TestAssembleCardSetWithSetWriterPrimary:
             "Note text from card_reasons must survive into the final card's "
             "display.display_why without truncation or substitution."
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 10. Concierge Latency Observability v1 tests
+#
+# Tests required by the Latency Observability v1 PR:
+#   a. Slow enrichment does not prevent verified Google cards from returning.
+#   b. Valid set-writer notes are not overwritten by timeout branches.
+#   c. Provider failure/timeout creates no visible fallback note.
+#   d. Final assembled card display contract preserves display_why /
+#      display_why_source / display_why_validated.
+#   e. Card cap is applied after _assemble_card_set (production path, not slice).
+#   f. Price formatting: partial price range never produces "$100–0".
+#   g. _format_display_price single-sided cases.
+#   h. timeout_budget_consumed_pct appears in latency_summary log (log-capture).
+#   i. timeout_branches_triggered appears in latency_summary log (log-capture).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestConciergeLatencyArchitecture:
+    """Concierge Latency Architecture v1 — contract and telemetry invariants."""
+
+    # ── a. Slow enrichment does not block card return ─────────────────────────
+
+    def test_slow_enrichment_does_not_prevent_verified_card_return(self):
+        """When note_generation_timed_out=True (enrichment consumed the SLA budget),
+        all verified Google cards must still be returned without a note block.
+        No cards are dropped simply because note generation was skipped.
+        """
+        from app.concierge.semantic_retrieval import _assemble_card_set
+
+        cards_data = _make_izakaya_cards_data(n_extra=4)  # 5 total cards
+        frame = _make_frame()
+
+        with patch(
+            "app.concierge.semantic_retrieval._entity_to_card",
+            side_effect=_stub_entity_to_card,
+        ):
+            cards, _rd, excluded, visible_count, without_count = _assemble_card_set(
+                cards_data=cards_data,
+                card_reasons={},                # empty — enrichment consumed budget
+                frame=frame,
+                note_generation_timed_out=True,
+                set_writer_primary_active=False,
+            )
+
+        assert len(cards) == 5, (
+            "All 5 verified Google cards must return even when enrichment consumed "
+            "the SLA budget. Slow enrichment must never drop verified cards."
+        )
+        assert visible_count == 0
+        assert without_count == 5
+        assert excluded == 0
+        for card in cards:
+            assert card.display.display_why_validated is False
+            assert card.display.display_why == ""
+
+    # ── b. Valid set-writer notes not overwritten by timeout ─────────────────
+
+    def test_set_writer_notes_not_overwritten_by_timeout_in_assemble(self):
+        """_assemble_card_set: set_writer_primary_active=True + note_generation_timed_out=True
+        must produce display_why_validated=True for cards with validated notes.
+        This guards against a regression where the timed_out branch fires first
+        and zeroes out pre-computed notes.
+        """
+        from app.concierge.semantic_retrieval import _assemble_card_set
+
+        cards_data = _make_izakaya_cards_data(n_extra=0)  # just The Izakaya
+        card_reasons = _make_izakaya_card_reasons(cards_data)
+        frame = _make_frame()
+
+        with patch(
+            "app.concierge.semantic_retrieval._entity_to_card",
+            side_effect=_stub_entity_to_card,
+        ):
+            cards, _rd, excluded, visible_count, without_count = _assemble_card_set(
+                cards_data=cards_data,
+                card_reasons=card_reasons,
+                frame=frame,
+                note_generation_timed_out=True,   # would have discarded notes before fix
+                set_writer_primary_active=True,
+            )
+
+        assert len(cards) == 1
+        assert visible_count == 1, "Validated set-writer note must survive timed_out=True"
+        izakaya = cards[0]
+        assert izakaya.display.display_why_validated is True
+        assert izakaya.display.display_why == _IZAKAYA_NOTE
+
+    # ── c. Provider failure/timeout creates no visible fallback note ──────────
+
+    def test_provider_failure_creates_no_visible_fallback_note(self):
+        """When providers fail or time out (card_reasons empty, no set-writer),
+        assembled cards must have display_why_validated=False and empty display_why.
+        No fallback note text must be injected.
+        """
+        from app.concierge.semantic_retrieval import _assemble_card_set
+
+        cards_data = _make_izakaya_cards_data(n_extra=2)
+        frame = _make_frame()
+
+        with patch(
+            "app.concierge.semantic_retrieval._entity_to_card",
+            side_effect=_stub_entity_to_card,
+        ):
+            cards, _rd, _exc, visible, without = _assemble_card_set(
+                cards_data=cards_data,
+                card_reasons={},                # provider failure → no reasons produced
+                frame=frame,
+                note_generation_timed_out=True,
+                set_writer_primary_active=False,
+            )
+
+        fallback_visible = sum(1 for c in cards if c.display.display_why_validated)
+        assert fallback_visible == 0, (
+            "No visible fallback note must appear when providers fail. "
+            f"Got {fallback_visible} cards with display_why_validated=True."
+        )
+        for card in cards:
+            assert card.display.display_why == "", (
+                f"Card '{card.name}' must have empty display_why when note timed out, "
+                f"got: {card.display.display_why!r}"
+            )
+
+    # ── d. Display contract preserved ────────────────────────────────────────
+
+    def test_display_contract_fields_always_present(self):
+        """_assemble_card_set must always set display_why, display_why_source,
+        and display_why_validated — these are the three fields the frontend contract
+        requires on every assembled card.
+        """
+        from app.concierge.semantic_retrieval import _assemble_card_set
+        from app.concierge.batched_reason_builder import CardReason
+
+        cards_data = _make_izakaya_cards_data(n_extra=1)
+        card_reasons = {
+            "1": CardReason(note=_IZAKAYA_NOTE, source="set_level_writer_v1", validated=True),
+            "2": CardReason(note="", source="set_level_writer_v1", validated=False),
+        }
+        frame = _make_frame()
+
+        with patch(
+            "app.concierge.semantic_retrieval._entity_to_card",
+            side_effect=_stub_entity_to_card,
+        ):
+            cards, *_ = _assemble_card_set(
+                cards_data=cards_data,
+                card_reasons=card_reasons,
+                frame=frame,
+                note_generation_timed_out=False,
+                set_writer_primary_active=True,
+            )
+
+        for card in cards:
+            display = card.display
+            assert hasattr(display, "display_why"), f"Missing display_why on {card.name}"
+            assert hasattr(display, "display_why_source"), f"Missing display_why_source on {card.name}"
+            assert hasattr(display, "display_why_validated"), f"Missing display_why_validated on {card.name}"
+            assert isinstance(display.display_why_validated, bool)
+            assert isinstance(display.display_why, str)
+            assert isinstance(display.display_why_source, str)
+
+    # ── e. Card cap preserved under latency pressure ──────────────────────────
+
+    def test_card_cap_applied_after_assembly_via_production_path(self):
+        """Card cap must apply to the output of _assemble_card_set (production path),
+        not just a synthetic list slice.  8 assembled cards → 6 after cap.
+        """
+        from app.concierge.semantic_retrieval import _assemble_card_set
+        from app.concierge.batched_reason_builder import CardReason
+
+        n = 8
+        cards_data = [
+            (
+                SimpleNamespace(
+                    name=f"Bar {i}", place_id=f"pid_{i:03d}",
+                    formatted_address=f"{i} Main St, Chicago, IL",
+                    lat=41.88 + i * 0.001, lng=-87.63,
+                    rating=4.5, user_rating_count=100,
+                    business_status="OPERATIONAL",
+                    google_maps_uri=f"https://maps.google.com/?q=bar_{i}",
+                    website_uri=None, types=["bar"], primary_type="bar",
+                ),
+                SimpleNamespace(evidence_adequacy="STRONG", structured_facts=[], enrichment_facts=[]),
+                SimpleNamespace(total=0.9, as_dict=lambda: {}),
+                "",
+            )
+            for i in range(n)
+        ]
+        card_reasons = {
+            str(i + 1): CardReason(
+                note=f"Note for bar {i}.", source="set_level_writer_v1", validated=True
+            )
+            for i in range(n)
+        }
+        frame = _make_frame()
+
+        with patch(
+            "app.concierge.semantic_retrieval._entity_to_card",
+            side_effect=_stub_entity_to_card,
+        ):
+            cards, *_ = _assemble_card_set(
+                cards_data=cards_data,
+                card_reasons=card_reasons,
+                frame=frame,
+                note_generation_timed_out=False,
+                set_writer_primary_active=True,
+            )
+
+        assert len(cards) == n, f"Assembly must return all {n} validated cards before cap"
+        first_card_limit = clamp_first_card_limit(DEFAULT_SLA.first_card_limit)
+        capped = cards[:first_card_limit]
+        assert len(capped) == 6, (
+            f"Cap must reduce {n} assembled cards to {first_card_limit}, got {len(capped)}"
+        )
+
+    # ── f. Price format: partial price range never produces "$100–0" ──────────
+
+    def test_price_format_partial_range_no_malformed_output(self):
+        """_format_display_price must never return '$100–0' or '$X–0' patterns."""
+        from app.concierge.semantic_retrieval import _format_display_price
+
+        bad_range = {
+            "startPrice": {"units": "100", "currencyCode": "USD"},
+            "endPrice": {"units": "0"},
+        }
+        result = _format_display_price(None, bad_range)
+        assert result is not None, "Expected a price string, got None"
+        assert "–0" not in result, (
+            f"Malformed range '$X–0' must not be returned. Got: {result!r}"
+        )
+
+    def test_price_format_single_sided_start_only(self):
+        """When only startPrice has units, returns 'From $X'."""
+        from app.concierge.semantic_retrieval import _format_display_price
+
+        result = _format_display_price(None, {
+            "startPrice": {"units": "50", "currencyCode": "USD"},
+            "endPrice": {},
+        })
+        assert result == "From $50", f"Expected 'From $50', got {result!r}"
+
+    def test_price_format_single_sided_start_zero_end(self):
+        """When endPrice.units is 0/absent, returns 'From $X' not '$X–0'."""
+        from app.concierge.semantic_retrieval import _format_display_price
+
+        result = _format_display_price(None, {
+            "startPrice": {"units": "100", "currencyCode": "USD"},
+            "endPrice": {"units": "0"},
+        })
+        assert result == "From $100", f"Expected 'From $100', got {result!r}"
+
+    def test_price_format_both_sides_valid_range(self):
+        """When both startPrice and endPrice have positive units, returns '$X–Y'."""
+        from app.concierge.semantic_retrieval import _format_display_price
+
+        result = _format_display_price(None, {
+            "startPrice": {"units": "25", "currencyCode": "USD"},
+            "endPrice": {"units": "75", "currencyCode": "USD"},
+        })
+        assert result == "$25–75", f"Expected '$25–75', got {result!r}"
+
+    def test_price_format_no_range_falls_back_to_price_level(self):
+        """When price_range is absent, falls back to price_level symbol."""
+        from app.concierge.semantic_retrieval import _format_display_price
+
+        result = _format_display_price("PRICE_LEVEL_MODERATE", None)
+        assert result == "$$"
+
+    def test_price_format_none_when_no_data(self):
+        """Returns None when both price_range and price_level are absent."""
+        from app.concierge.semantic_retrieval import _format_display_price
+
+        result = _format_display_price(None, None)
+        assert result is None
+
+    # ── g. timeout_budget_consumed_pct appears in latency_summary log ───────
+
+    def _make_log_frame(self) -> SimpleNamespace:
+        """Minimal frame stub for _log_semantic_turn calls."""
+        return SimpleNamespace(
+            subtype_concepts=[SimpleNamespace(label="bar", confidence=0.9)],
+            destination="Chicago",
+            open_class_place_detected=False,
+            geography_hints=[], location_modifiers=[],
+            soft_preferences=[], normalized_soft_preferences=[],
+            negative_constraints=[], use_cases=[], value_signals=[],
+            ambiguity_flags=[], suppressed_preference_nouns=[],
+            temporal_constraints=[],
+        )
+
+    def test_timeout_budget_consumed_pct_emitted_in_latency_summary(self, caplog):
+        """_log_semantic_turn must include the supplied timeout_budget_consumed_pct
+        value in the semantic_retrieval_v1.latency_summary log line.
+        Exercises the production function rather than reimplementing the formula.
+        """
+        import logging
+        from app.concierge.semantic_retrieval import _log_semantic_turn
+
+        with caplog.at_level(logging.INFO, logger="app.concierge.semantic_retrieval"):
+            _log_semantic_turn(
+                user_query="craft bars Chicago",
+                frame=self._make_log_frame(),
+                queries=["craft bars Chicago"],
+                latency={"provider_ms": 800},
+                provider_call_count=1,
+                provider_success_count=1,
+                raw_candidate_count=5,
+                deduped_candidate_count=5,
+                verified_entity_count=5,
+                rejection_stats={},
+                final_card_count=3,
+                t_pipeline_start=time.monotonic() - 1.5,
+                outcome="ok",
+                timeout_budget_consumed_pct=25,
+                timeout_branches_triggered=[],
+            )
+
+        summary_lines = [
+            r.message for r in caplog.records
+            if "latency_summary" in r.message
+        ]
+        assert len(summary_lines) == 1, "latency_summary log line must be emitted"
+        assert "timeout_budget_consumed_pct=25" in summary_lines[0], (
+            f"timeout_budget_consumed_pct=25 not found in: {summary_lines[0]}"
+        )
+
+    def test_timeout_budget_consumed_pct_caps_at_100_in_log(self, caplog):
+        """When elapsed > hard_cutoff, pct must be capped at 100 in the log."""
+        import logging
+        from app.concierge.semantic_retrieval import _log_semantic_turn
+
+        with caplog.at_level(logging.INFO, logger="app.concierge.semantic_retrieval"):
+            _log_semantic_turn(
+                user_query="craft bars Chicago",
+                frame=self._make_log_frame(),
+                queries=["craft bars Chicago"],
+                latency={},
+                provider_call_count=1,
+                provider_success_count=1,
+                raw_candidate_count=5,
+                deduped_candidate_count=5,
+                verified_entity_count=5,
+                rejection_stats={},
+                final_card_count=3,
+                t_pipeline_start=time.monotonic() - 1.5,
+                outcome="ok",
+                timeout_budget_consumed_pct=100,  # capped by caller
+                timeout_branches_triggered=[],
+            )
+
+        summary_lines = [
+            r.message for r in caplog.records
+            if "latency_summary" in r.message
+        ]
+        assert len(summary_lines) == 1
+        assert "timeout_budget_consumed_pct=100" in summary_lines[0]
+
+    # ── h. timeout_branches_triggered appears in latency_summary log ─────────
+
+    def test_timeout_branches_triggered_emitted_in_latency_summary(self, caplog):
+        """_log_semantic_turn must include the supplied timeout_branches_triggered
+        list in the semantic_retrieval_v1.latency_summary log line.
+        """
+        import logging
+        from app.concierge.semantic_retrieval import _log_semantic_turn
+
+        with caplog.at_level(logging.INFO, logger="app.concierge.semantic_retrieval"):
+            _log_semantic_turn(
+                user_query="craft bars Chicago",
+                frame=self._make_log_frame(),
+                queries=["craft bars Chicago"],
+                latency={},
+                provider_call_count=1,
+                provider_success_count=1,
+                raw_candidate_count=5,
+                deduped_candidate_count=5,
+                verified_entity_count=5,
+                rejection_stats={},
+                final_card_count=3,
+                t_pipeline_start=time.monotonic() - 1.5,
+                outcome="ok",
+                timeout_budget_consumed_pct=68,
+                timeout_branches_triggered=["note_generation_timed_out"],
+            )
+
+        summary_lines = [
+            r.message for r in caplog.records
+            if "latency_summary" in r.message
+        ]
+        assert len(summary_lines) == 1
+        assert "note_generation_timed_out" in summary_lines[0], (
+            f"timeout branch not found in latency_summary: {summary_lines[0]}"
+        )
+
+    def test_empty_timeout_branches_emitted_as_empty_list_in_log(self, caplog):
+        """When no timeout branches fired, the log must show an empty list."""
+        import logging
+        from app.concierge.semantic_retrieval import _log_semantic_turn
+
+        with caplog.at_level(logging.INFO, logger="app.concierge.semantic_retrieval"):
+            _log_semantic_turn(
+                user_query="craft bars Chicago",
+                frame=self._make_log_frame(),
+                queries=["craft bars Chicago"],
+                latency={},
+                provider_call_count=1,
+                provider_success_count=1,
+                raw_candidate_count=5,
+                deduped_candidate_count=5,
+                verified_entity_count=5,
+                rejection_stats={},
+                final_card_count=3,
+                t_pipeline_start=time.monotonic() - 1.5,
+                outcome="ok",
+                timeout_budget_consumed_pct=15,
+                timeout_branches_triggered=[],
+            )
+
+        summary_lines = [
+            r.message for r in caplog.records
+            if "latency_summary" in r.message
+        ]
+        assert len(summary_lines) == 1
+        assert "timeout_branches=[]" in summary_lines[0]
