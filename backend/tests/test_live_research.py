@@ -926,7 +926,16 @@ class TestConciergeWithLiveResearch:
         assert result.source_status == SOURCE_SAMPLE_DATA
         assert result.live_provider is None
         assert result.restaurants  # sample bars
-        assert all("verify hours" in (r.summary or "").lower() for r in result.restaurants)
+        # Architecture rescue: stale "verify hours and current status before
+        # booking." disclaimer is gone. Sample cards now carry a neutral
+        # "Sample data — limited source coverage" source label and never the
+        # legacy "Sample bar research data" phrasing.
+        assert all(
+            "sample" in (r.source or "").lower() for r in result.restaurants
+        ), "sample-fallback cards must retain the 'sample' discriminator"
+        for card in result.restaurants:
+            assert "Sample bar research data" not in (card.source or "")
+            assert "Sample bar research data" not in (card.summary or "")
 
     def test_nightlife_with_require_google_does_not_fallback_to_sample(self, monkeypatch):
         svc = self._make_concierge("Chicago", hits=[])

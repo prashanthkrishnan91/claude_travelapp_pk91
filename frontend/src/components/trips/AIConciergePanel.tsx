@@ -174,7 +174,7 @@ function sourceLabel(status: string, intent?: string, liveProvider?: string | nu
     return cached ? `${provider} (cached)` : provider;
   }
   if (status === "app_database") return "Based on available app database";
-  if (status === "sample_data") return "Sample bar research data · verify hours and current status before booking.";
+  if (status === "sample_data") return "Limited source coverage — verify hours and booking before adding.";
   if (status === "unavailable") return "Limited source coverage — verify names, hours, and booking details.";
   return null;
 }
@@ -202,7 +202,7 @@ function footerSourceLabel(msg: Message): string | null {
     return msg.cached ? `${provider} (cached)` : provider;
   }
   if (hasSample) {
-    return "Sample bar research data · verify hours and current status before booking.";
+    return "Limited source coverage — verify hours and booking before adding.";
   }
   return sourceLabel(msg.sourceStatus ?? "", msg.intent, msg.liveProvider, msg.cached);
 }

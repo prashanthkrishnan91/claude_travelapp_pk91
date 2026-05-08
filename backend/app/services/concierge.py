@@ -380,7 +380,7 @@ class ConciergeService:
                 restaurants = self._sample_nightlife_results(destination)
                 if restaurants:
                     source_status = SOURCE_SAMPLE_DATA
-                    sources.append("Sample bar research data · verify hours and current status before booking.")
+                    sources.append("Limited source coverage — verify hours and booking before adding.")
                     retrieval_used = True
                 else:
                     source_status = SOURCE_UNAVAILABLE
@@ -1034,13 +1034,16 @@ class ConciergeService:
             cards.append(
                 UnifiedRestaurantResult(
                     name=pick["name"],
-                    source="Sample bar research data · verify hours and current status before booking.",
+                    # Source token retains the "sample" discriminator so the
+                    # response-level _derive_response_source_status() can still
+                    # distinguish sample-fallback cards from live cards, but the
+                    # phrasing is neutral — no "research data" disclaimer.
+                    source="Sample data — limited source coverage",
                     cuisine=pick["category"],
                     neighborhood=pick["area"],
                     rating=pick["rating"],
                     summary=(
-                        f"{pick['why']} "
-                        "Sample bar research data · verify hours and current status before booking."
+                        f"{pick['why']}"
                         + (f" {' '.join(verification_bits)}." if verification_bits else "")
                     ),
                     maps_link=f"https://maps.google.com/?q={maps_query}",
@@ -1162,8 +1165,8 @@ class ConciergeService:
         ai_score = getattr(r, "ai_score", None)
         michelin_status = getattr(r, "michelin_status", None)
         maps_query = f"{name} {location}".strip().replace(" ", "+")
+        # Google Places ratings are 0-5; preserve native scale.
         rating = getattr(r, "rating", None)
-        rating_10 = round(rating * 2, 1) if rating is not None else None
         num_reviews = getattr(r, "num_reviews", None)
         price_level = getattr(r, "price_level", None)
         sentiment = getattr(r, "sentiment", None)
@@ -1178,8 +1181,8 @@ class ConciergeService:
                 price_text = "splurge-level"
 
         review_signal = ""
-        if rating_10 is not None:
-            review_signal = f"{rating_10}/10 rating"
+        if rating is not None:
+            review_signal = f"{rating:.1f}/5 rating"
             if num_reviews:
                 review_signal += f" across {num_reviews:,} reviews"
         elif num_reviews:
@@ -1234,10 +1237,16 @@ class ConciergeService:
             text=summary,
             name=name,
             category=cuisine,
-            rating=rating_10,
+            rating=rating,
             review_count=num_reviews,
             neighborhood=location or None,
             intent=intent,
+        )
+
+        meta_line = (
+            f"★ {float(rating):.1f} ({num_reviews:,} reviews)"
+            if rating is not None and num_reviews
+            else (f"★ {float(rating):.1f}" if rating is not None else None)
         )
 
         return UnifiedRestaurantResult(
@@ -1246,21 +1255,21 @@ class ConciergeService:
             michelin_status=michelin_status,
             cuisine=cuisine,
             neighborhood=location,
-            rating=rating_10,
+            rating=rating,
             review_count=num_reviews,
             summary=clean_summary,
             primary_reason=clean_summary,
             why_pick=clean_summary,
             supporting_details=PlaceSupportingDetails(
                 why_pick=clean_summary,
-                meta_line=(f"★ {rating_10:.1f} ({num_reviews:,} reviews)" if rating_10 is not None and num_reviews else None),
+                meta_line=meta_line,
                 address=location or None,
                 category_label=cuisine or "Restaurant",
             ),
             display=ConciergeDisplayFields(
                 display_name=name,
                 display_category=cuisine or "Restaurant",
-                display_meta_line=(f"★ {rating_10:.1f} ({num_reviews:,} reviews)" if rating_10 is not None and num_reviews else None),
+                display_meta_line=meta_line,
                 display_why=clean_summary,
                 display_badges=[],
                 addability="addable",
@@ -1284,9 +1293,11 @@ class ConciergeService:
         category = getattr(a, "category", "attraction")
         tags = list(getattr(a, "tags", []) or [])
         ai_score = getattr(a, "ai_score", None)
+        # Google Places ratings are 0-5; preserve native scale.
         rating = getattr(a, "rating", None)
+        review_count = getattr(a, "num_reviews", None) or getattr(a, "review_count", None)
+        address = getattr(a, "address", None)
         maps_query = f"{name} {location}".strip().replace(" ", "+")
-        rating_10 = round(rating * 2, 1) if rating is not None else None
         description = getattr(a, "description", None)
         duration = getattr(a, "duration_minutes", None)
         price_level = getattr(a, "price_level", None)
@@ -1302,11 +1313,11 @@ class ConciergeService:
                 description = description.rstrip(".") + ". " + " · ".join(extra)
         else:
             desc_parts = []
-            if rating_10 is not None:
-                if rating_10 >= 8.5:
+            if rating is not None:
+                if rating >= 4.25:
                     desc_parts.append("highly rated attraction")
-                elif rating_10 >= 7.0:
-                    desc_parts.append(f"well-reviewed ({rating_10}/10)")
+                elif rating >= 3.5:
+                    desc_parts.append(f"well-reviewed ({rating:.1f}/5)")
             if duration:
                 h, m = divmod(duration, 60)
                 desc_parts.append(f"plan ~{h}h" if h >= 1 else f"~{m} min visit")
@@ -1325,8 +1336,8 @@ class ConciergeService:
             reason_parts.append("for Day 2-style pacing")
         if location:
             reason_parts.append(f"around {location}")
-        if rating_10 is not None:
-            reason_parts.append(f"with a {rating_10}/10 rating")
+        if rating is not None:
+            reason_parts.append(f"with a {rating:.1f}/5 rating")
         if duration:
             reason_parts.append(f"and about {duration} minutes on site")
         reason = " ".join(reason_parts).strip()
@@ -1335,18 +1346,47 @@ class ConciergeService:
         elif reason:
             reason += "."
 
+        category_label = (category or "attraction").replace("_", " ").title()
+        meta_line: Optional[str] = None
+        if rating is not None:
+            try:
+                meta_line = f"★ {float(rating):.1f}"
+                if review_count:
+                    meta_line = f"{meta_line} ({int(review_count):,} reviews)"
+            except (TypeError, ValueError):
+                meta_line = None
+
+        display_why = reason or description or ""
+
         return UnifiedAttractionResult(
             name=name,
             source="Attraction database",
             category=category,
-            description=reason or description,
+            description=display_why,
             neighborhood=location,
-            rating=rating_10,
-            review_count=getattr(a, "num_reviews", None),
-            address=getattr(a, "address", None),
+            rating=rating,
+            review_count=review_count,
+            address=address or location or None,
             maps_link=f"https://maps.google.com/?q={maps_query}",
             ai_score=ai_score,
             tags=tags[:4],
+            primary_reason=display_why,
+            why_pick=display_why,
+            supporting_details=PlaceSupportingDetails(
+                why_pick=display_why,
+                meta_line=meta_line,
+                address=address or location or None,
+                category_label=category_label,
+            ),
+            display=ConciergeDisplayFields(
+                display_name=name,
+                display_category=category_label,
+                display_meta_line=meta_line,
+                display_why=display_why,
+                display_badges=[],
+                addability="addable",
+                display_why_source="deterministic_concierge",
+            ),
         )
 
     def _to_unified_hotel(self, h, limited_coverage: bool = False) -> UnifiedHotelResult:
@@ -1358,21 +1398,21 @@ class ConciergeService:
         area = getattr(h, "area_label", None)
         stars = getattr(h, "stars", None)
         price = getattr(h, "price_per_night", None)
+        # Google Places ratings are 0-5; preserve the native scale to stay
+        # aligned with restaurants/bars and the canonical display contract.
         rating = getattr(h, "rating", None)
-        rating_10 = round(rating * 2, 1) if rating is not None else None
+        review_count = getattr(h, "num_reviews", None) or getattr(h, "review_count", None)
         proximity_label = getattr(h, "proximity_label", None)
         savings = getattr(h, "savings_vs_best", None)
         tags = tags[:4]
 
-        reason_parts = []
-        # Location signal
+        reason_parts: List[str] = []
         if area and "best" in area.lower():
             reason_parts.append("centrally located near top attractions")
         elif proximity_label:
             reason_parts.append(proximity_label.lower())
         elif area and area not in ("City", "Unknown", ""):
             reason_parts.append(f"located in {area}")
-        # Star class signal
         if stars:
             s = int(round(stars))
             if s >= 5:
@@ -1381,7 +1421,6 @@ class ConciergeService:
                 reason_parts.append("4-star upscale property")
             elif s == 3:
                 reason_parts.append("3-star comfortable stay")
-        # Price/value signal
         if price:
             if savings is not None and savings < -40:
                 reason_parts.append(f"great value at ${int(price)}/night (below avg)")
@@ -1393,15 +1432,13 @@ class ConciergeService:
                 reason_parts.append(f"mid-range at ${int(price)}/night")
             else:
                 reason_parts.append(f"premium at ${int(price)}/night")
-        # Rating signal
-        if rating_10 is not None:
-            if rating_10 >= 9.0:
+        if rating is not None:
+            if rating >= 4.5:
                 reason_parts.append("outstanding guest reviews")
-            elif rating_10 >= 8.0:
-                reason_parts.append(f"highly rated ({rating_10}/10)")
-            elif rating_10 >= 7.0:
-                reason_parts.append(f"solid guest rating ({rating_10}/10)")
-        # Tradeoff caveat from tags
+            elif rating >= 4.0:
+                reason_parts.append(f"highly rated ({rating:.1f}/5)")
+            elif rating >= 3.5:
+                reason_parts.append(f"solid guest rating ({rating:.1f}/5)")
         if "Far from action" in (area or ""):
             reason_parts.append("note: farther from city center")
 
@@ -1411,7 +1448,6 @@ class ConciergeService:
             if limited_coverage:
                 reason += "; limited source coverage, verify amenities and live rates."
 
-        # Booking URL — use a non-maps URL different from the map link
         booking_url = None
         booking_options = getattr(h, "booking_options", None) or []
         if booking_options:
@@ -1427,18 +1463,59 @@ class ConciergeService:
                     booking_url = candidate_url
                     break
 
+        category_label = (
+            f"{int(round(stars))}-star Hotel" if stars else "Hotel"
+        )
+        # Hotels carry a numeric nightly rate, not a Google priceLevel/priceRange,
+        # so format the per-night display string directly.  The normalizer at the
+        # response boundary will still re-run this formatting idempotently.
+        price_display: Optional[str] = None
+        if price is not None:
+            try:
+                price_display = f"${int(round(float(price)))}/night"
+            except (TypeError, ValueError):
+                price_display = None
+
+        meta_line: Optional[str] = None
+        if rating is not None:
+            try:
+                meta_line = f"★ {float(rating):.1f}"
+                if review_count:
+                    meta_line = f"{meta_line} ({int(review_count):,} reviews)"
+            except (TypeError, ValueError):
+                meta_line = None
+
         return UnifiedHotelResult(
             name=name,
             source="Hotel search",
             area_label=area,
             stars=stars,
-            rating=rating_10,
+            rating=rating,
+            review_count=review_count,
             price_per_night=price,
             maps_link=f"https://maps.google.com/?q={maps_query}",
             booking_url=booking_url,
             reason=reason,
+            primary_reason=reason,
+            why_pick=reason,
             ai_score=ai_score,
             tags=tags,
+            supporting_details=PlaceSupportingDetails(
+                why_pick=reason,
+                meta_line=meta_line,
+                address=area or location or None,
+                category_label=category_label,
+            ),
+            display=ConciergeDisplayFields(
+                display_name=name,
+                display_category=category_label,
+                display_meta_line=meta_line,
+                display_why=reason or "",
+                display_price=price_display,
+                display_badges=[],
+                addability="addable",
+                display_why_source="deterministic_concierge",
+            ),
         )
 
     # ------------------------------------------------------------------
