@@ -264,7 +264,7 @@ def build_typed_concierge_response(
         provider_call_expected = not (
             getattr(settings, "concierge_context_v1_enabled", False)
             and turn_mode == "refine_previous"
-            and rerank_rule in ("top_n", "best_one", "compare")
+            and rerank_rule in ("top_n", "best_one", "compare", "modifier_filter")
             and ctx.has_prior_cards
         )
         log_context_turn(

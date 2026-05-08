@@ -37,6 +37,54 @@ _MAX_CARDS = 8  # pool/ranking size; first response is capped separately by SLA 
 # a call that cannot complete usefully within the remaining window.
 _MIN_NOTE_GENERATION_BUDGET_S = 0.5
 
+# Google type tokens that are incompatible with food/restaurant responses.
+# An entity whose types contain ONLY these tokens (none of the food-compatible
+# tokens below) is rejected from restaurant/place_recommendations results.
+# This gate blocks "Only One Boutique" (womens_clothing_store) from appearing
+# in restaurant responses.
+_FOOD_INCOMPATIBLE_TYPES: frozenset = frozenset({
+    "clothing_store", "womens_clothing_store", "mens_clothing_store",
+    "shoe_store", "department_store", "shopping_mall", "boutique",
+    "jewelry_store", "accessories_store", "sporting_goods_store",
+    "home_goods_store", "furniture_store", "hardware_store",
+    "electronics_store", "book_store", "toy_store", "pet_store",
+    "florist", "art_gallery", "gift_shop",
+    "gym", "fitness_center", "health_club", "yoga_studio", "spa",
+    "beauty_salon", "hair_salon", "nail_salon", "barber_shop",
+    "laundry", "dry_cleaning",
+    "car_dealer", "car_rental", "auto_parts_store",
+    "real_estate_agency", "insurance_agency", "travel_agency",
+    "lawyer", "accountant",
+})
+
+# Food/restaurant-compatible Google type tokens. An entity with at least one of
+# these tokens is eligible for restaurant responses regardless of other types.
+_FOOD_COMPATIBLE_TYPES: frozenset = frozenset({
+    "restaurant", "food", "cafe", "coffee_shop", "bakery", "bar",
+    "meal_takeaway", "meal_delivery", "night_club",
+    "brewery", "winery", "distillery",
+    "ice_cream_shop", "donut_shop", "pizza_delivery",
+    "sandwich_shop", "hamburger_restaurant", "fast_food_restaurant",
+    "sushi_restaurant", "japanese_restaurant", "ramen_restaurant",
+    "spanish_restaurant", "mexican_restaurant", "italian_restaurant",
+    "french_restaurant", "chinese_restaurant", "thai_restaurant",
+    "indian_restaurant", "korean_restaurant", "vietnamese_restaurant",
+    "mediterranean_restaurant", "greek_restaurant", "american_restaurant",
+    "steak_house", "seafood_restaurant", "pizza_restaurant",
+    "brunch_restaurant", "breakfast_restaurant", "dessert_shop",
+    "wine_bar", "cocktail_bar", "gastropub", "pub",
+})
+
+# Concept-label words that must never be used as category label prefixes.
+# These are modifier/refinement words that can become the concept label when the
+# query is a modifier-only phrase (e.g., "casual Mediterranean"). Using them as a
+# category label prefix produces nonsense like "Only Restaurant" or "Casual Restaurant".
+_CONCEPT_LABEL_BLOCKLIST: frozenset = frozenset({
+    "only", "just", "more", "less", "make", "filter", "show", "get",
+    "casual", "fancy", "cheap", "cheaper", "expensive", "affordable",
+    "nearby", "closer", "outdoor", "outside",
+})
+
 # Google priceLevel → UI symbol (mirrors fast_dynamic_place_search._PRICE_LEVEL_SYMBOL)
 _PRICE_LEVEL_SYMBOL: Dict[str, str] = {
     "PRICE_LEVEL_FREE": "Free",
@@ -45,6 +93,28 @@ _PRICE_LEVEL_SYMBOL: Dict[str, str] = {
     "PRICE_LEVEL_EXPENSIVE": "$$$",
     "PRICE_LEVEL_VERY_EXPENSIVE": "$$$$",
 }
+
+
+def _is_food_incompatible_entity(types: List[str]) -> bool:
+    """Return True when this entity's Google types are incompatible with food/restaurant results.
+
+    Blocks retail/clothing/services entities (e.g. "Only One Boutique") from
+    appearing in restaurant responses. An entity is food-incompatible when:
+    1. It has no food-compatible type tokens at all, AND
+    2. At least one food-incompatible type token is present.
+
+    An entity with only generic types like ["establishment", "point_of_interest"]
+    is NOT rejected (no incompatible marker). This keeps the gate conservative
+    so borderline or uncategorized venues still pass through.
+    """
+    if not types:
+        return False
+    types_lower = {t.lower() for t in types}
+    # Pass if ANY food-compatible type token present
+    if types_lower & _FOOD_COMPATIBLE_TYPES:
+        return False
+    # Reject if ANY food-incompatible type token present (and no food-compatible one)
+    return bool(types_lower & _FOOD_INCOMPATIBLE_TYPES)
 
 
 def _format_display_price(
@@ -412,6 +482,23 @@ def _run_pipeline(
 
     raw_count = entity_stats.raw_candidate_count
     verified_count = entity_stats.verified_entity_count
+
+    # ── Step 4.5: Food/restaurant entity type gate ────────────────────────────
+    # Reject entities whose Google types are exclusively non-food (clothing stores,
+    # retail, services, etc.) from restaurant/place_recommendations responses.
+    # "Only One Boutique" (womens_clothing_store) is blocked here.
+    # Entities with only generic types (establishment, point_of_interest) pass through.
+    _entity_type_gate_rejected = 0
+    if entities:
+        _entities_before_gate = len(entities)
+        entities = [e for e in entities if not _is_food_incompatible_entity(e.types)]
+        _entity_type_gate_rejected = _entities_before_gate - len(entities)
+        if _entity_type_gate_rejected > 0:
+            logger.info(
+                "semantic_retrieval_v1: entity_type_gate_rejected=%d query=%r "
+                "entities_remaining=%d",
+                _entity_type_gate_rejected, user_query, len(entities),
+            )
 
     if not entities:
         logger.warning(
@@ -877,6 +964,9 @@ def _run_pipeline(
         "on_concept_count": ranker_stats.on_concept_count,
         "venue_head_recognized": ranker_stats.concept_is_recognized,
         "destination_penalized_count": ranker_stats.destination_penalized_count,
+        "modifier_intent": ranker_stats.modifier_intent,
+        "modifier_filter_applied": ranker_stats.modifier_filter_applied,
+        "casual_downranked_count": ranker_stats.casual_downranked_count,
         "det_reason_rejected_count": det_reason_rejected_count,
         # Truthful telemetry: Reasoning Reliability v2 fields.
         "reasoning_attempted": reasoning_result.attempted,
@@ -905,6 +995,8 @@ def _run_pipeline(
             set_writer_result.visible_note_count
             if set_writer_result is not None else 0
         ),
+        # Entity type gate telemetry (Step 4.5)
+        "entity_type_gate_rejected": _entity_type_gate_rejected,
         # Honest card-count telemetry (split into distinct signals):
         # - insufficient_verified_candidates: true when Google returned too few
         #   verified places before note assembly — genuinely not enough supply.
@@ -1312,8 +1404,14 @@ def _derive_display_category(
         if label:
             return label
 
-    # Fall back to concept label if meaningful
-    if concept_label and len(concept_label) >= 3:
+    # Fall back to concept label if meaningful and not a modifier word.
+    # "only", "casual", "cheap" etc. must never become a category label prefix
+    # (prevents "Only Restaurant", "Casual Restaurant" fabrication).
+    if (
+        concept_label
+        and len(concept_label) >= 3
+        and concept_label.lower() not in _CONCEPT_LABEL_BLOCKLIST
+    ):
         # Capitalise and add a suffix
         c = concept_label.strip().title()
         # If it's a drink-type concept (brewery, bar, etc.)

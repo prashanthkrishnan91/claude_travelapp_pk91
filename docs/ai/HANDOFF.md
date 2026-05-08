@@ -1,6 +1,69 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-08) — Actual Concierge Latency Architecture v1 (Level 2 backend-only)
+## Last change (2026-05-08) — Sev 1 Catastrophic Fix: Modifier Routing + Entity Gate + Category Safety + Timeout Cap (Level 2 / Sev 1)
+
+**Status: IN PROGRESS (branch: claude/travel-concierge-dev-xPJH2)** — Backend + tests only. No SQL. No UI changes. No new providers. No new LLM calls. Preserves full display_why/display_why_source/display_why_validated API contract.
+
+### Root causes of three observed production failures (post-PR #283)
+
+**Failure 1 — "show only casual" triggered fresh provider search**
+- Root cause: `"only"` was not in `_FILLER_WORDS`. `_extract_primary_concepts("show only casual")` extracted `"only"` as the venue head → Google query became "Only restaurants in Chicago" → returned "Only One Boutique" (womens_clothing_store).
+- Fix: Added `"only"`, `"just"`, `"make"`, `"filter"`, `"switch"`, `"change"`, `"fewer"` to `_FILLER_WORDS` in `frame_extractor.py`.
+- Fix: Added `_MODIFIER_ONLY_UTTERANCE_RE` pattern and `_VENUE_CATEGORY_RE` to `context.py`. Modifier-only follow-ups (no venue category words) now route as `refine_previous/modifier_filter` BEFORE new_search_override patterns are checked.
+- Fix: Added `modifier_filter` to `_SUPPORTED_RULES` in `context_resolver.py` with full casual/cheap/formal/expensive card reordering and telemetry.
+
+**Failure 2 — "Only One Boutique" (womens_clothing_store) returned in restaurant results**
+- Root cause: No food-type entity gate existed. Pipeline accepted any Google entity regardless of type.
+- Fix: Added Step 4.5 in `semantic_retrieval.py` — `_is_food_incompatible_entity()` rejects entities whose Google types are exclusively non-food (clothing_store, boutique, department_store, etc.) with no food-compatible type (restaurant, cafe, bar, food, etc.).
+
+**Failure 3 — Fabricated label "Only Restaurant" / "Casual Restaurant"**
+- Root cause: `_derive_display_category` fallback used concept_label as prefix: `f"{'Only'.title()} Restaurant"` = "Only Restaurant". No blocklist existed.
+- Fix: Added `_CONCEPT_LABEL_BLOCKLIST` frozenset in `semantic_retrieval.py`. When concept_label is a modifier/command word, falls back safely to `"Restaurant"`.
+
+**Failure 4 — Set-writer exceeding production cap (set_writer_ms=6043)**
+- Root cause: SDK timeout alone was not reliably cancelling in-flight Anthropic API calls. Requests stalled beyond the specified timeout.
+- Fix: Added `concurrent.futures.ThreadPoolExecutor` wall-clock cap in `set_level_writer.py`. `_call_set_writer_llm` now wraps `_call_set_writer_llm_inner` in a thread, enforces `future.result(timeout=cap_s)`, and returns `(None, tel)` on `TimeoutError`. Added `set_writer_budget_s`, `set_writer_timeout_cap_s`, `set_writer_timeout_source` to `wtel` telemetry.
+
+### Additional fixes in this PR
+
+- **Casual/upscale in normalized_soft_preferences**: `_extract_normalized_soft_preferences()` in `frame_extractor.py` now adds `"casual"` and `"upscale"` from soft_prefs so the ranker's `_preference_fit()` can apply casual penalty / upscale boost on new-search results.
+- **Ranker casual penalty**: `ranker.py` now penalizes fine_dining/expensive entities when `"casual"` in normalized_soft_preferences, and boosts formal/expensive entities for `"upscale"`. Adds `modifier_intent`, `modifier_filter_applied`, `casual_downranked_count` to `RankerStats`.
+
+### Files changed
+
+- `backend/app/concierge/frame_extractor.py` — `_FILLER_WORDS` + `_extract_normalized_soft_preferences()`
+- `backend/app/concierge/context.py` — `RerankRule` literal + `_VENUE_CATEGORY_RE` + `_MODIFIER_ONLY_UTTERANCE_RE` + `classify_turn()` modifier-only branch
+- `backend/app/concierge/context_resolver.py` — `_SUPPORTED_RULES` + signal sets + `_detect_modifier_intent` + `_casual_fit_score` + `_reorder_for_modifier` + `modifier_filter` branch + telemetry
+- `backend/app/concierge/semantic_retrieval.py` — `_FOOD_INCOMPATIBLE_TYPES` + `_FOOD_COMPATIBLE_TYPES` + `_CONCEPT_LABEL_BLOCKLIST` + `_is_food_incompatible_entity()` + Step 4.5 gate + `_derive_display_category` blocklist check + telemetry fields
+- `backend/app/concierge/ranker.py` — casual/upscale scoring in `_preference_fit()` + `RankerStats` telemetry
+- `backend/app/concierge/set_level_writer.py` — `_call_set_writer_llm_inner` split + `ThreadPoolExecutor` wall-clock cap + budget telemetry
+- `backend/app/routes/ai.py` — `modifier_filter` added to `provider_call_expected` check
+- `backend/tests/test_concierge_sev1_catastrophic_fix.py` — 120 new tests
+
+### Test results
+
+- `test_concierge_sev1_catastrophic_fix.py`: **120/120 PASS**
+- `test_concierge_context.py`: **PASS** (no regression)
+- `test_concierge_context_resolver.py`: **PASS** (no regression)
+- `test_semantic_retrieval_v1.py`: **PASS** (no regression)
+- `test_concierge_latency_architecture_v1.py`: **PASS** (no regression)
+- `test_concierge_sev1_regression.py`: **PASS** (no regression)
+
+### Production validation plan
+
+After deploy:
+1. Hoppscotch: POST "Mediterranean restaurants" → confirm `display_why_source` populated on cards (not `"timed_out"`)
+2. Hoppscotch follow-up: "show only casual" → confirm `turn_mode=refine_previous`, `rerank_rule=modifier_filter`, `provider_call_skipped_for_refinement=true`, no clothing/retail entities
+3. Railway logs: confirm `set_writer_ms ≤ 1500ms` and no `wall_clock_timeout_enforced` on normal requests
+4. Railway logs: confirm `entity_type_gate_rejected=0` on restaurant queries; no non-food entities in cards
+
+### Supabase SQL
+
+None.
+
+---
+
+## Previous change (2026-05-08) — Actual Concierge Latency Architecture v1 (Level 2 backend-only)
 
 **Status: IN PROGRESS (branch: claude/concierge-latency-architecture-yppql)** — Backend + test only. No SQL. No UI changes. No new providers. No new LLM calls. No API contract changes.
 

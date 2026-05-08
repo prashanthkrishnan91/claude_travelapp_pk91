@@ -195,6 +195,9 @@ class RankerStats:
     concept_is_recognized: bool = False
     has_strong_concept: bool = False
     destination_penalized_count: int = 0
+    modifier_intent: str = ""           # "casual"|"upscale"|"" when modifier active
+    modifier_filter_applied: bool = False
+    casual_downranked_count: int = 0    # entities penalized for casual mismatch
 
 
 # ── Feature computation ───────────────────────────────────────────────────────
@@ -468,6 +471,33 @@ def _preference_fit(entity: PlaceEntity, frame: ExperienceFrame) -> float:
 
     name_lower = entity.name.lower()
     score = 0.5
+
+    # ── casual ────────────────────────────────────────────────────────────────
+    # Penalize entities with explicit fine-dining or expensive price-level signals.
+    # Does NOT remove cards entirely — this is a soft score penalty so users still
+    # see the card if nothing more casual is available.
+    if "casual" in normalized_prefs:
+        type_tokens_lower = {t.lower() for t in (entity.types or [])}
+        price = (entity.price_level or "").upper()
+        _FINE_DINING_TYPES = {"fine_dining_restaurant"}
+        _EXPENSIVE_PRICE = {"PRICE_LEVEL_VERY_EXPENSIVE", "PRICE_LEVEL_EXPENSIVE"}
+        if _FINE_DINING_TYPES & type_tokens_lower and price in _EXPENSIVE_PRICE:
+            score += -0.25  # strong penalty: fine-dining AND expensive
+        elif _FINE_DINING_TYPES & type_tokens_lower:
+            score += -0.18  # fine-dining type alone
+        elif price == "PRICE_LEVEL_VERY_EXPENSIVE":
+            score += -0.15  # very expensive without fine-dining type
+        elif price == "PRICE_LEVEL_EXPENSIVE":
+            score += -0.08  # expensive — mild penalty
+
+    # ── upscale ───────────────────────────────────────────────────────────────
+    if "upscale" in normalized_prefs:
+        type_tokens_lower = {t.lower() for t in (entity.types or [])}
+        price = (entity.price_level or "").upper()
+        if "fine_dining_restaurant" in type_tokens_lower:
+            score += 0.10
+        if price in {"PRICE_LEVEL_VERY_EXPENSIVE", "PRICE_LEVEL_EXPENSIVE"}:
+            score += 0.07
 
     # ── hidden_gem ────────────────────────────────────────────────────────────
     if "hidden_gem" in normalized_prefs:
@@ -784,6 +814,10 @@ def rank_entities_with_stats(
     )
 
     dest_penalized_count = 0
+    casual_downranked_count = 0
+    _normalized_prefs = getattr(frame, "normalized_soft_preferences", []) or []
+    _casual_active = "casual" in _normalized_prefs
+    _upscale_active = "upscale" in _normalized_prefs
 
     for entity in entities:
         sf = _subtype_fit(entity, frame)
@@ -810,6 +844,12 @@ def rank_entities_with_stats(
         if dest_pen > 0:
             pen += dest_pen
             dest_penalized_count += 1
+
+        # Casual modifier telemetry: track entities that received a preference_fit
+        # penalty due to casual modifier (pf < 0.5 means the preference_fit function
+        # applied a negative adjustment for fine-dining/expensive signals).
+        if _casual_active and pf < 0.5:
+            casual_downranked_count += 1
 
         total = (
             _W_SUBTYPE_FIT * sf
@@ -896,6 +936,9 @@ def rank_entities_with_stats(
     stats.on_concept_count = on_concept_total
     stats.off_concept_dropped = dropped_off_concept
     stats.destination_penalized_count = dest_penalized_count
+    stats.modifier_intent = "casual" if _casual_active else ("upscale" if _upscale_active else "")
+    stats.modifier_filter_applied = _casual_active or _upscale_active
+    stats.casual_downranked_count = casual_downranked_count
 
     logger.debug(
         "ranker: entities=%d ranked=%d off_concept_dropped=%d "
