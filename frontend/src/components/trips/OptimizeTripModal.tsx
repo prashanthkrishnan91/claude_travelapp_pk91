@@ -29,7 +29,35 @@ import type {
   TripOption,
   OptimizeFlightInput,
   OptimizeHotelInput,
+  FlightSearchResult,
+  ResearchResult,
+  BookingOption,
 } from "@/types";
+
+// Sentinel host stamped into every `_mock_*` booking URL on the backend.
+// Any URL containing this host is, by construction, fabricated.
+const MOCK_BOOKING_HOST = "book.example.com";
+
+function hasMockBookingUrl(
+  url: string | undefined,
+  options: BookingOption[] | undefined,
+): boolean {
+  if (url && url.includes(MOCK_BOOKING_HOST)) return true;
+  if (options) {
+    for (const opt of options) {
+      if (opt?.url && opt.url.includes(MOCK_BOOKING_HOST)) return true;
+    }
+  }
+  return false;
+}
+
+function anyMockDerivedFlights(flights: FlightSearchResult[]): boolean {
+  return flights.some((f) => hasMockBookingUrl(f.bookingUrl, f.bookingOptions));
+}
+
+function anyMockDerivedHotels(hotels: ResearchResult[]): boolean {
+  return hotels.some((h) => hasMockBookingUrl(h.bookingUrl, h.bookingOptions));
+}
 
 interface Props {
   trip: Trip;
@@ -125,6 +153,22 @@ export function OptimizeTripModal({ trip, itineraryDays, onClose, onPlanSelected
         // provider-backed search is not yet enabled (BLOCK_LEGACY_PRODUCT_MOCK
         // on, or the route returned []). Surface honest copy instead of
         // suggesting the user "adjust dates" — that is misleading here.
+        setPhase("provider_unavailable");
+        return;
+      }
+
+      // Mock-derived persistence guard: if /search/flights or /search/hotels
+      // returns rows whose booking URLs come from the legacy `_mock_*`
+      // fixtures (`book.example.com`), refuse to surface them as Selectable
+      // plans. Backend `/trips/create-with-search` is fully protected by the
+      // `_any_mock_derived` guard; this client-side check makes sure
+      // `addOptimizedFlightToDay` / `addOptimizedHotelToTrip` (which use
+      // separate persistence routes) never receive mock-derived rows either.
+      // Note: `FlightSearchResult` / `RawHotelResult` don't expose `source`
+      // today, so we rely on the booking-URL host signal. While
+      // `BLOCK_LEGACY_PRODUCT_MOCK` remains the operator-side gate, this
+      // guard hardens the UX path.
+      if (anyMockDerivedFlights(rawFlights) || anyMockDerivedHotels(rawHotels)) {
         setPhase("provider_unavailable");
         return;
       }

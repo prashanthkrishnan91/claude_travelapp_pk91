@@ -183,3 +183,281 @@ def test_create_with_search_invalid_destination_still_returns_422(monkeypatch):
     assert excinfo.value.status_code == 422
     fake_trips.create_trip.assert_not_called()
     fake_itinerary.create_trip_item.assert_not_called()
+
+
+# ---- Mock-derived persistence guard ----------------------------------------
+
+
+def _make_flight(*, source: str, booking_url: str, booking_options=None):
+    from app.models.search import BookingOption, FlightResult  # noqa: WPS433
+    from datetime import datetime as _dt
+    return FlightResult(
+        id="f1",
+        price=499.0,
+        rating=4.5,
+        location="JFK→CDG",
+        booking_url=booking_url,
+        source=source,
+        booking_options=booking_options or [],
+        airline="Test Air",
+        flight_number="TA100",
+        origin="JFK",
+        destination="CDG",
+        departure_time=_dt(2026, 6, 1, 9, 0),
+        arrival_time=_dt(2026, 6, 1, 21, 0),
+        duration_minutes=720,
+        stops=0,
+        cabin_class="economy",
+    )
+
+
+def _make_hotel(*, source: str, booking_url: str, booking_options=None):
+    from app.models.search import HotelResult  # noqa: WPS433
+    return HotelResult(
+        id="h1",
+        price=900.0,
+        rating=4.6,
+        location="Paris, FR",
+        booking_url=booking_url,
+        source=source,
+        booking_options=booking_options or [],
+        name="Test Hotel",
+        check_in=date(2026, 6, 1),
+        check_out=date(2026, 6, 7),
+        nights=6,
+        amenities=[],
+        price_per_night=150.0,
+    )
+
+
+def test_create_with_search_blocks_mock_flights_even_when_non_empty(monkeypatch):
+    """When ``BLOCK_LEGACY_PRODUCT_MOCK`` is *off*, ``_mock_flights`` returns
+    non-empty rows with ``source="mock"`` and ``book.example.com`` URLs.
+    The route must still fail closed before persisting anything — otherwise
+    fake booking URLs end up in ``itinerary_items.details``."""
+
+    mock_flight = _make_flight(
+        source="mock",
+        booking_url="https://book.example.com/flights/aa/jfk/cdg",
+    )
+    fake_search = MagicMock()
+    fake_search.search_flights.return_value = [mock_flight]
+    fake_search.search_round_trip_flights.return_value = []
+    fake_search.search_hotels.return_value = []
+
+    fake_trips = MagicMock()
+    fake_itinerary = MagicMock()
+
+    payload = trips_route.TripCreateWithSearch(
+        origin_city="New York",
+        destination_city="Paris",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+    )
+
+    with patch.object(trips_route, "SearchService", return_value=fake_search), \
+         patch.object(trips_route, "TripsService", return_value=fake_trips), \
+         patch.object(trips_route, "ItineraryService", return_value=fake_itinerary):
+        with pytest.raises(_StubHTTPException) as excinfo:
+            trips_route.create_trip_with_search(
+                payload, db=MagicMock(), user_id="user-123"
+            )
+
+    assert excinfo.value.status_code == 503
+    assert excinfo.value.detail.get("code") == "provider_unavailable"
+    fake_trips.create_trip.assert_not_called()
+    fake_itinerary.ensure_trip_days.assert_not_called()
+    fake_itinerary.create_trip_item.assert_not_called()
+
+
+def test_create_with_search_blocks_mock_hotels_even_when_non_empty(monkeypatch):
+    """Symmetric guard: a non-empty hotel row carrying ``book.example.com``
+    booking URL must also fail closed, even if ``source`` claims otherwise."""
+
+    from app.models.search import BookingOption  # noqa: WPS433
+
+    sneaky_hotel = _make_hotel(
+        source="booking_com",  # claim a real provider
+        booking_url="https://hotels.example.com/legit",  # primary URL clean
+        booking_options=[
+            BookingOption(
+                provider="hotels_com",
+                # ...but a deep link still leaks the mock host
+                url="https://book.example.com/hotels/booking/test-hotel",
+            ),
+        ],
+    )
+    fake_search = MagicMock()
+    fake_search.search_flights.return_value = []
+    fake_search.search_round_trip_flights.return_value = []
+    fake_search.search_hotels.return_value = [sneaky_hotel]
+
+    fake_trips = MagicMock()
+    fake_itinerary = MagicMock()
+
+    payload = trips_route.TripCreateWithSearch(
+        origin_city="New York",
+        destination_city="Paris",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+    )
+
+    with patch.object(trips_route, "SearchService", return_value=fake_search), \
+         patch.object(trips_route, "TripsService", return_value=fake_trips), \
+         patch.object(trips_route, "ItineraryService", return_value=fake_itinerary):
+        with pytest.raises(_StubHTTPException) as excinfo:
+            trips_route.create_trip_with_search(
+                payload, db=MagicMock(), user_id="user-123"
+            )
+
+    assert excinfo.value.status_code == 503
+    fake_trips.create_trip.assert_not_called()
+    fake_itinerary.create_trip_item.assert_not_called()
+
+
+def test_create_with_search_blocks_mock_round_trip_pairs(monkeypatch):
+    """Round-trip pairs are built from ``_mock_flights`` server-side. A pair
+    whose outbound or return flight is mock-derived must trigger fail-closed,
+    so mock-only round-trip rows can't slip past via the round-trip pair
+    persistence path."""
+
+    from app.models.search import RoundTripFlightPair  # noqa: WPS433
+
+    outbound = _make_flight(source="mock", booking_url="https://book.example.com/o")
+    ret = _make_flight(source="mock", booking_url="https://book.example.com/r")
+    pair = RoundTripFlightPair(
+        id="rt1",
+        outbound=outbound,
+        return_flight=ret,
+        total_price=998.0,
+        total_points=0,
+        combined_cpp=0.0,
+        total_duration_minutes=1440,
+    )
+
+    fake_search = MagicMock()
+    fake_search.search_flights.return_value = []
+    fake_search.search_round_trip_flights.return_value = [pair]
+    fake_search.search_hotels.return_value = []
+
+    fake_trips = MagicMock()
+    fake_itinerary = MagicMock()
+
+    payload = trips_route.TripCreateWithSearch(
+        origin_city="New York",
+        destination_city="Paris",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+    )
+
+    with patch.object(trips_route, "SearchService", return_value=fake_search), \
+         patch.object(trips_route, "TripsService", return_value=fake_trips), \
+         patch.object(trips_route, "ItineraryService", return_value=fake_itinerary):
+        with pytest.raises(_StubHTTPException) as excinfo:
+            trips_route.create_trip_with_search(
+                payload, db=MagicMock(), user_id="user-123"
+            )
+
+    assert excinfo.value.status_code == 503
+    fake_trips.create_trip.assert_not_called()
+    fake_itinerary.create_trip_item.assert_not_called()
+
+
+def test_create_with_search_allows_clean_provider_rows(monkeypatch):
+    """Negative control: a non-empty, *non*-mock flight + hotel result set
+    must NOT trigger the fail-closed branch. This proves the guard is
+    surgical (does not break the future provider-backed path) and that
+    persistence is reached on the happy path.
+
+    We stop short of asserting full itinerary persistence because the route
+    constructs ``ItineraryItemDirectCreate`` payloads using domain logic
+    that is exercised in service-level tests; here we only need to prove
+    the route reaches ``TripsService.create_trip`` without raising."""
+
+    clean_flight = _make_flight(
+        source="amadeus",
+        booking_url="https://amadeus.example/flights/AA100",
+    )
+    clean_hotel = _make_hotel(
+        source="booking_com",
+        booking_url="https://www.booking.com/hotel/fr/test-hotel",
+    )
+
+    fake_search = MagicMock()
+    fake_search.search_flights.return_value = [clean_flight]
+    fake_search.search_round_trip_flights.return_value = []
+    fake_search.search_hotels.return_value = [clean_hotel]
+
+    # Make trip creation return a Trip-like object so the rest of the
+    # function can run without exploding on type validation.
+    from app.models import Trip  # noqa: WPS433
+    from datetime import datetime as _dt
+    from uuid import uuid4 as _uuid4
+
+    user_uuid = _uuid4()
+    fake_trip = Trip(
+        id=_uuid4(),
+        user_id=user_uuid,
+        title="Paris Trip",
+        destination="Paris",
+        origin="New York",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+        status="planned",
+        created_at=_dt(2026, 5, 8, 0, 0, 0),
+    )
+    fake_trips = MagicMock()
+    fake_trips.create_trip.return_value = fake_trip
+
+    fake_itinerary = MagicMock()
+
+    payload = trips_route.TripCreateWithSearch(
+        origin_city="New York",
+        destination_city="Paris",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+    )
+
+    with patch.object(trips_route, "SearchService", return_value=fake_search), \
+         patch.object(trips_route, "TripsService", return_value=fake_trips), \
+         patch.object(trips_route, "ItineraryService", return_value=fake_itinerary):
+        result = trips_route.create_trip_with_search(
+            payload, db=MagicMock(), user_id=user_uuid
+        )
+
+    # Trip was created — the guard correctly let provider-like rows through.
+    fake_trips.create_trip.assert_called_once()
+    fake_itinerary.ensure_trip_days.assert_called_once()
+    # Flight + hotel were persisted as itinerary items.
+    assert fake_itinerary.create_trip_item.call_count >= 2
+    # Response carries the rows back so the frontend can render them.
+    assert any(f is clean_flight for f in result.flights)
+    assert any(h is clean_hotel for h in result.hotels)
+
+
+# ---- Helper-level unit tests on the detector ------------------------------
+
+
+def test_is_mock_flight_detects_source_marker():
+    f = _make_flight(source="mock", booking_url="https://legit.example.com/x")
+    assert trips_route._is_mock_flight(f) is True
+
+
+def test_is_mock_flight_detects_book_example_in_primary_url():
+    f = _make_flight(source="amadeus", booking_url="https://book.example.com/x")
+    assert trips_route._is_mock_flight(f) is True
+
+
+def test_is_mock_flight_detects_book_example_in_options():
+    from app.models.search import BookingOption  # noqa: WPS433
+    f = _make_flight(
+        source="amadeus",
+        booking_url="https://amadeus.example/x",
+        booking_options=[BookingOption(provider="kayak", url="https://book.example.com/y")],
+    )
+    assert trips_route._is_mock_flight(f) is True
+
+
+def test_is_mock_flight_passes_clean_provider_rows():
+    f = _make_flight(source="amadeus", booking_url="https://amadeus.example/x")
+    assert trips_route._is_mock_flight(f) is False

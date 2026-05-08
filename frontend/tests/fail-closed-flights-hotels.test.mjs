@@ -91,6 +91,30 @@ test('OptimizeTripModal: shows honest provider-unavailable copy', () => {
   );
 });
 
+test('OptimizeTripModal: refuses to surface rows with mock book.example.com booking URLs', () => {
+  // Even when /search/flights or /search/hotels returns *non-empty* rows
+  // (BLOCK_LEGACY_PRODUCT_MOCK off), the modal must detect mock-derived
+  // booking URLs and switch to provider_unavailable instead of letting
+  // the user click "Select This Plan" — otherwise mock rows leak into
+  // /trips/{id}/days/{dayId}/itinerary-items via addOptimizedFlightToDay
+  // / addOptimizedHotelToTrip.
+  assert.match(
+    optimizeModal,
+    /book\.example\.com/,
+    'Expected the mock host sentinel to appear in the client guard.',
+  );
+  assert.match(
+    optimizeModal,
+    /anyMockDerivedFlights/,
+    'Expected a mock-flight detection helper used before phase=results.',
+  );
+  assert.match(
+    optimizeModal,
+    /anyMockDerivedHotels/,
+    'Expected a mock-hotel detection helper used before phase=results.',
+  );
+});
+
 test('apiFetch: surfaces structured {code, message} error details', () => {
   assert.match(
     apiClient,
