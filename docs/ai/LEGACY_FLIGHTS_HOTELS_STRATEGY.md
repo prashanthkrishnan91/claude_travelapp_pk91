@@ -1,5 +1,7 @@
 # Legacy Flights/Hotels Strategy v1 — Audit & Migration Plan
 
+> **Status update (2026-05-08): Fail-Closed UX v1 (Option A) IMPLEMENTED** — see PR on branch `claude/fail-closed-ux-flights-hotels-XBsgp`. `/trips/create-with-search` now fails closed with `HTTP 503 {code: "provider_unavailable"}` when both flights and hotels are empty (no trip, no itinerary days, no itinerary items created). `TripBuilderForm` shows honest provider-unavailable copy and offers a `createTrip()` blank-trip fallback. `OptimizeTripModal` no longer says "Try adjusting your dates"; it surfaces honest provider-unavailable copy. New tests: `backend/tests/test_create_with_search_fail_closed.py` and `frontend/tests/fail-closed-flights-hotels.test.mjs`. **Next step: select a provider (Option C flights and/or Option D hotels) for a future provider-integration PR — implementation, not strategy work, is now the gating concern.**
+
 Date: 2026-05-08
 Severity: **Level 2** (architecture audit / spec). No live mock leakage was discovered in canonical Concierge addable flows, but mock-derived flight/hotel rows **can still be persisted into itinerary items** when `BLOCK_LEGACY_PRODUCT_MOCK` is off — see §5 risk table. No production behavior change in this PR. No SQL. No new providers. No new LLM calls. No UI redesign.
 Branch: `claude/audit-flights-hotels-strategy-KoptK`

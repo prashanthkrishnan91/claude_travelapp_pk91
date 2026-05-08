@@ -1,6 +1,45 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-08) — Legacy Flights/Hotels Strategy v1 (Level 2 — audit/spec)
+## Last change (2026-05-08) — Fail-Closed UX v1: flights/hotels mock-backed surface (Level 2)
+
+**Status: PR-ready (branch: claude/fail-closed-ux-flights-hotels-XBsgp)** — Closes the last live mock-backed flights/hotels persistence path (PR #294 risk row 1 + 2). No SQL. No providers. No LLM calls. No schema changes. Preserves the future flights/hotels product capability — routes, models, and frontend wrappers stay quarantined; only unsafe mock-derived persistence is fail-closed.
+
+### Problem
+
+`/trips/create-with-search` created a trip unconditionally even when both `flights=[]` and `hotels=[]` (under `BLOCK_LEGACY_PRODUCT_MOCK=on`), and persisted up to 20 fake-booking-URL itinerary items when the flag was off (`backend/app/routes/trips.py:488-580`). `OptimizeTripModal` told users to "Try adjusting your dates" when the real cause was provider-backed search not being enabled. Both surfaces were misleading.
+
+### Fix
+
+- **`backend/app/routes/trips.py`** — `create_trip_with_search` now raises `HTTP 503` with `{code: "provider_unavailable", message: ...}` when `flights`, `hotels`, and `round_trip_pairs` are all empty after search. No `TripsService.create_trip`, no `ItineraryService.ensure_trip_days`, no `create_trip_item` runs in that branch. Existing 422 invalid-destination behavior unchanged. Mock-row persistence path (when results are non-empty) is left intact for the future provider PR to swap.
+- **`frontend/src/lib/api.ts`** — `apiFetch` now surfaces structured `{code, message}` error details by attaching `code`, `status`, and `detail` to the thrown `Error` so callers can branch on `code === "provider_unavailable"` without string-matching.
+- **`frontend/src/components/trips/TripBuilderForm.tsx`** — On `code === "provider_unavailable"` or `status === 503`, shows an honest amber banner explaining provider-backed search is not enabled yet, plus a "Create a blank trip and add items manually" button that calls `createTrip()` with the form fields (manual trip creation preserved).
+- **`frontend/src/components/trips/OptimizeTripModal.tsx`** — New `provider_unavailable` phase replaces the misleading "Try adjusting your dates" copy when flight or hotel search returns empty. Copy: *"Provider-backed flight and hotel search is not enabled yet. You can still build the trip manually and add details later."* CTA closes the modal.
+
+### Tests
+
+- **New backend test** `backend/tests/test_create_with_search_fail_closed.py` proves: response is 503 with `code: "provider_unavailable"`; `TripsService.create_trip` not called; `ItineraryService.ensure_trip_days` not called; `ItineraryService.create_trip_item` not called; existing 422 invalid-destination path still skips persistence.
+- **New frontend contract test** `frontend/tests/fail-closed-flights-hotels.test.mjs` enforces: TripBuilderForm contains provider-unavailable copy and `createTrip` fallback; OptimizeTripModal no longer contains "Try adjusting your dates"; apiFetch attaches `code`+`status` to errors.
+- **Baseline suites:** `backend/tests/test_product_surface_pruning_v1a.py` (44 pass), `backend/tests/test_cost_guardrails.py` (pass). `frontend/tests/explore-concierge-migration.test.mjs` + `explore-hydration.test.mjs` show the same 4 pre-existing failures as base (unrelated TripBuilder/Explore snapshot-hydration drift; reproduced on stash baseline).
+
+### Files changed
+
+- `backend/app/routes/trips.py`
+- `backend/tests/test_create_with_search_fail_closed.py` (new)
+- `frontend/src/lib/api.ts`
+- `frontend/src/components/trips/TripBuilderForm.tsx`
+- `frontend/src/components/trips/OptimizeTripModal.tsx`
+- `frontend/tests/fail-closed-flights-hotels.test.mjs` (new)
+- `docs/ai/LEGACY_FLIGHTS_HOTELS_STRATEGY.md` (Fail-Closed UX v1 marked implemented)
+- `docs/ai/HANDOFF.md` (this entry)
+- `docs/ai/progress_log.md` (entry)
+
+**Supabase SQL**: No
+**HANDOFF.md edited**: Yes (this entry)
+**README.md edited**: No (no public/setup contract change)
+
+---
+
+## Previous change (2026-05-08) — Legacy Flights/Hotels Strategy v1 (Level 2 — audit/spec)
 
 **Status: PR-ready (branch: claude/audit-flights-hotels-strategy-KoptK)** — Doc-only. Adds `docs/ai/LEGACY_FLIGHTS_HOTELS_STRATEGY.md`. No code change. No SQL. No new providers. No new LLM calls. No UI change.
 

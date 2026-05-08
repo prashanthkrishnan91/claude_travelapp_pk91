@@ -483,6 +483,23 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
     flights_sorted = sorted(flights, key=lambda f: f.ai_score or 0.0, reverse=True)
     hotels_sorted = sorted(hotels, key=lambda h: h.ai_score or 0.0, reverse=True)
 
+    # Fail-Closed UX v1: refuse to create a trip when no provider-backed flight
+    # or hotel data is available. This prevents fake/mock-derived rows (and
+    # blank itineraries when BLOCK_LEGACY_PRODUCT_MOCK is on) from being
+    # persisted as if real. Manual blank-trip creation remains via POST /trips.
+    if not flights_sorted and not hotels_sorted and not round_trip_pairs:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "provider_unavailable",
+                "message": (
+                    "Flights and hotels are temporarily unavailable because "
+                    "provider-backed search is not enabled yet. Create a "
+                    "blank trip and add items manually."
+                ),
+            },
+        )
+
     # Step 5: Create trip
     title = payload.title or f"{payload.destination_city} Trip"
     trip = TripsService(db).create_trip(

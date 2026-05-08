@@ -38,6 +38,15 @@ interface Props {
   onPlanSelected: () => void;
 }
 
+// Provider-unavailable copy. Used when /search/flights or /search/hotels
+// returns no results — currently the dominant case while flights/hotels
+// search is not yet provider-backed (Fail-Closed UX v1). Do NOT suggest
+// the user adjust dates: dates are not the problem.
+const PROVIDER_UNAVAILABLE_TITLE =
+  "Flights & hotels search is temporarily unavailable";
+const PROVIDER_UNAVAILABLE_BODY =
+  "Provider-backed flight and hotel search is not enabled yet. You can still build the trip manually and add details later.";
+
 const RANK_LABELS = ["Best Value", "Runner-Up", "Budget Pick"];
 const RANK_BADGE = [
   "bg-emerald-100 text-emerald-700",
@@ -69,7 +78,7 @@ function fmtDuration(mins: number): string {
 }
 
 export function OptimizeTripModal({ trip, itineraryDays, onClose, onPlanSelected }: Props) {
-  const [phase, setPhase] = useState<"loading" | "error" | "results">("loading");
+  const [phase, setPhase] = useState<"loading" | "error" | "provider_unavailable" | "results">("loading");
   const [error, setError] = useState("");
   const [options, setOptions] = useState<TripOption[]>([]);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -111,8 +120,14 @@ export function OptimizeTripModal({ trip, itineraryDays, onClose, onPlanSelected
         searchHotels(trip.destination, startDate, endDate, trip.travelers ?? 1).catch(() => []),
       ]);
 
-      if (!rawFlights.length) throw new Error("No flights found for your route. Try adjusting your dates.");
-      if (!rawHotels.length) throw new Error("No hotels found for your destination.");
+      if (!rawFlights.length || !rawHotels.length) {
+        // Fail-Closed UX v1: empty flight/hotel results almost always mean
+        // provider-backed search is not yet enabled (BLOCK_LEGACY_PRODUCT_MOCK
+        // on, or the route returned []). Surface honest copy instead of
+        // suggesting the user "adjust dates" — that is misleading here.
+        setPhase("provider_unavailable");
+        return;
+      }
 
       const flights: OptimizeFlightInput[] = rawFlights.slice(0, 10).map((f) => ({
         id: f.id,
@@ -232,6 +247,25 @@ export function OptimizeTripModal({ trip, itineraryDays, onClose, onPlanSelected
                 className="mt-1 px-4 py-2 text-sm font-medium bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition"
               >
                 Try Again
+              </button>
+            </div>
+          )}
+
+          {/* Provider unavailable — Fail-Closed UX v1 */}
+          {phase === "provider_unavailable" && (
+            <div
+              role="alert"
+              data-testid="optimize-provider-unavailable"
+              className="flex flex-col items-center justify-center py-12 gap-3 text-center"
+            >
+              <AlertCircle className="w-8 h-8 text-amber-500" />
+              <p className="text-sm font-semibold text-slate-800">{PROVIDER_UNAVAILABLE_TITLE}</p>
+              <p className="text-sm text-slate-600 max-w-md">{PROVIDER_UNAVAILABLE_BODY}</p>
+              <button
+                onClick={onClose}
+                className="mt-1 px-4 py-2 text-sm font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
+              >
+                Build trip manually
               </button>
             </div>
           )}

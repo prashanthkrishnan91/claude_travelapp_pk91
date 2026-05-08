@@ -123,14 +123,32 @@ async function apiFetch<T>(
   if (res.status === 204) return null as T;
 
   if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`;
+    let detail: unknown = `${res.status} ${res.statusText}`;
     try {
       const body = await res.json();
       detail = body?.detail ?? detail;
     } catch {
       // ignore parse errors
     }
-    throw new Error(`API error: ${detail}`);
+    // Structured errors (e.g. {code, message}) are surfaced as ApiError so
+    // callers can branch on the code without string-matching.
+    if (detail && typeof detail === "object") {
+      const obj = detail as { code?: string; message?: string };
+      const err = new Error(obj.message ?? `API error: ${res.status}`) as Error & {
+        status?: number;
+        code?: string;
+        detail?: unknown;
+      };
+      err.status = res.status;
+      err.code = obj.code;
+      err.detail = detail;
+      throw err;
+    }
+    const err = new Error(`API error: ${detail}`) as Error & {
+      status?: number;
+    };
+    err.status = res.status;
+    throw err;
   }
 
   const json = await res.json();
