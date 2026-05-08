@@ -55,15 +55,21 @@ test('TripBuilder does not contain trip-item-to-explore-candidate mapper functio
   assert.doesNotMatch(tripBuilder, /function normalizeExploreScore/, 'normalizeExploreScore must be absent — its only callers were the deleted mappers');
 });
 
-test('API search mappers preserve attraction and restaurant score fields from snake_case/camelCase/score payloads', () => {
-  assert.match(apiClient, /typeof a\.ai_score === "number"/, 'Attractions mapper should support ai_score from backend payload');
-  assert.match(apiClient, /typeof a\.score === "number"/, 'Attractions mapper should support legacy score field');
+test('API restaurant mapper preserves restaurant score fields from snake_case/camelCase/score payloads', () => {
+  // Product Surface Migration v1B removed the legacy `searchAttractions` /
+  // `mapAttractionToResult` mock-backed helper from api.ts.  Snapshot
+  // hydration retains its own ai_score/score/snake_case handling — see
+  // fetchExploreSnapshot.  Restaurant mapper is unchanged.
   assert.match(apiClient, /typeof r\.ai_score === "number"/, 'Restaurants mapper should support ai_score from backend payload');
   assert.match(apiClient, /typeof r\.score === "number"/, 'Restaurants mapper should support legacy score field');
 });
 
-test('TripBuilder calls provider-backed search as fallback when no snapshot exists', () => {
-  assert.match(tripBuilder, /searchAttractions\(destination\)/, 'Attractions provider search must be present as fallback path');
+test('TripBuilder Explore attractions are sourced from the canonical AI Concierge surface (v1B)', () => {
+  // Product Surface Migration v1B: attractions migrate from the legacy
+  // mock-backed /search/attractions surface to the canonical
+  // /ai/concierge/search surface via `searchAttractionsViaConcierge`.
+  assert.match(tripBuilder, /searchAttractionsViaConcierge\(tripId, destination\)/, 'Attractions fallback must call the canonical AI Concierge search');
+  assert.doesNotMatch(tripBuilder, /\bsearchAttractions\(/, 'Legacy mock-backed searchAttractions must not be called');
   assert.match(tripBuilder, /searchRestaurants\(destination\)/, 'Restaurants provider search must be present as fallback path');
   assert.doesNotMatch(tripBuilder, /if \(candidateAttractions\.length > 0\) return;/, 'In-memory candidate count must not short-circuit snapshot-first hydration');
   assert.doesNotMatch(tripBuilder, /if \(candidateRestaurants\.length > 0\) return;/, 'In-memory candidate count must not short-circuit snapshot-first hydration');
@@ -262,13 +268,17 @@ test('api.ts fetchExploreSnapshot storedScore reads aiScore (camelCase, toCamel-
   assert.match(apiClient, /typeof a\.score === "number" && a\.score > 0/, 'Snapshot attraction storedScore must fall back to legacy score');
 });
 
-test('mapAttractionToResult normalizes score aliases in priority order: aiScore > ai_score > score', () => {
-  // Ternary priority order must match normalizeExploreScore: camelCase first.
-  // After apiFetch applies toCamel(), ai_score fields arrive as aiScore — so camelCase wins.
-  assert.match(apiClient, /typeof a\.aiScore === "number"\s*\?\s*a\.aiScore/, 'mapAttractionToResult must prefer camelCase aiScore as primary');
-  assert.match(apiClient, /typeof a\.ai_score === "number"\s*\?\s*a\.ai_score/, 'mapAttractionToResult must fall back to snake_case ai_score');
-  assert.match(apiClient, /typeof a\.score === "number"\s*\?\s*a\.score/, 'mapAttractionToResult must fall back to legacy score field');
-  assert.match(apiClient, /aiScore: normalizedAiScore/, 'mapAttractionToResult must expose normalizedAiScore as aiScore on the result object');
+test('Legacy mapAttractionToResult mock-backed mapper has been removed (v1B)', () => {
+  // Product Surface Migration v1B replaced the legacy mock-backed
+  // `mapAttractionToResult` (which read from /search/attractions ->
+  // _mock_attractions) with `mapUnifiedAttractionToResult`, an adapter that
+  // converts canonical /ai/concierge/search UnifiedAttractionResult cards
+  // into the existing AttractionSearchResult shape.  It is gated on
+  // Google Places verification + display.addability === "addable" so
+  // unverified or non-addable cards never reach Explore.
+  assert.doesNotMatch(apiClient, /function mapAttractionToResult\b/, 'Legacy mapAttractionToResult must be removed');
+  assert.match(apiClient, /export function mapUnifiedAttractionToResult\(/, 'Canonical Concierge → AttractionSearchResult adapter must be exported');
+  assert.match(apiClient, /typeof u\.aiScore === "number" \? u\.aiScore : undefined/, 'Canonical adapter must preserve aiScore from the verified Concierge card');
 });
 
 test('mapRestaurantToResult normalizes score aliases in priority order: aiScore > ai_score > score', () => {

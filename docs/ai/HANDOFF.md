@@ -1,6 +1,94 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-08) — Product Surface Pruning v1A: Legacy Mock Quarantine + Caller Registry (Level 3)
+## Last change (2026-05-08) — Product Surface Migration v1B: TripBuilder Explore canonical migration (Level 2 → 3)
+
+**Status: IN PROGRESS (branch: claude/migrate-tripbuilder-explore-G4Nyc)** — Frontend route migration + canonical adapter + tests + caller-registry update + handoff. No SQL. No new providers. No new LLM calls beyond what `/ai/concierge/search` already does. No semantic retrieval / ranking / note internals changed.
+
+### Problem (architectural gap left by PR #288)
+
+PR #288 quarantined the legacy `_mock_*` surface behind `BLOCK_LEGACY_PRODUCT_MOCK` and added a frontend caller registry, but TripBuilder Explore still rendered:
+
+1. **Attractions** sourced from `POST /search/attractions` → `_mock_attractions` (mock-backed; can fabricate venues).
+2. **Grouped/Areas view** sourced from `POST /search/clusters`, which derives the attractions side from `_mock_attractions` (partial-mock).
+3. **"Best Area to Stay" card** sourced from `POST /search/best-area`, which inherits the same partial-mock dependency.
+
+The canonical `/ai/concierge/search` surface (PR #287 display contract) already produces Google-Places-verified, addability-gated cards for attractions. v1B routes TripBuilder Explore through that surface and **fails closed** on the partial-mock cluster + best-area features rather than smuggling mock data through a new adapter.
+
+### Fix — canonical adapter + Explore migration + caller-registry update
+
+1. **`frontend/src/lib/api.ts`**:
+   - Added `mapUnifiedAttractionToResult(u: UnifiedAttractionResult): AttractionSearchResult | null` adapter. Gates:
+     - Drops cards whose `display.addability !== "addable"` (research-only / closed cards never reach Explore).
+     - Drops cards without `googleVerification.providerPlaceId` (canonical place identity is required for Maps + Save flows).
+   - Added `searchAttractionsViaConcierge(tripId, destination)` which calls `/ai/concierge/search` via the existing `callConciergeSearch` and applies the adapter. Fails closed (`[]`) on any error.
+   - **Removed** legacy mock-backed wrappers: `searchAttractions`, `searchClusters`, `fetchBestArea`, `planClusterDay`, `RawAttractionResult`, `mapAttractionToResult`. They had no other consumers post-migration.
+
+2. **`frontend/src/components/trips/TripBuilder.tsx`**:
+   - Replaced `searchAttractions(destination)` in the Explore hydration self-heal path with `searchAttractionsViaConcierge(tripId, destination)`.
+   - **Removed** the grouped/Areas view button + branch (was fed by `searchClusters`) and the `<BestAreaCard />` block (was fed by `fetchBestArea`). Both have no canonical replacement yet, so they fail closed (deferred to v1C).
+   - Removed `BestAreaCard` component, `handlePlanCluster` handler, `candidateClusters` / `clustersLoading` / `planningClusterId` / `bestArea` state, and the `Layers` icon import.
+   - `TripMapView` is passed `bestArea={null}` so the map circle no longer renders fabricated areas.
+   - Add to Day, Save, Maps, itinerary item creation, and saved-card flows are unchanged structurally — they consume the same `AttractionSearchResult` shape produced by the new adapter.
+
+3. **`backend/tests/test_product_surface_pruning_v1a.py`** (registry update):
+   - Removed `frontend/src/components/trips/TripBuilder.tsx` from `_KNOWN_LEGACY_SEARCH_CALLERS` (it no longer references the legacy mock-backed routes).
+   - Added `frontend/tests/explore-concierge-migration.test.mjs` to the registry — it documents the v1B migration via `assert.doesNotMatch(...)` patterns that mention the legacy tokens.
+   - Hardened `_file_uses_legacy_search_token` with a trailing-character guard so `searchAttractions` does not falsely match the canonical helper `searchAttractionsViaConcierge`.
+
+4. **`frontend/tests/explore-concierge-migration.test.mjs`** (new):
+   - Asserts TripBuilder Explore no longer references `/search/attractions`, `/search/clusters`, `/search/best-area`, or their typed wrappers.
+   - Asserts the canonical adapter exists, goes through `/ai/concierge/search`, and gates on `display.addability === "addable"` + `googleVerification.providerPlaceId`.
+   - Asserts the adapter preserves the AttractionSearchResult fields needed by Add to Day / Save / Maps (id, name, category, description, location, address, rating, numReviews, aiScore, tags, bookingUrl, lat, lng).
+   - Asserts the legacy wrappers and the grouped/Areas view + BestAreaCard have been removed from the frontend.
+
+5. **`frontend/tests/explore-hydration.test.mjs`** (registry update):
+   - Updated the snapshot-fallback assertion to require the canonical `searchAttractionsViaConcierge(tripId, destination)` call and to forbid the legacy `searchAttractions(...)` call.
+   - Updated the legacy mapper test to assert `mapAttractionToResult` is gone and `mapUnifiedAttractionToResult` is the canonical replacement.
+
+### Endpoint usage — before vs after
+
+| surface | before v1B | after v1B |
+|---|---|---|
+| TripBuilder Explore — attractions | `POST /search/attractions` (`_mock_attractions`) | `POST /ai/concierge/search` (Google-Places-verified, display-contract-gated) |
+| TripBuilder Explore — grouped/Areas view | `POST /search/clusters` (partial-mock) | **fail closed — view removed** (deferred to v1C) |
+| TripBuilder Explore — Best Area card | `POST /search/best-area` (partial-mock derivation) | **fail closed — card removed** (deferred to v1C) |
+| TripBuilder Explore — restaurants | `POST /search/restaurants` (canonical Google Places) | unchanged |
+| `/search/flights`, `/search/hotels`, `/search/round-trip-flights` | mock-backed; consumed by `OptimizeTripModal` + `TripBuilderForm` | unchanged (out of scope; covered by `BLOCK_LEGACY_PRODUCT_MOCK`) |
+
+### Frontend caller registry — before vs after
+
+| caller file | before v1B | after v1B |
+|---|---|---|
+| `frontend/src/lib/api.ts` | flights + hotels + attractions + clusters + best-area + round-trip-flights wrappers | flights + hotels + round-trip-flights wrappers (attractions / clusters / best-area / planClusterDay deleted) |
+| `frontend/src/components/trips/TripBuilder.tsx` | calls `searchAttractions`, `searchClusters`, `fetchBestArea`, `planClusterDay` | **migrated** — calls `searchAttractionsViaConcierge` only; no legacy refs |
+| `frontend/src/components/trips/OptimizeTripModal.tsx` | calls `searchFlights`, `searchHotels` | unchanged (v1B-flights+hotels deferred) |
+| `frontend/tests/explore-hydration.test.mjs` | documents legacy fallback | documents v1B canonical fallback |
+| `frontend/tests/explore-concierge-migration.test.mjs` | did not exist | new — asserts the migration via `doesNotMatch` patterns |
+
+### Test results
+
+- `backend/tests/test_product_surface_pruning_v1a.py`: **36/36 PASS**
+- Concierge regression band (`test_concierge_card_contract.py`, `test_concierge.py`, `test_explore_snapshot.py`, `test_concierge_display_contract.py`): **149/149 PASS**
+- `frontend/tests/explore-concierge-migration.test.mjs` (new): **6/6 PASS**
+- `frontend/tests/explore-hydration.test.mjs`: 52/53 pass (1 pre-existing failure unrelated to v1B — `searchRestaurants` filter pattern; existed on `main`).
+- TypeScript `tsc --noEmit`: clean.
+
+### Risks / deferred items
+
+- **Grouped/Areas view + Best Area card are gone from the UI.** v1B intentionally fails closed because the canonical `/ai/concierge/search` surface does not yet emit cluster / best-area shapes. v1C should either (a) add a canonical clustering pass over the verified Concierge attractions + restaurants, or (b) drop the feature.
+- **Restaurants** still flow through `/search/restaurants`, which is canonical Google Places — no change needed.
+- **`/search/flights`, `/search/hotels`, `/search/round-trip-flights`** remain mock-backed and consumed by `OptimizeTripModal` + `TripBuilderForm.createTripWithSearch`. Out of scope for v1B per task constraints; covered by `BLOCK_LEGACY_PRODUCT_MOCK`.
+- The pre-existing `searchRestaurants` filter-pattern test failure in `explore-hydration.test.mjs` is unrelated to v1B and predates this PR.
+
+### Next recommended PR (v1B-flights+hotels or v1C)
+
+1. **v1B-flights+hotels**: replace `_mock_flights` / `_mock_hotels` with a real provider (Amadeus / Google Flights) or migrate `OptimizeTripModal` + `TripBuilderForm.createTripWithSearch` to a Concierge-backed itinerary scaffold.
+2. **v1C-clustering**: bring back the grouped/Areas view + Best Area card on top of canonical Concierge attractions + restaurants only, with explicit unit-tested clustering, OR drop the feature.
+3. **v1B-cleanup**: once both above ship, delete `LEGACY_PRODUCT_MOCK_FUNCTIONS`, `BLOCK_LEGACY_PRODUCT_MOCK`, the v1A telemetry, and the caller-registry test.
+
+---
+
+## Previous change (2026-05-08) — Product Surface Pruning v1A: Legacy Mock Quarantine + Caller Registry (Level 3)
 
 **Status: IN PROGRESS (branch: claude/prune-product-surface-AdT8z)** — Backend + frontend (comments only) + tests only. No SQL. No new providers. No new LLM calls. No semantic retrieval / ranking / note changes.
 

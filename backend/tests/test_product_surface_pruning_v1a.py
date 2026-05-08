@@ -314,11 +314,19 @@ def test_search_restaurants_is_canonical_not_legacy():
 # forces a deliberate decision (extend the v1B migration plan vs. add the
 # caller and update this list) instead of silently widening the leak.
 _KNOWN_LEGACY_SEARCH_CALLERS: frozenset = frozenset({
+    # Still references the legacy `searchFlights` / `searchHotels` typed
+    # wrappers (consumed by OptimizeTripModal — out of scope for v1B).
     pathlib.PurePosixPath("frontend/src/lib/api.ts"),
-    pathlib.PurePosixPath("frontend/src/components/trips/TripBuilder.tsx"),
+    # OptimizeTripModal still calls /search/flights and /search/hotels until
+    # v1B-flights+hotels (or a real-provider follow-up) lands.
     pathlib.PurePosixPath("frontend/src/components/trips/OptimizeTripModal.tsx"),
-    # Test fixtures that exercise the legacy callers are explicitly allowed.
+    # Test fixtures that document the legacy surface or assert v1B
+    # migration intent are explicitly allowed.
     pathlib.PurePosixPath("frontend/tests/explore-hydration.test.mjs"),
+    # v1B migration regression fixture — asserts TripBuilder Explore no
+    # longer calls `searchAttractions` / `searchClusters` / `fetchBestArea`.
+    # The file references those tokens as `assert.doesNotMatch(...)` patterns.
+    pathlib.PurePosixPath("frontend/tests/explore-concierge-migration.test.mjs"),
 })
 
 # Tokens that mean "this file calls the legacy /search/* mock-backed surface".
@@ -349,11 +357,30 @@ _BENIGN_SEARCH_SUBSTRINGS: tuple[str, ...] = (
 
 def _file_uses_legacy_search_token(text: str) -> bool:
     """True if the file references the legacy ``/search/*`` mock surface
-    after stripping benign Google Maps URL fragments."""
+    after stripping benign Google Maps URL fragments.
+
+    Camel-case typed wrappers are matched with a trailing-character guard so
+    that ``searchAttractions`` does not match the canonical v1B migration
+    helper ``searchAttractionsViaConcierge`` (and analogous future helpers
+    like ``searchHotelsCanonical``).  Route literals (``/search/...``) are
+    matched as plain substrings since they are unique to the legacy surface.
+    """
+    import re
+
     cleaned = text
     for benign in _BENIGN_SEARCH_SUBSTRINGS:
         cleaned = cleaned.replace(benign, "")
-    return any(token in cleaned for token in _LEGACY_SEARCH_TOKENS)
+    for token in _LEGACY_SEARCH_TOKENS:
+        if token.startswith("/"):
+            if token in cleaned:
+                return True
+            continue
+        # Camel-case wrapper: must NOT be followed by another identifier char,
+        # so ``searchAttractionsViaConcierge`` is not flagged by ``searchAttractions``.
+        pattern = re.escape(token) + r"(?![A-Za-z0-9_])"
+        if re.search(pattern, cleaned):
+            return True
+    return False
 
 
 def test_only_known_frontend_files_reference_legacy_search():

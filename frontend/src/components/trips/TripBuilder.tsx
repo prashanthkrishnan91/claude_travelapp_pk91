@@ -42,7 +42,6 @@ import {
   UtensilsCrossed,
   Map as MapIcon,
   LayoutList,
-  Layers,
   Navigation,
 } from "lucide-react";
 import { estimateTravel, sumRoute } from "@/lib/travelTime";
@@ -56,9 +55,7 @@ import type {
   ItemType,
   CompareResult,
   AttractionSearchResult,
-  BestAreaRecommendation,
   RestaurantSearchResult,
-  LocationCluster,
   DayPlan,
 } from "@/types";
 import {
@@ -71,12 +68,9 @@ import {
   ensureTripDays,
   addRoundTripOutboundToDay,
   addRoundTripReturnToDay,
-  searchAttractions,
+  searchAttractionsViaConcierge,
   searchRestaurants,
-  searchClusters,
-  fetchBestArea,
   fetchDayPlan,
-  planClusterDay,
   addAttractionToDay,
   addRestaurantToDay,
   moveIdeaToTripIdeas,
@@ -333,24 +327,6 @@ function SummaryBar({
           </p>
         </div>
       )}
-    </div>
-  );
-}
-
-// ─── Best Area card ───────────────────────────────────────────────────────────
-
-function BestAreaCard({ bestArea }: { bestArea: BestAreaRecommendation }) {
-  return (
-    <div className="rounded-2xl border border-brand-500/35 bg-gradient-to-br from-dark-200 to-dark-300 p-3 shadow-sm flex flex-col gap-1.5">
-      <div className="flex items-center gap-1.5">
-        <span className="text-base leading-none">📍</span>
-        <span className="text-[10px] font-bold text-brand-300 uppercase tracking-wider">Best Area to Stay</span>
-        <span className="ml-auto text-[10px] font-bold text-brand-300 bg-brand-600/20 border border-brand-500/35 px-1.5 py-0.5 rounded-full">
-          {bestArea.score.toFixed(0)}/100
-        </span>
-      </div>
-      <p className="text-sm font-extrabold text-cream-100 leading-tight">{bestArea.areaName}</p>
-      <p className="text-xs text-cream-300 leading-snug">{bestArea.reason}</p>
     </div>
   );
 }
@@ -1251,12 +1227,8 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const [addingId,             setAddingId]             = useState<string | null>(null);
   const [toast,                setToast]                = useState<string | null>(null);
   const [activeId,             setActiveId]             = useState<UniqueIdentifier | null>(null);
-  const [viewMode,             setViewMode]             = useState<"list" | "map" | "grouped">("list");
+  const [viewMode,             setViewMode]             = useState<"list" | "map">("list");
   const [activeMarkerId,       setActiveMarkerId]       = useState<string | null>(null);
-  const [candidateClusters,    setCandidateClusters]    = useState<LocationCluster[]>([]);
-  const [clustersLoading,      setClustersLoading]      = useState(false);
-  const [planningClusterId,    setPlanningClusterId]    = useState<string | null>(null);
-  const [bestArea,             setBestArea]             = useState<BestAreaRecommendation | null>(null);
 
   // ── Day plan state ───────────────────────────────────────────────────────────
   const [dayPlan,            setDayPlan]            = useState<DayPlan | null>(null);
@@ -1267,7 +1239,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const hotelListRef       = useRef<HTMLDivElement>(null);
   const attractionListRef  = useRef<HTMLDivElement>(null);
   const restaurantListRef  = useRef<HTMLDivElement>(null);
-  const prevViewModeRef    = useRef<"list" | "map" | "grouped">("list");
+  const prevViewModeRef    = useRef<"list" | "map">("list");
   const exploreSnapshotLoadedRef = useRef<string | null>(null);
 
   // ── Compare state ────────────────────────────────────────────────────────────
@@ -1375,7 +1347,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       if (shouldFetchRestaurants) setRestaurantsLoading(true);
 
       const [attractionsResult, restaurantsResult] = await Promise.allSettled([
-        shouldFetchAttractions ? searchAttractions(destination) : Promise.resolve(snapshot?.attractions ?? []),
+        shouldFetchAttractions ? searchAttractionsViaConcierge(tripId, destination) : Promise.resolve(snapshot?.attractions ?? []),
         shouldFetchRestaurants ? searchRestaurants(destination) : Promise.resolve({ restaurants: snapshot?.restaurants ?? [], sourceStatus: snapshot?.restaurantStatus ?? "snapshot", cacheStatus: "snapshot", terminalNoResults: false }),
       ]);
 
@@ -1412,18 +1384,15 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     gsap.from(cards, { y: 24, opacity: 0, duration: 0.45, stagger: 0.05, ease: "power2.out", clearProps: "all" });
   }, [candidateRestaurants.length]);
 
-  // Load clusters when grouped view is activated
-  useEffect(() => {
-    if (viewMode !== "grouped" || !destination || candidateClusters.length > 0) return;
-    setClustersLoading(true);
-    searchClusters(destination).then(setCandidateClusters).finally(() => setClustersLoading(false));
-  }, [viewMode, destination, candidateClusters.length]);
-
-  // Fetch best area recommendation once destination is known
-  useEffect(() => {
-    if (!destination) return;
-    fetchBestArea(destination).then(setBestArea);
-  }, [destination]);
+  // Product Surface Migration v1B — TripBuilder Explore previously rendered
+  // a grouped "Areas" view and a "Best Area to Stay" card whose backends
+  // derived from `_mock_attractions` and so produced fabricated
+  // recommendations.  The canonical AI Concierge surface does not yet emit
+  // cluster / best-area shapes, so v1B fails closed: the legacy callers are
+  // removed and the grouped view + best-area card are intentionally dropped
+  // from the UI rather than hidden behind a new adapter that smuggles mock
+  // data through.  A canonical clustering / best-area replacement is a
+  // follow-up (v1C).
 
   // Scroll to highlighted list item when switching from map → list view
   useEffect(() => {
@@ -1553,47 +1522,6 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       showToast("Failed to add — please try again");
     } finally {
       setAddingId(null);
-    }
-  }, [days, selectedDayId, tripId, showToast]);
-
-  // ── Plan an entire cluster area into a single day ───────────────────────────
-
-  const handlePlanCluster = useCallback(async (cluster: LocationCluster) => {
-    setPlanningClusterId(cluster.clusterId);
-    try {
-      const targetDay = days.find((d) => d.id === selectedDayId) ?? days[0];
-      if (!targetDay) {
-        showToast("No day available — days are generated from trip dates");
-        return;
-      }
-
-      const plan = await planClusterDay(tripId, cluster.clusterId, cluster.places);
-
-      const newItems: ItineraryItem[] = [];
-      for (const attraction of plan.attractions) {
-        const item = await addAttractionToDay(tripId, targetDay.id, attraction);
-        newItems.push(item);
-      }
-      if (plan.lunch) {
-        const item = await addRestaurantToDay(tripId, targetDay.id, plan.lunch);
-        newItems.push(item);
-      }
-      if (plan.dinner) {
-        const item = await addRestaurantToDay(tripId, targetDay.id, plan.dinner);
-        newItems.push(item);
-      }
-
-      setDays((prev) =>
-        prev.map((d) =>
-          d.id === targetDay.id ? { ...d, items: [...d.items, ...newItems] } : d
-        )
-      );
-      const total = newItems.length;
-      showToast(`${total} place${total !== 1 ? "s" : ""} from ${cluster.areaName || "Popular Area"} added to Day ${targetDay.dayNumber}`);
-    } catch {
-      showToast("Failed to plan area — please try again");
-    } finally {
-      setPlanningClusterId(null);
     }
   }, [days, selectedDayId, tripId, showToast]);
 
@@ -1979,9 +1907,6 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
             {/* Summary bar */}
             <SummaryBar topFlight={topFlight} topHotel={topHotel} />
 
-            {/* Best area recommendation */}
-            {bestArea && <BestAreaCard bestArea={bestArea} />}
-
             {/* Flights section */}
             <CandidatePanel
               title="Flights"
@@ -2108,17 +2033,6 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                   <MapIcon className="w-3 h-3" />
                   Map
                 </button>
-                <button
-                  onClick={() => setViewMode("grouped")}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
-                    viewMode === "grouped"
-                      ? "bg-white text-slate-700 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  <Layers className="w-3 h-3" />
-                  Areas
-                </button>
               </div>
             </div>
 
@@ -2130,111 +2044,11 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                   attractions={filteredAttractions}
                   restaurants={filteredRestaurants}
                   activeMarkerId={activeMarkerId}
-                  bestArea={bestArea}
+                  bestArea={null}
                   onMarkerClick={(id) => setActiveMarkerId(id)}
                   onAddAttraction={handleAddAttractionToItinerary}
                   onAddRestaurant={handleAddRestaurantToItinerary}
                 />
-              </div>
-            ) : viewMode === "grouped" ? (
-              /* ── Grouped / Areas view ──────────────────────────────────── */
-              <div className="flex flex-col gap-4">
-                {clustersLoading ? (
-                  <div className="flex items-center justify-center py-8 gap-2 text-slate-400 text-xs">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Grouping nearby places…
-                  </div>
-                ) : candidateClusters.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400 text-xs">No clusters found.</div>
-                ) : (
-                  candidateClusters.map((cluster) => (
-                    <div key={cluster.clusterId} className="card p-3 flex flex-col gap-2">
-                      {/* Cluster header */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <MapPin className="w-3.5 h-3.5 text-sky-500 flex-shrink-0" />
-                          <span className="text-sm font-bold text-slate-100">{cluster.areaName || "Popular Area"}</span>
-                        </div>
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                            cluster.label === "Walkable cluster"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : cluster.label === "5 min apart"
-                              ? "bg-sky-100 text-sky-700"
-                              : "bg-amber-100 text-amber-700"
-                          }`}
-                        >
-                          <MapPin className="w-2.5 h-2.5" />
-                          {cluster.label}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[10px] text-slate-400">
-                          {cluster.places.length} place{cluster.places.length !== 1 ? "s" : ""} ·{" "}
-                          {cluster.counts.attractions} attraction
-                          {cluster.counts.attractions !== 1 ? "s" : ""} ·{" "}
-                          {cluster.counts.restaurants} restaurant
-                          {cluster.counts.restaurants !== 1 ? "s" : ""}
-                        </p>
-                        <button
-                          onClick={() => handlePlanCluster(cluster)}
-                          disabled={planningClusterId === cluster.clusterId}
-                          className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-semibold transition-all disabled:opacity-50"
-                        >
-                          {planningClusterId === cluster.clusterId ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <Zap className="w-3 h-3" />
-                          )}
-                          Plan this area
-                        </button>
-                      </div>
-                      {/* Places list */}
-                      <div className="flex flex-col gap-1.5 mt-1">
-                        {cluster.places.map((place) => (
-                          <div
-                            key={place.id}
-                            className="flex items-center gap-2 rounded-xl border border-slate-700/80 bg-slate-900/70 px-3 py-2 shadow-[inset_0_1px_0_rgba(148,163,184,0.15)]"
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                                place.placeType === "attraction" ? "bg-emerald-400" : "bg-rose-400"
-                              }`}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-slate-100 truncate">{place.name}</p>
-                              <p className="text-[10px] text-slate-300 truncate">{place.category} · {place.address.split(",")[0]}</p>
-                            </div>
-                            {place.rating != null && (
-                              <span className="flex items-center gap-0.5 text-[10px] text-amber-500 font-semibold flex-shrink-0">
-                                <Star className="w-2.5 h-2.5 fill-amber-400 stroke-amber-400" />
-                                {place.rating.toFixed(1)}
-                              </span>
-                            )}
-                            <button
-                              onClick={() => {
-                                if (place.placeType === "attraction") {
-                                  const match = sortedAttractions.find((a) => a.id === place.id);
-                                  if (match) handleAddAttractionToItinerary(match);
-                                } else {
-                                  const match = sortedRestaurants.find((r) => r.id === place.id);
-                                  if (match) handleAddRestaurantToItinerary(match);
-                                }
-                              }}
-                              disabled={addingId === place.id}
-                              className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition-all disabled:opacity-50"
-                            >
-                              {addingId === place.id
-                                ? <Loader2 className="w-3 h-3 animate-spin" />
-                                : <Plus className="w-3 h-3" />
-                              }
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                )}
               </div>
             ) : (
               /* ── List view ─────────────────────────────────────────────── */
