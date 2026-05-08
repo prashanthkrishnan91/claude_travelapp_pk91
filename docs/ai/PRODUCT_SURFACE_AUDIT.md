@@ -4,6 +4,8 @@ Date: 2026-05-08
 Severity: Level 2 (architecture audit / spec). No live mock leakage into AIConciergePanel addable cards or Add-to-Day / Save / Maps flows was discovered, so no Level 3 escalation.
 Type: Decision artifact. No production behavior change. No SQL. No new providers. No new LLM calls. No UI change.
 
+> **Status update (2026-05-08, post-merge of v1C deletion variant):** Candidate A is **completed**. `POST /search/attractions`, `POST /search/clusters`, and `POST /search/best-area` and the cluster/best-area service methods, helpers, and pydantic models have been deleted. `_mock_attractions` and `SearchService.search_attractions` were intentionally preserved with explanation (still consumed by `app/services/concierge.py` + `app/routes/plan.py`). The remaining audit-surface mock-backed routes — `/search/flights`, `/search/hotels`, `/search/round-trip-flights`, and the mixed `/trips/create-with-search` flow — move to the next-risk list and remain deferred to a real-provider strategy PR. Non-live story surfaces (`ConciergeResponse`, `PlaceRecommendationsView`, `PlaceRecommendationsView.stories.tsx`) remain on the watch-list.
+
 This document is the post-cleanup audit that follows PRs #287 (canonical display contract), #288 (legacy mock quarantine + caller registry), #289 (TripBuilder Explore migration to canonical `/ai/concierge/search`), and #290 (frontend fallback ladder removal).
 
 It maps every remaining product-surface route, every important frontend caller, the production status of each surface, and recommends the next single focused PR.

@@ -1,6 +1,59 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-08) — Post-PR #290 Product Surface Cleanup Audit (Level 2 — audit/spec)
+## Last change (2026-05-08) — Product Surface Cleanup v1C: orphaned legacy place routes deleted (Level 2 — architecture cleanup)
+
+**Status: PR-ready (branch: claude/cleanup-legacy-routes-meyzy)** — Structural deletion of orphaned mock-backed `/search/*` routes. No SQL. No new providers. No new LLM calls. No UI change.
+
+### Problem
+
+After PR #289 migrated TripBuilder Explore onto `/ai/concierge/search` and PR #290 removed broad fallback ladders, three `/search/*` handlers were left orphaned: `POST /search/attractions`, `POST /search/clusters`, `POST /search/best-area`. They had no live frontend caller but were still mounted on the FastAPI app and still backed by mock fixtures. Leaving them loaded preserved a structural risk that a future change could revive mock-derived attractions, clusters, or best-area recommendations.
+
+### Fix
+
+Deletion-variant v1C cleanup, chosen by the post-PR #290 audit (`docs/ai/PRODUCT_SURFACE_AUDIT.md`, Candidate A):
+
+- **`backend/app/routes/search.py`**: removed the `/search/attractions`, `/search/clusters`, and `/search/best-area` handlers and their model imports. Pruned `LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES` to `{flights, round-trip-flights, hotels}`. Added a new `DELETED_LEGACY_PRODUCT_ROUTES` "do not resurrect" set. Updated docstring/classification block to reflect reality.
+- **`backend/app/services/search.py`**: deleted `SearchService.search_clusters`, `SearchService.get_best_area`, `_cluster_places`, `_AREA_NAMES`, `_walkability_label`, `_avg_distance_label`, and the cluster/best-area model imports.
+  - **Preserved with explanation:** `SearchService.search_attractions` and `_mock_attractions`. Repo-wide search confirmed they are still consumed by `app/services/concierge.py` (intent fallback paths, `_load_context`) and `app/routes/plan.py` (POST /plan/day). `BLOCK_LEGACY_PRODUCT_MOCK` continues to fail-closed those flows. Migrating those internal callers off the mock fixture is tracked separately and is explicitly out of scope for v1C (deletion of orphaned route handlers only).
+- **`backend/app/models/search.py`**: deleted `ClusterSearchRequest`, `PlaceInCluster`, `ClusterCounts`, `LocationCluster`, `BestAreaRequest`, and `BestAreaRecommendation` (no remaining backend importers after the route + service deletions). Kept `AttractionSearchRequest` / `AttractionResult` (still used by concierge + plan).
+- **`backend/tests/test_product_surface_pruning_v1a.py`**: updated `test_legacy_dependent_set_contains_known_mock_routes` to expect only `{flights, round-trip-flights, hotels}`. Added three guard tests: deleted routes are absent from the FastAPI route source, deleted routes are absent from `LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES` (stale-entry guard), and `DELETED_LEGACY_PRODUCT_ROUTES` covers every v1C deletion. All v1A legacy-mock-emit, cache-suppression, frontend-caller-registry, and AI Concierge canonical-seam tests retained.
+- **`backend/tests/test_cost_guardrails.py`**: dropped the now-stale `/search/attractions` dedupe-payload assertion; canonical `/search/restaurants` shape assertion retained.
+
+### Tests
+
+- `backend/tests/test_product_surface_pruning_v1a.py`: 39/39 pass after edit, including the three new v1C deletion guards.
+- `backend/tests/test_cost_guardrails.py`: passes after the v1C-aware update.
+- Full backend suite: only the 4 pre-existing failures remain (`test_concierge_critical_path_hardening::test_pii_redaction_still_works`, `test_concierge_observability::test_request_log_redacts_prompt_and_persists_supabase_row`, `test_set_level_writer::TestWriterTelemetry::test_telemetry_on_no_budget_timeout`, `test_live_research::TestFrontendSourceEvidenceRendering::test_panel_uses_pick_card_reason_helper`). All four reproduce on the unmodified base branch — none reference the v1C deletions.
+- Frontend `tests/explore-concierge-migration.test.mjs` and `tests/explore-hydration.test.mjs`: same 4 pre-existing snapshot/hydration failures as base; none reference v1C deletions.
+
+### Repo-wide reference audit
+
+After deletion, every remaining mention of the deleted symbols falls into one of:
+
+- Expected canonical/test/doc reference: `docs/ai/PRODUCT_SURFACE_AUDIT.md`, `docs/ai/HANDOFF.md`, `progress_log.md`, `backend/app/routes/search.py` docstring + `DELETED_LEGACY_PRODUCT_ROUTES`, `backend/app/services/search.py` v1C-preservation comment, `backend/app/models/search.py` deletion comment, `backend/tests/test_product_surface_pruning_v1a.py`, `frontend/tests/explore-concierge-migration.test.mjs`, `frontend/tests/explore-hydration.test.mjs`, `frontend/src/lib/api.ts` (historical comment block describing the v1B migration off `/search/attractions`).
+- Intentionally preserved with reason: `SearchService.search_attractions`, `_mock_attractions`, `AttractionSearchRequest`, `AttractionResult` — still consumed by `app/services/concierge.py` and `app/routes/plan.py`.
+- Stale and removed: route handlers, `SearchService.search_clusters`, `SearchService.get_best_area`, cluster/best-area helpers, `ClusterSearchRequest`, `PlaceInCluster`, `ClusterCounts`, `LocationCluster`, `BestAreaRequest`, `BestAreaRecommendation`, deleted-route entries in `LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES`.
+
+### Risks / limitations
+
+- `_mock_attractions` is intentionally preserved because deleting it would break `POST /plan/day` and several Concierge intent fallback paths. Migrating those internal callers off the mock fixture is deferred to a focused follow-up PR.
+- `OptimizeTripModal` + `/trips/create-with-search` + `/search/{flights,hotels,round-trip-flights}` remain the only mock-backed product surfaces still in active use; quarantined by `BLOCK_LEGACY_PRODUCT_MOCK` and deferred to a real-provider PR.
+- Frontend types `BestAreaRecommendation` / `LocationCluster` in `frontend/src/types/index.ts` are now disconnected from any backend surface; not touched per task brief (no test or import proves direct impact).
+
+### PR summary checklist
+
+- Severity classification: Level 2 (architecture cleanup).
+- Root risk: orphaned mock-backed handlers loaded but unreachable.
+- Files changed: `backend/app/routes/search.py`, `backend/app/services/search.py`, `backend/app/models/search.py`, `backend/tests/test_product_surface_pruning_v1a.py`, `backend/tests/test_cost_guardrails.py`, `docs/ai/HANDOFF.md`, `docs/ai/PRODUCT_SURFACE_AUDIT.md`, `progress_log.md`.
+- Supabase SQL required: No.
+- UI changes: No.
+- New providers / LLM calls: No.
+- HANDOFF.md edited: Yes.
+- README.md edited: No.
+
+---
+
+## Previous change (2026-05-08) — Post-PR #290 Product Surface Cleanup Audit (Level 2 — audit/spec)
 
 **Status: PR-ready (branch: claude/post-pr290-cleanup-audit-4t3fX)** — Decision artifact only. No production behavior change. No SQL. No new providers. No new LLM calls. No UI change.
 

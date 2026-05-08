@@ -190,62 +190,11 @@ class RestaurantResult(SearchResult):
 
 
 # ------------------------------------------------------------------
-# Proximity cluster models
+# Proximity cluster + best-area models removed in Product Surface
+# Cleanup v1C — the /search/clusters and /search/best-area routes were
+# orphaned after PR #289 removed the grouped/Areas view and Best Area
+# card.  No canonical replacement exists.
 # ------------------------------------------------------------------
-
-class ClusterSearchRequest(BaseModel):
-    location: str = Field(..., min_length=2, description="City or region to cluster places for")
-    radius_km: float = Field(1.5, ge=0.5, le=5.0, description="Cluster radius in kilometres")
-
-
-class PlaceInCluster(BaseModel):
-    id: str
-    name: str
-    place_type: str = Field(..., description="attraction | restaurant")
-    category: str
-    address: str
-    rating: Optional[float] = None
-    ai_score: Optional[float] = None
-    tags: List[str] = Field(default_factory=list)
-    lat: float
-    lng: float
-    booking_url: str
-    booking_options: List[BookingOption] = Field(default_factory=list)
-
-
-class ClusterCounts(BaseModel):
-    attractions: int = 0
-    restaurants: int = 0
-
-
-class LocationCluster(BaseModel):
-    cluster_id: str
-    area_name: str
-    label: str = Field(..., description="Walkable cluster | 5 min apart | 10 min apart")
-    center_lat: float
-    center_lng: float
-    places: List[PlaceInCluster]
-    counts: ClusterCounts = Field(default_factory=ClusterCounts)
-    avg_distance: str = ""
-
-
-# ------------------------------------------------------------------
-# Best area recommendation
-# ------------------------------------------------------------------
-
-class BestAreaRequest(BaseModel):
-    location: str = Field(..., min_length=2, description="City or region to recommend area for")
-    radius_km: float = Field(1.5, ge=0.5, le=5.0, description="Cluster radius in kilometres")
-
-
-class BestAreaRecommendation(BaseModel):
-    area_name: str = Field(..., description="Name of the recommended area")
-    reason: str = Field(..., description="Human-readable justification for the recommendation")
-    score: float = Field(..., description="Composite score 0–100")
-    center_lat: float
-    center_lng: float
-    radius_km: float = Field(..., description="Visual highlight radius in km")
-    cluster_id: str
 
 
 # ------------------------------------------------------------------
