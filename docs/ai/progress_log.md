@@ -1,5 +1,31 @@
 # Progress Log
 
+## 2026-05-08 — Legacy Flights/Hotels Strategy v1
+
+**Branch**: `claude/audit-flights-hotels-strategy-KoptK`
+
+**Severity**: Level 2 — audit/spec. Doc-only.
+
+**Problem**: Post-PR #293, flights/hotels are the only remaining live mock-backed product surfaces. The post-PR-#290 audit deferred them to a real-provider strategy PR; this is that strategy artifact.
+
+**What was built**:
+- `docs/ai/LEGACY_FLIGHTS_HOTELS_STRATEGY.md` (new): full route/caller inventory, behavior matrix under flag on/off + cached/empty, risk table (highlighting the persistence of fake `book.example.com` booking URLs into `itinerary_items.details` via `/trips/create-with-search`), provider strategy options A–E, and a recommendation of **Option A (Fail-Closed UX v1)** as the next PR.
+- `docs/ai/HANDOFF.md`: top-of-file entry summarizing findings and the recommended next PR.
+
+**Key audit findings**:
+- `OptimizeTripModal` fails closed cleanly on empty results.
+- `/trips/create-with-search` creates a trip unconditionally even when flights+hotels both come back empty — UX hole independent of mock vs. provider.
+- Cache-leak path mitigated by dual-layer guard (`_legacy_product_mock_blocked` + `_suppress_legacy_mock_cache`).
+- Mock fixtures emit fake booking URLs (`book.example.com`) that get persisted into trip itinerary items when the flag is off.
+
+**Tests**: Doc-only. No new tests added. Existing contract tests in `backend/tests/test_product_surface_pruning_v1a.py` continue to gate the flag/cache/caller-registry contracts.
+**Supabase SQL**: No
+**UI changes**: No
+**New providers / LLM calls**: No
+**HANDOFF.md edited**: Yes
+
+---
+
 ## 2026-05-06 — PR #261: Set-Level Writer v1
 
 **Branch**: `claude/set-level-writer-v1-AkIL5`
