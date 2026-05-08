@@ -1,6 +1,50 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-08) — Product Surface Migration v1B: TripBuilder Explore canonical migration (Level 2 → 3)
+## Last change (2026-05-08) — Post-PR #290 Product Surface Cleanup Audit (Level 2 — audit/spec)
+
+**Status: PR-ready (branch: claude/post-pr290-cleanup-audit-4t3fX)** — Decision artifact only. No production behavior change. No SQL. No new providers. No new LLM calls. No UI change.
+
+### Problem
+
+PRs #287–#290 closed the canonical AI Concierge display contract, quarantined the legacy `_mock_*` surface, migrated TripBuilder Explore to `/ai/concierge/search`, and removed broad fallback ladders. After all four PRs landed, three `/search/*` route handlers were left **orphaned** (no live caller but still loaded), `OptimizeTripModal` + `/trips/create-with-search` remained as the *only* live mock-backed product surface, and the `ConciergeResponse` / `PlaceRecommendationsView` story-only views were left unwatched. There was no single artifact mapping which surfaces are canonical, guarded, orphaned, or non-live, which made it impossible to choose the next focused cleanup PR safely.
+
+### Fix (audit-only)
+
+1. **`docs/ai/PRODUCT_SURFACE_AUDIT.md`** (new): backend route inventory, frontend caller inventory, surface classification (canonical / guarded mock / orphan / non-live), per-surface mock-leak + addability + cache-leak ratings, recommended deletion candidates, recommended canonical rebuild candidates, explicit non-goals, and a self-audit table mapping each acceptance criterion to its artifact.
+2. **`progress_log.md`**: dated entry summarizing the audit and the recommended next PR.
+3. **`docs/ai/HANDOFF.md`** (this entry).
+
+### Recommended next PR
+
+**Candidate A — Product Surface Cleanup v1C, deletion variant.** Delete the orphaned `/search/attractions`, `/search/clusters`, `/search/best-area` route handlers, the corresponding `SearchService` methods, `_mock_attractions`, and any pydantic models that become unreachable; trim `LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES`, `LEGACY_PRODUCT_MOCK_FUNCTIONS`, and `backend/tests/test_product_surface_pruning_v1a.py` registries; add a small backend test asserting the deleted route paths are no longer registered. Chosen over B (legacy flights/hotels strategy — out of scope without a real-provider decision), C (non-live story cleanup — lower risk; captured as watch-list), and D (test consolidation — cleanup, not leakage closer).
+
+### Tests
+
+- No new tests added in this audit PR. The existing `backend/tests/test_product_surface_pruning_v1a.py` caller-registry test remains the live drift guard for any new `/search/*` mock caller.
+
+### Risks / deferred items
+
+- Orphan routes remain loaded until v1C ships.
+- `OptimizeTripModal` + `/trips/create-with-search` remain the only live mock-backed product surfaces, still guarded by `BLOCK_LEGACY_PRODUCT_MOCK` + cache-side suppression from PR #288.
+- `ConciergeResponse` / `PlaceRecommendationsView` are non-live today (no live `app/` page imports them; `PlaceRecommendationsView`'s "Add to Trip" button has no `onClick`). They are watch-listed for v1C non-live cleanup.
+
+### PR summary checklist
+
+- Severity classification: Level 2 (audit/spec).
+- Root risk: orphaned mock-backed `/search/{attractions,clusters,best-area}` route handlers still loaded after PR #289 removed their UI consumers.
+- Files changed: `docs/ai/PRODUCT_SURFACE_AUDIT.md` (new), `docs/ai/HANDOFF.md` (this entry), `progress_log.md` (entry).
+- Audit findings: see `docs/ai/PRODUCT_SURFACE_AUDIT.md`.
+- Selected next PR: Candidate A — Product Surface Cleanup v1C (deletion variant).
+- Tests: none added; existing v1A caller-registry test remains authoritative.
+- Supabase SQL required: No.
+- UI changes: No.
+- New providers / LLM calls: No.
+- Risks/limitations: see above.
+- Self-audit result: §10 of `docs/ai/PRODUCT_SURFACE_AUDIT.md`.
+
+---
+
+## Previous change (2026-05-08) — Product Surface Migration v1B: TripBuilder Explore canonical migration (Level 2 → 3)
 
 **Status: IN PROGRESS (branch: claude/migrate-tripbuilder-explore-G4Nyc)** — Frontend route migration + canonical adapter + tests + caller-registry update + handoff. No SQL. No new providers. No new LLM calls beyond what `/ai/concierge/search` already does. No semantic retrieval / ranking / note internals changed.
 
