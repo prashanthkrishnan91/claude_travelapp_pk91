@@ -92,6 +92,10 @@ _PREFERENCE_QUERY_MODIFIERS: dict = {
     "intimate": ["intimate", "cozy"],
     "late_night": ["late night", "open late"],
     "view_or_geo": ["rooftop", "with a view", "outdoor"],
+    # casual: generates queries that surface informal/neighbourhood options Google ranks
+    # differently from the default popular-place ordering. Two modifiers + the plain
+    # venue fallback = 3 queries; the third slot is always the broad recall query.
+    "casual": ["casual dining", "neighborhood"],
 }
 
 # Geography anchors for Chicago — used when geo hints reference water features.

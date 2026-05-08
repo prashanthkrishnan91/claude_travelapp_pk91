@@ -1,6 +1,44 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-08) — Result Quality Fix: Brand Dedup + Stronger Casual + Context Reuse Metadata (Level 2 / Sev 1.5)
+## Last change (2026-05-08) — Casual Live-Query Retrieval + Ranking Fix (Level 2 / Sev 1.5)
+
+**Status: IN PROGRESS (branch: claude/fix-travel-concierge-quality-XnC6C)** — Backend + tests only. No SQL. No UI changes. No new providers. No new LLM calls. Preserves full API contract.
+
+### Root cause of post-PR #285 production failure
+
+**Failure — "casual Mediterranean restaurants" live query still returns insufficiently casual set**
+
+- Greek Islands (fine_dining_restaurant, no price_level) appears first.
+- Aba and Purple Pig ($40–100 price_range) rank above casual alternatives.
+- Root cause 1 (retrieval): `_PREFERENCE_QUERY_MODIFIERS` in `retrieval_planner.py` had no `"casual"` entry. `pref_modifiers` was always empty for casual queries → planner fell through to the plain synonym path → generated identical queries to a broad "Mediterranean restaurants" search (`["mediterranean restaurant Chicago"]`). Same Google candidate pool, no casual-specific candidates fetched.
+- Root cause 2 (ranking): When the Google pool happens to contain only upscale/fine-dining Mediterranean options (because casual alternatives weren't fetched), even the existing penalty (0.10 for fine_dining alone) cannot push them below non-existent casual alternatives.
+
+### Fix
+
+1. **`retrieval_planner.py`**: Added `"casual": ["casual dining", "neighborhood"]` to `_PREFERENCE_QUERY_MODIFIERS`. This generates 3 queries: "casual dining mediterranean restaurant Chicago", "neighborhood mediterranean restaurant Chicago", and the broad fallback "mediterranean restaurant Chicago" for recall. Google receives a different signal for casual vs. broad and returns different candidate sets.
+
+2. **`ranker.py`**: Added `_MIN_CASUAL_COMPAT_FOR_SORT = 2` constant and a casual-aware pre-truncation sort block. When `casual` is active and ≥2 casual-compatible entities (not fine_dining, not expensive) exist in the scored pool, the sort runs before `scored[:top_n]` — placing casual-compatible entities (tier 0) above moderate-upscale (tier 1) above fine-dining/very_expensive (tier 2). Within each tier, score-descending. Added `casual_sort_applied` to `RankerStats`. Updated debug log to include `casual_active`, `casual_downranked`, `casual_sort_applied`.
+
+### Files changed
+
+- `backend/app/concierge/retrieval_planner.py` — added `"casual": ["casual dining", "neighborhood"]` to `_PREFERENCE_QUERY_MODIFIERS`
+- `backend/app/concierge/ranker.py` — `_MIN_CASUAL_COMPAT_FOR_SORT` constant; `RankerStats.casual_sort_applied` field; casual pre-truncation sort block; updated debug log
+- `backend/tests/test_concierge_result_quality.py` — 11 new tests in `TestCasualRetrievalPlannerQueries` and `TestCasualPreTruncationSort`
+
+### Test results
+
+- `test_concierge_result_quality.py`: **46/52 pass** (6 pre-existing env failures requiring email-validator, unchanged)
+- `test_concierge_sev1_catastrophic_fix.py`: no new regressions (pre-existing env failures identical)
+- `test_concierge_context_resolver.py`: no new regressions (pre-existing env failures identical)
+- Net: **+11 new tests all pass, 0 regressions**
+
+### Supabase SQL
+
+None.
+
+---
+
+## Previous change (2026-05-08) — Result Quality Fix: Brand Dedup + Stronger Casual + Context Reuse Metadata (Level 2 / Sev 1.5)
 
 **Status: IN PROGRESS (branch: claude/travel-concierge-dev-LO0yn)** — Backend + tests only. No SQL. No UI changes. No new providers. No new LLM calls. Preserves full display_why/display_why_source/display_why_validated API contract.
 
