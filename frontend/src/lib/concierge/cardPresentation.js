@@ -52,9 +52,40 @@ export function pickCardReason(card) {
     ?? "";
 }
 
-// Display category from canonical display contract, or legacy fallback.
-export function pickCardCategory(card, fallbackCategory) {
-  return card?.display?.displayCategory || card?.supportingDetails?.categoryLabel || fallbackCategory || "Place";
+// Canonical display contract (PR #287): the displayed category MUST come from
+// display.displayCategory.  Returns "" when the canonical field is missing —
+// callers must treat that as "not a polished addable card" and not render it.
+// We deliberately do not fall back through supportingDetails.categoryLabel or
+// any top-level legacy field; that is what produced silent contract drift.
+export function pickCardCategory(card) {
+  const displayCategory = card?.display?.displayCategory;
+  if (typeof displayCategory === "string" && displayCategory.trim().length > 0) {
+    return displayCategory;
+  }
+  return "";
+}
+
+// Canonical addable-card contract gate (PR #287/#289 frontend enforcement).
+// A card may be rendered as a polished, addable ConciergeCard only when:
+//   • display.addability === "addable"
+//   • display.displayName is a non-empty string
+//   • display.displayCategory is a non-empty string
+//   • googleVerification.providerPlaceId is present (Google provider identity)
+// Anything weaker fails closed and the card is omitted from the rendered list.
+// This intentionally does NOT consult top-level name/cuisine/category/rating —
+// those reads are exactly the masking pathway PR #287 was designed to remove.
+export function isAddableCanonicalCard(card) {
+  if (!card || typeof card !== "object") return false;
+  const display = card.display;
+  if (!display || typeof display !== "object") return false;
+  if (display.addability !== "addable") return false;
+  const displayName = display.displayName;
+  if (typeof displayName !== "string" || displayName.trim().length === 0) return false;
+  const displayCategory = display.displayCategory;
+  if (typeof displayCategory !== "string" || displayCategory.trim().length === 0) return false;
+  const providerPlaceId = card.googleVerification?.providerPlaceId;
+  if (typeof providerPlaceId !== "string" || providerPlaceId.trim().length === 0) return false;
+  return true;
 }
 
 const GENERIC_PHRASES_RE = /\b(a strong pick for well-reviewed|guest feedback, location, and relevance|polished night-out experience|viable option|great fit for this trip|trusted place signals|well-reviewed food|well-reviewed drinks|matches this dining request|matches this value-dinner request|fits this hotel request|fits this Michelin request|is a strong attraction match|well-rated|consistent guest ratings)\b/i;

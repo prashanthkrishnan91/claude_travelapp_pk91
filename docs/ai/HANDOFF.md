@@ -4791,3 +4791,44 @@ Enriched whyPick evidence quality by promoting venue-specific Foursquare tags, T
 - No visual redesign.
 - PR-3 batched grounded reasoning **not started**.
 - PGRST204 logging/schema issue deferred (non-blocker for card rendering path in this PR).
+
+## 2026-05-08 — Frontend Fallback Ladder Removal / Contract Enforcement v1 (Level 2)
+
+### Situation
+After PR #287 (canonical AI Concierge card display contract / response-boundary normalizer) and PR #289 (TripBuilder Explore migrated onto canonical `/ai/concierge/search`, strict addability), `AIConciergePanel.tsx` still contained fallback ladders that read top-level legacy fields when canonical `display.*` fields were missing. Those reads could silently mask backend contract drift by rebuilding a polished addable card from raw `name / cuisine / category / rating / reviewCount / address / neighborhood`.
+
+### Frontend contract now enforced
+- A card is rendered as a polished, addable `ConciergeCard` only when **all** of the following are present:
+  - `display.addability === "addable"`
+  - non-empty `display.displayName`
+  - non-empty `display.displayCategory`
+  - `googleVerification.providerPlaceId` (Google provider identity)
+- `pickCardCategory(card)` returns `display.displayCategory` only — no legacy `categoryLabel` / `cuisine` / `category` / `"Place"` fallback.
+- `pickCardMeta(card)` builds the rating/price/address line from canonical seams only (`display.displayMetaLine`, `supportingDetails.metaLine`, `display.displayPrice`, `supportingDetails.{priceLevel,priceRange,address}`); top-level `rating`, `reviewCount`, `address`, `neighborhood` are no longer read.
+- `isRenderableVerifiedPlace` is now the canonical addable-card gate (`isAddableCanonicalCard`) — the previous `type === "verified_place" || verifiedPlace || googleVerification != null` ladder is gone.
+- Card title is derived from `place.display.displayName`; map URL prefers `googleVerification.googleMapsUri` then the backend-derived `mapsLink`.
+
+### Failure mode
+- Cards missing the canonical contract are filtered out (loud) instead of rebuilt from raw fields (quiet). The AI Concierge text response is unaffected.
+
+### Files changed
+- `frontend/src/lib/concierge/cardPresentation.js` — tightened `pickCardCategory`; added `isAddableCanonicalCard`.
+- `frontend/src/components/trips/AIConciergePanel.tsx` — replaced `isRenderableVerifiedPlace` with canonical gate, dropped legacy category ladder, dropped top-level rating/reviewCount/address/neighborhood reads from `pickCardMeta`, render title/category from `display.*`, prefer `googleVerification.googleMapsUri` for the map link.
+- `frontend/tests/concierge-renderers.test.mjs` — positive + negative contract tests for `isAddableCanonicalCard` / `pickCardCategory` / panel source guards.
+
+### Tests
+- `cd frontend && npm test` → 224/224 passing locally.
+- TypeScript: `npx tsc --noEmit` baseline error count unchanged (env has no `node_modules`; no new errors in changed files).
+- Backend `test_concierge_card_contract.py` / `test_concierge_display_contract.py` / `test_product_surface_pruning_v1a.py` not changed; backend env in this harness lacks `pydantic`, but no backend code was touched.
+
+### Hard constraints preserved
+- No SQL, no new providers, no new LLM calls.
+- No semantic retrieval / ranking / note-writing changes.
+- No reintroduction of `/search/attractions`, `/search/clusters`, `/search/best-area` (test guard added).
+- TripBuilder Explore migration from PR #289 untouched.
+- AI Concierge UI not redesigned.
+
+### Deferred risks / next PR candidates
+- `PlaceRecommendationsView.tsx` (Storybook/typed-response branch) still reads `card.cuisine ?? card.category` for category — this view is not rendered from the live `AIConciergePanel` flow but should be tightened in a follow-up if it gains a production caller.
+- If production telemetry shows a meaningful share of `/ai/concierge/search` cards arriving without the canonical display contract, the durable fix lives in backend `display_contract.py`, not in a new frontend ladder.
+

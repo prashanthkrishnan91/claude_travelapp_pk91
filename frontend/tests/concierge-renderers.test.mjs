@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   pickCardReason,
+  pickCardCategory,
   sanitizeWhyPick,
   shouldShowCollapsedSources,
   verifiedAddableCount,
+  isAddableCanonicalCard,
 } from '../src/lib/concierge/cardPresentation.js';
 
 const aiConciergePanel = readFileSync(new URL('../src/components/trips/AIConciergePanel.tsx', import.meta.url), 'utf8');
@@ -438,6 +440,151 @@ test('production fixture: full semantic card render path for izakaya note', () =
   const rendered = sanitizeWhyPick(picked, card.name, allTitles);
   assert.equal(rendered, note,
     'Full render path must preserve izakaya production note unchanged');
+});
+
+// ── Frontend Fallback Ladder Removal v1 (PR #287/#289 contract enforcement) ──
+// AIConciergePanel must render a ConciergeCard only when the canonical display
+// contract is present.  These tests pin the contract gate so backend drift can
+// no longer be silently masked by reading top-level legacy fields.
+
+function makeCanonicalCard(overrides = {}) {
+  return {
+    type: 'verified_place',
+    name: 'Test Place',
+    googleVerification: { providerPlaceId: 'ChIJtest123' },
+    display: {
+      displayName: 'Test Place',
+      displayCategory: 'Restaurant',
+      displayWhy: 'A canonical reason that is more than twelve chars.',
+      displayWhyValidated: true,
+      displayBadges: [],
+      addability: 'addable',
+    },
+    supportingDetails: { metaLine: '★ 4.5 (200 reviews)' },
+    ...overrides,
+  };
+}
+
+test('isAddableCanonicalCard accepts a card with the full canonical contract', () => {
+  assert.equal(isAddableCanonicalCard(makeCanonicalCard()), true);
+});
+
+test('isAddableCanonicalCard rejects a card missing display.displayName', () => {
+  const card = makeCanonicalCard();
+  card.display.displayName = '';
+  assert.equal(isAddableCanonicalCard(card), false,
+    'Empty displayName must fail the canonical gate — never fall back to top-level name');
+});
+
+test('isAddableCanonicalCard rejects a card missing display.displayCategory', () => {
+  const card = makeCanonicalCard();
+  card.display.displayCategory = null;
+  assert.equal(isAddableCanonicalCard(card), false,
+    'Missing displayCategory must fail closed — never fall back to cuisine/category');
+});
+
+test('isAddableCanonicalCard rejects a card whose addability is not "addable"', () => {
+  for (const value of ['research_only', 'closed', null, undefined, 'unknown']) {
+    const card = makeCanonicalCard();
+    card.display.addability = value;
+    assert.equal(isAddableCanonicalCard(card), false,
+      `addability="${value}" must not render as a polished addable card`);
+  }
+});
+
+test('isAddableCanonicalCard rejects a card without Google providerPlaceId', () => {
+  const card = makeCanonicalCard();
+  card.googleVerification = null;
+  assert.equal(isAddableCanonicalCard(card), false,
+    'No googleVerification → no Add to Day / Save / Maps as if Google-verified');
+
+  const card2 = makeCanonicalCard();
+  card2.googleVerification = { providerPlaceId: '' };
+  assert.equal(isAddableCanonicalCard(card2), false,
+    'Empty providerPlaceId must fail closed');
+});
+
+test('isAddableCanonicalCard rejects a card with only top-level legacy fields', () => {
+  // The exact fallback ladder the v1 frontend contract enforcement removes.
+  const legacyOnly = {
+    type: 'verified_place',
+    name: 'Top-level Only',
+    cuisine: 'Italian',
+    category: 'Restaurant',
+    description: 'Legacy description',
+    address: '123 Main St',
+    rating: 4.6,
+    reviewCount: 1200,
+    mapsLink: 'https://maps.google.com/?q=foo',
+    bookingUrl: 'https://example.com/book',
+    verifiedPlace: true,
+  };
+  assert.equal(isAddableCanonicalCard(legacyOnly), false,
+    'Top-level name/category/description/address/rating must NOT be sufficient — the canonical display contract is required');
+});
+
+test('isAddableCanonicalCard rejects null / non-object input safely', () => {
+  assert.equal(isAddableCanonicalCard(null), false);
+  assert.equal(isAddableCanonicalCard(undefined), false);
+  assert.equal(isAddableCanonicalCard('string'), false);
+  assert.equal(isAddableCanonicalCard(42), false);
+});
+
+test('pickCardCategory returns display.displayCategory only — no legacy fallback', () => {
+  assert.equal(pickCardCategory(makeCanonicalCard()), 'Restaurant');
+
+  const noDisplay = { name: 'X', cuisine: 'Italian', supportingDetails: { categoryLabel: 'Trattoria' } };
+  assert.equal(pickCardCategory(noDisplay), '',
+    'Missing display.displayCategory must yield "" — never fall back to cuisine/categoryLabel');
+
+  const blankDisplayCategory = makeCanonicalCard();
+  blankDisplayCategory.display.displayCategory = '   ';
+  assert.equal(pickCardCategory(blankDisplayCategory), '',
+    'Whitespace-only displayCategory must yield ""');
+});
+
+test('AIConciergePanel imports the canonical addable-card gate', () => {
+  assert.match(aiConciergePanel, /isAddableCanonicalCard/,
+    'AIConciergePanel must import isAddableCanonicalCard for the canonical gate');
+});
+
+test('AIConciergePanel does not derive card category from top-level cuisine/category strings', () => {
+  // The legacy ladder built `category: place.cuisine || "Restaurant"` and passed
+  // it through pickCardCategory as a fallback.  After v1 enforcement that path
+  // must be gone — the rendered category comes only from display.displayCategory.
+  assert.doesNotMatch(aiConciergePanel, /place\.cuisine\s*\|\|\s*"Restaurant"/,
+    'Legacy `place.cuisine || "Restaurant"` ladder must be removed');
+  assert.doesNotMatch(aiConciergePanel, /place\.category\s*\|\|\s*"Attraction"/,
+    'Legacy `place.category || "Attraction"` ladder must be removed');
+  assert.doesNotMatch(aiConciergePanel, /pickCardCategory\(place,\s*category\)/,
+    'pickCardCategory must be called with the card alone (no legacy fallback arg)');
+});
+
+test('AIConciergePanel does not read top-level rating/reviewCount/neighborhood for meta', () => {
+  // pickCardMeta used to reach into card.rating, card.reviewCount, card.address,
+  // and card.neighborhood when the canonical meta_line was missing.  After v1
+  // enforcement those reads must be gone so missing meta is visible (no meta
+  // line) instead of silently rebuilt from raw fields.
+  assert.doesNotMatch(aiConciergePanel, /card\.reviewCount/,
+    'pickCardMeta must not read top-level reviewCount');
+  assert.doesNotMatch(aiConciergePanel, /card\.neighborhood/,
+    'pickCardMeta must not read top-level neighborhood');
+  assert.doesNotMatch(aiConciergePanel, /typeof card\.rating === "number"/,
+    'pickCardMeta must not derive rating from top-level numeric rating');
+});
+
+test('AIConciergePanel renders title from display.displayName, not place.name', () => {
+  // The polished card title should come from the canonical display contract.
+  assert.match(aiConciergePanel, /place\.display\?\.displayName/,
+    'AIConciergePanel must read place.display.displayName for the rendered title');
+});
+
+test('AIConciergePanel does not reintroduce the v1A quarantined product surfaces', () => {
+  // Guard against accidental regression that re-wires Concierge cards to the
+  // legacy mock-backed search routes pruned in PR #288 / #289.
+  assert.doesNotMatch(aiConciergePanel, /\/search\/attractions/);
+  assert.doesNotMatch(aiConciergePanel, /\/search\/clusters/);
+  assert.doesNotMatch(aiConciergePanel, /\/search\/best-area/);
 });
 
 test('cache version bump: AIConciergePanel declares CONCIERGE_CACHE_VERSION >= 5', () => {
