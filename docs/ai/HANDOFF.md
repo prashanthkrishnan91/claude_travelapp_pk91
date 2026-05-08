@@ -1,6 +1,46 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-08) — Legacy Flights/Hotels Strategy v1 (Level 2 — audit/spec)
+## Last change (2026-05-08) — Fail-Closed UX v1: flights/hotels mock-backed surface (Level 2)
+
+**Status: PR-ready (branch: claude/fail-closed-ux-flights-hotels-XBsgp)** — Closes the last live mock-backed flights/hotels persistence path (PR #294 risk row 1 + 2). The route now fails closed on **two** conditions: (a) all empty results (BLOCK_LEGACY_PRODUCT_MOCK on / true unavailability) and (b) any non-empty *mock-derived* row (`source="mock"` or `book.example.com` booking URL — covers the BLOCK_LEGACY_PRODUCT_MOCK *off* leak path). No SQL. No providers. No LLM calls. No schema changes. Preserves the future flights/hotels product capability — routes, models, and frontend wrappers stay quarantined; only unsafe mock-derived persistence is fail-closed.
+
+### Problem
+
+`/trips/create-with-search` created a trip unconditionally even when both `flights=[]` and `hotels=[]` (under `BLOCK_LEGACY_PRODUCT_MOCK=on`), and persisted up to 20 fake-booking-URL itinerary items when the flag was off (`backend/app/routes/trips.py:488-580`). `OptimizeTripModal` told users to "Try adjusting your dates" when the real cause was provider-backed search not being enabled. Both surfaces were misleading.
+
+### Fix
+
+- **`backend/app/routes/trips.py`** — `create_trip_with_search` now raises `HTTP 503` with `{code: "provider_unavailable", message: ...}` when (a) `flights`, `hotels`, and `round_trip_pairs` are all empty after search, **or** (b) any returned flight, hotel, or round-trip leg is mock-derived. Detection (`_is_mock_flight` / `_is_mock_hotel` / `_any_mock_derived`) treats a row as mock-derived if `source ∈ {mock, demo, fixture}` or any booking URL (primary or option) contains `book.example.com`. No `TripsService.create_trip`, no `ItineraryService.ensure_trip_days`, no `create_trip_item` runs in either branch. Existing 422 invalid-destination behavior unchanged. Clean provider-like rows still pass through — the guard is surgical and ready for the future provider PR to slot in real implementations.
+- **`frontend/src/components/trips/OptimizeTripModal.tsx`** — Adds a client-side mock-derivation guard. Even when `/search/flights` and `/search/hotels` return non-empty rows under flag-off, the modal switches to the `provider_unavailable` phase if any `bookingUrl` / `bookingOptions[].url` contains `book.example.com`. This prevents `addOptimizedFlightToDay` / `addOptimizedHotelToTrip` (separate persistence routes) from ever receiving mock-derived rows.
+- **`frontend/src/lib/api.ts`** — `apiFetch` now surfaces structured `{code, message}` error details by attaching `code`, `status`, and `detail` to the thrown `Error` so callers can branch on `code === "provider_unavailable"` without string-matching.
+- **`frontend/src/components/trips/TripBuilderForm.tsx`** — On `code === "provider_unavailable"` or `status === 503`, shows an honest amber banner explaining provider-backed search is not enabled yet, plus a "Create a blank trip and add items manually" button that calls `createTrip()` with the form fields (manual trip creation preserved).
+- **`frontend/src/components/trips/OptimizeTripModal.tsx`** — New `provider_unavailable` phase replaces the misleading "Try adjusting your dates" copy when flight or hotel search returns empty. Copy: *"Provider-backed flight and hotel search is not enabled yet. You can still build the trip manually and add details later."* CTA closes the modal.
+
+### Tests
+
+- **New backend tests** `backend/tests/test_create_with_search_fail_closed.py` (10 cases) prove: 503 with `code: "provider_unavailable"` + zero `TripsService.create_trip` / `ensure_trip_days` / `create_trip_item` calls in (a) all-empty results, (b) non-empty `_mock_flights` rows, (c) non-empty hotels with `book.example.com` in a `bookingOptions` URL, and (d) round-trip pairs whose legs are mock-derived. Negative control: clean non-mock provider-like rows pass the guard and reach `TripsService.create_trip` + `ensure_trip_days` + `create_trip_item`. Helper-level unit tests cover `_is_mock_flight` source / primary URL / options-URL paths and clean-row pass-through. Existing 422 invalid-destination path still skips persistence.
+- **New frontend contract test** `frontend/tests/fail-closed-flights-hotels.test.mjs` enforces: TripBuilderForm contains provider-unavailable copy and `createTrip` fallback; OptimizeTripModal no longer contains "Try adjusting your dates"; apiFetch attaches `code`+`status` to errors.
+- **Baseline suites:** `backend/tests/test_product_surface_pruning_v1a.py` (44 pass), `backend/tests/test_cost_guardrails.py` (pass). `frontend/tests/explore-concierge-migration.test.mjs` + `explore-hydration.test.mjs` show the same 4 pre-existing failures as base (unrelated TripBuilder/Explore snapshot-hydration drift; reproduced on stash baseline).
+
+### Files changed
+
+- `backend/app/routes/trips.py`
+- `backend/tests/test_create_with_search_fail_closed.py` (new)
+- `frontend/src/lib/api.ts`
+- `frontend/src/components/trips/TripBuilderForm.tsx`
+- `frontend/src/components/trips/OptimizeTripModal.tsx`
+- `frontend/tests/fail-closed-flights-hotels.test.mjs` (new)
+- `docs/ai/LEGACY_FLIGHTS_HOTELS_STRATEGY.md` (Fail-Closed UX v1 marked implemented)
+- `docs/ai/HANDOFF.md` (this entry)
+- `docs/ai/progress_log.md` (entry)
+
+**Supabase SQL**: No
+**HANDOFF.md edited**: Yes (this entry)
+**README.md edited**: No (no public/setup contract change)
+
+---
+
+## Previous change (2026-05-08) — Legacy Flights/Hotels Strategy v1 (Level 2 — audit/spec)
 
 **Status: PR-ready (branch: claude/audit-flights-hotels-strategy-KoptK)** — Doc-only. Adds `docs/ai/LEGACY_FLIGHTS_HOTELS_STRATEGY.md`. No code change. No SQL. No new providers. No new LLM calls. No UI change.
 

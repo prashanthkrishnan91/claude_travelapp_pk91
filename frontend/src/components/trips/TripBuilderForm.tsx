@@ -6,6 +6,14 @@ import { Sparkles, Loader2, CheckCircle2, Plane, Hotel, Star, BarChart2, MapPin 
 import { CityAutocomplete } from "@/components/ui/CityAutocomplete";
 import type { AirportSelection } from "@/components/ui/CityAutocomplete";
 
+type ProviderUnavailableState = {
+  kind: "provider_unavailable";
+  message: string;
+};
+
+const PROVIDER_UNAVAILABLE_COPY =
+  "Flights and hotels are temporarily unavailable because provider-backed search is not enabled yet. You can still create a blank trip and add items manually.";
+
 // ─── Step loader labels ───────────────────────────────────────────────────────
 
 const CREATION_STEPS = [
@@ -28,6 +36,8 @@ export function TripBuilderForm() {
   const [creating,   setCreating]   = useState(false);
   const [stepIndex,  setStepIndex]  = useState(0);
   const [error,      setError]      = useState<string | null>(null);
+  const [providerUnavailable, setProviderUnavailable] = useState<ProviderUnavailableState | null>(null);
+  const [creatingBlank, setCreatingBlank] = useState(false);
 
   const canSubmit = !!originSel && !!destSel && !!startDate && !!endDate;
 
@@ -37,6 +47,7 @@ export function TripBuilderForm() {
 
     setCreating(true);
     setError(null);
+    setProviderUnavailable(null);
     setStepIndex(0);
 
     // Advance the step indicator while waiting for the backend
@@ -58,9 +69,40 @@ export function TripBuilderForm() {
       router.push(`/trips/${trip.id}`);
     } catch (err) {
       clearInterval(interval);
-      setError(err instanceof Error ? err.message : "Failed to create trip. Please try again.");
+      const apiErr = err as Error & { code?: string; status?: number };
+      if (apiErr?.code === "provider_unavailable" || apiErr?.status === 503) {
+        setProviderUnavailable({
+          kind: "provider_unavailable",
+          message: apiErr?.message || PROVIDER_UNAVAILABLE_COPY,
+        });
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to create trip. Please try again.");
+      }
       setCreating(false);
       setStepIndex(0);
+    }
+  }
+
+  async function handleCreateBlankTrip() {
+    if (!destSel || !startDate || !endDate) return;
+    setCreatingBlank(true);
+    try {
+      const { createTrip } = await import("@/lib/api");
+      const trip = await createTrip({
+        title: `${destSel.city} Trip`,
+        destination: destSel.city,
+        origin: originSel?.city ?? "",
+        startDate,
+        endDate,
+        travelers: 1,
+        budgetCash: "",
+        budgetCurrency: "USD",
+        notes: "",
+      });
+      router.push(`/trips/${trip.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create a blank trip.");
+      setCreatingBlank(false);
     }
   }
 
@@ -172,6 +214,32 @@ export function TripBuilderForm() {
               (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)
             ))}{" "}
             nights
+          </div>
+        )}
+
+        {providerUnavailable && (
+          <div
+            role="alert"
+            data-testid="trip-builder-provider-unavailable"
+            className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 space-y-2"
+          >
+            <p className="font-medium">Flights & hotels search is temporarily unavailable</p>
+            <p>{PROVIDER_UNAVAILABLE_COPY}</p>
+            <button
+              type="button"
+              onClick={handleCreateBlankTrip}
+              disabled={creatingBlank || !destSel || !startDate || !endDate}
+              className="inline-flex items-center gap-1.5 text-amber-900 underline underline-offset-2 hover:text-amber-950 disabled:opacity-50 disabled:no-underline"
+            >
+              {creatingBlank ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Creating blank trip…
+                </>
+              ) : (
+                "Create a blank trip and add items manually"
+              )}
+            </button>
           </div>
         )}
 

@@ -324,6 +324,61 @@ def _enrich_hotels_with_intelligence(hotels: List[HotelResult]) -> None:
 # Request / response models for create-with-search
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Mock-derived detection — fail-closed guard for /trips/create-with-search
+# ---------------------------------------------------------------------------
+
+# Sentinel substring stamped into every ``_mock_*`` booking URL in
+# ``backend/app/services/search.py``.  Any URL containing this host is, by
+# construction, fabricated and must never be persisted.
+_MOCK_BOOKING_HOST = "book.example.com"
+
+
+def _is_mock_flight(flight: FlightResult) -> bool:
+    """True if a flight row came from ``_mock_flights`` (or any future mock
+    fixture that follows the same source/booking-URL convention)."""
+    if (flight.source or "").lower() in {"mock", "demo", "fixture"}:
+        return True
+    if flight.booking_url and _MOCK_BOOKING_HOST in flight.booking_url:
+        return True
+    for opt in flight.booking_options or []:
+        if opt.url and _MOCK_BOOKING_HOST in opt.url:
+            return True
+    return False
+
+
+def _is_mock_hotel(hotel: HotelResult) -> bool:
+    if (hotel.source or "").lower() in {"mock", "demo", "fixture"}:
+        return True
+    if hotel.booking_url and _MOCK_BOOKING_HOST in hotel.booking_url:
+        return True
+    for opt in hotel.booking_options or []:
+        if opt.url and _MOCK_BOOKING_HOST in opt.url:
+            return True
+    return False
+
+
+def _any_mock_derived(
+    flights: List[FlightResult],
+    hotels: List[HotelResult],
+    pairs: List[RoundTripFlightPair],
+) -> bool:
+    """Return True if any flight, hotel, or round-trip leg looks mock-derived.
+
+    Used to fail closed *before* a trip or any itinerary item is persisted,
+    so fabricated booking URLs (``book.example.com``) and ``source="mock"``
+    rows can never reach ``itinerary_items.details``.
+    """
+    if any(_is_mock_flight(f) for f in flights):
+        return True
+    if any(_is_mock_hotel(h) for h in hotels):
+        return True
+    for pair in pairs:
+        if _is_mock_flight(pair.outbound) or _is_mock_flight(pair.return_flight):
+            return True
+    return False
+
+
 class TripCreateWithSearch(BaseModel):
     origin_city: str
     origin_airports: Optional[List[str]] = None
@@ -482,6 +537,36 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
 
     flights_sorted = sorted(flights, key=lambda f: f.ai_score or 0.0, reverse=True)
     hotels_sorted = sorted(hotels, key=lambda h: h.ai_score or 0.0, reverse=True)
+
+    # Fail-Closed UX v1: refuse to create a trip when no provider-backed flight
+    # or hotel data is available. This prevents fake/mock-derived rows (and
+    # blank itineraries when BLOCK_LEGACY_PRODUCT_MOCK is on) from being
+    # persisted as if real. Manual blank-trip creation remains via POST /trips.
+    #
+    # Two cases trigger fail-closed:
+    #   (a) all results empty (provider not enabled / flag-on path), AND
+    #   (b) any non-empty result is mock-derived — detected via
+    #       ``source == "mock"`` or any ``book.example.com`` booking URL.
+    # Case (b) closes the persistence hole that exists when
+    # ``BLOCK_LEGACY_PRODUCT_MOCK`` is *off* and ``_mock_flights`` /
+    # ``_mock_hotels`` return non-empty rows: without this guard, the route
+    # would persist up to 20 fake itinerary items with fake booking URLs.
+    if (
+        not flights_sorted
+        and not hotels_sorted
+        and not round_trip_pairs
+    ) or _any_mock_derived(flights_sorted, hotels_sorted, round_trip_pairs):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "provider_unavailable",
+                "message": (
+                    "Flights and hotels are temporarily unavailable because "
+                    "provider-backed search is not enabled yet. Create a "
+                    "blank trip and add items manually."
+                ),
+            },
+        )
 
     # Step 5: Create trip
     title = payload.title or f"{payload.destination_city} Trip"

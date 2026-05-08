@@ -29,7 +29,35 @@ import type {
   TripOption,
   OptimizeFlightInput,
   OptimizeHotelInput,
+  FlightSearchResult,
+  ResearchResult,
+  BookingOption,
 } from "@/types";
+
+// Sentinel host stamped into every `_mock_*` booking URL on the backend.
+// Any URL containing this host is, by construction, fabricated.
+const MOCK_BOOKING_HOST = "book.example.com";
+
+function hasMockBookingUrl(
+  url: string | undefined,
+  options: BookingOption[] | undefined,
+): boolean {
+  if (url && url.includes(MOCK_BOOKING_HOST)) return true;
+  if (options) {
+    for (const opt of options) {
+      if (opt?.url && opt.url.includes(MOCK_BOOKING_HOST)) return true;
+    }
+  }
+  return false;
+}
+
+function anyMockDerivedFlights(flights: FlightSearchResult[]): boolean {
+  return flights.some((f) => hasMockBookingUrl(f.bookingUrl, f.bookingOptions));
+}
+
+function anyMockDerivedHotels(hotels: ResearchResult[]): boolean {
+  return hotels.some((h) => hasMockBookingUrl(h.bookingUrl, h.bookingOptions));
+}
 
 interface Props {
   trip: Trip;
@@ -37,6 +65,15 @@ interface Props {
   onClose: () => void;
   onPlanSelected: () => void;
 }
+
+// Provider-unavailable copy. Used when /search/flights or /search/hotels
+// returns no results — currently the dominant case while flights/hotels
+// search is not yet provider-backed (Fail-Closed UX v1). Do NOT suggest
+// the user adjust dates: dates are not the problem.
+const PROVIDER_UNAVAILABLE_TITLE =
+  "Flights & hotels search is temporarily unavailable";
+const PROVIDER_UNAVAILABLE_BODY =
+  "Provider-backed flight and hotel search is not enabled yet. You can still build the trip manually and add details later.";
 
 const RANK_LABELS = ["Best Value", "Runner-Up", "Budget Pick"];
 const RANK_BADGE = [
@@ -69,7 +106,7 @@ function fmtDuration(mins: number): string {
 }
 
 export function OptimizeTripModal({ trip, itineraryDays, onClose, onPlanSelected }: Props) {
-  const [phase, setPhase] = useState<"loading" | "error" | "results">("loading");
+  const [phase, setPhase] = useState<"loading" | "error" | "provider_unavailable" | "results">("loading");
   const [error, setError] = useState("");
   const [options, setOptions] = useState<TripOption[]>([]);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -111,8 +148,30 @@ export function OptimizeTripModal({ trip, itineraryDays, onClose, onPlanSelected
         searchHotels(trip.destination, startDate, endDate, trip.travelers ?? 1).catch(() => []),
       ]);
 
-      if (!rawFlights.length) throw new Error("No flights found for your route. Try adjusting your dates.");
-      if (!rawHotels.length) throw new Error("No hotels found for your destination.");
+      if (!rawFlights.length || !rawHotels.length) {
+        // Fail-Closed UX v1: empty flight/hotel results almost always mean
+        // provider-backed search is not yet enabled (BLOCK_LEGACY_PRODUCT_MOCK
+        // on, or the route returned []). Surface honest copy instead of
+        // suggesting the user "adjust dates" — that is misleading here.
+        setPhase("provider_unavailable");
+        return;
+      }
+
+      // Mock-derived persistence guard: if /search/flights or /search/hotels
+      // returns rows whose booking URLs come from the legacy `_mock_*`
+      // fixtures (`book.example.com`), refuse to surface them as Selectable
+      // plans. Backend `/trips/create-with-search` is fully protected by the
+      // `_any_mock_derived` guard; this client-side check makes sure
+      // `addOptimizedFlightToDay` / `addOptimizedHotelToTrip` (which use
+      // separate persistence routes) never receive mock-derived rows either.
+      // Note: `FlightSearchResult` / `RawHotelResult` don't expose `source`
+      // today, so we rely on the booking-URL host signal. While
+      // `BLOCK_LEGACY_PRODUCT_MOCK` remains the operator-side gate, this
+      // guard hardens the UX path.
+      if (anyMockDerivedFlights(rawFlights) || anyMockDerivedHotels(rawHotels)) {
+        setPhase("provider_unavailable");
+        return;
+      }
 
       const flights: OptimizeFlightInput[] = rawFlights.slice(0, 10).map((f) => ({
         id: f.id,
@@ -232,6 +291,25 @@ export function OptimizeTripModal({ trip, itineraryDays, onClose, onPlanSelected
                 className="mt-1 px-4 py-2 text-sm font-medium bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition"
               >
                 Try Again
+              </button>
+            </div>
+          )}
+
+          {/* Provider unavailable — Fail-Closed UX v1 */}
+          {phase === "provider_unavailable" && (
+            <div
+              role="alert"
+              data-testid="optimize-provider-unavailable"
+              className="flex flex-col items-center justify-center py-12 gap-3 text-center"
+            >
+              <AlertCircle className="w-8 h-8 text-amber-500" />
+              <p className="text-sm font-semibold text-slate-800">{PROVIDER_UNAVAILABLE_TITLE}</p>
+              <p className="text-sm text-slate-600 max-w-md">{PROVIDER_UNAVAILABLE_BODY}</p>
+              <button
+                onClick={onClose}
+                className="mt-1 px-4 py-2 text-sm font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
+              >
+                Build trip manually
               </button>
             </div>
           )}

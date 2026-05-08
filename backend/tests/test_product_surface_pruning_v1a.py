@@ -393,6 +393,11 @@ _KNOWN_LEGACY_SEARCH_CALLERS: frozenset = frozenset({
     # longer calls `searchAttractions` / `searchClusters` / `fetchBestArea`.
     # The file references those tokens as `assert.doesNotMatch(...)` patterns.
     pathlib.PurePosixPath("frontend/tests/explore-concierge-migration.test.mjs"),
+    # Fail-Closed UX v1 contract test — references `/search/flights` and
+    # `/search/hotels` in a documentation comment explaining the mock-row
+    # guard in OptimizeTripModal. No live caller; no v1B-equivalent
+    # migration owed.
+    pathlib.PurePosixPath("frontend/tests/fail-closed-flights-hotels.test.mjs"),
 })
 
 # Tokens that mean "this file calls the legacy /search/* mock-backed surface".
