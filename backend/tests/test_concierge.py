@@ -466,9 +466,19 @@ class TestConciergeSearch:
         assert result.restaurants[0].cuisine in {
             "Bar", "Cocktail Bar", "Rooftop Bar", "Speakeasy", "Wine Bar", "Brewery"
         }
-        assert all("verify hours and current status before booking" in (r.summary or "").lower() for r in result.restaurants)
+        # Architecture rescue: stale "Sample bar research data" disclaimer is gone.
+        # The sample fallback now ships with neutral language only. Cards must still
+        # be present and have a non-empty summary.
         assert result.source_status == SOURCE_SAMPLE_DATA
         assert result.restaurants[0].summary
+        for card in result.restaurants:
+            for fragment in ("Sample bar research data", "verify hours and current status before booking"):
+                assert fragment not in (card.summary or ""), (
+                    f"stale disclaimer leaked into card summary: {card.summary!r}"
+                )
+                assert fragment not in (card.source or ""), (
+                    f"stale disclaimer leaked into card source: {card.source!r}"
+                )
 
     def test_search_does_not_crash_when_messages_table_missing(self):
         db = _make_mock_db("Chicago")

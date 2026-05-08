@@ -1,6 +1,96 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-08) — Casual Live-Query Retrieval + Ranking Fix (Level 2 / Sev 1.5)
+## Last change (2026-05-08) — Architecture Rescue: Canonical Card Display Contract (Level 3)
+
+**Status: IN PROGRESS (branch: claude/travel-app-architecture-rescue-IiFDz)** — Backend + frontend (1 line) + tests only. No SQL. No new providers. No new LLM calls.
+
+### Problem (the visible drift)
+
+Hotel cards shipped without address, without price, with old 10-point ratings (7.2/8.4) instead of Google's native 5-point, with no concierge note, and with the stale **"Sample bar research data · verify hours and current status before booking."** disclaimer text.  Restaurants and bars from the newer `semantic_retrieval._entity_to_card` already shipped a clean canonical display contract.  The drift was the lack of a single response-boundary normalization seam — multiple producers built `UnifiedRestaurantResult` / `UnifiedAttractionResult` / `UnifiedHotelResult` and each populated the `display`/`supporting_details` blocks differently (or not at all).
+
+### Root cause
+
+1. `ConciergeService._to_unified_hotel` and `_to_unified_attraction` doubled Google's 0-5 rating to 0-10 (`rating * 2`) — that's the "7.2/8.4" the user saw.
+2. Both legacy adapters skipped the `display` and `supporting_details` blocks entirely.  Without them, the frontend has no canonical place to read address/price/note from for hotels and attractions.
+3. `_sample_nightlife_results` and the `_to_unified_hotel` `source=` field both emitted the literal "Sample bar research data · verify hours and current status before booking." string, which surfaces in card metadata and the `sources` list.
+4. There was no contract test enforcing display-block uniformity across verticals, so each future patch could (and did) drift further.
+
+### Fix — single response-boundary seam
+
+1. **`backend/app/concierge/display_contract.py`** (new) — canonical normalization adapter.  `normalize_unified_card(card, vertical=...)` ensures every card carries a populated `display` block (display_name, display_category, display_meta_line, display_why, display_price, display_badges, addability, display_why_source, display_why_validated) and a clean `supporting_details` block.  Idempotent.  Lossless.  Halves any rating > 5.05 (legacy 10-point) into Google's native 0-5 scale.  Strips the stale disclaimer fragment from `display.display_why`, `supporting_details.why_pick`, `summary`, `description`, `reason`, `primary_reason`, `why_pick`, `source`, and the response-level `sources` list.  Hotels get a `$NNN/night` price string; restaurants/attractions get the Google `$$` symbol.
+2. **`backend/app/routes/ai.py`** — the only seam every place card flows through.  All four return paths in `build_typed_concierge_response` (refine_previous reuse, more-options pool fast path, more-options provider call, main path) now invoke `normalize_place_recommendations(typed_payload)` before `_typed_response_adapter.validate_python(...)`.  Card-bearing endpoints upstream of this can never bypass the seam.
+3. **`backend/app/services/concierge.py`** — legacy `_to_unified_hotel`, `_to_unified_attraction`, and `_to_unified_restaurant` updated to (a) keep ratings on the 0-5 Google scale natively (no more `rating * 2`), (b) populate `display` and `supporting_details` at the producer (defense in depth — the response-boundary normalizer is still the single source of truth), and (c) swap the stale disclaimer string in `_sample_nightlife_results` for the neutral `"Sample data — limited source coverage"` source token (preserves the SOURCE_MIXED detection in `_derive_response_source_status`).
+4. **`frontend/src/components/trips/AIConciergePanel.tsx`** — two literal occurrences of "Sample bar research data · verify hours and current status before booking." replaced with the neutral "Limited source coverage — verify hours and booking before adding." label.
+
+### New testing standard (cross-vertical contract test)
+
+`backend/tests/test_concierge_card_contract.py` is the future-drift gate.  Every new place-card producer or change to the display contract MUST be covered here, not by adding another narrow regression test.  The file:
+
+- Parameterizes across **restaurant / attraction / hotel** verticals so every assertion runs against all three.
+- Asserts: display block populated, supporting_details populated, rating coerced to 0-5, address falls back through producer → google_verification → neighborhood → area_label, price normalized into `display.display_price`, idempotency, and lossless re-application.
+- Includes a repository-wide leak guard (`test_stale_disclaimer_not_in_production_code`) that walks `backend/app/**` and `frontend/src/**` and asserts the stale disclaimer fragments cannot appear in any production file (the normalizer's scrub list is the only allow-listed file).
+- Tests adversarial leakage by constructing cards with the stale text in every visible field and confirming the normalizer scrubs them all.
+
+**Going forward**: do not add narrow per-vertical regression tests for display contract issues.  Add the case to `test_concierge_card_contract.py` parametrize tuple instead.  This is now the single contract test for AI Concierge place cards.
+
+### Files changed
+
+- `backend/app/concierge/display_contract.py` (new) — canonical normalizer
+- `backend/app/routes/ai.py` — wired normalizer into all 4 return paths
+- `backend/app/services/concierge.py` — legacy producers emit 5-point ratings + populate display contract; sample-nightlife source label scrubbed
+- `frontend/src/components/trips/AIConciergePanel.tsx` — two literal disclaimer strings replaced with neutral label
+- `backend/tests/test_concierge_card_contract.py` (new) — 30 cross-vertical contract tests
+- `backend/tests/test_concierge.py` — `test_add_nearby_drinks_returns_structured_cards` updated to assert the stale disclaimer is GONE from sample cards (was previously asserting its presence)
+- `backend/tests/test_live_research.py` — `test_nightlife_falls_back_to_sample_when_live_unavailable` updated to assert the new sample-card source label and absent stale disclaimer
+
+### Test results
+
+- `test_concierge_card_contract.py`: **30/30 PASS** (new file)
+- `test_concierge.py`: **83/83 PASS** (1 updated, no regressions)
+- `test_live_research.py`: **213/213 PASS** (1 updated, no regressions)
+- `test_concierge_display_contract.py`: 36/36 PASS (no regressions)
+- `test_nightlife_payload_wiring.py`: 5/5 PASS (no regressions)
+- `test_concierge_sev1_catastrophic_fix.py`: 120/120 PASS (no regressions)
+- Full backend test suite: **2470 passed, 4 pre-existing env-only failures unchanged from base** (test_concierge_critical_path_hardening.py x2, test_concierge_observability.py x1, test_set_level_writer.py x1 — all assert on attributes the test setup itself does not provide; these failed identically on the base commit before this PR).
+- Frontend: `concierge-renderers.test.mjs` 31/31 PASS, `concierge-refinement.test.mjs` + `explore-restaurants-trust-contract.test.mjs` 169/169 PASS combined.
+
+### Endpoint classification (from the audit)
+
+| route | frontend caller | backend service | status | rationale |
+|---|---|---|---|---|
+| POST `/ai/concierge/search` | `AIConciergePanel` | `ConciergeService` + semantic retrieval | **KEEP** | Canonical place-card endpoint; now flows through the normalizer seam. |
+| POST `/ai/concierge` | (legacy, unused by UI) | `ConciergeService.answer` | **DEPRECATE** | Returns lightweight `ConciergeResponse` (no cards); kept for back-compat but no UI caller. |
+| POST `/ai/concierge/debug-trace` | (none) | `LiveResearchService` directly | **KEEP** (dev-only) | Debug-only; no card surface concerns. |
+| GET `/ai/concierge/{trip_id}/messages` | `AIConciergePanel` | persisted messages | **KEEP** | Reads back persisted Concierge messages. |
+| DELETE `/ai/concierge/cache` | `AIConciergePanel` | clears in-memory cache | **KEEP** | Required for "clear cache" UX. |
+| POST `/search/hotels` `/search/attractions` `/search/restaurants` `/search/best-area` `/search/clusters` `/search/flights` etc. | `TripBuilder` / `TripIdeasPanel` / explore | `SearchService` | **KEEP (non-Concierge)** | Trip Builder + Explore use these directly; they are not the AI Concierge place-card surface and have their own renderers that already align (5-point ratings via `app.models.search.SearchResult.rating ge=0 le=5`). |
+| `/cards`, `/trips`, `/itinerary`, `/dashboard`, `/compare`, `/deals`, `/optimize`, `/plan`, `/resolve`, `/travel`, `/value`, `/ai/timeline/suggest` | various | various | **KEEP** | Not place-card-discovery endpoints; out of scope for this rescue. |
+
+### Card/result contract matrix (after this PR)
+
+| row | frontend caller | endpoint | backend producer | normalized display contract | rating scale | price | address | display_why | addability | status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| AI Concierge restaurants/bars | `AIConciergePanel` | `/ai/concierge/search` | `semantic_retrieval._entity_to_card` | yes | 5-pt Google | yes | yes | yes | yes | KEEP |
+| AI Concierge restaurants (legacy fallback) | `AIConciergePanel` | `/ai/concierge/search` | `ConciergeService._to_unified_restaurant` + normalizer | yes | 5-pt (was 10-pt) | yes | yes | yes | yes | MIGRATED |
+| AI Concierge attractions | `AIConciergePanel` | `/ai/concierge/search` | `ConciergeService._to_unified_attraction` + normalizer | yes | 5-pt (was 10-pt) | (price_level if present) | yes | yes | yes | MIGRATED |
+| AI Concierge hotels | `AIConciergePanel` | `/ai/concierge/search` | `ConciergeService._to_unified_hotel` + normalizer | yes | 5-pt (was 10-pt) | `$NNN/night` | yes | yes | yes | MIGRATED |
+| Live research extracted cards | `AIConciergePanel` | `/ai/concierge/search` | `live_research.py` extractor | yes (via response-boundary normalizer) | 5-pt | yes | yes | yes | yes | MIGRATED |
+| Explore/search restaurants | TripBuilder | `/search/restaurants` | `SearchService` | (uses different `RestaurantResult` schema; out of scope; rating already 0-5 by Pydantic constraint) | 5-pt | n/a | n/a | n/a | n/a | KEEP |
+| Explore/search hotels | TripBuilder | `/search/hotels` | `SearchService` | same as above | 5-pt | n/a | n/a | n/a | n/a | KEEP |
+| Explore/search attractions | TripBuilder | `/search/attractions` | `SearchService` | same as above | 5-pt | n/a | n/a | n/a | n/a | KEEP |
+| Trip ideas / saved cards / itinerary items | trip pages | `/trips/{trip_id}/ideas` etc. | `cards.py` / `trips.py` | uses persisted snapshot — out of scope | n/a | n/a | n/a | n/a | n/a | KEEP |
+
+### Next-PR recommendation
+
+The drift is now closed at the response boundary.  The next safe high-leverage step is to migrate `frontend/src/components/trips/AIConciergePanel.tsx` (1,434 LOC) to read **only** from `display.*` and never fall back to top-level `card.rating`/`card.address` — the normalizer guarantees `display` is always populated, so the frontend's fallback ladder is no longer needed.  That reduces the frontend by ~150 LOC and removes a class of "what scale is this rating in?" branches.  Defer to a future PR; this rescue does not change the frontend rendering contract beyond the disclaimer-string swap.
+
+### Supabase SQL
+
+None.
+
+---
+
+## Previous change (2026-05-08) — Casual Live-Query Retrieval + Ranking Fix (Level 2 / Sev 1.5)
 
 **Status: IN PROGRESS (branch: claude/fix-travel-concierge-quality-XnC6C)** — Backend + tests only. No SQL. No UI changes. No new providers. No new LLM calls. Preserves full API contract.
 

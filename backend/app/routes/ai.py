@@ -16,6 +16,7 @@ from app.concierge.contracts import (
     TripAdviceResponse,
     UnsupportedResponse,
 )
+from app.concierge.display_contract import normalize_place_recommendations
 from app.concierge.builders.trip_advice import build_trip_advice_payload
 from app.concierge.context import (
     build_context_window,
@@ -350,6 +351,7 @@ def build_typed_concierge_response(
                         code="refine_previous_card_reuse",
                     )
                     try:
+                        normalize_place_recommendations(typed_payload)
                         validated = _typed_response_adapter.validate_python(typed_payload)
                         return validated, decision
                     except ValidationError:
@@ -439,6 +441,7 @@ def build_typed_concierge_response(
                             int((time.perf_counter() - _t0_cont) * 1000),
                         )
                         try:
+                            normalize_place_recommendations(_typed_pool)
                             validated = _typed_response_adapter.validate_python(_typed_pool)
                             return validated, _decision_pool
                         except ValidationError:
@@ -587,6 +590,7 @@ def build_typed_concierge_response(
                     code="more_options_continuation",
                 )
                 try:
+                    normalize_place_recommendations(typed_payload)
                     validated = _typed_response_adapter.validate_python(typed_payload)
                     return validated, decision
                 except ValidationError:
@@ -666,6 +670,8 @@ def build_typed_concierge_response(
             )
 
     _t_tv = time.perf_counter()
+    if isinstance(typed_payload, PlaceRecommendationsResponse):
+        normalize_place_recommendations(typed_payload)
     try:
         validated = _typed_response_adapter.validate_python(typed_payload)
     except ValidationError as exc:
