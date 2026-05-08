@@ -85,20 +85,25 @@ def _verified_card(
     types: Optional[List[str]] = None,
     price_level: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Build a minimal verified_place card that passes _card_passes_trust_gate."""
+    """Build a minimal verified_place card that passes _card_passes_trust_gate.
+
+    price_level is stored in supporting_details.price_level (real payload location),
+    NOT in gv.types (which only holds Google entity type tokens).
+    """
     gv: Dict[str, Any] = {
         "business_status": "OPERATIONAL",
         "provider_place_id": place_id,
         "google_maps_uri": maps_uri,
         "types": types or ["restaurant", "food"],
     }
-    if price_level:
-        gv["types"] = (types or ["restaurant", "food"]) + [price_level]
-    return {
+    card: Dict[str, Any] = {
         "type": "verified_place",
         "name": name,
         "google_verification": gv,
     }
+    if price_level:
+        card["supporting_details"] = {"price_level": price_level}
+    return card
 
 
 def _prior_card_pool(cards: List[Dict[str, Any]], intent: str = "restaurants") -> Dict[str, Any]:
@@ -337,45 +342,150 @@ def test_only_one_boutique_would_be_rejected() -> None:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Section 5: modifier_filter context reuse — prior cards reused without provider call
+# Section 5: modifier_filter — filtering, not just reordering
+#
+# "show only casual" must EXCLUDE fine-dining/expensive cards, not merely reorder.
+# Uses real card shapes: price in supporting_details.price_level (not gv.types).
+# Hoppscotch payload cards: Aba, Greek Islands, Sinya, Ema, Cedar Palace.
 # ══════════════════════════════════════════════════════════════════════════════
 
+# Real-shaped cards matching Hoppscotch Mediterranean restaurant payload
+_ABA = _verified_card(
+    "Aba", "ChIJaba",
+    types=["fine_dining_restaurant", "restaurant", "food"],
+    price_level="PRICE_LEVEL_EXPENSIVE",
+)
+_GREEK_ISLANDS = _verified_card(
+    "Greek Islands", "ChIJgreek",
+    types=["fine_dining_restaurant", "greek_restaurant", "restaurant"],
+    price_level="PRICE_LEVEL_MODERATE",
+)
+_SINYA = _verified_card(
+    "Sinya", "ChIJsinya",
+    types=["restaurant", "food"],
+    price_level="PRICE_LEVEL_INEXPENSIVE",
+)
+_EMA = _verified_card(
+    "Ema", "ChIJema",
+    types=["restaurant", "food"],
+    price_level="PRICE_LEVEL_MODERATE",
+)
+_CEDAR_PALACE = _verified_card(
+    "Cedar Palace", "ChIJcedar",
+    types=["restaurant", "food"],
+    price_level="PRICE_LEVEL_MODERATE",
+)
 
-def test_modifier_filter_resolves_from_prior_pool() -> None:
-    """modifier_filter rule must resolve from prior pool (no provider call)."""
+_MEDITERRANEAN_POOL = [_ABA, _GREEK_ISLANDS, _SINYA, _EMA, _CEDAR_PALACE]
+
+
+def test_show_only_casual_filters_out_fine_dining_expensive() -> None:
+    """'show only casual' must EXCLUDE fine-dining+expensive cards (Aba), not just reorder."""
+    ctx = _ctx_with_pool(_MEDITERRANEAN_POOL)
+    result = resolve_refine_previous(ctx, "modifier_filter", "show only casual")
+    assert result is not None, "Should resolve (casual cards exist in pool)"
+    all_cards = result.restaurants + result.attractions + result.hotels
+    names = [c["name"] for c in all_cards]
+    assert "Aba" not in names, (
+        f"Aba (fine_dining + EXPENSIVE) must be filtered out for casual; got names={names}"
+    )
+
+
+def test_show_only_casual_filters_out_fine_dining_moderate() -> None:
+    """Fine-dining type alone (no price) must still reduce casual fit below threshold."""
+    ctx = _ctx_with_pool(_MEDITERRANEAN_POOL)
+    result = resolve_refine_previous(ctx, "modifier_filter", "show only casual")
+    assert result is not None
+    all_cards = result.restaurants + result.attractions + result.hotels
+    names = [c["name"] for c in all_cards]
+    assert "Greek Islands" not in names, (
+        f"Greek Islands (fine_dining_restaurant) must be filtered out for casual; got names={names}"
+    )
+
+
+def test_show_only_casual_keeps_moderate_and_inexpensive() -> None:
+    """'show only casual' must keep moderate/inexpensive restaurants (Sinya, Ema, Cedar Palace)."""
+    ctx = _ctx_with_pool(_MEDITERRANEAN_POOL)
+    result = resolve_refine_previous(ctx, "modifier_filter", "show only casual")
+    assert result is not None
+    all_cards = result.restaurants + result.attractions + result.hotels
+    names = [c["name"] for c in all_cards]
+    for expected in ("Sinya", "Ema", "Cedar Palace"):
+        assert expected in names, (
+            f"{expected} (moderate/inexpensive) must survive casual filter; got names={names}"
+        )
+
+
+def test_show_only_casual_provider_skipped_when_casual_cards_exist() -> None:
+    """When casual cards remain in pool, provider call must be skipped (context reuse)."""
+    ctx = _ctx_with_pool(_MEDITERRANEAN_POOL)
+    result = resolve_refine_previous(ctx, "modifier_filter", "show only casual")
+    assert result is not None, "Should resolve via context reuse, not fall through"
+    assert result.rerank_rule == "modifier_filter"
+    assert result.pool_size_after < result.pool_size_before, (
+        "Filtered pool must be smaller than the original (fine-dining cards removed)"
+    )
+
+
+def test_show_only_casual_all_fine_dining_pool_falls_through() -> None:
+    """When ALL prior cards are fine-dining/expensive, must fall through to provider."""
+    all_fine_dining = [
+        _verified_card("Alinea", "ChIJalinea", types=["fine_dining_restaurant", "restaurant"], price_level="PRICE_LEVEL_VERY_EXPENSIVE"),
+        _verified_card("Smyth", "ChIJsmyth", types=["fine_dining_restaurant", "restaurant"], price_level="PRICE_LEVEL_VERY_EXPENSIVE"),
+    ]
+    ctx = _ctx_with_pool(all_fine_dining)
+    result = resolve_refine_previous(ctx, "modifier_filter", "show only casual")
+    assert result is None, (
+        "All fine-dining pool + casual query must fall through to provider search (result=None)"
+    )
+
+
+def test_modifier_filter_resolves_from_prior_pool_with_mixed_cards() -> None:
+    """modifier_filter with mixed pool must return a non-empty RefineResolved."""
     cards = [
-        _verified_card("Aba", "ChIJ1", types=["fine_dining_restaurant", "restaurant"], price_level="PRICE_LEVEL_EXPENSIVE"),
         _verified_card("Do-Rite Donuts", "ChIJ2", types=["fast_food_restaurant", "food"]),
         _verified_card("Cafe Gelato", "ChIJ3", types=["cafe", "coffee_shop"]),
     ]
     ctx = _ctx_with_pool(cards)
     result = resolve_refine_previous(ctx, "modifier_filter", "show only casual")
-    assert result is not None, "modifier_filter must resolve from prior pool"
-    assert isinstance(result, RefineResolved)
-    assert result.pool_size_after == 3, "All cards kept (modifier_filter never drops)"
-    assert result.rerank_rule == "modifier_filter"
-
-
-def test_modifier_filter_casual_reorders_fine_dining_last() -> None:
-    """Casual modifier_filter must push fine-dining/expensive cards toward the back."""
-    fine_dining = _verified_card(
-        "Fine Dining Place", "ChIJfine",
-        types=["fine_dining_restaurant", "restaurant", "food", "PRICE_LEVEL_VERY_EXPENSIVE"],
-    )
-    casual_cafe = _verified_card(
-        "Casual Cafe", "ChIJcafe",
-        types=["cafe", "coffee_shop", "PRICE_LEVEL_INEXPENSIVE"],
-    )
-    cards = [fine_dining, casual_cafe]
-    ctx = _ctx_with_pool(cards)
-    result = resolve_refine_previous(ctx, "modifier_filter", "show only casual")
     assert result is not None
-    # Casual cafe should be surfaced first
+    assert isinstance(result, RefineResolved)
+    assert result.rerank_rule == "modifier_filter"
     all_cards = result.restaurants + result.attractions + result.hotels
     assert len(all_cards) == 2
-    first_name = all_cards[0]["name"]
-    assert first_name == "Casual Cafe", (
-        f"Casual modifier should surface casual cafe first, got {first_name!r}"
+
+
+def test_modifier_filter_cheap_reads_price_from_supporting_details() -> None:
+    """cheap filter must use supporting_details.price_level, not gv.types."""
+    expensive_card = _verified_card("Expensive Place", "ChIJexp", price_level="PRICE_LEVEL_EXPENSIVE")
+    cheap_card = _verified_card("Cheap Place", "ChIJcheap", price_level="PRICE_LEVEL_INEXPENSIVE")
+    ctx = _ctx_with_pool([expensive_card, cheap_card])
+    result = resolve_refine_previous(ctx, "modifier_filter", "make it cheaper")
+    assert result is not None
+    all_cards = result.restaurants + result.attractions + result.hotels
+    names = [c["name"] for c in all_cards]
+    assert "Cheap Place" in names, "Cheap card must survive cheap filter"
+    assert "Expensive Place" not in names, "Expensive card must be excluded by cheap filter"
+
+
+def test_modifier_filter_cheap_price_in_gv_types_is_ignored() -> None:
+    """PRICE_LEVEL tokens in gv.types must NOT affect price scoring (wrong location)."""
+    # Card with PRICE_LEVEL_EXPENSIVE in gv.types only — no supporting_details
+    card_with_price_in_types = {
+        "type": "verified_place",
+        "name": "Wrong Location",
+        "google_verification": {
+            "business_status": "OPERATIONAL",
+            "provider_place_id": "ChIJwrong",
+            "google_maps_uri": "https://maps.google.com/?cid=wrong",
+            "types": ["restaurant", "food", "PRICE_LEVEL_EXPENSIVE"],  # wrong location
+        },
+    }
+    # With no supporting_details.price_level, _card_price_level returns ""
+    from app.concierge.context_resolver import _card_price_level
+    price = _card_price_level(card_with_price_in_types)
+    assert price == "", (
+        "PRICE_LEVEL in gv.types must not be read as price level; should return empty string"
     )
 
 
