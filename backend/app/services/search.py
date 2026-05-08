@@ -11,14 +11,20 @@ Architecture
 
 Product Surface Pruning v1A — legacy mock quarantine
 ----------------------------------------------------
-The ``_mock_flights`` / ``_mock_hotels`` / ``_mock_restaurants`` helpers
-in this module are **legacy test/demo-only
-fixtures**.  They predate the canonical AI Concierge display contract
-(see ``backend/app/concierge/display_contract.py``) and they are still
-reachable through the legacy ``/search/*`` routes that
-``frontend/src/components/trips/{TripBuilder,OptimizeTripModal,TripBuilderForm}``
-have not yet migrated off.  Until the v1B migration replaces those callers,
-these helpers must be:
+The ``_mock_flights`` / ``_mock_hotels`` helpers in this module are
+**legacy test/demo-only fixtures** preserved for the future
+provider-backed Flights/Hotels v1 product track.  They predate the
+canonical AI Concierge display contract (see
+``backend/app/concierge/display_contract.py``) and are still reachable
+through the legacy ``/search/{flights,hotels,round-trip-flights}`` routes
+consumed by ``OptimizeTripModal`` (the only remaining live caller).
+``/trips/create-with-search`` and ``OptimizeTripModal`` fail closed on any
+mock-derived row (``source ∈ {mock, demo, fixture}`` or
+``book.example.com`` booking URL), so no mock-backed flight or hotel can
+reach a persisted trip.  ``_mock_restaurants`` was deleted in the
+final mock-leak closeout — ``search_restaurants`` runs canonical Google
+Places fail-closed and never had a mock-backed live caller.  Until a
+provider-backed Flights/Hotels v1 lands, these helpers must be:
 
 - explicitly marked as legacy via the ``__legacy_product_mock__`` attribute
   (``is_legacy_product_mock(fn)`` and ``LEGACY_PRODUCT_MOCK_FUNCTIONS``);
@@ -533,125 +539,11 @@ def _compute_restaurant_tags(
     return tags
 
 
-def _mock_restaurants(req: RestaurantSearchRequest) -> List[RestaurantResult]:
-    """Generate realistic restaurant options simulating Google Places data.
-
-    Legacy product-surface mock fixture (Product Surface Pruning v1A).  This
-    helper currently has no production callers — ``search_restaurants`` calls
-    Google Places directly with fail-closed semantics — but it is retained as
-    a quarantined fixture and honors the ``BLOCK_LEGACY_PRODUCT_MOCK`` env
-    flag so the v1A regression tests can enumerate the full legacy surface.
-    """
-    if _legacy_product_mock_blocked():
-        _log_legacy_product_mock_event(
-            event="blocked",
-            namespace="restaurants",
-            location=req.location,
-            requested_count=0,
-            returned_count=0,
-        )
-        return []
-
-    # (cuisine, name_template, description, price_level, reviews_range)
-    RESTAURANT_POOL: List[tuple] = [
-        ("Italian", "La Trattoria", "Authentic Neapolitan pizza and housemade pastas in a warm, family-run setting.", 2, (8_000, 60_000)),
-        ("Japanese", "Sakura Sushi", "Omakase and à la carte sushi crafted with daily-sourced fish and aged rice.", 3, (12_000, 80_000)),
-        ("Mexican", "El Mercado", "Vibrant cantina serving street-style tacos, mezcal cocktails, and mole negro.", 1, (15_000, 90_000)),
-        ("French", "Bistro Le Marais", "Classic Parisian bistro with steak-frites, onion soup, and a curated wine list.", 3, (6_000, 40_000)),
-        ("Indian", "Spice Route", "Regional Indian curries, tandoor grills, and house-made paneer from a family kitchen.", 1, (10_000, 55_000)),
-        ("Mediterranean", "Olive & Sea", "Sun-drenched terrace dining with mezze platters, fresh seafood, and citrus desserts.", 2, (9_000, 50_000)),
-        ("American", "The Smokehouse", "Slow-smoked BBQ ribs, pulled pork sandwiches, and craft beer on tap.", 1, (20_000, 120_000)),
-        ("Thai", "Bangkok Garden", "Fragrant Thai curries, pad see ew, and refreshing mango sticky rice.", 1, (14_000, 75_000)),
-        ("Steakhouse", "Prime Cut", "USDA Prime dry-aged steaks, lobster bisque, and classic sides in an upscale setting.", 4, (5_000, 35_000)),
-        ("Seafood", "The Pier Kitchen", "Waterfront restaurant serving the morning's catch grilled simply with local produce.", 3, (7_000, 45_000)),
-        ("Café", "Corner Brew Café", "Specialty single-origin coffee, avocado toasts, and freshly baked sourdough.", 1, (18_000, 100_000)),
-        ("Vegetarian", "Garden Table", "Inventive plant-based dishes celebrating seasonal vegetables and global spices.", 2, (8_000, 45_000)),
-    ]
-
-    OPENING_HOURS = [
-        "Daily 11:00 AM – 10:00 PM",
-        "Mon–Sat 12:00 PM – 11:00 PM",
-        "Daily 7:00 AM – 3:00 PM",
-        "Tue–Sun 5:00 PM – 11:00 PM",
-        "Daily 8:00 AM – 9:00 PM",
-        "Wed–Mon 11:30 AM – 10:30 PM",
-        "Daily 6:00 PM – 12:00 AM",
-        "Mon–Fri 11:00 AM – 2:30 PM, 5:00 PM – 10:00 PM",
-    ]
-
-    STREET_NAMES = ["Main St", "Market Ave", "Riverfront Dr", "Old Town Sq", "Vine St", "Bay Blvd", "Canal Walk", "High St"]
-
-    city = req.location.split(",")[0].strip().title()
-    loc_slug = req.location.lower().replace(" ", "-").replace(",", "")
-
-    # Filter by cuisine if provided
-    if req.cuisine:
-        pool = [t for t in RESTAURANT_POOL if t[0].lower() == req.cuisine.lower()]
-        if not pool:
-            pool = list(RESTAURANT_POOL)
-    else:
-        pool = list(RESTAURANT_POOL)
-
-    results: List[RestaurantResult] = []
-    for cuisine, name_tpl, desc, price_level, reviews_range in pool:
-        name = f"{name_tpl} {city}"
-        rating = round(random.uniform(3.8, 4.95), 1)
-        num_reviews = random.randint(*reviews_range)
-        sentiment = round(random.uniform(0.70, 0.98), 2)
-        price = round(random.uniform(10, 120), 2) if price_level > 0 else 0.0
-
-        ai_score = _compute_restaurant_ai_score(rating, num_reviews, price_level, sentiment)
-        tags = _compute_restaurant_tags(ai_score, rating, num_reviews, price_level)
-        opening_hours = random.choice(OPENING_HOURS)
-        address = f"{random.randint(1, 999)} {random.choice(STREET_NAMES)}, {city}"
-
-        name_slug = name_tpl.lower().replace(" ", "-").replace("'", "").replace("&", "and")
-        provider_place_id = f"mock-{name_slug}-{city.lower().replace(' ', '-')}"
-        place_id = provider_place_id
-        google_maps_uri = f"https://www.google.com/maps/place/?q=place_id:{place_id}"
-        direct_url = google_maps_uri
-        restaurant_options = [
-            BookingOption(provider="google_maps", url=f"https://maps.example.com/restaurants/{name_slug}"),
-            BookingOption(provider="opentable", url=f"https://book.example.com/restaurants/opentable/{name_slug}"),
-            BookingOption(provider="yelp", url=f"https://book.example.com/restaurants/yelp/{name_slug}"),
-        ]
-        results.append(
-            RestaurantResult(
-                id=f"rst-{uuid4().hex[:10]}",
-                price=price if price > 0 else None,
-                points_estimate=None,
-                rating=rating,
-                location=req.location,
-                booking_url=direct_url,
-                source="mock",
-                booking_options=restaurant_options,
-                name=name,
-                cuisine=cuisine,
-                address=address,
-                ai_score=ai_score,
-                tags=tags,
-                num_reviews=num_reviews,
-                opening_hours=opening_hours,
-                price_level=price_level,
-                sentiment=sentiment,
-                provider_place_id=provider_place_id,
-                google_maps_uri=google_maps_uri,
-                place_id=place_id,
-                source_status="ok",
-                cache_status="miss",
-                verification_status="verified",
-            )
-        )
-
-    results.sort(key=lambda r: r.ai_score or 0, reverse=True)
-    _log_legacy_product_mock_event(
-        event="emitted",
-        namespace="restaurants",
-        location=req.location,
-        requested_count=0,
-        returned_count=len(results),
-    )
-    return results, "ok" if results else "empty"
+# ``_mock_restaurants`` was deleted in the final mock-leak closeout PR.
+# Rationale: ``SearchService.search_restaurants`` runs the canonical Google
+# Places provider with fail-closed semantics (no provider key → empty list),
+# and no live caller routed through the mock fixture.  The do-not-resurrect
+# guard lives in ``backend/tests/test_product_surface_pruning_v1a.py``.
 
 
 # ---------------------------------------------------------------------------
@@ -862,12 +754,12 @@ def _fetch_restaurants_google_places(
 
 # Tag the remaining legacy mock generators so the v1A regression suite can
 # enumerate the quarantined surface without string-matching identifiers.
-# v1D removed ``_mock_attractions`` — the internal ``search_attractions``
-# callers in ``app/services/concierge.py`` and ``app/routes/plan.py`` were
-# migrated to fail-closed canonical paths.
+# v1D removed ``_mock_attractions``; the final mock-leak closeout removed
+# ``_mock_restaurants`` (orphan — ``search_restaurants`` runs canonical
+# Google Places fail-closed).  Only flights and hotels remain quarantined,
+# preserved for a future provider-backed Flights/Hotels v1.
 _mark_legacy_product_mock(_mock_flights)
 _mark_legacy_product_mock(_mock_hotels)
-_mark_legacy_product_mock(_mock_restaurants)
 
 # Public, ordered registry of every legacy product-surface mock fixture in
 # this module.  ``backend/tests/test_product_surface_pruning_v1a.py`` reads
@@ -878,7 +770,6 @@ _mark_legacy_product_mock(_mock_restaurants)
 LEGACY_PRODUCT_MOCK_FUNCTIONS: tuple = (
     _mock_flights,
     _mock_hotels,
-    _mock_restaurants,
 )
 
 
