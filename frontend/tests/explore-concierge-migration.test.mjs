@@ -56,7 +56,7 @@ test('Canonical helper goes through /ai/concierge/search and is gated on addabil
   assert.match(apiClient, /callConciergeSearch\(tripId, `Top attractions in \$\{dest\}`\)/, 'searchAttractionsViaConcierge delegates to callConciergeSearch');
   assert.match(apiClient, /["']\/ai\/concierge\/search["']/, 'The canonical /ai/concierge/search route is the only Concierge search seam');
   // Fail-closed gates.
-  assert.match(apiClient, /addability && addability !== "addable"/, 'Adapter drops cards whose addability is not "addable"');
+  assert.match(apiClient, /if \(addability !== "addable"\) return null;/, 'Adapter drops cards unless addability is exactly "addable"');
   assert.match(apiClient, /if \(!providerPlaceId\) return null;/, 'Adapter drops cards without a Google Places provider id');
 });
 
@@ -96,6 +96,95 @@ test('Legacy mock-backed wrappers have been removed from api.ts', () => {
   assert.doesNotMatch(apiClient, /["']\/search\/attractions["']/, 'No /search/attractions literal in api.ts');
   assert.doesNotMatch(apiClient, /["']\/search\/clusters["']/, 'No /search/clusters literal in api.ts');
   assert.doesNotMatch(apiClient, /["']\/search\/best-area["']/, 'No /search/best-area literal in api.ts');
+});
+
+// ── Blocker 2 follow-up: addability must be present and equal to "addable" ──
+
+test('Adapter requires display.addability === "addable" (missing addability returns null)', () => {
+  // The adapter must require the canonical display contract; a Concierge
+  // card with no display block has not been normalized through the v1B/PR-287
+  // seam and must not surface in Explore even if a provider id is present.
+  assert.match(apiClient, /if \(addability !== "addable"\) return null;/, 'Adapter strictly requires addability === "addable"');
+  assert.doesNotMatch(apiClient, /if \(addability && addability !== "addable"\) return null;/, 'Soft check (allowing missing addability) must not exist');
+});
+
+// ── Blocker 1 follow-up: snapshot canonical-identity guard ───────────────────
+
+test('api.ts exports isCanonicalSnapshotAttraction with the v1B identity rules', () => {
+  assert.match(apiClient, /export function isCanonicalSnapshotAttraction\(/, 'Snapshot guard helper must be exported');
+  // Identity rules: reject mock-shaped ids and require a Google-Maps / place_id URL.
+  assert.match(apiClient, /id\.startsWith\("mock-"\)/, 'Snapshot guard rejects mock- prefixed ids');
+  assert.match(apiClient, /id\.startsWith\("attr-"\)/, 'Snapshot guard rejects legacy attr- prefixed ids');
+  assert.match(apiClient, /url\.includes\("google\.com\/maps"\)/, 'Snapshot guard accepts googleMapsUri-shaped urls');
+  assert.match(apiClient, /url\.includes\("place_id:"\)/, 'Snapshot guard accepts place_id deep-link urls');
+});
+
+test('TripBuilder Explore filters snapshot attractions through the canonical guard before reuse', () => {
+  // The snapshot may contain rows minted by the legacy mock-backed
+  // /search/attractions surface before this migration.  TripBuilder must
+  // discard non-canonical rows and trigger a canonical refetch.
+  assert.match(tripBuilder, /isCanonicalSnapshotAttraction/, 'TripBuilder imports and uses the snapshot guard');
+  assert.match(tripBuilder, /safeSnapshotAttractions/, 'TripBuilder uses a filtered safeSnapshotAttractions list');
+  assert.match(tripBuilder, /allSnapshotAttractionsCanonical/, 'TripBuilder tracks whether the entire snapshot attractions list is canonical');
+  // Health gate forces refetch when any snapshot row fails the guard.
+  assert.match(
+    tripBuilder,
+    /hasHealthyAttractions\s*=\s*\n?\s*snapshot != null\s*\n?\s*&&\s*allSnapshotAttractionsCanonical/,
+    'hasHealthyAttractions requires every snapshot attraction to be canonical',
+  );
+  // Refetch path uses the canonical helper, not raw snapshot.
+  assert.match(tripBuilder, /shouldFetchAttractions \? searchAttractionsViaConcierge\(tripId, destination\) : Promise\.resolve\(safeSnapshotAttractions\)/, 'Non-fetch branch falls back to the filtered safe list');
+  // Restaurants must remain reusable independently — guard is attractions-only.
+  assert.match(tripBuilder, /shouldFetchRestaurants \? searchRestaurants\(destination\)/, 'Restaurant snapshot reuse is not changed by the v1B guard');
+});
+
+// ── Behavioral parity for the snapshot guard ─────────────────────────────────
+// The guard logic is small and pure; we re-implement it here from the same
+// rules and verify both shapes (legacy mock vs. canonical Google identity).
+
+function isCanonicalSnapshotAttractionRef(a) {
+  if (!a) return false;
+  const id = typeof a.id === 'string' ? a.id : '';
+  if (!id || id.startsWith('mock-') || id.startsWith('attr-')) return false;
+  const url = typeof a.bookingUrl === 'string' ? a.bookingUrl : '';
+  if (!url) return false;
+  return url.includes('google.com/maps') || url.includes('place_id:');
+}
+
+test('Snapshot guard rejects legacy mock-shaped attraction rows (forces canonical refetch)', () => {
+  const legacyMockShaped = {
+    id: 'mock-attraction-1',
+    name: 'Mock Park',
+    bookingUrl: 'https://example.com/booking/mock-1',
+  };
+  const legacyAttrShaped = {
+    id: 'attr-12345',
+    name: 'Old Attraction',
+    bookingUrl: '',
+  };
+  const noBookingUrl = {
+    id: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
+    name: 'Place w/o Maps URL',
+    bookingUrl: '',
+  };
+  assert.equal(isCanonicalSnapshotAttractionRef(legacyMockShaped), false, 'mock- prefixed id must be rejected');
+  assert.equal(isCanonicalSnapshotAttractionRef(legacyAttrShaped), false, 'attr- prefixed legacy id must be rejected');
+  assert.equal(isCanonicalSnapshotAttractionRef(noBookingUrl), false, 'Missing Google Maps URL must be rejected');
+});
+
+test('Snapshot guard accepts canonical attraction rows minted by the v1B adapter (reusable)', () => {
+  const googleMapsUriShaped = {
+    id: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
+    name: 'Verified Park',
+    bookingUrl: 'https://www.google.com/maps/place/?q=place_id:ChIJN1t_tDeuEmsRUsoyG83frY4',
+  };
+  const placeIdDeepLink = {
+    id: 'ChIJExample',
+    name: 'Verified Museum',
+    bookingUrl: 'https://maps.google.com/?cid=12345&place_id:ChIJExample',
+  };
+  assert.equal(isCanonicalSnapshotAttractionRef(googleMapsUriShaped), true, 'Google Maps URL row must be reusable');
+  assert.equal(isCanonicalSnapshotAttractionRef(placeIdDeepLink), true, 'place_id deep link row must be reusable');
 });
 
 test('Grouped / Areas view and BestAreaCard are removed so partial-mock data cannot resurface', () => {

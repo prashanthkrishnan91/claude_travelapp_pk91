@@ -1699,7 +1699,10 @@ export function mapUnifiedAttractionToResult(
   u: UnifiedAttractionResult
 ): AttractionSearchResult | null {
   const addability = u.display?.addability;
-  if (addability && addability !== "addable") return null;
+  // v1B requires the canonical display contract: missing addability means
+  // the card never went through the display normalizer (PR #287) and must
+  // not surface in user-facing Explore.  Only `"addable"` passes.
+  if (addability !== "addable") return null;
   const gv = u.googleVerification ?? null;
   const providerPlaceId = gv?.providerPlaceId ?? undefined;
   if (!providerPlaceId) return null;
@@ -1736,6 +1739,29 @@ export function mapUnifiedAttractionToResult(
     lat: typeof gv?.lat === "number" ? gv.lat : undefined,
     lng: typeof gv?.lng === "number" ? gv.lng : undefined,
   };
+}
+
+/**
+ * v1B snapshot guard — true iff a persisted Explore attraction was minted
+ * by the canonical adapter (`mapUnifiedAttractionToResult`).  Old snapshots
+ * created from the legacy mock-backed `/search/attractions` surface had
+ * generated ids (e.g. `attr-…`, `mock-…`) and `bookingUrl` values that did
+ * not encode a Google Places identity.  The canonical adapter always
+ * produces a `bookingUrl` that points at Google Maps (either the
+ * `googleMapsUri` or a `place_id:` deep link), and an `id` equal to the
+ * Google `providerPlaceId`.  Returning false here forces TripBuilder
+ * Explore to discard the snapshot attraction and refetch via
+ * `searchAttractionsViaConcierge(...)`, so legacy mock-shaped rows never
+ * leak through snapshot reuse.
+ */
+export function isCanonicalSnapshotAttraction(a: AttractionSearchResult): boolean {
+  if (!a) return false;
+  const id = typeof a.id === "string" ? a.id : "";
+  if (!id || id.startsWith("mock-") || id.startsWith("attr-")) return false;
+  const url = typeof a.bookingUrl === "string" ? a.bookingUrl : "";
+  if (!url) return false;
+  // Canonical: googleMapsUri or the place_id deep link emitted by the v1B adapter.
+  return url.includes("google.com/maps") || url.includes("place_id:");
 }
 
 /**

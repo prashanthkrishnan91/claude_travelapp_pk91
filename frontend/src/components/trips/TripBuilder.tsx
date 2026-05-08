@@ -69,6 +69,7 @@ import {
   addRoundTripOutboundToDay,
   addRoundTripReturnToDay,
   searchAttractionsViaConcierge,
+  isCanonicalSnapshotAttraction,
   searchRestaurants,
   fetchDayPlan,
   addAttractionToDay,
@@ -1329,12 +1330,28 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
     (async () => {
       const snapshot = await fetchExploreSnapshot(tripId);
+      // v1B snapshot safety: a persisted snapshot may have been minted by
+      // the pre-migration legacy mock-backed attractions surface (see
+      // `isCanonicalSnapshotAttraction`).  Reuse only attractions that pass
+      // the canonical-identity guard; any non-canonical row is discarded
+      // and triggers a canonical refetch.  Restaurants are unaffected
+      // (they were already Google-Places-backed).
+      const safeSnapshotAttractions = snapshot
+        ? snapshot.attractions.filter(isCanonicalSnapshotAttraction)
+        : [];
+      const allSnapshotAttractionsCanonical =
+        snapshot != null && safeSnapshotAttractions.length === snapshot.attractions.length;
+
       if (snapshot) {
-        if (snapshot.attractions.length > 0) setCandidateAttractions(snapshot.attractions);
+        if (safeSnapshotAttractions.length > 0) setCandidateAttractions(safeSnapshotAttractions);
         if (snapshot.restaurants.length > 0) setCandidateRestaurants(snapshot.restaurants);
       }
 
-      const hasHealthyAttractions = snapshot != null && snapshot.attractions.length > 0 && hasPositiveExploreScore(snapshot.attractions);
+      const hasHealthyAttractions =
+        snapshot != null
+        && allSnapshotAttractionsCanonical
+        && safeSnapshotAttractions.length > 0
+        && hasPositiveExploreScore(safeSnapshotAttractions);
       const hasHealthyRestaurants = snapshot != null && snapshot.restaurants.length > 0 && hasPositiveExploreScore(snapshot.restaurants);
 
       if (hasHealthyAttractions && hasHealthyRestaurants) return;
@@ -1347,11 +1364,11 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       if (shouldFetchRestaurants) setRestaurantsLoading(true);
 
       const [attractionsResult, restaurantsResult] = await Promise.allSettled([
-        shouldFetchAttractions ? searchAttractionsViaConcierge(tripId, destination) : Promise.resolve(snapshot?.attractions ?? []),
+        shouldFetchAttractions ? searchAttractionsViaConcierge(tripId, destination) : Promise.resolve(safeSnapshotAttractions),
         shouldFetchRestaurants ? searchRestaurants(destination) : Promise.resolve({ restaurants: snapshot?.restaurants ?? [], sourceStatus: snapshot?.restaurantStatus ?? "snapshot", cacheStatus: "snapshot", terminalNoResults: false }),
       ]);
 
-      const resolvedAttractions = attractionsResult.status === "fulfilled" ? attractionsResult.value : (snapshot?.attractions ?? []);
+      const resolvedAttractions = attractionsResult.status === "fulfilled" ? attractionsResult.value : safeSnapshotAttractions;
       const resolvedRestaurantEnvelope = restaurantsResult.status === "fulfilled" ? restaurantsResult.value : { restaurants: snapshot?.restaurants ?? [], sourceStatus: "error", cacheStatus: "bypass", terminalNoResults: false };
       const resolvedRestaurants = resolvedRestaurantEnvelope.restaurants;
 
