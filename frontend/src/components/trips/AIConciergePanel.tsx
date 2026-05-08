@@ -31,7 +31,7 @@ import type {
   UnifiedRestaurantResult,
 } from "@/lib/api";
 import type { ItineraryDay, ItineraryItem } from "@/types";
-import { pickCardReason, pickCardCategory, sanitizeWhyPick, shouldShowCollapsedSources, splitReason, normalizeTitle } from "@/lib/concierge/cardPresentation";
+import { pickCardReason, pickCardCategory, sanitizeWhyPick, shouldShowCollapsedSources, splitReason, normalizeTitle, isAddableCanonicalCard } from "@/lib/concierge/cardPresentation";
 import { ACTION, parseRefinementAction, applyRefinementToMessage, buildContextualSearchQuery, selectBestCard, looksLikeFreshSearch, dedupeCardsAgainstCurrentSet, hasGooglePriceSignals, getBaselinePriceLevel } from "@/lib/concierge/refinementInterpreter";
 import { formatDisplayPrice } from "@/lib/concierge/priceFormatter";
 
@@ -242,9 +242,15 @@ type DisplayCard = {
 };
 
 // Compose the subheader/meta line: `★ 4.8 (9,483 reviews) · $$ · Address`.
-// Price appears after reviews and before address when a Google price signal is present.
-// Address is intentionally *included* here so the card has one consolidated
-// info line and the expanded view doesn't need to repeat it.
+// Reads only the canonical display contract (PR #287):
+//   • display.displayMetaLine / supportingDetails.metaLine for rating + reviews
+//   • display.displayPrice / supportingDetails.price{Level,Range} for price
+//   • supportingDetails.address for address
+// We intentionally do NOT fall back to top-level `rating`, `reviewCount`,
+// `address`, or `neighborhood` — those reads were the legacy ladder that
+// silently masked missing canonical fields.  When the canonical contract has
+// no meta_line we emit an empty meta block; the card will render without a
+// subheader rather than synthesising one from raw fields.
 function pickCardMeta(card: DisplayCard): string[] {
   const details = card.supportingDetails;
 
@@ -255,14 +261,11 @@ function pickCardMeta(card: DisplayCard): string[] {
       (details?.priceRange as Record<string, unknown> | null | undefined) ?? null,
     ) ??
     undefined;
-  const address = details?.address ?? card.address ?? card.neighborhood;
+  const address = details?.address ?? undefined;
 
-  // Use pre-formatted meta line as the rating/review base when available.
-  // live_research.py builds meta_line WITH address already included
-  // ("★ 4.8 (280 reviews) · 2207 W Montrose Ave"). Strip the address from the
-  // stem before rebuilding so address never appears twice, and so price is
-  // inserted in the correct position (rating · price · address).
   const ratingBase = card.display?.displayMetaLine ?? details?.metaLine;
+  if (!ratingBase && !price && !address) return [];
+
   if (ratingBase) {
     const addrTrimmed = address?.trim() ?? "";
     let stem = ratingBase;
@@ -277,13 +280,7 @@ function pickCardMeta(card: DisplayCard): string[] {
     return [parts.join(" · ")];
   }
 
-  // No pre-formatted line — build from raw fields.
-  const rating = details?.rating ?? (typeof card.rating === "number" ? card.rating.toFixed(1) : undefined);
-  const reviewCount = details?.reviewCount ?? card.reviewCount;
   const parts: string[] = [];
-  if (rating) {
-    parts.push(reviewCount ? `★ ${rating} (${Number(reviewCount).toLocaleString()} reviews)` : `★ ${rating}`);
-  }
   if (price) parts.push(price);
   if (address) parts.push(address);
   return parts.length > 0 ? [parts.join(" · ")] : [];
@@ -515,10 +512,20 @@ function fromSearchResult(result: ConciergeSearchResult): Message {
   };
 }
 
-function isRenderableVerifiedPlace(place: { type?: string | null; verifiedPlace?: boolean | null; googleVerification?: unknown }): boolean {
-  if (place.type === "verified_place") return true;
-  if (place.verifiedPlace === true) return true;
-  return place.googleVerification != null;
+// Canonical addable-card gate (PR #287/#289 frontend enforcement).
+// Replaces the previous fallback ladder which accepted any card with
+// `type === "verified_place"` or a non-null googleVerification block, even
+// when the canonical display contract was missing.  The new gate requires
+// the full canonical contract: addability === "addable", display.displayName,
+// display.displayCategory, and a Google providerPlaceId.  Cards that fail
+// this gate are filtered out rather than rendered from legacy top-level
+// fields, so backend contract drift surfaces as missing cards (loud) instead
+// of a silently degraded polished card (quiet).
+function isRenderableVerifiedPlace(place: {
+  display?: { addability?: string | null; displayName?: string | null; displayCategory?: string | null } | null;
+  googleVerification?: { providerPlaceId?: string | null } | null;
+}): boolean {
+  return isAddableCanonicalCard(place);
 }
 
 export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp = [], isOpen, onClose, onItemAdded, onIdeaSaved }: Props) {
@@ -1273,35 +1280,45 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                   {msg.intent !== "compare" && (msg.restaurants?.length || msg.attractions?.length || msg.hotels?.length || msg.researchSources?.length) ? (
                     <div className="space-y-2">
                       {(() => {
+                        // isRenderableVerifiedPlace enforces the full canonical
+                        // contract (display.addability + displayName + displayCategory
+                        // + Google providerPlaceId).  Cards that fail it are dropped
+                        // rather than rebuilt from legacy top-level fields.
                         const addablePlaces = [
-                          ...(msg.restaurants ?? []).filter((r) => isRenderableVerifiedPlace(r)).map((place) => ({ kind: "restaurant" as const, place, category: place.cuisine || "Restaurant", sourceLink: place.bookingLink ?? place.sourceUrl })),
-                          ...(msg.attractions ?? []).filter((a) => isRenderableVerifiedPlace(a)).map((place) => ({ kind: "attraction" as const, place, category: place.category || "Attraction", sourceLink: place.sourceUrl })),
-                          ...(msg.hotels ?? []).filter((h) => isRenderableVerifiedPlace(h)).map((place) => ({ kind: "hotel" as const, place, category: "Hotel", sourceLink: place.bookingUrl ?? place.sourceUrl })),
+                          ...(msg.restaurants ?? []).filter((r) => isRenderableVerifiedPlace(r)).map((place) => ({ kind: "restaurant" as const, place, sourceLink: place.bookingLink ?? place.sourceUrl })),
+                          ...(msg.attractions ?? []).filter((a) => isRenderableVerifiedPlace(a)).map((place) => ({ kind: "attraction" as const, place, sourceLink: place.sourceUrl })),
+                          ...(msg.hotels ?? []).filter((h) => isRenderableVerifiedPlace(h)).map((place) => ({ kind: "hotel" as const, place, sourceLink: place.bookingUrl ?? place.sourceUrl })),
                         ];
-                        const allTitles = addablePlaces.map(({ place }) => place.name);
+                        const allTitles = addablePlaces.map(({ place }) => place.display?.displayName ?? place.name);
 
-                        return addablePlaces.map(({ kind, place, category, sourceLink }) => {
-                          const key = cardKey(place.name, selectedDayId || undefined);
-                          // prefers card.supportingDetails?.whyPick ?? card.primaryReason when available
+                        return addablePlaces.map(({ kind, place, sourceLink }) => {
+                          // Canonical display fields are required by isRenderableVerifiedPlace.
+                          const title = place.display?.displayName ?? place.name;
+                          const displayCategory = pickCardCategory(place);
+                          const key = cardKey(title, selectedDayId || undefined);
                           const baseReason = pickCardReason(place);
-                          const reason = sanitizeWhyPick(baseReason, place.name, allTitles);
+                          const reason = sanitizeWhyPick(baseReason, title, allTitles);
                           const extraDetail = pickCardDetail(place);
                           const isClosed = hasClosedSignal(place);
                           const isOperational = !isClosed && canShowGoogleVerifiedBadge(place);
                           const meta = pickCardMeta(place);
-                          const displayCategory = pickCardCategory(place, category);
+                          // Maps URL prefers Google's googleMapsUri (canonical Google
+                          // identity) and falls back to the explicit mapsLink that the
+                          // backend already derives from providerPlaceId.  No top-level
+                          // legacy URL ladders.
+                          const mapLink = place.googleVerification?.googleMapsUri ?? place.mapsLink;
 
-                          const normalizedName = place.name.trim().toLowerCase();
+                          const normalizedName = title.trim().toLowerCase();
                           return (
                             <ConciergeCard
-                              key={`${place.name}-${key}`}
-                              title={place.name}
+                              key={`${title}-${key}`}
+                              title={title}
                               category={displayCategory}
                               meta={meta}
                               tags={[]}
                               reason={reason}
                               extraDetail={extraDetail}
-                              mapLink={place.mapsLink}
+                              mapLink={mapLink}
                               sourceLink={sourceLink}
                               isOperational={isOperational}
                               verifiedAt={null}
