@@ -23,9 +23,6 @@ import type {
   FlightSearchResult,
   AttractionSearchResult,
   RestaurantSearchResult,
-  LocationCluster,
-  PlaceInCluster,
-  BestAreaRecommendation,
   DayPlan,
   OptimizeFlightInput,
   OptimizeHotelInput,
@@ -585,27 +582,6 @@ export async function searchFlights(
 
 // ─── Search / Research ────────────────────────────────────────────────────────
 
-interface RawAttractionResult {
-  id: string;
-  name: string;
-  category: string;
-  description: string;
-  durationMinutes?: number;
-  price?: number;
-  rating?: number;
-  location: string;
-  address: string;
-  bookingUrl?: string;
-  bookingOptions?: BookingOption[];
-  aiScore?: number;
-  ai_score?: number;
-  score?: number;
-  tags?: string[];
-  numReviews?: number;
-  openingHours?: string;
-  priceLevel?: number;
-}
-
 interface RawHotelResult {
   id: string;
   name: string;
@@ -622,35 +598,6 @@ interface RawHotelResult {
   proximityLabel?: string;
   areaLabel?: string;
   distanceToBestArea?: number;
-}
-
-function mapAttractionToResult(a: RawAttractionResult): AttractionSearchResult {
-  const normalizedAiScore =
-    typeof a.aiScore === "number"
-      ? a.aiScore
-      : typeof a.ai_score === "number"
-        ? a.ai_score
-        : typeof a.score === "number"
-          ? a.score
-          : undefined;
-  return {
-    id: a.id,
-    name: a.name,
-    category: a.category,
-    description: a.description,
-    location: a.location,
-    address: a.address,
-    rating: a.rating,
-    numReviews: a.numReviews,
-    price: a.price,
-    priceLevel: a.priceLevel,
-    openingHours: a.openingHours,
-    durationMinutes: a.durationMinutes,
-    aiScore: normalizedAiScore,
-    tags: a.tags ?? [],
-    bookingUrl: a.bookingUrl,
-    bookingOptions: a.bookingOptions,
-  };
 }
 
 function mapHotelToResult(h: RawHotelResult): ResearchResult {
@@ -699,32 +646,6 @@ export async function searchHotels(
       body: JSON.stringify(payload),
     });
     return results.map(mapHotelToResult);
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Fetch attractions/activities for a location, sorted by AI score DESC.
- *
- * Product Surface Pruning v1A — legacy mock-backed product route.  Calls
- * `POST /search/attractions`, fed by `_mock_attractions`.  Honors the
- * `BLOCK_LEGACY_PRODUCT_MOCK` env flag.  Do not add new callers.
- */
-export async function searchAttractions(
-  location: string,
-  date?: string
-): Promise<AttractionSearchResult[]> {
-  try {
-    const payload = toSnake({ location, date: date ?? null });
-    const results = await apiFetch<RawAttractionResult[]>(
-      "/search/attractions",
-      {
-        method: "POST",
-        body: JSON.stringify(payload),
-      }
-    );
-    return results.map(mapAttractionToResult);
   } catch {
     return [];
   }
@@ -864,31 +785,6 @@ export async function searchRestaurants(
     return { restaurants: verified, sourceStatus, cacheStatus, terminalNoResults };
   } catch {
     return { restaurants: [], sourceStatus: "error", cacheStatus: "bypass", terminalNoResults: false };
-  }
-}
-
-/**
- * Fetch attractions and restaurants grouped into proximity clusters.
- *
- * Product Surface Pruning v1A — legacy mock-dependent product route.  Calls
- * `POST /search/clusters`, which derives the attractions side from
- * `_mock_attractions`.  Honors the `BLOCK_LEGACY_PRODUCT_MOCK` env flag.
- * Do not add new callers; v1B routes this through the canonical AI
- * Concierge surface.
- */
-export async function searchClusters(
-  location: string,
-  radiusKm: number = 1.5
-): Promise<LocationCluster[]> {
-  try {
-    const payload = { location, radius_km: radiusKm };
-    // apiFetch already applies toCamel — return directly so keys match LocationCluster
-    return await apiFetch<LocationCluster[]>("/search/clusters", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    return [];
   }
 }
 
@@ -1157,29 +1053,6 @@ export async function saveExploreSnapshot(
   }
 }
 
-/**
- * Fetch the best area recommendation for a destination.
- *
- * Product Surface Pruning v1A — legacy mock-dependent product route.  Calls
- * `POST /search/best-area`, which derives from clusters that include
- * `_mock_attractions`.  Honors the `BLOCK_LEGACY_PRODUCT_MOCK` env flag.
- * Do not add new callers.
- */
-export async function fetchBestArea(
-  location: string,
-  radiusKm: number = 1.5
-): Promise<BestAreaRecommendation | null> {
-  try {
-    const payload = { location, radius_km: radiusKm };
-    return await apiFetch<BestAreaRecommendation | null>("/search/best-area", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    return null;
-  }
-}
-
 /** Add a restaurant to the itinerary as a trip-level meal item. */
 export async function addRestaurantToTrip(
   tripId: string,
@@ -1215,36 +1088,6 @@ export async function addRestaurantToTrip(
 /** Fetch a smart day plan (2–3 attractions + lunch + dinner) for a specific trip day. */
 export async function fetchDayPlan(tripId: string, dayNumber: number): Promise<DayPlan> {
   const payload = toSnake({ tripId, dayNumber });
-  return apiFetch<DayPlan>("/plan/day", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-/** Generate a day plan from a specific cluster's places. */
-export async function planClusterDay(
-  tripId: string,
-  clusterId: string,
-  places: PlaceInCluster[]
-): Promise<DayPlan> {
-  const payload = {
-    trip_id: tripId,
-    day_number: 1,
-    cluster_id: clusterId,
-    places: places.map((p) => ({
-      id: p.id,
-      name: p.name,
-      place_type: p.placeType,
-      category: p.category,
-      address: p.address,
-      rating: p.rating ?? null,
-      ai_score: p.aiScore ?? null,
-      tags: p.tags,
-      lat: p.lat,
-      lng: p.lng,
-      booking_url: p.bookingUrl,
-    })),
-  };
   return apiFetch<DayPlan>("/plan/day", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -1834,6 +1677,114 @@ export async function callConciergeSearch(
 
 export async function fetchConciergeMessages(tripId: string): Promise<ConciergeMessage[]> {
   return apiFetch<ConciergeMessage[]>(`/ai/concierge/${tripId}/messages`);
+}
+
+// ─── Product Surface Migration v1B — TripBuilder Explore canonical adapter ──
+//
+// The legacy /search/attractions surface was mock-backed (see PR #288).  v1B
+// migrates the TripBuilder Explore attraction list onto the canonical
+// /ai/concierge/search response, which is Google-Places-verified and goes
+// through the display contract.  The adapter below converts a single
+// canonical UnifiedAttractionResult into the existing AttractionSearchResult
+// shape so downstream Add to Day / Save / Maps handlers keep working without
+// changing the persisted itinerary-item schema.
+//
+// Fail-closed rules:
+//   1. Drop cards whose `display.addability` is anything other than "addable"
+//      (research_only / closed must never become user-facing Explore cards).
+//   2. Drop cards without a Google Places provider id — TripBuilder Explore is
+//      a place-discovery surface, so the canonical identity must be present
+//      for Maps and Save flows to work safely.
+export function mapUnifiedAttractionToResult(
+  u: UnifiedAttractionResult
+): AttractionSearchResult | null {
+  const addability = u.display?.addability;
+  // v1B requires the canonical display contract: missing addability means
+  // the card never went through the display normalizer (PR #287) and must
+  // not surface in user-facing Explore.  Only `"addable"` passes.
+  if (addability !== "addable") return null;
+  const gv = u.googleVerification ?? null;
+  const providerPlaceId = gv?.providerPlaceId ?? undefined;
+  if (!providerPlaceId) return null;
+
+  const name = (u.display?.displayName && u.display.displayName.trim().length > 0)
+    ? u.display.displayName
+    : u.name;
+  const address = (gv?.formattedAddress && gv.formattedAddress.trim().length > 0)
+    ? gv.formattedAddress
+    : (u.address ?? "");
+  const mapsUri = gv?.googleMapsUri
+    ?? u.mapsLink
+    ?? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(providerPlaceId)}`;
+  const rating = typeof gv?.rating === "number" ? gv.rating : (typeof u.rating === "number" ? u.rating : undefined);
+  const numReviews = typeof gv?.userRatingCount === "number"
+    ? gv.userRatingCount
+    : (typeof u.reviewCount === "number" ? u.reviewCount : undefined);
+  const description = (u.description && u.description.trim().length > 0)
+    ? u.description
+    : (u.display?.displayWhy ?? u.primaryReason ?? "");
+
+  return {
+    id: providerPlaceId,
+    name,
+    category: u.display?.displayCategory || u.category || "attraction",
+    description,
+    location: u.neighborhood ?? "",
+    address,
+    rating,
+    numReviews,
+    aiScore: typeof u.aiScore === "number" ? u.aiScore : undefined,
+    tags: Array.isArray(u.tags) ? u.tags : [],
+    bookingUrl: mapsUri,
+    lat: typeof gv?.lat === "number" ? gv.lat : undefined,
+    lng: typeof gv?.lng === "number" ? gv.lng : undefined,
+  };
+}
+
+/**
+ * v1B snapshot guard — true iff a persisted Explore attraction was minted
+ * by the canonical adapter (`mapUnifiedAttractionToResult`).  Old snapshots
+ * created from the legacy mock-backed `/search/attractions` surface had
+ * generated ids (e.g. `attr-…`, `mock-…`) and `bookingUrl` values that did
+ * not encode a Google Places identity.  The canonical adapter always
+ * produces a `bookingUrl` that points at Google Maps (either the
+ * `googleMapsUri` or a `place_id:` deep link), and an `id` equal to the
+ * Google `providerPlaceId`.  Returning false here forces TripBuilder
+ * Explore to discard the snapshot attraction and refetch via
+ * `searchAttractionsViaConcierge(...)`, so legacy mock-shaped rows never
+ * leak through snapshot reuse.
+ */
+export function isCanonicalSnapshotAttraction(a: AttractionSearchResult): boolean {
+  if (!a) return false;
+  const id = typeof a.id === "string" ? a.id : "";
+  if (!id || id.startsWith("mock-") || id.startsWith("attr-")) return false;
+  const url = typeof a.bookingUrl === "string" ? a.bookingUrl : "";
+  if (!url) return false;
+  // Canonical: googleMapsUri or the place_id deep link emitted by the v1B adapter.
+  return url.includes("google.com/maps") || url.includes("place_id:");
+}
+
+/**
+ * Fetch verified attractions for a destination via the canonical
+ * /ai/concierge/search surface.  Replaces the legacy mock-backed
+ * `searchAttractions(...)` helper for TripBuilder Explore.  Fails closed
+ * (returns []) on any error so the UI never renders unverified data.
+ */
+export async function searchAttractionsViaConcierge(
+  tripId: string,
+  destination: string
+): Promise<AttractionSearchResult[]> {
+  const dest = destination?.trim();
+  if (!tripId || !dest) return [];
+  try {
+    const result = await callConciergeSearch(tripId, `Top attractions in ${dest}`);
+    if (!Array.isArray(result.attractions) || result.attractions.length === 0) return [];
+    return result.attractions
+      .map(mapUnifiedAttractionToResult)
+      .filter((a): a is AttractionSearchResult => a !== null);
+  } catch {
+    return [];
+  }
 }
 
 // [DEV-ONLY] Debug trace for the AI Concierge pipeline
