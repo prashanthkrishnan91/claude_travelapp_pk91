@@ -161,3 +161,23 @@ def test_round_trip_pairs_preserved_with_provider_rows():
     assert pair.outbound.origin == "JFK" and pair.outbound.destination == "CDG"
     assert pair.return_flight.origin == "CDG" and pair.return_flight.destination == "JFK"
     assert pair.total_price == 900.0
+
+
+def test_round_trip_pair_count_is_capped_and_shape_preserved():
+    class _ManyProvider:
+        def search_flights(self, req: FlightSearchRequest) -> FlightProviderResult:
+            rows = [_provider_row(i, origin=req.origin or "JFK", destination=req.destination or "CDG", price=300.0 + i) for i in range(1, 20)]
+            return FlightProviderResult(status=FlightSourceStatus.OK, rows=rows)
+
+    svc = SearchService(_empty_db())
+    with patch("app.services.flights_provider.get_flight_provider", return_value=_ManyProvider()):
+        pairs = svc.search_round_trip_flights(FlightSearchRequest(
+            origin="JFK", destination="CDG",
+            departure_date=date(2026, 6, 1),
+            return_date=date(2026, 6, 7),
+        ))
+
+    assert 1 <= len(pairs) <= 30
+    sample = pairs[0]
+    assert sample.outbound.origin == "JFK"
+    assert sample.return_flight.destination == "JFK"
