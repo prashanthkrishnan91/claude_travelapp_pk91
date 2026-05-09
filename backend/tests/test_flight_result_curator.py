@@ -56,3 +56,14 @@ def test_caps_and_stable_ordering():
     curated2, _ = curate_flight_results(rows)
     assert len(curated1) == 12
     assert [r.id for r in curated1] == [r.id for r in curated2]
+
+
+def test_empty_booking_url_not_penalized_in_quality():
+    with_url = _row(1, price=450, stops=0, duration=360, flight_number="AA100")
+    without_url = _row(2, price=450, stops=0, duration=360, flight_number="AA101").model_copy(
+        update={"booking_url": ""}
+    )
+
+    curated, _ = curate_flight_results([with_url, without_url])
+
+    assert [r.id for r in curated] == ["f1", "f2"]
