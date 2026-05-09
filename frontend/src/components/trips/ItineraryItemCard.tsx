@@ -295,20 +295,24 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           );
         })()}
 
-        {/* Hotel stay span: show check-in/out dates when available */}
+        {/* Hotel stay span: check-in/out dates + rating.  Location is shown
+            in the main location line below — don't duplicate it here. */}
         {item.itemType === "hotel" && (() => {
           const d = (item.details ?? {}) as Record<string, unknown>;
-          const checkIn  = (d.check_in_date  as string | undefined) ?? (d.checkInDate  as string | undefined);
-          const checkOut = (d.check_out_date as string | undefined) ?? (d.checkOutDate as string | undefined);
+          // Backend stores check_in / check_out (ISO date strings).
+          const checkIn  = (d.check_in  as string | undefined)
+                        ?? (d.check_in_date  as string | undefined)
+                        ?? (d.checkInDate  as string | undefined);
+          const checkOut = (d.check_out as string | undefined)
+                        ?? (d.check_out_date as string | undefined)
+                        ?? (d.checkOutDate as string | undefined);
           const rating = (d.rating as number | undefined) ?? undefined;
-          const location = (d.location as string | undefined) ?? item.location ?? undefined;
-          if (!checkIn && !checkOut && !rating && !location) return null;
+          if (!checkIn && !checkOut && !rating) return null;
           return (
             <div className="mt-0.5 flex items-center gap-1 text-[11px] text-violet-300 font-medium min-w-0">
               <Hotel className="w-3 h-3 flex-shrink-0" />
               {checkIn || checkOut ? <span className="shrink-0">Stay: {checkIn ?? "?"} → {checkOut ?? "?"}</span> : null}
-              {location ? <span className="text-slate-400 font-normal truncate" title={location}>· {location}</span> : null}
-              {rating ? <span className="text-amber-300 font-semibold">· ★ {rating.toFixed(1)}</span> : null}
+              {rating ? <span className="text-amber-300 font-semibold">{checkIn || checkOut ? " · " : ""}★ {rating.toFixed(1)}</span> : null}
             </div>
           );
         })()}

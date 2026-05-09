@@ -1787,16 +1787,31 @@ export function mapUnifiedAttractionToResult(
     ? u.description
     : (u.display?.displayWhy ?? u.primaryReason ?? "");
 
+  const category = u.display?.displayCategory || u.category || "attraction";
+
+  // Normalize ai_score to 0-100.  The concierge pipeline computes it on a
+  // ~0-8 scale (Bayesian 5-star base + category/relevance bonuses).  When
+  // rating + review data is present, use the same deterministic 0-100 formula
+  // as the snapshot-load path for consistency.  Otherwise linearly scale the
+  // raw score (max ~8) into 0-100.
+  const rawAiScore = typeof u.aiScore === "number" ? u.aiScore : undefined;
+  const aiScore: number | undefined =
+    rating != null && numReviews != null && numReviews > 0
+      ? computeExploreAttractionScore(rating, numReviews, category)
+      : rawAiScore != null && rawAiScore > 0 && rawAiScore <= 10
+        ? Math.round(Math.min(100, rawAiScore * (100 / 8.0)) * 10) / 10
+        : rawAiScore;
+
   return {
     id: providerPlaceId,
     name,
-    category: u.display?.displayCategory || u.category || "attraction",
+    category,
     description,
     location: u.neighborhood ?? "",
     address,
     rating,
     numReviews,
-    aiScore: typeof u.aiScore === "number" ? u.aiScore : undefined,
+    aiScore,
     tags: Array.isArray(u.tags) ? u.tags : [],
     bookingUrl: mapsUri,
     lat: typeof gv?.lat === "number" ? gv.lat : undefined,

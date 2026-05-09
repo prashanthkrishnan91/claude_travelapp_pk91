@@ -1,11 +1,35 @@
+import logging
 import re
+import time
 import unicodedata
+from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, TypeVar
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
+
+_T = TypeVar("_T")
+
+# Maximum wall-clock seconds the three provider searches (flights, round-trip,
+# hotels) may collectively take before we stop waiting and proceed with whatever
+# results arrived.  Keeps create-with-search responsive even when Duffel is
+# slow across many origin-destination pairs.
+_SEARCH_BUDGET_SECONDS = 18.0
+
+
+def _future_result_or_default(fut: "Future[_T]", default: _T, deadline: float) -> _T:
+    """Return fut's result, or default if it hasn't finished before deadline."""
+    remaining = deadline - time.perf_counter()
+    if remaining <= 0:
+        return default
+    try:
+        return fut.result(timeout=remaining)
+    except (FuturesTimeoutError, Exception):
+        return default
 
 from app.contracts.flights import (
     MOCK_BOOKING_HOST as _CONTRACT_MOCK_BOOKING_HOST,
@@ -468,6 +492,8 @@ def save_explore_snapshot(trip_id: UUID, payload: ExploreSnapshot, db: DB, user_
 @router.post("/create-with-search", response_model=TripWithResults, status_code=status.HTTP_201_CREATED)
 def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: CurrentUserID) -> TripWithResults:
     """Unified concierge flow: resolve airports → search flights + hotels → AI-score → create trip."""
+    t_total_start = time.perf_counter()
+
     # Step 1: Resolve airports
     origin_airports = payload.origin_airports or _resolve_city(payload.origin_city)
     dest_airports = payload.destination_airports or _resolve_city(payload.destination_city)
@@ -478,54 +504,63 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
             detail=f"Could not resolve destination city '{payload.destination_city}' to airport codes.",
         )
 
-    # Step 2: Search flights (skip gracefully if origin unknown)
+    # Steps 2/3/3b: Run flight (one-way), round-trip, and hotel searches
+    # concurrently so their wall-clock times overlap.  A shared budget deadline
+    # prevents slow Duffel responses from blocking trip creation for 40+ seconds
+    # when many origin-destination pairs are queried sequentially.
     search_svc = SearchService(db)
-    flights: List[FlightResult] = []
-    if origin_airports:
-        try:
-            flight_req = FlightSearchRequest(
-                origin_airports=origin_airports if len(origin_airports) > 1 else None,
-                origin=origin_airports[0] if len(origin_airports) == 1 else None,
-                destination_airports=dest_airports if len(dest_airports) > 1 else None,
-                destination=dest_airports[0] if len(dest_airports) == 1 else None,
-                departure_date=payload.start_date,
-                passengers=1,
-                cabin_class="economy",
-            )
-            flights = search_svc.search_flights(flight_req)
-        except Exception:
-            flights = []
 
-    # Step 3: Search round-trip flight pairs (outbound + return)
-    round_trip_pairs: List[RoundTripFlightPair] = []
+    flight_req: Optional[FlightSearchRequest] = None
+    rt_req: Optional[FlightSearchRequest] = None
     if origin_airports:
-        try:
-            rt_req = FlightSearchRequest(
-                origin_airports=origin_airports if len(origin_airports) > 1 else None,
-                origin=origin_airports[0] if len(origin_airports) == 1 else None,
-                destination_airports=dest_airports if len(dest_airports) > 1 else None,
-                destination=dest_airports[0] if len(dest_airports) == 1 else None,
-                departure_date=payload.start_date,
-                return_date=payload.end_date,
-                passengers=1,
-                cabin_class="economy",
-            )
-            round_trip_pairs = search_svc.search_round_trip_flights(rt_req)
-        except Exception:
-            round_trip_pairs = []
-
-    # Step 3b: Search hotels
-    hotels: List[HotelResult] = []
-    try:
-        hotel_req = HotelSearchRequest(
-            location=payload.destination_city,
-            check_in=payload.start_date,
-            check_out=payload.end_date,
-            guests=1,
+        flight_req = FlightSearchRequest(
+            origin_airports=origin_airports if len(origin_airports) > 1 else None,
+            origin=origin_airports[0] if len(origin_airports) == 1 else None,
+            destination_airports=dest_airports if len(dest_airports) > 1 else None,
+            destination=dest_airports[0] if len(dest_airports) == 1 else None,
+            departure_date=payload.start_date,
+            passengers=1,
+            cabin_class="economy",
         )
-        hotels = search_svc.search_hotels(hotel_req)
-    except Exception:
-        hotels = []
+        rt_req = FlightSearchRequest(
+            origin_airports=origin_airports if len(origin_airports) > 1 else None,
+            origin=origin_airports[0] if len(origin_airports) == 1 else None,
+            destination_airports=dest_airports if len(dest_airports) > 1 else None,
+            destination=dest_airports[0] if len(dest_airports) == 1 else None,
+            departure_date=payload.start_date,
+            return_date=payload.end_date,
+            passengers=1,
+            cabin_class="economy",
+        )
+    hotel_req = HotelSearchRequest(
+        location=payload.destination_city,
+        check_in=payload.start_date,
+        check_out=payload.end_date,
+        guests=1,
+    )
+
+    search_deadline = time.perf_counter() + _SEARCH_BUDGET_SECONDS
+    flights: List[FlightResult] = []
+    round_trip_pairs: List[RoundTripFlightPair] = []
+    hotels: List[HotelResult] = []
+
+    with ThreadPoolExecutor(max_workers=3) as _pool:
+        t_s = time.perf_counter()
+        f_fut = _pool.submit(search_svc.search_flights, flight_req) if flight_req else None
+        rt_fut = _pool.submit(search_svc.search_round_trip_flights, rt_req) if rt_req else None
+        h_fut = _pool.submit(search_svc.search_hotels, hotel_req)
+
+        if f_fut:
+            flights = _future_result_or_default(f_fut, [], search_deadline)
+        if rt_fut:
+            round_trip_pairs = _future_result_or_default(rt_fut, [], search_deadline)
+        hotels = _future_result_or_default(h_fut, [], search_deadline)
+
+    t_search_ms = int((time.perf_counter() - t_s) * 1000)
+    logger.info(
+        "[create_with_search.timing] phase=provider_search flights=%d rt_pairs=%d hotels=%d elapsed_ms=%d",
+        len(flights), len(round_trip_pairs), len(hotels), t_search_ms,
+    )
 
     # Step 4: AI scoring — individual scores first, then dataset-aware intelligence
     for flight in flights:
@@ -542,24 +577,17 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
     flights_sorted = sorted(flights, key=lambda f: f.ai_score or 0.0, reverse=True)
     hotels_sorted = sorted(hotels, key=lambda h: h.ai_score or 0.0, reverse=True)
 
-    # Fail-Closed UX v1: refuse to create a trip when no provider-backed flight
-    # or hotel data is available. This prevents fake/mock-derived rows (and
-    # blank itineraries when BLOCK_LEGACY_PRODUCT_MOCK is on) from being
-    # persisted as if real. Manual blank-trip creation remains via POST /trips.
+    # Fail-closed guard: refuse to persist mock-derived rows — detected via
+    # ``source == "mock"`` or any ``book.example.com`` booking URL.  This closes
+    # the persistence hole that exists when BLOCK_LEGACY_PRODUCT_MOCK is *off*
+    # and ``_mock_flights`` / ``_mock_hotels`` return non-empty rows.
     #
-    # Two cases trigger fail-closed:
-    #   (a) all results empty (provider not enabled / flag-on path), AND
-    #   (b) any non-empty result is mock-derived — detected via
-    #       ``source == "mock"`` or any ``book.example.com`` booking URL.
-    # Case (b) closes the persistence hole that exists when
-    # ``BLOCK_LEGACY_PRODUCT_MOCK`` is *off* and ``_mock_flights`` /
-    # ``_mock_hotels`` return non-empty rows: without this guard, the route
-    # would persist up to 20 fake itinerary items with fake booking URLs.
-    if (
-        not flights_sorted
-        and not hotels_sorted
-        and not round_trip_pairs
-    ) or _any_mock_derived(flights_sorted, hotels_sorted, round_trip_pairs):
+    # Empty results (provider unavailable / timed out) are now allowed: the trip
+    # is created without pre-loaded itinerary items so the user can still access
+    # and manually build their trip.  This replaces the previous all-empty → 503
+    # behaviour which caused a perceived 40-second hang when Duffel searched
+    # many origin-destination pairs sequentially.
+    if _any_mock_derived(flights_sorted, hotels_sorted, round_trip_pairs):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
@@ -572,7 +600,8 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
             },
         )
 
-    # Step 5: Create trip
+    # Step 5: Create trip (always, even when provider results are empty)
+    t_trip_start = time.perf_counter()
     title = payload.title or f"{payload.destination_city} Trip"
     trip = TripsService(db).create_trip(
         TripCreate(
@@ -588,6 +617,10 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
     itinerary_svc = ItineraryService(db)
     if trip.start_date and trip.end_date:
         itinerary_svc.ensure_trip_days(trip.id, trip.start_date, trip.end_date, user_id)
+    logger.info(
+        "[create_with_search.timing] phase=trip_create elapsed_ms=%d",
+        int((time.perf_counter() - t_trip_start) * 1000),
+    )
 
     # Step 6: Persist flight + hotel candidates as trip-level itinerary items
     for idx, flight in enumerate(flights_sorted[:10]):
@@ -726,6 +759,12 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
             ), user_id)
         except Exception:
             pass
+
+    t_total_ms = int((time.perf_counter() - t_total_start) * 1000)
+    logger.info(
+        "[create_with_search.timing] phase=total flights=%d hotels=%d rt_pairs=%d elapsed_ms=%d",
+        len(flights_sorted), len(hotels_sorted), len(round_trip_pairs), t_total_ms,
+    )
 
     return TripWithResults(
         **trip.model_dump(),
