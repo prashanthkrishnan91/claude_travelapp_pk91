@@ -185,16 +185,12 @@ def test_default_get_flight_provider_is_null_without_env(monkeypatch):
     assert isinstance(get_flight_provider(), NullFlightProvider)
 
 
-def test_get_flight_provider_returns_amadeus_when_configured(monkeypatch):
+def test_get_flight_provider_does_not_select_amadeus_by_default(monkeypatch):
     monkeypatch.setenv("AMADEUS_FLIGHTS_ENABLED", "true")
     monkeypatch.setenv("AMADEUS_CLIENT_ID", "abc")
     monkeypatch.setenv("AMADEUS_CLIENT_SECRET", "def")
     reset_flight_provider_cache()
-    provider = get_flight_provider()
-    assert isinstance(provider, AmadeusFlightProvider)
-    # Memoisation: same instance on repeat
-    assert get_flight_provider() is provider
-    reset_flight_provider_cache()
+    assert isinstance(get_flight_provider(), NullFlightProvider)
 
 
 # ---------------------------------------------------------------------------

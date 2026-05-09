@@ -28,14 +28,14 @@ from app.services.flights_provider import FlightProviderResult
 from app.services.search import SearchService
 
 
-def _amadeus_row(idx: int = 1, *, price: float = 499.0,
+def _provider_row(idx: int = 1, *, price: float = 499.0,
                   origin: str = "JFK", destination: str = "CDG") -> FlightResult:
     return FlightResult(
         id=f"amadeus-{idx}",
         price=price,
         location=f"{origin}→{destination}",
         booking_url="",
-        source="amadeus",
+        source="duffel",
         booking_options=[],
         airline="American Airlines",
         flight_number=f"AA{100 + idx}",
@@ -79,7 +79,7 @@ class _StaticProvider:
 
 def test_search_flights_uses_provider_and_does_not_call_mock():
     provider = _StaticProvider(
-        FlightProviderResult(status=FlightSourceStatus.OK, rows=[_amadeus_row(1)])
+        FlightProviderResult(status=FlightSourceStatus.OK, rows=[_provider_row(1)])
     )
     svc = SearchService(_empty_db())
     with patch.object(search_service, "_mock_flights",
@@ -92,7 +92,7 @@ def test_search_flights_uses_provider_and_does_not_call_mock():
             ))
         assert mock_call.called is False
     assert len(results) == 1
-    assert results[0].source == "amadeus"
+    assert results[0].source == "duffel"
     assert len(provider.calls) == 1
 
 
@@ -117,9 +117,9 @@ def test_search_flights_non_ok_status_returns_zero_rows(status, reason):
 
 
 def test_default_null_provider_results_in_zero_rows(monkeypatch):
-    monkeypatch.delenv("AMADEUS_FLIGHTS_ENABLED", raising=False)
-    monkeypatch.delenv("AMADEUS_CLIENT_ID", raising=False)
-    monkeypatch.delenv("AMADEUS_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("DUFFEL_FLIGHTS_ENABLED", raising=False)
+    monkeypatch.delenv("DUFFEL_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("DUFFEL_BASE_URL", raising=False)
     from app.services.flights_provider import reset_flight_provider_cache
     reset_flight_provider_cache()
     svc = SearchService(_empty_db())
@@ -133,8 +133,8 @@ def test_default_null_provider_results_in_zero_rows(monkeypatch):
 
 
 def test_round_trip_pairs_preserved_with_provider_rows():
-    outbound = _amadeus_row(1, origin="JFK", destination="CDG", price=500.0)
-    ret = _amadeus_row(2, origin="CDG", destination="JFK", price=400.0)
+    outbound = _provider_row(1, origin="JFK", destination="CDG", price=500.0)
+    ret = _provider_row(2, origin="CDG", destination="JFK", price=400.0)
 
     class _DirectionalProvider:
         def search_flights(self, req: FlightSearchRequest) -> FlightProviderResult:
