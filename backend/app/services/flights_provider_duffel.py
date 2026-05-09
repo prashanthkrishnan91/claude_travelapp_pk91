@@ -10,7 +10,11 @@ try:
 except ImportError:  # pragma: no cover
     httpx = None  # type: ignore[assignment]
 
-from app.contracts.flights import FlightContractViolation, FlightSourceStatus, assert_persistable_flight
+from app.contracts.flights import (
+    FlightContractViolation,
+    FlightSourceStatus,
+    assert_persistable_flight,
+)
 from app.models.search import FlightResult, FlightSearchRequest
 from app.services.flights_provider import FlightProviderResult
 
@@ -18,6 +22,7 @@ logger = logging.getLogger(__name__)
 _DEFAULT_BASE_URL = "https://api.duffel.com"
 _OFFERS_PATH = "/air/offer_requests"
 _HTTP_TIMEOUT_SECONDS = 8.0
+_SUPPLIER_TIMEOUT_MS = 6000
 _TRUTHY = {"1", "true", "yes", "on"}
 
 
@@ -26,7 +31,13 @@ def _truthy(value: Optional[str]) -> bool:
 
 
 class DuffelFlightProvider:
-    def __init__(self, *, access_token: str, base_url: str = _DEFAULT_BASE_URL, http_client: Optional["httpx.Client"] = None) -> None:
+    def __init__(
+        self,
+        *,
+        access_token: str,
+        base_url: str = _DEFAULT_BASE_URL,
+        http_client: Optional["httpx.Client"] = None,
+    ) -> None:
         if not access_token:
             raise ValueError("DuffelFlightProvider requires non-empty access token")
         self._access_token = access_token
@@ -44,12 +55,25 @@ class DuffelFlightProvider:
         origin = (req.origin or "").upper()
         destination = (req.destination or "").upper()
         if not origin or not destination:
-            return FlightProviderResult(status=FlightSourceStatus.EMPTY, rows=[], reason="missing origin or destination IATA")
+            return FlightProviderResult(
+                status=FlightSourceStatus.EMPTY,
+                rows=[],
+                reason="missing origin or destination IATA",
+            )
 
         payload: Dict[str, Any] = {
             "data": {
-                "slices": [{"origin": origin, "destination": destination, "departure_date": req.departure_date.isoformat()}],
-                "passengers": [{"type": "adult"} for _ in range(max(int(req.passengers or 1), 1))],
+                "slices": [
+                    {
+                        "origin": origin,
+                        "destination": destination,
+                        "departure_date": req.departure_date.isoformat(),
+                    }
+                ],
+                "passengers": [
+                    {"type": "adult"}
+                    for _ in range(max(int(req.passengers or 1), 1))
+                ],
                 "cabin_class": req.cabin_class or "economy",
             }
         }
@@ -57,6 +81,11 @@ class DuffelFlightProvider:
         try:
             resp = self._get_http().post(
                 f"{self._base_url}{_OFFERS_PATH}",
+                params={
+                    "return_offers": "true",
+                    "view": "offers",
+                    "supplier_timeout": str(_SUPPLIER_TIMEOUT_MS),
+                },
                 json=payload,
                 headers={
                     "Authorization": f"Bearer {self._access_token}",
@@ -66,22 +95,44 @@ class DuffelFlightProvider:
             )
         except Exception as exc:
             logger.warning("[duffel.offers_request_error] %s", exc)
-            return FlightProviderResult(status=FlightSourceStatus.ERROR, rows=[], reason=f"transport error: {exc}")
+            return FlightProviderResult(
+                status=FlightSourceStatus.ERROR,
+                rows=[],
+                reason=f"transport error: {exc}",
+            )
 
-        if resp.status_code != 200:
-            logger.warning("[duffel.offers_status] status=%d body=%s", resp.status_code, (resp.text or "")[:200])
-            return FlightProviderResult(status=FlightSourceStatus.ERROR, rows=[], reason=f"duffel http {resp.status_code}")
+        if resp.status_code < 200 or resp.status_code >= 300:
+            logger.warning("[duffel.offers_status] status=%d", resp.status_code)
+            return FlightProviderResult(
+                status=FlightSourceStatus.ERROR,
+                rows=[],
+                reason=f"duffel http {resp.status_code}",
+            )
 
         try:
             outer = resp.json() or {}
         except Exception as exc:
             logger.warning("[duffel.offers_parse_error] %s", exc)
-            return FlightProviderResult(status=FlightSourceStatus.ERROR, rows=[], reason=f"parse error: {exc}")
+            return FlightProviderResult(
+                status=FlightSourceStatus.ERROR,
+                rows=[],
+                reason=f"parse error: {exc}",
+            )
 
         data = outer.get("data") or {}
         offers = data.get("offers") or []
+        if not isinstance(offers, list):
+            return FlightProviderResult(
+                status=FlightSourceStatus.ERROR,
+                rows=[],
+                reason="duffel response missing offers list",
+            )
         if not offers:
-            return FlightProviderResult(status=FlightSourceStatus.EMPTY, rows=[], reason="duffel returned zero offers")
+            return FlightProviderResult(
+                status=FlightSourceStatus.EMPTY,
+                rows=[],
+                reason="duffel returned zero offers",
+            )
 
         rows: List[FlightResult] = []
         for offer in offers:
@@ -95,12 +146,17 @@ class DuffelFlightProvider:
             rows.append(row)
 
         if not rows:
-            return FlightProviderResult(status=FlightSourceStatus.EMPTY, rows=[], reason="all offers failed contract")
+            return FlightProviderResult(
+                status=FlightSourceStatus.EMPTY,
+                rows=[],
+                reason="all offers failed contract",
+            )
         return FlightProviderResult(status=FlightSourceStatus.OK, rows=rows)
 
 
 def _parse_iso_datetime(value: str):
     from datetime import datetime
+
     if not value:
         return None
     try:
@@ -125,7 +181,10 @@ def _parse_iso_duration_minutes(value: Optional[str]) -> int:
     return (h * 60) + m
 
 
-def _map_offer_to_outbound(offer: Dict[str, Any], cabin_class: str) -> Optional[FlightResult]:
+def _map_offer_to_outbound(
+    offer: Dict[str, Any],
+    cabin_class: str,
+) -> Optional[FlightResult]:
     slices = offer.get("slices") or []
     if not slices:
         return None
@@ -141,15 +200,22 @@ def _map_offer_to_outbound(offer: Dict[str, Any], cabin_class: str) -> Optional[
     if not (origin and dest and dep_at and arr_at):
         return None
 
+    operating = (first.get("operating_carrier") or {})
     marketing = (first.get("marketing_carrier") or {})
-    airline = marketing.get("name") or marketing.get("iata_code") or ""
+    airline = (
+        operating.get("name")
+        or marketing.get("name")
+        or operating.get("iata_code")
+        or marketing.get("iata_code")
+        or ""
+    )
     carrier_code = (marketing.get("iata_code") or "").upper()
     num = str(first.get("marketing_carrier_flight_number") or "")
     flight_number = f"{carrier_code}{num}" if carrier_code else num
     if not airline or not flight_number:
         return None
 
-    amount = (offer.get("total_amount") or "")
+    amount = offer.get("total_amount") or ""
     try:
         price = float(amount)
     except Exception:
@@ -180,8 +246,13 @@ def duffel_enabled_from_env(env: Optional[Dict[str, str]] = None) -> bool:
     return _truthy(env.get("DUFFEL_FLIGHTS_ENABLED")) and bool(env.get("DUFFEL_ACCESS_TOKEN"))
 
 
-def build_duffel_provider_from_env(env: Optional[Dict[str, str]] = None) -> Optional[DuffelFlightProvider]:
+def build_duffel_provider_from_env(
+    env: Optional[Dict[str, str]] = None,
+) -> Optional[DuffelFlightProvider]:
     env = env if env is not None else os.environ  # type: ignore[assignment]
     if not duffel_enabled_from_env(env):
         return None
-    return DuffelFlightProvider(access_token=env.get("DUFFEL_ACCESS_TOKEN") or "", base_url=env.get("DUFFEL_BASE_URL") or _DEFAULT_BASE_URL)
+    return DuffelFlightProvider(
+        access_token=env.get("DUFFEL_ACCESS_TOKEN") or "",
+        base_url=env.get("DUFFEL_BASE_URL") or _DEFAULT_BASE_URL,
+    )
