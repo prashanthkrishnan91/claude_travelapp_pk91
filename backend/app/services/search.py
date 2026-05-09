@@ -882,6 +882,25 @@ class SearchService:
         return pairs
 
     def search_hotels(self, req: HotelSearchRequest) -> List[HotelResult]:
+        """Provider-backed lodging discovery (Hotels v1).
+
+        Replaces the legacy ``_mock_hotels`` live path with the
+        ``HotelProvider`` seam (Google Places lodging discovery).  The
+        ``_mock_hotels`` helper is intentionally NOT called from this
+        method — the live route fails closed (zero rows) when the
+        provider is unconfigured / errored / empty.
+
+        Cache rows that fail the Hotels Product Contract v1 (legacy
+        mock-attributed entries left behind by the previous live path)
+        are discarded so fabricated booking URLs cannot leak from the
+        Supabase cache after the v1 wiring lands.
+        """
+        from app.contracts.hotels import (
+            HotelSourceStatus,
+            is_persistable_hotel,
+        )
+        from app.services.hotels_provider import get_hotel_provider
+
         query = req.model_dump(mode="json")
         key = _cache_key("hotels", query)
         cached = self._get_cache(key)
@@ -892,12 +911,34 @@ class SearchService:
             )
             cached = None
         if cached:
-            return [HotelResult(**item) for item in cached]
+            rows: List[HotelResult] = []
+            for item in cached:
+                try:
+                    row = HotelResult(**item)
+                except Exception:
+                    continue
+                if is_persistable_hotel(row):
+                    rows.append(row)
+            if rows:
+                return rows
 
-        results = _mock_hotels(req)
-        if not _legacy_product_mock_blocked():
-            self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
-        return results
+        provider = get_hotel_provider()
+        try:
+            result = provider.search_hotels(req)
+        except Exception as exc:
+            logger.warning("[hotels_provider.unexpected_exception] %s", exc)
+            return []
+
+        if result.status is not HotelSourceStatus.OK or not result.rows:
+            return []
+
+        self._set_cache(
+            key,
+            source="google_places",
+            query=query,
+            results=[r.model_dump(mode="json") for r in result.rows],
+        )
+        return list(result.rows)
 
     def search_restaurants(self, req: RestaurantSearchRequest) -> List[RestaurantResult]:
         query = req.model_dump(mode="json")

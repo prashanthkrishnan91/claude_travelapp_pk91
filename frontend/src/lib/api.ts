@@ -616,16 +616,25 @@ interface RawHotelResult {
   proximityLabel?: string;
   areaLabel?: string;
   distanceToBestArea?: number;
+  // Hotels Product Contract v1 surface markers.
+  source?: string;
+  offerKind?: string; // "discovery" | "bookable_offer"
+  hasRealRate?: boolean;
 }
 
 function mapHotelToResult(h: RawHotelResult): ResearchResult {
+  // Discovery-only rows (e.g. Google Places lodging) carry no real
+  // nightly rate.  Suppress fake ``$0/night`` strings so the UI never
+  // shows fabricated pricing copy.
+  const hasRealRate = h.hasRealRate === true;
+  const showsRate = hasRealRate && typeof h.pricePerNight === "number" && h.pricePerNight > 0;
   return {
     id: h.id,
     category: "hotel" as ResearchCategory,
     title: h.name,
     location: h.location,
     duration: "Per night",
-    priceDisplay: h.pricePerNight ? `$${h.pricePerNight}/night` : undefined,
+    priceDisplay: showsRate ? `$${h.pricePerNight}/night` : undefined,
     rating: h.rating,
     tags: (h.amenities ?? []).slice(0, 3),
     bookingUrl: h.bookingUrl,
@@ -640,6 +649,9 @@ function mapHotelToResult(h: RawHotelResult): ResearchResult {
       proximityLabel: h.proximityLabel,
       areaLabel: h.areaLabel,
       distanceToBestArea: h.distanceToBestArea,
+      source: h.source,
+      offerKind: h.offerKind,
+      hasRealRate,
     },
   };
 }

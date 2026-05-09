@@ -1,6 +1,52 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-09) — Provider-backed Flights v1 (Level 2)
+## Last change (2026-05-09) — Provider-backed Hotels v1 (Level 2)
+
+**Status: PR-ready (branch: `claude/hotels-prod-integration-VIFiI`)** — First real-data lodging provider (Google Places lodging discovery) plugged behind a typed `HotelProvider` seam mirroring the PR #297/#298 flights pattern. Replaces the user-facing `_mock_hotels` live path with a provider-backed/fail-closed lodging discovery path while preserving add-to-trip lodging capability.
+
+### Important product distinction
+
+Google Places returns operational lodging entities (name, address, rating, Google Maps URI) but **not** true nightly rates / availability / bookable inventory. Hotels v1 ships **lodging discovery only** (`HotelOfferKind.DISCOVERY`); a future Hotels v2 (Booking.com Demand API or Amadeus Hotels) will add a true bookable-rate adapter once partner credentials are confirmed. Discovery rows emit `price_per_night = 0.0`, no `stars`, no `amenities` — this PR refuses to fabricate them. `OptimizeTripModal` was intentionally not changed: it remains fail-closed for full flight+hotel package optimization until a true hotel rate provider exists.
+
+### Contract summary
+
+- **New module**: `backend/app/contracts/hotels.py` (transport-agnostic; no FastAPI/Supabase imports). Defines `HotelSource`, `HotelOfferKind{DISCOVERY, BOOKABLE_OFFER}`, `HotelSourceStatus{OK, EMPTY, UNAVAILABLE, ERROR}`, `ALLOWED_SOURCE_VALUES`, `DISALLOWED_SOURCES`, `FABRICATED_BOOKING_HOSTS`, `MOCK_BOOKING_HOST`, `is_persistable_hotel`, `assert_persistable_hotel`, `is_mock_derived_hotel`, `HotelContractViolation`, `HotelProviderUnavailable`. Mirrors `app.contracts.flights` so callers reason consistently across surfaces.
+- **Allowed sources**: `google_places`, `booking_com`, `amadeus_hotels`, `expedia`, `hotels_com`, `provider_backed`, `user_entered`, `manual`.
+- **Disallowed**: `mock|demo|fixture|sample|placeholder` plus fabricated hosts `book.example.com|example.com|example.org`.
+- **Required persistable fields**: `source, name, location, check_in, check_out, nights`. `booking_url` MUST NOT be a fabricated host.
+
+### Provider seam summary
+
+- **New module**: `backend/app/services/hotels_provider.py` — `HotelProviderResult` (post-init enforces invariants: OK has ≥1 contract-passing row; non-OK carries zero rows), `HotelProvider` Protocol, `NullHotelProvider`, `get_hotel_provider()` env-gated registry, `reset_hotel_provider_cache()`.
+- **New module**: `backend/app/services/hotels_provider_google_places.py` — `GooglePlacesHotelProvider` (HTTP-only, no SQL/LLM, no fabricated rows on failure). Backend-only Google Places (New) Text Search restricted to lodging via `includedType=lodging`. Field mask covers id, displayName, formattedAddress, location, businessStatus, types, primaryType, rating, userRatingCount, googleMapsUri, priceLevel. Filters non-`OPERATIONAL` and non-lodging results. Cap: 8 results. Timeout: 6s. All non-OK paths return typed `HotelProviderResult` with zero rows.
+- **Env vars (names only, no secrets)**: `GOOGLE_PLACES_API_KEY` (reused from canonical restaurants surface), optional `GOOGLE_HOTELS_ENABLED` (defaults to enabled when key is present; set `0`/`false` to disable). Backend-only — never exposed to frontend.
+- **Mapping**: `source="google_places"`, `id="gp-{place_id}"`, `name`/`location`/`rating` from Places, `booking_url = googleMapsUri` (falls back to deterministic `https://www.google.com/maps/place/?q=place_id:...`), `lat`/`lng` from `places.location`, `check_in`/`check_out`/`nights` from request dates, `price_per_night=0.0`, `price=None`, `stars=None`, `amenities=[]`. **No invented nightly rates, stars, amenities, or fabricated booking URLs.**
+- **Live wiring**: `SearchService.search_hotels` no longer calls `_mock_hotels`; it consults the Supabase `research_cache`, applies the Hotels Product Contract v1 filter to cached rows (mock-attributed legacy entries are dropped), then delegates to `get_hotel_provider().search_hotels(...)` and only emits rows when status is `OK`. Cache is written under `source="google_places"` only on success.
+- **`_mock_hotels` decision**: kept quarantined; no live route calls it. Production-block path (`BLOCK_LEGACY_PRODUCT_MOCK`) is unchanged. The `_mock_hotels` direct-test harness in `test_product_surface_pruning_v1a.py` still passes. Two pre-existing tests that asserted legacy mock cache leakage were updated to assert the new contract-filtered behavior.
+- **Frontend / OptimizeTripModal**: no UI redesign. `OptimizeTripModal` remains fail-closed for full flight+hotel package optimization since Google Places provides no nightly rates — pretending to optimize would mislead the user. Add-to-trip lodging continues to work end-to-end with provider-backed discovery rows.
+
+### Tests added
+
+- `backend/tests/test_hotels_product_contract_v1.py` (13 tests) — partition between provider-backed/user-entered sources, disallowed source vocabulary, fabricated host vocabulary, discovery vs bookable kind partition, persistable predicate happy path + every rejection code, mock-derived predicate, typed violation, `HotelProviderUnavailable` status invariants.
+- `backend/tests/test_google_places_hotel_provider.py` (20 tests) — env gating (key required, default-on when flag unset, explicit disable), `get_hotel_provider` Null fallback + Google Places selection, happy-path mapping → persistable rows, lodging query + field mask, non-operational / non-lodging skip, empty / all-skipped → `EMPTY`, non-200 / transport / parse errors → `ERROR`, whitespace-location → `EMPTY`, request dates drive check_in/out/nights, place_id URL fallback, `HotelProviderResult` post-init invariants (mock row rejected, OK with empty rows rejected, non-OK with rows rejected).
+- `backend/tests/test_search_hotels_provider_wiring.py` (5 tests) — `SearchService.search_hotels` does not call `_mock_hotels`; uses provider seam; UNAVAILABLE/ERROR/EMPTY → zero rows; default null provider yields zero rows.
+
+### Tests run / results
+
+- `pytest tests/test_hotels_product_contract_v1.py tests/test_google_places_hotel_provider.py tests/test_search_hotels_provider_wiring.py tests/test_product_surface_pruning_v1a.py tests/test_create_with_search_fail_closed.py tests/test_search_flights_provider_wiring.py tests/test_flights_product_contract_v1.py tests/test_amadeus_flight_provider.py` → **151/151 pass**.
+- Full backend suite: `pytest tests/` → 2618 pass, 5 baseline-unchanged failures (concierge observability, live_research frontend assertion, set_level_writer telemetry — pre-existing on `main`, unrelated to this PR).
+
+### Out of scope
+
+- Booking.com Demand API, Amadeus Hotels, Expedia, or any paid OTA integration (Hotels v2 — needs partner credentials).
+- Nightly availability, room selection, cancellation policy, payment, checkout.
+- Broad UI redesign / OptimizeTripModal rewrite.
+
+### Supabase SQL: No. Providers added: Yes (Google Places lodging discovery — reuses existing `GOOGLE_PLACES_API_KEY`). LLM calls added: No. UI redesign: No.
+
+---
+
+## 2026-05-09 — Provider-backed Flights v1 (Level 2)
 
 **Status: PR-ready (branch: `claude/hotels-prod-integration-EcEHo`)** — First real-data flight provider (Amadeus Flight Offers Search) plugged into the PR #297 `FlightProvider` seam. Replaces the user-facing mock-backed flight search path with a provider-backed/fail-closed path while preserving round-trip outbound→Day 1, return→final day add-to-trip behavior.
 
