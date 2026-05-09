@@ -118,6 +118,24 @@ class HotelResult(SearchResult):
     stars: Optional[float] = Field(None, ge=1, le=5)
     amenities: List[str] = Field(default_factory=list)
     price_per_night: float
+    # Hotels Product Contract v1 — discovery vs bookable rate marker.
+    # ``discovery`` rows carry no true nightly rate / availability and
+    # MUST NOT be used as priced inputs to package optimizers.
+    # ``bookable_offer`` rows carry a verified rate.  Optional so legacy
+    # rows / user-entered rows do not break; consumers that need the
+    # distinction must check ``has_real_rate`` explicitly.
+    offer_kind: Optional[str] = Field(
+        None,
+        description="Hotels Product Contract v1 offer kind: discovery | bookable_offer",
+    )
+    has_real_rate: bool = Field(
+        False,
+        description=(
+            "True iff the row carries a verified nightly rate from a "
+            "rates provider.  Discovery-only rows (e.g. Google Places "
+            "lodging) MUST set this to False."
+        ),
+    )
     ai_score: Optional[float] = Field(None, description="AI-computed value score 0–100")
     recommendation_tag: str = Field("Consider", description="Value recommendation tag")
     tags: List[str] = Field(default_factory=list, description="Multi-tag classification e.g. Best Value, Luxury Pick, Budget Friendly")

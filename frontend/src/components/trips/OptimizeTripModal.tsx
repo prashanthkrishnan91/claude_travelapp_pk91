@@ -59,6 +59,25 @@ function anyMockDerivedHotels(hotels: ResearchResult[]): boolean {
   return hotels.some((h) => hasMockBookingUrl(h.bookingUrl, h.bookingOptions));
 }
 
+// Hotels Product Contract v1 — a hotel row carries a true nightly rate
+// when ``metadata.hasRealRate === true`` AND ``metadata.pricePerNight``
+// is a positive number.  Discovery-only rows (e.g. Google Places
+// lodging) MUST be excluded from priced package optimization, otherwise
+// ``optimizeTrip()`` would build packages with $0/night hotels.
+export function hotelHasRealRate(hotel: ResearchResult): boolean {
+  const meta = (hotel.metadata ?? {}) as Record<string, unknown>;
+  const ppn = meta.pricePerNight;
+  return (
+    meta.hasRealRate === true &&
+    typeof ppn === "number" &&
+    ppn > 0
+  );
+}
+
+export function anyHotelHasRealRate(hotels: ResearchResult[]): boolean {
+  return hotels.some(hotelHasRealRate);
+}
+
 interface Props {
   trip: Trip;
   itineraryDays: ItineraryDay[];
@@ -173,6 +192,22 @@ export function OptimizeTripModal({ trip, itineraryDays, onClose, onPlanSelected
         return;
       }
 
+      // Hotels Product Contract v1: refuse to call ``optimizeTrip`` with
+      // discovery-only hotel rows.  Google Places lodging discovery has
+      // no true nightly rate, so a priced package built from those rows
+      // would show $0/night hotels — misleading.  Wait for Hotels v2
+      // (Booking.com Demand API or Amadeus Hotels) before priced
+      // package optimization is honest.
+      if (!anyHotelHasRealRate(rawHotels)) {
+        setPhase("provider_unavailable");
+        return;
+      }
+
+      // Drop any discovery-only rows from the optimizer input so a
+      // mixed batch (some priced, some discovery) cannot mix $0/night
+      // entries into the ranked packages.
+      const pricedHotels = rawHotels.filter(hotelHasRealRate);
+
       const flights: OptimizeFlightInput[] = rawFlights.slice(0, 10).map((f) => ({
         id: f.id,
         airline: f.airline,
@@ -189,7 +224,7 @@ export function OptimizeTripModal({ trip, itineraryDays, onClose, onPlanSelected
         explanation: f.explanation ?? "",
       }));
 
-      const hotels: OptimizeHotelInput[] = rawHotels.slice(0, 10).map((h) => {
+      const hotels: OptimizeHotelInput[] = pricedHotels.slice(0, 10).map((h) => {
         const meta = (h.metadata ?? {}) as Record<string, unknown>;
         const ppn = (meta.pricePerNight as number) ?? 0;
         return {

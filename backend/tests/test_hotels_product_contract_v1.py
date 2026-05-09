@@ -135,6 +135,17 @@ def test_assert_raises_typed_violation():
     assert exc.value.failure.code == "disallowed_source"
 
 
+def test_default_has_real_rate_is_false():
+    """``HotelResult.has_real_rate`` must default to ``False`` so any
+    legacy / partially-populated row is treated as discovery-only.  A
+    naive default of ``True`` would silently re-open the $0/night
+    package optimization hole when a future adapter forgets to set the
+    field explicitly."""
+    h = _hotel()
+    assert h.has_real_rate is False
+    assert h.offer_kind is None
+
+
 def test_provider_unavailable_must_carry_unavailable_or_error():
     HotelProviderUnavailable(status=HotelSourceStatus.UNAVAILABLE, reason="x")
     HotelProviderUnavailable(status=HotelSourceStatus.ERROR, reason="x")

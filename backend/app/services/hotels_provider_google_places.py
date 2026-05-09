@@ -303,6 +303,12 @@ def _map_place_to_hotel(
             stars=None,
             amenities=[],
             price_per_night=0.0,
+            # Lodging discovery only — Google Places does not return a
+            # true nightly rate.  ``has_real_rate=False`` is the contract
+            # marker the frontend uses to refuse priced package
+            # optimization on discovery-only rows.
+            offer_kind="discovery",
+            has_real_rate=False,
             ai_score=None,
             recommendation_tag="Lodging Discovery",
             tags=[],

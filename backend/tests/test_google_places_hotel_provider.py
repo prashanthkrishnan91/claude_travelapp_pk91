@@ -150,6 +150,20 @@ def test_happy_path_emits_persistable_rows():
         assert row.amenities == []  # no fabricated amenities
 
 
+def test_happy_path_marks_rows_as_discovery_only():
+    """Every Google Places lodging row MUST carry the
+    ``offer_kind="discovery"`` and ``has_real_rate=False`` markers so
+    the frontend can refuse to use them as priced package inputs."""
+    http = _FakeHttp()
+    http.responses.append(_FakeResponse(200, {"places": [_operational_lodging(1)]}))
+    provider = GooglePlacesHotelProvider(api_key="k", http_client=http)
+    out = provider.search_hotels(_req())
+    assert out.status is HotelSourceStatus.OK
+    row = out.rows[0]
+    assert row.offer_kind == "discovery"
+    assert row.has_real_rate is False
+
+
 def test_request_uses_lodging_query_and_field_mask():
     http = _FakeHttp()
     http.responses.append(_FakeResponse(200, {"places": [_operational_lodging(1)]}))
