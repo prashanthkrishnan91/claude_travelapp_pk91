@@ -636,6 +636,12 @@ def test_cached_legacy_mock_hotel_is_suppressed_when_flag_on(block_flag_on, capl
 
 
 def test_cached_legacy_mock_flight_is_suppressed_when_flag_on(block_flag_on, caplog):
+    """Flights v1 wired ``SearchService.search_flights`` to the
+    ``FlightProvider`` seam, which never consults ``research_cache``.  The
+    legacy cache-block path therefore no longer fires for flights — we
+    instead rely on the provider returning ``UNAVAILABLE`` (zero rows) by
+    default.  Keep the empty-output assertion so cached mock rows still
+    cannot leak under the operator flag."""
     caplog.set_level(logging.WARNING)
     db = _FakeSupabase(cached_rows=[_mock_flight_cache_row("mock")])
     svc = search_service.SearchService(db)
@@ -644,11 +650,6 @@ def test_cached_legacy_mock_flight_is_suppressed_when_flag_on(block_flag_on, cap
     )
     assert out == [], (
         "Cached mock flights must not leak under BLOCK_LEGACY_PRODUCT_MOCK"
-    )
-    assert any(
-        "[legacy_product_mock.cache_blocked]" in rec.getMessage()
-        and "namespace=flights" in rec.getMessage()
-        for rec in caplog.records
     )
 
 

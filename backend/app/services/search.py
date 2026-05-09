@@ -786,39 +786,23 @@ class SearchService:
     # ------------------------------------------------------------------
 
     def search_flights(self, req: FlightSearchRequest) -> List[FlightResult]:
+        """Provider-backed flight search (Flights v1).
+
+        Replaces the legacy ``_mock_flights`` live path with the
+        ``FlightProvider`` seam. ``_mock_flights`` is intentionally NOT
+        called from this method — the live route fails closed (zero rows)
+        when the provider is unconfigured / errored / empty.
+        """
+        from app.contracts.flights import FlightSourceStatus
+        from app.services.flights_provider import get_flight_provider
+
         origins = req.all_origins
         destinations = req.all_destinations
 
         if not origins or not destinations:
             return []
 
-        if len(origins) == 1 and len(destinations) == 1:
-            # Fast path: single airport pair with cache
-            sub_req = FlightSearchRequest(
-                origin=origins[0],
-                destination=destinations[0],
-                departure_date=req.departure_date,
-                return_date=req.return_date,
-                passengers=req.passengers,
-                cabin_class=req.cabin_class,
-            )
-            query = sub_req.model_dump(mode="json")
-            key = _cache_key("flights", query)
-            cached = self._get_cache(key)
-            if cached and _suppress_legacy_mock_cache("flights", cached):
-                logger.warning(
-                    "[legacy_product_mock.cache_blocked] namespace=flights cached_rows=%d — discarding suspect cache",
-                    len(cached),
-                )
-                cached = None
-            if cached:
-                return [FlightResult(**item) for item in cached]
-            results = _mock_flights(sub_req)
-            if not _legacy_product_mock_blocked():
-                self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
-            return results
-
-        # Multi-airport: cartesian product of all origin × destination pairs
+        provider = get_flight_provider()
         all_results: List[FlightResult] = []
         for origin in origins:
             for destination in destinations:
@@ -830,24 +814,20 @@ class SearchService:
                     passengers=req.passengers,
                     cabin_class=req.cabin_class,
                 )
-                query = sub_req.model_dump(mode="json")
-                key = _cache_key("flights", query)
-                cached = self._get_cache(key)
-                if cached and _suppress_legacy_mock_cache("flights", cached):
+                try:
+                    result = provider.search_flights(sub_req)
+                except Exception as exc:
                     logger.warning(
-                        "[legacy_product_mock.cache_blocked] namespace=flights cached_rows=%d — discarding suspect cache",
-                        len(cached),
+                        "[flights_provider.unexpected_exception] %s", exc,
                     )
-                    cached = None
-                if cached:
-                    all_results.extend([FlightResult(**item) for item in cached])
-                else:
-                    results = _mock_flights(sub_req)
-                    if not _legacy_product_mock_blocked():
-                        self._set_cache(key, source="mock", query=query, results=[r.model_dump(mode="json") for r in results])
-                    all_results.extend(results)
+                    continue
+                if result.status is FlightSourceStatus.OK and result.rows:
+                    all_results.extend(result.rows)
 
-        # Deduplicate by (airline, rounded price, duration)
+        if not all_results:
+            return []
+
+        # Deduplicate by (airline, rounded price, duration, origin, destination)
         seen: set = set()
         deduped: List[FlightResult] = []
         for r in all_results:
@@ -856,7 +836,6 @@ class SearchService:
                 seen.add(dedup_key)
                 deduped.append(r)
 
-        # Sort by price asc, then cpp desc
         deduped.sort(key=lambda r: (r.price or 0, -(r.cpp or 0)))
         return deduped
 
