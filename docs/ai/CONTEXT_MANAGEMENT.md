@@ -23,6 +23,7 @@ Use this to avoid bloated Claude chats and degraded adherence.
 - Further work would belong to a new task or phase.
 
 ## Compacting rule
+
 If compaction is needed, preserve only:
 
 - current repo/branch/PR
@@ -34,3 +35,10 @@ If compaction is needed, preserve only:
 - next required action
 
 Do not preserve long implementation narration unless needed for review.
+
+## OS v3 self-learning notes
+
+- If a chat has produced a PR and a workflow miss is identified, record the retrospective in `docs/ai/MISS_LEDGER.md` before starting a new chat.
+- Do not keep adding process fixes to a bloated implementation chat.
+- For workflow upgrades that touch many files, use Claude/Sonnet to batch one branch and one PR. Do not use file-by-file connector edits.
+- ChatGPT GitHub connector should be reserved for tiny/surgical edits, not bulk workflow/docs updates.

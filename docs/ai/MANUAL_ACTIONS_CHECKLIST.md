@@ -14,6 +14,15 @@ Every PR summary must answer these explicitly.
 - UI validation required: Yes/No and why
 - Rollback path: feature flag / revert / env off / not applicable
 
+## Deployment/build impact (OS v3)
+
+- Vercel deployment expected: Yes/No
+- Preview build needed: Yes/No
+- Deployment-cost risk: Low/Medium/High
+- Docs/workflow-only: Yes/No
+
+For Docs/workflow-only PRs, prefer Low deployment-cost risk and batch all workflow/docs edits in one branch/PR. Avoid file-by-file connector-style commits that trigger many preview builds.
+
 ## When manual action is required
 
 - SQL migration, schema, RLS, auth, or persistence contract changed.
