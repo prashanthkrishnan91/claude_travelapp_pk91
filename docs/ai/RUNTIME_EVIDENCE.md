@@ -32,3 +32,15 @@ Use the `railway-logs` personal Claude skill if available. Summarize relevant ev
 ## Evidence quality rule
 
 If logs prove only that a route was called but not the behavior under review, say that explicitly and add the missing observability as a follow-up or prerequisite.
+
+## Evidence MCP roadmap
+
+Future optional enhancement:
+
+- GitHub PR/diff evidence can be gathered through GitHub tools.
+- Railway runtime evidence can be gathered through the existing `railway-logs` workflow/skill.
+- Vercel deployment evidence can be gathered through Vercel tooling when needed.
+- Supabase SQL evidence should remain explicit/manual unless safe tooling is available.
+- MCP/tool evidence should summarize facts, not replace deterministic tests or human review.
+
+Do not implement new MCP connections in this PR.

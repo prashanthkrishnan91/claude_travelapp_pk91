@@ -74,3 +74,23 @@ Evidence:
 
 Yes/No:
 Why:
+
+## AI workflow retrospective
+
+Required for Level 1+ or meaningful workflow/product changes.
+
+- OS work-order format used: Yes/No
+- OS skills used:
+- Reviewer agents used:
+- Hooks triggered:
+- Evidence quality:
+- Codex needed: Yes/No
+- UI validation correctly classified: Yes/No
+- Runtime/SQL/deployment validation correctly classified: Yes/No
+- Miss ledger entry needed: Yes/No
+- Promotion target, if any:
+- Prompt intake correctly classified: Yes/No
+- Reviewer-agent budget appropriate: Yes/No
+- OS drift observed: Yes/No
+- Token/cost discipline: Good / Watch / Problem
+- Deployment/build discipline: Good / Watch / Problem

@@ -27,6 +27,13 @@ Use this whenever a PR, prompt, runtime validation, or UI test exposes a miss.
 - Do not patch UI if the backend contract is wrong.
 - Do not patch backend if the frontend mapper dropped valid fields.
 
+## Workflow miss recovery (OS v3)
+
+- If the failure is caused by a workflow/prompt/process miss, run `.claude/skills/workflow-retrospective/SKILL.md`.
+- If repeated, update `docs/ai/MISS_LEDGER.md` and recommend a promotion target via the ladder in `docs/ai/OS_LEARNING_PROTOCOL.md`.
+- Do not immediately add broad rules from a one-off failure.
+- If the failure involved deployment/build-cost usage, classify deployment-cost risk and update `MISS_LEDGER.md`.
+
 ## Escalate when
 
 - Google card authority is compromised.

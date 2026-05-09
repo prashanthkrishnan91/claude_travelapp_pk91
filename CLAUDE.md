@@ -16,6 +16,14 @@ For every non-trivial implementation, bug fix, UI change, provider/runtime chang
 
 Do not paste repeated workflow rules into every prompt. The short prompt should define the task, severity, success criteria, and scope; the repo OS owns the repeated process.
 
+## AI Repo Operating System v3 — self-learning loop
+
+For Level 1+ PRs or any failed validation, run `.claude/skills/workflow-retrospective/SKILL.md` against `docs/ai/WORKFLOW_RETROSPECTIVE.md`.
+
+If a workflow miss occurred, recommend or add a concise entry to `docs/ai/MISS_LEDGER.md` via `.claude/skills/miss-ledger-update/SKILL.md`. Do not promote one-off misses into broad rules — follow the promotion ladder in `docs/ai/OS_LEARNING_PROTOCOL.md`.
+
+All Travel/Finance/future-repo coding prompts must use OS v2/v3 work-order format unless explicitly generating architecture/spec only. For bulk repo/workflow edits, batch changes in one branch/PR; do not use file-by-file connector-style commits.
+
 Before work, read only the smallest needed subset of:
 
 1. `docs/ai/HANDOFF.md` — current state
@@ -44,6 +52,8 @@ Use one primary workflow skill when it matches the task:
 - `.claude/skills/pre-pr-self-audit/SKILL.md` — acceptance criteria to file/function/test/evidence mapping
 - `.claude/skills/pr-summary/SKILL.md` — PR template evidence
 - `.claude/skills/failure-recovery/SKILL.md` — failed patch/review/runtime recovery
+- `.claude/skills/workflow-retrospective/SKILL.md` — OS v3 retrospective after meaningful PRs or failed validation
+- `.claude/skills/miss-ledger-update/SKILL.md` — OS v3 ledger entry for workflow/product-process misses
 - `docs/ai/skills/discovery.md` — map unknown files or visual surfaces before implementation
 - `docs/ai/skills/bugfix.md` — focused bug fix or small behavior correction
 - `docs/ai/skills/ui_fix.md` — capped UI polish or visual consistency pass
@@ -61,6 +71,8 @@ Useful command aliases:
 - `/pre-pr-self-audit`
 - `/pr-summary`
 - `/update-handoff`
+- `/workflow-retrospective`
+- `/miss-ledger-update`
 
 Core rules:
 

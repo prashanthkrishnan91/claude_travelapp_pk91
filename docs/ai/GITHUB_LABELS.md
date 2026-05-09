@@ -14,6 +14,21 @@ Use these labels to make PR state obvious across ChatGPT, Claude, Codex, and PK.
 - `severity:level-2` — cross-contract/root-cause/full plumbing fix.
 - `severity:level-3` — architecture split/spec required before implementation.
 
+## OS v3 docs-only labels
+
+- `ai:miss-ledger-needed` — PR identified a workflow miss that should be recorded in `docs/ai/MISS_LEDGER.md`.
+- `ai:workflow-retro-needed` — PR is meaningful enough to require a workflow retrospective.
+- `ai:os-promotion-candidate` — PR proposes promoting a recurring miss to a precise OS surface.
+- `ai:deployment-cost-risk` — PR carries notable deployment/build-cost risk that should be classified.
+- `ai:cost-review-needed` — token/cost usage warrants review or `/cost` before continuing.
+- `ai:hook-promotion-candidate` — advisory hook may be ready to promote on the OS v3 ladder.
+- `ai:reviewer-budget-risk` — reviewer-agent budget on this PR seems too broad or too narrow.
+- `ai:os-drift` — PR shows signs of older OS habits instead of current OS v3.
+- `ai:prompt-intake-miss` — prompt classification was wrong or skipped before coding.
+- `ai:permission-boundary-review` — permission, memory, secrets, or MCP boundary needs review.
+
+These OS v3 entries are documentation-only label names. Do not create labels via API as part of OS v3.
+
 ## Usage rules
 
 - Label by current PR need, not aspiration.
