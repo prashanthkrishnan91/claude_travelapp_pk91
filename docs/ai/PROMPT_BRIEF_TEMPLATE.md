@@ -39,6 +39,13 @@ Open one focused PR.
 Stop after PR summary.
 ```
 
+## Optional advanced lines
+
+Add one or both only when relevant:
+
+- For Medium/High effort work, use `/cost` if usage grows, use `/compact` before context quality degrades, and invoke only relevant reviewer agents.
+- If this is a follow-up after PR review or failed validation, classify whether it is a product bug, workflow miss, OS drift, or evidence gap before coding.
+
 ## Optional add-ons
 
 Add only when needed:

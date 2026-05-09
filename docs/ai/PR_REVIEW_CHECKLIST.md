@@ -27,6 +27,18 @@ Use this checklist before merge and inside `/pre-pr-self-audit`.
 - Did the PR classify deployment/build impact when relevant?
 - Did the PR avoid file-by-file commit churn for bulk workflow/docs edits?
 
+## Pinnacle workflow checks (OS v3)
+
+- Was prompt intake correctly classified before implementation?
+- Were only relevant reviewer agents invoked, not all agents by default?
+- Did each invoked subagent return concise evidence/blockers/risks?
+- Was token/cost discipline reasonable?
+- Was deployment/build impact minimized?
+- Should `/cost`, `/compact`, `/review`, `/pr_comments`, `/doctor`, `/memory`, `/permissions`, or `/mcp` have been used?
+- Did the workflow retrospective produce a useful score or intentionally skip scoring?
+- If a workflow update is proposed, is it precise and anti-bloat compliant?
+- Did the PR avoid OS drift by using current OS v3 work-order format?
+
 ## Do not merge if
 
 - Google verification can be bypassed for addable cards.

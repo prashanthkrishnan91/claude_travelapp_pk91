@@ -25,3 +25,14 @@ Do not run for typo-only, tiny docs-only, pure formatting, or comment-only chang
 - One isolated miss → MISS_LEDGER only.
 - Repeated miss → propose one precise target.
 - Do not propose broad rule changes from a single PR.
+
+## Extended checks (when warranted)
+
+- Check token/cost discipline.
+- Check reviewer-agent budget discipline.
+- Check prompt-intake classification.
+- Check subagent output quality.
+- Check OS drift.
+- Check whether `/compact`, `/cost`, `/review`, `/pr_comments`, `/doctor`, `/memory`, `/permissions`, or `/mcp` would have been useful.
+- Check whether the task should have started in a new chat or stopped earlier.
+- Keep output to one screen unless explicitly asked for a deep retrospective.

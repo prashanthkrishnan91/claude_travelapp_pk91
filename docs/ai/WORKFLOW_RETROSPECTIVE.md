@@ -50,3 +50,33 @@ Workflow retrospective:
 - Promotion target:
 - Reason:
 ```
+
+## Extended retrospective fields (optional)
+
+When useful, also report:
+
+- Token/cost discipline:
+- Commit/deployment discipline:
+- Prompt intake correctly classified:
+- Reviewer-agent budget appropriate: Yes/No
+- Subagent output quality:
+- Built-in Claude commands used when helpful:
+- OS drift observed: Yes/No
+- Workflow score, optional:
+  - Prompt efficiency:
+  - Prompt intake quality:
+  - Planning quality:
+  - Review coverage:
+  - Subagent output quality:
+  - Evidence quality:
+  - Follow-up load:
+  - Cost/deployment discipline:
+  - OS drift control:
+
+## Guidance
+
+- Do not invoke every reviewer agent by default. Invoke only relevant reviewers.
+- If the task gets long or context-heavy, use compaction/new-chat guidance before quality degrades.
+- If token/cost or deployment usage was wasteful, record it as a workflow miss only when meaningful or repeated.
+- If prompt intake was wrong, record whether the issue was ChatGPT prompt quality, Claude planning, or repo OS discoverability.
+- If OS drift occurred, identify the smallest OS surface that should catch it next time.

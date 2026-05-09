@@ -19,8 +19,11 @@ Use this file when creating the next personal app repo. The goal is to copy the 
 - `docs/ai/OS_LEARNING_PROTOCOL.md`
 - `docs/ai/MISS_LEDGER.md`
 - `docs/ai/WORKFLOW_RETROSPECTIVE.md`
+- `docs/ai/HOOK_SAFETY.md`
+- `docs/ai/PERMISSIONS_AND_MEMORY_BOUNDARIES.md`
+- `docs/ai/AI_OS_MANIFEST.md`
 - `.claude/skills/*/SKILL.md` (including `workflow-retrospective` and `miss-ledger-update`)
-- `.claude/commands/*.md`
+- `.claude/commands/*.md` (including `workflow-retrospective.md` and `miss-ledger-update.md`)
 - `.claude/agents/workflow-retrospective-reviewer.md`
 
 ## Replace per repo
@@ -33,6 +36,7 @@ Use this file when creating the next personal app repo. The goal is to copy the 
 - SQL/env/deploy manual actions
 - design/product north star
 - repo-specific catches in `OS_LEARNING_PROTOCOL.md` and the workflow-retrospective-reviewer agent
+- repo-specific reviewer-agent budget defaults in `CONTEXT_MANAGEMENT.md`
 
 ## Bootstrap checklist
 
@@ -53,6 +57,15 @@ Use this file when creating the next personal app repo. The goal is to copy the 
 - Use OS v3 before scaling feature work.
 - Install deployment/build-cost control language in `CLAUDE.md`, `MANUAL_ACTIONS_CHECKLIST.md`, and `PR_REVIEW_CHECKLIST.md` before the first workflow-heavy PR.
 - For new repos using Vercel or similar preview-build systems, avoid file-by-file workflow commits; batch in one Sonnet-driven branch/PR.
+
+## OS v3 pinnacle bootstrap rules
+
+- Add reviewer-agent budget discipline before scaling AI PR volume.
+- Add built-in Claude command discipline before first large implementation.
+- Do not enable hard-blocking hooks in a new repo until advisory hooks have proven useful.
+- Do not connect MCP servers in a new repo until the need and security posture are clear.
+- Install the OS manifest (`docs/ai/AI_OS_MANIFEST.md`) before the first major feature PR.
+- Install `HOOK_SAFETY.md` and `PERMISSIONS_AND_MEMORY_BOUNDARIES.md` before any hooks or MCP additions.
 
 ## Default short prompt for any new repo
 

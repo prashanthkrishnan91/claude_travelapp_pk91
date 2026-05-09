@@ -41,4 +41,25 @@ Return:
 - source authority errors (enrichment minting cards, source-name-only facts leaking to visible prose)
 - deployment storm from file-by-file workflow/docs commits
 
+## Pinnacle OS v3 checks
+
+- prompt intake classification quality
+- reviewer-agent budget (only relevant reviewers invoked)
+- subagent output quality (concise, evidence-based, blockers/risks called out)
+- token/cost discipline
+- compaction / new-chat discipline
+- OS drift
+- permission/memory boundary concerns
+- whether the proposed promotion target is precise and anti-bloat compliant
+
+## Travel reviewer-agent budget defaults
+
+Prefer:
+
+- `place-authority-reviewer` for addable card / source authority changes
+- `latency-reviewer` for provider/fanout/cache/route changes
+- `evidence-prose-reviewer` for notes/reasons/claims/copy/evidence changes
+
+Do not run all three on docs-only or unrelated PRs. Choose by changed surface, not by ceremony.
+
 Do not edit files. Return blockers/risks/evidence only.

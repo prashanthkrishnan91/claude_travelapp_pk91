@@ -42,3 +42,48 @@ Do not preserve long implementation narration unless needed for review.
 - Do not keep adding process fixes to a bloated implementation chat.
 - For workflow upgrades that touch many files, use Claude/Sonnet to batch one branch and one PR. Do not use file-by-file connector edits.
 - ChatGPT GitHub connector should be reserved for tiny/surgical edits, not bulk workflow/docs updates.
+
+## Built-in Claude command discipline
+
+- Use `/cost` for Medium/High work or when token usage seems unexpectedly high.
+- Use `/compact` before long sessions degrade, preserving only the compacting rule fields.
+- Prefer a new chat after a PR plus one follow-up, or after a failed patch loop.
+- Use `/pr_comments` when responding to PR comments.
+- Use `/review` only as a lightweight extra review, not as a replacement for OS reviewer agents.
+- Use `/doctor` only for suspected Claude Code/tooling health issues.
+- Use `/memory` carefully; repo OS docs should be the source of team-shared workflow truth.
+- Use `/permissions` only to inspect/resolve tool access or safety issues.
+- Use `/mcp` only to inspect configured MCP state; do not add servers unless a future approved task requires it.
+
+## Pre-compact summary contract
+
+Before `/compact`, preserve:
+
+- repo
+- branch
+- PR number
+- task goal
+- severity
+- assumptions
+- success criteria
+- files changed
+- tests/checks run
+- reviewer agents used
+- unresolved blockers
+- manual actions
+- next required action
+- whether workflow retrospective or `MISS_LEDGER` update is needed
+
+## Reviewer-agent budget
+
+- Do not run every reviewer on every PR.
+- Choose reviewer agents based on changed contracts and risk.
+- Common default:
+  - `contract-auditor` for shared contract/API/output changes
+  - `test-strategist` for non-trivial test planning
+  - `pr-reviewer` before merge on meaningful PRs
+- Travel-specific reviewers only when their domain is touched:
+  - `place-authority-reviewer` for addable card / source authority changes
+  - `latency-reviewer` for provider/fanout/cache/route changes
+  - `evidence-prose-reviewer` for notes/reasons/claims/copy/evidence changes
+- `workflow-retrospective-reviewer` only when a miss, failed validation, or promotion candidate exists.

@@ -58,3 +58,54 @@ OS v3 self-learning should specifically catch:
 - latency claims without route-level evidence
 - source authority errors (enrichment minting cards, editorial source-name-only facts leaking to visible prose)
 - deployment storm from file-by-file workflow/docs commits
+
+## OS maturity scoring
+
+After every workflow retrospective, optionally score the AI workflow on a 1–5 scale:
+
+- Prompt efficiency: Did the task use a short OS v2/v3 work-order instead of a bulky prompt?
+- Prompt intake quality: Did Claude classify the prompt correctly before coding?
+- Planning quality: Did Claude state assumptions, success criteria, contracts, and stop/split conditions?
+- Review coverage: Were only the relevant read-only reviewer agents used?
+- Subagent output quality: Did reviewer agents return evidence, blockers, and risks in a usable format?
+- Evidence quality: Were tests/runtime/SQL/deployment/UI validation correctly classified?
+- Follow-up load: Did PK/ChatGPT/Codex need to catch something the OS should catch?
+- Cost/deployment discipline: Were token usage, commits, preview builds, and validation work minimized?
+- OS drift control: Did the task follow current OS v3 rather than older prompt/PR habits?
+
+Promotion rule:
+
+- Do not update OS files from one low score alone.
+- If the same score category is weak twice, create a `MISS_LEDGER` entry or update one precise checklist.
+- If the same score category is weak three times, consider an advisory hook or required reviewer.
+- If the score is weak because of a high-severity miss, recommend ChatGPT review before promotion.
+
+## Future hook promotion path
+
+Hooks must progress gradually:
+
+- Advisory reminder: default for new hooks.
+- Required evidence reminder: after repeated misses, require PR summary to mention the relevant gate.
+- Blocking hook: out of scope unless explicitly approved later.
+
+Hard-blocking hooks are not allowed in OS v3.
+
+## OS drift audit
+
+OS drift means Claude, ChatGPT, or Codex follows older repo habits instead of current OS v3.
+
+Check for:
+
+- old bulky prompt style when OS v3 work-order format should be used
+- PR summary missing retrospective fields
+- Claude using only the old `ai-repo-os` router and skipping v3 learning
+- running too many reviewer agents by default
+- skipping reviewer agents when risk clearly requires them
+- missing deployment/build-cost classification
+- follow-up prompt needed because the OS process was not followed
+
+If OS drift is observed:
+
+- record in `MISS_LEDGER.md` if meaningful
+- update only the narrow surface that should have caught it
+- do not rewrite broad OS docs unless repeated
