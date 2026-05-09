@@ -71,6 +71,8 @@ Useful command aliases:
 - `/pre-pr-self-audit`
 - `/pr-summary`
 - `/update-handoff`
+- `/workflow-retrospective`
+- `/miss-ledger-update`
 
 Core rules:
 

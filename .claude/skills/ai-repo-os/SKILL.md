@@ -13,6 +13,9 @@ Read only the smallest needed subset of:
 - `docs/ai/PR_REVIEW_CHECKLIST.md`
 - `docs/ai/DEFINITION_OF_DONE.md`
 - `docs/ai/MANUAL_ACTIONS_CHECKLIST.md`
+- `docs/ai/OS_LEARNING_PROTOCOL.md`
+- `docs/ai/MISS_LEDGER.md`
+- `docs/ai/WORKFLOW_RETROSPECTIVE.md`
 
 ## Task planner
 
@@ -94,3 +97,15 @@ Use `.github/pull_request_template.md`.
 - Call out known failures and whether they are pre-existing.
 - State SQL/UI/env/provider/LLM/runtime impact.
 - State user validation needed yes/no and why.
+- Fill the AI workflow retrospective section when applicable: OS skills used, reviewer agents used, miss ledger entry needed yes/no, promotion target if any.
+- Classify deployment/build-cost impact when relevant (Vercel deployment expected, preview build needed, deployment-cost risk, docs/workflow-only).
+
+## OS v3 self-learning loop
+
+For Level 1+ PRs, meaningful workflow/product changes, failed validation, Codex rescue, prompt-format miss, deployment/build-cost miss, or repeated follow-up loop:
+
+- run or apply `.claude/skills/workflow-retrospective/SKILL.md`
+- if a workflow/product-process miss occurred, run or apply `.claude/skills/miss-ledger-update/SKILL.md`
+- use `.claude/agents/workflow-retrospective-reviewer.md` for independent read-only review when a promotion target is proposed
+- promote lessons only through `docs/ai/OS_LEARNING_PROTOCOL.md`
+- do not bloat the OS from one isolated miss
