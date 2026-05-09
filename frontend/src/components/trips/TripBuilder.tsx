@@ -366,7 +366,6 @@ function FlightCandidateCard({
   const cpp         = (d.cpp              as number)   ?? 0;
   const aiScore     = (d.aiScore          as number)   ?? 0;
   const tags        = (d.tags             as string[]) ?? [];
-  const explanation = (d.explanation      as string)   ?? "";
   const bookingUrl  = (d.bookingUrl       as string)   ?? "";
 
   const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-brand-400/45" : ""} ${isLowScore ? "opacity-55" : ""}`;
