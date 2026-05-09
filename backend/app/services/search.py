@@ -65,6 +65,12 @@ from app.models.search import (
     RoundTripFlightPair,
 )
 
+from app.services.flight_result_curator import (
+    ROUND_TRIP_LEG_CAP,
+    ROUND_TRIP_PAIR_CAP,
+    curate_flight_results,
+)
+
 CACHE_TABLE = "research_cache"
 logger = logging.getLogger(__name__)
 CACHE_TTL_HOURS = 1
@@ -827,17 +833,14 @@ class SearchService:
         if not all_results:
             return []
 
-        # Deduplicate by (airline, rounded price, duration, origin, destination)
-        seen: set = set()
-        deduped: List[FlightResult] = []
-        for r in all_results:
-            dedup_key = (r.airline, round(r.price or 0, 0), r.duration_minutes, r.origin, r.destination)
-            if dedup_key not in seen:
-                seen.add(dedup_key)
-                deduped.append(r)
-
-        deduped.sort(key=lambda r: (r.price or 0, -(r.cpp or 0)))
-        return deduped
+        curated, summary = curate_flight_results(all_results, requested_limit=getattr(req, "limit", None))
+        logger.info(
+            "[flight_results.curated] route=/search/flights raw_count=%d deduped_count=%d returned_count=%d",
+            summary.raw_count,
+            summary.deduped_count,
+            summary.returned_count,
+        )
+        return curated
 
     def search_round_trip_flights(self, req: FlightSearchRequest) -> List[RoundTripFlightPair]:
         """Fetch outbound + return flights and return ranked pairs.
@@ -848,7 +851,7 @@ class SearchService:
         if not req.return_date:
             return []
 
-        outbound_flights = self.search_flights(req)
+        outbound_flights = self.search_flights(req)[:ROUND_TRIP_LEG_CAP]
 
         return_req = FlightSearchRequest(
             origin_airports=req.destination_airports,
@@ -859,7 +862,7 @@ class SearchService:
             passengers=req.passengers,
             cabin_class=req.cabin_class,
         )
-        return_flights = self.search_flights(return_req)
+        return_flights = self.search_flights(return_req)[:ROUND_TRIP_LEG_CAP]
 
         pairs: List[RoundTripFlightPair] = []
         for outbound in outbound_flights:
@@ -878,8 +881,15 @@ class SearchService:
                 ))
 
         # Rank: combined CPP desc, total price asc, total duration asc
-        pairs.sort(key=lambda p: (-p.combined_cpp, p.total_price, p.total_duration_minutes))
-        return pairs
+        pairs.sort(key=lambda p: (-p.combined_cpp, p.total_price, p.total_duration_minutes, p.id))
+        curated_pairs = pairs[:ROUND_TRIP_PAIR_CAP]
+        logger.info(
+            "[flight_results.curated] route=/search/round-trip-flights raw_count=%d deduped_count=%d returned_count=%d",
+            len(pairs),
+            len(pairs),
+            len(curated_pairs),
+        )
+        return curated_pairs
 
     def search_hotels(self, req: HotelSearchRequest) -> List[HotelResult]:
         """Provider-backed lodging discovery (Hotels v1).
