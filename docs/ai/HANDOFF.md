@@ -1,3 +1,26 @@
+## Last change (2026-05-09) — Duffel as primary Flights provider (Level 2)
+
+**Status: PR-ready** — Switched `FlightProvider` default production binding from Amadeus to Duffel while preserving Flights Product Contract v1, fail-closed route behavior, and round-trip pairing/add-to-trip contracts.
+
+### What changed
+
+- Added `backend/app/services/flights_provider_duffel.py` as the primary provider adapter, gated by `DUFFEL_FLIGHTS_ENABLED=true` + `DUFFEL_ACCESS_TOKEN` (optional `DUFFEL_BASE_URL`).
+- Updated `backend/app/services/flights_provider.py` provider registry to select Duffel only; no silent fallback to Amadeus. Missing/disabled Duffel config now returns `NullFlightProvider` fail-closed.
+- Updated flights provider wiring tests to assert provider-agnostic contract behavior with Duffel-attributed rows.
+- Added targeted Duffel unit tests for mapping, env-gating, provider selection, empty/error fail-closed handling.
+- Kept Amadeus adapter/tests as legacy/non-primary coverage only; no longer used by default provider selection.
+
+### Runtime/env notes
+
+- Required for live flights: `DUFFEL_FLIGHTS_ENABLED=true`, `DUFFEL_ACCESS_TOKEN`, optional `DUFFEL_BASE_URL`.
+- `AMADEUS_*` vars are no longer required for primary flight validation path.
+
+### Tests run
+
+- `cd backend && pytest tests/test_duffel_flight_provider.py tests/test_search_flights_provider_wiring.py tests/test_flights_product_contract_v1.py tests/test_create_with_search_fail_closed.py tests/test_product_surface_pruning_v1a.py tests/test_amadeus_flight_provider.py` → pass.
+
+---
+
 ## Last change (2026-05-09) — Test routing standard + focused rescue-test consolidation (Level 1)
 
 **Status: PR-ready** — Added a durable test-tier routing standard so routine Claude/Codex PRs avoid default full-suite backend runs while preserving mock/provider fail-closed regression gates from PR #287–#299.

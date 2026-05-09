@@ -140,24 +140,23 @@ def get_flight_provider() -> FlightProvider:
     """
     try:
         import os  # local import keeps module pure when reading env
-        from app.services.flights_provider_amadeus import (
-            amadeus_enabled_from_env,
-            build_amadeus_provider_from_env,
+        from app.services.flights_provider_duffel import (
+            duffel_enabled_from_env,
+            build_duffel_provider_from_env,
         )
-        if not amadeus_enabled_from_env():
+        if not duffel_enabled_from_env():
             return _DEFAULT_PROVIDER
         env_key = (
-            os.environ.get("AMADEUS_CLIENT_ID", ""),
-            os.environ.get("AMADEUS_CLIENT_SECRET", ""),
-            os.environ.get("AMADEUS_BASE_URL", ""),
+            os.environ.get("DUFFEL_ACCESS_TOKEN", ""),
+            os.environ.get("DUFFEL_BASE_URL", ""),
         )
         cached = _PROVIDER_CACHE.get(env_key)
         if cached is not None:
             return cached
-        amadeus = build_amadeus_provider_from_env()
-        if amadeus is not None:
-            _PROVIDER_CACHE[env_key] = amadeus
-            return amadeus
+        duffel = build_duffel_provider_from_env()
+        if duffel is not None:
+            _PROVIDER_CACHE[env_key] = duffel
+            return duffel
     except Exception:
         # Adapter import / construction must never break the seam.
         pass
