@@ -21,6 +21,23 @@ Follow-up needed:
 
 ---
 
+### 2026-05-09 — Unused variable left after JSX block removal caused Vercel build failure
+
+Repo: claude_travelapp_pk91
+Area: Frontend / UI — TripBuilder.tsx
+Severity: Low (build failure caught by CI before merge; fixed in follow-up commit)
+Miss: Removed `{/* Explanation */}` JSX block from `FlightCandidateCard` but left the `const explanation = ...` declaration, triggering `@typescript-eslint/no-unused-vars` in the Vercel production build.
+Impact: One extra commit; no merge block since fix was fast. No user-visible regression.
+What caught it: Vercel CI build log surfaced via GitHub PR comment bot.
+Root cause: UI cleanup removed JSX consumer of a variable but didn't scan for now-orphaned declarations above it.
+What should catch it next time: After any UI block removal, scan for orphaned `const`/`let` declarations in the same component scope. A local `cd frontend && npx tsc --noEmit` before push catches this class of error without a full build.
+One-off or repeated: One-off
+Promotion target: None yet — single occurrence.
+Action taken: Removed declaration in follow-up commit fb8c792. MISS_LEDGER entry added.
+Follow-up needed: No
+
+---
+
 ## Seed entries
 
 ### 2026-05-07 — Old-format prompt after OS v2
