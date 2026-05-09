@@ -39,7 +39,7 @@ def _cluster_key(row: FlightResult) -> Tuple:
 def _missing_critical_fields(row: FlightResult) -> int:
     return sum(
         1
-        for v in (row.airline, row.flight_number, row.origin, row.destination, row.booking_url)
+        for v in (row.airline, row.flight_number, row.origin, row.destination)
         if not v
     )
 
