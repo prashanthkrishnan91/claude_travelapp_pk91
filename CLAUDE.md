@@ -64,6 +64,8 @@ Useful command aliases:
 
 Core rules:
 
+- Default test-routing policy: follow `docs/ai/TEST_ROUTING.md`; do not run full `pytest tests/` by default for ordinary PRs.
+- Every PR summary must include **Test tier used** and **Why this tier was sufficient**. If full suite is run, include the explicit reason; if skipped, list targeted bundles/tests that replaced it.
 - No broad discovery. Read primary target files first; fallback reads only if blocked.
 - Classify issue severity before choosing Codex patch, Sonnet full plumbing analysis, or split plan.
 - Do not keep patching after failed patches. After one failed patch, reclassify. After two related patches, escalate to full plumbing analysis or split plan.

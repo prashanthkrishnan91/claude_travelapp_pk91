@@ -15,6 +15,8 @@ from datetime import date, datetime
 from typing import List
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.contracts.flights import FlightSourceStatus
 from app.models.search import (
     BookingOption,
@@ -22,10 +24,7 @@ from app.models.search import (
     FlightSearchRequest,
 )
 from app.services import search as search_service
-from app.services.flights_provider import (
-    FlightProviderResult,
-    NullFlightProvider,
-)
+from app.services.flights_provider import FlightProviderResult
 from app.services.search import SearchService
 
 
@@ -97,31 +96,13 @@ def test_search_flights_uses_provider_and_does_not_call_mock():
     assert len(provider.calls) == 1
 
 
-def test_search_flights_unavailable_returns_zero_rows():
+@pytest.mark.parametrize("status,reason", [
+    (FlightSourceStatus.UNAVAILABLE, "no provider configured"),
+    (FlightSourceStatus.ERROR, "500"),
+])
+def test_search_flights_non_ok_status_returns_zero_rows(status, reason):
     provider = _StaticProvider(
-        FlightProviderResult(
-            status=FlightSourceStatus.UNAVAILABLE,
-            rows=[],
-            reason="no provider configured",
-        )
-    )
-    svc = SearchService(_empty_db())
-    with patch.object(search_service, "_mock_flights",
-                      side_effect=AssertionError("must not be called")):
-        with patch("app.services.flights_provider.get_flight_provider",
-                   return_value=provider):
-            out = svc.search_flights(FlightSearchRequest(
-                origin="JFK", destination="CDG",
-                departure_date=date(2026, 6, 1),
-            ))
-    assert out == []
-
-
-def test_search_flights_error_returns_zero_rows():
-    provider = _StaticProvider(
-        FlightProviderResult(
-            status=FlightSourceStatus.ERROR, rows=[], reason="500",
-        )
+        FlightProviderResult(status=status, rows=[], reason=reason)
     )
     svc = SearchService(_empty_db())
     with patch.object(search_service, "_mock_flights",

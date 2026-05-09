@@ -1,3 +1,47 @@
+## Last change (2026-05-09) — Test routing standard + focused rescue-test consolidation (Level 1)
+
+**Status: PR-ready** — Added a durable test-tier routing standard so routine Claude/Codex PRs avoid default full-suite backend runs while preserving mock/provider fail-closed regression gates from PR #287–#299.
+
+### What changed
+
+- Added `docs/ai/TEST_ROUTING.md` with explicit Tier 0/1/2/3 guidance and canonical command bundles for:
+  - AI Concierge card contract
+  - Flights provider
+  - Hotels provider
+  - Mock/fail-closed safety
+  - OptimizeTripModal fail-closed
+  - TripBuilder/add-to-trip
+- Updated `CLAUDE.md` core rules to require:
+  - use of `docs/ai/TEST_ROUTING.md`
+  - PR summary fields: **Test tier used** + **Why this tier was sufficient**
+  - explicit reason when running full `pytest tests/`
+- Focused rescue-test consolidation in provider wiring tests:
+  - `backend/tests/test_search_flights_provider_wiring.py`: merged duplicate UNAVAILABLE/ERROR zero-row checks into one parametrized test.
+  - `backend/tests/test_search_hotels_provider_wiring.py`: merged duplicate UNAVAILABLE/ERROR/EMPTY zero-row checks into one parametrized test.
+  - Removed unused `Null*Provider` imports in those files.
+
+### Invariants preserved
+
+- No mock-backed rows promoted to product truth; no `book.example.com` relaxation.
+- No live-route `_mock_flights` / `_mock_hotels` resurrection.
+- Flights/hotels provider fail-closed behavior preserved (non-OK status => empty rows).
+- Discovery-only hotels guard remains in frontend bundle guidance.
+- Round-trip day mapping coverage remains in the flights contract bundle.
+
+### Tests run
+
+- `cd backend && pytest tests/test_search_flights_provider_wiring.py tests/test_search_hotels_provider_wiring.py` → pass.
+
+### Scope guard
+
+- No production code changes.
+- No SQL.
+- No providers.
+- No LLM calls.
+- No UI redesign.
+
+---
+
 # AI Handoff — Travel Concierge
 
 ## Last change (2026-05-09) — Provider-backed Hotels v1 (Level 2)

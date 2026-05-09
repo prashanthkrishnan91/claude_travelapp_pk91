@@ -13,13 +13,12 @@ from datetime import date
 from typing import List
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.contracts.hotels import HotelSourceStatus
 from app.models.search import HotelResult, HotelSearchRequest
 from app.services import search as search_service
-from app.services.hotels_provider import (
-    HotelProviderResult,
-    NullHotelProvider,
-)
+from app.services.hotels_provider import HotelProviderResult
 from app.services.search import SearchService
 
 
@@ -89,39 +88,14 @@ def test_search_hotels_uses_provider_and_does_not_call_mock():
     assert len(provider.calls) == 1
 
 
-def test_search_hotels_unavailable_returns_zero_rows():
+@pytest.mark.parametrize("status,reason", [
+    (HotelSourceStatus.UNAVAILABLE, "no provider configured"),
+    (HotelSourceStatus.ERROR, "500"),
+    (HotelSourceStatus.EMPTY, "zero"),
+])
+def test_search_hotels_non_ok_status_returns_zero_rows(status, reason):
     provider = _StaticProvider(
-        HotelProviderResult(
-            status=HotelSourceStatus.UNAVAILABLE,
-            rows=[],
-            reason="no provider configured",
-        )
-    )
-    svc = SearchService(_empty_db())
-    with patch.object(search_service, "_mock_hotels",
-                      side_effect=AssertionError("must not be called")):
-        with patch("app.services.hotels_provider.get_hotel_provider",
-                   return_value=provider):
-            out = svc.search_hotels(_req())
-    assert out == []
-
-
-def test_search_hotels_error_returns_zero_rows():
-    provider = _StaticProvider(
-        HotelProviderResult(status=HotelSourceStatus.ERROR, rows=[], reason="500")
-    )
-    svc = SearchService(_empty_db())
-    with patch.object(search_service, "_mock_hotels",
-                      side_effect=AssertionError("must not be called")):
-        with patch("app.services.hotels_provider.get_hotel_provider",
-                   return_value=provider):
-            out = svc.search_hotels(_req())
-    assert out == []
-
-
-def test_search_hotels_empty_returns_zero_rows():
-    provider = _StaticProvider(
-        HotelProviderResult(status=HotelSourceStatus.EMPTY, rows=[], reason="zero")
+        HotelProviderResult(status=status, rows=[], reason=reason)
     )
     svc = SearchService(_empty_db())
     with patch.object(search_service, "_mock_hotels",
