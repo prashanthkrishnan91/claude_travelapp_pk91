@@ -66,6 +66,7 @@ import {
   compareItems,
   fetchTripItems,
   ensureTripDays,
+  addOneWayFlightToDay,
   addRoundTripOutboundToDay,
   addRoundTripReturnToDay,
   searchAttractionsViaConcierge,
@@ -365,7 +366,6 @@ function FlightCandidateCard({
   const cpp         = (d.cpp              as number)   ?? 0;
   const aiScore     = (d.aiScore          as number)   ?? 0;
   const tags        = (d.tags             as string[]) ?? [];
-  const explanation = (d.explanation      as string)   ?? "";
   const bookingUrl  = (d.bookingUrl       as string)   ?? "";
 
   const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-brand-400/45" : ""} ${isLowScore ? "opacity-55" : ""}`;
@@ -381,10 +381,13 @@ function FlightCandidateCard({
         </div>
       )}
 
-      {/* Header: airline + flight number + AI score */}
+      {/* Header: airline + flight number + one-way badge + AI score */}
       <div className="flex items-start justify-between gap-2 pt-0.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-cream-100 leading-tight">{airline || flightNum}</p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-sm font-bold text-cream-100 leading-tight">{airline || flightNum}</p>
+            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-sky-500/15 text-sky-300 border border-sky-400/20">One-way</span>
+          </div>
           {airline && <p className="text-xs text-cream-300 mt-0.5">{flightNum}</p>}
         </div>
         <AiScoreBadge score={aiScore} />
@@ -416,16 +419,11 @@ function FlightCandidateCard({
         </div>
       )}
 
-      {/* Tags */}
+      {/* Tags — cap at 2 to avoid cramping on mobile */}
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {tags.slice(0, 3).map((tag) => <RecTag key={tag} tag={tag} />)}
+          {tags.slice(0, 2).map((tag) => <RecTag key={tag} tag={tag} />)}
         </div>
-      )}
-
-      {/* Explanation */}
-      {explanation && (
-        <p className="text-xs text-cream-300 leading-relaxed">{explanation}</p>
       )}
 
       {/* Pricing grid */}
@@ -636,7 +634,7 @@ function RoundTripFlightCard({
         className={`${PRIMARY_CTA} w-full`}
       >
         {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-        Add Both Flights to Itinerary
+        Add Round Trip
       </button>
     </div>
   );
@@ -1467,13 +1465,18 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         return;
       }
 
-      const newItem = await createItem(tripId, targetDay.id, {
-        itemType: item.itemType as ItemType,
-        title: item.title,
-        description: item.description ?? undefined,
-        location: item.location ?? undefined,
-        position: targetDay.items.length,
-      });
+      let newItem: ItineraryItem;
+      if (item.itemType === "flight") {
+        newItem = await addOneWayFlightToDay(tripId, targetDay.id, item, targetDay.items.length);
+      } else {
+        newItem = await createItem(tripId, targetDay.id, {
+          itemType: item.itemType as ItemType,
+          title: item.title,
+          description: item.description ?? undefined,
+          location: item.location ?? undefined,
+          position: targetDay.items.length,
+        });
+      }
 
       setDays((prev) =>
         prev.map((d) =>
