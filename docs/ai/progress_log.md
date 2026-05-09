@@ -1,5 +1,31 @@
 # Progress Log
 
+## 2026-05-09 — Provider-backed Hotels v1 (Google Places lodging discovery)
+
+**Branch**: `claude/hotels-prod-integration-VIFiI`
+
+**Severity**: Level 2 — first provider-backed real-data lodging surface. Replaces the user-facing mock-backed `_mock_hotels` live path with Google Places lodging discovery behind a typed `HotelProvider` seam mirroring PR #297/#298.
+
+**What was done**:
+- Added `backend/app/contracts/hotels.py` — Hotels Product Contract v1 (sources, statuses, persistability, fabricated-host vocabulary, `HotelOfferKind{DISCOVERY, BOOKABLE_OFFER}` partition).
+- Added `backend/app/services/hotels_provider.py` — `HotelProviderResult` (post-init invariants), `HotelProvider` Protocol, `NullHotelProvider`, env-gated `get_hotel_provider()` registry.
+- Added `backend/app/services/hotels_provider_google_places.py` — `GooglePlacesHotelProvider` (Places Text Search with `includedType=lodging`, lodging-type filter, OPERATIONAL filter, 6s timeout, 8-result cap, contract-safe mapping, no fabricated rates / stars / amenities / booking URLs). All transport/parse/non-200 failures translate to typed `ERROR`/`UNAVAILABLE`/`EMPTY`; never raises.
+- `SearchService.search_hotels` rewritten to apply the Hotels Product Contract v1 to cached rows (drops legacy mock entries) and delegate to the provider seam on miss; never calls `_mock_hotels`. Cache writes only happen on `OK` results, attributed `source="google_places"`.
+- Two pre-existing pruning tests updated to reflect that mock-attributed cache rows are now contract-filtered even with `BLOCK_LEGACY_PRODUCT_MOCK` off, and that the live path no longer writes `source="mock"` to `research_cache`.
+- Added `tests/test_hotels_product_contract_v1.py`, `tests/test_google_places_hotel_provider.py`, and `tests/test_search_hotels_provider_wiring.py`.
+
+**Important caveat**: Hotels v1 is **lodging discovery only**. Google Places does not return nightly rates / availability / bookable inventory. `OptimizeTripModal` was intentionally left fail-closed for full flight+hotel package optimization — no fabricated nightly rates were introduced. Hotels v2 (Booking.com Demand API or Amadeus Hotels) is the future track for true bookable rates, blocked on partner credentials.
+
+**Env vars (names only)**: `GOOGLE_PLACES_API_KEY` (reused), optional `GOOGLE_HOTELS_ENABLED` (defaults to enabled when key is present).
+
+**Tests**: 151/151 pass on the focused set (Hotels contract + Google Places provider + wiring + product surface pruning + create-with-search fail-closed + Flights v1 regression). 2618 pass / 5 baseline-unchanged failures on the full backend suite.
+
+**`_mock_hotels` decision**: kept quarantined; no live route calls it. `BLOCK_LEGACY_PRODUCT_MOCK` semantics preserved.
+
+**Supabase SQL**: No. **Providers added**: Yes (Google Places lodging discovery — reuses existing key). **LLM calls added**: No. **UI redesign**: No. **Booking/ticketing**: No.
+
+---
+
 ## 2026-05-09 — Provider-backed Flights v1 (Amadeus)
 
 **Branch**: `claude/hotels-prod-integration-EcEHo`

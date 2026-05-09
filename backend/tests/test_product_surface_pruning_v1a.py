@@ -653,7 +653,16 @@ def test_cached_legacy_mock_flight_is_suppressed_when_flag_on(block_flag_on, cap
     )
 
 
-def test_cached_mock_hotel_is_returned_when_flag_off(block_flag_off):
+def test_cached_mock_hotel_is_filtered_by_contract_when_flag_off(block_flag_off, monkeypatch):
+    """Hotels v1: ``SearchService.search_hotels`` no longer emits
+    mock-attributed cache rows even when the operator flag is off.  The
+    Hotels Product Contract v1 filter discards rows whose ``source`` is
+    in ``DISALLOWED_SOURCES`` or whose booking URL uses a fabricated
+    host, then falls back to the (default-Null) provider seam — which
+    returns ``UNAVAILABLE`` and zero rows in the test env."""
+    monkeypatch.delenv("GOOGLE_PLACES_API_KEY", raising=False)
+    from app.services.hotels_provider import reset_hotel_provider_cache
+    reset_hotel_provider_cache()
     db = _FakeSupabase(cached_rows=[_mock_hotel_cache_row("mock")])
     svc = search_service.SearchService(db)
     out = svc.search_hotels(
@@ -661,18 +670,22 @@ def test_cached_mock_hotel_is_returned_when_flag_off(block_flag_off):
             location="Paris", check_in=date(2026, 6, 1), check_out=date(2026, 6, 5)
         )
     )
-    assert len(out) == 1
-    assert out[0].id == "hotel-cached-1"
+    assert out == [], (
+        "Mock-attributed cached hotels must be filtered by the Hotels "
+        "Product Contract v1 even when the legacy block flag is off."
+    )
 
 
 def test_cached_canonical_hotel_is_not_suppressed_when_flag_on(block_flag_on):
     """Cached rows with a positive non-mock provider attribution
-    (``source == "google_places"``) must be allowed through even under
-    the operator flag — the block is a legacy-mock guard, not a kill
-    switch on the entire cache."""
-    db = _FakeSupabase(
-        cached_rows=[_mock_hotel_cache_row("google_places")]
+    (``source == "google_places"``) and a real Google Maps booking URL
+    must be allowed through even under the operator flag — the block
+    is a legacy-mock guard, not a kill switch on the entire cache."""
+    canonical_row = _mock_hotel_cache_row("google_places")
+    canonical_row["booking_url"] = (
+        "https://www.google.com/maps/place/?q=place_id:ChIJpQ"
     )
+    db = _FakeSupabase(cached_rows=[canonical_row])
     svc = search_service.SearchService(db)
     out = svc.search_hotels(
         HotelSearchRequest(
@@ -762,20 +775,26 @@ def test_cache_write_is_skipped_when_block_flag_on(block_flag_on):
     )
 
 
-def test_cache_write_proceeds_when_block_flag_off(block_flag_off):
-    """Default behavior: cache writes proceed normally when the flag is
-    unset — confirms the skip-on-block above is the only behavior change
-    in this code path."""
+def test_cache_write_skipped_when_provider_unavailable(block_flag_off, monkeypatch):
+    """Hotels v1: ``SearchService.search_hotels`` no longer calls
+    ``_mock_hotels`` and therefore never writes ``source="mock"`` rows
+    back to ``research_cache``.  In the test env (no Google Places key)
+    the provider returns ``UNAVAILABLE`` with zero rows, so no cache
+    upsert is performed — fail-closed end-to-end."""
+    monkeypatch.delenv("GOOGLE_PLACES_API_KEY", raising=False)
+    from app.services.hotels_provider import reset_hotel_provider_cache
+    reset_hotel_provider_cache()
     db = _FakeSupabase(cached_rows=None)
     svc = search_service.SearchService(db)
-    svc.search_hotels(
+    out = svc.search_hotels(
         HotelSearchRequest(
             location="Paris", check_in=date(2026, 6, 1), check_out=date(2026, 6, 5)
         )
     )
-    assert len(db.upserts) == 1, "Default cache write must still happen"
-    record = db.upserts[0]
-    assert record.get("source") == "mock"
+    assert out == []
+    assert db.upserts == [], (
+        "Provider-unavailable hotels must not write fabricated rows to cache"
+    )
 
 
 # ---------------------------------------------------------------------------
