@@ -1,3 +1,32 @@
+## Last change (2026-05-09) — Flights UX + One-way Add-to-Itinerary Correctness (Level 1)
+
+**Status: PR-ready (branch: `claude/fix-flights-ux-oneway-nJZoQ`)** — Fixed the one-way flight add-to-itinerary bug (appeared as "Unscheduled / no time set") and polished mobile flight result cards.
+
+### Root cause
+`handleAddCandidateToItinerary` called `createItem()` for one-way flights, which only sends `title/description/location/position` — no `startTime`, `endTime`, or `details`. Round-trip used `addRoundTripOutboundToDay`/`addRoundTripReturnToDay` which correctly pass schedule data. `ItineraryDayColumn.getItemDayPart` fell back to `"unscheduled"` when `item.startTime` and `details.dayPart` were both absent.
+
+### What changed
+
+- **`frontend/src/lib/api.ts`**: Added `addOneWayFlightToDay(tripId, dayId, item, position)` — mirrors `addRoundTripOutboundToDay` pattern but takes an `ItineraryItem`. Extracts `departureTime`/`arrivalTime`, `price`, `pointsCost`, `cpp` from `item.details`; sends `startTime`, `endTime`, `cashPrice`, `pointsPrice`, `cppValue`, and full `details` in the POST payload. No mock path, no fake URLs.
+- **`frontend/src/components/trips/TripBuilder.tsx`**:
+  - Imported `addOneWayFlightToDay`.
+  - `handleAddCandidateToItinerary`: for `itemType === "flight"` now calls `addOneWayFlightToDay` instead of generic `createItem`, preserving all schedule + flight metadata on add.
+  - `FlightCandidateCard`: added "One-way" badge to header; reduced tag cap from 3 → 2; removed low-value explanation text block to reduce mobile noise.
+  - `RoundTripFlightCard`: button copy changed from "Add Both Flights to Itinerary" → "Add Round Trip".
+- **`frontend/tests/flights-oneway-add.test.mjs`**: 16 new source-content contract tests covering one-way add correctness, round-trip preservation, no fake URLs, no mock path, and card copy.
+
+### Invariants preserved
+- Round-trip outbound → Day 1, return → final day behavior unchanged.
+- `addRoundTripOutboundToDay` / `addRoundTripReturnToDay` untouched.
+- No backend/provider changes.
+- No SQL. No fake booking URLs. No `_mock_flights` usage.
+- Flights Product Contract v1 preserved.
+
+### Tests run
+- `cd frontend && node --test tests/flights-oneway-add.test.mjs tests/fail-closed-flights-hotels.test.mjs` → 23/23 pass.
+
+---
+
 ## Last change (2026-05-09) — Duffel as primary Flights provider (Level 2)
 
 **Status: PR-ready** — Switched `FlightProvider` default production binding from Amadeus to Duffel while preserving Flights Product Contract v1, fail-closed route behavior, and round-trip pairing/add-to-trip contracts.

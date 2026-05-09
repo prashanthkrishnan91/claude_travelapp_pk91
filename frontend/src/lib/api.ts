@@ -485,6 +485,39 @@ export async function addRoundTripReturnToDay(
   });
 }
 
+export async function addOneWayFlightToDay(
+  tripId: string,
+  dayId: string,
+  item: ItineraryItem,
+  position: number
+): Promise<ItineraryItem> {
+  const d = (item.details ?? {}) as Record<string, unknown>;
+  const flightNum  = ((d.flightNumber  ?? d.flight_number)  as string | undefined) ?? "";
+  const airline    = (d.airline as string | undefined) ?? "";
+  const depTime    = (d.departureTime ?? d.departure_time) as string | undefined;
+  const arrTime    = (d.arrivalTime   ?? d.arrival_time)   as string | undefined;
+  const pointsCost = ((d.pointsCost   ?? d.points_cost)    as number | undefined) ?? item.pointsPrice;
+  const price      = (d.price as number | undefined) ?? item.cashPrice;
+  const cpp        = (d.cpp as number | undefined);
+  const payload = toSnake({
+    tripId,
+    dayId,
+    itemType: "flight",
+    title: `${airline} ${flightNum}`.trim() || item.title,
+    startTime: depTime,
+    endTime: arrTime,
+    cashPrice: price,
+    pointsPrice: pointsCost,
+    cppValue: cpp,
+    position,
+    details: { ...d },
+  });
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function addHotelToTrip(
   tripId: string,
   hotel: ResearchResult
