@@ -117,14 +117,50 @@ class NullFlightProvider:
 
 _DEFAULT_PROVIDER: FlightProvider = NullFlightProvider()
 
+# Memoised real provider keyed by env tuple so the OAuth token cache survives
+# across requests within a process while still picking up env changes.
+_PROVIDER_CACHE: dict = {}
+
+
+def reset_flight_provider_cache() -> None:
+    """Clear the memoised provider — used by tests that monkeypatch env."""
+    _PROVIDER_CACHE.clear()
+
 
 def get_flight_provider() -> FlightProvider:
     """Return the active ``FlightProvider``.
 
-    Until Flights v1 lands, this is always ``NullFlightProvider``.  The
-    next PR is expected to add an env-gated registry that resolves a real
-    adapter; until then, callers must treat the result as fail-closed.
+    Flights v1 — env-gated registry:
+    - When ``AMADEUS_FLIGHTS_ENABLED`` is truthy AND both
+      ``AMADEUS_CLIENT_ID`` and ``AMADEUS_CLIENT_SECRET`` are set, returns
+      a memoised ``AmadeusFlightProvider`` (its OAuth token cache is
+      internal and survives across requests).
+    - Otherwise falls back to ``NullFlightProvider`` so unconfigured
+      deployments fail closed with ``UNAVAILABLE`` and zero rows.
     """
+    try:
+        import os  # local import keeps module pure when reading env
+        from app.services.flights_provider_amadeus import (
+            amadeus_enabled_from_env,
+            build_amadeus_provider_from_env,
+        )
+        if not amadeus_enabled_from_env():
+            return _DEFAULT_PROVIDER
+        env_key = (
+            os.environ.get("AMADEUS_CLIENT_ID", ""),
+            os.environ.get("AMADEUS_CLIENT_SECRET", ""),
+            os.environ.get("AMADEUS_BASE_URL", ""),
+        )
+        cached = _PROVIDER_CACHE.get(env_key)
+        if cached is not None:
+            return cached
+        amadeus = build_amadeus_provider_from_env()
+        if amadeus is not None:
+            _PROVIDER_CACHE[env_key] = amadeus
+            return amadeus
+    except Exception:
+        # Adapter import / construction must never break the seam.
+        pass
     return _DEFAULT_PROVIDER
 
 
@@ -134,6 +170,7 @@ __all__ = [
     "FlightProviderResult",
     "NullFlightProvider",
     "get_flight_provider",
+    "reset_flight_provider_cache",
 ]
 
 

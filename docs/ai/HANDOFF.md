@@ -1,6 +1,39 @@
 # AI Handoff — Travel Concierge
 
-## Last change (2026-05-08) — Flights Product Contract v1 (Level 2)
+## Last change (2026-05-09) — Provider-backed Flights v1 (Level 2)
+
+**Status: PR-ready (branch: `claude/hotels-prod-integration-EcEHo`)** — First real-data flight provider (Amadeus Flight Offers Search) plugged into the PR #297 `FlightProvider` seam. Replaces the user-facing mock-backed flight search path with a provider-backed/fail-closed path while preserving round-trip outbound→Day 1, return→final day add-to-trip behavior.
+
+### Provider summary
+
+- **New module**: `backend/app/services/flights_provider_amadeus.py` — `AmadeusFlightProvider` (HTTP-only, no SQL/LLM, no fabricated rows on failure). OAuth2 client_credentials token cached in process until 60s before expiry. One automatic re-auth on 401. All non-OK paths return typed `FlightProviderResult` with zero rows.
+- **Registry**: `app.services.flights_provider.get_flight_provider()` returns `AmadeusFlightProvider` when `AMADEUS_FLIGHTS_ENABLED` is truthy AND both `AMADEUS_CLIENT_ID` + `AMADEUS_CLIENT_SECRET` are set; otherwise returns `NullFlightProvider` (typed `UNAVAILABLE`).
+- **Env vars (names only, no secrets)**: `AMADEUS_CLIENT_ID`, `AMADEUS_CLIENT_SECRET`, optional `AMADEUS_BASE_URL` (default `https://test.api.amadeus.com`), optional `AMADEUS_FLIGHTS_ENABLED` (default false). Backend-only — never exposed to frontend.
+- **Mapping**: source=`amadeus`; airline from `dictionaries.carriers[carrierCode]` falling back to `carrierCode`; flight_number = `carrierCode + segments[0].number`; origin/destination from first/last segment IATA; departure_time/arrival_time from segment ISO datetimes; duration_minutes from itinerary `PT…H…M` (segment delta fallback); stops = segments-1; price from `price.grandTotal`/`price.total`; **booking_url left empty when no real provider deep link is available — no fabricated booking URLs**.
+- **Live wiring**: `SearchService.search_flights` no longer calls `_mock_flights`; it iterates the cartesian (origin × destination) product calling `provider.search_flights(...)` and only collects rows when status is `OK`. `search_round_trip_flights` keeps the existing two-call (outbound + swap origin/dest for return) pair-building so PR #297 day-mapping invariants remain.
+- **`_mock_flights` decision**: kept quarantined; no live route calls it. Production-block path (`BLOCK_LEGACY_PRODUCT_MOCK`) is unchanged. The legacy `_mock_flights` direct-test harness in `test_product_surface_pruning_v1a.py` still passes.
+- **Frontend**: no UI redesign. Existing `OptimizeTripModal` fail-closed copy already handles zero-row responses.
+
+### Tests added
+
+- `backend/tests/test_amadeus_flight_provider.py` (21 tests) — env gating, token cache reuse + refetch after expiry, param mapping (IATA/dates/adults/cabin/currency), happy-path mapping → persistable rows, carrier dictionary fallback, 200/empty → `EMPTY`, 500 / transport / parse → `ERROR`, missing IATA → `EMPTY`, 401 → single token retry, malformed offer skipped, contract rejection of mock/`book.example.com`-tainted rows.
+- `backend/tests/test_search_flights_provider_wiring.py` (5 tests) — `SearchService.search_flights` does not call `_mock_flights`; uses provider seam; UNAVAILABLE/ERROR → zero rows; default null provider yields zero rows; round-trip pair preserves outbound/return shape.
+
+### Tests run / results
+
+- `pytest tests/test_amadeus_flight_provider.py tests/test_search_flights_provider_wiring.py tests/test_flights_product_contract_v1.py tests/test_create_with_search_fail_closed.py tests/test_product_surface_pruning_v1a.py` → **113/113 pass**.
+- Full backend suite: `pytest tests/` → 2580 pass, 5 baseline-unchanged failures (concierge observability, live_research frontend assertion, set_level_writer telemetry — pre-existing on `main`, unrelated to this PR).
+
+### Out of scope
+- Booking, ticketing, PNR, payment, seat selection.
+- Hotels v1 (next track).
+- Broad UI redesign / test cleanup.
+
+### Supabase SQL: No. Providers added: Yes (Amadeus). LLM calls added: No. UI redesign: No.
+
+---
+
+## 2026-05-08 — Flights Product Contract v1 (Level 2)
 
 **Status: PR-ready (branch: claude/cleanup-mock-fallback-F0aHD)** — Bridge from urgent mock cleanup (PRs #292–#296) to the upcoming provider-backed Flights v1 product track. Defines the durable real-data / user-entered flight surface, round-trip leg→day mapping, persistence rules, fail-closed source-status, and the provider seam — without integrating any provider, adding API keys, SQL, LLM calls, or fixture rows. Preserves the flights product capability (round-trip search, outbound→Day 1, return→final day, hotel/lodging trip add) so the next PR is a drop-in adapter.
 

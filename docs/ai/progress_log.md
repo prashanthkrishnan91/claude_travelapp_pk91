@@ -1,5 +1,28 @@
 # Progress Log
 
+## 2026-05-09 — Provider-backed Flights v1 (Amadeus)
+
+**Branch**: `claude/hotels-prod-integration-EcEHo`
+
+**Severity**: Level 2 — first provider-backed real-data flight surface plugged into the PR #297 `FlightProvider` seam. Replaces the user-facing mock-backed `_mock_flights` path with Amadeus Flight Offers Search; fail-closed when unconfigured/unavailable/errored.
+
+**What was done**:
+- Added `backend/app/services/flights_provider_amadeus.py` — `AmadeusFlightProvider` (OAuth2 client_credentials token cache + leeway, 401 single-retry, 8s HTTP timeout, ISO duration parser, contract-safe offer mapping). All transport/parse failures translate to typed `ERROR`/`UNAVAILABLE`/`EMPTY`; never raises.
+- `app.services.flights_provider.get_flight_provider()` now resolves to Amadeus when `AMADEUS_FLIGHTS_ENABLED` is truthy AND both `AMADEUS_CLIENT_ID` + `AMADEUS_CLIENT_SECRET` are set; memoised per env tuple so the in-process token cache persists across requests. Default remains `NullFlightProvider`.
+- `SearchService.search_flights` rewritten to call the provider seam over the (origin × destination) cartesian product; collects rows only on `OK`; never calls `_mock_flights`. `search_round_trip_flights` re-uses this path for outbound + swapped-direction return.
+- Updated stale cache-block test for flights to reflect that the live route no longer reads `research_cache`; mock flights still cannot leak (fail-closed at provider seam).
+- Added `tests/test_amadeus_flight_provider.py` and `tests/test_search_flights_provider_wiring.py`.
+
+**Env vars (names only)**: `AMADEUS_CLIENT_ID`, `AMADEUS_CLIENT_SECRET`, optional `AMADEUS_BASE_URL`, optional `AMADEUS_FLIGHTS_ENABLED`.
+
+**Tests**: 113/113 pass on the focused set (Amadeus + wiring + contract v1 + create-with-search fail-closed + product surface pruning). 2580 pass / 5 baseline-unchanged failures on the full backend suite.
+
+**Supabase SQL**: No. **Providers added**: Yes (Amadeus). **LLM calls added**: No. **UI redesign**: No. **Booking/ticketing**: No.
+
+**Next product track**: Hotels v1 after Flights v1 is validated against the live Amadeus test-API key in a deploy environment.
+
+---
+
 ## 2026-05-08 — Final Mock-Leak Closeout
 
 **Branch**: `claude/final-cleanup-mocks-vQ0VS`
