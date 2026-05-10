@@ -1,138 +1,157 @@
-# AI Repo Operating System — Travel Concierge
+# AI Repo Operating System — Travel Concierge (OS v4 consolidated)
 
 This repo uses an AI Repo Operating System so ChatGPT can give Claude short task briefs while Claude performs the repeated engineering workflow automatically.
 
 ## Goal
-Turn Claude from a prompt executor into a repo-aware engineering partner that plans, audits, tests, delegates independent review, summarizes, learns from misses, and stops at the right boundary.
+Turn Claude from a prompt executor into a repo-aware engineering partner that plans, audits, tests, delegates independent review, summarizes, learns from misses, and stops at the right boundary — by carrying only the task delta in prompts and pulling repeated process from the repo.
 
 ## Default human/agent loop
 
 1. PK states product goal, issue, screenshot, logs, or validation result.
-2. ChatGPT chooses severity, model, scope, and gives Claude a short task brief in OS v2/v3/v4 work-order format.
+2. ChatGPT chooses severity, model, scope, the relevant **safety pack(s)** and **build archetype**, and gives Claude a short task brief in OS v4 work-order format.
 3. Claude reads `CLAUDE.md`, this OS, and only the smallest relevant supporting docs.
-4. Claude runs the relevant focused skills or commands before coding.
-5. Claude builds one focused PR, runs tests, delegates read-only review to applicable reviewer agents, self-audits, updates handoff only when meaningful, and uses the PR template.
+4. Claude runs the relevant focused skill(s) and reviewer agent(s) for the changed domain — not all of them.
+5. Claude builds one coherent **capability slice** per PR, runs the appropriate **test tier** from `docs/ai/TEST_ROUTING.md`, self-audits, updates handoff, and uses the PR template.
 6. ChatGPT reviews the actual PR diff and evidence.
-7. Codex is used only for surgical blockers, merge-gate exceptions, or targeted audits.
-8. PK does UI/runtime validation only when the product-visible behavior requires it.
-9. After meaningful PRs or failed validation, Claude runs the workflow retrospective and recommends MISS_LEDGER/promotion updates if any.
+7. Codex is used for surgical blockers, merge-gate exceptions, or targeted audits.
+8. PK does UI/runtime validation only when product-visible behavior or deployment state requires it.
+9. After meaningful PRs or failed validation, Claude runs the workflow retrospective and recommends MISS_LEDGER / promotion updates if any.
 
-## OS v2 upgrades
+## OS v4 — Prompt Compression and Capability Slice Control (consolidation)
 
-OS v2 adds three automation layers on top of v1:
+This is the consolidation that resolves the prompt-bloat / micro-phasing miss. It is part of OS v4. Do **not** introduce a v4.2 or v5 label.
 
-1. **Focused skills** under `.claude/skills/*/SKILL.md` so Claude can invoke smaller task-specific routines instead of skimming one broad checklist.
-2. **Advisory hooks** through `.claude/settings.json` + `.claude/hooks/ai_os_advisory.py`. These only print reminders and exit successfully; they do not block tools or change app behavior.
-3. **Read-only reviewer agents** under `.claude/agents/*.md` so Claude can delegate independent contract, test, latency, place-authority, and evidence/prose review before PR summary.
+### Default prompt shape
 
-## OS v3 upgrades
+Every prompt to Claude is a work order in this shape:
 
-OS v3 adds a self-learning workflow loop on top of OS v2.
+```
+<task_delta>
+The specific change. Two to six lines.
+</task_delta>
 
-- After meaningful PRs, run the workflow retrospective via `.claude/skills/workflow-retrospective/SKILL.md` and `docs/ai/WORKFLOW_RETROSPECTIVE.md`.
-- After misses, record entries in `docs/ai/MISS_LEDGER.md` via `.claude/skills/miss-ledger-update/SKILL.md`.
-- Promote lessons to `KNOWN_FAILURE_MODES`, `TEST_SELECTOR`, `PR_REVIEW_CHECKLIST`, `FAILURE_RECOVERY`, `PROMPT_BRIEF_TEMPLATE`, hooks, reviewer agents, or `CLAUDE.md` only when repeated or severe — see the promotion ladder in `docs/ai/OS_LEARNING_PROTOCOL.md`.
-- Claude must not bloat the OS after one isolated miss.
-- ChatGPT still owns final workflow architecture judgment.
+<safety_packs>
+Named packs from docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md. The packs own their rules; do not paste them.
+</safety_packs>
 
-## OS v4 upgrades — Product Roadmap Control Plane and Agent Governance
+<build_archetype>
+One archetype name from docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md.
+</build_archetype>
 
-OS v4 adds a Product Roadmap Control Plane and reviewer-agent governance on top of OS v3. OS v3 decides how Claude works; Product OS decides what to build next and why.
+<anchor_files>
+Files Claude must read first. Keep small.
+</anchor_files>
 
-- Every meaningful implementation PR should map to:
-  - the product north star (`docs/product/NORTH_STAR.md`)
-  - a roadmap stage (`docs/product/ROADMAP.md`)
-  - a build queue item (`docs/product/BUILD_QUEUE.md`)
-  - a release gate or validation need (`docs/product/RELEASE_GATES.md`) when applicable
-- Ideas go to `docs/product/IDEA_INBOX.md` instead of hijacking active work.
-- Progress reports use `docs/product/PROGRESS_REPORT_TEMPLATE.md` and the `progress-report` skill.
-- The `roadmap-guardian` reviewer agent checks direction and scope creep.
-- The `agent-curator` reviewer evaluates external agent libraries without importing wholesale.
-- `docs/ai/AGENT_ROUTER.md` prevents all-agent default behavior.
-- `docs/ai/AGENT_INTAKE_REGISTRY.md` parks future external agent patterns.
-- `docs/ai/AGENT_EFFECTIVENESS_LEDGER.md` prevents reviewer bloat.
-- A small Certification Agent Pack (`reality-checker`, `evidence-collector`, `premium-delight-reviewer`, `accessibility-reviewer`, `performance-benchmarker`) is available; route via `AGENT_ROUTER`, do not run by default.
+<acceptance_evidence>
+The exact evidence that proves the slice is done.
+</acceptance_evidence>
 
-## OS v4 — Prompt Engineering Control Layer
+<stop_condition>
+When to stop instead of expanding scope.
+</stop_condition>
+```
 
-OS v4 also adds a prompt engineering control layer so future Claude/Codex prompts are precise, eval-driven, and safe for blind copy/paste:
+Optional sections only when they materially help: `<logs>`, `<runtime_evidence>`, `<ui_budget>`, `<sql_manual_actions>`, `<examples>`.
 
-- `docs/ai/PROMPT_ENGINEERING_STANDARD.md` is the repo standard for prompt structure, lint, coverage-first audits, and ask/plan-before-code for Level 2/3.
-- `docs/product/FEATURE_SLICE_CONTRACT.md` is the contract template for Level 2/3 feature slices.
-- `docs/product/GOLDEN_SCENARIOS.md` is the repo's reusable product invariants. Level 2+ implementation prompts should select 3-7 relevant scenarios.
-- `docs/ai/TOOL_FAILURE_TAXONOMY.md` is the failure-classification taxonomy used before patching failed commands/tests/log checks.
-- Skills: `feature-contract`, `golden-scenarios`, `prompt-lint`, `tool-failure-triage`.
-- Read-only reviewer agents: `prompt-quality-reviewer`, `eval-scenario-reviewer`.
+### What belongs in the prompt vs repo-native
 
-Default OS v4 routing for incoming tasks:
+- **In the prompt:** task delta, named safety pack(s), build archetype, anchor files, acceptance evidence, stop condition.
+- **Repo-native (do not paste into the prompt):** OS rules, skills list, reviewer agents list, generic project invariants, generic "do not" lists, PR summary fields, exhaustive read-first lists, severity ladder, learning protocol, product roadmap control plane.
 
-- "Where are we?" → `progress-report` skill.
-- "What next?" → `roadmap-check` skill + `BUILD_QUEUE`.
-- Idea dump → `idea-triage` skill → `IDEA_INBOX`.
-- Implementation / bug fix / product change → `prompt-intake` then `roadmap-check`.
-- Workflow / product roadmap update → `prompt-intake` then `build-queue-update` if queue moves.
-- Level 2/3 feature → `feature-contract` + `golden-scenarios` before coding.
-- Important generated prompt → `prompt-lint` + `prompt-quality-reviewer` before PK blind-copies.
-- Failed test/log/build/check → `tool-failure-triage` before patching.
+The safety packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` own anything that would otherwise be repeated.
+
+### Batch-vs-split decision gate
+
+Batch into one capability slice when:
+
+- the work is one coherent capability or pipeline seam (Concierge / Discover / Saved / Trip / provider)
+- it shares the same contract / invariant set
+- it shares the same test evidence
+- there is no unrelated migration / runtime / UI / provider expansion
+- batching reduces rework and repeated validation
+
+Split when:
+
+- the contract is unclear inside the current slice
+- the work crosses unrelated skill areas
+- this is the second patch on the same area after a previous failure
+- there is SQL / runtime / manual-action risk
+- it expands provider / LLM behavior
+- it is a large UI redesign across many surfaces
+- the durable fix exceeds the current capability slice
+
+Do **not** split simply because the slice contains related code, contract, tests, and docs; those belong together.
+
+### Meaningful progress standard
+
+- Prefer capability slices that visibly or architecturally advance the roadmap.
+- Avoid six micro-phases when one guarded backend slice is safe.
+- Avoid endless Travel cleanup patches; group by pipeline seam or product surface (Concierge cards, Discover, Saved, Trip Builder, provider).
+- A coherent backend-only scaffold (disabled, gated) is meaningful progress; do not avoid it because it is not user-visible.
+
+### Test tier hierarchy
+
+Use the smallest sufficient tier per `docs/ai/TEST_ROUTING.md`:
+
+- **Tier 0:** changed-file adjacent (default, includes pure helpers).
+- **Tier 1:** product contract / regression bundle (AI Concierge card contract, Flights/Hotels provider, mock/fail-closed safety, OptimizeTripModal fail-closed, TripBuilder add-to-trip).
+- **Tier 2:** broader smoke at milestone or shared-route boundaries.
+- **Tier 3:** full backend suite (`pytest tests/`) only for release checkpoints, shared infrastructure, test infrastructure, broad model/schema risk, suspicious failures, or explicit merge-gate request.
+
+Runtime validation is required only when deployment or user-visible behavior changes.
+
+Every PR summary must state **test tier used**, **why it was sufficient**, and whether the full suite was skipped or run with explicit reason.
+
+## What OS v4 already absorbed
+
+OS v4 is the only operating system label. It absorbs:
+
+- **OS v2:** focused skills under `.claude/skills/*/SKILL.md`, advisory hooks, read-only reviewer agents.
+- **OS v3:** workflow retrospective, MISS_LEDGER, promotion ladder.
+- **Product Roadmap Control Plane:** north star, roadmap, build queue, idea inbox, release gates, progress report, product retrospective.
+- **Prompt Engineering Control Layer:** standard, library, prompt-lint, feature-contract, golden-scenarios, tool-failure-triage.
+- **Consolidation (this section):** prompt compression, safety packs and archetypes, capability slices, batch-vs-split gate, test tier hierarchy.
+
+There is no v4.2 or v5. Future improvements extend OS v4 in place.
 
 ## Required sequence for non-trivial tasks
 
 Before coding:
 
-1. Run or apply `prompt-intake` (OS v4) to classify the task.
-2. Classify severity using `docs/ai/ISSUE_SEVERITY_ROUTING.md`.
-3. Run or apply `roadmap-check` if the task is implementation or product-direction work.
-4. For Level 2/3 features, run or apply `feature-contract` and `golden-scenarios`.
-5. Run or apply `task-planner`.
+1. `prompt-intake` to classify the task and confirm safety pack + archetype.
+2. Severity via `docs/ai/ISSUE_SEVERITY_ROUTING.md`.
+3. `roadmap-check` if implementation or product-direction work.
+4. For Level 2/3 features: `feature-contract` + `golden-scenarios`.
+5. `task-planner`.
 6. Identify changed contracts and likely downstream consumers.
-7. Run or apply `test-selector`.
-8. Read `docs/ai/KNOWN_FAILURE_MODES.md` for this repo.
+7. Pick test tier from `docs/ai/TEST_ROUTING.md`.
+8. Read `docs/ai/KNOWN_FAILURE_MODES.md`.
 
 Before PR summary for Level 1+:
 
-1. Run or apply `contract-audit`.
-2. Run or apply `runtime-gate` / `latency-gate` if runtime/provider/LLM/db behavior changed.
-3. Run or apply `claim-safety-gate` if user-visible text/data/actions/evidence changed.
-4. Delegate to applicable read-only reviewer agents per `docs/ai/AGENT_ROUTER.md`. For Level 2+ features include `eval-scenario-reviewer`.
-5. Run or apply `pre-pr-self-audit`.
-6. Fill `.github/pull_request_template.md` honestly through `pr-summary`. Include whether a workflow retrospective and a product retrospective are needed.
+1. `contract-audit`.
+2. `runtime-gate` / `latency-gate` if runtime/provider/LLM/db behavior changed.
+3. `claim-safety-gate` if user-visible text/data/actions/evidence changed.
+4. Reviewer agents per `AGENT_ROUTER.md`. For Level 2+ features include `eval-scenario-reviewer`.
+5. `pre-pr-self-audit`.
+6. `pr-summary` → fill `.github/pull_request_template.md` honestly. State test tier and reason. State whether workflow + product retrospectives are needed.
 
-When something fails:
-
-- Run `tool-failure-triage` before patching.
+When something fails: `tool-failure-triage` before patching.
 
 After PR summary or failed validation:
 
-- Run `workflow-retrospective` if the PR is meaningful or validation failed.
-- Run `product-retrospective` if the PR was product-stage work.
-- Use `miss-ledger-update` only if a workflow/product-process miss occurred.
-- Use `build-queue-update` only if the queue meaningfully moved.
+- `workflow-retrospective` if the PR is meaningful or validation failed.
+- `product-retrospective` if it was product-stage work.
+- `miss-ledger-update` only if a workflow/product-process miss occurred.
+- `build-queue-update` only if the queue meaningfully moved.
 
 ## Reviewer delegation guide
 
-Use reviewer agents for independent evidence, not code edits. Route via `docs/ai/AGENT_ROUTER.md`. Do not run every agent by default.
-
-Common defaults:
-
-- `roadmap-guardian`: product direction and scope creep.
-- `contract-auditor`: changed contracts, consumers, missed connected files.
-- `test-strategist`: smallest sufficient tests and adversarial invariant coverage.
-- `pr-reviewer`: final PR evidence vs checklist.
-- `place-authority-reviewer`: Google Places canonical authority and enrichment limits.
-- `latency-reviewer`: provider/fanout/LLM/cache/db route-budget risks.
-- `evidence-prose-reviewer`: evidence atoms, writer-visible facts, notes, and claim-safety leakage.
-- `workflow-retrospective-reviewer`: OS v3 misses, repeated patterns, and promotion targets.
-- Certification pack (route only when applicable): `reality-checker`, `evidence-collector`, `premium-delight-reviewer`, `accessibility-reviewer`, `performance-benchmarker`.
-- `agent-curator`: when evaluating external agent ideas / libraries.
-- `prompt-intake-reviewer`: when prompt classification or OS drift is suspected.
-- `prompt-quality-reviewer`: when an important generated prompt is about to be blind-copied.
-- `eval-scenario-reviewer`: for Level 2+ feature slices to verify chosen golden scenarios are appropriate and validated.
-
-Reviewer agents should return blockers/risks/evidence only. The builder remains responsible for implementation.
+Use reviewer agents for independent evidence, not code edits. Route via `docs/ai/AGENT_ROUTER.md`. Prefer fewer high-signal reviewers over many generic ones. Reviewer agents must not bloat builder context.
 
 ## Advisory hooks
 
-Hooks are reminders only in OS v2/v3/v4:
+Hooks are reminders only:
 
 - provider/runtime edits remind `/latency-gate`
 - evidence/prose edits remind `/claim-safety-gate`
@@ -140,36 +159,18 @@ Hooks are reminders only in OS v2/v3/v4:
 - SQL/env/settings edits remind manual action fields
 - Stop reminds `/pre-pr-self-audit` and `/pr-summary`
 
-Do not treat hook reminders as proof. They are prompts to run the relevant skill or reviewer.
-
 ## What belongs in the task prompt
 
-Keep future prompts short. Include only:
+Keep prompts compressed. Use the work-order shape above. The prompt names safety packs and the build archetype; the OS owns the rest.
 
-- repo
-- task/goal
-- severity or suspected severity
-- success criteria
-- hard scope boundaries
-- screenshots/log excerpts only if needed
-- required validation target, if any
-- the OS v4 default line: "Use OS v4. Run prompt-intake and roadmap-check before coding when applicable, run applicable focused skills, delegate via AGENT_ROUTER, and include workflow + product retrospectives if the PR is meaningful or validation fails."
-
-For Level 2+ implementation prompts, also include:
-
-- source-of-truth files
-- feature contract or instruction to run `feature-contract` skill
-- golden scenarios
-- tool failure policy (run `tool-failure-triage` before patching)
-
-Do not paste the full coding principles, repo invariants, test rules, or PR format. They live here.
+Do not paste full coding principles, repo invariants, test rules, or PR format. They live here and in the safety packs.
 
 ## What must stay repo-native
 
 - Coding principles: `docs/ai/EXECUTION_PRINCIPLES.md`
 - Severity routing: `docs/ai/ISSUE_SEVERITY_ROUTING.md`
 - Known failures: `docs/ai/KNOWN_FAILURE_MODES.md`
-- Test routing: `docs/ai/TEST_SELECTOR.md`
+- Test routing: `docs/ai/TEST_ROUTING.md` (default test router)
 - Definition of done: `docs/ai/DEFINITION_OF_DONE.md`
 - Failure recovery: `docs/ai/FAILURE_RECOVERY.md`
 - Runtime evidence: `docs/ai/RUNTIME_EVIDENCE.md`
@@ -182,51 +183,30 @@ Do not paste the full coding principles, repo invariants, test rules, or PR form
 - Agent effectiveness ledger: `docs/ai/AGENT_EFFECTIVENESS_LEDGER.md`
 - Prompt engineering standard: `docs/ai/PROMPT_ENGINEERING_STANDARD.md`
 - Tool failure taxonomy: `docs/ai/TOOL_FAILURE_TAXONOMY.md`
+- Safety packs and build archetypes: `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md`
 - Product OS: `docs/product/*`
 
-## Claude automation layers
+## Travel-specific invariants (owned by safety packs)
 
-### Layer 1 — Context files
-`AGENTS.md`, `CLAUDE.md`, and this OS manual define the repo contract.
+These are enforced via named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section). Prompts reference the pack name and do **not** re-list the rules.
 
-### Layer 2 — Focused skills
-Use `.claude/skills/*/SKILL.md` for reusable procedures Claude can invoke when context matches.
-
-### Layer 3 — Slash commands
-Use `.claude/commands/*.md` as explicit human-triggered shortcuts or aliases to skills.
-
-### Layer 4 — Advisory hooks
-Use `.claude/settings.json` + `.claude/hooks/ai_os_advisory.py` as non-blocking reminders.
-
-### Layer 5 — Read-only reviewer agents
-Use `.claude/agents/*.md` for independent review without bloating builder context. Route via `AGENT_ROUTER`.
-
-### Layer 6 — Self-learning loop (OS v3)
-Use the workflow-retrospective skill, miss-ledger-update skill, and workflow-retrospective-reviewer agent to record misses and promote lessons under the OS_LEARNING_PROTOCOL ladder.
-
-### Layer 7 — Product Roadmap Control Plane (OS v4)
-Use `docs/product/*` plus the OS v4 skills (`prompt-intake`, `roadmap-check`, `idea-triage`, `build-queue-update`, `progress-report`, `product-retrospective`) and the `roadmap-guardian` agent to keep product direction repo-native.
-
-### Layer 8 — Prompt Engineering Control Layer (OS v4)
-Use `docs/ai/PROMPT_ENGINEERING_STANDARD.md`, `docs/product/FEATURE_SLICE_CONTRACT.md`, `docs/product/GOLDEN_SCENARIOS.md`, `docs/ai/TOOL_FAILURE_TAXONOMY.md`, plus the `feature-contract`, `golden-scenarios`, `prompt-lint`, and `tool-failure-triage` skills, and the `prompt-quality-reviewer` and `eval-scenario-reviewer` agents to keep prompts precise, eval-driven, and safe for blind copy/paste.
-
-## Travel-specific invariants
-
-- Google Places is canonical for addable cards.
-- Enrichment providers cannot mint cards.
-- No keyword patching as a substitute for semantic behavior.
-- No deterministic fallback visible notes.
-- Evidence must be writer-safe before it reaches prose.
-- Total request-path latency matters more than local provider timeout.
+- Google Places Addable Authority Pack: Google Places is canonical for addable cards.
+- Enrichment Evidence Only Pack: Yelp / Foursquare / editorial sources are enrichment / evidence only — they cannot mint addable cards.
+- Semantic Concierge Behavior Pack: no keyword patching as a substitute for semantic behavior.
+- AI Concierge Card Contract Pack: card fields aligned (`display.displayWhy`, `supportingDetails.whyPick`, top-level `whyPick`).
+- No Mock/Sample Visible Data Pack: no mock / sample / prototype / unsupported visible claims; no visible deterministic fallback notes.
+- Latency Budget Pack: total request-path latency matters more than local provider timeout.
 
 ## Stop rules
 
 Stop and ask for a split if:
 
-- The fix touches three or more unrelated skill areas.
-- A second related patch would be needed.
+- The fix touches three or more **unrelated** skill areas.
+- A second related patch on the same area would be needed.
 - Durable architecture exceeds the stated scope.
 - Required runtime evidence is unavailable.
-- The implementation would violate a product invariant.
+- The implementation would violate a product invariant (named safety pack).
 - The PR has no clear roadmap stage or build queue item, and is not a justified blocker.
-- The Feature Slice Contract is unclear and cannot be made clear within scope.
+- The Feature Slice Contract is unclear and cannot be made clear within the current slice.
+
+Do not split a coherent capability slice merely because it includes related tests, docs, or contract work.

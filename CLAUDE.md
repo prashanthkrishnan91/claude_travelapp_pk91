@@ -2,171 +2,141 @@
 
 Use this repo through a browser/mobile Claude + Codex workflow unless the user explicitly says CLI is available.
 
-## AI Repo Operating System v2
+## Prompt Compression and Capability Slices (OS v4 consolidated)
 
-For every non-trivial implementation, bug fix, UI change, provider/runtime change, migration, PR review, or workflow update, use the repo AI Operating System before coding:
+This is the controlling rule for how prompts arrive in this repo and how Claude scopes work. It resolves the contradiction between earlier OS guidance ("short prompts, repeated process is repo-native") and an older prompt standard that implied every prompt must repeat every rule, every agent, every file, and every PR field.
 
-1. Read `docs/ai/AI_REPO_OPERATING_SYSTEM.md`.
+A prompt to Claude must carry only the **task delta**:
+
+- the specific task being requested
+- chosen safety pack(s) and build archetype name(s) from `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md`
+- anchor files to read first
+- acceptance evidence (what proves it is done)
+- stop condition (when to stop instead of expanding)
+
+A prompt **must not** paste:
+
+- repeated OS rules from this file or `AI_REPO_OPERATING_SYSTEM.md`
+- the PR summary template
+- exhaustive lists of skills or reviewer agents
+- generic project invariants
+- generic "do not" lists
+- exhaustive read-first file lists
+
+The reusable safety packs and build archetypes own anything the prompt would otherwise repeat. The PR template owns PR fields. `AGENT_ROUTER.md` owns reviewer routing. `TEST_ROUTING.md` owns test tier choice.
+
+### Capability slice over micro-patch
+
+Default to one coherent **capability slice** per PR, not a string of micro-phases.
+
+Split only for a real reason:
+
+- contract is unclear and cannot be made clear inside one slice
+- the task crosses unrelated skill areas
+- a previous patch on the same area already failed (escalation)
+- migration / runtime / SQL / manual-action risk
+- provider / LLM behavior expansion
+- large UI redesign across many surfaces
+- the durable fix exceeds the current capability slice
+
+Do **not** split simply because a task includes related tests, docs, contract, and code; if those belong to one coherent capability, ship one slice. Avoid endless Travel cleanup patches — group by pipeline seam (Concierge / Discover / Saved / Trip / provider) or product surface.
+
+### Prompt-compression gate (hard)
+
+Before a prompt is used:
+
+- if the prompt is mostly repeated workflow / process language, it fails the gate and must be rewritten
+- normal implementation prompts target **<700–1,200 words**, excluding logs/data that materially help
+- any longer prompt must justify why the repeated context cannot be made repo-native
+
+This gate applies to ChatGPT-generated prompts and to anything PK pastes into Claude.
+
+## AI Repo Operating System v4 — what governs
+
+OS v4 is the active operating system. It absorbs OS v2 (focused skills, advisory hooks, reviewer agents) and OS v3 (self-learning loop), and now consolidates prompt compression, safety packs, capability slices, batch-vs-split, and tiered tests. Do not introduce v4.2 or v5 labels — extend OS v4 in place.
+
+For every non-trivial implementation, bug fix, UI change, provider/runtime change, migration, PR review, or workflow update:
+
+1. Read `docs/ai/AI_REPO_OPERATING_SYSTEM.md` (consolidated OS v4).
 2. Read `docs/ai/KNOWN_FAILURE_MODES.md`.
-3. Use focused skills in `.claude/skills/*/SKILL.md` for planning, contract audit, test selection, runtime/latency gates, claim-safety, self-audit, PR summary, and failure recovery.
-4. Use read-only reviewer agents in `.claude/agents/*.md` for independent contract, test, place-authority, latency, evidence/prose, and PR review when applicable.
-5. Treat `.claude/hooks/ai_os_advisory.py` reminders as advisory prompts to run the relevant skill or reviewer, not as proof.
-6. Fill `.github/pull_request_template.md` honestly before PR summary.
-7. Stop and propose a split if the durable fix exceeds scope.
+3. Pick the relevant **safety pack(s)** and **build archetype** from `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md`.
+4. Use the relevant focused skill(s) only — not all of them.
+5. Use a reviewer agent only when the change touches its domain (see `docs/ai/AGENT_ROUTER.md`).
+6. Use `docs/ai/TEST_ROUTING.md` as the **default test router**. Do not run the full backend suite for ordinary PRs.
+7. Treat `.claude/hooks/ai_os_advisory.py` reminders as advisory.
+8. Fill `.github/pull_request_template.md` honestly.
+9. Stop and propose a split only when the durable fix genuinely exceeds the current capability slice (see criteria above).
 
-Do not paste repeated workflow rules into every prompt. The short prompt should define the task, severity, success criteria, and scope; the repo OS owns the repeated process.
+## Self-learning loop
 
-## AI Repo Operating System v3 — self-learning loop
+For Level 1+ PRs or any failed validation, run `.claude/skills/workflow-retrospective/SKILL.md` against `docs/ai/WORKFLOW_RETROSPECTIVE.md`. If a workflow miss occurred, recommend or add a concise entry to `docs/ai/MISS_LEDGER.md`. Do not promote one-off misses into broad rules — follow the promotion ladder in `docs/ai/OS_LEARNING_PROTOCOL.md`.
 
-For Level 1+ PRs or any failed validation, run `.claude/skills/workflow-retrospective/SKILL.md` against `docs/ai/WORKFLOW_RETROSPECTIVE.md`.
+## Product Roadmap Control Plane
 
-If a workflow miss occurred, recommend or add a concise entry to `docs/ai/MISS_LEDGER.md` via `.claude/skills/miss-ledger-update/SKILL.md`. Do not promote one-off misses into broad rules — follow the promotion ladder in `docs/ai/OS_LEARNING_PROTOCOL.md`.
+OS v4 routes product decisions before/around coding:
 
-All Travel/Finance/future-repo coding prompts must use OS v2/v3 work-order format unless explicitly generating architecture/spec only. For bulk repo/workflow edits, batch changes in one branch/PR; do not use file-by-file connector-style commits.
-
-## AI Repo Operating System v4 — Product Roadmap Control Plane and Agent Governance
-
-OS v3 decides how Claude works. OS v4 decides what to build next, why, and which reviewers to call.
-
-Product OS routing (use before/around coding):
-
-- Use `.claude/skills/prompt-intake/SKILL.md` before meaningful work to classify the task and choose OS v4 path.
-- Use `.claude/skills/roadmap-check/SKILL.md` for implementation / product prompts to confirm roadmap stage and build queue item.
-- Use `.claude/skills/progress-report/SKILL.md` whenever PK asks where we are.
-- Use `.claude/skills/idea-triage/SKILL.md` whenever PK dumps ideas; route them to `docs/product/IDEA_INBOX.md`, not implementation.
-- Use `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap decisions or merged PRs.
-- Use `.claude/skills/product-retrospective/SKILL.md` after product-stage PRs.
-
-Agent governance:
-
-- Follow `docs/ai/AGENT_ROUTER.md` to choose only relevant reviewer agents. Do not run every agent by default.
-- Park new external agent ideas in `docs/ai/AGENT_INTAKE_REGISTRY.md`. Do not import wholesale.
-- Record reviewer-agent usefulness in `docs/ai/AGENT_EFFECTIVENESS_LEDGER.md` only when the signal is meaningful.
+- `prompt-intake` to classify any meaningful task
+- `roadmap-check` for implementation / product prompts
+- `progress-report` when PK asks where we are
+- `idea-triage` for idea dumps → `docs/product/IDEA_INBOX.md`
+- `build-queue-update` after meaningful roadmap decisions or merged PRs
+- `product-retrospective` after product-stage PRs
 
 Every meaningful PR should state its roadmap stage and build queue item.
 
-## AI Repo Operating System v4 — Prompt Engineering Control Layer
+## Agent governance
 
-For Level 2/3 features and important generated prompts:
+Follow `docs/ai/AGENT_ROUTER.md`. Do not run every agent by default. Park new external agent ideas in `docs/ai/AGENT_INTAKE_REGISTRY.md`. Record reviewer-agent usefulness in `docs/ai/AGENT_EFFECTIVENESS_LEDGER.md` only when the signal is meaningful.
 
-- Use `.claude/skills/feature-contract/SKILL.md` for Level 2/3 implementation. If the contract is unclear, propose a split.
-- Use `.claude/skills/golden-scenarios/SKILL.md` for Level 2+ implementation. Select 3-7 relevant scenarios from `docs/product/GOLDEN_SCENARIOS.md`.
-- Use `.claude/skills/prompt-lint/SKILL.md` and the `prompt-quality-reviewer` agent for important generated prompts before PK blind-copies them.
-- Use `.claude/skills/tool-failure-triage/SKILL.md` and `docs/ai/TOOL_FAILURE_TAXONOMY.md` before patching failed commands / tests / log checks.
-- Reference `docs/ai/PROMPT_ENGINEERING_STANDARD.md` for prompt structure and lint checklist.
+## Read-first anchors (smallest sufficient subset)
 
-Before work, read only the smallest needed subset of:
+Read only what the task needs. Common anchors:
 
-1. `docs/ai/HANDOFF.md` — current state
-2. `docs/ai/AI_REPO_OPERATING_SYSTEM.md` — required non-trivial task workflow
-3. `docs/ai/KNOWN_FAILURE_MODES.md` — project-specific ways AI PRs fail
-4. `docs/ai/TEST_SELECTOR.md` — changed area to required tests
-5. `docs/ai/PROMPT_LIBRARY.md` — workflow, budget, prompt, UI, and review rules
-6. `docs/ai/ISSUE_SEVERITY_ROUTING.md` — choose patch vs focused root-cause fix vs full plumbing analysis vs split plan
-7. `docs/ai/EXECUTION_PRINCIPLES.md` — think-before-coding, simplicity-first, surgical changes, and goal-driven execution for every prompt
-8. `docs/ai/ROOT_CAUSE_QUALITY_BAR.md` — bounded root-cause quality bar for bugs, regressions, complex features, and reviews
-9. `docs/ai/skills/README.md` — task-specific workflow skill router
-10. `docs/ai/CLAUDE_PERSONAL_SKILLS.md` — optional personal Claude skill routing when a prompt names a personal skill, including runtime log retrieval with `railway-logs`
-11. `docs/ai/DESIGN_VISION.md` — long-term aspirational UI direction and timing gate when doing major design work
-12. `docs/ai/UI_BASELINE.md` — UI baseline and known visual costs when doing UI work
-13. `docs/ai/CLAUDE_WORKFLOW_KIT.md` — stable project constraints only when needed
-14. `README.md` — public/setup context only when needed
-15. `docs/product/NORTH_STAR.md`, `docs/product/ROADMAP.md`, `docs/product/BUILD_QUEUE.md` — read when prompt-intake or roadmap-check is in scope
-16. `docs/product/FEATURE_SLICE_CONTRACT.md`, `docs/product/GOLDEN_SCENARIOS.md` — read for Level 2+ feature work
-17. `docs/ai/PROMPT_ENGINEERING_STANDARD.md`, `docs/ai/TOOL_FAILURE_TAXONOMY.md` — read when generating prompts or triaging failures
+- `docs/ai/HANDOFF.md` — current state
+- `docs/ai/AI_REPO_OPERATING_SYSTEM.md` — consolidated OS v4
+- `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` — reusable contracts the OS owns
+- `docs/ai/KNOWN_FAILURE_MODES.md` — project-specific failure patterns
+- `docs/ai/TEST_ROUTING.md` — default test router (Tier 0–3)
+- `docs/ai/PROMPT_LIBRARY.md` — compact prompt templates
+- `docs/ai/PROMPT_ENGINEERING_STANDARD.md` — compressed prompt structure
+- `docs/ai/ISSUE_SEVERITY_ROUTING.md` — patch vs full-plumbing vs split
+- `docs/ai/EXECUTION_PRINCIPLES.md` — surgical changes
+- `docs/ai/ROOT_CAUSE_QUALITY_BAR.md` — root-cause quality bar
+- `docs/ai/AGENT_ROUTER.md` — reviewer routing
+- `docs/ai/skills/README.md` — skill router
+- `docs/product/NORTH_STAR.md`, `docs/product/ROADMAP.md`, `docs/product/BUILD_QUEUE.md` — product control plane
+- `docs/product/FEATURE_SLICE_CONTRACT.md`, `docs/product/GOLDEN_SCENARIOS.md` — Level 2+ feature work
+- `docs/ai/TOOL_FAILURE_TAXONOMY.md` — when commands/tests/log checks fail
 
-Use one primary workflow skill when it matches the task:
+Useful command aliases (call only when relevant): `/test-selector`, `/contract-audit`, `/latency-gate`, `/claim-safety-gate`, `/pre-pr-self-audit`, `/pr-summary`, `/update-handoff`, `/workflow-retrospective`, `/miss-ledger-update`, `/prompt-intake`, `/roadmap-check`, `/idea-triage`, `/progress-report`, `/build-queue-update`.
 
-- `.claude/skills/ai-repo-os/SKILL.md` — default non-trivial task planner, audit, test, and PR evidence workflow
-- `.claude/skills/task-planner/SKILL.md` — severity, assumptions, success criteria, contracts, stop/split plan
-- `.claude/skills/contract-audit/SKILL.md` — changed contracts and downstream consumers
-- `.claude/skills/test-selector/SKILL.md` — smallest sufficient tests and adversarial invariant coverage
-- `.claude/skills/runtime-gate/SKILL.md` — provider/runtime/latency evidence
-- `.claude/skills/claim-safety-gate/SKILL.md` — visible text/data/evidence safety
-- `.claude/skills/pre-pr-self-audit/SKILL.md` — acceptance criteria to file/function/test/evidence mapping
-- `.claude/skills/pr-summary/SKILL.md` — PR template evidence
-- `.claude/skills/failure-recovery/SKILL.md` — failed patch/review/runtime recovery
-- `.claude/skills/workflow-retrospective/SKILL.md` — OS v3 retrospective after meaningful PRs or failed validation
-- `.claude/skills/miss-ledger-update/SKILL.md` — OS v3 ledger entry for workflow/product-process misses
-- `.claude/skills/prompt-intake/SKILL.md` — OS v4 task classification and routing
-- `.claude/skills/roadmap-check/SKILL.md` — OS v4 roadmap and build queue mapping
-- `.claude/skills/idea-triage/SKILL.md` — OS v4 idea capture without derailing active work
-- `.claude/skills/build-queue-update/SKILL.md` — OS v4 build queue updates
-- `.claude/skills/progress-report/SKILL.md` — OS v4 concise progress reports
-- `.claude/skills/product-retrospective/SKILL.md` — OS v4 product-stage retrospective
-- `.claude/skills/feature-contract/SKILL.md` — OS v4 Level 2/3 feature contract
-- `.claude/skills/golden-scenarios/SKILL.md` — OS v4 select Level 2+ golden scenarios
-- `.claude/skills/prompt-lint/SKILL.md` — OS v4 prompt lint before blind copy
-- `.claude/skills/tool-failure-triage/SKILL.md` — OS v4 classify failed commands/tests/checks
-- `docs/ai/skills/discovery.md` — map unknown files or visual surfaces before implementation
-- `docs/ai/skills/bugfix.md` — focused bug fix or small behavior correction
-- `docs/ai/skills/ui_fix.md` — capped UI polish or visual consistency pass
-- `docs/ai/skills/implementation.md` — focused multi-file feature implementation
-- `docs/ai/skills/merge_gate.md` — cheap PR review before merge
-- `docs/ai/skills/workflow_update.md` — workflow/documentation updates
-- `docs/ai/skills/supabase_change.md` — any Supabase SQL, schema, RLS, auth, or persistence-contract change
+## Core rules
 
-Useful command aliases:
-
-- `/test-selector`
-- `/contract-audit`
-- `/latency-gate`
-- `/claim-safety-gate`
-- `/pre-pr-self-audit`
-- `/pr-summary`
-- `/update-handoff`
-- `/workflow-retrospective`
-- `/miss-ledger-update`
-- `/prompt-intake`
-- `/roadmap-check`
-- `/idea-triage`
-- `/progress-report`
-- `/build-queue-update`
-
-Core rules:
-
-- Default test-routing policy: follow `docs/ai/TEST_ROUTING.md`; do not run full `pytest tests/` by default for ordinary PRs.
-- Every PR summary must include **Test tier used** and **Why this tier was sufficient**. If full suite is run, include the explicit reason; if skipped, list targeted bundles/tests that replaced it.
-- No broad discovery. Read primary target files first; fallback reads only if blocked.
-- Classify issue severity before choosing Codex patch, Sonnet full plumbing analysis, or split plan.
-- Do not keep patching after failed patches. After one failed patch, reclassify. After two related patches, escalate to full plumbing analysis or split plan.
-- When a command/tool/test/log check fails, run `tool-failure-triage` and classify before patching. Do not patch app code for a tooling failure.
-- When runtime evidence matters, use the `railway-logs` personal Claude skill if available before coding. This applies to Railway/deployment errors, crashes, recent errors, 4xx/5xx responses, provider failures, auth/cache/persistence mismatches, and cases where backend logs disagree with UI behavior. Summarize only relevant evidence; do not ask the user to paste Railway JSON/logs unless the skill is unavailable.
-- Smallest safe patch. No unrelated refactors.
+- Default to one coherent capability slice; split only on the criteria above.
+- Default test routing follows `docs/ai/TEST_ROUTING.md`. Every PR summary states **test tier used** and **why this tier was sufficient**. If the full suite is run, include the explicit reason; if skipped, list the targeted bundles/tests that replaced it.
+- No broad discovery. Read primary target files first; fallback only if blocked.
+- Classify severity using `ISSUE_SEVERITY_ROUTING.md` before choosing patch / full-plumbing / split.
+- After one failed patch, reclassify. After two related patches, escalate to full plumbing analysis or split plan.
+- On a tool/test/log failure, run `tool-failure-triage` and classify before patching. Do not patch app code for a tooling failure.
+- When runtime evidence matters, use the `railway-logs` personal Claude skill if available (Railway errors, crashes, 4xx/5xx, provider failures, auth/cache/persistence mismatches, backend-vs-UI disagreement). Summarize only the relevant evidence.
+- Smallest safe patch within the chosen capability slice. No unrelated refactors.
 - For non-trivial work, state assumptions and success criteria before coding.
 - Every changed line must trace to the task.
-- Fix root causes, not symptoms. Do not hide broken behavior, remove UI, or add brittle glue code when the end-to-end flow is fixable within scope.
-- Use repo-local workflow skills instead of repeating large instruction blocks in prompts.
-- Personal Claude skills are optional accelerators only; they do not replace repo rules, budget gates, or project invariants.
-- Major design transformation must wait until `docs/ai/DESIGN_VISION.md` timing gate is satisfied; do small UI fixes only when needed before then.
-- If a task needs three or more skill types, split it before implementation.
+- Fix root causes, not symptoms.
+- Use repo-local skills, safety packs, and archetypes instead of repeating large instruction blocks in prompts.
+- Personal Claude skills are accelerators only; they do not replace repo rules, budget gates, or product invariants.
+- Major design transformation must wait until `docs/ai/DESIGN_VISION.md` timing gate is satisfied.
 - Update `docs/ai/HANDOFF.md` in the same PR for any implementation, bug fix, UI change, architecture change, migration, or workflow change.
 - State Supabase SQL requirement in every PR summary.
 - Stop after opening any Medium-High/High usage PR. Do not propose the next implementation prompt.
 - Every meaningful implementation PR must state its roadmap stage and build queue item from `docs/product/`.
-- Do not run every reviewer agent by default; use `docs/ai/AGENT_ROUTER.md`.
+- Do not run every reviewer agent by default; use `AGENT_ROUTER.md`.
 - For Level 2/3 implementation, run `feature-contract` and `golden-scenarios` before coding.
-- Important generated prompts run through `prompt-lint`/`prompt-quality-reviewer` before blind-copy.
-- Coverage-first audits for review prompts: list every plausible issue before classifying severity.
+- Important generated prompts run through `prompt-lint` / `prompt-quality-reviewer` before blind-copy.
+- Coverage-first audits for review prompts.
 
-Project invariants:
+## Project invariants
 
-- Google Places is canonical for addable places.
-- Yelp/Foursquare are enrichment only.
-- Editorial/web sources are evidence only.
-- AI Concierge card fields must stay aligned: `display.displayWhy`, `supportingDetails.whyPick`, and top-level `whyPick`.
-- No backend/API/business-logic changes during UI-only work.
+Travel-specific safety lives in named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section): Google Places Addable Authority Pack, Enrichment Evidence Only Pack, Semantic Concierge Behavior Pack, AI Concierge Card Contract Pack, No Mock/Sample Visible Data Pack, Latency Budget Pack. Prompts should reference the pack name; they should not re-list the rules.
 
-Final response format:
-
-```md
-Severity classification: Level 0/1/2/3, when applicable
-Root cause/plan:
-Files changed:
-Tests:
-Risks:
-Supabase SQL: Yes/No
-HANDOFF.md edited: Yes/No + reason
-README.md edited: Yes/No + reason
-Roadmap stage / build queue item: <stage> / <item>
-```
+The PR template owns required PR fields. Final response format remains as defined by `pr-summary` and `.github/pull_request_template.md`.

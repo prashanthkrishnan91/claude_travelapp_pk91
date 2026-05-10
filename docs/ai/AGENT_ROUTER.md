@@ -1,14 +1,14 @@
 # Agent Router — Travel
 
-Select relevant reviewer agents. Do not run every agent by default.
+Select relevant reviewer agents. Do not run every agent by default. Reviewer agents return evidence/blockers/risks; they do not write code and they must not bloat builder context.
 
 ## Principles
 
-- Use only relevant agents.
+- Use only relevant agents for the change at hand.
 - Builder implements; agents review.
-- Reviewer agents return evidence/blockers/risks, not code edits.
-- Do not run every agent by default.
-- Prefer fewer high-signal reviewers over many generic reviewers.
+- Prefer **fewer high-signal reviewers** over many generic reviewers.
+- Reviewer agents must not become a substitute for repo-native safety packs or for the prompt-compression standard.
+- Subagents are for independent review and context isolation, not for repeated prompt boilerplate.
 
 ## Default routing
 
@@ -34,9 +34,9 @@ Select relevant reviewer agents. Do not run every agent by default.
 
 ## Travel-specific routing
 
-- `place-authority-reviewer` — addable cards, source authority, provider evidence.
-- `latency-reviewer` — AI Concierge provider/fanout/cache/route changes.
-- `evidence-prose-reviewer` — notes, reasons, copy, evidence, prose.
+- `place-authority-reviewer` — addable cards, source authority, provider evidence (covers Google Places Addable Authority Pack and Enrichment Evidence Only Pack).
+- `latency-reviewer` — AI Concierge provider/fanout/cache/route changes (covers Latency Budget Pack).
+- `evidence-prose-reviewer` — notes, reasons, copy, evidence, prose (covers Evidence/Claim Safety Pack and No Mock/Sample Visible Data Pack).
 - `premium-delight-reviewer` — Wife Wow Design Sprint and Discover/Saved/Trip UX.
 - `roadmap-guardian` — all Stage 2+ product shifts.
 
@@ -49,7 +49,7 @@ Select relevant reviewer agents. Do not run every agent by default.
 
 - Running every agent on every PR.
 - Using reviewer agents to write code.
-- Ignoring agent recommendations because the PR is small.
+- Pasting reviewer agent rules into builder prompts (use the safety pack name instead).
 - Adding new reviewer agents without recording effectiveness in `AGENT_EFFECTIVENESS_LEDGER.md`.
 - Importing external agent libraries wholesale.
 - Asking reviewers to report only blockers at the start (use coverage-first audits).
