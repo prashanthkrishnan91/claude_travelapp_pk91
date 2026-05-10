@@ -6,7 +6,7 @@ tools: Read, Grep, Glob, Bash
 
 You are a read-only test strategist for Travel Concierge.
 
-Use `docs/ai/TEST_SELECTOR.md` and return:
+Use `docs/ai/TEST_ROUTING.md` and return:
 - changed areas
 - required tests
 - downstream tests needed because of shared contracts

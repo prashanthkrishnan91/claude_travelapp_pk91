@@ -25,8 +25,7 @@ This file is **current operational state**, not a historical log. It is meant to
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
 
-- 2026-05-10 — workflow architecture hygiene: removed claude-flow helper/hook stack from `.claude/settings.json`, deleted `.claude/helpers/`, compacted this HANDOFF, added handoff maintenance rule.
-- 2026-05-10 — workflow/setup asset hygiene (PR #312): removed ~37 stale/duplicate workflow/setup assets across root, `.claude`, `docs/ai`, `.kiro`, and cross-AI-tool configs (Cursor / Windsurf / Gemini / OpenCode); CLAUDE.md anchors updated to point at `.claude/skills/` directly.
+- 2026-05-10 — workflow architecture hygiene completed (claude-flow stack, helpers, ~37 stale/duplicate workflow assets, root-surface clutter, cross-AI-tool configs all removed; canonical anchors are `.claude/skills/`, `docs/ai/TEST_ROUTING.md`, `docs/ai/PROMPT_LIBRARY.md`, `.github/pull_request_template.md`, `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md`). Active docs/configs no longer reference deleted assets.
 - 2026-05-09 — follow-up commit removed an orphaned `const explanation = ...` declaration in `FlightCandidateCard` after a JSX block removal; lint/build clean. (See `docs/ai/MISS_LEDGER.md` for durable record.)
 - Earlier Concierge / provider / save-flow work has been folded into product source-of-truth docs and is no longer tracked PR-by-PR here. See `docs/product/DECISION_LOG.md` and `docs/ai/MISS_LEDGER.md` for durable records.
 

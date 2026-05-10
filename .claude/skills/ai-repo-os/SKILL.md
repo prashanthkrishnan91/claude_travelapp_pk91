@@ -9,10 +9,10 @@ Read only the smallest needed subset of:
 - `CLAUDE.md`
 - `docs/ai/AI_REPO_OPERATING_SYSTEM.md`
 - `docs/ai/KNOWN_FAILURE_MODES.md`
-- `docs/ai/TEST_SELECTOR.md`
-- `docs/ai/PR_REVIEW_CHECKLIST.md`
+- `docs/ai/TEST_ROUTING.md`
+- `.github/pull_request_template.md`
 - `docs/ai/DEFINITION_OF_DONE.md`
-- `docs/ai/MANUAL_ACTIONS_CHECKLIST.md`
+- `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md`
 - `docs/ai/OS_LEARNING_PROTOCOL.md`
 - `docs/ai/MISS_LEDGER.md`
 - `docs/ai/WORKFLOW_RETROSPECTIVE.md`
@@ -34,7 +34,7 @@ Fail planning if the task requires three or more unrelated skill areas in one PR
 
 ## Test selector
 
-Use `docs/ai/TEST_SELECTOR.md`.
+Use `docs/ai/TEST_ROUTING.md`.
 
 - Choose the smallest sufficient suite.
 - Add or identify one adversarial test for the riskiest invariant.

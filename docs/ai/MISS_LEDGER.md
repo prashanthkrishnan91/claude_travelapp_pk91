@@ -66,9 +66,9 @@ Miss: ChatGPT generated a Travel project prompt that did not use OS v2 work-orde
 Impact: PK had to catch the workflow regression manually; future Claude prompts could bypass the new OS.
 What caught it: PK review.
 Root cause: Prompt-generation standard was not enforced by the repo OS or prompt template strongly enough.
-What should catch it next time: PROMPT_BRIEF_TEMPLATE, PR_REVIEW_CHECKLIST, workflow-retrospective skill.
+What should catch it next time: PROMPT_LIBRARY / PROMPT_ENGINEERING_STANDARD, `.github/pull_request_template.md`, workflow-retrospective skill.
 One-off or repeated: First recorded miss, but high-signal.
-Promotion target: PROMPT_BRIEF_TEMPLATE and PR_REVIEW_CHECKLIST.
+Promotion target: PROMPT_LIBRARY / PROMPT_ENGINEERING_STANDARD and `.github/pull_request_template.md`.
 Action taken: OS v3 requires all future Travel/Finance/future-repo coding prompts to use OS v2/v3 work-order format unless explicitly generating architecture/spec only.
 Follow-up needed: Verify future prompts include required OS skills, reviewer agents, and stop condition.
 
@@ -81,9 +81,9 @@ Miss: Bulk workflow docs were updated through ChatGPT GitHub connector as many f
 Impact: Avoidable deployment usage spike and workflow friction.
 What caught it: PK observed Vercel usage impact.
 Root cause: Bulk repo update was performed through connector write actions instead of a batched Claude/Sonnet branch/PR.
-What should catch it next time: CONTEXT_MANAGEMENT, MANUAL_ACTIONS_CHECKLIST, PR_REVIEW_CHECKLIST, prompt-generation behavior.
+What should catch it next time: SAFETY_PACKS_AND_ARCHETYPES (Latency Budget Pack), `.github/pull_request_template.md` (manual actions / SQL / env fields), prompt-generation behavior.
 One-off or repeated: First recorded miss, high-cost.
-Promotion target: PR_REVIEW_CHECKLIST, MANUAL_ACTIONS_CHECKLIST, CONTEXT_MANAGEMENT.
+Promotion target: `.github/pull_request_template.md` and SAFETY_PACKS_AND_ARCHETYPES.
 Action taken: Bulk repo/workflow edits should be done by Claude/Sonnet as one PR, not through ChatGPT connector file-by-file writes.
 Follow-up needed: Future ChatGPT should generate Sonnet work-order prompts for bulk repo edits.
 
@@ -96,8 +96,8 @@ Miss: Multiple historical PRs required follow-up fixes because local implementat
 Impact: More prompts, more PR churn, more PK validation, slower build velocity.
 What caught it: ChatGPT PR review, PK UI validation, runtime logs, Codex/Claude follow-ups.
 Root cause: The builder often proved local behavior but not the full product invariant or downstream contract.
-What should catch it next time: contract-auditor, test-strategist, pr-reviewer, pre-pr-self-audit, TEST_SELECTOR.
+What should catch it next time: contract-auditor, test-strategist, pr-reviewer, pre-pr-self-audit, TEST_ROUTING.
 One-off or repeated: Repeated pattern.
-Promotion target: reviewer agents and TEST_SELECTOR.
+Promotion target: reviewer agents and TEST_ROUTING.
 Action taken: OS v2 added focused skills and read-only reviewer agents; OS v3 adds retrospective/learning loop.
 Follow-up needed: After next few PRs, check whether reviewer agents reduce follow-up prompts.

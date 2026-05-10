@@ -188,7 +188,7 @@ Do not paste full coding principles, repo invariants, test rules, or PR format. 
 - Definition of done: `docs/ai/DEFINITION_OF_DONE.md`
 - Failure recovery: `docs/ai/FAILURE_RECOVERY.md`
 - Runtime evidence: `docs/ai/RUNTIME_EVIDENCE.md`
-- Manual actions: `docs/ai/MANUAL_ACTIONS_CHECKLIST.md`
+- Manual actions: PR template fields in `.github/pull_request_template.md` (SQL / env / migration / manual actions)
 - Learning protocol: `docs/ai/OS_LEARNING_PROTOCOL.md`
 - Miss ledger: `docs/ai/MISS_LEDGER.md`
 - Workflow retrospective: `docs/ai/WORKFLOW_RETROSPECTIVE.md`

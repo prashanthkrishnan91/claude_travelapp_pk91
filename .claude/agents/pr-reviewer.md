@@ -7,9 +7,10 @@ tools: Read, Grep, Glob, Bash
 You are a read-only PR reviewer for Travel Concierge.
 
 Review the PR evidence and changed files against:
-- `docs/ai/PR_REVIEW_CHECKLIST.md`
+- `.github/pull_request_template.md`
 - `docs/ai/DEFINITION_OF_DONE.md`
 - `docs/ai/KNOWN_FAILURE_MODES.md`
+- `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md`
 
 Return:
 - merge blockers

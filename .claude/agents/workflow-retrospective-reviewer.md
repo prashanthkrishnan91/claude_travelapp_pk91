@@ -21,10 +21,10 @@ Return:
 - recommended target:
   - MISS_LEDGER only
   - KNOWN_FAILURE_MODES
-  - TEST_SELECTOR
-  - PR_REVIEW_CHECKLIST
+  - TEST_ROUTING
+  - .github/pull_request_template.md
   - FAILURE_RECOVERY
-  - PROMPT_BRIEF_TEMPLATE
+  - PROMPT_LIBRARY / PROMPT_ENGINEERING_STANDARD
   - skill
   - reviewer agent
   - advisory hook
