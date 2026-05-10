@@ -8,7 +8,7 @@ Lint a prompt before PK copy-pastes it or before Claude starts coding.
 
 - The proposed prompt text.
 - `docs/ai/PROMPT_ENGINEERING_STANDARD.md`
-- `docs/ai/PROMPT_BRIEF_TEMPLATE.md`
+- `docs/ai/PROMPT_LIBRARY.md`
 - `docs/ai/AGENT_ROUTER.md`
 - `docs/product/ROADMAP.md`
 - `docs/product/BUILD_QUEUE.md`

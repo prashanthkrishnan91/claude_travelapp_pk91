@@ -22,5 +22,5 @@ Catch wrong task classification, old prompt style, and OS drift before work begi
 
 - Do not edit files.
 - Do not block legitimate work; surface drift only.
-- Cross-reference `docs/ai/AGENT_ROUTER.md` and `docs/ai/PROMPT_BRIEF_TEMPLATE.md`.
+- Cross-reference `docs/ai/AGENT_ROUTER.md`, `docs/ai/PROMPT_LIBRARY.md`, and `docs/ai/PROMPT_ENGINEERING_STANDARD.md`.
 - Keep output concise.

@@ -81,4 +81,4 @@ Use this order:
 7. Motion/animation pass.
 8. Codex visual merge gate after each PR.
 
-Each implementation phase must use `docs/ai/skills/ui_fix.md`, `docs/ai/UI_BASELINE.md`, and the UI budget gate in `docs/ai/PROMPT_LIBRARY.md`.
+Each implementation phase must use the relevant focused skill in `.claude/skills/`, the AI Concierge Card Contract Pack and matching UI build archetype in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md`, and the UI budget gate in `docs/ai/PROMPT_LIBRARY.md`.

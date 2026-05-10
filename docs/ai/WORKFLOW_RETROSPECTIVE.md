@@ -30,7 +30,7 @@ A standard lightweight retrospective Claude runs after meaningful PRs or failed 
 - Was runtime/SQL/deployment validation correctly classified?
 - Did PK or ChatGPT catch something the OS should catch next time?
 - Should this create a `MISS_LEDGER` entry?
-- Should this promote to `KNOWN_FAILURE_MODES`, `TEST_SELECTOR`, `PR_REVIEW_CHECKLIST`, reviewer agent, skill, hook, or prompt template?
+- Should this promote to `KNOWN_FAILURE_MODES`, `TEST_ROUTING`, `.github/pull_request_template.md`, reviewer agent, skill, hook, or prompt template?
 
 ## Output format
 

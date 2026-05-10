@@ -2,7 +2,7 @@
 
 Use before coding and before PR summary.
 
-Read `docs/ai/TEST_SELECTOR.md`, then return:
+Read `docs/ai/TEST_ROUTING.md`, then return:
 - changed areas
 - smallest sufficient tests
 - downstream consumer tests needed

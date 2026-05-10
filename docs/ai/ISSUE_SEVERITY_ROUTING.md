@@ -18,7 +18,7 @@ Use when all are true:
 Route:
 
 - Model: Codex.
-- Skill: `docs/ai/skills/bugfix.md`.
+- Skill: relevant focused skill in `.claude/skills/` (e.g., `pre-pr-self-audit`, `pr-summary`).
 - Merge gate: optional for trivial docs/UI copy; otherwise cheap Codex gate.
 
 Examples:
@@ -39,7 +39,7 @@ Use when:
 Route:
 
 - Model: Codex for mechanical fixes; Sonnet for nuanced multi-file implementation.
-- Skill: `docs/ai/skills/bugfix.md` or `docs/ai/skills/implementation.md`.
+- Skill: relevant focused skill in `.claude/skills/` plus `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` for the matching archetype.
 - Require `docs/ai/ROOT_CAUSE_QUALITY_BAR.md`.
 
 Examples:
@@ -65,7 +65,7 @@ Route:
 
 - Model: Sonnet for one-pass full plumbing analysis + scoped fix.
 - Codex may do a read-only map first only if primary files are unknown.
-- Skill: `docs/ai/skills/implementation.md` plus `docs/ai/ROOT_CAUSE_QUALITY_BAR.md`.
+- Skill: relevant focused skill in `.claude/skills/` plus `docs/ai/ROOT_CAUSE_QUALITY_BAR.md` and the matching build archetype in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md`.
 - Include timeout budget and stop-after-PR if Medium-High/High.
 - Do one merge gate after the integrated fix, not after every speculative micro-patch.
 

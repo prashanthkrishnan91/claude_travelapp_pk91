@@ -21,7 +21,7 @@ Self-learning workflow loop. The repo OS records workflow misses, classifies whe
 ## Promotion ladder
 
 - **One miss** → record in `docs/ai/MISS_LEDGER.md`. Do not update other surfaces yet.
-- **Two similar misses** → update one precise target: `KNOWN_FAILURE_MODES.md`, `TEST_SELECTOR.md`, `PR_REVIEW_CHECKLIST.md`, `FAILURE_RECOVERY.md`, `PROMPT_BRIEF_TEMPLATE.md`, or a reviewer agent checklist.
+- **Two similar misses** → update one precise target: `KNOWN_FAILURE_MODES.md`, `TEST_ROUTING.md`, `.github/pull_request_template.md`, `FAILURE_RECOVERY.md`, `PROMPT_LIBRARY.md`, or a reviewer agent checklist.
 - **Three similar misses** → add or promote an advisory hook reminder.
 - **Repeated high-severity miss** → recommend a required reviewer or stronger stop/split rule.
 - Hard-blocking hooks remain out of scope unless explicitly approved later.
@@ -29,10 +29,10 @@ Self-learning workflow loop. The repo OS records workflow misses, classifies whe
 ## Learning targets
 
 - `docs/ai/KNOWN_FAILURE_MODES.md`
-- `docs/ai/TEST_SELECTOR.md`
-- `docs/ai/PR_REVIEW_CHECKLIST.md`
+- `docs/ai/TEST_ROUTING.md`
+- `.github/pull_request_template.md`
 - `docs/ai/FAILURE_RECOVERY.md`
-- `docs/ai/PROMPT_BRIEF_TEMPLATE.md`
+- `docs/ai/PROMPT_LIBRARY.md` and `docs/ai/PROMPT_ENGINEERING_STANDARD.md`
 - `.github/pull_request_template.md`
 - `.claude/skills/*`
 - `.claude/agents/*`
