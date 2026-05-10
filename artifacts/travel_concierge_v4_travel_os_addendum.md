@@ -33,7 +33,7 @@ V4 transforms the product framing from "AI itinerary/search tool" into "personal
 - **AI Concierge semantic-place artifacts (binding for the place-search core).** They govern open natural-language place understanding, the verified Google-backed addable card spine, evidence dossiers, set-level concierge writer, the LLM reviewer gate, latency budgets (p50 ≤ 2.5s, p75 ≤ 3.0s, p95 ≤ 4.0s, hard cutoff ≤ 6.0s), 5–7 first-response cards, more-options pool, no visible fallback notes, role badges, and quality certification. V4 does not reinterpret any of this.
 - **V3 product north star (still valid).** V3 introduced discovery-first product direction, the Travel Idea / Saved Item root, saved lists/boards, the discovery-first object model, the staged Layer 0–9 model, and the Wife Wow Readiness Gate. V4 keeps all of this and extends it.
 - **V4 supersedes V3 where V3 is shallow:** universal capture from social/web/screenshots/email, decision intelligence as a first-class product surface, source credibility and anti-hype reasoning, dynamic itinerary modification, hotel/dining deep intelligence, dedicated travel-ops (day-of) layer, household collaboration, controlled external-link launchers, watchtower discipline, personalization brain, certifications, and an ordered execution sequence.
-- **Conflict rule.** V3 governed the broad product direction; V4 is the broader source of truth from PR #265 onward. **Semantic-place invariants always win.** V4 must never weaken them.
+- **Conflict rule.** V3 governed the broad product direction; V4 is the broader Travel OS source of truth from this PR onward. **Semantic-place invariants always win.** V4 must never weaken them.
 
 ## 3. Market / Research Lessons Incorporated
 
