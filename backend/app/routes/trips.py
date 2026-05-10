@@ -518,6 +518,13 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
             detail=f"Could not resolve destination city '{payload.destination_city}' to airport codes.",
         )
 
+    logger.info(
+        "[create_with_search.timing] phase=airport_resolution origin_airports=%d destination_airports=%d elapsed_ms=%d",
+        len(origin_airports),
+        len(dest_airports),
+        int((time.perf_counter() - t_total_start) * 1000),
+    )
+
     search_svc = SearchService(db)
 
     # Step 2: Build provider requests.
@@ -649,12 +656,16 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
             status="planned",
         ).model_copy(update={"user_id": user_id})
     )
+    t_trip_create_ms = int((time.perf_counter() - t_trip_start) * 1000)
+    logger.info("[create_with_search.timing] phase=trip_create elapsed_ms=%d", t_trip_create_ms)
+
     itinerary_svc = ItineraryService(db)
+    t_ensure_days_start = time.perf_counter()
     if trip.start_date and trip.end_date:
         itinerary_svc.ensure_trip_days(trip.id, trip.start_date, trip.end_date, user_id)
     logger.info(
-        "[create_with_search.timing] phase=trip_create elapsed_ms=%d",
-        int((time.perf_counter() - t_trip_start) * 1000),
+        "[create_with_search.timing] phase=ensure_trip_days elapsed_ms=%d",
+        int((time.perf_counter() - t_ensure_days_start) * 1000),
     )
 
     # Step 6: Persist all four verticals as trip-level itinerary items.
@@ -664,6 +675,7 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
     seeding: dict = {}
 
     # 6a — Flights (one-way)
+    t_persist_flights_start = time.perf_counter()
     _flights_persisted = 0
     for idx, flight in enumerate(flights_sorted[:10]):
         try:
@@ -708,8 +720,10 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
             logger.warning("[create_with_search.persist] vertical=flight idx=%d error=%s", idx, _exc)
 
     seeding["flights"] = {"harvested": len(flights_sorted), "persisted": _flights_persisted}
+    logger.info("[create_with_search.timing] phase=persist_flights harvested=%d persisted=%d elapsed_ms=%d", len(flights_sorted), _flights_persisted, int((time.perf_counter() - t_persist_flights_start) * 1000))
 
     # 6b — Hotels
+    t_persist_hotels_start = time.perf_counter()
     _hotels_persisted = 0
     for idx, hotel in enumerate(hotels_sorted[:10]):
         try:
@@ -752,8 +766,10 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
             logger.warning("[create_with_search.persist] vertical=hotel idx=%d error=%s", idx, _exc)
 
     seeding["hotels"] = {"harvested": len(hotels_sorted), "persisted": _hotels_persisted}
+    logger.info("[create_with_search.timing] phase=persist_hotels harvested=%d persisted=%d elapsed_ms=%d", len(hotels_sorted), _hotels_persisted, int((time.perf_counter() - t_persist_hotels_start) * 1000))
 
     # 6c — Round-trip pairs
+    t_persist_round_trip_pairs_start = time.perf_counter()
     _rt_persisted = 0
     for idx, pair in enumerate(round_trip_pairs[:5]):
         try:
@@ -812,8 +828,10 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
             logger.warning("[create_with_search.persist] vertical=round_trip idx=%d error=%s", idx, _exc)
 
     seeding["round_trip_pairs"] = {"harvested": len(round_trip_pairs), "persisted": _rt_persisted}
+    logger.info("[create_with_search.timing] phase=persist_round_trip_pairs harvested=%d persisted=%d elapsed_ms=%d", len(round_trip_pairs), _rt_persisted, int((time.perf_counter() - t_persist_round_trip_pairs_start) * 1000))
 
     # 6d — Attractions (Google Places verified, OPERATIONAL only)
+    t_persist_attractions_start = time.perf_counter()
     # Seeded as ACTIVITY items.  These are addable via Google Maps URI — no fake
     # booking URLs, no mock rows, no invented data.
     _attractions_persisted = 0
@@ -845,8 +863,10 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
             logger.warning("[create_with_search.persist] vertical=attraction idx=%d error=%s", idx, _exc)
 
     seeding["attractions"] = {"harvested": len(attractions), "persisted": _attractions_persisted}
+    logger.info("[create_with_search.timing] phase=persist_attractions harvested=%d persisted=%d elapsed_ms=%d", len(attractions), _attractions_persisted, int((time.perf_counter() - t_persist_attractions_start) * 1000))
 
     # 6e — Restaurants (Google Places verified, OPERATIONAL only)
+    t_persist_restaurants_start = time.perf_counter()
     # Seeded as MEAL items.  Same contract as attractions — canonical Maps URI
     # only, no fabricated rates or booking links.
     _restaurants_persisted = 0
@@ -881,6 +901,7 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
             logger.warning("[create_with_search.persist] vertical=restaurant idx=%d error=%s", idx, _exc)
 
     seeding["restaurants"] = {"harvested": len(restaurants), "persisted": _restaurants_persisted}
+    logger.info("[create_with_search.timing] phase=persist_restaurants harvested=%d persisted=%d elapsed_ms=%d", len(restaurants), _restaurants_persisted, int((time.perf_counter() - t_persist_restaurants_start) * 1000))
 
     t_total_ms = int((time.perf_counter() - t_total_start) * 1000)
     logger.info(

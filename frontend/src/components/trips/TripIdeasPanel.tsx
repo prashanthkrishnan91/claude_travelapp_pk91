@@ -264,13 +264,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
   const load = useCallback(async () => {
     setLoading(true);
     const all = await fetchTripIdeas(tripId);
-    const conciergeIdeas = all.filter(
-      (it) => {
-        const details = (it.details ?? {}) as Record<string, unknown>;
-        return details.sourceKind === "concierge_idea" || details.source_kind === "concierge_idea";
-      },
-    );
-    setIdeas(conciergeIdeas);
+    setIdeas(all);
     setLoading(false);
   }, [tripId]);
 

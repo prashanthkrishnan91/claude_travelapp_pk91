@@ -17,7 +17,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { TripStatusBadge } from "@/components/ui/TripStatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { fetchTrips, updateTrip, deleteTrip } from "@/lib/api";
-import type { Trip, TripStatus } from "@/types";
+import { getDisplayTripStatus, getTripStatusGroup } from "@/lib/tripStatus";
+import type { Trip } from "@/types";
 
 function formatDateRange(start?: string, end?: string) {
   if (!start) return "Dates TBD";
@@ -30,10 +31,6 @@ function formatDateRange(start?: string, end?: string) {
   return end ? `${fmt(start)} – ${fmt(end)}` : fmt(start);
 }
 
-const STATUS_GROUPS: { label: string; statuses: TripStatus[] }[] = [
-  { label: "Active", statuses: ["draft", "researching", "planned", "booked"] },
-  { label: "Past",   statuses: ["completed", "archived"] },
-];
 
 interface EditForm {
   title: string;
@@ -100,9 +97,9 @@ export default function TripsPage() {
     showToast("Trip deleted");
   }
 
-  const groupedTrips = STATUS_GROUPS.map(({ label, statuses }) => ({
+  const groupedTrips = ["Active", "Past"].map((label) => ({
     label,
-    trips: trips.filter((t: Trip) => statuses.includes(t.status)),
+    trips: trips.filter((t: Trip) => getTripStatusGroup(t) === label),
   }));
 
   const hasAny = trips.length > 0;
@@ -262,7 +259,7 @@ export default function TripsPage() {
                           {trip.title}
                         </h3>
                         <div className="flex items-center gap-1">
-                          <TripStatusBadge status={trip.status} />
+                          <TripStatusBadge status={getDisplayTripStatus(trip)} />
                           <button
                             onClick={(e) => { e.stopPropagation(); openEdit(trip); }}
                             className="p-1 rounded hover:bg-white/[.06] text-cream-500 hover:text-cream-300 transition"

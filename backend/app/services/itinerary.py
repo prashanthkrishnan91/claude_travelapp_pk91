@@ -193,12 +193,21 @@ class ItineraryService:
             .execute()
         )
         rows = result.data or []
-        concierge_rows = []
+        allowed_item_types = {"flight", "hotel", "activity", "meal"}
+        allowed_source_kinds = {"concierge_idea", "creation_seed"}
+        idea_rows = []
         for row in rows:
-            details = row.get("details") if isinstance(row, dict) else None
-            if isinstance(details, dict) and details.get("source_kind") == "concierge_idea":
-                concierge_rows.append(row)
-        return [ItineraryItem(**row) for row in concierge_rows]
+            if not isinstance(row, dict):
+                continue
+            item_type = str(row.get("item_type") or "").lower()
+            details = row.get("details") if isinstance(row.get("details"), dict) else {}
+            source_kind = str(details.get("source_kind") or "").lower()
+            if item_type not in allowed_item_types:
+                continue
+            if source_kind and source_kind not in allowed_source_kinds:
+                continue
+            idea_rows.append(row)
+        return [ItineraryItem(**row) for row in idea_rows]
 
     def list_items(self, day_id: UUID, user_id: Optional[UUID] = None) -> List[ItineraryItem]:
         if user_id is not None:
