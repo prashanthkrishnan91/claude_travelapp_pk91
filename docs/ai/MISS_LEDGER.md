@@ -21,6 +21,23 @@ Follow-up needed:
 
 ---
 
+### 2026-05-10 — Project source/test/docs hygiene gaps after workflow cleanup
+
+Repo: claude_travelapp_pk91
+Area: Project hygiene (root-to-leaf source, tests, docs)
+Severity: Level 2 hygiene miss
+Miss: After OS v4 workflow cleanup, project-level scaffolding lingered: a root `ai/` package not imported anywhere, a `scripts/design_bible/` PDF generator and the `artifacts/Travel_Concierge_Design_Bible.pdf` it produced (no references in active docs/scripts/CI), and stale `docs/ai/PRODUCT_SURFACE_AUDIT.md` / `docs/ai/progress_log.md` references in `docs/ai/LEGACY_FLIGHTS_HOTELS_STRATEGY.md` (those files were already deleted in the workflow cleanup PR). 11 frontend tests live outside the configured `npm test` scripts and 1 PDF in `docs/ai/specs/` is unreferenced — both flagged for follow-up rather than deleted.
+Impact: Wasted tokens, misleading anchors for future Claude/Codex runs, and no repeatable check that would have caught this before the workflow cleanup PR closed.
+What caught it: PK requested a project-only source/test/docs cleanup with an ongoing hygiene audit.
+Root cause: Project-level cleanup is run ad hoc and scoped narrowly; without a reusable audit, project surface drifts back into clutter even when workflow surface is cleaned.
+What should catch it next time: `scripts/repo_hygiene_audit.py` (report-only) plus the policy in `docs/ai/REPO_HYGIENE.md`. Run before cleanup PRs and after major phase completions.
+One-off or repeated: First *project-level* hygiene cleanup after workflow cleanup; pattern of accumulation is repeated.
+Promotion target: `docs/ai/REPO_HYGIENE.md` and `docs/ai/HANDOFF.md` handoff-maintenance rule (already updated).
+Action taken: Deleted `ai/`, `scripts/design_bible/`, `artifacts/Travel_Concierge_Design_Bible.pdf`. Repaired stale doc references. Added `scripts/repo_hygiene_audit.py` and `docs/ai/REPO_HYGIENE.md`. README "Current focus" section repointed at canonical roadmap docs instead of dated PR notes.
+Follow-up needed: Triage the 11 frontend orphan tests (wire into `npm test` or delete) and decide whether `docs/ai/specs/conversational_context_v1.pdf` is canonical or removable, in a focused follow-up PR.
+
+---
+
 ### 2026-05-10 — Workflow/setup asset bloat across root, .claude, docs/ai, .kiro, and AI-tool configs
 
 Repo: claude_travelapp_pk91

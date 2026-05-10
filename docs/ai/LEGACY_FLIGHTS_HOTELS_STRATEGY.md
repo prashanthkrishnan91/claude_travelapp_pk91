@@ -6,7 +6,7 @@ Date: 2026-05-08
 Severity: **Level 2** (architecture audit / spec). No live mock leakage was discovered in canonical Concierge addable flows, but mock-derived flight/hotel rows **can still be persisted into itinerary items** when `BLOCK_LEGACY_PRODUCT_MOCK` is off — see §5 risk table. No production behavior change in this PR. No SQL. No new providers. No new LLM calls. No UI redesign.
 Branch: `claude/audit-flights-hotels-strategy-KoptK`
 
-> Companion to `docs/ai/PRODUCT_SURFACE_AUDIT.md` (post-PR #290 cleanup audit). This document is the deeper deferred analysis for the **flights/hotels** surfaces that the cleanup audit explicitly punted to a "real-provider strategy PR."
+> Companion to the post-PR #290 product-surface cleanup audit (since folded into `docs/ai/HANDOFF.md` and `docs/ai/MISS_LEDGER.md`). This document is the deeper deferred analysis for the **flights/hotels** surfaces that the cleanup audit explicitly punted to a "real-provider strategy PR."
 
 ## 0. Product capability vs. implementation
 
@@ -56,7 +56,7 @@ No other live frontend caller of flights/hotels was found. `searchRoundTripFligh
 | `/search/flights` | `backend/app/routes/search.py:14,77,98` | live runtime (guarded) |
 | `/search/flights` | `frontend/src/lib/api.ts:533,577` | live runtime wrapper |
 | `/search/flights` | `backend/tests/test_product_surface_pruning_v1a.py:302,403` | test guard |
-| `/search/flights` | `docs/ai/PRODUCT_SURFACE_AUDIT.md`, `docs/ai/HANDOFF.md`, `docs/ai/progress_log.md` | doc/handoff |
+| `/search/flights` | `docs/ai/HANDOFF.md` | doc/handoff |
 | `/search/hotels` | `backend/app/routes/search.py:19,79,156` | live runtime (guarded) |
 | `/search/hotels` | `frontend/src/lib/api.ts:633,644` | live runtime wrapper |
 | `/search/hotels` | `backend/tests/test_product_surface_pruning_v1a.py:304,405` | test guard |
@@ -156,7 +156,7 @@ Acceptance criteria for the next PR (Fail-Closed UX v1):
 6. Add frontend test: `OptimizeTripModal` displays the new copy under the flag-on path.
 7. No change to `/ai/concierge`, `/ai/concierge/search`, AIConciergePanel, or canonical Google-Places restaurant flow.
 8. No SQL, no new providers, no new LLM calls.
-9. Update `docs/ai/HANDOFF.md` and `docs/ai/PRODUCT_SURFACE_AUDIT.md`.
+9. Update `docs/ai/HANDOFF.md` (replace/summarize, never append).
 
 ## 8. Non-goals (explicit)
 
@@ -183,7 +183,7 @@ Acceptance criteria for the next PR (Fail-Closed UX v1):
 | 6. Explicitly rejects unsafe shortcuts (fake booking links, mock-derived persisted cards) | §5 (Persistence row), §6 (Option E), §8 |
 | 7. Any added tests are contract-focused, not brittle snapshots | No new tests added in this PR — existing contract tests in `backend/tests/test_product_surface_pruning_v1a.py` already cover the flag-on, cache-leak, and caller-registry contracts. Test additions deferred to the Fail-Closed UX v1 PR. |
 | 8. No SQL, no provider expansion, no LLM calls | §0, §6, §8 |
-| 9. Docs/handoff/progress lightly updated | `docs/ai/HANDOFF.md` and `docs/ai/progress_log.md` updated in this PR |
+| 9. Docs/handoff lightly updated | `docs/ai/HANDOFF.md` updated in this PR (replace/summarize) |
 | 10. PR summary includes severity, risks, files changed, audit findings, selected next PR, tests, SQL/UI/provider answers | See PR summary in the PR body |
 
 ## 10. Tests run for this audit
