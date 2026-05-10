@@ -81,34 +81,31 @@ class TestProviderSelection:
         assert provider.available is False
         assert provider.search("anything") == []
 
-    def test_tavily_key_ignored_without_live_opt_in(self, monkeypatch):
+    def test_tavily_key_ignored_without_allow_flag(self, monkeypatch):
         monkeypatch.setenv("TAVILY_API_KEY", "tvly-fake")
         monkeypatch.delenv("RUN_LIVE_PROVIDER_TESTS", raising=False)
         monkeypatch.delenv("ALLOW_LIVE_RESEARCH_CALLS", raising=False)
         provider = select_default_provider()
         assert isinstance(provider, _NoopProvider)
 
-    def test_tavily_key_selected_only_with_explicit_opt_in(self, monkeypatch):
+    def test_tavily_key_selected_with_allow_flag_only(self, monkeypatch):
         monkeypatch.setenv("TAVILY_API_KEY", "tvly-fake")
-        monkeypatch.setenv("RUN_LIVE_PROVIDER_TESTS", "true")
         monkeypatch.setenv("ALLOW_LIVE_RESEARCH_CALLS", "true")
         provider = select_default_provider()
         assert provider.name == "Tavily"
         assert provider.available is True
 
-    def test_brave_picked_when_opted_in_and_no_tavily(self, monkeypatch):
+    def test_brave_picked_with_allow_flag_and_no_tavily(self, monkeypatch):
         monkeypatch.delenv("TAVILY_API_KEY", raising=False)
         monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "brave-fake")
-        monkeypatch.setenv("RUN_LIVE_PROVIDER_TESTS", "true")
         monkeypatch.setenv("ALLOW_LIVE_RESEARCH_CALLS", "true")
         provider = select_default_provider()
         assert provider.name == "Brave Search"
 
-    def test_serper_picked_when_only_serper_and_opted_in(self, monkeypatch):
+    def test_serper_picked_with_allow_flag_when_only_serper(self, monkeypatch):
         monkeypatch.delenv("TAVILY_API_KEY", raising=False)
         monkeypatch.delenv("BRAVE_SEARCH_API_KEY", raising=False)
         monkeypatch.setenv("SERPER_API_KEY", "serper-fake")
-        monkeypatch.setenv("RUN_LIVE_PROVIDER_TESTS", "true")
         monkeypatch.setenv("ALLOW_LIVE_RESEARCH_CALLS", "true")
         provider = select_default_provider()
         assert provider.name.startswith("Google")

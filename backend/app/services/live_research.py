@@ -713,15 +713,12 @@ def _env_truthy(name: str) -> bool:
 
 
 def _live_research_calls_allowed() -> bool:
-    """Default-deny gate for paid live provider calls in tests/validation.
+    """Master runtime switch for paid live-provider calls.
 
-    Live providers are enabled when either:
-    - explicit runtime allow flag is on (production path), or
-    - BOTH live-test opt-in flags are on (intentional validation path).
+    Provider API keys are ignored unless ``ALLOW_LIVE_RESEARCH_CALLS`` is truthy.
+    ``RUN_LIVE_PROVIDER_TESTS`` is a test-run convention and not required at runtime.
     """
-    if _env_truthy("ALLOW_LIVE_RESEARCH_CALLS"):
-        return True
-    return _env_truthy("RUN_LIVE_PROVIDER_TESTS") and _env_truthy("ALLOW_LIVE_RESEARCH_CALLS")
+    return _env_truthy("ALLOW_LIVE_RESEARCH_CALLS")
 
 
 def _read_provider_api_key(name: str) -> str:

@@ -77,6 +77,6 @@ Do not merge without targeted coverage for:
 
 ## Live-provider safety rule (non-negotiable)
 - Default tests, local validation, and routine PR validation must never call live paid research providers (Tavily/Brave/Serper) or live Google Places.
-- Live-provider validation is opt-in only and skipped by default. Enable only when explicitly requested with `RUN_LIVE_PROVIDER_TESTS=true` and `ALLOW_LIVE_RESEARCH_CALLS=true`.
+- Live-provider validation is opt-in only and skipped by default. `ALLOW_LIVE_RESEARCH_CALLS=true` is the master runtime switch; provider keys are ignored when it is unset/false. `RUN_LIVE_PROVIDER_TESTS=true` is only a test-run marker/convention for intentionally live tests (not a production requirement).
 - Provider-selection tests must use fake keys + mocked provider constructors, and must make zero network calls.
 - Routine PR checks must use mocked/stubbed providers and contract tests only.
