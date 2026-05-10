@@ -6,6 +6,23 @@ Reason:
 ## Root cause / architecture gap
 
 
+## Product roadmap alignment
+
+- Product stage:
+- Build queue item:
+- Why now:
+- What this unlocks:
+- Scope creep risk:
+- Release gate affected:
+
+## Product OS updates
+
+- BUILD_QUEUE updated: Yes/No
+- IDEA_INBOX updated: Yes/No
+- DECISION_LOG updated: Yes/No
+- PRODUCT_HEALTH updated: Yes/No
+- RELEASE_GATES affected: Yes/No
+
 ## Assumptions
 
 
@@ -59,10 +76,7 @@ Details:
 ## Feature flags / rollback
 
 
-## Risks and limitations
-
-
-## Out of scope
+## Risks, limitations, and out of scope
 
 
 ## Self-audit result
@@ -81,7 +95,7 @@ Required for Level 1+ or meaningful workflow/product changes.
 
 - OS work-order format used: Yes/No
 - OS skills used:
-- Reviewer agents used:
+- Reviewer agents used (per AGENT_ROUTER):
 - Hooks triggered:
 - Evidence quality:
 - Codex needed: Yes/No
@@ -94,3 +108,13 @@ Required for Level 1+ or meaningful workflow/product changes.
 - OS drift observed: Yes/No
 - Token/cost discipline: Good / Watch / Problem
 - Deployment/build discipline: Good / Watch / Problem
+
+## Product OS retrospective
+
+- Roadmap stage advanced: Yes/No
+- Build queue item completed/moved: Yes/No
+- Idea inbox update needed: Yes/No
+- Decision log update needed: Yes/No
+- Product health update needed: Yes/No
+- Roadmap drift observed: Yes/No
+- Future progress report available: Yes/No

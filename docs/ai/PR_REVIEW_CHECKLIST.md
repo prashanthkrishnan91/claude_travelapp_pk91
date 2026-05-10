@@ -16,9 +16,19 @@ Use this checklist before merge and inside `/pre-pr-self-audit`.
 - Feature flag/rollback audit: flag or safe rollback path for risky changes.
 - PR summary accuracy: do not overclaim; list tests actually run and known limitations.
 
+## Product OS (OS v4) checks
+
+- Does the PR map to a roadmap stage?
+- Does it map to a build queue item, or is it a justified blocker?
+- Is the work scope creep, or is it the active stage?
+- Did it update Product OS docs (BUILD_QUEUE / IDEA_INBOX / DECISION_LOG / PRODUCT_HEALTH / RELEASE_GATES) when the roadmap or queue changed?
+- Did it use the correct reviewer agents per `docs/ai/AGENT_ROUTER.md`?
+- Did it avoid all-agent default behavior?
+- Did it preserve active stage focus and not drift into later-stage work?
+
 ## OS v3 self-learning checks
 
-- Did the prompt/task use OS v2/v3 work-order format?
+- Did the prompt/task use OS v3/v4 work-order format?
 - Did Claude use required focused skills?
 - Did Claude delegate to applicable read-only reviewer agents?
 - Did the PR include a workflow retrospective when required?
@@ -27,7 +37,7 @@ Use this checklist before merge and inside `/pre-pr-self-audit`.
 - Did the PR classify deployment/build impact when relevant?
 - Did the PR avoid file-by-file commit churn for bulk workflow/docs edits?
 
-## Pinnacle workflow checks (OS v3)
+## Pinnacle workflow checks (OS v3/v4)
 
 - Was prompt intake correctly classified before implementation?
 - Were only relevant reviewer agents invoked, not all agents by default?
@@ -37,7 +47,7 @@ Use this checklist before merge and inside `/pre-pr-self-audit`.
 - Should `/cost`, `/compact`, `/review`, `/pr_comments`, `/doctor`, `/memory`, `/permissions`, or `/mcp` have been used?
 - Did the workflow retrospective produce a useful score or intentionally skip scoring?
 - If a workflow update is proposed, is it precise and anti-bloat compliant?
-- Did the PR avoid OS drift by using current OS v3 work-order format?
+- Did the PR avoid OS drift by using current OS v4 work-order format?
 
 ## Do not merge if
 
@@ -49,3 +59,4 @@ Use this checklist before merge and inside `/pre-pr-self-audit`.
 - PR summary hides SQL/env/provider/LLM/runtime impact.
 - The implementation is a symptom patch after repeated related failures.
 - The PR proposes broad OS rule changes from a single isolated miss without ledger evidence.
+- The PR has no roadmap stage or build queue mapping and is not a justified blocker.
