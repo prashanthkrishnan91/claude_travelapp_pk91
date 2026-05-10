@@ -103,7 +103,7 @@ Read only what the task needs. Common anchors:
 - `docs/ai/EXECUTION_PRINCIPLES.md` — surgical changes
 - `docs/ai/ROOT_CAUSE_QUALITY_BAR.md` — root-cause quality bar
 - `docs/ai/AGENT_ROUTER.md` — reviewer routing
-- `docs/ai/skills/README.md` — skill router
+- `.claude/skills/` — canonical Claude-native skills (each has SKILL.md)
 - `docs/product/NORTH_STAR.md`, `docs/product/ROADMAP.md`, `docs/product/BUILD_QUEUE.md` — product control plane
 - `docs/product/FEATURE_SLICE_CONTRACT.md`, `docs/product/GOLDEN_SCENARIOS.md` — Level 2+ feature work
 - `docs/ai/TOOL_FAILURE_TAXONOMY.md` — when commands/tests/log checks fail
