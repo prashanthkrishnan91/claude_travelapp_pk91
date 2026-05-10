@@ -32,12 +32,6 @@ class AISettings:
         self.temperature: float = float(os.getenv("AI_TEMPERATURE", "0.3"))
         self.concurrency_limit: int = int(os.getenv("AI_CONCURRENCY_LIMIT", "6"))
 
-        # --- Memory / persistence ---
-        self.memory_dir: str = os.getenv(
-            "CLAUDE_FLOW_MEMORY_DIR",
-            ".claude-flow/data",
-        )
-
         # --- Debug ---
         self.debug: bool = os.getenv("AI_DEBUG", "false").lower() == "true"
         self.log_level: str = os.getenv("LOG_LEVEL", "INFO")
