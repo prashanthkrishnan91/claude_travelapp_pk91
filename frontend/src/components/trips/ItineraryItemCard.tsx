@@ -338,7 +338,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
               <span className="truncate" title={item.location}>{item.location}</span>
             </span>
           )}
-          {item.cashPrice != null && (
+          {item.cashPrice != null && item.cashPrice > 0 && (
             <span className={`flex items-center gap-0.5 text-xs font-medium ${
               item.bestOption === "cash" ? "text-emerald-700 font-semibold" : "text-emerald-600"
             }`}>

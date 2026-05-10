@@ -2,9 +2,9 @@ import logging
 import re
 import time
 import unicodedata
-from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from concurrent.futures import ThreadPoolExecutor, wait as _futures_wait
 from datetime import date
-from typing import List, Optional, TypeVar
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
@@ -12,23 +12,26 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-_T = TypeVar("_T")
-
 # Maximum wall-clock seconds the three provider searches (flights, round-trip,
-# hotels) may collectively take before we stop waiting and proceed with whatever
-# results arrived.  Keeps create-with-search responsive even when Duffel is
-# slow across many origin-destination pairs.
-_SEARCH_BUDGET_SECONDS = 18.0
+# hotels) may collectively take.  After this deadline _futures_wait returns and
+# we proceed with whatever finished; executor.shutdown(wait=False) is then
+# called so the route handler is NOT blocked waiting for slow threads — their
+# HTTP calls will time out on their own (Duffel cap: 8s per call).
+_SEARCH_BUDGET_SECONDS = 15.0
 
 
-def _future_result_or_default(fut: "Future[_T]", default: _T, deadline: float) -> _T:
-    """Return fut's result, or default if it hasn't finished before deadline."""
-    remaining = deadline - time.perf_counter()
-    if remaining <= 0:
+def _safe_future_result(fut, done_set, default):
+    """Return fut's result if it's in done_set, else default.
+
+    Catches all exceptions so a provider error never propagates past the
+    collection step.  Only call on futures that are known to have completed
+    (i.e., in done_set from futures_wait).
+    """
+    if fut is None or fut not in done_set:
         return default
     try:
-        return fut.result(timeout=remaining)
-    except (FuturesTimeoutError, Exception):
+        return fut.result()
+    except Exception:
         return default
 
 from app.contracts.flights import (
@@ -539,27 +542,41 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
         guests=1,
     )
 
-    search_deadline = time.perf_counter() + _SEARCH_BUDGET_SECONDS
+    # Steps 2/3/3b: submit all three provider searches concurrently then
+    # collect results within _SEARCH_BUDGET_SECONDS using futures_wait().
+    #
+    # IMPORTANT — do NOT use `with ThreadPoolExecutor(...) as pool:` here.
+    # The context-manager calls shutdown(wait=True) on exit, which blocks the
+    # route handler until every submitted thread finishes regardless of the
+    # budget.  Instead we call shutdown(wait=False, cancel_futures=True) after
+    # collecting results so the route proceeds immediately; any still-running
+    # threads clean themselves up when their Duffel HTTP call times out (≤8s).
+    t_search_start = time.perf_counter()
     flights: List[FlightResult] = []
     round_trip_pairs: List[RoundTripFlightPair] = []
     hotels: List[HotelResult] = []
 
-    with ThreadPoolExecutor(max_workers=3) as _pool:
-        t_s = time.perf_counter()
-        f_fut = _pool.submit(search_svc.search_flights, flight_req) if flight_req else None
-        rt_fut = _pool.submit(search_svc.search_round_trip_flights, rt_req) if rt_req else None
-        h_fut = _pool.submit(search_svc.search_hotels, hotel_req)
+    _executor = ThreadPoolExecutor(max_workers=3)
+    try:
+        f_fut = _executor.submit(search_svc.search_flights, flight_req) if flight_req else None
+        rt_fut = _executor.submit(search_svc.search_round_trip_flights, rt_req) if rt_req else None
+        h_fut = _executor.submit(search_svc.search_hotels, hotel_req)
 
-        if f_fut:
-            flights = _future_result_or_default(f_fut, [], search_deadline)
-        if rt_fut:
-            round_trip_pairs = _future_result_or_default(rt_fut, [], search_deadline)
-        hotels = _future_result_or_default(h_fut, [], search_deadline)
+        _live = [f for f in (f_fut, rt_fut, h_fut) if f is not None]
+        _done, _not_done = _futures_wait(_live, timeout=_SEARCH_BUDGET_SECONDS)
 
-    t_search_ms = int((time.perf_counter() - t_s) * 1000)
+        flights = _safe_future_result(f_fut, _done, [])
+        round_trip_pairs = _safe_future_result(rt_fut, _done, [])
+        hotels = _safe_future_result(h_fut, _done, [])
+    finally:
+        # Return immediately; threads for _not_done continue in background.
+        _executor.shutdown(wait=False, cancel_futures=True)
+
+    t_search_ms = int((time.perf_counter() - t_search_start) * 1000)
     logger.info(
-        "[create_with_search.timing] phase=provider_search flights=%d rt_pairs=%d hotels=%d elapsed_ms=%d",
-        len(flights), len(round_trip_pairs), len(hotels), t_search_ms,
+        "[create_with_search.timing] phase=provider_search flights=%d rt_pairs=%d hotels=%d "
+        "elapsed_ms=%d timed_out=%d",
+        len(flights), len(round_trip_pairs), len(hotels), t_search_ms, len(_not_done),
     )
 
     # Step 4: AI scoring — individual scores first, then dataset-aware intelligence
@@ -671,12 +688,16 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
                 item_type="hotel",
                 title=hotel.name,
                 location=hotel.location,
-                cash_price=hotel.price_per_night,
+                # Do not write cash_price=0.0 for discovery hotels (Hotels v1
+                # returns price_per_night=0.0 since no real rate is available).
+                # None prevents the generic price row from displaying "$0".
+                cash_price=hotel.price_per_night if hotel.price_per_night else None,
                 position=idx,
                 details={
                     "name": hotel.name,
                     "location": hotel.location,
-                    "price_per_night": float(hotel.price_per_night or 0),
+                    # Omit price_per_night from details to avoid $0/night display.
+                    # Hotels v1 is discovery-only; no real nightly rate exists.
                     "total_price": float(hotel.price or 0),
                     "rating": hotel.rating,
                     "stars": hotel.stars,

@@ -92,3 +92,17 @@ test('ItineraryItemCard: hotel details block reads d.rating for display', () => 
     'Hotel section must display rating formatted to 1 decimal',
   );
 });
+
+// ── No $0 cash price display ─────────────────────────────────────────────────
+
+test('ItineraryItemCard: generic price row guards cashPrice > 0 (no $0 display)', () => {
+  // Hotels v1 discovery-only ships with price_per_night=0.0 and cashPrice=null
+  // (after the backend fix).  The frontend price row must additionally guard
+  // item.cashPrice > 0 so that a 0 value (legacy items or edge cases) is
+  // never rendered as "$0 USD".
+  assert.match(
+    itemCard,
+    /cashPrice\s*!=\s*null\s*&&\s*item\.cashPrice\s*>\s*0/,
+    'Generic price row must check cashPrice > 0, not just != null, to prevent $0 display',
+  );
+});
