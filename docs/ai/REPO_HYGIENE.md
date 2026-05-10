@@ -28,7 +28,9 @@ The audit is **report-only**. It never deletes files. Output is a Markdown repor
 ## What it checks
 
 1. **Banned obsolete surfaces.** Paths that were intentionally removed must not come back: `.claude-flow/`, `.kiro/`, `graphify-out/`, cross-AI-tool configs (`GEMINI.md`, `.cursorrules`, `.windsurfrules`, `.opencode.json`), historical one-off audits (`PRODUCT_SURFACE_AUDIT.md`, `MERGE_GATE_AUDIT_*`, dated `HANDOFF_*` files), and any `progress_log.md`. Reintroducing one of these is a **hard blocker** (exit code 1).
-2. **Banned production-visible tokens.** Tokens like `book.example.com` must not appear under `frontend/src/`. Hard blocker.
+2. **Banned production-visible tokens.** Tokens like `book.example.com` must not appear under `frontend/src/`. The audit splits hits by surrounding context:
+   - **Hard blocker** when the token appears in a file with no `guard` / `mock` / `sentinel` / `refuse` / `fail-closed` / `fail_closed` context — i.e., it looks like the token could actually reach a rendered surface.
+   - **Review-only finding** (under "Docs/artifact findings") when the token appears in a file that is clearly guard/refusal/fail-closed code (e.g., a `MOCK_BOOKING_HOST` sentinel used to detect and refuse fabricated booking URLs). These hits must still be **manually confirmed** in review — the heuristic only proves intent looks defensive, not that the guard is correct.
 3. **Progress/handoff discipline.**
    - Soft warning when `docs/ai/HANDOFF.md` exceeds ~500 lines or `docs/ai/MISS_LEDGER.md` exceeds ~800.
    - Hard blocker when either exceeds the byte threshold (raw-dump territory).
@@ -45,7 +47,7 @@ The audit is **report-only**. It never deletes files. Output is a Markdown repor
 ## What it does **not** do
 
 - It does not delete files.
-- It does not fail CI on cleanup candidates — only on banned legacy paths or oversized raw-dump handoff/miss-ledger files.
+- It does not fail CI on cleanup candidates. The audit hard-fails (exit 1) **only** for: reintroduced banned legacy paths, oversized raw-dump `HANDOFF.md` / `MISS_LEDGER.md` files, and banned production-visible tokens that appear without explicit guard / fail-closed / mock-sentinel context.
 - It does not flag every unreferenced source file. Source-import auditing is too noisy for an automated gate; the audit deliberately focuses on durable, repeatable checks.
 
 ## How to use the output
@@ -65,5 +67,5 @@ The audit is **report-only**. It never deletes files. Output is a Markdown repor
 
 ## Exit codes
 
-- `0` — no hard blockers (cleanup-only signals are fine to ship in a follow-up).
-- `1` — at least one hard blocker.
+- `0` — no hard blockers (cleanup-only and review-only signals are fine to ship in a follow-up).
+- `1` — at least one hard blocker. Hard blockers are limited to: reintroduced banned legacy paths, oversized raw-dump `HANDOFF.md` / `MISS_LEDGER.md`, and banned production-visible tokens with no surrounding guard / fail-closed / mock-sentinel context. Review-only token hits (those with guard context) do not fail the gate but must still be manually confirmed in PR review.
