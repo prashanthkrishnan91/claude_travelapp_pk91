@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from supabase import Client
 
+from app.core.supabase_retry import supabase_execute as _supabase_execute
 from app.models import Trip, TripCreate, TripUpdate
 
 TABLE = "trips"
@@ -18,12 +19,15 @@ class TripsService:
     # ------------------------------------------------------------------
 
     def list_trips(self, user_id: UUID) -> List[Trip]:
-        result = (
-            self.db.table(TABLE)
-            .select("*")
-            .eq("user_id", str(user_id))
-            .order("created_at", desc=True)
-            .execute()
+        result = _supabase_execute(
+            lambda: (
+                self.db.table(TABLE)
+                .select("*")
+                .eq("user_id", str(user_id))
+                .order("created_at", desc=True)
+                .execute()
+            ),
+            context="trips.list_trips",
         )
         return [Trip(**row) for row in result.data]
 
@@ -31,7 +35,10 @@ class TripsService:
         query = self.db.table(TABLE).select("*").eq("id", str(trip_id))
         if user_id is not None:
             query = query.eq("user_id", str(user_id))
-        result = query.limit(1).execute()
+        result = _supabase_execute(
+            lambda: query.limit(1).execute(),
+            context="trips.get_trip",
+        )
         if not result.data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -44,10 +51,10 @@ class TripsService:
     # ------------------------------------------------------------------
 
     def create_trip(self, payload: TripCreate) -> Trip:
-        result = (
-            self.db.table(TABLE)
-            .insert(payload.model_dump(mode="json"))
-            .execute()
+        data = payload.model_dump(mode="json")
+        result = _supabase_execute(
+            lambda: self.db.table(TABLE).insert(data).execute(),
+            context="trips.create_trip",
         )
         return Trip(**result.data[0])
 
