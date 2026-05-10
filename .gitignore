@@ -12,7 +12,13 @@ node_modules/
 # Added by code-review-graph
 .code-review-graph/
 # Claude Flow runtime data
-.claude-flow/
 out/
 *.csv
 public/assets/
+.claude-flow/
+graphify-out/
+.kiro/
+.opencode.json
+.cursorrules
+.windsurfrules
+GEMINI.md
