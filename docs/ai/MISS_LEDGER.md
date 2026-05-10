@@ -21,6 +21,23 @@ Follow-up needed:
 
 ---
 
+### 2026-05-10 — Workflow/setup asset bloat across root, .claude, docs/ai, .kiro, and AI-tool configs
+
+Repo: claude_travelapp_pk91
+Area: Workflow architecture hygiene
+Severity: Level 2 workflow miss
+Miss: Repo accumulated duplicated/orphaned workflow/setup assets — duplicate cross-AI-tool config files at root (`GEMINI.md`, `.cursorrules`, `.windsurfrules`, `.opencode.json` — three of which were byte-identical), entire `.kiro/steering/` mirror of the same content, 59k stale `progress_log.md` at root, dated transition handoff `HANDOFF_2026-05-10_OS_V4_CONSOLIDATION.md`, one-off audits (`MERGE_GATE_AUDIT_2026-05-01.md`, `pr-194-audit.md`, `PRODUCT_SURFACE_AUDIT.md`), 40k stale `docs/ai/progress_log.md`, duplicate process docs (`PROMPT_BRIEF_TEMPLATE`, `TEST_SELECTOR`, `PR_REVIEW_CHECKLIST`, `CLAUDE_WORKFLOW_KIT`, `CLAUDE_PERSONAL_SKILLS`, `CLAUDE_HOOKS_ROADMAP`, `SUBAGENTS_ROADMAP`, `CONTEXT_MANAGEMENT`, `GITHUB_LABELS`, `HOOK_SAFETY`, `MANUAL_ACTIONS_CHECKLIST`, `UI_BASELINE`, `USAGE_LEDGER`, `PERMISSIONS_AND_MEMORY_BOUNDARIES`, `ENGINEERING_DISCIPLINE`, `AI_OS_MANIFEST`, `NEW_REPO_BOOTSTRAP`), legacy `docs/ai/skills/` docs-style skill router superseded by `.claude/skills/`, unreferenced loose `.claude/skills/` md files (`debug-issue.md`, `explore-codebase.md`, `refactor-safely.md`, `review-changes.md`), and unreferenced `.claude/agents/agent-curator.md` and `graphify-out/`. Net: ~37 files removed.
+Impact: Bloated workflow surface created multiple competing rule owners (Cursor/Windsurf/Gemini/Kiro/OpenCode + Claude), broke `CLAUDE.md` anchor reliability (deleted `docs/ai/skills/README.md` ref), and made it unclear which doc is canonical for each topic.
+What caught it: PK requested a cross-repo workflow hygiene cleanup.
+Root cause: Travel repo was originally seeded for several AI tools and several workflow generations; pruning lagged behind canonical OS v4 consolidation.
+What should catch it next time: After any AI-tool or OS version transition, run a workflow-asset reference scan and delete orphans. Cross-AI-tool duplicate configs should be deleted unless that tool is actively used.
+One-off or repeated: First major workflow cleanup; pattern of accumulation is repeated.
+Promotion target: Add a periodic "workflow surface scan" step to OS_LEARNING_PROTOCOL or workflow-retrospective skill.
+Action taken: Deleted ~37 stale/duplicate/orphaned workflow assets in PR; updated `CLAUDE.md` to drop the broken `docs/ai/skills/README.md` anchor and point at `.claude/skills/` directly; recorded this entry. Note: `docs/ai/HANDOFF.md` exceeded ~454k chars and could not be updated in-place via the GitHub Contents API; cleanup is documented here and in the PR summary instead.
+Follow-up needed: Confirm `.kiro/`, `GEMINI.md`, `.cursorrules`, `.windsurfrules` removal does not break any local PK tool workflow.
+
+---
+
 ### 2026-05-09 — Unused variable left after JSX block removal caused Vercel build failure
 
 Repo: claude_travelapp_pk91
