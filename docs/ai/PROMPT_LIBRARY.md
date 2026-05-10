@@ -41,6 +41,12 @@ Before giving any Claude/Codex prompt, ChatGPT must silently check:
 
 If any check fails, rewrite before showing the user.
 
+## Prompt / workflow effectiveness rule
+
+- Every meaningful PR must include the **Prompt / workflow effectiveness** section (see PR template).
+- Only failures or repeated patterns should be promoted to `MISS_LEDGER.md`.
+- Do not expand `HANDOFF.md` for routine prompt-effectiveness notes.
+
 ## Compact templates
 
 ### 1. Capability Slice Implementation

@@ -117,6 +117,17 @@ Required for Level 1+ or meaningful workflow/product changes.
 - Token/cost discipline: Good / Watch / Problem
 - Deployment/build discipline: Good / Watch / Problem
 
+## Prompt / workflow effectiveness
+
+- Source prompt type: normal / incident / cleanup / merge-gate / UI pass
+- v4 compact prompt used: Yes/No
+- Correct repo scope: Yes/No
+- Safety packs/archetype used: Yes/No
+- Follow-up patch needed: Yes/No
+- Test tier appropriate: Yes/No
+- Scope split needed but missed: Yes/No
+- Prompt/system update needed: Yes/No
+
 ## Product OS retrospective
 
 - Roadmap stage advanced: Yes/No

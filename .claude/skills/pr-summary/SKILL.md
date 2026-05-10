@@ -11,5 +11,6 @@ Rules:
 - state SQL/UI/env/provider/LLM/runtime impact
 - state user validation needed yes/no and why
 - state risks and limitations clearly
+- fill the **Prompt / workflow effectiveness** section in every meaningful PR summary
 
 If evidence is insufficient, say so and identify the missing proof instead of claiming success.
