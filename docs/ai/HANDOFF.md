@@ -25,8 +25,8 @@ This file is **current operational state**, not a historical log. It is meant to
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
 
-- 2026-05-10 — workflow architecture hygiene completed (claude-flow stack, helpers, ~37 stale/duplicate workflow assets, root-surface clutter, cross-AI-tool configs all removed; canonical anchors are `.claude/skills/`, `docs/ai/TEST_ROUTING.md`, `docs/ai/PROMPT_LIBRARY.md`, `.github/pull_request_template.md`, `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md`). Active docs/configs no longer reference deleted assets.
-- 2026-05-09 — follow-up commit removed an orphaned `const explanation = ...` declaration in `FlightCandidateCard` after a JSX block removal; lint/build clean. (See `docs/ai/MISS_LEDGER.md` for durable record.)
+- 2026-05-10 — project source/test/docs hygiene PR. Deleted orphan `ai/` root scaffolding package, `scripts/design_bible/` PDF generator, and the orphan `artifacts/Travel_Concierge_Design_Bible.pdf` it produced. Removed dead `PRODUCT_SURFACE_AUDIT.md` / `progress_log.md` references in `docs/ai/LEGACY_FLIGHTS_HOTELS_STRATEGY.md`. Added report-only `scripts/repo_hygiene_audit.py` + `docs/ai/REPO_HYGIENE.md`. No product behavior change.
+- 2026-05-10 — workflow architecture hygiene (claude-flow stack, ~37 stale/duplicate workflow assets, cross-AI-tool configs removed). Canonical anchors: `.claude/skills/`, `docs/ai/TEST_ROUTING.md`, `docs/ai/PROMPT_LIBRARY.md`, `.github/pull_request_template.md`, `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md`.
 - Earlier Concierge / provider / save-flow work has been folded into product source-of-truth docs and is no longer tracked PR-by-PR here. See `docs/product/DECISION_LOG.md` and `docs/ai/MISS_LEDGER.md` for durable records.
 
 ## Active invariants / safety packs to remember
@@ -58,4 +58,5 @@ Produce the discovery-first product architecture audit (one capability slice or 
 - Every meaningful PR may update this file, but by **replacing or summarizing**, never by appending.
 - Move durable historical detail to `docs/ai/MISS_LEDGER.md` (workflow/process misses) or `docs/product/DECISION_LOG.md` (product decisions). Do not preserve old noise just because it exists.
 - Do not create new archive files for routine PRs. An archive is justified only when current-state value is being replaced and the original detail is still useful elsewhere.
+- Run `python scripts/repo_hygiene_audit.py` before opening cleanup-style PRs and after any major phase. The audit is report-only and flags handoff bloat, banned legacy paths, and uncollected/obsolete tests. See `docs/ai/REPO_HYGIENE.md`.
 - `CLAUDE.md`, `docs/ai/AI_REPO_OPERATING_SYSTEM.md`, and `docs/ai/PROMPT_LIBRARY.md` enforce this rule.

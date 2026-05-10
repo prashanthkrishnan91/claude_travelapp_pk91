@@ -80,16 +80,11 @@ This app:
 
 ---
 
-## Current focus (as of latest PR)
+## Current focus
 
-Recent work has focused on **open-language place understanding** for the AI Concierge:
+Active product direction lives in `docs/product/NORTH_STAR.md`, `docs/product/ROADMAP.md`, and `docs/product/BUILD_QUEUE.md`. Architecture and AI Concierge specs live in `artifacts/` (north-star, semantic place intelligence, Travel OS addendum). For repo workflow rules see `CLAUDE.md`, `AGENTS.md`, and `docs/ai/`.
 
-- venue-head preservation so geo/style modifiers ("waterfront", "rooftop", "romantic") never overwrite the real venue noun ("brewery", "tapas", "sushi")
-- open-class place-ask detector that admits unknown venue nouns (izakaya, tea houses, dessert bars, record stores) into Semantic Retrieval v1 without keyword-bucket maintenance
-- venue-first retrieval planning with concrete neighborhood/street anchors (e.g., "Fulton Street") preserved through to provider queries
-- wrong-category penalty so waterfront restaurants/parks no longer dominate brewery/sushi asks just because they share a geo modifier
-- safe-reason builder no longer prints repetitive geo-targeted-search-area copy on every card and never anchors user-visible reasons on a modifier word
-- structured `semantic_retrieval_v1.turn` log line now carries `venue_concept`, `location_modifiers`, `open_class_place_detected`, and wrong-category diagnostics for one-pass debuggability
+Recent direction: discovery-first product spine (Discover → Search → Save → Plan → Optimize → Watch), open-language place understanding in the AI Concierge, and Google-verified addable cards with evidence-grounded reasoning.
 
 ---
 
@@ -100,6 +95,8 @@ This is an actively evolving personal project focused on:
 - improving recommendation quality
 - refining UI/UX to feel premium
 - building a reliable, scalable research engine
+
+For repo hygiene and how to keep the codebase clean over time, see `docs/ai/REPO_HYGIENE.md`.
 
 ---
 
