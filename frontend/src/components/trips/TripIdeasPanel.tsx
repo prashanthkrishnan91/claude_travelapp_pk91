@@ -1,9 +1,43 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bookmark, ChevronDown, Loader2, Search, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Bookmark, ChevronDown, Loader2, Plane, Hotel, Sparkles, UtensilsCrossed, Search, X } from "lucide-react";
 import { fetchTripIdeas, assignIdeaToDay, deleteItem, updateIdeaMeta } from "@/lib/api";
-import type { ItineraryDay, ItineraryItem } from "@/types";
+import type { ItemType, ItineraryDay, ItineraryItem } from "@/types";
+
+// Default visible items per vertical before "Show more" — keeps the panel
+// usable when a user accumulates many saved ideas. See Level 3 Trip Data
+// Contract Rescue (Trip Ideas must not flat-dump 39+ cards).
+const DEFAULT_VISIBLE_PER_VERTICAL = 3;
+
+interface VerticalGroup {
+  key: ItemType;
+  label: string;
+  icon: ReactNode;
+  items: ItineraryItem[];
+}
+
+function groupIdeasByVertical(ideas: ItineraryItem[]): VerticalGroup[] {
+  const buckets: Record<string, ItineraryItem[]> = {
+    activity: [],
+    meal: [],
+    hotel: [],
+    flight: [],
+  };
+  for (const idea of ideas) {
+    const t = idea.itemType;
+    if (t === "activity" || t === "meal" || t === "hotel" || t === "flight") {
+      buckets[t].push(idea);
+    }
+  }
+  const groups: VerticalGroup[] = [
+    { key: "activity", label: "Attractions", icon: <Sparkles className="h-3 w-3 text-emerald-300" />, items: buckets.activity },
+    { key: "meal",     label: "Restaurants", icon: <UtensilsCrossed className="h-3 w-3 text-rose-300" />, items: buckets.meal     },
+    { key: "hotel",    label: "Hotels",      icon: <Hotel className="h-3 w-3 text-violet-300" />,        items: buckets.hotel    },
+    { key: "flight",   label: "Flights",     icon: <Plane className="h-3 w-3 text-sky-300" />,           items: buckets.flight   },
+  ];
+  return groups.filter((g) => g.items.length > 0);
+}
 
 interface Props {
   tripId: string;
@@ -260,6 +294,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
   const [sortBy, setSortBy] = useState<SortOption>("priority");
+  const [expandedGroups, setExpandedGroups] = useState<Partial<Record<ItemType, boolean>>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -423,19 +458,53 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
               {filteredAndSorted.length === 0 ? (
                 <p className="py-2 text-xs text-slate-400">No ideas match your current filters.</p>
               ) : (
-                <div className="space-y-2">
-                  {filteredAndSorted.map((idea) => (
-                    <IdeaCard
-                      key={idea.id}
-                      item={idea}
-                      days={days}
-                      assigning={assigningId === idea.id}
-                      removing={removingId === idea.id}
-                      onAssign={(dayId) => handleAssign(idea.id, dayId)}
-                      onRemove={() => handleRemove(idea.id)}
-                      onUpdate={(patch) => handleUpdate(idea.id, patch)}
-                    />
-                  ))}
+                <div className="space-y-3">
+                  {groupIdeasByVertical(filteredAndSorted).map((group) => {
+                    const expanded = expandedGroups[group.key] ?? false;
+                    const visible = expanded
+                      ? group.items
+                      : group.items.slice(0, DEFAULT_VISIBLE_PER_VERTICAL);
+                    const overflow = group.items.length - visible.length;
+                    return (
+                      <div key={group.key} data-vertical={group.key}>
+                        <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-300">
+                          {group.icon}
+                          {group.label}
+                          <span className="text-slate-500">({group.items.length})</span>
+                        </div>
+                        <div className="space-y-2">
+                          {visible.map((idea) => (
+                            <IdeaCard
+                              key={idea.id}
+                              item={idea}
+                              days={days}
+                              assigning={assigningId === idea.id}
+                              removing={removingId === idea.id}
+                              onAssign={(dayId) => handleAssign(idea.id, dayId)}
+                              onRemove={() => handleRemove(idea.id)}
+                              onUpdate={(patch) => handleUpdate(idea.id, patch)}
+                            />
+                          ))}
+                        </div>
+                        {overflow > 0 && (
+                          <button
+                            onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.key]: true }))}
+                            className="mt-1.5 w-full rounded-lg border border-slate-700/60 bg-slate-900/40 py-1 text-[10px] font-medium text-slate-300 hover:bg-slate-800/60 transition"
+                          >
+                            Show {overflow} more
+                          </button>
+                        )}
+                        {expanded && group.items.length > DEFAULT_VISIBLE_PER_VERTICAL && (
+                          <button
+                            onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.key]: false }))}
+                            className="mt-1.5 w-full rounded-lg border border-slate-700/60 bg-slate-900/40 py-1 text-[10px] font-medium text-slate-300 hover:bg-slate-800/60 transition"
+                          >
+                            Show less
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </>
