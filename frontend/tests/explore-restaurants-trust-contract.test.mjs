@@ -67,24 +67,15 @@ test('searchRestaurants catch returns empty envelope not throws (no uncaught err
 
 // ─── Test 3: State/snapshot - empty snapshot + live verified → non-empty state ─
 
-test('TripBuilder sets candidateRestaurants unconditionally after Promise.allSettled (no length guard)', () => {
-  // Previous bug: "if (resolvedRestaurants.length > 0) setCandidateRestaurants" — gate prevented setting []
-  // was changed to unconditional setCandidateRestaurants to allow self-heal to propagate empty → live results
-  assert.match(tripBuilder, /setCandidateRestaurants\(resolvedRestaurants\)/);
-  // Must NOT have the old length guard before setCandidateRestaurants
-  assert.doesNotMatch(tripBuilder, /if \(resolvedRestaurants\.length > 0\) setCandidateRestaurants/);
-});
-
-test('TripBuilder canPersistRestaurants guard prevents saving [] when live results exist and prior was empty', () => {
-  assert.match(tripBuilder, /const canPersistRestaurants = resolvedRestaurants\.length > 0 \|\| shouldPersistEmptyRestaurants \|\| priorRestaurants\.length === 0/);
-  assert.match(tripBuilder, /restaurants: canPersistRestaurants \? resolvedRestaurants : priorRestaurants/);
-});
-
-test('TripBuilder self-heal triggers when snapshot has empty restaurants', () => {
-  assert.match(tripBuilder, /const hasHealthyRestaurants = snapshot != null && snapshot\.restaurants\.length > 0 && hasPositiveExploreScore\(snapshot\.restaurants\)/);
-  assert.match(tripBuilder, /const shouldFetchRestaurants = !hasHealthyRestaurants/);
-  assert.match(tripBuilder, /shouldFetchRestaurants \? searchRestaurants\(destination\)/);
-});
+// Removed (Level 3 Trip Data Contract Rescue):
+//   - "TripBuilder sets candidateRestaurants unconditionally after Promise.allSettled"
+//   - "TripBuilder canPersistRestaurants guard prevents saving []"
+//   - "TripBuilder self-heal triggers when snapshot has empty restaurants"
+// These pinned the obsolete snapshot-first/self-heal hydration internals that
+// caused new trips to render 0 restaurants while triggering a slow AI
+// Concierge fallback.  Replacement coverage lives in
+// tests/trip-candidates-contract.test.mjs (mergePersistedWithSnapshot guard
+// + TripBuilder reads from persisted itinerary_items).
 
 // ─── Test 4: Hydration - snapshot with identity fields survives trust gate ────
 
@@ -177,25 +168,14 @@ test('restaurant Maps link uses canonical googleMapsUri then placeId, not loose 
 
 // ─── Test 9: Race - stale empty snapshot cannot overwrite live results ────────
 
-test('TripBuilder hydration effect is one-shot per tripId:destination (exploreSnapshotLoadedRef)', () => {
-  assert.match(tripBuilder, /exploreSnapshotLoadedRef\.current === hydrationKey/);
-  // The ref is set synchronously before async work — prevents double execution
-  assert.match(tripBuilder, /exploreSnapshotLoadedRef\.current = hydrationKey/);
-});
-
-test('TripBuilder snapshot hydration does not set candidateRestaurants from snapshot when restaurants are empty', () => {
-  // Only sets from snapshot when length > 0 — avoids overwriting live results with stale []
-  assert.match(tripBuilder, /if \(snapshot\.restaurants\.length > 0\) setCandidateRestaurants\(snapshot\.restaurants\)/);
-});
-
-// ─── Test 10: canPersistRestaurants prevents snapshot overwrite with empty ────
-
-test('TripBuilder does not overwrite prior non-empty restaurants with empty live result unless terminalNoResults', () => {
-  // shouldPersistEmptyRestaurants only true when both resolved is [] AND terminalNoResults
-  assert.match(tripBuilder, /const shouldPersistEmptyRestaurants = resolvedRestaurants\.length === 0 && resolvedRestaurantEnvelope\.terminalNoResults/);
-  // canPersistRestaurants = true only when there are results OR terminal OR prior was already empty
-  assert.match(tripBuilder, /const canPersistRestaurants = resolvedRestaurants\.length > 0 \|\| shouldPersistEmptyRestaurants \|\| priorRestaurants\.length === 0/);
-});
+// Removed (Level 3 Trip Data Contract Rescue):
+//   - "TripBuilder hydration effect is one-shot per tripId:destination"
+//   - "TripBuilder snapshot hydration does not set candidateRestaurants … when empty"
+//   - "TripBuilder does not overwrite prior non-empty restaurants with empty live result"
+// All three encoded the removed snapshot-first hydration effect.  The
+// canonical replacement (persisted itinerary_items → buildTripCandidateBuckets
+// → mergePersistedWithSnapshot) is covered by
+// tests/trip-candidates-contract.test.mjs.
 
 // ─── Tests 11–16: Mock/demo restaurant rejection ─────────────────────────────
 

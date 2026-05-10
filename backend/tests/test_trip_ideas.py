@@ -209,10 +209,16 @@ def test_list_unscheduled_items_returns_only_null_day_items():
 
 
 # ---------------------------------------------------------------------------
-# Test 2b: list_unscheduled_items includes creation_seed for supported item types
+# Test 2b: list_unscheduled_items EXCLUDES creation_seed candidates
+#
+# Level 3 Trip Data Contract Rescue: creation-seeded candidates from
+# `/trips/create-with-search` are routed to the four vertical candidate
+# panels (Flights / Hotels / Attractions / Restaurants) via
+# `GET /trips/{id}/items` — they MUST NOT be dumped into Trip Ideas, which
+# represents the user's explicitly saved shortlist (source_kind="concierge_idea").
 # ---------------------------------------------------------------------------
 
-def test_list_unscheduled_items_includes_creation_seed_activity_and_meal():
+def test_list_unscheduled_items_excludes_creation_seed_rows():
     db = _FakeDB()
     svc = ItineraryService(db)
     trip_id = uuid4()
@@ -220,6 +226,8 @@ def test_list_unscheduled_items_includes_creation_seed_activity_and_meal():
     idea = svc.create_trip_item(_make_idea(trip_id, "Lou Malnati's"))
     activity_id = str(uuid4())
     meal_id = str(uuid4())
+    flight_id = str(uuid4())
+    hotel_id = str(uuid4())
     db.tables["itinerary_items"].extend([
         {
             "id": activity_id,
@@ -243,13 +251,40 @@ def test_list_unscheduled_items_includes_creation_seed_activity_and_meal():
             "updated_at": "2026-01-01T00:00:00+00:00",
             "details": {"source_kind": "creation_seed"},
         },
+        # Flights/hotels seeded with no source_kind must also be excluded —
+        # they belong to the Flights / Hotels candidate panels, not Trip Ideas.
+        {
+            "id": flight_id,
+            "trip_id": str(trip_id),
+            "day_id": None,
+            "item_type": "flight",
+            "title": "ANA NH7",
+            "position": 3,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+            "details": {},
+        },
+        {
+            "id": hotel_id,
+            "trip_id": str(trip_id),
+            "day_id": None,
+            "item_type": "hotel",
+            "title": "Park Hyatt Tokyo",
+            "position": 4,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+            "details": {},
+        },
     ])
 
     unscheduled = svc.list_unscheduled_items(trip_id)
     ids = {str(it.id) for it in unscheduled}
+    # Only the explicitly saved concierge_idea row survives the filter.
     assert str(idea.id) in ids
-    assert activity_id in ids
-    assert meal_id in ids
+    assert activity_id not in ids, "creation_seed activities must not appear in Trip Ideas"
+    assert meal_id not in ids, "creation_seed meals must not appear in Trip Ideas"
+    assert flight_id not in ids, "seeded flights must not appear in Trip Ideas"
+    assert hotel_id not in ids, "seeded hotels must not appear in Trip Ideas"
 
 # ---------------------------------------------------------------------------
 # Test 3: Duplicate idea for the same trip/title is not created

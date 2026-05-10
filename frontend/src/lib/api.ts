@@ -1819,51 +1819,15 @@ export function mapUnifiedAttractionToResult(
   };
 }
 
-/**
- * v1B snapshot guard — true iff a persisted Explore attraction was minted
- * by the canonical adapter (`mapUnifiedAttractionToResult`).  Old snapshots
- * created from the legacy mock-backed `/search/attractions` surface had
- * generated ids (e.g. `attr-…`, `mock-…`) and `bookingUrl` values that did
- * not encode a Google Places identity.  The canonical adapter always
- * produces a `bookingUrl` that points at Google Maps (either the
- * `googleMapsUri` or a `place_id:` deep link), and an `id` equal to the
- * Google `providerPlaceId`.  Returning false here forces TripBuilder
- * Explore to discard the snapshot attraction and refetch via
- * `searchAttractionsViaConcierge(...)`, so legacy mock-shaped rows never
- * leak through snapshot reuse.
- */
-export function isCanonicalSnapshotAttraction(a: AttractionSearchResult): boolean {
-  if (!a) return false;
-  const id = typeof a.id === "string" ? a.id : "";
-  if (!id || id.startsWith("mock-") || id.startsWith("attr-")) return false;
-  const url = typeof a.bookingUrl === "string" ? a.bookingUrl : "";
-  if (!url) return false;
-  // Canonical: googleMapsUri or the place_id deep link emitted by the v1B adapter.
-  return url.includes("google.com/maps") || url.includes("place_id:");
-}
-
-/**
- * Fetch verified attractions for a destination via the canonical
- * /ai/concierge/search surface.  Replaces the legacy mock-backed
- * `searchAttractions(...)` helper for TripBuilder Explore.  Fails closed
- * (returns []) on any error so the UI never renders unverified data.
- */
-export async function searchAttractionsViaConcierge(
-  tripId: string,
-  destination: string
-): Promise<AttractionSearchResult[]> {
-  const dest = destination?.trim();
-  if (!tripId || !dest) return [];
-  try {
-    const result = await callConciergeSearch(tripId, `Top attractions in ${dest}`);
-    if (!Array.isArray(result.attractions) || result.attractions.length === 0) return [];
-    return result.attractions
-      .map(mapUnifiedAttractionToResult)
-      .filter((a): a is AttractionSearchResult => a !== null);
-  } catch {
-    return [];
-  }
-}
+// Removed (Level 3 Trip Data Contract Rescue):
+//   - isCanonicalSnapshotAttraction
+//   - searchAttractionsViaConcierge
+// These powered the legacy snapshot-first Explore hydration in TripBuilder,
+// which competed with the canonical persisted-itinerary_items source of
+// truth and caused new trips to render 0 attractions/restaurants while
+// triggering a slow AI Concierge "Top attractions in <city>" search.
+// Attractions/restaurants are now read from persisted ACTIVITY/MEAL rows
+// via buildTripCandidateBuckets (frontend/src/lib/tripCandidates.ts).
 
 // [DEV-ONLY] Debug trace for the AI Concierge pipeline
 export interface ConciergeDebugTrace {

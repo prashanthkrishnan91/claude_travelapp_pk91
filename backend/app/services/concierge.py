@@ -1812,7 +1812,36 @@ class ConciergeService:
             if self._is_duplicate_message_error(exc):
                 logger.info("Ignoring duplicate concierge message for client_message_id=%s", client_message_id)
                 return
+            if self._is_deleted_trip_fk_error(exc):
+                # Trip was deleted between request start and message persistence.
+                # This is an expected lifecycle race (e.g. user deletes a trip
+                # while an in-flight concierge search is still completing); the
+                # FK violation is benign — log at INFO without alarming WARNING
+                # noise. See Level 3 Trip Data Contract Rescue lifecycle guard.
+                logger.info(
+                    "Skipping concierge message persistence — trip_id=%s no longer exists (deleted between request and save)",
+                    trip_id,
+                )
+                return
             logger.warning("Failed to persist concierge message: %s", exc)
+
+    def _is_deleted_trip_fk_error(self, exc: Exception) -> bool:
+        """Detect FK violation from a deleted trip_id.
+
+        Supabase / Postgres surface FK violations as code 23503 with a message
+        referencing the trips foreign key.  Returning True here lets callers
+        quietly drop late writes against a no-longer-existing trip rather
+        than spamming Railway logs with WARNING-level failures during the
+        normal delete-trip-while-search-in-flight race.
+        """
+        code = str(getattr(exc, "code", "") or "").upper()
+        if code == "23503":
+            return True
+        text = str(exc).lower()
+        return (
+            "foreign key" in text
+            and ("trip_id" in text or "trips" in text)
+        )
 
     def _is_duplicate_message_error(self, exc: Exception) -> bool:
         code = str(getattr(exc, "code", "") or "").upper()

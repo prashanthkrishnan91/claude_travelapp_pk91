@@ -735,6 +735,19 @@ def _persist_request_log_task(
             request_id=request_id,
         )
     except Exception as exc:
+        code = str(getattr(exc, "code", "") or "").upper()
+        text = str(exc).lower()
+        is_deleted_trip_fk = code == "23503" or (
+            "foreign key" in text and ("trip_id" in text or "trips" in text)
+        )
+        if is_deleted_trip_fk:
+            # Lifecycle race: trip was deleted between request start and the
+            # background persist.  See ConciergeService._is_deleted_trip_fk_error.
+            logger.info(
+                "concierge.request_log.background_task_skipped_deleted_trip request_id=%s",
+                request_id,
+            )
+            return
         logger.warning(
             "concierge.request_log.background_task_failed request_id=%s error=%s",
             request_id,

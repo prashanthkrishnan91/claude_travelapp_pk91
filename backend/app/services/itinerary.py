@@ -183,7 +183,18 @@ class ItineraryService:
         return [ItineraryItem(**row) for row in result.data]
 
     def list_unscheduled_items(self, trip_id: UUID) -> List[ItineraryItem]:
-        """Concierge ideas saved to a trip but not yet assigned to any day."""
+        """Concierge ideas saved to a trip but not yet assigned to any day.
+
+        Trip Ideas is the user-saved shortlist: only rows with
+        ``details.source_kind == "concierge_idea"`` (i.e. items the user
+        explicitly saved from the AI Concierge "Save to Ideas" action)
+        appear here.  Creation-seeded candidates from ``/trips/create-with-search``
+        carry ``source_kind = "creation_seed"`` and are routed instead to the
+        four vertical candidate panels (Flights / Hotels / Attractions /
+        Restaurants) via ``GET /trips/{id}/items``.  Mixing them into Trip
+        Ideas dumps the ~39 seeded rows into one flat list and obscures the
+        user's actual shortlist — see Level 3 Trip Data Contract Rescue.
+        """
         result = (
             self.db.table(ITEMS_TABLE)
             .select("*")
@@ -194,17 +205,16 @@ class ItineraryService:
         )
         rows = result.data or []
         allowed_item_types = {"flight", "hotel", "activity", "meal"}
-        allowed_source_kinds = {"concierge_idea", "creation_seed"}
         idea_rows = []
         for row in rows:
             if not isinstance(row, dict):
                 continue
             item_type = str(row.get("item_type") or "").lower()
-            details = row.get("details") if isinstance(row.get("details"), dict) else {}
-            source_kind = str(details.get("source_kind") or "").lower()
             if item_type not in allowed_item_types:
                 continue
-            if source_kind and source_kind not in allowed_source_kinds:
+            details = row.get("details") if isinstance(row.get("details"), dict) else {}
+            source_kind = str(details.get("source_kind") or "").lower()
+            if source_kind != "concierge_idea":
                 continue
             idea_rows.append(row)
         return [ItineraryItem(**row) for row in idea_rows]

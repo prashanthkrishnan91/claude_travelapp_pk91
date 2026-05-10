@@ -69,16 +69,13 @@ import {
   addOneWayFlightToDay,
   addRoundTripOutboundToDay,
   addRoundTripReturnToDay,
-  searchAttractionsViaConcierge,
-  isCanonicalSnapshotAttraction,
-  searchRestaurants,
   fetchDayPlan,
   addAttractionToDay,
   addRestaurantToDay,
   moveIdeaToTripIdeas,
   fetchExploreSnapshot,
-  saveExploreSnapshot,
 } from "@/lib/api";
+import { buildTripCandidateBuckets, mergePersistedWithSnapshot } from "@/lib/tripCandidates";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
 import { ItineraryItemCard } from "./ItineraryItemCard";
@@ -88,10 +85,6 @@ import { TripMapView } from "./TripMapView";
 import { TripIdeasPanel } from "./TripIdeasPanel";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function aiScoreOf(item: ItineraryItem): number {
-  return ((item.details as Record<string, unknown>)?.aiScore as number) ?? 0;
-}
 
 type SortKey = "ai" | "price" | "cpp" | "duration" | "rating" | "location";
 
@@ -144,12 +137,6 @@ function sortRestaurants(items: RestaurantSearchResult[], key: SortKey): Restaur
     if (key === "price")  return (a.priceLevel ?? 0) - (b.priceLevel ?? 0);
     return (b.aiScore ?? 0) - (a.aiScore ?? 0);
   });
-}
-
-function hasPositiveExploreScore(
-  items: Array<{ aiScore?: number | null }>,
-): boolean {
-  return items.some((item) => typeof item.aiScore === "number" && Number.isFinite(item.aiScore) && item.aiScore > 0);
 }
 
 function filterAttractions(
@@ -1207,8 +1194,6 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const [candidateHotels,      setCandidateHotels]      = useState<ItineraryItem[]>([]);
   const [candidateAttractions, setCandidateAttractions] = useState<AttractionSearchResult[]>([]);
   const [candidateRestaurants, setCandidateRestaurants] = useState<RestaurantSearchResult[]>([]);
-  const [attractionsLoading,   setAttractionsLoading]   = useState(false);
-  const [restaurantsLoading,   setRestaurantsLoading]   = useState(false);
   const [authSessionReady, setAuthSessionReady] = useState(false);
   const [flightPanelOpen,      setFlightPanelOpen]      = useState(true);
   const [hotelPanelOpen,       setHotelPanelOpen]       = useState(true);
@@ -1239,7 +1224,6 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const attractionListRef  = useRef<HTMLDivElement>(null);
   const restaurantListRef  = useRef<HTMLDivElement>(null);
   const prevViewModeRef    = useRef<"list" | "map">("list");
-  const exploreSnapshotLoadedRef = useRef<string | null>(null);
 
   // ── Compare state ────────────────────────────────────────────────────────────
   const [compareSet,     setCompareSet]     = useState<Set<string>>(new Set());
@@ -1286,22 +1270,46 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     [days, canonicalStartDate]
   );
 
-  // Load trip-level items on mount, sort by AI score.
-  // Attractions and restaurants are hydrated exclusively by the snapshot-first effect below.
-  // Loading them here caused a race condition: unscored trip-level items (concierge ideas
-  // with day_id=null, no ai_score) raced against and overwrote scored snapshot candidates.
+  // Canonical trip-candidate hydration — Level 3 Trip Data Contract Rescue.
+  //
+  // Single source of truth: persisted itinerary_items (day_id IS NULL) returned
+  // by GET /trips/{id}/items.  The buildTripCandidateBuckets selector groups
+  // them into the four product verticals + a round-trip-flight bucket.
+  //
+  // Replaces the prior split where flights/hotels were read from itinerary_items
+  // but attractions/restaurants were read from the legacy explore_snapshot
+  // cache (which could be empty after fresh creation and would then trigger a
+  // slow AI Concierge "Top attractions in <city>" fallback that wrote an
+  // empty snapshot back, locking the UI at 0).
   useEffect(() => {
-    fetchTripItems(tripId).then((items) => {
-      const flights = items
-        .filter((i) => i.itemType === "flight")
-        .sort((a, b) => aiScoreOf(b) - aiScoreOf(a));
-      const hotels = items
-        .filter((i) => i.itemType === "hotel")
-        .sort((a, b) => aiScoreOf(b) - aiScoreOf(a));
-      setCandidateFlights(flights);
-      setCandidateHotels(hotels);
-    });
-  }, [tripId]);
+    if (!authSessionReady) return;
+    void (async () => {
+      const items = await fetchTripItems(tripId);
+      const buckets = buildTripCandidateBuckets(items);
+
+      // Snapshot is a deprecated fallback: it can hydrate empty buckets but
+      // it CANNOT override non-empty persisted buckets.  This guarantees that
+      // create-with-search ACTIVITY/MEAL rows are always visible regardless
+      // of snapshot state.
+      let merged = buckets;
+      if (buckets.attractions.length === 0 || buckets.restaurants.length === 0) {
+        const snapshot = await fetchExploreSnapshot(tripId);
+        if (snapshot) {
+          merged = mergePersistedWithSnapshot(buckets, {
+            attractions: snapshot.attractions,
+            restaurants: snapshot.restaurants,
+          });
+        }
+      }
+
+      // Combine one-way + round-trip flights into the flight panel; the
+      // existing card components branch on details.isRoundTrip.
+      setCandidateFlights([...merged.flights, ...merged.roundTripFlights]);
+      setCandidateHotels(merged.hotels);
+      setCandidateAttractions(merged.attractions);
+      setCandidateRestaurants(merged.restaurants);
+    })();
+  }, [tripId, authSessionReady]);
 
   // GSAP entrance animations for flight cards
   useEffect(() => {
@@ -1317,73 +1325,11 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     gsap.from(cards, { y: 24, opacity: 0, duration: 0.45, stagger: 0.07, ease: "power2.out", clearProps: "all" });
   }, [candidateHotels.length]);
 
-  // Snapshot-first Explore hydration.
-  // On mount: load from persisted snapshot when available, skip provider search.
-  // On cache miss: call provider-backed search (one-shot per tripId:destination) then persist snapshot.
-  useEffect(() => {
-    if (!destination || !authSessionReady) return;
-    const hydrationKey = `${tripId}:${destination.toLowerCase()}`;
-    if (exploreSnapshotLoadedRef.current === hydrationKey) return;
-    exploreSnapshotLoadedRef.current = hydrationKey;
-
-    (async () => {
-      const snapshot = await fetchExploreSnapshot(tripId);
-      // v1B snapshot safety: a persisted snapshot may have been minted by
-      // the pre-migration legacy mock-backed attractions surface (see
-      // `isCanonicalSnapshotAttraction`).  Reuse only attractions that pass
-      // the canonical-identity guard; any non-canonical row is discarded
-      // and triggers a canonical refetch.  Restaurants are unaffected
-      // (they were already Google-Places-backed).
-      const safeSnapshotAttractions = snapshot
-        ? snapshot.attractions.filter(isCanonicalSnapshotAttraction)
-        : [];
-      const allSnapshotAttractionsCanonical =
-        snapshot != null && safeSnapshotAttractions.length === snapshot.attractions.length;
-
-      if (snapshot) {
-        if (safeSnapshotAttractions.length > 0) setCandidateAttractions(safeSnapshotAttractions);
-        if (snapshot.restaurants.length > 0) setCandidateRestaurants(snapshot.restaurants);
-      }
-
-      const hasHealthyAttractions =
-        snapshot != null
-        && allSnapshotAttractionsCanonical
-        && safeSnapshotAttractions.length > 0
-        && hasPositiveExploreScore(safeSnapshotAttractions);
-      const hasHealthyRestaurants = snapshot != null && snapshot.restaurants.length > 0 && hasPositiveExploreScore(snapshot.restaurants);
-
-      if (hasHealthyAttractions && hasHealthyRestaurants) return;
-
-      // Section-aware self-heal: refetch only missing/stale sections once per hydration key.
-      const shouldFetchAttractions = !hasHealthyAttractions;
-      const shouldFetchRestaurants = !hasHealthyRestaurants;
-
-      if (shouldFetchAttractions) setAttractionsLoading(true);
-      if (shouldFetchRestaurants) setRestaurantsLoading(true);
-
-      const [attractionsResult, restaurantsResult] = await Promise.allSettled([
-        shouldFetchAttractions ? searchAttractionsViaConcierge(tripId, destination) : Promise.resolve(safeSnapshotAttractions),
-        shouldFetchRestaurants ? searchRestaurants(destination) : Promise.resolve({ restaurants: snapshot?.restaurants ?? [], sourceStatus: snapshot?.restaurantStatus ?? "snapshot", cacheStatus: "snapshot", terminalNoResults: false }),
-      ]);
-
-      const resolvedAttractions = attractionsResult.status === "fulfilled" ? attractionsResult.value : safeSnapshotAttractions;
-      const resolvedRestaurantEnvelope = restaurantsResult.status === "fulfilled" ? restaurantsResult.value : { restaurants: snapshot?.restaurants ?? [], sourceStatus: "error", cacheStatus: "bypass", terminalNoResults: false };
-      const resolvedRestaurants = resolvedRestaurantEnvelope.restaurants;
-
-      setCandidateAttractions(resolvedAttractions);
-      setCandidateRestaurants(resolvedRestaurants);
-      setAttractionsLoading(false);
-      setRestaurantsLoading(false);
-
-      const priorRestaurants = snapshot?.restaurants ?? [];
-      const shouldPersistEmptyRestaurants = resolvedRestaurants.length === 0 && resolvedRestaurantEnvelope.terminalNoResults;
-      const canPersistRestaurants = resolvedRestaurants.length > 0 || shouldPersistEmptyRestaurants || priorRestaurants.length === 0;
-      if (resolvedAttractions.length > 0 || canPersistRestaurants) {
-        saveExploreSnapshot(tripId, { destination, attractions: resolvedAttractions, restaurants: canPersistRestaurants ? resolvedRestaurants : priorRestaurants, restaurantStatus: resolvedRestaurantEnvelope.sourceStatus });
-      }
-      console.info("[explore_snapshot_save] restaurants_saved=%d source_status=%s cache_status=%s", (canPersistRestaurants ? resolvedRestaurants : priorRestaurants).length, resolvedRestaurantEnvelope.sourceStatus, resolvedRestaurantEnvelope.cacheStatus);
-    })();
-  }, [destination, authSessionReady, tripId]);
+  // Legacy snapshot-first Explore hydration removed (Level 3 Trip Data
+  // Contract Rescue).  Attractions and restaurants are now hydrated from
+  // persisted ACTIVITY / MEAL itinerary_items via the canonical selector in
+  // the effect above.  The snapshot survives only as a deprecated empty-bucket
+  // fallback inside that effect (it cannot zero out persisted rows).
 
   // GSAP entrance animations for attraction cards
   useEffect(() => {
@@ -2121,12 +2067,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                   }
                   listRef={attractionListRef}
                 >
-                  {attractionsLoading ? (
-                    <div className="flex items-center justify-center py-6 gap-2 text-slate-400 text-xs">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Discovering attractions…
-                    </div>
-                  ) : filteredAttractions.length === 0 ? (
+                  {filteredAttractions.length === 0 ? (
                     <p className="text-xs text-slate-400 py-4 text-center">No attractions match the selected filters.</p>
                   ) : (
                     (() => {
@@ -2213,12 +2154,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                   }
                   listRef={restaurantListRef}
                 >
-                  {restaurantsLoading ? (
-                    <div className="flex items-center justify-center py-6 gap-2 text-slate-400 text-xs">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Discovering restaurants…
-                    </div>
-                  ) : filteredRestaurants.length === 0 ? (
+                  {filteredRestaurants.length === 0 ? (
                     <p className="text-xs text-slate-400 py-4 text-center">No restaurants match the selected filters.</p>
                   ) : (
                     (() => {
