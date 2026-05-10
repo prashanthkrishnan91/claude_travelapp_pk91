@@ -233,14 +233,17 @@ test('saveExploreSnapshot filters out mock-marker restaurants before persisting 
   assert.match(apiTs, /\.filter\(\(r\) => !r\.providerPlaceId\?\.startsWith\("mock-"\)\)/);
 });
 
-test('backend _mock_restaurants function still exists for test/dev use but is NOT called from search_restaurants', () => {
-  // _mock_restaurants stays in the file for isolated test use — it must not be imported into
-  // production test suites. Verify the function definition exists but is not called in the method.
-  assert.match(backendSearch, /def _mock_restaurants\(/);
+test('backend _mock_restaurants remains deleted and search_restaurants stays fail-closed Google Places', () => {
+  // Final mock-leak closeout removed _mock_restaurants. Keep this strict so
+  // future edits cannot silently reintroduce mock-backed behavior.
+  assert.doesNotMatch(backendSearch, /def _mock_restaurants\(/, '_mock_restaurants must remain absent');
   const methodStart = backendSearch.indexOf('def search_restaurants(');
   const methodEnd = backendSearch.indexOf('\n    def ', methodStart + 1);
   const methodBody = methodEnd > methodStart
     ? backendSearch.slice(methodStart, methodEnd)
     : backendSearch.slice(methodStart);
-  assert.doesNotMatch(methodBody, /_mock_restaurants\(/);
+  assert.doesNotMatch(methodBody, /_mock_restaurants\(/, 'search_restaurants must not call deleted _mock_restaurants');
+  assert.match(backendSearch, /Returns an empty list on any error \(fail-closed\)\. Never returns mock data\./, 'search_restaurants must preserve fail-closed contract');
+  assert.match(methodBody, /api_key = os\.getenv\("GOOGLE_PLACES_API_KEY", ""\)/, 'search_restaurants must remain Google Places-provider gated');
+  assert.match(methodBody, /if not provider_configured:[\s\S]*?return \[\]/, 'search_restaurants must fail closed when provider is unconfigured');
 });
