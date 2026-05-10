@@ -26,6 +26,15 @@ Use this checklist before merge and inside `/pre-pr-self-audit`.
 - Did it avoid all-agent default behavior?
 - Did it preserve active stage focus and not drift into later-stage work?
 
+## Prompt engineering / eval checks (OS v4)
+
+- Did this PR map to a Feature Slice Contract when needed (Level 2/3)?
+- Did it select relevant golden scenarios (Level 2+)?
+- Did it validate or explicitly limit those scenarios?
+- Were tool / test / log / build failures classified via `tool-failure-triage` before patching?
+- Did the prompt avoid old-format drift and scope creep?
+- Did the PR show coverage-first audit discipline for reviews (list every plausible issue, then classify)?
+
 ## OS v3 self-learning checks
 
 - Did the prompt/task use OS v3/v4 work-order format?
@@ -60,3 +69,5 @@ Use this checklist before merge and inside `/pre-pr-self-audit`.
 - The implementation is a symptom patch after repeated related failures.
 - The PR proposes broad OS rule changes from a single isolated miss without ledger evidence.
 - The PR has no roadmap stage or build queue mapping and is not a justified blocker.
+- The PR breaks a golden scenario without explanation and roadmap/decision-log update.
+- A failed tool/test/log check was patched as if it were an app bug without `tool-failure-triage` classification.

@@ -45,6 +45,16 @@ Agent governance:
 
 Every meaningful PR should state its roadmap stage and build queue item.
 
+## AI Repo Operating System v4 — Prompt Engineering Control Layer
+
+For Level 2/3 features and important generated prompts:
+
+- Use `.claude/skills/feature-contract/SKILL.md` for Level 2/3 implementation. If the contract is unclear, propose a split.
+- Use `.claude/skills/golden-scenarios/SKILL.md` for Level 2+ implementation. Select 3-7 relevant scenarios from `docs/product/GOLDEN_SCENARIOS.md`.
+- Use `.claude/skills/prompt-lint/SKILL.md` and the `prompt-quality-reviewer` agent for important generated prompts before PK blind-copies them.
+- Use `.claude/skills/tool-failure-triage/SKILL.md` and `docs/ai/TOOL_FAILURE_TAXONOMY.md` before patching failed commands / tests / log checks.
+- Reference `docs/ai/PROMPT_ENGINEERING_STANDARD.md` for prompt structure and lint checklist.
+
 Before work, read only the smallest needed subset of:
 
 1. `docs/ai/HANDOFF.md` — current state
@@ -62,6 +72,8 @@ Before work, read only the smallest needed subset of:
 13. `docs/ai/CLAUDE_WORKFLOW_KIT.md` — stable project constraints only when needed
 14. `README.md` — public/setup context only when needed
 15. `docs/product/NORTH_STAR.md`, `docs/product/ROADMAP.md`, `docs/product/BUILD_QUEUE.md` — read when prompt-intake or roadmap-check is in scope
+16. `docs/product/FEATURE_SLICE_CONTRACT.md`, `docs/product/GOLDEN_SCENARIOS.md` — read for Level 2+ feature work
+17. `docs/ai/PROMPT_ENGINEERING_STANDARD.md`, `docs/ai/TOOL_FAILURE_TAXONOMY.md` — read when generating prompts or triaging failures
 
 Use one primary workflow skill when it matches the task:
 
@@ -82,6 +94,10 @@ Use one primary workflow skill when it matches the task:
 - `.claude/skills/build-queue-update/SKILL.md` — OS v4 build queue updates
 - `.claude/skills/progress-report/SKILL.md` — OS v4 concise progress reports
 - `.claude/skills/product-retrospective/SKILL.md` — OS v4 product-stage retrospective
+- `.claude/skills/feature-contract/SKILL.md` — OS v4 Level 2/3 feature contract
+- `.claude/skills/golden-scenarios/SKILL.md` — OS v4 select Level 2+ golden scenarios
+- `.claude/skills/prompt-lint/SKILL.md` — OS v4 prompt lint before blind copy
+- `.claude/skills/tool-failure-triage/SKILL.md` — OS v4 classify failed commands/tests/checks
 - `docs/ai/skills/discovery.md` — map unknown files or visual surfaces before implementation
 - `docs/ai/skills/bugfix.md` — focused bug fix or small behavior correction
 - `docs/ai/skills/ui_fix.md` — capped UI polish or visual consistency pass
@@ -114,6 +130,7 @@ Core rules:
 - No broad discovery. Read primary target files first; fallback reads only if blocked.
 - Classify issue severity before choosing Codex patch, Sonnet full plumbing analysis, or split plan.
 - Do not keep patching after failed patches. After one failed patch, reclassify. After two related patches, escalate to full plumbing analysis or split plan.
+- When a command/tool/test/log check fails, run `tool-failure-triage` and classify before patching. Do not patch app code for a tooling failure.
 - When runtime evidence matters, use the `railway-logs` personal Claude skill if available before coding. This applies to Railway/deployment errors, crashes, recent errors, 4xx/5xx responses, provider failures, auth/cache/persistence mismatches, and cases where backend logs disagree with UI behavior. Summarize only relevant evidence; do not ask the user to paste Railway JSON/logs unless the skill is unavailable.
 - Smallest safe patch. No unrelated refactors.
 - For non-trivial work, state assumptions and success criteria before coding.
@@ -128,6 +145,9 @@ Core rules:
 - Stop after opening any Medium-High/High usage PR. Do not propose the next implementation prompt.
 - Every meaningful implementation PR must state its roadmap stage and build queue item from `docs/product/`.
 - Do not run every reviewer agent by default; use `docs/ai/AGENT_ROUTER.md`.
+- For Level 2/3 implementation, run `feature-contract` and `golden-scenarios` before coding.
+- Important generated prompts run through `prompt-lint`/`prompt-quality-reviewer` before blind-copy.
+- Coverage-first audits for review prompts: list every plausible issue before classifying severity.
 
 Project invariants:
 

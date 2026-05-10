@@ -23,6 +23,14 @@ Reason:
 - PRODUCT_HEALTH updated: Yes/No
 - RELEASE_GATES affected: Yes/No
 
+## Feature contract & golden scenarios
+
+- Feature Slice Contract used: Yes/No/Not needed
+- Golden scenarios selected:
+- Golden scenarios validated:
+- Tool/test failures classified: Yes/No/Not applicable
+- Prompt quality risk: Low/Medium/High
+
 ## Assumptions
 
 

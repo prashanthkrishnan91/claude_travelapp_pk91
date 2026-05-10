@@ -53,6 +53,17 @@ OS v4 adds a Product Roadmap Control Plane and reviewer-agent governance on top 
 - `docs/ai/AGENT_EFFECTIVENESS_LEDGER.md` prevents reviewer bloat.
 - A small Certification Agent Pack (`reality-checker`, `evidence-collector`, `premium-delight-reviewer`, `accessibility-reviewer`, `performance-benchmarker`) is available; route via `AGENT_ROUTER`, do not run by default.
 
+## OS v4 — Prompt Engineering Control Layer
+
+OS v4 also adds a prompt engineering control layer so future Claude/Codex prompts are precise, eval-driven, and safe for blind copy/paste:
+
+- `docs/ai/PROMPT_ENGINEERING_STANDARD.md` is the repo standard for prompt structure, lint, coverage-first audits, and ask/plan-before-code for Level 2/3.
+- `docs/product/FEATURE_SLICE_CONTRACT.md` is the contract template for Level 2/3 feature slices.
+- `docs/product/GOLDEN_SCENARIOS.md` is the repo's reusable product invariants. Level 2+ implementation prompts should select 3-7 relevant scenarios.
+- `docs/ai/TOOL_FAILURE_TAXONOMY.md` is the failure-classification taxonomy used before patching failed commands/tests/log checks.
+- Skills: `feature-contract`, `golden-scenarios`, `prompt-lint`, `tool-failure-triage`.
+- Read-only reviewer agents: `prompt-quality-reviewer`, `eval-scenario-reviewer`.
+
 Default OS v4 routing for incoming tasks:
 
 - "Where are we?" → `progress-report` skill.
@@ -60,6 +71,9 @@ Default OS v4 routing for incoming tasks:
 - Idea dump → `idea-triage` skill → `IDEA_INBOX`.
 - Implementation / bug fix / product change → `prompt-intake` then `roadmap-check`.
 - Workflow / product roadmap update → `prompt-intake` then `build-queue-update` if queue moves.
+- Level 2/3 feature → `feature-contract` + `golden-scenarios` before coding.
+- Important generated prompt → `prompt-lint` + `prompt-quality-reviewer` before PK blind-copies.
+- Failed test/log/build/check → `tool-failure-triage` before patching.
 
 ## Required sequence for non-trivial tasks
 
@@ -68,19 +82,24 @@ Before coding:
 1. Run or apply `prompt-intake` (OS v4) to classify the task.
 2. Classify severity using `docs/ai/ISSUE_SEVERITY_ROUTING.md`.
 3. Run or apply `roadmap-check` if the task is implementation or product-direction work.
-4. Run or apply `task-planner`.
-5. Identify changed contracts and likely downstream consumers.
-6. Run or apply `test-selector`.
-7. Read `docs/ai/KNOWN_FAILURE_MODES.md` for this repo.
+4. For Level 2/3 features, run or apply `feature-contract` and `golden-scenarios`.
+5. Run or apply `task-planner`.
+6. Identify changed contracts and likely downstream consumers.
+7. Run or apply `test-selector`.
+8. Read `docs/ai/KNOWN_FAILURE_MODES.md` for this repo.
 
 Before PR summary for Level 1+:
 
 1. Run or apply `contract-audit`.
 2. Run or apply `runtime-gate` / `latency-gate` if runtime/provider/LLM/db behavior changed.
 3. Run or apply `claim-safety-gate` if user-visible text/data/actions/evidence changed.
-4. Delegate to applicable read-only reviewer agents per `docs/ai/AGENT_ROUTER.md`.
+4. Delegate to applicable read-only reviewer agents per `docs/ai/AGENT_ROUTER.md`. For Level 2+ features include `eval-scenario-reviewer`.
 5. Run or apply `pre-pr-self-audit`.
 6. Fill `.github/pull_request_template.md` honestly through `pr-summary`. Include whether a workflow retrospective and a product retrospective are needed.
+
+When something fails:
+
+- Run `tool-failure-triage` before patching.
 
 After PR summary or failed validation:
 
@@ -106,6 +125,8 @@ Common defaults:
 - Certification pack (route only when applicable): `reality-checker`, `evidence-collector`, `premium-delight-reviewer`, `accessibility-reviewer`, `performance-benchmarker`.
 - `agent-curator`: when evaluating external agent ideas / libraries.
 - `prompt-intake-reviewer`: when prompt classification or OS drift is suspected.
+- `prompt-quality-reviewer`: when an important generated prompt is about to be blind-copied.
+- `eval-scenario-reviewer`: for Level 2+ feature slices to verify chosen golden scenarios are appropriate and validated.
 
 Reviewer agents should return blockers/risks/evidence only. The builder remains responsible for implementation.
 
@@ -134,6 +155,13 @@ Keep future prompts short. Include only:
 - required validation target, if any
 - the OS v4 default line: "Use OS v4. Run prompt-intake and roadmap-check before coding when applicable, run applicable focused skills, delegate via AGENT_ROUTER, and include workflow + product retrospectives if the PR is meaningful or validation fails."
 
+For Level 2+ implementation prompts, also include:
+
+- source-of-truth files
+- feature contract or instruction to run `feature-contract` skill
+- golden scenarios
+- tool failure policy (run `tool-failure-triage` before patching)
+
 Do not paste the full coding principles, repo invariants, test rules, or PR format. They live here.
 
 ## What must stay repo-native
@@ -152,6 +180,8 @@ Do not paste the full coding principles, repo invariants, test rules, or PR form
 - Agent router: `docs/ai/AGENT_ROUTER.md`
 - Agent intake registry: `docs/ai/AGENT_INTAKE_REGISTRY.md`
 - Agent effectiveness ledger: `docs/ai/AGENT_EFFECTIVENESS_LEDGER.md`
+- Prompt engineering standard: `docs/ai/PROMPT_ENGINEERING_STANDARD.md`
+- Tool failure taxonomy: `docs/ai/TOOL_FAILURE_TAXONOMY.md`
 - Product OS: `docs/product/*`
 
 ## Claude automation layers
@@ -177,6 +207,9 @@ Use the workflow-retrospective skill, miss-ledger-update skill, and workflow-ret
 ### Layer 7 — Product Roadmap Control Plane (OS v4)
 Use `docs/product/*` plus the OS v4 skills (`prompt-intake`, `roadmap-check`, `idea-triage`, `build-queue-update`, `progress-report`, `product-retrospective`) and the `roadmap-guardian` agent to keep product direction repo-native.
 
+### Layer 8 — Prompt Engineering Control Layer (OS v4)
+Use `docs/ai/PROMPT_ENGINEERING_STANDARD.md`, `docs/product/FEATURE_SLICE_CONTRACT.md`, `docs/product/GOLDEN_SCENARIOS.md`, `docs/ai/TOOL_FAILURE_TAXONOMY.md`, plus the `feature-contract`, `golden-scenarios`, `prompt-lint`, and `tool-failure-triage` skills, and the `prompt-quality-reviewer` and `eval-scenario-reviewer` agents to keep prompts precise, eval-driven, and safe for blind copy/paste.
+
 ## Travel-specific invariants
 
 - Google Places is canonical for addable cards.
@@ -196,3 +229,4 @@ Stop and ask for a split if:
 - Required runtime evidence is unavailable.
 - The implementation would violate a product invariant.
 - The PR has no clear roadmap stage or build queue item, and is not a justified blocker.
+- The Feature Slice Contract is unclear and cannot be made clear within scope.

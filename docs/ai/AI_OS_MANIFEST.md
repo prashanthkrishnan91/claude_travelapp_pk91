@@ -27,6 +27,8 @@ A portable checklist for future repos and for auditing whether the OS is fully i
 - `docs/ai/AGENT_ROUTER.md`
 - `docs/ai/AGENT_INTAKE_REGISTRY.md`
 - `docs/ai/AGENT_EFFECTIVENESS_LEDGER.md`
+- `docs/ai/PROMPT_ENGINEERING_STANDARD.md`
+- `docs/ai/TOOL_FAILURE_TAXONOMY.md`
 
 ## Required Product OS docs (OS v4)
 
@@ -39,6 +41,8 @@ A portable checklist for future repos and for auditing whether the OS is fully i
 - `docs/product/PRODUCT_HEALTH.md`
 - `docs/product/DO_NOT_BUILD_YET.md`
 - `docs/product/PROGRESS_REPORT_TEMPLATE.md`
+- `docs/product/FEATURE_SLICE_CONTRACT.md`
+- `docs/product/GOLDEN_SCENARIOS.md`
 
 ## Required skills
 
@@ -59,6 +63,10 @@ A portable checklist for future repos and for auditing whether the OS is fully i
 - `build-queue-update`
 - `progress-report`
 - `product-retrospective`
+- `feature-contract`
+- `golden-scenarios`
+- `prompt-lint`
+- `tool-failure-triage`
 
 ## Required agents
 
@@ -69,6 +77,8 @@ A portable checklist for future repos and for auditing whether the OS is fully i
 - `roadmap-guardian`
 - `prompt-intake-reviewer`
 - `agent-curator`
+- `prompt-quality-reviewer`
+- `eval-scenario-reviewer`
 - Certification pack: `reality-checker`, `evidence-collector`, `premium-delight-reviewer`, `accessibility-reviewer`, `performance-benchmarker`
 - Travel-specific reviewers: `place-authority-reviewer`, `latency-reviewer`, `evidence-prose-reviewer`
 
