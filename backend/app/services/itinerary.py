@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from supabase import Client
 
+from app.core.supabase_retry import supabase_execute as _supabase_execute
 from app.models import (
     ItineraryDay,
     ItineraryDayCreate,
@@ -33,12 +34,15 @@ class ItineraryService:
     def list_days(self, trip_id: UUID, user_id: Optional[UUID] = None) -> List[ItineraryDay]:
         if user_id is not None:
             self._ensure_trip_owned(trip_id, user_id)
-        result = (
-            self.db.table(DAYS_TABLE)
-            .select("*")
-            .eq("trip_id", str(trip_id))
-            .order("day_number")
-            .execute()
+        result = _supabase_execute(
+            lambda: (
+                self.db.table(DAYS_TABLE)
+                .select("*")
+                .eq("trip_id", str(trip_id))
+                .order("day_number")
+                .execute()
+            ),
+            context="itinerary.list_days",
         )
         return [ItineraryDay(**row) for row in result.data]
 
@@ -62,10 +66,10 @@ class ItineraryService:
     def create_day(self, payload: ItineraryDayCreate, user_id: Optional[UUID] = None) -> ItineraryDay:
         if user_id is not None:
             self._ensure_trip_owned(payload.trip_id, user_id)
-        result = (
-            self.db.table(DAYS_TABLE)
-            .insert(payload.model_dump(mode="json"))
-            .execute()
+        data = payload.model_dump(mode="json")
+        result = _supabase_execute(
+            lambda: self.db.table(DAYS_TABLE).insert(data).execute(),
+            context="itinerary.create_day",
         )
         return ItineraryDay(**result.data[0])
 
@@ -166,12 +170,15 @@ class ItineraryService:
     # ------------------------------------------------------------------
 
     def list_items_by_trip(self, trip_id: UUID) -> List[ItineraryItem]:
-        result = (
-            self.db.table(ITEMS_TABLE)
-            .select("*")
-            .eq("trip_id", str(trip_id))
-            .order("position")
-            .execute()
+        result = _supabase_execute(
+            lambda: (
+                self.db.table(ITEMS_TABLE)
+                .select("*")
+                .eq("trip_id", str(trip_id))
+                .order("position")
+                .execute()
+            ),
+            context="itinerary.list_items_by_trip",
         )
         return [ItineraryItem(**row) for row in result.data]
 
@@ -246,10 +253,9 @@ class ItineraryService:
         )
         if duplicate:
             return ItineraryItem(**duplicate)
-        result = (
-            self.db.table(ITEMS_TABLE)
-            .insert(data)
-            .execute()
+        result = _supabase_execute(
+            lambda: self.db.table(ITEMS_TABLE).insert(data).execute(),
+            context="itinerary.create_trip_item",
         )
         return ItineraryItem(**result.data[0])
 

@@ -950,6 +950,125 @@ class SearchService:
         )
         return list(result.rows)
 
+    def search_attractions(self, destination: str) -> List[Dict[str, Any]]:
+        """Search Google Places for top tourist attractions at a destination.
+
+        Returns a list of plain dicts (name, place_id, address, rating,
+        google_maps_uri, lat, lng, source) for direct trip-seeding.  Fails
+        closed (empty list) when the API key is absent, httpx is unavailable,
+        or any request error occurs.  Never returns mock data.
+
+        Only OPERATIONAL places whose Google types overlap with the attraction
+        family (museums, landmarks, parks, temples, etc.) are returned.
+        """
+        api_key = os.getenv("GOOGLE_PLACES_API_KEY", "")
+        if not api_key or httpx is None:
+            logger.info(
+                "[search_attractions] location=%s source_status=no_provider returned=0",
+                destination,
+            )
+            return []
+
+        query = f"top tourist attractions in {destination}"
+        headers = {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": api_key,
+            "X-Goog-FieldMask": ",".join([
+                "places.id",
+                "places.displayName",
+                "places.formattedAddress",
+                "places.location",
+                "places.businessStatus",
+                "places.types",
+                "places.rating",
+                "places.userRatingCount",
+                "places.googleMapsUri",
+            ]),
+        }
+        body = {"textQuery": query, "maxResultCount": 10}
+
+        _ATTRACTION_TYPES: frozenset = frozenset({
+            "tourist_attraction",
+            "museum",
+            "art_gallery",
+            "historical_landmark",
+            "monument",
+            "national_monument",
+            "park",
+            "national_park",
+            "amusement_park",
+            "aquarium",
+            "zoo",
+            "botanical_garden",
+            "cultural_landmark",
+            "temple",
+            "shrine",
+            "castle",
+            "palace",
+            "church",
+            "cathedral",
+        })
+
+        try:
+            with httpx.Client(timeout=6.0) as client:
+                resp = client.post(_GOOGLE_PLACES_SEARCH_ENDPOINT, headers=headers, json=body)
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as exc:
+            logger.warning("[search_attractions] Google Places request failed: %s", exc)
+            return []
+
+        raw_places = list(data.get("places") or [])
+        results: List[Dict[str, Any]] = []
+
+        for place in raw_places:
+            if place.get("businessStatus") != "OPERATIONAL":
+                continue
+            place_id = place.get("id")
+            if not place_id:
+                continue
+
+            types_set = set(place.get("types") or [])
+            if not (_ATTRACTION_TYPES & types_set):
+                continue
+
+            display_name = place.get("displayName") or {}
+            name = (
+                display_name.get("text")
+                if isinstance(display_name, dict)
+                else str(display_name or "")
+            ).strip()
+            if not name:
+                continue
+
+            google_maps_uri = (place.get("googleMapsUri") or "").strip() or None
+            location_data = place.get("location") or {}
+            lat = location_data.get("latitude") if isinstance(location_data, dict) else None
+            lng = location_data.get("longitude") if isinstance(location_data, dict) else None
+
+            results.append({
+                "place_id": place_id,
+                "name": name,
+                "address": (place.get("formattedAddress") or "").strip() or destination,
+                "rating": place.get("rating"),
+                "num_reviews": place.get("userRatingCount"),
+                "google_maps_uri": google_maps_uri,
+                "booking_url": google_maps_uri or f"https://www.google.com/maps/place/?q=place_id:{place_id}",
+                "lat": lat,
+                "lng": lng,
+                "types": sorted(types_set),
+                "source": "google_places",
+            })
+
+        results = results[:8]
+        logger.info(
+            "[search_attractions] location=%s raw_count=%d returned=%d",
+            destination,
+            len(raw_places),
+            len(results),
+        )
+        return results
+
     def search_restaurants(self, req: RestaurantSearchRequest) -> List[RestaurantResult]:
         query = req.model_dump(mode="json")
         key = _cache_key("restaurants", query)

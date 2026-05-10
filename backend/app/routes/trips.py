@@ -40,8 +40,8 @@ from app.contracts.flights import (
 )
 from app.core.deps import DB, CurrentUserID
 from app.models import Trip, TripCreate, TripUpdate, ItineraryItem
-from app.models.itinerary import ItineraryItemDirectCreate
-from app.models.search import ExploreSnapshot, FlightResult, FlightSearchRequest, HotelResult, HotelSearchRequest, RoundTripFlightPair
+from app.models.itinerary import ItineraryItemDirectCreate, ItineraryItemType
+from app.models.search import ExploreSnapshot, FlightResult, FlightSearchRequest, HotelResult, HotelSearchRequest, RestaurantSearchRequest, RoundTripFlightPair
 from app.services import TripsService
 from app.services.itinerary import ItineraryService
 from app.services.search import SearchService
@@ -421,10 +421,13 @@ class TripCreateWithSearch(BaseModel):
 
 
 class TripWithResults(Trip):
-    """Trip creation response with AI-scored flight + hotel candidates."""
+    """Trip creation response with AI-scored flight + hotel candidates and seeding status."""
     flights: List[FlightResult] = []
     hotels: List[HotelResult] = []
     round_trip_pairs: List[RoundTripFlightPair] = []
+    # Per-vertical seeding counts — harvested from provider, persisted to DB.
+    # Allows the frontend to know what was found without a separate /items fetch.
+    seeding_status: dict = {}
 
 
 @router.get("", response_model=List[Trip])
@@ -494,7 +497,15 @@ def save_explore_snapshot(trip_id: UUID, payload: ExploreSnapshot, db: DB, user_
 
 @router.post("/create-with-search", response_model=TripWithResults, status_code=status.HTTP_201_CREATED)
 def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: CurrentUserID) -> TripWithResults:
-    """Unified concierge flow: resolve airports → search flights + hotels → AI-score → create trip."""
+    """Unified concierge flow: resolve airports → search all four verticals → AI-score → create trip.
+
+    Verticals seeded concurrently: flights (one-way), round-trip pairs, hotels,
+    attractions, restaurants.  A per-vertical seeding_status dict is returned so
+    the frontend knows what was harvested and persisted without a follow-up fetch.
+
+    Flight searches use only the primary (first) airport per city to prevent the
+    origin×destination cross-product from exceeding the provider budget.
+    """
     t_total_start = time.perf_counter()
 
     # Step 1: Resolve airports
@@ -507,76 +518,89 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
             detail=f"Could not resolve destination city '{payload.destination_city}' to airport codes.",
         )
 
-    # Steps 2/3/3b: Run flight (one-way), round-trip, and hotel searches
-    # concurrently so their wall-clock times overlap.  A shared budget deadline
-    # prevents slow Duffel responses from blocking trip creation for 40+ seconds
-    # when many origin-destination pairs are queried sequentially.
     search_svc = SearchService(db)
 
+    # Step 2: Build provider requests.
+    #
+    # Flights — use ONLY the primary (first) airport for each city.
+    # Passing the full multi-airport list causes search_flights to iterate every
+    # origin×destination pair sequentially.  For Tokyo (NRT + HND) that doubles
+    # the Duffel call count, and for rt_fut it quadruples it, routinely blowing
+    # past the 15-second budget.  The primary airport covers the dominant route;
+    # the full multi-airport path is still available from the standalone
+    # /search/flights endpoint.
     flight_req: Optional[FlightSearchRequest] = None
     rt_req: Optional[FlightSearchRequest] = None
-    if origin_airports:
+    if origin_airports and dest_airports:
+        _primary_origin = origin_airports[0]
+        _primary_dest = dest_airports[0]
         flight_req = FlightSearchRequest(
-            origin_airports=origin_airports if len(origin_airports) > 1 else None,
-            origin=origin_airports[0] if len(origin_airports) == 1 else None,
-            destination_airports=dest_airports if len(dest_airports) > 1 else None,
-            destination=dest_airports[0] if len(dest_airports) == 1 else None,
+            origin=_primary_origin,
+            destination=_primary_dest,
             departure_date=payload.start_date,
             passengers=1,
             cabin_class="economy",
         )
         rt_req = FlightSearchRequest(
-            origin_airports=origin_airports if len(origin_airports) > 1 else None,
-            origin=origin_airports[0] if len(origin_airports) == 1 else None,
-            destination_airports=dest_airports if len(dest_airports) > 1 else None,
-            destination=dest_airports[0] if len(dest_airports) == 1 else None,
+            origin=_primary_origin,
+            destination=_primary_dest,
             departure_date=payload.start_date,
             return_date=payload.end_date,
             passengers=1,
             cabin_class="economy",
         )
+
     hotel_req = HotelSearchRequest(
         location=payload.destination_city,
         check_in=payload.start_date,
         check_out=payload.end_date,
         guests=1,
     )
+    restaurant_req = RestaurantSearchRequest(
+        location=payload.destination_city,
+    )
 
-    # Steps 2/3/3b: submit all three provider searches concurrently then
-    # collect results within _SEARCH_BUDGET_SECONDS using futures_wait().
+    # Step 3: Submit all five provider searches concurrently.
     #
     # IMPORTANT — do NOT use `with ThreadPoolExecutor(...) as pool:` here.
-    # The context-manager calls shutdown(wait=True) on exit, which blocks the
-    # route handler until every submitted thread finishes regardless of the
-    # budget.  Instead we call shutdown(wait=False, cancel_futures=True) after
-    # collecting results so the route proceeds immediately; any still-running
-    # threads clean themselves up when their Duffel HTTP call times out (≤8s).
+    # The context-manager calls shutdown(wait=True) on exit which blocks the
+    # route regardless of the budget.  Instead call shutdown(wait=False) after
+    # collecting results so the route returns immediately; any still-running
+    # Duffel threads will self-terminate when their HTTP timeout fires (≤8s).
     t_search_start = time.perf_counter()
     flights: List[FlightResult] = []
     round_trip_pairs: List[RoundTripFlightPair] = []
     hotels: List[HotelResult] = []
+    attractions: List[dict] = []
+    restaurants: List = []
 
-    _executor = ThreadPoolExecutor(max_workers=3)
+    _executor = ThreadPoolExecutor(max_workers=5)
     try:
         f_fut = _executor.submit(search_svc.search_flights, flight_req) if flight_req else None
         rt_fut = _executor.submit(search_svc.search_round_trip_flights, rt_req) if rt_req else None
         h_fut = _executor.submit(search_svc.search_hotels, hotel_req)
+        att_fut = _executor.submit(search_svc.search_attractions, payload.destination_city)
+        rest_fut = _executor.submit(search_svc.search_restaurants, restaurant_req)
 
-        _live = [f for f in (f_fut, rt_fut, h_fut) if f is not None]
+        _live = [f for f in (f_fut, rt_fut, h_fut, att_fut, rest_fut) if f is not None]
         _done, _not_done = _futures_wait(_live, timeout=_SEARCH_BUDGET_SECONDS)
 
         flights = _safe_future_result(f_fut, _done, [])
         round_trip_pairs = _safe_future_result(rt_fut, _done, [])
         hotels = _safe_future_result(h_fut, _done, [])
+        attractions = _safe_future_result(att_fut, _done, [])
+        restaurants = _safe_future_result(rest_fut, _done, [])
     finally:
-        # Return immediately; threads for _not_done continue in background.
         _executor.shutdown(wait=False, cancel_futures=True)
 
     t_search_ms = int((time.perf_counter() - t_search_start) * 1000)
     logger.info(
-        "[create_with_search.timing] phase=provider_search flights=%d rt_pairs=%d hotels=%d "
+        "[create_with_search.timing] phase=provider_search "
+        "flights=%d rt_pairs=%d hotels=%d attractions=%d restaurants=%d "
         "elapsed_ms=%d timed_out=%d",
-        len(flights), len(round_trip_pairs), len(hotels), t_search_ms, len(_not_done),
+        len(flights), len(round_trip_pairs), len(hotels),
+        len(attractions), len(restaurants),
+        t_search_ms, len(_not_done),
     )
 
     # Step 4: AI scoring — individual scores first, then dataset-aware intelligence
@@ -594,16 +618,10 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
     flights_sorted = sorted(flights, key=lambda f: f.ai_score or 0.0, reverse=True)
     hotels_sorted = sorted(hotels, key=lambda h: h.ai_score or 0.0, reverse=True)
 
-    # Fail-closed guard: refuse to persist mock-derived rows — detected via
-    # ``source == "mock"`` or any ``book.example.com`` booking URL.  This closes
-    # the persistence hole that exists when BLOCK_LEGACY_PRODUCT_MOCK is *off*
-    # and ``_mock_flights`` / ``_mock_hotels`` return non-empty rows.
-    #
-    # Empty results (provider unavailable / timed out) are now allowed: the trip
-    # is created without pre-loaded itinerary items so the user can still access
-    # and manually build their trip.  This replaces the previous all-empty → 503
-    # behaviour which caused a perceived 40-second hang when Duffel searched
-    # many origin-destination pairs sequentially.
+    # Fail-closed guard: refuse to persist mock-derived rows.
+    # Attractions and restaurants come from Google Places (source="google_places")
+    # so they are not checked here — this guard is specific to the legacy mock
+    # fixtures for flights/hotels.
     if _any_mock_derived(flights_sorted, hotels_sorted, round_trip_pairs):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -639,12 +657,19 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
         int((time.perf_counter() - t_trip_start) * 1000),
     )
 
-    # Step 6: Persist flight + hotel candidates as trip-level itinerary items
+    # Step 6: Persist all four verticals as trip-level itinerary items.
+    # Each vertical is persisted independently so a failure in one does not
+    # discard completed results from another.  Errors are logged at WARNING
+    # (not silently swallowed) so they appear in Railway logs.
+    seeding: dict = {}
+
+    # 6a — Flights (one-way)
+    _flights_persisted = 0
     for idx, flight in enumerate(flights_sorted[:10]):
         try:
             itinerary_svc.create_trip_item(ItineraryItemDirectCreate(
                 trip_id=trip.id,
-                item_type="flight",
+                item_type=ItineraryItemType.FLIGHT,
                 title=f"{flight.airline} {flight.flight_number}",
                 start_time=flight.departure_time,
                 end_time=flight.arrival_time,
@@ -678,26 +703,26 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
                     ],
                 },
             ), user_id)
-        except Exception:
-            pass
+            _flights_persisted += 1
+        except Exception as _exc:
+            logger.warning("[create_with_search.persist] vertical=flight idx=%d error=%s", idx, _exc)
 
+    seeding["flights"] = {"harvested": len(flights_sorted), "persisted": _flights_persisted}
+
+    # 6b — Hotels
+    _hotels_persisted = 0
     for idx, hotel in enumerate(hotels_sorted[:10]):
         try:
             itinerary_svc.create_trip_item(ItineraryItemDirectCreate(
                 trip_id=trip.id,
-                item_type="hotel",
+                item_type=ItineraryItemType.HOTEL,
                 title=hotel.name,
                 location=hotel.location,
-                # Do not write cash_price=0.0 for discovery hotels (Hotels v1
-                # returns price_per_night=0.0 since no real rate is available).
-                # None prevents the generic price row from displaying "$0".
                 cash_price=hotel.price_per_night if hotel.price_per_night else None,
                 position=idx,
                 details={
                     "name": hotel.name,
                     "location": hotel.location,
-                    # Omit price_per_night from details to avoid $0/night display.
-                    # Hotels v1 is discovery-only; no real nightly rate exists.
                     "total_price": float(hotel.price or 0),
                     "rating": hotel.rating,
                     "stars": hotel.stars,
@@ -722,16 +747,20 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
                     "area_label": hotel.area_label,
                 },
             ), user_id)
-        except Exception:
-            pass
+            _hotels_persisted += 1
+        except Exception as _exc:
+            logger.warning("[create_with_search.persist] vertical=hotel idx=%d error=%s", idx, _exc)
 
-    # Step 7: Persist top round-trip pairs as trip-level itinerary items
+    seeding["hotels"] = {"harvested": len(hotels_sorted), "persisted": _hotels_persisted}
+
+    # 6c — Round-trip pairs
+    _rt_persisted = 0
     for idx, pair in enumerate(round_trip_pairs[:5]):
         try:
             outbound_ai = _compute_flight_ai_score(pair.outbound)
             itinerary_svc.create_trip_item(ItineraryItemDirectCreate(
                 trip_id=trip.id,
-                item_type="flight",
+                item_type=ItineraryItemType.FLIGHT,
                 title=f"{pair.outbound.airline} {pair.outbound.flight_number} + {pair.return_flight.airline} {pair.return_flight.flight_number}",
                 start_time=pair.outbound.departure_time,
                 end_time=pair.return_flight.arrival_time,
@@ -778,13 +807,96 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
                     },
                 },
             ), user_id)
-        except Exception:
-            pass
+            _rt_persisted += 1
+        except Exception as _exc:
+            logger.warning("[create_with_search.persist] vertical=round_trip idx=%d error=%s", idx, _exc)
+
+    seeding["round_trip_pairs"] = {"harvested": len(round_trip_pairs), "persisted": _rt_persisted}
+
+    # 6d — Attractions (Google Places verified, OPERATIONAL only)
+    # Seeded as ACTIVITY items.  These are addable via Google Maps URI — no fake
+    # booking URLs, no mock rows, no invented data.
+    _attractions_persisted = 0
+    for idx, att in enumerate(attractions):
+        try:
+            itinerary_svc.create_trip_item(ItineraryItemDirectCreate(
+                trip_id=trip.id,
+                item_type=ItineraryItemType.ACTIVITY,
+                title=att["name"],
+                location=att.get("address") or payload.destination_city,
+                position=2000 + idx,
+                details={
+                    "name": att["name"],
+                    "address": att.get("address"),
+                    "rating": att.get("rating"),
+                    "num_reviews": att.get("num_reviews"),
+                    "google_maps_uri": att.get("google_maps_uri"),
+                    "booking_url": att.get("booking_url"),
+                    "lat": att.get("lat"),
+                    "lng": att.get("lng"),
+                    "types": att.get("types", []),
+                    "source": "google_places",
+                    "source_kind": "creation_seed",
+                    "place_id": att.get("place_id"),
+                },
+            ), user_id)
+            _attractions_persisted += 1
+        except Exception as _exc:
+            logger.warning("[create_with_search.persist] vertical=attraction idx=%d error=%s", idx, _exc)
+
+    seeding["attractions"] = {"harvested": len(attractions), "persisted": _attractions_persisted}
+
+    # 6e — Restaurants (Google Places verified, OPERATIONAL only)
+    # Seeded as MEAL items.  Same contract as attractions — canonical Maps URI
+    # only, no fabricated rates or booking links.
+    _restaurants_persisted = 0
+    for idx, rest in enumerate(restaurants[:8]):
+        try:
+            itinerary_svc.create_trip_item(ItineraryItemDirectCreate(
+                trip_id=trip.id,
+                item_type=ItineraryItemType.MEAL,
+                title=rest.name,
+                location=rest.address or payload.destination_city,
+                position=3000 + idx,
+                details={
+                    "name": rest.name,
+                    "address": rest.address,
+                    "cuisine": rest.cuisine,
+                    "rating": rest.rating,
+                    "num_reviews": rest.num_reviews,
+                    "price_level": rest.price_level,
+                    "google_maps_uri": rest.google_maps_uri,
+                    "booking_url": rest.booking_url,
+                    "lat": rest.lat,
+                    "lng": rest.lng,
+                    "ai_score": float(rest.ai_score or 0) if rest.ai_score is not None else None,
+                    "tags": rest.tags,
+                    "source": "google_places",
+                    "source_kind": "creation_seed",
+                    "place_id": rest.place_id,
+                },
+            ), user_id)
+            _restaurants_persisted += 1
+        except Exception as _exc:
+            logger.warning("[create_with_search.persist] vertical=restaurant idx=%d error=%s", idx, _exc)
+
+    seeding["restaurants"] = {"harvested": len(restaurants), "persisted": _restaurants_persisted}
 
     t_total_ms = int((time.perf_counter() - t_total_start) * 1000)
     logger.info(
-        "[create_with_search.timing] phase=total flights=%d hotels=%d rt_pairs=%d elapsed_ms=%d",
-        len(flights_sorted), len(hotels_sorted), len(round_trip_pairs), t_total_ms,
+        "[create_with_search.timing] phase=total "
+        "flights_harvested=%d flights_persisted=%d "
+        "hotels_harvested=%d hotels_persisted=%d "
+        "attractions_harvested=%d attractions_persisted=%d "
+        "restaurants_harvested=%d restaurants_persisted=%d "
+        "rt_pairs_harvested=%d rt_pairs_persisted=%d "
+        "elapsed_ms=%d",
+        seeding["flights"]["harvested"], seeding["flights"]["persisted"],
+        seeding["hotels"]["harvested"], seeding["hotels"]["persisted"],
+        seeding["attractions"]["harvested"], seeding["attractions"]["persisted"],
+        seeding["restaurants"]["harvested"], seeding["restaurants"]["persisted"],
+        seeding["round_trip_pairs"]["harvested"], seeding["round_trip_pairs"]["persisted"],
+        t_total_ms,
     )
 
     return TripWithResults(
@@ -792,4 +904,5 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
         flights=flights_sorted,
         hotels=hotels_sorted,
         round_trip_pairs=round_trip_pairs[:5],
+        seeding_status=seeding,
     )

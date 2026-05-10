@@ -123,17 +123,34 @@ def test_block_flag_parses_truthy_values(monkeypatch, raw: str, expected: bool):
 
 
 def test_mock_attractions_helper_was_deleted_in_v1d():
-    """v1D: ``_mock_attractions`` was removed entirely along with
-    ``SearchService.search_attractions``.  This guard prevents silent
-    re-introduction (e.g. via a stray helper or merge mishap)."""
+    """v1D: ``_mock_attractions`` was removed entirely and must stay gone.
+
+    ``SearchService.search_attractions`` was also deleted in v1D but has since
+    been reintroduced as a real Google-Places-backed provider (Level 2 seeding
+    fix, 2026-05-10) — it is NOT a mock fixture.  This test now asserts:
+
+    1. The mock module-level helper ``_mock_attractions`` remains absent.
+    2. The live ``search_attractions`` method, when present, must fail closed
+       (return []) when the Google Places API key is absent — proving it is
+       not a mock fixture that fabricates data.
+    """
     assert not hasattr(search_service, "_mock_attractions"), (
         "_mock_attractions was deleted in v1D and must not be reintroduced; "
-        "the canonical attraction surface is /ai/concierge/search."
+        "the canonical attraction surface is Google Places + /ai/concierge/search."
     )
-    assert not hasattr(search_service.SearchService, "search_attractions"), (
-        "SearchService.search_attractions was deleted in v1D and must not "
-        "be reintroduced; concierge fallback paths must fail closed instead."
-    )
+    # search_attractions was re-added as a real Google Places provider.
+    # The contract: it must fail closed (empty list) when the API key is absent.
+    if hasattr(search_service.SearchService, "search_attractions"):
+        import os
+        import unittest.mock as _mock
+        with _mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("GOOGLE_PLACES_API_KEY", None)
+            svc = search_service.SearchService(db=_mock.MagicMock())
+            result = svc.search_attractions("Tokyo")
+        assert result == [], (
+            "search_attractions must return [] (fail closed) when "
+            "GOOGLE_PLACES_API_KEY is absent — it must not fabricate data."
+        )
 
 
 def test_block_flag_blocks_mock_hotels(block_flag_on, caplog):
