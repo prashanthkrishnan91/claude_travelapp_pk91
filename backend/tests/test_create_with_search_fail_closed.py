@@ -108,19 +108,39 @@ from app.routes import trips as trips_route  # noqa: E402
 # ---- Test ------------------------------------------------------------------
 
 
-def test_create_with_search_fails_closed_when_provider_unavailable(monkeypatch):
-    """When both flights and hotels return empty (provider unavailable / flag-on),
-    the route must raise 503 and not create or persist anything."""
+def test_create_with_search_creates_trip_when_providers_return_empty(monkeypatch):
+    """When all providers return empty (timeout / unavailable), the trip must
+    still be created so the user can manually build their itinerary.  No
+    itinerary items are persisted since there are no provider results to save.
 
-    # Force search service to return empty for every search call (flights,
-    # round-trip pairs, hotels) — simulates BLOCK_LEGACY_PRODUCT_MOCK=1 or any
-    # provider-unavailable condition.
+    This replaces the old all-empty → 503 behaviour that caused a ~40-second
+    hang while Duffel searched many origin-destination pairs sequentially.
+    """
+    from app.models import Trip  # noqa: WPS433
+    from datetime import datetime as _dt
+    from uuid import uuid4 as _uuid4
+
+    user_uuid = _uuid4()
+    fake_trip = Trip(
+        id=_uuid4(),
+        user_id=user_uuid,
+        title="Paris Trip",
+        destination="Paris",
+        origin="New York",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+        status="planned",
+        created_at=_dt(2026, 5, 8, 0, 0, 0),
+    )
+
     fake_search = MagicMock()
     fake_search.search_flights.return_value = []
     fake_search.search_round_trip_flights.return_value = []
     fake_search.search_hotels.return_value = []
 
     fake_trips = MagicMock()
+    fake_trips.create_trip.return_value = fake_trip
+
     fake_itinerary = MagicMock()
 
     payload = trips_route.TripCreateWithSearch(
@@ -133,27 +153,105 @@ def test_create_with_search_fails_closed_when_provider_unavailable(monkeypatch):
     with patch.object(trips_route, "SearchService", return_value=fake_search), \
          patch.object(trips_route, "TripsService", return_value=fake_trips), \
          patch.object(trips_route, "ItineraryService", return_value=fake_itinerary):
-        with pytest.raises(_StubHTTPException) as excinfo:
-            trips_route.create_trip_with_search(
-                payload, db=MagicMock(), user_id="user-123"
-            )
+        result = trips_route.create_trip_with_search(
+            payload, db=MagicMock(), user_id=user_uuid
+        )
 
-    # 1. Honest 503 with structured provider_unavailable detail
-    assert excinfo.value.status_code == 503
-    detail = excinfo.value.detail
-    assert isinstance(detail, dict)
-    assert detail.get("code") == "provider_unavailable"
-    assert "provider-backed" in detail.get("message", "").lower() or \
-           "provider" in detail.get("message", "").lower()
+    # 1. Trip was created — user gets a usable (empty) trip
+    fake_trips.create_trip.assert_called_once()
+    fake_itinerary.ensure_trip_days.assert_called_once()
 
-    # 2. No trip was created
-    fake_trips.create_trip.assert_not_called()
-
-    # 3. No itinerary days were ensured
-    fake_itinerary.ensure_trip_days.assert_not_called()
-
-    # 4. No itinerary items were persisted
+    # 2. No itinerary items (no provider results to persist)
     fake_itinerary.create_trip_item.assert_not_called()
+
+    # 3. Response has empty flights/hotels/pairs
+    assert result.flights == []
+    assert result.hotels == []
+    assert result.round_trip_pairs == []
+
+
+def test_create_with_search_does_not_block_after_budget_expiry(monkeypatch):
+    """Provider calls that exceed the budget must NOT block the route.
+
+    This test catches the context-manager bug: `with ThreadPoolExecutor(...) as
+    pool:` calls shutdown(wait=True) on exit, holding the route until every
+    thread finishes regardless of the per-future timeout.
+
+    We simulate three slow providers that block until released, set a tiny
+    budget (50 ms), and assert the route returns well within 500 ms — far
+    below the time the slow providers would take if we waited for them.
+    """
+    import threading as _threading
+    import time as _time
+    from app.models import Trip  # noqa: WPS433
+    from datetime import datetime as _dt
+    from uuid import uuid4 as _uuid4
+
+    # Event the slow-provider threads wait on.  We set it *after* asserting
+    # so threads can exit cleanly rather than lingering for the full wait.
+    _unblock = _threading.Event()
+
+    def _slow_search(*_args, **_kwargs):
+        # Block until released or 3s safety timeout.
+        _unblock.wait(timeout=3.0)
+        return []
+
+    fake_search = MagicMock()
+    fake_search.search_flights.side_effect = _slow_search
+    fake_search.search_round_trip_flights.side_effect = _slow_search
+    fake_search.search_hotels.side_effect = _slow_search
+
+    user_uuid = _uuid4()
+    fake_trip = Trip(
+        id=_uuid4(),
+        user_id=user_uuid,
+        title="Paris Trip",
+        destination="Paris",
+        origin="New York",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+        status="planned",
+        created_at=_dt(2026, 5, 8, 0, 0, 0),
+    )
+    fake_trips = MagicMock()
+    fake_trips.create_trip.return_value = fake_trip
+    fake_itinerary = MagicMock()
+
+    payload = trips_route.TripCreateWithSearch(
+        origin_city="New York",
+        destination_city="Paris",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+    )
+
+    # Patch budget to 50 ms so _futures_wait times out quickly.
+    monkeypatch.setattr(trips_route, "_SEARCH_BUDGET_SECONDS", 0.05)
+
+    t_start = _time.perf_counter()
+    with patch.object(trips_route, "SearchService", return_value=fake_search), \
+         patch.object(trips_route, "TripsService", return_value=fake_trips), \
+         patch.object(trips_route, "ItineraryService", return_value=fake_itinerary):
+        result = trips_route.create_trip_with_search(
+            payload, db=MagicMock(), user_id=user_uuid
+        )
+    elapsed = _time.perf_counter() - t_start
+
+    # Release background threads now that we have the result.
+    _unblock.set()
+
+    # With context-manager shutdown(wait=True) the route would block until all
+    # slow threads finish (3s each).  With shutdown(wait=False) it returns
+    # near the 50ms budget.  Allow generous headroom for CI scheduling jitter.
+    assert elapsed < 0.5, (
+        f"Route took {elapsed:.3f}s — executor.shutdown(wait=True) likely still blocking "
+        "after budget expiry.  Fix: use shutdown(wait=False, cancel_futures=True)."
+    )
+
+    # Trip is created and provider results are all empty (timed out).
+    fake_trips.create_trip.assert_called_once()
+    assert result.flights == []
+    assert result.round_trip_pairs == []
+    assert result.hotels == []
 
 
 def test_create_with_search_invalid_destination_still_returns_422(monkeypatch):
