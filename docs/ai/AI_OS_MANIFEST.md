@@ -24,6 +24,25 @@ A portable checklist for future repos and for auditing whether the OS is fully i
 - `docs/ai/WORKFLOW_RETROSPECTIVE.md`
 - `docs/ai/HOOK_SAFETY.md`
 - `docs/ai/PERMISSIONS_AND_MEMORY_BOUNDARIES.md`
+- `docs/ai/AGENT_ROUTER.md`
+- `docs/ai/AGENT_INTAKE_REGISTRY.md`
+- `docs/ai/AGENT_EFFECTIVENESS_LEDGER.md`
+- `docs/ai/PROMPT_ENGINEERING_STANDARD.md`
+- `docs/ai/TOOL_FAILURE_TAXONOMY.md`
+
+## Required Product OS docs (OS v4)
+
+- `docs/product/NORTH_STAR.md`
+- `docs/product/ROADMAP.md`
+- `docs/product/BUILD_QUEUE.md`
+- `docs/product/IDEA_INBOX.md`
+- `docs/product/DECISION_LOG.md`
+- `docs/product/RELEASE_GATES.md`
+- `docs/product/PRODUCT_HEALTH.md`
+- `docs/product/DO_NOT_BUILD_YET.md`
+- `docs/product/PROGRESS_REPORT_TEMPLATE.md`
+- `docs/product/FEATURE_SLICE_CONTRACT.md`
+- `docs/product/GOLDEN_SCENARIOS.md`
 
 ## Required skills
 
@@ -38,6 +57,16 @@ A portable checklist for future repos and for auditing whether the OS is fully i
 - `failure-recovery`
 - `workflow-retrospective`
 - `miss-ledger-update`
+- `prompt-intake`
+- `roadmap-check`
+- `idea-triage`
+- `build-queue-update`
+- `progress-report`
+- `product-retrospective`
+- `feature-contract`
+- `golden-scenarios`
+- `prompt-lint`
+- `tool-failure-triage`
 
 ## Required agents
 
@@ -45,6 +74,12 @@ A portable checklist for future repos and for auditing whether the OS is fully i
 - `test-strategist`
 - `pr-reviewer`
 - `workflow-retrospective-reviewer`
+- `roadmap-guardian`
+- `prompt-intake-reviewer`
+- `agent-curator`
+- `prompt-quality-reviewer`
+- `eval-scenario-reviewer`
+- Certification pack: `reality-checker`, `evidence-collector`, `premium-delight-reviewer`, `accessibility-reviewer`, `performance-benchmarker`
 - Travel-specific reviewers: `place-authority-reviewer`, `latency-reviewer`, `evidence-prose-reviewer`
 
 ## Required command aliases
@@ -58,6 +93,11 @@ A portable checklist for future repos and for auditing whether the OS is fully i
 - `/update-handoff`
 - `/workflow-retrospective`
 - `/miss-ledger-update`
+- `/prompt-intake`
+- `/roadmap-check`
+- `/idea-triage`
+- `/progress-report`
+- `/build-queue-update`
 
 ## Optional / future
 
@@ -67,4 +107,4 @@ A portable checklist for future repos and for auditing whether the OS is fully i
 
 ## Audit rule
 
-If a future repo lacks one required OS component, add it before scaling AI-driven feature work.
+If a future repo lacks one required OS or Product OS component, add it before scaling AI-driven feature work.

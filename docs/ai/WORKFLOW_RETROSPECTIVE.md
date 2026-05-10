@@ -20,9 +20,9 @@ A standard lightweight retrospective Claude runs after meaningful PRs or failed 
 
 ## Retrospective questions
 
-- Did the task use OS v2/v3 work-order format?
+- Did the task use OS v3/v4 work-order format?
 - Did Claude use required focused skills?
-- Did Claude delegate to applicable read-only reviewer agents?
+- Did Claude delegate to applicable read-only reviewer agents per AGENT_ROUTER?
 - Did advisory hooks create useful reminders or noise?
 - Did the PR summary include enough evidence?
 - Was Codex needed?
@@ -51,6 +51,17 @@ Workflow retrospective:
 - Reason:
 ```
 
+## Product-direction fields (OS v4)
+
+Also include when meaningful:
+
+- Roadmap stage advanced: Yes/No
+- Build queue item completed/moved: Yes/No
+- Idea inbox update needed: Yes/No
+- Decision log update needed: Yes/No
+- Product health update needed: Yes/No
+- Roadmap drift observed: Yes/No
+
 ## Extended retrospective fields (optional)
 
 When useful, also report:
@@ -75,8 +86,9 @@ When useful, also report:
 
 ## Guidance
 
-- Do not invoke every reviewer agent by default. Invoke only relevant reviewers.
+- Do not invoke every reviewer agent by default. Invoke only relevant reviewers per AGENT_ROUTER.
 - If the task gets long or context-heavy, use compaction/new-chat guidance before quality degrades.
 - If token/cost or deployment usage was wasteful, record it as a workflow miss only when meaningful or repeated.
 - If prompt intake was wrong, record whether the issue was ChatGPT prompt quality, Claude planning, or repo OS discoverability.
 - If OS drift occurred, identify the smallest OS surface that should catch it next time.
+- If product direction drift occurred, recommend BUILD_QUEUE / IDEA_INBOX / DECISION_LOG updates rather than expanding scope.

@@ -24,6 +24,37 @@ If a workflow miss occurred, recommend or add a concise entry to `docs/ai/MISS_L
 
 All Travel/Finance/future-repo coding prompts must use OS v2/v3 work-order format unless explicitly generating architecture/spec only. For bulk repo/workflow edits, batch changes in one branch/PR; do not use file-by-file connector-style commits.
 
+## AI Repo Operating System v4 — Product Roadmap Control Plane and Agent Governance
+
+OS v3 decides how Claude works. OS v4 decides what to build next, why, and which reviewers to call.
+
+Product OS routing (use before/around coding):
+
+- Use `.claude/skills/prompt-intake/SKILL.md` before meaningful work to classify the task and choose OS v4 path.
+- Use `.claude/skills/roadmap-check/SKILL.md` for implementation / product prompts to confirm roadmap stage and build queue item.
+- Use `.claude/skills/progress-report/SKILL.md` whenever PK asks where we are.
+- Use `.claude/skills/idea-triage/SKILL.md` whenever PK dumps ideas; route them to `docs/product/IDEA_INBOX.md`, not implementation.
+- Use `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap decisions or merged PRs.
+- Use `.claude/skills/product-retrospective/SKILL.md` after product-stage PRs.
+
+Agent governance:
+
+- Follow `docs/ai/AGENT_ROUTER.md` to choose only relevant reviewer agents. Do not run every agent by default.
+- Park new external agent ideas in `docs/ai/AGENT_INTAKE_REGISTRY.md`. Do not import wholesale.
+- Record reviewer-agent usefulness in `docs/ai/AGENT_EFFECTIVENESS_LEDGER.md` only when the signal is meaningful.
+
+Every meaningful PR should state its roadmap stage and build queue item.
+
+## AI Repo Operating System v4 — Prompt Engineering Control Layer
+
+For Level 2/3 features and important generated prompts:
+
+- Use `.claude/skills/feature-contract/SKILL.md` for Level 2/3 implementation. If the contract is unclear, propose a split.
+- Use `.claude/skills/golden-scenarios/SKILL.md` for Level 2+ implementation. Select 3-7 relevant scenarios from `docs/product/GOLDEN_SCENARIOS.md`.
+- Use `.claude/skills/prompt-lint/SKILL.md` and the `prompt-quality-reviewer` agent for important generated prompts before PK blind-copies them.
+- Use `.claude/skills/tool-failure-triage/SKILL.md` and `docs/ai/TOOL_FAILURE_TAXONOMY.md` before patching failed commands / tests / log checks.
+- Reference `docs/ai/PROMPT_ENGINEERING_STANDARD.md` for prompt structure and lint checklist.
+
 Before work, read only the smallest needed subset of:
 
 1. `docs/ai/HANDOFF.md` — current state
@@ -40,6 +71,9 @@ Before work, read only the smallest needed subset of:
 12. `docs/ai/UI_BASELINE.md` — UI baseline and known visual costs when doing UI work
 13. `docs/ai/CLAUDE_WORKFLOW_KIT.md` — stable project constraints only when needed
 14. `README.md` — public/setup context only when needed
+15. `docs/product/NORTH_STAR.md`, `docs/product/ROADMAP.md`, `docs/product/BUILD_QUEUE.md` — read when prompt-intake or roadmap-check is in scope
+16. `docs/product/FEATURE_SLICE_CONTRACT.md`, `docs/product/GOLDEN_SCENARIOS.md` — read for Level 2+ feature work
+17. `docs/ai/PROMPT_ENGINEERING_STANDARD.md`, `docs/ai/TOOL_FAILURE_TAXONOMY.md` — read when generating prompts or triaging failures
 
 Use one primary workflow skill when it matches the task:
 
@@ -54,6 +88,16 @@ Use one primary workflow skill when it matches the task:
 - `.claude/skills/failure-recovery/SKILL.md` — failed patch/review/runtime recovery
 - `.claude/skills/workflow-retrospective/SKILL.md` — OS v3 retrospective after meaningful PRs or failed validation
 - `.claude/skills/miss-ledger-update/SKILL.md` — OS v3 ledger entry for workflow/product-process misses
+- `.claude/skills/prompt-intake/SKILL.md` — OS v4 task classification and routing
+- `.claude/skills/roadmap-check/SKILL.md` — OS v4 roadmap and build queue mapping
+- `.claude/skills/idea-triage/SKILL.md` — OS v4 idea capture without derailing active work
+- `.claude/skills/build-queue-update/SKILL.md` — OS v4 build queue updates
+- `.claude/skills/progress-report/SKILL.md` — OS v4 concise progress reports
+- `.claude/skills/product-retrospective/SKILL.md` — OS v4 product-stage retrospective
+- `.claude/skills/feature-contract/SKILL.md` — OS v4 Level 2/3 feature contract
+- `.claude/skills/golden-scenarios/SKILL.md` — OS v4 select Level 2+ golden scenarios
+- `.claude/skills/prompt-lint/SKILL.md` — OS v4 prompt lint before blind copy
+- `.claude/skills/tool-failure-triage/SKILL.md` — OS v4 classify failed commands/tests/checks
 - `docs/ai/skills/discovery.md` — map unknown files or visual surfaces before implementation
 - `docs/ai/skills/bugfix.md` — focused bug fix or small behavior correction
 - `docs/ai/skills/ui_fix.md` — capped UI polish or visual consistency pass
@@ -73,6 +117,11 @@ Useful command aliases:
 - `/update-handoff`
 - `/workflow-retrospective`
 - `/miss-ledger-update`
+- `/prompt-intake`
+- `/roadmap-check`
+- `/idea-triage`
+- `/progress-report`
+- `/build-queue-update`
 
 Core rules:
 
@@ -81,6 +130,7 @@ Core rules:
 - No broad discovery. Read primary target files first; fallback reads only if blocked.
 - Classify issue severity before choosing Codex patch, Sonnet full plumbing analysis, or split plan.
 - Do not keep patching after failed patches. After one failed patch, reclassify. After two related patches, escalate to full plumbing analysis or split plan.
+- When a command/tool/test/log check fails, run `tool-failure-triage` and classify before patching. Do not patch app code for a tooling failure.
 - When runtime evidence matters, use the `railway-logs` personal Claude skill if available before coding. This applies to Railway/deployment errors, crashes, recent errors, 4xx/5xx responses, provider failures, auth/cache/persistence mismatches, and cases where backend logs disagree with UI behavior. Summarize only relevant evidence; do not ask the user to paste Railway JSON/logs unless the skill is unavailable.
 - Smallest safe patch. No unrelated refactors.
 - For non-trivial work, state assumptions and success criteria before coding.
@@ -93,6 +143,11 @@ Core rules:
 - Update `docs/ai/HANDOFF.md` in the same PR for any implementation, bug fix, UI change, architecture change, migration, or workflow change.
 - State Supabase SQL requirement in every PR summary.
 - Stop after opening any Medium-High/High usage PR. Do not propose the next implementation prompt.
+- Every meaningful implementation PR must state its roadmap stage and build queue item from `docs/product/`.
+- Do not run every reviewer agent by default; use `docs/ai/AGENT_ROUTER.md`.
+- For Level 2/3 implementation, run `feature-contract` and `golden-scenarios` before coding.
+- Important generated prompts run through `prompt-lint`/`prompt-quality-reviewer` before blind-copy.
+- Coverage-first audits for review prompts: list every plausible issue before classifying severity.
 
 Project invariants:
 
@@ -113,4 +168,5 @@ Risks:
 Supabase SQL: Yes/No
 HANDOFF.md edited: Yes/No + reason
 README.md edited: Yes/No + reason
+Roadmap stage / build queue item: <stage> / <item>
 ```
