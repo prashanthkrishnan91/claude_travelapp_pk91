@@ -1,3 +1,37 @@
+## Last change (2026-05-10) — V4 Travel OS Addendum (Level 3, docs-only)
+
+**Status: PR-ready (branch: `claude/add-v4-travel-os-addendum-33X1C`)** — Added comprehensive V4 product/architecture source-of-truth artifact for the broader Travel OS direction. Docs-only; no runtime, SQL, providers, or UI changes.
+
+### What changed
+
+- **`artifacts/travel_concierge_v4_travel_os_addendum.md`** (new): full Travel OS architecture addendum covering executive summary, relationship to existing artifacts, market lessons, non-negotiable invariants, the Dream→Learn lifecycle, Universal Capture / Inspiration Inbox, Travel Knowledge Graph, Decision Cockpit, Source Credibility / Anti-Hype Engine, Domain Intelligence Layers (Place / Dining / Hotel / Flight / Experience / Destination / Points-Deals-Coupons), Spatial Trip Brain, Itinerary Feasibility & Modification Engine, Travel Ops / Day-Of Layer, Collaboration, External-Link Launcher, Watchtower / Alerts, Personalization brain, Product Surfaces, staged Phase 0–15 Execution Roadmap with model routing, Build Guardrails, Certification Framework, Do-Not-Build-Yet list, and the final V4 north-star statement.
+
+### Binding artifacts (unchanged)
+
+- `artifacts/ai_concierge_semantic_place_intelligence.md` and `artifacts/ai_concierge_semantic_place_intelligence_v2_amendment.md` remain binding for AI Concierge place search (verified Google-canonical addable cards, evidence dossiers, set-level writer, reviewer gate, latency budgets, 5–7 first-response cards, no visible fallback notes, more-options pool).
+- `artifacts/travel_concierge_product_north_star_v3.md` remains valid for discovery-first product direction. V4 extends V3 and supersedes it only where V3 is too shallow for the full Travel OS goal.
+- **Conflict rule:** if anything in V4 appears to conflict with the semantic-place invariants, the semantic-place artifacts win.
+
+### Use V4 as source of truth for
+
+- Universal capture (Inspiration Inbox).
+- Decision intelligence (Decision Cockpit + Source Credibility).
+- Dynamic itinerary feasibility and modification.
+- Travel Ops / day-of layer.
+- Hotel / dining deep intelligence.
+- Collaboration and external-link discipline.
+- Watchtower alerts.
+- Personalization.
+- Phase 0–15 execution sequencing and model routing.
+
+### Scope guard
+
+- No runtime code, SQL, providers, or LLM calls added.
+- No UI changes.
+- No edits to existing semantic-place or V3 artifacts.
+
+---
+
 ## Last change (2026-05-09) — Flights UX + One-way Add-to-Itinerary Correctness (Level 1)
 
 **Status: PR-ready (branch: `claude/fix-flights-ux-oneway-nJZoQ`)** — Fixed the one-way flight add-to-itinerary bug (appeared as "Unscheduled / no time set") and polished mobile flight result cards.

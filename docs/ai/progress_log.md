@@ -1,5 +1,23 @@
 # Progress Log
 
+## 2026-05-10 — V4 Travel OS Addendum (docs-only)
+
+**Branch**: `claude/add-v4-travel-os-addendum-33X1C`
+
+**Severity**: Level 3 — comprehensive product architecture, source-of-truth roadmap, and execution sequencing. Documentation only.
+
+**What was done**:
+- Added `artifacts/travel_concierge_v4_travel_os_addendum.md` as the broader Travel OS architecture and execution source of truth. Sections cover executive summary, relationship to existing artifacts, market lessons, invariants, full Dream→Learn lifecycle, Universal Capture / Inspiration Inbox, Travel Knowledge Graph, Decision Cockpit, Source Credibility / Anti-Hype Engine, Domain Intelligence Layers (Place / Dining / Hotel / Flight / Experience / Destination / Points-Deals-Coupons), Spatial Trip Brain, Itinerary Feasibility & Modification Engine, Travel Ops / Day-Of Layer, Collaboration, External-Link Launcher, Watchtower / Alerts, Personalization, Product Surfaces, Phase 0–15 Execution Roadmap with model routing, Build Guardrails, Certification Framework, Do-Not-Build-Yet list, and final V4 north-star statement.
+- V4 extends `artifacts/travel_concierge_product_north_star_v3.md` and supersedes it only where V3 is shallow for the full Travel OS goal.
+- V4 explicitly affirms that `artifacts/ai_concierge_semantic_place_intelligence.md` and `artifacts/ai_concierge_semantic_place_intelligence_v2_amendment.md` remain binding for the AI Concierge place-search core (verified Google-canonical addable cards, evidence dossiers, reviewer gate, latency budgets, 5–7 first-response cards, no visible fallback notes, more-options pool). Conflict rule: semantic-place invariants always win.
+- Updated `docs/ai/HANDOFF.md` with a V4 entry pointing to the addendum as the broader Travel OS source of truth.
+
+**Tests**: docs-only. No runtime tests required; no behavior changed.
+
+**Supabase SQL**: No. **Providers added**: No. **LLM calls added**: No. **UI changes**: No. **Runtime behavior changes**: No.
+
+---
+
 ## 2026-05-09 — Provider-backed Hotels v1 (Google Places lodging discovery)
 
 **Branch**: `claude/hotels-prod-integration-VIFiI`
