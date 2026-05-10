@@ -95,20 +95,20 @@ test('TripBuilder has exploreSnapshotLoadedRef to gate one-shot snapshot fetch',
 
 test('TripBuilder snapshot-first hydration: fetches snapshot before calling provider search', () => {
   assert.match(tripBuilder, /const snapshot = await fetchExploreSnapshot\(tripId\)/, 'TripBuilder must await fetchExploreSnapshot before provider search');
-    assert.match(tripBuilder, /const hasHealthyAttractions = snapshot != null && snapshot\.attractions\.length > 0 && hasPositiveExploreScore\(snapshot\.attractions\);/, 'Snapshot health check must evaluate attractions section quality');
+  assert.match(tripBuilder, /hasPositiveExploreScore\(safeSnapshotAttractions\)/, 'Snapshot health check must evaluate attractions section quality');
   assert.match(tripBuilder, /const hasHealthyRestaurants = snapshot != null && snapshot\.restaurants\.length > 0 && hasPositiveExploreScore\(snapshot\.restaurants\);/, 'Snapshot health check must evaluate restaurants section quality');
 });
 
 test('TripBuilder skips provider search and returns early when usable snapshot exists', () => {
-    assert.match(tripBuilder, /if \(hasHealthyAttractions && hasHealthyRestaurants\) return;/, 'Must short-circuit only when both sections are healthy');
-  assert.match(tripBuilder, /if \(snapshot\.attractions\.length > 0\) setCandidateAttractions\(snapshot\.attractions\)/, 'Must hydrate attractions from snapshot');
+  assert.match(tripBuilder, /if \(hasHealthyAttractions && hasHealthyRestaurants\) return;/, 'Must short-circuit only when both sections are healthy');
+  assert.match(tripBuilder, /if \(safeSnapshotAttractions\.length > 0\) setCandidateAttractions\(safeSnapshotAttractions\)/, 'Must hydrate attractions from canonical snapshot rows');
   assert.match(tripBuilder, /if \(snapshot\.restaurants\.length > 0\) setCandidateRestaurants\(snapshot\.restaurants\)/, 'Must hydrate restaurants from snapshot');
 });
 
 
 
 test('TripBuilder performs section-aware self-heal so empty restaurants do not block live refetch', () => {
-  assert.match(tripBuilder, /const hasHealthyAttractions = snapshot != null && snapshot\.attractions\.length > 0 && hasPositiveExploreScore\(snapshot\.attractions\);/);
+  assert.match(tripBuilder, /hasPositiveExploreScore\(safeSnapshotAttractions\)/);
   assert.match(tripBuilder, /const hasHealthyRestaurants = snapshot != null && snapshot\.restaurants\.length > 0 && hasPositiveExploreScore\(snapshot\.restaurants\);/);
   assert.match(tripBuilder, /const shouldFetchRestaurants = !hasHealthyRestaurants;/);
   assert.match(tripBuilder, /shouldFetchRestaurants \? searchRestaurants\(destination\) : Promise\.resolve\(\{ restaurants: snapshot\?\.restaurants \?\? \[\]/);
@@ -288,7 +288,7 @@ test('mapRestaurantToResult normalizes score aliases in priority order: aiScore 
 });
 
 test('Explore restaurants require verified Google place identity before rendering/persisting', () => {
-  assert.match(apiClient, /\.filter\(\(r\) => Boolean\(r\.googleMapsUri \|\| r\.providerPlaceId \|\| r\.placeId\)\)/, 'searchRestaurants must drop unverified results missing Google identity');
+  assert.match(apiClient, /!pId\.startsWith\("mock-"\) && Boolean\(r\.googleMapsUri \|\| r\.providerPlaceId \|\| r\.placeId\)/, 'searchRestaurants must keep only verifiable non-mock Google identity rows');
   assert.match(apiClient, /if \(!googleMapsUri && !providerPlaceId && !placeId\) return null;/, 'fetchExploreSnapshot must reject unverified restaurant snapshot rows');
 });
 
