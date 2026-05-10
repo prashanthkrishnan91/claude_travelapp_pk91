@@ -128,12 +128,15 @@ test('TripIdeasPanel exists and has Add to Day assignment action', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 9. TripIdeasPanel: filters for source_kind === "concierge_idea"
+// 9. TripIdeasPanel does not hard-filter to concierge_idea only
 // ---------------------------------------------------------------------------
 
-test('TripIdeasPanel filters items by source_kind === concierge_idea', () => {
-  assert.match(tripIdeasPanel, /source_kind.*concierge_idea|concierge_idea.*source_kind/,
-    'Must filter for concierge_idea source_kind to avoid mixing with flight/hotel candidates');
+test('TripIdeasPanel does not hard-filter to source_kind concierge_idea only', () => {
+  assert.doesNotMatch(
+    tripIdeasPanel,
+    /source_kind\s*===\s*["']concierge_idea["']/,
+    'Trip ideas visibility should not depend on a single source_kind value.',
+  );
 });
 
 // ---------------------------------------------------------------------------

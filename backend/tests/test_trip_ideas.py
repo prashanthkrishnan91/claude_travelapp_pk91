@@ -209,31 +209,47 @@ def test_list_unscheduled_items_returns_only_null_day_items():
 
 
 # ---------------------------------------------------------------------------
-# Test 2b: list_unscheduled_items excludes non-concierge unscheduled candidates
+# Test 2b: list_unscheduled_items includes creation_seed for supported item types
 # ---------------------------------------------------------------------------
 
-def test_list_unscheduled_items_excludes_non_concierge_candidates():
+def test_list_unscheduled_items_includes_creation_seed_activity_and_meal():
     db = _FakeDB()
     svc = ItineraryService(db)
     trip_id = uuid4()
 
     idea = svc.create_trip_item(_make_idea(trip_id, "Lou Malnati's"))
-    # Simulate unscheduled trip-level candidate item (e.g., flight/hotel preload)
-    db.tables["itinerary_items"].append({
-        "id": str(uuid4()),
-        "trip_id": str(trip_id),
-        "day_id": None,
-        "item_type": "hotel",
-        "title": "Candidate Hotel",
-        "position": 1,
-        "created_at": "2026-01-01T00:00:00+00:00",
-        "updated_at": "2026-01-01T00:00:00+00:00",
-        "details": {"source_kind": "search_candidate"},
-    })
+    activity_id = str(uuid4())
+    meal_id = str(uuid4())
+    db.tables["itinerary_items"].extend([
+        {
+            "id": activity_id,
+            "trip_id": str(trip_id),
+            "day_id": None,
+            "item_type": "activity",
+            "title": "Tokyo Tower",
+            "position": 1,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+            "details": {"source_kind": "creation_seed"},
+        },
+        {
+            "id": meal_id,
+            "trip_id": str(trip_id),
+            "day_id": None,
+            "item_type": "meal",
+            "title": "Sushi Dai",
+            "position": 2,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+            "details": {"source_kind": "creation_seed"},
+        },
+    ])
 
     unscheduled = svc.list_unscheduled_items(trip_id)
-    assert len(unscheduled) == 1
-    assert unscheduled[0].id == idea.id
+    ids = {str(it.id) for it in unscheduled}
+    assert str(idea.id) in ids
+    assert activity_id in ids
+    assert meal_id in ids
 
 # ---------------------------------------------------------------------------
 # Test 3: Duplicate idea for the same trip/title is not created

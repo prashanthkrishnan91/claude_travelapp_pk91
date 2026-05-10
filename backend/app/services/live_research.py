@@ -705,6 +705,31 @@ def _make_cache_key(intent: str, destination: str, query: str, dates: Optional[s
     return "::".join(parts)
 
 
+
+
+def _env_truthy(name: str) -> bool:
+    value = os.getenv(name)
+    return bool(value and value.strip().lower() in {"1", "true", "yes", "on"})
+
+
+def _live_research_calls_allowed() -> bool:
+    """Default-deny gate for paid live provider calls in tests/validation.
+
+    Live providers are enabled when either:
+    - explicit runtime allow flag is on (production path), or
+    - BOTH live-test opt-in flags are on (intentional validation path).
+    """
+    if _env_truthy("ALLOW_LIVE_RESEARCH_CALLS"):
+        return True
+    return _env_truthy("RUN_LIVE_PROVIDER_TESTS") and _env_truthy("ALLOW_LIVE_RESEARCH_CALLS")
+
+
+def _read_provider_api_key(name: str) -> str:
+    """Return provider key only when live calls are explicitly allowed."""
+    if not _live_research_calls_allowed():
+        return ""
+    return os.getenv(name) or ""
+
 # ── Provider selection ───────────────────────────────────────────────────────
 
 def select_default_provider(timeout: float = 6.0) -> LiveSearchProvider:
@@ -715,13 +740,13 @@ def select_default_provider(timeout: float = 6.0) -> LiveSearchProvider:
     has no hard dependency on ``app.core.config`` (which imports pydantic-
     settings) and stays unit-testable in minimal harnesses.
     """
-    tavily = os.getenv("TAVILY_API_KEY") or ""
+    tavily = _read_provider_api_key("TAVILY_API_KEY")
     if tavily:
         return TavilyProvider(api_key=tavily, timeout=timeout)
-    brave = os.getenv("BRAVE_SEARCH_API_KEY") or ""
+    brave = _read_provider_api_key("BRAVE_SEARCH_API_KEY")
     if brave:
         return BraveSearchProvider(api_key=brave, timeout=timeout)
-    serper = os.getenv("SERPER_API_KEY") or ""
+    serper = _read_provider_api_key("SERPER_API_KEY")
     if serper:
         return SerperProvider(api_key=serper, timeout=timeout)
     return _NoopProvider()

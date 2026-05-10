@@ -1,30 +1,8 @@
 import Link from "next/link";
 import { MapPin, Calendar, Users, ArrowRight } from "lucide-react";
 import { TripStatusBadge } from "@/components/ui/TripStatusBadge";
-import type { Trip, TripStatus } from "@/types";
-
-const _TODAY = new Date().toISOString().slice(0, 10);
-
-// Planning-state statuses that should display as Completed once the trip's
-// end date has passed.  Trips the user already marked "completed" or
-// "archived" are left unchanged.
-const _PLANNING_STATUSES: ReadonlySet<TripStatus> = new Set([
-  "draft",
-  "researching",
-  "planned",
-  "booked",
-]);
-
-function getDisplayStatus(trip: Trip): TripStatus {
-  if (
-    trip.endDate &&
-    trip.endDate < _TODAY &&
-    _PLANNING_STATUSES.has(trip.status)
-  ) {
-    return "completed";
-  }
-  return trip.status;
-}
+import { getDisplayTripStatus } from "@/lib/tripStatus";
+import type { Trip } from "@/types";
 
 function formatDateRange(start?: string, end?: string) {
   if (!start) return "Dates TBD";
@@ -81,7 +59,7 @@ export function RecentTrips({ trips }: RecentTripsProps) {
                     <span className="text-sm font-semibold text-cream-100 group-hover:text-brand-400 transition truncate">
                       {trip.title}
                     </span>
-                    <TripStatusBadge status={getDisplayStatus(trip)} />
+                    <TripStatusBadge status={getDisplayTripStatus(trip)} />
                   </div>
                   <p className="text-xs text-cream-400 mt-0.5 truncate">
                     {trip.destination}

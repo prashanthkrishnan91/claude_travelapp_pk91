@@ -73,3 +73,10 @@ Do not merge without targeted coverage for:
 - no live `_mock_flights` / `_mock_hotels` route calls
 - discovery-only hotels excluded from priced OptimizeTripModal inputs
 - outbound flight Day 1 / return flight final-day behavior
+
+
+## Live-provider safety rule (non-negotiable)
+- Default tests, local validation, and routine PR validation must never call live paid research providers (Tavily/Brave/Serper) or live Google Places.
+- Live-provider validation is opt-in only and skipped by default. Enable only when explicitly requested with `RUN_LIVE_PROVIDER_TESTS=true` and `ALLOW_LIVE_RESEARCH_CALLS=true`.
+- Provider-selection tests must use fake keys + mocked provider constructors, and must make zero network calls.
+- Routine PR checks must use mocked/stubbed providers and contract tests only.
