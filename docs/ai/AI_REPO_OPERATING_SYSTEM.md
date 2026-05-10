@@ -159,6 +159,20 @@ Hooks are reminders only:
 - SQL/env/settings edits remind manual action fields
 - Stop reminds `/pre-pr-self-audit` and `/pr-summary`
 
+The canonical workflow surface lives in `.claude/settings.json` and `.claude/hooks/ai_os_advisory.py`. There is **no** claude-flow / helper / statusline stack — that has been removed. Do not reintroduce hook-handlers, auto-memory hooks, statusline scripts, `npx claude-flow*` permissions, `CLAUDE_FLOW_*` env vars, or experimental agent-team config blocks. Hooks must stay simple and advisory.
+
+## Handoff maintenance rule (canonical)
+
+`docs/ai/HANDOFF.md` is **current state only**. It is loaded into context on every meaningful task, so it must stay compact.
+
+- Do not append unbounded PR-by-PR history.
+- Every meaningful PR may update HANDOFF, but by **replacing or summarizing** the affected section — never by adding a new dated entry.
+- If HANDOFF.md exceeds ~500 lines, **compact before adding** more.
+- Move durable detail elsewhere: workflow/process misses → `docs/ai/MISS_LEDGER.md`; product decisions → `docs/product/DECISION_LOG.md`.
+- Do not create new archive files for routine PRs. An archive is justified only when a still-useful body of historical context is being replaced.
+- Archive files (if they exist) must not be referenced as default reads from `CLAUDE.md` or this OS doc.
+- Stale resolved issues must be removed from HANDOFF, not preserved.
+
 ## What belongs in the task prompt
 
 Keep prompts compressed. Use the work-order shape above. The prompt names safety packs and the build archetype; the OS owns the rest.

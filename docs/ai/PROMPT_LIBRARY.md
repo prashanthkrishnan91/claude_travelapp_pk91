@@ -28,7 +28,7 @@ Before giving any Claude/Codex prompt, ChatGPT must silently check:
 10. Is the **build archetype** named?
 11. Is acceptance evidence specific (test bundle / snapshot / Concierge card field / screenshot)?
 12. Is the stop condition explicit?
-13. HANDOFF.md required inside PR?
+13. HANDOFF.md required inside PR? **Update by replacing/summarizing, not appending.**
 14. README excluded unless public/setup changed?
 15. Mobile-safe copy block?
 16. Usage estimate included?
@@ -220,13 +220,25 @@ workflow-update
 </anchor_files>
 
 <acceptance_evidence>
-Docs read cleanly; named gates exist; references to safety packs / archetypes / TEST_ROUTING.md are correct; HANDOFF.md updated.
+Docs read cleanly; named gates exist; references to safety packs / archetypes / TEST_ROUTING.md are correct; HANDOFF.md updated by replacing/summarizing (not appending).
 </acceptance_evidence>
 
 <stop_condition>
 No product code changes. Do not introduce new OS version labels (e.g., v4.2 / v5).
 </stop_condition>
 ```
+
+## HANDOFF update guidance
+
+`docs/ai/HANDOFF.md` is current state only — not a historical log. Every prompt that touches HANDOFF must follow these rules:
+
+- The PR's HANDOFF edit replaces or summarizes the affected section. It does **not** append a new dated entry per PR.
+- Recent meaningful PRs section lists at most 5–10 lines, one-liners only. Older entries roll out as new ones roll in.
+- If HANDOFF.md is approaching ~500 lines, the prompt must include a compaction step **before** adding any new content.
+- Resolved risks / closed issues are removed, not preserved.
+- Durable historical detail belongs in `docs/ai/MISS_LEDGER.md` or `docs/product/DECISION_LOG.md`, not in HANDOFF.
+
+This matches the `Handoff maintenance rule` in `docs/ai/AI_REPO_OPERATING_SYSTEM.md` and the read-first anchor in `CLAUDE.md`.
 
 ## Budget gate
 

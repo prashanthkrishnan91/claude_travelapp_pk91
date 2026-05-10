@@ -92,7 +92,7 @@ Follow `docs/ai/AGENT_ROUTER.md`. Do not run every agent by default. Park new ex
 
 Read only what the task needs. Common anchors:
 
-- `docs/ai/HANDOFF.md` — current state
+- `docs/ai/HANDOFF.md` — compact current state only (no historical PR log; replace/summarize, never append)
 - `docs/ai/AI_REPO_OPERATING_SYSTEM.md` — consolidated OS v4
 - `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` — reusable contracts the OS owns
 - `docs/ai/KNOWN_FAILURE_MODES.md` — project-specific failure patterns
@@ -126,7 +126,7 @@ Useful command aliases (call only when relevant): `/test-selector`, `/contract-a
 - Use repo-local skills, safety packs, and archetypes instead of repeating large instruction blocks in prompts.
 - Personal Claude skills are accelerators only; they do not replace repo rules, budget gates, or product invariants.
 - Major design transformation must wait until `docs/ai/DESIGN_VISION.md` timing gate is satisfied.
-- Update `docs/ai/HANDOFF.md` in the same PR for any implementation, bug fix, UI change, architecture change, migration, or workflow change.
+- Update `docs/ai/HANDOFF.md` in the same PR for any implementation, bug fix, UI change, architecture change, migration, or workflow change. Update by **replacing or summarizing**, not appending. Keep the file under ~500 lines; if it would exceed that, compact first.
 - State Supabase SQL requirement in every PR summary.
 - Stop after opening any Medium-High/High usage PR. Do not propose the next implementation prompt.
 - Every meaningful implementation PR must state its roadmap stage and build queue item from `docs/product/`.
