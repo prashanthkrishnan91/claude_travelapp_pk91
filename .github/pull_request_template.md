@@ -1,39 +1,38 @@
 ## Summary
 
 ## Severity
-Level: 0 / 1 / 2 / 3  
-Reason:
+- Level: 0 / 1 / 2 / 3
+- Reason:
 
 ## Root cause / task reason
 
 ## Files changed
+- 
 
 ## Validation
-- Test tier used:
-- Why this tier is sufficient:
-- Commands/results:
+- Commands/checks run:
+- Test tier used + why sufficient:
 
-## Runtime validation *(optional; include only when relevant)*
+### Runtime validation (only when relevant)
+- 
 
 ## Product behavior changed
-Yes/No:
-Details:
+- Yes/No:
+- User-visible impact:
 
 ## SQL / env / providers / UI
-- Supabase SQL required: Yes/No  
-  Manual action:
-- Env vars required: Yes/No  
-  Manual action:
-- New providers or new LLM calls: Yes/No  
-  Details:
-- UI changes: Yes/No  
-  Details:
+- Supabase SQL required (Yes/No + manual action):
+- Env vars required (Yes/No + manual action):
+- New providers or new LLM calls (Yes/No + details):
+- UI changed (Yes/No + details):
 
-## Screenshots / UI validation *(optional; include only when relevant)*
+### Screenshots / UI validation (only when relevant)
+- 
 
 ## Risks / limitations
 
-## Follow-up required *(optional; include only when relevant)*
+### Follow-up required (only when relevant)
+- 
 
 ## AI usage note
 Run `bash scripts/ai/usage_snapshot.sh` manually before opening a PR and paste the output line below.
@@ -41,5 +40,6 @@ Run `bash scripts/ai/usage_snapshot.sh` manually before opening a PR and paste t
 **Usage note:** Low/Medium/High; source: ccusage/statusline/manual/unavailable; main drivers: [fill]; justified: yes/partially/no; next efficiency improvement: [fill]
 
 ## Self-audit
-Pass/Fail:
-Evidence:
+- Repository PR template used exactly: Yes/No
+- Scope stayed workflow-only (no product code): Yes/No
+- Downstream consumers reviewed (if relevant): Yes/No
