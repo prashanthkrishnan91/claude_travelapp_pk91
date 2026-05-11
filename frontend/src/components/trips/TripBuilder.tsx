@@ -683,7 +683,9 @@ function HotelCandidateCard({
             {stars != null && (
               <span className="text-xs text-amber-400">{"★".repeat(Math.min(5, Math.round(stars)))}</span>
             )}
-            {location && (
+            {/* Only show raw location when it differs from the hotel name and no richer
+                area/proximity badges are available — avoids repeating the address as filler. */}
+            {location && location.trim().toLowerCase() !== name.trim().toLowerCase() && !(proximityLabel && areaLabel) && (
               <span className="flex items-center gap-0.5 text-xs text-cream-300 truncate">
                 <MapPin className="w-3 h-3 flex-shrink-0" />
                 {location}
@@ -1114,6 +1116,7 @@ function CandidatePanel({
   onToggle,
   sortControls,
   listRef,
+  emptyMessage = "No candidates yet.",
   children,
 }: {
   title: string;
@@ -1125,6 +1128,7 @@ function CandidatePanel({
   onToggle: () => void;
   sortControls?: React.ReactNode;
   listRef?: React.Ref<HTMLDivElement>;
+  emptyMessage?: string;
   children: React.ReactNode;
 }) {
   const hasData = (totalCount ?? count) > 0;
@@ -1148,7 +1152,7 @@ function CandidatePanel({
       {open && sortControls && <div className="pt-0.5">{sortControls}</div>}
       {open && !hasData && (
         <p className="text-xs text-slate-400 py-2 text-center">
-          No candidates yet — create a new trip to auto-populate.
+          {emptyMessage}
         </p>
       )}
       {open && hasData && (
@@ -1881,6 +1885,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
               accentColor="text-sky-500"
               open={flightPanelOpen}
               onToggle={() => setFlightPanelOpen((v) => !v)}
+              emptyMessage="No flight options seeded — check trip creation logs or re-create the trip to populate."
               sortControls={
                 <SortControl
                   keys={[
@@ -1896,38 +1901,56 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
               listRef={flightListRef}
             >
               {(() => {
-                const top20 = Math.max(1, Math.ceil(sortedFlights.length * 0.2));
-                const bot20 = sortedFlights.length > 2
-                  ? Math.max(1, Math.ceil(sortedFlights.length * 0.2))
-                  : 0;
-                return sortedFlights.map((item, idx) => {
-                  const d = (item.details ?? {}) as Record<string, unknown>;
-                  // toCamel converts is_round_trip → isRoundTrip; check both for compat
-                  if (d.isRoundTrip ?? d.is_round_trip) {
-                    return (
-                      <RoundTripFlightCard
-                        key={item.id}
-                        item={item}
-                        onAddToItinerary={handleAddRoundTripToItinerary}
-                        adding={addingId === item.id}
-                        isTopPick={flightSort === "ai" && idx < top20}
-                        isLowScore={flightSort === "ai" && bot20 > 0 && idx >= sortedFlights.length - bot20}
-                      />
-                    );
-                  }
-                  return (
+                // Render one-way first, then round-trip pairs, each with a section label.
+                // Sorting within each group is preserved from sortedFlights (AI-score order).
+                const oneWay     = sortedFlights.filter((it) => { const d = (it.details ?? {}) as Record<string, unknown>; return !(d.isRoundTrip ?? d.is_round_trip); });
+                const roundTrip  = sortedFlights.filter((it) => { const d = (it.details ?? {}) as Record<string, unknown>; return !!(d.isRoundTrip ?? d.is_round_trip); });
+                const showOWLabel = oneWay.length > 0 && roundTrip.length > 0;
+                const showRTLabel = roundTrip.length > 0 && oneWay.length > 0;
+                const owTop20 = Math.max(1, Math.ceil(oneWay.length * 0.2));
+                const rtTop20 = Math.max(1, Math.ceil(roundTrip.length * 0.2));
+                const nodes: React.ReactNode[] = [];
+                if (showOWLabel) {
+                  nodes.push(
+                    <p key="ow-label" className="text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-400/70">
+                      One-way options
+                    </p>
+                  );
+                }
+                oneWay.forEach((item, idx) => {
+                  nodes.push(
                     <FlightCandidateCard
                       key={item.id}
                       item={item}
                       onAddToItinerary={handleAddCandidateToItinerary}
                       onToggleCompare={handleToggleCompareItem}
                       adding={addingId === item.id}
-                      isTopPick={flightSort === "ai" && idx < top20}
-                      isLowScore={flightSort === "ai" && bot20 > 0 && idx >= sortedFlights.length - bot20}
+                      isTopPick={flightSort === "ai" && idx < owTop20}
+                      isLowScore={false}
                       isComparing={compareSet.has(item.id)}
                     />
                   );
                 });
+                if (showRTLabel) {
+                  nodes.push(
+                    <p key="rt-label" className="text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-400/70 pt-1">
+                      Round-trip pairs
+                    </p>
+                  );
+                }
+                roundTrip.forEach((item, idx) => {
+                  nodes.push(
+                    <RoundTripFlightCard
+                      key={item.id}
+                      item={item}
+                      onAddToItinerary={handleAddRoundTripToItinerary}
+                      adding={addingId === item.id}
+                      isTopPick={flightSort === "ai" && idx < rtTop20}
+                      isLowScore={false}
+                    />
+                  );
+                });
+                return nodes;
               })()}
             </CandidatePanel>
 
@@ -1939,6 +1962,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
               accentColor="text-violet-500"
               open={hotelPanelOpen}
               onToggle={() => setHotelPanelOpen((v) => !v)}
+              emptyMessage="No hotel options seeded — check trip creation logs or re-create the trip to populate."
               sortControls={
                 <SortControl
                   keys={[
@@ -2028,6 +2052,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                   accentColor="text-emerald-500"
                   open={attractionPanelOpen}
                   onToggle={() => setAttractionPanelOpen((v) => !v)}
+                  emptyMessage="No attractions seeded yet — they're added automatically when you create a trip."
                   sortControls={
                     <div className="flex flex-col gap-2">
                       <SortControl
@@ -2105,6 +2130,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                   accentColor="text-rose-500"
                   open={restaurantPanelOpen}
                   onToggle={() => setRestaurantPanelOpen((v) => !v)}
+                  emptyMessage="No restaurants seeded yet — they're added automatically when you create a trip."
                   sortControls={
                     <div className="flex flex-col gap-2">
                       <SortControl
