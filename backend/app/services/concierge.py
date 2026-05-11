@@ -240,8 +240,11 @@ class ConciergeService:
     # Original answer() — unchanged for backward compatibility
     # ------------------------------------------------------------------
 
-    def answer(self, trip_id: UUID, user_query: str, user_id: UUID, day_number: Optional[int] = None) -> ConciergeResponse:
-        context = self._load_context(trip_id, user_id, day_number)
+    def answer(self, trip_id: Optional[UUID], user_query: str, user_id: UUID, day_number: Optional[int] = None, destination: Optional[str] = None) -> ConciergeResponse:
+        if trip_id is not None:
+            context = self._load_context(trip_id, user_id, day_number)
+        else:
+            context = {"trip": {"destination": (destination or "").strip()}, "items": [], "attractions": [], "restaurants": [], "best_area": "", "preferences": {}, "day_number": day_number}
         prompt = self._build_prompt(context, user_query)
         raw = self._call_claude(prompt)
         return self._parse_response(raw)
@@ -252,16 +255,20 @@ class ConciergeService:
 
     def search(
         self,
-        trip_id: UUID,
+        trip_id: Optional[UUID],
         user_query: str,
         user_id: UUID,
         client_message_id: Optional[str] = None,
         prior_identity_keys: Optional[frozenset] = None,
+        destination: Optional[str] = None,
     ) -> ConciergeSearchResponse:
         _t_search_start = time.perf_counter()
 
         _t0 = time.perf_counter()
-        trip = self._fetch_trip(trip_id, user_id)
+        if trip_id is not None:
+            trip = self._fetch_trip(trip_id, user_id)
+        else:
+            trip = {"destination": (destination or "").strip()}
         _fetch_trip_ms = int((time.perf_counter() - _t0) * 1000)
 
         request_id = (client_message_id or "").strip() or str(uuid4())
@@ -274,7 +281,8 @@ class ConciergeService:
         # save_assistant_message_ms prove slow in production logs, a later PR can
         # add safe deferred persistence with an in-memory immediate-context fallback.
         _t0 = time.perf_counter()
-        self._save_message(trip_id, "user", user_query, client_message_id=request_id)
+        if trip_id is not None:
+            self._save_message(trip_id, "user", user_query, client_message_id=request_id)
         _save_user_message_ms = int((time.perf_counter() - _t0) * 1000)
 
         destination = trip.get("destination", "")
@@ -602,13 +610,14 @@ class ConciergeService:
         _response_assembly_ms = int((time.perf_counter() - _t_assembly) * 1000)
 
         _t0 = time.perf_counter()
-        self._save_message(
-            trip_id,
-            "assistant",
-            response.response,
-            structured_results=response.model_dump(mode="json"),
-            client_message_id=f"{request_id}:assistant",
-        )
+        if trip_id is not None:
+            self._save_message(
+                trip_id,
+                "assistant",
+                response.response,
+                structured_results=response.model_dump(mode="json"),
+                client_message_id=f"{request_id}:assistant",
+            )
         _save_assistant_message_ms = int((time.perf_counter() - _t0) * 1000)
 
         _total_search_ms = int((time.perf_counter() - _t_search_start) * 1000)

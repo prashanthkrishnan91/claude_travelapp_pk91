@@ -1704,24 +1704,31 @@ export interface ConciergeMessage {
 }
 
 export async function callConcierge(
-  tripId: string,
-  userQuery: string
+  tripId: string | null,
+  userQuery: string,
+  destination?: string
 ): Promise<ConciergeResult> {
   return apiFetch<ConciergeResult>("/ai/concierge", {
     method: "POST",
-    body: JSON.stringify({ trip_id: tripId, user_query: userQuery }),
+    body: JSON.stringify({
+      ...(tripId ? { trip_id: tripId } : {}),
+      ...(destination ? { destination } : {}),
+      user_query: userQuery,
+    }),
   });
 }
 
 export async function callConciergeSearch(
-  tripId: string,
+  tripId: string | null,
   userQuery: string,
-  clientMessageId?: string
+  clientMessageId?: string,
+  destination?: string
 ): Promise<ConciergeSearchResult> {
   const raw = await apiFetch<unknown>("/ai/concierge/search", {
     method: "POST",
     body: JSON.stringify({
-      trip_id: tripId,
+      ...(tripId ? { trip_id: tripId } : {}),
+      ...(destination ? { destination } : {}),
       user_query: userQuery,
       ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
     }),

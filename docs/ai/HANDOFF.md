@@ -9,7 +9,7 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Current product stage
 
 - Roadmap stage: **Stage 2 — Open app before trip exists.** Stage 1 is GREEN. Stage 2A contract is defined in `docs/product/STAGE_2A_CONTRACT.md`. See `docs/product/ROADMAP.md`.
-- Active build queue item: **Stage 2A Slice 3 — Trip-Optional AI Concierge.** Slice 2 shipped.
+- Active build queue item: **Stage 2A Slice 4 — Attractions Vertical Live (Tripless Concierge).** Slice 3 shipped.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -25,6 +25,7 @@ This file is **current operational state**, not a historical log. It is meant to
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
 
+- 2026-05-11 — **Stage 2A Slice 3 — Trip-Optional AI Concierge.** `trip_id` made `Optional[UUID]` in `ConciergeRequest` + `ConciergeSearchRequest`. Added `destination` field as the trip-optional alternative. `model_validator` enforces at least one present. `service.search()` / `service.answer()` skip `_fetch_trip` + `_save_message` when `trip_id` is None and build `trip = {"destination": ...}` directly. `build_context_window` bypassed (returns no prior cards). Frontend: `callConcierge`/`callConciergeSearch` accept `tripId: string | null` + optional `destination` param; body conditionally includes `trip_id` / `destination`. 12 backend pytest + 17 frontend structural tests. No SQL migration. No change to existing trip-bound Concierge behavior. TripBuilder / tripCandidates untouched.
 - 2026-05-11 — **Stage 2A Slice 2 — Unified Result Actions v1 + saved_items foundation.** Migration 005 adds `saved_items` table (user-scoped, vertical enum: restaurant|attraction|hotel|flight, provider identity, display_snapshot JSONB, search_context JSONB, provenance JSONB, soft-delete, RLS, partial unique index for provider dedup). Backend: `SavedItemsService` + `/saved-items` route (POST/GET/DELETE). Frontend: `SavedItem` + `SavedItemCreate` types, `saveItem`/`listSavedItems`/`deleteSavedItem` API helpers, `ResultActionSheet` component (Save live; Add to Trip / Create Trip deferred with clear UX). Wired into `RestaurantExploreFlow` result cards. 13 backend tests, 42 frontend tests pass. No changes to `TripBuilder`, `TripIdeasPanel`, or `tripCandidates.ts`.
 - 2026-05-11 — **Stage 2A Slice 1 — Global Explore Shell v1.** `/explore` route + `ExploreShell` component with 4-vertical entry grid (Flights, Hotels, Restaurants, Attractions). Restaurants execute via real `searchRestaurants` (Google Places, no trip_id). Attractions/Hotels/Flights show structured forms + polished deferred states (routes mock-backed or deleted — documented in source). "Explore" link added to Sidebar and MobileNav. `ExploreResultContext` type carries full Slice-2 action-ready payload (vertical, destination, dates, origin, guests, passengers, providerIdentity, originalPayload). 43 new tests in `global-explore-shell.test.mjs`; 518 total pass. No SQL migration. No changes to `TripBuilder`, `tripCandidates.ts`, or AI Concierge behavior.
 - 2026-05-11 — **Trip Workspace Finalized Itinerary Card Experience v1 (Level 2).** Two gaps fixed: (a) hotel add-to-day data loss — `handleAddCandidateToItinerary` called `createItem` for hotels, stripping all details (stars, rating, amenities, area_label, proximity_label); new `addHotelToDay` in `api.ts` preserves the full `item.details` payload; TripBuilder uses it; (b) display layer gaps — `ItineraryItemCard` now has vertical-specific sections for `activity` (rating ★, category, tags, maps link) and `meal` (cuisine, rating ★, price level $/$$/$$, tags); hotel section enhanced with stars (★★★★★), area badges (In Best Area / Close to Best Area), proximity label, and amenities/tags pills alongside existing check-in/check-out/rating. Flight schedule display (origin→dest, dep/arr times, outbound/return leg badge) unchanged. 48 tests in `frontend/tests/itinerary-card-finalized-display.test.mjs` (includes payload-level field-mapping and handler-routing proofs added in correction commit); 144 total frontend tests pass across 9 bundles. No SQL migration. No live providers.
@@ -49,8 +50,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 ## Known risks / unresolved issues
 
 - `saved_items` migration 005 must be applied to the Supabase project before Save is live in production. Migration is in `backend/db/migrations/005_saved_items.sql`.
-- AI Concierge (`callConcierge`, `callConciergeSearch`) currently requires a `tripId`. Slice 3 must make this optional.
-- Attractions vertical is deferred: `/search/attractions` was removed (v1C), and `searchAttractionsViaConcierge` requires a tripId. Slice 3 unblocks this.
+- Attractions vertical is deferred: `/search/attractions` was removed (v1C). Slice 3 (merged) unblocked tripless Concierge; Slice 4 should wire `AttractionExploreFlow` to call `callConciergeSearch(null, query, undefined, destination)` for live results.
 - Hotels vertical is deferred: `/search/hotels` is mock-backed (BLOCK_LEGACY_PRODUCT_MOCK). Needs a real provider.
 - Flights vertical is deferred: `/search/flights` is mock-backed. Needs Duffel/Amadeus real provider.
 - Saved-list foundation (Stage 3 root object) not built; ideas still need a non-trip home.
@@ -58,7 +58,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-Implement Stage 2A Slice 3 — Trip-Optional AI Concierge. Backend: `callConcierge`/`callConciergeSearch` accept optional `trip_id`; when null, skip trip-context hydration and return place cards only. Frontend: `callConcierge`/`callConciergeSearch` in `api.ts` accept optional `tripId`. No change to existing trip-bound Concierge behavior. This unblocks the Attractions vertical in the Explore shell.
+Implement Stage 2A Slice 4 — Attractions Vertical Live. Wire `AttractionExploreFlow` to call `callConciergeSearch(null, userQuery, undefined, destination)` and render the returned `attractions[]` cards (same `UnifiedAttractionResult` shape as TripBuilder). Add a `ResultActionSheet` to each card. No new backend work needed — Slice 3 unblocked tripless calls.
 
 ## Handoff maintenance rule
 

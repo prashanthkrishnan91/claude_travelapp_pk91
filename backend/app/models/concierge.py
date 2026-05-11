@@ -6,13 +6,20 @@ from uuid import UUID
 
 
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class ConciergeRequest(BaseModel):
-    trip_id: UUID
+    trip_id: Optional[UUID] = None
+    destination: Optional[str] = None
     user_query: str
     day_number: Optional[int] = None
+
+    @model_validator(mode="after")
+    def require_trip_or_destination(self) -> "ConciergeRequest":
+        if self.trip_id is None and not (self.destination or "").strip():
+            raise ValueError("Either trip_id or destination is required")
+        return self
 
 
 class Suggestion(BaseModel):
@@ -276,9 +283,16 @@ class UnifiedAreaComparisonResult(BaseModel):
 # ── Request / Response ────────────────────────────────────────────────────────
 
 class ConciergeSearchRequest(BaseModel):
-    trip_id: UUID
+    trip_id: Optional[UUID] = None
+    destination: Optional[str] = None
     user_query: str
     client_message_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def require_trip_or_destination(self) -> "ConciergeSearchRequest":
+        if self.trip_id is None and not (self.destination or "").strip():
+            raise ValueError("Either trip_id or destination is required")
+        return self
 
 
 class ConciergeCacheClearRequest(BaseModel):
