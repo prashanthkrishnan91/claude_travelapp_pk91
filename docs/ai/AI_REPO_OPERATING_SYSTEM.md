@@ -102,6 +102,13 @@ Runtime validation is required only when deployment or user-visible behavior cha
 
 Every PR summary must state **test tier used**, **why it was sufficient**, and whether the full suite was skipped or run with explicit reason.
 
+
+## Workflow certification (v4.1, lightweight)
+
+Travel uses a lightweight workflow-only certification gate for repo workflow surfaces. This certification is structural and non-product: it checks required anchors and workflow safety structure, not subjective prompt quality or product behavior.
+
+The CI workflow certification runs only when workflow-surface files change (`.github/**`, `.claude/**`, `docs/ai/**`, `scripts/**`) or through manual `workflow_dispatch`.
+
 ## What OS v4 already absorbed
 
 OS v4 is the only operating system label. It absorbs:
