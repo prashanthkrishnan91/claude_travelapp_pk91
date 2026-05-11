@@ -1,7 +1,10 @@
-"""Tests for SavedItemsService — Stage 2A Slice 2.
+"""Tests for SavedItemsService — Stage 2A Slice 2 (patched).
 
-Covers: create (new), create (idempotent dedup), list (active only),
-list (vertical filter), soft-delete, cross-user isolation.
+Covers: create (new), create (idempotent dedup by place id), create (idempotent
+dedup by item/offer id), list (active only), list (vertical filter), list (invalid
+vertical rejected), soft-delete, cross-user isolation, hotel context (guests + rooms,
+no passengers), flight context (passengers, no guests), display_name blank rejected,
+provider_item_id persisted on the row.
 """
 
 from __future__ import annotations
@@ -99,7 +102,7 @@ class _DB:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_payload(vertical="restaurant", name="Le Bistro") -> SavedItemCreate:
+def _place_payload(vertical="restaurant", name="Le Bistro") -> SavedItemCreate:
     return SavedItemCreate(
         vertical=vertical,
         display_name=name,
@@ -107,6 +110,24 @@ def _make_payload(vertical="restaurant", name="Le Bistro") -> SavedItemCreate:
         provider_place_id="ChIJplace123",
         display_snapshot={"name": name, "rating": 4.5},
         search_context={"destination": "Paris"},
+        provenance={"source": "explore_shell"},
+    )
+
+
+def _flight_payload(offer_id: str = "offer-abc") -> SavedItemCreate:
+    return SavedItemCreate(
+        vertical="flight",
+        display_name="JFK → CDG",
+        provider="duffel",
+        provider_item_id=offer_id,
+        display_snapshot={"name": "JFK → CDG"},
+        search_context={
+            "origin": "JFK",
+            "destination": "CDG",
+            "departure_date": "2026-06-01",
+            "passengers": 2,
+            "cabin_class": "economy",
+        },
         provenance={"source": "explore_shell"},
     )
 
@@ -119,28 +140,45 @@ def test_create_returns_saved_item():
     db = _DB()
     svc = SavedItemsService(db)
     user = uuid4()
-    payload = _make_payload()
-    item = svc.create(payload, user)
+    item = svc.create(_place_payload(), user)
     assert item.vertical == "restaurant"
     assert item.display_name == "Le Bistro"
     assert item.status == "active"
     assert item.provider == "google_places"
     assert item.provider_place_id == "ChIJplace123"
+    assert item.provider_item_id is None
 
 
-def test_create_idempotent_same_provider_identity():
+def test_create_persists_provider_item_id():
     db = _DB()
     svc = SavedItemsService(db)
     user = uuid4()
-    payload = _make_payload()
-    first = svc.create(payload, user)
-    second = svc.create(payload, user)
-    # No duplicate rows; second call returns the same id
+    item = svc.create(_flight_payload("offer-xyz"), user)
+    assert item.provider_item_id == "offer-xyz"
+    assert item.provider_place_id is None
+
+
+def test_create_idempotent_by_place_id():
+    db = _DB()
+    svc = SavedItemsService(db)
+    user = uuid4()
+    first = svc.create(_place_payload(), user)
+    second = svc.create(_place_payload(), user)
     assert first.id == second.id
     assert len(db.tables["saved_items"]) == 1
 
 
-def test_create_no_dedup_without_provider_place_id():
+def test_create_idempotent_by_item_id():
+    db = _DB()
+    svc = SavedItemsService(db)
+    user = uuid4()
+    first = svc.create(_flight_payload("offer-abc"), user)
+    second = svc.create(_flight_payload("offer-abc"), user)
+    assert first.id == second.id
+    assert len(db.tables["saved_items"]) == 1
+
+
+def test_create_no_dedup_without_any_identity():
     db = _DB()
     svc = SavedItemsService(db)
     user = uuid4()
@@ -152,7 +190,15 @@ def test_create_no_dedup_without_provider_place_id():
     )
     svc.create(payload, user)
     svc.create(payload, user)
-    # Flights without provider_place_id should not dedup
+    assert len(db.tables["saved_items"]) == 2
+
+
+def test_create_different_item_ids_not_deduped():
+    db = _DB()
+    svc = SavedItemsService(db)
+    user = uuid4()
+    svc.create(_flight_payload("offer-1"), user)
+    svc.create(_flight_payload("offer-2"), user)
     assert len(db.tables["saved_items"]) == 2
 
 
@@ -160,27 +206,25 @@ def test_list_returns_only_active():
     db = _DB()
     svc = SavedItemsService(db)
     user = uuid4()
-    item = svc.create(_make_payload(), user)
+    item = svc.create(_place_payload(), user)
     svc.delete(item.id, user)
-    items = svc.list_active(user)
-    assert items == []
+    assert svc.list_active(user) == []
 
 
 def test_list_all_active_for_user():
     db = _DB()
     svc = SavedItemsService(db)
     user = uuid4()
-    svc.create(_make_payload("restaurant", "A"), user)
-    svc.create(_make_payload("attraction", "B"), user)
-    items = svc.list_active(user)
-    assert len(items) == 2
+    svc.create(_place_payload("restaurant", "A"), user)
+    svc.create(_place_payload("attraction", "B"), user)
+    assert len(svc.list_active(user)) == 2
 
 
 def test_list_vertical_filter():
     db = _DB()
     svc = SavedItemsService(db)
     user = uuid4()
-    svc.create(_make_payload("restaurant", "A"), user)
+    svc.create(_place_payload("restaurant", "A"), user)
     svc.create(
         SavedItemCreate(
             vertical="hotel",
@@ -197,14 +241,22 @@ def test_list_vertical_filter():
     assert restaurants[0].vertical == "restaurant"
 
 
+def test_list_invalid_vertical_rejected():
+    db = _DB()
+    svc = SavedItemsService(db)
+    user = uuid4()
+    import fastapi
+    with pytest.raises((fastapi.HTTPException, Exception)):
+        svc.list_active(user, vertical="cruise")
+
+
 def test_delete_soft_deletes():
     db = _DB()
     svc = SavedItemsService(db)
     user = uuid4()
-    item = svc.create(_make_payload(), user)
+    item = svc.create(_place_payload(), user)
     svc.delete(item.id, user)
-    row = db.tables["saved_items"][0]
-    assert row["status"] == "deleted"
+    assert db.tables["saved_items"][0]["status"] == "deleted"
 
 
 def test_delete_raises_for_nonexistent():
@@ -219,25 +271,22 @@ def test_delete_raises_for_nonexistent():
 def test_cross_user_isolation_list():
     db = _DB()
     svc = SavedItemsService(db)
-    user_a = uuid4()
-    user_b = uuid4()
-    svc.create(_make_payload("restaurant", "A's place"), user_a)
-    items_b = svc.list_active(user_b)
-    assert items_b == []
+    user_a, user_b = uuid4(), uuid4()
+    svc.create(_place_payload("restaurant", "A's place"), user_a)
+    assert svc.list_active(user_b) == []
 
 
 def test_cross_user_cannot_delete():
     db = _DB()
     svc = SavedItemsService(db)
-    owner = uuid4()
-    intruder = uuid4()
-    item = svc.create(_make_payload(), owner)
+    owner, intruder = uuid4(), uuid4()
+    item = svc.create(_place_payload(), owner)
     import fastapi
     with pytest.raises((fastapi.HTTPException, Exception)):
         svc.delete(item.id, intruder)
 
 
-def test_hotel_search_context_preserved():
+def test_hotel_search_context_has_guests_and_rooms():
     db = _DB()
     svc = SavedItemsService(db)
     user = uuid4()
@@ -258,27 +307,15 @@ def test_hotel_search_context_preserved():
     )
     item = svc.create(payload, user)
     assert item.search_context["guests"] == 2
+    assert item.search_context["rooms"] == 1
     assert "passengers" not in item.search_context
 
 
-def test_flight_search_context_preserved():
+def test_flight_search_context_has_passengers_not_guests():
     db = _DB()
     svc = SavedItemsService(db)
     user = uuid4()
-    payload = SavedItemCreate(
-        vertical="flight",
-        display_name="JFK → CDG",
-        display_snapshot={"name": "JFK → CDG"},
-        search_context={
-            "origin": "JFK",
-            "destination": "CDG",
-            "departure_date": "2026-06-01",
-            "passengers": 2,
-            "cabin_class": "economy",
-        },
-        provenance={"source": "explore_shell"},
-    )
-    item = svc.create(payload, user)
+    item = svc.create(_flight_payload(), user)
     assert item.search_context["passengers"] == 2
     assert "guests" not in item.search_context
 

@@ -18,10 +18,12 @@ create table if not exists public.saved_items (
   display_name      text not null,
 
   -- Provider / place identity
-  -- For restaurants/attractions/hotels: provider='google_places', provider_place_id=Place ID
-  -- For flights: provider identifies offer source; provider_place_id left null
+  -- For restaurants/attractions/hotels: provider='google_places', provider_place_id=Google Place ID
+  -- For flights and non-place providers: provider_item_id holds the offer/itinerary/entity identity
+  -- Exactly one of provider_place_id or provider_item_id is expected when provider is set.
   provider          text,
-  provider_place_id text,
+  provider_place_id text,   -- Google Place ID (restaurants, attractions, hotels)
+  provider_item_id  text,   -- Generic offer / itinerary / entity identity (flights, non-place)
 
   -- Snapshot for card rendering without re-fetch
   display_snapshot  jsonb not null default '{}'::jsonb,
@@ -47,11 +49,15 @@ create table if not exists public.saved_items (
 create index if not exists saved_items_user_idx
   on public.saved_items (user_id, status, created_at desc);
 
--- Provider deduplication index (Google Places and similar)
--- Partial: only rows where provider_place_id is present.
-create unique index if not exists saved_items_provider_identity_uq
+-- Deduplication index for place-based providers (Google Places: restaurants, attractions, hotels)
+create unique index if not exists saved_items_place_identity_uq
   on public.saved_items (user_id, vertical, provider, provider_place_id)
   where provider_place_id is not null and status = 'active';
+
+-- Deduplication index for non-place providers (flights: offer/itinerary identity)
+create unique index if not exists saved_items_item_identity_uq
+  on public.saved_items (user_id, vertical, provider, provider_item_id)
+  where provider_item_id is not null and status = 'active';
 
 -- Vertical filter index
 create index if not exists saved_items_vertical_idx

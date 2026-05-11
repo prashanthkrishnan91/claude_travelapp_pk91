@@ -63,6 +63,7 @@ function buildSavePayload(ctx: ExploreResultContext): SavedItemCreate {
       ...(ctx.dates?.checkIn && { checkIn: ctx.dates.checkIn }),
       ...(ctx.dates?.checkOut && { checkOut: ctx.dates.checkOut }),
       ...(ctx.guests !== undefined && { guests: ctx.guests }),
+      ...(ctx.rooms !== undefined && { rooms: ctx.rooms }),
     };
   } else if (ctx.vertical === "flights") {
     searchContext = {

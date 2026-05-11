@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 
 from app.core.deps import DB, CurrentUserID
-from app.models.saved_items import SavedItem, SavedItemCreate
+from app.models.saved_items import SavedItem, SavedItemCreate, SavedItemVertical
 from app.services.saved_items import SavedItemsService
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ def create_saved_item(
 def list_saved_items(
     db: DB,
     user_id: CurrentUserID,
-    vertical: Optional[str] = Query(default=None),
+    vertical: Optional[SavedItemVertical] = Query(default=None),
 ) -> List[SavedItem]:
     """List active saved items for the current user, optionally filtered by vertical."""
     svc = SavedItemsService(db)

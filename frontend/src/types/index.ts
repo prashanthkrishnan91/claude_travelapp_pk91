@@ -395,7 +395,10 @@ export interface SavedItemCreate {
   vertical: SavedItemVertical;
   displayName: string;
   provider?: string;
+  /** Google Place ID — restaurants, attractions, hotels */
   providerPlaceId?: string;
+  /** Generic offer / itinerary / entity identity — flights, non-place providers */
+  providerItemId?: string;
   displaySnapshot?: Record<string, unknown>;
   searchContext?: Record<string, unknown>;
   provenance?: Record<string, unknown>;
@@ -408,6 +411,7 @@ export interface SavedItem {
   displayName: string;
   provider?: string;
   providerPlaceId?: string;
+  providerItemId?: string;
   displaySnapshot: Record<string, unknown>;
   searchContext: Record<string, unknown>;
   provenance: Record<string, unknown>;

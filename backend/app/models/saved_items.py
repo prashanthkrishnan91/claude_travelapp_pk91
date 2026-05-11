@@ -3,7 +3,7 @@
 from typing import Any, Dict, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 SavedItemVertical = Literal["restaurant", "attraction", "hotel", "flight"]
 SavedItemStatus = Literal["active", "deleted"]
@@ -15,10 +15,13 @@ class SavedItemCreate(BaseModel):
     vertical: SavedItemVertical
     display_name: str
     provider: Optional[str] = None
+    # Place-based identity (Google Places — restaurants, attractions, hotels)
     provider_place_id: Optional[str] = None
-    display_snapshot: Dict[str, Any] = {}
-    search_context: Dict[str, Any] = {}
-    provenance: Dict[str, Any] = {}
+    # Generic offer/itinerary/entity identity (flights, non-place providers)
+    provider_item_id: Optional[str] = None
+    display_snapshot: Dict[str, Any] = Field(default_factory=dict)
+    search_context: Dict[str, Any] = Field(default_factory=dict)
+    provenance: Dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("display_name")
     @classmethod
@@ -35,9 +38,10 @@ class SavedItem(BaseModel):
     display_name: str
     provider: Optional[str] = None
     provider_place_id: Optional[str] = None
-    display_snapshot: Dict[str, Any] = {}
-    search_context: Dict[str, Any] = {}
-    provenance: Dict[str, Any] = {}
+    provider_item_id: Optional[str] = None
+    display_snapshot: Dict[str, Any] = Field(default_factory=dict)
+    search_context: Dict[str, Any] = Field(default_factory=dict)
+    provenance: Dict[str, Any] = Field(default_factory=dict)
     status: SavedItemStatus = "active"
     created_at: str
     updated_at: str

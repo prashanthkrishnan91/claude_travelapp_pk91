@@ -12,7 +12,7 @@ from fastapi import HTTPException, status
 from supabase import Client
 
 from app.core.supabase_retry import supabase_execute as _supabase_execute
-from app.models.saved_items import SavedItem, SavedItemCreate
+from app.models.saved_items import VALID_VERTICALS, SavedItem, SavedItemCreate
 
 SAVED_ITEMS_TABLE = "saved_items"
 logger = logging.getLogger(__name__)
@@ -25,12 +25,21 @@ class SavedItemsService:
     def create(self, payload: SavedItemCreate, user_id: UUID) -> SavedItem:
         """Persist a saved item.
 
-        Idempotent when provider + provider_place_id is present: returns the
-        existing active row rather than inserting a duplicate.
+        Idempotent when a provider identity is present:
+        - provider + provider_place_id → place-based dedup (restaurants/attractions/hotels)
+        - provider + provider_item_id  → offer/itinerary dedup (flights, non-place)
+        Returns the existing active row rather than inserting a duplicate.
         """
         if payload.provider and payload.provider_place_id:
-            existing = self._find_active(
+            existing = self._find_by_place(
                 user_id, payload.vertical, payload.provider, payload.provider_place_id
+            )
+            if existing:
+                return existing
+
+        if payload.provider and payload.provider_item_id:
+            existing = self._find_by_item(
+                user_id, payload.vertical, payload.provider, payload.provider_item_id
             )
             if existing:
                 return existing
@@ -41,6 +50,7 @@ class SavedItemsService:
             "display_name": payload.display_name,
             "provider": payload.provider,
             "provider_place_id": payload.provider_place_id,
+            "provider_item_id": payload.provider_item_id,
             "display_snapshot": payload.display_snapshot,
             "search_context": payload.search_context,
             "provenance": payload.provenance,
@@ -53,6 +63,11 @@ class SavedItemsService:
         return SavedItem(**result.data[0])
 
     def list_active(self, user_id: UUID, vertical: Optional[str] = None) -> List[SavedItem]:
+        if vertical is not None and vertical not in VALID_VERTICALS:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid vertical '{vertical}'. Must be one of: {sorted(VALID_VERTICALS)}",
+            )
         query = (
             self.db.table(SAVED_ITEMS_TABLE)
             .select("*")
@@ -83,9 +98,10 @@ class SavedItemsService:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _find_active(
+    def _find_by_place(
         self, user_id: UUID, vertical: str, provider: str, provider_place_id: str
     ) -> Optional[SavedItem]:
+        """Dedup lookup for place-based identity (Google Places)."""
         result = _supabase_execute(
             lambda: (
                 self.db.table(SAVED_ITEMS_TABLE)
@@ -98,7 +114,29 @@ class SavedItemsService:
                 .limit(1)
                 .execute()
             ),
-            context="saved_items._find_active",
+            context="saved_items._find_by_place",
+        )
+        if result.data:
+            return SavedItem(**result.data[0])
+        return None
+
+    def _find_by_item(
+        self, user_id: UUID, vertical: str, provider: str, provider_item_id: str
+    ) -> Optional[SavedItem]:
+        """Dedup lookup for non-place identity (flights, offer IDs)."""
+        result = _supabase_execute(
+            lambda: (
+                self.db.table(SAVED_ITEMS_TABLE)
+                .select("*")
+                .eq("user_id", str(user_id))
+                .eq("vertical", vertical)
+                .eq("provider", provider)
+                .eq("provider_item_id", provider_item_id)
+                .eq("status", "active")
+                .limit(1)
+                .execute()
+            ),
+            context="saved_items._find_by_item",
         )
         if result.data:
             return SavedItem(**result.data[0])
