@@ -134,7 +134,7 @@ Useful command aliases (call only when relevant): `/test-selector`, `/contract-a
 - For Level 2/3 implementation, run `feature-contract` and `golden-scenarios` before coding.
 - Important generated prompts run through `prompt-lint` / `prompt-quality-reviewer` before blind-copy.
 - Coverage-first audits for review prompts.
-- Every PR summary must include a compact AI usage note. Run `bash scripts/ai/usage_snapshot.sh` before opening a PR and paste the output line into the **AI usage note** field. See `docs/ai/AI_USAGE_TRACKING.md`.
+- Every PR summary must include a compact AI usage note. Run `bash scripts/ai/usage_snapshot.sh` before opening a PR and paste the output line into the **AI usage note** field. Keep Level 1/2 PR summaries concise and do not invent long-form sections unless Level 3 or explicitly requested. See `docs/ai/AI_USAGE_TRACKING.md`.
 
 ## Project invariants
 
