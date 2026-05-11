@@ -518,6 +518,29 @@ export async function addOneWayFlightToDay(
   });
 }
 
+/** Add a hotel candidate to a specific itinerary day, preserving all stored details. */
+export async function addHotelToDay(
+  tripId: string,
+  dayId: string,
+  item: ItineraryItem,
+  position: number
+): Promise<ItineraryItem> {
+  const d = (item.details ?? {}) as Record<string, unknown>;
+  const payload = {
+    trip_id: tripId,
+    day_id: dayId,
+    item_type: "hotel",
+    title: item.title,
+    location: item.location ?? undefined,
+    position,
+    details: { ...d },
+  };
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function addHotelToTrip(
   tripId: string,
   hotel: ResearchResult
