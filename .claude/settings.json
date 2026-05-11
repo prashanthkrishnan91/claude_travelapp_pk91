@@ -19,6 +19,11 @@
             "type": "command",
             "command": "sh -c 'python3 \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/ai_os_advisory.py\" stop'",
             "timeout": 3000
+          },
+          {
+            "type": "command",
+            "command": "sh -c '[ \"${AI_USAGE_SNAPSHOT_ON_STOP:-0}\" = \"1\" ] && bash \"${CLAUDE_PROJECT_DIR:-.}/scripts/ai/usage_snapshot.sh\" 2>/dev/null || true'",
+            "timeout": 15000
           }
         ]
       }

@@ -117,6 +117,14 @@ Required for Level 1+ or meaningful workflow/product changes.
 - Token/cost discipline: Good / Watch / Problem
 - Deployment/build discipline: Good / Watch / Problem
 
+## AI usage note
+
+Run `bash scripts/ai/usage_snapshot.sh` manually before opening a PR and paste the output line below.
+This is a manual step — no automatic network calls or package execution happen unless you run this command.
+If ccusage is unavailable, use statusline token count or estimate manually. No raw logs are committed.
+
+**Usage note:** Low/Medium/High; source: ccusage/statusline/manual/unavailable; main drivers: [fill]; justified: yes/partially/no; next efficiency improvement: [fill]
+
 ## Prompt / workflow effectiveness
 
 - Source prompt type: normal / incident / cleanup / merge-gate / UI pass
