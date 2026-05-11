@@ -47,7 +47,7 @@ test('selector groups by item_type and splits round-trip flights off the flight 
 });
 
 test('selector skips day-assigned items so candidates only carry unscheduled rows', () => {
-  assert.match(selectorSrc, /if \(item\.dayId\) continue;/);
+  assert.match(selectorSrc, /if \(isDayAssigned\(item\)\) continue;/);
 });
 
 test('selector dedupes hotel/attraction/restaurant rows by a stable identity key', () => {
@@ -100,4 +100,22 @@ test('api.ts no longer exports searchAttractionsViaConcierge / isCanonicalSnapsh
 test('api.ts still exports computeExploreAttractionScore / computeExploreRestaurantScore (used by selector)', () => {
   assert.match(apiTs, /export function computeExploreAttractionScore\(/);
   assert.match(apiTs, /export function computeExploreRestaurantScore\(/);
+});
+
+
+test('selector treats null-like day_id sentinels as unscheduled candidates', () => {
+  assert.match(selectorSrc, /normalized === \"null\"/);
+  assert.match(selectorSrc, /normalized === \"undefined\"/);
+});
+
+
+test('TripBuilder does not gate flight candidate hydration by past/completed trip date', () => {
+  assert.match(tripBuilder, /setCandidateFlights\(\[\.\.\.merged\.flights, \.\.\.merged\.roundTripFlights\]\)/);
+  assert.doesNotMatch(tripBuilder, /Flights are unavailable for past trip dates\./);
+});
+
+
+test('selector keeps real UUID dayId rows assigned (not candidate buckets)', () => {
+  assert.match(selectorSrc, /return true;/, 'Expected non-null-like dayId to remain assigned.');
+  assert.doesNotMatch(selectorSrc, /normalized === \"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\"/i, 'UUID dayId must not be treated as null-like sentinel.');
 });
