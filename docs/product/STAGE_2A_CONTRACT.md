@@ -20,7 +20,7 @@ This PR defines the entry contract for that shift. It does not implement the UI.
 ```
 Open app (no trip)
   → Land on global Explore shell
-  → Browse / search by destination or vertical
+  → Browse / search by destination or vertical (Attractions, Restaurants; Hotels conditional; Flights deferred from v1)
   → AI Concierge or search surfaces place cards
   → Pick a result → Unified Result Action sheet appears
        ├── Save (to personal shortlist — Stage 3 backing, placeholder in 2A)
@@ -84,8 +84,9 @@ Every place card surface (Explore, AI Concierge, search) must present exactly th
 
 ### 1. Save
 - **Stage 2A behavior:** Action button exists. Tapping it saves the item to a user-scoped shortlist.
-- **Stage 2A backing:** `itinerary_items` with `source_kind="concierge_idea"` and a sentinel `trip_id` (or a new trip-optional save path — implementation choice deferred to Stage 2A slice 2). Do NOT pre-solve Stage 3's saved-list data model here.
-- **Stage 3 backing:** Saved list as first-class root object (Stage 3 owns this migration).
+- **Stage 2A backing:** An explicit trip-optional save path must be designed before Slice 2 implementation begins. The implementation team must choose one approach (e.g. a new `saved_items` table stub, a nullable `trip_id` column, or deferring the Save action to a disabled/Coming Soon state in Slice 1) and document the decision in `docs/product/DECISION_LOG.md`.
+- **Forbidden:** Hidden or sentinel `trip_id` values to fake global persistence. Do not create a shadow trip solely to hold saved items — this would corrupt the trip list and violate the No Mock/Sample Visible Data Pack invariant.
+- **Stage 3 backing:** Saved list as first-class root object (Stage 3 owns the full data model migration).
 - **Forbidden:** Silently failing, crashing without a trip, or leaking "you need a trip to save."
 
 ### 2. Add to Trip
@@ -114,7 +115,7 @@ Every place card surface (Explore, AI Concierge, search) must present exactly th
 | Enrichment / evidence | Yelp / Foursquare / editorial (Enrichment Evidence Only Pack) | No |
 | AI Concierge card fields | `display.displayWhy`, `supportingDetails.whyPick`, top-level `whyPick` (AI Concierge Card Contract Pack) | No |
 | Trip candidates selector | `tripCandidates.ts` — `itinerary_items` grouped by vertical | No — do not touch |
-| Save backing (2A) | `itinerary_items` with `source_kind="concierge_idea"` (trip sentinel or trip-optional path TBD) | Implementation choice in next slice |
+| Save backing (2A) | Trip-optional path — explicit design required before Slice 2; no sentinel trips allowed | Decision required before Slice 2 |
 | Saved list (Stage 3) | New root object — not built in Stage 2A | Deferred |
 
 ---
@@ -126,15 +127,15 @@ These are implementation slices, not this PR. Each slice is one focused PR.
 ### Slice 1 — Global Explore Shell v1
 - Add `/explore` route in Next.js app router.
 - Add "Explore" nav link to `Sidebar.tsx` and `MobileNav.tsx`.
-- Shell renders a destination search input + vertical filters (Attractions, Restaurants, Hotels, Flights).
-- On search, calls existing `searchRestaurants` / attractions / hotels providers (no new backend routes required for v1).
-- AI Concierge available without a trip: `callConciergeSearch` must accept `tripId=null` or an optional param (check backend contract before assuming — this is a small backend change or a new endpoint).
+- Shell renders a destination search input + vertical filters. **v1 scope: Attractions and Restaurants (Google Places-backed). Hotels are conditional — include only if `searchHotels` can operate without a trip context.** Flights are deferred from v1; the existing `searchFlights` API requires origin/destination/dates and has no trip-optional contract.
+- On search, reuse existing provider routes where the `tripId` binding is safe to relax; add a narrow trip-optional route only if required. Do not pre-decide whether a new backend route is needed — audit the binding at implementation time.
+- AI Concierge in Explore shell is Slice 3 work; do not assume it is available in Slice 1.
 - No mock destinations, no sample data, no hardcoded editorial lists.
 
 ### Slice 2 — Unified Result Actions v1
 - New `ResultActionSheet` component (or `ResultActionMenu` for desktop).
 - Three actions: Save, Add to Trip, Create Trip.
-- Save: trip-optional save path (sentinel trip or deferred bucket — decide in slice).
+- Save: implement the trip-optional save path decided in the pre-Slice-2 design step (no sentinel trips). If no safe path exists yet, the Save button may be disabled/deferred with a clear UX state rather than silently broken.
 - Add to Trip: reuses existing add-to-trip API functions; adds trip picker UI.
 - Create Trip: modal wrapping `TripBuilderForm`, pre-filled destination.
 - Wire into `SearchResultCard` and the new Explore Shell.
@@ -152,10 +153,10 @@ These are implementation slices, not this PR. Each slice is one focused PR.
 
 ### Global Explore Shell v1 (Golden Scenarios 1, 2, 6, 7)
 - [ ] User opens `/explore` with no trips — sees a useful shell, not an error.
-- [ ] User searches for "coffee shops in Tokyo" — gets real Google Places results, no mock data.
-- [ ] AI Concierge panel (if shown) returns claim-safe cards.
+- [ ] User searches for attractions or restaurants in a destination — gets real Google Places results, no mock data.
 - [ ] No "create a trip first" gate anywhere in the Explore shell.
 - [ ] Navigation shows "Explore" link on both desktop sidebar and mobile nav.
+- [ ] Flights vertical is not shown in v1 (deferred); no broken state from its absence.
 - [ ] Existing `/trips` and `/trips/[id]` flows completely unaffected.
 
 ### Unified Result Actions v1 (Golden Scenarios 1, 2, 3, 4, 6)
