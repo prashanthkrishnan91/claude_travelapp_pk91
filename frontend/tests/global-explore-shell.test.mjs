@@ -200,25 +200,43 @@ test('RestaurantExploreFlow does not call mock/sample data paths', () => {
   assert.doesNotMatch(restaurantFlow, /hardcoded/i);
 });
 
-// ── 5. Attractions — deferred state ────────────────────────────────────────
+// ── 5. Attractions — live via tripless Concierge (Slice 4) ─────────────────
 
-test('AttractionExploreFlow shows deferred state after form submission', () => {
-  assert.match(attractionFlow, /data-testid="attraction-deferred-state"/);
+test('AttractionExploreFlow imports callConciergeSearch from api', () => {
+  assert.match(attractionFlow, /callConciergeSearch/);
+  assert.match(attractionFlow, /from "@\/lib\/api"/);
 });
 
-test('AttractionExploreFlow does not import or call any live search function', () => {
-  // Must not import from api or call any live route
-  assert.doesNotMatch(attractionFlow, /import.*from "@\/lib\/api"/);
-  assert.doesNotMatch(attractionFlow, /callConcierge/);
-  assert.doesNotMatch(attractionFlow, /apiFetch/);
+test('AttractionExploreFlow calls callConciergeSearch with null tripId', () => {
+  assert.match(attractionFlow, /callConciergeSearch\(null/);
 });
 
-test('AttractionExploreFlow explains that attractions search is coming soon', () => {
-  assert.match(attractionFlow, /coming soon/i);
+test('AttractionExploreFlow passes destination as the fourth argument', () => {
+  // signature: callConciergeSearch(null, query, undefined, dest)
+  assert.match(attractionFlow, /callConciergeSearch\(null,\s*query,\s*undefined,\s*dest\)/);
 });
 
-test('AttractionExploreFlow deferred state has role=status for accessibility', () => {
-  assert.match(attractionFlow, /role="status"/);
+test('AttractionExploreFlow renders attraction-results testid when results present', () => {
+  assert.match(attractionFlow, /data-testid="attraction-results"/);
+});
+
+test('AttractionExploreFlow builds ExploreResultContext with attractions vertical', () => {
+  assert.match(attractionFlow, /vertical: "attractions"/);
+  assert.match(attractionFlow, /providerIdentity/);
+});
+
+test('AttractionExploreFlow uses ResultActionSheet on each card', () => {
+  assert.match(attractionFlow, /ResultActionSheet/);
+  assert.match(attractionFlow, /import.*ResultActionSheet/);
+});
+
+test('AttractionExploreFlow does not use removed /search/attractions route', () => {
+  assert.doesNotMatch(attractionFlow, /searchAttractions[^V]/);
+  assert.doesNotMatch(attractionFlow, /\/search\/attractions/);
+});
+
+test('AttractionExploreFlow does not require a tripId', () => {
+  assert.doesNotMatch(attractionFlow, /tripId(?!.*null)/);
 });
 
 // ── 6. Hotels — structured form + deferred state ───────────────────────────
@@ -316,10 +334,10 @@ test('TripBuilder does not import from explore component directory', () => {
 
 // ── 10. Safe execution rule documentation ─────────────────────────────────
 
-test('AttractionExploreFlow source documents why it is deferred', () => {
-  // The file must explain which route was removed and why it is deferred
-  assert.match(attractionFlow, /\/search\/attractions/);
-  assert.match(attractionFlow, /tripId/);
+test('AttractionExploreFlow source documents the live Concierge path', () => {
+  // File must document the tripless Concierge approach (Slice 4)
+  assert.match(attractionFlow, /callConciergeSearch/);
+  assert.match(attractionFlow, /trip.optional/i);
 });
 
 test('HotelExploreFlow source documents mock-backed quarantine reason', () => {
