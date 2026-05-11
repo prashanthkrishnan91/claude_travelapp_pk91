@@ -6,7 +6,7 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Now
 
-- **Stage 2A Slice 5 — Hotels Vertical Live:** `HotelExploreFlow` deferred (mock-backed). Needs real Google Places hotel provider or dedicated hotel search before live wiring.
+- **Stage 2A Slice 5A — Hotels Discovery (scope-locked):** `HotelExploreFlow` wired as discovery-only lodging cards via the existing tripless Concierge / verified place card pattern (same as Attractions Slice 4). Uses `HotelDiscoveryCard` naming. No rates, prices, availability, or mock hotel provider. Search context fields (destination, check_in, check_out, guests, rooms) preserved in card payload for future provider upgrade. See `docs/product/DECISION_LOG.md` 2026-05-11 Hotels scope-lock decision.
 
 ## Next
 
