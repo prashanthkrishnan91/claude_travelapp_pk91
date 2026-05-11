@@ -27,6 +27,8 @@ import type {
   OptimizeFlightInput,
   OptimizeHotelInput,
   TripOptimizationResponse,
+  SavedItem,
+  SavedItemCreate,
 } from "@/types";
 import { supabase } from "./supabase";
 import { normalizeConciergeResponse } from "./concierge/types";
@@ -2178,4 +2180,22 @@ export async function addMichelinRestaurantToTrip(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+// ─── Saved Items (Stage 2A Slice 2) ──────────────────────────────────────────
+
+export async function saveItem(payload: SavedItemCreate): Promise<SavedItem> {
+  return apiFetch<SavedItem>("/saved-items", {
+    method: "POST",
+    body: JSON.stringify(toSnake(payload)),
+  });
+}
+
+export async function listSavedItems(vertical?: string): Promise<SavedItem[]> {
+  const qs = vertical ? `?vertical=${encodeURIComponent(vertical)}` : "";
+  return apiFetch<SavedItem[]>(`/saved-items${qs}`);
+}
+
+export async function deleteSavedItem(itemId: string): Promise<void> {
+  await apiFetch<void>(`/saved-items/${itemId}`, { method: "DELETE" });
 }

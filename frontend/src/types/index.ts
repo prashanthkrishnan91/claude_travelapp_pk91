@@ -385,3 +385,33 @@ export interface TripBuilderFormData {
   budgetCurrency: string;
   notes: string;
 }
+
+// ─── Saved Items (Stage 2A Slice 2) ──────────────────────────────────────────
+
+export type SavedItemVertical = "restaurant" | "attraction" | "hotel" | "flight";
+export type SavedItemStatus = "active" | "deleted";
+
+export interface SavedItemCreate {
+  vertical: SavedItemVertical;
+  displayName: string;
+  provider?: string;
+  providerPlaceId?: string;
+  displaySnapshot?: Record<string, unknown>;
+  searchContext?: Record<string, unknown>;
+  provenance?: Record<string, unknown>;
+}
+
+export interface SavedItem {
+  id: string;
+  userId: string;
+  vertical: SavedItemVertical;
+  displayName: string;
+  provider?: string;
+  providerPlaceId?: string;
+  displaySnapshot: Record<string, unknown>;
+  searchContext: Record<string, unknown>;
+  provenance: Record<string, unknown>;
+  status: SavedItemStatus;
+  createdAt: string;
+  updatedAt: string;
+}

@@ -5,6 +5,7 @@ import { Search, MapPin, Star, ExternalLink, Utensils, Loader2, AlertCircle } fr
 import { searchRestaurants } from "@/lib/api";
 import type { RestaurantSearchResult } from "@/types";
 import type { ExploreResultContext } from "./types";
+import { ResultActionSheet } from "./ResultActionSheet";
 
 export function RestaurantExploreFlow() {
   const [destination, setDestination] = useState("");
@@ -38,10 +39,6 @@ export function RestaurantExploreFlow() {
     }
   }
 
-  /**
-   * Builds the action-ready context for Slice 2 (ResultActionSheet).
-   * Not exposed via UI in Slice 1 — wired by ExploreShell when actions land.
-   */
   function buildContext(r: RestaurantSearchResult): ExploreResultContext {
     return {
       vertical: "restaurants",
@@ -51,9 +48,6 @@ export function RestaurantExploreFlow() {
       originalPayload: r,
     };
   }
-
-  // Expose buildContext for Slice 2 wiring — suppressed lint warning intentional.
-  void buildContext;
 
   return (
     <div className="space-y-6">
@@ -128,7 +122,7 @@ export function RestaurantExploreFlow() {
             {results.length} restaurant{results.length !== 1 ? "s" : ""} in {lastDestination}
           </p>
           {results.map((r) => (
-            <RestaurantCard key={r.id} restaurant={r} />
+            <RestaurantCard key={r.id} restaurant={r} context={buildContext(r)} />
           ))}
         </div>
       )}
@@ -143,7 +137,13 @@ export function RestaurantExploreFlow() {
   );
 }
 
-function RestaurantCard({ restaurant: r }: { restaurant: RestaurantSearchResult }) {
+function RestaurantCard({
+  restaurant: r,
+  context,
+}: {
+  restaurant: RestaurantSearchResult;
+  context: ExploreResultContext;
+}) {
   const priceStr = r.priceLevel != null ? "$".repeat(Math.min(r.priceLevel, 4)) : null;
 
   return (
@@ -174,13 +174,6 @@ function RestaurantCard({ restaurant: r }: { restaurant: RestaurantSearchResult 
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               )}
-              {/* Save & add actions land in Slice 2 (ResultActionSheet) */}
-              <span
-                className="px-2 py-1 rounded-lg bg-white/[.04] text-cream-600 text-[10px] font-medium"
-                data-testid="actions-pending-badge"
-              >
-                Save & add — next
-              </span>
             </div>
           </div>
 
@@ -212,6 +205,8 @@ function RestaurantCard({ restaurant: r }: { restaurant: RestaurantSearchResult 
               </div>
             )}
           </div>
+
+          <ResultActionSheet context={context} />
         </div>
       </div>
     </div>
