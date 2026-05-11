@@ -9,7 +9,7 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Current product stage
 
 - Roadmap stage: **Stage 2 — Open app before trip exists.** Stage 1 is GREEN. Stage 2A contract is defined in `docs/product/STAGE_2A_CONTRACT.md`. See `docs/product/ROADMAP.md`.
-- Active build queue item: **Stage 2A Slice 5 — Hotels Vertical Live (real provider).** Slice 4 shipped.
+- Active build queue item: **Stage 2A Slice 5A — Hotels Discovery (scope-locked).** Slice 4 shipped. Hotels in Slice 5A are discovery-only lodging cards (`HotelDiscoveryCard`); no rates, prices, or availability. Real hotel offers deferred to a later provider-backed slice.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -51,15 +51,14 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 ## Known risks / unresolved issues
 
 - `saved_items` migration 005 must be applied to the Supabase project before Save is live in production. Migration is in `backend/db/migrations/005_saved_items.sql`.
-- Hotels vertical is deferred: `/search/hotels` is mock-backed (BLOCK_LEGACY_PRODUCT_MOCK). Needs a real provider before `HotelExploreFlow` can go live.
-- Hotels vertical is deferred: `/search/hotels` is mock-backed (BLOCK_LEGACY_PRODUCT_MOCK). Needs a real provider.
+- Hotels Slice 5A is discovery-only (`HotelDiscoveryCard`); do not add rates, prices, availability, or a fake hotel provider. Real hotel offers require a provider-backed Hotel Offer contract (deferred to Stage 2B or later).
 - Flights vertical is deferred: `/search/flights` is mock-backed. Needs Duffel/Amadeus real provider.
 - Saved-list foundation (Stage 3 root object) not built; ideas still need a non-trip home.
 - AI destination intelligence, road trip mode, deal/points intelligence, and Travel Watchtower are deferred to later stages.
 
 ## Next recommended step
 
-Hotels Vertical Live (Stage 2A Slice 5). `HotelExploreFlow` is deferred because `/search/hotels` is mock-backed. Needs a real Google Places hotel provider wired to `callConciergeSearch` (same tripless pattern as Attractions Slice 4) or a dedicated hotel search endpoint before it can go live.
+Stage 2A Slice 5A — Hotels Discovery. `HotelExploreFlow` wired as discovery-only lodging cards using the existing tripless Concierge / verified place card pattern (same as Attractions Slice 4). Name components `HotelDiscoveryCard` / `hotel_discovery`. Preserve search context fields (destination, check_in, check_out, guests, rooms) in the card payload. No rates, prices, availability, or mock hotel endpoint. `ResultActionSheet` expected to support hotel discovery cards. No new Supabase migration required (`saved_items` `hotel` enum already present). See scope-lock decision in `docs/product/DECISION_LOG.md` (2026-05-11).
 
 ## Handoff maintenance rule
 

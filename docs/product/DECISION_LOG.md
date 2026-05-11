@@ -60,3 +60,22 @@ Product decisions are recorded here so we do not re-litigate direction.
 - SQL note for next implementation PR: include a focused migration creating `saved_items` with `user_id` FK, provider/place identity fields, content snapshot JSON, timestamps, and uniqueness/indexes; do not redesign trips/auth models.
 - What would change our mind: Evidence that this migration cannot be delivered surgically (e.g., auth/RLS constraints force broad redesign) or that a pre-existing trip-optional persistence path already exists without trip-flow contamination.
 - Roadmap impact: Unblocks Stage 2A Slice 2 action-sheet implementation with safe Save semantics and establishes the minimum substrate Stage 3 can expand.
+
+## 2026-05-11 — Stage 2A Slice 5A: Hotels as discovery-only lodging cards (scope-lock)
+- Decision: Hotels in Stage 2A Slice 5 are **discovery-only** lodging/property cards. They use the existing tripless Explore / verified place card pattern (same as Attractions Slice 4). They are **not** bookable hotel offers and carry no rate, price, or availability data.
+- Architecture rules locked by this decision:
+  - Google Places / verified place identity is acceptable for lodging discovery cards (`HotelDiscoveryCard` / `hotel_discovery` naming).
+  - Do not claim real rates, nightly prices, total prices, availability, sold-out status, booking policy, cancellation policy, or "best deal" in Slice 5A.
+  - Do not create or mock `/search/hotels`; do not introduce a fake hotel provider.
+  - Search context fields (destination/location, check_in, check_out, guests, rooms) must be preserved in card payload so a future provider-backed offer can consume them without a migration.
+  - `ResultActionSheet` is expected to support hotel discovery cards in the Slice 5A implementation PR (no new component contract needed).
+  - `saved_items` cross-vertical schema (`hotel` enum value already present in migration 005) is sufficient; no additional schema migration is required for Slice 5A.
+  - Real hotel rates/availability require a separate, explicitly deferred **Hotel Offer contract** backed by a real provider (e.g., Booking.com, Hotels.com API). That work is Stage 2B or later.
+  - Naming convention: use `hotel_discovery` / `lodging_discovery` / `HotelDiscoveryCard` throughout. Avoid `offer`, `rate`, `availability`, `price`, or `booking` in Slice 5A identifiers.
+- Why: Unblocks Hotels vertical in Stage 2A without creating false user expectations or requiring a provider integration that is not yet contracted. Mirrors the proven Attractions pattern. Preserves all context fields so the upgrade path to real offers is clean.
+- Alternatives rejected:
+  - Full provider-backed hotel offers in Slice 5A: no provider contracted; would require fake rates or mock data (violates No Mock/Sample Visible Data Pack).
+  - Mock `/search/hotels` endpoint: explicitly forbidden; leaks false availability into user-visible UI.
+  - Reusing generic "hotel" naming without discovery/offer separation: risks polluting the future real-offer contract with discovery-layer semantics.
+- What would change our mind: A real hotel rate/availability provider is contracted and the Hotel Offer contract is written and reviewed before Slice 5A ships.
+- Roadmap impact: Slice 5A ships Hotels discovery. Real hotel offers are explicitly deferred to a named future slice with a provider-backed Hotel Offer contract. BUILD_QUEUE and HANDOFF updated accordingly.
