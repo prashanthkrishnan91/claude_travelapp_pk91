@@ -22,7 +22,7 @@
           },
           {
             "type": "command",
-            "command": "sh -c 'bash \"${CLAUDE_PROJECT_DIR:-.}/scripts/ai/usage_snapshot.sh\" 2>/dev/null || true'",
+            "command": "sh -c '[ \"${AI_USAGE_SNAPSHOT_ON_STOP:-0}\" = \"1\" ] && bash \"${CLAUDE_PROJECT_DIR:-.}/scripts/ai/usage_snapshot.sh\" 2>/dev/null || true'",
             "timeout": 15000
           }
         ]
