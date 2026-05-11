@@ -337,7 +337,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                       "bg-slate-800/60 text-slate-400 border border-slate-700/50"
                     }`}>{areaLabel}</span>
                   )}
-                  {proximityLabel && !areaLabel && (
+                  {proximityLabel && proximityLabel.toLowerCase() !== (areaLabel ?? "").toLowerCase() && (
                     <span className="text-[10px] text-slate-500">{proximityLabel}</span>
                   )}
                 </div>

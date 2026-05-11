@@ -344,3 +344,129 @@ test('ItineraryItemCard: generic price row guards cashPrice > 0 (no $0 display)'
     'Generic price row must check cashPrice > 0 to prevent $0 display for discovery hotels',
   );
 });
+
+// ── 11. Payload-level detail preservation: addAttractionToDay ───────────────
+// These check the actual field-by-field mapping in the API function body so
+// that a future refactor cannot silently drop fields from the persisted payload.
+
+test('addAttractionToDay payload maps attraction.rating into details', () => {
+  const fnIdx = apiSrc.indexOf('export async function addAttractionToDay(');
+  const fnEnd = apiSrc.indexOf('\nexport ', fnIdx + 1);
+  const fn = apiSrc.slice(fnIdx, fnEnd > fnIdx ? fnEnd : fnIdx + 800);
+  assert.match(fn, /rating:\s*attraction\.rating/, 'addAttractionToDay must map attraction.rating into details');
+});
+
+test('addAttractionToDay payload maps attraction.tags into details', () => {
+  const fnIdx = apiSrc.indexOf('export async function addAttractionToDay(');
+  const fnEnd = apiSrc.indexOf('\nexport ', fnIdx + 1);
+  const fn = apiSrc.slice(fnIdx, fnEnd > fnIdx ? fnEnd : fnIdx + 800);
+  assert.match(fn, /tags:\s*attraction\.tags/, 'addAttractionToDay must map attraction.tags into details');
+});
+
+test('addAttractionToDay payload maps attraction.category into details', () => {
+  const fnIdx = apiSrc.indexOf('export async function addAttractionToDay(');
+  const fnEnd = apiSrc.indexOf('\nexport ', fnIdx + 1);
+  const fn = apiSrc.slice(fnIdx, fnEnd > fnIdx ? fnEnd : fnIdx + 800);
+  assert.match(fn, /category:\s*attraction\.category/, 'addAttractionToDay must map attraction.category into details');
+});
+
+test('addAttractionToDay payload maps numReviews (num_reviews) into details', () => {
+  const fnIdx = apiSrc.indexOf('export async function addAttractionToDay(');
+  const fnEnd = apiSrc.indexOf('\nexport ', fnIdx + 1);
+  const fn = apiSrc.slice(fnIdx, fnEnd > fnIdx ? fnEnd : fnIdx + 800);
+  assert.match(fn, /num_reviews:\s*attraction\.numReviews/, 'addAttractionToDay must map numReviews into details');
+});
+
+test('addAttractionToDay payload maps attraction.address into details', () => {
+  const fnIdx = apiSrc.indexOf('export async function addAttractionToDay(');
+  const fnEnd = apiSrc.indexOf('\nexport ', fnIdx + 1);
+  const fn = apiSrc.slice(fnIdx, fnEnd > fnIdx ? fnEnd : fnIdx + 800);
+  assert.match(fn, /address:\s*attraction\.address/, 'addAttractionToDay must map attraction.address into details');
+});
+
+// ── 12. Payload-level detail preservation: addRestaurantToDay ───────────────
+
+test('addRestaurantToDay payload maps restaurant.cuisine into details', () => {
+  const fnIdx = apiSrc.indexOf('export async function addRestaurantToDay(');
+  const fnEnd = apiSrc.indexOf('\nexport ', fnIdx + 1);
+  const fn = apiSrc.slice(fnIdx, fnEnd > fnIdx ? fnEnd : fnIdx + 800);
+  assert.match(fn, /cuisine:\s*restaurant\.cuisine/, 'addRestaurantToDay must map restaurant.cuisine into details');
+});
+
+test('addRestaurantToDay payload maps restaurant.rating into details', () => {
+  const fnIdx = apiSrc.indexOf('export async function addRestaurantToDay(');
+  const fnEnd = apiSrc.indexOf('\nexport ', fnIdx + 1);
+  const fn = apiSrc.slice(fnIdx, fnEnd > fnIdx ? fnEnd : fnIdx + 800);
+  assert.match(fn, /rating:\s*restaurant\.rating/, 'addRestaurantToDay must map restaurant.rating into details');
+});
+
+test('addRestaurantToDay payload maps priceLevel (price_level) into details', () => {
+  const fnIdx = apiSrc.indexOf('export async function addRestaurantToDay(');
+  const fnEnd = apiSrc.indexOf('\nexport ', fnIdx + 1);
+  const fn = apiSrc.slice(fnIdx, fnEnd > fnIdx ? fnEnd : fnIdx + 800);
+  assert.match(fn, /price_level:\s*restaurant\.priceLevel/, 'addRestaurantToDay must map priceLevel into details');
+});
+
+test('addRestaurantToDay payload maps restaurant.tags into details', () => {
+  const fnIdx = apiSrc.indexOf('export async function addRestaurantToDay(');
+  const fnEnd = apiSrc.indexOf('\nexport ', fnIdx + 1);
+  const fn = apiSrc.slice(fnIdx, fnEnd > fnIdx ? fnEnd : fnIdx + 800);
+  assert.match(fn, /tags:\s*restaurant\.tags/, 'addRestaurantToDay must map restaurant.tags into details');
+});
+
+// ── 13. Handler routing: attraction/restaurant panels use detail-preserving helpers ──
+
+test('TripBuilder attraction candidate panel wires to handleAddAttractionToItinerary (not handleAddCandidateToItinerary)', () => {
+  // The attraction panel passes onAddAttraction, which is wired to handleAddAttractionToItinerary.
+  // This guarantees addAttractionToDay is called (detail-preserving), not createItem (stripping).
+  assert.match(
+    tripBuilderSrc,
+    /onAddAttraction=\{handleAddAttractionToItinerary\}/,
+    'Attraction candidate panel must wire onAddAttraction to handleAddAttractionToItinerary',
+  );
+});
+
+test('TripBuilder restaurant candidate panel wires to handleAddRestaurantToItinerary (not handleAddCandidateToItinerary)', () => {
+  assert.match(
+    tripBuilderSrc,
+    /onAddRestaurant=\{handleAddRestaurantToItinerary\}/,
+    'Restaurant candidate panel must wire onAddRestaurant to handleAddRestaurantToItinerary',
+  );
+});
+
+test('handleAddAttractionToItinerary calls addAttractionToDay (not createItem)', () => {
+  const fnIdx = tripBuilderSrc.indexOf('const handleAddAttractionToItinerary');
+  const fnEnd = tripBuilderSrc.indexOf('}, [days', fnIdx);
+  const fn = tripBuilderSrc.slice(fnIdx, fnEnd > fnIdx ? fnEnd + 50 : fnIdx + 600);
+  assert.match(fn, /addAttractionToDay/, 'handleAddAttractionToItinerary must call addAttractionToDay');
+  assert.doesNotMatch(fn, /createItem/, 'handleAddAttractionToItinerary must not call createItem');
+});
+
+test('handleAddRestaurantToItinerary calls addRestaurantToDay (not createItem)', () => {
+  const fnIdx = tripBuilderSrc.indexOf('const handleAddRestaurantToItinerary');
+  const fnEnd = tripBuilderSrc.indexOf('}, [days', fnIdx);
+  const fn = tripBuilderSrc.slice(fnIdx, fnEnd > fnIdx ? fnEnd + 50 : fnIdx + 600);
+  assert.match(fn, /addRestaurantToDay/, 'handleAddRestaurantToItinerary must call addRestaurantToDay');
+  assert.doesNotMatch(fn, /createItem/, 'handleAddRestaurantToItinerary must not call createItem');
+});
+
+// ── 14. Hotel proximity: both area badge and proximity label shown together ──
+
+test('ItineraryItemCard: hotel proximity section shows proximityLabel even when areaLabel present (no !areaLabel guard)', () => {
+  // Before this fix, the guard was `proximityLabel && !areaLabel`, which suppressed
+  // the proximity label whenever an area badge was also available.  After the fix,
+  // both are shown unless the text is the same.
+  assert.doesNotMatch(
+    itemCard,
+    /proximityLabel && !areaLabel/,
+    'Hotel proximity section must not suppress proximityLabel with !areaLabel guard',
+  );
+});
+
+test('ItineraryItemCard: hotel proximity section guards against duplicate text (case-insensitive)', () => {
+  assert.match(
+    itemCard,
+    /proximityLabel.*toLowerCase\(\).*areaLabel.*toLowerCase\(\)|areaLabel.*toLowerCase\(\).*proximityLabel.*toLowerCase\(\)/,
+    'Hotel proximity section must skip rendering proximityLabel when it matches areaLabel text',
+  );
+});
