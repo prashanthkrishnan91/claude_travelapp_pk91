@@ -161,10 +161,10 @@ test('CandidatePanel accepts an emptyMessage prop for per-vertical empty states'
 
 test('each candidate panel passes a vertical-specific emptyMessage', () => {
   // Flights, Hotels, Attractions, Restaurants each supply a distinct message.
-  assert.match(tripBuilderSrc, /No flight options seeded/,     'Flights panel needs specific empty message');
-  assert.match(tripBuilderSrc, /No hotel options seeded/,      'Hotels panel needs specific empty message');
-  assert.match(tripBuilderSrc, /No attractions seeded yet/,    'Attractions panel needs specific empty message');
-  assert.match(tripBuilderSrc, /No restaurants seeded yet/,    'Restaurants panel needs specific empty message');
+  assert.match(tripBuilderSrc, /No flight options are available yet/,     'Flights panel needs specific empty message');
+  assert.match(tripBuilderSrc, /No hotel options are available yet/,      'Hotels panel needs specific empty message');
+  assert.match(tripBuilderSrc, /No attractions are available yet/,        'Attractions panel needs specific empty message');
+  assert.match(tripBuilderSrc, /No restaurants are available yet/,        'Restaurants panel needs specific empty message');
 });
 
 // ── 7. Round-trip / one-way flights rendered with clear section labels ────────

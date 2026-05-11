@@ -1885,7 +1885,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
               accentColor="text-sky-500"
               open={flightPanelOpen}
               onToggle={() => setFlightPanelOpen((v) => !v)}
-              emptyMessage="No flight options seeded — check trip creation logs or re-create the trip to populate."
+              emptyMessage="No flight options are available yet. Try refreshing this trip or creating it again if this continues."
               sortControls={
                 <SortControl
                   keys={[
@@ -1962,7 +1962,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
               accentColor="text-violet-500"
               open={hotelPanelOpen}
               onToggle={() => setHotelPanelOpen((v) => !v)}
-              emptyMessage="No hotel options seeded — check trip creation logs or re-create the trip to populate."
+              emptyMessage="No hotel options are available yet. Try refreshing this trip or creating it again if this continues."
               sortControls={
                 <SortControl
                   keys={[
@@ -2052,7 +2052,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                   accentColor="text-emerald-500"
                   open={attractionPanelOpen}
                   onToggle={() => setAttractionPanelOpen((v) => !v)}
-                  emptyMessage="No attractions seeded yet — they're added automatically when you create a trip."
+                  emptyMessage="No attractions are available yet. Try refreshing this trip or creating it again if this continues."
                   sortControls={
                     <div className="flex flex-col gap-2">
                       <SortControl
@@ -2130,7 +2130,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                   accentColor="text-rose-500"
                   open={restaurantPanelOpen}
                   onToggle={() => setRestaurantPanelOpen((v) => !v)}
-                  emptyMessage="No restaurants seeded yet — they're added automatically when you create a trip."
+                  emptyMessage="No restaurants are available yet. Try refreshing this trip or creating it again if this continues."
                   sortControls={
                     <div className="flex flex-col gap-2">
                       <SortControl
