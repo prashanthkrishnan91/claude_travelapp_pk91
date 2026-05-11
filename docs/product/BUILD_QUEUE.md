@@ -6,8 +6,7 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Now
 
-- **Stage 2A Slice 1 — Global Explore Shell v1:** Add `/explore` route + nav link. Destination search + vertical filters. Real Google Places results. No trip required. See `docs/product/STAGE_2A_CONTRACT.md`.
-- **Stage 2A Slice 2 — Unified Result Actions v1:** `ResultActionSheet` component with Save / Add to Trip / Create Trip. Trip-optional save path. Wire into Explore shell and `SearchResultCard`.
+- **Stage 2A Slice 2 — Unified Result Actions v1:** `ResultActionSheet` component with Save / Add to Trip / Create Trip. Trip-optional save path. Wire into Explore shell restaurant cards and `SearchResultCard`. Pre-step: decide Save backing in `docs/product/DECISION_LOG.md`.
 
 ## Next
 
@@ -16,6 +15,7 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Completed
 
+- Stage 2A Slice 1 — Global Explore Shell v1: `/explore` route, 4-vertical entry grid, Restaurants live (Google Places), Attractions/Hotels/Flights deferred with polished states, `ExploreResultContext` action-ready type, nav links in Sidebar + MobileNav. (2026-05-11)
 - Stage 1 → Stage 2 transition: discovery-first architecture audit + Stage 2A contract. See `docs/product/STAGE_2A_CONTRACT.md`. (2026-05-11)
 
 ## Later
