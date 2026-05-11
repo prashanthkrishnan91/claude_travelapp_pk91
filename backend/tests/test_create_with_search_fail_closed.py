@@ -559,5 +559,3 @@ def test_is_mock_flight_detects_book_example_in_options():
 def test_is_mock_flight_passes_clean_provider_rows():
     f = _make_flight(source="amadeus", booking_url="https://amadeus.example/x")
     assert trips_route._is_mock_flight(f) is False
-
-
