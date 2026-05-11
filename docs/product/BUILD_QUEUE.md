@@ -6,7 +6,7 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Now
 
-- **Stage 2A Slice 3 — Trip-Optional AI Concierge:** backend accepts optional `trip_id`; Concierge usable from Explore shell. Unblocks Attractions vertical.
+- **Stage 2A Slice 4 — Attractions Vertical Live:** wire `AttractionExploreFlow` to `callConciergeSearch(null, query, undefined, destination)`; render `UnifiedAttractionResult` cards with `ResultActionSheet`. Tripless Concierge (Slice 3) already unblocked this.
 
 ## Next
 
@@ -14,6 +14,7 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Completed
 
+- Stage 2A Slice 3 — Trip-Optional AI Concierge: `trip_id` optional in `ConciergeRequest`/`ConciergeSearchRequest`; service/route guard `_fetch_trip`+`_save_message`; frontend `callConcierge`/`callConciergeSearch` accept `tripId: string | null` + `destination`. No SQL migration. (2026-05-11)
 - Stage 2A Slice 2 — Unified Result Actions v1 + saved_items foundation: `saved_items` migration (005), `SavedItemsService`, `/saved-items` route (POST/GET/DELETE), `ResultActionSheet` (Save live; Add to Trip / Create Trip deferred), wired into `RestaurantExploreFlow`. (2026-05-11)
 - Stage 2A Slice 1 — Global Explore Shell v1: `/explore` route, 4-vertical entry grid, Restaurants live (Google Places), Attractions/Hotels/Flights deferred with polished states, `ExploreResultContext` action-ready type, nav links in Sidebar + MobileNav. (2026-05-11)
 - Stage 1 → Stage 2 transition: discovery-first architecture audit + Stage 2A contract. See `docs/product/STAGE_2A_CONTRACT.md`. (2026-05-11)

@@ -267,32 +267,38 @@ def build_typed_concierge_response(
     _typed_val_ms = 0
 
     # Context classification — classifies and logs. PR 2: may skip provider call.
+    # Tripless calls (trip_id=None) have no prior-card context to load.
     turn_mode = "new_search"
     rerank_rule = "none"
     ctx = None
     _t_ctx = time.perf_counter()
-    try:
-        ctx = build_context_window(service._db, payload.trip_id)
-        turn_mode, rerank_rule = classify_turn(payload.user_query, ctx)
-        provider_call_expected = not (
-            getattr(settings, "concierge_context_v1_enabled", False)
-            and turn_mode == "refine_previous"
-            and rerank_rule in ("top_n", "best_one", "compare", "modifier_filter")
-            and ctx.has_prior_cards
-        )
-        log_context_turn(
-            trip_id=payload.trip_id,
-            turn_mode=turn_mode,
-            rerank_rule=rerank_rule,
-            card_pool_size=ctx.card_pool_size,
-            has_prior_cards=ctx.has_prior_cards,
-            source_message_id=ctx.source_message_id,
-            reset_reason=ctx.reset_reason,
-            provider_call_expected_for_future_mode=provider_call_expected,
-        )
-    except Exception:
-        logger.exception(
-            "concierge.context.classify_failed trip_id=%s", payload.trip_id
+    if payload.trip_id is not None:
+        try:
+            ctx = build_context_window(service._db, payload.trip_id)
+            turn_mode, rerank_rule = classify_turn(payload.user_query, ctx)
+            provider_call_expected = not (
+                getattr(settings, "concierge_context_v1_enabled", False)
+                and turn_mode == "refine_previous"
+                and rerank_rule in ("top_n", "best_one", "compare", "modifier_filter")
+                and ctx.has_prior_cards
+            )
+            log_context_turn(
+                trip_id=payload.trip_id,
+                turn_mode=turn_mode,
+                rerank_rule=rerank_rule,
+                card_pool_size=ctx.card_pool_size,
+                has_prior_cards=ctx.has_prior_cards,
+                source_message_id=ctx.source_message_id,
+                reset_reason=ctx.reset_reason,
+                provider_call_expected_for_future_mode=provider_call_expected,
+            )
+        except Exception:
+            logger.exception(
+                "concierge.context.classify_failed trip_id=%s", payload.trip_id
+            )
+    else:
+        logger.debug(
+            "concierge.context.tripless_skip destination=%r", payload.destination
         )
     _ctx_ms = int((time.perf_counter() - _t_ctx) * 1000)
 
@@ -472,6 +478,7 @@ def build_typed_concierge_response(
                     user_id,
                     payload.client_message_id,
                     prior_identity_keys=_prior_keys,
+                    destination=payload.destination,
                 )
                 _provider_ms = int((time.perf_counter() - _t_provider_start) * 1000)
 
@@ -513,6 +520,7 @@ def build_typed_concierge_response(
                                 user_id,
                                 None,
                                 prior_identity_keys=_combined_prior,
+                                destination=payload.destination,
                             )
                             _refill_resp = PlaceRecommendationsResponse(**_refill_legacy.model_dump())
                             _refill_resp, _refill_dedup = _exclude_prior_verified_cards(
@@ -614,7 +622,7 @@ def build_typed_concierge_response(
 
     if not settings.concierge_router_v2:
         _t_ss = time.perf_counter()
-        legacy = service.search(payload.trip_id, payload.user_query, user_id, payload.client_message_id)
+        legacy = service.search(payload.trip_id, payload.user_query, user_id, payload.client_message_id, destination=payload.destination)
         _service_search_ms = int((time.perf_counter() - _t_ss) * 1000)
         typed_payload = PlaceRecommendationsResponse(**legacy.model_dump())
         decision = RouteDecision(
@@ -639,7 +647,7 @@ def build_typed_concierge_response(
 
         if decision.response_type == "place_recommendations":
             _t_ss = time.perf_counter()
-            legacy = service.search(payload.trip_id, payload.user_query, user_id, payload.client_message_id)
+            legacy = service.search(payload.trip_id, payload.user_query, user_id, payload.client_message_id, destination=payload.destination)
             _service_search_ms = int((time.perf_counter() - _t_ss) * 1000)
             typed_payload = PlaceRecommendationsResponse(**legacy.model_dump())
         elif decision.response_type == "trip_advice":
@@ -708,9 +716,9 @@ def concierge(payload: ConciergeRequest, db: DB, user_id: CurrentUserID) -> Conc
             window_seconds=settings.guardrail_ai_concierge_window_seconds,
             dedupe_seconds=settings.guardrail_ai_concierge_dedupe_seconds,
         ),
-        dedupe_payload={"trip_id": payload.trip_id, "query": payload.user_query.strip().lower(), "day": payload.day_number},
+        dedupe_payload={"trip_id": str(payload.trip_id) if payload.trip_id else (payload.destination or "").strip(), "query": payload.user_query.strip().lower(), "day": payload.day_number},
     )
-    return ConciergeService(db).answer(payload.trip_id, payload.user_query, user_id, payload.day_number)
+    return ConciergeService(db).answer(payload.trip_id, payload.user_query, user_id, payload.day_number, destination=payload.destination)
 
 
 def _persist_request_log_task(
@@ -772,7 +780,7 @@ def concierge_search(
             window_seconds=settings.guardrail_ai_concierge_window_seconds,
             dedupe_seconds=settings.guardrail_ai_concierge_dedupe_seconds,
         ),
-        dedupe_payload={"trip_id": payload.trip_id, "query": payload.user_query.strip().lower(), "client_message_id": payload.client_message_id},
+        dedupe_payload={"trip_id": str(payload.trip_id) if payload.trip_id else (payload.destination or "").strip(), "query": payload.user_query.strip().lower(), "client_message_id": payload.client_message_id},
     )
     # Generate request_id upfront so both the synchronous log event and the
     # background DB persistence share the same identifier.
