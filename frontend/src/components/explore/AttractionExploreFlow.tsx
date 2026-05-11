@@ -97,7 +97,7 @@ function DeferredState({ destination, interest }: { destination: string; interes
         </p>
       </div>
       <p className="text-xs text-cream-600">
-        In the meantime, create a trip to search attractions with the full AI Concierge.
+        Full attraction search arrives in the next Explore update.
       </p>
     </div>
   );

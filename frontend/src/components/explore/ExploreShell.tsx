@@ -6,7 +6,7 @@ import { RestaurantExploreFlow } from "./RestaurantExploreFlow";
 import { AttractionExploreFlow } from "./AttractionExploreFlow";
 import { HotelExploreFlow } from "./HotelExploreFlow";
 import { FlightExploreFlow } from "./FlightExploreFlow";
-import type { ExploreVertical, ExploreResultContext } from "./types";
+import type { ExploreVertical } from "./types";
 
 interface VerticalMeta {
   id: ExploreVertical;
@@ -66,12 +66,6 @@ const VERTICAL_TITLES: Record<ExploreVertical, string> = {
 export function ExploreShell() {
   const [active, setActive] = useState<ExploreVertical | null>(null);
 
-  function handleSelect(ctx: ExploreResultContext) {
-    // Slice 2 will wire ResultActionSheet here.
-    // For now the context is available but no action is taken.
-    console.info("[ExploreShell] result selected:", ctx.vertical, ctx.destination);
-  }
-
   if (active) {
     return (
       <div className="space-y-6" data-testid="explore-vertical-flow">
@@ -93,9 +87,7 @@ export function ExploreShell() {
 
         {/* Active vertical flow */}
         <div className="card p-6" data-testid={`${active}-flow`}>
-          {active === "restaurants" && (
-            <RestaurantExploreFlow onResultSelect={handleSelect} />
-          )}
+          {active === "restaurants" && <RestaurantExploreFlow />}
           {active === "attractions" && <AttractionExploreFlow />}
           {active === "hotels" && <HotelExploreFlow onDeferred={handleSelect} />}
           {active === "flights" && <FlightExploreFlow onDeferred={handleSelect} />}

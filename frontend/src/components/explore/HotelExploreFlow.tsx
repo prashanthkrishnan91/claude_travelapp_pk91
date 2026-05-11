@@ -159,7 +159,7 @@ function DeferredState({ ctx }: { ctx: ExploreResultContext }) {
         </p>
       </div>
       <p className="text-xs text-cream-600">
-        Create a trip to search hotels using the current trip workspace.
+        Live hotel search arrives in a future Explore update.
       </p>
     </div>
   );

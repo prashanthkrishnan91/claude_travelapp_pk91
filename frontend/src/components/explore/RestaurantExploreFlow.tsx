@@ -6,13 +6,8 @@ import { searchRestaurants } from "@/lib/api";
 import type { RestaurantSearchResult } from "@/types";
 import type { ExploreResultContext } from "./types";
 
-interface Props {
-  onResultSelect?: (ctx: ExploreResultContext) => void;
-}
-
-export function RestaurantExploreFlow({ onResultSelect }: Props) {
+export function RestaurantExploreFlow() {
   const [destination, setDestination] = useState("");
-  const [cuisine, setCuisine] = useState("");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<RestaurantSearchResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +38,10 @@ export function RestaurantExploreFlow({ onResultSelect }: Props) {
     }
   }
 
+  /**
+   * Builds the action-ready context for Slice 2 (ResultActionSheet).
+   * Not exposed via UI in Slice 1 — wired by ExploreShell when actions land.
+   */
   function buildContext(r: RestaurantSearchResult): ExploreResultContext {
     return {
       vertical: "restaurants",
@@ -53,9 +52,13 @@ export function RestaurantExploreFlow({ onResultSelect }: Props) {
     };
   }
 
+  // Expose buildContext for Slice 2 wiring — suppressed lint warning intentional.
+  void buildContext;
+
   return (
     <div className="space-y-6">
-      {/* Search form */}
+      {/* Search form — cuisine/vibe filter is a Slice 2+ feature once
+          searchRestaurants supports a query parameter */}
       <form onSubmit={handleSearch} className="space-y-3">
         <div className="flex gap-3">
           <div className="relative flex-1">
@@ -68,17 +71,6 @@ export function RestaurantExploreFlow({ onResultSelect }: Props) {
               className="input pl-9 w-full"
               aria-label="Destination"
               required
-            />
-          </div>
-          <div className="relative w-40 shrink-0">
-            <Utensils className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cream-500 pointer-events-none" />
-            <input
-              type="text"
-              value={cuisine}
-              onChange={(e) => setCuisine(e.target.value)}
-              placeholder="Cuisine (optional)"
-              className="input pl-9 w-full"
-              aria-label="Cuisine or vibe"
             />
           </div>
           <button
@@ -136,11 +128,7 @@ export function RestaurantExploreFlow({ onResultSelect }: Props) {
             {results.length} restaurant{results.length !== 1 ? "s" : ""} in {lastDestination}
           </p>
           {results.map((r) => (
-            <RestaurantCard
-              key={r.id}
-              restaurant={r}
-              onSelect={onResultSelect ? () => onResultSelect(buildContext(r)) : undefined}
-            />
+            <RestaurantCard key={r.id} restaurant={r} />
           ))}
         </div>
       )}
@@ -155,13 +143,7 @@ export function RestaurantExploreFlow({ onResultSelect }: Props) {
   );
 }
 
-function RestaurantCard({
-  restaurant: r,
-  onSelect,
-}: {
-  restaurant: RestaurantSearchResult;
-  onSelect?: () => void;
-}) {
+function RestaurantCard({ restaurant: r }: { restaurant: RestaurantSearchResult }) {
   const priceStr = r.priceLevel != null ? "$".repeat(Math.min(r.priceLevel, 4)) : null;
 
   return (
@@ -188,20 +170,17 @@ function RestaurantCard({
                   rel="noopener noreferrer"
                   className="p-1.5 rounded-lg bg-white/[.05] hover:bg-white/[.10] text-cream-400 transition"
                   aria-label={`View ${r.name} on Google Maps`}
-                  onClick={(e) => e.stopPropagation()}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               )}
-              {onSelect && (
-                <button
-                  onClick={onSelect}
-                  className="px-3 py-1.5 rounded-lg bg-brand-500/20 text-brand-300 text-xs font-medium hover:bg-brand-500/30 transition"
-                  aria-label={`Select ${r.name}`}
-                >
-                  Select
-                </button>
-              )}
+              {/* Save & add actions land in Slice 2 (ResultActionSheet) */}
+              <span
+                className="px-2 py-1 rounded-lg bg-white/[.04] text-cream-600 text-[10px] font-medium"
+                data-testid="actions-pending-badge"
+              >
+                Save & add — next
+              </span>
             </div>
           </div>
 

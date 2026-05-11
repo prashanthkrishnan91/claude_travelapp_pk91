@@ -148,15 +148,23 @@ test('RestaurantExploreFlow imports searchRestaurants from api', () => {
   assert.match(restaurantFlow, /import.*searchRestaurants.*from "@\/lib\/api"/);
 });
 
-test('RestaurantExploreFlow calls searchRestaurants with location only (no tripId)', () => {
+test('RestaurantExploreFlow calls searchRestaurants with location only — no tripId, no cuisine param', () => {
+  // searchRestaurants(location, date?) — cuisine is not a supported param in Slice 1
   assert.match(restaurantFlow, /searchRestaurants\(dest\)/);
   assert.doesNotMatch(restaurantFlow, /searchRestaurants\(.*tripId/);
+  assert.doesNotMatch(restaurantFlow, /searchRestaurants\(.*cuisine/);
 });
 
 test('searchRestaurants in api.ts does not require tripId', () => {
   const fnMatch = apiTs.match(/export async function searchRestaurants\([^)]+\)/);
   assert.ok(fnMatch, 'searchRestaurants must be exported');
   assert.doesNotMatch(fnMatch[0], /tripId/);
+});
+
+test('RestaurantExploreFlow has no cuisine/vibe input field (not supported by searchRestaurants)', () => {
+  // The cuisine field was removed because searchRestaurants(location, date?) does not accept it
+  assert.doesNotMatch(restaurantFlow, /placeholder="Cuisine/);
+  assert.doesNotMatch(restaurantFlow, /aria-label="Cuisine or vibe"/);
 });
 
 test('RestaurantExploreFlow wraps results in RestaurantSearchEnvelope (envelope.restaurants)', () => {
@@ -167,11 +175,22 @@ test('RestaurantExploreFlow sets restaurant-results testid when results present'
   assert.match(restaurantFlow, /data-testid="restaurant-results"/);
 });
 
-test('RestaurantExploreFlow builds ExploreResultContext with vertical=restaurants', () => {
+test('RestaurantExploreFlow builds ExploreResultContext with vertical=restaurants (Slice 2 ready)', () => {
   assert.match(restaurantFlow, /vertical: "restaurants"/);
   assert.match(restaurantFlow, /destination: lastDestination/);
   assert.match(restaurantFlow, /providerIdentity: r\.providerPlaceId/);
   assert.match(restaurantFlow, /originalPayload: r/);
+});
+
+test('RestaurantExploreFlow result cards do not expose a clickable Select action', () => {
+  // Slice 1: no fake "Select" button that only logs to console
+  assert.doesNotMatch(restaurantFlow, /aria-label=\{`Select /);
+  assert.doesNotMatch(restaurantFlow, />Select<\/button>/);
+});
+
+test('RestaurantExploreFlow result cards show a non-clickable actions-pending badge', () => {
+  assert.match(restaurantFlow, /data-testid="actions-pending-badge"/);
+  assert.match(restaurantFlow, /Save & add/);
 });
 
 test('RestaurantExploreFlow does not call mock/sample data paths', () => {
@@ -270,6 +289,18 @@ test('ExploreShell has no createTrip requirement or trip gate', () => {
 test('RestaurantExploreFlow does not check for or require a tripId', () => {
   assert.doesNotMatch(restaurantFlow, /tripId/);
   assert.doesNotMatch(restaurantFlow, /TripBuilder/);
+});
+
+test('AttractionExploreFlow deferred copy does not frame create-trip as the required Explore path', () => {
+  assert.doesNotMatch(attractionFlow, /create a trip to search/i);
+});
+
+test('HotelExploreFlow deferred copy does not frame create-trip as the required Explore path', () => {
+  assert.doesNotMatch(hotelFlow, /create a trip to search/i);
+});
+
+test('FlightExploreFlow deferred copy does not frame create-trip as the required Explore path', () => {
+  assert.doesNotMatch(flightFlow, /create a trip to search/i);
 });
 
 // ── 9. tripCandidates and TripBuilder are unchanged ───────────────────────
