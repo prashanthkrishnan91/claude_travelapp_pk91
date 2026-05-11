@@ -60,7 +60,7 @@ export function AttractionExploreFlow() {
       destination: lastDestination,
       location:
         gv?.lat != null && gv?.lng != null ? { lat: gv.lat, lng: gv.lng } : undefined,
-      providerIdentity: gv?.provider_place_id ?? undefined,
+      providerIdentity: gv?.providerPlaceId ?? undefined,
       originalPayload: a as unknown as Record<string, unknown>,
     };
   }
