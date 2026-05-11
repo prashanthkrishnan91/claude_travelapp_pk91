@@ -6,14 +6,17 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Now
 
-- Stage 1 → Stage 2 transition: product architecture audit for the discovery-first shift.
-- Stabilize core product spine if any catastrophic failure remains (AI Concierge / add / save / trip).
+- **Stage 2A Slice 1 — Global Explore Shell v1:** Add `/explore` route + nav link. Destination search + vertical filters. Real Google Places results. No trip required. See `docs/product/STAGE_2A_CONTRACT.md`.
+- **Stage 2A Slice 2 — Unified Result Actions v1:** `ResultActionSheet` component with Save / Add to Trip / Create Trip. Trip-optional save path. Wire into Explore shell and `SearchResultCard`.
 
 ## Next
 
-- Global Explore shell without trip.
-- Unified result actions: save / add to trip / create trip.
-- Saved lists foundation.
+- Stage 2A Slice 3 — Trip-Optional AI Concierge: backend accepts optional `trip_id`; Concierge usable from Explore shell.
+- Saved lists foundation (Stage 3 entry).
+
+## Completed
+
+- Stage 1 → Stage 2 transition: discovery-first architecture audit + Stage 2A contract. See `docs/product/STAGE_2A_CONTRACT.md`. (2026-05-11)
 
 ## Later
 

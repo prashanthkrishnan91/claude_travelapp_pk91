@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-10
+Last updated: 2026-05-11
 
 ## Purpose
 
@@ -8,8 +8,8 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: Stage 1 → Stage 2 transition (stabilize core product spine → open-app-before-trip / discovery-first). See `docs/product/ROADMAP.md`.
-- Active build queue item: product architecture audit for the discovery-first shift; stabilize AI Concierge / add / save / trip if any catastrophic failure remains. See `docs/product/BUILD_QUEUE.md`.
+- Roadmap stage: **Stage 2 — Open app before trip exists.** Stage 1 is GREEN. Stage 2A contract is defined in `docs/product/STAGE_2A_CONTRACT.md`. See `docs/product/ROADMAP.md`.
+- Active build queue item: Stage 2A Slice 1 — Global Explore Shell v1 (implement `/explore` route + nav + search). See `docs/product/BUILD_QUEUE.md`.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -46,13 +46,15 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Known risks / unresolved issues
 
-- Discovery-first shift has not yet produced a global Explore shell or unified result actions — these are the next entry gates for Stage 2.
-- Saved-list foundation is not built; ideas still need a non-trip home.
-- AI destination intelligence, road trip mode, deal/points intelligence, and Travel Watchtower are deferred to later stages and must not be pre-built.
+- Global Explore Shell v1 is contracted but not yet implemented. `/search` still redirects to `/trips/new`.
+- All save / add APIs are trip-scoped. No global saved-list path exists. Stage 2A Slice 2 must define a trip-optional save path before Stage 3's full saved-list model.
+- AI Concierge (`callConcierge`, `callConciergeSearch`) currently requires a `tripId`. Slice 3 must make this optional.
+- Saved-list foundation (Stage 3 root object) not built; ideas still need a non-trip home.
+- AI destination intelligence, road trip mode, deal/points intelligence, and Travel Watchtower are deferred to later stages.
 
 ## Next recommended step
 
-Produce the discovery-first product architecture audit (one capability slice or focused doc) that defines the entry gates for Stage 2. Use the OS v4 work-order shape and the AI Concierge Card Contract Pack + No Mock/Sample Visible Data Pack as relevant.
+Implement Stage 2A Slice 1 — Global Explore Shell v1. Contract: `docs/product/STAGE_2A_CONTRACT.md`. Minimal scope: `/explore` route, nav link in Sidebar + MobileNav, destination search input + vertical filters, real Google Places results, no trip gate. Do not change `TripBuilder`, `tripCandidates.ts`, or AI Concierge hydration.
 
 ## Handoff maintenance rule
 
