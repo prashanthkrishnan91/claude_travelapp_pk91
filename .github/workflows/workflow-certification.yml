@@ -1,0 +1,36 @@
+name: Workflow Certification
+
+on:
+  pull_request:
+    paths:
+      - '.github/**'
+      - '.claude/**'
+      - 'docs/ai/**'
+      - 'scripts/**'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/**'
+      - '.claude/**'
+      - 'docs/ai/**'
+      - 'scripts/**'
+  workflow_dispatch:
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run repo hygiene audit
+        run: python3 scripts/repo_hygiene_audit.py
+
+      - name: Run workflow certification checker (v4.1)
+        run: python3 scripts/workflow/certify_v4_1.py
