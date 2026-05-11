@@ -113,3 +113,9 @@ test('TripBuilder does not gate flight candidate hydration by past/completed tri
   assert.match(tripBuilder, /setCandidateFlights\(\[\.\.\.merged\.flights, \.\.\.merged\.roundTripFlights\]\)/);
   assert.doesNotMatch(tripBuilder, /Flights are unavailable for past trip dates\./);
 });
+
+
+test('selector keeps real UUID dayId rows assigned (not candidate buckets)', () => {
+  assert.match(selectorSrc, /return true;/, 'Expected non-null-like dayId to remain assigned.');
+  assert.doesNotMatch(selectorSrc, /normalized === \"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\"/i, 'UUID dayId must not be treated as null-like sentinel.');
+});
