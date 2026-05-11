@@ -25,6 +25,8 @@ export interface ExploreResultContext {
   origin?: string;
   /** Hotel guest count */
   guests?: number;
+  /** Hotel room count */
+  rooms?: number;
   /** Flight passenger count */
   passengers?: number;
   /** Cabin class for flights */

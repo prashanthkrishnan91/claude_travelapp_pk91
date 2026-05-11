@@ -6,15 +6,15 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Now
 
-- **Stage 2A Slice 2 — Unified Result Actions v1:** `ResultActionSheet` component with Save / Add to Trip / Create Trip. Trip-optional save path. Wire into Explore shell restaurant cards and `SearchResultCard`. Pre-step: decide Save backing in `docs/product/DECISION_LOG.md`.
+- **Stage 2A Slice 3 — Trip-Optional AI Concierge:** backend accepts optional `trip_id`; Concierge usable from Explore shell. Unblocks Attractions vertical.
 
 ## Next
 
-- Stage 2A Slice 3 — Trip-Optional AI Concierge: backend accepts optional `trip_id`; Concierge usable from Explore shell.
 - Saved lists foundation (Stage 3 entry).
 
 ## Completed
 
+- Stage 2A Slice 2 — Unified Result Actions v1 + saved_items foundation: `saved_items` migration (005), `SavedItemsService`, `/saved-items` route (POST/GET/DELETE), `ResultActionSheet` (Save live; Add to Trip / Create Trip deferred), wired into `RestaurantExploreFlow`. (2026-05-11)
 - Stage 2A Slice 1 — Global Explore Shell v1: `/explore` route, 4-vertical entry grid, Restaurants live (Google Places), Attractions/Hotels/Flights deferred with polished states, `ExploreResultContext` action-ready type, nav links in Sidebar + MobileNav. (2026-05-11)
 - Stage 1 → Stage 2 transition: discovery-first architecture audit + Stage 2A contract. See `docs/product/STAGE_2A_CONTRACT.md`. (2026-05-11)
 

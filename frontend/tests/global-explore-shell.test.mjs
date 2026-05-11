@@ -188,9 +188,10 @@ test('RestaurantExploreFlow result cards do not expose a clickable Select action
   assert.doesNotMatch(restaurantFlow, />Select<\/button>/);
 });
 
-test('RestaurantExploreFlow result cards show a non-clickable actions-pending badge', () => {
-  assert.match(restaurantFlow, /data-testid="actions-pending-badge"/);
-  assert.match(restaurantFlow, /Save & add/);
+test('RestaurantExploreFlow result cards expose ResultActionSheet (Slice 2)', () => {
+  // Slice 1 stub replaced by live ResultActionSheet in Slice 2
+  assert.ok(restaurantFlow.includes('ResultActionSheet'), 'ResultActionSheet missing from RestaurantExploreFlow');
+  assert.ok(!restaurantFlow.includes('actions-pending-badge'), 'Slice-1 stub should be gone in Slice 2');
 });
 
 test('RestaurantExploreFlow does not call mock/sample data paths', () => {
