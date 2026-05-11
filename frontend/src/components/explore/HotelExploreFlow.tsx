@@ -20,12 +20,7 @@ interface HotelFormValues {
   guests: number;
 }
 
-interface Props {
-  /** Called when user confirms the form — carries action-ready context for Slice 2. */
-  onDeferred?: (ctx: ExploreResultContext) => void;
-}
-
-export function HotelExploreFlow({ onDeferred }: Props) {
+export function HotelExploreFlow() {
   const [form, setForm] = useState<HotelFormValues>({
     destination: "",
     checkIn: "",
@@ -52,7 +47,6 @@ export function HotelExploreFlow({ onDeferred }: Props) {
     };
     setSavedCtx(ctx);
     setSubmitted(true);
-    onDeferred?.(ctx);
   }
 
   function set(field: keyof HotelFormValues, value: string | number) {

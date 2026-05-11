@@ -89,8 +89,8 @@ export function ExploreShell() {
         <div className="card p-6" data-testid={`${active}-flow`}>
           {active === "restaurants" && <RestaurantExploreFlow />}
           {active === "attractions" && <AttractionExploreFlow />}
-          {active === "hotels" && <HotelExploreFlow onDeferred={handleSelect} />}
-          {active === "flights" && <FlightExploreFlow onDeferred={handleSelect} />}
+          {active === "hotels" && <HotelExploreFlow />}
+          {active === "flights" && <FlightExploreFlow />}
         </div>
       </div>
     );

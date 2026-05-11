@@ -23,11 +23,7 @@ interface FlightFormValues {
   cabinClass: "economy" | "premium_economy" | "business" | "first";
 }
 
-interface Props {
-  onDeferred?: (ctx: ExploreResultContext) => void;
-}
-
-export function FlightExploreFlow({ onDeferred }: Props) {
+export function FlightExploreFlow() {
   const [form, setForm] = useState<FlightFormValues>({
     origin: "",
     destination: "",
@@ -86,7 +82,6 @@ export function FlightExploreFlow({ onDeferred }: Props) {
     };
     setSavedCtx(ctx);
     setSubmitted(true);
-    onDeferred?.(ctx);
   }
 
   return (
