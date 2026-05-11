@@ -71,6 +71,19 @@ function getDetail<T = unknown>(item: ItineraryItem, ...keys: string[]): T | und
   return undefined;
 }
 
+function isDayAssigned(item: ItineraryItem): boolean {
+  // Treat null-like legacy sentinels as unscheduled candidates.
+  const raw = item.dayId;
+  if (raw == null) return false;
+  if (typeof raw === "string") {
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === "" || normalized === "null" || normalized === "undefined") {
+      return false;
+    }
+  }
+  return true;
+}
+
 function isRoundTripFlight(item: ItineraryItem): boolean {
   const d = (item.details ?? {}) as Record<string, unknown>;
   return Boolean(d.isRoundTrip ?? d.is_round_trip);
@@ -271,7 +284,7 @@ export function buildTripCandidateBuckets(items: ItineraryItem[]): TripCandidate
   for (const item of items) {
     // Candidates are trip-level rows (day_id = null).  Day-assigned items
     // are already rendered in the right-pane itinerary timeline.
-    if (item.dayId) continue;
+    if (isDayAssigned(item)) continue;
 
     switch (item.itemType) {
       case "flight": {

@@ -559,3 +559,94 @@ def test_is_mock_flight_detects_book_example_in_options():
 def test_is_mock_flight_passes_clean_provider_rows():
     f = _make_flight(source="amadeus", booking_url="https://amadeus.example/x")
     assert trips_route._is_mock_flight(f) is False
+
+
+def test_create_with_search_skips_flight_search_for_past_departure_date():
+    """Past-date trips should skip outbound/round-trip provider calls and
+    return an explicit reason in seeding_status so empty flights do not look broken.
+    """
+    from app.models import Trip  # noqa: WPS433
+    from datetime import datetime as _dt
+    from uuid import uuid4 as _uuid4
+
+    user_uuid = _uuid4()
+    fake_trip = Trip(
+        id=_uuid4(),
+        user_id=user_uuid,
+        title="Hawaii Trip",
+        destination="Honolulu",
+        origin="Seattle",
+        start_date=date(2026, 4, 1),
+        end_date=date(2026, 4, 7),
+        status="planned",
+        created_at=_dt(2026, 5, 8, 0, 0, 0),
+    )
+
+    fake_search = MagicMock()
+    fake_search.search_hotels.return_value = []
+    fake_search.search_attractions.return_value = []
+    fake_search.search_restaurants.return_value = []
+
+    fake_trips = MagicMock()
+    fake_trips.create_trip.return_value = fake_trip
+    fake_itinerary = MagicMock()
+
+    payload = trips_route.TripCreateWithSearch(
+        origin_city="Seattle",
+        destination_city="Honolulu",
+        start_date=date(2026, 4, 1),
+        end_date=date(2026, 4, 7),
+    )
+
+    with patch.object(trips_route, "SearchService", return_value=fake_search),          patch.object(trips_route, "TripsService", return_value=fake_trips),          patch.object(trips_route, "ItineraryService", return_value=fake_itinerary):
+        result = trips_route.create_trip_with_search(payload, db=MagicMock(), user_id=user_uuid)
+
+    fake_search.search_flights.assert_not_called()
+    fake_search.search_round_trip_flights.assert_not_called()
+    assert result.seeding_status["flights"]["reason"] == "skipped_past_departure_date"
+    assert result.seeding_status["flights"]["harvested"] == 0
+
+
+def test_create_with_search_future_departure_still_calls_flight_providers():
+    """Future-date trips should retain existing flight provider behavior."""
+    from app.models import Trip  # noqa: WPS433
+    from datetime import datetime as _dt
+    from uuid import uuid4 as _uuid4
+
+    user_uuid = _uuid4()
+    fake_trip = Trip(
+        id=_uuid4(),
+        user_id=user_uuid,
+        title="Paris Trip",
+        destination="Paris",
+        origin="New York",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+        status="planned",
+        created_at=_dt(2026, 5, 8, 0, 0, 0),
+    )
+
+    fake_search = MagicMock()
+    fake_search.search_flights.return_value = []
+    fake_search.search_round_trip_flights.return_value = []
+    fake_search.search_hotels.return_value = []
+    fake_search.search_attractions.return_value = []
+    fake_search.search_restaurants.return_value = []
+
+    fake_trips = MagicMock()
+    fake_trips.create_trip.return_value = fake_trip
+    fake_itinerary = MagicMock()
+
+    payload = trips_route.TripCreateWithSearch(
+        origin_city="New York",
+        destination_city="Paris",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+    )
+
+    with patch.object(trips_route, "SearchService", return_value=fake_search),          patch.object(trips_route, "TripsService", return_value=fake_trips),          patch.object(trips_route, "ItineraryService", return_value=fake_itinerary):
+        result = trips_route.create_trip_with_search(payload, db=MagicMock(), user_id=user_uuid)
+
+    fake_search.search_flights.assert_called_once()
+    fake_search.search_round_trip_flights.assert_called_once()
+    assert "reason" not in result.seeding_status["flights"]
