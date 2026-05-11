@@ -18,6 +18,12 @@ SAVED_ITEMS_TABLE = "saved_items"
 logger = logging.getLogger(__name__)
 
 
+def _is_unique_conflict(exc: Exception) -> bool:
+    """Return True if exc is a Postgres unique-constraint violation (23505)."""
+    text = f"{type(exc).__name__} {exc}"
+    return "23505" in text or "duplicate key" in text.lower() or "UniqueViolation" in type(exc).__name__
+
+
 class SavedItemsService:
     def __init__(self, db: Client) -> None:
         self.db = db
@@ -56,11 +62,29 @@ class SavedItemsService:
             "provenance": payload.provenance,
             "status": "active",
         }
-        result = _supabase_execute(
-            lambda: self.db.table(SAVED_ITEMS_TABLE).insert(row).execute(),
-            context="saved_items.create",
-        )
-        return SavedItem(**result.data[0])
+        try:
+            result = _supabase_execute(
+                lambda: self.db.table(SAVED_ITEMS_TABLE).insert(row).execute(),
+                context="saved_items.create",
+            )
+            return SavedItem(**result.data[0])
+        except Exception as exc:
+            if not _is_unique_conflict(exc):
+                raise
+            # Concurrent insert won the race — return the existing active row.
+            logger.info("saved_items.create: unique conflict on insert, recovering existing row")
+            recovered: Optional[SavedItem] = None
+            if payload.provider and payload.provider_place_id:
+                recovered = self._find_by_place(
+                    user_id, payload.vertical, payload.provider, payload.provider_place_id
+                )
+            if recovered is None and payload.provider and payload.provider_item_id:
+                recovered = self._find_by_item(
+                    user_id, payload.vertical, payload.provider, payload.provider_item_id
+                )
+            if recovered:
+                return recovered
+            raise
 
     def list_active(self, user_id: UUID, vertical: Optional[str] = None) -> List[SavedItem]:
         if vertical is not None and vertical not in VALID_VERTICALS:

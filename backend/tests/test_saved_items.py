@@ -202,6 +202,83 @@ def test_create_different_item_ids_not_deduped():
     assert len(db.tables["saved_items"]) == 2
 
 
+def test_create_resilient_to_unique_conflict_on_insert():
+    """Simulate a concurrent insert race: insert raises a unique conflict after
+    the pre-check passes.  create() must recover the existing row and return it
+    rather than surfacing a 500 to the caller."""
+    user = uuid4()
+    # Seed an existing row directly into the table so the conflict is pre-existing
+    existing_row = {
+        "id": str(uuid4()),
+        "user_id": str(user),
+        "vertical": "restaurant",
+        "display_name": "Le Bistro",
+        "provider": "google_places",
+        "provider_place_id": "ChIJrace",
+        "provider_item_id": None,
+        "display_snapshot": {},
+        "search_context": {},
+        "provenance": {},
+        "status": "active",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+    }
+
+    class _ConflictQuery(_Query):
+        def execute(self):
+            if self.mode == "insert":
+                raise Exception("duplicate key value violates unique constraint (23505)")
+            return super().execute()
+
+    class _ConflictDB(_DB):
+        def __init__(self, existing):
+            super().__init__()
+            self.tables["saved_items"].append(existing)
+
+        def table(self, name):
+            return _ConflictQuery(self.tables[name])
+
+    db = _ConflictDB(existing_row)
+    svc = SavedItemsService(db)
+    payload = SavedItemCreate(
+        vertical="restaurant",
+        display_name="Le Bistro",
+        provider="google_places",
+        provider_place_id="ChIJrace",
+        display_snapshot={},
+        search_context={},
+    )
+    recovered = svc.create(payload, user)
+    assert str(recovered.id) == existing_row["id"]
+    assert recovered.display_name == "Le Bistro"
+
+
+def test_create_non_conflict_error_propagates():
+    """Unrelated insert errors must not be swallowed."""
+    user = uuid4()
+
+    class _ErrorQuery(_Query):
+        def execute(self):
+            if self.mode == "insert":
+                raise RuntimeError("connection refused")
+            return super().execute()
+
+    class _ErrorDB(_DB):
+        def table(self, name):
+            return _ErrorQuery(self.tables[name])
+
+    db = _ErrorDB()
+    svc = SavedItemsService(db)
+    payload = SavedItemCreate(
+        vertical="restaurant",
+        display_name="Le Bistro",
+        display_snapshot={},
+        search_context={},
+    )
+    with pytest.raises(RuntimeError):
+        svc.create(payload, user)
+
+
 def test_list_returns_only_active():
     db = _DB()
     svc = SavedItemsService(db)
