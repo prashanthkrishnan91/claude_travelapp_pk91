@@ -9,7 +9,7 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Current product stage
 
 - Roadmap stage: **Stage 2 — Open app before trip exists.** Stage 1 is GREEN. Stage 2A contract is defined in `docs/product/STAGE_2A_CONTRACT.md`. See `docs/product/ROADMAP.md`.
-- Active build queue item: Stage 2A Slice 1 — Global Explore Shell v1 (implement `/explore` route + nav + search). See `docs/product/BUILD_QUEUE.md`.
+- Active build queue item: **Stage 2A Slice 2 — Unified Result Actions v1** (`ResultActionSheet` with Save / Add to Trip / Create Trip). Slice 1 shipped.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -25,6 +25,7 @@ This file is **current operational state**, not a historical log. It is meant to
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
 
+- 2026-05-11 — **Stage 2A Slice 1 — Global Explore Shell v1.** `/explore` route + `ExploreShell` component with 4-vertical entry grid (Flights, Hotels, Restaurants, Attractions). Restaurants execute via real `searchRestaurants` (Google Places, no trip_id). Attractions/Hotels/Flights show structured forms + polished deferred states (routes mock-backed or deleted — documented in source). "Explore" link added to Sidebar and MobileNav. `ExploreResultContext` type carries full Slice-2 action-ready payload (vertical, destination, dates, origin, guests, passengers, providerIdentity, originalPayload). 43 new tests in `global-explore-shell.test.mjs`; 518 total pass. No SQL migration. No changes to `TripBuilder`, `tripCandidates.ts`, or AI Concierge behavior.
 - 2026-05-11 — **Trip Workspace Finalized Itinerary Card Experience v1 (Level 2).** Two gaps fixed: (a) hotel add-to-day data loss — `handleAddCandidateToItinerary` called `createItem` for hotels, stripping all details (stars, rating, amenities, area_label, proximity_label); new `addHotelToDay` in `api.ts` preserves the full `item.details` payload; TripBuilder uses it; (b) display layer gaps — `ItineraryItemCard` now has vertical-specific sections for `activity` (rating ★, category, tags, maps link) and `meal` (cuisine, rating ★, price level $/$$/$$, tags); hotel section enhanced with stars (★★★★★), area badges (In Best Area / Close to Best Area), proximity label, and amenities/tags pills alongside existing check-in/check-out/rating. Flight schedule display (origin→dest, dep/arr times, outbound/return leg badge) unchanged. 48 tests in `frontend/tests/itinerary-card-finalized-display.test.mjs` (includes payload-level field-mapping and handler-routing proofs added in correction commit); 144 total frontend tests pass across 9 bundles. No SQL migration. No live providers.
 - 2026-05-10 — **Level 3 Trip Data Contract Rescue.** Persisted ACTIVITY/MEAL rows were not surfacing in the Attractions/Restaurants panels because the frontend still hydrated those panels from the legacy `trips.metadata.explore_snapshot` cache, which was empty after fresh creation and then triggered a slow AI Concierge "Top attractions in <city>" fallback that wrote `[]` back, locking the UI at 0. Simultaneously, all 39 creation-seed candidates were being dumped into Trip Ideas. Fixes: (a) `itinerary_items` (day_id IS NULL) is now the single canonical source of truth — new `frontend/src/lib/tripCandidates.ts` selector groups persisted rows into flights / round-trip / hotels / attractions / restaurants with stable dedupe + on-the-fly aiScore enrichment; (b) `TripBuilder` reads all four verticals from this selector via one `fetchTripItems` call; (c) snapshot demoted to a deprecated empty-bucket fallback — `mergePersistedWithSnapshot` cannot override non-empty persisted buckets; (d) backend `list_unscheduled_items` re-scoped to `source_kind == "concierge_idea"` so Trip Ideas holds only the user's explicit shortlist; (e) `TripIdeasPanel` groups by vertical with a per-vertical visible cap + Show more/less; (f) concierge `_save_message` and `_persist_request_log_task` quietly drop FK 23503 from a deleted trip (INFO, not WARNING). Obsolete callers (`searchAttractionsViaConcierge`, `isCanonicalSnapshotAttraction`) and the tests pinning the snapshot-first hydration internals were removed; replacement coverage lives in `frontend/tests/trip-candidates-contract.test.mjs`, `frontend/tests/trip-ideas-grouping.test.mjs`, and `backend/tests/test_concierge_deleted_trip_lifecycle.py`. No SQL migration. No live providers.
 - 2026-05-10 — **PR #318** — Level 2: unified four-vertical trip seeding reliability. Fixed: (1) flights=0 bug — airport cross-product blew 15s Duffel budget; now uses primary airport only; (2) hotels not immediately visible — Supabase `RemoteProtocolError` silently swallowed; added `supabase_retry.py` + WARNING-level logging; (3) attractions=0 — no creation-time seeding; added `SearchService.search_attractions` (Google Places, fail-closed); (4) restaurants=0 — same; `search_restaurants` now called concurrently. `create_with_search` runs 5 concurrent workers (was 3), returns `seeding_status` dict per vertical. 121 tests pass. No SQL migration.
@@ -46,15 +47,17 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Known risks / unresolved issues
 
-- Global Explore Shell v1 is contracted but not yet implemented. `/search` still redirects to `/trips/new`.
 - All save / add APIs are trip-scoped. No global saved-list path exists. Stage 2A Slice 2 must define a trip-optional save path before Stage 3's full saved-list model.
 - AI Concierge (`callConcierge`, `callConciergeSearch`) currently requires a `tripId`. Slice 3 must make this optional.
+- Attractions vertical is deferred: `/search/attractions` was removed (v1C), and `searchAttractionsViaConcierge` requires a tripId. Slice 3 unblocks this.
+- Hotels vertical is deferred: `/search/hotels` is mock-backed (BLOCK_LEGACY_PRODUCT_MOCK). Needs a real provider.
+- Flights vertical is deferred: `/search/flights` is mock-backed. Needs Duffel/Amadeus real provider.
 - Saved-list foundation (Stage 3 root object) not built; ideas still need a non-trip home.
 - AI destination intelligence, road trip mode, deal/points intelligence, and Travel Watchtower are deferred to later stages.
 
 ## Next recommended step
 
-Implement Stage 2A Slice 1 — Global Explore Shell v1. Contract: `docs/product/STAGE_2A_CONTRACT.md`. Minimal scope: `/explore` route, nav link in Sidebar + MobileNav, destination search input + vertical filters, real Google Places results, no trip gate. Do not change `TripBuilder`, `tripCandidates.ts`, or AI Concierge hydration.
+Implement Stage 2A Slice 2 — Unified Result Actions v1. New `ResultActionSheet` component with Save / Add to Trip / Create Trip. Pre-implementation step: decide the trip-optional save path (disabled/deferred vs. `saved_items` stub) and record the decision in `docs/product/DECISION_LOG.md` before coding. Do not change `TripBuilder`, `TripIdeasPanel`, or `tripCandidates.ts`. Wire the action sheet into `SearchResultCard` and the new Explore Shell restaurant result cards.
 
 ## Handoff maintenance rule
 

@@ -13,6 +13,7 @@ import {
   Settings,
   Plane,
   LogOut,
+  Compass,
 } from "lucide-react";
 import clsx from "clsx";
 import { supabase } from "@/lib/supabase";
@@ -20,13 +21,20 @@ import type { User } from "@supabase/supabase-js";
 
 const links = [
   { label: "Dashboard",    href: "/",         icon: LayoutDashboard },
+  { label: "Explore",      href: "/explore",  icon: Compass },
   { label: "My Trips",     href: "/trips",    icon: Map },
   { label: "New Trip",     href: "/trips/new", icon: PlusCircle },
   { label: "Travel Cards", href: "/cards",    icon: CreditCard },
   { label: "Settings",     href: "/settings", icon: Settings },
 ];
 
-const tabLinks = links;
+const tabLinks = [
+  { label: "Dashboard",    href: "/",         icon: LayoutDashboard },
+  { label: "Explore",      href: "/explore",  icon: Compass },
+  { label: "New Trip",     href: "/trips/new", icon: PlusCircle },
+  { label: "My Trips",     href: "/trips",    icon: Map },
+  { label: "Cards",        href: "/cards",    icon: CreditCard },
+];
 
 function getUserDisplay(user: User): { name: string; initial: string } {
   const meta = user.user_metadata ?? {};
