@@ -72,6 +72,7 @@ import {
   fetchDayPlan,
   addAttractionToDay,
   addRestaurantToDay,
+  addHotelToDay,
   moveIdeaToTripIdeas,
   fetchExploreSnapshot,
 } from "@/lib/api";
@@ -1418,6 +1419,9 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       let newItem: ItineraryItem;
       if (item.itemType === "flight") {
         newItem = await addOneWayFlightToDay(tripId, targetDay.id, item, targetDay.items.length);
+      } else if (item.itemType === "hotel") {
+        // Preserve all hotel details (stars, rating, amenities, area_label, etc.)
+        newItem = await addHotelToDay(tripId, targetDay.id, item, targetDay.items.length);
       } else {
         newItem = await createItem(tripId, targetDay.id, {
           itemType: item.itemType as ItemType,

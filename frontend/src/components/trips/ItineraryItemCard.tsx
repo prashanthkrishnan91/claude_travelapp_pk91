@@ -18,6 +18,8 @@ import {
   Scale,
   Ticket,
   Zap,
+  Star,
+  ExternalLink,
 } from "lucide-react";
 import { ItineraryItem, ItemType } from "@/types";
 import { BookingChecklistModal } from "./BookingChecklistModal";
@@ -295,7 +297,8 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           );
         })()}
 
-        {/* Hotel stay span: check-in/out dates + rating.  Location is shown
+        {/* Hotel stay span: check-in/out, rating, stars, area badges, amenities.
+            Location is shown
             in the main location line below — don't duplicate it here. */}
         {item.itemType === "hotel" && (() => {
           const d = (item.details ?? {}) as Record<string, unknown>;
@@ -307,12 +310,134 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                         ?? (d.check_out_date as string | undefined)
                         ?? (d.checkOutDate as string | undefined);
           const rating = (d.rating as number | undefined) ?? undefined;
-          if (!checkIn && !checkOut && !rating) return null;
+          const stars = typeof d.stars === "number" ? (d.stars as number) : undefined;
+          const areaLabel = (d.areaLabel as string | undefined) ?? (d.area_label as string | undefined);
+          const proximityLabel = (d.proximityLabel as string | undefined) ?? (d.proximity_label as string | undefined);
+          const amenities = Array.isArray(d.amenities) ? (d.amenities as string[]).slice(0, 3) : [];
+          const tags = Array.isArray(d.tags) ? (d.tags as string[]).slice(0, 2) : [];
+          const richTags = [...amenities, ...tags].slice(0, 3);
+          const hasAny = !!(checkIn || checkOut || rating || stars || areaLabel || proximityLabel || richTags.length);
+          if (!hasAny) return null;
           return (
-            <div className="mt-0.5 flex items-center gap-1 text-[11px] text-violet-300 font-medium min-w-0">
-              <Hotel className="w-3 h-3 flex-shrink-0" />
-              {checkIn || checkOut ? <span className="shrink-0">Stay: {checkIn ?? "?"} → {checkOut ?? "?"}</span> : null}
-              {rating ? <span className="text-amber-300 font-semibold">{checkIn || checkOut ? " · " : ""}★ {rating.toFixed(1)}</span> : null}
+            <div className="mt-0.5 space-y-0.5">
+              <div className="flex items-center gap-1 text-[11px] text-violet-300 font-medium min-w-0 flex-wrap">
+                <Hotel className="w-3 h-3 flex-shrink-0" />
+                {stars != null && (
+                  <span className="text-amber-400 flex-shrink-0">{"★".repeat(Math.min(5, Math.round(stars)))}</span>
+                )}
+                {checkIn || checkOut ? <span className="shrink-0">Stay: {checkIn ?? "?"} → {checkOut ?? "?"}</span> : null}
+                {rating ? <span className="text-amber-300 font-semibold flex-shrink-0">{checkIn || checkOut ? " · " : ""}★ {rating.toFixed(1)}</span> : null}
+              </div>
+              {(areaLabel || proximityLabel) && (
+                <div className="flex items-center gap-1 flex-wrap pl-4">
+                  {areaLabel && (
+                    <span className={`px-1.5 py-0 text-[10px] font-semibold rounded-full ${
+                      areaLabel === "In Best Area" ? "bg-emerald-900/50 text-emerald-300 border border-emerald-800/40" :
+                      areaLabel === "Close to Best Area" ? "bg-amber-900/50 text-amber-300 border border-amber-800/40" :
+                      "bg-slate-800/60 text-slate-400 border border-slate-700/50"
+                    }`}>{areaLabel}</span>
+                  )}
+                  {proximityLabel && !areaLabel && (
+                    <span className="text-[10px] text-slate-500">{proximityLabel}</span>
+                  )}
+                </div>
+              )}
+              {richTags.length > 0 && (
+                <div className="flex flex-wrap gap-1 pl-4">
+                  {richTags.map((tag) => (
+                    <span key={tag} className="px-1.5 py-0 text-[10px] rounded-full bg-violet-900/40 text-violet-300/70 border border-violet-800/50">{tag}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Attraction (activity) vertical details: rating, category, tags, map link */}
+        {item.itemType === "activity" && (() => {
+          const d = (item.details ?? {}) as Record<string, unknown>;
+          const rating = typeof d.rating === "number" ? (d.rating as number) : undefined;
+          const numReviews = typeof d.numReviews === "number" ? (d.numReviews as number) : typeof d.num_reviews === "number" ? (d.num_reviews as number) : undefined;
+          const category = (d.category as string | undefined) ?? "";
+          const tags = Array.isArray(d.tags) ? (d.tags as string[]).slice(0, 3) : [];
+          const mapsUri = (d.googleMapsUri as string | undefined) ?? (d.google_maps_uri as string | undefined);
+          const placeId = (d.placeId as string | undefined) ?? (d.place_id as string | undefined);
+          const mapsLink = mapsUri ?? (placeId ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(placeId)}` : null);
+          if (!rating && !category && tags.length === 0) return null;
+          return (
+            <div className="mt-0.5 space-y-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                {rating != null && (
+                  <span className="flex items-center gap-0.5 text-[11px] text-amber-400 font-medium">
+                    <Star className="w-3 h-3 fill-amber-400" />
+                    {rating.toFixed(1)}
+                    {numReviews != null && (
+                      <span className="text-slate-500 font-normal ml-0.5">
+                        ({numReviews >= 1000 ? `${(numReviews / 1000).toFixed(0)}k` : numReviews})
+                      </span>
+                    )}
+                  </span>
+                )}
+                {category && <span className="text-[11px] text-emerald-300/80">{category}</span>}
+                {mapsLink && (
+                  <a
+                    href={mapsLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-0.5 text-[11px] text-sky-400/70 hover:text-sky-300 transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Open in Google Maps"
+                  >
+                    <ExternalLink className="w-2.5 h-2.5" />
+                    Map
+                  </a>
+                )}
+              </div>
+              {tags.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {tags.map((tag) => (
+                    <span key={tag} className="px-1.5 py-0 text-[10px] rounded-full bg-emerald-900/40 text-emerald-300/70 border border-emerald-800/50">{tag}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Restaurant (meal) vertical details: cuisine, rating, price level, tags */}
+        {item.itemType === "meal" && (() => {
+          const d = (item.details ?? {}) as Record<string, unknown>;
+          const rating = typeof d.rating === "number" ? (d.rating as number) : undefined;
+          const numReviews = typeof d.numReviews === "number" ? (d.numReviews as number) : typeof d.num_reviews === "number" ? (d.num_reviews as number) : undefined;
+          const cuisine = (d.cuisine as string | undefined) ?? "";
+          const priceLevel = typeof d.priceLevel === "number" ? (d.priceLevel as number) : typeof d.price_level === "number" ? (d.price_level as number) : undefined;
+          const tags = Array.isArray(d.tags) ? (d.tags as string[]).slice(0, 3) : [];
+          const priceLevelStr = priceLevel != null ? "$".repeat(Math.min(4, Math.max(1, Math.round(priceLevel)))) : null;
+          if (!rating && !cuisine && !priceLevelStr && tags.length === 0) return null;
+          return (
+            <div className="mt-0.5 space-y-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                {cuisine && <span className="text-[11px] text-amber-300/80">{cuisine}</span>}
+                {rating != null && (
+                  <span className="flex items-center gap-0.5 text-[11px] text-amber-400 font-medium">
+                    <Star className="w-3 h-3 fill-amber-400" />
+                    {rating.toFixed(1)}
+                    {numReviews != null && (
+                      <span className="text-slate-500 font-normal ml-0.5">
+                        ({numReviews >= 1000 ? `${(numReviews / 1000).toFixed(0)}k` : numReviews})
+                      </span>
+                    )}
+                  </span>
+                )}
+                {priceLevelStr && <span className="text-[11px] text-slate-400 font-medium">{priceLevelStr}</span>}
+              </div>
+              {tags.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {tags.map((tag) => (
+                    <span key={tag} className="px-1.5 py-0 text-[10px] rounded-full bg-amber-900/40 text-amber-300/70 border border-amber-800/50">{tag}</span>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })()}
