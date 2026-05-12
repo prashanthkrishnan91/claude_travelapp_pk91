@@ -1,0 +1,43 @@
+{
+  "timestamp": "2026-05-12T16:20:55Z",
+  "repo": "claude_travelapp_pk91",
+  "branch": "claude/flights-provider-contract-hhbFc",
+  "diff_stats": " 6 files changed, 236 insertions(+), 40 deletions(-)",
+  "ccusage_source": "ccusage",
+  "ccusage": {
+    "sessions": [
+      {
+        "sessionId": "-home-user-claude-travelapp-pk91",
+        "inputTokens": 311,
+        "outputTokens": 36640,
+        "cacheCreationTokens": 108548,
+        "cacheReadTokens": 3768872,
+        "totalTokens": 3914371,
+        "totalCost": 2.0882496000000006,
+        "lastActivity": "2026-05-12",
+        "modelsUsed": [
+          "claude-sonnet-4-6"
+        ],
+        "modelBreakdowns": [
+          {
+            "modelName": "claude-sonnet-4-6",
+            "inputTokens": 311,
+            "outputTokens": 36640,
+            "cacheCreationTokens": 108548,
+            "cacheReadTokens": 3768872,
+            "cost": 2.0882496000000006
+          }
+        ],
+        "projectPath": "Unknown Project"
+      }
+    ],
+    "totals": {
+      "inputTokens": 311,
+      "outputTokens": 36640,
+      "cacheCreationTokens": 108548,
+      "cacheReadTokens": 3768872,
+      "totalCost": 2.0882496000000006,
+      "totalTokens": 3914371
+    }
+  }
+}
