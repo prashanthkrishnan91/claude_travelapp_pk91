@@ -502,14 +502,14 @@ class TestMappingEdgeCases:
         with pytest.raises(ValueError, match="no segments"):
             IgnavFlightProvider._map_leg(leg_data)
 
-    def test_map_segment_uses_utc_time_over_local(self):
+    def test_map_segment_uses_local_time_over_utc(self):
+        # Local is preferred for display correctness (airline departure boards show local)
         seg = _make_segment_dict(
             dep_utc="2026-06-01T22:00:00Z",
         )
-        # Add local time that differs
-        seg["departure_time_local"] = "2026-06-01T18:00:00"
+        seg["departure_time_local"] = "2026-06-01T15:00:00"
         result = IgnavFlightProvider._map_segment(seg)
-        assert result.departure_time == "2026-06-01T22:00:00Z"
+        assert result.departure_time == "2026-06-01T15:00:00"
 
     def test_flight_number_prefixes_carrier_code(self):
         seg = _make_segment_dict(carrier_code="AF", flight_number="001")
@@ -565,3 +565,196 @@ class TestBookingLinkPriority:
         options = [{"provider_name": "AF", "provider_type": "airline", "links": [{"url": "//airfrance.com/book/xyz"}]}]
         link = IgnavFlightProvider._pick_booking_link(options)
         assert link.url == "https://airfrance.com/book/xyz"
+
+
+# ---------------------------------------------------------------------------
+# 18: Trust gate — _validate_itinerary_raw
+# ---------------------------------------------------------------------------
+
+def _make_sea_lax_request() -> FlightSearchRequest:
+    return FlightSearchRequest(
+        origin="SEA",
+        destination="LAX",
+        departure_date=date(2026, 6, 17),
+        passengers=1,
+        cabin_class="economy",
+    )
+
+
+def _make_sea_lax_itinerary(
+    dep_airport="SEA",
+    arr_airport="LAX",
+    dep_local="2026-06-17T08:00:00",
+    dep_utc=None,
+    extra_segments=None,
+) -> Dict[str, Any]:
+    """Build a minimal Ignav-shaped itinerary with configurable route/date."""
+    seg = {
+        "marketing_carrier_code": "AS",
+        "flight_number": "AS101",
+        "operating_carrier_name": "Alaska Airlines",
+        "departure_airport": dep_airport,
+        "arrival_airport": arr_airport,
+        "departure_time_local": dep_local,
+        "arrival_time_local": "2026-06-17T10:30:00",
+        "duration_minutes": 150,
+    }
+    if dep_utc is not None:
+        seg["departure_time_utc"] = dep_utc
+    segments = [seg] + (extra_segments or [])
+    return {
+        "ignav_id": "sea_lax_abc123",
+        "price": {"amount": 179.0, "currency": "USD"},
+        "cabin_class": "economy",
+        "outbound": {"duration_minutes": 150, "segments": segments},
+    }
+
+
+class TestTrustGate:
+    """Covers _validate_itinerary_raw + search_flights integration with the gate."""
+
+    # --- Unit: _validate_itinerary_raw ---
+
+    def test_valid_sea_lax_offer_passes(self):
+        req = _make_sea_lax_request()
+        it = _make_sea_lax_itinerary()
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is True, f"Expected pass, got rejection: {reason}"
+
+    def test_wrong_origin_is_rejected(self):
+        req = _make_sea_lax_request()
+        it = _make_sea_lax_itinerary(dep_airport="PDX")  # Portland, not SEA
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "origin mismatch" in reason
+        assert "PDX" in reason
+
+    def test_wrong_destination_is_rejected(self):
+        req = _make_sea_lax_request()
+        it = _make_sea_lax_itinerary(arr_airport="SFO")  # wrong route
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "dest mismatch" in reason
+        assert "SFO" in reason
+
+    def test_wrong_departure_date_rejected(self):
+        req = _make_sea_lax_request()
+        # Local date is June 16, but request is for June 17
+        it = _make_sea_lax_itinerary(dep_local="2026-06-16T23:59:00")
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "date mismatch" in reason
+        assert "2026-06-16" in reason
+
+    def test_local_time_preferred_over_utc_for_date(self):
+        req = _make_sea_lax_request()
+        # Local date = June 17 (correct), UTC date = June 18 (due to UTC+offset)
+        it = _make_sea_lax_itinerary(
+            dep_local="2026-06-17T23:30:00",  # June 17 local — correct
+            dep_utc="2026-06-18T06:30:00Z",   # June 18 UTC — would wrongly fail
+        )
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is True, f"Local date should be used; rejection: {reason}"
+
+    def test_broken_segment_chain_rejected(self):
+        req = _make_sea_lax_request()
+        # Two-segment itinerary where SEA→ORD and JFK→LAX (gap at ORD/JFK)
+        extra = {
+            "marketing_carrier_code": "AA",
+            "flight_number": "AA456",
+            "operating_carrier_name": "American",
+            "departure_airport": "JFK",   # doesn't connect to ORD
+            "arrival_airport": "LAX",
+            "departure_time_local": "2026-06-17T14:00:00",
+            "arrival_time_local": "2026-06-17T17:00:00",
+            "duration_minutes": 180,
+        }
+        it = _make_sea_lax_itinerary(
+            dep_airport="SEA",
+            arr_airport="ORD",  # last segment of first leg, doesn't match
+            extra_segments=[extra],
+        )
+        # With extra_segments, arr_airport of the itinerary is LAX (last segment),
+        # but chain is broken: SEA→ORD then JFK→LAX
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "chain" in reason.lower() or "mismatch" in reason.lower()
+
+    def test_no_segments_rejected(self):
+        req = _make_sea_lax_request()
+        it = _make_sea_lax_itinerary()
+        it["outbound"]["segments"] = []
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "no segments" in reason
+
+    # --- Integration: search_flights applies the gate ---
+
+    def _build_provider(self) -> IgnavFlightProvider:
+        return IgnavFlightProvider(api_key="testkey", http_client=MagicMock())
+
+    def test_all_invalid_offers_return_unavailable(self):
+        provider = self._build_provider()
+        req = _make_sea_lax_request()
+        # Ignav returns two itineraries with wrong routes
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "itineraries": [
+                _make_sea_lax_itinerary(dep_airport="SFO", arr_airport="LAX"),  # wrong origin
+                _make_sea_lax_itinerary(dep_airport="SEA", arr_airport="SFO"),  # wrong dest
+            ]
+        }
+        provider._client.post.return_value = mock_resp
+        result = provider.search_flights(req)
+        assert result.status == FlightSourceStatus.UNAVAILABLE
+        assert result.rows == []
+        assert "validation" in (result.reason or "").lower()
+
+    def test_valid_offers_pass_through(self):
+        provider = self._build_provider()
+        req = _make_sea_lax_request()
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "itineraries": [_make_sea_lax_itinerary()]
+        }
+        provider._client.post.return_value = mock_resp
+        with patch.object(provider, "_fetch_booking_links", return_value=[]):
+            result = provider.search_flights(req)
+        assert result.status == FlightSourceStatus.OK
+        assert len(result.rows) == 1
+        offer = result.rows[0]
+        assert isinstance(offer, FlightItineraryOffer)
+        assert offer.outbound_leg.segments[0].origin == "SEA"
+        assert offer.outbound_leg.segments[0].destination == "LAX"
+
+    def test_mixed_valid_invalid_returns_only_valid(self):
+        provider = self._build_provider()
+        req = _make_sea_lax_request()
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "itineraries": [
+                _make_sea_lax_itinerary(dep_airport="PDX"),  # invalid: wrong origin
+                _make_sea_lax_itinerary(),                   # valid
+            ]
+        }
+        provider._client.post.return_value = mock_resp
+        with patch.object(provider, "_fetch_booking_links", return_value=[]):
+            result = provider.search_flights(req)
+        assert result.status == FlightSourceStatus.OK
+        assert len(result.rows) == 1
+
+    def test_missing_ignav_id_does_not_crash_booking_links(self):
+        provider = self._build_provider()
+        req = _make_sea_lax_request()
+        it = _make_sea_lax_itinerary()
+        del it["ignav_id"]  # missing ignav_id — should not crash; booking link unavailable
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {"itineraries": [it]}
+        provider._client.post.return_value = mock_resp
+        result = provider.search_flights(req)
+        assert result.status == FlightSourceStatus.OK
+        assert result.rows[0].booking_link.link_type == BookingLinkType.UNAVAILABLE

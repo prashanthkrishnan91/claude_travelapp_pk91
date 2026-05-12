@@ -55,13 +55,11 @@ type SearchState =
 
 function formatTime(isoStr: string): string {
   if (!isoStr) return "--:--";
-  try {
-    // Prefer parsing as UTC; strip trailing Z for display
-    const d = new Date(isoStr);
-    return d.toUTCString().slice(17, 22); // "HH:MM"
-  } catch {
-    return isoStr.slice(11, 16);
-  }
+  // Slice HH:MM directly from ISO string position [11:16].
+  // Do NOT convert through UTC — backend stores local time for display
+  // (prefers departure_time_local), so UTC conversion shifts displayed times.
+  const hhmm = isoStr.slice(11, 16);
+  return /^\d{2}:\d{2}$/.test(hhmm) ? hhmm : "--:--";
 }
 
 function formatDuration(minutes: number): string {
