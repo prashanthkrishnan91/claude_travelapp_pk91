@@ -207,3 +207,18 @@ Product decisions are recorded here so we do not re-litigate direction.
   - No flights conversion (disabled, clearly labelled).
 - What would change our mind: Evidence that the existing `POST /itinerary/items` route is insufficient (e.g., a required field is missing from display_snapshot for a critical vertical) — in which case we extend the snapshot, not the schema.
 - Roadmap impact: Stage 3 v2 implementation PR is the next queue item. Stage 3 v3 candidate is "Create Trip from Saved Item" (needs its own contract PR first). After Stage 3 stabilises, Stage 4 (AI destination intelligence) is next.
+
+## 2026-05-12 — Flights v1: Ignav as live provider (Skyscanner rejected)
+
+- Decision: Ignav (`ignav_flights`) is the Flights v1 live provider. `ProviderRole.LINK_OUT`, `production_allowed=True`. Activated by `IGNAV_API_KEY` + `IGNAV_FLIGHTS_ENABLED=1` env vars (server-side only).
+- Why Ignav over Skyscanner: Skyscanner Live Prices API access was rejected. Ignav provides a REST API for live flight fares + booking deep-links. Free tier: 1,000 req/month. No booking engine, no PNR — link-out only.
+- Why LINK_OUT role: Ignav returns prices + booking URLs for airline/OTA deep-links. The user is redirected to book on the airline or OTA. No payment processing, no ticketing, no PNR in our system.
+- Safety constraints locked:
+  - API key is server-side only; never `NEXT_PUBLIC_` or client-side.
+  - No mock/fabricated flight data in any code path.
+  - No points prices. Cash only.
+  - No booking engine, no PNR, no payments, no scraping.
+  - Duffel and Amadeus remain DISABLED/quarantined.
+- Booking link priority: `airline_direct` > `ota` > `provider_deeplink`. UNAVAILABLE if none.
+- Latency budget: search call (~15s timeout) + parallel booking links (~5s each, max 5 concurrent) ≈ 20s total. Acceptable for flight search.
+- Roadmap impact: Flights v1 shipped. Stage 3 v3 (Create Trip from Saved Item) is next; needs its own contract PR.

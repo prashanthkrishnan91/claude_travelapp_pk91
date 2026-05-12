@@ -6,17 +6,17 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Now
 
-- **Flights v1 — Cash Live/Link-Out (promotion)**: Provider contract scaffold shipped. Next step: confirm Skyscanner API key (or Ignav if Skyscanner is unavailable), update registry entry from PENDING/EVALUATION to active, implement live `search_flights` body in the adapter shell. Then the implementation PR delivers: flight cards with AI scoring, cash price from provider, deep-link to book, `ResultActionSheet` save, `POST /itinerary/items` add-to-trip. Fail-closed polished unavailable state when no key present. Contract locked in DECISION_LOG 2026-05-12. Points/award track separately gated.
+- **Stage 3 v3 — Create Trip from Saved Item**: Flight cards are now saveable. Needs its own contract PR to confirm how a saved flight offer maps to trip creation (destination/dates pre-fill, itinerary seed). No implementation until contract PR merged.
 
 ## Next
 
-- Stage 3 v3 candidate: Create Trip from Saved Item (needs its own contract PR — deferred until Flights v1 ships and flight cards are saveable/addable).
 - Stage 2B or later: Real hotel offer rates (requires provider-backed Hotel Offer contract + explicit Provider Registry re-approval).
 
 ## Completed
 
 - **Stage 3 v1 — Saved Lists Foundation**: `/saved` route + `SavedShell`; items fetched via `listSavedItems()`, grouped by vertical (Restaurants / Attractions / Hotels / Flights), compact cards from `displaySnapshot`/`searchContext`, remove via `deleteSavedItem()`, empty/loading/error states, Explore link in empty state. "Saved" in Sidebar + MobileNav (drawer + tab bar). 46 new structural tests. No SQL. No provider change. (2026-05-12)
 - **Stage 2A Slice 5C — Hotels Discovery Live**: `HotelExploreFlow` rewritten from deferred state to live; calls `callConciergeSearch(null, query, undefined, destination)` (tripless Concierge); renders `UnifiedHotelResult` discovery cards (stars, rating, area, maps link, why note, `ResultActionSheet`); normalized `originalPayload` for saved-item display snapshots (address, googleMapsUri, search context; no price/rate/booking fields); no rates/prices/availability. 26 new hotel structural tests + 5 updated global Explore tests. No SQL. No backend change. (2026-05-12)
+- **Flights v1 — Ignav Live Cash Search + Link-Out**: Ignav promoted to `LINK_OUT`/`production_allowed=True`. `IgnavFlightProvider.search_flights()` live (httpx, one-way + round-trip, parallel booking links). `POST /explore/flights` route. `FlightExploreFlow` live (FlightCard, ResultActionSheet save, unavailable/error states). 57 backend + 20 frontend new tests. No SQL. No points. (2026-05-12)
 - **Flights Provider Contract + Skyscanner/Ignav Scaffold**: Normalized `FlightItineraryOffer` contract, Skyscanner (PENDING) + Ignav (EVALUATION) registry entries, adapter shells (fail-closed), TS types, 68 backend + 23 frontend tests. No SQL. No UI change. (2026-05-12)
 - **Provider Registry v1 + Explore Provider Scope Reset**: `provider_registry.py` as central provider policy; Brave/Serper/Duffel/Amadeus/Foursquare disabled; `live_research` + `flights_provider` + `hotels_provider` + `duffel_stays` gated through registry; 58 tests. No SQL. No UI change. (2026-05-12)
 - Stage 2A Slice 5B — Hotel Offer contract + Duffel Stays scaffold: `HotelOffer` dataclass, `DuffelStaysProvider` (disabled by default, no live calls), `HotelDiscoveryCard`/`HotelOffer` TS types, 38 new tests. No SQL. No UI rates. (2026-05-12)

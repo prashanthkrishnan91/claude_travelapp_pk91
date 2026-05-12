@@ -178,21 +178,24 @@ class TestRegistryEntries:
         entry = PROVIDER_REGISTRY["skyscanner_flights"]
         assert entry.role is ProviderRole.PENDING
 
-    def test_ignav_role_is_evaluation(self):
+    def test_ignav_role_is_link_out(self):
+        # Promoted from EVALUATION to LINK_OUT (active Flights v1 provider).
         entry = PROVIDER_REGISTRY["ignav_flights"]
-        assert entry.role is ProviderRole.EVALUATION
+        assert entry.role is ProviderRole.LINK_OUT
 
     def test_skyscanner_not_production_allowed(self):
         assert not is_production_allowed("skyscanner_flights")
 
-    def test_ignav_not_production_allowed(self):
-        assert not is_production_allowed("ignav_flights")
+    def test_ignav_is_production_allowed(self):
+        # Ignav is now the active Flights v1 provider.
+        assert is_production_allowed("ignav_flights")
 
     def test_skyscanner_not_active(self):
         assert not is_provider_active("skyscanner_flights")
 
-    def test_ignav_not_active(self):
-        assert not is_provider_active("ignav_flights")
+    def test_ignav_is_active(self):
+        # Ignav promoted to LINK_OUT + production_allowed=True.
+        assert is_provider_active("ignav_flights")
 
     def test_skyscanner_required_env_vars(self):
         entry = PROVIDER_REGISTRY["skyscanner_flights"]
@@ -271,14 +274,32 @@ class TestAdapterShellsFailClosed:
         result = provider.search_flights(self._dummy_req())
         assert len(result.rows) == 0
 
-    def test_ignav_shell_returns_unavailable(self):
-        provider = IgnavFlightProvider()
+    def test_ignav_no_env_returns_null_provider(self):
+        # Ignav is now live; without IGNAV_API_KEY + IGNAV_FLIGHTS_ENABLED,
+        # build_ignav_provider_from_env() returns None so get_flight_provider()
+        # falls back to NullFlightProvider (UNAVAILABLE, zero rows).
+        import os
+        from unittest.mock import patch
+        from app.services.flights_provider import get_flight_provider, reset_flight_provider_cache
+        reset_flight_provider_cache()
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("IGNAV_API_KEY", None)
+            os.environ.pop("IGNAV_FLIGHTS_ENABLED", None)
+            provider = get_flight_provider()
+        assert isinstance(provider, NullFlightProvider)
         result = provider.search_flights(self._dummy_req())
         assert result.status is FlightSourceStatus.UNAVAILABLE
         assert result.rows == []
 
-    def test_ignav_shell_zero_rows(self):
-        provider = IgnavFlightProvider()
+    def test_ignav_no_env_zero_rows(self):
+        import os
+        from unittest.mock import patch
+        from app.services.flights_provider import get_flight_provider, reset_flight_provider_cache
+        reset_flight_provider_cache()
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("IGNAV_API_KEY", None)
+            os.environ.pop("IGNAV_FLIGHTS_ENABLED", None)
+            provider = get_flight_provider()
         result = provider.search_flights(self._dummy_req())
         assert len(result.rows) == 0
 
@@ -290,10 +311,17 @@ class TestAdapterShellsFailClosed:
             for r in result.rows
         )
 
-    def test_ignav_shell_no_mock_rows(self):
-        provider = IgnavFlightProvider()
+    def test_ignav_no_env_no_mock_rows(self):
+        import os
+        from unittest.mock import patch
+        from app.services.flights_provider import get_flight_provider, reset_flight_provider_cache
+        reset_flight_provider_cache()
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("IGNAV_API_KEY", None)
+            os.environ.pop("IGNAV_FLIGHTS_ENABLED", None)
+            provider = get_flight_provider()
         result = provider.search_flights(self._dummy_req())
-        assert len(result.rows) == 0  # confirms no mock rows exist
+        assert len(result.rows) == 0  # no mock rows
 
 
 # ---------------------------------------------------------------------------
@@ -321,8 +349,16 @@ class TestNoPriceWithoutLiveProvider:
         result = provider.search_flights(req)
         assert result.rows == []
 
-    def test_ignav_shell_no_cash_price(self):
-        provider = IgnavFlightProvider()
+    def test_ignav_no_key_no_cash_price(self):
+        # Without a key, build_ignav_provider_from_env returns None → NullFlightProvider
+        import os
+        from unittest.mock import patch
+        from app.services.flights_provider import get_flight_provider, reset_flight_provider_cache
+        reset_flight_provider_cache()
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("IGNAV_API_KEY", None)
+            os.environ.pop("IGNAV_FLIGHTS_ENABLED", None)
+            provider = get_flight_provider()
         req = FlightSearchRequest(
             origin="JFK", destination="CDG", departure_date=date(2026, 6, 1)
         )
@@ -628,17 +664,19 @@ class TestGetFlightProviderFailClosed:
         provider = get_flight_provider()
         assert isinstance(provider, NullFlightProvider)
 
-    def test_registry_gate_blocks_ignav_even_with_env(self, monkeypatch):
-        """Even with both env vars set, Ignav stays off (registry EVALUATION)."""
+    def test_registry_gate_ignav_now_active_with_env(self, monkeypatch):
+        """Ignav is promoted to LINK_OUT + production_allowed=True.
+        With both env vars set, get_flight_provider() returns IgnavFlightProvider."""
+        from app.services.flights_provider_ignav import IgnavFlightProvider
         reset_flight_provider_cache()
         monkeypatch.setenv("IGNAV_API_KEY", "ignav-test-key")
         monkeypatch.setenv("IGNAV_FLIGHTS_ENABLED", "1")
 
-        assert not is_provider_active("ignav_flights")
+        assert is_provider_active("ignav_flights")
 
         from app.services.flights_provider import get_flight_provider
         provider = get_flight_provider()
-        assert isinstance(provider, NullFlightProvider)
+        assert isinstance(provider, IgnavFlightProvider)
 
 
 # ---------------------------------------------------------------------------
@@ -753,9 +791,16 @@ class TestFlightProviderResultSeamAlignment:
         # No FlightItineraryOffer produced while disabled
         assert not any(isinstance(r, FlightItineraryOffer) for r in result.rows)
 
-    def test_ignav_shell_rows_are_empty_not_offers(self):
-        """Ignav adapter shell returns UNAVAILABLE, not FlightItineraryOffer rows."""
-        provider = IgnavFlightProvider()
+    def test_ignav_no_key_rows_are_empty_not_offers(self):
+        """Without env key, NullFlightProvider returns UNAVAILABLE with zero rows."""
+        import os
+        from unittest.mock import patch
+        from app.services.flights_provider import get_flight_provider, reset_flight_provider_cache
+        reset_flight_provider_cache()
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("IGNAV_API_KEY", None)
+            os.environ.pop("IGNAV_FLIGHTS_ENABLED", None)
+            provider = get_flight_provider()
         req = FlightSearchRequest(
             origin="JFK", destination="CDG", departure_date=date(2026, 6, 1)
         )
