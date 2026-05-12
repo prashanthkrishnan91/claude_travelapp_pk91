@@ -9,14 +9,14 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Current product stage
 
 - Roadmap stage: **Stage 3 — Saved lists / boards.** Stage 2A is GREEN. Stage 3 v1 (Saved Lists Foundation) shipped: `/saved` is live, items grouped by vertical, remove/unsave wired. Stage 3 v2 shipped: "Add to Trip" on SavedShell cards is live. See `docs/product/ROADMAP.md`.
-- Active build queue item: **Flights v1 — Cash Live/Link-Out** (prerequisite before Stage 3 v3). Contract locked in DECISION_LOG 2026-05-12. Implementation requires a confirmed Skyscanner Live Prices API key and a Provider Registry entry + gated adapter before any live calls.
+- Active build queue item: **Flights v1 — Cash Live/Link-Out** (prerequisite before Stage 3 v3). Provider contract scaffold shipped (2026-05-12). Skyscanner is the preferred candidate (PENDING in registry); Ignav is the evaluation/backup (EVALUATION in registry). Neither is active — implementation is blocked until a provider key is confirmed and the registry entry is promoted.
 - Stage 3 v3 (Create Trip from Saved Item) is re-ordered to after Flights v1 ships and flight cards are saveable/addable to trips.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
 
 - OS v4 is the canonical operating system. No v4.2 or v5 labels.
-- **Provider Registry v1** (`backend/app/services/provider_registry.py`) is the single policy source of truth for provider activation, addable-card authority, and disabled/quarantined status. Known active/risky provider-selection paths now consult it; future provider additions must register policy + adapter + tests. See `docs/product/DECISION_LOG.md` 2026-05-12 for the policy decision.
+- **Provider Registry v1** (`backend/app/services/provider_registry.py`) is the single policy source of truth for provider activation, addable-card authority, and disabled/quarantined status. Roles now include `PENDING` (Skyscanner — awaiting key) and `EVALUATION` (Ignav — backup candidate). Known active/risky provider-selection paths now consult it; future provider additions must register policy + adapter + tests. See `docs/product/DECISION_LOG.md` 2026-05-12 for the policy decision.
 - Google Places is canonical for addable cards (the only `can_create_addable_cards=True` entry). Yelp / Foursquare / editorial are enrichment / evidence only and cannot mint addable cards. Foursquare is disabled; enrichment is covered by Yelp.
 - Brave, Serper, Duffel (flights + stays), Amadeus, and Foursquare are disabled/quarantined in the registry. They cannot activate in production even if API keys are present in env. Re-approval in the registry is required to re-enable any of them.
 - Duffel and Amadeus are no longer active roadmap items. See DECISION_LOG 2026-05-12.
@@ -29,6 +29,7 @@ This file is **current operational state**, not a historical log. It is meant to
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
 
+- 2026-05-12 — **Flights Provider Contract + Skyscanner/Ignav Scaffold.** Normalized `FlightItineraryOffer` contract (`backend/app/contracts/flight_offer.py`): `FlightSegment`, `FlightOfferLeg`, `FlightPrice`, `FlightBookingLink`, `FlightItineraryOffer` (one-way and round-trip shapes, invariant enforcement, no fabricated prices). `ProviderRole.PENDING` and `EVALUATION` added to registry. `skyscanner_flights` (PENDING) and `ignav_flights` (EVALUATION) registered — both fail-closed, `production_allowed=False`. Adapter shells (`flights_provider_skyscanner.py`, `flights_provider_ignav.py`) return UNAVAILABLE with zero rows; no live API calls. `get_flight_provider()` priority order: Skyscanner → Ignav → Duffel (all blocked). `FlightItineraryOffer` + supporting TS types added to `frontend/src/components/explore/types.ts`. 68 backend + 23 frontend tests. No SQL. No UI behavior change.
 - 2026-05-12 — **Stage 3 v2 — Add Saved Item to Trip.** "Add to Trip" on each saved card in `SavedShell`: compact inline trip picker, calls new `addSavedItemToTrip` → `POST /itinerary/items` with `trip_id` + `day_id=null` (unscheduled candidate). Vertical mapping: restaurant→meal, attraction→activity, hotel→hotel. Hotel details: checkIn/checkOut/guests from searchContext only — no rates, prices, or booking fields. Flights disabled (guarded). Trips loaded in parallel with saved items via `fetchTrips()`. States: idle/picking/adding/added/error. 25 new structural tests (`saved-trip-conversion.test.mjs`). No SQL. No TripBuilder/tripCandidates/ResultActionSheet changes. No provider calls.
 - 2026-05-12 — **Stage 3 v1 — Saved Lists Foundation.** `/saved` route + `SavedShell` component. Fetches all saved items via existing `listSavedItems()`, groups by vertical (Restaurants / Attractions / Hotels / Flights), renders compact cards rehydrated from `displaySnapshot` + `searchContext`. Hotel cards show dates/guests from searchContext — no rates, no booking. Remove/unsave via existing `deleteSavedItem()` with optimistic UI. Empty state guides to `/explore`. Loading + error + empty states. "Saved" added to Sidebar (primary links) and MobileNav (drawer + tab bar). 46 new structural tests (`saved-lists-foundation.test.mjs`). No SQL. No backend change. No provider change.
 - 2026-05-12 — **Stage 2A Slice 5C — Hotels Discovery Live.** `HotelExploreFlow` rewritten from deferred state to live discovery. Calls `callConciergeSearch(null, query, undefined, destination)` (tripless Concierge, same pattern as Attractions Slice 4). Renders `UnifiedHotelResult` cards with stars, rating, area/address, Google Maps link, why-pick note, tags, and `ResultActionSheet`. Search context (destination, dates, guests) preserved in `ExploreResultContext` for future provider-backed offer. No rates, prices, availability, or booking copy rendered. 26 new hotel structural tests (`hotel-explore-live.test.mjs`) + 5 updated global Explore tests (`global-explore-shell.test.mjs` hotel section, deferred→live). No SQL. No backend change. No provider change.
@@ -61,17 +62,18 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 - `saved_items` migration 005 must be applied to the Supabase project before Save is live in production. Migration is in `backend/db/migrations/005_saved_items.sql`.
 - Hotels Slice 5A is discovery-only (`HotelDiscoveryCard`); do not add rates, prices, availability, or a fake hotel provider. Real hotel offers require a provider-backed Hotel Offer contract (deferred to Stage 2B or later).
-- Flights vertical is now on the active build queue (Flights v1). Contract locked in DECISION_LOG 2026-05-12. Implementation is blocked until a Skyscanner Live Prices API key is confirmed. When the key is available: register in `provider_registry.py`, implement a gated adapter, then open the implementation PR. Until then, Explore Flights shows polished unavailable state — no mock rows, no placeholder prices. Duffel and Amadeus remain DISABLED/quarantined and are not active roadmap items.
+- Flights v1 scaffold shipped (2026-05-12): normalized `FlightItineraryOffer` contract (`backend/app/contracts/flight_offer.py`), Skyscanner and Ignav adapter shells (`flights_provider_skyscanner.py`, `flights_provider_ignav.py`), and registry entries. Both providers fail-closed (UNAVAILABLE) until a key is confirmed and the registry is promoted. Explore Flights shows polished unavailable state — no mock rows, no placeholder prices. Duffel and Amadeus remain DISABLED/quarantined and are not active roadmap items.
 - Saved-list foundation (Stage 3 v1) is live; `/saved` page, grouping, remove, and nav links all shipped.
 - AI destination intelligence, road trip mode, deal/points intelligence, and Travel Watchtower are deferred to later stages.
 
 ## Next recommended step
 
-**Flights v1 — Cash Live/Link-Out.** Contract locked in DECISION_LOG 2026-05-12. Two prerequisites before the implementation PR opens:
-1. Confirm Skyscanner Live Prices API key/access exists (or select an alternative live cash provider if Skyscanner is unavailable).
-2. Register the provider in `provider_registry.py` and implement a gated adapter (fail-closed when key absent).
+**Flights v1 — Cash Live/Link-Out (promotion).** Provider contract scaffold is in place. Prerequisites before the implementation PR opens:
+1. Confirm Skyscanner Live Prices API key/access (or, if unavailable, confirm Ignav access and update its registry entry from EVALUATION to approved).
+2. Update the registry entry from `PENDING`/`EVALUATION` to `production_allowed=True` + active role.
+3. Implement the live `search_flights` body in the relevant adapter shell (`flights_provider_skyscanner.py` or `flights_provider_ignav.py`).
 
-Once those are done, the implementation PR covers: flight search form (origin, destination, dates, passengers, cabin, one-way/round-trip), live provider call, flight cards with AI scoring + cash price + deep link, `ResultActionSheet` save, and `POST /itinerary/items` add-to-trip (`day_id: null`). Polished unavailable state when key is absent. No mock rows. No points prices unless a real award API is confirmed.
+The implementation PR then covers: live provider call, flight cards with AI scoring + cash price + deep link, `ResultActionSheet` save, `POST /itinerary/items` add-to-trip (`day_id: null`). No mock rows. No points prices unless a real award API is confirmed.
 
 Stage 3 v3 (Create Trip from Saved Item) is re-ordered to after Flights v1 ships.
 

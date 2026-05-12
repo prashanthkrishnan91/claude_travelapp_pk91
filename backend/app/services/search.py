@@ -809,6 +809,10 @@ class SearchService:
             return []
 
         provider = get_flight_provider()
+        # LEGACY: type is List[FlightResult] for the curate_flight_results/
+        # search_round_trip_flights consumer layer (pre-contract SearchService
+        # stack).  When a real provider is activated its rows will be
+        # FlightItineraryOffer; this layer must be updated in the promotion PR.
         all_results: List[FlightResult] = []
         for origin in origins:
             for destination in destinations:

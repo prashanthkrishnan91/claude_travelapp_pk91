@@ -105,6 +105,17 @@ Product decisions are recorded here so we do not re-litigate direction.
   - Enabling the adapter without credentials: `build_duffel_stays_provider_from_env` returns `None` without credentials; the seam falls back to `NullHotelProvider`.
 - Roadmap impact: Slice 5B ships the contract foundation. Slice 5B preserved the disabled scaffold, but Provider Registry v1 supersedes activation. Slice 5C is Hotels Discovery Live only. Duffel Stays/live hotel offers require explicit future registry re-approval and are not in the active build queue.
 
+## 2026-05-12 — Flights Provider Contract scaffold: Skyscanner + Ignav registry entries
+
+- Decision: Add normalized `FlightItineraryOffer` contract and disabled-promotion-scaffold adapter shells for Skyscanner (preferred) and Ignav (evaluation/backup). Both are registered in Provider Registry v1 as `PENDING`/`EVALUATION` with `production_allowed=False`. No live API calls. No visible flight cards. Existing fail-closed unavailable state preserved.
+- Why: Unblocks the implementation PR — when a provider key is confirmed, only the registry entry needs updating + the live adapter body needs implementing. The frontend seam, contract, and test suite are already in place.
+- Provider registry roles added: `PENDING` (preferred candidate awaiting key), `EVALUATION` (backup/provisional candidate requiring validation before promotion).
+- Promotion path (locked): (1) confirm key + access, (2) update registry entry (`production_allowed=True`, active role), (3) implement live `search_flights` body in the adapter shell, (4) pass validation tests. No shortcut path exists.
+- Duffel and Amadeus: remain DISABLED/quarantined. No change.
+- Alternatives rejected: adding live implementation before key is confirmed (no key exists); using Duffel/Amadeus (quarantined); mock/placeholder data (No Mock/Sample Visible Data Pack).
+- What would change our mind: Both Skyscanner and Ignav are unavailable — would require evaluating another cash provider and adding a new PENDING entry.
+- Roadmap impact: Flights v1 implementation PR is unblocked once key is confirmed. Stage 3 v3 ordering unchanged.
+
 ## 2026-05-12 — Flight product and provider contract (pre-Stage 3 v3)
 
 - Decision: Flights must be completed before Stage 3 v3 (Create Trip from Saved Item). v1 implementation is cash live/link-out first. Points/award results are a separately gated track. No mock flights, no Duffel, no Amadeus, no booking engine.

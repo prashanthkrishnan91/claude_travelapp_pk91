@@ -67,6 +67,99 @@ export interface HotelOffer {
   errorReason?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Flight domain types — normalized offer contract (Flights v1 scaffold)
+// ---------------------------------------------------------------------------
+
+/**
+ * How fresh the flight price is.
+ * Adapters MUST set this on every FlightItineraryOffer.
+ */
+export type LiveCachedStatus = "live" | "cached";
+
+/**
+ * Classification of the booking deep-link destination.
+ * "unavailable" means no bookable URL exists for this offer.
+ */
+export type BookingLinkType = "airline_direct" | "ota" | "provider_deeplink" | "unavailable";
+
+export type TripType = "one_way" | "round_trip";
+
+/** One non-stop hop within a journey leg. All fields are provider-sourced. */
+export interface FlightSegment {
+  airline: string;
+  flightNumber: string;
+  origin: string;          // IATA
+  destination: string;     // IATA
+  departureTime: string;   // ISO 8601 UTC
+  arrivalTime: string;     // ISO 8601 UTC
+  durationMinutes: number;
+  aircraftType?: string;
+  cabinClass?: string;
+}
+
+/** One outbound or return journey, containing one or more segments. */
+export interface FlightOfferLeg {
+  origin: string;          // IATA
+  destination: string;     // IATA
+  departureTime: string;   // ISO 8601 UTC
+  arrivalTime: string;     // ISO 8601 UTC
+  durationMinutes: number;
+  stops: number;
+  segments: FlightSegment[];
+}
+
+/**
+ * Cash price from a live provider.
+ * NEVER fabricated, estimated, or inferred.
+ */
+export interface FlightPrice {
+  currency: string;        // ISO 4217
+  totalAmount: number;     // > 0; total for all passengers
+  perPassengerAmount?: number;
+  taxesFeesIncluded?: boolean | null;
+}
+
+/**
+ * External deep-link to complete the booking.
+ * When link_type is "unavailable", url is empty.
+ * Placeholder/mock URLs are explicitly forbidden.
+ */
+export interface FlightBookingLink {
+  url: string;
+  linkType: BookingLinkType;
+  providerName: string;    // e.g. "skyscanner_flights"
+}
+
+/**
+ * Normalized flight offer from an approved provider adapter.
+ *
+ * This type is NEVER populated by disabled/scaffold adapters.
+ * A disabled provider returns no flight cards — the FlightExploreFlow
+ * remains in its polished "unavailable" state.
+ *
+ * Cash price (FlightPrice) is only present when sourced from a live
+ * provider; points/award prices are a separate future track.
+ */
+export interface FlightItineraryOffer {
+  kind: "flight_offer";
+  provider: string;                    // registry ID, e.g. "skyscanner_flights"
+  fetchedAt: string;                   // ISO 8601 UTC
+  liveCachedStatus: LiveCachedStatus;
+  tripType: TripType;
+  origin: string;                      // IATA
+  destination: string;                 // IATA
+  departureDate: string;               // YYYY-MM-DD
+  returnDate?: string;                 // YYYY-MM-DD; undefined for one-way
+  passengers: number;
+  cabinClass: string;
+  outboundLeg: FlightOfferLeg;
+  returnLeg?: FlightOfferLeg;          // undefined for one-way
+  price: FlightPrice;
+  bookingLink: FlightBookingLink;
+  aiScore?: number;                    // 0–1 optional AI ranking
+}
+
 export type ExploreVertical = "flights" | "hotels" | "restaurants" | "attractions";
 
 export interface ExploreResultContext {

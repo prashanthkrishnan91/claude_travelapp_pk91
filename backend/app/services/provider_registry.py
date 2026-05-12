@@ -42,6 +42,8 @@ class ProviderRole(str, Enum):
     LINK_OUT = "link_out"          # external link destination; no data ingestion
     DISABLED = "disabled"          # explicitly off; not approved for production
     QUARANTINED = "quarantined"    # previously scaffolded; suspended pending re-approval
+    PENDING = "pending"            # preferred candidate; awaiting API key / access confirmation
+    EVALUATION = "evaluation"      # provisional backup candidate; must pass validation before promotion
 
 
 @dataclass(frozen=True)
@@ -200,6 +202,41 @@ PROVIDER_REGISTRY: dict[str, ProviderEntry] = {
             "Explicit re-approval in this registry required before activation."
         ),
     ),
+    # ── Flight provider candidates (scaffold / evaluation — not yet active) ───
+    # Neither entry has production_allowed=True; both fail is_provider_active().
+    # Promotion requires: (1) update this entry to production_allowed=True and
+    # an active role, (2) confirm API key/access, (3) implement live adapter
+    # call, (4) pass validation tests.  No live API calls are made at this stage.
+    "skyscanner_flights": ProviderEntry(
+        provider_id="skyscanner_flights",
+        display_name="Skyscanner Live Prices",
+        role=ProviderRole.PENDING,
+        required_env_vars=("SKYSCANNER_API_KEY", "SKYSCANNER_FLIGHTS_ENABLED"),
+        production_allowed=False,
+        can_create_addable_cards=False,
+        can_enrich_only=False,
+        supported_verticals=("flight",),
+        cost_notes=(
+            "Preferred flight provider candidate. Awaiting API key / Live Prices access "
+            "confirmation. Not active. Explicit registry re-approval + key + adapter "
+            "implementation required before any live calls."
+        ),
+    ),
+    "ignav_flights": ProviderEntry(
+        provider_id="ignav_flights",
+        display_name="Ignav Flights",
+        role=ProviderRole.EVALUATION,
+        required_env_vars=("IGNAV_API_KEY", "IGNAV_FLIGHTS_ENABLED"),
+        production_allowed=False,
+        can_create_addable_cards=False,
+        can_enrich_only=False,
+        supported_verticals=("flight",),
+        cost_notes=(
+            "Provisional backup flight candidate. Evaluation/validation required before "
+            "promotion. Not active. Explicit registry re-approval + key + adapter "
+            "implementation required before any live calls."
+        ),
+    ),
 }
 
 
@@ -236,7 +273,12 @@ def is_provider_active(provider_id: str) -> bool:
         return False
     return (
         entry.production_allowed
-        and entry.role not in (ProviderRole.DISABLED, ProviderRole.QUARANTINED)
+        and entry.role not in (
+            ProviderRole.DISABLED,
+            ProviderRole.QUARANTINED,
+            ProviderRole.PENDING,
+            ProviderRole.EVALUATION,
+        )
     )
 
 

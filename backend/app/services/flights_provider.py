@@ -6,52 +6,71 @@ This module deliberately ships **no** real provider, **no** API key, and
 boundary so the next PR is a drop-in adapter, not a refactor of
 ``TripBuilder`` / ``OptimizeTripModal`` / ``/trips/create-with-search``.
 
-The seam returns a typed ``FlightProviderResult`` containing a list of
-real ``FlightResult`` rows and a ``FlightSourceStatus`` health marker.  An
-unavailable / errored provider returns an empty ``rows`` list and a
-non-``OK`` status — never a fake row.
+Row type policy
+---------------
+``FlightProviderResult.rows`` accepts two row shapes:
+
+- **Canonical (new adapters):** ``FlightItineraryOffer`` from
+  ``app.contracts.flight_offer``.  Skyscanner, Ignav, and any future
+  approved adapter MUST return this type.  Its invariants (positive price,
+  no fabricated booking URLs, IATA code lengths, etc.) are enforced in its
+  own ``__post_init__``.
+
+- **Legacy (SearchService consumer layer):** ``FlightResult`` from
+  ``app.models.search``.  This shape is used by the existing
+  ``SearchService.search_flights`` / ``search_round_trip_flights`` /
+  ``curate_flight_results`` stack that pre-dates the normalized offer
+  contract.  ``FlightResult`` rows are validated via the legacy
+  ``assert_persistable_flight`` predicate.  New provider adapters MUST NOT
+  produce ``FlightResult`` rows; this path exists only to avoid a breaking
+  change on the SearchService consumer while the promotion PR is pending.
 
 Default binding (``DefaultFlightProvider``) is the ``NullFlightProvider``
 which always returns ``UNAVAILABLE``.  The legacy ``_mock_flights`` helper
 in ``backend/app/services/search.py`` is intentionally NOT wired into this
-seam: it remains a quarantined legacy fixture, and binding it here would
-re-open the persistence hole that PR #295 closed.
+seam: it remains a quarantined legacy fixture.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Protocol
+from typing import List, Protocol, Union
 
 from app.contracts.flights import (
     FlightProviderUnavailable,
     FlightSourceStatus,
     assert_persistable_flight,
 )
+from app.contracts.flight_offer import FlightItineraryOffer
 from app.models.search import FlightResult, FlightSearchRequest
+
+# Canonical row type for new provider adapters.
+# Legacy type (FlightResult) is accepted for backward compat with the
+# SearchService consumer layer; it is not the canonical live-provider shape.
+ProviderBoundRow = Union[FlightItineraryOffer, FlightResult]
 
 
 @dataclass(frozen=True)
 class FlightProviderResult:
     """Typed response for any flight provider adapter.
 
-    Invariants (enforced in ``__post_init__``):
+    Row contract:
+    - **Canonical:** ``FlightItineraryOffer`` — new adapters (Skyscanner,
+      Ignav) MUST use this.  Invariants enforced in ``FlightItineraryOffer``
+      itself; no fabricated prices, no placeholder booking URLs.
+    - **Legacy:** ``FlightResult`` — accepted for backward compat with the
+      SearchService consumer layer (``curate_flight_results`` etc.) that
+      pre-dates the normalized contract.  Validated via
+      ``assert_persistable_flight``.  NOT the canonical live-provider shape.
 
-    - ``rows`` MUST be empty whenever ``status`` is not ``OK``
-      (``EMPTY``/``UNAVAILABLE``/``ERROR`` cannot carry rows).
-    - When ``status == OK``, every row MUST satisfy
-      ``app.contracts.flights.is_persistable_flight``.  Mock/demo/sample
-      sources, fabricated booking hosts, and rows missing required fields
-      are rejected via ``assert_persistable_flight``.
-    - ``OK`` with zero rows is intentionally NOT allowed: callers should
-      use ``EMPTY`` for the "valid query, no results" case so the typed
-      status remains the single source of truth for UI fail-closed copy.
-    - Adapters never raise on transport / API errors; they translate to
-      ``status = ERROR`` with a non-empty ``reason``.
+    Structural invariants (enforced in ``__post_init__``):
+    - ``rows`` MUST be empty whenever ``status`` is not ``OK``.
+    - ``OK`` with zero rows is a contract bug; use ``EMPTY`` instead.
+    - Adapters never raise on transport errors; translate to ``ERROR``.
     """
 
     status: FlightSourceStatus
-    rows: List[FlightResult] = field(default_factory=list)
+    rows: List[ProviderBoundRow] = field(default_factory=list)
     reason: str = ""
 
     def __post_init__(self) -> None:
@@ -62,13 +81,24 @@ class FlightProviderResult:
                     "row; use FlightSourceStatus.EMPTY for zero-result queries"
                 )
             for idx, row in enumerate(self.rows):
-                try:
-                    assert_persistable_flight(row)
-                except Exception as exc:
+                if isinstance(row, FlightItineraryOffer):
+                    # Canonical path: invariants already enforced in __post_init__.
+                    pass
+                elif isinstance(row, FlightResult):
+                    # LEGACY path: validate via pre-contract persistability predicate.
+                    try:
+                        assert_persistable_flight(row)
+                    except Exception as exc:
+                        raise ValueError(
+                            f"FlightProviderResult(status=OK).rows[{idx}] failed "
+                            f"the Flights Product Contract v1: {exc}"
+                        ) from exc
+                else:
                     raise ValueError(
-                        f"FlightProviderResult(status=OK).rows[{idx}] failed "
-                        f"the Flights Product Contract v1: {exc}"
-                    ) from exc
+                        f"FlightProviderResult(status=OK).rows[{idx}] is not a "
+                        f"FlightItineraryOffer (canonical) or FlightResult (legacy); "
+                        f"got {type(row).__name__}"
+                    )
         else:
             if self.rows:
                 raise ValueError(
@@ -130,45 +160,92 @@ def reset_flight_provider_cache() -> None:
 def get_flight_provider() -> FlightProvider:
     """Return the active ``FlightProvider``.
 
-    Flights v1 — registry-gated then env-gated:
+    Flights v1 — registry-gated then env-gated.  Provider priority order:
 
-    - Provider Registry v1 is the outer gate: ``duffel_flights`` must be
-      ``production_allowed`` and not ``DISABLED``/``QUARANTINED`` in
-      ``app.services.provider_registry`` before the adapter is attempted.
-      This means Duffel Flights stays off even if ``DUFFEL_FLIGHTS_ENABLED``
-      is set in env, until the registry entry is explicitly re-approved.
-    - When the registry allows it AND ``DUFFEL_FLIGHTS_ENABLED`` is truthy
-      AND ``DUFFEL_ACCESS_TOKEN`` is set, returns a memoised
-      ``DuffelFlightProvider``.
-    - Otherwise falls back to ``NullFlightProvider`` so unconfigured
-      deployments fail closed with ``UNAVAILABLE`` and zero rows.
+    1. Skyscanner (``skyscanner_flights``) — preferred candidate; currently
+       PENDING in the registry (``production_allowed=False``).  Gates:
+       registry ``is_provider_active("skyscanner_flights")`` then
+       ``SKYSCANNER_API_KEY`` + ``SKYSCANNER_FLIGHTS_ENABLED`` env vars.
+
+    2. Ignav (``ignav_flights``) — evaluation/backup candidate; currently
+       EVALUATION in the registry (``production_allowed=False``).  Gates:
+       registry ``is_provider_active("ignav_flights")`` then
+       ``IGNAV_API_KEY`` + ``IGNAV_FLIGHTS_ENABLED`` env vars.
+
+    3. Duffel (``duffel_flights``) — DISABLED in the registry; stays off
+       even if env vars are present.
+
+    For all three candidates, ``is_provider_active()`` currently returns
+    ``False``, so this function always falls back to ``NullFlightProvider``
+    (``UNAVAILABLE``, zero rows).  The priority ordering is in place so that
+    when Skyscanner or Ignav is approved (registry updated, key confirmed),
+    the seam selects the right adapter without any further changes here.
     """
+    from app.services.provider_registry import is_provider_active
+
+    # ── 1. Skyscanner (preferred, currently PENDING) ────────────────────────
     try:
-        import os  # local import keeps module pure when reading env
-        from app.services.provider_registry import is_provider_active
+        import os
+        from app.services.flights_provider_skyscanner import (
+            skyscanner_enabled_from_env,
+            build_skyscanner_provider_from_env,
+        )
+        if is_provider_active("skyscanner_flights"):
+            if skyscanner_enabled_from_env():
+                env_key = ("skyscanner", os.environ.get("SKYSCANNER_API_KEY", ""))
+                cached = _PROVIDER_CACHE.get(env_key)
+                if cached is not None:
+                    return cached
+                provider = build_skyscanner_provider_from_env()
+                if provider is not None:
+                    _PROVIDER_CACHE[env_key] = provider
+                    return provider
+    except Exception:
+        pass
+
+    # ── 2. Ignav (evaluation/backup, currently EVALUATION) ──────────────────
+    try:
+        import os
+        from app.services.flights_provider_ignav import (
+            ignav_enabled_from_env,
+            build_ignav_provider_from_env,
+        )
+        if is_provider_active("ignav_flights"):
+            if ignav_enabled_from_env():
+                env_key = ("ignav", os.environ.get("IGNAV_API_KEY", ""))
+                cached = _PROVIDER_CACHE.get(env_key)
+                if cached is not None:
+                    return cached
+                provider = build_ignav_provider_from_env()
+                if provider is not None:
+                    _PROVIDER_CACHE[env_key] = provider
+                    return provider
+    except Exception:
+        pass
+
+    # ── 3. Duffel (DISABLED — stays off) ────────────────────────────────────
+    try:
         from app.services.flights_provider_duffel import (
             duffel_enabled_from_env,
             build_duffel_provider_from_env,
         )
-        # Registry gate: Duffel Flights must be approved in Provider Policy v1.
-        if not is_provider_active("duffel_flights"):
-            return _DEFAULT_PROVIDER
-        if not duffel_enabled_from_env():
-            return _DEFAULT_PROVIDER
-        env_key = (
-            os.environ.get("DUFFEL_ACCESS_TOKEN", ""),
-            os.environ.get("DUFFEL_BASE_URL", ""),
-        )
-        cached = _PROVIDER_CACHE.get(env_key)
-        if cached is not None:
-            return cached
-        duffel = build_duffel_provider_from_env()
-        if duffel is not None:
-            _PROVIDER_CACHE[env_key] = duffel
-            return duffel
+        if is_provider_active("duffel_flights"):
+            import os
+            if duffel_enabled_from_env():
+                env_key = (
+                    os.environ.get("DUFFEL_ACCESS_TOKEN", ""),
+                    os.environ.get("DUFFEL_BASE_URL", ""),
+                )
+                cached = _PROVIDER_CACHE.get(env_key)
+                if cached is not None:
+                    return cached
+                duffel = build_duffel_provider_from_env()
+                if duffel is not None:
+                    _PROVIDER_CACHE[env_key] = duffel
+                    return duffel
     except Exception:
-        # Adapter import / construction must never break the seam.
         pass
+
     return _DEFAULT_PROVIDER
 
 
