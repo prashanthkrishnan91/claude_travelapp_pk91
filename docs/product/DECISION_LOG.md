@@ -79,3 +79,18 @@ Product decisions are recorded here so we do not re-litigate direction.
   - Reusing generic "hotel" naming without discovery/offer separation: risks polluting the future real-offer contract with discovery-layer semantics.
 - What would change our mind: A real hotel rate/availability provider is contracted and the Hotel Offer contract is written and reviewed before Slice 5A ships.
 - Roadmap impact: Slice 5A ships Hotels discovery. Real hotel offers are explicitly deferred to a named future slice with a provider-backed Hotel Offer contract. BUILD_QUEUE and HANDOFF updated accordingly.
+
+## 2026-05-12 — Stage 2A Slice 5B: Hotel Offer contract + Duffel Stays readiness scaffold
+- Decision: Slice 5B adds the typed `HotelOffer` contract and a disabled-by-default `DuffelStaysProvider` scaffold. No live API calls. No user-facing rates.
+- Architecture rules locked by this decision:
+  - `HotelOffer` dataclass (`backend/app/contracts/hotels.py`) is the canonical shape for provider-backed hotel rate offers. It carries: vertical, provider, provider_property_id, provider_offer_id, destination, check_in, check_out, guests, rooms, currency, total_price, taxes_fees_included, cancellation_summary, booking_url, rate_fetched_at, provider_disclaimer, is_available, error_reason.
+  - `HotelOffer` is never constructed by discovery-only adapters. `HotelResult` with `has_real_rate=False` / `offer_kind="discovery"` remains the discovery-card wire type.
+  - `DuffelStaysProvider` (`backend/app/services/hotels_provider_duffel_stays.py`) is the Duffel Stays adapter scaffold. It requires `DUFFEL_STAYS_API_KEY` AND explicit `DUFFEL_STAYS_ENABLED=1` to activate. Both absent by default.
+  - When disabled or uncredentialed, `search_hotels` returns `HotelSourceStatus.UNAVAILABLE` with zero rows. No mock/fixture fallback.
+  - `HotelDiscoveryCard` and `HotelOffer` TypeScript interfaces are separated by `kind` discriminant in `frontend/src/components/explore/types.ts`.
+  - Slice 5C activates `DuffelStaysProvider` only after Duffel Stays API access is confirmed and credentials are provisioned.
+- What would need to change for Slice 5C: Duffel Stays API access confirmed, credentials in Railway/Vercel env, live offer request implemented in `DuffelStaysProvider.search_hotels`, `DUFFEL_STAYS_ENABLED=1` set.
+- Alternatives rejected:
+  - Mock Duffel responses: explicitly forbidden (No Mock/Sample Visible Data Pack).
+  - Enabling the adapter without credentials: `build_duffel_stays_provider_from_env` returns `None` without credentials; the seam falls back to `NullHotelProvider`.
+- Roadmap impact: Slice 5B ships the contract foundation. Slice 5C wires live Duffel Stays once access is confirmed.

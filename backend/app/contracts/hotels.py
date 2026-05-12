@@ -38,6 +38,7 @@ and adds zero LLM calls.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from enum import Enum
 from typing import Any, Iterable, Optional
 
@@ -297,11 +298,106 @@ class HotelProviderUnavailable:
             )
 
 
+# ---------------------------------------------------------------------------
+# Hotel Offer contract — provider-backed dated offer (Slice 5C+)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class HotelOffer:
+    """Typed shape for a real provider-backed hotel rate offer.
+
+    This is the contract every hotel rates adapter must produce.
+    It is **not** used by discovery-only adapters (Google Places);
+    those emit ``HotelResult`` with ``has_real_rate=False`` and
+    ``offer_kind="discovery"`` instead.
+
+    Invariants enforced in ``__post_init__``:
+
+    - ``vertical`` must equal ``"hotel_offer"``.
+    - ``provider`` must be non-empty and must not be ``"mock"`` or
+      ``"demo"``; fabricated providers are explicitly rejected.
+    - ``total_price`` must be positive when ``is_available=True``.
+    - ``provider_disclaimer`` must be non-empty; the UI must surface it.
+    - ``rate_fetched_at`` must be a non-empty ISO 8601 string.
+    - ``currency`` must be a non-empty string (ISO 4217 recommended).
+    - ``guests`` and ``rooms`` must be positive.
+    """
+
+    # --- Identity ---
+    vertical: str                        # always "hotel_offer"
+    provider: str                        # e.g. "duffel_stays", "booking_com"
+    provider_property_id: str            # provider's stable hotel id
+    provider_offer_id: Optional[str]     # offer/rate token if available
+
+    # --- Search context (preserved for future hydration without migration) ---
+    destination: str
+    check_in: date
+    check_out: date
+    guests: int
+    rooms: int
+
+    # --- Price (provider-verified; never invented) ---
+    currency: str                        # ISO 4217 e.g. "USD"
+    total_price: float                   # full stay total from provider
+    taxes_fees_included: Optional[bool]  # True=incl, False=excl, None=unknown
+
+    # --- Booking ---
+    cancellation_summary: Optional[str]  # e.g. "Free cancellation until Jun 1"
+    booking_url: Optional[str]           # deep-link to provider booking page
+
+    # --- Freshness + trust ---
+    rate_fetched_at: str                 # ISO 8601 UTC timestamp
+    provider_disclaimer: str            # e.g. "Rates from Duffel Stays. May change."
+
+    # --- Availability ---
+    is_available: bool
+    error_reason: Optional[str] = None   # set when is_available=False due to error
+
+    _DISALLOWED_PROVIDERS: frozenset = frozenset.__new__(
+        frozenset,  # class-level sentinel; __post_init__ uses a local constant
+    )
+
+    def __post_init__(self) -> None:
+        _DISALLOWED = frozenset({"mock", "demo", "fixture", "sample", "placeholder"})
+
+        if self.vertical != "hotel_offer":
+            raise ValueError(
+                f"HotelOffer.vertical must be 'hotel_offer', got {self.vertical!r}"
+            )
+        if not self.provider or self.provider.strip().lower() in _DISALLOWED:
+            raise ValueError(
+                f"HotelOffer.provider {self.provider!r} is empty or disallowed"
+            )
+        if not self.provider_property_id:
+            raise ValueError("HotelOffer.provider_property_id must be non-empty")
+        if not self.destination:
+            raise ValueError("HotelOffer.destination must be non-empty")
+        if self.guests < 1:
+            raise ValueError("HotelOffer.guests must be >= 1")
+        if self.rooms < 1:
+            raise ValueError("HotelOffer.rooms must be >= 1")
+        if not self.currency:
+            raise ValueError("HotelOffer.currency must be non-empty")
+        if self.is_available and self.total_price <= 0:
+            raise ValueError(
+                "HotelOffer.total_price must be positive when is_available=True"
+            )
+        if not self.rate_fetched_at:
+            raise ValueError("HotelOffer.rate_fetched_at must be non-empty")
+        if not self.provider_disclaimer:
+            raise ValueError(
+                "HotelOffer.provider_disclaimer must be non-empty; "
+                "the UI must display it to the user"
+            )
+
+
 __all__ = [
     "ALLOWED_SOURCE_VALUES",
     "DISALLOWED_SOURCES",
     "FABRICATED_BOOKING_HOSTS",
     "HotelContractViolation",
+    "HotelOffer",
     "HotelOfferKind",
     "HotelProviderUnavailable",
     "HotelSource",

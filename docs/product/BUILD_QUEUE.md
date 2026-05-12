@@ -6,7 +6,7 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Now
 
-- **Stage 2A Slice 5A — Hotels Discovery (scope-locked):** `HotelExploreFlow` wired as discovery-only lodging cards via the existing tripless Concierge / verified place card pattern (same as Attractions Slice 4). Uses `HotelDiscoveryCard` naming. No rates, prices, availability, or mock hotel provider. Search context fields (destination, check_in, check_out, guests, rooms) preserved in card payload for future provider upgrade. See `docs/product/DECISION_LOG.md` 2026-05-11 Hotels scope-lock decision.
+- **Stage 2A Slice 5C — Duffel Stays Adapter live (blocked on credentials):** Activate `DuffelStaysProvider` behind `DUFFEL_STAYS_ENABLED=1`. Implement live offer request in `search_hotels`. Wire into `get_hotel_provider()` registry alongside Google Places discovery. Show real offer cards only when `is_available=True` and `has_real_rate=True`. Requires Duffel Stays API access + credentials confirmed before starting.
 
 ## Next
 
@@ -14,6 +14,8 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Completed
 
+- Stage 2A Slice 5B — Hotel Offer contract + Duffel Stays scaffold: `HotelOffer` dataclass, `DuffelStaysProvider` (disabled by default, no live calls), `HotelDiscoveryCard`/`HotelOffer` TS types, 38 new tests. No SQL. No UI rates. (2026-05-12)
+- Stage 2A Slice 5A — Hotels Discovery (scope-locked): decision-only PR locking Hotels as discovery-only in Stage 2A. (2026-05-11)
 - Stage 2A Slice 4 — Attractions Vertical Live: `AttractionExploreFlow` rewritten from deferred state to live; calls `callConciergeSearch(null, query, undefined, destination)` (tripless Concierge); renders `UnifiedAttractionResult` cards with `ResultActionSheet`. (2026-05-11)
 - Stage 2A Slice 3 — Trip-Optional AI Concierge: `trip_id` optional in `ConciergeRequest`/`ConciergeSearchRequest`; service/route guard `_fetch_trip`+`_save_message`; frontend `callConcierge`/`callConciergeSearch` accept `tripId: string | null` + `destination`. No SQL migration. (2026-05-11)
 - Stage 2A Slice 2 — Unified Result Actions v1 + saved_items foundation: `saved_items` migration (005), `SavedItemsService`, `/saved-items` route (POST/GET/DELETE), `ResultActionSheet` (Save live; Add to Trip / Create Trip deferred), wired into `RestaurantExploreFlow`. (2026-05-11)
