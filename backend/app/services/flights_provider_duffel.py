@@ -237,6 +237,46 @@ def _map_offer(
             logger.warning("[duffel.trust] offer %s: return leg failed trust gate", offer.get("id"))
             return None
 
+    # Route/date validation — confirm segment data matches what the user requested.
+    # A provider could return a different route or date; we must reject such offers
+    # rather than display a wrong-route card as if it matched the search.
+    req_origin = (req.origin or "").upper()
+    req_dest = (req.destination or "").upper()
+
+    if outbound_leg.origin != req_origin or outbound_leg.destination != req_dest:
+        logger.warning(
+            "[duffel.trust] offer %s: outbound route mismatch (got %s→%s, want %s→%s)",
+            offer.get("id"), outbound_leg.origin, outbound_leg.destination, req_origin, req_dest,
+        )
+        return None
+
+    outbound_dep_dt = _parse_iso_dt(outbound_leg.departure_time)
+    if outbound_dep_dt is None or outbound_dep_dt.date() != req.departure_date:
+        logger.warning(
+            "[duffel.trust] offer %s: outbound departure date mismatch (got %s, want %s)",
+            offer.get("id"),
+            outbound_dep_dt.date() if outbound_dep_dt else None,
+            req.departure_date,
+        )
+        return None
+
+    if is_round_trip and return_leg is not None:
+        if return_leg.origin != req_dest or return_leg.destination != req_origin:
+            logger.warning(
+                "[duffel.trust] offer %s: return route mismatch (got %s→%s, want %s→%s)",
+                offer.get("id"), return_leg.origin, return_leg.destination, req_dest, req_origin,
+            )
+            return None
+        return_dep_dt = _parse_iso_dt(return_leg.departure_time)
+        if return_dep_dt is None or return_dep_dt.date() != req.return_date:
+            logger.warning(
+                "[duffel.trust] offer %s: return departure date mismatch (got %s, want %s)",
+                offer.get("id"),
+                return_dep_dt.date() if return_dep_dt else None,
+                req.return_date,
+            )
+            return None
+
     amount = _parse_positive_float(offer.get("total_amount"))
     if amount is None:
         logger.warning("[duffel.trust] offer %s: missing or zero total_amount", offer.get("id"))

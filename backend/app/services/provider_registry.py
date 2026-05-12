@@ -229,7 +229,7 @@ PROVIDER_REGISTRY: dict[str, ProviderEntry] = {
         supported_verticals=("flight",),
         cost_notes=(
             "Access rejected by Skyscanner. Remains PENDING/disabled. "
-            "Ignav is the active Flights v1 provider. "
+            "Duffel is the active Flights v1 provider (search-only). "
             "Re-evaluate Skyscanner only if access is granted in the future."
         ),
     ),

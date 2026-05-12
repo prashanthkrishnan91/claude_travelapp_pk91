@@ -687,3 +687,114 @@ class TestMultiOfferResponse:
         assert result.status is FlightSourceStatus.OK
         assert len(result.rows) == 1
         assert result.rows[0].price.total_amount == 189.50
+
+
+# ── 13. Route/date validation ─────────────────────────────────────────────────
+
+@requires_full_stack
+class TestRouteDateValidation:
+    """Offers whose segment data doesn't match the requested route/date are rejected."""
+
+    def _offer_with_seg_route(
+        self,
+        origin: str = "SEA",
+        destination: str = "LAX",
+        dep: str = "2026-06-17T08:00:00Z",
+    ) -> Dict[str, Any]:
+        s = _seg(origin=origin, destination=destination, dep=dep)
+        return {
+            "id": "off_route",
+            "total_amount": "189.50",
+            "total_currency": "USD",
+            "slices": [{"duration": "PT2H30M", "segments": [s]}],
+        }
+
+    # ── One-way route/date mismatches ─────────────────────────────────────────
+
+    def test_wrong_outbound_origin_rejects(self):
+        p, http = _build()
+        http.enqueue(_duffel_response([self._offer_with_seg_route(origin="SFO")]))
+        result = p.search_flights(_one_way_req(origin="SEA", destination="LAX"))
+        assert result.status in (FlightSourceStatus.UNAVAILABLE, FlightSourceStatus.EMPTY)
+
+    def test_wrong_outbound_destination_rejects(self):
+        p, http = _build()
+        http.enqueue(_duffel_response([self._offer_with_seg_route(destination="SFO")]))
+        result = p.search_flights(_one_way_req(origin="SEA", destination="LAX"))
+        assert result.status in (FlightSourceStatus.UNAVAILABLE, FlightSourceStatus.EMPTY)
+
+    def test_wrong_outbound_departure_date_rejects(self):
+        p, http = _build()
+        # Same route but wrong date (June 18 instead of June 17)
+        http.enqueue(_duffel_response([
+            self._offer_with_seg_route(dep="2026-06-18T08:00:00Z")
+        ]))
+        result = p.search_flights(_one_way_req(departure_date="2026-06-17"))
+        assert result.status in (FlightSourceStatus.UNAVAILABLE, FlightSourceStatus.EMPTY)
+
+    def test_valid_one_way_route_and_date_accepted(self):
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_one_way()]))
+        result = p.search_flights(_one_way_req(origin="SEA", destination="LAX"))
+        assert result.status is FlightSourceStatus.OK
+        assert result.rows[0].outbound_leg.origin == "SEA"
+        assert result.rows[0].outbound_leg.destination == "LAX"
+
+    # ── Round-trip return leg mismatches ──────────────────────────────────────
+
+    def _offer_rt_with_return_route(
+        self,
+        ret_origin: str = "LAX",
+        ret_dest: str = "SEA",
+        ret_dep: str = "2026-06-24T15:00:00Z",
+    ) -> Dict[str, Any]:
+        outbound_seg = _seg(
+            origin="SEA", destination="LAX",
+            dep="2026-06-17T08:00:00Z", arr="2026-06-17T10:30:00Z",
+        )
+        return_seg = _seg(
+            origin=ret_origin, destination=ret_dest,
+            dep=ret_dep, arr="2026-06-24T17:30:00Z",
+            carrier_iata="AS", flight_num="8",
+        )
+        return {
+            "id": "off_rt_route",
+            "total_amount": "320.00",
+            "total_currency": "USD",
+            "slices": [
+                {"duration": "PT2H30M", "segments": [outbound_seg]},
+                {"duration": "PT2H30M", "segments": [return_seg]},
+            ],
+        }
+
+    def test_round_trip_wrong_return_origin_rejects(self):
+        p, http = _build()
+        http.enqueue(_duffel_response([self._offer_rt_with_return_route(ret_origin="SFO")]))
+        result = p.search_flights(_round_trip_req())
+        assert result.status in (FlightSourceStatus.UNAVAILABLE, FlightSourceStatus.EMPTY)
+
+    def test_round_trip_wrong_return_destination_rejects(self):
+        p, http = _build()
+        http.enqueue(_duffel_response([self._offer_rt_with_return_route(ret_dest="SFO")]))
+        result = p.search_flights(_round_trip_req())
+        assert result.status in (FlightSourceStatus.UNAVAILABLE, FlightSourceStatus.EMPTY)
+
+    def test_round_trip_wrong_return_date_rejects(self):
+        p, http = _build()
+        # Return on June 25 instead of June 24
+        http.enqueue(_duffel_response([
+            self._offer_rt_with_return_route(ret_dep="2026-06-25T15:00:00Z")
+        ]))
+        result = p.search_flights(_round_trip_req())
+        assert result.status in (FlightSourceStatus.UNAVAILABLE, FlightSourceStatus.EMPTY)
+
+    def test_valid_round_trip_route_and_dates_accepted(self):
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_round_trip()]))
+        result = p.search_flights(_round_trip_req())
+        assert result.status is FlightSourceStatus.OK
+        offer = result.rows[0]
+        assert offer.outbound_leg.origin == "SEA"
+        assert offer.outbound_leg.destination == "LAX"
+        assert offer.return_leg.origin == "LAX"
+        assert offer.return_leg.destination == "SEA"
