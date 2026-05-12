@@ -72,15 +72,41 @@ export function HotelExploreFlow() {
 
   function buildContext(h: UnifiedHotelResult): ExploreResultContext {
     const gv = h.googleVerification;
+    const dest = lastForm?.destination ?? form.destination.trim();
+    // Normalize saved-item display snapshot: discovery fields only, no price/rate/booking.
+    const savedPayload: Record<string, unknown> = {
+      type: h.type,
+      name: h.name,
+      source: h.source,
+      areaLabel: h.areaLabel,
+      stars: h.stars,
+      rating: h.rating,
+      mapsLink: h.mapsLink,
+      tags: h.tags,
+      verifiedPlace: h.verifiedPlace,
+      verificationTier: h.verificationTier,
+      googleVerification: h.googleVerification,
+      supportingDetails: h.supportingDetails,
+      display: h.display,
+      primaryReason: h.primaryReason,
+      // Normalized top-level fields for ResultActionSheet saved-item snapshot
+      address: h.supportingDetails?.address ?? undefined,
+      googleMapsUri: h.mapsLink ?? undefined,
+      // Search context preserved for future provider-backed offer hydration
+      destination: dest,
+      checkIn: lastForm?.checkIn || undefined,
+      checkOut: lastForm?.checkOut || undefined,
+      guests: lastForm?.guests,
+    };
     return {
       vertical: "hotels",
-      destination: lastForm?.destination ?? form.destination.trim(),
+      destination: dest,
       dates: { checkIn: lastForm?.checkIn || undefined, checkOut: lastForm?.checkOut || undefined },
       guests: lastForm?.guests,
       location:
         gv?.lat != null && gv?.lng != null ? { lat: gv.lat, lng: gv.lng } : undefined,
       providerIdentity: gv?.providerPlaceId ?? undefined,
-      originalPayload: h as unknown as Record<string, unknown>,
+      originalPayload: savedPayload,
     };
   }
 

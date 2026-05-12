@@ -149,3 +149,36 @@ test('HotelExploreFlow does not reference Duffel or booking providers', () => {
   assert.doesNotMatch(hotelFlow, /[Dd]uffel/);
   assert.doesNotMatch(hotelFlow, /[Bb]ooking\.com/);
 });
+
+// ── 7. originalPayload normalization for saved-item display snapshots ─────
+
+test('buildContext savedPayload includes normalized address from supportingDetails', () => {
+  assert.match(hotelFlow, /address: h\.supportingDetails/);
+});
+
+test('buildContext savedPayload includes googleMapsUri normalized from mapsLink', () => {
+  assert.match(hotelFlow, /googleMapsUri: h\.mapsLink/);
+});
+
+test('buildContext savedPayload preserves mapsLink field', () => {
+  assert.match(hotelFlow, /mapsLink: h\.mapsLink/);
+});
+
+test('buildContext savedPayload includes search context fields destination, checkIn, checkOut, guests', () => {
+  assert.match(hotelFlow, /destination: dest/);
+  assert.match(hotelFlow, /checkIn: lastForm/);
+  assert.match(hotelFlow, /checkOut: lastForm/);
+  assert.match(hotelFlow, /guests: lastForm/);
+});
+
+test('buildContext savedPayload does not assign pricePerNight or bookingUrl', () => {
+  assert.doesNotMatch(hotelFlow, /pricePerNight\s*:/);
+  assert.doesNotMatch(hotelFlow, /bookingUrl\s*:/);
+});
+
+test('buildContext savedPayload does not assign totalPrice, currency, isAvailable, or cancellation', () => {
+  assert.doesNotMatch(hotelFlow, /totalPrice\s*:/);
+  assert.doesNotMatch(hotelFlow, /currency\s*:/);
+  assert.doesNotMatch(hotelFlow, /isAvailable\s*:/);
+  assert.doesNotMatch(hotelFlow, /cancellation\s*:/);
+});
