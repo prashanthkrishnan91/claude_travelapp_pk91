@@ -16,17 +16,39 @@ Response contract:
   - Every offer passes the trust gate before being returned to the frontend.
 
 Trust gate (applied before mapping):
+  Route/date checks:
   - Outbound first-segment departure airport must equal requested origin.
   - Outbound last-segment arrival airport must equal requested destination.
   - Segment airport chain must be coherent (each arrival == next departure).
   - Outbound departure LOCAL date must equal requested departure_date.
     Prefers departure_time_local; falls back to UTC date if local unavailable.
     Missing departure time (no local or utc) is a hard rejection.
-  - For round-trips: inbound segments must be present; inbound first-segment
+
+  Per-segment field checks (all segments in outbound and inbound):
+  - Each segment must have at least one of: marketing_carrier_code, flight_number.
+  - Each segment's departure_airport and arrival_airport must be 3-letter IATA.
+  - Each segment must have departure time (local or UTC).
+  - Each segment must have arrival time (local or UTC).
+  - If duration_minutes is present it must be > 0.
+
+  Internal consistency checks:
+  - If the leg-level duration_minutes is present and segments also provide
+    durations, leg duration must not be less than the sum of segment durations
+    by more than 10 minutes (leg can exceed segment sum due to layover time;
+    it cannot be materially less — that indicates data corruption).
+  - If the raw outbound/inbound leg carries a stops count, it must equal
+    len(segments) - 1.
+  - Duplicate normalized flight numbers within a single leg are rejected when
+    they appear on different routes (identical flight number on two different
+    dep→arr pairs is a data assembly error, not a through-flight continuation).
+
+  For round-trips: inbound segments must be present; inbound first-segment
     departure airport == requested destination; inbound last-segment arrival
     airport == requested origin; inbound chain coherent; inbound departure
     LOCAL date (falling back to UTC) == requested return_date.
     Missing inbound departure time is a hard rejection.
+    All per-segment and consistency checks apply to inbound as well.
+
   - Offers failing any check are excluded and logged at WARNING level.
   - If ALL offers fail, returns UNAVAILABLE (not incorrect cards).
 
@@ -35,9 +57,19 @@ Time normalization:
     airline schedules. Stored strings may lack UTC offset; frontend must
     extract HH:MM by slicing, not by UTC conversion.
 
-Booking-link 400 diagnosis:
-  - Non-200 booking-link responses are logged with status code + first 200
-    chars of the response body (no API keys, no tokens).
+Booking-link lookup:
+  - ``_fetch_booking_links`` sends only ``ignav_id`` — the Ignav booking-link
+    endpoint does not accept ``adults`` or ``market`` fields alongside
+    ``ignav_id`` and returns 400 if they are present.
+  - Non-200 responses are logged with status code + first 200 chars of body
+    (no API keys, no tokens).
+
+Debug payload logging:
+  - Set ``IGNAV_FLIGHTS_DEBUG_PAYLOAD=1`` in backend env to emit structured
+    diagnostic info for the first three trust-gate-passing offers.
+  - Only non-sensitive scheduling fields are logged: provider index, ignav_id
+    prefix, segment route chain, flight numbers, local/UTC dep/arr times,
+    durations, and price.  API keys/tokens/personal data are never logged.
 
 Latency strategy:
   - One search call (one-way or round-trip endpoint).
@@ -162,10 +194,15 @@ class IgnavFlightProvider:
         resp.raise_for_status()
         return resp.json()
 
-    def _fetch_booking_links(self, ignav_id: str, adults: int) -> List[Dict[str, Any]]:
-        """Fetch booking links for a single itinerary.  Returns empty list on failure."""
+    def _fetch_booking_links(self, ignav_id: str) -> List[Dict[str, Any]]:
+        """Fetch booking links for a single itinerary.  Returns empty list on failure.
+
+        The Ignav booking-link endpoint only accepts ``ignav_id``.  Including
+        ``adults`` or ``market`` alongside ``ignav_id`` returns HTTP 400
+        conflicting_booking_lookup_mode.
+        """
         url = f"{self._base_url}/booking-links"
-        body = {"ignav_id": ignav_id, "adults": adults}
+        body = {"ignav_id": ignav_id}
         try:
             client = httpx.Client(timeout=_BOOKING_LINK_TIMEOUT_SECONDS) if self._client is None else self._client
             resp = client.post(url, json=body, headers=self._headers())
@@ -259,6 +296,45 @@ class IgnavFlightProvider:
                 f"req={req_date_str!r}"
             )
 
+        # Per-segment field validation for all outbound segments
+        for seg_i, seg in enumerate(segments):
+            seg_ok, seg_reason = IgnavFlightProvider._validate_segment_fields(
+                seg, seg_i, "outbound"
+            )
+            if not seg_ok:
+                return False, seg_reason
+
+        # Duplicate flight-number check within outbound leg
+        dup_reason = IgnavFlightProvider._check_duplicate_flight_numbers(
+            segments, "outbound"
+        )
+        if dup_reason:
+            return False, dup_reason
+
+        # Outbound leg duration must not be less than segment sum (leg can exceed
+        # segment sum due to layover time; it cannot be materially less)
+        out_leg_dur = outbound.get("duration_minutes")
+        if out_leg_dur is not None:
+            out_seg_sum = sum(int(s.get("duration_minutes") or 0) for s in segments)
+            if out_seg_sum > 0 and int(out_leg_dur) < out_seg_sum - 10:
+                return False, (
+                    f"outbound leg duration {out_leg_dur}m less than segment "
+                    f"sum {out_seg_sum}m — data inconsistency"
+                )
+
+        # Outbound stop count cross-check when provider supplies it
+        raw_out_stops = outbound.get("stops")
+        if raw_out_stops is not None:
+            expected_stops = len(segments) - 1
+            try:
+                if int(raw_out_stops) != expected_stops:
+                    return False, (
+                        f"outbound stop count mismatch: raw={raw_out_stops} "
+                        f"segments_imply={expected_stops}"
+                    )
+            except (TypeError, ValueError):
+                return False, f"outbound stops field malformed: {raw_out_stops!r}"
+
         # Inbound validation for round-trips
         if req.return_date is not None:
             inbound = it.get("inbound") or {}
@@ -302,7 +378,172 @@ class IgnavFlightProvider:
                     f"req={req_return_str!r}"
                 )
 
+            # Per-segment field validation for all inbound segments
+            for seg_i, seg in enumerate(in_segments):
+                seg_ok, seg_reason = IgnavFlightProvider._validate_segment_fields(
+                    seg, seg_i, "inbound"
+                )
+                if not seg_ok:
+                    return False, seg_reason
+
+            # Duplicate flight-number check within inbound leg
+            in_dup_reason = IgnavFlightProvider._check_duplicate_flight_numbers(
+                in_segments, "inbound"
+            )
+            if in_dup_reason:
+                return False, in_dup_reason
+
+            # Inbound leg duration vs segment sum
+            in_leg_dur = inbound.get("duration_minutes")
+            if in_leg_dur is not None:
+                in_seg_sum = sum(
+                    int(s.get("duration_minutes") or 0) for s in in_segments
+                )
+                if in_seg_sum > 0 and int(in_leg_dur) < in_seg_sum - 10:
+                    return False, (
+                        f"inbound leg duration {in_leg_dur}m less than segment "
+                        f"sum {in_seg_sum}m — data inconsistency"
+                    )
+
         return True, ""
+
+    # ------------------------------------------------------------------
+    # Internal: per-segment and leg consistency validators
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _validate_segment_fields(
+        seg: Dict[str, Any], seg_index: int, leg: str
+    ) -> Tuple[bool, str]:
+        """Deep-validate one segment's required fields.
+
+        Returns (valid, rejection_reason).
+        Checks: carrier/flight number, 3-letter IATA airports, departure time,
+        arrival time, and positive duration when present.
+        """
+        prefix = f"{leg} seg[{seg_index}]"
+
+        carrier_code = (seg.get("marketing_carrier_code") or "").strip()
+        flight_num = (seg.get("flight_number") or "").strip()
+        if not carrier_code and not flight_num:
+            return False, f"{prefix}: missing carrier code and flight number"
+
+        dep_airport = (seg.get("departure_airport") or "").upper().strip()
+        arr_airport = (seg.get("arrival_airport") or "").upper().strip()
+        if len(dep_airport) != 3:
+            return False, f"{prefix}: departure_airport not a 3-letter IATA code: {dep_airport!r}"
+        if len(arr_airport) != 3:
+            return False, f"{prefix}: arrival_airport not a 3-letter IATA code: {arr_airport!r}"
+
+        dep_local = (seg.get("departure_time_local") or "").strip()
+        dep_utc = (seg.get("departure_time_utc") or "").strip()
+        if not dep_local and not dep_utc:
+            return False, f"{prefix}: missing departure time"
+
+        arr_local = (seg.get("arrival_time_local") or "").strip()
+        arr_utc = (seg.get("arrival_time_utc") or "").strip()
+        if not arr_local and not arr_utc:
+            return False, f"{prefix}: missing arrival time"
+
+        dur = seg.get("duration_minutes")
+        if dur is not None:
+            try:
+                if int(dur) <= 0:
+                    return False, f"{prefix}: non-positive duration_minutes={dur}"
+            except (TypeError, ValueError):
+                return False, f"{prefix}: malformed duration_minutes={dur!r}"
+
+        return True, ""
+
+    @staticmethod
+    def _check_duplicate_flight_numbers(
+        segments: List[Dict[str, Any]], leg: str
+    ) -> str:
+        """Return rejection reason when the same flight number appears on different routes.
+
+        Identical flight number on two different dep→arr pairs in one leg is a
+        data assembly error (not a through-flight continuation — those have the
+        same route and are already filtered by chain coherence).
+        Returns empty string if no violation found.
+        """
+        seen: Dict[str, str] = {}
+        for seg in segments:
+            carrier_code = (seg.get("marketing_carrier_code") or "").strip()
+            flight_num = (seg.get("flight_number") or "").strip()
+            if not flight_num:
+                continue
+            if carrier_code and not flight_num.startswith(carrier_code):
+                normalized = f"{carrier_code}{flight_num}"
+            else:
+                normalized = flight_num
+
+            dep = (seg.get("departure_airport") or "").upper().strip()
+            arr = (seg.get("arrival_airport") or "").upper().strip()
+            route = f"{dep}→{arr}"
+
+            if normalized in seen:
+                if seen[normalized] != route:
+                    return (
+                        f"{leg}: duplicate flight number {normalized!r} on "
+                        f"different routes ({seen[normalized]} and {route})"
+                    )
+            else:
+                seen[normalized] = route
+        return ""
+
+    # ------------------------------------------------------------------
+    # Internal: debug payload logging
+    # ------------------------------------------------------------------
+
+    def _log_debug_offer(self, idx: int, it: Dict[str, Any]) -> None:
+        """Log structured non-sensitive offer fields for mapping diagnostics.
+
+        Only emitted when IGNAV_FLIGHTS_DEBUG_PAYLOAD=1.  Never logs API keys,
+        tokens, or personal data.  Logs: provider index, ignav_id prefix,
+        segment route chain, flight numbers, local/UTC dep/arr times, durations,
+        and price.
+        """
+        ignav_id_prefix = (it.get("ignav_id") or "")[:12]
+        price_data = it.get("price") or {}
+        price_str = (
+            f"{price_data.get('currency', '?')}{price_data.get('amount', '?')}"
+        )
+
+        def _seg_summary(seg: Dict[str, Any]) -> str:
+            code = (seg.get("marketing_carrier_code") or "").strip()
+            num = (seg.get("flight_number") or "?").strip()
+            fn = f"{code}{num}" if (code and not num.startswith(code)) else (num or f"{code}?")
+            dep = (seg.get("departure_airport") or "???").upper()
+            arr = (seg.get("arrival_airport") or "???").upper()
+            dep_t = (
+                seg.get("departure_time_local") or seg.get("departure_time_utc") or "?"
+            )[:16]
+            arr_t = (
+                seg.get("arrival_time_local") or seg.get("arrival_time_utc") or "?"
+            )[:16]
+            dur = seg.get("duration_minutes", "?")
+            return f"{fn}:{dep}@{dep_t}→{arr}@{arr_t}({dur}m)"
+
+        outbound = it.get("outbound") or {}
+        out_segs = outbound.get("segments") or []
+        out_chain = " | ".join(_seg_summary(s) for s in out_segs)
+        out_leg_dur = outbound.get("duration_minutes", "?")
+
+        in_part = ""
+        inbound = it.get("inbound")
+        if inbound:
+            in_segs = inbound.get("segments") or []
+            in_chain = " | ".join(_seg_summary(s) for s in in_segs)
+            in_part = f" | return:[{in_chain}]({inbound.get('duration_minutes','?')}m)"
+
+        logger.info(
+            "[ignav_debug] idx=%d id_prefix=%.12s price=%s cabin=%s "
+            "outbound:[%s](%sm)%s",
+            idx, ignav_id_prefix, price_str,
+            it.get("cabin_class", "?"),
+            out_chain, out_leg_dur,
+            in_part,
+        )
 
     # ------------------------------------------------------------------
     # Internal: mapping helpers
@@ -568,6 +809,11 @@ class IgnavFlightProvider:
             len(valid_itineraries), len(capped),
         )
 
+        # Debug payload logging — gated by IGNAV_FLIGHTS_DEBUG_PAYLOAD=1
+        if os.environ.get("IGNAV_FLIGHTS_DEBUG_PAYLOAD", "").strip().lower() in _TRUTHY:
+            for dbg_idx, dbg_it in enumerate(valid_itineraries[:3]):
+                self._log_debug_offer(dbg_idx, dbg_it)
+
         # Extract ignav_ids for parallel booking-link fetches (valid offers only)
         ids_to_fetch = [
             (idx, it.get("ignav_id", ""))
@@ -580,7 +826,7 @@ class IgnavFlightProvider:
         if ids_to_fetch:
             with ThreadPoolExecutor(max_workers=min(len(ids_to_fetch), 5)) as pool:
                 future_to_idx: Dict[Future, int] = {
-                    pool.submit(self._fetch_booking_links, ignav_id, adults): idx
+                    pool.submit(self._fetch_booking_links, ignav_id): idx
                     for idx, ignav_id in ids_to_fetch
                 }
                 for future in as_completed(future_to_idx):
