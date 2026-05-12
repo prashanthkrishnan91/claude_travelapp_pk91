@@ -13,7 +13,7 @@
  */
 
 import { useState } from "react";
-import { Search, MapPin, Calendar, Users, Building2, Hotel, Star, ExternalLink, Loader2, AlertCircle } from "lucide-react";
+import { MapPin, Calendar, Users, Building2, Hotel, Star, ExternalLink, Loader2, AlertCircle } from "lucide-react";
 import { callConciergeSearch } from "@/lib/api";
 import type { UnifiedHotelResult } from "@/lib/api";
 import type { ExploreResultContext } from "./types";
