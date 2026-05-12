@@ -581,6 +581,51 @@ def _make_sea_lax_request() -> FlightSearchRequest:
     )
 
 
+def _make_sea_lax_rt_request() -> FlightSearchRequest:
+    return FlightSearchRequest(
+        origin="SEA",
+        destination="LAX",
+        departure_date=date(2026, 6, 17),
+        return_date=date(2026, 6, 24),
+        passengers=1,
+        cabin_class="economy",
+    )
+
+
+def _make_lax_sea_inbound(
+    dep_airport: str = "LAX",
+    arr_airport: str = "SEA",
+    dep_local: str = "2026-06-24T14:00:00",
+    dep_utc: str = None,
+    extra_segments: list = None,
+) -> Dict[str, Any]:
+    """Inbound leg dict for LAX→SEA return flight."""
+    seg = {
+        "marketing_carrier_code": "AS",
+        "flight_number": "AS202",
+        "operating_carrier_name": "Alaska Airlines",
+        "departure_airport": dep_airport,
+        "arrival_airport": arr_airport,
+        "departure_time_local": dep_local,
+        "arrival_time_local": "2026-06-24T16:30:00",
+        "duration_minutes": 150,
+    }
+    if dep_utc is not None:
+        seg["departure_time_utc"] = dep_utc
+    segs = [seg] + (extra_segments or [])
+    return {"duration_minutes": 150, "segments": segs}
+
+
+def _make_sea_lax_rt_itinerary(
+    inbound: Dict[str, Any] = None,
+    **kwargs,
+) -> Dict[str, Any]:
+    """Round-trip SEA↔LAX itinerary fixture."""
+    it = _make_sea_lax_itinerary(**kwargs)
+    it["inbound"] = inbound if inbound is not None else _make_lax_sea_inbound()
+    return it
+
+
 def _make_sea_lax_itinerary(
     dep_airport="SEA",
     arr_airport="LAX",
@@ -758,3 +803,63 @@ class TestTrustGate:
         result = provider.search_flights(req)
         assert result.status == FlightSourceStatus.OK
         assert result.rows[0].booking_link.link_type == BookingLinkType.UNAVAILABLE
+
+    def test_missing_departure_time_rejected(self):
+        req = _make_sea_lax_request()
+        it = _make_sea_lax_itinerary(dep_local=None)  # dep_utc also absent (fixture default)
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "missing" in reason.lower()
+
+    # --- Round-trip inbound validation ---
+
+    def test_valid_round_trip_passes(self):
+        req = _make_sea_lax_rt_request()
+        it = _make_sea_lax_rt_itinerary()
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is True, f"Expected pass, got rejection: {reason}"
+
+    def test_missing_inbound_rejected_for_round_trip(self):
+        req = _make_sea_lax_rt_request()
+        it = _make_sea_lax_itinerary()  # one-way fixture, no inbound key
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "inbound" in reason.lower()
+
+    def test_inbound_wrong_route_rejected(self):
+        req = _make_sea_lax_rt_request()
+        # Inbound departs from SFO instead of LAX
+        it = _make_sea_lax_rt_itinerary(inbound=_make_lax_sea_inbound(dep_airport="SFO"))
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "inbound origin mismatch" in reason
+        assert "SFO" in reason
+
+    def test_inbound_wrong_return_date_rejected(self):
+        req = _make_sea_lax_rt_request()
+        # Inbound departs June 23, but return_date is June 24
+        it = _make_sea_lax_rt_itinerary(inbound=_make_lax_sea_inbound(dep_local="2026-06-23T14:00:00"))
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "inbound date mismatch" in reason
+        assert "2026-06-23" in reason
+
+    def test_inbound_broken_chain_rejected(self):
+        req = _make_sea_lax_rt_request()
+        # Two-segment inbound: LAX→ORD then JFK→SEA — ORD/JFK gap
+        extra = {
+            "marketing_carrier_code": "AA",
+            "flight_number": "AA789",
+            "operating_carrier_name": "American",
+            "departure_airport": "JFK",  # doesn't connect from ORD
+            "arrival_airport": "SEA",
+            "departure_time_local": "2026-06-24T18:00:00",
+            "arrival_time_local": "2026-06-24T20:30:00",
+            "duration_minutes": 150,
+        }
+        it = _make_sea_lax_rt_itinerary(
+            inbound=_make_lax_sea_inbound(arr_airport="ORD", extra_segments=[extra])
+        )
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "inbound segment chain broken" in reason

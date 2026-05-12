@@ -21,6 +21,12 @@ Trust gate (applied before mapping):
   - Segment airport chain must be coherent (each arrival == next departure).
   - Outbound departure LOCAL date must equal requested departure_date.
     Prefers departure_time_local; falls back to UTC date if local unavailable.
+    Missing departure time (no local or utc) is a hard rejection.
+  - For round-trips: inbound segments must be present; inbound first-segment
+    departure airport == requested destination; inbound last-segment arrival
+    airport == requested origin; inbound chain coherent; inbound departure
+    LOCAL date (falling back to UTC) == requested return_date.
+    Missing inbound departure time is a hard rejection.
   - Offers failing any check are excluded and logged at WARNING level.
   - If ALL offers fail, returns UNAVAILABLE (not incorrect cards).
 
@@ -194,6 +200,10 @@ class IgnavFlightProvider:
         3. Last segment arrival airport == requested destination.
         4. Segment chain is coherent (each arrival == next departure).
         5. Departure LOCAL date (or UTC fallback) == requested departure_date.
+           Missing departure time is a hard rejection.
+        6. For round-trips: inbound segments present; inbound route reversed;
+           inbound chain coherent; inbound LOCAL date == return_date.
+           Missing inbound departure time is a hard rejection.
 
         Returns (valid: bool, rejection_reason: str).
         """
@@ -222,14 +232,14 @@ class IgnavFlightProvider:
         if last_arr != req_dest:
             return False, f"dest mismatch: segment={last_arr!r} req={req_dest!r}"
 
-        # Segment chain coherence
+        # Outbound segment chain coherence
         for i in range(len(segments) - 1):
             conn_arr = (segments[i].get("arrival_airport") or "").upper().strip()
             conn_dep = (segments[i + 1].get("departure_airport") or "").upper().strip()
             if conn_arr != conn_dep:
                 return False, f"segment chain broken at {i}: {conn_arr!r}→{conn_dep!r}"
 
-        # Date check: prefer local departure date, fall back to UTC date
+        # Outbound date check: prefer local, fall back to UTC; missing is a hard rejection
         dep_local = (first_seg.get("departure_time_local") or "").strip()
         dep_utc = (first_seg.get("departure_time_utc") or "").strip()
 
@@ -240,16 +250,56 @@ class IgnavFlightProvider:
             actual_date_str = dep_utc[:10]
             source = "utc"
         else:
-            # No time data — skip date check, not a hard rejection
-            actual_date_str = None
-            source = "none"
+            return False, "missing outbound departure time (no local or utc)"
 
-        if actual_date_str:
-            req_date_str = req.departure_date.isoformat()
-            if actual_date_str != req_date_str:
+        req_date_str = req.departure_date.isoformat()
+        if actual_date_str != req_date_str:
+            return False, (
+                f"date mismatch ({source}): segment={actual_date_str!r} "
+                f"req={req_date_str!r}"
+            )
+
+        # Inbound validation for round-trips
+        if req.return_date is not None:
+            inbound = it.get("inbound") or {}
+            in_segments = inbound.get("segments") or []
+            if not in_segments:
+                return False, "round-trip has no inbound segments"
+
+            in_first = in_segments[0]
+            in_last = in_segments[-1]
+
+            in_first_dep = (in_first.get("departure_airport") or "").upper().strip()
+            in_last_arr = (in_last.get("arrival_airport") or "").upper().strip()
+
+            if in_first_dep != req_dest:
+                return False, f"inbound origin mismatch: segment={in_first_dep!r} req={req_dest!r}"
+            if in_last_arr != req_origin:
+                return False, f"inbound dest mismatch: segment={in_last_arr!r} req={req_origin!r}"
+
+            for i in range(len(in_segments) - 1):
+                conn_arr = (in_segments[i].get("arrival_airport") or "").upper().strip()
+                conn_dep = (in_segments[i + 1].get("departure_airport") or "").upper().strip()
+                if conn_arr != conn_dep:
+                    return False, f"inbound segment chain broken at {i}: {conn_arr!r}→{conn_dep!r}"
+
+            in_dep_local = (in_first.get("departure_time_local") or "").strip()
+            in_dep_utc = (in_first.get("departure_time_utc") or "").strip()
+
+            if in_dep_local:
+                in_date_str = in_dep_local[:10]
+                in_source = "local"
+            elif in_dep_utc:
+                in_date_str = in_dep_utc[:10]
+                in_source = "utc"
+            else:
+                return False, "missing inbound departure time (no local or utc)"
+
+            req_return_str = req.return_date.isoformat()
+            if in_date_str != req_return_str:
                 return False, (
-                    f"date mismatch ({source}): segment={actual_date_str!r} "
-                    f"req={req_date_str!r}"
+                    f"inbound date mismatch ({in_source}): segment={in_date_str!r} "
+                    f"req={req_return_str!r}"
                 )
 
         return True, ""
