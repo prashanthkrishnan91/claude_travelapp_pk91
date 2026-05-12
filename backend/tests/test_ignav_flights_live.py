@@ -137,12 +137,16 @@ def _make_search_response(itineraries=None) -> Dict[str, Any]:
     }
 
 
-def _make_booking_options(link_type="airline_direct") -> List[Dict[str, Any]]:
+def _make_booking_options(
+    provider_type: str = "airline",
+    url: str = "https://www.airfrance.com/booking/abc123",
+) -> List[Dict[str, Any]]:
+    """Return Ignav-doc-shaped booking_options[].links[] fixture."""
     return [
         {
-            "provider": "Air France",
-            "url": "https://www.airfrance.com/booking/abc123",
-            "link_type": link_type,
+            "provider_name": "Air France",
+            "provider_type": provider_type,
+            "links": [{"url": url, "price": {"amount": 499.0, "currency": "USD"}}],
         }
     ]
 
@@ -241,7 +245,7 @@ class TestMapping:
     def test_maps_one_way_offer_correctly(self):
         provider = self._build_provider()
         it = _make_itinerary(amount=499.0, currency="USD", cabin="economy")
-        bl = _make_booking_options("airline_direct")
+        bl = _make_booking_options("airline")
         req = _make_request()
         offer = provider._map_itinerary(it, bl, req, "2026-05-12T10:00:00Z")
 
@@ -416,20 +420,20 @@ class TestNoPointsNoFabricatedUrls:
         assert offer.booking_link.url == ""
 
     def test_airline_direct_link_type_mapped(self):
-        bl = _make_booking_options("airline_direct")
+        bl = _make_booking_options("airline")
         offer = self._make_offer(booking_options=bl)
         assert offer.booking_link.link_type == BookingLinkType.AIRLINE_DIRECT
         assert "airfrance.com" in offer.booking_link.url
 
     def test_ota_link_type_mapped(self):
-        bl = [{"provider": "Kayak", "url": "https://www.kayak.com/flights/abc", "link_type": "ota"}]
+        bl = [{"provider_name": "Kayak", "provider_type": "third_party", "links": [{"url": "https://www.kayak.com/flights/abc"}]}]
         offer = self._make_offer(booking_options=bl)
         assert offer.booking_link.link_type == BookingLinkType.OTA
 
     def test_airline_direct_preferred_over_ota(self):
         bl = [
-            {"provider": "Kayak", "url": "https://www.kayak.com/x", "link_type": "ota"},
-            {"provider": "Air France", "url": "https://www.airfrance.com/x", "link_type": "airline_direct"},
+            {"provider_name": "Kayak", "provider_type": "third_party", "links": [{"url": "https://www.kayak.com/x"}]},
+            {"provider_name": "Air France", "provider_type": "airline", "links": [{"url": "https://www.airfrance.com/x"}]},
         ]
         offer = self._make_offer(booking_options=bl)
         assert offer.booking_link.link_type == BookingLinkType.AIRLINE_DIRECT
@@ -526,12 +530,38 @@ class TestMappingEdgeCases:
 class TestBookingLinkPriority:
     def test_provider_deeplink_fallback(self):
         options = [
-            {"provider": "Ignav", "url": "https://ignav.com/deeplink/xyz", "link_type": "provider_deeplink"}
+            {"provider_name": "Ignav", "provider_type": "ignav_generated", "links": [{"url": "https://ignav.com/deeplink/xyz"}]}
         ]
         link = IgnavFlightProvider._pick_booking_link(options)
         assert link.link_type == BookingLinkType.PROVIDER_DEEPLINK
 
-    def test_empty_url_falls_through_to_unavailable(self):
-        options = [{"provider": "Ignav", "url": "", "link_type": "airline_direct"}]
+    def test_empty_url_in_links_falls_through_to_unavailable(self):
+        options = [{"provider_name": "Ignav", "provider_type": "airline", "links": [{"url": ""}]}]
         link = IgnavFlightProvider._pick_booking_link(options)
         assert link.link_type == BookingLinkType.UNAVAILABLE
+
+    def test_url_without_scheme_gets_https_prefix(self):
+        options = [{"provider_name": "AA", "provider_type": "airline", "links": [{"url": "aa.com/booking/123"}]}]
+        link = IgnavFlightProvider._pick_booking_link(options)
+        assert link.url == "https://aa.com/booking/123"
+        assert link.link_type == BookingLinkType.AIRLINE_DIRECT
+
+    def test_airline_link_nested_under_links_array_is_selected(self):
+        options = [
+            {
+                "provider_name": "American Airlines",
+                "provider_type": "airline",
+                "links": [
+                    {"url": "https://aa.com/booking/abc"},
+                    {"url": "https://aa.com/booking/def"},
+                ],
+            }
+        ]
+        link = IgnavFlightProvider._pick_booking_link(options)
+        assert link.link_type == BookingLinkType.AIRLINE_DIRECT
+        assert "aa.com" in link.url
+
+    def test_scheme_relative_url_gets_https(self):
+        options = [{"provider_name": "AF", "provider_type": "airline", "links": [{"url": "//airfrance.com/book/xyz"}]}]
+        link = IgnavFlightProvider._pick_booking_link(options)
+        assert link.url == "https://airfrance.com/book/xyz"

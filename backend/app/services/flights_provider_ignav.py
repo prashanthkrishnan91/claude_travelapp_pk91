@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 
 _IGNAV_BASE_URL = "https://ignav.com/api/fares"
 _HTTP_TIMEOUT_SECONDS = 15.0
-_BOOKING_LINK_TIMEOUT_SECONDS = 5.0
+_BOOKING_LINK_TIMEOUT_SECONDS = 3.0
 _MAX_OFFERS = 10           # cap results returned to frontend
 _MAX_BOOKING_LINK_FETCHES = 5   # parallel limit for booking-link calls
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
@@ -223,51 +223,67 @@ class IgnavFlightProvider:
         )
 
     @staticmethod
-    def _pick_booking_link(options: List[Dict[str, Any]], provider_name: str = "ignav_flights") -> FlightBookingLink:
-        """Pick the best booking link from options list.
+    def _normalize_url(url: str) -> str:
+        """Ensure URL has an https:// scheme so frontend hrefs are absolute."""
+        url = url.strip()
+        if not url:
+            return url
+        if url.startswith("//"):
+            return "https:" + url
+        if "://" not in url:
+            return "https://" + url
+        return url
 
-        Priority: airline_direct > ota > provider_deeplink > unavailable.
-        Returns UNAVAILABLE booking link if no usable option is found.
+    @staticmethod
+    def _pick_booking_link(
+        booking_options: List[Dict[str, Any]],
+        provider_name: str = "ignav_flights",
+    ) -> FlightBookingLink:
+        """Flatten booking_options[].links[], classify by provider_type, pick best.
+
+        Ignav response shape per option:
+          { provider_name, provider_type, links: [{url, price}, ...] }
+
+        provider_type mapping:
+          "airline"      → airline_direct
+          "third_party"  → ota
+          anything else  → provider_deeplink (if URL present)
+
+        Priority: airline_direct > ota > provider_deeplink.
+        Returns UNAVAILABLE if no usable link found.
         """
-        if not options:
-            return FlightBookingLink(
-                url="",
-                link_type=BookingLinkType.UNAVAILABLE,
-                provider_name=provider_name,
-            )
-
         _rank = {
-            "airline_direct": 0,
-            "ota": 1,
-            "provider_deeplink": 2,
+            BookingLinkType.AIRLINE_DIRECT: 0,
+            BookingLinkType.OTA: 1,
+            BookingLinkType.PROVIDER_DEEPLINK: 2,
         }
 
-        def option_key(opt: Dict[str, Any]) -> int:
-            lt = (opt.get("link_type") or "").lower()
-            return _rank.get(lt, 3)
+        candidates: List[Tuple[BookingLinkType, str]] = []
+        for option in (booking_options or []):
+            raw_type = (option.get("provider_type") or "").lower().strip()
+            if raw_type == "airline":
+                link_type = BookingLinkType.AIRLINE_DIRECT
+            elif raw_type == "third_party":
+                link_type = BookingLinkType.OTA
+            else:
+                link_type = BookingLinkType.PROVIDER_DEEPLINK
 
-        best = min(options, key=option_key)
-        url = (best.get("url") or "").strip()
-        raw_lt = (best.get("link_type") or "").lower()
+            for link in (option.get("links") or []):
+                url = IgnavFlightProvider._normalize_url((link.get("url") or ""))
+                if url:
+                    candidates.append((link_type, url))
 
-        if not url:
+        if not candidates:
             return FlightBookingLink(
                 url="",
                 link_type=BookingLinkType.UNAVAILABLE,
                 provider_name=provider_name,
             )
 
-        if raw_lt == "airline_direct":
-            link_type = BookingLinkType.AIRLINE_DIRECT
-        elif raw_lt == "ota":
-            link_type = BookingLinkType.OTA
-        else:
-            # Ignav-generated link; classify as provider_deeplink
-            link_type = BookingLinkType.PROVIDER_DEEPLINK
-
+        best_type, best_url = min(candidates, key=lambda c: _rank.get(c[0], 3))
         return FlightBookingLink(
-            url=url,
-            link_type=link_type,
+            url=best_url,
+            link_type=best_type,
             provider_name=provider_name,
         )
 

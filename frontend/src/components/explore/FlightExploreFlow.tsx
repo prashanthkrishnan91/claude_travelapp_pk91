@@ -88,8 +88,7 @@ function cabinLabel(cabin: string): string {
 }
 
 function buildFlightContext(
-  offer: FlightItineraryOffer,
-  formValues: FlightFormValues
+  offer: FlightItineraryOffer
 ): ExploreResultContext {
   const label =
     `${offer.origin} → ${offer.destination}` +
@@ -130,13 +129,7 @@ function buildFlightContext(
 // FlightCard
 // ---------------------------------------------------------------------------
 
-function FlightCard({
-  offer,
-  formValues,
-}: {
-  offer: FlightItineraryOffer;
-  formValues: FlightFormValues;
-}) {
+function FlightCard({ offer }: { offer: FlightItineraryOffer }) {
   const ob = offer.outboundLeg;
   const ret = offer.returnLeg;
   const airline =
@@ -144,7 +137,7 @@ function FlightCard({
   const flightNumbers = ob.segments.map((s) => s.flightNumber).join(", ");
   const hasBookingLink =
     offer.bookingLink.linkType !== "unavailable" && offer.bookingLink.url;
-  const context = buildFlightContext(offer, formValues);
+  const context = buildFlightContext(offer);
 
   return (
     <div
@@ -561,7 +554,6 @@ export function FlightExploreFlow() {
                   <FlightCard
                     key={`${offer.provider}-${offer.fetchedAt}-${i}`}
                     offer={offer}
-                    formValues={form}
                   />
                 ))}
               </div>
