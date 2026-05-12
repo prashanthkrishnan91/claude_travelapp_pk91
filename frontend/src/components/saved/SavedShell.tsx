@@ -16,9 +16,11 @@ import {
   AlertCircle,
   Calendar,
   Users,
+  PlusCircle,
+  CheckCircle2,
 } from "lucide-react";
-import { listSavedItems, deleteSavedItem } from "@/lib/api";
-import type { SavedItem, SavedItemVertical } from "@/types";
+import { listSavedItems, deleteSavedItem, fetchTrips, addSavedItemToTrip } from "@/lib/api";
+import type { SavedItem, SavedItemVertical, Trip } from "@/types";
 
 // ── Vertical config ───────────────────────────────────────────────────────────
 
@@ -94,19 +96,28 @@ function formatSavedDate(iso: string): string {
   }
 }
 
+// ── Add-to-Trip state ─────────────────────────────────────────────────────────
+
+type AddState = "idle" | "picking" | "adding" | "added" | "error";
+
 // ── Saved Item Card ───────────────────────────────────────────────────────────
 
 function SavedItemCard({
   item,
   vertConfig,
+  trips,
   onRemove,
 }: {
   item: SavedItem;
   vertConfig: VerticalCfg;
+  trips: Trip[];
   onRemove: (id: string) => void;
 }) {
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const [addState, setAddState] = useState<AddState>("idle");
+  const [addedToTripName, setAddedToTripName] = useState<string | null>(null);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const { icon: Icon, iconBg, iconColor } = vertConfig;
 
@@ -129,6 +140,9 @@ function SavedItemCard({
 
   const savedDate = formatSavedDate(item.createdAt);
 
+  // Flights are not yet supported for trip conversion
+  const canAddToTrip = item.vertical !== "flight";
+
   // Secondary line: cuisine + address, or destination fallback
   const subtitle =
     [cuisine, address].filter(Boolean).join(" · ") || destination || null;
@@ -143,6 +157,19 @@ function SavedItemCard({
     } catch {
       setRemoving(false);
       setRemoveError("Could not remove. Please try again.");
+    }
+  }
+
+  async function handleAddToTrip(trip: Trip) {
+    setAddState("adding");
+    setAddError(null);
+    try {
+      await addSavedItemToTrip(trip.id, item);
+      setAddedToTripName(trip.title);
+      setAddState("added");
+    } catch {
+      setAddState("error");
+      setAddError("Could not add to trip. Please try again.");
     }
   }
 
@@ -247,6 +274,96 @@ function SavedItemCard({
           {/* Saved date */}
           <p className="text-[10px] text-cream-700 mt-2">Saved {savedDate}</p>
 
+          {/* Add to Trip */}
+          {canAddToTrip && (
+            <div className="mt-2" data-testid="add-to-trip-section">
+              {addState === "idle" && (
+                <button
+                  onClick={() => setAddState("picking")}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/[.06] text-cream-400 hover:bg-white/[.10] transition"
+                  data-testid="add-to-trip-btn"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  Add to Trip
+                </button>
+              )}
+
+              {addState === "picking" && (
+                <div className="space-y-1" data-testid="trip-picker">
+                  {trips.length === 0 ? (
+                    <p className="text-xs text-cream-500 py-1">
+                      No trips yet.{" "}
+                      <Link href="/trips/new" className="text-brand-400 hover:underline">
+                        Create one
+                      </Link>
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-[10px] text-cream-600 uppercase tracking-wide">
+                        Choose a trip
+                      </p>
+                      {trips.map((trip) => (
+                        <button
+                          key={trip.id}
+                          onClick={() => handleAddToTrip(trip)}
+                          className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-cream-300 bg-white/[.05] hover:bg-white/[.10] transition truncate"
+                          data-testid="trip-picker-option"
+                        >
+                          {trip.title} · {trip.destination}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  <button
+                    onClick={() => setAddState("idle")}
+                    className="text-[10px] text-cream-600 hover:text-cream-400 transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              {addState === "adding" && (
+                <div className="flex items-center gap-1.5 text-xs text-cream-500 py-1">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Adding to trip…
+                </div>
+              )}
+
+              {addState === "added" && (
+                <div className="space-y-1">
+                  <div
+                    className="flex items-center gap-1.5 text-xs text-brand-400"
+                    data-testid="add-to-trip-success"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Added to {addedToTripName}
+                  </div>
+                  <button
+                    onClick={() => setAddState("idle")}
+                    className="text-[10px] text-cream-600 hover:text-cream-400 transition"
+                  >
+                    Add to another trip
+                  </button>
+                </div>
+              )}
+
+              {addState === "error" && (
+                <div className="space-y-1">
+                  <p className="text-xs text-rose-400" data-testid="add-to-trip-error">
+                    {addError}
+                  </p>
+                  <button
+                    onClick={() => setAddState("idle")}
+                    className="text-[10px] text-cream-500 hover:text-cream-300 transition"
+                  >
+                    Try again
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Remove error */}
           {removeError && (
             <p className="text-xs text-rose-400 mt-1" data-testid="remove-error">
@@ -264,10 +381,12 @@ function SavedItemCard({
 function VerticalGroup({
   config,
   items,
+  trips,
   onRemove,
 }: {
   config: VerticalCfg;
   items: SavedItem[];
+  trips: Trip[];
   onRemove: (id: string) => void;
 }) {
   if (items.length === 0) return null;
@@ -289,6 +408,7 @@ function VerticalGroup({
             key={item.id}
             item={item}
             vertConfig={config}
+            trips={trips}
             onRemove={onRemove}
           />
         ))}
@@ -301,6 +421,7 @@ function VerticalGroup({
 
 export function SavedShell() {
   const [items, setItems] = useState<SavedItem[]>([]);
+  const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -308,8 +429,9 @@ export function SavedShell() {
     setLoading(true);
     setError(null);
     try {
-      const data = await listSavedItems();
+      const [data, tripList] = await Promise.all([listSavedItems(), fetchTrips()]);
       setItems(data.filter((i) => i.status === "active"));
+      setTrips(tripList);
     } catch {
       setError("Could not load saved ideas. Please try again.");
     } finally {
@@ -407,6 +529,7 @@ export function SavedShell() {
               key={config.key}
               config={config}
               items={groupItems}
+              trips={trips}
               onRemove={handleRemove}
             />
           ))}

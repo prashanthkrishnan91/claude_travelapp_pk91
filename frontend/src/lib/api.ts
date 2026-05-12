@@ -2206,3 +2206,75 @@ export async function listSavedItems(vertical?: string): Promise<SavedItem[]> {
 export async function deleteSavedItem(itemId: string): Promise<void> {
   await apiFetch<void>(`/saved-items/${itemId}`, { method: "DELETE" });
 }
+
+// ─── Saved → Trip Conversion (Stage 3 v2) ────────────────────────────────────
+
+const SAVED_VERTICAL_TO_ITEM_TYPE: Record<string, string> = {
+  restaurant: "meal",
+  attraction: "activity",
+  hotel: "hotel",
+};
+
+/**
+ * Promote a saved idea into an unscheduled itinerary candidate on an existing trip.
+ * Posts directly to POST /itinerary/items with day_id omitted (null = unscheduled).
+ * Hotel details carry discovery context only — no rates, prices, or booking fields.
+ * Flights are not supported; callers must guard on item.vertical !== "flight".
+ */
+export async function addSavedItemToTrip(
+  tripId: string,
+  item: SavedItem
+): Promise<ItineraryItem> {
+  const itemType = SAVED_VERTICAL_TO_ITEM_TYPE[item.vertical];
+  if (!itemType) {
+    throw new Error(`Vertical "${item.vertical}" is not supported for trip conversion.`);
+  }
+
+  const snap = item.displaySnapshot;
+  const ctx = item.searchContext;
+
+  const title =
+    (typeof snap["name"] === "string" && snap["name"] ? snap["name"] : null) ??
+    item.displayName;
+
+  const location: string | undefined =
+    (typeof snap["address"] === "string" && snap["address"] ? snap["address"] : undefined) ??
+    (typeof snap["destination"] === "string" && snap["destination"] ? snap["destination"] : undefined) ??
+    (typeof ctx["destination"] === "string" && ctx["destination"] ? ctx["destination"] : undefined);
+
+  const details: Record<string, unknown> = {
+    name: title,
+    source: "saved_item",
+    savedItemId: item.id,
+  };
+
+  if (typeof snap["address"] === "string" && snap["address"]) details.address = snap["address"];
+  if (typeof snap["rating"] === "number") details.rating = snap["rating"];
+  if (Array.isArray(snap["tags"]) && (snap["tags"] as unknown[]).length) details.tags = snap["tags"];
+  if (typeof snap["googleMapsUri"] === "string" && snap["googleMapsUri"]) details.googleMapsUri = snap["googleMapsUri"];
+
+  if (item.vertical === "restaurant") {
+    if (typeof snap["cuisine"] === "string" && snap["cuisine"]) details.cuisine = snap["cuisine"];
+    if (typeof snap["priceLevel"] === "number") details.priceLevel = snap["priceLevel"];
+  }
+
+  if (item.vertical === "hotel") {
+    if (typeof ctx["checkIn"] === "string" && ctx["checkIn"]) details.checkIn = ctx["checkIn"];
+    if (typeof ctx["checkOut"] === "string" && ctx["checkOut"]) details.checkOut = ctx["checkOut"];
+    if (typeof ctx["guests"] === "number") details.guests = ctx["guests"];
+  }
+
+  const payload: Record<string, unknown> = {
+    trip_id: tripId,
+    item_type: itemType,
+    title,
+    details,
+    position: 0,
+  };
+  if (location) payload.location = location;
+
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
