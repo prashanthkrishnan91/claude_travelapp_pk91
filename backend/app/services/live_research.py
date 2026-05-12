@@ -736,15 +736,28 @@ def select_default_provider(timeout: float = 6.0) -> LiveSearchProvider:
     Settings are read from environment variables directly so that this module
     has no hard dependency on ``app.core.config`` (which imports pydantic-
     settings) and stays unit-testable in minimal harnesses.
+
+    Provider Policy gate: every candidate is checked against
+    ``app.services.provider_registry.is_provider_active`` before being
+    returned.  Quarantined providers (Brave, Serper) will not activate even
+    when their API keys are present in the environment.
     """
+    # Local import keeps the registry dependency lazy so this module stays
+    # importable in minimal test harnesses that do not load the full app.
+    try:
+        from app.services.provider_registry import is_provider_active as _active
+    except Exception:  # pragma: no cover
+        def _active(pid: str) -> bool:  # type: ignore[misc]
+            return False  # fail closed: unknown registry state → no live provider
+
     tavily = _read_provider_api_key("TAVILY_API_KEY")
-    if tavily:
+    if tavily and _active("tavily"):
         return TavilyProvider(api_key=tavily, timeout=timeout)
     brave = _read_provider_api_key("BRAVE_SEARCH_API_KEY")
-    if brave:
+    if brave and _active("brave"):
         return BraveSearchProvider(api_key=brave, timeout=timeout)
     serper = _read_provider_api_key("SERPER_API_KEY")
-    if serper:
+    if serper and _active("serper"):
         return SerperProvider(api_key=serper, timeout=timeout)
     return _NoopProvider()
 

@@ -130,20 +130,29 @@ def reset_flight_provider_cache() -> None:
 def get_flight_provider() -> FlightProvider:
     """Return the active ``FlightProvider``.
 
-    Flights v1 — env-gated registry:
-    - When ``AMADEUS_FLIGHTS_ENABLED`` is truthy AND both
-      ``AMADEUS_CLIENT_ID`` and ``AMADEUS_CLIENT_SECRET`` are set, returns
-      a memoised ``AmadeusFlightProvider`` (its OAuth token cache is
-      internal and survives across requests).
+    Flights v1 — registry-gated then env-gated:
+
+    - Provider Registry v1 is the outer gate: ``duffel_flights`` must be
+      ``production_allowed`` and not ``DISABLED``/``QUARANTINED`` in
+      ``app.services.provider_registry`` before the adapter is attempted.
+      This means Duffel Flights stays off even if ``DUFFEL_FLIGHTS_ENABLED``
+      is set in env, until the registry entry is explicitly re-approved.
+    - When the registry allows it AND ``DUFFEL_FLIGHTS_ENABLED`` is truthy
+      AND ``DUFFEL_ACCESS_TOKEN`` is set, returns a memoised
+      ``DuffelFlightProvider``.
     - Otherwise falls back to ``NullFlightProvider`` so unconfigured
       deployments fail closed with ``UNAVAILABLE`` and zero rows.
     """
     try:
         import os  # local import keeps module pure when reading env
+        from app.services.provider_registry import is_provider_active
         from app.services.flights_provider_duffel import (
             duffel_enabled_from_env,
             build_duffel_provider_from_env,
         )
+        # Registry gate: Duffel Flights must be approved in Provider Policy v1.
+        if not is_provider_active("duffel_flights"):
+            return _DEFAULT_PROVIDER
         if not duffel_enabled_from_env():
             return _DEFAULT_PROVIDER
         env_key = (

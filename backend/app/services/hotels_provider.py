@@ -112,21 +112,27 @@ def reset_hotel_provider_cache() -> None:
 def get_hotel_provider() -> HotelProvider:
     """Return the active ``HotelProvider``.
 
-    Hotels v1 — env-gated registry:
+    Hotels v1 — registry-gated then env-gated:
 
-    - When ``GOOGLE_PLACES_API_KEY`` is set AND
-      ``GOOGLE_HOTELS_ENABLED`` is truthy (defaults to enabled when
-      the key is present and the flag is unset), returns a memoised
+    - Provider Registry v1 is the outer gate: ``google_places`` must be
+      ``production_allowed`` and not ``DISABLED``/``QUARANTINED`` in
+      ``app.services.provider_registry`` before the adapter is attempted.
+    - When the registry allows it AND ``GOOGLE_PLACES_API_KEY`` is set AND
+      ``GOOGLE_HOTELS_ENABLED`` is truthy, returns a memoised
       ``GooglePlacesHotelProvider``.
     - Otherwise falls back to ``NullHotelProvider`` so unconfigured
       deployments fail closed with ``UNAVAILABLE`` and zero rows.
     """
     try:
         import os  # local import keeps module pure when reading env
+        from app.services.provider_registry import is_provider_active
         from app.services.hotels_provider_google_places import (
             build_google_places_hotel_provider_from_env,
             google_places_hotels_enabled_from_env,
         )
+        # Registry gate: Google Places must be approved in Provider Policy v1.
+        if not is_provider_active("google_places"):
+            return _DEFAULT_PROVIDER
         if not google_places_hotels_enabled_from_env():
             return _DEFAULT_PROVIDER
         env_key = (

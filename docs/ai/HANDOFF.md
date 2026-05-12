@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-11
+Last updated: 2026-05-12
 
 ## Purpose
 
@@ -9,13 +9,16 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Current product stage
 
 - Roadmap stage: **Stage 2 — Open app before trip exists.** Stage 1 is GREEN. Stage 2A contract is defined in `docs/product/STAGE_2A_CONTRACT.md`. See `docs/product/ROADMAP.md`.
-- Active build queue item: **Stage 2A Slice 5C — Hotels Discovery Live.** Slice 5B shipped the `HotelOffer` contract and `DuffelStaysProvider` scaffold. Next: wire `HotelExploreFlow` as discovery-only lodging cards (same pattern as Attractions Slice 4). Duffel Stays live offers are Slice 5D, blocked on credentials.
+- Active build queue item: **Stage 2A Slice 5C — Hotels Discovery Live.** Provider Registry v1 cleanup is complete (prerequisite). Next: wire `HotelExploreFlow` as discovery-only lodging cards (same pattern as Attractions Slice 4). Duffel Stays live offers are deferred — not an active roadmap item without explicit re-approval.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
 
 - OS v4 is the canonical operating system. No v4.2 or v5 labels.
-- Google Places is canonical for addable cards. Yelp / Foursquare / editorial are enrichment / evidence only and cannot mint addable cards.
+- **Provider Registry v1** (`backend/app/services/provider_registry.py`) is the single policy source of truth for provider activation, addable-card authority, and disabled/quarantined status. Known active/risky provider-selection paths now consult it; future provider additions must register policy + adapter + tests. See `docs/product/DECISION_LOG.md` 2026-05-12 for the policy decision.
+- Google Places is canonical for addable cards (the only `can_create_addable_cards=True` entry). Yelp / Foursquare / editorial are enrichment / evidence only and cannot mint addable cards. Foursquare is disabled; enrichment is covered by Yelp.
+- Brave, Serper, Duffel (flights + stays), Amadeus, and Foursquare are disabled/quarantined in the registry. They cannot activate in production even if API keys are present in env. Re-approval in the registry is required to re-enable any of them.
+- Duffel and Amadeus are no longer active roadmap items. See DECISION_LOG 2026-05-12.
 - AI Concierge card field contract is the source of truth (`display.displayWhy`, `supportingDetails.whyPick`, top-level `whyPick`).
 - Latency Budget Pack governs total request-path latency, not just local provider timeouts.
 - For long architecture references, read `artifacts/travel_concierge_product_north_star_v3.md`, `artifacts/travel_concierge_v4_travel_os_addendum.md`, `artifacts/ai_concierge_semantic_place_intelligence.md`, and `artifacts/ai_concierge_semantic_place_intelligence_v2_amendment.md` rather than copying them here.
@@ -25,6 +28,7 @@ This file is **current operational state**, not a historical log. It is meant to
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
 
+- 2026-05-12 — **Provider Registry v1 + Explore Provider Scope Reset (corrected).** Added `backend/app/services/provider_registry.py` as the central provider policy (ProviderRole enum, ProviderEntry dataclass, PROVIDER_REGISTRY dict). Approved stack: Google Places (canonical/addable cards), Anthropic (reasoning only), Tavily (research only), Yelp (enrichment only), OpenWeather (weather only). Disabled/quarantined: Duffel Flights, Duffel Stays, Amadeus, Brave, Serper, Foursquare. Registry gates applied to: `live_research.select_default_provider()` (Brave/Serper blocked; fail-closed on registry import failure), `flights_provider.get_flight_provider()` (Duffel Flights blocked), `hotels_provider.get_hotel_provider()` (Google Places gated), `hotels_provider_duffel_stays.build_duffel_stays_provider_from_env()` (Duffel Stays blocked at factory). 58 tests pass (8 skip in minimal harness, run in Railway/Docker). No SQL. No UI change. No Concierge notes change. Duffel/Amadeus are no longer active roadmap items.
 - 2026-05-12 — **Stage 2A Slice 5B — Hotel Offer contract + Duffel Stays scaffold.** Added `HotelOffer` dataclass to `backend/app/contracts/hotels.py` (all required offer fields with invariant enforcement; rejects mock/demo providers, zero price when available, empty disclaimer). Added `DuffelStaysProvider` scaffold in `backend/app/services/hotels_provider_duffel_stays.py` (disabled by default; requires `DUFFEL_STAYS_API_KEY` + `DUFFEL_STAYS_ENABLED=1`; returns `UNAVAILABLE` with zero rows; no mock fallback). Added `HotelDiscoveryCard` / `HotelOffer` TypeScript interfaces in `frontend/src/components/explore/types.ts` (discriminated by `kind`). 38 new backend tests pass. No SQL migration. No UI behavior change. `HotelExploreFlow` remains deferred.
 - 2026-05-11 — **Stage 2A Slice 4 — Attractions Vertical Live.** `AttractionExploreFlow` rewritten from deferred-state to live: calls `callConciergeSearch(null, query, undefined, destination)` (tripless Concierge, Slice 3), renders `UnifiedAttractionResult` cards with rating, category, address, why-pick note, tags, maps link, and `ResultActionSheet`. Query built from destination + optional interest field. Google-Places-verified cards only. 53 frontend structural tests (4 new attraction-live tests replace 4 deferred-state tests). No SQL migration. No backend changes.
 - 2026-05-11 — **Stage 2A Slice 3 — Trip-Optional AI Concierge.** `trip_id` made `Optional[UUID]` in `ConciergeRequest` + `ConciergeSearchRequest`. Added `destination` field as the trip-optional alternative. `model_validator` enforces at least one present. `service.search()` / `service.answer()` skip `_fetch_trip` + `_save_message` when `trip_id` is None and build `trip = {"destination": ...}` directly. `build_context_window` bypassed (returns no prior cards). Frontend: `callConcierge`/`callConciergeSearch` accept `tripId: string | null` + optional `destination` param; body conditionally includes `trip_id` / `destination`. 12 backend pytest + 17 frontend structural tests. No SQL migration. No change to existing trip-bound Concierge behavior. TripBuilder / tripCandidates untouched.
@@ -53,7 +57,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 - `saved_items` migration 005 must be applied to the Supabase project before Save is live in production. Migration is in `backend/db/migrations/005_saved_items.sql`.
 - Hotels Slice 5A is discovery-only (`HotelDiscoveryCard`); do not add rates, prices, availability, or a fake hotel provider. Real hotel offers require a provider-backed Hotel Offer contract (deferred to Stage 2B or later).
-- Flights vertical is deferred: `/search/flights` is mock-backed. Needs Duffel/Amadeus real provider.
+- Flights vertical is deferred: `/search/flights` is mock-backed. Duffel and Amadeus are disabled in Provider Registry v1 and are not active roadmap items. A flights provider requires explicit re-approval in the registry.
 - Saved-list foundation (Stage 3 root object) not built; ideas still need a non-trip home.
 - AI destination intelligence, road trip mode, deal/points intelligence, and Travel Watchtower are deferred to later stages.
 
@@ -61,7 +65,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 Stage 2A Slice 5C — Hotels Discovery Live. Wire `HotelExploreFlow` as discovery-only lodging cards using `callConciergeSearch(null, query, undefined, destination)` (same tripless pattern as Attractions Slice 4). Render `HotelDiscoveryCard` results with rating, address, Google Maps link, and `ResultActionSheet`. Preserve search context (destination, check_in, check_out, guests, rooms) in result payload. No rates, prices, or availability. Requires only `GOOGLE_PLACES_API_KEY` (already in Railway backend env). No new Supabase migration.
 
-Slice 5D (Duffel Stays live) is **blocked on credentials** — do not start until `DUFFEL_STAYS_API_KEY` + `DUFFEL_STAYS_ENABLED=1` are provisioned in **Railway backend env only** (never Vercel/frontend). See `DECISION_LOG.md` 2026-05-12.
+Note: Duffel Stays (Slice 5D) is no longer an active roadmap item. Re-approval in Provider Registry v1 is required before any Duffel or booking-provider path can be activated. See `DECISION_LOG.md` 2026-05-12.
 
 ## Handoff maintenance rule
 

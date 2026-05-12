@@ -119,11 +119,24 @@ class DuffelStaysProvider:
 def build_duffel_stays_provider_from_env(
     env: Optional[Dict[str, str]] = None,
 ) -> Optional[DuffelStaysProvider]:
-    """Return a ``DuffelStaysProvider`` iff both the key and flag are set.
+    """Return a ``DuffelStaysProvider`` iff the registry allows it AND both env vars are set.
+
+    Provider Registry gate (outer): ``duffel_stays`` must be
+    ``production_allowed`` and not ``QUARANTINED``/``DISABLED`` in
+    ``app.services.provider_registry``.  Because ``duffel_stays`` is
+    QUARANTINED, this returns ``None`` even when ``DUFFEL_STAYS_API_KEY``
+    and ``DUFFEL_STAYS_ENABLED=1`` are present.  Explicit registry
+    re-approval is required before this factory can return a live provider.
 
     Returns ``None`` (not an exception) when disabled so callers fall
     back to ``NullHotelProvider`` without noise.
     """
+    try:
+        from app.services.provider_registry import is_provider_active
+        if not is_provider_active("duffel_stays"):
+            return None
+    except Exception:
+        return None  # fail closed if registry is unreachable
     env = env if env is not None else os.environ  # type: ignore[assignment]
     if not duffel_stays_enabled_from_env(env):
         return None
