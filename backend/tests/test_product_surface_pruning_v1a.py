@@ -425,6 +425,10 @@ _KNOWN_LEGACY_SEARCH_CALLERS: frozenset = frozenset({
     # discovery / has_real_rate markers.  No live caller; documents
     # the OptimizeTripModal discovery-only refusal.
     pathlib.PurePosixPath("frontend/tests/hotels-discovery-only.test.mjs"),
+    # Flights v1 live search contract test — references ``/search/flights``
+    # in a ``assert.doesNotMatch`` assertion proving ``searchFlightsExplore``
+    # does NOT call the legacy route.  No live caller; documents migration intent.
+    pathlib.PurePosixPath("frontend/tests/flights-ignav-live.test.mjs"),
 })
 
 # Tokens that mean "this file calls the legacy /search/* mock-backed surface".

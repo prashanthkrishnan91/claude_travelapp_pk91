@@ -1,18 +1,38 @@
 "use client";
 
 /**
- * Flights vertical — structured input + deferred state.
+ * Flights vertical — live Ignav-backed search (Flights v1).
  *
- * POST /search/flights requires IATA codes + dates and is classified
- * mock-backed (BLOCK_LEGACY_PRODUCT_MOCK) in Product Surface Pruning v1A.
- * A real provider (Duffel/Amadeus) is needed before this vertical can
- * execute. The form collects origin, destination, dates, passengers, and
- * cabin class so the full context is action-ready for Slice 2.
+ * Calls POST /explore/flights when the form is submitted.
+ * Renders compact flight cards when offers are returned.
+ * Falls back to polished unavailable/error states when provider is off or errors.
+ *
+ * Safety invariants:
+ * - No mock/placeholder flight data ever rendered.
+ * - Cash price only from provider (never estimated).
+ * - No points prices (separately gated track).
+ * - IGNAV_API_KEY is server-side only; no NEXT_PUBLIC_ key exposure.
  */
 
 import { useState } from "react";
-import { Plane, Calendar, Users, ArrowRight, Construction } from "lucide-react";
-import type { ExploreResultContext } from "./types";
+import {
+  Plane,
+  Calendar,
+  Users,
+  ArrowRight,
+  Construction,
+  ExternalLink,
+  Clock,
+  AlertCircle,
+} from "lucide-react";
+import { searchFlightsExplore } from "@/lib/api";
+import type { FlightExploreRequest, FlightExploreResponse } from "@/lib/api";
+import type { FlightItineraryOffer, ExploreResultContext } from "./types";
+import { ResultActionSheet } from "./ResultActionSheet";
+
+// ---------------------------------------------------------------------------
+// Form types
+// ---------------------------------------------------------------------------
 
 interface FlightFormValues {
   origin: string;
@@ -23,6 +43,304 @@ interface FlightFormValues {
   cabinClass: "economy" | "premium_economy" | "business" | "first";
 }
 
+type SearchState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "results"; response: FlightExploreResponse }
+  | { kind: "error"; message: string };
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatTime(isoStr: string): string {
+  if (!isoStr) return "--:--";
+  try {
+    // Prefer parsing as UTC; strip trailing Z for display
+    const d = new Date(isoStr);
+    return d.toUTCString().slice(17, 22); // "HH:MM"
+  } catch {
+    return isoStr.slice(11, 16);
+  }
+}
+
+function formatDuration(minutes: number): string {
+  if (!minutes) return "--";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+function formatPrice(currency: string, amount: number): string {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(0)}`;
+  }
+}
+
+function cabinLabel(cabin: string): string {
+  return cabin.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function buildFlightContext(
+  offer: FlightItineraryOffer
+): ExploreResultContext {
+  const label =
+    `${offer.origin} → ${offer.destination}` +
+    (offer.tripType === "round_trip" ? " (round-trip)" : "");
+
+  return {
+    vertical: "flights",
+    destination: offer.destination,
+    origin: offer.origin,
+    dates: {
+      departure: offer.departureDate,
+      returnDate: offer.returnDate ?? undefined,
+    },
+    passengers: offer.passengers,
+    cabinClass: offer.cabinClass,
+    originalPayload: {
+      // Flight offer fields for saved-item display snapshot
+      name: label,
+      origin: offer.origin,
+      destination: offer.destination,
+      departureDate: offer.departureDate,
+      returnDate: offer.returnDate ?? undefined,
+      tripType: offer.tripType,
+      passengers: offer.passengers,
+      cabinClass: offer.cabinClass,
+      price: offer.price,
+      bookingLink: offer.bookingLink,
+      provider: offer.provider,
+      liveCachedStatus: offer.liveCachedStatus,
+      fetchedAt: offer.fetchedAt,
+      outboundLeg: offer.outboundLeg,
+      returnLeg: offer.returnLeg ?? undefined,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// FlightCard
+// ---------------------------------------------------------------------------
+
+function FlightCard({ offer }: { offer: FlightItineraryOffer }) {
+  const ob = offer.outboundLeg;
+  const ret = offer.returnLeg;
+  const airline =
+    ob.segments[0]?.airline ?? "Unknown airline";
+  const flightNumbers = ob.segments.map((s) => s.flightNumber).join(", ");
+  const hasBookingLink =
+    offer.bookingLink.linkType !== "unavailable" && offer.bookingLink.url;
+  const context = buildFlightContext(offer);
+
+  return (
+    <div
+      className="rounded-2xl border border-white/[.08] bg-white/[.03] p-4 space-y-3"
+      data-testid="flight-card"
+    >
+      {/* Header row: airline + price */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <Plane className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+            <span
+              className="text-sm font-semibold text-cream-100 truncate"
+              data-testid="flight-airline"
+            >
+              {airline}
+            </span>
+            <span className="text-xs text-cream-600">{flightNumbers}</span>
+          </div>
+          <p className="text-xs text-cream-500 mt-0.5">
+            {cabinLabel(offer.cabinClass)} ·{" "}
+            {offer.passengers} pax
+          </p>
+        </div>
+        <div className="text-right shrink-0">
+          <p
+            className="text-base font-bold text-cream-100"
+            data-testid="flight-price"
+          >
+            {formatPrice(offer.price.currency, offer.price.totalAmount)}
+          </p>
+          <p className="text-[10px] text-cream-600 uppercase tracking-wide">
+            {offer.price.taxesFeesIncluded === true
+              ? "taxes incl."
+              : offer.price.taxesFeesIncluded === false
+              ? "+ taxes"
+              : "total"}
+          </p>
+        </div>
+      </div>
+
+      {/* Outbound leg */}
+      <LegRow leg={ob} label={offer.tripType === "round_trip" ? "Outbound" : undefined} />
+
+      {/* Return leg (round-trip only) */}
+      {ret && <LegRow leg={ret} label="Return" />}
+
+      {/* Live status badge + booking CTA */}
+      <div className="flex items-center justify-between pt-1 border-t border-white/[.05]">
+        <span
+          className={[
+            "text-[10px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wide",
+            offer.liveCachedStatus === "live"
+              ? "bg-emerald-500/10 text-emerald-400"
+              : "bg-amber-500/10 text-amber-400",
+          ].join(" ")}
+          data-testid="flight-live-status"
+        >
+          {offer.liveCachedStatus}
+        </span>
+
+        {hasBookingLink ? (
+          <a
+            href={offer.bookingLink.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/15 text-sky-300 text-xs font-medium hover:bg-sky-500/25 transition"
+            data-testid="flight-book-link"
+            aria-label={`Book flight on ${offer.bookingLink.providerName}`}
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            Book
+          </a>
+        ) : (
+          <span className="text-xs text-cream-700 italic">
+            Booking link unavailable
+          </span>
+        )}
+      </div>
+
+      {/* Save action */}
+      <ResultActionSheet context={context} />
+    </div>
+  );
+}
+
+function LegRow({
+  leg,
+  label,
+}: {
+  leg: FlightItineraryOffer["outboundLeg"];
+  label?: string;
+}) {
+  return (
+    <div className="space-y-1">
+      {label && (
+        <p className="text-[10px] uppercase tracking-wide text-cream-600 font-medium">
+          {label}
+        </p>
+      )}
+      <div className="flex items-center gap-2 text-sm">
+        <span className="font-semibold text-cream-100 w-11 shrink-0">
+          {formatTime(leg.departureTime)}
+        </span>
+        <span className="text-cream-500 font-medium">{leg.origin}</span>
+        <ArrowRight className="w-3 h-3 text-cream-600 shrink-0" />
+        <span className="text-cream-500 font-medium">{leg.destination}</span>
+        <span className="font-semibold text-cream-100">
+          {formatTime(leg.arrivalTime)}
+        </span>
+      </div>
+      <div className="flex items-center gap-3 text-xs text-cream-600">
+        <span className="flex items-center gap-1">
+          <Clock className="w-3 h-3" />
+          {formatDuration(leg.durationMinutes)}
+        </span>
+        <span>
+          {leg.stops === 0
+            ? "Non-stop"
+            : leg.stops === 1
+            ? "1 stop"
+            : `${leg.stops} stops`}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Unavailable / error states
+// ---------------------------------------------------------------------------
+
+function UnavailableState() {
+  return (
+    <div
+      className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-6 text-center space-y-3"
+      data-testid="flight-unavailable-state"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex justify-center">
+        <div className="w-12 h-12 rounded-full bg-sky-500/10 text-sky-400 flex items-center justify-center">
+          <Construction className="w-6 h-6" />
+        </div>
+      </div>
+      <div>
+        <p className="text-cream-200 font-semibold text-sm">
+          Flight search unavailable
+        </p>
+        <p className="text-cream-500 text-xs mt-1">
+          Live flight search is not available at the moment. Please try again
+          later.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({
+  origin,
+  destination,
+}: {
+  origin: string;
+  destination: string;
+}) {
+  return (
+    <div
+      className="rounded-2xl border border-white/[.06] bg-white/[.02] p-6 text-center space-y-2"
+      data-testid="flight-empty-state"
+      role="status"
+    >
+      <Plane className="w-8 h-8 text-cream-600 mx-auto" />
+      <p className="text-cream-300 text-sm font-medium">No flights found</p>
+      <p className="text-cream-600 text-xs">
+        No available flights for {origin} → {destination}. Try different dates
+        or airports.
+      </p>
+    </div>
+  );
+}
+
+function ErrorState({ message }: { message?: string }) {
+  return (
+    <div
+      className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-5 flex items-start gap-3"
+      data-testid="flight-error-state"
+      role="alert"
+    >
+      <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+      <div>
+        <p className="text-sm font-medium text-rose-300">Search failed</p>
+        <p className="text-xs text-cream-500 mt-0.5">
+          {message ?? "Could not complete flight search. Please try again."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export function FlightExploreFlow() {
   const [form, setForm] = useState<FlightFormValues>({
     origin: "",
@@ -32,8 +350,7 @@ export function FlightExploreFlow() {
     passengers: 1,
     cabinClass: "economy",
   });
-  const [submitted, setSubmitted] = useState(false);
-  const [savedCtx, setSavedCtx] = useState<ExploreResultContext | null>(null);
+  const [searchState, setSearchState] = useState<SearchState>({ kind: "idle" });
   const [originError, setOriginError] = useState("");
   const [destError, setDestError] = useState("");
 
@@ -41,14 +358,14 @@ export function FlightExploreFlow() {
     return /^[A-Za-z]{3}$/.test(code.trim());
   }
 
-  function set(field: keyof FlightFormValues, value: string | number) {
-    setSubmitted(false);
+  function setField(field: keyof FlightFormValues, value: string | number) {
     if (field === "origin") setOriginError("");
     if (field === "destination") setDestError("");
+    setSearchState({ kind: "idle" });
     setForm((f) => ({ ...f, [field]: value }));
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     let valid = true;
     if (!validateIata(form.origin)) {
@@ -61,31 +378,34 @@ export function FlightExploreFlow() {
     }
     if (!valid || !form.departure) return;
 
-    const ctx: ExploreResultContext = {
-      vertical: "flights",
-      destination: form.destination.trim().toUpperCase(),
+    setSearchState({ kind: "loading" });
+
+    const req: FlightExploreRequest = {
       origin: form.origin.trim().toUpperCase(),
-      dates: {
-        departure: form.departure || undefined,
-        returnDate: form.returnDate || undefined,
-      },
+      destination: form.destination.trim().toUpperCase(),
+      departureDate: form.departure,
       passengers: form.passengers,
       cabinClass: form.cabinClass,
-      originalPayload: {
-        origin: form.origin.trim().toUpperCase(),
-        destination: form.destination.trim().toUpperCase(),
-        departure: form.departure,
-        returnDate: form.returnDate,
-        passengers: form.passengers,
-        cabinClass: form.cabinClass,
-      },
     };
-    setSavedCtx(ctx);
-    setSubmitted(true);
+    if (form.returnDate) {
+      req.returnDate = form.returnDate;
+    }
+
+    try {
+      const response = await searchFlightsExplore(req);
+      setSearchState({ kind: "results", response });
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Unexpected error during search";
+      setSearchState({ kind: "error", message: msg });
+    }
   }
+
+  const isLoading = searchState.kind === "loading";
 
   return (
     <div className="space-y-6">
+      {/* Search form */}
       <form onSubmit={handleSubmit} className="space-y-3">
         {/* Origin / Destination */}
         <div className="grid grid-cols-2 gap-3">
@@ -95,7 +415,7 @@ export function FlightExploreFlow() {
               <input
                 type="text"
                 value={form.origin}
-                onChange={(e) => set("origin", e.target.value.toUpperCase())}
+                onChange={(e) => setField("origin", e.target.value.toUpperCase())}
                 placeholder="Origin — JFK"
                 maxLength={3}
                 className={`input pl-9 w-full uppercase tracking-widest ${originError ? "border-rose-500/60" : ""}`}
@@ -103,7 +423,9 @@ export function FlightExploreFlow() {
                 required
               />
             </div>
-            {originError && <p className="text-xs text-rose-400 mt-1">{originError}</p>}
+            {originError && (
+              <p className="text-xs text-rose-400 mt-1">{originError}</p>
+            )}
           </div>
           <div>
             <div className="relative">
@@ -111,7 +433,9 @@ export function FlightExploreFlow() {
               <input
                 type="text"
                 value={form.destination}
-                onChange={(e) => set("destination", e.target.value.toUpperCase())}
+                onChange={(e) =>
+                  setField("destination", e.target.value.toUpperCase())
+                }
                 placeholder="Destination — CDG"
                 maxLength={3}
                 className={`input pl-9 w-full uppercase tracking-widest ${destError ? "border-rose-500/60" : ""}`}
@@ -119,7 +443,9 @@ export function FlightExploreFlow() {
                 required
               />
             </div>
-            {destError && <p className="text-xs text-rose-400 mt-1">{destError}</p>}
+            {destError && (
+              <p className="text-xs text-rose-400 mt-1">{destError}</p>
+            )}
           </div>
         </div>
 
@@ -130,7 +456,7 @@ export function FlightExploreFlow() {
             <input
               type="date"
               value={form.departure}
-              onChange={(e) => set("departure", e.target.value)}
+              onChange={(e) => setField("departure", e.target.value)}
               className="input pl-9 w-full"
               aria-label="Departure date"
               required
@@ -141,10 +467,10 @@ export function FlightExploreFlow() {
             <input
               type="date"
               value={form.returnDate}
-              onChange={(e) => set("returnDate", e.target.value)}
+              onChange={(e) => setField("returnDate", e.target.value)}
               min={form.departure || undefined}
               className="input pl-9 w-full"
-              aria-label="Return date (optional)"
+              aria-label="Return date (optional — leave blank for one-way)"
             />
           </div>
         </div>
@@ -156,7 +482,9 @@ export function FlightExploreFlow() {
             <input
               type="number"
               value={form.passengers}
-              onChange={(e) => set("passengers", Math.max(1, parseInt(e.target.value) || 1))}
+              onChange={(e) =>
+                setField("passengers", Math.max(1, parseInt(e.target.value) || 1))
+              }
               min={1}
               max={9}
               className="input pl-9 w-full"
@@ -165,7 +493,7 @@ export function FlightExploreFlow() {
           </div>
           <select
             value={form.cabinClass}
-            onChange={(e) => set("cabinClass", e.target.value)}
+            onChange={(e) => setField("cabinClass", e.target.value)}
             className="input w-full"
             aria-label="Cabin class"
           >
@@ -178,52 +506,79 @@ export function FlightExploreFlow() {
 
         <button
           type="submit"
-          disabled={!form.origin.trim() || !form.destination.trim() || !form.departure}
+          disabled={
+            isLoading ||
+            !form.origin.trim() ||
+            !form.destination.trim() ||
+            !form.departure
+          }
           className="btn-primary w-full flex items-center justify-center gap-2"
+          data-testid="flight-search-btn"
         >
-          <Plane className="w-4 h-4" />
-          Search Flights
+          {isLoading ? (
+            <>
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Searching…
+            </>
+          ) : (
+            <>
+              <Plane className="w-4 h-4" />
+              Search Flights
+            </>
+          )}
         </button>
       </form>
 
-      {submitted && savedCtx ? (
-        <DeferredState ctx={savedCtx} />
-      ) : (
+      {/* Results area */}
+      {searchState.kind === "idle" && (
         <div className="text-center py-8 text-cream-500 text-sm">
           Enter origin and destination airport codes to search flights.
         </div>
       )}
-    </div>
-  );
-}
 
-function DeferredState({ ctx }: { ctx: ExploreResultContext }) {
-  const route = ctx.origin && ctx.destination ? `${ctx.origin} → ${ctx.destination}` : ctx.destination;
-  return (
-    <div
-      className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-6 text-center space-y-3"
-      data-testid="flight-deferred-state"
-      role="status"
-      aria-live="polite"
-    >
-      <div className="flex justify-center">
-        <div className="w-12 h-12 rounded-full bg-sky-500/10 text-sky-400 flex items-center justify-center">
-          <Construction className="w-6 h-6" />
-        </div>
-      </div>
-      <div>
-        <p className="text-cream-200 font-semibold text-sm">Live flight search coming soon</p>
-        <p className="text-cream-500 text-xs mt-1">
-          We&apos;re connecting to real flight providers for{" "}
-          <span className="text-cream-300">{route}</span>
-          {ctx.dates?.departure ? ` on ${ctx.dates.departure}` : ""}
-          {ctx.passengers ? `, ${ctx.passengers} passenger${ctx.passengers !== 1 ? "s" : ""}` : ""}{" "}
-          ({ctx.cabinClass?.replace("_", " ")}).
-        </p>
-      </div>
-      <p className="text-xs text-cream-600">
-        Live flight search arrives in a future Explore update.
-      </p>
+      {searchState.kind === "results" &&
+        (() => {
+          const { response } = searchState;
+          if (response.status === "ok" && response.offers.length > 0) {
+            return (
+              <div
+                className="space-y-4"
+                data-testid="flight-results-list"
+              >
+                <p className="text-xs text-cream-500">
+                  {response.offers.length} flight
+                  {response.offers.length !== 1 ? "s" : ""} found · prices from
+                  live provider
+                </p>
+                {response.offers.map((offer, i) => (
+                  <FlightCard
+                    key={`${offer.provider}-${offer.fetchedAt}-${i}`}
+                    offer={offer}
+                  />
+                ))}
+              </div>
+            );
+          }
+          if (response.status === "empty") {
+            return (
+              <EmptyState
+                origin={form.origin.toUpperCase()}
+                destination={form.destination.toUpperCase()}
+              />
+            );
+          }
+          if (
+            response.status === "unavailable" ||
+            response.status === "error"
+          ) {
+            return <UnavailableState />;
+          }
+          return null;
+        })()}
+
+      {searchState.kind === "error" && (
+        <ErrorState message={searchState.message} />
+      )}
     </div>
   );
 }

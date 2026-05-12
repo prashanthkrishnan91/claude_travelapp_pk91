@@ -17,6 +17,9 @@ Approved provider stack (production_allowed=True):
   - yelp           : optional enrichment/corroboration only
   - openweather    : optional trip/weather ambience only
 
+Active flight provider (production_allowed=True, link-out model):
+  - ignav_flights  : live cash prices + booking deep-links; gated by IGNAV_API_KEY + IGNAV_FLIGHTS_ENABLED
+
 Disabled / quarantined (production_allowed=False):
   - duffel_flights : booking/OTA path; disabled
   - duffel_stays   : booking/OTA path; quarantined scaffold
@@ -24,6 +27,7 @@ Disabled / quarantined (production_allowed=False):
   - brave          : quarantined; use Tavily instead
   - serper         : quarantined; use Tavily instead
   - foursquare     : disabled; enrichment covered by Yelp
+  - skyscanner_flights : pending; access rejected; remains disabled
 """
 
 from __future__ import annotations
@@ -217,24 +221,25 @@ PROVIDER_REGISTRY: dict[str, ProviderEntry] = {
         can_enrich_only=False,
         supported_verticals=("flight",),
         cost_notes=(
-            "Preferred flight provider candidate. Awaiting API key / Live Prices access "
-            "confirmation. Not active. Explicit registry re-approval + key + adapter "
-            "implementation required before any live calls."
+            "Access rejected by Skyscanner. Remains PENDING/disabled. "
+            "Ignav is the active Flights v1 provider. "
+            "Re-evaluate Skyscanner only if access is granted in the future."
         ),
     ),
     "ignav_flights": ProviderEntry(
         provider_id="ignav_flights",
         display_name="Ignav Flights",
-        role=ProviderRole.EVALUATION,
+        role=ProviderRole.LINK_OUT,
         required_env_vars=("IGNAV_API_KEY", "IGNAV_FLIGHTS_ENABLED"),
-        production_allowed=False,
+        production_allowed=True,
         can_create_addable_cards=False,
         can_enrich_only=False,
         supported_verticals=("flight",),
         cost_notes=(
-            "Provisional backup flight candidate. Evaluation/validation required before "
-            "promotion. Not active. Explicit registry re-approval + key + adapter "
-            "implementation required before any live calls."
+            "Active Flights v1 provider (link-out model). "
+            "Returns live cash prices + external booking deep-links; no booking engine. "
+            "Requires IGNAV_API_KEY + IGNAV_FLIGHTS_ENABLED=1 in backend env. "
+            "1,000 free requests/month; no credit card required for free tier."
         ),
     ),
 }

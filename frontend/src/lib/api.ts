@@ -656,6 +656,55 @@ export async function searchFlights(
   });
 }
 
+// ─── Explore Flights (canonical live provider) ───────────────────────────────
+
+export interface FlightExploreRequest {
+  origin: string;
+  destination: string;
+  departureDate: string;      // YYYY-MM-DD
+  returnDate?: string;        // YYYY-MM-DD; omit for one-way
+  passengers: number;
+  cabinClass: "economy" | "premium_economy" | "business" | "first";
+}
+
+export type FlightExploreStatus = "ok" | "empty" | "unavailable" | "error";
+
+export interface FlightExploreResponse {
+  status: FlightExploreStatus;
+  offers: import("@/components/explore/types").FlightItineraryOffer[];
+  reason?: string | null;
+}
+
+/**
+ * Live flight search via POST /explore/flights (canonical provider-neutral route).
+ *
+ * Returns { status, offers } where status drives the UI state:
+ * - "ok"          → render flight cards
+ * - "empty"       → no results found
+ * - "unavailable" → provider not configured (polished unavailable state)
+ * - "error"       → provider error (polished error state)
+ *
+ * Provider key (IGNAV_API_KEY) is server-side only; never exposed to the frontend.
+ */
+export async function searchFlightsExplore(
+  req: FlightExploreRequest
+): Promise<FlightExploreResponse> {
+  const body: Record<string, unknown> = {
+    origin: req.origin.trim().toUpperCase(),
+    destination: req.destination.trim().toUpperCase(),
+    departure_date: req.departureDate,
+    passengers: req.passengers,
+    cabin_class: req.cabinClass,
+  };
+  if (req.returnDate) {
+    body["return_date"] = req.returnDate;
+  }
+  return apiFetch<FlightExploreResponse>("/explore/flights", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 // ─── Search / Research ────────────────────────────────────────────────────────
 
 interface RawHotelResult {

@@ -1,4 +1,5 @@
 from .ai import router as ai_router
+from .explore import router as explore_router
 from .trips import router as trips_router
 from .itinerary import router as itinerary_router
 from .cards import router as cards_router
@@ -14,4 +15,4 @@ from .search import router as search_router
 from .travel import router as travel_router
 from .value import router as value_router
 
-__all__ = ["ai_router", "trips_router", "itinerary_router", "cards_router", "compare_router", "context_router", "dashboard_router", "deals_router", "optimize_router", "plan_router", "resolve_router", "saved_items_router", "search_router", "travel_router", "value_router"]
+__all__ = ["ai_router", "explore_router", "trips_router", "itinerary_router", "cards_router", "compare_router", "context_router", "dashboard_router", "deals_router", "optimize_router", "plan_router", "resolve_router", "saved_items_router", "search_router", "travel_router", "value_router"]
