@@ -6,15 +6,16 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Now
 
-- **Stage 2A Slice 5C — Hotels Discovery Live:** Provider Registry v1 cleanup is complete (prerequisite shipped). Wire `HotelExploreFlow` as discovery-only lodging cards using the existing tripless Concierge / verified place card pattern (same as Attractions Slice 4). Render `HotelDiscoveryCard` results with rating, address, maps link, and `ResultActionSheet`. Preserve search context (destination, check_in, check_out, guests, rooms) in card payload. No rates, prices, or availability. `GOOGLE_PLACES_API_KEY` + `GOOGLE_HOTELS_ENABLED` (already in Railway backend env). No new Supabase migration required.
+- Saved lists foundation (Stage 3 entry).
 
 ## Next
 
-- Saved lists foundation (Stage 3 entry).
+- Stage 2B or later: Real hotel offer rates (requires provider-backed Hotel Offer contract + explicit Provider Registry re-approval).
 
 ## Completed
 
-- **Provider Registry v1 + Explore Provider Scope Reset**: `provider_registry.py` as central provider policy; Brave/Serper/Duffel/Amadeus/Foursquare disabled; `live_research` + `flights_provider` gated through registry; 38 tests. No SQL. No UI change. (2026-05-12)
+- **Stage 2A Slice 5C — Hotels Discovery Live**: `HotelExploreFlow` rewritten from deferred state to live; calls `callConciergeSearch(null, query, undefined, destination)` (tripless Concierge); renders `UnifiedHotelResult` discovery cards (stars, rating, area, maps link, why note, `ResultActionSheet`); normalized `originalPayload` for saved-item display snapshots (address, googleMapsUri, search context; no price/rate/booking fields); no rates/prices/availability. 26 new hotel structural tests + 5 updated global Explore tests. No SQL. No backend change. (2026-05-12)
+- **Provider Registry v1 + Explore Provider Scope Reset**: `provider_registry.py` as central provider policy; Brave/Serper/Duffel/Amadeus/Foursquare disabled; `live_research` + `flights_provider` + `hotels_provider` + `duffel_stays` gated through registry; 58 tests. No SQL. No UI change. (2026-05-12)
 - Stage 2A Slice 5B — Hotel Offer contract + Duffel Stays scaffold: `HotelOffer` dataclass, `DuffelStaysProvider` (disabled by default, no live calls), `HotelDiscoveryCard`/`HotelOffer` TS types, 38 new tests. No SQL. No UI rates. (2026-05-12)
 - Stage 2A Slice 5A — Hotels Discovery (scope-locked): decision-only PR locking Hotels as discovery-only in Stage 2A. (2026-05-11)
 - Stage 2A Slice 4 — Attractions Vertical Live: `AttractionExploreFlow` rewritten from deferred state to live; calls `callConciergeSearch(null, query, undefined, destination)` (tripless Concierge); renders `UnifiedAttractionResult` cards with `ResultActionSheet`. (2026-05-11)

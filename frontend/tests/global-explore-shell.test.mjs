@@ -6,7 +6,7 @@
  * 2. ExploreShell exports and renders a 4-vertical grid.
  * 3. Sidebar and MobileNav both expose the Explore nav link.
  * 4. Restaurants vertical flow uses searchRestaurants (trip-optional, real Google Places).
- * 5. Attractions / Hotels / Flights verticals are deferred and carry polished deferred states.
+ * 5. Attractions / Hotels verticals use live tripless Concierge discovery; Flights is deferred.
  * 6. Each result context carries action-ready fields for Slice 2 (vertical, destination,
  *    dates, origin, guests, passengers, providerIdentity, originalPayload).
  * 7. No trip creation gate in any Explore component.
@@ -239,10 +239,11 @@ test('AttractionExploreFlow does not require a tripId', () => {
   assert.doesNotMatch(attractionFlow, /tripId(?!.*null)/);
 });
 
-// ── 6. Hotels — structured form + deferred state ───────────────────────────
+// ── 6. Hotels — live discovery via tripless AI Concierge (Slice 5C) ──────────
 
-test('HotelExploreFlow shows hotel-deferred-state testid after submission', () => {
-  assert.match(hotelFlow, /data-testid="hotel-deferred-state"/);
+test('HotelExploreFlow calls callConciergeSearch for live hotel discovery', () => {
+  assert.match(hotelFlow, /callConciergeSearch/);
+  assert.match(hotelFlow, /res\.hotels/);
 });
 
 test('HotelExploreFlow collects destination, checkIn, checkOut, guests', () => {
@@ -252,19 +253,20 @@ test('HotelExploreFlow collects destination, checkIn, checkOut, guests', () => {
   assert.match(hotelFlow, /destination/);
 });
 
-test('HotelExploreFlow builds ExploreResultContext with hotel vertical', () => {
+test('HotelExploreFlow builds ExploreResultContext with hotel vertical and dates', () => {
   assert.match(hotelFlow, /vertical: "hotels"/);
   assert.match(hotelFlow, /dates: \{ checkIn/);
-  assert.match(hotelFlow, /guests: form\.guests/);
+  assert.match(hotelFlow, /guests: lastForm/);
 });
 
-test('HotelExploreFlow does not call searchHotels (mock-backed, quarantined)', () => {
+test('HotelExploreFlow does not call searchHotels or use mock-backed apiFetch', () => {
   assert.doesNotMatch(hotelFlow, /searchHotels/);
   assert.doesNotMatch(hotelFlow, /apiFetch/);
 });
 
-test('HotelExploreFlow deferred state explains live hotel search is coming soon', () => {
-  assert.match(hotelFlow, /coming soon/i);
+test('HotelExploreFlow wires ResultActionSheet into hotel discovery cards', () => {
+  assert.match(hotelFlow, /import.*ResultActionSheet/);
+  assert.match(hotelFlow, /<ResultActionSheet/);
 });
 
 // ── 7. Flights — structured form + deferred state ──────────────────────────
@@ -314,7 +316,7 @@ test('AttractionExploreFlow deferred copy does not frame create-trip as the requ
   assert.doesNotMatch(attractionFlow, /create a trip to search/i);
 });
 
-test('HotelExploreFlow deferred copy does not frame create-trip as the required Explore path', () => {
+test('HotelExploreFlow does not frame create-trip as the required Explore path', () => {
   assert.doesNotMatch(hotelFlow, /create a trip to search/i);
 });
 
@@ -340,8 +342,9 @@ test('AttractionExploreFlow source documents the live Concierge path', () => {
   assert.match(attractionFlow, /trip.optional/i);
 });
 
-test('HotelExploreFlow source documents mock-backed quarantine reason', () => {
-  assert.match(hotelFlow, /BLOCK_LEGACY_PRODUCT_MOCK/);
+test('HotelExploreFlow source documents the live Concierge discovery approach', () => {
+  assert.match(hotelFlow, /callConciergeSearch/);
+  assert.match(hotelFlow, /discovery/i);
 });
 
 test('FlightExploreFlow source documents mock-backed quarantine reason', () => {
