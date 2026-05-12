@@ -363,9 +363,9 @@ class TestErrorHandling:
         mock_resp.json.return_value = _make_search_response()
         mock_resp.raise_for_status = MagicMock()
         provider._client.post.return_value = mock_resp
-        # Also mock _fetch_booking_links to avoid extra httpx calls
         with patch.object(provider, "_fetch_booking_links", return_value=[]):
-            result = provider.search_flights(_make_request())
+            with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+                result = provider.search_flights(_make_request())
         assert result.status == FlightSourceStatus.OK
         assert len(result.rows) == 1
         assert isinstance(result.rows[0], FlightItineraryOffer)
@@ -379,7 +379,8 @@ class TestErrorHandling:
         mock_resp.raise_for_status = MagicMock()
         provider._client.post.return_value = mock_resp
         with patch.object(provider, "_fetch_booking_links", return_value=[]):
-            result = provider.search_flights(_make_request())
+            with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+                result = provider.search_flights(_make_request())
         assert result.status == FlightSourceStatus.OK
         for row in result.rows:
             assert isinstance(row, FlightItineraryOffer)
@@ -766,7 +767,8 @@ class TestTrustGate:
         }
         provider._client.post.return_value = mock_resp
         with patch.object(provider, "_fetch_booking_links", return_value=[]):
-            result = provider.search_flights(req)
+            with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+                result = provider.search_flights(req)
         assert result.status == FlightSourceStatus.OK
         assert len(result.rows) == 1
         offer = result.rows[0]
@@ -787,7 +789,8 @@ class TestTrustGate:
         }
         provider._client.post.return_value = mock_resp
         with patch.object(provider, "_fetch_booking_links", return_value=[]):
-            result = provider.search_flights(req)
+            with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+                result = provider.search_flights(req)
         assert result.status == FlightSourceStatus.OK
         assert len(result.rows) == 1
 
@@ -800,7 +803,8 @@ class TestTrustGate:
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {"itineraries": [it]}
         provider._client.post.return_value = mock_resp
-        result = provider.search_flights(req)
+        with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+            result = provider.search_flights(req)
         assert result.status == FlightSourceStatus.OK
         assert result.rows[0].booking_link.link_type == BookingLinkType.UNAVAILABLE
 
@@ -863,3 +867,551 @@ class TestTrustGate:
         ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
         assert ok is False
         assert "inbound segment chain broken" in reason
+
+
+# ---------------------------------------------------------------------------
+# 19: Booking-link payload omits adults
+# ---------------------------------------------------------------------------
+
+class TestBookingLinkPayload:
+    """booking-link ignav_id lookup must not include adults or market fields."""
+
+    def _build_provider(self) -> IgnavFlightProvider:
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {"booking_options": []}
+        mock_client.post.return_value = mock_resp
+        return IgnavFlightProvider(api_key="testkey", http_client=mock_client)
+
+    def test_booking_link_payload_omits_adults(self):
+        provider = self._build_provider()
+        provider._fetch_booking_links("test-ignav-id-abc")
+        _, kwargs = provider._client.post.call_args
+        body = kwargs.get("json", {})
+        assert "adults" not in body, (
+            f"booking-link request must not contain 'adults'; got keys: {list(body.keys())}"
+        )
+
+    def test_booking_link_payload_includes_ignav_id(self):
+        provider = self._build_provider()
+        provider._fetch_booking_links("my-ignav-id-xyz")
+        _, kwargs = provider._client.post.call_args
+        body = kwargs.get("json", {})
+        assert body.get("ignav_id") == "my-ignav-id-xyz"
+
+    def test_booking_link_payload_has_no_extra_fields(self):
+        provider = self._build_provider()
+        provider._fetch_booking_links("abc123")
+        _, kwargs = provider._client.post.call_args
+        body = kwargs.get("json", {})
+        assert set(body.keys()) == {"ignav_id"}, (
+            f"booking-link body should only contain 'ignav_id'; got {set(body.keys())}"
+        )
+
+    def test_search_flights_booking_link_fetch_omits_adults(self):
+        """Integration: search_flights parallel booking-link calls omit adults."""
+        provider = IgnavFlightProvider(api_key="testkey", http_client=MagicMock())
+        req = _make_sea_lax_request()
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {"itineraries": [_make_sea_lax_itinerary()]}
+        provider._client.post.return_value = mock_resp
+
+        mock_bl = MagicMock(return_value=[])
+        with patch.object(provider, "_fetch_booking_links", mock_bl):
+            with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+                result = provider.search_flights(req)
+            assert result.status == FlightSourceStatus.OK
+            # Verify each call used only ignav_id — no adults arg
+            for call in mock_bl.call_args_list:
+                args, kwargs = call
+                assert len(args) == 1, "only ignav_id positional arg expected"
+                assert "adults" not in kwargs
+
+
+# ---------------------------------------------------------------------------
+# 20: Per-segment field validation (_validate_segment_fields)
+# ---------------------------------------------------------------------------
+
+def _make_valid_segment(
+    dep="SEA",
+    arr="LAX",
+    carrier_code="AS",
+    flight_num="101",
+    dep_local="2026-06-17T08:00:00",
+    arr_local="2026-06-17T10:30:00",
+    duration=150,
+) -> Dict[str, Any]:
+    return {
+        "marketing_carrier_code": carrier_code,
+        "flight_number": flight_num,
+        "operating_carrier_name": "Alaska Airlines",
+        "departure_airport": dep,
+        "arrival_airport": arr,
+        "departure_time_local": dep_local,
+        "arrival_time_local": arr_local,
+        "duration_minutes": duration,
+    }
+
+
+class TestSegmentFieldValidation:
+    """Unit tests for _validate_segment_fields."""
+
+    def test_valid_segment_passes(self):
+        seg = _make_valid_segment()
+        ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 0, "outbound")
+        assert ok is True, f"expected pass, got: {reason}"
+
+    def test_missing_carrier_code_and_flight_number_rejected(self):
+        seg = _make_valid_segment(carrier_code="", flight_num="")
+        ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 0, "outbound")
+        assert ok is False
+        assert "carrier code" in reason  # carrier check fires first
+
+    def test_only_carrier_code_no_flight_number_rejected(self):
+        seg = _make_valid_segment(flight_num="")
+        ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 0, "outbound")
+        assert ok is False
+        assert "flight number" in reason
+
+    def test_only_flight_number_no_carrier_code_rejected(self):
+        seg = _make_valid_segment(carrier_code="")
+        ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 0, "outbound")
+        assert ok is False
+        assert "carrier code" in reason
+
+    def test_malformed_departure_airport_rejected(self):
+        seg = _make_valid_segment(dep="SE")  # 2 chars, not 3
+        ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 0, "outbound")
+        assert ok is False
+        assert "departure_airport" in reason
+
+    def test_malformed_arrival_airport_rejected(self):
+        seg = _make_valid_segment(arr="LAXX")  # 4 chars
+        ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 0, "outbound")
+        assert ok is False
+        assert "arrival_airport" in reason
+
+    def test_missing_departure_time_rejected(self):
+        seg = _make_valid_segment()
+        del seg["departure_time_local"]
+        # no departure_time_utc either
+        ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 0, "outbound")
+        assert ok is False
+        assert "missing departure time" in reason
+
+    def test_departure_utc_only_accepted(self):
+        seg = _make_valid_segment()
+        del seg["departure_time_local"]
+        seg["departure_time_utc"] = "2026-06-17T15:00:00Z"
+        ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 0, "outbound")
+        assert ok is True, f"UTC departure should suffice: {reason}"
+
+    def test_missing_arrival_time_rejected(self):
+        seg = _make_valid_segment()
+        del seg["arrival_time_local"]
+        # no arrival_time_utc either
+        ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 1, "outbound")
+        assert ok is False
+        assert "missing arrival time" in reason
+
+    def test_arrival_utc_only_accepted(self):
+        seg = _make_valid_segment()
+        del seg["arrival_time_local"]
+        seg["arrival_time_utc"] = "2026-06-17T17:30:00Z"
+        ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 0, "outbound")
+        assert ok is True, f"UTC arrival should suffice: {reason}"
+
+    def test_zero_duration_rejected(self):
+        seg = _make_valid_segment(duration=0)
+        ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 0, "outbound")
+        assert ok is False
+        assert "non-positive duration_minutes" in reason
+
+    def test_negative_duration_rejected(self):
+        seg = _make_valid_segment(duration=-10)
+        ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 0, "outbound")
+        assert ok is False
+        assert "non-positive duration_minutes" in reason
+
+    def test_absent_duration_accepted(self):
+        seg = _make_valid_segment()
+        del seg["duration_minutes"]
+        ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 0, "outbound")
+        assert ok is True, f"absent duration should pass at this gate: {reason}"
+
+    def test_inbound_leg_name_in_reason(self):
+        seg = _make_valid_segment(carrier_code="", flight_num="")
+        ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 2, "inbound")
+        assert ok is False
+        assert "inbound seg[2]" in reason
+
+
+# ---------------------------------------------------------------------------
+# 21: Duplicate flight-number check (_check_duplicate_flight_numbers)
+# ---------------------------------------------------------------------------
+
+class TestDuplicateFlightNumbers:
+    def test_no_duplicates_returns_empty_string(self):
+        segs = [
+            _make_valid_segment(dep="SEA", arr="PDX", carrier_code="AS", flight_num="101"),
+            _make_valid_segment(dep="PDX", arr="LAX", carrier_code="AS", flight_num="202"),
+        ]
+        assert IgnavFlightProvider._check_duplicate_flight_numbers(segs, "outbound") == ""
+
+    def test_same_flight_number_different_routes_rejected(self):
+        segs = [
+            _make_valid_segment(dep="SEA", arr="PDX", carrier_code="AS", flight_num="101"),
+            _make_valid_segment(dep="PDX", arr="LAX", carrier_code="AS", flight_num="101"),
+        ]
+        reason = IgnavFlightProvider._check_duplicate_flight_numbers(segs, "outbound")
+        assert reason != ""
+        assert "duplicate" in reason.lower()
+        assert "AS101" in reason
+
+    def test_same_flight_number_same_route_not_rejected(self):
+        # Through-flight: same flight number, same dep→arr is allowed
+        segs = [
+            _make_valid_segment(dep="SEA", arr="LAX", carrier_code="AS", flight_num="101"),
+            _make_valid_segment(dep="SEA", arr="LAX", carrier_code="AS", flight_num="101"),
+        ]
+        reason = IgnavFlightProvider._check_duplicate_flight_numbers(segs, "outbound")
+        assert reason == ""
+
+    def test_missing_flight_number_segments_skipped(self):
+        segs = [
+            _make_valid_segment(dep="SEA", arr="LAX", carrier_code="AS", flight_num=""),
+            _make_valid_segment(dep="SEA", arr="LAX", carrier_code="UA", flight_num=""),
+        ]
+        reason = IgnavFlightProvider._check_duplicate_flight_numbers(segs, "outbound")
+        assert reason == ""
+
+    def test_single_segment_never_duplicates(self):
+        segs = [_make_valid_segment()]
+        assert IgnavFlightProvider._check_duplicate_flight_numbers(segs, "outbound") == ""
+
+
+# ---------------------------------------------------------------------------
+# 22: Integration trust gate — new segment/consistency checks
+# ---------------------------------------------------------------------------
+
+def _make_full_sea_lax_segment(
+    dep="SEA", arr="LAX", flight_num="101",
+    dep_local="2026-06-17T08:00:00", arr_local="2026-06-17T10:30:00",
+    duration=150,
+) -> Dict[str, Any]:
+    """Full-featured segment fixture with all required fields."""
+    return {
+        "marketing_carrier_code": "AS",
+        "flight_number": flight_num,
+        "operating_carrier_name": "Alaska Airlines",
+        "departure_airport": dep,
+        "arrival_airport": arr,
+        "departure_time_local": dep_local,
+        "arrival_time_local": arr_local,
+        "duration_minutes": duration,
+    }
+
+
+def _make_full_sea_lax_itinerary(**kwargs) -> Dict[str, Any]:
+    seg = _make_full_sea_lax_segment(**kwargs)
+    return {
+        "ignav_id": "full_sea_lax_test",
+        "price": {"amount": 179.0, "currency": "USD"},
+        "cabin_class": "economy",
+        "outbound": {"duration_minutes": seg["duration_minutes"], "segments": [seg]},
+    }
+
+
+class TestTrustGateSegmentConsistency:
+    """Integration tests for per-segment and consistency checks in _validate_itinerary_raw."""
+
+    def test_valid_one_way_all_fields_passes(self):
+        req = _make_sea_lax_request()
+        it = _make_full_sea_lax_itinerary()
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is True, f"expected pass, got: {reason}"
+
+    def test_valid_round_trip_all_fields_passes(self):
+        req = _make_sea_lax_rt_request()
+        it = _make_sea_lax_rt_itinerary()
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is True, f"expected pass, got: {reason}"
+
+    def test_missing_arrival_time_in_segment_rejected(self):
+        req = _make_sea_lax_request()
+        it = _make_full_sea_lax_itinerary()
+        seg = it["outbound"]["segments"][0]
+        del seg["arrival_time_local"]
+        # no arrival_time_utc either
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "missing arrival time" in reason
+
+    def test_missing_carrier_and_flight_number_rejects_offer(self):
+        req = _make_sea_lax_request()
+        it = _make_full_sea_lax_itinerary()
+        seg = it["outbound"]["segments"][0]
+        seg["marketing_carrier_code"] = ""
+        seg["flight_number"] = ""
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "carrier code" in reason  # carrier check fires first
+
+    def test_non_positive_segment_duration_rejects_offer(self):
+        req = _make_sea_lax_request()
+        it = _make_full_sea_lax_itinerary(duration=0)
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "non-positive duration_minutes" in reason
+
+    def test_inconsistent_leg_duration_rejects_offer(self):
+        req = _make_sea_lax_request()
+        it = _make_full_sea_lax_itinerary()
+        # Segment duration=150, leg duration=50 — physically impossible
+        it["outbound"]["duration_minutes"] = 50
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "duration" in reason.lower()
+        assert "less than segment" in reason
+
+    def test_leg_duration_exceeds_segment_sum_allowed(self):
+        """Leg can be > segment sum (layover time); that is not an error."""
+        req = _make_sea_lax_request()
+        it = _make_full_sea_lax_itinerary()
+        # Segment=150m but leg says 200m (50m layover). Acceptable.
+        it["outbound"]["duration_minutes"] = 200
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is True, f"leg > segment sum should be valid: {reason}"
+
+    def test_stop_count_mismatch_rejects_offer(self):
+        req = _make_sea_lax_request()
+        it = _make_full_sea_lax_itinerary()
+        # 1 segment → 0 stops; raw says 2 — contradiction
+        it["outbound"]["stops"] = 2
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "stop count mismatch" in reason
+
+    def test_stop_count_match_passes(self):
+        req = _make_sea_lax_request()
+        it = _make_full_sea_lax_itinerary()
+        it["outbound"]["stops"] = 0  # correct: 1 segment → 0 stops
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is True, f"stop count 0 for non-stop should pass: {reason}"
+
+    def test_duplicate_flight_numbers_across_segments_rejected(self):
+        req = _make_sea_lax_request()
+        seg1 = _make_full_sea_lax_segment(
+            dep="SEA", arr="PDX", flight_num="101",
+            dep_local="2026-06-17T08:00:00", arr_local="2026-06-17T08:45:00",
+            duration=45,
+        )
+        seg2 = _make_full_sea_lax_segment(
+            dep="PDX", arr="LAX", flight_num="101",  # same flight number, different route
+            dep_local="2026-06-17T10:00:00", arr_local="2026-06-17T12:30:00",
+            duration=150,
+        )
+        it = {
+            "ignav_id": "dup_fn_test",
+            "price": {"amount": 179.0, "currency": "USD"},
+            "cabin_class": "economy",
+            "outbound": {"duration_minutes": 270, "segments": [seg1, seg2]},
+        }
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "duplicate" in reason.lower()
+        assert "AS101" in reason
+
+    def test_connecting_flight_different_numbers_passes(self):
+        req = _make_sea_lax_request()
+        seg1 = _make_full_sea_lax_segment(
+            dep="SEA", arr="PDX", flight_num="101",
+            dep_local="2026-06-17T08:00:00", arr_local="2026-06-17T08:45:00",
+            duration=45,
+        )
+        seg2 = _make_full_sea_lax_segment(
+            dep="PDX", arr="LAX", flight_num="202",  # different flight number
+            dep_local="2026-06-17T10:00:00", arr_local="2026-06-17T12:30:00",
+            duration=150,
+        )
+        it = {
+            "ignav_id": "conn_diff_fn",
+            "price": {"amount": 179.0, "currency": "USD"},
+            "cabin_class": "economy",
+            "outbound": {"duration_minutes": 270, "segments": [seg1, seg2]},
+        }
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is True, f"connecting flight with different numbers should pass: {reason}"
+
+    def test_all_invalid_segment_offers_return_unavailable_from_search(self):
+        """search_flights returns UNAVAILABLE when all offers fail segment validation."""
+        provider = IgnavFlightProvider(api_key="testkey", http_client=MagicMock())
+        req = _make_sea_lax_request()
+        bad_seg = _make_full_sea_lax_segment()
+        bad_seg["arrival_time_local"] = None
+        # Remove all arrival time keys so segment fails
+        bad_seg.pop("arrival_time_local", None)
+        bad_it = {
+            "ignav_id": "bad_it",
+            "price": {"amount": 179.0, "currency": "USD"},
+            "cabin_class": "economy",
+            "outbound": {"duration_minutes": 150, "segments": [bad_seg]},
+        }
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {"itineraries": [bad_it]}
+        provider._client.post.return_value = mock_resp
+        result = provider.search_flights(req)
+        assert result.status == FlightSourceStatus.UNAVAILABLE
+        assert result.rows == []
+
+    def test_inbound_missing_arrival_time_rejected_for_round_trip(self):
+        req = _make_sea_lax_rt_request()
+        it = _make_sea_lax_rt_itinerary()
+        in_seg = it["inbound"]["segments"][0]
+        in_seg.pop("arrival_time_local", None)
+        # no arrival_time_utc either
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "missing arrival time" in reason
+        assert "inbound" in reason
+
+    def test_inbound_duplicate_flight_numbers_rejected(self):
+        req = _make_sea_lax_rt_request()
+        in_seg1 = {
+            "marketing_carrier_code": "AS",
+            "flight_number": "AS202",
+            "operating_carrier_name": "Alaska Airlines",
+            "departure_airport": "LAX",
+            "arrival_airport": "PDX",
+            "departure_time_local": "2026-06-24T14:00:00",
+            "arrival_time_local": "2026-06-24T15:30:00",
+            "duration_minutes": 90,
+        }
+        in_seg2 = {
+            "marketing_carrier_code": "AS",
+            "flight_number": "AS202",  # same number, different route
+            "operating_carrier_name": "Alaska Airlines",
+            "departure_airport": "PDX",
+            "arrival_airport": "SEA",
+            "departure_time_local": "2026-06-24T16:30:00",
+            "arrival_time_local": "2026-06-24T17:15:00",
+            "duration_minutes": 45,
+        }
+        it = _make_sea_lax_rt_itinerary(
+            inbound={"duration_minutes": 225, "segments": [in_seg1, in_seg2]}
+        )
+        ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
+        assert ok is False
+        assert "duplicate" in reason.lower()
+        assert "inbound" in reason
+
+
+# ---------------------------------------------------------------------------
+# 23: Schedule trust certification gate
+# ---------------------------------------------------------------------------
+
+def _make_certified_search_response() -> Dict[str, Any]:
+    """One valid SEA→LAX itinerary with all required fields."""
+    return {"itineraries": [_make_sea_lax_itinerary()]}
+
+
+class TestScheduleTrustCertification:
+    """Tests for the IGNAV_SCHEDULE_TRUST_CERTIFIED gate.
+
+    Field completeness ≠ external correctness.  The gate prevents displaying
+    offers whose schedule accuracy has not been manually confirmed.
+    """
+
+    def _build_provider(self) -> IgnavFlightProvider:
+        provider = IgnavFlightProvider(api_key="testkey", http_client=MagicMock())
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = _make_certified_search_response()
+        provider._client.post.return_value = mock_resp
+        return provider
+
+    def test_no_cert_env_returns_unavailable(self):
+        """Default (no IGNAV_SCHEDULE_TRUST_CERTIFIED) → UNAVAILABLE."""
+        provider = self._build_provider()
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("IGNAV_SCHEDULE_TRUST_CERTIFIED", None)
+            with patch.object(provider, "_fetch_booking_links", return_value=[]):
+                result = provider.search_flights(_make_sea_lax_request())
+        assert result.status == FlightSourceStatus.UNAVAILABLE
+        assert result.rows == []
+
+    def test_cert_flag_zero_returns_unavailable(self):
+        provider = self._build_provider()
+        with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "0"}):
+            with patch.object(provider, "_fetch_booking_links", return_value=[]):
+                result = provider.search_flights(_make_sea_lax_request())
+        assert result.status == FlightSourceStatus.UNAVAILABLE
+        assert result.rows == []
+
+    def test_cert_flag_false_string_returns_unavailable(self):
+        provider = self._build_provider()
+        with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "false"}):
+            with patch.object(provider, "_fetch_booking_links", return_value=[]):
+                result = provider.search_flights(_make_sea_lax_request())
+        assert result.status == FlightSourceStatus.UNAVAILABLE
+        assert result.rows == []
+
+    def test_unavailable_reason_mentions_certification(self):
+        provider = self._build_provider()
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("IGNAV_SCHEDULE_TRUST_CERTIFIED", None)
+            with patch.object(provider, "_fetch_booking_links", return_value=[]):
+                result = provider.search_flights(_make_sea_lax_request())
+        assert result.reason is not None
+        assert "certification" in (result.reason or "").lower()
+
+    def test_cert_flag_one_allows_valid_offers(self):
+        """IGNAV_SCHEDULE_TRUST_CERTIFIED=1 → OK with offers for valid payload."""
+        provider = self._build_provider()
+        with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+            with patch.object(provider, "_fetch_booking_links", return_value=[]):
+                result = provider.search_flights(_make_sea_lax_request())
+        assert result.status == FlightSourceStatus.OK
+        assert len(result.rows) == 1
+        assert isinstance(result.rows[0], FlightItineraryOffer)
+
+    def test_cert_flag_true_string_allows_valid_offers(self):
+        provider = self._build_provider()
+        with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "true"}):
+            with patch.object(provider, "_fetch_booking_links", return_value=[]):
+                result = provider.search_flights(_make_sea_lax_request())
+        assert result.status == FlightSourceStatus.OK
+        assert len(result.rows) >= 1
+
+    def test_cert_on_but_trust_gate_still_rejects_invalid_offers(self):
+        """Cert flag does not bypass trust gate — invalid offers still rejected."""
+        provider = IgnavFlightProvider(api_key="testkey", http_client=MagicMock())
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        # Itinerary with wrong origin — should fail trust gate before cert check
+        mock_resp.json.return_value = {
+            "itineraries": [_make_sea_lax_itinerary(dep_airport="PDX")]
+        }
+        provider._client.post.return_value = mock_resp
+        with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+            result = provider.search_flights(_make_sea_lax_request())
+        assert result.status == FlightSourceStatus.UNAVAILABLE
+        assert result.rows == []
+
+    def test_cert_on_but_segment_missing_flight_number_rejects(self):
+        """Cert flag does not bypass segment field validation."""
+        provider = IgnavFlightProvider(api_key="testkey", http_client=MagicMock())
+        it = _make_sea_lax_itinerary()
+        it["outbound"]["segments"][0]["flight_number"] = ""
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {"itineraries": [it]}
+        provider._client.post.return_value = mock_resp
+        with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+            result = provider.search_flights(_make_sea_lax_request())
+        assert result.status == FlightSourceStatus.UNAVAILABLE
+        assert result.rows == []
