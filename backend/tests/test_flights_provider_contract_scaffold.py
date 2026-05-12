@@ -2,12 +2,12 @@
 
 Covers:
 1.  No provider key/config => no flight results and no mock rows (get_flight_provider)
-2.  Skyscanner registry entry is pending/disabled by default
-3.  Ignav registry entry is evaluation/disabled by default
-4.  Duffel cannot activate (registry disabled)
+2.  Skyscanner registry entry is pending/disabled
+3.  Ignav registry entry is DISABLED (schedule trust not certified)
+4.  Duffel is the active search-only provider (LINK_OUT, production_allowed=True)
 5.  Amadeus cannot activate (registry disabled)
 6.  Skyscanner adapter shell fails closed (UNAVAILABLE, zero rows)
-7.  Ignav adapter shell fails closed (UNAVAILABLE, zero rows)
+7.  Ignav not active; without Duffel env, get_flight_provider returns NullFlightProvider
 8.  No cash price produced without a live provider
 9.  No points price produced (points track is separately gated)
 10. FlightItineraryOffer invariants: fabricated prices and URLs rejected
@@ -16,7 +16,7 @@ Covers:
 13. FlightSegment rejects invalid IATA codes or zero duration
 14. FlightOfferLeg rejects empty segments
 15. Provider keys are not in the approved frontend public env prefix (NEXT_PUBLIC_)
-16. Existing get_flight_provider() returns NullFlightProvider (no real provider active)
+16. get_flight_provider() returns NullFlightProvider when Duffel env absent
 """
 
 from __future__ import annotations
@@ -178,24 +178,24 @@ class TestRegistryEntries:
         entry = PROVIDER_REGISTRY["skyscanner_flights"]
         assert entry.role is ProviderRole.PENDING
 
-    def test_ignav_role_is_link_out(self):
-        # Promoted from EVALUATION to LINK_OUT (active Flights v1 provider).
+    def test_ignav_role_is_disabled(self):
+        # Ignav DISABLED: schedule trust not certified in production smoke test.
         entry = PROVIDER_REGISTRY["ignav_flights"]
-        assert entry.role is ProviderRole.LINK_OUT
+        assert entry.role is ProviderRole.DISABLED
 
     def test_skyscanner_not_production_allowed(self):
         assert not is_production_allowed("skyscanner_flights")
 
-    def test_ignav_is_production_allowed(self):
-        # Ignav is now the active Flights v1 provider.
-        assert is_production_allowed("ignav_flights")
+    def test_ignav_is_not_production_allowed(self):
+        # Ignav disabled; must not serve visible flight cards.
+        assert not is_production_allowed("ignav_flights")
 
     def test_skyscanner_not_active(self):
         assert not is_provider_active("skyscanner_flights")
 
-    def test_ignav_is_active(self):
-        # Ignav promoted to LINK_OUT + production_allowed=True.
-        assert is_provider_active("ignav_flights")
+    def test_ignav_is_not_active(self):
+        # Ignav disabled; is_provider_active must return False.
+        assert not is_provider_active("ignav_flights")
 
     def test_skyscanner_required_env_vars(self):
         entry = PROVIDER_REGISTRY["skyscanner_flights"]
@@ -230,16 +230,17 @@ class TestRegistryEntries:
 
 
 class TestDisabledProvidersCannotActivate:
-    def test_duffel_flights_disabled(self):
-        assert not is_provider_active("duffel_flights")
-        assert not is_production_allowed("duffel_flights")
+    def test_duffel_flights_is_active_search_only_provider(self):
+        # Duffel is now the active Flights v1 search-only provider.
+        assert is_provider_active("duffel_flights")
+        assert is_production_allowed("duffel_flights")
+
+    def test_duffel_role_is_link_out(self):
+        assert PROVIDER_REGISTRY["duffel_flights"].role is ProviderRole.LINK_OUT
 
     def test_amadeus_disabled(self):
         assert not is_provider_active("amadeus")
         assert not is_production_allowed("amadeus")
-
-    def test_duffel_role_is_disabled(self):
-        assert PROVIDER_REGISTRY["duffel_flights"].role is ProviderRole.DISABLED
 
     def test_amadeus_role_is_disabled(self):
         assert PROVIDER_REGISTRY["amadeus"].role is ProviderRole.DISABLED
@@ -274,29 +275,32 @@ class TestAdapterShellsFailClosed:
         result = provider.search_flights(self._dummy_req())
         assert len(result.rows) == 0
 
-    def test_ignav_no_env_returns_null_provider(self):
-        # Ignav is now live; without IGNAV_API_KEY + IGNAV_FLIGHTS_ENABLED,
-        # build_ignav_provider_from_env() returns None so get_flight_provider()
+    def test_no_duffel_env_returns_null_provider(self):
+        # Without DUFFEL_API_KEY + DUFFEL_FLIGHTS_ENABLED, get_flight_provider()
         # falls back to NullFlightProvider (UNAVAILABLE, zero rows).
         import os
-        from unittest.mock import patch
         from app.services.flights_provider import get_flight_provider, reset_flight_provider_cache
         reset_flight_provider_cache()
         with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DUFFEL_API_KEY", None)
+            os.environ.pop("DUFFEL_FLIGHTS_ENABLED", None)
             os.environ.pop("IGNAV_API_KEY", None)
             os.environ.pop("IGNAV_FLIGHTS_ENABLED", None)
+            os.environ.pop("SKYSCANNER_API_KEY", None)
+            os.environ.pop("SKYSCANNER_FLIGHTS_ENABLED", None)
             provider = get_flight_provider()
         assert isinstance(provider, NullFlightProvider)
         result = provider.search_flights(self._dummy_req())
         assert result.status is FlightSourceStatus.UNAVAILABLE
         assert result.rows == []
 
-    def test_ignav_no_env_zero_rows(self):
+    def test_no_provider_env_zero_rows(self):
         import os
-        from unittest.mock import patch
         from app.services.flights_provider import get_flight_provider, reset_flight_provider_cache
         reset_flight_provider_cache()
         with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DUFFEL_API_KEY", None)
+            os.environ.pop("DUFFEL_FLIGHTS_ENABLED", None)
             os.environ.pop("IGNAV_API_KEY", None)
             os.environ.pop("IGNAV_FLIGHTS_ENABLED", None)
             provider = get_flight_provider()
@@ -311,12 +315,13 @@ class TestAdapterShellsFailClosed:
             for r in result.rows
         )
 
-    def test_ignav_no_env_no_mock_rows(self):
+    def test_no_provider_env_no_mock_rows(self):
         import os
-        from unittest.mock import patch
         from app.services.flights_provider import get_flight_provider, reset_flight_provider_cache
         reset_flight_provider_cache()
         with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DUFFEL_API_KEY", None)
+            os.environ.pop("DUFFEL_FLIGHTS_ENABLED", None)
             os.environ.pop("IGNAV_API_KEY", None)
             os.environ.pop("IGNAV_FLIGHTS_ENABLED", None)
             provider = get_flight_provider()
@@ -349,13 +354,14 @@ class TestNoPriceWithoutLiveProvider:
         result = provider.search_flights(req)
         assert result.rows == []
 
-    def test_ignav_no_key_no_cash_price(self):
-        # Without a key, build_ignav_provider_from_env returns None → NullFlightProvider
+    def test_no_duffel_env_no_cash_price(self):
+        # Without Duffel env, get_flight_provider() → NullFlightProvider → zero rows
         import os
-        from unittest.mock import patch
         from app.services.flights_provider import get_flight_provider, reset_flight_provider_cache
         reset_flight_provider_cache()
         with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DUFFEL_API_KEY", None)
+            os.environ.pop("DUFFEL_FLIGHTS_ENABLED", None)
             os.environ.pop("IGNAV_API_KEY", None)
             os.environ.pop("IGNAV_FLIGHTS_ENABLED", None)
             provider = get_flight_provider()
@@ -626,7 +632,7 @@ class TestGetFlightProviderFailClosed:
         for var in (
             "SKYSCANNER_API_KEY", "SKYSCANNER_FLIGHTS_ENABLED",
             "IGNAV_API_KEY", "IGNAV_FLIGHTS_ENABLED",
-            "DUFFEL_ACCESS_TOKEN", "DUFFEL_FLIGHTS_ENABLED",
+            "DUFFEL_API_KEY", "DUFFEL_FLIGHTS_ENABLED",
         ):
             monkeypatch.delenv(var, raising=False)
 
@@ -639,6 +645,7 @@ class TestGetFlightProviderFailClosed:
         for var in (
             "SKYSCANNER_API_KEY", "SKYSCANNER_FLIGHTS_ENABLED",
             "IGNAV_API_KEY", "IGNAV_FLIGHTS_ENABLED",
+            "DUFFEL_API_KEY", "DUFFEL_FLIGHTS_ENABLED",
         ):
             monkeypatch.delenv(var, raising=False)
 
@@ -654,6 +661,8 @@ class TestGetFlightProviderFailClosed:
     def test_registry_gate_blocks_skyscanner_even_with_env(self, monkeypatch):
         """Even with both env vars set, Skyscanner stays off (registry PENDING)."""
         reset_flight_provider_cache()
+        monkeypatch.delenv("DUFFEL_API_KEY", raising=False)
+        monkeypatch.delenv("DUFFEL_FLIGHTS_ENABLED", raising=False)
         monkeypatch.setenv("SKYSCANNER_API_KEY", "sk-live-test-key")
         monkeypatch.setenv("SKYSCANNER_FLIGHTS_ENABLED", "1")
 
@@ -664,19 +673,25 @@ class TestGetFlightProviderFailClosed:
         provider = get_flight_provider()
         assert isinstance(provider, NullFlightProvider)
 
-    def test_registry_gate_ignav_now_active_with_env(self, monkeypatch):
-        """Ignav is promoted to LINK_OUT + production_allowed=True.
-        With both env vars set, get_flight_provider() returns IgnavFlightProvider."""
+    def test_registry_gate_ignav_disabled_even_with_env(self, monkeypatch):
+        """Ignav is DISABLED (schedule trust not certified).
+        Even with env vars set, get_flight_provider() must NOT return IgnavFlightProvider."""
         from app.services.flights_provider_ignav import IgnavFlightProvider
+        from app.services.flights_provider_duffel import DuffelFlightProvider
         reset_flight_provider_cache()
+        monkeypatch.delenv("DUFFEL_API_KEY", raising=False)
+        monkeypatch.delenv("DUFFEL_FLIGHTS_ENABLED", raising=False)
         monkeypatch.setenv("IGNAV_API_KEY", "ignav-test-key")
         monkeypatch.setenv("IGNAV_FLIGHTS_ENABLED", "1")
 
-        assert is_provider_active("ignav_flights")
+        assert not is_provider_active("ignav_flights")
 
         from app.services.flights_provider import get_flight_provider
         provider = get_flight_provider()
-        assert isinstance(provider, IgnavFlightProvider)
+        assert not isinstance(provider, IgnavFlightProvider), \
+            "Ignav must not be selected even when env vars are set"
+        assert not isinstance(provider, DuffelFlightProvider), \
+            "Duffel key absent so should fall back to NullFlightProvider"
 
 
 # ---------------------------------------------------------------------------

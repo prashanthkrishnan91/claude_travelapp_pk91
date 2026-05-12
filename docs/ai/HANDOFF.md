@@ -8,17 +8,17 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3 — Saved lists / boards.** Stage 2A is GREEN. Stage 3 v1 (Saved Lists Foundation) shipped. Stage 3 v2 shipped: "Add to Trip" on SavedShell cards. **Flights v1 — Cash Live/Link-Out shipped (2026-05-12)**: Ignav is now the active flight provider (LINK_OUT, `production_allowed=True`); live search + booking links + flight cards live when `IGNAV_API_KEY` + `IGNAV_FLIGHTS_ENABLED=1` are set. See `docs/product/ROADMAP.md`.
+- Roadmap stage: **Stage 3 — Saved lists / boards.** Stage 2A is GREEN. Stage 3 v1 (Saved Lists Foundation) shipped. Stage 3 v2 shipped: "Add to Trip" on SavedShell cards. **Flights v1 — Duffel search-only provider active (2026-05-12)**: Duffel is the active flight search provider (LINK_OUT, `production_allowed=True`); live search + flight cards live when `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` are set. BOOKING/ORDERS: out of scope for v1; booking_link is always UNAVAILABLE. Ignav DISABLED (schedule trust not certified). See `docs/product/ROADMAP.md`.
 - Active build queue item: **Stage 3 v3 — Create Trip from Saved Item** (needs its own contract PR). Flight cards are saveable via `ResultActionSheet`. Add-to-trip for flights deferred to Stage 3 v3.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
 
 - OS v4 is the canonical operating system. No v4.2 or v5 labels.
-- **Provider Registry v1** (`backend/app/services/provider_registry.py`) is the single policy source of truth for provider activation, addable-card authority, and disabled/quarantined status. Ignav is now `LINK_OUT` + `production_allowed=True` (Flights v1 live). Skyscanner remains PENDING (access rejected). Future provider additions must register policy + adapter + tests. See `docs/product/DECISION_LOG.md` 2026-05-12.
+- **Provider Registry v1** (`backend/app/services/provider_registry.py`) is the single policy source of truth for provider activation, addable-card authority, and disabled/quarantined status. Duffel Flights is now `LINK_OUT` + `production_allowed=True` (Flights v1 active, search-only). Ignav is DISABLED (schedule trust not certified — production smoke test showed externally incorrect schedule times). Skyscanner remains PENDING (access rejected). Future provider additions must register policy + adapter + tests. See `docs/product/DECISION_LOG.md` 2026-05-12.
 - Google Places is canonical for addable cards (the only `can_create_addable_cards=True` entry). Yelp / Foursquare / editorial are enrichment / evidence only and cannot mint addable cards. Foursquare is disabled; enrichment is covered by Yelp.
-- Brave, Serper, Duffel (flights + stays), Amadeus, and Foursquare are disabled/quarantined in the registry. They cannot activate in production even if API keys are present in env. Re-approval in the registry is required to re-enable any of them.
-- Duffel and Amadeus are no longer active roadmap items. See DECISION_LOG 2026-05-12.
+- Brave, Serper, Ignav (flights), Duffel (stays), Amadeus, and Foursquare are disabled/quarantined in the registry. They cannot activate in production even if API keys are present in env. Re-approval in the registry is required to re-enable any of them.
+- Duffel Flights is now the active provider; Duffel Stays and Amadeus remain disabled. Ignav may be re-evaluated only after a separate manual schedule-trust certification pass.
 - AI Concierge card field contract is the source of truth (`display.displayWhy`, `supportingDetails.whyPick`, top-level `whyPick`).
 - Latency Budget Pack governs total request-path latency, not just local provider timeouts.
 - For long architecture references, read `artifacts/travel_concierge_product_north_star_v3.md`, `artifacts/travel_concierge_v4_travel_os_addendum.md`, `artifacts/ai_concierge_semantic_place_intelligence.md`, and `artifacts/ai_concierge_semantic_place_intelligence_v2_amendment.md` rather than copying them here.
@@ -28,6 +28,7 @@ This file is **current operational state**, not a historical log. It is meant to
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
 
+- 2026-05-12 — **Flights v1 — Duffel Provider Replacement.** Ignav disabled (schedule trust not certified). Duffel promoted to active search-only provider (`LINK_OUT`, `production_allowed=True`). `DuffelFlightProvider` rewritten to return `FlightItineraryOffer` (canonical shape), `DUFFEL_API_KEY` env var, one-way + round-trip support, trust gate per segment, booking always UNAVAILABLE (no orders). Provider selection seam updated (Duffel first). 60+ backend tests (`test_duffel_flights_v1.py`). All pydantic-heavy tests guarded with `@requires_full_stack`. No SQL. No UI change. Env: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1`. `DUFFEL_BOOKING_ENABLED=0` (default; booking out of scope). Live smoke test after deploy: SEA→LAX 2026-06-17 one-way 1 adult economy.
 - 2026-05-12 — **Flights v1 Ignav Trust Certification Fix (PR #346).** Fixes three production failures: (1) booking-link 400 `conflicting_booking_lookup_mode` — `_fetch_booking_links` now sends only `ignav_id`, never `adults`; (2) insufficient trust gate — added `_validate_segment_fields` (per-segment: carrier/flight number, 3-letter IATA airports, departure time, arrival time, positive duration), `_check_duplicate_flight_numbers` (same flight number on different routes within a leg rejected), and leg-level duration/stop-count cross-checks; (3) debug payload logging — `IGNAV_FLIGHTS_DEBUG_PAYLOAD=1` logs structured non-sensitive schedule fields for the first 3 valid offers. 103 backend tests pass (46 new). Fail-closed preserved. No SQL. No UI change.
 - 2026-05-12 — **Flights v1 — Ignav Live Cash Search + Link-Out.** Ignav promoted to `LINK_OUT` / `production_allowed=True` in registry. `IgnavFlightProvider.search_flights()` fully implemented (httpx, one-way + round-trip, parallel booking-link fetches via `ThreadPoolExecutor`, maps to `FlightItineraryOffer`). New `POST /explore/flights` route (`backend/app/routes/explore.py`) serving `FlightProviderResult`. Frontend `FlightExploreFlow.tsx` rewritten with live search form, `FlightCard` (airline, route, times, price, live badge, booking CTA), `ResultActionSheet` save, polished unavailable/empty/error states. `searchFlightsExplore()` API helper added to `frontend/src/lib/api.ts`. 57 new backend tests (`test_ignav_flights_live.py`) + 20 new frontend tests (`flights-ignav-live.test.mjs`) + updated scaffold tests. No SQL. No points. Fail-closed when key absent.
 - 2026-05-12 — **Flights Provider Contract + Skyscanner/Ignav Scaffold.** Normalized `FlightItineraryOffer` contract, Skyscanner (PENDING) + Ignav (EVALUATION) registry entries, adapter shells (fail-closed), TS types, 68 backend + 23 frontend tests. No SQL. No UI change.
@@ -63,20 +64,22 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 - `saved_items` migration 005 must be applied to the Supabase project before Save is live in production. Migration is in `backend/db/migrations/005_saved_items.sql`.
 - Hotels Slice 5A is discovery-only (`HotelDiscoveryCard`); do not add rates, prices, availability, or a fake hotel provider. Real hotel offers require a provider-backed Hotel Offer contract (deferred to Stage 2B or later).
-- Flights v1 is live (2026-05-12): Ignav (`LINK_OUT`, `production_allowed=True`) serves real fares + booking links when `IGNAV_API_KEY` + `IGNAV_FLIGHTS_ENABLED=1` are set. Fail-closed when keys absent (polished unavailable state). Trust certification fix applied (PR #346): per-segment field validation, duplicate flight-number detection, leg duration/stop-count consistency, booking-link payload corrected (no `adults`). Enable `IGNAV_FLIGHTS_DEBUG_PAYLOAD=1` to log structured schedule diagnostics. Skyscanner remains PENDING. Duffel/Amadeus remain DISABLED.
+- Flights v1 is live (2026-05-12): Duffel (`LINK_OUT`, `production_allowed=True`) serves live search offers when `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` are set. BOOKING/ORDERS: explicitly out of scope for v1; `booking_link` is always UNAVAILABLE. Fail-closed when keys absent (polished unavailable state). Trust gate: per-segment carrier/flight_num/IATA/times validation; rejects entire offer if any segment fails. Skyscanner remains PENDING. Ignav DISABLED (schedule trust not certified — externally incorrect schedule times in production smoke test; do not re-enable without separate certification). Amadeus remains DISABLED.
 - Saved-list foundation (Stage 3 v1) is live; `/saved` page, grouping, remove, and nav links all shipped.
 - AI destination intelligence, road trip mode, deal/points intelligence, and Travel Watchtower are deferred to later stages.
 
 ## Next recommended step
 
-**Stage 3 v3 — Create Trip from Saved Item.** Flights v1 has shipped; flight cards are saveable. Stage 3 v3 contract PR should confirm:
+**Stage 3 v3 — Create Trip from Saved Item.** Flights v1 has shipped (Duffel search-only). Flight cards are saveable. Stage 3 v3 contract PR should confirm:
 1. What happens when user creates a trip from a saved flight offer (source of truth: `FlightItineraryOffer` fields in `displaySnapshot`).
 2. Whether the new trip is auto-populated with the flight itinerary or requires manual confirmation.
 3. Trip creation form scope (destination defaulting from flight offer, travel dates pre-filled, etc.).
 
 Until that contract PR opens, no implementation. No mock pricing, no AI estimate, no points estimates.
 
-Deploy requirement: set `IGNAV_API_KEY` + `IGNAV_FLIGHTS_ENABLED=1` in Railway (or other backend env) to activate live flight search. Key must be server-side only; never `NEXT_PUBLIC_`.
+**Post-deploy live smoke test** (run exactly once after deploying): SEA → LAX, 2026-06-17, one-way, 1 adult, economy. Expected: real Duffel offer cards with correct flight data, or honest UNAVAILABLE. No booking/order creation. No repeated searches.
+
+Deploy requirement: set `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` in Railway backend env to activate live flight search. `DUFFEL_BOOKING_ENABLED` must NOT be set to a truthy value (booking is out of scope). Key must be server-side only; never `NEXT_PUBLIC_`.
 
 ## Handoff maintenance rule
 

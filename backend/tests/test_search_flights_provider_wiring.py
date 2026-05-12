@@ -118,8 +118,10 @@ def test_search_flights_non_ok_status_returns_zero_rows(status, reason):
 
 def test_default_null_provider_results_in_zero_rows(monkeypatch):
     monkeypatch.delenv("DUFFEL_FLIGHTS_ENABLED", raising=False)
-    monkeypatch.delenv("DUFFEL_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("DUFFEL_API_KEY", raising=False)
     monkeypatch.delenv("DUFFEL_BASE_URL", raising=False)
+    monkeypatch.delenv("IGNAV_API_KEY", raising=False)
+    monkeypatch.delenv("IGNAV_FLIGHTS_ENABLED", raising=False)
     from app.services.flights_provider import reset_flight_provider_cache
     reset_flight_provider_cache()
     svc = SearchService(_empty_db())

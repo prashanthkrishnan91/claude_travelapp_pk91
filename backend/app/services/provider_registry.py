@@ -17,12 +17,16 @@ Approved provider stack (production_allowed=True):
   - yelp           : optional enrichment/corroboration only
   - openweather    : optional trip/weather ambience only
 
-Active flight provider (production_allowed=True, link-out model):
-  - ignav_flights  : live cash prices + booking deep-links; gated by IGNAV_API_KEY + IGNAV_FLIGHTS_ENABLED
+Active flight provider (production_allowed=True, search-only):
+  - duffel_flights : live cash flight search via Duffel offer requests;
+                     SEARCH ONLY — no booking/orders; gated by DUFFEL_API_KEY
+                     + DUFFEL_FLIGHTS_ENABLED; DUFFEL_BOOKING_ENABLED must be 0.
 
-Disabled / quarantined (production_allowed=False):
-  - duffel_flights : booking/OTA path; disabled
-  - duffel_stays   : booking/OTA path; quarantined scaffold
+Disabled (production_allowed=False):
+  - ignav_flights  : Flights v1 schedule trust NOT certified (external schedule
+                     times incorrect in production smoke test); disabled until
+                     separately re-certified.
+  - duffel_stays   : stays/hotel scaffold; quarantined pending re-approval
   - amadeus        : booking/OTA path; disabled
   - brave          : quarantined; use Tavily instead
   - serper         : quarantined; use Tavily instead
@@ -127,15 +131,18 @@ PROVIDER_REGISTRY: dict[str, ProviderEntry] = {
     "duffel_flights": ProviderEntry(
         provider_id="duffel_flights",
         display_name="Duffel Flights",
-        role=ProviderRole.DISABLED,
-        required_env_vars=("DUFFEL_ACCESS_TOKEN", "DUFFEL_FLIGHTS_ENABLED"),
-        production_allowed=False,
+        role=ProviderRole.LINK_OUT,
+        required_env_vars=("DUFFEL_API_KEY", "DUFFEL_FLIGHTS_ENABLED"),
+        production_allowed=True,
         can_create_addable_cards=False,
         can_enrich_only=False,
         supported_verticals=("flight",),
         cost_notes=(
-            "Disabled. Booking/OTA path not active. "
-            "Explicit re-approval in this registry required before activation."
+            "Active Flights v1 provider (search-only). "
+            "Returns live Duffel offer data (route, times, price); NO booking/orders. "
+            "Requires DUFFEL_API_KEY + DUFFEL_FLIGHTS_ENABLED=1 in backend env. "
+            "DUFFEL_BOOKING_ENABLED must be 0 (or absent); booking is out of scope for v1. "
+            "Key is server-side only; never NEXT_PUBLIC_."
         ),
     ),
     "duffel_stays": ProviderEntry(
@@ -222,24 +229,24 @@ PROVIDER_REGISTRY: dict[str, ProviderEntry] = {
         supported_verticals=("flight",),
         cost_notes=(
             "Access rejected by Skyscanner. Remains PENDING/disabled. "
-            "Ignav is the active Flights v1 provider. "
+            "Duffel is the active Flights v1 provider (search-only). "
             "Re-evaluate Skyscanner only if access is granted in the future."
         ),
     ),
     "ignav_flights": ProviderEntry(
         provider_id="ignav_flights",
         display_name="Ignav Flights",
-        role=ProviderRole.LINK_OUT,
+        role=ProviderRole.DISABLED,
         required_env_vars=("IGNAV_API_KEY", "IGNAV_FLIGHTS_ENABLED"),
-        production_allowed=True,
+        production_allowed=False,
         can_create_addable_cards=False,
         can_enrich_only=False,
         supported_verticals=("flight",),
         cost_notes=(
-            "Active Flights v1 provider (link-out model). "
-            "Returns live cash prices + external booking deep-links; no booking engine. "
-            "Requires IGNAV_API_KEY + IGNAV_FLIGHTS_ENABLED=1 in backend env. "
-            "1,000 free requests/month; no credit card required for free tier."
+            "DISABLED. Schedule trust NOT certified: production smoke test revealed "
+            "externally incorrect schedule times. Must not serve visible flight cards. "
+            "Duffel is the active Flights v1 provider. Ignav may be re-evaluated only "
+            "after a separate manual schedule-trust certification pass."
         ),
     ),
 }

@@ -9,7 +9,8 @@ Covers:
 - No disabled booking/OTA provider can produce visible rates or claims.
 - Concierge notes / card copy contracts are intact (Anthropic role preserved).
 - live_research select_default_provider skips Brave and Serper via registry gate.
-- flights get_flight_provider returns Null (Duffel disabled in registry).
+- Duffel is the active Flights v1 search-only provider (LINK_OUT, production_allowed=True).
+- Ignav is DISABLED (schedule trust not certified).
 """
 from __future__ import annotations
 
@@ -36,9 +37,11 @@ from app.services.provider_registry import (
 class TestRegistryCompleteness:
     """All expected provider IDs must be present in the registry."""
 
-    APPROVED = {"google_places", "anthropic", "tavily", "yelp", "openweather"}
+    # duffel_flights is now LINK_OUT + production_allowed=True (Flights v1 active provider).
+    # ignav_flights is now DISABLED (schedule trust not certified).
+    APPROVED = {"google_places", "anthropic", "tavily", "yelp", "openweather", "duffel_flights"}
     DISABLED_OR_QUARANTINED = {
-        "duffel_flights",
+        "ignav_flights",
         "duffel_stays",
         "amadeus",
         "brave",
@@ -64,11 +67,12 @@ class TestProductionAllowed:
     """production_allowed reflects the approved provider stack."""
 
     def test_approved_providers_are_production_allowed(self):
-        for pid in ("google_places", "anthropic", "tavily", "yelp", "openweather"):
+        for pid in ("google_places", "anthropic", "tavily", "yelp", "openweather", "duffel_flights"):
             assert is_production_allowed(pid), f"{pid!r} should be production_allowed"
 
     def test_disabled_providers_are_not_production_allowed(self):
-        for pid in ("duffel_flights", "amadeus", "foursquare"):
+        # ignav_flights is DISABLED (not schedule-certified); duffel_flights is now active.
+        for pid in ("ignav_flights", "amadeus", "foursquare"):
             assert not is_production_allowed(pid), f"{pid!r} must not be production_allowed"
 
     def test_quarantined_providers_are_not_production_allowed(self):
@@ -125,8 +129,9 @@ class TestProviderRoles:
     def test_openweather_is_weather(self):
         assert get_provider("openweather").role == ProviderRole.WEATHER
 
-    def test_duffel_flights_is_disabled(self):
-        assert get_provider("duffel_flights").role == ProviderRole.DISABLED
+    def test_duffel_flights_is_link_out(self):
+        # Duffel is the active Flights v1 search-only provider.
+        assert get_provider("duffel_flights").role == ProviderRole.LINK_OUT
 
     def test_duffel_stays_is_quarantined(self):
         assert get_provider("duffel_stays").role == ProviderRole.QUARANTINED
@@ -178,8 +183,8 @@ class TestIsProviderActive:
     def test_yelp_is_active(self):
         assert is_provider_active("yelp")
 
-    def test_duffel_flights_is_not_active(self):
-        assert not is_provider_active("duffel_flights")
+    def test_duffel_flights_is_active(self):
+        assert is_provider_active("duffel_flights")
 
     def test_duffel_stays_is_not_active(self):
         assert not is_provider_active("duffel_stays")
@@ -221,12 +226,17 @@ class TestConciergeNotesProviderIntact:
 
 
 class TestDisabledBookingProviderBehavior:
-    """Disabled/quarantined booking providers must never produce visible results."""
+    """Disabled/quarantined providers must not produce visible booking results."""
 
-    def test_duffel_flights_production_allowed_is_false(self):
-        """Duffel Flights must not activate even if env vars are set."""
-        assert not is_production_allowed("duffel_flights")
-        assert not is_provider_active("duffel_flights")
+    def test_duffel_flights_is_active_search_only(self):
+        """Duffel Flights is the active search-only provider; never creates orders."""
+        assert is_production_allowed("duffel_flights")
+        assert is_provider_active("duffel_flights")
+
+    def test_ignav_flights_is_disabled(self):
+        """Ignav is DISABLED (schedule trust not certified)."""
+        assert not is_production_allowed("ignav_flights")
+        assert not is_provider_active("ignav_flights")
 
     def test_duffel_stays_production_allowed_is_false(self):
         """Duffel Stays must not activate even if env vars are set."""
@@ -346,13 +356,14 @@ class TestLiveResearchProviderSelection:
 
 
 # ---------------------------------------------------------------------------
-# Integration: flights provider respects registry (Duffel disabled)
+# Integration: flights provider respects registry (Duffel now active)
 # ---------------------------------------------------------------------------
 
 @requires_full_stack
 class TestFlightsProviderRegistryGate:
-    """get_flight_provider must return NullFlightProvider because duffel_flights
-    is DISABLED in the registry, regardless of env vars."""
+    """get_flight_provider returns DuffelFlightProvider when DUFFEL_API_KEY +
+    DUFFEL_FLIGHTS_ENABLED are set, because duffel_flights is LINK_OUT +
+    production_allowed=True in the registry.  No env → NullFlightProvider."""
 
     def _get_provider_with_env(self, env_patch: dict) -> object:
         from app.services.flights_provider import (  # noqa: PLC0415
@@ -361,7 +372,10 @@ class TestFlightsProviderRegistryGate:
         )
 
         reset_flight_provider_cache()
-        strip = ["DUFFEL_FLIGHTS_ENABLED", "DUFFEL_ACCESS_TOKEN", "DUFFEL_BASE_URL"]
+        strip = [
+            "DUFFEL_FLIGHTS_ENABLED", "DUFFEL_API_KEY", "DUFFEL_BASE_URL",
+            "IGNAV_API_KEY", "IGNAV_FLIGHTS_ENABLED",
+        ]
         original_env = {}
         for k in strip:
             original_env[k] = os.environ.pop(k, None)
@@ -379,16 +393,16 @@ class TestFlightsProviderRegistryGate:
                     os.environ[k] = val
         return provider
 
-    def test_duffel_disabled_in_registry_returns_null_provider(self):
-        """Even with Duffel flags set, registry gate blocks activation."""
+    def test_duffel_enabled_in_registry_returns_duffel_provider(self):
+        """With DUFFEL_API_KEY + flag, registry gate allows activation."""
         provider = self._get_provider_with_env(
             {
                 "DUFFEL_FLIGHTS_ENABLED": "1",
-                "DUFFEL_ACCESS_TOKEN": "duffel_test_token",
+                "DUFFEL_API_KEY": "duffel_test_key",
             }
         )
-        assert type(provider).__name__ == "NullFlightProvider", (
-            "NullFlightProvider expected because duffel_flights is DISABLED in registry"
+        assert type(provider).__name__ == "DuffelFlightProvider", (
+            "DuffelFlightProvider expected because duffel_flights is LINK_OUT in registry"
         )
 
     def test_no_env_returns_null_provider(self):
