@@ -8,8 +8,8 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 2 — Open app before trip exists.** Stage 1 is GREEN. Stage 2A contract is defined in `docs/product/STAGE_2A_CONTRACT.md`. See `docs/product/ROADMAP.md`.
-- Active build queue item: **Saved lists foundation (Stage 3 entry).** Stage 2A is complete — Hotels Discovery Live (Slice 5C) shipped. Next stage work is the saved-item root object for Discover → Save → Plan. Duffel Stays live offers are deferred — not active without explicit Provider Registry re-approval.
+- Roadmap stage: **Stage 3 — Saved lists / boards.** Stage 2A is GREEN. Stage 3 v1 (Saved Lists Foundation) shipped: `/saved` is live, items grouped by vertical, remove/unsave wired. See `docs/product/ROADMAP.md`.
+- Active build queue item: **Next TBD — saved-to-trip conversion candidate.** Stage 3 v1 complete. No explicit next item locked; see BUILD_QUEUE.md.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -28,6 +28,7 @@ This file is **current operational state**, not a historical log. It is meant to
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
 
+- 2026-05-12 — **Stage 3 v1 — Saved Lists Foundation.** `/saved` route + `SavedShell` component. Fetches all saved items via existing `listSavedItems()`, groups by vertical (Restaurants / Attractions / Hotels / Flights), renders compact cards rehydrated from `displaySnapshot` + `searchContext`. Hotel cards show dates/guests from searchContext — no rates, no booking. Remove/unsave via existing `deleteSavedItem()` with optimistic UI. Empty state guides to `/explore`. Loading + error + empty states. "Saved" added to Sidebar (primary links) and MobileNav (drawer + tab bar). 46 new structural tests (`saved-lists-foundation.test.mjs`). No SQL. No backend change. No provider change.
 - 2026-05-12 — **Stage 2A Slice 5C — Hotels Discovery Live.** `HotelExploreFlow` rewritten from deferred state to live discovery. Calls `callConciergeSearch(null, query, undefined, destination)` (tripless Concierge, same pattern as Attractions Slice 4). Renders `UnifiedHotelResult` cards with stars, rating, area/address, Google Maps link, why-pick note, tags, and `ResultActionSheet`. Search context (destination, dates, guests) preserved in `ExploreResultContext` for future provider-backed offer. No rates, prices, availability, or booking copy rendered. 26 new hotel structural tests (`hotel-explore-live.test.mjs`) + 5 updated global Explore tests (`global-explore-shell.test.mjs` hotel section, deferred→live). No SQL. No backend change. No provider change.
 - 2026-05-12 — **Provider Registry v1 + Explore Provider Scope Reset (corrected).** Added `backend/app/services/provider_registry.py` as the central provider policy (ProviderRole enum, ProviderEntry dataclass, PROVIDER_REGISTRY dict). Approved stack: Google Places (canonical/addable cards), Anthropic (reasoning only), Tavily (research only), Yelp (enrichment only), OpenWeather (weather only). Disabled/quarantined: Duffel Flights, Duffel Stays, Amadeus, Brave, Serper, Foursquare. Registry gates applied to: `live_research.select_default_provider()` (Brave/Serper blocked; fail-closed on registry import failure), `flights_provider.get_flight_provider()` (Duffel Flights blocked), `hotels_provider.get_hotel_provider()` (Google Places gated), `hotels_provider_duffel_stays.build_duffel_stays_provider_from_env()` (Duffel Stays blocked at factory). 58 tests pass (8 skip in minimal harness, run in Railway/Docker). No SQL. No UI change. No Concierge notes change. Duffel/Amadeus are no longer active roadmap items.
 - 2026-05-12 — **Stage 2A Slice 5B — Hotel Offer contract + Duffel Stays scaffold.** Added `HotelOffer` dataclass to `backend/app/contracts/hotels.py` (all required offer fields with invariant enforcement; rejects mock/demo providers, zero price when available, empty disclaimer). Added `DuffelStaysProvider` scaffold in `backend/app/services/hotels_provider_duffel_stays.py` (disabled by default; requires `DUFFEL_STAYS_API_KEY` + `DUFFEL_STAYS_ENABLED=1`; returns `UNAVAILABLE` with zero rows; no mock fallback). Added `HotelDiscoveryCard` / `HotelOffer` TypeScript interfaces in `frontend/src/components/explore/types.ts` (discriminated by `kind`). 38 new backend tests pass. No SQL migration. No UI behavior change. `HotelExploreFlow` remains deferred.
@@ -59,12 +60,12 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 - `saved_items` migration 005 must be applied to the Supabase project before Save is live in production. Migration is in `backend/db/migrations/005_saved_items.sql`.
 - Hotels Slice 5A is discovery-only (`HotelDiscoveryCard`); do not add rates, prices, availability, or a fake hotel provider. Real hotel offers require a provider-backed Hotel Offer contract (deferred to Stage 2B or later).
 - Flights vertical is deferred: `/search/flights` is mock-backed. Duffel and Amadeus are disabled in Provider Registry v1 and are not active roadmap items. A flights provider requires explicit re-approval in the registry.
-- Saved-list foundation (Stage 3 root object) not built; ideas still need a non-trip home.
+- Saved-list foundation (Stage 3 v1) is live; `/saved` page, grouping, remove, and nav links all shipped.
 - AI destination intelligence, road trip mode, deal/points intelligence, and Travel Watchtower are deferred to later stages.
 
 ## Next recommended step
 
-Saved lists foundation (Stage 3 entry). The `saved_items` table and `ResultActionSheet` Save action are live (Slice 2). Stage 3 work is a first-class saved-list product surface — a user-facing "Saved" view that groups saved items by vertical, supports re-render from the stored snapshot, and provides a home for ideas before a trip is created.
+Stage 3 v1 is complete. Next item is TBD — saved-to-trip conversion is the natural candidate (letting users promote a saved idea into an active trip or add to an existing one), but no explicit contract is locked. Set direction in `docs/product/BUILD_QUEUE.md` before coding.
 
 Note: Duffel Stays (former Slice 5D) is not an active roadmap item. Re-approval in Provider Registry v1 is required before any Duffel or booking-provider path can be activated. See `DECISION_LOG.md` 2026-05-12.
 

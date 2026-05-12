@@ -12,6 +12,7 @@ import {
   Plane,
   LogOut,
   Compass,
+  Bookmark,
 } from "lucide-react";
 import clsx from "clsx";
 import { supabase } from "@/lib/supabase";
@@ -26,6 +27,7 @@ interface NavLink {
 const primaryLinks: NavLink[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Explore", href: "/explore", icon: Compass },
+  { label: "Saved", href: "/saved", icon: Bookmark },
   { label: "My Trips", href: "/trips", icon: Map },
   { label: "New Trip", href: "/trips/new", icon: PlusCircle },
 ];
