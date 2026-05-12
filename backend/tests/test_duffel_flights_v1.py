@@ -47,6 +47,7 @@ try:
     from app.services.flights_provider_duffel import (
         DuffelFlightProvider,
         build_duffel_provider_from_env,
+        duffel_certified_from_env,
         duffel_enabled_from_env,
     )
 except (ImportError, ModuleNotFoundError):
@@ -61,6 +62,7 @@ except (ImportError, ModuleNotFoundError):
     reset_flight_provider_cache = None  # type: ignore[assignment]
     DuffelFlightProvider = None  # type: ignore[assignment,misc]
     build_duffel_provider_from_env = None  # type: ignore[assignment]
+    duffel_certified_from_env = None  # type: ignore[assignment]
     duffel_enabled_from_env = None  # type: ignore[assignment]
 
 from app.services.provider_registry import (
@@ -107,9 +109,11 @@ class _FakeHttp:
         return self._responses.pop(0)
 
 
-def _build(api_key: str = "test-key") -> tuple[DuffelFlightProvider, _FakeHttp]:
+def _build(api_key: str = "test-key", certified: bool = True) -> tuple[DuffelFlightProvider, _FakeHttp]:
     http = _FakeHttp()
-    return DuffelFlightProvider(api_key=api_key, base_url="https://duffel.test", http_client=http), http
+    return DuffelFlightProvider(
+        api_key=api_key, base_url="https://duffel.test", http_client=http, certified=certified
+    ), http
 
 
 # ── Fixture helpers ───────────────────────────────────────────────────────────
@@ -661,6 +665,20 @@ class TestRequestStructure:
         headers = http.calls[0]["headers"]
         assert "Duffel-Version" in headers
 
+    def test_one_way_slice_includes_max_connections_zero(self):
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_one_way()]))
+        p.search_flights(_one_way_req())
+        slices = http.calls[0]["json"]["data"]["slices"]
+        assert slices[0]["max_connections"] == 0
+
+    def test_round_trip_both_slices_include_max_connections_zero(self):
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_round_trip()]))
+        p.search_flights(_round_trip_req())
+        slices = http.calls[0]["json"]["data"]["slices"]
+        assert all(sl["max_connections"] == 0 for sl in slices)
+
 
 # ── 12. Multi-offer response ───────────────────────────────────────────────────
 
@@ -798,3 +816,131 @@ class TestRouteDateValidation:
         assert offer.outbound_leg.destination == "LAX"
         assert offer.return_leg.origin == "LAX"
         assert offer.return_leg.destination == "SEA"
+
+
+# ── 14. Certification gate ────────────────────────────────────────────────────
+
+@requires_full_stack
+class TestCertificationGate:
+    """DUFFEL_SCHEDULE_TRUST_CERTIFIED must be truthy before cards are returned."""
+
+    def test_uncertified_returns_unavailable_even_with_valid_offers(self):
+        # certified=False (default); valid offer maps but gate suppresses cards
+        p, http = _build(certified=False)
+        http.enqueue(_duffel_response([_offer_one_way()]))
+        result = p.search_flights(_one_way_req())
+        assert result.status is FlightSourceStatus.UNAVAILABLE
+        assert result.rows == []
+        assert "certification" in (result.reason or "").lower()
+
+    def test_uncertified_rows_are_empty_not_partial(self):
+        # Multiple valid offers, still no rows when not certified
+        p, http = _build(certified=False)
+        http.enqueue(_duffel_response([
+            _offer_one_way(offer_id="off1"),
+            _offer_one_way(offer_id="off2"),
+        ]))
+        result = p.search_flights(_one_way_req())
+        assert result.rows == []
+
+    def test_certified_allows_valid_offers(self):
+        p, http = _build(certified=True)
+        http.enqueue(_duffel_response([_offer_one_way()]))
+        result = p.search_flights(_one_way_req())
+        assert result.status is FlightSourceStatus.OK
+        assert len(result.rows) == 1
+
+    def test_certified_round_trip_allowed(self):
+        p, http = _build(certified=True)
+        http.enqueue(_duffel_response([_offer_round_trip()]))
+        result = p.search_flights(_round_trip_req())
+        assert result.status is FlightSourceStatus.OK
+
+    def test_trust_gate_failures_still_unavailable_when_uncertified(self):
+        # Trust gate failure path returns UNAVAILABLE for a different reason
+        # (all offers failed trust gate), not the certification reason.
+        # Either way: no visible cards.
+        p, http = _build(certified=False)
+        bad_offer = _offer_one_way()
+        bad_offer["total_amount"] = None
+        http.enqueue(_duffel_response([bad_offer]))
+        result = p.search_flights(_one_way_req())
+        assert result.status is FlightSourceStatus.UNAVAILABLE
+        assert result.rows == []
+
+    def test_duffel_certified_from_env_returns_false_by_default(self):
+        assert duffel_certified_from_env({}) is False
+        assert duffel_certified_from_env({"DUFFEL_SCHEDULE_TRUST_CERTIFIED": "0"}) is False
+        assert duffel_certified_from_env({"DUFFEL_SCHEDULE_TRUST_CERTIFIED": "false"}) is False
+
+    def test_duffel_certified_from_env_returns_true_when_set(self):
+        assert duffel_certified_from_env({"DUFFEL_SCHEDULE_TRUST_CERTIFIED": "1"}) is True
+        assert duffel_certified_from_env({"DUFFEL_SCHEDULE_TRUST_CERTIFIED": "true"}) is True
+        assert duffel_certified_from_env({"DUFFEL_SCHEDULE_TRUST_CERTIFIED": "yes"}) is True
+
+    def test_build_from_env_uncertified_by_default(self):
+        env = {"DUFFEL_API_KEY": "k", "DUFFEL_FLIGHTS_ENABLED": "1"}
+        p = build_duffel_provider_from_env(env)
+        assert p is not None
+        assert p._certified is False
+
+    def test_build_from_env_certified_when_flag_set(self):
+        env = {
+            "DUFFEL_API_KEY": "k",
+            "DUFFEL_FLIGHTS_ENABLED": "1",
+            "DUFFEL_SCHEDULE_TRUST_CERTIFIED": "1",
+        }
+        p = build_duffel_provider_from_env(env)
+        assert p is not None
+        assert p._certified is True
+
+
+# ── 15. Debug logging ─────────────────────────────────────────────────────────
+
+@requires_full_stack
+class TestDebugLogging:
+    """DUFFEL_DEBUG=true logs compact non-sensitive summaries; off by default."""
+
+    def test_no_debug_log_when_flag_absent(self, monkeypatch, caplog):
+        monkeypatch.delenv("DUFFEL_DEBUG", raising=False)
+        import logging
+        with caplog.at_level(logging.DEBUG, logger="app.services.flights_provider_duffel"):
+            p, http = _build(certified=True)
+            http.enqueue(_duffel_response([_offer_one_way()]))
+            p.search_flights(_one_way_req())
+        debug_msgs = [r for r in caplog.records if "[duffel.accepted]" in r.message]
+        assert debug_msgs == []
+
+    def test_debug_log_emitted_when_flag_set(self, monkeypatch, caplog):
+        monkeypatch.setenv("DUFFEL_DEBUG", "true")
+        import logging
+        with caplog.at_level(logging.DEBUG, logger="app.services.flights_provider_duffel"):
+            p, http = _build(certified=True)
+            http.enqueue(_duffel_response([_offer_one_way()]))
+            p.search_flights(_one_way_req())
+        debug_msgs = [r for r in caplog.records if "[duffel.accepted]" in r.message]
+        assert len(debug_msgs) >= 1
+
+    def test_debug_log_contains_route_and_price(self, monkeypatch, caplog):
+        monkeypatch.setenv("DUFFEL_DEBUG", "true")
+        import logging
+        with caplog.at_level(logging.DEBUG, logger="app.services.flights_provider_duffel"):
+            p, http = _build(certified=True)
+            http.enqueue(_duffel_response([_offer_one_way()]))
+            p.search_flights(_one_way_req())
+        debug_msgs = [r for r in caplog.records if "[duffel.accepted]" in r.message]
+        assert debug_msgs, "Expected at least one accepted-offer debug log"
+        msg = debug_msgs[0].message
+        assert "SEA" in msg
+        assert "LAX" in msg
+        assert "189.5" in msg or "189" in msg
+
+    def test_debug_log_does_not_contain_api_key(self, monkeypatch, caplog):
+        monkeypatch.setenv("DUFFEL_DEBUG", "true")
+        import logging
+        with caplog.at_level(logging.DEBUG, logger="app.services.flights_provider_duffel"):
+            p, http = _build(api_key="SUPERSECRET-KEY", certified=True)
+            http.enqueue(_duffel_response([_offer_one_way()]))
+            p.search_flights(_one_way_req())
+        all_messages = " ".join(r.message for r in caplog.records)
+        assert "SUPERSECRET-KEY" not in all_messages

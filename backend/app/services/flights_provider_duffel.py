@@ -7,6 +7,27 @@ Activation requirements (all must be met):
   4. ``DUFFEL_BOOKING_ENABLED`` must NOT be set to a truthy value; booking/orders
      are out of scope for v1 and this adapter never creates Duffel orders.
 
+Schedule trust certification gate:
+  - ``DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`` must be set before visible cards appear.
+  - Default is uncertified: the adapter still calls Duffel and runs the full trust
+    gate, but returns UNAVAILABLE with reason ``"Duffel schedule trust certification
+    pending"`` rather than showing cards.
+  - Set to ``1`` only after running one live smoke test with ``DUFFEL_DEBUG=true``
+    and manually verifying all accepted-offer details (route, times, price) are
+    correct.  Mirrors the Ignav safety gate.
+
+Debug logging:
+  - Set ``DUFFEL_DEBUG=true`` in backend env to log compact non-sensitive summaries
+    of accepted mapped offers (offer index, price, outbound/return route, flight
+    numbers, timestamps, stops).  Never logs API keys, passenger PII, or full
+    payloads.  First ``_DEBUG_LOG_MAX_OFFERS`` accepted offers are logged at DEBUG
+    level.  Turn off after certification.
+
+Direct-flight default (v1):
+  - Each Duffel slice is sent with ``max_connections: 0`` to request direct
+    flights only.  Stops filtering may be exposed as a user-selectable option
+    in a future slice; do not remove this default without a product decision.
+
 Response contract:
   - Returns ``FlightItineraryOffer`` rows (canonical provider shape).
   - booking_link is always UNAVAILABLE — no orders, no checkout.
@@ -24,6 +45,8 @@ Trust gate (applied per offer before mapping):
   - Each segment must have 3-letter IATA origin/destination airports.
   - Each segment must have departing_at and arriving_at timestamps.
   - total_amount must be parseable as a positive float.
+  - Outbound leg origin/destination/date must match the search request exactly.
+  - Return leg origin/destination/date must match the search request exactly.
   - Offers failing any check are skipped and logged at WARNING level.
   - If ALL offers fail the trust gate, returns UNAVAILABLE with reason.
 
@@ -65,6 +88,7 @@ _OFFER_REQUESTS_PATH = "/air/offer_requests"
 _HTTP_TIMEOUT_SECONDS = 12.0
 _SUPPLIER_TIMEOUT_MS = 9000
 _MAX_OFFERS_TO_MAP = 20
+_DEBUG_LOG_MAX_OFFERS = 5
 _TRUTHY = {"1", "true", "yes", "on"}
 
 _UNAVAILABLE_BOOKING_LINK = FlightBookingLink(
@@ -76,6 +100,33 @@ _UNAVAILABLE_BOOKING_LINK = FlightBookingLink(
 
 def _truthy(value: Optional[str]) -> bool:
     return bool(value) and value.strip().lower() in _TRUTHY
+
+
+def _log_accepted_offer(offer: "FlightItineraryOffer", idx: int) -> None:
+    """Log a compact non-sensitive summary of an accepted offer for manual cert review.
+
+    Never logs API keys, passenger PII, full payloads, or tokens.
+    """
+    def _leg_summary(leg: "FlightOfferLeg") -> str:
+        segs = ", ".join(
+            f"{s.flight_number} {s.origin}→{s.destination} "
+            f"dep={s.departure_time[:16]} arr={s.arrival_time[:16]} {s.duration_minutes}min"
+            for s in leg.segments
+        )
+        return f"{leg.origin}→{leg.destination} stops={leg.stops} [{segs}]"
+
+    ret_part = ""
+    if offer.return_leg is not None:
+        ret_part = f" | return: {_leg_summary(offer.return_leg)}"
+
+    logger.debug(
+        "[duffel.accepted] #%d price=%s%s outbound: %s%s",
+        idx + 1,
+        offer.price.total_amount,
+        offer.price.currency,
+        _leg_summary(offer.outbound_leg),
+        ret_part,
+    )
 
 
 def _now_utc_iso() -> str:
@@ -328,12 +379,14 @@ class DuffelFlightProvider:
         api_key: str,
         base_url: str = _DEFAULT_BASE_URL,
         http_client: Optional["httpx.Client"] = None,
+        certified: bool = False,
     ) -> None:
         if not api_key:
             raise ValueError("DuffelFlightProvider requires non-empty api_key")
         self._api_key = api_key
         self._base_url = base_url.rstrip("/") or _DEFAULT_BASE_URL
         self._client = http_client
+        self._certified = certified
 
     def _get_http(self) -> "httpx.Client":
         if self._client is None:
@@ -350,6 +403,7 @@ class DuffelFlightProvider:
                 "origin": origin,
                 "destination": destination,
                 "departure_date": req.departure_date.isoformat(),
+                "max_connections": 0,
             }
         ]
         if req.return_date is not None:
@@ -358,6 +412,7 @@ class DuffelFlightProvider:
                     "origin": destination,
                     "destination": origin,
                     "departure_date": req.return_date.isoformat(),
+                    "max_connections": 0,
                 }
             )
         return slices
@@ -458,6 +513,29 @@ class DuffelFlightProvider:
                 rows=[],
                 reason="all duffel offers failed trust gate",
             )
+
+        # Debug logging — compact non-sensitive summaries for manual cert review.
+        # Never logs API key, passenger PII, or full payload.
+        if _truthy(os.environ.get("DUFFEL_DEBUG")):
+            for idx, offer in enumerate(rows[:_DEBUG_LOG_MAX_OFFERS]):
+                _log_accepted_offer(offer, idx)
+
+        # Certification gate — prevent cards from surfacing until accepted payloads
+        # are manually verified.  Set DUFFEL_SCHEDULE_TRUST_CERTIFIED=1 only after
+        # running one live smoke test with DUFFEL_DEBUG=true and confirming all
+        # accepted offer details (route, times, price) are correct.
+        if not self._certified:
+            logger.warning(
+                "[duffel.cert] %d valid offer(s) mapped but DUFFEL_SCHEDULE_TRUST_CERTIFIED "
+                "not set; returning UNAVAILABLE until schedule trust is manually verified",
+                len(rows),
+            )
+            return FlightProviderResult(
+                status=FlightSourceStatus.UNAVAILABLE,
+                rows=[],
+                reason="Duffel schedule trust certification pending",
+            )
+
         return FlightProviderResult(status=FlightSourceStatus.OK, rows=rows)
 
 
@@ -465,6 +543,17 @@ def duffel_enabled_from_env(env: Optional[Dict[str, str]] = None) -> bool:
     """Return True only when DUFFEL_API_KEY and DUFFEL_FLIGHTS_ENABLED are both set."""
     e = env if env is not None else os.environ  # type: ignore[assignment]
     return _truthy(e.get("DUFFEL_FLIGHTS_ENABLED")) and bool(e.get("DUFFEL_API_KEY"))
+
+
+def duffel_certified_from_env(env: Optional[Dict[str, str]] = None) -> bool:
+    """Return True when DUFFEL_SCHEDULE_TRUST_CERTIFIED is truthy.
+
+    Must be set to 1 only after running one live smoke test with DUFFEL_DEBUG=true
+    and manually confirming all accepted offer details (route, times, price) are
+    correct.  Default is False — prevents visible cards until certified.
+    """
+    e = env if env is not None else os.environ  # type: ignore[assignment]
+    return _truthy(e.get("DUFFEL_SCHEDULE_TRUST_CERTIFIED"))
 
 
 def build_duffel_provider_from_env(
@@ -477,4 +566,5 @@ def build_duffel_provider_from_env(
     return DuffelFlightProvider(
         api_key=e.get("DUFFEL_API_KEY") or "",
         base_url=e.get("DUFFEL_BASE_URL") or _DEFAULT_BASE_URL,
+        certified=duffel_certified_from_env(e),
     )
