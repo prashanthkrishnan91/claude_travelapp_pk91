@@ -6,11 +6,11 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Now
 
-- Stage 3 v3 candidate: Create Trip from Saved Item. Needs its own contract PR first — trip-creation wiring is wider than Add to Existing Trip.
+- **Flights v1 — Cash Live/Link-Out**: Implement flight search (origin, destination, dates, passengers, cabin, one-way/round-trip) backed by a live cash provider (Skyscanner Live Prices preferred, requires confirmed API key). Cards with AI scoring, cash price from provider, deep-link to book, provenance fields, `ResultActionSheet` save, and `POST /itinerary/items` add-to-trip. Fail-closed polished unavailable state when no key present. Provider Registry entry + gated adapter required first. Contract locked in DECISION_LOG 2026-05-12. Points/award track separately gated.
 
 ## Next
 
-- Stage 3 v3 candidate: Create Trip from Saved Item (needs its own contract PR first — trip creation wiring is wider than Add to Existing Trip).
+- Stage 3 v3 candidate: Create Trip from Saved Item (needs its own contract PR — deferred until Flights v1 ships and flight cards are saveable/addable).
 - Stage 2B or later: Real hotel offer rates (requires provider-backed Hotel Offer contract + explicit Provider Registry re-approval).
 
 ## Completed

@@ -8,8 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3 — Saved lists / boards.** Stage 2A is GREEN. Stage 3 v1 (Saved Lists Foundation) shipped: `/saved` is live, items grouped by vertical, remove/unsave wired. See `docs/product/ROADMAP.md`.
-- Active build queue item: **Stage 3 v3 candidate — Create Trip from Saved Item** (needs its own contract PR). Stage 3 v2 shipped: "Add to Trip" on SavedShell cards is live.
+- Roadmap stage: **Stage 3 — Saved lists / boards.** Stage 2A is GREEN. Stage 3 v1 (Saved Lists Foundation) shipped: `/saved` is live, items grouped by vertical, remove/unsave wired. Stage 3 v2 shipped: "Add to Trip" on SavedShell cards is live. See `docs/product/ROADMAP.md`.
+- Active build queue item: **Flights v1 — Cash Live/Link-Out** (prerequisite before Stage 3 v3). Contract locked in DECISION_LOG 2026-05-12. Implementation requires a confirmed Skyscanner Live Prices API key and a Provider Registry entry + gated adapter before any live calls.
+- Stage 3 v3 (Create Trip from Saved Item) is re-ordered to after Flights v1 ships and flight cards are saveable/addable to trips.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -60,13 +61,19 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 - `saved_items` migration 005 must be applied to the Supabase project before Save is live in production. Migration is in `backend/db/migrations/005_saved_items.sql`.
 - Hotels Slice 5A is discovery-only (`HotelDiscoveryCard`); do not add rates, prices, availability, or a fake hotel provider. Real hotel offers require a provider-backed Hotel Offer contract (deferred to Stage 2B or later).
-- Flights vertical is deferred: `/search/flights` is mock-backed. Duffel and Amadeus are disabled in Provider Registry v1 and are not active roadmap items. A flights provider requires explicit re-approval in the registry.
+- Flights vertical is now on the active build queue (Flights v1). Contract locked in DECISION_LOG 2026-05-12. Implementation is blocked until a Skyscanner Live Prices API key is confirmed. When the key is available: register in `provider_registry.py`, implement a gated adapter, then open the implementation PR. Until then, Explore Flights shows polished unavailable state — no mock rows, no placeholder prices. Duffel and Amadeus remain DISABLED/quarantined and are not active roadmap items.
 - Saved-list foundation (Stage 3 v1) is live; `/saved` page, grouping, remove, and nav links all shipped.
 - AI destination intelligence, road trip mode, deal/points intelligence, and Travel Watchtower are deferred to later stages.
 
 ## Next recommended step
 
-Stage 3 v2 — Add Saved Item to Trip. Contract is locked in DECISION_LOG 2026-05-12. Implementation prompt can proceed directly; no further decision PR needed. Key constraints: SavedShell-only (ResultActionSheet stays deferred), no SQL, no TripBuilder/tripCandidates changes, hotel details carry no rates/prices, flights disabled.
+**Flights v1 — Cash Live/Link-Out.** Contract locked in DECISION_LOG 2026-05-12. Two prerequisites before the implementation PR opens:
+1. Confirm Skyscanner Live Prices API key/access exists (or select an alternative live cash provider if Skyscanner is unavailable).
+2. Register the provider in `provider_registry.py` and implement a gated adapter (fail-closed when key absent).
+
+Once those are done, the implementation PR covers: flight search form (origin, destination, dates, passengers, cabin, one-way/round-trip), live provider call, flight cards with AI scoring + cash price + deep link, `ResultActionSheet` save, and `POST /itinerary/items` add-to-trip (`day_id: null`). Polished unavailable state when key is absent. No mock rows. No points prices unless a real award API is confirmed.
+
+Stage 3 v3 (Create Trip from Saved Item) is re-ordered to after Flights v1 ships.
 
 Note: Duffel Stays (former Slice 5D) is not an active roadmap item. Re-approval in Provider Registry v1 is required before any Duffel or booking-provider path can be activated. See `DECISION_LOG.md` 2026-05-12.
 

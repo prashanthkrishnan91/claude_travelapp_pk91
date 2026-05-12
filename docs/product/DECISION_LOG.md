@@ -105,6 +105,59 @@ Product decisions are recorded here so we do not re-litigate direction.
   - Enabling the adapter without credentials: `build_duffel_stays_provider_from_env` returns `None` without credentials; the seam falls back to `NullHotelProvider`.
 - Roadmap impact: Slice 5B ships the contract foundation. Slice 5B preserved the disabled scaffold, but Provider Registry v1 supersedes activation. Slice 5C is Hotels Discovery Live only. Duffel Stays/live hotel offers require explicit future registry re-approval and are not in the active build queue.
 
+## 2026-05-12 — Flight product and provider contract (pre-Stage 3 v3)
+
+- Decision: Flights must be completed before Stage 3 v3 (Create Trip from Saved Item). v1 implementation is cash live/link-out first. Points/award results are a separately gated track. No mock flights, no Duffel, no Amadeus, no booking engine.
+- Product definition (locked):
+  - User searches with origin, destination, dates, passengers, cabin class, and one-way / round-trip toggle.
+  - App returns live available flight options from an approved cash provider.
+  - Cards support one-way flights and round-trip pairs. Round-trip may be implemented as paired outbound/return card contract if provider response supports complete itineraries.
+  - Each card carries AI scoring (same scoring convention as Hotels/Attractions/Restaurants).
+  - Cash price shown only when sourced from a live cash provider (never estimated, never mocked).
+  - Points/award price shown only when sourced from a confirmed real award availability API. Not derived from cash prices.
+  - Each card has an external deep link to book (link-out; no booking engine, no PNR, no payments).
+  - Flight cards are saveable via `ResultActionSheet` and addable to trips via the existing `POST /itinerary/items` path (`day_id: null`, unscheduled candidate). Do **not** use day-scoped helpers.
+- Provider strategy (locked):
+  - Cash flights: Skyscanner Live Prices is the preferred candidate — supports live create/poll search, bookable itineraries, and deep links. Requires confirmed API key/access before implementation begins.
+  - Skyscanner Indicative Prices: may be used for inspiration / rough-estimate surfaces only. Must **never** be labeled as live bookable prices.
+  - Duffel: remains DISABLED/quarantined in Provider Registry v1. Not an active roadmap item.
+  - Amadeus: remains DISABLED/quarantined. Not an active roadmap item unless explicitly re-approved.
+  - Points/award flights: separate provider track. Seats.aero or equivalent may be considered later only with confirmed API access and clear cached/live labeling. Do not infer points prices from cash prices.
+- Provenance requirements (locked): every flight card must carry:
+  - `provider` (name of the live provider)
+  - `live_cached_status` (`live` | `cached`; never omit)
+  - `fetched_at` (ISO timestamp)
+  - `booking_link_source` (deep-link URL or provider name)
+  - `price_currency` and `price_amount` (only when real; never estimated)
+  - `points_program` and `points_amount` (only when sourced from a real award API; never derived)
+- Fail-closed / disabled behavior (locked):
+  - If no approved cash flight provider key is present in the registry, Explore Flights shows a polished "unavailable" state — not mock rows, not placeholder prices.
+  - No `/search/flights` mock route reuse.
+  - No fake cash or points estimates.
+  - No booking, ticketing, or PNR claims beyond the external link-out.
+- Non-goals (locked):
+  - No booking engine.
+  - No payments or checkout.
+  - No ticketing or PNR/order management.
+  - No Duffel (any product).
+  - No Amadeus (unless re-approved).
+  - No scraping-heavy provider path.
+  - No stale/cached prices labeled as live.
+  - No points estimates unless a real award API source is confirmed.
+- Sequence: flight implementation is a prerequisite for Stage 3 v3. Stage 3 v3 (Create Trip from Saved Item) proceeds only after flight cards are saveable and addable to trips.
+- Why: User explicitly wants real flights before Stage 3 v3. Flights follow the same live/link-out, discovery-first model as Hotels (discovery only) but flight-specific — a real provider is what makes them useful, not a mock UI. The link-out model avoids OTA/booking-engine scope while still delivering live prices.
+- Alternatives rejected:
+  - Mock flights / placeholder prices: explicitly forbidden (No Mock/Sample Visible Data Pack).
+  - Duffel: quarantined; user-rejected.
+  - Amadeus: quarantined; user-rejected.
+  - Points/award in v1: separately gated; cannot be derived from cash prices.
+  - Proceeding to Stage 3 v3 before flights: user-rejected ordering.
+- What would change our mind:
+  - Skyscanner Live Prices API is not accessible — would require evaluating another live/link-out cash provider (e.g., Travelpayouts, Kiwi.com Tequila, or a TPF-based search).
+  - User explicitly reverses the sequencing decision.
+- Provider Registry impact: any new flight provider must be registered in `provider_registry.py` before activation. Implementation PR must add a registry entry and gated adapter before any live calls.
+- Roadmap impact: Flights implementation is the next item in the build queue. Stage 3 v3 is re-ordered to after flights v1 ships.
+
 ## 2026-05-12 — Stage 3 v2: Saved → Trip conversion v1 contract
 
 - Decision: v1 scope is **Add to Existing Trip only**. A user on the `/saved` page can promote a saved idea into an unscheduled itinerary candidate on a trip they already own. "Create new trip from saved item" is explicitly deferred to Stage 3 v3+.
