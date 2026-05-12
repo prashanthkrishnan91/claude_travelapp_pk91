@@ -13,13 +13,37 @@ Response contract:
   - Never returns mock/fabricated data; fails closed on any error.
   - ``live_cached_status`` is always ``LIVE`` (real-time Ignav call).
   - ``ai_score`` is None in v1 (no scoring pipeline wired yet).
+  - Every offer passes the trust gate before being returned to the frontend.
+
+Trust gate (applied before mapping):
+  - Outbound first-segment departure airport must equal requested origin.
+  - Outbound last-segment arrival airport must equal requested destination.
+  - Segment airport chain must be coherent (each arrival == next departure).
+  - Outbound departure LOCAL date must equal requested departure_date.
+    Prefers departure_time_local; falls back to UTC date if local unavailable.
+    Missing departure time (no local or utc) is a hard rejection.
+  - For round-trips: inbound segments must be present; inbound first-segment
+    departure airport == requested destination; inbound last-segment arrival
+    airport == requested origin; inbound chain coherent; inbound departure
+    LOCAL date (falling back to UTC) == requested return_date.
+    Missing inbound departure time is a hard rejection.
+  - Offers failing any check are excluded and logged at WARNING level.
+  - If ALL offers fail, returns UNAVAILABLE (not incorrect cards).
+
+Time normalization:
+  - ``_parse_time()`` prefers LOCAL time over UTC so displayed times match
+    airline schedules. Stored strings may lack UTC offset; frontend must
+    extract HH:MM by slicing, not by UTC conversion.
+
+Booking-link 400 diagnosis:
+  - Non-200 booking-link responses are logged with status code + first 200
+    chars of the response body (no API keys, no tokens).
 
 Latency strategy:
   - One search call (one-way or round-trip endpoint).
   - Parallel booking-link fetches for the top ``_MAX_BOOKING_LINK_FETCHES``
-    results using ThreadPoolExecutor.
-  - Total budget: _HTTP_TIMEOUT_SECONDS + _BOOKING_LINK_TIMEOUT_SECONDS ≈ 20 s.
-    Acceptable for flight search; tuned below.
+    valid results using ThreadPoolExecutor.
+  - Total budget: _HTTP_TIMEOUT_SECONDS + _BOOKING_LINK_TIMEOUT_SECONDS ≈ 18 s.
 """
 
 from __future__ import annotations
@@ -145,12 +169,140 @@ class IgnavFlightProvider:
         try:
             client = httpx.Client(timeout=_BOOKING_LINK_TIMEOUT_SECONDS) if self._client is None else self._client
             resp = client.post(url, json=body, headers=self._headers())
+            if resp.status_code != 200:
+                # Log status + truncated body for diagnosis (no keys/tokens in body)
+                body_preview = (resp.text or "")[:200]
+                logger.warning(
+                    "[ignav] booking_links status=%d id_prefix=%.8s body=%r",
+                    resp.status_code, ignav_id, body_preview,
+                )
             resp.raise_for_status()
             data = resp.json()
             return data.get("booking_options", []) or []
         except Exception as exc:
-            logger.warning("[ignav] booking_links failed for %s: %s", ignav_id, exc)
+            logger.warning("[ignav] booking_links failed id_prefix=%.8s: %s", ignav_id, exc)
             return []
+
+    # ------------------------------------------------------------------
+    # Internal: trust gate
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _validate_itinerary_raw(
+        it: Dict[str, Any],
+        req: FlightSearchRequest,
+    ) -> Tuple[bool, str]:
+        """Validate raw Ignav itinerary against the search request.
+
+        Checks (in order):
+        1. Outbound has segments.
+        2. First segment departure airport == requested origin.
+        3. Last segment arrival airport == requested destination.
+        4. Segment chain is coherent (each arrival == next departure).
+        5. Departure LOCAL date (or UTC fallback) == requested departure_date.
+           Missing departure time is a hard rejection.
+        6. For round-trips: inbound segments present; inbound route reversed;
+           inbound chain coherent; inbound LOCAL date == return_date.
+           Missing inbound departure time is a hard rejection.
+
+        Returns (valid: bool, rejection_reason: str).
+        """
+        outbound = it.get("outbound") or {}
+        segments = outbound.get("segments") or []
+
+        if not segments:
+            return False, "outbound has no segments"
+
+        first_seg = segments[0]
+        last_seg = segments[-1]
+
+        req_origin = (req.all_origins[0].upper() if req.all_origins else "").strip()
+        req_dest = (req.all_destinations[0].upper() if req.all_destinations else "").strip()
+
+        first_dep = (first_seg.get("departure_airport") or "").upper().strip()
+        last_arr = (last_seg.get("arrival_airport") or "").upper().strip()
+
+        logger.debug(
+            "[ignav] trust_gate check origin=%s→%s req=%s→%s",
+            first_dep, last_arr, req_origin, req_dest,
+        )
+
+        if first_dep != req_origin:
+            return False, f"origin mismatch: segment={first_dep!r} req={req_origin!r}"
+        if last_arr != req_dest:
+            return False, f"dest mismatch: segment={last_arr!r} req={req_dest!r}"
+
+        # Outbound segment chain coherence
+        for i in range(len(segments) - 1):
+            conn_arr = (segments[i].get("arrival_airport") or "").upper().strip()
+            conn_dep = (segments[i + 1].get("departure_airport") or "").upper().strip()
+            if conn_arr != conn_dep:
+                return False, f"segment chain broken at {i}: {conn_arr!r}→{conn_dep!r}"
+
+        # Outbound date check: prefer local, fall back to UTC; missing is a hard rejection
+        dep_local = (first_seg.get("departure_time_local") or "").strip()
+        dep_utc = (first_seg.get("departure_time_utc") or "").strip()
+
+        if dep_local:
+            actual_date_str = dep_local[:10]
+            source = "local"
+        elif dep_utc:
+            actual_date_str = dep_utc[:10]
+            source = "utc"
+        else:
+            return False, "missing outbound departure time (no local or utc)"
+
+        req_date_str = req.departure_date.isoformat()
+        if actual_date_str != req_date_str:
+            return False, (
+                f"date mismatch ({source}): segment={actual_date_str!r} "
+                f"req={req_date_str!r}"
+            )
+
+        # Inbound validation for round-trips
+        if req.return_date is not None:
+            inbound = it.get("inbound") or {}
+            in_segments = inbound.get("segments") or []
+            if not in_segments:
+                return False, "round-trip has no inbound segments"
+
+            in_first = in_segments[0]
+            in_last = in_segments[-1]
+
+            in_first_dep = (in_first.get("departure_airport") or "").upper().strip()
+            in_last_arr = (in_last.get("arrival_airport") or "").upper().strip()
+
+            if in_first_dep != req_dest:
+                return False, f"inbound origin mismatch: segment={in_first_dep!r} req={req_dest!r}"
+            if in_last_arr != req_origin:
+                return False, f"inbound dest mismatch: segment={in_last_arr!r} req={req_origin!r}"
+
+            for i in range(len(in_segments) - 1):
+                conn_arr = (in_segments[i].get("arrival_airport") or "").upper().strip()
+                conn_dep = (in_segments[i + 1].get("departure_airport") or "").upper().strip()
+                if conn_arr != conn_dep:
+                    return False, f"inbound segment chain broken at {i}: {conn_arr!r}→{conn_dep!r}"
+
+            in_dep_local = (in_first.get("departure_time_local") or "").strip()
+            in_dep_utc = (in_first.get("departure_time_utc") or "").strip()
+
+            if in_dep_local:
+                in_date_str = in_dep_local[:10]
+                in_source = "local"
+            elif in_dep_utc:
+                in_date_str = in_dep_utc[:10]
+                in_source = "utc"
+            else:
+                return False, "missing inbound departure time (no local or utc)"
+
+            req_return_str = req.return_date.isoformat()
+            if in_date_str != req_return_str:
+                return False, (
+                    f"inbound date mismatch ({in_source}): segment={in_date_str!r} "
+                    f"req={req_return_str!r}"
+                )
+
+        return True, ""
 
     # ------------------------------------------------------------------
     # Internal: mapping helpers
@@ -158,11 +310,16 @@ class IgnavFlightProvider:
 
     @staticmethod
     def _parse_time(utc_str: Optional[str], local_str: Optional[str]) -> str:
-        """Return best available ISO 8601 time string; prefers UTC."""
-        val = utc_str or local_str or ""
+        """Return display-ready ISO 8601 time string; prefers LOCAL over UTC.
+
+        Preference for local means displayed times match airline departure boards.
+        The frontend must extract HH:MM by slicing position [11:16], not by
+        converting through UTC (which would show wrong local times).
+        """
+        val = local_str or utc_str or ""
         if not val:
             raise ValueError("no departure or arrival time available")
-        # Ensure it ends with Z if it looks UTC
+        # Normalize UTC offset suffix for consistency
         if val.endswith("+00:00"):
             val = val[:-6] + "Z"
         return val
@@ -380,11 +537,41 @@ class IgnavFlightProvider:
                 reason="no itineraries returned by Ignav",
             )
 
-        # Cap and extract ignav_ids for parallel booking-link fetches
+        # Cap raw results
         capped = raw_itineraries[:_MAX_OFFERS]
+
+        # Trust gate: validate each raw itinerary before mapping or fetching links
+        valid_itineraries: List[Dict[str, Any]] = []
+        for idx, it in enumerate(capped):
+            ok, reason = self._validate_itinerary_raw(it, req)
+            if ok:
+                valid_itineraries.append(it)
+            else:
+                logger.warning(
+                    "[ignav] trust_gate rejected idx=%d ignav_id_prefix=%.8s reason=%s",
+                    idx, it.get("ignav_id", ""), reason,
+                )
+
+        if not valid_itineraries:
+            logger.warning(
+                "[ignav] trust_gate rejected all %d itineraries — returning unavailable",
+                len(capped),
+            )
+            return FlightProviderResult(
+                status=FlightSourceStatus.UNAVAILABLE,
+                rows=[],
+                reason="all Ignav offers failed route/date validation",
+            )
+
+        logger.info(
+            "[ignav] trust_gate: %d/%d itineraries passed",
+            len(valid_itineraries), len(capped),
+        )
+
+        # Extract ignav_ids for parallel booking-link fetches (valid offers only)
         ids_to_fetch = [
             (idx, it.get("ignav_id", ""))
-            for idx, it in enumerate(capped)
+            for idx, it in enumerate(valid_itineraries)
             if it.get("ignav_id")
         ][:_MAX_BOOKING_LINK_FETCHES]
 
@@ -404,9 +591,9 @@ class IgnavFlightProvider:
                         logger.warning("[ignav] booking_links future error idx=%d: %s", idx, exc)
                         booking_map[idx] = []
 
-        # Map itineraries → FlightItineraryOffer
+        # Map valid itineraries → FlightItineraryOffer
         offers: List[FlightItineraryOffer] = []
-        for idx, it in enumerate(capped):
+        for idx, it in enumerate(valid_itineraries):
             bl_options = booking_map.get(idx, [])
             try:
                 offer = self._map_itinerary(it, bl_options, req, fetched_at)
@@ -415,7 +602,7 @@ class IgnavFlightProvider:
                 logger.warning("[ignav] skipping itinerary idx=%d mapping error: %s", idx, exc)
 
         if not offers:
-            logger.warning("[ignav] all %d itineraries failed to map", len(capped))
+            logger.warning("[ignav] all %d valid itineraries failed to map", len(valid_itineraries))
             return FlightProviderResult(
                 status=FlightSourceStatus.EMPTY,
                 rows=[],
@@ -448,3 +635,4 @@ __all__ = [
     "build_ignav_provider_from_env",
     "ignav_enabled_from_env",
 ]
+
