@@ -639,3 +639,126 @@ class TestGetFlightProviderFailClosed:
         from app.services.flights_provider import get_flight_provider
         provider = get_flight_provider()
         assert isinstance(provider, NullFlightProvider)
+
+
+# ---------------------------------------------------------------------------
+# Seam alignment — FlightProviderResult accepts FlightItineraryOffer (canonical)
+# ---------------------------------------------------------------------------
+
+
+class TestFlightProviderResultSeamAlignment:
+    """Prove FlightProviderResult.rows accepts FlightItineraryOffer as the
+    canonical row type, and isolates FlightResult as the legacy path.
+    """
+
+    def test_ok_accepts_valid_flight_itinerary_offer(self):
+        result = FlightProviderResult(
+            status=FlightSourceStatus.OK,
+            rows=[_make_offer()],
+        )
+        assert result.status is FlightSourceStatus.OK
+        assert len(result.rows) == 1
+        assert isinstance(result.rows[0], FlightItineraryOffer)
+
+    def test_ok_accepts_multiple_offers(self):
+        offer1 = _make_offer()
+        offer2 = _make_offer(
+            trip_type=TripType.ROUND_TRIP,
+            return_date="2026-06-08",
+            return_leg=_make_leg(),
+        )
+        result = FlightProviderResult(
+            status=FlightSourceStatus.OK,
+            rows=[offer1, offer2],
+        )
+        assert len(result.rows) == 2
+
+    def test_ok_rejects_zero_rows(self):
+        with pytest.raises(ValueError, match="EMPTY"):
+            FlightProviderResult(status=FlightSourceStatus.OK, rows=[])
+
+    def test_unavailable_rejects_offer_rows(self):
+        with pytest.raises(ValueError, match="must carry zero rows"):
+            FlightProviderResult(
+                status=FlightSourceStatus.UNAVAILABLE,
+                rows=[_make_offer()],
+                reason="bug",
+            )
+
+    def test_error_rejects_offer_rows(self):
+        with pytest.raises(ValueError, match="must carry zero rows"):
+            FlightProviderResult(
+                status=FlightSourceStatus.ERROR,
+                rows=[_make_offer()],
+                reason="upstream 500",
+            )
+
+    def test_empty_rejects_offer_rows(self):
+        with pytest.raises(ValueError, match="must carry zero rows"):
+            FlightProviderResult(
+                status=FlightSourceStatus.EMPTY,
+                rows=[_make_offer()],
+            )
+
+    def test_ok_rejects_arbitrary_dict_row(self):
+        with pytest.raises(ValueError, match="not a FlightItineraryOffer"):
+            FlightProviderResult(
+                status=FlightSourceStatus.OK,
+                rows=[{"source": "mock", "price": 100}],  # type: ignore[list-item]
+            )
+
+    def test_canonical_offer_has_no_points_cost_field(self):
+        """FlightItineraryOffer must not carry points_cost or points_estimate.
+
+        Points/award prices are a separately gated track; the canonical offer
+        type must not emit or require points fields.
+        """
+        offer = _make_offer()
+        assert not hasattr(offer, "points_cost"), (
+            "FlightItineraryOffer must not have points_cost field"
+        )
+        assert not hasattr(offer, "points_estimate"), (
+            "FlightItineraryOffer must not have points_estimate field"
+        )
+        assert not hasattr(offer, "cpp"), (
+            "FlightItineraryOffer must not have cpp (cents-per-point) field"
+        )
+
+    def test_canonical_offer_price_is_not_a_bare_float(self):
+        """FlightPrice is the typed price wrapper — a bare float is not valid."""
+        offer = _make_offer()
+        assert isinstance(offer.price, FlightPrice)
+        # The price amount is positive (invariant enforced in FlightPrice)
+        assert offer.price.total_amount > 0
+
+    def test_canonical_offer_has_no_recommendation_tag(self):
+        """FlightItineraryOffer must not carry legacy FlightResult scoring tags."""
+        offer = _make_offer()
+        assert not hasattr(offer, "recommendation_tag"), (
+            "FlightItineraryOffer must not have recommendation_tag (legacy FlightResult field)"
+        )
+        assert not hasattr(offer, "decision"), (
+            "FlightItineraryOffer must not have decision (legacy FlightResult field)"
+        )
+
+    def test_skyscanner_shell_rows_are_empty_not_offers(self):
+        """Skyscanner adapter shell returns UNAVAILABLE, not FlightItineraryOffer rows."""
+        provider = SkyscannerFlightProvider()
+        req = FlightSearchRequest(
+            origin="JFK", destination="CDG", departure_date=date(2026, 6, 1)
+        )
+        result = provider.search_flights(req)
+        assert result.status is FlightSourceStatus.UNAVAILABLE
+        assert result.rows == []
+        # No FlightItineraryOffer produced while disabled
+        assert not any(isinstance(r, FlightItineraryOffer) for r in result.rows)
+
+    def test_ignav_shell_rows_are_empty_not_offers(self):
+        """Ignav adapter shell returns UNAVAILABLE, not FlightItineraryOffer rows."""
+        provider = IgnavFlightProvider()
+        req = FlightSearchRequest(
+            origin="JFK", destination="CDG", departure_date=date(2026, 6, 1)
+        )
+        result = provider.search_flights(req)
+        assert result.status is FlightSourceStatus.UNAVAILABLE
+        assert result.rows == []

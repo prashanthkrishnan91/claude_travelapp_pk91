@@ -6,52 +6,71 @@ This module deliberately ships **no** real provider, **no** API key, and
 boundary so the next PR is a drop-in adapter, not a refactor of
 ``TripBuilder`` / ``OptimizeTripModal`` / ``/trips/create-with-search``.
 
-The seam returns a typed ``FlightProviderResult`` containing a list of
-real ``FlightResult`` rows and a ``FlightSourceStatus`` health marker.  An
-unavailable / errored provider returns an empty ``rows`` list and a
-non-``OK`` status — never a fake row.
+Row type policy
+---------------
+``FlightProviderResult.rows`` accepts two row shapes:
+
+- **Canonical (new adapters):** ``FlightItineraryOffer`` from
+  ``app.contracts.flight_offer``.  Skyscanner, Ignav, and any future
+  approved adapter MUST return this type.  Its invariants (positive price,
+  no fabricated booking URLs, IATA code lengths, etc.) are enforced in its
+  own ``__post_init__``.
+
+- **Legacy (SearchService consumer layer):** ``FlightResult`` from
+  ``app.models.search``.  This shape is used by the existing
+  ``SearchService.search_flights`` / ``search_round_trip_flights`` /
+  ``curate_flight_results`` stack that pre-dates the normalized offer
+  contract.  ``FlightResult`` rows are validated via the legacy
+  ``assert_persistable_flight`` predicate.  New provider adapters MUST NOT
+  produce ``FlightResult`` rows; this path exists only to avoid a breaking
+  change on the SearchService consumer while the promotion PR is pending.
 
 Default binding (``DefaultFlightProvider``) is the ``NullFlightProvider``
 which always returns ``UNAVAILABLE``.  The legacy ``_mock_flights`` helper
 in ``backend/app/services/search.py`` is intentionally NOT wired into this
-seam: it remains a quarantined legacy fixture, and binding it here would
-re-open the persistence hole that PR #295 closed.
+seam: it remains a quarantined legacy fixture.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Protocol
+from typing import List, Protocol, Union
 
 from app.contracts.flights import (
     FlightProviderUnavailable,
     FlightSourceStatus,
     assert_persistable_flight,
 )
+from app.contracts.flight_offer import FlightItineraryOffer
 from app.models.search import FlightResult, FlightSearchRequest
+
+# Canonical row type for new provider adapters.
+# Legacy type (FlightResult) is accepted for backward compat with the
+# SearchService consumer layer; it is not the canonical live-provider shape.
+ProviderBoundRow = Union[FlightItineraryOffer, FlightResult]
 
 
 @dataclass(frozen=True)
 class FlightProviderResult:
     """Typed response for any flight provider adapter.
 
-    Invariants (enforced in ``__post_init__``):
+    Row contract:
+    - **Canonical:** ``FlightItineraryOffer`` — new adapters (Skyscanner,
+      Ignav) MUST use this.  Invariants enforced in ``FlightItineraryOffer``
+      itself; no fabricated prices, no placeholder booking URLs.
+    - **Legacy:** ``FlightResult`` — accepted for backward compat with the
+      SearchService consumer layer (``curate_flight_results`` etc.) that
+      pre-dates the normalized contract.  Validated via
+      ``assert_persistable_flight``.  NOT the canonical live-provider shape.
 
-    - ``rows`` MUST be empty whenever ``status`` is not ``OK``
-      (``EMPTY``/``UNAVAILABLE``/``ERROR`` cannot carry rows).
-    - When ``status == OK``, every row MUST satisfy
-      ``app.contracts.flights.is_persistable_flight``.  Mock/demo/sample
-      sources, fabricated booking hosts, and rows missing required fields
-      are rejected via ``assert_persistable_flight``.
-    - ``OK`` with zero rows is intentionally NOT allowed: callers should
-      use ``EMPTY`` for the "valid query, no results" case so the typed
-      status remains the single source of truth for UI fail-closed copy.
-    - Adapters never raise on transport / API errors; they translate to
-      ``status = ERROR`` with a non-empty ``reason``.
+    Structural invariants (enforced in ``__post_init__``):
+    - ``rows`` MUST be empty whenever ``status`` is not ``OK``.
+    - ``OK`` with zero rows is a contract bug; use ``EMPTY`` instead.
+    - Adapters never raise on transport errors; translate to ``ERROR``.
     """
 
     status: FlightSourceStatus
-    rows: List[FlightResult] = field(default_factory=list)
+    rows: List[ProviderBoundRow] = field(default_factory=list)
     reason: str = ""
 
     def __post_init__(self) -> None:
@@ -62,13 +81,24 @@ class FlightProviderResult:
                     "row; use FlightSourceStatus.EMPTY for zero-result queries"
                 )
             for idx, row in enumerate(self.rows):
-                try:
-                    assert_persistable_flight(row)
-                except Exception as exc:
+                if isinstance(row, FlightItineraryOffer):
+                    # Canonical path: invariants already enforced in __post_init__.
+                    pass
+                elif isinstance(row, FlightResult):
+                    # LEGACY path: validate via pre-contract persistability predicate.
+                    try:
+                        assert_persistable_flight(row)
+                    except Exception as exc:
+                        raise ValueError(
+                            f"FlightProviderResult(status=OK).rows[{idx}] failed "
+                            f"the Flights Product Contract v1: {exc}"
+                        ) from exc
+                else:
                     raise ValueError(
-                        f"FlightProviderResult(status=OK).rows[{idx}] failed "
-                        f"the Flights Product Contract v1: {exc}"
-                    ) from exc
+                        f"FlightProviderResult(status=OK).rows[{idx}] is not a "
+                        f"FlightItineraryOffer (canonical) or FlightResult (legacy); "
+                        f"got {type(row).__name__}"
+                    )
         else:
             if self.rows:
                 raise ValueError(
