@@ -6,10 +6,11 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Now
 
-- **Stage 2A Slice 5C — Duffel Stays Adapter live (blocked on credentials):** Activate `DuffelStaysProvider` behind `DUFFEL_STAYS_ENABLED=1`. Implement live offer request in `search_hotels`. Wire into `get_hotel_provider()` registry alongside Google Places discovery. Show real offer cards only when `is_available=True` and `has_real_rate=True`. Requires Duffel Stays API access + credentials confirmed before starting.
+- **Stage 2A Slice 5C — Hotels Discovery Live:** Wire `HotelExploreFlow` as discovery-only lodging cards using the existing tripless Concierge / verified place card pattern (same as Attractions Slice 4). Render `HotelDiscoveryCard` results with rating, address, maps link, and `ResultActionSheet`. Preserve search context (destination, check_in, check_out, guests, rooms) in card payload. No rates, prices, or availability. `GOOGLE_PLACES_API_KEY` + `GOOGLE_HOTELS_ENABLED` (already in Railway backend env). No new Supabase migration required.
 
 ## Next
 
+- Stage 2A Slice 5D — Duffel Stays Adapter live (blocked on credentials): activate `DuffelStaysProvider` with real offer request once `DUFFEL_STAYS_API_KEY` + `DUFFEL_STAYS_ENABLED=1` are provisioned in Railway backend env. Do not start until credentials are confirmed.
 - Saved lists foundation (Stage 3 entry).
 
 ## Completed

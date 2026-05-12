@@ -7,14 +7,21 @@ This module scaffolds the Duffel Stays provider behind the
 live API calls, does NOT fabricate rates, and does NOT return mock data.
 When activated without credentials it returns ``UNAVAILABLE`` with no rows.
 
-Activation requires:
+Activation requires (Railway/backend env only — never Vercel/frontend):
 
 1. ``DUFFEL_STAYS_API_KEY``   — Duffel Stays access token (required).
+                                Backend-only secret. Must never be
+                                exposed to the frontend or client env.
 2. ``DUFFEL_STAYS_ENABLED``   — must be explicitly ``1``/``true``
                                 (defaults to disabled).
+                                Backend-only flag.
+
+Both env vars belong in Railway (backend service) only.  They must
+never be added to Vercel env or any frontend build configuration.
+The frontend should never know whether Duffel Stays is enabled.
 
 The flag defaults to disabled so that deploying this module does not
-accidentally activate a live provider.  Slice 5C will enable it once
+accidentally activate a live provider.  Slice 5D will enable it once
 Duffel Stays API access is confirmed and credentials are provisioned.
 
 Do not add mock/fixture responses here.  If there is no real provider

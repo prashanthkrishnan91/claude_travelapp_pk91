@@ -354,10 +354,6 @@ class HotelOffer:
     is_available: bool
     error_reason: Optional[str] = None   # set when is_available=False due to error
 
-    _DISALLOWED_PROVIDERS: frozenset = frozenset.__new__(
-        frozenset,  # class-level sentinel; __post_init__ uses a local constant
-    )
-
     def __post_init__(self) -> None:
         _DISALLOWED = frozenset({"mock", "demo", "fixture", "sample", "placeholder"})
 

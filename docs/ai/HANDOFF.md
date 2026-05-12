@@ -9,7 +9,7 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Current product stage
 
 - Roadmap stage: **Stage 2 — Open app before trip exists.** Stage 1 is GREEN. Stage 2A contract is defined in `docs/product/STAGE_2A_CONTRACT.md`. See `docs/product/ROADMAP.md`.
-- Active build queue item: **Stage 2A Slice 5C — Duffel Stays Adapter live (blocked on credentials).** Slice 5B shipped the `HotelOffer` contract and `DuffelStaysProvider` scaffold (disabled by default). Slice 5C activates live offer search once Duffel Stays API access is confirmed.
+- Active build queue item: **Stage 2A Slice 5C — Hotels Discovery Live.** Slice 5B shipped the `HotelOffer` contract and `DuffelStaysProvider` scaffold. Next: wire `HotelExploreFlow` as discovery-only lodging cards (same pattern as Attractions Slice 4). Duffel Stays live offers are Slice 5D, blocked on credentials.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -59,7 +59,9 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-Stage 2A Slice 5C — Duffel Stays Adapter live. **Blocked on credentials.** Before starting, confirm: (1) Duffel Stays API access is granted, (2) `DUFFEL_STAYS_API_KEY` is provisioned in Railway + Vercel env, (3) `DUFFEL_STAYS_ENABLED=1` is set. Then: implement live offer request in `DuffelStaysProvider.search_hotels` (`_STAYS_PATH` endpoint), wire into `get_hotel_provider()` registry, render `HotelOffer` cards in `HotelExploreFlow` with `providerDisclaimer` visible, guard on `is_available=True` and `has_real_rate=True`. See `DECISION_LOG.md` 2026-05-12.
+Stage 2A Slice 5C — Hotels Discovery Live. Wire `HotelExploreFlow` as discovery-only lodging cards using `callConciergeSearch(null, query, undefined, destination)` (same tripless pattern as Attractions Slice 4). Render `HotelDiscoveryCard` results with rating, address, Google Maps link, and `ResultActionSheet`. Preserve search context (destination, check_in, check_out, guests, rooms) in result payload. No rates, prices, or availability. Requires only `GOOGLE_PLACES_API_KEY` (already in Railway backend env). No new Supabase migration.
+
+Slice 5D (Duffel Stays live) is **blocked on credentials** — do not start until `DUFFEL_STAYS_API_KEY` + `DUFFEL_STAYS_ENABLED=1` are provisioned in **Railway backend env only** (never Vercel/frontend). See `DECISION_LOG.md` 2026-05-12.
 
 ## Handoff maintenance rule
 
