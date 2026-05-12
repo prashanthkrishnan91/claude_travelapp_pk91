@@ -9,7 +9,7 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Current product stage
 
 - Roadmap stage: **Stage 3 — Saved lists / boards.** Stage 2A is GREEN. Stage 3 v1 (Saved Lists Foundation) shipped: `/saved` is live, items grouped by vertical, remove/unsave wired. See `docs/product/ROADMAP.md`.
-- Active build queue item: **Next TBD — saved-to-trip conversion candidate.** Stage 3 v1 complete. No explicit next item locked; see BUILD_QUEUE.md.
+- Active build queue item: **Stage 3 v2 — Add Saved Item to Trip.** Contract locked (DECISION_LOG 2026-05-12). "Add to Trip" on SavedShell cards → trip picker → unscheduled itinerary candidate via existing `/itinerary/items` POST. No SQL. No TripBuilder/tripCandidates/ResultActionSheet changes. See BUILD_QUEUE.md.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -65,7 +65,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-Stage 3 v1 is complete. Next item is TBD — saved-to-trip conversion is the natural candidate (letting users promote a saved idea into an active trip or add to an existing one), but no explicit contract is locked. Set direction in `docs/product/BUILD_QUEUE.md` before coding.
+Stage 3 v2 — Add Saved Item to Trip. Contract is locked in DECISION_LOG 2026-05-12. Implementation prompt can proceed directly; no further decision PR needed. Key constraints: SavedShell-only (ResultActionSheet stays deferred), no SQL, no TripBuilder/tripCandidates changes, hotel details carry no rates/prices, flights disabled.
 
 Note: Duffel Stays (former Slice 5D) is not an active roadmap item. Re-approval in Provider Registry v1 is required before any Duffel or booking-provider path can be activated. See `DECISION_LOG.md` 2026-05-12.
 
