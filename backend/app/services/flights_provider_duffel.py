@@ -20,8 +20,9 @@ Debug logging:
   - Set ``DUFFEL_DEBUG=true`` in backend env to log compact non-sensitive summaries
     of accepted mapped offers (offer index, price, outbound/return route, flight
     numbers, timestamps, stops).  Never logs API keys, passenger PII, or full
-    payloads.  First ``_DEBUG_LOG_MAX_OFFERS`` accepted offers are logged at DEBUG
-    level.  Turn off after certification.
+    payloads.  First ``_DEBUG_LOG_MAX_OFFERS`` accepted offers are logged at INFO
+    level so they surface in production Railway logs without requiring global
+    LOG_LEVEL=DEBUG.  Turn off after certification.
 
 Direct-flight default (v1):
   - Each Duffel slice is sent with ``max_connections: 0`` to request direct
@@ -119,7 +120,7 @@ def _log_accepted_offer(offer: "FlightItineraryOffer", idx: int) -> None:
     if offer.return_leg is not None:
         ret_part = f" | return: {_leg_summary(offer.return_leg)}"
 
-    logger.debug(
+    logger.info(
         "[duffel.accepted] #%d price=%s%s outbound: %s%s",
         idx + 1,
         offer.price.total_amount,
@@ -515,8 +516,10 @@ class DuffelFlightProvider:
             )
 
         # Debug logging — compact non-sensitive summaries for manual cert review.
-        # Never logs API key, passenger PII, or full payload.
+        # Logged at INFO so they surface in production Railway logs without
+        # requiring global LOG_LEVEL=DEBUG. Never logs API key, PII, or payload.
         if _truthy(os.environ.get("DUFFEL_DEBUG")):
+            logger.info("[duffel.debug] accepted-offer certification logging enabled")
             for idx, offer in enumerate(rows[:_DEBUG_LOG_MAX_OFFERS]):
                 _log_accepted_offer(offer, idx)
 

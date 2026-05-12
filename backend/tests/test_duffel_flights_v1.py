@@ -899,12 +899,12 @@ class TestCertificationGate:
 
 @requires_full_stack
 class TestDebugLogging:
-    """DUFFEL_DEBUG=true logs compact non-sensitive summaries; off by default."""
+    """DUFFEL_DEBUG=true logs compact non-sensitive summaries at INFO level (production-visible)."""
 
     def test_no_debug_log_when_flag_absent(self, monkeypatch, caplog):
         monkeypatch.delenv("DUFFEL_DEBUG", raising=False)
         import logging
-        with caplog.at_level(logging.DEBUG, logger="app.services.flights_provider_duffel"):
+        with caplog.at_level(logging.INFO, logger="app.services.flights_provider_duffel"):
             p, http = _build(certified=True)
             http.enqueue(_duffel_response([_offer_one_way()]))
             p.search_flights(_one_way_req())
@@ -914,17 +914,20 @@ class TestDebugLogging:
     def test_debug_log_emitted_when_flag_set(self, monkeypatch, caplog):
         monkeypatch.setenv("DUFFEL_DEBUG", "true")
         import logging
-        with caplog.at_level(logging.DEBUG, logger="app.services.flights_provider_duffel"):
+        with caplog.at_level(logging.INFO, logger="app.services.flights_provider_duffel"):
             p, http = _build(certified=True)
             http.enqueue(_duffel_response([_offer_one_way()]))
             p.search_flights(_one_way_req())
         debug_msgs = [r for r in caplog.records if "[duffel.accepted]" in r.message]
         assert len(debug_msgs) >= 1
+        # diagnostic startup marker must also appear at INFO
+        diag_msgs = [r for r in caplog.records if "[duffel.debug]" in r.message]
+        assert len(diag_msgs) >= 1
 
     def test_debug_log_contains_route_and_price(self, monkeypatch, caplog):
         monkeypatch.setenv("DUFFEL_DEBUG", "true")
         import logging
-        with caplog.at_level(logging.DEBUG, logger="app.services.flights_provider_duffel"):
+        with caplog.at_level(logging.INFO, logger="app.services.flights_provider_duffel"):
             p, http = _build(certified=True)
             http.enqueue(_duffel_response([_offer_one_way()]))
             p.search_flights(_one_way_req())
@@ -938,7 +941,7 @@ class TestDebugLogging:
     def test_debug_log_does_not_contain_api_key(self, monkeypatch, caplog):
         monkeypatch.setenv("DUFFEL_DEBUG", "true")
         import logging
-        with caplog.at_level(logging.DEBUG, logger="app.services.flights_provider_duffel"):
+        with caplog.at_level(logging.INFO, logger="app.services.flights_provider_duffel"):
             p, http = _build(api_key="SUPERSECRET-KEY", certified=True)
             http.enqueue(_duffel_response([_offer_one_way()]))
             p.search_flights(_one_way_req())
