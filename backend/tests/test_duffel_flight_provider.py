@@ -90,6 +90,7 @@ def _build() -> Tuple[DuffelFlightProvider, _FakeHttpClient]:
             api_key="tok",
             base_url="https://duffel.test",
             http_client=http,
+            certified=True,
         ),
         http,
     )

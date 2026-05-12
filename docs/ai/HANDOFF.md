@@ -8,7 +8,7 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3 — Saved lists / boards.** Stage 2A is GREEN. Stage 3 v1 (Saved Lists Foundation) shipped. Stage 3 v2 shipped: "Add to Trip" on SavedShell cards. **Flights v1 — Duffel search-only provider active (2026-05-12)**: Duffel is the active flight search provider (LINK_OUT, `production_allowed=True`); live search + flight cards live when `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` are set. BOOKING/ORDERS: out of scope for v1; booking_link is always UNAVAILABLE. Ignav DISABLED (schedule trust not certified). See `docs/product/ROADMAP.md`.
+- Roadmap stage: **Stage 3 — Saved lists / boards.** Stage 2A is GREEN. Stage 3 v1 (Saved Lists Foundation) shipped. Stage 3 v2 shipped: "Add to Trip" on SavedShell cards. **Flights v1 — Duffel search-only provider active but NOT trust-certified (2026-05-12)**: Duffel calls live, trust gate + route/date validation active, but `DUFFEL_SCHEDULE_TRUST_CERTIFIED` is NOT set → adapter returns UNAVAILABLE until one live payload is manually verified. `DUFFEL_DEBUG=true` enables accepted-offer debug logging for cert review. Slices default to `max_connections=0` (direct flights). BOOKING/ORDERS: out of scope for v1; booking_link is always UNAVAILABLE. Ignav DISABLED (schedule trust not certified). See `docs/product/ROADMAP.md`.
 - Active build queue item: **Stage 3 v3 — Create Trip from Saved Item** (needs its own contract PR). Flight cards are saveable via `ResultActionSheet`. Add-to-trip for flights deferred to Stage 3 v3.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
@@ -64,22 +64,22 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 - `saved_items` migration 005 must be applied to the Supabase project before Save is live in production. Migration is in `backend/db/migrations/005_saved_items.sql`.
 - Hotels Slice 5A is discovery-only (`HotelDiscoveryCard`); do not add rates, prices, availability, or a fake hotel provider. Real hotel offers require a provider-backed Hotel Offer contract (deferred to Stage 2B or later).
-- Flights v1 is live (2026-05-12): Duffel (`LINK_OUT`, `production_allowed=True`) serves live search offers when `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` are set. BOOKING/ORDERS: explicitly out of scope for v1; `booking_link` is always UNAVAILABLE. Fail-closed when keys absent (polished unavailable state). Trust gate: per-segment carrier/flight_num/IATA/times validation; rejects entire offer if any segment fails. Skyscanner remains PENDING. Ignav DISABLED (schedule trust not certified — externally incorrect schedule times in production smoke test; do not re-enable without separate certification). Amadeus remains DISABLED.
+- Flights v1 is live but NOT visible (2026-05-12): Duffel (`LINK_OUT`, `production_allowed=True`) calls are live and trust/route/date validation is active, but `DUFFEL_SCHEDULE_TRUST_CERTIFIED` is NOT set → adapter returns UNAVAILABLE. Live smoke test revealed Duffel returned LA-area alternate airports (BUR, ONT, SNA) for a SEA→LAX request; those were correctly rejected by the route mismatch gate. Slices now default to `max_connections=0` (direct flights). **To enable visible cards**: set `DUFFEL_DEBUG=true`, run one search, verify accepted-offer log lines are correct, then set `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` and turn off `DUFFEL_DEBUG`. One live call only. BOOKING/ORDERS: out of scope for v1; `booking_link` is always UNAVAILABLE. Skyscanner remains PENDING. Ignav DISABLED. Amadeus remains DISABLED.
 - Saved-list foundation (Stage 3 v1) is live; `/saved` page, grouping, remove, and nav links all shipped.
 - AI destination intelligence, road trip mode, deal/points intelligence, and Travel Watchtower are deferred to later stages.
 
 ## Next recommended step
 
-**Stage 3 v3 — Create Trip from Saved Item.** Flights v1 has shipped (Duffel search-only). Flight cards are saveable. Stage 3 v3 contract PR should confirm:
-1. What happens when user creates a trip from a saved flight offer (source of truth: `FlightItineraryOffer` fields in `displaySnapshot`).
-2. Whether the new trip is auto-populated with the flight itinerary or requires manual confirmation.
-3. Trip creation form scope (destination defaulting from flight offer, travel dates pre-filled, etc.).
+**Duffel schedule trust certification** (one live call only):
+1. Set `DUFFEL_DEBUG=true` in Railway backend env.
+2. Run exactly one search: SEA → LAX, 2026-06-17, one-way, 1 adult, economy.
+3. Read Railway logs — look for `[duffel.accepted]` lines. Verify route (SEA→LAX), flight numbers, departure/arrival times, and price look correct.
+4. If accepted offers look correct: set `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` in Railway env, then remove `DUFFEL_DEBUG` (or set to `false`). Visible cards will appear on the next search.
+5. If accepted offers look wrong: leave `DUFFEL_SCHEDULE_TRUST_CERTIFIED` unset and open a trust-hardening PR.
 
-Until that contract PR opens, no implementation. No mock pricing, no AI estimate, no points estimates.
+**After certification**, next product work is **Stage 3 v3 — Create Trip from Saved Item**. Flight cards are saveable. Contract PR should confirm: how a trip is created from a saved flight offer, whether auto-populated or manual, and trip creation form scope.
 
-**Post-deploy live smoke test** (run exactly once after deploying): SEA → LAX, 2026-06-17, one-way, 1 adult, economy. Expected: real Duffel offer cards with correct flight data, or honest UNAVAILABLE. No booking/order creation. No repeated searches.
-
-Deploy requirement: set `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` in Railway backend env to activate live flight search. `DUFFEL_BOOKING_ENABLED` must NOT be set to a truthy value (booking is out of scope). Key must be server-side only; never `NEXT_PUBLIC_`.
+Env requirements: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` must be set. `DUFFEL_BOOKING_ENABLED` absent or `0`. `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` only after manual payload verification. Key server-side only; never `NEXT_PUBLIC_`.
 
 ## Handoff maintenance rule
 
