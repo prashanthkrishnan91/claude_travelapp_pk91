@@ -25,7 +25,8 @@ Trust gate (applied before mapping):
     Missing departure time (no local or utc) is a hard rejection.
 
   Per-segment field checks (all segments in outbound and inbound):
-  - Each segment must have at least one of: marketing_carrier_code, flight_number.
+  - Each segment must have both marketing_carrier_code AND flight_number (not
+    just one); both are required for an unambiguous displayed flight identity.
   - Each segment's departure_airport and arrival_airport must be 3-letter IATA.
   - Each segment must have departure time (local or UTC).
   - Each segment must have arrival time (local or UTC).
@@ -64,12 +65,24 @@ Booking-link lookup:
   - Non-200 responses are logged with status code + first 200 chars of body
     (no API keys, no tokens).
 
+Schedule trust certification gate:
+  - Set ``IGNAV_SCHEDULE_TRUST_CERTIFIED=1`` in backend env ONLY after manually
+    confirming that raw Ignav field values match live airline schedules for at
+    least one sample payload (inspect via IGNAV_FLIGHTS_DEBUG_PAYLOAD logging).
+  - Default is OFF (not certified).  When off, all field/route/date checks still
+    run and debug logging still fires, but no offers are returned to the frontend
+    — reason: "Ignav schedule trust certification pending".
+  - This gate exists because field completeness does not prove external correctness;
+    a provider can return structurally coherent data with wrong times.
+
 Debug payload logging:
   - Set ``IGNAV_FLIGHTS_DEBUG_PAYLOAD=1`` in backend env to emit structured
     diagnostic info for the first three trust-gate-passing offers.
   - Only non-sensitive scheduling fields are logged: provider index, ignav_id
     prefix, segment route chain, flight numbers, local/UTC dep/arr times,
     durations, and price.  API keys/tokens/personal data are never logged.
+  - Fires even when IGNAV_SCHEDULE_TRUST_CERTIFIED is off — use to inspect
+    raw payload without showing offers to users.
 
 Latency strategy:
   - One search call (one-way or round-trip endpoint).
@@ -425,8 +438,10 @@ class IgnavFlightProvider:
 
         carrier_code = (seg.get("marketing_carrier_code") or "").strip()
         flight_num = (seg.get("flight_number") or "").strip()
-        if not carrier_code and not flight_num:
-            return False, f"{prefix}: missing carrier code and flight number"
+        if not carrier_code:
+            return False, f"{prefix}: missing carrier code (required for displayed flight identity)"
+        if not flight_num:
+            return False, f"{prefix}: missing flight number (required for displayed flight identity)"
 
         dep_airport = (seg.get("departure_airport") or "").upper().strip()
         arr_airport = (seg.get("arrival_airport") or "").upper().strip()
@@ -853,6 +868,28 @@ class IgnavFlightProvider:
                 status=FlightSourceStatus.EMPTY,
                 rows=[],
                 reason="all itineraries failed contract mapping",
+            )
+
+        # Schedule trust certification gate — prevents displaying externally unverified
+        # schedule data as LIVE cards even when field-level checks pass.  Field
+        # completeness proves the payload is structurally sound; it does not prove
+        # that the field values are externally correct (e.g. Ignav may return coherent
+        # but stale times).  Set IGNAV_SCHEDULE_TRUST_CERTIFIED=1 only after manually
+        # inspecting at least one raw provider payload via IGNAV_FLIGHTS_DEBUG_PAYLOAD
+        # logging and confirming the mapped times match live airline schedules.
+        _trust_certified = (
+            os.environ.get("IGNAV_SCHEDULE_TRUST_CERTIFIED", "").strip().lower() in _TRUTHY
+        )
+        if not _trust_certified:
+            logger.info(
+                "[ignav] schedule trust not certified — %d mapped offer(s) discarded; "
+                "set IGNAV_SCHEDULE_TRUST_CERTIFIED=1 after inspecting debug payload",
+                len(offers),
+            )
+            return FlightProviderResult(
+                status=FlightSourceStatus.UNAVAILABLE,
+                rows=[],
+                reason="Ignav schedule trust certification pending",
             )
 
         logger.info("[ignav] returning %d offers", len(offers))

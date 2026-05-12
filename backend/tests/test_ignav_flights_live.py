@@ -363,9 +363,9 @@ class TestErrorHandling:
         mock_resp.json.return_value = _make_search_response()
         mock_resp.raise_for_status = MagicMock()
         provider._client.post.return_value = mock_resp
-        # Also mock _fetch_booking_links to avoid extra httpx calls
         with patch.object(provider, "_fetch_booking_links", return_value=[]):
-            result = provider.search_flights(_make_request())
+            with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+                result = provider.search_flights(_make_request())
         assert result.status == FlightSourceStatus.OK
         assert len(result.rows) == 1
         assert isinstance(result.rows[0], FlightItineraryOffer)
@@ -379,7 +379,8 @@ class TestErrorHandling:
         mock_resp.raise_for_status = MagicMock()
         provider._client.post.return_value = mock_resp
         with patch.object(provider, "_fetch_booking_links", return_value=[]):
-            result = provider.search_flights(_make_request())
+            with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+                result = provider.search_flights(_make_request())
         assert result.status == FlightSourceStatus.OK
         for row in result.rows:
             assert isinstance(row, FlightItineraryOffer)
@@ -766,7 +767,8 @@ class TestTrustGate:
         }
         provider._client.post.return_value = mock_resp
         with patch.object(provider, "_fetch_booking_links", return_value=[]):
-            result = provider.search_flights(req)
+            with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+                result = provider.search_flights(req)
         assert result.status == FlightSourceStatus.OK
         assert len(result.rows) == 1
         offer = result.rows[0]
@@ -787,7 +789,8 @@ class TestTrustGate:
         }
         provider._client.post.return_value = mock_resp
         with patch.object(provider, "_fetch_booking_links", return_value=[]):
-            result = provider.search_flights(req)
+            with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+                result = provider.search_flights(req)
         assert result.status == FlightSourceStatus.OK
         assert len(result.rows) == 1
 
@@ -800,7 +803,8 @@ class TestTrustGate:
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {"itineraries": [it]}
         provider._client.post.return_value = mock_resp
-        result = provider.search_flights(req)
+        with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+            result = provider.search_flights(req)
         assert result.status == FlightSourceStatus.OK
         assert result.rows[0].booking_link.link_type == BookingLinkType.UNAVAILABLE
 
@@ -917,7 +921,8 @@ class TestBookingLinkPayload:
 
         mock_bl = MagicMock(return_value=[])
         with patch.object(provider, "_fetch_booking_links", mock_bl):
-            result = provider.search_flights(req)
+            with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+                result = provider.search_flights(req)
             assert result.status == FlightSourceStatus.OK
             # Verify each call used only ignav_id — no adults arg
             for call in mock_bl.call_args_list:
@@ -963,17 +968,19 @@ class TestSegmentFieldValidation:
         seg = _make_valid_segment(carrier_code="", flight_num="")
         ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 0, "outbound")
         assert ok is False
-        assert "missing carrier code and flight number" in reason
+        assert "carrier code" in reason  # carrier check fires first
 
-    def test_only_carrier_code_no_flight_number_passes(self):
+    def test_only_carrier_code_no_flight_number_rejected(self):
         seg = _make_valid_segment(flight_num="")
         ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 0, "outbound")
-        assert ok is True, f"carrier code alone should suffice: {reason}"
+        assert ok is False
+        assert "flight number" in reason
 
-    def test_only_flight_number_no_carrier_code_passes(self):
+    def test_only_flight_number_no_carrier_code_rejected(self):
         seg = _make_valid_segment(carrier_code="")
         ok, reason = IgnavFlightProvider._validate_segment_fields(seg, 0, "outbound")
-        assert ok is True, f"flight number alone should suffice: {reason}"
+        assert ok is False
+        assert "carrier code" in reason
 
     def test_malformed_departure_airport_rejected(self):
         seg = _make_valid_segment(dep="SE")  # 2 chars, not 3
@@ -1151,7 +1158,7 @@ class TestTrustGateSegmentConsistency:
         seg["flight_number"] = ""
         ok, reason = IgnavFlightProvider._validate_itinerary_raw(it, req)
         assert ok is False
-        assert "missing carrier code and flight number" in reason
+        assert "carrier code" in reason  # carrier check fires first
 
     def test_non_positive_segment_duration_rejects_offer(self):
         req = _make_sea_lax_request()
@@ -1301,3 +1308,110 @@ class TestTrustGateSegmentConsistency:
         assert ok is False
         assert "duplicate" in reason.lower()
         assert "inbound" in reason
+
+
+# ---------------------------------------------------------------------------
+# 23: Schedule trust certification gate
+# ---------------------------------------------------------------------------
+
+def _make_certified_search_response() -> Dict[str, Any]:
+    """One valid SEA→LAX itinerary with all required fields."""
+    return {"itineraries": [_make_sea_lax_itinerary()]}
+
+
+class TestScheduleTrustCertification:
+    """Tests for the IGNAV_SCHEDULE_TRUST_CERTIFIED gate.
+
+    Field completeness ≠ external correctness.  The gate prevents displaying
+    offers whose schedule accuracy has not been manually confirmed.
+    """
+
+    def _build_provider(self) -> IgnavFlightProvider:
+        provider = IgnavFlightProvider(api_key="testkey", http_client=MagicMock())
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = _make_certified_search_response()
+        provider._client.post.return_value = mock_resp
+        return provider
+
+    def test_no_cert_env_returns_unavailable(self):
+        """Default (no IGNAV_SCHEDULE_TRUST_CERTIFIED) → UNAVAILABLE."""
+        provider = self._build_provider()
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("IGNAV_SCHEDULE_TRUST_CERTIFIED", None)
+            with patch.object(provider, "_fetch_booking_links", return_value=[]):
+                result = provider.search_flights(_make_sea_lax_request())
+        assert result.status == FlightSourceStatus.UNAVAILABLE
+        assert result.rows == []
+
+    def test_cert_flag_zero_returns_unavailable(self):
+        provider = self._build_provider()
+        with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "0"}):
+            with patch.object(provider, "_fetch_booking_links", return_value=[]):
+                result = provider.search_flights(_make_sea_lax_request())
+        assert result.status == FlightSourceStatus.UNAVAILABLE
+        assert result.rows == []
+
+    def test_cert_flag_false_string_returns_unavailable(self):
+        provider = self._build_provider()
+        with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "false"}):
+            with patch.object(provider, "_fetch_booking_links", return_value=[]):
+                result = provider.search_flights(_make_sea_lax_request())
+        assert result.status == FlightSourceStatus.UNAVAILABLE
+        assert result.rows == []
+
+    def test_unavailable_reason_mentions_certification(self):
+        provider = self._build_provider()
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("IGNAV_SCHEDULE_TRUST_CERTIFIED", None)
+            with patch.object(provider, "_fetch_booking_links", return_value=[]):
+                result = provider.search_flights(_make_sea_lax_request())
+        assert result.reason is not None
+        assert "certification" in (result.reason or "").lower()
+
+    def test_cert_flag_one_allows_valid_offers(self):
+        """IGNAV_SCHEDULE_TRUST_CERTIFIED=1 → OK with offers for valid payload."""
+        provider = self._build_provider()
+        with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+            with patch.object(provider, "_fetch_booking_links", return_value=[]):
+                result = provider.search_flights(_make_sea_lax_request())
+        assert result.status == FlightSourceStatus.OK
+        assert len(result.rows) == 1
+        assert isinstance(result.rows[0], FlightItineraryOffer)
+
+    def test_cert_flag_true_string_allows_valid_offers(self):
+        provider = self._build_provider()
+        with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "true"}):
+            with patch.object(provider, "_fetch_booking_links", return_value=[]):
+                result = provider.search_flights(_make_sea_lax_request())
+        assert result.status == FlightSourceStatus.OK
+        assert len(result.rows) >= 1
+
+    def test_cert_on_but_trust_gate_still_rejects_invalid_offers(self):
+        """Cert flag does not bypass trust gate — invalid offers still rejected."""
+        provider = IgnavFlightProvider(api_key="testkey", http_client=MagicMock())
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        # Itinerary with wrong origin — should fail trust gate before cert check
+        mock_resp.json.return_value = {
+            "itineraries": [_make_sea_lax_itinerary(dep_airport="PDX")]
+        }
+        provider._client.post.return_value = mock_resp
+        with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+            result = provider.search_flights(_make_sea_lax_request())
+        assert result.status == FlightSourceStatus.UNAVAILABLE
+        assert result.rows == []
+
+    def test_cert_on_but_segment_missing_flight_number_rejects(self):
+        """Cert flag does not bypass segment field validation."""
+        provider = IgnavFlightProvider(api_key="testkey", http_client=MagicMock())
+        it = _make_sea_lax_itinerary()
+        it["outbound"]["segments"][0]["flight_number"] = ""
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {"itineraries": [it]}
+        provider._client.post.return_value = mock_resp
+        with patch.dict(os.environ, {"IGNAV_SCHEDULE_TRUST_CERTIFIED": "1"}):
+            result = provider.search_flights(_make_sea_lax_request())
+        assert result.status == FlightSourceStatus.UNAVAILABLE
+        assert result.rows == []
