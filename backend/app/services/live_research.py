@@ -748,7 +748,7 @@ def select_default_provider(timeout: float = 6.0) -> LiveSearchProvider:
         from app.services.provider_registry import is_provider_active as _active
     except Exception:  # pragma: no cover
         def _active(pid: str) -> bool:  # type: ignore[misc]
-            return True  # degrade gracefully if registry unreachable
+            return False  # fail closed: unknown registry state → no live provider
 
     tavily = _read_provider_api_key("TAVILY_API_KEY")
     if tavily and _active("tavily"):
