@@ -80,6 +80,16 @@ Product decisions are recorded here so we do not re-litigate direction.
 - What would change our mind: A real hotel rate/availability provider is contracted and the Hotel Offer contract is written and reviewed before Slice 5A ships.
 - Roadmap impact: Slice 5A ships Hotels discovery. Real hotel offers are explicitly deferred to a named future slice with a provider-backed Hotel Offer contract. BUILD_QUEUE and HANDOFF updated accordingly.
 
+## 2026-05-12 — Provider Registry v1: central provider policy + Explore provider scope reset
+- Decision: Add `backend/app/services/provider_registry.py` as the single, canonical source of truth for provider activation, addable-card authority, and disabled/quarantined status. Disallowed providers (Duffel, Amadeus, Brave, Serper, Foursquare) are registered as DISABLED or QUARANTINED and will not activate in production even if API keys are present. Duffel and Amadeus are no longer active roadmap items.
+- Why: Provider behavior was scattered across route files, service adapters, and env-var checks with no central authority. The app is a private-use Travel Concierge, not a booking engine or OTA. A registry makes the policy explicit, makes it easy to extend (register + adapter + tests), and ensures disallowed providers fail closed without manual env audits.
+- Approved provider stack: Google Places (canonical / addable cards), Anthropic (reasoning / Concierge notes only), Tavily (research context only), Yelp (enrichment/corroboration only), OpenWeather (weather/trip context only).
+- Disabled/quarantined: Duffel Flights (DISABLED), Duffel Stays (QUARANTINED), Amadeus (DISABLED), Brave (QUARANTINED), Serper (QUARANTINED), Foursquare (DISABLED).
+- Surgical refactors: `live_research.select_default_provider()` consults registry before returning Brave/Serper; `flights_provider.get_flight_provider()` consults registry before building Duffel adapter. No other code changed.
+- Alternatives rejected: (a) per-file env-var-only gates — scattered, fragile, no central policy; (b) deleting adapter files — risky if adapter code is referenced elsewhere; quarantine is safer.
+- What would change our mind: A specific booking/OTA provider is contracted, credentialed, and the Hotel Offer or Flights contract is written — at which point the registry entry is updated and re-approved explicitly.
+- Roadmap impact: Provider Registry v1 is now the prerequisite gateway before any new provider is added. Hotels Discovery Live (Slice 5C) is the next product build. Duffel Stays (former Slice 5D) is no longer in the active build queue.
+
 ## 2026-05-12 — Stage 2A Slice 5B: Hotel Offer contract + Duffel Stays readiness scaffold
 - Decision: Slice 5B adds the typed `HotelOffer` contract and a disabled-by-default `DuffelStaysProvider` scaffold. No live API calls. No user-facing rates.
 - Architecture rules locked by this decision:
