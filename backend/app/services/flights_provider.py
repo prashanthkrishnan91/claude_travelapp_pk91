@@ -130,45 +130,92 @@ def reset_flight_provider_cache() -> None:
 def get_flight_provider() -> FlightProvider:
     """Return the active ``FlightProvider``.
 
-    Flights v1 — registry-gated then env-gated:
+    Flights v1 — registry-gated then env-gated.  Provider priority order:
 
-    - Provider Registry v1 is the outer gate: ``duffel_flights`` must be
-      ``production_allowed`` and not ``DISABLED``/``QUARANTINED`` in
-      ``app.services.provider_registry`` before the adapter is attempted.
-      This means Duffel Flights stays off even if ``DUFFEL_FLIGHTS_ENABLED``
-      is set in env, until the registry entry is explicitly re-approved.
-    - When the registry allows it AND ``DUFFEL_FLIGHTS_ENABLED`` is truthy
-      AND ``DUFFEL_ACCESS_TOKEN`` is set, returns a memoised
-      ``DuffelFlightProvider``.
-    - Otherwise falls back to ``NullFlightProvider`` so unconfigured
-      deployments fail closed with ``UNAVAILABLE`` and zero rows.
+    1. Skyscanner (``skyscanner_flights``) — preferred candidate; currently
+       PENDING in the registry (``production_allowed=False``).  Gates:
+       registry ``is_provider_active("skyscanner_flights")`` then
+       ``SKYSCANNER_API_KEY`` + ``SKYSCANNER_FLIGHTS_ENABLED`` env vars.
+
+    2. Ignav (``ignav_flights``) — evaluation/backup candidate; currently
+       EVALUATION in the registry (``production_allowed=False``).  Gates:
+       registry ``is_provider_active("ignav_flights")`` then
+       ``IGNAV_API_KEY`` + ``IGNAV_FLIGHTS_ENABLED`` env vars.
+
+    3. Duffel (``duffel_flights``) — DISABLED in the registry; stays off
+       even if env vars are present.
+
+    For all three candidates, ``is_provider_active()`` currently returns
+    ``False``, so this function always falls back to ``NullFlightProvider``
+    (``UNAVAILABLE``, zero rows).  The priority ordering is in place so that
+    when Skyscanner or Ignav is approved (registry updated, key confirmed),
+    the seam selects the right adapter without any further changes here.
     """
+    from app.services.provider_registry import is_provider_active
+
+    # ── 1. Skyscanner (preferred, currently PENDING) ────────────────────────
     try:
-        import os  # local import keeps module pure when reading env
-        from app.services.provider_registry import is_provider_active
+        import os
+        from app.services.flights_provider_skyscanner import (
+            skyscanner_enabled_from_env,
+            build_skyscanner_provider_from_env,
+        )
+        if is_provider_active("skyscanner_flights"):
+            if skyscanner_enabled_from_env():
+                env_key = ("skyscanner", os.environ.get("SKYSCANNER_API_KEY", ""))
+                cached = _PROVIDER_CACHE.get(env_key)
+                if cached is not None:
+                    return cached
+                provider = build_skyscanner_provider_from_env()
+                if provider is not None:
+                    _PROVIDER_CACHE[env_key] = provider
+                    return provider
+    except Exception:
+        pass
+
+    # ── 2. Ignav (evaluation/backup, currently EVALUATION) ──────────────────
+    try:
+        import os
+        from app.services.flights_provider_ignav import (
+            ignav_enabled_from_env,
+            build_ignav_provider_from_env,
+        )
+        if is_provider_active("ignav_flights"):
+            if ignav_enabled_from_env():
+                env_key = ("ignav", os.environ.get("IGNAV_API_KEY", ""))
+                cached = _PROVIDER_CACHE.get(env_key)
+                if cached is not None:
+                    return cached
+                provider = build_ignav_provider_from_env()
+                if provider is not None:
+                    _PROVIDER_CACHE[env_key] = provider
+                    return provider
+    except Exception:
+        pass
+
+    # ── 3. Duffel (DISABLED — stays off) ────────────────────────────────────
+    try:
         from app.services.flights_provider_duffel import (
             duffel_enabled_from_env,
             build_duffel_provider_from_env,
         )
-        # Registry gate: Duffel Flights must be approved in Provider Policy v1.
-        if not is_provider_active("duffel_flights"):
-            return _DEFAULT_PROVIDER
-        if not duffel_enabled_from_env():
-            return _DEFAULT_PROVIDER
-        env_key = (
-            os.environ.get("DUFFEL_ACCESS_TOKEN", ""),
-            os.environ.get("DUFFEL_BASE_URL", ""),
-        )
-        cached = _PROVIDER_CACHE.get(env_key)
-        if cached is not None:
-            return cached
-        duffel = build_duffel_provider_from_env()
-        if duffel is not None:
-            _PROVIDER_CACHE[env_key] = duffel
-            return duffel
+        if is_provider_active("duffel_flights"):
+            import os
+            if duffel_enabled_from_env():
+                env_key = (
+                    os.environ.get("DUFFEL_ACCESS_TOKEN", ""),
+                    os.environ.get("DUFFEL_BASE_URL", ""),
+                )
+                cached = _PROVIDER_CACHE.get(env_key)
+                if cached is not None:
+                    return cached
+                duffel = build_duffel_provider_from_env()
+                if duffel is not None:
+                    _PROVIDER_CACHE[env_key] = duffel
+                    return duffel
     except Exception:
-        # Adapter import / construction must never break the seam.
         pass
+
     return _DEFAULT_PROVIDER
 
 
