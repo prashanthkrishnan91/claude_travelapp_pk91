@@ -8,7 +8,7 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 - **Stage 3 v2 — Add Saved Item to Trip.** Contract locked (see DECISION_LOG 2026-05-12). On each saved card in `SavedShell`, add "Add to Trip" action → compact trip picker → creates unscheduled itinerary candidate via existing `/itinerary/items` POST API. Restaurants → `meal`, attractions → `activity`, hotels → `hotel` (discovery fields only, no rates). Flights remain disabled. No SQL. No TripBuilder/tripCandidates/ResultActionSheet changes.
   - Acceptance criteria: "Add to Trip" on saved cards; trip picker; itinerary candidate created; hotel details carry no rates/prices; item visible in TripBuilder as unscheduled candidate; no SQL; targeted tests pass.
-  - Files likely touched: `SavedShell.tsx`, `api.ts` (addSavedItemToTrip helper + listTrips if not present), `types/index.ts` (if needed).
+  - Files likely touched: `SavedShell.tsx`, `api.ts` (add `addSavedItemToTrip` helper using existing `POST /itinerary/items` with `trip_id` + `day_id: null`; do **not** reuse day-scoped `createItem`/`addHotelToDay`; add `listTrips` if not present), `types/index.ts` (if needed).
 
 ## Next
 

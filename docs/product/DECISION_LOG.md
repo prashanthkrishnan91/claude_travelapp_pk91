@@ -114,7 +114,7 @@ Product decisions are recorded here so we do not re-litigate direction.
   - The `ResultActionSheet` "Add to Trip" on Explore cards stays deferred ("Coming soon"). The conversion action lives only on SavedShell cards in v2, keeping blast radius minimal.
 - Safest first implementation slice:
   - On each saved card in `SavedShell`, add an "Add to Trip" action that opens a compact trip picker (inline dropdown or small modal; fetches user's trips via existing list-trips API).
-  - On trip selection, call existing `createItem` (for restaurants/attractions) or `addHotelToDay`-equivalent (for hotels, using day_id=null for unscheduled) to insert the item as an unscheduled itinerary candidate.
+  - On trip selection, call a new small frontend helper `addSavedItemToTrip` that posts to the existing backend route `POST /itinerary/items` with `trip_id`, `item_type`, `title`, `location`, `details`, `position`, and `day_id: null`. Do **not** reuse the day-scoped `createItem` or `addHotelToDay` helpers — those assume a scheduled day context. The direct trip-level route (`ItineraryItemDirectCreate` payload) is the correct path for unscheduled candidates.
   - Flights remain disabled: discovery-only saved flights carry no actionable offer data to add to a trip itinerary. Deferred until a real flight offer exists.
 - Data mapping contract (locked): saved_item.display_snapshot + search_context → itinerary_items fields:
   - `title` ← `displaySnapshot.name` ?? `savedItem.displayName`
@@ -141,5 +141,5 @@ Product decisions are recorded here so we do not re-litigate direction.
   - No changes to ResultActionSheet (Explore stays deferred).
   - No new providers, no Concierge calls, no `/search/*` calls.
   - No flights conversion (disabled, clearly labelled).
-- What would change our mind: Evidence that the existing createItem / addHotelToDay API is insufficient (e.g., a required field is missing from display_snapshot for a critical vertical) — in which case we extend the snapshot, not the schema.
+- What would change our mind: Evidence that the existing `POST /itinerary/items` route is insufficient (e.g., a required field is missing from display_snapshot for a critical vertical) — in which case we extend the snapshot, not the schema.
 - Roadmap impact: Stage 3 v2 implementation PR is the next queue item. Stage 3 v3 candidate is "Create Trip from Saved Item" (needs its own contract PR first). After Stage 3 stabilises, Stage 4 (AI destination intelligence) is next.
