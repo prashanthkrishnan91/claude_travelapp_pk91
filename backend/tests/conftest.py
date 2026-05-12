@@ -45,3 +45,20 @@ _services_pkg.__path__ = [_services_dir]  # real path so submodule imports work
 _services_pkg.__package__ = "app.services"
 _services_pkg.__file__ = os.path.join(_services_dir, "__init__.py")
 sys.modules["app.services"] = _services_pkg
+
+# Stub app.models so submodule imports like app.models.search work without
+# running app/models/__init__.py (which imports User → pydantic.EmailStr).
+_models_dir = os.path.join(_backend_dir, "app", "models")
+_models_pkg = types.ModuleType("app.models")
+_models_pkg.__path__ = [_models_dir]
+_models_pkg.__package__ = "app.models"
+_models_pkg.__file__ = os.path.join(_models_dir, "__init__.py")
+sys.modules["app.models"] = _models_pkg
+
+# Stub app.contracts the same way so app.contracts.flight_offer imports directly.
+_contracts_dir = os.path.join(_backend_dir, "app", "contracts")
+_contracts_pkg = types.ModuleType("app.contracts")
+_contracts_pkg.__path__ = [_contracts_dir]
+_contracts_pkg.__package__ = "app.contracts"
+_contracts_pkg.__file__ = os.path.join(_contracts_dir, "__init__.py")
+sys.modules["app.contracts"] = _contracts_pkg

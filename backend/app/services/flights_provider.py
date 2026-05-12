@@ -162,30 +162,45 @@ def get_flight_provider() -> FlightProvider:
 
     Flights v1 — registry-gated then env-gated.  Provider priority order:
 
-    1. Skyscanner (``skyscanner_flights``) — preferred candidate; currently
-       PENDING in the registry (``production_allowed=False``).  Gates:
-       registry ``is_provider_active("skyscanner_flights")`` then
-       ``SKYSCANNER_API_KEY`` + ``SKYSCANNER_FLIGHTS_ENABLED`` env vars.
+    1. Duffel (``duffel_flights``) — active search-only provider.  LINK_OUT +
+       ``production_allowed=True`` in the registry.  Gates:
+       registry ``is_provider_active("duffel_flights")`` then
+       ``DUFFEL_API_KEY`` + ``DUFFEL_FLIGHTS_ENABLED`` env vars.
+       BOOKING DISABLED: never creates Duffel orders; v1 is search-only.
 
-    2. Ignav (``ignav_flights``) — evaluation/backup candidate; currently
-       EVALUATION in the registry (``production_allowed=False``).  Gates:
-       registry ``is_provider_active("ignav_flights")`` then
-       ``IGNAV_API_KEY`` + ``IGNAV_FLIGHTS_ENABLED`` env vars.
+    2. Skyscanner (``skyscanner_flights``) — PENDING; access rejected; stays
+       off even if env vars are present.
 
-    3. Duffel (``duffel_flights``) — DISABLED in the registry; stays off
-       even if env vars are present.
+    3. Ignav (``ignav_flights``) — DISABLED; schedule trust not certified;
+       must not serve visible flight cards.
 
-    For all three candidates, ``is_provider_active()`` currently returns
-    ``False``, so this function always falls back to ``NullFlightProvider``
-    (``UNAVAILABLE``, zero rows).  The priority ordering is in place so that
-    when Skyscanner or Ignav is approved (registry updated, key confirmed),
-    the seam selects the right adapter without any further changes here.
+    When no provider is active, falls back to ``NullFlightProvider``
+    (``UNAVAILABLE``, zero rows — polished fail-closed state in UI).
     """
     from app.services.provider_registry import is_provider_active
+    import os
 
-    # ── 1. Skyscanner (preferred, currently PENDING) ────────────────────────
+    # ── 1. Duffel (active search-only provider) ──────────────────────────────
     try:
-        import os
+        from app.services.flights_provider_duffel import (
+            duffel_enabled_from_env,
+            build_duffel_provider_from_env,
+        )
+        if is_provider_active("duffel_flights"):
+            if duffel_enabled_from_env():
+                env_key = ("duffel", os.environ.get("DUFFEL_API_KEY", ""))
+                cached = _PROVIDER_CACHE.get(env_key)
+                if cached is not None:
+                    return cached
+                provider = build_duffel_provider_from_env()
+                if provider is not None:
+                    _PROVIDER_CACHE[env_key] = provider
+                    return provider
+    except Exception:
+        pass
+
+    # ── 2. Skyscanner (PENDING — stays off) ──────────────────────────────────
+    try:
         from app.services.flights_provider_skyscanner import (
             skyscanner_enabled_from_env,
             build_skyscanner_provider_from_env,
@@ -203,9 +218,8 @@ def get_flight_provider() -> FlightProvider:
     except Exception:
         pass
 
-    # ── 2. Ignav (evaluation/backup, currently EVALUATION) ──────────────────
+    # ── 3. Ignav (DISABLED — schedule trust not certified) ───────────────────
     try:
-        import os
         from app.services.flights_provider_ignav import (
             ignav_enabled_from_env,
             build_ignav_provider_from_env,
@@ -220,29 +234,6 @@ def get_flight_provider() -> FlightProvider:
                 if provider is not None:
                     _PROVIDER_CACHE[env_key] = provider
                     return provider
-    except Exception:
-        pass
-
-    # ── 3. Duffel (DISABLED — stays off) ────────────────────────────────────
-    try:
-        from app.services.flights_provider_duffel import (
-            duffel_enabled_from_env,
-            build_duffel_provider_from_env,
-        )
-        if is_provider_active("duffel_flights"):
-            import os
-            if duffel_enabled_from_env():
-                env_key = (
-                    os.environ.get("DUFFEL_ACCESS_TOKEN", ""),
-                    os.environ.get("DUFFEL_BASE_URL", ""),
-                )
-                cached = _PROVIDER_CACHE.get(env_key)
-                if cached is not None:
-                    return cached
-                duffel = build_duffel_provider_from_env()
-                if duffel is not None:
-                    _PROVIDER_CACHE[env_key] = duffel
-                    return duffel
     except Exception:
         pass
 

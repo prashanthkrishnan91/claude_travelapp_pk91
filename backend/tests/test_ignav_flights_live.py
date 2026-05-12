@@ -1,11 +1,11 @@
-"""Ignav Flights live adapter — targeted contract tests.
+"""Ignav Flights adapter — targeted contract tests.
 
 Covers:
 1.  ignav_enabled_from_env() requires both key and flag
 2.  build_ignav_provider_from_env() returns None when not enabled
-3.  is_provider_active("ignav_flights") now returns True (promoted)
+3.  is_provider_active("ignav_flights") returns False (DISABLED — not schedule-certified)
 4.  is_provider_active("skyscanner_flights") still False (still PENDING)
-5.  Duffel + Amadeus still disabled
+5.  Duffel is now active; Amadeus still disabled
 6.  IgnavFlightProvider maps a one-way fixture → FlightItineraryOffer (correct fields)
 7.  IgnavFlightProvider maps a round-trip fixture → FlightItineraryOffer with return_leg
 8.  Provider HTTP error → ERROR status, zero rows
@@ -156,18 +156,18 @@ def _make_booking_options(
 # ---------------------------------------------------------------------------
 
 class TestRegistryGates:
-    def test_ignav_now_production_allowed(self):
+    def test_ignav_is_disabled(self):
+        # Ignav DISABLED: schedule trust not certified in production smoke test.
         entry = PROVIDER_REGISTRY["ignav_flights"]
-        assert entry.production_allowed is True
+        assert entry.production_allowed is False
 
-    def test_ignav_role_is_link_out(self):
+    def test_ignav_role_is_disabled(self):
         entry = PROVIDER_REGISTRY["ignav_flights"]
-        assert entry.role == ProviderRole.LINK_OUT
+        assert entry.role == ProviderRole.DISABLED
 
-    def test_ignav_is_provider_active_when_no_env_set(self):
-        # Even though production_allowed=True, is_provider_active doesn't check env —
-        # it only checks role and production_allowed.  So it returns True.
-        assert is_provider_active("ignav_flights") is True
+    def test_ignav_is_not_provider_active(self):
+        # Ignav is DISABLED; is_provider_active must return False.
+        assert is_provider_active("ignav_flights") is False
 
     def test_skyscanner_still_not_active(self):
         assert is_provider_active("skyscanner_flights") is False
@@ -175,8 +175,9 @@ class TestRegistryGates:
     def test_skyscanner_still_pending(self):
         assert PROVIDER_REGISTRY["skyscanner_flights"].role == ProviderRole.PENDING
 
-    def test_duffel_still_disabled(self):
-        assert is_provider_active("duffel_flights") is False
+    def test_duffel_now_active_search_only(self):
+        # Duffel is the active Flights v1 search-only provider.
+        assert is_provider_active("duffel_flights") is True
 
     def test_amadeus_still_disabled(self):
         assert is_provider_active("amadeus") is False
@@ -474,6 +475,8 @@ class TestFailClosed:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("IGNAV_API_KEY", None)
             os.environ.pop("IGNAV_FLIGHTS_ENABLED", None)
+            os.environ.pop("DUFFEL_API_KEY", None)
+            os.environ.pop("DUFFEL_FLIGHTS_ENABLED", None)
             provider = get_flight_provider()
         assert isinstance(provider, NullFlightProvider)
 
@@ -482,6 +485,8 @@ class TestFailClosed:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("IGNAV_API_KEY", None)
             os.environ.pop("IGNAV_FLIGHTS_ENABLED", None)
+            os.environ.pop("DUFFEL_API_KEY", None)
+            os.environ.pop("DUFFEL_FLIGHTS_ENABLED", None)
             provider = get_flight_provider()
         result = provider.search_flights(_make_request())
         assert result.status == FlightSourceStatus.UNAVAILABLE
