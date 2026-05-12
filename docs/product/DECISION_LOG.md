@@ -104,3 +104,42 @@ Product decisions are recorded here so we do not re-litigate direction.
   - Mock Duffel responses: explicitly forbidden (No Mock/Sample Visible Data Pack).
   - Enabling the adapter without credentials: `build_duffel_stays_provider_from_env` returns `None` without credentials; the seam falls back to `NullHotelProvider`.
 - Roadmap impact: Slice 5B ships the contract foundation. Slice 5B preserved the disabled scaffold, but Provider Registry v1 supersedes activation. Slice 5C is Hotels Discovery Live only. Duffel Stays/live hotel offers require explicit future registry re-approval and are not in the active build queue.
+
+## 2026-05-12 — Stage 3 v2: Saved → Trip conversion v1 contract
+
+- Decision: v1 scope is **Add to Existing Trip only**. A user on the `/saved` page can promote a saved idea into an unscheduled itinerary candidate on a trip they already own. "Create new trip from saved item" is explicitly deferred to Stage 3 v3+.
+- Why:
+  - "Add to Existing Trip" maps cleanly onto the existing `/itinerary/items` POST API and `itinerary_items` schema — no new SQL, no TripBuilder changes, no tripCandidates.ts changes.
+  - "Create Trip from Saved Item" requires trip-creation form wiring, destination defaulting, and trip-shell scaffolding — a wider surface that deserves its own contract PR.
+  - The `ResultActionSheet` "Add to Trip" on Explore cards stays deferred ("Coming soon"). The conversion action lives only on SavedShell cards in v2, keeping blast radius minimal.
+- Safest first implementation slice:
+  - On each saved card in `SavedShell`, add an "Add to Trip" action that opens a compact trip picker (inline dropdown or small modal; fetches user's trips via existing list-trips API).
+  - On trip selection, call existing `createItem` (for restaurants/attractions) or `addHotelToDay`-equivalent (for hotels, using day_id=null for unscheduled) to insert the item as an unscheduled itinerary candidate.
+  - Flights remain disabled: discovery-only saved flights carry no actionable offer data to add to a trip itinerary. Deferred until a real flight offer exists.
+- Data mapping contract (locked): saved_item.display_snapshot + search_context → itinerary_items fields:
+  - `title` ← `displaySnapshot.name` ?? `savedItem.displayName`
+  - `location` ← `displaySnapshot.address` ?? `displaySnapshot.destination`
+  - `item_type` ← restaurant → `meal`; attraction → `activity`; hotel → `hotel`; flight → deferred
+  - `details` (open dict) ← vertical-specific safe fields only:
+    - All verticals: `name`, `address`, `rating`, `tags`, `googleMapsUri`, `source: "saved_item"`, `savedItemId`
+    - Restaurant adds: `cuisine`, `priceLevel`
+    - Hotel adds: `checkIn`, `checkOut`, `guests` (from searchContext — discovery context for date awareness only; **no rates, prices, total cost, availability, or booking fields**)
+    - Attraction: no vertical-specific additions beyond common fields
+  - `aiScore` omitted: user's explicit save is a stronger signal than AI ranking; let tripCandidates default to 0 or sort-stable position
+  - `day_id` = null (unscheduled candidate; TripBuilder picks it up via tripCandidates selector)
+  - `position` = 0 or list-tail (stable; TripBuilder manages ordering)
+- Hotel discovery-only invariant: even after conversion, `details` must never contain `totalPrice`, `nightly_rate`, `availability`, `bookingUrl`, or any rate/booking field. The Hotel Offer contract (Stage 2B+) is the gating requirement for any pricing in the trip workspace.
+- Alternatives rejected:
+  - Wire "Add to Trip" in ResultActionSheet (Explore cards): wider blast radius; would also need the trip picker inline in the Explore result sheet. SavedShell-first is narrower.
+  - Add `trip_id` FK to `saved_items` row directly: unnecessary coupling; the itinerary_items row is the correct trip-scoped object.
+  - Bulk "Add all" or "Create trip from all saved": explicit out-of-scope; too much auto-planning magic for v2.
+  - Auto-select the most recent trip: silent actions are never right; user must pick explicitly.
+- Must-NOT for the implementation PR:
+  - No changes to `TripBuilder.tsx`, `tripCandidates.ts`, `TripIdeasPanel`.
+  - No SQL migration.
+  - No rates, prices, availability, or booking fields in any itinerary_items.details written by this flow.
+  - No changes to ResultActionSheet (Explore stays deferred).
+  - No new providers, no Concierge calls, no `/search/*` calls.
+  - No flights conversion (disabled, clearly labelled).
+- What would change our mind: Evidence that the existing createItem / addHotelToDay API is insufficient (e.g., a required field is missing from display_snapshot for a critical vertical) — in which case we extend the snapshot, not the schema.
+- Roadmap impact: Stage 3 v2 implementation PR is the next queue item. Stage 3 v3 candidate is "Create Trip from Saved Item" (needs its own contract PR first). After Stage 3 stabilises, Stage 4 (AI destination intelligence) is next.
