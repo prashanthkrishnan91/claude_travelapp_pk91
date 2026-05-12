@@ -103,4 +103,4 @@ Product decisions are recorded here so we do not re-litigate direction.
 - Alternatives rejected:
   - Mock Duffel responses: explicitly forbidden (No Mock/Sample Visible Data Pack).
   - Enabling the adapter without credentials: `build_duffel_stays_provider_from_env` returns `None` without credentials; the seam falls back to `NullHotelProvider`.
-- Roadmap impact: Slice 5B ships the contract foundation. Slice 5C wires live Duffel Stays once access is confirmed.
+- Roadmap impact: Slice 5B ships the contract foundation. Slice 5B preserved the disabled scaffold, but Provider Registry v1 supersedes activation. Slice 5C is Hotels Discovery Live only. Duffel Stays/live hotel offers require explicit future registry re-approval and are not in the active build queue.

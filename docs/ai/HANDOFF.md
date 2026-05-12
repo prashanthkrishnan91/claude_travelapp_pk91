@@ -15,7 +15,7 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Current architecture / runtime state
 
 - OS v4 is the canonical operating system. No v4.2 or v5 labels.
-- **Provider Registry v1** (`backend/app/services/provider_registry.py`) is the single policy source of truth for provider activation, addable-card authority, and disabled/quarantined status. All provider-selection code consults it. See `docs/product/DECISION_LOG.md` 2026-05-12 for the policy decision.
+- **Provider Registry v1** (`backend/app/services/provider_registry.py`) is the single policy source of truth for provider activation, addable-card authority, and disabled/quarantined status. Known active/risky provider-selection paths now consult it; future provider additions must register policy + adapter + tests. See `docs/product/DECISION_LOG.md` 2026-05-12 for the policy decision.
 - Google Places is canonical for addable cards (the only `can_create_addable_cards=True` entry). Yelp / Foursquare / editorial are enrichment / evidence only and cannot mint addable cards. Foursquare is disabled; enrichment is covered by Yelp.
 - Brave, Serper, Duffel (flights + stays), Amadeus, and Foursquare are disabled/quarantined in the registry. They cannot activate in production even if API keys are present in env. Re-approval in the registry is required to re-enable any of them.
 - Duffel and Amadeus are no longer active roadmap items. See DECISION_LOG 2026-05-12.
