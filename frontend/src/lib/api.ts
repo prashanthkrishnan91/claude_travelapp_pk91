@@ -202,8 +202,10 @@ export async function createTripWithSearch(data: {
   destinationAirports: string[];
   startDate: string;
   endDate: string;
+  title?: string;
+  travelers?: number;
 }): Promise<Trip> {
-  const payload = {
+  const payload: Record<string, unknown> = {
     origin_city: data.originCity,
     origin_airports: data.originAirports,
     destination_city: data.destinationCity,
@@ -211,6 +213,10 @@ export async function createTripWithSearch(data: {
     start_date: data.startDate,
     end_date: data.endDate,
   };
+  if (data.title && data.title.trim()) payload.title = data.title.trim();
+  if (typeof data.travelers === "number" && data.travelers >= 1) {
+    payload.travelers = Math.floor(data.travelers);
+  }
   return apiFetch<Trip>("/trips/create-with-search", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -2412,6 +2418,8 @@ export async function createTripFromSavedItem(args: {
     destinationAirports: [],
     startDate,
     endDate,
+    title: formData.title,
+    travelers: formData.travelers,
   });
 
   if (args.savedItem.vertical === "flight") {

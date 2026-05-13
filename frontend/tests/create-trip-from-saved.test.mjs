@@ -70,6 +70,34 @@ test("createTripFromSavedItem does not call plain createTrip for the complete fl
   );
 });
 
+test("createTripFromSavedItem passes title and travelers into createTripWithSearch", () => {
+  const fnStart = apiTs.indexOf("export async function createTripFromSavedItem");
+  const fnBody = apiTs.slice(fnStart, fnStart + 2000);
+  assert.ok(
+    fnBody.includes("title: formData.title"),
+    "must forward user-confirmed title to createTripWithSearch"
+  );
+  assert.ok(
+    fnBody.includes("travelers: formData.travelers"),
+    "must forward user-confirmed travelers to createTripWithSearch"
+  );
+});
+
+test("createTripWithSearch accepts and forwards optional title + travelers", () => {
+  const fnStart = apiTs.indexOf("export async function createTripWithSearch");
+  const fnBody = apiTs.slice(fnStart, fnStart + 1500);
+  assert.ok(fnBody.includes("title?:"), "must accept optional title");
+  assert.ok(fnBody.includes("travelers?:"), "must accept optional travelers");
+  assert.ok(
+    fnBody.includes("payload.title"),
+    "must include title in request payload when present"
+  );
+  assert.ok(
+    fnBody.includes("payload.travelers"),
+    "must include travelers in request payload when present"
+  );
+});
+
 test("createTripFromSavedItem requires origin/destination/dates before submit", () => {
   const fnStart = apiTs.indexOf("export async function createTripFromSavedItem");
   const fnBody = apiTs.slice(fnStart, fnStart + 2000);
