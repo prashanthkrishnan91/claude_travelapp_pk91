@@ -2308,7 +2308,11 @@ export async function addSavedItemToTrip(
   const details: Record<string, unknown> = {
     name: title,
     source: "saved_item",
+    source_kind: "saved_item",
+    saved_item_id: item.id,
     savedItemId: item.id,
+    created_from_saved_item: true,
+    idea_status: "must_do",
   };
 
   if (typeof snap["address"] === "string" && snap["address"]) details.address = snap["address"];
@@ -2364,7 +2368,11 @@ async function seedSavedFlightAsItineraryItem(
   const details: Record<string, unknown> = {
     name: title,
     source: "saved_item",
+    source_kind: "saved_item",
+    saved_item_id: item.id,
     savedItemId: item.id,
+    created_from_saved_item: true,
+    idea_status: "must_do",
   };
   if (typeof ctx["origin"] === "string" && ctx["origin"]) details.origin = ctx["origin"];
   if (typeof ctx["destination"] === "string" && ctx["destination"]) details.destination = ctx["destination"];

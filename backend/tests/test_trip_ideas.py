@@ -277,10 +277,53 @@ def test_list_unscheduled_items_excludes_creation_seed_rows():
         },
     ])
 
+    # Inject a Create-Trip-from-Saved row — must appear in Trip Ideas (curated).
+    saved_item_id = str(uuid4())
+    db.tables["itinerary_items"].append(
+        {
+            "id": saved_item_id,
+            "trip_id": str(trip_id),
+            "day_id": None,
+            "item_type": "meal",
+            "title": "Saved Sushi Dai",
+            "position": 5,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+            "details": {
+                "source": "saved_item",
+                "source_kind": "saved_item",
+                "saved_item_id": "abc-123",
+                "created_from_saved_item": True,
+                "idea_status": "must_do",
+            },
+        }
+    )
+    # Inject a curated row that only carries created_from_saved_item: True
+    # (no source_kind) — must still appear.
+    legacy_saved_id = str(uuid4())
+    db.tables["itinerary_items"].append(
+        {
+            "id": legacy_saved_id,
+            "trip_id": str(trip_id),
+            "day_id": None,
+            "item_type": "activity",
+            "title": "Saved Tokyo Skytree",
+            "position": 6,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+            "details": {
+                "source": "saved_item",
+                "created_from_saved_item": True,
+            },
+        }
+    )
+
     unscheduled = svc.list_unscheduled_items(trip_id)
     ids = {str(it.id) for it in unscheduled}
-    # Only the explicitly saved concierge_idea row survives the filter.
+    # Curated rows (concierge_idea + saved_item) survive the filter.
     assert str(idea.id) in ids
+    assert saved_item_id in ids, "Create-Trip-from-Saved row must appear in Trip Ideas"
+    assert legacy_saved_id in ids, "created_from_saved_item rows must appear in Trip Ideas"
     assert activity_id not in ids, "creation_seed activities must not appear in Trip Ideas"
     assert meal_id not in ids, "creation_seed meals must not appear in Trip Ideas"
     assert flight_id not in ids, "seeded flights must not appear in Trip Ideas"
@@ -497,3 +540,111 @@ def test_moving_assigned_idea_back_to_unscheduled_preserves_details():
 
     unscheduled = svc.list_unscheduled_items(trip_id)
     assert any(it.id == moved.id for it in unscheduled), "Moved idea should reappear in unscheduled list"
+
+
+# ---------------------------------------------------------------------------
+# Test 10: Create-Trip-from-Saved seeded items surface in Trip Ideas
+#
+# Stage 3 exit blocker — `createTripFromSavedItem` (frontend) seeds the
+# user-selected saved item with curated provenance (source_kind="saved_item",
+# created_from_saved_item=True).  list_unscheduled_items() MUST surface that
+# row alongside concierge_idea rows; otherwise the user's pick disappears
+# from Trip Ideas after Create Trip from Saved.
+# ---------------------------------------------------------------------------
+
+def test_list_unscheduled_items_includes_saved_item_provenance():
+    db = _FakeDB()
+    svc = ItineraryService(db)
+    trip_id = uuid4()
+
+    saved_meal_id = str(uuid4())
+    saved_flight_id = str(uuid4())
+    db.tables["itinerary_items"].extend([
+        {
+            "id": saved_meal_id,
+            "trip_id": str(trip_id),
+            "day_id": None,
+            "item_type": "meal",
+            "title": "Saved Sushi Dai",
+            "position": 0,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+            "details": {
+                "source": "saved_item",
+                "source_kind": "saved_item",
+                "saved_item_id": "saved-123",
+                "savedItemId": "saved-123",
+                "created_from_saved_item": True,
+                "idea_status": "must_do",
+            },
+        },
+        {
+            "id": saved_flight_id,
+            "trip_id": str(trip_id),
+            "day_id": None,
+            "item_type": "flight",
+            "title": "Saved AA100 JFK→CDG",
+            "position": 1,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+            "details": {
+                "source": "saved_item",
+                "source_kind": "saved_item",
+                "saved_item_id": "saved-flight-9",
+                "created_from_saved_item": True,
+                "idea_status": "must_do",
+            },
+        },
+    ])
+
+    unscheduled = svc.list_unscheduled_items(trip_id)
+    ids = {str(it.id) for it in unscheduled}
+    assert saved_meal_id in ids, "saved_item meal must appear in Trip Ideas"
+    assert saved_flight_id in ids, "saved_item flight must appear in Trip Ideas"
+
+
+def test_list_unscheduled_items_separates_saved_item_from_creation_seed():
+    """A saved_item row and a creation_seed row with similar payloads —
+    only the saved_item survives the Trip Ideas filter."""
+    db = _FakeDB()
+    svc = ItineraryService(db)
+    trip_id = uuid4()
+
+    saved_id = str(uuid4())
+    seed_id = str(uuid4())
+    db.tables["itinerary_items"].extend([
+        {
+            "id": saved_id,
+            "trip_id": str(trip_id),
+            "day_id": None,
+            "item_type": "activity",
+            "title": "Saved Tokyo Skytree",
+            "position": 0,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+            "details": {
+                "source": "saved_item",
+                "source_kind": "saved_item",
+                "created_from_saved_item": True,
+            },
+        },
+        {
+            "id": seed_id,
+            "trip_id": str(trip_id),
+            "day_id": None,
+            "item_type": "activity",
+            "title": "Seed Tokyo Tower",
+            "position": 1,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+            "details": {
+                "source": "google_places",
+                "source_kind": "creation_seed",
+            },
+        },
+    ])
+
+    unscheduled = svc.list_unscheduled_items(trip_id)
+    ids = {str(it.id) for it in unscheduled}
+    assert saved_id in ids
+    assert seed_id not in ids
