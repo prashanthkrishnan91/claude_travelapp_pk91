@@ -6,14 +6,16 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Now
 
-- **Stage 3 v3 — Create Trip from Saved Item (implementation)**: Contract merged (2026-05-13, `docs/product/DECISION_LOG.md`). Next PR: one Level 2 frontend PR — `CreateTripFromSavedModal`, `createTripFromSavedItem` helper, "Create Trip" action wired into `SavedShell` for all four verticals per contract conditions. No backend. No SQL. No TripBuilder change. No ResultActionSheet change. See contract for prefill rules, confirmation form spec, and must-not-build list.
+- **Stage 3 exit/status decision**: Stage 3 v1/v2/v3 are shipped. Before starting Stage 4, confirm whether the Saved Lists Gate is sufficiently met for current private-use scope or whether saved-list board/edit/reorganization gaps must be handled first.
 
 ## Next
 
+- Stage 4 — AI destination intelligence entry contract, only after the Stage 3 exit/status decision accepts the Saved Lists Gate as sufficiently met.
 - Stage 2B or later: Real hotel offer rates (requires provider-backed Hotel Offer contract + explicit Provider Registry re-approval).
 
 ## Completed
 
+- **Stage 3 v3 — Create Trip from Saved Item**: SavedShell adds "Create Trip" per card (all four verticals); `CreateTripFromSavedModal` always shown with prefill per contract; flight one-way defaults `endDate` to `departureDate`; hotel hides both dates if either missing; restaurant/attraction dates user-entered; missing destination requires user input. `createTripFromSavedItem` composes `POST /trips` + `POST /itinerary/items` (`day_id: null`). Flights seeded via dedicated safe-details path — no booking/rate/price fields. Navigates to `/trips/{id}` on success. 25 new structural tests. 491 frontend tests pass. No backend. No SQL. No TripBuilder/tripCandidates/ResultActionSheet changes. (2026-05-13)
 - **Stage 3 v1 — Saved Lists Foundation**: `/saved` route + `SavedShell`; items fetched via `listSavedItems()`, grouped by vertical (Restaurants / Attractions / Hotels / Flights), compact cards from `displaySnapshot`/`searchContext`, remove via `deleteSavedItem()`, empty/loading/error states, Explore link in empty state. "Saved" in Sidebar + MobileNav (drawer + tab bar). 46 new structural tests. No SQL. No provider change. (2026-05-12)
 - **Stage 2A Slice 5C — Hotels Discovery Live**: `HotelExploreFlow` rewritten from deferred state to live; calls `callConciergeSearch(null, query, undefined, destination)` (tripless Concierge); renders `UnifiedHotelResult` discovery cards (stars, rating, area, maps link, why note, `ResultActionSheet`); normalized `originalPayload` for saved-item display snapshots (address, googleMapsUri, search context; no price/rate/booking fields); no rates/prices/availability. 26 new hotel structural tests + 5 updated global Explore tests. No SQL. No backend change. (2026-05-12)
 - **Flights v1 — Ignav Live Cash Search + Link-Out**: Ignav promoted to `LINK_OUT`/`production_allowed=True`. `IgnavFlightProvider.search_flights()` live (httpx, one-way + round-trip, parallel booking links). `POST /explore/flights` route. `FlightExploreFlow` live (FlightCard, ResultActionSheet save, unavailable/error states). 57 backend + 20 frontend new tests. No SQL. No points. (2026-05-12)
