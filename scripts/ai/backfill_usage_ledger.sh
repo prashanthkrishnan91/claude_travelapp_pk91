@@ -3,6 +3,7 @@
 #
 # Backfill sanitized ledger rows from local ccusage session data.
 # PR mapping is marked unknown when it cannot be proven — never guess.
+# Backfill rows use phase=backfill and delta fields=unavailable.
 #
 # Usage:
 #   bash scripts/ai/backfill_usage_ledger.sh [OPTIONS]
@@ -13,8 +14,8 @@
 #   --append-ledger      Append printed rows to docs/ai/USAGE_LEDGER.md
 #   --help               Print this help
 #
-# Never commits raw JSON. Never guesses PR numbers.
-# Review printed rows and fill in PR/model/repo-area before committing.
+# Never commits raw JSON. Never guesses PR numbers or per-prompt deltas.
+# Review printed rows and fill in PR/model/repo-area/waste before committing.
 
 OPT_SINCE=""
 OPT_UNTIL=""
@@ -60,19 +61,36 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-# Normalize to array
+# Normalize ccusage output to a bare array of session objects for iteration.
+# Handles shapes: {sessions/data array + totals/summary}, single object, bare array.
 _type=$(printf '%s\n' "$CCUSAGE_JSON" | jq -r 'type' 2>/dev/null || echo "unknown")
 if [ "$_type" = "object" ]; then
-  CCUSAGE_JSON=$(printf '%s\n' "$CCUSAGE_JSON" | jq -c '[.]')
-elif [ "$_type" != "array" ]; then
+  # Extract session array from wrapper shapes; fall back to wrapping single object
+  SESSIONS_JSON=$(printf '%s\n' "$CCUSAGE_JSON" | jq -c '
+    if   .sessions != null then .sessions
+    elif .data     != null then .data
+    else [.]
+    end
+  ' 2>/dev/null || echo "null")
+elif [ "$_type" = "array" ]; then
+  SESSIONS_JSON="$CCUSAGE_JSON"
+else
   printf 'Unrecognized ccusage output format. Cannot backfill.\n' >&2
   exit 1
 fi
 
-printf '\n=== Backfill Candidate Ledger Rows ===\n'
+if [ -z "$SESSIONS_JSON" ] || [ "$SESSIONS_JSON" = "null" ]; then
+  printf 'Could not extract session list from ccusage output.\n' >&2
+  exit 1
+fi
+
+printf '\n=== Backfill Candidate Ledger Rows (26 columns) ===\n'
+printf '# phase=backfill, prompt_id=unknown, delta fields=unavailable\n'
 printf '# PR mapping is unknown — do not guess. Review and correct before committing.\n\n'
 
-ROWS=$(printf '%s\n' "$CCUSAGE_JSON" | jq -r \
+# Emit 26-column rows: Date|PR|PromptID|Phase|LinkedPR|Area|Session|Model|Chat|Source|
+#   In|Out|CacheR|CacheC|Total|Cost|ΔIn|ΔOut|ΔCacheR|ΔCacheC|ΔTotal|ΔCost|Waste|Drivers|FollowUp|Lesson
+ROWS=$(printf '%s\n' "$SESSIONS_JSON" | jq -r \
   --arg since "$OPT_SINCE" \
   --arg until "$OPT_UNTIL" \
   '.[] |
@@ -80,7 +98,19 @@ ROWS=$(printf '%s\n' "$CCUSAGE_JSON" | jq -r \
     (if $since != "" then (.date // "") >= $since else true end) and
     (if $until != "" then (.date // "") <= $until else true end)
   ) |
-  "| \(.date // "unknown") | unknown | unknown | unknown | unknown | unknown | ccusage | \(.inputTokens // "unavailable") | \(.outputTokens // "unavailable") | \(.cacheReadTokens // "unavailable") | \(.cacheWriteTokens // "unavailable") | \(.totalTokens // "unavailable") | \(if .totalCost != null then "$\(.totalCost)" else "unavailable" end) | unknown | 0 | review-and-fill |"
+  [
+    (.date // "unknown"),
+    "unknown", "unknown", "backfill", "n/a",
+    "unknown", "unknown", "unknown", "unknown", "ccusage",
+    (.inputTokens // "unavailable" | tostring),
+    (.outputTokens // "unavailable" | tostring),
+    (.cacheReadTokens // "unavailable" | tostring),
+    ((.cacheCreationTokens // .cacheWriteTokens) // "unavailable" | tostring),
+    (.totalTokens // "unavailable" | tostring),
+    (if (.totalCost // .costUSD) != null then "$\((.totalCost // .costUSD))" else "unavailable" end),
+    "unavailable", "unavailable", "unavailable", "unavailable", "unavailable", "unavailable",
+    "unknown", "unknown", "0", "review-and-fill"
+  ] | "| " + join(" | ") + " |"
   ' 2>/dev/null || true)
 
 if [ -z "$ROWS" ]; then
@@ -99,6 +129,6 @@ if "$OPT_APPEND_LEDGER"; then
   else
     printf '%s\n' "$ROWS" >> "$LEDGER_FILE"
     printf 'Rows appended to %s\n' "$LEDGER_FILE"
-    printf 'Review and correct PR/model/repo-area/efficiency-lesson before committing.\n'
+    printf 'Review and correct PR/prompt-id/model/repo-area/waste/lesson before committing.\n'
   fi
 fi

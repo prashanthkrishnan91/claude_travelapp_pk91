@@ -35,14 +35,16 @@
 - 
 
 ## AI usage note
-Run `bash scripts/ai/usage_snapshot.sh --pr <number> --model <model> --repo-area <area>` before opening a PR.
+Run `bash scripts/ai/usage_snapshot.sh --pr <number> --prompt-id <id> --phase <phase> --model <model>` before opening a PR.
 
 **Usage note:** Low/Medium/High; source: ccusage/statusline/manual/unavailable; main drivers: [fill]; justified: yes/partially/no; next efficiency improvement: [fill]
 
 **Usage ledger updated:** Yes / No / Not available
-**Ledger source:** ccusage / statusline / manual / unavailable
+**Prompt ID / phase:** [e.g. initial / follow-up]
+**Linked PR if follow-up:** [n/a or #PR]
 **Main token drivers:** [fill]
 **Follow-up patches required:** [n]
+**Waste classification:** none / preventable-follow-up / necessary-follow-up / exploration / unknown
 **Next efficiency improvement:** [fill]
 
 ## Self-audit
