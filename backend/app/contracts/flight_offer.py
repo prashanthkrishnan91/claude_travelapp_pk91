@@ -55,15 +55,18 @@ class LiveCachedStatus(str, Enum):
 class BookingLinkType(str, Enum):
     """Classification of the booking deep-link.
 
-    ``AIRLINE_DIRECT``  — links directly to the airline's booking page.
-    ``OTA``             — links to a third-party OTA (e.g. Kayak, Expedia).
+    ``AIRLINE_DIRECT``   — links directly to the airline's booking page.
+    ``OTA``              — links to a third-party OTA (e.g. Kayak, Expedia).
     ``PROVIDER_DEEPLINK`` — provider-generated deep-link (e.g. Skyscanner).
-    ``UNAVAILABLE``     — no bookable link available for this offer.
+    ``SEARCH_REDIRECT``  — links to a third-party search page (e.g. Google
+                           Flights); search-only, does NOT imply booking.
+    ``UNAVAILABLE``      — no bookable or searchable link for this offer.
     """
 
     AIRLINE_DIRECT = "airline_direct"
     OTA = "ota"
     PROVIDER_DEEPLINK = "provider_deeplink"
+    SEARCH_REDIRECT = "search_redirect"
     UNAVAILABLE = "unavailable"
 
 

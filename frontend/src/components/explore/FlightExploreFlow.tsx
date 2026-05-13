@@ -133,8 +133,8 @@ function FlightCard({ offer }: { offer: FlightItineraryOffer }) {
   const airline =
     ob.segments[0]?.airline ?? "Unknown airline";
   const flightNumbers = ob.segments.map((s) => s.flightNumber).join(", ");
-  const hasBookingLink =
-    offer.bookingLink.linkType !== "unavailable" && offer.bookingLink.url;
+  const bookingUrl = offer.bookingLink.linkType !== "unavailable" ? offer.bookingLink.url : "";
+  const isSearchRedirect = offer.bookingLink.linkType === "search_redirect";
   const context = buildFlightContext(offer);
 
   return (
@@ -197,17 +197,17 @@ function FlightCard({ offer }: { offer: FlightItineraryOffer }) {
           {offer.liveCachedStatus}
         </span>
 
-        {hasBookingLink ? (
+        {bookingUrl ? (
           <a
-            href={offer.bookingLink.url}
+            href={bookingUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/15 text-sky-300 text-xs font-medium hover:bg-sky-500/25 transition"
-            data-testid="flight-book-link"
-            aria-label={`Book flight on ${offer.bookingLink.providerName}`}
+            data-testid={isSearchRedirect ? "flight-search-link" : "flight-book-link"}
+            aria-label={isSearchRedirect ? "Search on Google Flights" : `Book flight on ${offer.bookingLink.providerName}`}
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            Book
+            {isSearchRedirect ? "Search on Google Flights" : "Book"}
           </a>
         ) : (
           <span className="text-xs text-cream-700 italic">

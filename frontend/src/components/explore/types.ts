@@ -79,9 +79,10 @@ export type LiveCachedStatus = "live" | "cached";
 
 /**
  * Classification of the booking deep-link destination.
- * "unavailable" means no bookable URL exists for this offer.
+ * "search_redirect" links to a third-party search page (e.g. Google Flights) — search only, not booking.
+ * "unavailable" means no bookable or searchable link exists for this offer.
  */
-export type BookingLinkType = "airline_direct" | "ota" | "provider_deeplink" | "unavailable";
+export type BookingLinkType = "airline_direct" | "ota" | "provider_deeplink" | "search_redirect" | "unavailable";
 
 export type TripType = "one_way" | "round_trip";
 
