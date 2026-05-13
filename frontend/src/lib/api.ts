@@ -2382,18 +2382,38 @@ async function seedSavedFlightAsItineraryItem(
 }
 
 /**
- * Create a new trip from a saved item and seed the item as an unscheduled
- * itinerary candidate (day_id: null). Composes existing POST /trips and
- * POST /itinerary/items routes — no new backend route.
+ * Create a new trip from a saved item using the full create-with-search seeding
+ * flow so the new trip receives flight/hotel/attraction/restaurant candidates,
+ * then seed the selected saved item itself as an unscheduled Trip Ideas
+ * candidate (day_id: null) so the user's pick is never dropped.
  *
- * For restaurant/attraction/hotel verticals, reuses addSavedItemToTrip mapping.
- * For flights, uses a dedicated safe-details mapping (no booking fields).
+ * Composes existing POST /trips/create-with-search and POST /itinerary/items
+ * routes — no new backend route. Requires origin, destination, start/end dates.
  */
 export async function createTripFromSavedItem(args: {
   savedItem: SavedItem;
   formData: TripBuilderFormData;
 }): Promise<Trip> {
-  const trip = await createTrip(args.formData);
+  const { formData } = args;
+  const originCity = (formData.origin || "").trim();
+  const destinationCity = (formData.destination || "").trim();
+  const startDate = formData.startDate;
+  const endDate = formData.endDate;
+  if (!originCity || !destinationCity || !startDate || !endDate) {
+    throw new Error(
+      "Create Trip from Saved requires origin, destination, start date, and end date."
+    );
+  }
+
+  const trip = await createTripWithSearch({
+    originCity,
+    originAirports: [],
+    destinationCity,
+    destinationAirports: [],
+    startDate,
+    endDate,
+  });
+
   if (args.savedItem.vertical === "flight") {
     await seedSavedFlightAsItineraryItem(trip.id, args.savedItem);
   } else {

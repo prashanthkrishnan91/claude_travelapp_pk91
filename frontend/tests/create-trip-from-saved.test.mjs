@@ -46,16 +46,39 @@ test("api.ts exports createTripFromSavedItem", () => {
   );
 });
 
-test("createTripFromSavedItem composes createTrip then itinerary seed", () => {
+test("createTripFromSavedItem composes createTripWithSearch then itinerary seed", () => {
   const fnStart = apiTs.indexOf("export async function createTripFromSavedItem");
-  const fnBody = apiTs.slice(fnStart, fnStart + 1500);
-  const createTripIdx = fnBody.indexOf("createTrip(");
+  const fnBody = apiTs.slice(fnStart, fnStart + 2000);
+  const createWithSearchIdx = fnBody.indexOf("createTripWithSearch(");
   const seedFlightIdx = fnBody.indexOf("seedSavedFlightAsItineraryItem");
   const addSavedIdx = fnBody.indexOf("addSavedItemToTrip");
-  assert.ok(createTripIdx > -1, "must call createTrip");
+  assert.ok(createWithSearchIdx > -1, "must call createTripWithSearch");
   assert.ok(
-    seedFlightIdx > createTripIdx && addSavedIdx > createTripIdx,
+    seedFlightIdx > createWithSearchIdx && addSavedIdx > createWithSearchIdx,
     "trip creation must happen before itinerary seed"
+  );
+});
+
+test("createTripFromSavedItem does not call plain createTrip for the complete flow", () => {
+  const fnStart = apiTs.indexOf("export async function createTripFromSavedItem");
+  const fnBody = apiTs.slice(fnStart, fnStart + 2000);
+  // The complete-flow helper must use createTripWithSearch — not the bare
+  // /trips POST — so the new trip is fully seeded with candidates.
+  assert.ok(
+    !/\bcreateTrip\s*\(/.test(fnBody.replace(/createTripWithSearch\s*\(/g, "")),
+    "must not invoke plain createTrip(...)"
+  );
+});
+
+test("createTripFromSavedItem requires origin/destination/dates before submit", () => {
+  const fnStart = apiTs.indexOf("export async function createTripFromSavedItem");
+  const fnBody = apiTs.slice(fnStart, fnStart + 2000);
+  assert.ok(
+    fnBody.includes("!originCity") &&
+      fnBody.includes("!destinationCity") &&
+      fnBody.includes("!startDate") &&
+      fnBody.includes("!endDate"),
+    "must reject missing required inputs"
   );
 });
 
@@ -154,12 +177,27 @@ test("modal exports CreateTripFromSavedModal and prefill helper", () => {
 
 // ── 8. Required-field validation ─────────────────────────────────────────────
 
-test("modal requires title, destination, start/end dates before submit", () => {
-  // canSubmit gate checks all four required fields are non-empty
+test("modal requires title, origin, destination, start/end dates before submit", () => {
+  // canSubmit gate checks all five required fields are non-empty
   assert.ok(modal.includes("title.trim().length > 0"), "title required");
+  assert.ok(modal.includes("origin.trim().length > 0"), "origin required");
   assert.ok(modal.includes("destination.trim().length > 0"), "destination required");
   assert.ok(modal.includes("startDate.length > 0"), "startDate required");
   assert.ok(modal.includes("endDate.length > 0"), "endDate required");
+});
+
+test("modal renders Origin field for ALL verticals (not flight-gated)", () => {
+  // Stage 3 exit: Origin must be visible regardless of vertical so the
+  // full create-with-search flow can run for hotels/restaurants/attractions.
+  assert.ok(modal.includes('data-testid="ct-origin"'), "must render ct-origin input");
+  assert.ok(
+    !modal.includes('isFlight && (\n            <div>'),
+    "Origin must not be hidden behind isFlight gate"
+  );
+  assert.ok(
+    !/item\.vertical\s*===\s*"flight"[^}]*ct-origin/s.test(modal),
+    "ct-origin must not be flight-gated"
+  );
 });
 
 test("modal does not silently create — always shows confirmation form", () => {

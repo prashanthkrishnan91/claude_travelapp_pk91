@@ -116,10 +116,9 @@ export function CreateTripFromSavedModal({
   const [state, setState] = useState<SubmitState>("idle");
   const [error, setError] = useState<string | null>(null);
 
-  const isFlight = item.vertical === "flight";
-
   const canSubmit =
     title.trim().length > 0 &&
+    origin.trim().length > 0 &&
     destination.trim().length > 0 &&
     startDate.length > 0 &&
     endDate.length > 0 &&
@@ -208,20 +207,20 @@ export function CreateTripFromSavedModal({
             />
           </div>
 
-          {isFlight && (
-            <div>
-              <label className="block text-[10px] uppercase tracking-wide text-cream-500 mb-1">
-                Origin
-              </label>
-              <input
-                type="text"
-                value={origin}
-                onChange={(e) => setOrigin(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-white/[.04] border border-white/[.06] text-sm text-cream-100 focus:outline-none focus:border-brand-400"
-                data-testid="ct-origin"
-              />
-            </div>
-          )}
+          <div>
+            <label className="block text-[10px] uppercase tracking-wide text-cream-500 mb-1">
+              Origin
+            </label>
+            <input
+              type="text"
+              value={origin}
+              onChange={(e) => setOrigin(e.target.value)}
+              required
+              placeholder="City you're flying from"
+              className="w-full px-3 py-2 rounded-lg bg-white/[.04] border border-white/[.06] text-sm text-cream-100 focus:outline-none focus:border-brand-400"
+              data-testid="ct-origin"
+            />
+          </div>
 
           <div>
             <label className="block text-[10px] uppercase tracking-wide text-cream-500 mb-1">
