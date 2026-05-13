@@ -9,7 +9,7 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Current product stage
 
 - Roadmap stage: **Stage 3 — Saved lists / boards.** Stage 2A is GREEN. Stage 3 v1 (Saved Lists Foundation) shipped. Stage 3 v2 shipped: "Add to Trip" on SavedShell cards. **Flights v1 — Duffel search-only provider LIVE and trust-certified (2026-05-13)**: `DUFFEL_FLIGHTS_ENABLED=1`, `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`, `DUFFEL_DEBUG=false`, `DUFFEL_BOOKING_ENABLED=0`. Visible flight cards are active. Each card shows "Search on Google Flights" (SEARCH_REDIRECT link-out, not booking). BOOKING/ORDERS: out of scope for v1; Duffel never creates orders. Ignav DISABLED. See `docs/product/ROADMAP.md`.
-- Active build queue item: **Stage 3 v3 — Create Trip from Saved Item shipped (2026-05-13)**. SavedShell now has a "Create Trip" action per card across all four verticals; `CreateTripFromSavedModal` always shows a confirmation form prefilled per contract; on submit `createTripFromSavedItem` composes `POST /trips` then `POST /itinerary/items` (`day_id: null`) and navigates to `/trips/{id}`. Flights are seeded via a dedicated safe-details path (no booking/rate/price fields). Saved Restaurants/Attractions still gate destination via user input. Stage 3 v2 add-to-trip remains restaurant/attraction/hotel only.
+- Active build queue item: **Stage 3 exit/status decision.** Stage 3 v3 — Create Trip from Saved Item shipped (2026-05-13): SavedShell now has a "Create Trip" action per card across all four verticals; `CreateTripFromSavedModal` always shows a confirmation form prefilled per contract; on submit `createTripFromSavedItem` composes `POST /trips` then `POST /itinerary/items` (`day_id: null`) and navigates to `/trips/{id}`. Before starting Stage 4, confirm whether the Saved Lists Gate is sufficiently met for current private-use scope or whether saved-list board/edit/reorganization gaps must be handled first.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -74,7 +74,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Stage 3 v3 — Create Trip from Saved Item shipped (2026-05-13).** Next product work: Stage 4 — AI destination intelligence (entry already in build queue Later list). Stage 3 (Saved Lists Foundation → Add to Trip → Create Trip) is now complete. Hotel rates/availability remains explicitly deferred to a future Hotel Offer contract (Stage 2B or later) and requires Provider Registry re-approval.
+**Next product work: Stage 3 exit/status decision.** Stage 3 v1/v2/v3 are shipped, but do not automatically declare the whole Stage 3 gate complete. Confirm whether the Saved Lists Gate is sufficiently met for current private-use scope, then proceed to a Stage 4 — AI destination intelligence entry contract if accepted. Hotel rates/availability remains explicitly deferred to a future Hotel Offer contract (Stage 2B or later) and requires Provider Registry re-approval.
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 
