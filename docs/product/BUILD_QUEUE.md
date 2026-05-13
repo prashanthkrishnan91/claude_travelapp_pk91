@@ -6,11 +6,11 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Now
 
-- _Stage 3 complete — pick next item from Later._
+- **Stage 3 exit/status decision**: Stage 3 v1/v2/v3 are shipped. Before starting Stage 4, confirm whether the Saved Lists Gate is sufficiently met for current private-use scope or whether saved-list board/edit/reorganization gaps must be handled first.
 
 ## Next
 
-- Stage 4 — AI destination intelligence (per `docs/product/ROADMAP.md`).
+- Stage 4 — AI destination intelligence entry contract, only after the Stage 3 exit/status decision accepts the Saved Lists Gate as sufficiently met.
 - Stage 2B or later: Real hotel offer rates (requires provider-backed Hotel Offer contract + explicit Provider Registry re-approval).
 
 ## Completed
