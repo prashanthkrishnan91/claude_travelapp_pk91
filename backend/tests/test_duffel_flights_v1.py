@@ -1061,3 +1061,101 @@ class TestGoogleFlightsLinkWiring:
         decoded = self._decode_tfs(offer.booking_link.url)
         f8_marker = bytes([0x40, 0x01])
         assert decoded.count(f8_marker) == 2  # 2 adults
+
+
+@requires_full_stack
+class TestCityGroupTokenWiring:
+    """City-group token wiring: mode-3 encoding used when multiple airports requested."""
+
+    def _decode_tfs(self, url: str) -> bytes:
+        tfs = url.split("?tfs=")[1]
+        return base64.urlsafe_b64decode(tfs + "=" * (-len(tfs) % 4))
+
+    def test_single_airport_no_group_token_in_url(self):
+        # Single origin → no city-group token bytes in tfs=
+        req = FlightSearchRequest(
+            origin="JFK", destination="CDG",
+            departure_date=date(2026, 6, 17), cabin_class="economy",
+        )
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_one_way(
+            seg_kwargs={"origin": "JFK", "destination": "CDG",
+                        "dep": "2026-06-17T08:00:00Z", "arr": "2026-06-17T17:30:00Z"}
+        )]))
+        offer = p.search_flights(req).rows[0]
+        assert offer.booking_link.url is not None
+        decoded = self._decode_tfs(offer.booking_link.url)
+        assert b"/m/02_286" not in decoded  # no city-group token for single airport
+
+    def test_multi_origin_airports_nyc_group_token_in_url(self):
+        # NYC multi-airport request → /m/02_286 city-group token in tfs=
+        req = FlightSearchRequest(
+            origin="JFK",
+            origin_airports=["JFK", "LGA", "EWR"],
+            destination="LAX",
+            departure_date=date(2026, 6, 17), cabin_class="economy",
+        )
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_one_way(
+            seg_kwargs={"origin": "JFK", "destination": "LAX"}
+        )]))
+        offer = p.search_flights(req).rows[0]
+        assert offer.booking_link.url is not None
+        decoded = self._decode_tfs(offer.booking_link.url)
+        assert b"/m/02_286" in decoded
+
+    def test_multi_dest_airports_lax_group_token_in_url(self):
+        # LAX multi-airport destination → /m/030qb3t city-group token in tfs=
+        req = FlightSearchRequest(
+            origin="JFK",
+            destination="LAX",
+            destination_airports=["LAX", "BUR"],
+            departure_date=date(2026, 6, 17), cabin_class="economy",
+        )
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_one_way(
+            seg_kwargs={"origin": "JFK", "destination": "LAX"}
+        )]))
+        offer = p.search_flights(req).rows[0]
+        assert offer.booking_link.url is not None
+        decoded = self._decode_tfs(offer.booking_link.url)
+        assert b"/m/030qb3t" in decoded
+
+    def test_multi_airports_chi_group_token_in_url(self):
+        # Chicago multi-airport origin → /m/01_d4 in tfs=
+        req = FlightSearchRequest(
+            origin="ORD",
+            origin_airports=["ORD", "MDW"],
+            destination="JFK",
+            departure_date=date(2026, 6, 17), cabin_class="economy",
+        )
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_one_way(
+            seg_kwargs={"origin": "ORD", "destination": "JFK",
+                        "dep": "2026-06-17T10:00:00Z", "arr": "2026-06-17T13:00:00Z"}
+        )]))
+        offer = p.search_flights(req).rows[0]
+        assert offer.booking_link.url is not None
+        decoded = self._decode_tfs(offer.booking_link.url)
+        assert b"/m/01_d4" in decoded
+
+    def test_unknown_multi_airport_group_no_known_token_injected(self):
+        # Unknown airport group (BOS+MHT) → no verified city-group token injected
+        req = FlightSearchRequest(
+            origin="BOS",
+            origin_airports=["BOS", "MHT"],
+            destination="JFK",
+            departure_date=date(2026, 6, 17), cabin_class="economy",
+        )
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_one_way(
+            seg_kwargs={"origin": "BOS", "destination": "JFK",
+                        "dep": "2026-06-17T09:00:00Z", "arr": "2026-06-17T10:30:00Z"}
+        )]))
+        offer = p.search_flights(req).rows[0]
+        assert offer.booking_link.url is not None
+        decoded = self._decode_tfs(offer.booking_link.url)
+        # None of the three verified city-group tokens should appear
+        assert b"/m/02_286" not in decoded
+        assert b"/m/030qb3t" not in decoded
+        assert b"/m/01_d4" not in decoded

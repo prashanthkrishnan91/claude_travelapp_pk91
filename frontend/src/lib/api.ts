@@ -665,6 +665,8 @@ export interface FlightExploreRequest {
   returnDate?: string;        // YYYY-MM-DD; omit for one-way
   passengers: number;
   cabinClass: "economy" | "premium_economy" | "business" | "first";
+  originAirports?: string[];        // multi-airport city group; city-group token used when > 1
+  destinationAirports?: string[];   // multi-airport city group; city-group token used when > 1
 }
 
 export type FlightExploreStatus = "ok" | "empty" | "unavailable" | "error";
@@ -698,6 +700,12 @@ export async function searchFlightsExplore(
   };
   if (req.returnDate) {
     body["return_date"] = req.returnDate;
+  }
+  if (req.originAirports && req.originAirports.length > 1) {
+    body["origin_airports"] = req.originAirports.map((c) => c.toUpperCase());
+  }
+  if (req.destinationAirports && req.destinationAirports.length > 1) {
+    body["destination_airports"] = req.destinationAirports.map((c) => c.toUpperCase());
   }
   return apiFetch<FlightExploreResponse>("/explore/flights", {
     method: "POST",

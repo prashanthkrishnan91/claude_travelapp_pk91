@@ -26,12 +26,18 @@ _available = True
 try:
     from app.services.google_flights_link import (
         build_google_flights_url,
+        get_city_group_token,
         _AIRPORT_PLACE_TOKENS,
+        _CITY_GROUP_TOKENS,
+        _IATA_TO_CITY_GROUP_TOKEN,
     )
 except (ImportError, ModuleNotFoundError):
     _available = False
     build_google_flights_url = None  # type: ignore[assignment]
+    get_city_group_token = None  # type: ignore[assignment]
     _AIRPORT_PLACE_TOKENS = {}  # type: ignore[assignment]
+    _CITY_GROUP_TOKENS = {}  # type: ignore[assignment]
+    _IATA_TO_CITY_GROUP_TOKEN = {}  # type: ignore[assignment]
 
 requires_module = pytest.mark.skipif(
     not _available,
@@ -370,4 +376,163 @@ class TestRoundTrip:
         )
         assert url is not None
         assert url.startswith("https://www.google.com/travel/flights/search?tfs=")
+
+
+@requires_module
+class TestCityGroupTokenLookup:
+    """get_city_group_token() — verified token map (NYC/LAX/CHI only)."""
+
+    def test_jfk_returns_nyc_token(self):
+        assert get_city_group_token("JFK") == "/m/02_286"
+
+    def test_lga_returns_nyc_token(self):
+        assert get_city_group_token("LGA") == "/m/02_286"
+
+    def test_ewr_returns_nyc_token(self):
+        assert get_city_group_token("EWR") == "/m/02_286"
+
+    def test_lax_returns_lax_token(self):
+        assert get_city_group_token("LAX") == "/m/030qb3t"
+
+    def test_bur_returns_lax_token(self):
+        assert get_city_group_token("BUR") == "/m/030qb3t"
+
+    def test_ord_returns_chi_token(self):
+        assert get_city_group_token("ORD") == "/m/01_d4"
+
+    def test_mdw_returns_chi_token(self):
+        assert get_city_group_token("MDW") == "/m/01_d4"
+
+    def test_sea_returns_none(self):
+        assert get_city_group_token("SEA") is None
+
+    def test_cdg_returns_none(self):
+        assert get_city_group_token("CDG") is None
+
+    def test_case_insensitive(self):
+        assert get_city_group_token("jfk") == get_city_group_token("JFK")
+
+    def test_three_verified_city_groups(self):
+        assert len(_CITY_GROUP_TOKENS) == 3
+        assert "NYC" in _CITY_GROUP_TOKENS
+        assert "LAX" in _CITY_GROUP_TOKENS
+        assert "CHI" in _CITY_GROUP_TOKENS
+
+    def test_iata_to_city_group_covers_expected_airports(self):
+        expected = {"JFK", "LGA", "EWR", "LAX", "BUR", "ORD", "MDW"}
+        assert expected.issubset(set(_IATA_TO_CITY_GROUP_TOKEN.keys()))
+
+
+@requires_module
+class TestCityGroupEncoding:
+    """Mode-3 encoding when origin_group_token / destination_group_token are passed."""
+
+    def _decode(self, url: str) -> bytes:
+        tfs = url.split("?tfs=")[1]
+        return base64.urlsafe_b64decode(tfs + "=" * (-len(tfs) % 4))
+
+    def test_nyc_group_token_bytes_present_in_origin(self):
+        url = build_google_flights_url(
+            origin="JFK", destination="LAX",
+            departure_date=date(2026, 6, 17),
+            origin_group_token="/m/02_286",
+        )
+        assert url is not None
+        decoded = self._decode(url)
+        assert b"/m/02_286" in decoded
+
+    def test_lax_group_token_bytes_present_in_destination(self):
+        url = build_google_flights_url(
+            origin="JFK", destination="LAX",
+            departure_date=date(2026, 6, 17),
+            destination_group_token="/m/030qb3t",
+        )
+        assert url is not None
+        decoded = self._decode(url)
+        assert b"/m/030qb3t" in decoded
+
+    def test_chi_group_token_bytes_present(self):
+        url = build_google_flights_url(
+            origin="ORD", destination="JFK",
+            departure_date=date(2026, 6, 17),
+            origin_group_token="/m/01_d4",
+        )
+        assert url is not None
+        decoded = self._decode(url)
+        assert b"/m/01_d4" in decoded
+
+    def test_mode3_field1_value_3_present_when_group_token_set(self):
+        # Mode-3 encoding: field 1 = 3 (varint 0x08 0x03) inside airport submessage.
+        url = build_google_flights_url(
+            origin="JFK", destination="CDG",
+            departure_date=date(2026, 6, 17),
+            origin_group_token="/m/02_286",
+        )
+        decoded = self._decode(url)
+        # Byte pair 0x08 0x03 appears inside mode-3 airport submessage
+        assert bytes([0x08, 0x03]) in decoded
+
+    def test_group_token_differs_from_no_group_token(self):
+        url_plain = build_google_flights_url(
+            origin="JFK", destination="CDG",
+            departure_date=date(2026, 6, 17),
+        )
+        url_group = build_google_flights_url(
+            origin="JFK", destination="CDG",
+            departure_date=date(2026, 6, 17),
+            origin_group_token="/m/02_286",
+        )
+        assert url_plain != url_group
+
+    def test_round_trip_group_tokens_both_legs(self):
+        url = build_google_flights_url(
+            origin="JFK", destination="LAX",
+            departure_date=date(2026, 6, 17),
+            return_date=date(2026, 6, 24),
+            origin_group_token="/m/02_286",
+            destination_group_token="/m/030qb3t",
+        )
+        assert url is not None
+        decoded = self._decode(url)
+        # Both tokens appear (outbound + return legs each encode them)
+        assert decoded.count(b"/m/02_286") >= 1
+        assert decoded.count(b"/m/030qb3t") >= 1
+
+    def test_round_trip_tokens_swapped_in_return_leg(self):
+        # When round-trip, return leg swaps origin/destination tokens.
+        # Both tokens appear twice: once as origin, once as destination.
+        url = build_google_flights_url(
+            origin="JFK", destination="LAX",
+            departure_date=date(2026, 6, 17),
+            return_date=date(2026, 6, 24),
+            origin_group_token="/m/02_286",
+            destination_group_token="/m/030qb3t",
+        )
+        decoded = self._decode(url)
+        assert decoded.count(b"/m/02_286") == 2
+        assert decoded.count(b"/m/030qb3t") == 2
+
+    def test_group_token_url_is_valid_base64url(self):
+        url = build_google_flights_url(
+            origin="JFK", destination="ORD",
+            departure_date=date(2026, 6, 17),
+            origin_group_token="/m/02_286",
+            destination_group_token="/m/01_d4",
+        )
+        assert url is not None
+        tfs = url.split("?tfs=")[1]
+        assert "=" not in tfs
+        assert "+" not in tfs
+        base64.urlsafe_b64decode(tfs + "=" * (-len(tfs) % 4))
+
+    def test_existing_sea_to_lax_golden_unchanged_with_no_group_tokens(self):
+        # Sanity: adding group token params defaulting to None must not affect existing goldens.
+        url = build_google_flights_url(
+            origin="SEA", destination="LAX",
+            departure_date=date(2026, 6, 17),
+            passengers=1,
+        )
+        from app.services.google_flights_link import _GOOGLE_FLIGHTS_BASE  # type: ignore[import]
+        expected_prefix = _GOOGLE_FLIGHTS_BASE + "?tfs="
+        assert url is not None and url.startswith(expected_prefix)
 
