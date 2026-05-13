@@ -73,7 +73,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Next product work: Stage 3 v3 — Create Trip from Saved Item.** Duffel is certified and visible. Flight cards are saveable via `ResultActionSheet`. Contract PR should confirm: how a trip is created from a saved flight offer, whether auto-populated or manual, and trip creation form scope.
+**Next product work: Stage 3 v3 — Create Trip from Saved Item (implementation PR).** Contract PR merged (2026-05-13). Decision log entry defines: explicit confirmation form always required (no silent creation); flight is the primary v1 path (origin/destination/dates/passengers from `search_context`); hotel enabled with restriction (no rates/prices); restaurant/attraction conditional on destination being reliably present. Implementation: one Level 2 frontend PR — `CreateTripFromSavedModal`, `createTripFromSavedItem` helper, "Create Trip" wired into `SavedShell`. Existing `POST /trips` + `POST /itinerary/items` (day_id: null) reused. No backend route. No SQL. No TripBuilder. See `docs/product/DECISION_LOG.md` (2026-05-13).
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 

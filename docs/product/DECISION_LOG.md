@@ -222,3 +222,129 @@ Product decisions are recorded here so we do not re-litigate direction.
 - Booking link priority: `airline_direct` > `ota` > `provider_deeplink`. UNAVAILABLE if none.
 - Latency budget: search call (~15s timeout) + parallel booking links (~5s each, max 5 concurrent) ≈ 20s total. Acceptable for flight search.
 - Roadmap impact: Flights v1 shipped. Stage 3 v3 (Create Trip from Saved Item) is next; needs its own contract PR.
+
+## 2026-05-13 — Stage 3 v3: Create Trip from Saved Item — v1 contract
+
+- Decision: "Create Trip from Saved Item" is a user-confirmed trip creation flow prefilled from a saved item. The user always sees and can edit a confirmation form before the trip is created. No silent trip creation in any vertical.
+
+### Flights v1 constraint carry-forward (locked)
+Duffel is search-only (`LINK_OUT`, `production_allowed=True`). Google Flights is `SEARCH_REDIRECT` link-out only. No booking/orders. `DUFFEL_BOOKING_ENABLED=0`. Ignav is DISABLED. These constraints are not changed by Stage 3 v3. A saved flight card carries a Google Flights search URL — not a booking. The trip creation flow must not claim booking, confirm availability, or change these constraints.
+
+### Vertical scope — what is enabled in v1
+
+| Vertical | v1 status | Condition |
+|---|---|---|
+| **Flight** | Enabled | Strongest path; `search_context` has origin, destination, date(s), passengers. Confirmation form pre-filled from these fields. |
+| **Hotel** | Enabled with restriction | Pre-fill destination/dates/guests from `search_context` only. Must not imply rate, price, or availability. Confirmation form required. |
+| **Restaurant** | Conditional | Enabled only when `search_context.destination` or `display_snapshot.destination` is reliably set. Destination can prefill when reliable; start/end dates are always user-entered required fields. |
+| **Attraction** | Conditional | Same condition as Restaurant. Destination can prefill when reliable; start/end dates are always user-entered required fields. |
+
+### Prefill contract — saved flight
+
+Trusted source fields (from `saved_items.search_context` and `display_snapshot`):
+
+| Trip form field | Source field | Fallback |
+|---|---|---|
+| Trip title | `"{origin} → {destination}"` (city names when resolvable; IATA codes otherwise) | User input |
+| Origin | `search_context.origin` | Blank (user must fill) |
+| Destination | `search_context.destination` | Blank (user must fill) |
+| Start date | `search_context.departure_date` | Blank (user must fill) |
+| End date | `search_context.return_date` (round-trip). One-way: default to departure_date; user may edit before submit. Never omit. | `departure_date` pre-filled |
+| Travelers | `search_context.passengers` (integer) | 1 |
+| Cabin class | `search_context.cabin_class` (display-only, not editable in v1) | Omit |
+| Itinerary seed | The saved flight added as unscheduled candidate (`day_id: null`) after trip is confirmed and created | — |
+
+### Prefill contract — saved hotel
+
+Trusted source fields:
+
+| Trip form field | Source field | Fallback |
+|---|---|---|
+| Trip title | `"{destination} trip"` using `search_context.destination` | User input |
+| Destination | `search_context.destination` | Blank |
+| Start date | `search_context.check_in` | Blank (user must fill) |
+| End date | `search_context.check_out` | Blank (user must fill) |
+| Travelers | `search_context.guests` (integer) | 1 |
+| Itinerary seed | The saved hotel added as unscheduled candidate after trip confirmed | — |
+
+Date condition: if either `check_in` or `check_out` is absent from `search_context`, both date fields show blank and the user must fill them before submitting. Do not pre-fill one date and leave the other blank.
+
+Invariant: `details` for the hotel itinerary seed must never contain `totalPrice`, `nightly_rate`, `availability`, `bookingUrl`, or any rate/booking field (same rule as Stage 3 v2 hotel mapping). Discovery-context fields only.
+
+### Prefill contract — saved restaurant / attraction
+
+Trusted source fields:
+
+| Trip form field | Source field | Fallback |
+|---|---|---|
+| Trip title | `"{destination} trip"` or `"{name} trip"` | User input |
+| Destination | `search_context.destination` ?? `display_snapshot.destination` | **Blank — user must fill if missing** |
+| Start date | None — user must enter | Required; no auto-fill |
+| End date | None — user must enter | Required; no auto-fill |
+| Travelers | None | 1 |
+| Itinerary seed | The saved item added as unscheduled candidate after trip confirmed | — |
+
+Gate rule: if destination cannot be reliably resolved from `search_context.destination` or `display_snapshot.destination`, the confirmation form must prompt the user to enter it. Do not fabricate or guess a destination.
+
+### Confirmation form contract (all verticals)
+
+- Form is always shown — no auto-create path exists in v1.
+- Required fields (form must not submit unless all are populated): trip title, destination, start date, end date.
+- Travelers is optional; pre-filled from saved item context when available; defaults to 1.
+- Why both dates are required: the existing trip creation and day-generation logic expects both `start_date` and `end_date` to produce a fully usable trip shell. A trip without an end date creates a degenerate shell that the day grid cannot render correctly.
+- Form title: **"Create a new trip"** (not "Book" or "Reserve").
+- Submit label: **"Create trip"**.
+- The saved item is added as an unscheduled itinerary candidate (`POST /itinerary/items`, `day_id: null`) immediately after the trip creation call succeeds.
+- On success, navigate directly to the newly created trip. Do not stay on `/saved`. Do not leave navigation destination ambiguous.
+
+### API reuse (locked)
+
+| Action | API | Notes |
+|---|---|---|
+| Create trip | Existing `POST /trips` (or equivalent trip creation route) | Reuse as-is; no new backend route |
+| Seed itinerary item | Existing `POST /itinerary/items` with `day_id: null` | Same path used by Stage 3 v2 |
+| Load user's existing trips | Existing list-trips API | Already used by Stage 3 v2 trip picker |
+
+No new backend routes, no new SQL, no provider calls, no Concierge calls, no `/search/*` calls in v1.
+
+### Trusted fields for prefill (summary)
+
+Only fields from `saved_items.search_context` and `saved_items.display_snapshot` are trusted for prefill. `provenance` is read-only evidence and must not drive form values. Fields not present in `search_context` or `display_snapshot` must show blank in the form, not be guessed or inferred from other sources.
+
+### Must-not-build in Stage 3 v3 implementation PR
+
+- No booking, order creation, or payment of any kind.
+- No fake rates, prices, or availability claims for any vertical.
+- No Google Flights booking claim (only the existing SEARCH_REDIRECT link passes through as-is).
+- No multi-airport Duffel search expansion.
+- No new provider calls of any kind.
+- No new Concierge calls.
+- No SQL migration (existing `saved_items` schema + `itinerary_items` schema covers v1 needs; if a real gap is found, it must be stated explicitly before any migration is written).
+- No TripBuilder.tsx changes.
+- No `tripCandidates.ts` changes.
+- No `ResultActionSheet` wiring for the Create Trip action on Explore cards (deferred; Stage 3 v3 wires SavedShell only, same blast-radius principle as Stage 3 v2).
+- No itinerary route changes.
+- No auto-scheduling — itinerary seed is always unscheduled (`day_id: null`).
+- No "Create trip from all saved items" bulk action.
+
+### Implementation slice for next PR (after this contract merges)
+
+One focused Level 2 frontend PR. Target files: `SavedShell` (add "Create Trip" action per card), a new `CreateTripFromSavedModal` (or inline sheet) component, and the thin `createTripFromSavedItem` API helper.
+
+Steps:
+1. Add `createTripFromSavedItem(savedItem)` frontend helper: calls `POST /trips` with prefilled fields → then calls `POST /itinerary/items` with the saved item as unscheduled seed.
+2. Add "Create Trip" button/action to each saved card in `SavedShell` (all verticals that satisfy their v1 condition above).
+3. Show `CreateTripFromSavedModal` with prefilled form; user confirms or edits; on submit calls the helper above.
+4. Navigate to the newly created trip on success (deterministic — not `/saved`, not conditional).
+5. Test all four verticals with structural tests (`create-trip-from-saved.test.mjs`). Include: form renders with correct prefill for each vertical; one-way flight defaults end_date to departure_date; round-trip flight uses return_date; missing-destination gate for restaurants/attractions; both date fields required (form does not submit when either is blank); hotel both-dates-absent shows both blank; no-booking/no-rate invariants; API call sequence; navigation to new trip on success.
+6. No backend change. No SQL. No TripBuilder change. No provider change.
+
+- Why: Explicit confirmation prevents accidental trip clutter. Pre-fill from `search_context` avoids re-asking the user for information they already provided. Flight is the strongest path because it always provides origin, destination, and date(s) — the minimum trip shell fields. Hotel is the second-best path. Restaurants/attractions need destination fallback because their search context is less reliably set.
+- Alternatives rejected:
+  - Silent creation (auto-create on one tap): risks polluting the trips list with poorly-named or date-less trips; explicitly rejected.
+  - ResultActionSheet wiring on Explore cards in v1: wider blast radius; SavedShell-first keeps the scope equivalent to Stage 3 v2.
+  - Date auto-fill for restaurants/attractions: no reliable date source in these verticals; blank is correct.
+  - New backend route for combined trip-create + seed: unnecessary; existing `POST /trips` + `POST /itinerary/items` compose cleanly from the frontend.
+  - Defer restaurants/attractions entirely: destination-shell is useful and the risk is low when destination is reliable.
+- What would change our mind: Evidence that `POST /trips` does not exist or requires a field not derivable from `search_context` (would require a backend contract amendment before implementation begins). Or evidence that `search_context` is not reliably populated for saved flights (would scope flights back to conditional).
+- Roadmap impact: Stage 3 v3 implementation PR is the immediate next queue item after this contract merges. Completes the Saved → Plan conversion arc. Opens the door to Stage 4 (AI destination intelligence) once Stage 3 is stable.
