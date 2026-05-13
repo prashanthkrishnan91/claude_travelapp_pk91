@@ -249,7 +249,7 @@ Trusted source fields (from `saved_items.search_context` and `display_snapshot`)
 | Origin | `search_context.origin` | Blank (user must fill) |
 | Destination | `search_context.destination` | Blank (user must fill) |
 | Start date | `search_context.departure_date` | Blank (user must fill) |
-| End date | `search_context.return_date` (round-trip). One-way: default to `departure_date`; user must edit before submit. Never omit. | `departure_date` pre-filled |
+| End date | `search_context.return_date` (round-trip). One-way: default to departure_date; user may edit before submit. Never omit. | `departure_date` pre-filled |
 | Travelers | `search_context.passengers` (integer) | 1 |
 | Cabin class | `search_context.cabin_class` (display-only, not editable in v1) | Omit |
 | Itinerary seed | The saved flight added as unscheduled candidate (`day_id: null`) after trip is confirmed and created | — |
