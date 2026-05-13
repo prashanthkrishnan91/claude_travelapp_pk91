@@ -8,7 +8,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator as pydantic_field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -418,6 +418,16 @@ class TripCreateWithSearch(BaseModel):
     start_date: date
     end_date: date
     title: Optional[str] = None
+    travelers: int = 1
+
+    @pydantic_field_validator("travelers", mode="before")
+    @classmethod
+    def _sanitize_travelers(cls, value):
+        try:
+            n = int(value)
+        except (TypeError, ValueError):
+            return 1
+        return max(1, n)
 
 
 class TripWithResults(Trip):
@@ -545,7 +555,7 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
             origin=_primary_origin,
             destination=_primary_dest,
             departure_date=payload.start_date,
-            passengers=1,
+            passengers=payload.travelers,
             cabin_class="economy",
         )
         rt_req = FlightSearchRequest(
@@ -553,7 +563,7 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
             destination=_primary_dest,
             departure_date=payload.start_date,
             return_date=payload.end_date,
-            passengers=1,
+            passengers=payload.travelers,
             cabin_class="economy",
         )
 
@@ -561,7 +571,7 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
         location=payload.destination_city,
         check_in=payload.start_date,
         check_out=payload.end_date,
-        guests=1,
+        guests=payload.travelers,
     )
     restaurant_req = RestaurantSearchRequest(
         location=payload.destination_city,
@@ -644,7 +654,7 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
 
     # Step 5: Create trip (always, even when provider results are empty)
     t_trip_start = time.perf_counter()
-    title = payload.title or f"{payload.destination_city} Trip"
+    title = (payload.title.strip() if payload.title and payload.title.strip() else f"{payload.destination_city} Trip")
     trip = TripsService(db).create_trip(
         TripCreate(
             user_id=user_id,
@@ -653,6 +663,7 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
             origin=payload.origin_city if payload.origin_city else None,
             start_date=payload.start_date,
             end_date=payload.end_date,
+            travelers=payload.travelers,
             status="planned",
         ).model_copy(update={"user_id": user_id})
     )

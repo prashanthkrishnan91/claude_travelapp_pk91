@@ -606,6 +606,113 @@ def test_flight_request_uses_single_primary_airport():
     assert req.destination_airports is None
 
 
+def test_payload_title_is_used_for_created_trip():
+    """create-with-search must use payload.title for the created trip when provided."""
+    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks()
+
+    payload = trips_route.TripCreateWithSearch(
+        origin_city="San Francisco",
+        origin_airports=["SFO"],
+        destination_city="Tokyo",
+        destination_airports=["NRT"],
+        start_date=date(2026, 5, 13),
+        end_date=date(2026, 5, 20),
+        title="Honeymoon in Tokyo",
+        travelers=2,
+    )
+
+    _run(payload, fake_search, fake_trips, fake_itin, uid)
+
+    create_trip_arg = fake_trips.create_trip.call_args.args[0]
+    assert create_trip_arg.title == "Honeymoon in Tokyo"
+
+
+def test_payload_title_defaults_to_destination_when_omitted():
+    """When payload.title is missing, created trip falls back to '<destination> Trip'."""
+    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks()
+
+    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, uid)
+
+    create_trip_arg = fake_trips.create_trip.call_args.args[0]
+    assert create_trip_arg.title == "Tokyo Trip"
+
+
+def test_flight_passengers_uses_payload_travelers():
+    """Flight search requests must use payload.travelers as passenger count."""
+    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks()
+
+    payload = trips_route.TripCreateWithSearch(
+        origin_city="San Francisco",
+        origin_airports=["SFO"],
+        destination_city="Tokyo",
+        destination_airports=["NRT"],
+        start_date=date(2026, 5, 13),
+        end_date=date(2026, 5, 20),
+        travelers=3,
+    )
+
+    _run(payload, fake_search, fake_trips, fake_itin, uid)
+
+    flight_req = fake_search.search_flights.call_args.args[0]
+    rt_req = fake_search.search_round_trip_flights.call_args.args[0]
+    assert flight_req.passengers == 3
+    assert rt_req.passengers == 3
+
+
+def test_hotel_guests_uses_payload_travelers():
+    """Hotel search request must use payload.travelers as guests."""
+    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks()
+
+    payload = trips_route.TripCreateWithSearch(
+        origin_city="San Francisco",
+        origin_airports=["SFO"],
+        destination_city="Tokyo",
+        destination_airports=["NRT"],
+        start_date=date(2026, 5, 13),
+        end_date=date(2026, 5, 20),
+        travelers=4,
+    )
+
+    _run(payload, fake_search, fake_trips, fake_itin, uid)
+
+    hotel_req = fake_search.search_hotels.call_args.args[0]
+    assert hotel_req.guests == 4
+
+
+def test_payload_travelers_persisted_on_created_trip():
+    """The created Trip row must carry the requested travelers count."""
+    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks()
+
+    payload = trips_route.TripCreateWithSearch(
+        origin_city="San Francisco",
+        origin_airports=["SFO"],
+        destination_city="Tokyo",
+        destination_airports=["NRT"],
+        start_date=date(2026, 5, 13),
+        end_date=date(2026, 5, 20),
+        travelers=2,
+    )
+
+    _run(payload, fake_search, fake_trips, fake_itin, uid)
+
+    create_trip_arg = fake_trips.create_trip.call_args.args[0]
+    assert create_trip_arg.travelers == 2
+
+
+def test_travelers_sanitized_to_minimum_one():
+    """travelers must be coerced to a minimum of 1, never zero or negative."""
+    payload = trips_route.TripCreateWithSearch(
+        origin_city="San Francisco",
+        origin_airports=["SFO"],
+        destination_city="Tokyo",
+        destination_airports=["NRT"],
+        start_date=date(2026, 5, 13),
+        end_date=date(2026, 5, 20),
+        travelers=0,
+    )
+    assert payload.travelers == 1
+
+
 def test_round_trip_request_uses_same_primary_airports():
     """Round-trip requests must also use only primary airports."""
     fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks()
