@@ -12,6 +12,7 @@ REQUIRED_ANCHOR_FILES = [
     ".github/pull_request_template.md",
     "docs/ai/AI_REPO_OPERATING_SYSTEM.md",
     ".claude/settings.json",
+    "docs/ai/USAGE_LEDGER.md",
 ]
 
 PR_TEMPLATE_ANCHORS = [
@@ -20,11 +21,28 @@ PR_TEMPLATE_ANCHORS = [
     "## Validation",
     "## AI usage note",
     "## Self-audit",
+    "Usage ledger updated",
+    "Waste classification",
 ]
 
 SELF_AUDIT_ANCHORS = [
     "Repository PR template used exactly: Yes/No",
     "Scope stayed workflow-only (no product code): Yes/No",
+]
+
+USAGE_LEDGER_ANCHORS = [
+    "Prompt ID",
+    "Phase",
+    "Linked PR",
+    "Δ total",
+    "Waste",
+]
+
+SNAPSHOT_SCRIPT_ANCHORS = [
+    "--append-ledger",
+    "--prompt-id",
+    "--phase",
+    "--delta-from-baseline",
 ]
 
 
@@ -48,15 +66,12 @@ def assert_anchors(text: str, anchors: list[str], label: str) -> None:
 def check_settings_read_deny() -> None:
     settings_path = ROOT / ".claude/settings.json"
     data = json.loads(read_text(settings_path))
-
     permissions = data.get("permissions")
     if not isinstance(permissions, dict):
         return
-
     deny = permissions.get("deny")
     if not isinstance(deny, list):
         return
-
     required_entries = {"Read(./.env)", "Read(./.env.*)"}
     missing = sorted(entry for entry in required_entries if entry not in deny)
     if missing:
@@ -68,11 +83,9 @@ def check_advisory_hook_safety_if_configured() -> None:
     hooks = settings_data.get("hooks")
     if not isinstance(hooks, dict):
         return
-
     stop_hooks = hooks.get("Stop")
     if not isinstance(stop_hooks, list):
         return
-
     for stop_hook in stop_hooks:
         if not isinstance(stop_hook, dict):
             continue
@@ -93,6 +106,40 @@ def check_advisory_hook_safety_if_configured() -> None:
                 return
 
 
+def check_usage_tracking_documents_ledger() -> None:
+    tracking_path = ROOT / "docs/ai/AI_USAGE_TRACKING.md"
+    if not tracking_path.exists():
+        raise AssertionError("docs/ai/AI_USAGE_TRACKING.md is missing")
+    text = read_text(tracking_path)
+    if "USAGE_LEDGER.md" not in text:
+        raise AssertionError("docs/ai/AI_USAGE_TRACKING.md does not document USAGE_LEDGER.md")
+
+
+def check_snapshot_script_references_ledger() -> None:
+    script_path = ROOT / "scripts/ai/usage_snapshot.sh"
+    if not script_path.exists():
+        raise AssertionError("scripts/ai/usage_snapshot.sh is missing")
+    text = read_text(script_path)
+    assert_anchors(text, SNAPSHOT_SCRIPT_ANCHORS, "usage_snapshot.sh")
+
+
+def check_usage_ledger_columns() -> None:
+    ledger_path = ROOT / "docs/ai/USAGE_LEDGER.md"
+    if not ledger_path.exists():
+        raise AssertionError("docs/ai/USAGE_LEDGER.md is missing")
+    text = read_text(ledger_path)
+    assert_anchors(text, USAGE_LEDGER_ANCHORS, "USAGE_LEDGER.md")
+
+
+def check_gitignore_excludes_ai_usage() -> None:
+    gitignore_path = ROOT / ".gitignore"
+    if not gitignore_path.exists():
+        raise AssertionError(".gitignore is missing")
+    text = read_text(gitignore_path)
+    if ".ai/usage" not in text:
+        raise AssertionError(".gitignore does not exclude .ai/usage/ (raw snapshots must remain local)")
+
+
 def main() -> int:
     for file_path in REQUIRED_ANCHOR_FILES:
         assert_file_exists(file_path)
@@ -103,6 +150,10 @@ def main() -> int:
 
     check_settings_read_deny()
     check_advisory_hook_safety_if_configured()
+    check_usage_tracking_documents_ledger()
+    check_snapshot_script_references_ledger()
+    check_usage_ledger_columns()
+    check_gitignore_excludes_ai_usage()
 
     print("✅ Travel workflow certification v4.1 checks passed (lightweight, structural, workflow-only).")
     return 0
