@@ -328,12 +328,15 @@ def _make_hotel(*, source: str, booking_url: str, booking_options=None):
     )
 
 
-def test_create_with_search_blocks_mock_flights_even_when_non_empty(monkeypatch):
-    """When ``BLOCK_LEGACY_PRODUCT_MOCK`` is *off*, ``_mock_flights`` returns
-    non-empty rows with ``source="mock"`` and ``book.example.com`` URLs.
-    The route must still fail closed before persisting anything — otherwise
-    fake booking URLs end up in ``itinerary_items.details``."""
+def test_create_with_search_does_not_persist_mock_derived_flights_via_canonical_helper():
+    """The canonical flight helper cannot return mock-derived rows.
 
+    ``FlightItineraryOffer`` / ``FlightBookingLink`` reject fabricated hosts at
+    construction time, so the legacy ``_mock_flights`` row path is structurally
+    unreachable from ``/trips/create-with-search``.  This test pins that
+    invariant by feeding the legacy SearchService a mock row and asserting it
+    is never reached from this route.
+    """
     mock_flight = _make_flight(
         source="mock",
         booking_url="https://book.example.com/flights/aa/jfk/cdg",
@@ -343,7 +346,24 @@ def test_create_with_search_blocks_mock_flights_even_when_non_empty(monkeypatch)
     fake_search.search_round_trip_flights.return_value = []
     fake_search.search_hotels.return_value = []
 
+    from app.models import Trip  # noqa: WPS433
+    from datetime import datetime as _dt
+    from uuid import uuid4 as _uuid4
+
+    user_uuid = _uuid4()
+    fake_trip = Trip(
+        id=_uuid4(),
+        user_id=user_uuid,
+        title="Paris Trip",
+        destination="Paris",
+        origin="New York",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+        status="planned",
+        created_at=_dt(2026, 5, 8, 0, 0, 0),
+    )
     fake_trips = MagicMock()
+    fake_trips.create_trip.return_value = fake_trip
     fake_itinerary = MagicMock()
 
     payload = trips_route.TripCreateWithSearch(
@@ -356,16 +376,23 @@ def test_create_with_search_blocks_mock_flights_even_when_non_empty(monkeypatch)
     with patch.object(trips_route, "SearchService", return_value=fake_search), \
          patch.object(trips_route, "TripsService", return_value=fake_trips), \
          patch.object(trips_route, "ItineraryService", return_value=fake_itinerary):
-        with pytest.raises(_StubHTTPException) as excinfo:
-            trips_route.create_trip_with_search(
-                payload, db=MagicMock(), user_id="user-123"
-            )
+        result = trips_route.create_trip_with_search(
+            payload, db=MagicMock(), user_id=user_uuid
+        )
 
-    assert excinfo.value.status_code == 503
-    assert excinfo.value.detail.get("code") == "provider_unavailable"
-    fake_trips.create_trip.assert_not_called()
-    fake_itinerary.ensure_trip_days.assert_not_called()
-    fake_itinerary.create_trip_item.assert_not_called()
+    # SearchService.search_flights is never invoked from create-with-search.
+    fake_search.search_flights.assert_not_called()
+    fake_search.search_round_trip_flights.assert_not_called()
+    # Trip is created (no longer 503 just because flights are 0).
+    fake_trips.create_trip.assert_called_once()
+    # No flight items persisted (NullFlightProvider returns UNAVAILABLE in tests).
+    from app.models.itinerary import ItineraryItemType  # noqa: WPS433
+    flight_calls = [
+        c for c in fake_itinerary.create_trip_item.call_args_list
+        if c.args and getattr(c.args[0], "item_type", None) == ItineraryItemType.FLIGHT
+    ]
+    assert flight_calls == []
+    assert result.flights == []
 
 
 def test_create_with_search_blocks_mock_hotels_even_when_non_empty(monkeypatch):
@@ -413,81 +440,63 @@ def test_create_with_search_blocks_mock_hotels_even_when_non_empty(monkeypatch):
     fake_itinerary.create_trip_item.assert_not_called()
 
 
-def test_create_with_search_blocks_mock_round_trip_pairs(monkeypatch):
-    """Round-trip pairs are built from ``_mock_flights`` server-side. A pair
-    whose outbound or return flight is mock-derived must trigger fail-closed,
-    so mock-only round-trip rows can't slip past via the round-trip pair
-    persistence path."""
+def test_legacy_round_trip_pair_search_is_not_invoked_from_create_with_search():
+    """Round-trip flight seeding goes through canonical FlightItineraryOffer.
 
-    from app.models.search import RoundTripFlightPair  # noqa: WPS433
-
-    outbound = _make_flight(source="mock", booking_url="https://book.example.com/o")
-    ret = _make_flight(source="mock", booking_url="https://book.example.com/r")
-    pair = RoundTripFlightPair(
-        id="rt1",
-        outbound=outbound,
-        return_flight=ret,
-        total_price=998.0,
-        total_points=0,
-        combined_cpp=0.0,
-        total_duration_minutes=1440,
-    )
-
+    The legacy ``search_round_trip_flights`` path is intentionally bypassed
+    because it could diverge from Explore Flights.  This test pins that.
+    """
     fake_search = MagicMock()
     fake_search.search_flights.return_value = []
-    fake_search.search_round_trip_flights.return_value = [pair]
+    fake_search.search_round_trip_flights.return_value = []
     fake_search.search_hotels.return_value = []
 
+    from app.models import Trip  # noqa: WPS433
+    from datetime import datetime as _dt
+    from uuid import uuid4 as _uuid4
+
+    user_uuid = _uuid4()
+    fake_trip = Trip(
+        id=_uuid4(), user_id=user_uuid, title="Paris Trip", destination="Paris",
+        origin="New York", start_date=date(2026, 6, 1), end_date=date(2026, 6, 7),
+        status="planned", created_at=_dt(2026, 5, 8, 0, 0, 0),
+    )
     fake_trips = MagicMock()
+    fake_trips.create_trip.return_value = fake_trip
     fake_itinerary = MagicMock()
 
     payload = trips_route.TripCreateWithSearch(
-        origin_city="New York",
-        destination_city="Paris",
-        start_date=date(2026, 6, 1),
-        end_date=date(2026, 6, 7),
+        origin_city="New York", destination_city="Paris",
+        start_date=date(2026, 6, 1), end_date=date(2026, 6, 7),
     )
 
     with patch.object(trips_route, "SearchService", return_value=fake_search), \
          patch.object(trips_route, "TripsService", return_value=fake_trips), \
          patch.object(trips_route, "ItineraryService", return_value=fake_itinerary):
-        with pytest.raises(_StubHTTPException) as excinfo:
-            trips_route.create_trip_with_search(
-                payload, db=MagicMock(), user_id="user-123"
-            )
+        trips_route.create_trip_with_search(
+            payload, db=MagicMock(), user_id=user_uuid,
+        )
 
-    assert excinfo.value.status_code == 503
-    fake_trips.create_trip.assert_not_called()
-    fake_itinerary.create_trip_item.assert_not_called()
+    fake_search.search_round_trip_flights.assert_not_called()
+    fake_search.search_flights.assert_not_called()
 
 
 def test_create_with_search_allows_clean_provider_rows(monkeypatch):
-    """Negative control: a non-empty, *non*-mock flight + hotel result set
-    must NOT trigger the fail-closed branch. This proves the guard is
-    surgical (does not break the future provider-backed path) and that
-    persistence is reached on the happy path.
+    """Negative control: clean hotel rows pass the mock guard and persist.
 
-    We stop short of asserting full itinerary persistence because the route
-    constructs ``ItineraryItemDirectCreate`` payloads using domain logic
-    that is exercised in service-level tests; here we only need to prove
-    the route reaches ``TripsService.create_trip`` without raising."""
-
-    clean_flight = _make_flight(
-        source="amadeus",
-        booking_url="https://amadeus.example/flights/AA100",
-    )
+    Flights now come from the canonical FlightProvider, not SearchService,
+    so this test focuses on the hotel persistence path remaining intact.
+    """
     clean_hotel = _make_hotel(
         source="booking_com",
         booking_url="https://www.booking.com/hotel/fr/test-hotel",
     )
 
     fake_search = MagicMock()
-    fake_search.search_flights.return_value = [clean_flight]
+    fake_search.search_flights.return_value = []
     fake_search.search_round_trip_flights.return_value = []
     fake_search.search_hotels.return_value = [clean_hotel]
 
-    # Make trip creation return a Trip-like object so the rest of the
-    # function can run without exploding on type validation.
     from app.models import Trip  # noqa: WPS433
     from datetime import datetime as _dt
     from uuid import uuid4 as _uuid4
@@ -523,13 +532,10 @@ def test_create_with_search_allows_clean_provider_rows(monkeypatch):
             payload, db=MagicMock(), user_id=user_uuid
         )
 
-    # Trip was created — the guard correctly let provider-like rows through.
     fake_trips.create_trip.assert_called_once()
     fake_itinerary.ensure_trip_days.assert_called_once()
-    # Flight + hotel were persisted as itinerary items.
-    assert fake_itinerary.create_trip_item.call_count >= 2
-    # Response carries the rows back so the frontend can render them.
-    assert any(f is clean_flight for f in result.flights)
+    # Hotel persisted.
+    assert fake_itinerary.create_trip_item.call_count >= 1
     assert any(h is clean_hotel for h in result.hotels)
 
 

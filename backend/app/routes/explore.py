@@ -28,7 +28,7 @@ from app.core.config import get_settings
 from app.core.cost_guardrails import GuardrailRule, guardrails
 from app.core.deps import DB, CurrentUserID
 from app.models.search import FlightSearchRequest
-from app.services.flights_provider import get_flight_provider
+from app.services.canonical_flight_search import canonical_flight_search
 
 logger = logging.getLogger(__name__)
 
@@ -97,16 +97,14 @@ def explore_flights(
         payload.cabin_class,
     )
 
-    provider = get_flight_provider()
-    result = provider.search_flights(payload)
+    result = canonical_flight_search(payload)
 
     offers: List[Dict[str, Any]] = []
-    for row in result.rows:
-        if isinstance(row, FlightItineraryOffer):
-            try:
-                offers.append(_offer_to_dict(row))
-            except Exception as exc:
-                logger.warning("[explore_flights] offer serialization error: %s", exc)
+    for row in result.offers:
+        try:
+            offers.append(_offer_to_dict(row))
+        except Exception as exc:
+            logger.warning("[explore_flights] offer serialization error: %s", exc)
 
     return {
         "status": result.status.value,
