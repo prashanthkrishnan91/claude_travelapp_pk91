@@ -6,7 +6,7 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Now
 
-- **Stage 3 v3 — Create Trip from Saved Item**: Flight cards are now saveable. Needs its own contract PR to confirm how a saved flight offer maps to trip creation (destination/dates pre-fill, itinerary seed). No implementation until contract PR merged.
+- **Stage 3 v3 — Create Trip from Saved Item (implementation)**: Contract merged (2026-05-13, `docs/product/DECISION_LOG.md`). Next PR: one Level 2 frontend PR — `CreateTripFromSavedModal`, `createTripFromSavedItem` helper, "Create Trip" action wired into `SavedShell` for all four verticals per contract conditions. No backend. No SQL. No TripBuilder change. No ResultActionSheet change. See contract for prefill rules, confirmation form spec, and must-not-build list.
 
 ## Next
 
