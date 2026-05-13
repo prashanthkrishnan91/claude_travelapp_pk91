@@ -14,7 +14,6 @@ def test_create_with_search_emits_required_timing_phases():
         "phase=persist_hotels",
         "phase=persist_attractions",
         "phase=persist_restaurants",
-        "phase=persist_round_trip_pairs",
         "phase=total",
     ]
     for phase in required:

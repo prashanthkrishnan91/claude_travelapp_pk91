@@ -61,6 +61,7 @@ PR usage notes in the PR body are not sufficient for workflow audits — they ar
 | Date | PR | Prompt ID | Phase | Linked PR | Repo area | Session | Model | Chat | Source | Input tok | Output tok | Cache read | Cache creation | Total tok | Est. cost | Δ input | Δ output | Δ cache read | Δ cache creation | Δ total | Δ cost | Waste | Main drivers | Follow-up patches | Efficiency lesson |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | YYYY-MM-DD | #000 | initial | initial | n/a | workflow/docs | unknown | claude-sonnet-4-6 | same-chat | manual | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unknown | template row — replace | 0 | n/a |
+| 2026-05-13 | stage3-exit-canonical-flight-seeding | initial | initial | n/a | backend/routes,services,tests | web-claude | claude-opus-4-7 | same-chat | manual | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | none | unify /trips/create-with-search flight seeding with /explore/flights via canonical_flight_search helper; persist FlightItineraryOffer as Trip Ideas | 0 | one provider seam → fewer divergent flight pathways |
 
 ## Per-prompt delta workflow
 

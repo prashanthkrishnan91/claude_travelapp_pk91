@@ -105,6 +105,18 @@ setattr(_services_pkg, "TripsService", _trips_svc_mod.TripsService)
 setattr(_services_pkg, "ItineraryService", _itin_svc_mod.ItineraryService)
 setattr(_services_pkg, "SearchService", _search_svc_mod.SearchService)
 
+from app.contracts.flight_offer import (  # noqa: E402
+    BookingLinkType,
+    FlightBookingLink,
+    FlightItineraryOffer,
+    FlightOfferLeg,
+    FlightPrice,
+    FlightSegment,
+    LiveCachedStatus,
+    TripType,
+)
+from app.contracts.flights import FlightSourceStatus  # noqa: E402
+from app.services.canonical_flight_search import CanonicalFlightSearchResult  # noqa: E402
 from app.routes import trips as trips_route  # noqa: E402
 
 
@@ -126,27 +138,77 @@ def _fake_trip(user_uuid=None):
     )
 
 
-def _clean_flight(origin="SFO", destination="NRT"):
-    from app.models.search import FlightResult  # noqa: WPS433
-    return FlightResult(
-        id=f"fl-{uuid4().hex[:6]}",
-        price=850.0,
-        rating=4.2,
-        location=f"{origin}→{destination}",
-        booking_url="https://duffel.com/flights/DL100",
-        source="duffel",
-        booking_options=[],
+def _clean_offer(
+    origin="SFO",
+    destination="NRT",
+    *,
+    departure_date=date(2026, 5, 13),
+    return_date=None,
+    google_url="https://www.google.com/travel/flights?tfs=GgYIAQ&q=SFO+to+NRT",
+):
+    """Build a canonical FlightItineraryOffer for create-with-search tests."""
+    dep_iso = "2026-05-13T10:00:00Z"
+    arr_iso = "2026-05-14T14:30:00Z"
+    outbound_seg = FlightSegment(
         airline="Delta Air Lines",
         flight_number="DL100",
         origin=origin,
         destination=destination,
-        departure_time=datetime(2026, 5, 13, 10, 0),
-        arrival_time=datetime(2026, 5, 14, 14, 30),
+        departure_time=dep_iso,
+        arrival_time=arr_iso,
+        duration_minutes=860,
+    )
+    outbound = FlightOfferLeg(
+        origin=origin,
+        destination=destination,
+        departure_time=dep_iso,
+        arrival_time=arr_iso,
         duration_minutes=860,
         stops=0,
+        segments=(outbound_seg,),
+    )
+    return_leg = None
+    if return_date is not None:
+        ret_dep_iso = f"{return_date.isoformat()}T09:00:00Z"
+        ret_arr_iso = f"{return_date.isoformat()}T22:30:00Z"
+        return_seg = FlightSegment(
+            airline="Delta Air Lines",
+            flight_number="DL101",
+            origin=destination,
+            destination=origin,
+            departure_time=ret_dep_iso,
+            arrival_time=ret_arr_iso,
+            duration_minutes=810,
+        )
+        return_leg = FlightOfferLeg(
+            origin=destination,
+            destination=origin,
+            departure_time=ret_dep_iso,
+            arrival_time=ret_arr_iso,
+            duration_minutes=810,
+            stops=0,
+            segments=(return_seg,),
+        )
+
+    return FlightItineraryOffer(
+        provider="duffel_flights",
+        fetched_at="2026-05-13T09:00:00+00:00",
+        live_cached_status=LiveCachedStatus.LIVE,
+        trip_type=TripType.ROUND_TRIP if return_date is not None else TripType.ONE_WAY,
+        origin=origin,
+        destination=destination,
+        departure_date=departure_date.isoformat(),
+        return_date=return_date.isoformat() if return_date else None,
+        passengers=1,
         cabin_class="economy",
-        points_cost=85000,
-        cpp=1.0,
+        outbound_leg=outbound,
+        return_leg=return_leg,
+        price=FlightPrice(currency="USD", total_amount=850.0, taxes_fees_included=True),
+        booking_link=FlightBookingLink(
+            url=google_url,
+            link_type=BookingLinkType.SEARCH_REDIRECT,
+            provider_name="google_flights",
+        ),
     )
 
 
@@ -215,39 +277,73 @@ def _restaurant_result():
     )
 
 
+class _CanonicalSpy:
+    """Captures FlightSearchRequest calls and returns a canned canonical result."""
+
+    def __init__(self, offers=None, status=None, reason="", side_effect=None):
+        self.calls = []
+        self.offers = list(offers or [])
+        self.status = status if status is not None else (
+            FlightSourceStatus.OK if offers else FlightSourceStatus.UNAVAILABLE
+        )
+        self.reason = reason
+        self.side_effect = side_effect
+
+    def __call__(self, req):
+        self.calls.append(req)
+        if self.side_effect is not None:
+            self.side_effect(req)
+        return CanonicalFlightSearchResult(
+            status=self.status,
+            offers=list(self.offers),
+            reason=self.reason,
+        )
+
+
 def _setup_mocks(
     *,
-    flights=None,
+    offers=None,
     hotels=None,
-    rt_pairs=None,
     attractions=None,
     restaurants=None,
     user_uuid=None,
+    canonical_side_effect=None,
 ):
-    """Return (fake_search, fake_trips, fake_itinerary, user_uuid, fake_trip)."""
+    """Return (fake_search, fake_trips, fake_itinerary, canonical_spy, user_uuid, fake_trip)."""
     uid = user_uuid or uuid4()
     trip = _fake_trip(uid)
 
     fake_search = MagicMock()
-    fake_search.search_flights.return_value = flights if flights is not None else []
-    fake_search.search_round_trip_flights.return_value = rt_pairs if rt_pairs is not None else []
     fake_search.search_hotels.return_value = hotels if hotels is not None else []
     fake_search.search_attractions.return_value = attractions if attractions is not None else []
     fake_search.search_restaurants.return_value = restaurants if restaurants is not None else []
+    # search_flights / search_round_trip_flights MUST NOT be called from
+    # create-with-search — wire to assertion errors so a regression fails loudly.
+    fake_search.search_flights.side_effect = AssertionError(
+        "create-with-search must not call SearchService.search_flights; "
+        "use canonical_flight_search instead"
+    )
+    fake_search.search_round_trip_flights.side_effect = AssertionError(
+        "create-with-search must not call SearchService.search_round_trip_flights; "
+        "canonical FlightItineraryOffer carries return_leg natively"
+    )
 
     fake_trips = MagicMock()
     fake_trips.create_trip.return_value = trip
 
     fake_itinerary = MagicMock()
 
-    return fake_search, fake_trips, fake_itinerary, uid, trip
+    canonical_spy = _CanonicalSpy(offers=offers or [], side_effect=canonical_side_effect)
+
+    return fake_search, fake_trips, fake_itinerary, canonical_spy, uid, trip
 
 
-def _run(payload, fake_search, fake_trips, fake_itinerary, uid):
+def _run(payload, fake_search, fake_trips, fake_itinerary, canonical_spy, uid):
     with (
         patch.object(trips_route, "SearchService", return_value=fake_search),
         patch.object(trips_route, "TripsService", return_value=fake_trips),
         patch.object(trips_route, "ItineraryService", return_value=fake_itinerary),
+        patch.object(trips_route, "canonical_flight_search", canonical_spy),
     ):
         return trips_route.create_trip_with_search(
             payload, db=MagicMock(), user_id=uid
@@ -267,40 +363,39 @@ _TOKYO_PAYLOAD = trips_route.TripCreateWithSearch(
 # ── 1. Vertical isolation — completed results survive sibling timeouts ────────
 
 def test_flights_captured_when_hotel_search_times_out(monkeypatch):
-    """Completed flight results must be captured even when hotel search times out."""
+    """Canonical flight offers must be captured even when hotel search times out."""
     _unblock = threading.Event()
 
     def _slow_hotels(*_a, **_k):
         _unblock.wait(timeout=3.0)
         return []
 
-    clean = _clean_flight()
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks(flights=[clean])
+    offer = _clean_offer()
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(offers=[offer])
     fake_search.search_hotels.side_effect = _slow_hotels
 
     monkeypatch.setattr(trips_route, "_SEARCH_BUDGET_SECONDS", 0.15)
-    result = _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, uid)
+    result = _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
     _unblock.set()
 
-    assert len(result.flights) == 1, "Completed flight results must not be zeroed out"
     assert result.seeding_status["flights"]["harvested"] == 1
+    assert result.seeding_status["flights"]["persisted"] == 1
 
 
 def test_hotels_captured_when_flight_search_times_out(monkeypatch):
-    """Completed hotel results must be captured even when flight search times out."""
+    """Completed hotel results must be captured even when canonical flight search hangs."""
     _unblock = threading.Event()
 
-    def _slow_flights(*_a, **_k):
+    def _slow_flight(_req):
         _unblock.wait(timeout=3.0)
-        return []
 
     hotel = _clean_hotel()
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks(hotels=[hotel])
-    fake_search.search_flights.side_effect = _slow_flights
-    fake_search.search_round_trip_flights.side_effect = _slow_flights
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(
+        hotels=[hotel], canonical_side_effect=_slow_flight,
+    )
 
     monkeypatch.setattr(trips_route, "_SEARCH_BUDGET_SECONDS", 0.15)
-    result = _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, uid)
+    result = _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
     _unblock.set()
 
     assert len(result.hotels) == 1, "Completed hotel results must not be zeroed out"
@@ -311,19 +406,19 @@ def test_hotels_captured_when_flight_search_times_out(monkeypatch):
 
 def test_all_four_verticals_seeded_and_logged():
     """All four verticals must be persisted and appear in seeding_status."""
-    flight = _clean_flight()
+    offer = _clean_offer()
     hotel = _clean_hotel()
     att = _attraction_dict()
     rest = _restaurant_result()
 
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks(
-        flights=[flight],
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(
+        offers=[offer],
         hotels=[hotel],
         attractions=[att],
         restaurants=[rest],
     )
 
-    result = _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, uid)
+    result = _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
 
     assert result.seeding_status["flights"]["harvested"] == 1
     assert result.seeding_status["hotels"]["harvested"] == 1
@@ -337,9 +432,9 @@ def test_all_four_verticals_seeded_and_logged():
 def test_attraction_item_type_is_activity():
     """Attractions must be persisted as ACTIVITY items, never a fabricated type."""
     att = _attraction_dict()
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks(attractions=[att])
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(attractions=[att])
 
-    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, uid)
+    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
 
     # Find the call whose title matches the attraction name
     att_calls = [
@@ -355,9 +450,9 @@ def test_attraction_item_type_is_activity():
 def test_restaurant_item_type_is_meal():
     """Restaurants must be persisted as MEAL items."""
     rest = _restaurant_result()
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks(restaurants=[rest])
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(restaurants=[rest])
 
-    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, uid)
+    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
 
     rest_calls = [
         c for c in fake_itin.create_trip_item.call_args_list
@@ -372,9 +467,9 @@ def test_restaurant_item_type_is_meal():
 def test_attraction_source_is_google_places():
     """Attraction details must carry source=google_places — no mock/invented data."""
     att = _attraction_dict()
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks(attractions=[att])
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(attractions=[att])
 
-    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, uid)
+    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
 
     att_calls = [
         c for c in fake_itin.create_trip_item.call_args_list
@@ -390,11 +485,11 @@ def test_attraction_source_is_google_places():
 
 def test_hotel_persistence_failure_does_not_zero_flights():
     """If hotel persistence raises, flight items must still be persisted."""
-    flight = _clean_flight()
+    offer = _clean_offer()
     hotel = _clean_hotel()
 
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks(
-        flights=[flight], hotels=[hotel]
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(
+        offers=[offer], hotels=[hotel]
     )
 
     def _raise_for_hotel(item, *_a):
@@ -405,7 +500,7 @@ def test_hotel_persistence_failure_does_not_zero_flights():
 
     fake_itin.create_trip_item.side_effect = _raise_for_hotel
 
-    result = _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, uid)
+    result = _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
 
     # Hotels failed to persist but seeding_status must reflect the failure.
     assert result.seeding_status["hotels"]["persisted"] == 0
@@ -418,7 +513,7 @@ def test_attraction_failure_does_not_zero_restaurants():
     att = _attraction_dict()
     rest = _restaurant_result()
 
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks(
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(
         attractions=[att], restaurants=[rest]
     )
 
@@ -430,7 +525,7 @@ def test_attraction_failure_does_not_zero_restaurants():
 
     fake_itin.create_trip_item.side_effect = _raise_for_attraction
 
-    result = _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, uid)
+    result = _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
 
     assert result.seeding_status["attractions"]["persisted"] == 0
     assert result.seeding_status["restaurants"]["harvested"] == 1
@@ -440,18 +535,18 @@ def test_attraction_failure_does_not_zero_restaurants():
 
 def test_search_attractions_called_with_destination():
     """search_attractions must be called with the destination city during creation."""
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks()
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks()
 
-    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, uid)
+    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
 
     fake_search.search_attractions.assert_called_once_with("Tokyo")
 
 
 def test_attraction_seeding_zero_when_provider_returns_empty():
     """When search_attractions returns [], seeding_status.attractions.harvested == 0."""
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks(attractions=[])
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(attractions=[])
 
-    result = _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, uid)
+    result = _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
 
     assert result.seeding_status["attractions"]["harvested"] == 0
     assert result.seeding_status["attractions"]["persisted"] == 0
@@ -461,9 +556,9 @@ def test_attraction_seeding_zero_when_provider_returns_empty():
 
 def test_search_restaurants_called_with_destination():
     """search_restaurants must be called with the destination city during creation."""
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks()
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks()
 
-    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, uid)
+    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
 
     assert fake_search.search_restaurants.call_count == 1
     call_req = fake_search.search_restaurants.call_args.args[0]
@@ -472,9 +567,9 @@ def test_search_restaurants_called_with_destination():
 
 def test_restaurant_seeding_zero_when_provider_returns_empty():
     """When search_restaurants returns [], seeding_status.restaurants.harvested == 0."""
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks(restaurants=[])
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(restaurants=[])
 
-    result = _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, uid)
+    result = _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
 
     assert result.seeding_status["restaurants"]["harvested"] == 0
     assert result.seeding_status["restaurants"]["persisted"] == 0
@@ -549,9 +644,9 @@ def test_supabase_retry_reraises_after_all_retries_exhausted():
 def test_attraction_details_contain_no_mock_booking_url():
     """Attraction items must not carry book.example.com URLs."""
     att = _attraction_dict()
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks(attractions=[att])
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(attractions=[att])
 
-    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, uid)
+    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
 
     att_calls = [
         c for c in fake_itin.create_trip_item.call_args_list
@@ -567,8 +662,8 @@ def test_hotel_discovery_price_not_written_as_zero():
     hotel = _clean_hotel()
     assert hotel.price_per_night == 0.0  # discovery hotel
 
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks(hotels=[hotel])
-    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, uid)
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(hotels=[hotel])
+    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
 
     hotel_calls = [
         c for c in fake_itin.create_trip_item.call_args_list
@@ -583,7 +678,7 @@ def test_hotel_discovery_price_not_written_as_zero():
 
 def test_flight_request_uses_single_primary_airport():
     """create_with_search must build flight requests using only the primary airport."""
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks()
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks()
 
     multi_airport_payload = trips_route.TripCreateWithSearch(
         origin_city="Tokyo",
@@ -594,21 +689,23 @@ def test_flight_request_uses_single_primary_airport():
         end_date=date(2026, 5, 20),
     )
 
-    _run(multi_airport_payload, fake_search, fake_trips, fake_itin, uid)
+    _run(multi_airport_payload, fake_search, fake_trips, fake_itin, spy, uid)
 
-    # search_flights must have been called with a single-airport request
-    assert fake_search.search_flights.call_count == 1
-    req = fake_search.search_flights.call_args.args[0]
+    # canonical_flight_search must have been called once with a single-airport request
+    assert len(spy.calls) == 1
+    req = spy.calls[0]
     # Primary airports only — no multi-airport list
     assert req.origin == "NRT"
     assert req.destination == "LHR"
     assert req.origin_airports is None
     assert req.destination_airports is None
+    # Single canonical request encodes round-trip via return_date — no second pairing call.
+    assert req.return_date == date(2026, 5, 20)
 
 
 def test_payload_title_is_used_for_created_trip():
     """create-with-search must use payload.title for the created trip when provided."""
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks()
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks()
 
     payload = trips_route.TripCreateWithSearch(
         origin_city="San Francisco",
@@ -621,7 +718,7 @@ def test_payload_title_is_used_for_created_trip():
         travelers=2,
     )
 
-    _run(payload, fake_search, fake_trips, fake_itin, uid)
+    _run(payload, fake_search, fake_trips, fake_itin, spy, uid)
 
     create_trip_arg = fake_trips.create_trip.call_args.args[0]
     assert create_trip_arg.title == "Honeymoon in Tokyo"
@@ -629,9 +726,9 @@ def test_payload_title_is_used_for_created_trip():
 
 def test_payload_title_defaults_to_destination_when_omitted():
     """When payload.title is missing, created trip falls back to '<destination> Trip'."""
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks()
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks()
 
-    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, uid)
+    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
 
     create_trip_arg = fake_trips.create_trip.call_args.args[0]
     assert create_trip_arg.title == "Tokyo Trip"
@@ -639,7 +736,7 @@ def test_payload_title_defaults_to_destination_when_omitted():
 
 def test_flight_passengers_uses_payload_travelers():
     """Flight search requests must use payload.travelers as passenger count."""
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks()
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks()
 
     payload = trips_route.TripCreateWithSearch(
         origin_city="San Francisco",
@@ -651,17 +748,18 @@ def test_flight_passengers_uses_payload_travelers():
         travelers=3,
     )
 
-    _run(payload, fake_search, fake_trips, fake_itin, uid)
+    _run(payload, fake_search, fake_trips, fake_itin, spy, uid)
 
-    flight_req = fake_search.search_flights.call_args.args[0]
-    rt_req = fake_search.search_round_trip_flights.call_args.args[0]
+    assert len(spy.calls) == 1
+    flight_req = spy.calls[0]
     assert flight_req.passengers == 3
-    assert rt_req.passengers == 3
+    # Round-trip is encoded by return_date on the same canonical request.
+    assert flight_req.return_date == date(2026, 5, 20)
 
 
 def test_hotel_guests_uses_payload_travelers():
     """Hotel search request must use payload.travelers as guests."""
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks()
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks()
 
     payload = trips_route.TripCreateWithSearch(
         origin_city="San Francisco",
@@ -673,7 +771,7 @@ def test_hotel_guests_uses_payload_travelers():
         travelers=4,
     )
 
-    _run(payload, fake_search, fake_trips, fake_itin, uid)
+    _run(payload, fake_search, fake_trips, fake_itin, spy, uid)
 
     hotel_req = fake_search.search_hotels.call_args.args[0]
     assert hotel_req.guests == 4
@@ -681,7 +779,7 @@ def test_hotel_guests_uses_payload_travelers():
 
 def test_payload_travelers_persisted_on_created_trip():
     """The created Trip row must carry the requested travelers count."""
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks()
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks()
 
     payload = trips_route.TripCreateWithSearch(
         origin_city="San Francisco",
@@ -693,7 +791,7 @@ def test_payload_travelers_persisted_on_created_trip():
         travelers=2,
     )
 
-    _run(payload, fake_search, fake_trips, fake_itin, uid)
+    _run(payload, fake_search, fake_trips, fake_itin, spy, uid)
 
     create_trip_arg = fake_trips.create_trip.call_args.args[0]
     assert create_trip_arg.travelers == 2
@@ -715,7 +813,7 @@ def test_travelers_sanitized_to_minimum_one():
 
 def test_round_trip_request_uses_same_primary_airports():
     """Round-trip requests must also use only primary airports."""
-    fake_search, fake_trips, fake_itin, uid, _ = _setup_mocks()
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks()
 
     multi_airport_payload = trips_route.TripCreateWithSearch(
         origin_city="New York",
@@ -726,9 +824,123 @@ def test_round_trip_request_uses_same_primary_airports():
         end_date=date(2026, 5, 20),
     )
 
-    _run(multi_airport_payload, fake_search, fake_trips, fake_itin, uid)
+    _run(multi_airport_payload, fake_search, fake_trips, fake_itin, spy, uid)
 
-    rt_req = fake_search.search_round_trip_flights.call_args.args[0]
+    # Single canonical request carries the round-trip (return_date set).
+    assert len(spy.calls) == 1
+    rt_req = spy.calls[0]
     assert rt_req.origin == "JFK"
     assert rt_req.destination == "NRT"
     assert rt_req.return_date == date(2026, 5, 20)
+
+
+# ── 9. Canonical-flight-search wiring (Stage 3 exit blocker) ─────────────────
+
+def _flight_item_call(fake_itin):
+    """Return the create_trip_item call args for the persisted flight item, if any."""
+    from app.models.itinerary import ItineraryItemType  # noqa: WPS433
+    for c in fake_itin.create_trip_item.call_args_list:
+        if c.args and getattr(c.args[0], "item_type", None) == ItineraryItemType.FLIGHT:
+            return c
+    return None
+
+
+def test_create_with_search_calls_canonical_flight_search_not_legacy_search_service():
+    """Provider parity: create-with-search must use canonical_flight_search()."""
+    offer = _clean_offer()
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(offers=[offer])
+
+    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
+
+    assert len(spy.calls) == 1, "canonical_flight_search must be called exactly once"
+    # _setup_mocks wires legacy paths to AssertionError; reaching here proves
+    # neither SearchService.search_flights nor search_round_trip_flights was called.
+
+
+def test_canonical_offer_persisted_as_unscheduled_flight_idea():
+    """Canonical offers must persist as flight Trip Ideas (day_id is None)."""
+    offer = _clean_offer()
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(offers=[offer])
+
+    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
+
+    call = _flight_item_call(fake_itin)
+    assert call is not None, "Flight Trip Idea was not persisted"
+    item = call.args[0]
+    assert item.day_id is None, "Flight Trip Idea must be unscheduled (day_id=None)"
+    assert item.cash_price is not None
+    assert item.cash_currency == "USD"
+
+
+def test_persisted_flight_item_carries_google_flights_search_redirect():
+    """Persisted flight details must include the Google Flights SEARCH_REDIRECT URL."""
+    offer = _clean_offer(
+        google_url="https://www.google.com/travel/flights?tfs=GgYIAQ&q=SFO+to+NRT",
+    )
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(offers=[offer])
+
+    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
+
+    call = _flight_item_call(fake_itin)
+    assert call is not None
+    details = call.args[0].details
+    assert details["google_flights_search_url"].startswith("https://www.google.com/travel/flights?")
+    assert details["booking_link"]["link_type"] == BookingLinkType.SEARCH_REDIRECT.value
+    assert details["booking_link"]["kind"] == "search_redirect_only"
+
+
+def test_persisted_flight_item_contains_no_duffel_booking_fields():
+    """Persisted flight items must not include Duffel order/booking/payment fields."""
+    offer = _clean_offer()
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(offers=[offer])
+
+    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
+
+    call = _flight_item_call(fake_itin)
+    assert call is not None
+    details = call.args[0].details
+
+    forbidden_keys = {
+        "order_id", "duffel_order_id", "booking_id", "booking_reference",
+        "passenger_payment", "payment_method", "card_token", "stripe_payment_intent",
+        "checkout_url", "purchase_url",
+    }
+    assert forbidden_keys.isdisjoint(details.keys()), (
+        f"Persisted flight item leaked booking/payment fields: "
+        f"{forbidden_keys.intersection(details.keys())}"
+    )
+
+    # Provenance must remain present.
+    assert details["provider"] == "duffel_flights"
+    assert details["source_kind"] == "creation_seed"
+    assert details["live_cached_status"] == "live"
+
+
+def test_zero_canonical_offers_does_not_treat_run_as_success():
+    """When canonical provider returns no offers, no flight items must be persisted."""
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(offers=[])
+    spy.status = FlightSourceStatus.UNAVAILABLE
+    spy.reason = "no flight provider configured"
+
+    result = _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
+
+    assert result.seeding_status["flights"]["harvested"] == 0
+    assert result.seeding_status["flights"]["persisted"] == 0
+    assert result.seeding_status["flights"]["status"] == "unavailable"
+    assert _flight_item_call(fake_itin) is None
+
+
+def test_round_trip_canonical_offer_persists_with_return_leg():
+    """Round-trip canonical offers carry return_leg natively; no second pairing call."""
+    offer = _clean_offer(return_date=date(2026, 5, 20))
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(offers=[offer])
+
+    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
+
+    call = _flight_item_call(fake_itin)
+    assert call is not None
+    details = call.args[0].details
+    assert details["trip_type"] == TripType.ROUND_TRIP.value
+    assert details["return_leg"] is not None
+    assert details["return_leg"]["origin"] == "NRT"
+    assert details["return_leg"]["destination"] == "SFO"

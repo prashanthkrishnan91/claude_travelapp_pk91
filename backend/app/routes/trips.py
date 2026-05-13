@@ -38,11 +38,21 @@ from app.contracts.flights import (
     MOCK_BOOKING_HOST as _CONTRACT_MOCK_BOOKING_HOST,
     is_mock_derived_flight as _contract_is_mock_derived_flight,
 )
+from app.contracts.flight_offer import (
+    BookingLinkType,
+    FlightItineraryOffer,
+    TripType,
+)
+from app.contracts.flights import FlightSourceStatus
 from app.core.deps import DB, CurrentUserID
 from app.models import Trip, TripCreate, TripUpdate, ItineraryItem
 from app.models.itinerary import ItineraryItemDirectCreate, ItineraryItemType
 from app.models.search import ExploreSnapshot, FlightResult, FlightSearchRequest, HotelResult, HotelSearchRequest, RestaurantSearchRequest, RoundTripFlightPair
 from app.services import TripsService
+from app.services.canonical_flight_search import (
+    CanonicalFlightSearchResult,
+    canonical_flight_search,
+)
 from app.services.itinerary import ItineraryService
 from app.services.search import SearchService
 
@@ -410,6 +420,131 @@ def _any_mock_derived(
     return False
 
 
+def _parse_offer_iso(value: Optional[str]):
+    """Parse an ISO 8601 string from a canonical offer into a naive datetime.
+
+    Returns None on parse failure.  Used to populate ``start_time`` / ``end_time``
+    on the persisted flight item.  Naive datetimes match the existing
+    ``ItineraryItemBase`` shape used by every other persisted item.
+    """
+    from datetime import datetime as _dt
+    if not value:
+        return None
+    try:
+        v = value
+        if v.endswith("Z"):
+            v = v[:-1] + "+00:00"
+        dt = _dt.fromisoformat(v)
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(tz=None).replace(tzinfo=None)
+        return dt
+    except Exception:
+        return None
+
+
+def _serialize_offer_leg(leg) -> dict:
+    return {
+        "origin": leg.origin,
+        "destination": leg.destination,
+        "departure_time": leg.departure_time,
+        "arrival_time": leg.arrival_time,
+        "duration_minutes": leg.duration_minutes,
+        "stops": leg.stops,
+        "segments": [
+            {
+                "airline": s.airline,
+                "flight_number": s.flight_number,
+                "origin": s.origin,
+                "destination": s.destination,
+                "departure_time": s.departure_time,
+                "arrival_time": s.arrival_time,
+                "duration_minutes": s.duration_minutes,
+                "cabin_class": s.cabin_class,
+            }
+            for s in leg.segments
+        ],
+    }
+
+
+def _offer_to_flight_item(
+    offer: FlightItineraryOffer,
+    *,
+    trip_id,
+    position: int,
+) -> ItineraryItemDirectCreate:
+    """Deterministic mapper: canonical FlightItineraryOffer → flight Trip Idea.
+
+    Persists with ``day_id = None`` so the offer appears as an unscheduled
+    Trip Idea, never auto-scheduled to a day.  Preserves the canonical
+    Google Flights SEARCH_REDIRECT link (search-only, not booking) and never
+    includes booking/order/payment fields.
+    """
+    ob = offer.outbound_leg
+    rt = offer.return_leg
+    first_seg = ob.segments[0]
+    airline = first_seg.airline or "Flight"
+    flight_no = first_seg.flight_number or ""
+
+    if rt is not None:
+        title = f"{airline} {flight_no} {ob.origin}→{ob.destination} · return {rt.origin}→{rt.destination}".strip()
+    else:
+        title = f"{airline} {flight_no} {ob.origin}→{ob.destination}".strip()
+
+    start_dt = _parse_offer_iso(ob.departure_time)
+    end_dt = _parse_offer_iso(rt.arrival_time if rt is not None else ob.arrival_time)
+
+    booking_link = offer.booking_link
+    google_url: Optional[str] = None
+    if booking_link.link_type is BookingLinkType.SEARCH_REDIRECT and booking_link.url:
+        google_url = booking_link.url
+
+    details: dict = {
+        "kind": "flight_offer",
+        "provider": offer.provider,
+        "source": offer.provider,
+        "source_kind": "creation_seed",
+        "trip_type": offer.trip_type.value,
+        "origin": offer.origin,
+        "destination": offer.destination,
+        "departure_date": offer.departure_date,
+        "return_date": offer.return_date,
+        "passengers": offer.passengers,
+        "cabin_class": offer.cabin_class,
+        "live_cached_status": offer.live_cached_status.value,
+        "fetched_at": offer.fetched_at,
+        "airline": airline,
+        "flight_number": flight_no,
+        "stops": ob.stops,
+        "duration_minutes": ob.duration_minutes,
+        "departure_time": ob.departure_time,
+        "arrival_time": ob.arrival_time,
+        "cash_price": float(offer.price.total_amount),
+        "currency": offer.price.currency,
+        "outbound_leg": _serialize_offer_leg(ob),
+        "return_leg": _serialize_offer_leg(rt) if rt is not None else None,
+        "google_flights_search_url": google_url,
+        "booking_link": {
+            "url": booking_link.url,
+            "link_type": booking_link.link_type.value,
+            "provider_name": booking_link.provider_name,
+            "kind": "search_redirect_only",
+        },
+    }
+
+    return ItineraryItemDirectCreate(
+        trip_id=trip_id,
+        day_id=None,  # Trip Idea — unscheduled until the user assigns it.
+        item_type=ItineraryItemType.FLIGHT,
+        title=title,
+        start_time=start_dt,
+        end_time=end_dt,
+        cash_price=float(offer.price.total_amount),
+        cash_currency=offer.price.currency,
+        position=position,
+        details=details,
+    )
+
+
 class TripCreateWithSearch(BaseModel):
     origin_city: str
     origin_airports: Optional[List[str]] = None
@@ -539,15 +674,13 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
 
     # Step 2: Build provider requests.
     #
-    # Flights — use ONLY the primary (first) airport for each city.
-    # Passing the full multi-airport list causes search_flights to iterate every
-    # origin×destination pair sequentially.  For Tokyo (NRT + HND) that doubles
-    # the Duffel call count, and for rt_fut it quadruples it, routinely blowing
-    # past the 15-second budget.  The primary airport covers the dominant route;
-    # the full multi-airport path is still available from the standalone
-    # /search/flights endpoint.
+    # Flights — canonical provider search, exactly the same path Explore Flights
+    # uses.  Single primary airport per city to preserve the latency cap (the
+    # cross-product over multi-airport groups blows the 15-second budget).  The
+    # canonical Duffel provider handles round-trip natively when ``return_date``
+    # is set; we do NOT keep the legacy two-call outbound/return SearchService
+    # pairing that could diverge from Explore Flights.
     flight_req: Optional[FlightSearchRequest] = None
-    rt_req: Optional[FlightSearchRequest] = None
     if origin_airports and dest_airports:
         _primary_origin = origin_airports[0]
         _primary_dest = dest_airports[0]
@@ -555,14 +688,7 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
             origin=_primary_origin,
             destination=_primary_dest,
             departure_date=payload.start_date,
-            passengers=payload.travelers,
-            cabin_class="economy",
-        )
-        rt_req = FlightSearchRequest(
-            origin=_primary_origin,
-            destination=_primary_dest,
-            departure_date=payload.start_date,
-            return_date=payload.end_date,
+            return_date=payload.end_date if payload.end_date and payload.end_date > payload.start_date else None,
             passengers=payload.travelers,
             cabin_class="economy",
         )
@@ -585,61 +711,67 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
     # collecting results so the route returns immediately; any still-running
     # Duffel threads will self-terminate when their HTTP timeout fires (≤8s).
     t_search_start = time.perf_counter()
-    flights: List[FlightResult] = []
-    round_trip_pairs: List[RoundTripFlightPair] = []
+    flight_offers: List[FlightItineraryOffer] = []
+    flight_search_status: str = FlightSourceStatus.UNAVAILABLE.value
+    flight_search_reason: str = ""
     hotels: List[HotelResult] = []
     attractions: List[dict] = []
     restaurants: List = []
 
-    _executor = ThreadPoolExecutor(max_workers=5)
+    _executor = ThreadPoolExecutor(max_workers=4)
     try:
-        f_fut = _executor.submit(search_svc.search_flights, flight_req) if flight_req else None
-        rt_fut = _executor.submit(search_svc.search_round_trip_flights, rt_req) if rt_req else None
+        f_fut = _executor.submit(canonical_flight_search, flight_req) if flight_req else None
         h_fut = _executor.submit(search_svc.search_hotels, hotel_req)
         att_fut = _executor.submit(search_svc.search_attractions, payload.destination_city)
         rest_fut = _executor.submit(search_svc.search_restaurants, restaurant_req)
 
-        _live = [f for f in (f_fut, rt_fut, h_fut, att_fut, rest_fut) if f is not None]
+        _live = [f for f in (f_fut, h_fut, att_fut, rest_fut) if f is not None]
         _done, _not_done = _futures_wait(_live, timeout=_SEARCH_BUDGET_SECONDS)
 
-        flights = _safe_future_result(f_fut, _done, [])
-        round_trip_pairs = _safe_future_result(rt_fut, _done, [])
+        _flight_result: Optional[CanonicalFlightSearchResult] = _safe_future_result(f_fut, _done, None)
+        if _flight_result is not None:
+            flight_offers = list(_flight_result.offers)
+            flight_search_status = _flight_result.status.value
+            flight_search_reason = _flight_result.reason or ""
         hotels = _safe_future_result(h_fut, _done, [])
         attractions = _safe_future_result(att_fut, _done, [])
         restaurants = _safe_future_result(rest_fut, _done, [])
     finally:
         _executor.shutdown(wait=False, cancel_futures=True)
 
+    # Legacy SearchService flight rows are no longer produced here — the canonical
+    # provider (Duffel) is the single source of truth for visible flight cards.
+    flights: List[FlightResult] = []
+    round_trip_pairs: List[RoundTripFlightPair] = []
+
     t_search_ms = int((time.perf_counter() - t_search_start) * 1000)
     logger.info(
         "[create_with_search.timing] phase=provider_search "
-        "flights=%d rt_pairs=%d hotels=%d attractions=%d restaurants=%d "
+        "flight_offers=%d flight_status=%s flight_reason=%s "
+        "hotels=%d attractions=%d restaurants=%d "
         "elapsed_ms=%d timed_out=%d",
-        len(flights), len(round_trip_pairs), len(hotels),
-        len(attractions), len(restaurants),
+        len(flight_offers), flight_search_status, flight_search_reason,
+        len(hotels), len(attractions), len(restaurants),
         t_search_ms, len(_not_done),
     )
 
-    # Step 4: AI scoring — individual scores first, then dataset-aware intelligence
-    for flight in flights:
-        flight.ai_score = _compute_flight_ai_score(flight)
-        flight.recommendation_tag = _flight_recommendation_tag(flight.cpp or 0.0, flight.ai_score)
-
+    # Step 4: AI scoring — hotels still use the legacy SearchService path.
+    # Flight offers carry their own provider-sourced ranking; no points/CPP
+    # scoring is applied to canonical offers in this slice.
     for hotel in hotels:
         hotel.ai_score = _compute_hotel_ai_score(hotel)
         hotel.recommendation_tag = _hotel_recommendation_tag(hotel, hotel.ai_score)
 
-    _enrich_flights_with_intelligence(flights)
     _enrich_hotels_with_intelligence(hotels)
 
-    flights_sorted = sorted(flights, key=lambda f: f.ai_score or 0.0, reverse=True)
+    flights_sorted: List[FlightResult] = []
     hotels_sorted = sorted(hotels, key=lambda h: h.ai_score or 0.0, reverse=True)
 
     # Fail-closed guard: refuse to persist mock-derived rows.
-    # Attractions and restaurants come from Google Places (source="google_places")
-    # so they are not checked here — this guard is specific to the legacy mock
-    # fixtures for flights/hotels.
-    if _any_mock_derived(flights_sorted, hotels_sorted, round_trip_pairs):
+    # Canonical flight offers come from the registered FlightProvider seam and
+    # cannot be mock-derived (FlightItineraryOffer + FlightBookingLink reject
+    # fabricated hosts at construction time), so only hotels are screened here.
+    if _any_mock_derived([], hotels_sorted, []):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
@@ -685,53 +817,30 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
     # (not silently swallowed) so they appear in Railway logs.
     seeding: dict = {}
 
-    # 6a — Flights (one-way)
+    # 6a — Flights (canonical FlightItineraryOffer from active provider)
     t_persist_flights_start = time.perf_counter()
     _flights_persisted = 0
-    for idx, flight in enumerate(flights_sorted[:10]):
+    for idx, offer in enumerate(flight_offers[:10]):
         try:
-            itinerary_svc.create_trip_item(ItineraryItemDirectCreate(
-                trip_id=trip.id,
-                item_type=ItineraryItemType.FLIGHT,
-                title=f"{flight.airline} {flight.flight_number}",
-                start_time=flight.departure_time,
-                end_time=flight.arrival_time,
-                cash_price=flight.price,
-                points_price=flight.points_cost,
-                cpp_value=flight.cpp,
-                position=idx,
-                details={
-                    "airline": flight.airline,
-                    "flight_number": flight.flight_number,
-                    "origin": flight.origin,
-                    "destination": flight.destination,
-                    "departure_time": flight.departure_time.isoformat(),
-                    "arrival_time": flight.arrival_time.isoformat(),
-                    "duration_minutes": flight.duration_minutes,
-                    "stops": flight.stops,
-                    "cabin_class": flight.cabin_class,
-                    "price": float(flight.price or 0),
-                    "points_cost": flight.points_cost,
-                    "cpp": float(flight.cpp or 0),
-                    "ai_score": float(flight.ai_score or 0),
-                    "recommendation_tag": flight.recommendation_tag,
-                    "decision": flight.decision,
-                    "tags": flight.tags,
-                    "savings_vs_best": flight.savings_vs_best,
-                    "explanation": flight.explanation,
-                    "booking_url": flight.booking_url,
-                    "booking_options": [
-                        {"provider": o.provider, "url": o.url}
-                        for o in flight.booking_options
-                    ],
-                },
-            ), user_id)
+            itinerary_svc.create_trip_item(
+                _offer_to_flight_item(offer, trip_id=trip.id, position=idx),
+                user_id,
+            )
             _flights_persisted += 1
         except Exception as _exc:
             logger.warning("[create_with_search.persist] vertical=flight idx=%d error=%s", idx, _exc)
 
-    seeding["flights"] = {"harvested": len(flights_sorted), "persisted": _flights_persisted}
-    logger.info("[create_with_search.timing] phase=persist_flights harvested=%d persisted=%d elapsed_ms=%d", len(flights_sorted), _flights_persisted, int((time.perf_counter() - t_persist_flights_start) * 1000))
+    seeding["flights"] = {
+        "harvested": len(flight_offers),
+        "persisted": _flights_persisted,
+        "status": flight_search_status,
+        "reason": flight_search_reason or None,
+    }
+    logger.info(
+        "[create_with_search.timing] phase=persist_flights harvested=%d persisted=%d status=%s elapsed_ms=%d",
+        len(flight_offers), _flights_persisted, flight_search_status,
+        int((time.perf_counter() - t_persist_flights_start) * 1000),
+    )
 
     # 6b — Hotels
     t_persist_hotels_start = time.perf_counter()
@@ -779,67 +888,11 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
     seeding["hotels"] = {"harvested": len(hotels_sorted), "persisted": _hotels_persisted}
     logger.info("[create_with_search.timing] phase=persist_hotels harvested=%d persisted=%d elapsed_ms=%d", len(hotels_sorted), _hotels_persisted, int((time.perf_counter() - t_persist_hotels_start) * 1000))
 
-    # 6c — Round-trip pairs
-    t_persist_round_trip_pairs_start = time.perf_counter()
-    _rt_persisted = 0
-    for idx, pair in enumerate(round_trip_pairs[:5]):
-        try:
-            outbound_ai = _compute_flight_ai_score(pair.outbound)
-            itinerary_svc.create_trip_item(ItineraryItemDirectCreate(
-                trip_id=trip.id,
-                item_type=ItineraryItemType.FLIGHT,
-                title=f"{pair.outbound.airline} {pair.outbound.flight_number} + {pair.return_flight.airline} {pair.return_flight.flight_number}",
-                start_time=pair.outbound.departure_time,
-                end_time=pair.return_flight.arrival_time,
-                cash_price=pair.total_price,
-                points_price=pair.total_points,
-                cpp_value=pair.combined_cpp,
-                position=1000 + idx,
-                details={
-                    "is_round_trip": True,
-                    "pair_id": pair.id,
-                    "cabin_class": pair.outbound.cabin_class,
-                    "total_price": pair.total_price,
-                    "total_points": pair.total_points,
-                    "combined_cpp": pair.combined_cpp,
-                    "total_duration_minutes": pair.total_duration_minutes,
-                    "ai_score": float(outbound_ai),
-                    "outbound": {
-                        "airline": pair.outbound.airline,
-                        "flight_number": pair.outbound.flight_number,
-                        "origin": pair.outbound.origin,
-                        "destination": pair.outbound.destination,
-                        "departure_time": pair.outbound.departure_time.isoformat(),
-                        "arrival_time": pair.outbound.arrival_time.isoformat(),
-                        "duration_minutes": pair.outbound.duration_minutes,
-                        "stops": pair.outbound.stops,
-                        "price": float(pair.outbound.price or 0),
-                        "points_cost": pair.outbound.points_cost,
-                        "cpp": float(pair.outbound.cpp or 0),
-                        "booking_url": pair.outbound.booking_url,
-                    },
-                    "return_flight": {
-                        "airline": pair.return_flight.airline,
-                        "flight_number": pair.return_flight.flight_number,
-                        "origin": pair.return_flight.origin,
-                        "destination": pair.return_flight.destination,
-                        "departure_time": pair.return_flight.departure_time.isoformat(),
-                        "arrival_time": pair.return_flight.arrival_time.isoformat(),
-                        "duration_minutes": pair.return_flight.duration_minutes,
-                        "stops": pair.return_flight.stops,
-                        "price": float(pair.return_flight.price or 0),
-                        "points_cost": pair.return_flight.points_cost,
-                        "cpp": float(pair.return_flight.cpp or 0),
-                        "booking_url": pair.return_flight.booking_url,
-                    },
-                },
-            ), user_id)
-            _rt_persisted += 1
-        except Exception as _exc:
-            logger.warning("[create_with_search.persist] vertical=round_trip idx=%d error=%s", idx, _exc)
-
-    seeding["round_trip_pairs"] = {"harvested": len(round_trip_pairs), "persisted": _rt_persisted}
-    logger.info("[create_with_search.timing] phase=persist_round_trip_pairs harvested=%d persisted=%d elapsed_ms=%d", len(round_trip_pairs), _rt_persisted, int((time.perf_counter() - t_persist_round_trip_pairs_start) * 1000))
+    # 6c — Round-trip pairs (RETIRED)
+    # Canonical FlightItineraryOffer rows already carry a `return_leg` when the
+    # provider returned a round-trip itinerary, so a second pairing pass would
+    # be a divergent third pathway.  Kept zeroed for response-shape compat.
+    seeding["round_trip_pairs"] = {"harvested": 0, "persisted": 0}
 
     # 6d — Attractions (Google Places verified, OPERATIONAL only)
     t_persist_attractions_start = time.perf_counter()
@@ -921,13 +974,11 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
         "hotels_harvested=%d hotels_persisted=%d "
         "attractions_harvested=%d attractions_persisted=%d "
         "restaurants_harvested=%d restaurants_persisted=%d "
-        "rt_pairs_harvested=%d rt_pairs_persisted=%d "
         "elapsed_ms=%d",
         seeding["flights"]["harvested"], seeding["flights"]["persisted"],
         seeding["hotels"]["harvested"], seeding["hotels"]["persisted"],
         seeding["attractions"]["harvested"], seeding["attractions"]["persisted"],
         seeding["restaurants"]["harvested"], seeding["restaurants"]["persisted"],
-        seeding["round_trip_pairs"]["harvested"], seeding["round_trip_pairs"]["persisted"],
         t_total_ms,
     )
 
@@ -935,6 +986,6 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
         **trip.model_dump(),
         flights=flights_sorted,
         hotels=hotels_sorted,
-        round_trip_pairs=round_trip_pairs[:5],
+        round_trip_pairs=[],
         seeding_status=seeding,
     )
