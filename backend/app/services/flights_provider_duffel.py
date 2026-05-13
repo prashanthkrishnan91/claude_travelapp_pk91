@@ -514,6 +514,7 @@ class DuffelFlightProvider:
             origin=origin,
             destination=destination,
             departure_date=req.departure_date,
+            return_date=req.return_date,
             passengers=max(int(req.passengers or 1), 1),
         )
         _search_booking_link: FlightBookingLink = (
