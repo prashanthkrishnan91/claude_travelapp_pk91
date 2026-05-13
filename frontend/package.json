@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "test": "node --test tests/concierge-renderers.test.mjs tests/explore-restaurants-trust-contract.test.mjs tests/concierge-refinement.test.mjs tests/explore-concierge-migration.test.mjs tests/attraction-score-display.test.mjs tests/cards-and-account.test.mjs tests/dashboard-trip-status.test.mjs tests/fail-closed-flights-hotels.test.mjs tests/flights-oneway-add.test.mjs tests/hotel-itinerary-display.test.mjs tests/hotels-discovery-only.test.mjs tests/itinerary-timeline.test.mjs tests/smart-timeline.test.mjs tests/travel-time-hints.test.mjs tests/trip-ideas.test.mjs tests/saved-lists-foundation.test.mjs tests/saved-trip-conversion.test.mjs tests/create-trip-from-saved.test.mjs",
+    "test": "node --test tests/concierge-renderers.test.mjs tests/explore-restaurants-trust-contract.test.mjs tests/concierge-refinement.test.mjs tests/explore-concierge-migration.test.mjs tests/attraction-score-display.test.mjs tests/cards-and-account.test.mjs tests/dashboard-trip-status.test.mjs tests/fail-closed-flights-hotels.test.mjs tests/flights-oneway-add.test.mjs tests/hotel-itinerary-display.test.mjs tests/hotels-discovery-only.test.mjs tests/itinerary-timeline.test.mjs tests/smart-timeline.test.mjs tests/travel-time-hints.test.mjs tests/trip-ideas.test.mjs tests/saved-lists-foundation.test.mjs tests/saved-trip-conversion.test.mjs tests/create-trip-from-saved.test.mjs tests/saved-items-action-wiring.test.mjs tests/stage3-exit-cleanup.test.mjs",
     "test:explore-hydration": "node --test tests/explore-hydration.test.mjs"
   },
   "dependencies": {

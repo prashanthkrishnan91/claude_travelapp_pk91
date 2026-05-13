@@ -22,20 +22,18 @@ const VERTICALS: VerticalMeta[] = [
   {
     id: "flights",
     label: "Flights",
-    description: "Search one-way or round-trip flights by route and dates",
+    description: "Search live flights by route and dates with a Google Flights link-out",
     icon: Plane,
     iconBg: "bg-sky-500/10",
     iconColor: "text-sky-400",
-    badge: "Coming soon",
   },
   {
     id: "hotels",
     label: "Hotels",
-    description: "Find hotels at any destination for your travel dates",
+    description: "Discover Google-verified hotels at any destination",
     icon: Hotel,
     iconBg: "bg-violet-500/10",
     iconColor: "text-violet-400",
-    badge: "Coming soon",
   },
   {
     id: "restaurants",
@@ -52,7 +50,6 @@ const VERTICALS: VerticalMeta[] = [
     icon: MapPin,
     iconBg: "bg-emerald-500/10",
     iconColor: "text-emerald-400",
-    badge: "Coming soon",
   },
 ];
 

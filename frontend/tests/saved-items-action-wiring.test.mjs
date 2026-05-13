@@ -113,16 +113,22 @@ test('ResultActionSheet renders more-actions-toggle', () => {
   assert.ok(actionSheet.includes('data-testid="more-actions-toggle"'), 'more-actions-toggle missing');
 });
 
-test('ResultActionSheet has deferred add-to-trip-btn', () => {
-  assert.ok(actionSheet.includes('data-testid="add-to-trip-btn"'), 'add-to-trip-btn missing');
+test('ResultActionSheet no longer renders deferred add-to-trip-btn', () => {
+  assert.ok(!actionSheet.includes('data-testid="add-to-trip-btn"'), 'stale add-to-trip-btn must be removed');
 });
 
-test('ResultActionSheet has deferred create-trip-btn', () => {
-  assert.ok(actionSheet.includes('data-testid="create-trip-btn"'), 'create-trip-btn missing');
+test('ResultActionSheet no longer renders deferred create-trip-btn', () => {
+  assert.ok(!actionSheet.includes('data-testid="create-trip-btn"'), 'stale create-trip-btn must be removed');
 });
 
-test('deferred actions are disabled with Coming soon copy', () => {
-  assert.ok(actionSheet.includes('disabled') && actionSheet.includes('Coming soon'), 'deferred actions must be disabled');
+test('ResultActionSheet does not render "Coming soon" copy', () => {
+  assert.ok(!actionSheet.includes('Coming soon'), 'stale Coming soon copy must be removed');
+});
+
+test('ResultActionSheet exposes save-first guidance and Manage-in-Saved link', () => {
+  assert.ok(actionSheet.includes('data-testid="save-first-hint"'), 'save-first-hint missing');
+  assert.ok(actionSheet.includes('data-testid="manage-in-saved-link"'), 'manage-in-saved-link missing');
+  assert.ok(actionSheet.includes('href="/saved"'), 'Manage link must point to /saved');
 });
 
 test('ResultActionSheet does not import tripCandidates or TripBuilder', () => {

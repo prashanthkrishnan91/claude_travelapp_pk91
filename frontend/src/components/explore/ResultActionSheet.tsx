@@ -1,16 +1,17 @@
 "use client";
 
 /**
- * ResultActionSheet — Stage 2A Slice 2
+ * ResultActionSheet — Stage 3 exit cleanup
  *
- * Shared action surface for Explore result cards: Save, Add to Trip, Create Trip.
- * Works without a trip context. Save is wired; Add to Trip and Create Trip are
- * present but deferred (disabled with clear copy) until trip-picker and modal
- * wiring lands in a follow-up slice.
+ * Shared action surface for Explore result cards. Save/Unsave is wired here.
+ * Adding to or creating a trip happens from Saved (`/saved`), not directly
+ * from Explore. The expanded section shows accurate guidance and (after save)
+ * a link to manage the item in Saved.
  */
 
 import { useState } from "react";
-import { Bookmark, BookmarkCheck, PlusCircle, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import Link from "next/link";
+import { Bookmark, BookmarkCheck, PlusCircle, Loader2, ChevronDown, ChevronUp, ArrowRight } from "lucide-react";
 import { saveItem, deleteSavedItem } from "@/lib/api";
 import type { SavedItemCreate, SavedItem } from "@/types";
 import type { ExploreResultContext } from "./types";
@@ -183,33 +184,28 @@ export function ResultActionSheet({ context, initialSavedItem }: ResultActionShe
         </button>
       </div>
 
-      {/* Expanded deferred actions */}
+      {/* Expanded guidance — Add/Create happen from Saved, not Explore */}
       {expanded && (
-        <div className="mt-2 flex flex-col gap-1.5" data-testid="deferred-actions">
-          <button
-            disabled
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-cream-600 bg-white/[.03] cursor-not-allowed"
-            aria-label="Add to Trip — coming soon"
-            data-testid="add-to-trip-btn"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            Add to Trip
-            <span className="ml-auto text-[10px] text-cream-700 font-medium uppercase tracking-wide">
-              Coming soon
-            </span>
-          </button>
-          <button
-            disabled
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-cream-600 bg-white/[.03] cursor-not-allowed"
-            aria-label="Create Trip — coming soon"
-            data-testid="create-trip-btn"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            Create Trip
-            <span className="ml-auto text-[10px] text-cream-700 font-medium uppercase tracking-wide">
-              Coming soon
-            </span>
-          </button>
+        <div className="mt-2 flex flex-col gap-1.5" data-testid="trip-actions-guidance">
+          {isSaved ? (
+            <Link
+              href="/saved"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-cream-300 bg-white/[.05] hover:bg-white/[.10] transition"
+              aria-label="Manage in Saved"
+              data-testid="manage-in-saved-link"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              Manage in Saved
+              <ArrowRight className="w-3.5 h-3.5 ml-auto" />
+            </Link>
+          ) : (
+            <p
+              className="px-3 py-2 rounded-lg text-xs text-cream-500 bg-white/[.03] leading-snug"
+              data-testid="save-first-hint"
+            >
+              Save first to add or create a trip from Saved.
+            </p>
+          )}
         </div>
       )}
 
