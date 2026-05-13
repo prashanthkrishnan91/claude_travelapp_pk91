@@ -2335,3 +2335,69 @@ export async function addSavedItemToTrip(
     body: JSON.stringify(payload),
   });
 }
+
+// ─── Create Trip from Saved Item (Stage 3 v3) ────────────────────────────────
+
+/**
+ * Seed a saved flight as an unscheduled itinerary candidate.
+ * Carries only safe schedule/route fields — no rates, prices, or booking fields.
+ * Flights are excluded from addSavedItemToTrip (Stage 3 v2 contract); the
+ * Create-Trip flow handles them via this dedicated path.
+ */
+async function seedSavedFlightAsItineraryItem(
+  tripId: string,
+  item: SavedItem
+): Promise<ItineraryItem> {
+  const snap = item.displaySnapshot;
+  const ctx = item.searchContext;
+
+  const title =
+    (typeof snap["name"] === "string" && snap["name"] ? snap["name"] : null) ??
+    item.displayName;
+
+  const details: Record<string, unknown> = {
+    name: title,
+    source: "saved_item",
+    savedItemId: item.id,
+  };
+  if (typeof ctx["origin"] === "string" && ctx["origin"]) details.origin = ctx["origin"];
+  if (typeof ctx["destination"] === "string" && ctx["destination"]) details.destination = ctx["destination"];
+  if (typeof ctx["departureDate"] === "string" && ctx["departureDate"]) details.departureDate = ctx["departureDate"];
+  if (typeof ctx["returnDate"] === "string" && ctx["returnDate"]) details.returnDate = ctx["returnDate"];
+  if (typeof ctx["passengers"] === "number") details.passengers = ctx["passengers"];
+  if (typeof ctx["cabinClass"] === "string" && ctx["cabinClass"]) details.cabinClass = ctx["cabinClass"];
+
+  const payload: Record<string, unknown> = {
+    trip_id: tripId,
+    item_type: "flight",
+    title,
+    details,
+    position: 0,
+  };
+
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Create a new trip from a saved item and seed the item as an unscheduled
+ * itinerary candidate (day_id: null). Composes existing POST /trips and
+ * POST /itinerary/items routes — no new backend route.
+ *
+ * For restaurant/attraction/hotel verticals, reuses addSavedItemToTrip mapping.
+ * For flights, uses a dedicated safe-details mapping (no booking fields).
+ */
+export async function createTripFromSavedItem(args: {
+  savedItem: SavedItem;
+  formData: TripBuilderFormData;
+}): Promise<Trip> {
+  const trip = await createTrip(args.formData);
+  if (args.savedItem.vertical === "flight") {
+    await seedSavedFlightAsItineraryItem(trip.id, args.savedItem);
+  } else {
+    await addSavedItemToTrip(trip.id, args.savedItem);
+  }
+  return trip;
+}

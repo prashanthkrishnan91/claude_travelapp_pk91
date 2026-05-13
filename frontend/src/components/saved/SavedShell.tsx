@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Bookmark,
   Utensils,
@@ -18,9 +19,11 @@ import {
   Users,
   PlusCircle,
   CheckCircle2,
+  Sparkles,
 } from "lucide-react";
 import { listSavedItems, deleteSavedItem, fetchTrips, addSavedItemToTrip } from "@/lib/api";
 import type { SavedItem, SavedItemVertical, Trip } from "@/types";
+import { CreateTripFromSavedModal } from "./CreateTripFromSavedModal";
 
 // ── Vertical config ───────────────────────────────────────────────────────────
 
@@ -107,11 +110,13 @@ function SavedItemCard({
   vertConfig,
   trips,
   onRemove,
+  onCreateTrip,
 }: {
   item: SavedItem;
   vertConfig: VerticalCfg;
   trips: Trip[];
   onRemove: (id: string) => void;
+  onCreateTrip: (item: SavedItem) => void;
 }) {
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
@@ -274,6 +279,18 @@ function SavedItemCard({
           {/* Saved date */}
           <p className="text-[10px] text-cream-700 mt-2">Saved {savedDate}</p>
 
+          {/* Create Trip — all verticals (Stage 3 v3) */}
+          <div className="mt-2" data-testid="create-trip-section">
+            <button
+              onClick={() => onCreateTrip(item)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-brand-500/10 text-brand-300 hover:bg-brand-500/20 transition"
+              data-testid="create-trip-btn"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Create Trip
+            </button>
+          </div>
+
           {/* Add to Trip */}
           {canAddToTrip && (
             <div className="mt-2" data-testid="add-to-trip-section">
@@ -383,11 +400,13 @@ function VerticalGroup({
   items,
   trips,
   onRemove,
+  onCreateTrip,
 }: {
   config: VerticalCfg;
   items: SavedItem[];
   trips: Trip[];
   onRemove: (id: string) => void;
+  onCreateTrip: (item: SavedItem) => void;
 }) {
   if (items.length === 0) return null;
 
@@ -410,6 +429,7 @@ function VerticalGroup({
             vertConfig={config}
             trips={trips}
             onRemove={onRemove}
+            onCreateTrip={onCreateTrip}
           />
         ))}
       </div>
@@ -420,10 +440,12 @@ function VerticalGroup({
 // ── SavedShell ─────────────────────────────────────────────────────────────────
 
 export function SavedShell() {
+  const router = useRouter();
   const [items, setItems] = useState<SavedItem[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [createTripFor, setCreateTripFor] = useState<SavedItem | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -445,6 +467,10 @@ export function SavedShell() {
 
   const handleRemove = useCallback((id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id));
+  }, []);
+
+  const handleCreateTrip = useCallback((item: SavedItem) => {
+    setCreateTripFor(item);
   }, []);
 
   const grouped = VERTICAL_CONFIG.map((cfg) => ({
@@ -531,9 +557,21 @@ export function SavedShell() {
               items={groupItems}
               trips={trips}
               onRemove={handleRemove}
+              onCreateTrip={handleCreateTrip}
             />
           ))}
         </div>
+      )}
+
+      {createTripFor && (
+        <CreateTripFromSavedModal
+          item={createTripFor}
+          onClose={() => setCreateTripFor(null)}
+          onCreated={(trip) => {
+            setCreateTripFor(null);
+            router.push(`/trips/${trip.id}`);
+          }}
+        />
       )}
     </div>
   );
