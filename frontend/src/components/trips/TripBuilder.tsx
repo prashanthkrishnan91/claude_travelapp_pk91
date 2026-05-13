@@ -349,12 +349,19 @@ function FlightCandidateCard({
   const arrTime     = (d.arrivalTime      as string)   ?? "";
   const duration    = (d.durationMinutes  as number)   ?? 0;
   const stops       = (d.stops            as number)   ?? 0;
-  const price       = (d.price            as number)   ?? item.cashPrice ?? 0;
+  // Canonical field is cash_price → cashPrice (after toCamel); legacy rows used price
+  const price       = (d.cashPrice as number) ?? (d.cash_price as number) ?? (d.price as number) ?? item.cashPrice ?? 0;
   const points      = (d.pointsCost       as number)   ?? item.pointsPrice ?? 0;
   const cpp         = (d.cpp              as number)   ?? 0;
   const aiScore     = (d.aiScore          as number)   ?? 0;
   const tags        = (d.tags             as string[]) ?? [];
-  const bookingUrl  = (d.bookingUrl       as string)   ?? "";
+  // Canonical booking link: google_flights_search_url + booking_link (after toCamel)
+  const bookingLinkObj  = (d.bookingLink as Record<string, unknown>) ?? (d.booking_link as Record<string, unknown>) ?? {};
+  const googleFlightsUrl = (d.googleFlightsSearchUrl as string) || (d.google_flights_search_url as string) || (bookingLinkObj.url as string) || "";
+  const blLinkType       = (bookingLinkObj.linkType as string) || (bookingLinkObj.link_type as string) || (bookingLinkObj.kind as string) || "";
+  const isSearchRedirect = blLinkType === "search_redirect" || blLinkType === "search_redirect_only";
+  // Legacy rows: bookingUrl present and not a SEARCH_REDIRECT canonical row
+  const legacyBookingUrl = !isSearchRedirect ? ((d.bookingUrl as string) ?? "") : "";
 
   const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-brand-400/45" : ""} ${isLowScore ? "opacity-55" : ""}`;
 
@@ -452,9 +459,23 @@ function FlightCandidateCard({
             Compare
           </button>
         )}
-        {bookingUrl && (
+        {googleFlightsUrl && isSearchRedirect && (
           <a
-            href={bookingUrl}
+            href={googleFlightsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            title="Search on Google Flights"
+            className={SECONDARY_CTA}
+            data-testid="google-flights-cta"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            Google Flights
+          </a>
+        )}
+        {legacyBookingUrl && (
+          <a
+            href={legacyBookingUrl}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
@@ -469,6 +490,7 @@ function FlightCandidateCard({
           onClick={() => onAddToItinerary(item)}
           disabled={adding}
           className={PRIMARY_CTA}
+          data-testid="flight-add-btn"
         >
           {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           Add
@@ -487,9 +509,12 @@ function FlightLegRow({
   leg: Record<string, unknown>;
   label: string;
 }) {
-  const airline   = (leg.airline as string) ?? "";
+  // Canonical outbound/return legs store airline + flight_number only in segments[0], not at leg level
+  const segs      = (leg.segments as Array<Record<string, unknown>>) ?? [];
+  const firstSeg  = segs[0] as Record<string, unknown> | undefined;
+  const airline   = (leg.airline as string) || (firstSeg?.airline as string) || "";
   // Support both camelCase (API response after toCamel) and snake_case (legacy stored data)
-  const flightNum = ((leg.flightNumber  ?? leg.flight_number)  as string) ?? "";
+  const flightNum = ((leg.flightNumber ?? leg.flight_number) as string) || (firstSeg?.flightNumber as string) || (firstSeg?.flight_number as string) || "";
   const origin    = (leg.origin    as string) ?? "";
   const dest      = (leg.destination as string) ?? "";
   const depTime   = ((leg.departureTime ?? leg.departure_time) as string) ?? "";
@@ -548,14 +573,20 @@ function RoundTripFlightCard({
   isLowScore?: boolean;
 }) {
   const d           = (item.details ?? {}) as Record<string, unknown>;
-  const outbound    = (d.outbound as Record<string, unknown>) ?? {};
-  // toCamel transforms return_flight → returnFlight; support both for backwards compat
-  const returnFlight = ((d.returnFlight ?? d.return_flight) as Record<string, unknown>) ?? {};
-  // toCamel transforms total_price → totalPrice, etc.
-  const totalPrice  = ((d.totalPrice  ?? d.total_price)   as number) ?? 0;
+  // Canonical: outbound_leg → outboundLeg after toCamel; legacy rows used outbound
+  const outbound    = (d.outboundLeg as Record<string, unknown>) ?? (d.outbound_leg as Record<string, unknown>) ?? (d.outbound as Record<string, unknown>) ?? {};
+  // Canonical: return_leg → returnLeg after toCamel; legacy rows used returnFlight / return_flight
+  const returnFlight = (d.returnLeg as Record<string, unknown>) ?? (d.return_leg as Record<string, unknown>) ?? ((d.returnFlight ?? d.return_flight) as Record<string, unknown>) ?? {};
+  // Canonical price: cash_price → cashPrice; legacy rows used totalPrice / total_price
+  const totalPrice  = (d.cashPrice as number) ?? (d.cash_price as number) ?? ((d.totalPrice ?? d.total_price) as number) ?? item.cashPrice ?? 0;
   const totalPoints = ((d.totalPoints ?? d.total_points)  as number) ?? 0;
   const combinedCpp = ((d.combinedCpp ?? d.combined_cpp)  as number) ?? 0;
   const aiScore     = ((d.aiScore     ?? d.ai_score)      as number) ?? 0;
+  // Canonical booking link
+  const rtBookingLinkObj  = (d.bookingLink as Record<string, unknown>) ?? (d.booking_link as Record<string, unknown>) ?? {};
+  const rtGoogleFlightsUrl = (d.googleFlightsSearchUrl as string) || (d.google_flights_search_url as string) || (rtBookingLinkObj.url as string) || "";
+  const rtLinkType         = (rtBookingLinkObj.linkType as string) || (rtBookingLinkObj.link_type as string) || (rtBookingLinkObj.kind as string) || "";
+  const rtIsSearchRedirect = rtLinkType === "search_redirect" || rtLinkType === "search_redirect_only";
 
   const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-brand-400/45" : ""} ${isLowScore ? "opacity-55" : ""}`;
 
@@ -615,15 +646,32 @@ function RoundTripFlightCard({
         )}
       </div>
 
-      {/* Add button */}
-      <button
-        onClick={() => onAddToItinerary(item)}
-        disabled={adding}
-        className={`${PRIMARY_CTA} w-full`}
-      >
-        {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-        Add Round Trip
-      </button>
+      {/* Action buttons */}
+      <div className="flex items-center gap-1.5 pt-1">
+        {rtGoogleFlightsUrl && rtIsSearchRedirect && (
+          <a
+            href={rtGoogleFlightsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            title="Search on Google Flights"
+            className={SECONDARY_CTA}
+            data-testid="google-flights-cta"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            Google Flights
+          </a>
+        )}
+        <button
+          onClick={() => onAddToItinerary(item)}
+          disabled={adding}
+          className={`${PRIMARY_CTA} flex-1`}
+          data-testid="flight-add-btn"
+        >
+          {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+          Add Round Trip
+        </button>
+      </div>
     </div>
   );
 }
