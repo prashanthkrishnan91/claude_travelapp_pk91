@@ -8,7 +8,7 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3 — Saved lists / boards.** Stage 2A is GREEN. Stage 3 v1 (Saved Lists Foundation) shipped. Stage 3 v2 shipped: "Add to Trip" on SavedShell cards. **Flights v1 — Duffel search-only provider active but NOT trust-certified (2026-05-12)**: Duffel calls live, trust gate + route/date validation active, but `DUFFEL_SCHEDULE_TRUST_CERTIFIED` is NOT set → adapter returns UNAVAILABLE until one live payload is manually verified. `DUFFEL_DEBUG=true` enables accepted-offer debug logging for cert review. Slices default to `max_connections=0` (direct flights). **Google Flights link-out active (2026-05-13)**: when visible cards surface after cert, each card shows "Search on Google Flights" (SEARCH_REDIRECT link-out, not booking). BOOKING/ORDERS: out of scope for v1. Ignav DISABLED (schedule trust not certified). See `docs/product/ROADMAP.md`.
+- Roadmap stage: **Stage 3 — Saved lists / boards.** Stage 2A is GREEN. Stage 3 v1 (Saved Lists Foundation) shipped. Stage 3 v2 shipped: "Add to Trip" on SavedShell cards. **Flights v1 — Duffel search-only provider LIVE and trust-certified (2026-05-13)**: `DUFFEL_FLIGHTS_ENABLED=1`, `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`, `DUFFEL_DEBUG=false`, `DUFFEL_BOOKING_ENABLED=0`. Visible flight cards are active. Each card shows "Search on Google Flights" (SEARCH_REDIRECT link-out, not booking). BOOKING/ORDERS: out of scope for v1; Duffel never creates orders. Ignav DISABLED. See `docs/product/ROADMAP.md`.
 - Active build queue item: **Stage 3 v3 — Create Trip from Saved Item** (needs its own contract PR). Flight cards are saveable via `ResultActionSheet`. Add-to-trip for flights deferred to Stage 3 v3.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
@@ -65,22 +65,15 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 - `saved_items` migration 005 must be applied to the Supabase project before Save is live in production. Migration is in `backend/db/migrations/005_saved_items.sql`.
 - Hotels Slice 5A is discovery-only (`HotelDiscoveryCard`); do not add rates, prices, availability, or a fake hotel provider. Real hotel offers require a provider-backed Hotel Offer contract (deferred to Stage 2B or later).
-- Flights v1 is live but NOT visible (2026-05-12): Duffel (`LINK_OUT`, `production_allowed=True`) calls are live and trust/route/date validation is active, but `DUFFEL_SCHEDULE_TRUST_CERTIFIED` is NOT set → adapter returns UNAVAILABLE. Slices default to `max_connections=0` (direct flights). **Google Flights link-out (2026-05-13)**: `booking_link` is now `SEARCH_REDIRECT` (Google Flights tfs= URL) when a valid URL can be built; falls back to UNAVAILABLE. Frontend FlightCard shows "Search on Google Flights" for SEARCH_REDIRECT (not "Book"). Label makes clear it's a search, not booking. No OTA/booking URL is ever generated. **To enable visible cards**: set `DUFFEL_DEBUG=true`, run one search, verify `[duffel.accepted]` log lines, then set `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` and turn off `DUFFEL_DEBUG`. One live call only. Skyscanner remains PENDING. Ignav DISABLED. Amadeus DISABLED.
+- Flights v1 is **live and visible** (2026-05-13): Duffel (`LINK_OUT`, `production_allowed=True`) is trust-certified (`DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`). Trust gate + route/date validation active. Slices default to `max_connections=0` (direct flights). `DUFFEL_DEBUG=false` (cert complete). **Google Flights link-out**: `booking_link` is `SEARCH_REDIRECT` (Google Flights tfs= URL) for valid queries; falls back to UNAVAILABLE when URL cannot be built. Frontend `FlightCard` shows "Search on Google Flights" — search redirect only, never booking. No OTA/booking URL ever generated. No Duffel orders. Skyscanner PENDING. Ignav DISABLED. Amadeus DISABLED.
 - Saved-list foundation (Stage 3 v1) is live; `/saved` page, grouping, remove, and nav links all shipped.
 - AI destination intelligence, road trip mode, deal/points intelligence, and Travel Watchtower are deferred to later stages.
 
 ## Next recommended step
 
-**Duffel schedule trust certification** (one live call only):
-1. Set `DUFFEL_DEBUG=true` in Railway backend env.
-2. Run exactly one search: SEA → LAX, 2026-06-17, one-way, 1 adult, economy.
-3. Read Railway logs — look for `[duffel.accepted]` lines. Verify route (SEA→LAX), flight numbers, departure/arrival times, and price look correct.
-4. If accepted offers look correct: set `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` in Railway env, then remove `DUFFEL_DEBUG` (or set to `false`). Visible cards will appear on the next search. Each card will show "Search on Google Flights" linking to the Google Flights search for that route/date.
-5. If accepted offers look wrong: leave `DUFFEL_SCHEDULE_TRUST_CERTIFIED` unset and open a trust-hardening PR.
+**Next product work: Stage 3 v3 — Create Trip from Saved Item.** Duffel is certified and visible. Flight cards are saveable via `ResultActionSheet`. Contract PR should confirm: how a trip is created from a saved flight offer, whether auto-populated or manual, and trip creation form scope.
 
-**After certification**, next product work is **Stage 3 v3 — Create Trip from Saved Item**. Flight cards are saveable. Contract PR should confirm: how a trip is created from a saved flight offer, whether auto-populated or manual, and trip creation form scope.
-
-Env requirements: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` must be set. `DUFFEL_BOOKING_ENABLED` absent or `0`. `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` only after manual payload verification. Key server-side only; never `NEXT_PUBLIC_`.
+Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 
 ## Handoff maintenance rule
 
