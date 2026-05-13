@@ -959,7 +959,13 @@ class TestDebugLogging:
 @requires_full_stack
 class TestGoogleFlightsLinkWiring:
     """Verify that the Google Flights SEARCH_REDIRECT link carries the correct
-    trip type and dates for both one-way and round-trip Duffel requests."""
+    trip type, dates, and passenger count for both one-way and round-trip requests.
+
+    Verified facts (decoded from real tfs= samples 2026-05-13):
+      - Field 2 = 2 for BOTH one-way and round-trip.
+      - Field 19 = 2 one-way; field 19 = 1 round-trip.
+      - Passenger count = repeated field 8 = 1 (one per adult).
+    """
 
     def _decode_tfs(self, url: str) -> bytes:
         tfs = url.split("?tfs=")[1]
@@ -972,13 +978,21 @@ class TestGoogleFlightsLinkWiring:
         assert offer.booking_link.link_type is BookingLinkType.SEARCH_REDIRECT
         assert "google.com/travel/flights" in offer.booking_link.url
 
-    def test_one_way_link_encodes_field_2_as_2(self):
-        # Structural: field 2 = 2 for one-way.
+    def test_one_way_link_field_2_is_2(self):
+        # Structural: field 2 = 2 for one-way (verified from real URL).
         p, http = _build()
         http.enqueue(_duffel_response([_offer_one_way()]))
         offer = p.search_flights(_one_way_req()).rows[0]
         decoded = self._decode_tfs(offer.booking_link.url)
-        assert decoded[2] == 0x10 and decoded[3] == 0x02  # field 2 tag + one-way value
+        assert decoded[2] == 0x10 and decoded[3] == 0x02
+
+    def test_one_way_link_field_19_is_2(self):
+        # Field 19 = 2 signals one-way (verified from real URL).
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_one_way()]))
+        offer = p.search_flights(_one_way_req()).rows[0]
+        decoded = self._decode_tfs(offer.booking_link.url)
+        assert decoded[-1] == 0x02
 
     def test_one_way_link_contains_departure_date(self):
         p, http = _build()
@@ -994,13 +1008,22 @@ class TestGoogleFlightsLinkWiring:
         assert offer.booking_link.link_type is BookingLinkType.SEARCH_REDIRECT
         assert "google.com/travel/flights" in offer.booking_link.url
 
-    def test_round_trip_link_encodes_field_2_as_1(self):
-        # Structural: field 2 = 1 for round-trip.
+    def test_round_trip_link_field_2_is_2(self):
+        # Structural: field 2 = 2 for round-trip too (verified: NOT 1).
+        # Round-trip is signaled by field 19 = 1 and two leg submessages.
         p, http = _build()
         http.enqueue(_duffel_response([_offer_round_trip()]))
         offer = p.search_flights(_round_trip_req()).rows[0]
         decoded = self._decode_tfs(offer.booking_link.url)
-        assert decoded[2] == 0x10 and decoded[3] == 0x01  # field 2 tag + round-trip value
+        assert decoded[2] == 0x10 and decoded[3] == 0x02
+
+    def test_round_trip_link_field_19_is_1(self):
+        # Field 19 = 1 signals round-trip (verified from real URL).
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_round_trip()]))
+        offer = p.search_flights(_round_trip_req()).rows[0]
+        decoded = self._decode_tfs(offer.booking_link.url)
+        assert decoded[-1] == 0x01
 
     def test_round_trip_link_contains_both_dates(self):
         # Both departure (2026-06-17) and return (2026-06-24) must appear in binary.
@@ -1021,3 +1044,20 @@ class TestGoogleFlightsLinkWiring:
         rt_url = p2.search_flights(_round_trip_req()).rows[0].booking_link.url
 
         assert ow_url != rt_url
+
+    def test_passenger_count_wired_from_request(self):
+        # Verify Duffel passes req.passengers into build_google_flights_url.
+        # 2-pax one-way: field_8=1 marker (0x40 0x01) appears twice in decoded bytes.
+        req_2pax = FlightSearchRequest(
+            origin="SEA",
+            destination="LAX",
+            departure_date=date(2026, 6, 17),
+            passengers=2,
+            cabin_class="economy",
+        )
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_one_way()]))
+        offer = p.search_flights(req_2pax).rows[0]
+        decoded = self._decode_tfs(offer.booking_link.url)
+        f8_marker = bytes([0x40, 0x01])
+        assert decoded.count(f8_marker) == 2  # 2 adults

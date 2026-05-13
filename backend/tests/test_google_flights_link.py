@@ -1,9 +1,19 @@
 """Tests for the Google Flights tfs= URL builder.
 
-Golden test verifies exact byte-for-byte match against the known-good URL:
-  SEA→LAX, 2026-06-17, one-way, 1 passenger, economy class
+Golden tests verify exact byte-for-byte match against real Google Flights URLs
+captured 2026-05-13. Five fixtures cover the full combinatorial space:
+  - one-way 1 pax (original golden, unchanged)
+  - one-way 2 pax
+  - one-way 3 pax
+  - round-trip 1 pax
+  - round-trip 2 pax
 
-Guarded with a graceful skip in case the module isn't installed.
+Key verified facts (decoded from real tfs= samples):
+  - Field 2 = 2 for BOTH one-way and round-trip (not a trip-type flag).
+  - Field 19 = 2 one-way; field 19 = 1 round-trip.
+  - Passenger count = repeated field 8 = 1 (one entry per adult).
+  - Field 9 = always 1 regardless of passenger count.
+  - tfu= query param is constant/optional; not included in generated URLs.
 """
 from __future__ import annotations
 
@@ -28,13 +38,38 @@ requires_module = pytest.mark.skipif(
     reason="google_flights_link not available in this harness",
 )
 
-# Golden URL reverse-engineered from the real Google Flights UI.
-# SEA→LAX, departure 2026-06-17, one-way, 1 passenger, economy.
-GOLDEN_URL = (
-    "https://www.google.com/travel/flights/search"
-    "?tfs=CBwQAhojEgoyMDI2LTA2LTE3agwIAhIIL20vMGQ5anJyBwgBEgNMQVhAAUgBcAGCAQsI"
+BASE = "https://www.google.com/travel/flights/search?tfs="
+
+# Real Google Flights URLs captured 2026-05-13 (tfs= only, tfu=/hl=/gl= omitted).
+# Each tfs= exactly matches the corrected encoder output.
+GOLDEN_1WAY_1PAX = BASE + (
+    "CBwQAhojEgoyMDI2LTA2LTE3agwIAhIIL20vMGQ5anJyBwgBEgNMQVhAAUgBcAGCAQsI"
     "____________AZgBAg"
 )
+GOLDEN_1WAY_2PAX = BASE + (
+    "CBwQAhojEgoyMDI2LTA2LTE3agwIAhIIL20vMGQ5anJyBwgBEgNMQVhAAUABSAFwAYIBCwj"
+    "___________8BmAEC"
+)
+GOLDEN_1WAY_3PAX = BASE + (
+    "CBwQAhojEgoyMDI2LTA2LTE3agwIAhIIL20vMGQ5anJyBwgBEgNMQVhAAUABQAFIAXABggELCP"
+    "___________wGYAQI"
+)
+GOLDEN_RT_1PAX = BASE + (
+    "CBwQAhojEgoyMDI2LTA2LTE3agwIAhIIL20vMGQ5anJyBwgBEgNMQVgaIxIKMjAyNi0wNi0yMG"
+    "oHCAESA0xBWHIMCAISCC9tLzBkOWpyQAFIAXABggELCP___________wGYAQE"
+)
+GOLDEN_RT_2PAX = BASE + (
+    "CBwQAhojEgoyMDI2LTA2LTE3agwIAhIIL20vMGQ5anJyBwgBEgNMQVgaIxIKMjAyNi0wNi0yMG"
+    "oHCAESA0xBWHIMCAISCC9tLzBkOWpyQAFAAUgBcAGCAQsI____________AZgBAQ"
+)
+
+# Backward-compat alias: GOLDEN_URL is the original one-way 1-pax golden.
+GOLDEN_URL = GOLDEN_1WAY_1PAX
+
+
+def _decode_tfs(url: str) -> bytes:
+    tfs = url.split("?tfs=")[1]
+    return base64.urlsafe_b64decode(tfs + "=" * (-len(tfs) % 4))
 
 
 @requires_module
@@ -46,7 +81,7 @@ class TestGoldenUrl:
             departure_date=date(2026, 6, 17),
             passengers=1,
         )
-        assert url == GOLDEN_URL
+        assert url == GOLDEN_1WAY_1PAX
 
     def test_case_insensitive_inputs(self):
         url_upper = build_google_flights_url(
@@ -55,7 +90,7 @@ class TestGoldenUrl:
         url_lower = build_google_flights_url(
             origin="sea", destination="lax", departure_date=date(2026, 6, 17)
         )
-        assert url_upper == url_lower == GOLDEN_URL
+        assert url_upper == url_lower == GOLDEN_1WAY_1PAX
 
     def test_sea_place_token_is_correct(self):
         assert _AIRPORT_PLACE_TOKENS.get("SEA") == "/m/0d9jr"
@@ -64,10 +99,39 @@ class TestGoldenUrl:
         url = build_google_flights_url(
             origin="SEA", destination="LAX", departure_date=date(2026, 6, 17)
         )
-        tfs = url.split("?tfs=")[1]
-        padded = tfs + "=" * (-len(tfs) % 4)
-        decoded = base64.urlsafe_b64decode(padded)
-        assert len(decoded) == 64
+        assert len(_decode_tfs(url)) == 64
+
+    def test_2pax_one_way_exact_match(self):
+        url = build_google_flights_url(
+            origin="SEA", destination="LAX",
+            departure_date=date(2026, 6, 17), passengers=2,
+        )
+        assert url == GOLDEN_1WAY_2PAX
+
+    def test_3pax_one_way_exact_match(self):
+        url = build_google_flights_url(
+            origin="SEA", destination="LAX",
+            departure_date=date(2026, 6, 17), passengers=3,
+        )
+        assert url == GOLDEN_1WAY_3PAX
+
+    def test_round_trip_1pax_exact_match(self):
+        url = build_google_flights_url(
+            origin="SEA", destination="LAX",
+            departure_date=date(2026, 6, 17),
+            return_date=date(2026, 6, 20),
+            passengers=1,
+        )
+        assert url == GOLDEN_RT_1PAX
+
+    def test_round_trip_2pax_exact_match(self):
+        url = build_google_flights_url(
+            origin="SEA", destination="LAX",
+            departure_date=date(2026, 6, 17),
+            return_date=date(2026, 6, 20),
+            passengers=2,
+        )
+        assert url == GOLDEN_RT_2PAX
 
 
 @requires_module
@@ -119,8 +183,7 @@ class TestUnknownAirports:
         tfs = url.split("?tfs=")[1]
         assert "=" not in tfs
         assert "+" not in tfs
-        padded = tfs + "=" * (-len(tfs) % 4)
-        base64.urlsafe_b64decode(padded)  # should not raise
+        base64.urlsafe_b64decode(tfs + "=" * (-len(tfs) % 4))  # should not raise
 
     def test_different_airports_produce_different_urls(self):
         url1 = build_google_flights_url(
@@ -172,18 +235,14 @@ class TestUrlStructure:
         url = build_google_flights_url(
             origin="SEA", destination="LAX", departure_date=date(2026, 6, 17)
         )
-        tfs = url.split("?tfs=")[1]
-        decoded = base64.urlsafe_b64decode(tfs + "=" * (-len(tfs) % 4))
-        # Bytes: [0]=0x08 field-1-tag, [1]=0x1C value-28, [2]=0x10 field-2-tag, [3]=0x02 one-way
+        decoded = _decode_tfs(url)
+        # Bytes: [0]=0x08 field-1-tag, [1]=0x1C value-28, [2]=0x10 field-2-tag, [3]=0x02
         assert decoded[2] == 0x10  # tag for field 2, wire type 0
-        assert decoded[3] == 0x02  # one-way
+        assert decoded[3] == 0x02  # always 2
 
-    def test_passenger_field_9_changes_with_count(self):
-        # Structural check: field 9 carries the passenger count.
-        # NOTE: production smoke test (2026-05-13) showed Google Flights does NOT
-        # display the correct visible count for field 9 > 1. The correct multi-
-        # passenger encoding is unverified — this test only documents the field
-        # location, not functional correctness for pax > 1.
+    def test_passenger_encoding_verified(self):
+        # Verified from real URL samples: each adult = one field_8=1 (0x40 0x01).
+        # Field 9 is always 0x01 regardless of passenger count.
         url1 = build_google_flights_url(
             origin="SEA", destination="LAX",
             departure_date=date(2026, 6, 17), passengers=1,
@@ -192,16 +251,23 @@ class TestUrlStructure:
             origin="SEA", destination="LAX",
             departure_date=date(2026, 6, 17), passengers=2,
         )
-        dec1 = base64.urlsafe_b64decode(
-            url1.split("?tfs=")[1] + "=" * (-len(url1.split("?tfs=")[1]) % 4)
+        url3 = build_google_flights_url(
+            origin="SEA", destination="LAX",
+            departure_date=date(2026, 6, 17), passengers=3,
         )
-        dec2 = base64.urlsafe_b64decode(
-            url2.split("?tfs=")[1] + "=" * (-len(url2.split("?tfs=")[1]) % 4)
-        )
-        # Find field-9 tag (0x48) and verify the value byte differs.
-        idx = dec1.index(0x48)
-        assert dec1[idx + 1] == 1   # 1 passenger
-        assert dec2[idx + 1] == 2   # 2 passengers (structurally correct; smoke-test unverified)
+        dec1 = _decode_tfs(url1)
+        dec2 = _decode_tfs(url2)
+        dec3 = _decode_tfs(url3)
+        # Count occurrences of the field_8=1 marker (0x40 0x01) before field_9 tag (0x48)
+        f8_tag = bytes([0x40, 0x01])
+        f9_tag = bytes([0x48, 0x01])
+        assert dec1.count(f8_tag) == 1 and f9_tag in dec1
+        assert dec2.count(f8_tag) == 2 and f9_tag in dec2
+        assert dec3.count(f8_tag) == 3 and f9_tag in dec3
+        # Field 9 value is always 1 (0x48 0x01) — not the passenger count
+        for dec in (dec1, dec2, dec3):
+            idx = dec.index(0x48)
+            assert dec[idx + 1] == 1  # always 1
 
 
 @requires_module
@@ -220,25 +286,35 @@ class TestRoundTrip:
         assert one_way != round_trip
 
     def test_one_way_golden_url_unchanged_with_none_return_date(self):
-        # Backward compat: no return_date must preserve the exact golden URL.
         url = build_google_flights_url(
             origin="SEA", destination="LAX",
             departure_date=date(2026, 6, 17),
             return_date=None,
         )
-        assert url == GOLDEN_URL
+        assert url == GOLDEN_1WAY_1PAX
 
-    def test_round_trip_field_2_is_1(self):
-        # Round-trip changes field 2 from 2 (one-way) to 1.
+    def test_round_trip_field_19_is_1(self):
+        # Verified: field 2 = 2 for round-trip (same as one-way).
+        # Field 19 = 1 signals round-trip; field 19 = 2 signals one-way.
         url = build_google_flights_url(
             origin="SEA", destination="LAX",
             departure_date=date(2026, 6, 17),
             return_date=date(2026, 6, 20),
         )
-        tfs = url.split("?tfs=")[1]
-        decoded = base64.urlsafe_b64decode(tfs + "=" * (-len(tfs) % 4))
-        assert decoded[2] == 0x10   # tag for field 2, wire type 0
-        assert decoded[3] == 0x01   # round-trip = 1
+        decoded = _decode_tfs(url)
+        # Field 2 = 2 for round-trip (verified: NOT 1)
+        assert decoded[2] == 0x10  # tag for field 2, wire type 0
+        assert decoded[3] == 0x02  # always 2
+        # Field 19 = 1 for round-trip (last two meaningful bytes: 0x98 0x01 then 0x01)
+        assert decoded[-1] == 0x01  # field 19 value = 1 (round-trip)
+
+    def test_one_way_field_19_is_2(self):
+        url = build_google_flights_url(
+            origin="SEA", destination="LAX",
+            departure_date=date(2026, 6, 17),
+        )
+        decoded = _decode_tfs(url)
+        assert decoded[-1] == 0x02  # field 19 value = 2 (one-way)
 
     def test_round_trip_both_dates_in_binary(self):
         url = build_google_flights_url(
@@ -246,8 +322,7 @@ class TestRoundTrip:
             departure_date=date(2026, 6, 17),
             return_date=date(2026, 6, 20),
         )
-        tfs = url.split("?tfs=")[1]
-        decoded = base64.urlsafe_b64decode(tfs + "=" * (-len(tfs) % 4))
+        decoded = _decode_tfs(url)
         assert b"2026-06-17" in decoded
         assert b"2026-06-20" in decoded
 
@@ -265,15 +340,12 @@ class TestRoundTrip:
         assert url1 != url2
 
     def test_round_trip_return_route_is_reversed_in_binary(self):
-        # The return leg should encode dest→origin. Verify both "LAX" and "SEA"
-        # appear twice in the decoded bytes (once per direction per leg).
         url = build_google_flights_url(
             origin="SEA", destination="LAX",
             departure_date=date(2026, 6, 17),
             return_date=date(2026, 6, 20),
         )
-        tfs = url.split("?tfs=")[1]
-        decoded = base64.urlsafe_b64decode(tfs + "=" * (-len(tfs) % 4))
+        decoded = _decode_tfs(url)
         assert decoded.count(b"LAX") == 2
         assert decoded.count(b"2026-06") == 2   # two legs, both in the same month
 
@@ -298,3 +370,4 @@ class TestRoundTrip:
         )
         assert url is not None
         assert url.startswith("https://www.google.com/travel/flights/search?tfs=")
+
