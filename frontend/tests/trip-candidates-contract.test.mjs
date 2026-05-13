@@ -162,11 +162,13 @@ test('isRoundTripFlight still detects legacy is_round_trip boolean', () => {
   );
 });
 
-test('flightDedupeKey uses canonical origin+destination+departureDate+returnDate for round-trips', () => {
+test('flightDedupeKey uses segment airline+flightNumber+departureTime per leg for round-trips', () => {
+  // Route/date alone is insufficient — many Duffel offers share origin+dest+date.
+  // Key must include itinerary-specific fields so distinct offers survive dedup.
   assert.match(
     selectorSrc,
-    /rt:\$\{origin\}:\$\{dest\}:\$\{depDate\}:\$\{retDate\}/,
-    'flightDedupeKey must use canonical route fields for round-trip dedup key',
+    /rt:\$\{obAirline\}:\$\{obFlight\}:\$\{obDep\}:\$\{rtAirline\}:\$\{rtFlight\}:\$\{rtDep\}/,
+    'flightDedupeKey must use segment airline+flight+departure per leg for round-trip key',
   );
 });
 
@@ -178,10 +180,26 @@ test('flightDedupeKey calls isRoundTripFlight (so canonical rows use canonical d
   );
 });
 
-test('flightDedupeKey reads departure_date / departureDate for canonical one-way key', () => {
+test('flightDedupeKey reads outboundLeg and returnLeg for canonical segment extraction', () => {
   assert.match(
     selectorSrc,
-    /d\.departureDate.*d\.departure_date|d\.departure_date.*d\.departureDate/,
-    'flightDedupeKey must read canonical departureDate/departure_date',
+    /d\.outboundLeg.*d\.outbound_leg|d\.outbound_leg.*d\.outboundLeg/,
+    'flightDedupeKey must read canonical outboundLeg/outbound_leg',
+  );
+});
+
+test('flightDedupeKey reads departure_time / departureTime from leg for round-trip key', () => {
+  assert.match(
+    selectorSrc,
+    /ob\?\.departureTime.*ob\?\.departure_time|ob\?\.departure_time.*ob\?\.departureTime/,
+    'flightDedupeKey must read ob?.departureTime/ob?.departure_time for round-trip key',
+  );
+});
+
+test('flightDedupeKey falls back to legacy pairId when no segment data available', () => {
+  assert.match(
+    selectorSrc,
+    /d\.pairId.*d\.pair_id.*item\.id|pairId.*pair_id.*item\.id/,
+    'flightDedupeKey must fall back to pairId/pair_id/item.id for legacy rows',
   );
 });

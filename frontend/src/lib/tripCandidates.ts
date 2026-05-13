@@ -110,20 +110,29 @@ function hotelScore(item: ItineraryItem): number {
 function flightDedupeKey(item: ItineraryItem): string {
   const d = (item.details ?? {}) as Record<string, unknown>;
   if (isRoundTripFlight(item)) {
-    // Canonical: stable key from origin+dest+departureDate+returnDate
-    const origin   = (d.origin as string | undefined) ?? "";
-    const dest     = (d.destination as string | undefined) ?? "";
-    const depDate  = ((d.departureDate ?? d.departure_date) as string | undefined) ?? "";
-    const retDate  = ((d.returnDate   ?? d.return_date)    as string | undefined) ?? "";
-    if (origin && dest && depDate) {
-      return `rt:${origin}:${dest}:${depDate}:${retDate}`;
+    // Canonical: key on first-segment airline+flightNumber+departureTime for each leg.
+    // Route/date alone is not sufficient — many Duffel offers share origin+dest+date.
+    const ob     = (d.outboundLeg ?? d.outbound_leg ?? d.outbound) as Record<string, unknown> | undefined;
+    const rt     = (d.returnLeg  ?? d.return_leg  ?? d.returnFlight ?? d.return_flight) as Record<string, unknown> | undefined;
+    const obSegs = (ob?.segments as Array<Record<string, unknown>>) ?? [];
+    const rtSegs = (rt?.segments as Array<Record<string, unknown>>) ?? [];
+    const obSeg0 = obSegs[0] as Record<string, unknown> | undefined;
+    const rtSeg0 = rtSegs[0] as Record<string, unknown> | undefined;
+    const obAirline = (obSeg0?.airline as string)                                                     || (d.airline as string)        || "";
+    const obFlight  = ((obSeg0?.flightNumber ?? obSeg0?.flight_number) as string)                     || ((d.flightNumber ?? d.flight_number) as string) || "";
+    const obDep     = ((ob?.departureTime   ?? ob?.departure_time)   as string)                       || ((d.departureTime  ?? d.departure_time)  as string) || "";
+    const rtAirline = (rtSeg0?.airline as string)      || "";
+    const rtFlight  = ((rtSeg0?.flightNumber ?? rtSeg0?.flight_number) as string) || "";
+    const rtDep     = ((rt?.departureTime   ?? rt?.departure_time)   as string)   || "";
+    if (obFlight || obDep) {
+      return `rt:${obAirline}:${obFlight}:${obDep}:${rtAirline}:${rtFlight}:${rtDep}`;
     }
     // Legacy fallback: pairId or item id
     return `rt:${(d.pairId ?? d.pair_id ?? item.id) as string}`;
   }
-  const num = (d.flightNumber ?? d.flight_number) as string | undefined;
+  const num     = (d.flightNumber ?? d.flight_number) as string | undefined;
   const airline = d.airline as string | undefined;
-  const dep = (d.departureTime ?? d.departure_time) as string | undefined;
+  const dep     = (d.departureTime ?? d.departure_time) as string | undefined;
   return `ow:${airline ?? ""}:${num ?? item.title}:${dep ?? ""}`;
 }
 
