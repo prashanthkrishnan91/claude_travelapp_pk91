@@ -31,7 +31,9 @@ Direct-flight default (v1):
 
 Response contract:
   - Returns ``FlightItineraryOffer`` rows (canonical provider shape).
-  - booking_link is always UNAVAILABLE — no orders, no checkout.
+  - booking_link is SEARCH_REDIRECT (Google Flights link-out) when a valid
+    URL can be built for the query; falls back to UNAVAILABLE otherwise.
+    The link is a search redirect only — no orders, no checkout.
   - Never returns mock/fabricated data; fails closed on any error.
   - ``live_cached_status`` is always ``LIVE``.
   - ``ai_score`` is None in v1.
@@ -54,7 +56,8 @@ Trust gate (applied per offer before mapping):
 No booking:
   - DUFFEL_BOOKING_ENABLED env var is checked; if truthy, it is IGNORED because
     booking is out of scope for v1.  The adapter never calls Duffel orders endpoints.
-  - booking_link is always FlightBookingLink(url="", link_type=UNAVAILABLE, ...).
+  - booking_link is SEARCH_REDIRECT (Google Flights) when a valid URL can be built,
+    otherwise UNAVAILABLE.  Google Flights is a search redirect, NOT a booking path.
 """
 from __future__ import annotations
 
@@ -81,6 +84,7 @@ from app.contracts.flight_offer import (
 )
 from app.models.search import FlightSearchRequest
 from app.services.flights_provider import FlightProviderResult
+from app.services.google_flights_link import build_google_flights_url
 
 logger = logging.getLogger(__name__)
 
@@ -267,6 +271,7 @@ def _map_offer(
     *,
     req: FlightSearchRequest,
     fetched_at: str,
+    booking_link: Optional[FlightBookingLink] = None,
 ) -> Optional[FlightItineraryOffer]:
     """Map a Duffel offer dict to FlightItineraryOffer; returns None on any trust failure."""
     slices = offer.get("slices") or []
@@ -359,7 +364,7 @@ def _map_offer(
                 total_amount=amount,
                 taxes_fees_included=None,
             ),
-            booking_link=_UNAVAILABLE_BOOKING_LINK,
+            booking_link=booking_link if booking_link is not None else _UNAVAILABLE_BOOKING_LINK,
             ai_score=None,
         )
     except (ValueError, TypeError) as exc:
@@ -502,9 +507,28 @@ class DuffelFlightProvider:
             )
 
         fetched_at = _now_utc_iso()
+
+        # Build Google Flights search link-out for all offers from this query.
+        # SEARCH_REDIRECT is a search redirect only — never a booking endpoint.
+        _google_url = build_google_flights_url(
+            origin=origin,
+            destination=destination,
+            departure_date=req.departure_date,
+            passengers=max(int(req.passengers or 1), 1),
+        )
+        _search_booking_link: FlightBookingLink = (
+            FlightBookingLink(
+                url=_google_url,
+                link_type=BookingLinkType.SEARCH_REDIRECT,
+                provider_name="google_flights",
+            )
+            if _google_url
+            else _UNAVAILABLE_BOOKING_LINK
+        )
+
         rows: List[FlightItineraryOffer] = []
         for offer in offers_raw[:_MAX_OFFERS_TO_MAP]:
-            mapped = _map_offer(offer, req=req, fetched_at=fetched_at)
+            mapped = _map_offer(offer, req=req, fetched_at=fetched_at, booking_link=_search_booking_link)
             if mapped is not None:
                 rows.append(mapped)
 

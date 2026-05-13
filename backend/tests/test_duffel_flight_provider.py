@@ -211,9 +211,10 @@ def test_duffel_non_2xx_and_empty_fail_closed():
     assert p.search_flights(_req()).status is FlightSourceStatus.EMPTY
 
 
-def test_duffel_booking_link_always_unavailable():
+def test_duffel_booking_link_is_search_redirect():
     p, http = _build()
     http.offer_responses = [_FakeResponse(200, payload=_payload())]
     offer = p.search_flights(_req()).rows[0]
-    assert offer.booking_link.link_type is BookingLinkType.UNAVAILABLE
-    assert offer.booking_link.url == ""
+    # JFK→CDG uses raw IATA fallback; still produces a Google Flights search link.
+    assert offer.booking_link.link_type is BookingLinkType.SEARCH_REDIRECT
+    assert "google.com/travel/flights" in offer.booking_link.url

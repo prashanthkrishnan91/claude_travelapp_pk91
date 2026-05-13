@@ -350,12 +350,13 @@ class TestOneWayMapping:
         assert seg.destination == "LAX"
         assert seg.duration_minutes == 150
 
-    def test_one_way_booking_link_is_unavailable(self):
+    def test_one_way_booking_link_is_search_redirect(self):
+        # SEA→LAX has a known Google MID token; link-out to Google Flights is generated.
         p, http = _build()
         http.enqueue(_duffel_response([_offer_one_way()]))
         offer = p.search_flights(_one_way_req()).rows[0]
-        assert offer.booking_link.link_type is BookingLinkType.UNAVAILABLE
-        assert offer.booking_link.url == ""
+        assert offer.booking_link.link_type is BookingLinkType.SEARCH_REDIRECT
+        assert "google.com/travel/flights" in offer.booking_link.url
 
     def test_one_way_live_cached_status_is_live(self):
         from app.contracts.flight_offer import LiveCachedStatus
@@ -559,12 +560,15 @@ class TestNoBookingOrderCalled:
             assert "/air/orders" not in call["url"], \
                 f"Orders endpoint must never be called; got: {call['url']}"
 
-    def test_booking_link_type_is_always_unavailable(self):
+    def test_booking_link_is_search_redirect_for_known_airports(self):
+        # SEA→LAX → Google Flights search redirect; not an OTA or Duffel orders endpoint.
         p, http = _build()
         http.enqueue(_duffel_response([_offer_one_way(), _offer_one_way(offer_id="off2")]))
         result = p.search_flights(_one_way_req())
         for offer in result.rows:
-            assert offer.booking_link.link_type is BookingLinkType.UNAVAILABLE
+            assert offer.booking_link.link_type is BookingLinkType.SEARCH_REDIRECT
+            assert "google.com/travel" in offer.booking_link.url
+            assert "duffel" not in offer.booking_link.url.lower()
 
     def test_only_one_http_call_per_search(self):
         p, http = _build()
