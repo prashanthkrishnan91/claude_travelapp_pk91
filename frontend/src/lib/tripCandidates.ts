@@ -86,7 +86,14 @@ function isDayAssigned(item: ItineraryItem): boolean {
 
 function isRoundTripFlight(item: ItineraryItem): boolean {
   const d = (item.details ?? {}) as Record<string, unknown>;
-  return Boolean(d.isRoundTrip ?? d.is_round_trip);
+  // Legacy boolean flags
+  if (d.isRoundTrip != null) return Boolean(d.isRoundTrip);
+  if (d.is_round_trip != null) return Boolean(d.is_round_trip);
+  // Canonical: trip_type field (snake_case stored, camelCase after toCamel)
+  if (d.tripType === "round_trip" || d.trip_type === "round_trip") return true;
+  // Canonical: return_leg present and non-null (outbound+return pair)
+  if (d.returnLeg != null || d.return_leg != null) return true;
+  return false;
 }
 
 /** AI score from persisted details, falling back to 0. */
@@ -102,7 +109,16 @@ function hotelScore(item: ItineraryItem): number {
 
 function flightDedupeKey(item: ItineraryItem): string {
   const d = (item.details ?? {}) as Record<string, unknown>;
-  if (d.isRoundTrip ?? d.is_round_trip) {
+  if (isRoundTripFlight(item)) {
+    // Canonical: stable key from origin+dest+departureDate+returnDate
+    const origin   = (d.origin as string | undefined) ?? "";
+    const dest     = (d.destination as string | undefined) ?? "";
+    const depDate  = ((d.departureDate ?? d.departure_date) as string | undefined) ?? "";
+    const retDate  = ((d.returnDate   ?? d.return_date)    as string | undefined) ?? "";
+    if (origin && dest && depDate) {
+      return `rt:${origin}:${dest}:${depDate}:${retDate}`;
+    }
+    // Legacy fallback: pairId or item id
     return `rt:${(d.pairId ?? d.pair_id ?? item.id) as string}`;
   }
   const num = (d.flightNumber ?? d.flight_number) as string | undefined;

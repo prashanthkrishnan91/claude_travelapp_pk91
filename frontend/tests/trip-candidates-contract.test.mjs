@@ -119,3 +119,69 @@ test('selector keeps real UUID dayId rows assigned (not candidate buckets)', () 
   assert.match(selectorSrc, /return true;/, 'Expected non-null-like dayId to remain assigned.');
   assert.doesNotMatch(selectorSrc, /normalized === \"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\"/i, 'UUID dayId must not be treated as null-like sentinel.');
 });
+
+// ── Canonical round-trip bucketing (canonical FlightItineraryOffer fields) ────
+
+test('isRoundTripFlight detects canonical snake_case trip_type="round_trip"', () => {
+  assert.match(
+    selectorSrc,
+    /d\.trip_type === "round_trip"/,
+    'isRoundTripFlight must check d.trip_type === "round_trip"',
+  );
+});
+
+test('isRoundTripFlight detects canonical camelCase tripType="round_trip"', () => {
+  assert.match(
+    selectorSrc,
+    /d\.tripType === "round_trip"/,
+    'isRoundTripFlight must check d.tripType === "round_trip"',
+  );
+});
+
+test('isRoundTripFlight detects canonical returnLeg (camelCase after toCamel)', () => {
+  assert.match(
+    selectorSrc,
+    /d\.returnLeg != null/,
+    'isRoundTripFlight must classify row as round-trip when d.returnLeg is non-null',
+  );
+});
+
+test('isRoundTripFlight detects canonical return_leg (snake_case fallback)', () => {
+  assert.match(
+    selectorSrc,
+    /d\.return_leg != null/,
+    'isRoundTripFlight must classify row as round-trip when d.return_leg is non-null',
+  );
+});
+
+test('isRoundTripFlight still detects legacy is_round_trip boolean', () => {
+  assert.match(
+    selectorSrc,
+    /d\.is_round_trip != null/,
+    'isRoundTripFlight must still handle legacy is_round_trip boolean flag',
+  );
+});
+
+test('flightDedupeKey uses canonical origin+destination+departureDate+returnDate for round-trips', () => {
+  assert.match(
+    selectorSrc,
+    /rt:\$\{origin\}:\$\{dest\}:\$\{depDate\}:\$\{retDate\}/,
+    'flightDedupeKey must use canonical route fields for round-trip dedup key',
+  );
+});
+
+test('flightDedupeKey calls isRoundTripFlight (so canonical rows use canonical dedup branch)', () => {
+  assert.match(
+    selectorSrc,
+    /if \(isRoundTripFlight\(item\)\)/,
+    'flightDedupeKey must call isRoundTripFlight to select the dedup branch',
+  );
+});
+
+test('flightDedupeKey reads departure_date / departureDate for canonical one-way key', () => {
+  assert.match(
+    selectorSrc,
+    /d\.departureDate.*d\.departure_date|d\.departure_date.*d\.departureDate/,
+    'flightDedupeKey must read canonical departureDate/departure_date',
+  );
+});
