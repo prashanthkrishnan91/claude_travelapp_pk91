@@ -1159,3 +1159,46 @@ class TestCityGroupTokenWiring:
         assert b"/m/02_286" not in decoded
         assert b"/m/030qb3t" not in decoded
         assert b"/m/01_d4" not in decoded
+
+    def test_multi_airport_city_resolver_does_not_expand_duffel_slices(self):
+        # Safety: multi-airport origin_airports must NOT produce a cross-product
+        # of Duffel API slices. Duffel search is always single-pair primary IATA.
+        req = FlightSearchRequest(
+            origin="JFK",
+            origin_airports=["JFK", "LGA", "EWR"],
+            destination="LAX",
+            destination_airports=["LAX", "BUR"],
+            departure_date=date(2026, 6, 17), cabin_class="economy",
+        )
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_one_way(
+            seg_kwargs={"origin": "JFK", "destination": "LAX"}
+        )]))
+        p.search_flights(req)
+        # Exactly one Duffel HTTP call, exactly one outbound slice (no cross-product)
+        assert len(http.calls) == 1
+        slices = http.calls[0]["json"]["data"]["slices"]
+        assert len(slices) == 1
+        assert slices[0]["origin"] == "JFK"
+        assert slices[0]["destination"] == "LAX"
+
+    def test_google_flights_link_uses_group_token_when_multi_airport(self):
+        # City-group scope: multi-airport arrays improve Google Flights link-out
+        # (mode-3 token encoding) while Duffel search stays primary-airport-only.
+        req = FlightSearchRequest(
+            origin="JFK",
+            origin_airports=["JFK", "LGA", "EWR"],
+            destination="LAX",
+            destination_airports=["LAX", "BUR"],
+            departure_date=date(2026, 6, 17), cabin_class="economy",
+        )
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_one_way(
+            seg_kwargs={"origin": "JFK", "destination": "LAX"}
+        )]))
+        offer = p.search_flights(req).rows[0]
+        decoded = self._decode_tfs(offer.booking_link.url)
+        # Google Flights link uses mode-3 NYC token for multi-airport origin
+        assert b"/m/02_286" in decoded
+        # Google Flights link uses mode-3 LAX token for multi-airport destination
+        assert b"/m/030qb3t" in decoded

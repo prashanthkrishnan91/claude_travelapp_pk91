@@ -2,7 +2,7 @@
 
 Verified against real Google Flights tfs= samples (2026-05-13):
   - 5 single-airport samples (SEA/LAX/JFK routes, 1–3 pax, one-way/round-trip)
-  - 3 city-group samples (NYC/LAX/CHI groups, mode 3 encoding)
+  - 3 city-group samples (NYC→LAX and LAX→CHI routes, mode-3 encoding)
 
 The tfs= parameter is a base64url-encoded protobuf binary.
 
@@ -39,8 +39,13 @@ The tfs= parameter is a base64url-encoded protobuf binary.
     not functionally required. Generated URLs omit it.
 
   tcfs= query parameter: NOT included. Present in some real round-trip
-    city-group URLs alongside mode-2 encoding; our approach uses mode-3
-    without tcfs= (verified to produce correct URLs in F1–F3 fixtures).
+    city-group URLs that use mode-2 encoding (the "F4" fixture pattern).
+    Our approach uses mode-3 without tcfs= (the "F1–F3" fixture pattern).
+    Semantic equivalence tests confirm correct field structure for mode-3
+    output. Exact byte-for-byte match against F4-style mode-2+tcfs= URLs
+    is intentionally not attempted: Google emits both variants depending
+    on the UI entry path, and mode-3 without tcfs= is the verified city-
+    group encoding (confirmed in three F1–F3 real-URL fixtures).
 
 IMPORTANT: This format is undocumented and may change without notice.
 Treat as best-effort link-out; always fail gracefully to None.

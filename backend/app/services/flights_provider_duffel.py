@@ -402,6 +402,12 @@ class DuffelFlightProvider:
         return self._client
 
     def _build_slices(self, req: FlightSearchRequest) -> List[Dict[str, Any]]:
+        # City-group scope note: Duffel search always uses the single primary
+        # airport (req.origin / req.destination). Multi-airport arrays from the
+        # city resolver improve Google Flights link-out scope (mode-3 token) but
+        # do NOT expand Duffel search into a cross-product — that would require
+        # a bounded multi-slice strategy with hard caps and per-offer trust gates
+        # that are out of scope for v1. Do not change without a product decision.
         origin = (req.origin or "").upper()
         destination = (req.destination or "").upper()
         slices: List[Dict[str, Any]] = [
