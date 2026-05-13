@@ -269,10 +269,10 @@ test('HotelExploreFlow wires ResultActionSheet into hotel discovery cards', () =
   assert.match(hotelFlow, /<ResultActionSheet/);
 });
 
-// ── 7. Flights — structured form + deferred state ──────────────────────────
+// ── 7. Flights — live CityAutocomplete form ────────────────────────────────
 
-test('FlightExploreFlow shows flight-deferred-state testid after submission', () => {
-  assert.match(flightFlow, /data-testid="flight-deferred-state"/);
+test('FlightExploreFlow renders live search button (not deferred)', () => {
+  assert.match(flightFlow, /data-testid="flight-search-btn"/);
 });
 
 test('FlightExploreFlow collects origin, destination, departure, passengers, cabinClass', () => {
@@ -283,21 +283,20 @@ test('FlightExploreFlow collects origin, destination, departure, passengers, cab
   assert.match(flightFlow, /cabinClass/);
 });
 
-test('FlightExploreFlow validates IATA airport codes', () => {
-  assert.match(flightFlow, /validateIata/);
-  assert.match(flightFlow, /\[A-Za-z\]\{3\}/);
+test('FlightExploreFlow uses CityAutocomplete for airport selection', () => {
+  assert.match(flightFlow, /CityAutocomplete/);
+  assert.match(flightFlow, /AirportSelection/);
 });
 
 test('FlightExploreFlow builds ExploreResultContext with flight vertical', () => {
   assert.match(flightFlow, /vertical: "flights"/);
-  assert.match(flightFlow, /origin: form\.origin/);
   assert.match(flightFlow, /passengers: form\.passengers/);
   assert.match(flightFlow, /cabinClass: form\.cabinClass/);
 });
 
-test('FlightExploreFlow does not call searchFlights (mock-backed)', () => {
-  assert.doesNotMatch(flightFlow, /searchFlights/);
-  assert.doesNotMatch(flightFlow, /apiFetch/);
+test('FlightExploreFlow calls searchFlightsExplore (live provider, not mock-backed searchFlights)', () => {
+  assert.match(flightFlow, /searchFlightsExplore/);
+  assert.doesNotMatch(flightFlow, /\/search\/flights/);
 });
 
 // ── 8. No-trip gate verification ──────────────────────────────────────────
@@ -347,6 +346,7 @@ test('HotelExploreFlow source documents the live Concierge discovery approach', 
   assert.match(hotelFlow, /discovery/i);
 });
 
-test('FlightExploreFlow source documents mock-backed quarantine reason', () => {
-  assert.match(flightFlow, /BLOCK_LEGACY_PRODUCT_MOCK/);
+test('FlightExploreFlow source documents live provider safety invariants', () => {
+  // Live FlightExploreFlow must document server-side key safety
+  assert.match(flightFlow, /IGNAV_API_KEY.*server-side|server-side.*IGNAV_API_KEY/i);
 });

@@ -19,24 +19,26 @@ import {
   Plane,
   Calendar,
   Users,
-  ArrowRight,
   Construction,
   ExternalLink,
   Clock,
   AlertCircle,
+  ArrowRight,
 } from "lucide-react";
 import { searchFlightsExplore } from "@/lib/api";
 import type { FlightExploreRequest, FlightExploreResponse } from "@/lib/api";
 import type { FlightItineraryOffer, ExploreResultContext } from "./types";
 import { ResultActionSheet } from "./ResultActionSheet";
+import { CityAutocomplete } from "@/components/ui/CityAutocomplete";
+import type { AirportSelection } from "@/components/ui/CityAutocomplete";
 
 // ---------------------------------------------------------------------------
 // Form types
 // ---------------------------------------------------------------------------
 
 interface FlightFormValues {
-  origin: string;
-  destination: string;
+  origin: AirportSelection | null;
+  destination: AirportSelection | null;
   departure: string;
   returnDate: string;
   passengers: number;
@@ -341,50 +343,42 @@ function ErrorState({ message }: { message?: string }) {
 
 export function FlightExploreFlow() {
   const [form, setForm] = useState<FlightFormValues>({
-    origin: "",
-    destination: "",
+    origin: null,
+    destination: null,
     departure: "",
     returnDate: "",
     passengers: 1,
     cabinClass: "economy",
   });
   const [searchState, setSearchState] = useState<SearchState>({ kind: "idle" });
-  const [originError, setOriginError] = useState("");
-  const [destError, setDestError] = useState("");
 
-  function validateIata(code: string): boolean {
-    return /^[A-Za-z]{3}$/.test(code.trim());
-  }
-
-  function setField(field: keyof FlightFormValues, value: string | number) {
-    if (field === "origin") setOriginError("");
-    if (field === "destination") setDestError("");
+  function setField(field: keyof Omit<FlightFormValues, "origin" | "destination">, value: string | number) {
     setSearchState({ kind: "idle" });
     setForm((f) => ({ ...f, [field]: value }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    let valid = true;
-    if (!validateIata(form.origin)) {
-      setOriginError("Enter a 3-letter IATA code (e.g. JFK)");
-      valid = false;
-    }
-    if (!validateIata(form.destination)) {
-      setDestError("Enter a 3-letter IATA code (e.g. CDG)");
-      valid = false;
-    }
-    if (!valid || !form.departure) return;
+    if (!form.origin || !form.destination || !form.departure) return;
+
+    const primaryOrigin = form.origin.airports[0].toUpperCase();
+    const primaryDest = form.destination.airports[0].toUpperCase();
 
     setSearchState({ kind: "loading" });
 
     const req: FlightExploreRequest = {
-      origin: form.origin.trim().toUpperCase(),
-      destination: form.destination.trim().toUpperCase(),
+      origin: primaryOrigin,
+      destination: primaryDest,
       departureDate: form.departure,
       passengers: form.passengers,
       cabinClass: form.cabinClass,
     };
+    if (form.origin.airports.length > 1) {
+      req.originAirports = form.origin.airports.map((a) => a.toUpperCase());
+    }
+    if (form.destination.airports.length > 1) {
+      req.destinationAirports = form.destination.airports.map((a) => a.toUpperCase());
+    }
     if (form.returnDate) {
       req.returnDate = form.returnDate;
     }
@@ -407,44 +401,22 @@ export function FlightExploreFlow() {
       <form onSubmit={handleSubmit} className="space-y-3">
         {/* Origin / Destination */}
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <div className="relative">
-              <Plane className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cream-500 pointer-events-none rotate-45" />
-              <input
-                type="text"
-                value={form.origin}
-                onChange={(e) => setField("origin", e.target.value.toUpperCase())}
-                placeholder="Origin — JFK"
-                maxLength={3}
-                className={`input pl-9 w-full uppercase tracking-widest ${originError ? "border-rose-500/60" : ""}`}
-                aria-label="Origin airport code"
-                required
-              />
-            </div>
-            {originError && (
-              <p className="text-xs text-rose-400 mt-1">{originError}</p>
-            )}
-          </div>
-          <div>
-            <div className="relative">
-              <ArrowRight className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cream-500 pointer-events-none" />
-              <input
-                type="text"
-                value={form.destination}
-                onChange={(e) =>
-                  setField("destination", e.target.value.toUpperCase())
-                }
-                placeholder="Destination — CDG"
-                maxLength={3}
-                className={`input pl-9 w-full uppercase tracking-widest ${destError ? "border-rose-500/60" : ""}`}
-                aria-label="Destination airport code"
-                required
-              />
-            </div>
-            {destError && (
-              <p className="text-xs text-rose-400 mt-1">{destError}</p>
-            )}
-          </div>
+          <CityAutocomplete
+            value={form.origin}
+            onChange={(sel) => {
+              setSearchState({ kind: "idle" });
+              setForm((f) => ({ ...f, origin: sel }));
+            }}
+            placeholder="From — city or airport"
+          />
+          <CityAutocomplete
+            value={form.destination}
+            onChange={(sel) => {
+              setSearchState({ kind: "idle" });
+              setForm((f) => ({ ...f, destination: sel }));
+            }}
+            placeholder="To — city or airport"
+          />
         </div>
 
         {/* Dates */}
@@ -504,12 +476,7 @@ export function FlightExploreFlow() {
 
         <button
           type="submit"
-          disabled={
-            isLoading ||
-            !form.origin.trim() ||
-            !form.destination.trim() ||
-            !form.departure
-          }
+          disabled={isLoading || !form.origin || !form.destination || !form.departure}
           className="btn-primary w-full flex items-center justify-center gap-2"
           data-testid="flight-search-btn"
         >
@@ -530,7 +497,7 @@ export function FlightExploreFlow() {
       {/* Results area */}
       {searchState.kind === "idle" && (
         <div className="text-center py-8 text-cream-500 text-sm">
-          Enter origin and destination airport codes to search flights.
+          Search by city name or airport code.
         </div>
       )}
 
@@ -560,8 +527,8 @@ export function FlightExploreFlow() {
           if (response.status === "empty") {
             return (
               <EmptyState
-                origin={form.origin.toUpperCase()}
-                destination={form.destination.toUpperCase()}
+                origin={form.origin?.airports[0] ?? ""}
+                destination={form.destination?.airports[0] ?? ""}
               />
             );
           }

@@ -84,7 +84,7 @@ from app.contracts.flight_offer import (
 )
 from app.models.search import FlightSearchRequest
 from app.services.flights_provider import FlightProviderResult
-from app.services.google_flights_link import build_google_flights_url
+from app.services.google_flights_link import build_google_flights_url, get_city_group_token
 
 logger = logging.getLogger(__name__)
 
@@ -402,6 +402,12 @@ class DuffelFlightProvider:
         return self._client
 
     def _build_slices(self, req: FlightSearchRequest) -> List[Dict[str, Any]]:
+        # City-group scope note: Duffel search always uses the single primary
+        # airport (req.origin / req.destination). Multi-airport arrays from the
+        # city resolver improve Google Flights link-out scope (mode-3 token) but
+        # do NOT expand Duffel search into a cross-product — that would require
+        # a bounded multi-slice strategy with hard caps and per-offer trust gates
+        # that are out of scope for v1. Do not change without a product decision.
         origin = (req.origin or "").upper()
         destination = (req.destination or "").upper()
         slices: List[Dict[str, Any]] = [
@@ -510,12 +516,17 @@ class DuffelFlightProvider:
 
         # Build Google Flights search link-out for all offers from this query.
         # SEARCH_REDIRECT is a search redirect only — never a booking endpoint.
+        # Use city-group tokens (mode 3) when the request covers multiple airports.
+        _origin_group = get_city_group_token(origin) if len(req.all_origins) > 1 else None
+        _dest_group = get_city_group_token(destination) if len(req.all_destinations) > 1 else None
         _google_url = build_google_flights_url(
             origin=origin,
             destination=destination,
             departure_date=req.departure_date,
             return_date=req.return_date,
             passengers=max(int(req.passengers or 1), 1),
+            origin_group_token=_origin_group,
+            destination_group_token=_dest_group,
         )
         _search_booking_link: FlightBookingLink = (
             FlightBookingLink(
