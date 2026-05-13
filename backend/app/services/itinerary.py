@@ -183,16 +183,22 @@ class ItineraryService:
         return [ItineraryItem(**row) for row in result.data]
 
     def list_unscheduled_items(self, trip_id: UUID) -> List[ItineraryItem]:
-        """Concierge ideas saved to a trip but not yet assigned to any day.
+        """User-curated unscheduled itinerary items (Trip Ideas).
 
-        Trip Ideas is the user-saved shortlist: only rows with
-        ``details.source_kind == "concierge_idea"`` (i.e. items the user
-        explicitly saved from the AI Concierge "Save to Ideas" action)
-        appear here.  Creation-seeded candidates from ``/trips/create-with-search``
-        carry ``source_kind = "creation_seed"`` and are routed instead to the
-        four vertical candidate panels (Flights / Hotels / Attractions /
+        Trip Ideas is the user's explicit shortlist.  Two provenances qualify:
+
+        - ``details.source_kind == "concierge_idea"`` — items the user saved
+          via the AI Concierge "Save to Ideas" action.
+        - ``details.source_kind == "saved_item"`` (or
+          ``details.created_from_saved_item == True``) — items seeded from
+          the Create Trip from Saved flow (the user explicitly picked this
+          saved item to anchor the new trip).
+
+        Creation-seeded candidates from ``/trips/create-with-search`` carry
+        ``source_kind = "creation_seed"`` and are routed instead to the four
+        vertical candidate panels (Flights / Hotels / Attractions /
         Restaurants) via ``GET /trips/{id}/items``.  Mixing them into Trip
-        Ideas dumps the ~39 seeded rows into one flat list and obscures the
+        Ideas dumps the seeded rows into one flat list and obscures the
         user's actual shortlist — see Level 3 Trip Data Contract Rescue.
         """
         result = (
@@ -205,6 +211,7 @@ class ItineraryService:
         )
         rows = result.data or []
         allowed_item_types = {"flight", "hotel", "activity", "meal"}
+        curated_source_kinds = {"concierge_idea", "saved_item"}
         idea_rows = []
         for row in rows:
             if not isinstance(row, dict):
@@ -214,7 +221,11 @@ class ItineraryService:
                 continue
             details = row.get("details") if isinstance(row.get("details"), dict) else {}
             source_kind = str(details.get("source_kind") or "").lower()
-            if source_kind != "concierge_idea":
+            is_curated = (
+                source_kind in curated_source_kinds
+                or bool(details.get("created_from_saved_item"))
+            )
+            if not is_curated:
                 continue
             idea_rows.append(row)
         return [ItineraryItem(**row) for row in idea_rows]

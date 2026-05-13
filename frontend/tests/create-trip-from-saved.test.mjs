@@ -152,6 +152,55 @@ test("flight seed carries source:saved_item + savedItemId provenance", () => {
   assert.ok(fnBody.includes("savedItemId"), "must carry savedItemId provenance");
 });
 
+// ── 4b. Trip Ideas surfacing — saved-item provenance ─────────────────────────
+//
+// Backend `list_unscheduled_items` admits rows where source_kind == "saved_item"
+// or created_from_saved_item == true.  The seed payloads must carry those
+// fields so the user's selected saved item appears in Trip Ideas after Create
+// Trip from Saved.
+
+test("flight seed marks source_kind=saved_item and created_from_saved_item", () => {
+  const fnStart = apiTs.indexOf("async function seedSavedFlightAsItineraryItem");
+  const fnBody = apiTs.slice(fnStart, fnStart + 2500);
+  assert.ok(
+    fnBody.includes('source_kind: "saved_item"'),
+    "flight seed must mark source_kind=saved_item so Trip Ideas surfaces it"
+  );
+  assert.ok(
+    fnBody.includes("created_from_saved_item"),
+    "flight seed must mark created_from_saved_item"
+  );
+  assert.ok(fnBody.includes("saved_item_id"), "flight seed must carry saved_item_id (snake)");
+});
+
+test("non-flight seed marks source_kind=saved_item and created_from_saved_item", () => {
+  const fnStart = apiTs.indexOf("export async function addSavedItemToTrip");
+  const fnBody = apiTs.slice(fnStart, fnStart + 3500);
+  assert.ok(
+    fnBody.includes('source_kind: "saved_item"'),
+    "non-flight seed must mark source_kind=saved_item"
+  );
+  assert.ok(
+    fnBody.includes("created_from_saved_item"),
+    "non-flight seed must mark created_from_saved_item"
+  );
+  assert.ok(fnBody.includes("saved_item_id"), "non-flight seed must carry saved_item_id (snake)");
+});
+
+test("saved-item seeds do not set day_id (Trip Idea, unscheduled)", () => {
+  for (const fnName of [
+    "async function seedSavedFlightAsItineraryItem",
+    "export async function addSavedItemToTrip",
+  ]) {
+    const fnStart = apiTs.indexOf(fnName);
+    const fnBody = apiTs.slice(fnStart, fnStart + 3500);
+    assert.ok(
+      !/\bday_id\b/.test(fnBody),
+      `${fnName} must not write day_id (Trip Idea stays unscheduled)`
+    );
+  }
+});
+
 // ── 5. Non-flight: reuse addSavedItemToTrip ──────────────────────────────────
 
 test("createTripFromSavedItem reuses addSavedItemToTrip for non-flight verticals", () => {
