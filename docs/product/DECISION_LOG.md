@@ -236,8 +236,8 @@ Duffel is search-only (`LINK_OUT`, `production_allowed=True`). Google Flights is
 |---|---|---|
 | **Flight** | Enabled | Strongest path; `search_context` has origin, destination, date(s), passengers. Confirmation form pre-filled from these fields. |
 | **Hotel** | Enabled with restriction | Pre-fill destination/dates/guests from `search_context` only. Must not imply rate, price, or availability. Confirmation form required. |
-| **Restaurant** | Conditional | Enabled only when `search_context.destination` or `display_snapshot.destination` is reliably set. Otherwise form must prompt user to enter destination. |
-| **Attraction** | Conditional | Same condition as Restaurant. Destination-shell trip only; no dates auto-filled (attractions rarely carry date context). |
+| **Restaurant** | Conditional | Enabled only when `search_context.destination` or `display_snapshot.destination` is reliably set. Destination can prefill when reliable; start/end dates are always user-entered required fields. |
+| **Attraction** | Conditional | Same condition as Restaurant. Destination can prefill when reliable; start/end dates are always user-entered required fields. |
 
 ### Prefill contract — saved flight
 
@@ -248,8 +248,8 @@ Trusted source fields (from `saved_items.search_context` and `display_snapshot`)
 | Trip title | `"{origin} → {destination}"` (city names when resolvable; IATA codes otherwise) | User input |
 | Origin | `search_context.origin` | Blank (user must fill) |
 | Destination | `search_context.destination` | Blank (user must fill) |
-| Start date | `search_context.departure_date` | Blank |
-| End date | `search_context.return_date` (round-trip only; omit for one-way) | Blank |
+| Start date | `search_context.departure_date` | Blank (user must fill) |
+| End date | `search_context.return_date` (round-trip). One-way: default to `departure_date`; user must edit before submit. Never omit. | `departure_date` pre-filled |
 | Travelers | `search_context.passengers` (integer) | 1 |
 | Cabin class | `search_context.cabin_class` (display-only, not editable in v1) | Omit |
 | Itinerary seed | The saved flight added as unscheduled candidate (`day_id: null`) after trip is confirmed and created | — |
@@ -262,10 +262,12 @@ Trusted source fields:
 |---|---|---|
 | Trip title | `"{destination} trip"` using `search_context.destination` | User input |
 | Destination | `search_context.destination` | Blank |
-| Start date | `search_context.check_in` | Blank |
-| End date | `search_context.check_out` | Blank |
+| Start date | `search_context.check_in` | Blank (user must fill) |
+| End date | `search_context.check_out` | Blank (user must fill) |
 | Travelers | `search_context.guests` (integer) | 1 |
 | Itinerary seed | The saved hotel added as unscheduled candidate after trip confirmed | — |
+
+Date condition: if either `check_in` or `check_out` is absent from `search_context`, both date fields show blank and the user must fill them before submitting. Do not pre-fill one date and leave the other blank.
 
 Invariant: `details` for the hotel itinerary seed must never contain `totalPrice`, `nightly_rate`, `availability`, `bookingUrl`, or any rate/booking field (same rule as Stage 3 v2 hotel mapping). Discovery-context fields only.
 
@@ -277,8 +279,8 @@ Trusted source fields:
 |---|---|---|
 | Trip title | `"{destination} trip"` or `"{name} trip"` | User input |
 | Destination | `search_context.destination` ?? `display_snapshot.destination` | **Blank — user must fill if missing** |
-| Start date | None (restaurants/attractions rarely carry date context) | Blank |
-| End date | None | Blank |
+| Start date | None — user must enter | Required; no auto-fill |
+| End date | None — user must enter | Required; no auto-fill |
 | Travelers | None | 1 |
 | Itinerary seed | The saved item added as unscheduled candidate after trip confirmed | — |
 
@@ -287,12 +289,13 @@ Gate rule: if destination cannot be reliably resolved from `search_context.desti
 ### Confirmation form contract (all verticals)
 
 - Form is always shown — no auto-create path exists in v1.
-- Minimum required fields: trip title, destination, start date.
-- End date and travelers are optional but pre-filled when available.
+- Required fields (form must not submit unless all are populated): trip title, destination, start date, end date.
+- Travelers is optional; pre-filled from saved item context when available; defaults to 1.
+- Why both dates are required: the existing trip creation and day-generation logic expects both `start_date` and `end_date` to produce a fully usable trip shell. A trip without an end date creates a degenerate shell that the day grid cannot render correctly.
 - Form title: **"Create a new trip"** (not "Book" or "Reserve").
 - Submit label: **"Create trip"**.
 - The saved item is added as an unscheduled itinerary candidate (`POST /itinerary/items`, `day_id: null`) immediately after the trip creation call succeeds.
-- On success, navigate to the newly created trip or to `/saved` — do not silently stay on the saved page with no indication.
+- On success, navigate directly to the newly created trip. Do not stay on `/saved`. Do not leave navigation destination ambiguous.
 
 ### API reuse (locked)
 
@@ -332,8 +335,8 @@ Steps:
 1. Add `createTripFromSavedItem(savedItem)` frontend helper: calls `POST /trips` with prefilled fields → then calls `POST /itinerary/items` with the saved item as unscheduled seed.
 2. Add "Create Trip" button/action to each saved card in `SavedShell` (all verticals that satisfy their v1 condition above).
 3. Show `CreateTripFromSavedModal` with prefilled form; user confirms or edits; on submit calls the helper above.
-4. Navigate to the new trip on success.
-5. Test all four verticals with structural tests (`create-trip-from-saved.test.mjs`). Include: form renders with correct prefill for each vertical, missing-destination gate for restaurants/attractions, no-booking/no-rate invariants, API call sequence.
+4. Navigate to the newly created trip on success (deterministic — not `/saved`, not conditional).
+5. Test all four verticals with structural tests (`create-trip-from-saved.test.mjs`). Include: form renders with correct prefill for each vertical; one-way flight defaults end_date to departure_date; round-trip flight uses return_date; missing-destination gate for restaurants/attractions; both date fields required (form does not submit when either is blank); hotel both-dates-absent shows both blank; no-booking/no-rate invariants; API call sequence; navigation to new trip on success.
 6. No backend change. No SQL. No TripBuilder change. No provider change.
 
 - Why: Explicit confirmation prevents accidental trip clutter. Pre-fill from `search_context` avoids re-asking the user for information they already provided. Flight is the strongest path because it always provides origin, destination, and date(s) — the minimum trip shell fields. Hotel is the second-best path. Restaurants/attractions need destination fallback because their search context is less reliably set.
