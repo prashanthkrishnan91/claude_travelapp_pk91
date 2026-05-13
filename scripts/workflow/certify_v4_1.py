@@ -12,6 +12,7 @@ REQUIRED_ANCHOR_FILES = [
     ".github/pull_request_template.md",
     "docs/ai/AI_REPO_OPERATING_SYSTEM.md",
     ".claude/settings.json",
+    "docs/ai/USAGE_LEDGER.md",
 ]
 
 PR_TEMPLATE_ANCHORS = [
@@ -20,6 +21,7 @@ PR_TEMPLATE_ANCHORS = [
     "## Validation",
     "## AI usage note",
     "## Self-audit",
+    "Usage ledger updated",
 ]
 
 SELF_AUDIT_ANCHORS = [
@@ -93,6 +95,33 @@ def check_advisory_hook_safety_if_configured() -> None:
                 return
 
 
+def check_usage_tracking_documents_ledger() -> None:
+    tracking_path = ROOT / "docs/ai/AI_USAGE_TRACKING.md"
+    if not tracking_path.exists():
+        raise AssertionError("docs/ai/AI_USAGE_TRACKING.md is missing")
+    text = read_text(tracking_path)
+    if "USAGE_LEDGER.md" not in text:
+        raise AssertionError("docs/ai/AI_USAGE_TRACKING.md does not document USAGE_LEDGER.md (two-layer model missing)")
+
+
+def check_snapshot_script_references_ledger() -> None:
+    script_path = ROOT / "scripts/ai/usage_snapshot.sh"
+    if not script_path.exists():
+        raise AssertionError("scripts/ai/usage_snapshot.sh is missing")
+    text = read_text(script_path)
+    if "--append-ledger" not in text:
+        raise AssertionError("scripts/ai/usage_snapshot.sh does not reference --append-ledger (ledger append behavior missing)")
+
+
+def check_gitignore_excludes_ai_usage() -> None:
+    gitignore_path = ROOT / ".gitignore"
+    if not gitignore_path.exists():
+        raise AssertionError(".gitignore is missing")
+    text = read_text(gitignore_path)
+    if ".ai/usage" not in text:
+        raise AssertionError(".gitignore does not exclude .ai/usage/ (raw snapshots must remain local)")
+
+
 def main() -> int:
     for file_path in REQUIRED_ANCHOR_FILES:
         assert_file_exists(file_path)
@@ -103,6 +132,9 @@ def main() -> int:
 
     check_settings_read_deny()
     check_advisory_hook_safety_if_configured()
+    check_usage_tracking_documents_ledger()
+    check_snapshot_script_references_ledger()
+    check_gitignore_excludes_ai_usage()
 
     print("✅ Travel workflow certification v4.1 checks passed (lightweight, structural, workflow-only).")
     return 0
