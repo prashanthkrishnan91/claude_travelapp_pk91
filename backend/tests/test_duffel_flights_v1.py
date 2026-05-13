@@ -21,6 +21,7 @@ CI harness and run in the full Railway/Docker environment.
 """
 from __future__ import annotations
 
+import base64
 from datetime import date
 from typing import Any, Dict, List, Optional
 from unittest.mock import patch
@@ -951,3 +952,112 @@ class TestDebugLogging:
             p.search_flights(_one_way_req())
         all_messages = " ".join(r.message for r in caplog.records)
         assert "SUPERSECRET-KEY" not in all_messages
+
+
+# ── 16. Google Flights link-out wiring ────────────────────────────────────────
+
+@requires_full_stack
+class TestGoogleFlightsLinkWiring:
+    """Verify that the Google Flights SEARCH_REDIRECT link carries the correct
+    trip type, dates, and passenger count for both one-way and round-trip requests.
+
+    Verified facts (decoded from real tfs= samples 2026-05-13):
+      - Field 2 = 2 for BOTH one-way and round-trip.
+      - Field 19 = 2 one-way; field 19 = 1 round-trip.
+      - Passenger count = repeated field 8 = 1 (one per adult).
+    """
+
+    def _decode_tfs(self, url: str) -> bytes:
+        tfs = url.split("?tfs=")[1]
+        return base64.urlsafe_b64decode(tfs + "=" * (-len(tfs) % 4))
+
+    def test_one_way_link_is_search_redirect(self):
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_one_way()]))
+        offer = p.search_flights(_one_way_req()).rows[0]
+        assert offer.booking_link.link_type is BookingLinkType.SEARCH_REDIRECT
+        assert "google.com/travel/flights" in offer.booking_link.url
+
+    def test_one_way_link_field_2_is_2(self):
+        # Structural: field 2 = 2 for one-way (verified from real URL).
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_one_way()]))
+        offer = p.search_flights(_one_way_req()).rows[0]
+        decoded = self._decode_tfs(offer.booking_link.url)
+        assert decoded[2] == 0x10 and decoded[3] == 0x02
+
+    def test_one_way_link_field_19_is_2(self):
+        # Field 19 = 2 signals one-way (verified from real URL).
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_one_way()]))
+        offer = p.search_flights(_one_way_req()).rows[0]
+        decoded = self._decode_tfs(offer.booking_link.url)
+        assert decoded[-1] == 0x02
+
+    def test_one_way_link_contains_departure_date(self):
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_one_way()]))
+        offer = p.search_flights(_one_way_req()).rows[0]
+        decoded = self._decode_tfs(offer.booking_link.url)
+        assert b"2026-06-17" in decoded
+
+    def test_round_trip_link_is_search_redirect(self):
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_round_trip()]))
+        offer = p.search_flights(_round_trip_req()).rows[0]
+        assert offer.booking_link.link_type is BookingLinkType.SEARCH_REDIRECT
+        assert "google.com/travel/flights" in offer.booking_link.url
+
+    def test_round_trip_link_field_2_is_2(self):
+        # Structural: field 2 = 2 for round-trip too (verified: NOT 1).
+        # Round-trip is signaled by field 19 = 1 and two leg submessages.
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_round_trip()]))
+        offer = p.search_flights(_round_trip_req()).rows[0]
+        decoded = self._decode_tfs(offer.booking_link.url)
+        assert decoded[2] == 0x10 and decoded[3] == 0x02
+
+    def test_round_trip_link_field_19_is_1(self):
+        # Field 19 = 1 signals round-trip (verified from real URL).
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_round_trip()]))
+        offer = p.search_flights(_round_trip_req()).rows[0]
+        decoded = self._decode_tfs(offer.booking_link.url)
+        assert decoded[-1] == 0x01
+
+    def test_round_trip_link_contains_both_dates(self):
+        # Both departure (2026-06-17) and return (2026-06-24) must appear in binary.
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_round_trip()]))
+        offer = p.search_flights(_round_trip_req()).rows[0]
+        decoded = self._decode_tfs(offer.booking_link.url)
+        assert b"2026-06-17" in decoded
+        assert b"2026-06-24" in decoded
+
+    def test_round_trip_url_differs_from_one_way_url(self):
+        p1, http1 = _build()
+        http1.enqueue(_duffel_response([_offer_one_way()]))
+        ow_url = p1.search_flights(_one_way_req()).rows[0].booking_link.url
+
+        p2, http2 = _build()
+        http2.enqueue(_duffel_response([_offer_round_trip()]))
+        rt_url = p2.search_flights(_round_trip_req()).rows[0].booking_link.url
+
+        assert ow_url != rt_url
+
+    def test_passenger_count_wired_from_request(self):
+        # Verify Duffel passes req.passengers into build_google_flights_url.
+        # 2-pax one-way: field_8=1 marker (0x40 0x01) appears twice in decoded bytes.
+        req_2pax = FlightSearchRequest(
+            origin="SEA",
+            destination="LAX",
+            departure_date=date(2026, 6, 17),
+            passengers=2,
+            cabin_class="economy",
+        )
+        p, http = _build()
+        http.enqueue(_duffel_response([_offer_one_way()]))
+        offer = p.search_flights(req_2pax).rows[0]
+        decoded = self._decode_tfs(offer.booking_link.url)
+        f8_marker = bytes([0x40, 0x01])
+        assert decoded.count(f8_marker) == 2  # 2 adults
