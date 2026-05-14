@@ -109,6 +109,16 @@ function hotelScore(item: ItineraryItem): number {
 
 function flightDedupeKey(item: ItineraryItem): string {
   const d = (item.details ?? {}) as Record<string, unknown>;
+  // Fare identity — same airline/flight/time pair can come back with multiple
+  // fare/price variants (basic/main/refundable/with-baggage). These are
+  // user-visible distinct offers, so include them in the key so they survive
+  // dedupe. Exact duplicates (same flight identity AND same price+currency+cabin)
+  // still collapse.
+  const cash = (d.cashPrice ?? d.cash_price ?? d.totalPrice ?? d.total_price ?? "") as number | string;
+  const cur  = ((d.currency as string) ?? "").toUpperCase();
+  const cabin = ((d.cabinClass ?? d.cabin_class) as string) ?? "";
+  const fareIdentity = `${cash}:${cur}:${cabin}`;
+
   if (isRoundTripFlight(item)) {
     // Canonical: key on first-segment airline+flightNumber+departureTime for each leg.
     // Route/date alone is not sufficient — many Duffel offers share origin+dest+date.
@@ -125,15 +135,15 @@ function flightDedupeKey(item: ItineraryItem): string {
     const rtFlight  = ((rtSeg0?.flightNumber ?? rtSeg0?.flight_number) as string) || "";
     const rtDep     = ((rt?.departureTime   ?? rt?.departure_time)   as string)   || "";
     if (obFlight || obDep) {
-      return `rt:${obAirline}:${obFlight}:${obDep}:${rtAirline}:${rtFlight}:${rtDep}`;
+      return `rt:${obAirline}:${obFlight}:${obDep}:${rtAirline}:${rtFlight}:${rtDep}:${fareIdentity}`;
     }
     // Legacy fallback: pairId or item id
-    return `rt:${(d.pairId ?? d.pair_id ?? item.id) as string}`;
+    return `rt:${(d.pairId ?? d.pair_id ?? item.id) as string}:${fareIdentity}`;
   }
   const num     = (d.flightNumber ?? d.flight_number) as string | undefined;
   const airline = d.airline as string | undefined;
   const dep     = (d.departureTime ?? d.departure_time) as string | undefined;
-  return `ow:${airline ?? ""}:${num ?? item.title}:${dep ?? ""}`;
+  return `ow:${airline ?? ""}:${num ?? item.title}:${dep ?? ""}:${fareIdentity}`;
 }
 
 function hotelDedupeKey(item: ItineraryItem): string {
