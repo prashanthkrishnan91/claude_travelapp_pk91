@@ -1,6 +1,7 @@
-"""Stage 3 stabilization — default Explore Hotels must not call paid live research.
+"""Stage 3 stabilization — default Explore surfaces must not call paid live research.
 
-Covers Scope C of the Stage 3 stabilization patch:
+Covers Scope C of the Stage 3 stabilization patch (Explore Hotels + Attractions
+tripless discovery):
 - ConciergeSearchRequest defaults allow_live_research=True and accepts False.
 - ConciergeService.search forwards allow_live_research to _fetch_live_research.
 - _fetch_live_research short-circuits to an empty LiveResearchResult when
@@ -150,6 +151,25 @@ class TestFetchLiveResearchGate:
         assert result.restaurants == []
         assert result.attractions == []
         assert result.hotels == []
+
+    def test_disabled_blocks_provider_for_any_intent(self):
+        """The gate is intent-agnostic — attractions, restaurants, etc. all skip
+        live research when allow_live_research=False (default Explore surfaces)."""
+        svc = _make_service()
+        for intent in ("attractions", "restaurants", "hotels", "hidden_gems"):
+            with patch.object(svc, "_get_live_research") as mock_get_provider:
+                result = svc._fetch_live_research(
+                    intent=intent,
+                    destination="Boise",
+                    user_query=f"{intent} in boise",
+                    trip={"destination": "Boise"},
+                    allow_live_research=False,
+                )
+            mock_get_provider.assert_not_called()
+            assert isinstance(result, LiveResearchResult)
+            assert result.attractions == []
+            assert result.restaurants == []
+            assert result.hotels == []
 
     def test_enabled_still_reaches_provider_path(self):
         """allow_live_research=True (default) still uses live research."""

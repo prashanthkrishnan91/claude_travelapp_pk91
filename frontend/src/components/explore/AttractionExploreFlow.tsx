@@ -3,9 +3,11 @@
 /**
  * Attractions vertical — live via tripless AI Concierge (Stage 2A Slice 4).
  *
- * Calls callConciergeSearch(null, query, undefined, destination) — no trip_id
- * required (Slice 3 made the Concierge trip-optional). Returns
- * UnifiedAttractionResult cards verified by Google Places.
+ * Calls callConciergeSearch(null, query, undefined, destination, false) — no
+ * trip_id required (Slice 3 made the Concierge trip-optional). The trailing
+ * `false` sets allowLiveResearch=false so default Explore Attractions never
+ * spends paid Tavily/live-research credits; the backend serves Google-Places-
+ * verified attractions only. Tavily stays reserved for explicit AI Concierge.
  */
 
 import { useState } from "react";
@@ -40,7 +42,11 @@ export function AttractionExploreFlow() {
     setResults(null);
 
     try {
-      const res = await callConciergeSearch(null, query, undefined, dest);
+      // Default Explore Attractions is verified-only: pass allowLiveResearch=false
+      // so the backend serves Google-Places-backed attractions and never spends
+      // paid Tavily/live-research credits. Tavily stays available for the
+      // explicit AI Concierge / deep-research experiences only.
+      const res = await callConciergeSearch(null, query, undefined, dest, false);
       setResults(res.attractions);
       if (res.attractions.length === 0) {
         setError("No attractions found for this destination. Try a different area or interest.");
