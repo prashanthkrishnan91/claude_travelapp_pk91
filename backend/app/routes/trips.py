@@ -498,12 +498,18 @@ def _offer_to_flight_item(
     if booking_link.link_type is BookingLinkType.SEARCH_REDIRECT and booking_link.url:
         google_url = booking_link.url
 
+    is_round_trip = offer.trip_type is TripType.ROUND_TRIP and rt is not None
+
     details: dict = {
         "kind": "flight_offer",
         "provider": offer.provider,
         "source": offer.provider,
         "source_kind": "creation_seed",
         "trip_type": offer.trip_type.value,
+        # Explicit boolean alongside trip_type so the UI never has to infer
+        # round-trip from leg presence alone. Both are persisted so frontend
+        # selectors can use whichever lookup is cheapest without divergence.
+        "is_round_trip": is_round_trip,
         "origin": offer.origin,
         "destination": offer.destination,
         "departure_date": offer.departure_date,
@@ -519,6 +525,7 @@ def _offer_to_flight_item(
         "departure_time": ob.departure_time,
         "arrival_time": ob.arrival_time,
         "cash_price": float(offer.price.total_amount),
+        "total_price": float(offer.price.total_amount),
         "currency": offer.price.currency,
         "outbound_leg": _serialize_offer_leg(ob),
         "return_leg": _serialize_offer_leg(rt) if rt is not None else None,
@@ -644,9 +651,14 @@ def save_explore_snapshot(trip_id: UUID, payload: ExploreSnapshot, db: DB, user_
 def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: CurrentUserID) -> TripWithResults:
     """Unified concierge flow: resolve airports → search all four verticals → AI-score → create trip.
 
-    Verticals seeded concurrently: flights (one-way), round-trip pairs, hotels,
-    attractions, restaurants.  A per-vertical seeding_status dict is returned so
-    the frontend knows what was harvested and persisted without a follow-up fetch.
+    Verticals seeded concurrently: canonical provider flight offers, hotels,
+    attractions, restaurants.  Round-trip is requested by setting
+    ``return_date`` on the FlightSearchRequest when
+    ``payload.end_date > payload.start_date``; the canonical provider returns
+    each round-trip itinerary with a non-null ``return_leg`` on the same
+    offer.  No legacy round-trip pair path is used by create-with-search.
+    A per-vertical seeding_status dict is returned so the frontend knows
+    what was harvested and persisted without a follow-up fetch.
 
     Flight searches use only the primary (first) airport per city to prevent the
     origin×destination cross-product from exceeding the provider budget.
@@ -818,9 +830,34 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
     seeding: dict = {}
 
     # 6a — Flights (canonical FlightItineraryOffer from active provider)
+    #
+    # Trip-type contract: when the search was round-trip (return_date set on the
+    # request), we MUST not persist canonical offers that came back as one-way
+    # (missing return_leg).  Doing so would silently render a "One-way" card on
+    # a round-trip-created trip — exactly the regression this slice fixes.
+    # We fail closed on per-offer basis: skip them, log the count, and let the
+    # remaining valid round-trip offers persist.
     t_persist_flights_start = time.perf_counter()
     _flights_persisted = 0
+    _round_trip_offers = 0
+    _one_way_offers = 0
+    _skipped_missing_return_leg = 0
+    _round_trip_requested = (
+        flight_req is not None and flight_req.return_date is not None
+    )
     for idx, offer in enumerate(flight_offers[:10]):
+        if offer.trip_type is TripType.ROUND_TRIP and offer.return_leg is not None:
+            _round_trip_offers += 1
+        else:
+            _one_way_offers += 1
+            if _round_trip_requested:
+                # Fail closed: do not persist a one-way row for a round-trip request.
+                _skipped_missing_return_leg += 1
+                logger.warning(
+                    "[create_with_search.flight] skipped one-way offer for round-trip request idx=%d trip_type=%s return_leg_present=%s",
+                    idx, offer.trip_type.value, offer.return_leg is not None,
+                )
+                continue
         try:
             itinerary_svc.create_trip_item(
                 _offer_to_flight_item(offer, trip_id=trip.id, position=idx),
@@ -835,10 +872,19 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
         "persisted": _flights_persisted,
         "status": flight_search_status,
         "reason": flight_search_reason or None,
+        "round_trip_offers": _round_trip_offers,
+        "one_way_offers": _one_way_offers,
+        "skipped_missing_return_leg": _skipped_missing_return_leg,
     }
     logger.info(
-        "[create_with_search.timing] phase=persist_flights harvested=%d persisted=%d status=%s elapsed_ms=%d",
+        "[create_with_search.flight] harvested=%d persisted=%d status=%s "
+        "flight_trip_type_counts={round_trip:%d, one_way:%d} "
+        "round_trip_offers=%d one_way_offers=%d skipped_missing_return_leg=%d "
+        "round_trip_requested=%s elapsed_ms=%d",
         len(flight_offers), _flights_persisted, flight_search_status,
+        _round_trip_offers, _one_way_offers,
+        _round_trip_offers, _one_way_offers, _skipped_missing_return_leg,
+        _round_trip_requested,
         int((time.perf_counter() - t_persist_flights_start) * 1000),
     )
 

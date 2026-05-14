@@ -250,3 +250,41 @@ test('RoundTripFlightCard also renders Google Flights CTA for canonical offers',
     'RoundTripFlightCard must include Google Flights CTA for SEARCH_REDIRECT',
   );
 });
+
+// ── 11. Flight-panel split detects canonical round-trip rows ──────────────────
+//
+// The flight panel re-splits sortedFlights (which combines flights +
+// roundTripFlights from the selector) into one-way + round-trip groups for
+// rendering. Without checking canonical fields the round-trip canonical rows
+// from create-with-search fall into the one-way group and render with the
+// hard-coded "One-way" badge.
+
+test('TripBuilder panel split detects tripType="round_trip" for canonical rows', () => {
+  const splitAnchor = src.indexOf('const isRT = (it: ItineraryItem)');
+  const splitSection = src.slice(splitAnchor, splitAnchor + 1200);
+  assert.match(
+    splitSection,
+    /tripType === "round_trip"/,
+    'Flight panel split must check tripType for canonical round-trip rows',
+  );
+});
+
+test('TripBuilder panel split detects returnLeg presence for canonical rows', () => {
+  const splitAnchor = src.indexOf('const isRT = (it: ItineraryItem)');
+  const splitSection = src.slice(splitAnchor, splitAnchor + 1200);
+  assert.match(
+    splitSection,
+    /returnLeg != null|return_leg != null/,
+    'Flight panel split must consider returnLeg presence',
+  );
+});
+
+test('TripBuilder panel split still detects legacy isRoundTrip flag', () => {
+  const splitAnchor = src.indexOf('const isRT = (it: ItineraryItem)');
+  const splitSection = src.slice(splitAnchor, splitAnchor + 1200);
+  assert.match(
+    splitSection,
+    /isRoundTrip != null|is_round_trip != null/,
+    'Flight panel split must keep legacy isRoundTrip support',
+  );
+});

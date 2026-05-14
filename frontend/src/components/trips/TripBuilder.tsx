@@ -1955,8 +1955,20 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
               {(() => {
                 // Render one-way first, then round-trip pairs, each with a section label.
                 // Sorting within each group is preserved from sortedFlights (AI-score order).
-                const oneWay     = sortedFlights.filter((it) => { const d = (it.details ?? {}) as Record<string, unknown>; return !(d.isRoundTrip ?? d.is_round_trip); });
-                const roundTrip  = sortedFlights.filter((it) => { const d = (it.details ?? {}) as Record<string, unknown>; return !!(d.isRoundTrip ?? d.is_round_trip); });
+                // Canonical round-trip detection — must match `isRoundTripFlight` in
+                // tripCandidates.ts so create-with-search-seeded canonical offers
+                // (trip_type="round_trip" / returnLeg present) render in the
+                // round-trip group, not the one-way group.
+                const isRT = (it: ItineraryItem): boolean => {
+                  const d = (it.details ?? {}) as Record<string, unknown>;
+                  if (d.isRoundTrip != null) return Boolean(d.isRoundTrip);
+                  if (d.is_round_trip != null) return Boolean(d.is_round_trip);
+                  if (d.tripType === "round_trip" || d.trip_type === "round_trip") return true;
+                  if (d.returnLeg != null || d.return_leg != null) return true;
+                  return false;
+                };
+                const oneWay     = sortedFlights.filter((it) => !isRT(it));
+                const roundTrip  = sortedFlights.filter((it) => isRT(it));
                 const showOWLabel = oneWay.length > 0 && roundTrip.length > 0;
                 const showRTLabel = roundTrip.length > 0 && oneWay.length > 0;
                 const owTop20 = Math.max(1, Math.ceil(oneWay.length * 0.2));

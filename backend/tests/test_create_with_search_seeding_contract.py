@@ -96,6 +96,18 @@ if "app.routes" not in sys.modules:
     ]
     sys.modules["app.routes"] = _routes_pkg
 
+# Unstub conftest's empty app.models module so the real models package loads
+# (Trip/TripCreate/TripUpdate are required by app.services.trips). The conftest
+# pre-stub exists to skip pydantic.EmailStr when email-validator is missing; now
+# that the dependency is installed in CI/Railway, we can safely load the real
+# package. Falls back gracefully if import fails.
+try:
+    if "app.models" in sys.modules and not hasattr(sys.modules["app.models"], "Trip"):
+        del sys.modules["app.models"]
+    import app.models as _real_models  # noqa: F401
+except Exception:
+    pass
+
 import app.services.trips as _trips_svc_mod  # noqa: E402
 import app.services.itinerary as _itin_svc_mod  # noqa: E402
 import app.services.search as _search_svc_mod  # noqa: E402
@@ -143,7 +155,11 @@ def _clean_offer(
     destination="NRT",
     *,
     departure_date=date(2026, 5, 13),
-    return_date=None,
+    # Default is a round-trip offer that matches the round-trip _TOKYO_PAYLOAD
+    # (start=2026-05-13, end=2026-05-20). Callers wanting a true one-way offer
+    # pass return_date=None explicitly, and must pair it with a one-way payload
+    # (same start/end date) — otherwise create-with-search now fails closed.
+    return_date=date(2026, 5, 20),
     google_url="https://www.google.com/travel/flights?tfs=GgYIAQ&q=SFO+to+NRT",
 ):
     """Build a canonical FlightItineraryOffer for create-with-search tests."""
@@ -944,3 +960,126 @@ def test_round_trip_canonical_offer_persists_with_return_leg():
     assert details["return_leg"] is not None
     assert details["return_leg"]["origin"] == "NRT"
     assert details["return_leg"]["destination"] == "SFO"
+
+
+# ── 10. Round-trip flight contract end-to-end (Stage 3 exit blocker) ──────────
+
+
+def test_create_with_search_request_carries_return_date_for_round_trip():
+    """When payload.end_date > start_date, FlightSearchRequest.return_date is end_date."""
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks()
+    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
+
+    assert len(spy.calls) == 1
+    req = spy.calls[0]
+    assert req.departure_date == date(2026, 5, 13)
+    assert req.return_date == date(2026, 5, 20)
+
+
+def test_offer_to_flight_item_persists_round_trip_contract_fields():
+    """Round-trip canonical offer maps to all required explicit details fields."""
+    offer = _clean_offer(return_date=date(2026, 5, 20))
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(offers=[offer])
+
+    _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
+
+    call = _flight_item_call(fake_itin)
+    assert call is not None
+    details = call.args[0].details
+
+    # Required round-trip contract fields
+    assert details["trip_type"] == "round_trip"
+    assert details["is_round_trip"] is True
+    assert details["outbound_leg"] is not None
+    assert details["outbound_leg"]["origin"] == "SFO"
+    assert details["outbound_leg"]["destination"] == "NRT"
+    assert details["return_leg"] is not None
+    assert details["return_leg"]["origin"] == "NRT"
+    assert details["return_leg"]["destination"] == "SFO"
+    assert details["return_date"] == "2026-05-20"
+    # Total cash + Google Flights search URL
+    assert details["cash_price"] == 850.0
+    assert details["currency"] == "USD"
+    assert details["google_flights_search_url"].startswith("https://www.google.com/travel/flights?")
+    # cash_price column on the persisted ItineraryItem
+    assert call.args[0].cash_price == 850.0
+
+
+def test_offer_to_flight_item_persists_one_way_contract_fields():
+    """One-way canonical offers persist with trip_type=one_way, is_round_trip=False, no return_leg."""
+    offer = _clean_offer(return_date=None)  # one-way
+    one_way_payload = trips_route.TripCreateWithSearch(
+        origin_city="San Francisco",
+        origin_airports=["SFO"],
+        destination_city="Tokyo",
+        destination_airports=["NRT"],
+        start_date=date(2026, 5, 13),
+        end_date=date(2026, 5, 13),  # same-day → one-way
+    )
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(offers=[offer])
+
+    _run(one_way_payload, fake_search, fake_trips, fake_itin, spy, uid)
+
+    call = _flight_item_call(fake_itin)
+    assert call is not None
+    details = call.args[0].details
+
+    assert details["trip_type"] == "one_way"
+    assert details["is_round_trip"] is False
+    assert details["return_leg"] is None
+    assert details["return_date"] is None
+
+
+def test_round_trip_request_skips_one_way_only_canonical_rows():
+    """If a round-trip request gets a one-way canonical row back, it must NOT be persisted.
+
+    Fail-closed contract: never silently render a One-way card on a round-trip-created trip.
+    """
+    # User asked for round-trip (payload.end_date > start_date), but the provider
+    # returned a one-way offer (no return_leg). Must be skipped, not persisted.
+    one_way_offer = _clean_offer(return_date=None)
+    round_trip_offer = _clean_offer(return_date=date(2026, 5, 20))
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(
+        offers=[one_way_offer, round_trip_offer]
+    )
+
+    result = _run(_TOKYO_PAYLOAD, fake_search, fake_trips, fake_itin, spy, uid)
+
+    # Both harvested, but only the round-trip persisted.
+    assert result.seeding_status["flights"]["harvested"] == 2
+    assert result.seeding_status["flights"]["persisted"] == 1
+    assert result.seeding_status["flights"]["skipped_missing_return_leg"] == 1
+    assert result.seeding_status["flights"]["round_trip_offers"] == 1
+    assert result.seeding_status["flights"]["one_way_offers"] == 1
+
+    # The persisted row is the round-trip one.
+    from app.models.itinerary import ItineraryItemType  # noqa: WPS433
+    flight_calls = [
+        c for c in fake_itin.create_trip_item.call_args_list
+        if c.args and getattr(c.args[0], "item_type", None) == ItineraryItemType.FLIGHT
+    ]
+    assert len(flight_calls) == 1
+    persisted_details = flight_calls[0].args[0].details
+    assert persisted_details["trip_type"] == "round_trip"
+    assert persisted_details["is_round_trip"] is True
+    assert persisted_details["return_leg"] is not None
+
+
+def test_one_way_request_persists_one_way_offers():
+    """When the request is one-way (no return_date), one-way offers must persist normally."""
+    one_way_payload = trips_route.TripCreateWithSearch(
+        origin_city="San Francisco",
+        origin_airports=["SFO"],
+        destination_city="Tokyo",
+        destination_airports=["NRT"],
+        start_date=date(2026, 5, 13),
+        end_date=date(2026, 5, 13),  # same-day → one-way
+    )
+    offer = _clean_offer(return_date=None)
+    fake_search, fake_trips, fake_itin, spy, uid, _ = _setup_mocks(offers=[offer])
+
+    result = _run(one_way_payload, fake_search, fake_trips, fake_itin, spy, uid)
+
+    assert result.seeding_status["flights"]["persisted"] == 1
+    assert result.seeding_status["flights"]["one_way_offers"] == 1
+    assert result.seeding_status["flights"]["skipped_missing_return_leg"] == 0
