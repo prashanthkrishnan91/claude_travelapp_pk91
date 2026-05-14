@@ -150,6 +150,26 @@ test('buildHotelCompareUrl uses encodeURIComponent for deterministic encoding', 
   assert.match(hotelFlow, /encodeURIComponent/);
 });
 
+test('buildHotelCompareUrl uses adults= param (not guests=) for structured Google Hotels handoff', () => {
+  assert.match(hotelFlow, /adults=\$\{guests\}/);
+  assert.doesNotMatch(hotelFlow, /guests=\$\{guests\}/);
+});
+
+test('buildHotelCompareUrl q fallback includes dates and guest count context', () => {
+  // q is built from qParts including checkIn, checkOut, and guests text
+  assert.match(hotelFlow, /qParts\.push.*guest/);
+  assert.match(hotelFlow, /qParts\.push.*to /);
+});
+
+test('formatIsoDateForDisplay parses YYYY-MM-DD by string split, not new Date', () => {
+  // Must define a local formatter using split, not new Date(isoDate)
+  assert.match(hotelFlow, /formatIsoDateForDisplay/);
+  assert.match(hotelFlow, /\.split\('-'\)/);
+  // Must not pass checkIn/checkOut directly into new Date() for display formatting
+  assert.doesNotMatch(hotelFlow, /new Date\(checkIn\)/);
+  assert.doesNotMatch(hotelFlow, /new Date\(checkOut\)/);
+});
+
 test('buildContext savedPayload includes compareLink metadata', () => {
   assert.match(hotelFlow, /compareLink/);
 });
