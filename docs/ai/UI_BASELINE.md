@@ -127,6 +127,7 @@ Global `@media (prefers-reduced-motion: reduce)` rule in `@layer base` suppresse
 
 ## References
 
+- **Design Implementation Contract v1:** `docs/product/DESIGN_IMPLEMENTATION_CONTRACT.md` (exact implementation reference for all design PRs — token values, primitive contracts, visual rules, forbidden patterns, self-audit checks)
 - Design Bible v1.0: `artifacts/Travel_Concierge_Design_Bible.pdf` (§04 Visual System, §08 Card Design System, §11 Phase 0, §12 Guardrails, §13 First recommended implementation slice)
 - Design Bible Addendum v1.1: `docs/product/DESIGN_BIBLE_ADDENDUM_V1_1.md` (§1 private atelier, §5 constraint-first feasibility UX, §6 Phase 0 scope confirmation)
 - Roadmap: Stage 3.5 — Wife-Wow design system foundation (`docs/product/ROADMAP.md`)
