@@ -64,11 +64,42 @@ All values are Design Bible v1.0 §4 exact. Named palette tokens are defined fir
 - Trust: `--ds-trust-verified` → Verified Sage, `--ds-trust-partial` → Caution Amber
 - Caution / warning: `--ds-caution` → Caution Amber, `--ds-warning` → Whisper Coral
 
-**Other token categories** (structure unchanged from Phase 0 initial):
-- Elevation tokens — four shadow stack levels (`--ds-elevation-1` through `--ds-elevation-4`)
-- Motion tokens — fast/standard/slow durations + standard/decelerate/accelerate easings (`--ds-duration-*`, `--ds-easing-*`)
-- Spacing scale tokens — `--ds-space-1` through `--ds-space-12`
-- Typography role tokens — display, heading, subheading, body, label, caption (`--ds-type-*`)
+**Elevation tokens** — four shadow stack levels (`--ds-elevation-1` through `--ds-elevation-4`)
+
+**Motion tokens** — fast/standard/slow durations + standard/decelerate/accelerate easings (`--ds-duration-*`, `--ds-easing-*`)
+
+**Spacing scale tokens — Design Bible v1.0 §4 complete**
+
+| Token | px |
+|---|---|
+| `--ds-space-1` | 4px |
+| `--ds-space-2` | 8px |
+| `--ds-space-3` | 12px |
+| `--ds-space-4` | 16px |
+| `--ds-space-5` | 20px |
+| `--ds-space-6` | 24px |
+| `--ds-space-8` | 32px |
+| `--ds-space-10` | 40px |
+| `--ds-space-12` | 48px |
+| `--ds-space-16` | 64px |
+
+**Typography role tokens — Design Bible v1.0 §4.4 complete**
+
+| Token prefix | Size / Line-height | Weight | Notes |
+|---|---|---|---|
+| `--ds-type-display-xl-*` | 64px / 68px | 700 | tracking −0.03em |
+| `--ds-type-display-l-*` | 44px / 50px | 700 | tracking −0.025em |
+| `--ds-type-display-m-*` | 32px / 38px | 700 | tracking −0.02em |
+| `--ds-type-display-s-*` | 24px / 30px | 600 | tracking −0.015em |
+| `--ds-type-body-l-*` | 18px / 28px | 400 | |
+| `--ds-type-body-*` | 15px / 24px | 400 | |
+| `--ds-type-body-s-*` | 13px / 20px | 400 | |
+| `--ds-type-caption-*` | 12px / 16px | 400 | |
+| `--ds-type-overline-*` | 10px / 14px | 600 | `text-transform: uppercase`, tracking 0.1em |
+| `--ds-type-mono-*` | 12px / 16px | 400 | monospace role |
+| `--ds-type-quote-*` | 18px / 28px | 400 | `font-style: italic` |
+
+Backward-compatible aliases preserved: `--ds-type-display-*`, `--ds-type-heading-*`, `--ds-type-subheading-*`, `--ds-type-label-*` (reference the new named tokens above).
 
 ### Tailwind wiring
 
