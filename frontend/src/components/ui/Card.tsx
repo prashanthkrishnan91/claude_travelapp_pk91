@@ -10,7 +10,7 @@ const TONE_CLASSES: Record<CardTone, string> = {
 };
 
 // ── Root ────────────────────────────────────────────────────────────────────
-export interface CardProps extends HTMLAttributes<HTMLDivElement> {
+export interface CardProps extends HTMLAttributes<HTMLElement> {
   tone?:      CardTone;
   as?:        "article" | "div" | "li" | "section";
   children?:  ReactNode;
