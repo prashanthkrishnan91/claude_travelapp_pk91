@@ -62,6 +62,11 @@ const { buildTripCandidateBuckets } = mod;
 
 // ─── Canonical-shaped fixtures (post-toCamel — keys are camelCase) ────────────
 
+// All canonical fixtures carry `kind: "flight_offer"` and `sourceKind:
+// "creation_seed"` (set by backend _offer_to_flight_item). These markers
+// signal the frontend selector that the persisted item id IS the offer
+// identity — no further reconstructive dedupe should run.
+
 function camelRoundTripOffer({
   id,
   dep = '2026-05-13T10:00:00Z',
@@ -78,6 +83,10 @@ function camelRoundTripOffer({
     title: `Delta ${flightNo}`,
     dayId: null,
     details: {
+      kind: 'flight_offer',
+      provider: 'duffel_flights',
+      source: 'duffel_flights',
+      sourceKind: 'creation_seed',
       tripType: 'round_trip',
       isRoundTrip: true,
       airline: 'Delta',
@@ -109,6 +118,10 @@ function snakeRoundTripOffer({ id }) {
     title: 'Snake RT',
     dayId: null,
     details: {
+      kind: 'flight_offer',
+      provider: 'duffel_flights',
+      source: 'duffel_flights',
+      source_kind: 'creation_seed',
       trip_type: 'round_trip',
       is_round_trip: true,
       outbound_leg: {
@@ -132,6 +145,10 @@ function oneWayOffer({ id, flightNo = 'AA300' }) {
     title: `American ${flightNo}`,
     dayId: null,
     details: {
+      kind: 'flight_offer',
+      provider: 'duffel_flights',
+      source: 'duffel_flights',
+      sourceKind: 'creation_seed',
       tripType: 'one_way',
       isRoundTrip: false,
       airline: 'American',
@@ -218,97 +235,105 @@ test('runtime: round-trip rows assigned to a day are excluded from candidate buc
   assert.equal(buckets.flights.length, 0);
 });
 
-// ─── Fare-variant dedupe contract (Stage 3 exit blocker — over-collapse fix) ──
+// ─── Canonical-flight-offer no-dedupe contract (Stage 3 exit) ────────────────
 //
-// Duffel commonly returns multiple offers for the same outbound+return flight
-// pair with different fare variants (basic / main / refundable / with-baggage),
-// each with its own total cash price. The frontend dedupe must collapse exact
-// duplicates only — distinct fare/price variants on the same flight pair must
-// stay visible as separate cards. Production evidence (PR #363 follow-up):
-// 10 persisted round-trip offers collapsed to 2 visible cards because the
-// dedupe key was identity-only (no fare/price).
+// Canonical provider-backed persisted flight offers (kind="flight_offer" /
+// sourceKind="creation_seed" / provider+tripType) carry the offer identity
+// IN the persisted item id. Backend create-with-search has already chosen
+// which offers to persist; the frontend MUST NOT re-collapse them by
+// reconstructed fields. Every persisted canonical row is its own card.
+// Production evidence: 10 persisted round-trip offers → must be 10 cards.
 
-test('runtime: 10 offers spanning 2 flight-pairs and varied fares survive dedupe (>2 visible)', () => {
-  // Two distinct flight pairs (A and B). Five fare variants per pair, distinct
-  // by cashPrice. After dedupe we expect 10 distinct round-trip cards.
+test('runtime: 10 canonical persisted round-trip offers (same pair, same price) show 10 cards', () => {
+  // Same flight pair, same cash price, same currency, same cabin — only the
+  // persisted item id differs. With the canonical-offer contract all 10 must
+  // remain visible.
   const offers = [];
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 10; i++) {
     offers.push(camelRoundTripOffer({
-      id: `pairA-fare${i}`,
+      id: `canonical-rt-${i}`,
       flightNo: 'DL100', rtFlightNo: 'DL101',
-      dep: '2026-05-13T10:00:00Z', rtDep: '2026-05-20T10:00:00Z',
-      cashPrice: 800 + i * 25,
-    }));
-    offers.push(camelRoundTripOffer({
-      id: `pairB-fare${i}`,
-      flightNo: 'UA200', rtFlightNo: 'UA201',
-      dep: '2026-05-13T18:00:00Z', rtDep: '2026-05-20T18:00:00Z',
-      cashPrice: 750 + i * 30,
+      cashPrice: 850, currency: 'USD', cabinClass: 'economy',
     }));
   }
   const buckets = buildTripCandidateBuckets(offers);
   assert.equal(buckets.roundTripFlights.length, 10,
-    `Expected 10 distinct fare variants visible, got ${buckets.roundTripFlights.length}`);
+    `Expected 10 canonical round-trip cards, got ${buckets.roundTripFlights.length}`);
   assert.equal(buckets.flights.length, 0);
 });
 
-test('runtime: exact-duplicate round-trip rows still collapse', () => {
-  const a = camelRoundTripOffer({ id: 'a', cashPrice: 850, currency: 'USD', cabinClass: 'economy' });
-  const b = camelRoundTripOffer({ id: 'b', cashPrice: 850, currency: 'USD', cabinClass: 'economy' });
-  const c = camelRoundTripOffer({ id: 'c', cashPrice: 850, currency: 'USD', cabinClass: 'economy' });
-  const buckets = buildTripCandidateBuckets([a, b, c]);
-  assert.equal(buckets.roundTripFlights.length, 1, 'exact duplicates must collapse to 1');
+test('runtime: 10 canonical persisted one-way offers all remain visible', () => {
+  const offers = [];
+  for (let i = 0; i < 10; i++) {
+    offers.push(oneWayOffer({ id: `canonical-ow-${i}` }));
+  }
+  const buckets = buildTripCandidateBuckets(offers);
+  assert.equal(buckets.flights.length, 10, 'all 10 canonical one-way offers must remain visible');
+  assert.equal(buckets.roundTripFlights.length, 0);
 });
 
-test('runtime: same flight pair with different cash price stays distinct', () => {
-  const cheap = camelRoundTripOffer({ id: 'cheap', cashPrice: 800 });
-  const main  = camelRoundTripOffer({ id: 'main',  cashPrice: 920 });
-  const flex  = camelRoundTripOffer({ id: 'flex',  cashPrice: 1450 });
-  const buckets = buildTripCandidateBuckets([cheap, main, flex]);
-  assert.equal(buckets.roundTripFlights.length, 3, 'distinct prices must remain visible');
-});
-
-test('runtime: same flight pair / same price / different currency stays distinct', () => {
-  const usd = camelRoundTripOffer({ id: 'usd', cashPrice: 850, currency: 'USD' });
-  const eur = camelRoundTripOffer({ id: 'eur', cashPrice: 850, currency: 'EUR' });
-  const buckets = buildTripCandidateBuckets([usd, eur]);
-  assert.equal(buckets.roundTripFlights.length, 2, 'distinct currencies must remain visible');
-});
-
-test('runtime: same flight pair / same price / different cabin stays distinct', () => {
-  const econ = camelRoundTripOffer({ id: 'econ', cashPrice: 850, cabinClass: 'economy' });
-  const biz  = camelRoundTripOffer({ id: 'biz',  cashPrice: 850, cabinClass: 'business' });
-  const buckets = buildTripCandidateBuckets([econ, biz]);
-  assert.equal(buckets.roundTripFlights.length, 2, 'distinct cabin classes must remain visible');
-});
-
-test('runtime: one-way dedupe — distinct fares for same flight remain visible', () => {
-  const mkOneWay = (id, cashPrice) => ({
+test('runtime: canonical round-trip with sourceKind="creation_seed" only (no kind) still no-dedupe', () => {
+  const mk = (id) => ({
     id,
     itemType: 'flight',
-    title: `American AA300`,
+    title: 'Delta DL100',
     dayId: null,
     details: {
-      tripType: 'one_way', isRoundTrip: false,
-      airline: 'American', flightNumber: 'AA300',
-      origin: 'BOS', destination: 'SEA',
-      departureTime: '2026-05-13T10:00:00Z',
-      cashPrice, currency: 'USD', cabinClass: 'economy',
+      sourceKind: 'creation_seed',
+      tripType: 'round_trip',
+      isRoundTrip: true,
+      returnLeg: {
+        origin: 'SEA', destination: 'BOS',
+        departureTime: '2026-05-20T10:00:00Z',
+        segments: [{ airline: 'Delta', flightNumber: 'DL101', departureTime: '2026-05-20T10:00:00Z' }],
+      },
+      outboundLeg: {
+        origin: 'BOS', destination: 'SEA',
+        departureTime: '2026-05-13T10:00:00Z',
+        segments: [{ airline: 'Delta', flightNumber: 'DL100', departureTime: '2026-05-13T10:00:00Z' }],
+      },
+      cashPrice: 850, currency: 'USD', cabinClass: 'economy',
     },
   });
-  const buckets = buildTripCandidateBuckets([
-    mkOneWay('a', 250),
-    mkOneWay('b', 320),
-    mkOneWay('c', 450),
-  ]);
-  assert.equal(buckets.flights.length, 3, 'distinct one-way fares must remain visible');
+  const buckets = buildTripCandidateBuckets([mk('a'), mk('b'), mk('c')]);
+  assert.equal(buckets.roundTripFlights.length, 3,
+    'creation_seed canonical rows must not collapse even when other fields match');
 });
 
-test('runtime: one-way dedupe — exact duplicates still collapse', () => {
-  const mkOneWay = (id) => ({
+test('runtime: legacy exact-duplicate rows (no canonical provenance) still collapse', () => {
+  // No kind, no sourceKind, no provider/source — pre-canonical legacy rows
+  // continue to use the identity+fare dedupe key so old fixtures collapse.
+  const mkLegacy = (id) => ({
     id,
     itemType: 'flight',
-    title: 'American AA300',
+    title: 'Legacy Delta',
+    dayId: null,
+    details: {
+      tripType: 'round_trip',
+      isRoundTrip: true,
+      outboundLeg: {
+        origin: 'BOS', destination: 'SEA',
+        departureTime: '2026-05-13T10:00:00Z',
+        segments: [{ airline: 'Delta', flightNumber: 'DL100', departureTime: '2026-05-13T10:00:00Z' }],
+      },
+      returnLeg: {
+        origin: 'SEA', destination: 'BOS',
+        departureTime: '2026-05-20T10:00:00Z',
+        segments: [{ airline: 'Delta', flightNumber: 'DL101', departureTime: '2026-05-20T10:00:00Z' }],
+      },
+      cashPrice: 850, currency: 'USD', cabinClass: 'economy',
+    },
+  });
+  const buckets = buildTripCandidateBuckets([mkLegacy('a'), mkLegacy('b'), mkLegacy('c')]);
+  assert.equal(buckets.roundTripFlights.length, 1,
+    'legacy exact-duplicate rows without canonical provenance must still collapse');
+});
+
+test('runtime: legacy one-way exact duplicates (no canonical provenance) still collapse', () => {
+  const mkLegacy = (id) => ({
+    id,
+    itemType: 'flight',
+    title: 'Legacy AA',
     dayId: null,
     details: {
       tripType: 'one_way', isRoundTrip: false,
@@ -318,6 +343,6 @@ test('runtime: one-way dedupe — exact duplicates still collapse', () => {
       cashPrice: 320, currency: 'USD', cabinClass: 'economy',
     },
   });
-  const buckets = buildTripCandidateBuckets([mkOneWay('a'), mkOneWay('b'), mkOneWay('c')]);
-  assert.equal(buckets.flights.length, 1, 'exact one-way duplicates must collapse');
+  const buckets = buildTripCandidateBuckets([mkLegacy('a'), mkLegacy('b'), mkLegacy('c')]);
+  assert.equal(buckets.flights.length, 1, 'legacy one-way duplicates must still collapse');
 });

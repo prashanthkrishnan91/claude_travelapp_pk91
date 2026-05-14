@@ -107,13 +107,35 @@ function hotelScore(item: ItineraryItem): number {
   return typeof v === "number" ? v : 0;
 }
 
+function isCanonicalFlightOffer(item: ItineraryItem): boolean {
+  const d = (item.details ?? {}) as Record<string, unknown>;
+  if (d.kind === "flight_offer") return true;
+  if (item.itemType === "flight") {
+    const sourceKind = (d.sourceKind ?? d.source_kind) as string | undefined;
+    if (sourceKind === "creation_seed") return true;
+    const hasProvider = Boolean(d.provider ?? d.source);
+    const hasTripType = d.tripType != null || d.trip_type != null;
+    if (hasProvider && hasTripType) return true;
+  }
+  return false;
+}
+
 function flightDedupeKey(item: ItineraryItem): string {
   const d = (item.details ?? {}) as Record<string, unknown>;
-  // Fare identity — same airline/flight/time pair can come back with multiple
-  // fare/price variants (basic/main/refundable/with-baggage). These are
-  // user-visible distinct offers, so include them in the key so they survive
-  // dedupe. Exact duplicates (same flight identity AND same price+currency+cabin)
-  // still collapse.
+
+  // Canonical provider-backed offers: the persisted itinerary item IS the
+  // offer identity. Backend create-with-search has already chosen which
+  // offers to persist (10 valid round-trip rows in the production trace),
+  // so the frontend MUST NOT re-collapse them by reconstructed fields.
+  // Each canonical row gets its own bucket — same flight pair + same price
+  // is still two visible offers if the backend persisted two rows.
+  if (isCanonicalFlightOffer(item)) {
+    return `canonical-flight:${item.id}`;
+  }
+
+  // Legacy rows (no canonical provenance): preserve the prior identity-based
+  // dedupe so old fixtures and pre-canonical persisted rows still collapse
+  // exact duplicates.
   const cash = (d.cashPrice ?? d.cash_price ?? d.totalPrice ?? d.total_price ?? "") as number | string;
   const cur  = ((d.currency as string) ?? "").toUpperCase();
   const cabin = ((d.cabinClass ?? d.cabin_class) as string) ?? "";
