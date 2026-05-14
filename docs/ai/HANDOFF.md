@@ -8,7 +8,7 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Design Foundation Phase 0 SHIPPED (2026-05-14).** Design token layer (`--ds-*`) + Card primitive + TrustStrip primitive in place. No surface adoption yet. Stage 3 functionally exited. Stage 3.5 Phase 1 (surface adoption) is next. **Active build queue item: Wife-Wow design system foundation.**
+- Roadmap stage: **Stage 3.5 — Design Foundation Phase 0 SHIPPED (2026-05-14).** Design token layer (`--ds-*`) + Card primitive + TrustStrip primitive in place. No surface adoption yet. Stage 3 functionally exited. Stage 3.5 Phase 1 (surface adoption) is next. **Active build queue item: Wife-Wow design system foundation.** Exact implementation reference is now `docs/product/DESIGN_IMPLEMENTATION_CONTRACT.md` — all future design prompts must cite this contract, not infer from PDF.
 - Flights v1 — Duffel search-only LIVE: `DUFFEL_FLIGHTS_ENABLED=1`, `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`, `DUFFEL_DEBUG=false`, `DUFFEL_BOOKING_ENABLED=0`. Each flight card shows "Search on Google Flights" (SEARCH_REDIRECT link-out, not booking). Duffel never creates orders. Ignav DISABLED.
 - Active build queue item: **Wife-Wow design system foundation (Phase 1 — surface adoption).** Token + primitive infrastructure shipped in Phase 0. Phase 1: adopt Card primitive + tokens on one surface. Hard stops: no provider/search/API/Tavily changes, no flight/hotel/saved-trip behavior changes. See `docs/ai/UI_BASELINE.md` for Phase 0 inventory.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
