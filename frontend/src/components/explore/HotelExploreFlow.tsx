@@ -7,13 +7,41 @@
  * no prices, no availability. Search context (destination, dates, guests)
  * is preserved in ExploreResultContext for a future provider-backed offer.
  *
+ * Compare prices CTA (v1): deterministic Google Hotels search link-out only —
+ * no in-app rates, no OTA booking, no price/availability claims.
+ *
  * Calls callConciergeSearch(null, query, undefined, destination) — no trip_id
  * required (Slice 3 made the Concierge trip-optional). Returns
  * UnifiedHotelResult cards verified by Google Places.
  */
 
 import { useState } from "react";
-import { MapPin, Calendar, Users, Building2, Hotel, Star, ExternalLink, Loader2, AlertCircle } from "lucide-react";
+import { MapPin, Calendar, Users, Building2, Hotel, Star, ExternalLink, Search, Loader2, AlertCircle } from "lucide-react";
+
+/**
+ * Build a deterministic Google Hotels comparison search URL.
+ * External search link-out only — no price, rate, or availability data.
+ */
+function buildHotelCompareUrl({
+  hotelName,
+  destination,
+  checkIn,
+  checkOut,
+  guests,
+}: {
+  hotelName: string;
+  destination: string;
+  checkIn?: string;
+  checkOut?: string;
+  guests?: number;
+}): string {
+  const q = encodeURIComponent(`${hotelName} ${destination}`);
+  let url = `https://www.google.com/travel/hotels?q=${q}`;
+  if (checkIn) url += `&checkin=${encodeURIComponent(checkIn)}`;
+  if (checkOut) url += `&checkout=${encodeURIComponent(checkOut)}`;
+  if (guests && guests > 0) url += `&guests=${guests}`;
+  return url;
+}
 import { callConciergeSearch } from "@/lib/api";
 import type { UnifiedHotelResult } from "@/lib/api";
 import type { ExploreResultContext } from "./types";
@@ -73,6 +101,15 @@ export function HotelExploreFlow() {
   function buildContext(h: UnifiedHotelResult): ExploreResultContext {
     const gv = h.googleVerification;
     const dest = lastForm?.destination ?? form.destination.trim();
+    const displayName = h.display?.displayName ?? h.name;
+    // Future-ready compare link: Google Hotels search link-out only, no price fields.
+    const compareLink = buildHotelCompareUrl({
+      hotelName: displayName,
+      destination: dest,
+      checkIn: lastForm?.checkIn || undefined,
+      checkOut: lastForm?.checkOut || undefined,
+      guests: lastForm?.guests,
+    });
     // Normalize saved-item display snapshot: discovery fields only, no price/rate/booking.
     const savedPayload: Record<string, unknown> = {
       type: h.type,
@@ -97,6 +134,8 @@ export function HotelExploreFlow() {
       checkIn: lastForm?.checkIn || undefined,
       checkOut: lastForm?.checkOut || undefined,
       guests: lastForm?.guests,
+      // Compare link metadata (external search link-out only; no price/rate data)
+      compareLink,
     };
     return {
       vertical: "hotels",
@@ -242,6 +281,8 @@ function HotelCard({
   const displayWhy = h.display?.displayWhy ?? h.supportingDetails?.whyPick ?? null;
   const address = h.supportingDetails?.address ?? null;
   const areaLabel = h.areaLabel ?? null;
+  // compareLink is stored by buildContext in originalPayload — external search link-out only.
+  const compareLink = (context.originalPayload as Record<string, unknown>).compareLink as string | undefined;
 
   return (
     <div className="card card-lift p-4">
@@ -304,6 +345,22 @@ function HotelCard({
             <p className="text-xs text-cream-400 mt-2 leading-relaxed line-clamp-2">
               {displayWhy}
             </p>
+          )}
+
+          {compareLink && (
+            <div className="mt-2">
+              <a
+                href={compareLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 hover:text-violet-200 text-xs transition"
+                aria-label={`Compare prices for ${displayName}`}
+                data-testid="hotel-compare-cta"
+              >
+                <Search className="w-3 h-3" />
+                Compare prices
+              </a>
+            </div>
           )}
 
           <ResultActionSheet context={context} />

@@ -2,6 +2,8 @@
 
 import { useState, useMemo, type FormEvent } from "react";
 import { Loader2, X, AlertCircle } from "lucide-react";
+import { CityAutocomplete } from "@/components/ui/CityAutocomplete";
+import type { AirportSelection } from "@/components/ui/CityAutocomplete";
 import { createTripFromSavedItem } from "@/lib/api";
 import type { SavedItem, Trip, TripBuilderFormData } from "@/types";
 
@@ -107,11 +109,16 @@ export function CreateTripFromSavedModal({
   const prefill = useMemo(() => buildTripPrefillFromSavedItem(item), [item]);
 
   const [title, setTitle] = useState(prefill.title);
-  const [destination, setDestination] = useState(prefill.destination);
-  const [origin, setOrigin] = useState(prefill.origin);
+  // Airport autocomplete selections — resolved chips with city/country/IATA airports.
+  const [originSel, setOriginSel] = useState<AirportSelection | null>(null);
+  const [destSel, setDestSel] = useState<AirportSelection | null>(null);
   const [startDate, setStartDate] = useState(prefill.startDate);
   const [endDate, setEndDate] = useState(prefill.endDate);
   const [travelers, setTravelers] = useState<number>(prefill.travelers);
+
+  // Derive string values used in formData and canSubmit gate.
+  const origin = originSel?.city ?? "";
+  const destination = destSel?.city ?? "";
 
   const [state, setState] = useState<SubmitState>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -153,6 +160,8 @@ export function CreateTripFromSavedModal({
       const trip = await createTripFromSavedItem({
         savedItem: item,
         formData,
+        originAirports: originSel?.airports,
+        destinationAirports: destSel?.airports,
       });
       onCreated(trip);
     } catch {
@@ -211,29 +220,26 @@ export function CreateTripFromSavedModal({
             <label className="block text-[10px] uppercase tracking-wide text-cream-500 mb-1">
               Origin
             </label>
-            <input
-              type="text"
-              value={origin}
-              onChange={(e) => setOrigin(e.target.value)}
-              required
-              placeholder="City you're flying from"
-              className="w-full px-3 py-2 rounded-lg bg-white/[.04] border border-white/[.06] text-sm text-cream-100 focus:outline-none focus:border-brand-400"
-              data-testid="ct-origin"
-            />
+            <div data-testid="ct-origin">
+              <CityAutocomplete
+                placeholder="City you're flying from"
+                value={originSel}
+                onChange={setOriginSel}
+              />
+            </div>
           </div>
 
           <div>
             <label className="block text-[10px] uppercase tracking-wide text-cream-500 mb-1">
               Destination
             </label>
-            <input
-              type="text"
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-              required
-              className="w-full px-3 py-2 rounded-lg bg-white/[.04] border border-white/[.06] text-sm text-cream-100 focus:outline-none focus:border-brand-400"
-              data-testid="ct-destination"
-            />
+            <div data-testid="ct-destination">
+              <CityAutocomplete
+                placeholder="Destination city"
+                value={destSel}
+                onChange={setDestSel}
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
