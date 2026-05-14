@@ -62,7 +62,9 @@ All values are Design Bible v1.0 §4.1 exact. These are the **only** official co
 **Rules:**
 - Do not substitute colors in new components when a `ds-*` token exists.
 - Do not infer alternate "luxury palettes" or adjusted saturation variants.
-- All new design primitives must use `ds-*` CSS variables, not raw hex or Tailwind utility classes.
+- New design components may use either `ds-*` Tailwind token utilities (e.g., `bg-ds-onyx`, `text-ds-text`) or direct CSS variables.
+- They must not use raw hex or legacy palette utilities when a `ds-*` token exists.
+- Forbidden legacy color utilities in new primitives: `emerald-*`, `amber-*`, `cream-*`, `dark-*`, raw `white/`, or ad hoc rgba colors unless explicitly declared as a token.
 
 ---
 
@@ -242,7 +244,234 @@ All durations are Design Bible v1.0 §4.5 exact. Motion explains; it never decor
 
 ---
 
-## 10. Brand and emotional architecture
+## 10. Map styling and map/card interaction contract
+
+**Preserve Design Bible §4.9 and §5.7.**
+
+### Map themes (Design Bible §4.9):
+- **Dark map:** deep ink background, brass roads, sage parks; lower saturation than default Google.
+- **Paper map:** cream background, umber roads, sage parks; lower saturation than default Google.
+- Cluster counts use app humanist sans (not system default styling).
+- At most 30 pins visible before clustering.
+
+### Pin styling:
+- Verified place pin: small filled sandstone-gold circle.
+- Hovered pin: 1.5x ring around the pin.
+- Saved place pin: hairline ring (no fill).
+
+### Card ↔ map interaction (Design Bible §5.7):
+- Hovering a card highlights its pin (1.5x ring) and dims unrelated pins to 0.4 opacity.
+- Hovering a pin highlights the card with 1px sandstone border; list does not auto-scroll.
+- Clicking a pin flies map to pin in 320ms (ease-out-cubic) and opens card detail drawer.
+- Clicking the same pin twice closes the drawer.
+- After meaningful pan (>300px), show "search this area" chip; never auto-requery on pan.
+
+### Responsive map behavior:
+- Desktop/tablet: map and list share screen (parity by default).
+- Mobile: list is default, map reachable by single chip; never 50/50 split on phone.
+
+**No map provider changes unless explicitly scoped.**
+
+---
+
+## 11. Empty, loading, error, and skeleton state contract
+
+**Preserve Design Bible §4.11 and §6.8.**
+
+### Empty state (Design Bible §4.11):
+- One sentence describing the constraint + 2–3 refinement chips derived from prior search/context.
+- Example: "Nothing matches %s in this neighborhood yet. Try widening to %s, or ask for a different cuisine." (with chips: "Widen to %s", "Different cuisine", "Saved places in %s")
+- AI Concierge zero results should explain the constraint and offer context-aware alternatives.
+- Never blank "No results" alone.
+
+### Loading state (Design Bible §4.11):
+- Typeset breadcrumb: `Searching · Verifying · Composing`.
+- Active stage rendered in pearl cream; inactive stages in mist opacity.
+- Active stage must reflect real pipeline state/timing where available (driven by `fast_dynamic_place_search.timing`); no theater.
+- No generic spinners as primary intelligence signal.
+
+### Error state (Design Bible §4.11):
+- Names the cause and offers a path/retry. Example: "The Google Places verifier is unavailable. We will retry; meanwhile, here are your saved places."
+- No stack traces, no "Oops!" cartoons, no generic error icons.
+- If provider unavailable, state it calmly and surface known/saved alternatives.
+
+### Skeleton state (Design Bible §4.11):
+- Typed/hairline geometry (not flat gray rectangles).
+- Card skeletons render actual card geometry with hairline outlines.
+- Place name is a 60%-width typeset bar.
+
+**No loading animation may delay first card/content paint.**
+
+---
+
+## 12. Accessibility and responsive contract
+
+**Preserve Design Bible §4.12–§4.13.**
+
+### Contrast and color:
+- All text passes WCAG 2.2 AA at rendered size. Pearl Cream on Midnight Ink ≈ 13.4:1; Cream on Onyx ≈ 11.2:1.
+- Color is never the only signal. Trust marks pair sage with label; weak-evidence pairs amber with phrase "We could not verify…"
+
+### Focus and keyboard:
+- Focus ring: 2px sandstone-gold with 2px offset on every interactive element.
+- Never `outline: none` without replacement.
+- Keyboard shortcuts are complementary, not required:
+  - `/` focuses search where scoped.
+  - `Esc` closes drawers/sheets/modals.
+  - Command bar shortcuts only when explicitly scoped.
+
+### Touch targets and layout:
+- Hit area: 44×44px minimum on touch. Chips use invisible padding to reach this without inflating visual size.
+- Layout survives 200% browser zoom without horizontal scroll.
+
+### Responsive breakpoints (Design Bible §4.12):
+- Three breakpoints only: phone <640px, tablet 640–1024px, desktop ≥1024px.
+- Right-thumb reachability: primary actions in bottom 25% on phone where possible.
+- AI Concierge on mobile is 90vh sheet with composer always visible (not hidden on scroll).
+
+### Reduced-motion (Design Bible §4.13):
+- `@media (prefers-reduced-motion: reduce)` disables all entrance animations.
+- Reduces all durations to ≤80ms.
+- Removes `transform`, `filter`, and `scale` animations; caps opacity transitions to fade only.
+- Every visual PR must include reduced-motion verification notes.
+
+---
+
+## 13. Interaction language and persistence contract
+
+**Preserve Design Bible §3.4.**
+
+### Interaction patterns:
+- Prefer direct manipulation over modal forms. Drag a card to a day, tap a chip to refine, long-press to compare.
+- Modals only for legally distinct actions (sign out, delete trip) or unavoidable destructive decisions.
+- Do not change routes or information architecture unless the phase explicitly scopes it.
+
+### Persistence:
+- Filters, scroll positions, and prompt history survive page transitions when scoped.
+- The concierge does not forget context five seconds later.
+- Memory pill should persist session state; if persisting across sessions, "forget" link becomes durable backend action (out of design scope).
+
+### Keyboard and accessibility:
+- Keyboard for power users (shortcuts are complementary, not required).
+- Tab order must be logical; focus must be manageable on long lists.
+
+---
+
+## 14. Save, add-to-trip, drag, and acknowledgement microinteractions
+
+**Preserve Design Bible §5.5–§5.6.**
+
+### Save (heart toggle):
+- Icon transitions stroke → fill in ~160ms.
+- 4% scale pulse maximum.
+- No confetti, no generic toast.
+
+### Add-to-trip:
+- Card shifts subtly (6px right) with sandstone hairline pulse, or receives visual acknowledgement.
+- No disruptive modal unless trip-choice decision is required.
+- Acknowledge via local UI state (e.g., sidebar tab indicator dot) or trip-list update, not global noisy toast.
+
+### Drag and drop (Design Bible §5.6):
+- Drag handle visible on desktop itinerary cards where drag is scoped.
+- Long-press starts drag on mobile where drag is scoped.
+- Drop zones gain sandstone hairline on hover; whole row is the target.
+- Day reorder uses FLIP-like transition; no scroll jump.
+
+### Timeline state transitions (Design Bible §5.6):
+- Travel-time hint reveal expands from height 0 → computed in 220ms (caption-grade hairline row).
+- Day collapse shows headline pick + count where scoped; expand uses same 220ms.
+
+**Note: These are future phase rules; do not implement in Phase 1 unless explicitly scoped.**
+
+---
+
+## 15. Detail panel, drawer, and sheet contract
+
+**Preserve Design Bible §7.10.**
+
+### Layout:
+- Desktop: card detail opens as half-bleed right panel.
+- Mobile: card detail opens as 90vh sheet (scrollable, closable by Esc or backdrop click).
+- Page/list behind dims to 60% opacity where scoped.
+
+### Behavior:
+- Esc closes; backdrop click closes unless destructive/unsaved action requires confirmation.
+- Detail panel supports URL deep-link param where scoped (e.g., `?place=ID`).
+- If detail load fails, show calm retry; do not blank the whole page.
+
+### Content hierarchy (where content exists):
+1. Hero photo (4:5 portrait, lazy-loaded) or typeset monogram
+2. Place name + category
+3. TrustStrip
+4. Neighborhood/distance (when supplied by backend)
+5. "Why this fits" pull-quote
+6. Metadata grid (tags, price tier, etc. — omit missing fields)
+7. Map preview (when scoped)
+8. Actions (save, add to trip, link-out)
+9. Caveat (if weak evidence/restriction exists)
+
+**No in-card booking action unless explicitly scoped.**
+
+---
+
+## 16. Component/form control quality contract
+
+**Preserve Design Bible Addendum §2 (Concierge Search Bar grammar) and expectations for premium controls.**
+
+### Premium components (when scoped):
+- Date picker, dropdown, passenger selector, city autocomplete, chips, tabs, filters are first-class premium components.
+- No browser-default-looking selects or inputs in final design phases.
+- All must follow `--ds-space-*` and `--ds-type-*` tokens.
+- All must pass 44×44 hit area, focus rings, and reduced-motion safety.
+
+### Behavior constraints:
+- Input beauty must not slow task completion (Design Bible Addendum §2: "constraint: beauty must not slow task completion").
+- City autocomplete must not treat plain lowercase city text as resolved unless canonical resolution exists.
+- Passenger/guest selectors use steppers or clear controls (not freeform text when scoped).
+- Date formatting must be timezone-safe (no UTC assumption for local dates).
+- Do not change provider/search behavior while redesigning controls.
+
+---
+
+## 17. Source/date discipline
+
+**Preserve Design Bible §8.5 and §9.**
+
+### Source list rendering:
+- Source list rows should include: publication/source name + date (when available) + supporting snippet (when available).
+- Snippets are extractive; UI must not fabricate source support.
+- Sources older than 24 months should be visually marked as older where source dates are available.
+
+### Aggregation and ranking:
+- Do not aggregate sources into star ratings or numeric scores.
+- If source list does not exist in backend payload, do not create fake expandable evidence UI.
+
+### Trust signal pairing:
+- Verified mark + label.
+- Source count + label.
+- Confidence + label (high/medium/low, no percentages).
+- Weak evidence + first-class sentence caveat (e.g., "We could not verify the waterfront view").
+
+---
+
+## 18. Known future-only ideas — not Phase 1 authorization
+
+These are valid Design Bible ideas for future phases **only**. They are explicitly forbidden in Phase 1:
+
+- Experience lanes: Stay, Eat, See, Wander, Unwind, After dark, Worth the splurge, Luxury for less.
+- Neighborhood mood maps.
+- Calendar heatmap / flexible date suggestions.
+- Personal travel-style memory.
+- Rainy-day swaps based on weather.
+- Tonight's edit / next-best-actions.
+- Streaks, XP, badges, achievement unlocks, confetti bursts.
+- Persisted memory across sessions (pending backend design).
+
+**These require explicit future phase scope and data support. Do not build in Phase 1.**
+
+---
+
+## 20. Brand and emotional architecture
 
 Durable principles (Design Bible v1.0 §3, Design Bible Addendum v1.1):
 
@@ -266,7 +495,7 @@ Durable principles (Design Bible v1.0 §3, Design Bible Addendum v1.1):
 
 ---
 
-## 11. Card primitive contract
+## 21. Card primitive contract
 
 **Based on merged `Card.tsx` (2026-05-14).**
 
@@ -325,7 +554,7 @@ Durable principles (Design Bible v1.0 §3, Design Bible Addendum v1.1):
 
 ---
 
-## 12. Card system adoption rules
+## 22. Card system adoption rules
 
 **Preserve Design Bible §8 (Card Design System).**
 
@@ -359,7 +588,7 @@ Future variant patterns (Phase 1+):
 
 ---
 
-## 13. TrustStrip contract
+## 23. TrustStrip contract
 
 **Based on merged `TrustStrip.tsx` (2026-05-14).**
 
@@ -381,7 +610,7 @@ Future variant patterns (Phase 1+):
 
 ---
 
-## 14. Evidence and trust UX contract
+## 24. Evidence and trust UX contract
 
 **Preserve Design Bible §9 (Trust + Evidence).**
 
@@ -429,7 +658,7 @@ Future variant patterns (Phase 1+):
 
 ---
 
-## 15. AI Concierge flagship UX contract
+## 25. AI Concierge flagship UX contract
 
 **Preserve Design Bible §6 (AI Concierge).**
 
@@ -479,7 +708,7 @@ Future variant patterns (Phase 1+):
 
 ---
 
-## 16. Page-by-page implementation direction
+## 26. Page-by-page implementation direction
 
 **Durable rules from Design Bible §7 (Page-by-Page Implementation).**
 
@@ -545,7 +774,7 @@ Future variant patterns (Phase 1+):
 
 ---
 
-## 17. Concierge Search Bar grammar
+## 27. Concierge Search Bar grammar
 
 **From Design Bible Addendum v1.1 §2, preserve shared grammar across surfaces.**
 
@@ -574,7 +803,7 @@ All components must:
 
 ---
 
-## 18. Constraint-first planning / feasibility UX
+## 28. Constraint-first planning / feasibility UX
 
 **From Design Bible Addendum v1.1 §5, preserve honest constraint visualization.**
 
@@ -598,7 +827,7 @@ Feasibility constraints render beautifully **only when backend data supports the
 
 ---
 
-## 19. Addictive personalization guardrails
+## 29. Addictive personalization guardrails
 
 **Preserve Design Bible v1.0 §10 (Addictive Personalization Guardrails).**
 
@@ -628,7 +857,7 @@ Feasibility constraints render beautifully **only when backend data supports the
 
 ---
 
-## 20. Stage 3.5 phase roadmap and sequencing
+## 30. Stage 3.5 phase roadmap and sequencing
 
 **Preserve Design Bible roadmap direction (§13.1, §12 Stop Conditions).**
 
@@ -657,7 +886,7 @@ Feasibility constraints render beautifully **only when backend data supports the
 
 ---
 
-## 21. Hard forbidden patterns
+## 31. Hard forbidden patterns
 
 **Cumulative list from Design Bible v1.0 §12 (Guardrails) and Addendum v1.1 (sharpening).**
 
@@ -704,7 +933,7 @@ Feasibility constraints render beautifully **only when backend data supports the
 
 ---
 
-## 22. Stop conditions
+## 32. Stop conditions
 
 **Preserve Design Bible v1.0 §12 (Stop Conditions).**
 
@@ -723,7 +952,7 @@ Stop immediately and escalate if any of the following occur:
 
 ---
 
-## 23. Required self-audit checks for future design PRs
+## 33. Required self-audit checks for future design PRs
 
 **Include before opening any design PR.**
 
@@ -751,7 +980,7 @@ Stop immediately and escalate if any of the following occur:
 
 ---
 
-## 24. Future prompt checklist
+## 34. Future prompt checklist
 
 Include when writing a design-focused implementation prompt:
 
@@ -769,7 +998,7 @@ Include when writing a design-focused implementation prompt:
 
 ---
 
-## 25. Prompt usage snippet
+## 35. Prompt usage snippet
 
 **For future design-focused prompts, cite this contract and the Design Bible/Addendum:**
 
@@ -794,4 +1023,6 @@ This contract is **live** as of 2026-05-14 and replaces ad-hoc inference from th
 
 ## Change log
 
-- **2026-05-14:** v1 — Initial contract. Consolidates Phase 0 shipped work (tokens, Card, TrustStrip) + full implementation guidance + forbidden patterns + self-audit checks + prompt snippet.
+- **2026-05-14 (patch):** v1.1 — Clarified token utility rules (may use ds-* utilities or direct CSS vars, not raw hex). Added 9 sections: map styling/card-map interaction contract (§10), empty/loading/error/skeleton state contract (§11), accessibility/responsive contract (§12), interaction language/persistence contract (§13), save/add/drag microinteractions (§14), detail panel/sheet/drawer rules (§15), premium form control quality contract (§16), source/date discipline (§17), future-only ideas guardrails (§18). Renumbered existing sections 10–25 to 20–35. Remains compact, complete, and usable by Claude.
+
+- **2026-05-14:** v1 — Initial contract. Consolidates Phase 0 shipped work (tokens, Card, TrustStrip) + implementation guidance + forbidden patterns + self-audit checks + prompt snippet.
