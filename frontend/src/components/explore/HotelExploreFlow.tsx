@@ -34,11 +34,15 @@ function buildHotelCompareUrl({
   checkOut?: string;
   guests?: number;
 }): string {
-  const q = encodeURIComponent(`${hotelName} ${destination}`);
+  const qParts = [hotelName, destination];
+  if (checkIn) qParts.push(new Date(checkIn).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
+  if (checkOut) qParts.push(`to ${new Date(checkOut).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`);
+  if (guests && guests > 0) qParts.push(`${guests} guest${guests !== 1 ? 's' : ''}`);
+  const q = encodeURIComponent(qParts.join(' '));
   let url = `https://www.google.com/travel/hotels?q=${q}`;
   if (checkIn) url += `&checkin=${encodeURIComponent(checkIn)}`;
   if (checkOut) url += `&checkout=${encodeURIComponent(checkOut)}`;
-  if (guests && guests > 0) url += `&guests=${guests}`;
+  if (guests && guests > 0) url += `&adults=${guests}`;
   return url;
 }
 import { searchHotelsExplore } from "@/lib/api";
