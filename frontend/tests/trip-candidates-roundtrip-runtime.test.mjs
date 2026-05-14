@@ -62,7 +62,16 @@ const { buildTripCandidateBuckets } = mod;
 
 // ─── Canonical-shaped fixtures (post-toCamel — keys are camelCase) ────────────
 
-function camelRoundTripOffer({ id, dep = '2026-05-13T10:00:00Z', flightNo = 'DL100' }) {
+function camelRoundTripOffer({
+  id,
+  dep = '2026-05-13T10:00:00Z',
+  flightNo = 'DL100',
+  rtFlightNo = 'DL101',
+  rtDep = '2026-05-20T10:00:00Z',
+  cashPrice = 850,
+  currency = 'USD',
+  cabinClass = 'economy',
+}) {
   return {
     id,
     itemType: 'flight',
@@ -76,7 +85,9 @@ function camelRoundTripOffer({ id, dep = '2026-05-13T10:00:00Z', flightNo = 'DL1
       origin: 'BOS',
       destination: 'SEA',
       departureTime: dep,
-      cashPrice: 850,
+      cashPrice,
+      currency,
+      cabinClass,
       outboundLeg: {
         origin: 'BOS', destination: 'SEA',
         departureTime: dep, arrivalTime: '2026-05-13T14:00:00Z',
@@ -84,8 +95,8 @@ function camelRoundTripOffer({ id, dep = '2026-05-13T10:00:00Z', flightNo = 'DL1
       },
       returnLeg: {
         origin: 'SEA', destination: 'BOS',
-        departureTime: '2026-05-20T10:00:00Z', arrivalTime: '2026-05-20T18:00:00Z',
-        segments: [{ airline: 'Delta', flightNumber: 'DL101', origin: 'SEA', destination: 'BOS', departureTime: '2026-05-20T10:00:00Z' }],
+        departureTime: rtDep, arrivalTime: '2026-05-20T18:00:00Z',
+        segments: [{ airline: 'Delta', flightNumber: rtFlightNo, origin: 'SEA', destination: 'BOS', departureTime: rtDep }],
       },
     },
   };
@@ -205,4 +216,108 @@ test('runtime: round-trip rows assigned to a day are excluded from candidate buc
   const buckets = buildTripCandidateBuckets([row]);
   assert.equal(buckets.roundTripFlights.length, 0);
   assert.equal(buckets.flights.length, 0);
+});
+
+// ─── Fare-variant dedupe contract (Stage 3 exit blocker — over-collapse fix) ──
+//
+// Duffel commonly returns multiple offers for the same outbound+return flight
+// pair with different fare variants (basic / main / refundable / with-baggage),
+// each with its own total cash price. The frontend dedupe must collapse exact
+// duplicates only — distinct fare/price variants on the same flight pair must
+// stay visible as separate cards. Production evidence (PR #363 follow-up):
+// 10 persisted round-trip offers collapsed to 2 visible cards because the
+// dedupe key was identity-only (no fare/price).
+
+test('runtime: 10 offers spanning 2 flight-pairs and varied fares survive dedupe (>2 visible)', () => {
+  // Two distinct flight pairs (A and B). Five fare variants per pair, distinct
+  // by cashPrice. After dedupe we expect 10 distinct round-trip cards.
+  const offers = [];
+  for (let i = 0; i < 5; i++) {
+    offers.push(camelRoundTripOffer({
+      id: `pairA-fare${i}`,
+      flightNo: 'DL100', rtFlightNo: 'DL101',
+      dep: '2026-05-13T10:00:00Z', rtDep: '2026-05-20T10:00:00Z',
+      cashPrice: 800 + i * 25,
+    }));
+    offers.push(camelRoundTripOffer({
+      id: `pairB-fare${i}`,
+      flightNo: 'UA200', rtFlightNo: 'UA201',
+      dep: '2026-05-13T18:00:00Z', rtDep: '2026-05-20T18:00:00Z',
+      cashPrice: 750 + i * 30,
+    }));
+  }
+  const buckets = buildTripCandidateBuckets(offers);
+  assert.equal(buckets.roundTripFlights.length, 10,
+    `Expected 10 distinct fare variants visible, got ${buckets.roundTripFlights.length}`);
+  assert.equal(buckets.flights.length, 0);
+});
+
+test('runtime: exact-duplicate round-trip rows still collapse', () => {
+  const a = camelRoundTripOffer({ id: 'a', cashPrice: 850, currency: 'USD', cabinClass: 'economy' });
+  const b = camelRoundTripOffer({ id: 'b', cashPrice: 850, currency: 'USD', cabinClass: 'economy' });
+  const c = camelRoundTripOffer({ id: 'c', cashPrice: 850, currency: 'USD', cabinClass: 'economy' });
+  const buckets = buildTripCandidateBuckets([a, b, c]);
+  assert.equal(buckets.roundTripFlights.length, 1, 'exact duplicates must collapse to 1');
+});
+
+test('runtime: same flight pair with different cash price stays distinct', () => {
+  const cheap = camelRoundTripOffer({ id: 'cheap', cashPrice: 800 });
+  const main  = camelRoundTripOffer({ id: 'main',  cashPrice: 920 });
+  const flex  = camelRoundTripOffer({ id: 'flex',  cashPrice: 1450 });
+  const buckets = buildTripCandidateBuckets([cheap, main, flex]);
+  assert.equal(buckets.roundTripFlights.length, 3, 'distinct prices must remain visible');
+});
+
+test('runtime: same flight pair / same price / different currency stays distinct', () => {
+  const usd = camelRoundTripOffer({ id: 'usd', cashPrice: 850, currency: 'USD' });
+  const eur = camelRoundTripOffer({ id: 'eur', cashPrice: 850, currency: 'EUR' });
+  const buckets = buildTripCandidateBuckets([usd, eur]);
+  assert.equal(buckets.roundTripFlights.length, 2, 'distinct currencies must remain visible');
+});
+
+test('runtime: same flight pair / same price / different cabin stays distinct', () => {
+  const econ = camelRoundTripOffer({ id: 'econ', cashPrice: 850, cabinClass: 'economy' });
+  const biz  = camelRoundTripOffer({ id: 'biz',  cashPrice: 850, cabinClass: 'business' });
+  const buckets = buildTripCandidateBuckets([econ, biz]);
+  assert.equal(buckets.roundTripFlights.length, 2, 'distinct cabin classes must remain visible');
+});
+
+test('runtime: one-way dedupe — distinct fares for same flight remain visible', () => {
+  const mkOneWay = (id, cashPrice) => ({
+    id,
+    itemType: 'flight',
+    title: `American AA300`,
+    dayId: null,
+    details: {
+      tripType: 'one_way', isRoundTrip: false,
+      airline: 'American', flightNumber: 'AA300',
+      origin: 'BOS', destination: 'SEA',
+      departureTime: '2026-05-13T10:00:00Z',
+      cashPrice, currency: 'USD', cabinClass: 'economy',
+    },
+  });
+  const buckets = buildTripCandidateBuckets([
+    mkOneWay('a', 250),
+    mkOneWay('b', 320),
+    mkOneWay('c', 450),
+  ]);
+  assert.equal(buckets.flights.length, 3, 'distinct one-way fares must remain visible');
+});
+
+test('runtime: one-way dedupe — exact duplicates still collapse', () => {
+  const mkOneWay = (id) => ({
+    id,
+    itemType: 'flight',
+    title: 'American AA300',
+    dayId: null,
+    details: {
+      tripType: 'one_way', isRoundTrip: false,
+      airline: 'American', flightNumber: 'AA300',
+      origin: 'BOS', destination: 'SEA',
+      departureTime: '2026-05-13T10:00:00Z',
+      cashPrice: 320, currency: 'USD', cabinClass: 'economy',
+    },
+  });
+  const buckets = buildTripCandidateBuckets([mkOneWay('a'), mkOneWay('b'), mkOneWay('c')]);
+  assert.equal(buckets.flights.length, 1, 'exact one-way duplicates must collapse');
 });
