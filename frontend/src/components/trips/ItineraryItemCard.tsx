@@ -261,9 +261,91 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           </p>
         )}
 
-        {/* Flight leg details: route + times extracted from stored details */}
+        {/* Flight details: round-trip renders both legs in one card; one-way
+            renders a single route row. Both keep the Google Flights CTA. */}
         {item.itemType === "flight" && (() => {
           const d = (item.details ?? {}) as Record<string, unknown>;
+
+          // Canonical round-trip: outbound_leg / return_leg (camelCased after
+          // toCamel) or trip_type === "round_trip".
+          const outboundLeg = (d.outboundLeg ?? d.outbound_leg ?? d.outbound) as Record<string, unknown> | undefined;
+          const returnLeg = (d.returnLeg ?? d.return_leg ?? d.returnFlight ?? d.return_flight) as Record<string, unknown> | undefined;
+          const isRoundTrip =
+            d.tripType === "round_trip" ||
+            d.trip_type === "round_trip" ||
+            d.isRoundTrip === true ||
+            d.is_round_trip === true ||
+            (!!outboundLeg && !!returnLeg);
+
+          // Google Flights CTA (SEARCH_REDIRECT) preserved for canonical offers.
+          const bookingLinkObj = (d.bookingLink ?? d.booking_link) as Record<string, unknown> | undefined;
+          const googleFlightsUrl =
+            (d.googleFlightsSearchUrl as string | undefined) ??
+            (d.google_flights_search_url as string | undefined) ??
+            (bookingLinkObj?.url as string | undefined) ??
+            undefined;
+
+          const renderLeg = (leg: Record<string, unknown> | undefined, label: string, accent: string) => {
+            if (!leg) return null;
+            const segs = (leg.segments as Array<Record<string, unknown>> | undefined) ?? [];
+            const seg0 = segs[0] as Record<string, unknown> | undefined;
+            const lOrigin = (leg.origin as string | undefined) ?? (seg0?.origin as string | undefined);
+            const lDest = (leg.destination as string | undefined) ?? (seg0?.destination as string | undefined);
+            const lAirline = (leg.airline as string | undefined) ?? (seg0?.airline as string | undefined) ?? "";
+            const lFlightNum =
+              ((leg.flightNumber ?? leg.flight_number) as string | undefined) ??
+              ((seg0?.flightNumber ?? seg0?.flight_number) as string | undefined) ?? "";
+            const lDep = formatClock(((leg.departureTime ?? leg.departure_time) as string | undefined) ?? undefined);
+            const lArr = formatClock(((leg.arrivalTime ?? leg.arrival_time) as string | undefined) ?? undefined);
+            if (!lOrigin && !lDest && !lAirline) return null;
+            return (
+              <div className="text-[11px] text-slate-400 space-y-0.5">
+                <span className="flex items-center gap-1 font-medium text-slate-200 min-w-0">
+                  <Plane className="w-3 h-3 text-sky-300 flex-shrink-0" />
+                  <span className="truncate" title={`${lOrigin ?? "?"} → ${lDest ?? "?"}`}>
+                    {lOrigin ?? "?"} → {lDest ?? "?"}
+                  </span>
+                  <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${accent}`}>{label}</span>
+                </span>
+                {(lAirline || lFlightNum || lDep) && (
+                  <span className="flex items-center gap-1 text-slate-400 min-w-0">
+                    <span className="truncate" title={`${lAirline}${lFlightNum ? ` ${lFlightNum}` : ""}`}>
+                      {lAirline}{lFlightNum ? ` ${lFlightNum}` : ""}
+                    </span>
+                    {lDep && <>{" · "}{lDep}{lArr ? ` – ${lArr}` : ""}</>}
+                  </span>
+                )}
+              </div>
+            );
+          };
+
+          if (isRoundTrip && (outboundLeg || returnLeg)) {
+            return (
+              <div className="mt-0.5 space-y-1" data-testid="itinerary-roundtrip-flight">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-indigo-500/20 text-indigo-200 inline-block">
+                  Round-trip
+                </span>
+                {renderLeg(outboundLeg, "Outbound", "bg-sky-500/20 text-sky-200")}
+                {renderLeg(returnLeg, "Return", "bg-indigo-500/20 text-indigo-200")}
+                {googleFlightsUrl && (
+                  <a
+                    href={googleFlightsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-0.5 text-[11px] text-sky-400/80 hover:text-sky-300 transition-colors"
+                    aria-label="Search on Google Flights"
+                    data-testid="itinerary-google-flights-cta"
+                  >
+                    <ExternalLink className="w-2.5 h-2.5" />
+                    Google Flights
+                  </a>
+                )}
+              </div>
+            );
+          }
+
+          // One-way / legacy single-leg render.
           const origin      = d.origin      as string | undefined;
           const destination = d.destination as string | undefined;
           const airline     = (d.airline     as string | undefined) ?? "";
@@ -292,6 +374,20 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                   </span>
                   {dep && <>{" · "}{dep}{arr ? ` – ${arr}` : ""}</>}
                 </span>
+              )}
+              {googleFlightsUrl && (
+                <a
+                  href={googleFlightsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-0.5 text-[11px] text-sky-400/80 hover:text-sky-300 transition-colors"
+                  aria-label="Search on Google Flights"
+                  data-testid="itinerary-google-flights-cta"
+                >
+                  <ExternalLink className="w-2.5 h-2.5" />
+                  Google Flights
+                </a>
               )}
             </div>
           );

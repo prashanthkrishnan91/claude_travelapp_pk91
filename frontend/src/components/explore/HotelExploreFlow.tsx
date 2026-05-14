@@ -10,9 +10,11 @@
  * Compare prices CTA (v1): deterministic Google Hotels search link-out only —
  * no in-app rates, no OTA booking, no price/availability claims.
  *
- * Calls callConciergeSearch(null, query, undefined, destination) — no trip_id
- * required (Slice 3 made the Concierge trip-optional). Returns
- * UnifiedHotelResult cards verified by Google Places.
+ * Calls callConciergeSearch(null, query, undefined, destination, false) — no
+ * trip_id required (Slice 3 made the Concierge trip-optional). The trailing
+ * `false` sets allowLiveResearch=false so default Explore Hotels never spends
+ * paid Tavily/live-research credits; the backend serves Google-Places-verified
+ * hotels only. Tavily stays reserved for explicit AI Concierge / deep research.
  */
 
 import { useState } from "react";
@@ -81,7 +83,11 @@ export function HotelExploreFlow() {
     setResults(null);
 
     try {
-      const res = await callConciergeSearch(null, query, undefined, dest);
+      // Default Explore Hotels is verified-only: pass allowLiveResearch=false
+      // so the backend serves Google-Places-backed hotels and never spends
+      // paid Tavily/live-research credits. Tavily stays available for the
+      // explicit AI Concierge / deep-research experiences only.
+      const res = await callConciergeSearch(null, query, undefined, dest, false);
       setResults(res.hotels);
       if (res.hotels.length === 0) {
         setError("No hotels found for this destination. Try a different area.");

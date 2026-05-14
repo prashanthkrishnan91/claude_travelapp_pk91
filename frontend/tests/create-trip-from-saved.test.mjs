@@ -254,13 +254,25 @@ test("modal exports CreateTripFromSavedModal and prefill helper", () => {
 
 // ── 8. Required-field validation ─────────────────────────────────────────────
 
-test("modal requires title, origin, destination, start/end dates before submit", () => {
-  // canSubmit gate checks all five required fields are non-empty
+test("modal requires title, resolved origin/destination, start/end dates before submit", () => {
+  // canSubmit gate checks all required fields — origin/destination must be
+  // RESOLVED airport selections (not plain city strings).
   assert.ok(modal.includes("title.trim().length > 0"), "title required");
-  assert.ok(modal.includes("origin.trim().length > 0"), "origin required");
-  assert.ok(modal.includes("destination.trim().length > 0"), "destination required");
+  assert.ok(modal.includes("originResolved"), "resolved origin required");
+  assert.ok(modal.includes("destResolved"), "resolved destination required");
   assert.ok(modal.includes("startDate.length > 0"), "startDate required");
   assert.ok(modal.includes("endDate.length > 0"), "endDate required");
+});
+
+test("modal blocks submit until plain-city prefill is resolved through CityAutocomplete", () => {
+  // A selection counts as resolved only when it carries IATA airport codes.
+  assert.match(modal, /originResolved\s*=\s*!!originSel\s*&&\s*originSel\.airports\.length\s*>\s*0/);
+  assert.match(modal, /destResolved\s*=\s*!!destSel\s*&&\s*destSel\.airports\.length\s*>\s*0/);
+  // Inline copy is shown when unresolved.
+  assert.ok(
+    modal.includes("Select a city/airport from suggestions before creating the trip."),
+    "inline unresolved hint copy must be present"
+  );
 });
 
 test("modal renders Origin field for ALL verticals (not flight-gated)", () => {
@@ -354,8 +366,8 @@ test("restaurant/attraction: destination missing → blank (user must fill)", ()
     !body.includes("'unknown'") && !body.includes('"unknown"'),
     "no fabricated destination"
   );
-  // canSubmit gate enforces non-empty destination
-  assert.ok(modal.includes("destination.trim().length > 0"), "submit gated on destination");
+  // canSubmit gate enforces a resolved destination airport selection
+  assert.ok(modal.includes("destResolved"), "submit gated on resolved destination");
 });
 
 // ── 14. No provider/concierge/search wiring ──────────────────────────────────
@@ -477,53 +489,55 @@ test("hotel/restaurant/attraction prefill still populates dates and title via st
   assert.ok(modal.includes("useState(prefill.travelers") || modal.includes("useState<number>(prefill.travelers)"), "travelers prefill preserved");
 });
 
-// ── 18. Prefill preservation — initAirportSelection ──────────────────────────
+// ── 18. Prefill preservation — initFromPrefill ───────────────────────────────
 
-test("modal defines initAirportSelection helper for prefill-to-chip conversion", () => {
-  assert.ok(modal.includes("initAirportSelection"), "helper must exist");
-  assert.ok(modal.includes("function initAirportSelection"), "must be defined in modal");
+test("modal defines initFromPrefill helper for prefill-to-state conversion", () => {
+  assert.ok(modal.includes("initFromPrefill"), "helper must exist");
+  assert.ok(modal.includes("function initFromPrefill"), "must be defined in modal");
 });
 
-test("initAirportSelection converts 3-letter IATA prefill to AirportSelection with airports", () => {
-  const helperStart = modal.indexOf("function initAirportSelection");
-  const helperBody = modal.slice(helperStart, helperStart + 600);
+test("initFromPrefill converts 3-letter IATA prefill to a resolved AirportSelection", () => {
+  const helperStart = modal.indexOf("function initFromPrefill");
+  const helperBody = modal.slice(helperStart, helperStart + 800);
   assert.match(helperBody, /\[A-Z\]\{3\}/);   // IATA pattern
   assert.ok(
     helperBody.includes("airports: [upper]") || helperBody.includes("airports: [code]"),
-    "IATA prefill must produce airports: [code]"
+    "IATA prefill must produce a resolved selection with airports: [code]"
   );
 });
 
-test("initAirportSelection returns empty airports for plain city strings (no fabrication)", () => {
-  const helperStart = modal.indexOf("function initAirportSelection");
-  const helperBody = modal.slice(helperStart, helperStart + 600);
-  assert.ok(helperBody.includes("airports: []"), "non-IATA must produce airports: []");
+test("initFromPrefill returns plain city prefill as an UNRESOLVED query, never a selection", () => {
+  const helperStart = modal.indexOf("function initFromPrefill");
+  const helperBody = modal.slice(helperStart, helperStart + 800);
+  // Plain (non-IATA) prefill must NOT become an AirportSelection with airports:[].
+  assert.ok(!helperBody.includes("airports: []"), "non-IATA prefill must not fabricate a selection");
+  assert.ok(
+    helperBody.includes("selection: null, query: trimmed"),
+    "non-IATA prefill must return selection:null + the text as query"
+  );
 });
 
-test("initAirportSelection returns null for empty prefill", () => {
-  const helperStart = modal.indexOf("function initAirportSelection");
-  const helperBody = modal.slice(helperStart, helperStart + 600);
-  assert.ok(helperBody.includes("return null"), "empty prefill must produce null");
+test("initFromPrefill returns null selection / blank query for empty prefill", () => {
+  const helperStart = modal.indexOf("function initFromPrefill");
+  const helperBody = modal.slice(helperStart, helperStart + 800);
+  assert.ok(helperBody.includes('selection: null, query: ""'), "empty prefill → null selection, blank query");
 });
 
-test("modal initializes originSel from prefill.origin via initAirportSelection", () => {
-  assert.match(modal, /initAirportSelection\(prefill\.origin\)/);
+test("modal initializes originSel/destSel from prefill via initFromPrefill", () => {
+  assert.match(modal, /initFromPrefill\(prefill\.origin\)/);
+  assert.match(modal, /initFromPrefill\(prefill\.destination\)/);
 });
 
-test("modal initializes destSel from prefill.destination via initAirportSelection", () => {
-  assert.match(modal, /initAirportSelection\(prefill\.destination\)/);
+test("saved flight origin/destination prefill remains visible/editable via initialQuery", () => {
+  // Non-IATA flight prefill stays visible as CityAutocomplete initialQuery text.
+  assert.match(modal, /initialQuery=\{originInit\.query\}/);
+  assert.match(modal, /initialQuery=\{destInit\.query\}/);
 });
 
-test("saved flight origin/destination prefill is preserved as initial chip in modal", () => {
-  // buildTripPrefillFromSavedItem returns origin/destination strings for flights;
-  // initAirportSelection converts them to chips (IATA chip or plain city chip).
-  assert.ok(modal.includes("initAirportSelection(prefill.origin)"), "flight origin prefill wired");
-  assert.ok(modal.includes("initAirportSelection(prefill.destination)"), "flight destination prefill wired");
-});
-
-test("saved hotel/restaurant/attraction destination prefill preserved as initial chip", () => {
-  // Non-flight verticals set prefill.destination; initAirportSelection converts it.
-  assert.ok(modal.includes("initAirportSelection(prefill.destination)"), "destination prefill wired");
+test("saved hotel/restaurant/attraction destination prefill remains visible via initialQuery", () => {
+  // Non-flight verticals set prefill.destination; it stays visible as initialQuery.
+  assert.match(modal, /initFromPrefill\(prefill\.destination\)/);
+  assert.match(modal, /initialQuery=\{destInit\.query\}/);
 });
 
 test("airports forwarded to createTripFromSavedItem only when resolved selection has non-empty airports", () => {
