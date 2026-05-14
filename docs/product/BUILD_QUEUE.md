@@ -6,15 +6,25 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Now
 
-- **Stage 3 exit/status decision**: Stage 3 v1/v2/v3 are shipped, but Stage 3 is **not auto-complete**. Confirm whether the Saved Lists Gate is sufficiently met for current private-use scope or whether saved-list board/edit/reorganization gaps must be handled first. Also decide whether trip-workspace search parity with Explore (canonical Flights flow + hotel discovery inside `TripBuilder`) is required before Stage 4 — currently it is an accepted open gap.
+- **Wife-Wow design system foundation** (Stage 3 exit → pre-Stage-4 design foundation). Strict scope: design tokens / visual primitives, app shell / premium surface language, shared buttons/cards/forms/actions, vertical result-card visual foundation. **Hard stops**: no provider/search behavior changes, no API route changes, no Tavily/live-research changes, no flight/hotel/saved-trip behavior changes. Deliver as one coherent design foundation PR; no incremental style micro-patches.
 
 ## Next
 
-- Stage 4 — AI destination intelligence entry contract, only after the Stage 3 exit/status decision accepts the Saved Lists Gate as sufficiently met.
+- Stage 4 — AI destination intelligence entry contract (after Wife-Wow design foundation is merged).
 - Stage 2B or later: Real hotel offer rates (requires provider-backed Hotel Offer contract + explicit Provider Registry re-approval).
-- Optional pre-Stage-4 slice: Trip-workspace Explore parity (reuse Explore's canonical Flights search and hotel discovery inside `TripBuilder`). Only if the Stage 3 exit decision requires it.
+- Optional: Trip-workspace Explore parity (reuse Explore's canonical Flights search and hotel discovery inside `TripBuilder`) — accepted open gap, schedule separately if needed.
 
 ## Completed
+
+- **Stage 3 exit — functionally complete (2026-05-14).** Stage 3 v1/v2/v3 shipped. Stage 3 is accepted as functionally unblocked for current private-use scope. Saved-list board reorganization/edit is an accepted open gap (not required before design foundation). Trip-workspace search parity with Explore is an accepted open gap (schedule separately). Canonical provider routing contract locked (see below). Next: Wife-Wow design system foundation.
+
+  **Canonical Explore provider routing contract (durable — do not regress):**
+  - Hotels → `POST /search/hotels` → `SearchService.search_hotels` → Google Places `HotelProvider`
+  - Attractions → `POST /search/attractions` → `SearchService.search_attraction_results` → Google Places Text Search
+  - Restaurants → `POST /search/restaurants` → Google Places
+  - Flights → `canonical_flight_search` helper → Duffel → Google Flights `SEARCH_REDIRECT` link-out
+  - AI Concierge (`/ai/concierge/search`) is **not** the backend for default Explore. It is the explicit Tavily/live-research path only, gated by `ALLOW_LIVE_RESEARCH_CALLS`.
+  - Hotel "Compare prices" CTA → deterministic `google.com/travel/hotels` URL (`buildHotelCompareUrl`). Stays Google Hotels — not Booking.com. Guest count defaults to Google's behavior for now.
 
 - **Stage 3 pre-design utility — hotel compare link-out v1 + Create Trip from Saved autocomplete parity**: `HotelExploreFlow` hotel cards gain a deterministic "Compare prices" CTA linking to `google.com/travel/hotels` search (no rates, no OTA, no booking). `compareLink` stored in saved-item payload metadata (future-friendly, no price fields). `CreateTripFromSavedModal` replaces plain Origin/Destination text inputs with `CityAutocomplete` matching `TripBuilderForm` UX; resolved city/country/IATA chips; manual IATA fallback preserved; airport arrays forwarded to `createTripWithSearch`. No backend/SQL/env changes. 42 + 45 + 20 + 123 tests pass. (2026-05-14)
 

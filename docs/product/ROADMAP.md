@@ -23,20 +23,31 @@ For gates, see `docs/product/RELEASE_GATES.md`.
 - Example build slices: global Explore shell, unified result actions (save / add to trip / create trip), trip-optional surfaces.
 - Do not expand into: saved-list ML ranking, AI destination intelligence, or design sprint.
 
-## Stage 3 — Saved lists / boards
+## Stage 3 — Saved lists / boards ✓ FUNCTIONALLY EXITED (2026-05-14)
 
 - Goal: Travel Idea / Saved Item becomes a first-class root object.
 - Why it matters: ideas need a home that does not require a trip.
 - Entry criteria: Stage 2 exit gate passed.
 - Exit gate: Saved Lists Gate passes.
+- Status: **Functionally unblocked for private-use scope.** v1 (Saved Lists Foundation), v2 (Add to Trip), v3 (Create Trip from Saved) shipped. Board reorganization/edit is an accepted open gap. Trip-workspace search parity is an accepted open gap. PRs #366–#370 resolved all Stage 3 exit blockers.
 - Example build slices: saved list data model, list views, board organization, save-from-anywhere actions.
 - Do not expand into: AI ranking, social sharing, or notifications.
+
+## Stage 3.5 — Wife-Wow design system foundation (ACTIVE NEXT)
+
+- Goal: design tokens, visual primitives, premium surface language, shared components, and vertical result-card visual foundation.
+- Why it matters: the product is functionally unblocked; premium feel is the next unlock for wife-wow readiness.
+- Entry criteria: Stage 3 functionally exited.
+- Exit gate: Wife Wow Readiness Gate passes (see RELEASE_GATES.md).
+- Hard stops for this stage: no provider/search behavior changes, no API route changes, no Tavily/live-research changes, no flight/hotel/saved-trip behavior changes.
+- Example build slices: design tokens, app shell / surface language, shared buttons/cards/forms/actions, vertical result-card visual foundation.
+- Do not expand into: new feature surfaces, route changes, or provider work during the design foundation.
 
 ## Stage 4 — AI destination intelligence
 
 - Goal: trustworthy AI recommendations grounded in the place graph.
 - Why it matters: makes Discover useful at the level of intent, not keywords.
-- Entry criteria: Stage 3 exit gate passed; AI Concierge stable.
+- Entry criteria: Stage 3.5 design foundation merged; AI Concierge stable.
 - Exit gate: AI destination quality matches trusted-card bar.
 - Example build slices: preference-aware destination cards, semantic intent surfaces, evidence-backed reasons.
 - Do not expand into: deals, points, social, or alerts.
