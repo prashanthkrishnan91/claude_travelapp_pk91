@@ -1,3 +1,5 @@
+import hashlib
+import json
 import logging
 import re
 import time
@@ -466,6 +468,70 @@ def _serialize_offer_leg(leg) -> dict:
     }
 
 
+def _fingerprint_leg(leg) -> dict:
+    """Normalized leg projection used for the deterministic offer fingerprint.
+
+    Includes only offer-identity fields (route, times, duration, stops, and
+    every segment in order).  Excludes nothing user/session-specific because
+    a leg carries none.
+    """
+    return {
+        "origin": leg.origin,
+        "destination": leg.destination,
+        "departure_time": leg.departure_time,
+        "arrival_time": leg.arrival_time,
+        "duration_minutes": leg.duration_minutes,
+        "stops": leg.stops,
+        "segments": [
+            {
+                "airline": s.airline,
+                "flight_number": s.flight_number,
+                "origin": s.origin,
+                "destination": s.destination,
+                "departure_time": s.departure_time,
+                "arrival_time": s.arrival_time,
+                "duration_minutes": s.duration_minutes,
+                "cabin_class": s.cabin_class,
+            }
+            for s in leg.segments
+        ],
+    }
+
+
+def _flight_offer_fingerprint(offer: FlightItineraryOffer) -> str:
+    """Deterministic identity for a canonical provider-backed flight offer.
+
+    Stable across runs for the same offer; changes when any offer-identity
+    field (provider offer id, route, dates, legs, segments, price, currency,
+    passengers, cabin) changes.  Deliberately excludes title, position,
+    fetched_at, live/cached status, booking/search URLs, and any
+    user/session-specific or random field — those do not distinguish offers.
+    """
+    payload: dict = {
+        "provider": offer.provider,
+        "trip_type": offer.trip_type.value,
+        "origin": offer.origin,
+        "destination": offer.destination,
+        "departure_date": offer.departure_date,
+        "return_date": offer.return_date,
+        "passengers": offer.passengers,
+        "cabin_class": offer.cabin_class,
+        "currency": offer.price.currency,
+        "total_price": f"{float(offer.price.total_amount):.2f}",
+        "outbound_leg": _fingerprint_leg(offer.outbound_leg),
+        "return_leg": (
+            _fingerprint_leg(offer.return_leg)
+            if offer.return_leg is not None
+            else None
+        ),
+    }
+    if offer.provider_offer_id:
+        payload["provider_offer_id"] = offer.provider_offer_id
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return f"flight_offer:v1:{digest}"
+
+
 def _offer_to_flight_item(
     offer: FlightItineraryOffer,
     *,
@@ -529,6 +595,7 @@ def _offer_to_flight_item(
         "currency": offer.price.currency,
         "outbound_leg": _serialize_offer_leg(ob),
         "return_leg": _serialize_offer_leg(rt) if rt is not None else None,
+        "offer_fingerprint": _flight_offer_fingerprint(offer),
         "google_flights_search_url": google_url,
         "booking_link": {
             "url": booking_link.url,
@@ -537,6 +604,9 @@ def _offer_to_flight_item(
             "kind": "search_redirect_only",
         },
     }
+
+    if offer.provider_offer_id:
+        details["provider_offer_id"] = offer.provider_offer_id
 
     return ItineraryItemDirectCreate(
         trip_id=trip_id,
@@ -839,6 +909,9 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
     # remaining valid round-trip offers persist.
     t_persist_flights_start = time.perf_counter()
     _flights_persisted = 0
+    _flights_attempted = 0
+    _flights_duplicate = 0
+    _seen_flight_item_ids: set = set()
     _round_trip_offers = 0
     _one_way_offers = 0
     _skipped_missing_return_leg = 0
@@ -859,17 +932,30 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
                 )
                 continue
         try:
-            itinerary_svc.create_trip_item(
+            _created = itinerary_svc.create_trip_item(
                 _offer_to_flight_item(offer, trip_id=trip.id, position=idx),
                 user_id,
             )
-            _flights_persisted += 1
+            _flights_attempted += 1
+            # create_trip_item collapses exact-fingerprint duplicates: a repeat
+            # offer returns the already-persisted row.  Count unique inserts
+            # honestly so the log never implies more rows than the DB holds.
+            _created_id = str(getattr(_created, "id", "") or "")
+            if _created_id and _created_id in _seen_flight_item_ids:
+                _flights_duplicate += 1
+            else:
+                if _created_id:
+                    _seen_flight_item_ids.add(_created_id)
+                _flights_persisted += 1
         except Exception as _exc:
             logger.warning("[create_with_search.persist] vertical=flight idx=%d error=%s", idx, _exc)
 
     seeding["flights"] = {
         "harvested": len(flight_offers),
         "persisted": _flights_persisted,
+        "attempted": _flights_attempted,
+        "duplicate_existing": _flights_duplicate,
+        "api_visible_after_persist": _flights_persisted,
         "status": flight_search_status,
         "reason": flight_search_reason or None,
         "round_trip_offers": _round_trip_offers,
@@ -877,11 +963,13 @@ def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: Curr
         "skipped_missing_return_leg": _skipped_missing_return_leg,
     }
     logger.info(
-        "[create_with_search.flight] harvested=%d persisted=%d status=%s "
+        "[create_with_search.flight] harvested=%d attempted=%d persisted=%d "
+        "duplicate_existing=%d status=%s "
         "flight_trip_type_counts={round_trip:%d, one_way:%d} "
         "round_trip_offers=%d one_way_offers=%d skipped_missing_return_leg=%d "
         "round_trip_requested=%s elapsed_ms=%d",
-        len(flight_offers), _flights_persisted, flight_search_status,
+        len(flight_offers), _flights_attempted, _flights_persisted,
+        _flights_duplicate, flight_search_status,
         _round_trip_offers, _one_way_offers,
         _round_trip_offers, _one_way_offers, _skipped_missing_return_leg,
         _round_trip_requested,

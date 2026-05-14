@@ -1083,3 +1083,404 @@ def test_one_way_request_persists_one_way_offers():
     assert result.seeding_status["flights"]["persisted"] == 1
     assert result.seeding_status["flights"]["one_way_offers"] == 1
     assert result.seeding_status["flights"]["skipped_missing_return_leg"] == 0
+
+
+# ── 11. Flight-offer fingerprint dedupe (Stage 3 exit blocker) ────────────────
+#
+# Canonical Duffel flight offers must be deduped in the backend by a
+# deterministic offer fingerprint, NOT by title. Multiple valid Duffel offers
+# can share the same headline title (airline + flight number + route); title
+# dedupe silently collapsed them, so /trips/{id}/items returned fewer rows than
+# create-with-search attempted.
+
+from dataclasses import replace as _dc_replace  # noqa: E402
+
+from app.services.itinerary import ItineraryService  # noqa: E402
+from app.models.itinerary import ItineraryItemDirectCreate, ItineraryItemType  # noqa: E402
+
+
+def _mk_offer(
+    *,
+    provider_offer_id=None,
+    ob_flight_number="DL100",
+    ob_dep="2026-05-13T10:00:00Z",
+    rt_flight_number="DL101",
+    rt_dep="2026-05-20T09:00:00Z",
+    total_amount=850.0,
+    currency="USD",
+    origin="SFO",
+    destination="NRT",
+):
+    """Build a round-trip canonical FlightItineraryOffer for fingerprint tests."""
+    ob_arr = "2026-05-14T14:30:00Z"
+    rt_arr = "2026-05-20T22:30:00Z"
+    outbound_seg = FlightSegment(
+        airline="Delta Air Lines",
+        flight_number=ob_flight_number,
+        origin=origin,
+        destination=destination,
+        departure_time=ob_dep,
+        arrival_time=ob_arr,
+        duration_minutes=860,
+    )
+    outbound = FlightOfferLeg(
+        origin=origin,
+        destination=destination,
+        departure_time=ob_dep,
+        arrival_time=ob_arr,
+        duration_minutes=860,
+        stops=0,
+        segments=(outbound_seg,),
+    )
+    return_seg = FlightSegment(
+        airline="Delta Air Lines",
+        flight_number=rt_flight_number,
+        origin=destination,
+        destination=origin,
+        departure_time=rt_dep,
+        arrival_time=rt_arr,
+        duration_minutes=810,
+    )
+    return_leg = FlightOfferLeg(
+        origin=destination,
+        destination=origin,
+        departure_time=rt_dep,
+        arrival_time=rt_arr,
+        duration_minutes=810,
+        stops=0,
+        segments=(return_seg,),
+    )
+    return FlightItineraryOffer(
+        provider="duffel_flights",
+        fetched_at="2026-05-13T09:00:00+00:00",
+        live_cached_status=LiveCachedStatus.LIVE,
+        trip_type=TripType.ROUND_TRIP,
+        origin=origin,
+        destination=destination,
+        departure_date="2026-05-13",
+        return_date="2026-05-20",
+        passengers=1,
+        cabin_class="economy",
+        outbound_leg=outbound,
+        return_leg=return_leg,
+        price=FlightPrice(currency=currency, total_amount=total_amount, taxes_fees_included=True),
+        booking_link=FlightBookingLink(
+            url="https://www.google.com/travel/flights?tfs=GgYIAQ&q=SFO+to+NRT",
+            link_type=BookingLinkType.SEARCH_REDIRECT,
+            provider_name="google_flights",
+        ),
+        provider_offer_id=provider_offer_id,
+    )
+
+
+def _fp(offer):
+    return trips_route._offer_to_flight_item(
+        offer, trip_id=uuid4(), position=0
+    ).details["offer_fingerprint"]
+
+
+def test_offer_to_flight_item_persists_provider_offer_id():
+    """provider_offer_id is persisted into details when the offer carries one."""
+    offer = _mk_offer(provider_offer_id="off_abc123")
+    item = trips_route._offer_to_flight_item(offer, trip_id=uuid4(), position=0)
+    assert item.details["provider_offer_id"] == "off_abc123"
+
+
+def test_offer_to_flight_item_omits_provider_offer_id_when_absent():
+    """provider_offer_id is optional — absent offers must not carry the key."""
+    offer = _mk_offer(provider_offer_id=None)
+    item = trips_route._offer_to_flight_item(offer, trip_id=uuid4(), position=0)
+    assert "provider_offer_id" not in item.details
+
+
+def test_offer_to_flight_item_persists_offer_fingerprint():
+    """Every canonical flight item carries a v1-prefixed offer fingerprint."""
+    fp = _fp(_mk_offer(provider_offer_id="off_1"))
+    assert fp.startswith("flight_offer:v1:")
+    assert len(fp) > len("flight_offer:v1:")
+
+
+def test_fingerprint_is_stable_for_identical_offers():
+    """Identical canonical offers produce an identical fingerprint."""
+    a = _mk_offer(provider_offer_id="off_1")
+    b = _mk_offer(provider_offer_id="off_1")
+    assert _fp(a) == _fp(b)
+
+
+def test_fingerprint_changes_when_provider_offer_id_differs():
+    assert _fp(_mk_offer(provider_offer_id="off_1")) != _fp(
+        _mk_offer(provider_offer_id="off_2")
+    )
+
+
+def test_fingerprint_changes_on_outbound_flight_number_or_departure():
+    base = _mk_offer(provider_offer_id="off_1")
+    assert _fp(base) != _fp(
+        _mk_offer(provider_offer_id="off_1", ob_flight_number="DL999")
+    )
+    assert _fp(base) != _fp(
+        _mk_offer(provider_offer_id="off_1", ob_dep="2026-05-13T18:00:00Z")
+    )
+
+
+def test_fingerprint_changes_on_return_flight_number_or_departure():
+    base = _mk_offer(provider_offer_id="off_1")
+    assert _fp(base) != _fp(
+        _mk_offer(provider_offer_id="off_1", rt_flight_number="DL999")
+    )
+    assert _fp(base) != _fp(
+        _mk_offer(provider_offer_id="off_1", rt_dep="2026-05-20T18:00:00Z")
+    )
+
+
+def test_fingerprint_changes_on_price_or_currency():
+    base = _mk_offer(provider_offer_id="off_1")
+    assert _fp(base) != _fp(_mk_offer(provider_offer_id="off_1", total_amount=999.0))
+    assert _fp(base) != _fp(_mk_offer(provider_offer_id="off_1", currency="EUR"))
+
+
+def test_fingerprint_ignores_booking_link_url():
+    """Google Flights URL is query-level, not offer-level — must not change the fp."""
+    a = _mk_offer(provider_offer_id="off_1")
+    b = _dc_replace(
+        a,
+        booking_link=FlightBookingLink(
+            url="https://www.google.com/travel/flights?tfs=DIFFERENT&q=X",
+            link_type=BookingLinkType.SEARCH_REDIRECT,
+            provider_name="google_flights",
+        ),
+    )
+    assert _fp(a) == _fp(b)
+
+
+# ── Fake Supabase DB supporting is_() for ItineraryService dedupe tests ──────
+
+class _FpResult:
+    def __init__(self, data):
+        self.data = data
+
+
+class _FpQuery:
+    def __init__(self, rows):
+        self.rows = rows
+        self.eqs = []
+        self.is_nulls = []
+        self.mode = "select"
+        self.payload = None
+        self.limit_n = None
+        self.order_field = None
+
+    def select(self, *_a):
+        return self
+
+    def eq(self, f, v):
+        self.eqs.append((f, str(v)))
+        return self
+
+    def is_(self, f, _v):
+        self.is_nulls.append(f)
+        return self
+
+    def limit(self, n):
+        self.limit_n = n
+        return self
+
+    def order(self, f, desc=False):
+        self.order_field = f
+        return self
+
+    def insert(self, p):
+        self.mode = "insert"
+        self.payload = p
+        return self
+
+    def _match(self, r):
+        if not all(str(r.get(f)) == v for f, v in self.eqs):
+            return False
+        return all(r.get(f) is None for f in self.is_nulls)
+
+    def execute(self):
+        if self.mode == "insert":
+            row = dict(self.payload)
+            row.setdefault("id", str(uuid4()))
+            row.setdefault("created_at", "2026-01-01T00:00:00+00:00")
+            row.setdefault("updated_at", "2026-01-01T00:00:00+00:00")
+            self.rows.append(row)
+            return _FpResult([dict(row)])
+        rows = [dict(r) for r in self.rows if self._match(r)]
+        if self.order_field:
+            rows.sort(key=lambda r: r.get(self.order_field) or 0)
+        if self.limit_n is not None:
+            rows = rows[: self.limit_n]
+        return _FpResult(rows)
+
+
+class _FpDB:
+    def __init__(self):
+        self.tables = {"trips": [], "itinerary_days": [], "itinerary_items": []}
+
+    def table(self, name):
+        return _FpQuery(self.tables[name])
+
+
+def _canonical_flight_payload(trip_id, offer, position=0):
+    return trips_route._offer_to_flight_item(offer, trip_id=trip_id, position=position)
+
+
+def test_create_trip_item_inserts_two_canonical_offers_with_same_title_diff_fingerprint():
+    """Two canonical offers sharing a title but with distinct fingerprints both insert."""
+    db = _FpDB()
+    svc = ItineraryService(db)
+    trip_id = uuid4()
+
+    a = _mk_offer(provider_offer_id="off_1")
+    b = _mk_offer(provider_offer_id="off_2")
+    pa = _canonical_flight_payload(trip_id, a, 0)
+    pb = _canonical_flight_payload(trip_id, b, 1)
+    # Same title, different fingerprint — the regression precondition.
+    assert pa.title == pb.title
+    assert pa.details["offer_fingerprint"] != pb.details["offer_fingerprint"]
+
+    r1 = svc.create_trip_item(pa)
+    r2 = svc.create_trip_item(pb)
+    assert r1.id != r2.id
+    assert len(db.tables["itinerary_items"]) == 2
+
+
+def test_create_trip_item_collapses_exact_duplicate_canonical_offers():
+    """Two canonical offers with an identical fingerprint collapse to one row."""
+    db = _FpDB()
+    svc = ItineraryService(db)
+    trip_id = uuid4()
+
+    offer = _mk_offer(provider_offer_id="off_1")
+    p1 = _canonical_flight_payload(trip_id, offer, 0)
+    p2 = _canonical_flight_payload(trip_id, offer, 1)
+    assert p1.details["offer_fingerprint"] == p2.details["offer_fingerprint"]
+
+    r1 = svc.create_trip_item(p1)
+    r2 = svc.create_trip_item(p2)
+    assert r1.id == r2.id
+    assert len(db.tables["itinerary_items"]) == 1
+
+
+def test_create_trip_item_still_title_dedupes_non_canonical_rows():
+    """Non-canonical rows (hotels/manual) keep exact title-based dedupe behavior."""
+    db = _FpDB()
+    svc = ItineraryService(db)
+    trip_id = uuid4()
+
+    def _hotel(title):
+        return ItineraryItemDirectCreate(
+            trip_id=trip_id,
+            item_type=ItineraryItemType.HOTEL,
+            title=title,
+            position=0,
+            details={"name": title, "source": "google_places"},
+        )
+
+    r1 = svc.create_trip_item(_hotel("Park Hyatt Tokyo"))
+    r2 = svc.create_trip_item(_hotel("Park Hyatt Tokyo"))
+    r3 = svc.create_trip_item(_hotel("Hotel Okura"))
+    assert r1.id == r2.id  # duplicate title collapses
+    assert r3.id != r1.id
+    assert len(db.tables["itinerary_items"]) == 2
+
+
+def test_non_canonical_flight_without_fingerprint_uses_title_dedupe():
+    """A flight row missing canonical markers falls back to title dedupe."""
+    db = _FpDB()
+    svc = ItineraryService(db)
+    trip_id = uuid4()
+
+    def _legacy_flight():
+        return ItineraryItemDirectCreate(
+            trip_id=trip_id,
+            item_type=ItineraryItemType.FLIGHT,
+            title="Legacy Flight DL100",
+            position=0,
+            details={"kind": "manual"},  # no source_kind/offer_fingerprint
+        )
+
+    r1 = svc.create_trip_item(_legacy_flight())
+    r2 = svc.create_trip_item(_legacy_flight())
+    assert r1.id == r2.id
+    assert len(db.tables["itinerary_items"]) == 1
+
+
+def test_create_with_search_round_trip_persists_ten_distinct_fingerprint_offers():
+    """10 canonical offers with repeated titles but distinct fingerprints → 10 rows.
+
+    End-to-end Stage 3 exit check: create-with-search attempts 10 distinct
+    canonical round-trip offers; /trips/{id}/items must return all 10.
+    """
+    offers = [_mk_offer(provider_offer_id=f"off_{i}") for i in range(10)]
+    # All 10 share the same headline title — the exact regression condition.
+    titles = {
+        trips_route._offer_to_flight_item(o, trip_id=uuid4(), position=0).title
+        for o in offers
+    }
+    assert len(titles) == 1
+
+    db = _FpDB()
+    real_itin = ItineraryService(db)
+
+    fake_search, fake_trips, _fake_itin, spy, uid, trip = _setup_mocks(offers=offers)
+    # Seed the trip row so ownership checks pass against the fake DB.
+    db.tables["trips"].append({"id": str(trip.id), "user_id": str(uid)})
+
+    with (
+        patch.object(trips_route, "SearchService", return_value=fake_search),
+        patch.object(trips_route, "TripsService", return_value=fake_trips),
+        patch.object(trips_route, "ItineraryService", return_value=real_itin),
+        patch.object(trips_route, "canonical_flight_search", spy),
+    ):
+        result = trips_route.create_trip_with_search(
+            _TOKYO_PAYLOAD, db=db, user_id=uid
+        )
+
+    flight_rows = [
+        r for r in real_itin.list_items_by_trip(trip.id)
+        if r.item_type == ItineraryItemType.FLIGHT
+    ]
+    assert len(flight_rows) == 10, "all 10 distinct canonical offers must be API-visible"
+    assert result.seeding_status["flights"]["attempted"] == 10
+    assert result.seeding_status["flights"]["persisted"] == 10
+    assert result.seeding_status["flights"]["duplicate_existing"] == 0
+    assert result.seeding_status["flights"]["api_visible_after_persist"] == 10
+
+
+def test_create_with_search_collapses_exact_duplicate_offers_and_logs_duplicate():
+    """Exact-duplicate canonical offers collapse; seeding_status distinguishes them."""
+    # Five distinct offers, each duplicated once → 10 attempted, 5 unique rows.
+    offers = []
+    for i in range(5):
+        o = _mk_offer(provider_offer_id=f"off_{i}")
+        offers.append(o)
+        offers.append(o)
+
+    db = _FpDB()
+    real_itin = ItineraryService(db)
+
+    fake_search, fake_trips, _fake_itin, spy, uid, trip = _setup_mocks(offers=offers)
+    db.tables["trips"].append({"id": str(trip.id), "user_id": str(uid)})
+
+    with (
+        patch.object(trips_route, "SearchService", return_value=fake_search),
+        patch.object(trips_route, "TripsService", return_value=fake_trips),
+        patch.object(trips_route, "ItineraryService", return_value=real_itin),
+        patch.object(trips_route, "canonical_flight_search", spy),
+    ):
+        result = trips_route.create_trip_with_search(
+            _TOKYO_PAYLOAD, db=db, user_id=uid
+        )
+
+    flight_rows = [
+        r for r in real_itin.list_items_by_trip(trip.id)
+        if r.item_type == ItineraryItemType.FLIGHT
+    ]
+    assert len(flight_rows) == 5
+    assert result.seeding_status["flights"]["attempted"] == 10
+    assert result.seeding_status["flights"]["persisted"] == 5
+    assert result.seeding_status["flights"]["duplicate_existing"] == 5
+    assert result.seeding_status["flights"]["api_visible_after_persist"] == 5
