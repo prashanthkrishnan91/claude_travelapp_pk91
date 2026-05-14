@@ -32,7 +32,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
 
-- 2026-05-14 — **Stage 3 exit / status contract (this PR).** Stage 3 declared functionally exited. Canonical provider/search routing locked in `BUILD_QUEUE.md`. Wife-Wow design foundation added as next queue item in `BUILD_QUEUE.md` and `ROADMAP.md` (Stage 3.5). `HANDOFF.md` compacted and updated. No code, SQL, provider, or env changes.
+- 2026-05-14 — **Design Bible Addendum v1.1 (this PR).** New `docs/product/DESIGN_BIBLE_ADDENDUM_V1_1.md` — concise Stage 3.5 sharpening of Design Bible v1.0 (private atelier principle, Concierge search-bar grammar, trip-as-story model, future experience-lane IA, constraint-first feasibility UX). Adds emotional-architecture/UX-grammar guidance only; does not rewrite the Bible, does not expand Phase 0 scope, preserves all Stage 3 exit routing/provider guardrails. Docs only — no code, SQL, provider, or env changes.
+
+- 2026-05-14 — **Stage 3 exit / status contract.** Stage 3 declared functionally exited. Canonical provider/search routing locked in `BUILD_QUEUE.md`. Wife-Wow design foundation added as next queue item in `BUILD_QUEUE.md` and `ROADMAP.md` (Stage 3.5). `HANDOFF.md` compacted and updated. No code, SQL, provider, or env changes.
 
 - 2026-05-14 — **PR #370 — Google Hotels compare URL: timezone-safe date formatting + improved date context.** `buildHotelCompareUrl` now formats check-in/check-out dates in local time (not UTC), passes them to the Google Hotels URL. No behavior changes beyond date accuracy.
 
