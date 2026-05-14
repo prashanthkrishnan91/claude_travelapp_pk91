@@ -15,8 +15,10 @@ This file is the contract test for the v1A architecture rescue:
    classification is exhaustive across the route file.
 5. **Frontend caller registry** — only the files in
    ``_KNOWN_LEGACY_SEARCH_CALLERS`` are allowed to reference the legacy
-   ``/search/{flights,hotels,attractions,best-area,clusters,round-trip-flights}``
-   routes (or their typed helpers ``searchFlights`` / ``searchHotels`` / etc).
+   ``/search/{flights,best-area,clusters,round-trip-flights}`` routes (or
+   their typed helpers ``searchFlights`` / ``searchHotels`` / etc).
+   ``/search/hotels`` and ``/search/attractions`` are canonical
+   Google-Places-backed vertical search routes and are not policed here.
    Any new caller fails this test and forces an explicit decision.
 
 Add new mock fixtures or new callers only by extending these registries
@@ -323,7 +325,6 @@ def test_legacy_dependent_set_contains_known_mock_routes():
     expected = {
         "/search/flights",
         "/search/round-trip-flights",
-        "/search/hotels",
     }
     missing = expected - search_routes.LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES
     assert not missing, f"LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES is missing: {missing}"
@@ -334,8 +335,10 @@ def test_legacy_dependent_set_contains_known_mock_routes():
 # ---------------------------------------------------------------------------
 
 
+# ``/search/attractions`` was restored as a canonical Google Places vertical
+# search endpoint by the vertical-search architecture slice — it is NOT a
+# v1C-deleted route.
 _V1C_DELETED_ROUTES: frozenset = frozenset({
-    "/search/attractions",
     "/search/clusters",
     "/search/best-area",
 })
@@ -405,20 +408,12 @@ _KNOWN_LEGACY_SEARCH_CALLERS: frozenset = frozenset({
     # Still references the legacy `searchFlights` / `searchHotels` typed
     # wrappers (consumed by OptimizeTripModal — out of scope for v1B).
     pathlib.PurePosixPath("frontend/src/lib/api.ts"),
-    # OptimizeTripModal still calls /search/flights and /search/hotels until
-    # v1B-flights+hotels (or a real-provider follow-up) lands.
+    # OptimizeTripModal still calls the legacy /search/flights route and the
+    # legacy ``searchHotels`` wrapper until a real-provider follow-up lands.
     pathlib.PurePosixPath("frontend/src/components/trips/OptimizeTripModal.tsx"),
-    # Test fixtures that document the legacy surface or assert v1B
-    # migration intent are explicitly allowed.
-    pathlib.PurePosixPath("frontend/tests/explore-hydration.test.mjs"),
-    # v1B migration regression fixture — asserts TripBuilder Explore no
-    # longer calls `searchAttractions` / `searchClusters` / `fetchBestArea`.
-    # The file references those tokens as `assert.doesNotMatch(...)` patterns.
-    pathlib.PurePosixPath("frontend/tests/explore-concierge-migration.test.mjs"),
-    # Fail-Closed UX v1 contract test — references `/search/flights` and
-    # `/search/hotels` in a documentation comment explaining the mock-row
-    # guard in OptimizeTripModal. No live caller; no v1B-equivalent
-    # migration owed.
+    # Fail-Closed UX v1 contract test — references `/search/flights` in a
+    # documentation comment explaining the mock-row guard in
+    # OptimizeTripModal. No live caller.
     pathlib.PurePosixPath("frontend/tests/fail-closed-flights-hotels.test.mjs"),
     # Hotels Product Contract v1 contract test — references
     # ``searchHotels`` in source-content assertions guarding the
@@ -435,16 +430,16 @@ _KNOWN_LEGACY_SEARCH_CALLERS: frozenset = frozenset({
 # Distinct from ``/search/restaurants`` (canonical) and unrelated string
 # literals like Google Maps URLs (``maps/search/...``) which are filtered
 # below.
+# NOTE: ``/search/hotels`` and ``/search/attractions`` are NOT in this list —
+# they are canonical Google-Places-backed vertical search routes (shared by
+# Explore and trip creation), not legacy mock-backed surfaces.
 _LEGACY_SEARCH_TOKENS: tuple[str, ...] = (
     "/search/flights",
     "/search/round-trip-flights",
-    "/search/hotels",
-    "/search/attractions",
     "/search/clusters",
     "/search/best-area",
     "searchFlights",
     "searchHotels",
-    "searchAttractions",
     "searchClusters",
     "fetchBestArea",
     "searchRoundTripFlights",

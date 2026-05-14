@@ -925,6 +925,146 @@ export async function searchRestaurants(
   }
 }
 
+// ─── Canonical vertical search — Explore Hotels / Attractions ────────────────
+//
+// HotelExploreFlow and AttractionExploreFlow call these helpers, NOT
+// callConciergeSearch.  /search/hotels and /search/attractions are the
+// canonical Google-Places-backed vertical search endpoints shared by Explore
+// and trip creation.  No Tavily / live research / Concierge involvement.
+
+/** Verified hotel discovery card from the canonical /search/hotels endpoint. */
+export interface ExploreHotelResult {
+  id: string;
+  name: string;
+  source: string;
+  address: string;
+  rating?: number;
+  lat?: number;
+  lng?: number;
+  /** Google Places place id (canonical addability/verification identity). */
+  googlePlaceId?: string;
+  /** Canonical Google Maps URI for this place. */
+  googleMapsUri?: string;
+}
+
+/** Verified attraction card from the canonical /search/attractions endpoint. */
+export interface ExploreAttractionResult {
+  id: string;
+  name: string;
+  source: string;
+  category: string;
+  address: string;
+  rating?: number;
+  reviewCount?: number;
+  tags: string[];
+  lat?: number;
+  lng?: number;
+  googlePlaceId?: string;
+  googleMapsUri?: string;
+}
+
+interface RawAttractionResult {
+  id: string;
+  name: string;
+  category: string;
+  description?: string;
+  location: string;
+  address: string;
+  rating?: number;
+  numReviews?: number;
+  tags?: string[];
+  bookingUrl?: string;
+  lat?: number;
+  lng?: number;
+  source?: string;
+}
+
+function placeIdFromGpId(id: unknown): string | undefined {
+  return typeof id === "string" && id.startsWith("gp-") ? id.slice(3) : undefined;
+}
+
+/**
+ * Canonical Explore Hotels search — POST /search/hotels (Google Places only).
+ * Discovery-only: verified lodging entities, no rates/prices/availability.
+ */
+export async function searchHotelsExplore(
+  destination: string,
+  checkIn?: string,
+  checkOut?: string,
+  guests?: number
+): Promise<ExploreHotelResult[]> {
+  // /search/hotels requires concrete check-in/out dates; default to a 1-night
+  // window when the Explore form leaves them blank (discovery is date-agnostic).
+  const now = new Date();
+  const fallbackIn = now.toISOString().slice(0, 10);
+  const fallbackOut = new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10);
+  const payload = toSnake({
+    location: destination,
+    checkIn: checkIn || fallbackIn,
+    checkOut: checkOut || fallbackOut,
+    guests: guests && guests > 0 ? guests : 2,
+  });
+  try {
+    const results = await apiFetch<RawHotelResult[]>("/search/hotels", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return results
+      .filter((h) => h.source === "google_places")
+      .map((h) => ({
+        id: h.id,
+        name: h.name,
+        source: h.source ?? "google_places",
+        address: h.location ?? "",
+        rating: h.rating,
+        lat: h.lat,
+        lng: h.lng,
+        googlePlaceId: placeIdFromGpId(h.id),
+        googleMapsUri: h.bookingUrl,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Canonical Explore Attractions search — POST /search/attractions
+ * (Google Places Text Search only).  No Concierge / Tavily / live research.
+ */
+export async function searchAttractionsExplore(
+  destination: string,
+  interest?: string
+): Promise<ExploreAttractionResult[]> {
+  const payload = toSnake({
+    location: destination,
+    category: interest && interest.trim() ? interest.trim() : null,
+  });
+  try {
+    const results = await apiFetch<RawAttractionResult[]>("/search/attractions", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return results
+      .filter((a) => a.source === "google_places")
+      .map((a) => ({
+        id: a.id,
+        name: a.name,
+        source: a.source ?? "google_places",
+        category: a.category ?? "Attraction",
+        address: a.address ?? a.location ?? "",
+        rating: a.rating,
+        reviewCount: a.numReviews,
+        tags: Array.isArray(a.tags) ? a.tags : [],
+        lat: a.lat,
+        lng: a.lng,
+        googlePlaceId: placeIdFromGpId(a.id),
+        googleMapsUri: a.bookingUrl,
+      }));
+  } catch {
+    return [];
+  }
+}
+
 // ─── Explore candidate snapshots ─────────────────────────────────────────────
 
 export interface ExploreSnapshot {
@@ -1771,8 +1911,7 @@ export async function callConciergeSearch(
   tripId: string | null,
   userQuery: string,
   clientMessageId?: string,
-  destination?: string,
-  allowLiveResearch?: boolean
+  destination?: string
 ): Promise<ConciergeSearchResult> {
   const raw = await apiFetch<unknown>("/ai/concierge/search", {
     method: "POST",
@@ -1781,9 +1920,6 @@ export async function callConciergeSearch(
       ...(destination ? { destination } : {}),
       user_query: userQuery,
       ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
-      // Only send when explicitly disabling paid live research (default
-      // Explore Hotels). Omitted → backend default (true) for AI Concierge.
-      ...(allowLiveResearch === false ? { allow_live_research: false } : {}),
     }),
   });
   const normalized = normalizeConciergeResponse(raw);

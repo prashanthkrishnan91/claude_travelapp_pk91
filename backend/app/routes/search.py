@@ -16,24 +16,35 @@ C=internal/test/demo / D=dead / E=unclear):
   ``BLOCK_LEGACY_PRODUCT_MOCK`` until a real provider lands.
 - ``POST /search/round-trip-flights`` — class C, no direct frontend caller,
   invoked by ``/trips/create-with-search``.  Same quarantine path.
-- ``POST /search/hotels`` — class A, mock-backed, called by
-  ``OptimizeTripModal`` and ``/trips/create-with-search``.  Same quarantine
-  path.
+- ``POST /search/hotels`` — class A, **canonical** Google Places lodging
+  discovery (``SearchService.search_hotels`` → ``HotelProvider`` seam).
+  Used by Explore Hotels, ``OptimizeTripModal``, and
+  ``/trips/create-with-search``.  Not mock-backed; not quarantined.
+- ``POST /search/attractions`` — class A, **canonical** Google Places Text
+  Search (``SearchService.search_attraction_results``).  Used by Explore
+  Attractions and shares the attractions mapping with
+  ``/trips/create-with-search`` seeding.  Not mock-backed; not Concierge.
 - ``POST /search/restaurants`` — class A, real Google Places provider,
   fail-closed when no API key.  Already canonical; **not** quarantined.
 
-Routes deleted in v1C (Product Surface Cleanup deletion variant — orphaned
-after PR #289 migrated TripBuilder Explore onto ``/ai/concierge/search``):
+Vertical-search architecture
+----------------------------
+``/search/hotels`` and ``/search/attractions`` are the canonical vertical
+search endpoints shared by Explore and trip creation.  Default Explore
+Hotels/Attractions do NOT call ``/ai/concierge/search`` — the Concierge
+route is reserved for explicit AI Concierge chat / concierge-note / deep
+research, which is the only default user-facing path that may use
+Tavily/live research (further gated by ``ALLOW_LIVE_RESEARCH_CALLS``).
 
-- ``POST /search/attractions`` — removed.  Frontend now uses
-  ``searchAttractionsViaConcierge(...)`` against ``/ai/concierge/search``.
+Routes deleted in v1C (Product Surface Cleanup deletion variant):
+
 - ``POST /search/clusters`` — removed.  Grouped/Areas view was deleted in
   PR #289; no canonical replacement exists.
 - ``POST /search/best-area`` — removed.  Best Area card was deleted in PR
   #289; no canonical replacement exists.
 
 The ``/ai/concierge*`` family (see ``backend/app/routes/ai.py``) is the
-canonical place-card surface and goes through
+canonical AI Concierge surface and goes through
 ``backend/app/concierge/display_contract.py`` at the response boundary.
 """
 
@@ -46,6 +57,8 @@ from app.core.config import get_settings
 from app.core.cost_guardrails import GuardrailRule, guardrails
 from app.core.deps import DB, CurrentUserID
 from app.models.search import (
+    AttractionResult,
+    AttractionSearchRequest,
     FlightResult,
     FlightSearchRequest,
     HotelResult,
@@ -70,26 +83,28 @@ router = APIRouter(prefix="/search", tags=["search"])
 # legacy ``SearchService`` mock fixtures.  Keep this registry in sync with
 # ``LEGACY_PRODUCT_MOCK_FUNCTIONS`` in ``backend/app/services/search.py``.
 #
-# v1C deletion variant (this file): /search/attractions, /search/clusters,
-# and /search/best-area were removed.  Their entries must NOT reappear here;
-# the v1A regression suite enforces that via a stale-entry guard test.
+# Only the flight routes still route through the legacy ``SearchService``
+# mock seam.  ``/search/hotels`` and ``/search/attractions`` are canonical
+# Google-Places-backed vertical search endpoints (see below).
 LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES: frozenset = frozenset({
     "/search/flights",
     "/search/round-trip-flights",
-    "/search/hotels",
 })
 
 # Routes that are already canonical (do not depend on legacy mocks).  Listed
 # here so the v1A regression tests can assert the partition is exhaustive.
 CANONICAL_PRODUCT_ROUTES: frozenset = frozenset({
     "/search/restaurants",
+    "/search/hotels",
+    "/search/attractions",
 })
 
 # Routes deleted in v1C — kept here as an explicit "do not resurrect" list.
 # The v1A regression suite asserts none of these reappear in the route source
-# or in ``LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES``.
+# or in ``LEGACY_PRODUCT_MOCK_DEPENDENT_ROUTES``.  ``/search/attractions`` was
+# restored as a canonical Google Places endpoint by the vertical-search
+# architecture slice and is intentionally NOT in this set.
 DELETED_LEGACY_PRODUCT_ROUTES: frozenset = frozenset({
-    "/search/attractions",
     "/search/clusters",
     "/search/best-area",
 })
@@ -173,6 +188,32 @@ def search_hotels(payload: HotelSearchRequest, db: DB, user_id: CurrentUserID) -
         dedupe_payload={"location": payload.location, "check_in": payload.check_in, "check_out": payload.check_out},
     )
     return SearchService(db).search_hotels(payload)
+
+
+@router.post("/attractions", response_model=List[AttractionResult])
+def search_attractions(payload: AttractionSearchRequest, db: DB, user_id: CurrentUserID) -> List[AttractionResult]:
+    """Canonical Google Places attraction search.
+
+    Backed by Google Places Text Search only (``SearchService.
+    search_attraction_results``).  Returns OPERATIONAL attraction cards with
+    stable provider identity (``gp-<place_id>`` ids, Google Maps URIs,
+    lat/lng).  Never calls the AI Concierge, live research, Tavily, or
+    Claude; fails closed (empty list) when no API key / no results.  Shares
+    the attractions mapping with ``/trips/create-with-search`` seeding.
+    """
+    logger.info("[search_attractions] location=%s category=%s", payload.location, payload.category)
+    settings = get_settings()
+    guardrails.enforce(
+        endpoint_key="search.search_attractions",
+        user_id=user_id,
+        rule=GuardrailRule(
+            requests=settings.guardrail_search_requests,
+            window_seconds=settings.guardrail_search_window_seconds,
+            dedupe_seconds=settings.guardrail_search_dedupe_seconds,
+        ),
+        dedupe_payload={"location": payload.location, "category": payload.category},
+    )
+    return SearchService(db).search_attraction_results(payload)
 
 
 @router.post("/restaurants", response_model=List[RestaurantResult])

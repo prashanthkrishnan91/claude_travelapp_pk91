@@ -1,20 +1,17 @@
 "use client";
 
 /**
- * Hotels vertical — live discovery via tripless AI Concierge (Stage 2A Slice 5C).
+ * Hotels vertical — canonical vertical search.
+ *
+ * HotelExploreFlow calls the canonical /search/hotels endpoint
+ * (searchHotelsExplore), the same Google-Places-backed hotel search service
+ * used by /trips/create-with-search seeding.  Explore Hotels is a pure
+ * provider-backed discovery surface — it does not depend on the AI Concierge
+ * search route and spends no paid research credits.
  *
  * Discovery-only lodging cards: Google Places verified hotels, no rates,
- * no prices, no availability. Search context (destination, dates, guests)
- * is preserved in ExploreResultContext for a future provider-backed offer.
- *
- * Compare prices CTA (v1): deterministic Google Hotels search link-out only —
- * no in-app rates, no OTA booking, no price/availability claims.
- *
- * Calls callConciergeSearch(null, query, undefined, destination, false) — no
- * trip_id required (Slice 3 made the Concierge trip-optional). The trailing
- * `false` sets allowLiveResearch=false so default Explore Hotels never spends
- * paid Tavily/live-research credits; the backend serves Google-Places-verified
- * hotels only. Tavily stays reserved for explicit AI Concierge / deep research.
+ * no prices, no availability.  Compare prices CTA (v1): deterministic Google
+ * Hotels search link-out only — no in-app rates, no OTA booking.
  */
 
 import { useState } from "react";
@@ -44,8 +41,8 @@ function buildHotelCompareUrl({
   if (guests && guests > 0) url += `&guests=${guests}`;
   return url;
 }
-import { callConciergeSearch } from "@/lib/api";
-import type { UnifiedHotelResult } from "@/lib/api";
+import { searchHotelsExplore } from "@/lib/api";
+import type { ExploreHotelResult } from "@/lib/api";
 import type { ExploreResultContext } from "./types";
 import { ResultActionSheet } from "./ResultActionSheet";
 
@@ -64,7 +61,7 @@ export function HotelExploreFlow() {
     guests: 2,
   });
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<UnifiedHotelResult[] | null>(null);
+  const [results, setResults] = useState<ExploreHotelResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [lastForm, setLastForm] = useState<HotelFormValues | null>(null);
@@ -74,8 +71,6 @@ export function HotelExploreFlow() {
     const dest = form.destination.trim();
     if (!dest) return;
 
-    const query = `hotels in ${dest}`;
-
     setLoading(true);
     setError(null);
     setSearched(true);
@@ -83,13 +78,15 @@ export function HotelExploreFlow() {
     setResults(null);
 
     try {
-      // Default Explore Hotels is verified-only: pass allowLiveResearch=false
-      // so the backend serves Google-Places-backed hotels and never spends
-      // paid Tavily/live-research credits. Tavily stays available for the
-      // explicit AI Concierge / deep-research experiences only.
-      const res = await callConciergeSearch(null, query, undefined, dest, false);
-      setResults(res.hotels);
-      if (res.hotels.length === 0) {
+      // Canonical vertical search: Google-Places-backed /search/hotels.
+      const res = await searchHotelsExplore(
+        dest,
+        form.checkIn || undefined,
+        form.checkOut || undefined,
+        form.guests,
+      );
+      setResults(res);
+      if (res.length === 0) {
         setError("No hotels found for this destination. Try a different area.");
       }
     } catch {
@@ -104,13 +101,11 @@ export function HotelExploreFlow() {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
-  function buildContext(h: UnifiedHotelResult): ExploreResultContext {
-    const gv = h.googleVerification;
+  function buildContext(h: ExploreHotelResult): ExploreResultContext {
     const dest = lastForm?.destination ?? form.destination.trim();
-    const displayName = h.display?.displayName ?? h.name;
     // Future-ready compare link: Google Hotels search link-out only, no price fields.
     const compareLink = buildHotelCompareUrl({
-      hotelName: displayName,
+      hotelName: h.name,
       destination: dest,
       checkIn: lastForm?.checkIn || undefined,
       checkOut: lastForm?.checkOut || undefined,
@@ -118,23 +113,14 @@ export function HotelExploreFlow() {
     });
     // Normalize saved-item display snapshot: discovery fields only, no price/rate/booking.
     const savedPayload: Record<string, unknown> = {
-      type: h.type,
+      type: "hotel",
       name: h.name,
       source: h.source,
-      areaLabel: h.areaLabel,
-      stars: h.stars,
       rating: h.rating,
-      mapsLink: h.mapsLink,
-      tags: h.tags,
-      verifiedPlace: h.verifiedPlace,
-      verificationTier: h.verificationTier,
-      googleVerification: h.googleVerification,
-      supportingDetails: h.supportingDetails,
-      display: h.display,
-      primaryReason: h.primaryReason,
-      // Normalized top-level fields for ResultActionSheet saved-item snapshot
-      address: h.supportingDetails?.address ?? undefined,
-      googleMapsUri: h.mapsLink ?? undefined,
+      address: h.address,
+      mapsLink: h.googleMapsUri,
+      googleMapsUri: h.googleMapsUri,
+      providerPlaceId: h.googlePlaceId,
       // Search context preserved for future provider-backed offer hydration
       destination: dest,
       checkIn: lastForm?.checkIn || undefined,
@@ -149,8 +135,8 @@ export function HotelExploreFlow() {
       dates: { checkIn: lastForm?.checkIn || undefined, checkOut: lastForm?.checkOut || undefined },
       guests: lastForm?.guests,
       location:
-        gv?.lat != null && gv?.lng != null ? { lat: gv.lat, lng: gv.lng } : undefined,
-      providerIdentity: gv?.providerPlaceId ?? undefined,
+        h.lat != null && h.lng != null ? { lat: h.lat, lng: h.lng } : undefined,
+      providerIdentity: h.googlePlaceId ?? undefined,
       originalPayload: savedPayload,
     };
   }
@@ -261,7 +247,7 @@ export function HotelExploreFlow() {
             {results.length} hotel{results.length !== 1 ? "s" : ""} in {lastForm?.destination}
           </p>
           {results.map((h, i) => (
-            <HotelCard key={h.name + i} hotel={h} context={buildContext(h)} />
+            <HotelCard key={h.id + i} hotel={h} context={buildContext(h)} />
           ))}
         </div>
       )}
@@ -280,13 +266,9 @@ function HotelCard({
   hotel: h,
   context,
 }: {
-  hotel: UnifiedHotelResult;
+  hotel: ExploreHotelResult;
   context: ExploreResultContext;
 }) {
-  const displayName = h.display?.displayName ?? h.name;
-  const displayWhy = h.display?.displayWhy ?? h.supportingDetails?.whyPick ?? null;
-  const address = h.supportingDetails?.address ?? null;
-  const areaLabel = h.areaLabel ?? null;
   // compareLink is stored by buildContext in originalPayload — external search link-out only.
   const compareLink = (context.originalPayload as Record<string, unknown>).compareLink as string | undefined;
 
@@ -300,20 +282,20 @@ function HotelCard({
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h3 className="text-sm font-semibold text-cream-100 leading-tight truncate">
-                {displayName}
+                {h.name}
               </h3>
               <p className="text-xs text-cream-500 mt-0.5 truncate">
-                {areaLabel ?? address ?? "Hotel"}
+                {h.address || "Hotel"}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {h.mapsLink && (
+              {h.googleMapsUri && (
                 <a
-                  href={h.mapsLink}
+                  href={h.googleMapsUri}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-1.5 rounded-lg bg-white/[.05] hover:bg-white/[.10] text-cream-400 transition"
-                  aria-label={`View ${displayName} on Google Maps`}
+                  aria-label={`View ${h.name} on Google Maps`}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
@@ -322,36 +304,13 @@ function HotelCard({
           </div>
 
           <div className="flex items-center gap-3 mt-2 flex-wrap">
-            {h.stars != null && h.stars > 0 && (
-              <span className="text-xs text-amber-300 font-medium" aria-label={`${h.stars} stars`}>
-                {"★".repeat(Math.min(h.stars, 5))}
-              </span>
-            )}
             {h.rating != null && (
               <span className="flex items-center gap-0.5 text-xs text-amber-400 font-medium">
                 <Star className="w-3 h-3 fill-amber-400" />
                 {h.rating.toFixed(1)}
               </span>
             )}
-            {h.tags && h.tags.length > 0 && (
-              <div className="flex gap-1 flex-wrap">
-                {h.tags.slice(0, 3).map((tag) => (
-                  <span
-                    key={tag}
-                    className="px-1.5 py-0.5 text-[10px] rounded-full bg-white/[.06] text-cream-400"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
-
-          {displayWhy && (
-            <p className="text-xs text-cream-400 mt-2 leading-relaxed line-clamp-2">
-              {displayWhy}
-            </p>
-          )}
 
           {compareLink && (
             <div className="mt-2">
@@ -360,7 +319,7 @@ function HotelCard({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 hover:text-violet-200 text-xs transition"
-                aria-label={`Compare prices for ${displayName}`}
+                aria-label={`Compare prices for ${h.name}`}
                 data-testid="hotel-compare-cta"
               >
                 <Search className="w-3 h-3" />

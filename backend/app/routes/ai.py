@@ -479,7 +479,6 @@ def build_typed_concierge_response(
                     payload.client_message_id,
                     prior_identity_keys=_prior_keys,
                     destination=payload.destination,
-                    allow_live_research=payload.allow_live_research,
                 )
                 _provider_ms = int((time.perf_counter() - _t_provider_start) * 1000)
 
@@ -522,7 +521,6 @@ def build_typed_concierge_response(
                                 None,
                                 prior_identity_keys=_combined_prior,
                                 destination=payload.destination,
-                                allow_live_research=payload.allow_live_research,
                             )
                             _refill_resp = PlaceRecommendationsResponse(**_refill_legacy.model_dump())
                             _refill_resp, _refill_dedup = _exclude_prior_verified_cards(
@@ -624,7 +622,7 @@ def build_typed_concierge_response(
 
     if not settings.concierge_router_v2:
         _t_ss = time.perf_counter()
-        legacy = service.search(payload.trip_id, payload.user_query, user_id, payload.client_message_id, destination=payload.destination, allow_live_research=payload.allow_live_research)
+        legacy = service.search(payload.trip_id, payload.user_query, user_id, payload.client_message_id, destination=payload.destination)
         _service_search_ms = int((time.perf_counter() - _t_ss) * 1000)
         typed_payload = PlaceRecommendationsResponse(**legacy.model_dump())
         decision = RouteDecision(
@@ -649,7 +647,7 @@ def build_typed_concierge_response(
 
         if decision.response_type == "place_recommendations":
             _t_ss = time.perf_counter()
-            legacy = service.search(payload.trip_id, payload.user_query, user_id, payload.client_message_id, destination=payload.destination, allow_live_research=payload.allow_live_research)
+            legacy = service.search(payload.trip_id, payload.user_query, user_id, payload.client_message_id, destination=payload.destination)
             _service_search_ms = int((time.perf_counter() - _t_ss) * 1000)
             typed_payload = PlaceRecommendationsResponse(**legacy.model_dump())
         elif decision.response_type == "trip_advice":

@@ -1,40 +1,50 @@
-"""SearchService — fetch (or generate mock) results and cache them in Supabase.
+"""SearchService — canonical vertical search + Supabase result cache.
 
 Architecture
 ------------
 1. Build a deterministic cache_key from the serialised query.
 2. Check research_cache for a live hit (not expired).
-3. On miss: call the appropriate _fetch_* method (currently returns realistic
-   mock data; swap in real provider clients when API keys are available).
+3. On miss: call the canonical provider seam for the vertical.
 4. Persist the result set to research_cache with a configurable TTL.
 5. Return the normalised result list to the route handler.
 
-Product Surface Pruning v1A — legacy mock quarantine
-----------------------------------------------------
-The ``_mock_flights`` / ``_mock_hotels`` helpers in this module are
-**legacy test/demo-only fixtures** preserved for the future
-provider-backed Flights/Hotels v1 product track.  They predate the
-canonical AI Concierge display contract (see
-``backend/app/concierge/display_contract.py``) and are still reachable
-through the legacy ``/search/{flights,hotels,round-trip-flights}`` routes
-consumed by ``OptimizeTripModal`` (the only remaining live caller).
-``/trips/create-with-search`` and ``OptimizeTripModal`` fail closed on any
-mock-derived row (``source ∈ {mock, demo, fixture}`` or
-``book.example.com`` booking URL), so no mock-backed flight or hotel can
-reach a persisted trip.  ``_mock_restaurants`` was deleted in the
-final mock-leak closeout — ``search_restaurants`` runs canonical Google
-Places fail-closed and never had a mock-backed live caller.  Until a
-provider-backed Flights/Hotels v1 lands, these helpers must be:
+Canonical vertical search (current architecture)
+------------------------------------------------
+``/search/hotels`` → ``search_hotels`` → ``HotelProvider`` seam (Google
+Places lodging discovery).  ``/search/attractions`` →
+``search_attraction_results`` → ``search_attractions`` (Google Places Text
+Search).  ``/search/restaurants`` → ``search_restaurants`` (Google Places,
+fail-closed).  These are the canonical Google-Places-backed vertical search
+endpoints shared by Explore and ``/trips/create-with-search`` seeding.
+
+The AI Concierge (``/ai/concierge/search``) is **not** the backend for
+default Explore — Explore Hotels/Attractions call the canonical
+``/search/*`` endpoints above, never the Concierge route.  Tavily / live
+research is reserved for the explicit AI Concierge / concierge-note /
+deep-research path only (further gated by ``ALLOW_LIVE_RESEARCH_CALLS``).
+
+Legacy mock quarantine — flights only
+-------------------------------------
+``_mock_flights`` is the only remaining legacy test/demo-only fixture
+preserved for a future provider-backed Flights v1 track.  ``_mock_hotels``
+is **dead legacy code**: ``search_hotels`` never calls it, the canonical
+hotel path is the Google Places ``HotelProvider`` seam, and
+``/trips/create-with-search`` + ``OptimizeTripModal`` independently fail
+closed on any mock-derived row (``source ∈ {mock, demo, fixture}`` or a
+``book.example.com`` booking URL).  ``_mock_hotels`` is retained only so
+the ``BLOCK_LEGACY_PRODUCT_MOCK`` operator-flag regression suite and the
+quarantine registry stay coherent; it is not reachable from any live
+route.  ``_mock_restaurants`` was deleted in the final mock-leak closeout.
+
+The remaining legacy mock fixture(s) must be:
 
 - explicitly marked as legacy via the ``__legacy_product_mock__`` attribute
   (``is_legacy_product_mock(fn)`` and ``LEGACY_PRODUCT_MOCK_FUNCTIONS``);
-- runtime-blockable via the ``BLOCK_LEGACY_PRODUCT_MOCK`` env flag so an
-  operator can fail-closed in production without a redeploy;
-- traceable via the ``legacy_product_mock`` structured log channel so we can
-  measure leakage rate in production logs before/after the v1B migration.
+- runtime-blockable via the ``BLOCK_LEGACY_PRODUCT_MOCK`` env flag;
+- traceable via the ``legacy_product_mock`` structured log channel.
 
 Do not extend or grow new mock fixtures.  All new place data must flow
-through ``/ai/concierge/search`` and the canonical display contract.
+through the canonical Google Places provider seams above.
 """
 
 import hashlib
@@ -55,6 +65,8 @@ except ImportError:  # pragma: no cover — httpx is in requirements.txt
 from supabase import Client
 
 from app.models.search import (
+    AttractionResult,
+    AttractionSearchRequest,
     BookingOption,
     FlightResult,
     FlightSearchRequest,
@@ -152,10 +164,16 @@ def _log_legacy_product_mock_event(
     )
 
 
-# Cache namespaces whose ``research_cache`` rows can only have come from the
-# legacy mock fixtures.  ``restaurants`` is intentionally **excluded**: it is
-# served by the canonical Google Places provider with fail-closed semantics
-# and already has its own stale-mock cache eviction in ``search_restaurants``.
+# Cache namespaces still subject to the ``BLOCK_LEGACY_PRODUCT_MOCK``
+# operator-flag cache guard.  ``hotels`` is retained as **defense-in-depth**
+# only: ``search_hotels`` is now the canonical Google Places ``HotelProvider``
+# path and writes exclusively ``source="google_places"`` cache rows, and
+# ``is_persistable_hotel`` already rejects any mock-attributed row
+# unconditionally — but a ``research_cache`` row written before the
+# vertical-search migration could still carry ``source="mock"``, so the
+# operator flag keeps the cache-side guard available.  ``restaurants`` and
+# ``attractions`` are intentionally **excluded** — they are canonical Google
+# Places paths with their own fail-closed semantics.
 _LEGACY_MOCK_DEPENDENT_NAMESPACES: frozenset = frozenset({
     "flights",
     "hotels",
@@ -418,8 +436,13 @@ def _mock_flights(req: FlightSearchRequest) -> List[FlightResult]:
 def _mock_hotels(req: HotelSearchRequest) -> List[HotelResult]:
     """Generate realistic hotel options for the requested location and dates.
 
-    Legacy product-surface mock fixture (Product Surface Pruning v1A).  See
-    module docstring for the quarantine seam.  Honors the
+    DEAD LEGACY CODE — not reachable from any live route.  ``search_hotels``
+    is the canonical Google Places ``HotelProvider`` path and never calls
+    this helper; ``/search/hotels`` and ``/trips/create-with-search`` cannot
+    emit ``_mock_hotels`` rows.  Retained only so the
+    ``BLOCK_LEGACY_PRODUCT_MOCK`` operator-flag regression suite and the
+    ``LEGACY_PRODUCT_MOCK_FUNCTIONS`` quarantine registry stay coherent.  Do
+    not wire this back into any route.  Honors the
     ``BLOCK_LEGACY_PRODUCT_MOCK`` env flag.
     """
     if _legacy_product_mock_blocked():
@@ -780,6 +803,42 @@ LEGACY_PRODUCT_MOCK_FUNCTIONS: tuple = (
 
 
 # ---------------------------------------------------------------------------
+# Attraction category mapping
+# ---------------------------------------------------------------------------
+
+_GOOGLE_TYPE_TO_ATTRACTION_CATEGORY: Dict[str, str] = {
+    "museum": "Museum",
+    "art_gallery": "Art Gallery",
+    "historical_landmark": "Landmark",
+    "monument": "Monument",
+    "national_monument": "Monument",
+    "cultural_landmark": "Landmark",
+    "tourist_attraction": "Attraction",
+    "park": "Park",
+    "national_park": "Park",
+    "amusement_park": "Amusement Park",
+    "aquarium": "Aquarium",
+    "zoo": "Zoo",
+    "botanical_garden": "Garden",
+    "temple": "Temple",
+    "shrine": "Shrine",
+    "castle": "Castle",
+    "palace": "Palace",
+    "church": "Church",
+    "cathedral": "Cathedral",
+}
+
+
+def _attraction_category_from_types(types: List[str]) -> str:
+    """Map Google Places types to a human-readable attraction category."""
+    for t in types:
+        label = _GOOGLE_TYPE_TO_ATTRACTION_CATEGORY.get((t or "").lower())
+        if label:
+            return label
+    return "Attraction"
+
+
+# ---------------------------------------------------------------------------
 # Service class
 # ---------------------------------------------------------------------------
 
@@ -1071,6 +1130,56 @@ class SearchService:
             len(raw_places),
             len(results),
         )
+        return results
+
+    def search_attraction_results(
+        self, req: AttractionSearchRequest
+    ) -> List[AttractionResult]:
+        """Canonical /search/attractions provider path.
+
+        Wraps the Google-Places-backed ``search_attractions`` dict provider
+        and normalises each operational place into an ``AttractionResult``
+        wire model so Explore and trip-creation seeding share one mapping.
+        Fails closed (empty list) when no API key / no results — never
+        fabricates mock data, never touches the Concierge / live-research /
+        Tavily path.
+        """
+        location = (req.location or "").strip()
+        query = (
+            f"{req.category.strip()} in {location}"
+            if req.category
+            else location
+        )
+        raw = self.search_attractions(query if req.category else location)
+        results: List[AttractionResult] = []
+        for place in raw:
+            place_id = place.get("place_id")
+            name = (place.get("name") or "").strip()
+            if not place_id or not name:
+                continue
+            types = list(place.get("types") or [])
+            category = _attraction_category_from_types(types)
+            results.append(
+                AttractionResult(
+                    id=f"gp-{place_id}",
+                    price=None,
+                    points_estimate=None,
+                    rating=place.get("rating"),
+                    location=req.location,
+                    booking_url=place.get("booking_url")
+                    or f"https://www.google.com/maps/place/?q=place_id:{place_id}",
+                    source="google_places",
+                    booking_options=[],
+                    name=name,
+                    category=category,
+                    description="",
+                    address=(place.get("address") or "").strip() or req.location,
+                    num_reviews=place.get("num_reviews"),
+                    tags=[t.replace("_", " ").title() for t in types[:3]],
+                    lat=place.get("lat"),
+                    lng=place.get("lng"),
+                )
+            )
         return results
 
     def search_restaurants(self, req: RestaurantSearchRequest) -> List[RestaurantResult]:

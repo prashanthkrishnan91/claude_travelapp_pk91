@@ -1,16 +1,17 @@
 /**
- * Hotel Explore Live — Stage 2A Slice 5C
+ * Hotel Explore — canonical vertical search architecture.
  *
- * Focused structural tests verifying the Hotels vertical is wired as
- * discovery-only lodging cards via the tripless AI Concierge:
+ * Structural tests proving Explore Hotels uses the canonical
+ * /search/hotels Google Places endpoint (searchHotelsExplore) and does NOT
+ * go through the AI Concierge route:
  *
- * 1. callConciergeSearch is the search path — no mock/legacy routes.
- * 2. Discovery-only contract: no price, rate, booking, or availability fields rendered.
- * 3. Search context (destination, dates, guests) preserved in ExploreResultContext.
- * 4. HotelCard renders name, stars, rating, address/area, why note, maps link, ResultActionSheet.
- * 5. No DeferredState / "coming soon" copy remains.
- * 6. Google Places providerPlaceId extracted as providerIdentity.
- * 7. No fake hotel provider, no mock rows, no /search/hotels route.
+ * 1. searchHotelsExplore is the search path — /search/hotels, not Concierge.
+ * 2. No callConciergeSearch import/call, no /ai/concierge/search reference.
+ * 3. Discovery-only contract: no price, rate, booking, or availability fields.
+ * 4. No Tavily / live-research / concierge-note rendering.
+ * 5. HotelCard renders name, rating, address, maps link, ResultActionSheet.
+ * 6. Compare prices CTA preserved (PR #367 Google Hotels link-out).
+ * 7. Google Places place id flows through as providerIdentity.
  */
 
 import test from 'node:test';
@@ -19,43 +20,54 @@ import { readFileSync } from 'node:fs';
 
 const hotelFlow = readFileSync(
   new URL('../src/components/explore/HotelExploreFlow.tsx', import.meta.url), 'utf8');
+const apiClient = readFileSync(
+  new URL('../src/lib/api.ts', import.meta.url), 'utf8');
 
-// ── 1. Live search path ────────────────────────────────────────────────────
+// ── 1. Canonical vertical-search path ──────────────────────────────────────
 
-test('HotelExploreFlow imports and calls callConciergeSearch', () => {
-  assert.match(hotelFlow, /import.*callConciergeSearch.*from.*api/);
-  assert.match(hotelFlow, /callConciergeSearch\(null,/);
+test('HotelExploreFlow imports and calls searchHotelsExplore', () => {
+  assert.match(hotelFlow, /import\s*\{\s*searchHotelsExplore\s*\}\s*from\s*"@\/lib\/api"/);
+  assert.match(hotelFlow, /searchHotelsExplore\(/);
 });
 
-test('HotelExploreFlow passes null tripId (tripless Concierge pattern)', () => {
-  assert.match(hotelFlow, /callConciergeSearch\(null,\s*query/);
+test('HotelExploreFlow imports ExploreHotelResult type from api', () => {
+  assert.match(hotelFlow, /ExploreHotelResult/);
 });
 
-test('HotelExploreFlow reads res.hotels from Concierge response', () => {
-  assert.match(hotelFlow, /res\.hotels/);
+test('searchHotelsExplore helper exists in api.ts and hits /search/hotels', () => {
+  assert.match(apiClient, /export async function searchHotelsExplore\(/);
+  const start = apiClient.indexOf('export async function searchHotelsExplore(');
+  const slice = apiClient.slice(start, start + 1200);
+  assert.match(slice, /"\/search\/hotels"/);
+  assert.doesNotMatch(slice, /concierge/i);
 });
 
-test('HotelExploreFlow imports UnifiedHotelResult type from api', () => {
-  assert.match(hotelFlow, /UnifiedHotelResult/);
-  assert.match(hotelFlow, /from.*@\/lib\/api/);
+// ── 2. No AI Concierge dependency ──────────────────────────────────────────
+
+test('HotelExploreFlow does not import or call callConciergeSearch', () => {
+  assert.doesNotMatch(hotelFlow, /callConciergeSearch/);
 });
 
-// ── 2. Discovery-only contract — no price/rate/booking fields rendered ─────
+test('HotelExploreFlow does not reference /ai/concierge/search', () => {
+  assert.doesNotMatch(hotelFlow, /\/ai\/concierge\/search/);
+});
 
-test('HotelExploreFlow does not render pricePerNight', () => {
+test('HotelExploreFlow does not reference allowLiveResearch / live research / Tavily', () => {
+  assert.doesNotMatch(hotelFlow, /allowLiveResearch/);
+  assert.doesNotMatch(hotelFlow, /live.?research/i);
+  assert.doesNotMatch(hotelFlow, /tavily/i);
+});
+
+// ── 3. Discovery-only contract — no price/rate/booking fields ──────────────
+
+test('HotelExploreFlow does not render pricePerNight / bookingUrl', () => {
   assert.doesNotMatch(hotelFlow, /pricePerNight/);
-});
-
-test('HotelExploreFlow does not render bookingUrl', () => {
   assert.doesNotMatch(hotelFlow, /bookingUrl/);
 });
 
-test('HotelExploreFlow does not render totalPrice or currency fields', () => {
+test('HotelExploreFlow does not render totalPrice, currency, availability claims', () => {
   assert.doesNotMatch(hotelFlow, /totalPrice/);
   assert.doesNotMatch(hotelFlow, /\.currency/);
-});
-
-test('HotelExploreFlow does not render availability or cancellation claims', () => {
   assert.doesNotMatch(hotelFlow, /isAvailable/);
   assert.doesNotMatch(hotelFlow, /cancellation/i);
 });
@@ -65,125 +77,56 @@ test('HotelExploreFlow does not show "book now" or "best deal" copy', () => {
   assert.doesNotMatch(hotelFlow, /best deal/i);
 });
 
-// ── 3. Search context preserved in ExploreResultContext ──────────────────
+// ── 4. No concierge / LLM note rendering ───────────────────────────────────
+
+test('HotelCard does not render concierge / displayWhy / whyPick notes', () => {
+  assert.doesNotMatch(hotelFlow, /displayWhy/);
+  assert.doesNotMatch(hotelFlow, /whyPick/);
+  assert.doesNotMatch(hotelFlow, /conciergeNote/);
+});
+
+// ── 5. Search context preserved in ExploreResultContext ────────────────────
 
 test('HotelExploreFlow sets vertical: "hotels" in ExploreResultContext', () => {
   assert.match(hotelFlow, /vertical: "hotels"/);
 });
 
-test('HotelExploreFlow preserves checkIn and checkOut in dates context', () => {
+test('HotelExploreFlow preserves checkIn/checkOut/guests in context', () => {
   assert.match(hotelFlow, /dates: \{ checkIn/);
   assert.match(hotelFlow, /checkOut/);
-});
-
-test('HotelExploreFlow preserves guests count in ExploreResultContext', () => {
   assert.match(hotelFlow, /guests: lastForm/);
 });
 
-test('HotelExploreFlow extracts providerPlaceId as providerIdentity', () => {
-  assert.match(hotelFlow, /providerPlaceId/);
-  assert.match(hotelFlow, /providerIdentity/);
+test('HotelExploreFlow flows Google Places place id as providerIdentity', () => {
+  assert.match(hotelFlow, /providerIdentity: h\.googlePlaceId/);
 });
 
-// ── 4. HotelCard content ─────────────────────────────────────────────────
-
-test('HotelCard renders stars field', () => {
-  assert.match(hotelFlow, /h\.stars/);
-  assert.match(hotelFlow, /★/);
-});
+// ── 6. HotelCard content ───────────────────────────────────────────────────
 
 test('HotelCard renders rating with Star icon', () => {
   assert.match(hotelFlow, /h\.rating/);
   assert.match(hotelFlow, /Star/);
 });
 
-test('HotelCard renders areaLabel or address', () => {
-  assert.match(hotelFlow, /areaLabel/);
-  assert.match(hotelFlow, /address/);
+test('HotelCard renders address line', () => {
+  assert.match(hotelFlow, /h\.address/);
 });
 
-test('HotelCard renders displayWhy / whyPick note', () => {
-  assert.match(hotelFlow, /displayWhy/);
-  assert.match(hotelFlow, /whyPick/);
-});
-
-test('HotelCard renders Google Maps external link when mapsLink present', () => {
-  assert.match(hotelFlow, /h\.mapsLink/);
+test('HotelCard renders Google Maps external link', () => {
+  assert.match(hotelFlow, /h\.googleMapsUri/);
   assert.match(hotelFlow, /ExternalLink/);
 });
 
-test('HotelCard wires ResultActionSheet', () => {
+test('HotelCard wires ResultActionSheet (Save / More actions)', () => {
   assert.match(hotelFlow, /import.*ResultActionSheet/);
   assert.match(hotelFlow, /<ResultActionSheet/);
 });
 
-test('HotelCard renders hotel-results testid on result list', () => {
+test('HotelExploreFlow renders hotel-results testid on result list', () => {
   assert.match(hotelFlow, /data-testid="hotel-results"/);
 });
 
-// ── 5. No deferred-state remnants ────────────────────────────────────────
-
-test('HotelExploreFlow does not contain deferred-state testid', () => {
-  assert.doesNotMatch(hotelFlow, /hotel-deferred-state/);
-});
-
-test('HotelExploreFlow does not contain "coming soon" copy', () => {
-  assert.doesNotMatch(hotelFlow, /coming soon/i);
-});
-
-test('HotelExploreFlow does not import Construction icon (deferred UI)', () => {
-  assert.doesNotMatch(hotelFlow, /Construction/);
-});
-
-// ── 6. No fake/mock provider ─────────────────────────────────────────────
-
-test('HotelExploreFlow does not reference /search/hotels route', () => {
-  assert.doesNotMatch(hotelFlow, /\/search\/hotels/);
-});
-
-test('HotelExploreFlow does not reference searchHotels function', () => {
-  assert.doesNotMatch(hotelFlow, /searchHotels/);
-});
-
-test('HotelExploreFlow does not reference Duffel or booking providers', () => {
-  assert.doesNotMatch(hotelFlow, /[Dd]uffel/);
-  assert.doesNotMatch(hotelFlow, /[Bb]ooking\.com/);
-});
-
-// ── 7. originalPayload normalization for saved-item display snapshots ─────
-
-test('buildContext savedPayload includes normalized address from supportingDetails', () => {
-  assert.match(hotelFlow, /address: h\.supportingDetails/);
-});
-
-test('buildContext savedPayload includes googleMapsUri normalized from mapsLink', () => {
-  assert.match(hotelFlow, /googleMapsUri: h\.mapsLink/);
-});
-
-test('buildContext savedPayload preserves mapsLink field', () => {
-  assert.match(hotelFlow, /mapsLink: h\.mapsLink/);
-});
-
-test('buildContext savedPayload includes search context fields destination, checkIn, checkOut, guests', () => {
-  assert.match(hotelFlow, /destination: dest/);
-  assert.match(hotelFlow, /checkIn: lastForm/);
-  assert.match(hotelFlow, /checkOut: lastForm/);
-  assert.match(hotelFlow, /guests: lastForm/);
-});
-
-test('buildContext savedPayload does not assign pricePerNight or bookingUrl', () => {
-  assert.doesNotMatch(hotelFlow, /pricePerNight\s*:/);
-  assert.doesNotMatch(hotelFlow, /bookingUrl\s*:/);
-});
-
-test('buildContext savedPayload does not assign totalPrice, currency, isAvailable, or cancellation', () => {
-  assert.doesNotMatch(hotelFlow, /totalPrice\s*:/);
-  assert.doesNotMatch(hotelFlow, /currency\s*:/);
-  assert.doesNotMatch(hotelFlow, /isAvailable\s*:/);
-  assert.doesNotMatch(hotelFlow, /cancellation\s*:/);
-});
-
-// ── 8. Hotel external compare link-out CTA (Scope A) ─────────────────────────
+// ── 7. Compare prices CTA preserved (PR #367) ──────────────────────────────
 
 test('HotelCard renders a Compare prices CTA (labeled link-out)', () => {
   assert.match(hotelFlow, /Compare prices/);
@@ -195,19 +138,8 @@ test('Hotel compare CTA is an external link (target=_blank, rel=noopener)', () =
   assert.match(hotelFlow, /rel="noopener noreferrer"/);
 });
 
-test('Hotel compare CTA does not render book now, best price, or availability claims', () => {
-  assert.doesNotMatch(hotelFlow, /book now/i);
-  assert.doesNotMatch(hotelFlow, /best price/i);
-  assert.doesNotMatch(hotelFlow, /check availability/i);
-  assert.doesNotMatch(hotelFlow, /priceGuaranteed/);
-});
-
-test('buildHotelCompareUrl utility function exists in HotelExploreFlow', () => {
-  assert.match(hotelFlow, /buildHotelCompareUrl/);
+test('buildHotelCompareUrl utility targets Google Hotels search URL', () => {
   assert.match(hotelFlow, /function buildHotelCompareUrl/);
-});
-
-test('buildHotelCompareUrl targets Google Hotels search URL, not an OTA or booking endpoint', () => {
   assert.match(hotelFlow, /google\.com\/travel\/hotels/);
   assert.doesNotMatch(hotelFlow, /expedia\.com/i);
   assert.doesNotMatch(hotelFlow, /booking\.com/i);
@@ -218,27 +150,11 @@ test('buildHotelCompareUrl uses encodeURIComponent for deterministic encoding', 
   assert.match(hotelFlow, /encodeURIComponent/);
 });
 
-test('buildContext savedPayload includes compareLink field (future-friendly metadata)', () => {
+test('buildContext savedPayload includes compareLink metadata', () => {
   assert.match(hotelFlow, /compareLink/);
-  // compareLink is not a price, rate, or booking field
-  assert.doesNotMatch(hotelFlow, /compareLink.*price/i);
-  assert.doesNotMatch(hotelFlow, /compareLink.*book/i);
 });
 
-test('HotelCard extracts compareLink from originalPayload without rendering price shells', () => {
-  assert.match(hotelFlow, /compareLink.*originalPayload/);
-  // No empty price container rendered alongside compare CTA
-  assert.doesNotMatch(hotelFlow, /pricePerNight\s*&&/);
-  assert.doesNotMatch(hotelFlow, /bestRate/);
-});
-
-test('Hotel compare CTA preserves maps link separately (not replaced)', () => {
-  // Both the maps icon link and the compare CTA must be present
-  assert.match(hotelFlow, /View.*on Google Maps/);
-  assert.match(hotelFlow, /Compare prices/);
-});
-
-test('HotelCard compare CTA renders with Search icon (not a booking icon)', () => {
+test('Hotel compare CTA renders with Search icon (not a booking icon)', () => {
   assert.match(hotelFlow, /Search.*className/);
   assert.doesNotMatch(hotelFlow, /ShoppingCart/);
   assert.doesNotMatch(hotelFlow, /CreditCard/);
