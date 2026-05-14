@@ -8,9 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3 — FUNCTIONALLY EXITED (2026-05-14).** Stage 3 v1/v2/v3 shipped. Accepted as functionally complete for private-use scope. Board reorganization/edit and trip-workspace search parity are accepted open gaps (schedule separately). **Active next: Wife-Wow design system foundation (Stage 3.5).**
+- Roadmap stage: **Stage 3.5 — Design Foundation Phase 0 SHIPPED (2026-05-14).** Design token layer (`--ds-*`) + Card primitive + TrustStrip primitive in place. No surface adoption yet. Stage 3 functionally exited. Stage 3.5 Phase 1 (surface adoption) is next. **Active build queue item: Wife-Wow design system foundation.**
 - Flights v1 — Duffel search-only LIVE: `DUFFEL_FLIGHTS_ENABLED=1`, `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`, `DUFFEL_DEBUG=false`, `DUFFEL_BOOKING_ENABLED=0`. Each flight card shows "Search on Google Flights" (SEARCH_REDIRECT link-out, not booking). Duffel never creates orders. Ignav DISABLED.
-- Active build queue item: **Wife-Wow design system foundation.** Design tokens / visual primitives, app shell / premium surface language, shared buttons/cards/forms/actions, vertical result-card visual foundation. Hard stops: no provider/search/API/Tavily changes, no flight/hotel/saved-trip behavior changes.
+- Active build queue item: **Wife-Wow design system foundation (Phase 1 — surface adoption).** Token + primitive infrastructure shipped in Phase 0. Phase 1: adopt Card primitive + tokens on one surface. Hard stops: no provider/search/API/Tavily changes, no flight/hotel/saved-trip behavior changes. See `docs/ai/UI_BASELINE.md` for Phase 0 inventory.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -32,7 +32,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
 
-- 2026-05-14 — **Design Bible Addendum v1.1 (this PR).** New `docs/product/DESIGN_BIBLE_ADDENDUM_V1_1.md` — concise Stage 3.5 sharpening of Design Bible v1.0 (private atelier principle, Concierge search-bar grammar, trip-as-story model, future experience-lane IA, constraint-first feasibility UX). Adds emotional-architecture/UX-grammar guidance only; does not rewrite the Bible, does not expand Phase 0 scope, preserves all Stage 3 exit routing/provider guardrails. Docs only — no code, SQL, provider, or env changes.
+- 2026-05-14 — **Design Foundation Phase 0 (this PR).** `globals.css`: `--ds-*` semantic token `:root` block (dark surfaces, warm paper, text, accent, trust, caution, elevation, motion, spacing, typography) + `@theme` semantic color wiring (`--color-ds-*: var(--ds-*)`) + global reduced-motion rule. `tailwind.config.ts`: minimal Tailwind v4 content config. `Card.tsx`: composable primitive shell (7 named slots: Identity, Trust, Media, Why, Meta, Actions, Caveat; tone=dark|paper). `TrustStrip.tsx`: trust signal primitive (verified/sourceCount/confidence/caveat; "Verified by Google" only when `verified=true`). No surface adoption. No code behavior, provider/search/API/Tavily/flight/hotel/saved-trip logic changed. No SQL. New baseline doc: `docs/ai/UI_BASELINE.md`.
+
+- 2026-05-14 — **Design Bible Addendum v1.1.** New `docs/product/DESIGN_BIBLE_ADDENDUM_V1_1.md` — concise Stage 3.5 sharpening of Design Bible v1.0 (private atelier principle, Concierge search-bar grammar, trip-as-story model, future experience-lane IA, constraint-first feasibility UX). Docs only — no code, SQL, provider, or env changes.
 
 - 2026-05-14 — **Stage 3 exit / status contract.** Stage 3 declared functionally exited. Canonical provider/search routing locked in `BUILD_QUEUE.md`. Wife-Wow design foundation added as next queue item in `BUILD_QUEUE.md` and `ROADMAP.md` (Stage 3.5). `HANDOFF.md` compacted and updated. No code, SQL, provider, or env changes.
 
@@ -72,7 +74,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Wife-Wow design system foundation.** Stage 3 is functionally exited. Design tokens, premium surface language, shared components, and vertical result-card visual foundation are the next unlock. Strict no-behavior-change scope: no provider/search/API route/Tavily changes, no flight/hotel/saved-trip logic changes. After design foundation merges → Stage 4 AI destination intelligence entry contract.
+**Design Foundation Phase 1 (surface adoption).** Phase 0 token + primitive infrastructure is now in place. Next: adopt the Card primitive and design tokens in one surface (e.g., Explore result cards or Saved list cards) as the first Wife-Wow visible slice. Strict no-behavior-change scope continues: no provider/search/API route/Tavily changes, no flight/hotel/saved-trip logic changes. After design foundation Phase 1+ merges → Stage 4 AI destination intelligence entry contract.
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 

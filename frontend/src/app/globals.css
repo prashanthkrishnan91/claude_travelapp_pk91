@@ -1,5 +1,106 @@
 @import "tailwindcss";
 
+/* ════════════════════════════════════════════════════════════════
+   DESIGN TOKEN FOUNDATION — Design Bible v1.0 Phase 0
+   Stage 3.5 · Wife-Wow design system foundation
+   Tokens are additive — existing Tailwind utilities unchanged.
+   ════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Dark surface tokens (Midnight Ink palette) */
+  --ds-midnight-ink:   #0c0c1a;
+  --ds-onyx-velvet:    #131325;
+  --ds-carbon-mist:    #16162d;
+  --ds-pen-stroke:     rgba(255, 255, 255, 0.07);
+  --ds-pen-stroke-md:  rgba(255, 255, 255, 0.12);
+
+  /* ── Warm paper surface tokens */
+  --ds-warm-paper:   #faf8f4;
+  --ds-parchment:    #f2ede4;
+  --ds-aged-paper:   #e8e0d4;
+
+  /* ── Text role tokens */
+  --ds-text-primary:   #f2ede4;
+  --ds-text-secondary: #b8b5c0;
+  --ds-text-tertiary:  #706d80;
+  --ds-text-inverse:   #1a1008;
+
+  /* ── Accent tokens (warm gold) */
+  --ds-accent:        #e8b854;
+  --ds-accent-muted:  #c8a55c;
+  --ds-accent-subtle: rgba(200, 165, 92, 0.12);
+
+  /* ── Trust signal tokens */
+  --ds-trust-verified: #34d399;
+  --ds-trust-partial:  #fcd34d;
+  --ds-trust-caveat:   rgba(251, 191, 36, 0.15);
+
+  /* ── Caution / warning tokens */
+  --ds-caution: #f59e0b;
+  --ds-warning: #ef4444;
+
+  /* ── Elevation tokens */
+  --ds-elevation-1:
+    0 1px 2px rgba(0, 0, 0, 0.55),
+    0 4px 12px rgba(0, 0, 0, 0.40);
+  --ds-elevation-2:
+    0 4px 6px rgba(0, 0, 0, 0.50),
+    0 12px 28px rgba(0, 0, 0, 0.40),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --ds-elevation-3:
+    0 8px 16px rgba(0, 0, 0, 0.50),
+    0 24px 48px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --ds-elevation-4:
+    0 16px 32px rgba(0, 0, 0, 0.55),
+    0 40px 80px rgba(0, 0, 0, 0.40),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+
+  /* ── Motion tokens */
+  --ds-duration-fast:     120ms;
+  --ds-duration-standard: 200ms;
+  --ds-duration-slow:     300ms;
+  --ds-easing-standard:   cubic-bezier(0.4, 0, 0.2, 1);
+  --ds-easing-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --ds-easing-accelerate: cubic-bezier(0.4, 0, 1, 1);
+
+  /* ── Spacing scale tokens */
+  --ds-space-1:   0.25rem;   /*  4px */
+  --ds-space-2:   0.5rem;    /*  8px */
+  --ds-space-3:   0.75rem;   /* 12px */
+  --ds-space-4:   1rem;      /* 16px */
+  --ds-space-6:   1.5rem;    /* 24px */
+  --ds-space-8:   2rem;      /* 32px */
+  --ds-space-12:  3rem;      /* 48px */
+
+  /* ── Typography role tokens */
+  --ds-type-display-size:     2.25rem;
+  --ds-type-display-weight:   700;
+  --ds-type-display-leading:  1.15;
+  --ds-type-display-tracking: -0.03em;
+
+  --ds-type-heading-size:     1.5rem;
+  --ds-type-heading-weight:   600;
+  --ds-type-heading-leading:  1.25;
+  --ds-type-heading-tracking: -0.025em;
+
+  --ds-type-subheading-size:    1.125rem;
+  --ds-type-subheading-weight:  600;
+  --ds-type-subheading-leading: 1.3;
+
+  --ds-type-body-size:    0.875rem;
+  --ds-type-body-weight:  400;
+  --ds-type-body-leading: 1.5;
+
+  --ds-type-label-size:     0.75rem;
+  --ds-type-label-weight:   500;
+  --ds-type-label-tracking: 0.04em;
+
+  --ds-type-caption-size:    0.6875rem;
+  --ds-type-caption-weight:  400;
+  --ds-type-caption-leading: 1.4;
+}
+
 @theme {
   /* ── Sky (kept for secondary links/info) */
   --color-sky-50: #f0f9ff;
@@ -83,11 +184,39 @@
   --color-brand-500: #c8a55c;
   --color-brand-600: #a88438;
   --color-brand-700: #7d5f20;
+
+  /* ── Design token semantic wiring — theme keys read from :root vars */
+  --color-ds-midnight:         var(--ds-midnight-ink);
+  --color-ds-onyx:             var(--ds-onyx-velvet);
+  --color-ds-carbon:           var(--ds-carbon-mist);
+  --color-ds-paper:            var(--ds-warm-paper);
+  --color-ds-parchment:        var(--ds-parchment);
+  --color-ds-aged-paper:       var(--ds-aged-paper);
+  --color-ds-text:             var(--ds-text-primary);
+  --color-ds-text-secondary:   var(--ds-text-secondary);
+  --color-ds-text-tertiary:    var(--ds-text-tertiary);
+  --color-ds-text-inverse:     var(--ds-text-inverse);
+  --color-ds-accent:           var(--ds-accent);
+  --color-ds-accent-muted:     var(--ds-accent-muted);
+  --color-ds-trust:            var(--ds-trust-verified);
+  --color-ds-trust-partial:    var(--ds-trust-partial);
+  --color-ds-caution:          var(--ds-caution);
+  --color-ds-warning:          var(--ds-warning);
 }
 
 @layer base {
   *, *::before, *::after {
     box-sizing: border-box;
+  }
+
+  /* ── Reduced-motion global safety (Design Bible v1.0 §4.13) */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   html {
