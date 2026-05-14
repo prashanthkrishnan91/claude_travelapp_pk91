@@ -287,11 +287,6 @@ class ConciergeSearchRequest(BaseModel):
     destination: Optional[str] = None
     user_query: str
     client_message_id: Optional[str] = None
-    # When False, the retrieval-first concierge skips paid live research
-    # (Tavily) and serves verified Google-Places-backed cards only. Default
-    # Explore Hotels sets this to False; explicit AI Concierge / deep-research
-    # leaves it True.
-    allow_live_research: bool = True
 
     @model_validator(mode="after")
     def require_trip_or_destination(self) -> "ConciergeSearchRequest":

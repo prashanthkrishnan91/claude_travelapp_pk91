@@ -55,6 +55,8 @@ except ImportError:  # pragma: no cover — httpx is in requirements.txt
 from supabase import Client
 
 from app.models.search import (
+    AttractionResult,
+    AttractionSearchRequest,
     BookingOption,
     FlightResult,
     FlightSearchRequest,
@@ -780,6 +782,42 @@ LEGACY_PRODUCT_MOCK_FUNCTIONS: tuple = (
 
 
 # ---------------------------------------------------------------------------
+# Attraction category mapping
+# ---------------------------------------------------------------------------
+
+_GOOGLE_TYPE_TO_ATTRACTION_CATEGORY: Dict[str, str] = {
+    "museum": "Museum",
+    "art_gallery": "Art Gallery",
+    "historical_landmark": "Landmark",
+    "monument": "Monument",
+    "national_monument": "Monument",
+    "cultural_landmark": "Landmark",
+    "tourist_attraction": "Attraction",
+    "park": "Park",
+    "national_park": "Park",
+    "amusement_park": "Amusement Park",
+    "aquarium": "Aquarium",
+    "zoo": "Zoo",
+    "botanical_garden": "Garden",
+    "temple": "Temple",
+    "shrine": "Shrine",
+    "castle": "Castle",
+    "palace": "Palace",
+    "church": "Church",
+    "cathedral": "Cathedral",
+}
+
+
+def _attraction_category_from_types(types: List[str]) -> str:
+    """Map Google Places types to a human-readable attraction category."""
+    for t in types:
+        label = _GOOGLE_TYPE_TO_ATTRACTION_CATEGORY.get((t or "").lower())
+        if label:
+            return label
+    return "Attraction"
+
+
+# ---------------------------------------------------------------------------
 # Service class
 # ---------------------------------------------------------------------------
 
@@ -1071,6 +1109,56 @@ class SearchService:
             len(raw_places),
             len(results),
         )
+        return results
+
+    def search_attraction_results(
+        self, req: AttractionSearchRequest
+    ) -> List[AttractionResult]:
+        """Canonical /search/attractions provider path.
+
+        Wraps the Google-Places-backed ``search_attractions`` dict provider
+        and normalises each operational place into an ``AttractionResult``
+        wire model so Explore and trip-creation seeding share one mapping.
+        Fails closed (empty list) when no API key / no results — never
+        fabricates mock data, never touches the Concierge / live-research /
+        Tavily path.
+        """
+        location = (req.location or "").strip()
+        query = (
+            f"{req.category.strip()} in {location}"
+            if req.category
+            else location
+        )
+        raw = self.search_attractions(query if req.category else location)
+        results: List[AttractionResult] = []
+        for place in raw:
+            place_id = place.get("place_id")
+            name = (place.get("name") or "").strip()
+            if not place_id or not name:
+                continue
+            types = list(place.get("types") or [])
+            category = _attraction_category_from_types(types)
+            results.append(
+                AttractionResult(
+                    id=f"gp-{place_id}",
+                    price=None,
+                    points_estimate=None,
+                    rating=place.get("rating"),
+                    location=req.location,
+                    booking_url=place.get("booking_url")
+                    or f"https://www.google.com/maps/place/?q=place_id:{place_id}",
+                    source="google_places",
+                    booking_options=[],
+                    name=name,
+                    category=category,
+                    description="",
+                    address=(place.get("address") or "").strip() or req.location,
+                    num_reviews=place.get("num_reviews"),
+                    tags=[t.replace("_", " ").title() for t in types[:3]],
+                    lat=place.get("lat"),
+                    lng=place.get("lng"),
+                )
+            )
         return results
 
     def search_restaurants(self, req: RestaurantSearchRequest) -> List[RestaurantResult]:

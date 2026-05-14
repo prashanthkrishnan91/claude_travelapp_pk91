@@ -200,29 +200,26 @@ test('RestaurantExploreFlow does not call mock/sample data paths', () => {
   assert.doesNotMatch(restaurantFlow, /hardcoded/i);
 });
 
-// ── 5. Attractions — live via tripless Concierge (Slice 4) ─────────────────
+// ── 5. Attractions — canonical /search/attractions vertical search ─────────
 
-test('AttractionExploreFlow imports callConciergeSearch from api', () => {
-  assert.match(attractionFlow, /callConciergeSearch/);
+test('AttractionExploreFlow imports searchAttractionsExplore from api', () => {
+  assert.match(attractionFlow, /searchAttractionsExplore/);
   assert.match(attractionFlow, /from "@\/lib\/api"/);
 });
 
-test('AttractionExploreFlow calls callConciergeSearch with null tripId', () => {
-  assert.match(attractionFlow, /callConciergeSearch\(null/);
+test('AttractionExploreFlow calls searchAttractionsExplore', () => {
+  assert.match(attractionFlow, /searchAttractionsExplore\(/);
 });
 
-test('AttractionExploreFlow passes destination + allowLiveResearch=false', () => {
-  // signature: callConciergeSearch(null, query, undefined, dest, false)
-  // Default Explore Attractions must not spend paid Tavily/live-research credits.
-  assert.match(attractionFlow, /callConciergeSearch\(null,\s*query,\s*undefined,\s*dest,\s*false\)/);
+test('AttractionExploreFlow does not call the AI Concierge route', () => {
+  assert.doesNotMatch(attractionFlow, /callConciergeSearch/);
+  assert.doesNotMatch(attractionFlow, /\/ai\/concierge\/search/);
 });
 
-test('AttractionExploreFlow disables live research for default Explore (no Tavily spend)', () => {
-  assert.match(
-    attractionFlow,
-    /callConciergeSearch\([^)]*,\s*false\)/,
-    'default Explore Attractions must pass allowLiveResearch=false',
-  );
+test('AttractionExploreFlow does not use Tavily / live research', () => {
+  assert.doesNotMatch(attractionFlow, /allowLiveResearch/);
+  assert.doesNotMatch(attractionFlow, /tavily/i);
+  assert.doesNotMatch(attractionFlow, /live.?research/i);
 });
 
 test('AttractionExploreFlow renders attraction-results testid when results present', () => {
@@ -239,20 +236,19 @@ test('AttractionExploreFlow uses ResultActionSheet on each card', () => {
   assert.match(attractionFlow, /import.*ResultActionSheet/);
 });
 
-test('AttractionExploreFlow does not use removed /search/attractions route', () => {
-  assert.doesNotMatch(attractionFlow, /searchAttractions[^V]/);
-  assert.doesNotMatch(attractionFlow, /\/search\/attractions/);
-});
-
 test('AttractionExploreFlow does not require a tripId', () => {
   assert.doesNotMatch(attractionFlow, /tripId(?!.*null)/);
 });
 
-// ── 6. Hotels — live discovery via tripless AI Concierge (Slice 5C) ──────────
+// ── 6. Hotels — canonical /search/hotels vertical search ───────────────────
 
-test('HotelExploreFlow calls callConciergeSearch for live hotel discovery', () => {
-  assert.match(hotelFlow, /callConciergeSearch/);
-  assert.match(hotelFlow, /res\.hotels/);
+test('HotelExploreFlow calls searchHotelsExplore for hotel discovery', () => {
+  assert.match(hotelFlow, /searchHotelsExplore\(/);
+});
+
+test('HotelExploreFlow does not call the AI Concierge route', () => {
+  assert.doesNotMatch(hotelFlow, /callConciergeSearch/);
+  assert.doesNotMatch(hotelFlow, /\/ai\/concierge\/search/);
 });
 
 test('HotelExploreFlow collects destination, checkIn, checkOut, guests', () => {
@@ -268,9 +264,10 @@ test('HotelExploreFlow builds ExploreResultContext with hotel vertical and dates
   assert.match(hotelFlow, /guests: lastForm/);
 });
 
-test('HotelExploreFlow does not call searchHotels or use mock-backed apiFetch', () => {
-  assert.doesNotMatch(hotelFlow, /searchHotels/);
-  assert.doesNotMatch(hotelFlow, /apiFetch/);
+test('HotelExploreFlow imports only the canonical searchHotelsExplore helper', () => {
+  // The canonical helper is searchHotelsExplore; the legacy mock-era
+  // wrapper must not be imported by Explore.
+  assert.match(hotelFlow, /import \{ searchHotelsExplore \} from "@\/lib\/api"/);
 });
 
 test('HotelExploreFlow wires ResultActionSheet into hotel discovery cards', () => {
@@ -303,7 +300,7 @@ test('FlightExploreFlow builds ExploreResultContext with flight vertical', () =>
   assert.match(flightFlow, /cabinClass: form\.cabinClass/);
 });
 
-test('FlightExploreFlow calls searchFlightsExplore (live provider, not mock-backed searchFlights)', () => {
+test('FlightExploreFlow calls searchFlightsExplore (live provider, not the mock-backed legacy flight route)', () => {
   assert.match(flightFlow, /searchFlightsExplore/);
   assert.doesNotMatch(flightFlow, /\/search\/flights/);
 });
@@ -344,14 +341,14 @@ test('TripBuilder does not import from explore component directory', () => {
 
 // ── 10. Safe execution rule documentation ─────────────────────────────────
 
-test('AttractionExploreFlow source documents the live Concierge path', () => {
-  // File must document the tripless Concierge approach (Slice 4)
-  assert.match(attractionFlow, /callConciergeSearch/);
-  assert.match(attractionFlow, /trip.optional/i);
+test('AttractionExploreFlow source documents the canonical vertical-search path', () => {
+  assert.match(attractionFlow, /searchAttractionsExplore/);
+  assert.match(attractionFlow, /\/search\/attractions/);
 });
 
-test('HotelExploreFlow source documents the live Concierge discovery approach', () => {
-  assert.match(hotelFlow, /callConciergeSearch/);
+test('HotelExploreFlow source documents the canonical vertical-search path', () => {
+  assert.match(hotelFlow, /searchHotelsExplore/);
+  assert.match(hotelFlow, /\/search\/hotels/);
   assert.match(hotelFlow, /discovery/i);
 });
 

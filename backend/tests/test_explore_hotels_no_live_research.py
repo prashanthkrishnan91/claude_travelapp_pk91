@@ -1,18 +1,24 @@
-"""Stage 3 stabilization — default Explore surfaces must not call paid live research.
+"""Vertical-search architecture — Explore is not backed by the AI Concierge.
 
-Covers Scope C of the Stage 3 stabilization patch (Explore Hotels + Attractions
-tripless discovery):
-- ConciergeSearchRequest defaults allow_live_research=True and accepts False.
-- ConciergeService.search forwards allow_live_research to _fetch_live_research.
-- _fetch_live_research short-circuits to an empty LiveResearchResult when
-  allow_live_research is False — no provider (Tavily) is ever constructed or
-  called, so default Explore Hotels never spends live-research credits.
-- allow_live_research=True still reaches the provider path (explicit AI
-  Concierge / deep-research behaviour is unchanged).
+Durable replacement for the PR #368 ``allow_live_research`` flag tests.  The
+flag was a patch around wrong routing; the durable fix is canonical vertical
+search endpoints (``/search/hotels``, ``/search/attractions``) shared by
+Explore and trip creation.  This file proves:
+
+- ``ConciergeSearchRequest`` no longer carries an ``allow_live_research`` flag.
+- ``ConciergeService.search`` / ``_fetch_live_research`` no longer accept an
+  ``allow_live_research`` parameter.
+- The AI Concierge live-research path still reaches the provider (Tavily) when
+  a live-capable provider is configured — explicit AI Concierge / deep-research
+  behaviour is unchanged and not gated by any per-request boolean.
+- The canonical ``/search/attractions`` route and
+  ``SearchService.search_attraction_results`` exist and are Google-Places
+  backed (fail-closed, no Concierge, no live research).
 """
 
 from __future__ import annotations
 
+import inspect
 import os
 import sys
 
@@ -28,20 +34,9 @@ from app.services.live_research import LiveResearchResult
 FAKE_USER_ID = UUID("00000000-0000-0000-0000-000000000099")
 
 
-class _LiveResult:
-    restaurants: list = []
-    attractions: list = []
-    hotels: list = []
-    research_sources: list = []
-    provider_name: str = "mock"
-    source_status: str = "none"
-    cached: bool = False
-
-
 def _make_service():
-    db = MagicMock()
     svc = object.__new__(ConciergeService)
-    svc._db = db
+    svc._db = MagicMock()
     svc._live_research = None
     svc._settings = MagicMock(
         concierge_router_v2=False,
@@ -55,124 +50,33 @@ def _make_service():
 
 
 # ---------------------------------------------------------------------------
-# Request model
+# allow_live_research flag is fully removed
 # ---------------------------------------------------------------------------
 
-class TestConciergeSearchRequestLiveResearchFlag:
-    def test_allow_live_research_defaults_true(self):
+class TestAllowLiveResearchFlagRemoved:
+    def test_request_model_has_no_allow_live_research_field(self):
+        assert "allow_live_research" not in ConciergeSearchRequest.model_fields
         req = ConciergeSearchRequest(destination="Boise", user_query="hotels in boise")
-        assert req.allow_live_research is True
+        assert not hasattr(req, "allow_live_research")
 
-    def test_allow_live_research_can_be_disabled(self):
-        req = ConciergeSearchRequest(
-            destination="Boise",
-            user_query="hotels in boise",
-            allow_live_research=False,
-        )
-        assert req.allow_live_research is False
+    def test_search_signature_has_no_allow_live_research_param(self):
+        params = inspect.signature(ConciergeService.search).parameters
+        assert "allow_live_research" not in params
 
-
-# ---------------------------------------------------------------------------
-# search() forwards the flag
-# ---------------------------------------------------------------------------
-
-class TestSearchForwardsAllowLiveResearch:
-    def test_search_forwards_allow_live_research_false(self):
-        svc = _make_service()
-        captured = {}
-
-        def capture(intent, destination, user_query, trip, **kw):
-            captured["allow_live_research"] = kw.get("allow_live_research")
-            return _LiveResult()
-
-        with patch.object(svc, "_fetch_trip"), \
-             patch.object(svc, "_fetch_live_research", side_effect=capture), \
-             patch.object(svc, "_save_message"), \
-             patch.object(svc, "_call_claude", return_value='{"response":"ok","suggestions":[]}'), \
-             patch.object(svc, "_detect_intent", return_value="restaurants"), \
-             patch.object(svc, "_build_search_prompt", return_value="prompt"), \
-             patch.object(svc, "_concise_response", return_value="ok"), \
-             patch.object(svc, "_align_summary_with_ranked_cards", return_value="ok"), \
-             patch.object(svc, "_derive_response_source_status", return_value="none"):
-            svc.search(
-                trip_id=None,
-                user_query="hotels in boise",
-                user_id=FAKE_USER_ID,
-                destination="Boise",
-                allow_live_research=False,
-            )
-        assert captured.get("allow_live_research") is False
-
-    def test_search_defaults_allow_live_research_true(self):
-        svc = _make_service()
-        captured = {}
-
-        def capture(intent, destination, user_query, trip, **kw):
-            captured["allow_live_research"] = kw.get("allow_live_research")
-            return _LiveResult()
-
-        with patch.object(svc, "_fetch_trip"), \
-             patch.object(svc, "_fetch_live_research", side_effect=capture), \
-             patch.object(svc, "_save_message"), \
-             patch.object(svc, "_call_claude", return_value='{"response":"ok","suggestions":[]}'), \
-             patch.object(svc, "_detect_intent", return_value="restaurants"), \
-             patch.object(svc, "_build_search_prompt", return_value="prompt"), \
-             patch.object(svc, "_concise_response", return_value="ok"), \
-             patch.object(svc, "_align_summary_with_ranked_cards", return_value="ok"), \
-             patch.object(svc, "_derive_response_source_status", return_value="none"):
-            svc.search(
-                trip_id=None,
-                user_query="hotels in boise",
-                user_id=FAKE_USER_ID,
-                destination="Boise",
-            )
-        assert captured.get("allow_live_research") is True
+    def test_fetch_live_research_signature_has_no_allow_live_research_param(self):
+        params = inspect.signature(ConciergeService._fetch_live_research).parameters
+        assert "allow_live_research" not in params
 
 
 # ---------------------------------------------------------------------------
-# _fetch_live_research enforcement — the actual no-Tavily gate
+# AI Concierge live research still reaches the provider when configured
 # ---------------------------------------------------------------------------
 
-class TestFetchLiveResearchGate:
-    def test_disabled_returns_empty_without_constructing_provider(self):
-        """allow_live_research=False short-circuits before any provider call."""
-        svc = _make_service()
-        with patch.object(svc, "_get_live_research") as mock_get_provider:
-            result = svc._fetch_live_research(
-                intent="hotels",
-                destination="Boise",
-                user_query="hotels in boise",
-                trip={"destination": "Boise"},
-                allow_live_research=False,
-            )
-        # No provider (Tavily or otherwise) is ever constructed.
-        mock_get_provider.assert_not_called()
-        assert isinstance(result, LiveResearchResult)
-        assert result.restaurants == []
-        assert result.attractions == []
-        assert result.hotels == []
-
-    def test_disabled_blocks_provider_for_any_intent(self):
-        """The gate is intent-agnostic — attractions, restaurants, etc. all skip
-        live research when allow_live_research=False (default Explore surfaces)."""
-        svc = _make_service()
-        for intent in ("attractions", "restaurants", "hotels", "hidden_gems"):
-            with patch.object(svc, "_get_live_research") as mock_get_provider:
-                result = svc._fetch_live_research(
-                    intent=intent,
-                    destination="Boise",
-                    user_query=f"{intent} in boise",
-                    trip={"destination": "Boise"},
-                    allow_live_research=False,
-                )
-            mock_get_provider.assert_not_called()
-            assert isinstance(result, LiveResearchResult)
-            assert result.attractions == []
-            assert result.restaurants == []
-            assert result.hotels == []
-
-    def test_enabled_still_reaches_provider_path(self):
-        """allow_live_research=True (default) still uses live research."""
+class TestConciergeLiveResearchStillReachesProvider:
+    def test_enabled_provider_path_is_reached(self):
+        """The explicit AI Concierge path still uses live research (Tavily) when
+        a live-capable provider is configured — there is no per-request flag
+        that can disable it."""
         svc = _make_service()
         sentinel = LiveResearchResult()
         fake_provider = MagicMock()
@@ -184,8 +88,40 @@ class TestFetchLiveResearchGate:
                 destination="Boise",
                 user_query="hotels in boise",
                 trip={"destination": "Boise"},
-                allow_live_research=True,
             )
         mock_get_provider.assert_called_once()
         fake_provider.fetch.assert_called_once()
         assert result is sentinel
+
+
+# ---------------------------------------------------------------------------
+# Canonical /search/attractions vertical-search service
+# ---------------------------------------------------------------------------
+
+class TestCanonicalAttractionsSearch:
+    def test_search_attraction_results_exists(self):
+        from app.services.search import SearchService
+        assert hasattr(SearchService, "search_attraction_results")
+
+    def test_search_attraction_results_fails_closed_without_api_key(self):
+        """Canonical attractions search is Google Places only — it must fail
+        closed (empty list) when no API key is configured and never fall back
+        to the Concierge / live research / Tavily path."""
+        from app.models.search import AttractionSearchRequest
+        from app.services.search import SearchService
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("GOOGLE_PLACES_API_KEY", None)
+            svc = SearchService(db=MagicMock())
+            out = svc.search_attraction_results(
+                AttractionSearchRequest(location="Boise")
+            )
+        assert out == []
+
+    def test_search_attractions_route_is_mounted(self):
+        """The canonical /search/attractions route exists in the route source."""
+        import pathlib
+
+        repo_root = pathlib.Path(__file__).resolve().parent.parent.parent
+        src = (repo_root / "backend" / "app" / "routes" / "search.py").read_text(encoding="utf-8")
+        assert '@router.post("/attractions"' in src

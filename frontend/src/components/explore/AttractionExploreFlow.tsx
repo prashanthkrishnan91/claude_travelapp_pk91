@@ -1,19 +1,20 @@
 "use client";
 
 /**
- * Attractions vertical — live via tripless AI Concierge (Stage 2A Slice 4).
+ * Attractions vertical — canonical vertical search.
  *
- * Calls callConciergeSearch(null, query, undefined, destination, false) — no
- * trip_id required (Slice 3 made the Concierge trip-optional). The trailing
- * `false` sets allowLiveResearch=false so default Explore Attractions never
- * spends paid Tavily/live-research credits; the backend serves Google-Places-
- * verified attractions only. Tavily stays reserved for explicit AI Concierge.
+ * AttractionExploreFlow calls the canonical /search/attractions endpoint
+ * (searchAttractionsExplore), backed by Google Places Text Search only — the
+ * same provider-backed attractions search used by /trips/create-with-search
+ * seeding.  Explore Attractions is a pure provider-backed discovery surface:
+ * it does not depend on the AI Concierge search route and uses no paid
+ * research providers.
  */
 
 import { useState } from "react";
 import { Search, MapPin, Tag, Star, ExternalLink, Landmark, Loader2, AlertCircle } from "lucide-react";
-import { callConciergeSearch } from "@/lib/api";
-import type { UnifiedAttractionResult } from "@/lib/api";
+import { searchAttractionsExplore } from "@/lib/api";
+import type { ExploreAttractionResult } from "@/lib/api";
 import type { ExploreResultContext } from "./types";
 import { ResultActionSheet } from "./ResultActionSheet";
 
@@ -21,7 +22,7 @@ export function AttractionExploreFlow() {
   const [destination, setDestination] = useState("");
   const [interest, setInterest] = useState("");
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<UnifiedAttractionResult[] | null>(null);
+  const [results, setResults] = useState<ExploreAttractionResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [lastDestination, setLastDestination] = useState("");
@@ -31,10 +32,6 @@ export function AttractionExploreFlow() {
     const dest = destination.trim();
     if (!dest) return;
 
-    const query = interest.trim()
-      ? `${interest.trim()} in ${dest}`
-      : `top attractions in ${dest}`;
-
     setLoading(true);
     setError(null);
     setSearched(true);
@@ -42,13 +39,10 @@ export function AttractionExploreFlow() {
     setResults(null);
 
     try {
-      // Default Explore Attractions is verified-only: pass allowLiveResearch=false
-      // so the backend serves Google-Places-backed attractions and never spends
-      // paid Tavily/live-research credits. Tavily stays available for the
-      // explicit AI Concierge / deep-research experiences only.
-      const res = await callConciergeSearch(null, query, undefined, dest, false);
-      setResults(res.attractions);
-      if (res.attractions.length === 0) {
+      // Canonical vertical search: Google-Places-backed /search/attractions.
+      const res = await searchAttractionsExplore(dest, interest.trim() || undefined);
+      setResults(res);
+      if (res.length === 0) {
         setError("No attractions found for this destination. Try a different area or interest.");
       }
     } catch {
@@ -59,15 +53,27 @@ export function AttractionExploreFlow() {
     }
   }
 
-  function buildContext(a: UnifiedAttractionResult): ExploreResultContext {
-    const gv = a.googleVerification;
+  function buildContext(a: ExploreAttractionResult): ExploreResultContext {
+    const savedPayload: Record<string, unknown> = {
+      type: "attraction",
+      name: a.name,
+      source: a.source,
+      category: a.category,
+      rating: a.rating,
+      address: a.address,
+      tags: a.tags,
+      mapsLink: a.googleMapsUri,
+      googleMapsUri: a.googleMapsUri,
+      providerPlaceId: a.googlePlaceId,
+      destination: lastDestination,
+    };
     return {
       vertical: "attractions",
       destination: lastDestination,
       location:
-        gv?.lat != null && gv?.lng != null ? { lat: gv.lat, lng: gv.lng } : undefined,
-      providerIdentity: gv?.providerPlaceId ?? undefined,
-      originalPayload: a as unknown as Record<string, unknown>,
+        a.lat != null && a.lng != null ? { lat: a.lat, lng: a.lng } : undefined,
+      providerIdentity: a.googlePlaceId ?? undefined,
+      originalPayload: savedPayload,
     };
   }
 
@@ -155,7 +161,7 @@ export function AttractionExploreFlow() {
             {results.length} attraction{results.length !== 1 ? "s" : ""} in {lastDestination}
           </p>
           {results.map((a, i) => (
-            <AttractionCard key={a.name + i} attraction={a} context={buildContext(a)} />
+            <AttractionCard key={a.id + i} attraction={a} context={buildContext(a)} />
           ))}
         </div>
       )}
@@ -174,13 +180,9 @@ function AttractionCard({
   attraction: a,
   context,
 }: {
-  attraction: UnifiedAttractionResult;
+  attraction: ExploreAttractionResult;
   context: ExploreResultContext;
 }) {
-  const displayName = a.display?.displayName ?? a.name;
-  const displayWhy = a.display?.displayWhy ?? a.supportingDetails?.whyPick ?? null;
-  const address = a.address ?? a.supportingDetails?.address ?? null;
-
   return (
     <div className="card card-lift p-4">
       <div className="flex items-start gap-3">
@@ -191,20 +193,20 @@ function AttractionCard({
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h3 className="text-sm font-semibold text-cream-100 leading-tight truncate">
-                {displayName}
+                {a.name}
               </h3>
               <p className="text-xs text-cream-500 mt-0.5 truncate">
-                {a.category}{address ? ` · ${address}` : ""}
+                {a.category}{a.address ? ` · ${a.address}` : ""}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {a.mapsLink && (
+              {a.googleMapsUri && (
                 <a
-                  href={a.mapsLink}
+                  href={a.googleMapsUri}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-1.5 rounded-lg bg-white/[.05] hover:bg-white/[.10] text-cream-400 transition"
-                  aria-label={`View ${displayName} on Google Maps`}
+                  aria-label={`View ${a.name} on Google Maps`}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
@@ -237,12 +239,6 @@ function AttractionCard({
               </div>
             )}
           </div>
-
-          {displayWhy && (
-            <p className="text-xs text-cream-400 mt-2 leading-relaxed line-clamp-2">
-              {displayWhy}
-            </p>
-          )}
 
           <ResultActionSheet context={context} />
         </div>
