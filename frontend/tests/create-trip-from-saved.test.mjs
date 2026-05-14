@@ -476,3 +476,64 @@ test("hotel/restaurant/attraction prefill still populates dates and title via st
   assert.ok(modal.includes("useState(prefill.title)"), "title prefill preserved");
   assert.ok(modal.includes("useState(prefill.travelers") || modal.includes("useState<number>(prefill.travelers)"), "travelers prefill preserved");
 });
+
+// ── 18. Prefill preservation — initAirportSelection ──────────────────────────
+
+test("modal defines initAirportSelection helper for prefill-to-chip conversion", () => {
+  assert.ok(modal.includes("initAirportSelection"), "helper must exist");
+  assert.ok(modal.includes("function initAirportSelection"), "must be defined in modal");
+});
+
+test("initAirportSelection converts 3-letter IATA prefill to AirportSelection with airports", () => {
+  const helperStart = modal.indexOf("function initAirportSelection");
+  const helperBody = modal.slice(helperStart, helperStart + 600);
+  assert.match(helperBody, /\[A-Z\]\{3\}/);   // IATA pattern
+  assert.ok(
+    helperBody.includes("airports: [upper]") || helperBody.includes("airports: [code]"),
+    "IATA prefill must produce airports: [code]"
+  );
+});
+
+test("initAirportSelection returns empty airports for plain city strings (no fabrication)", () => {
+  const helperStart = modal.indexOf("function initAirportSelection");
+  const helperBody = modal.slice(helperStart, helperStart + 600);
+  assert.ok(helperBody.includes("airports: []"), "non-IATA must produce airports: []");
+});
+
+test("initAirportSelection returns null for empty prefill", () => {
+  const helperStart = modal.indexOf("function initAirportSelection");
+  const helperBody = modal.slice(helperStart, helperStart + 600);
+  assert.ok(helperBody.includes("return null"), "empty prefill must produce null");
+});
+
+test("modal initializes originSel from prefill.origin via initAirportSelection", () => {
+  assert.match(modal, /initAirportSelection\(prefill\.origin\)/);
+});
+
+test("modal initializes destSel from prefill.destination via initAirportSelection", () => {
+  assert.match(modal, /initAirportSelection\(prefill\.destination\)/);
+});
+
+test("saved flight origin/destination prefill is preserved as initial chip in modal", () => {
+  // buildTripPrefillFromSavedItem returns origin/destination strings for flights;
+  // initAirportSelection converts them to chips (IATA chip or plain city chip).
+  assert.ok(modal.includes("initAirportSelection(prefill.origin)"), "flight origin prefill wired");
+  assert.ok(modal.includes("initAirportSelection(prefill.destination)"), "flight destination prefill wired");
+});
+
+test("saved hotel/restaurant/attraction destination prefill preserved as initial chip", () => {
+  // Non-flight verticals set prefill.destination; initAirportSelection converts it.
+  assert.ok(modal.includes("initAirportSelection(prefill.destination)"), "destination prefill wired");
+});
+
+test("airports forwarded to createTripFromSavedItem only when resolved selection has non-empty airports", () => {
+  // Guard: only pass airports if originSel.airports.length > 0
+  assert.match(modal, /originSel\?\.airports\?\.length/);
+  assert.match(modal, /destSel\?\.airports\?\.length/);
+  // Plain city chips (airports:[]) must not be forwarded as airport arrays
+  assert.ok(
+    modal.includes("originSel?.airports?.length ? originSel.airports : undefined") ||
+    modal.includes("originSel?.airports?.length"),
+    "originAirports guarded by airports.length"
+  );
+});

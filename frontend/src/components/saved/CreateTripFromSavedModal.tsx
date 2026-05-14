@@ -93,6 +93,25 @@ export function buildTripPrefillFromSavedItem(item: SavedItem): TripPrefill {
   };
 }
 
+// ── Airport selection helpers ─────────────────────────────────────────────────
+
+/**
+ * Convert a prefill string to an initial AirportSelection for CityAutocomplete.
+ * - 3-letter IATA codes (e.g. "SEA") → AirportSelection with airports: [code].
+ * - Plain city strings (e.g. "Paris") → AirportSelection with airports: [] —
+ *   preserves the city visibly without fabricating airport codes.
+ * - Empty string → null (no chip).
+ */
+function initAirportSelection(prefillStr: string): AirportSelection | null {
+  const trimmed = prefillStr.trim();
+  if (!trimmed) return null;
+  const upper = trimmed.toUpperCase();
+  if (/^[A-Z]{3}$/.test(upper)) {
+    return { city: upper, country: "", airports: [upper] };
+  }
+  return { city: trimmed, country: "", airports: [] };
+}
+
 // ── Modal ─────────────────────────────────────────────────────────────────────
 
 type SubmitState = "idle" | "submitting" | "error";
@@ -109,9 +128,11 @@ export function CreateTripFromSavedModal({
   const prefill = useMemo(() => buildTripPrefillFromSavedItem(item), [item]);
 
   const [title, setTitle] = useState(prefill.title);
-  // Airport autocomplete selections — resolved chips with city/country/IATA airports.
-  const [originSel, setOriginSel] = useState<AirportSelection | null>(null);
-  const [destSel, setDestSel] = useState<AirportSelection | null>(null);
+  // Airport autocomplete selections — initialized from prefill via initAirportSelection.
+  // IATA prefills (e.g. "SEA") start as a chip with airports:[code].
+  // Plain city prefills (e.g. "Paris") start as a chip with airports:[] — visible, no fabrication.
+  const [originSel, setOriginSel] = useState<AirportSelection | null>(() => initAirportSelection(prefill.origin));
+  const [destSel, setDestSel] = useState<AirportSelection | null>(() => initAirportSelection(prefill.destination));
   const [startDate, setStartDate] = useState(prefill.startDate);
   const [endDate, setEndDate] = useState(prefill.endDate);
   const [travelers, setTravelers] = useState<number>(prefill.travelers);
@@ -160,8 +181,10 @@ export function CreateTripFromSavedModal({
       const trip = await createTripFromSavedItem({
         savedItem: item,
         formData,
-        originAirports: originSel?.airports,
-        destinationAirports: destSel?.airports,
+        // Only forward airport arrays when there are resolved IATA codes.
+        // Plain city prefill chips have airports:[] — do not pass them.
+        originAirports: originSel?.airports?.length ? originSel.airports : undefined,
+        destinationAirports: destSel?.airports?.length ? destSel.airports : undefined,
       });
       onCreated(trip);
     } catch {
