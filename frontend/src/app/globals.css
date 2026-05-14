@@ -1,5 +1,174 @@
 @import "tailwindcss";
 
+/* ════════════════════════════════════════════════════════════════
+   DESIGN TOKEN FOUNDATION — Design Bible v1.0 Phase 0
+   Stage 3.5 · Wife-Wow design system foundation
+   Tokens are additive — existing Tailwind utilities unchanged.
+   ════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Dark surface tokens — Design Bible v1.0 §4 exact values */
+  --ds-midnight-ink:   #0B1320;
+  --ds-onyx-velvet:    #0F1A2C;
+  --ds-carbon-mist:    #1A2538;
+  --ds-pen-stroke:     #22324A;
+
+  /* ── Warm paper surface tokens — Design Bible v1.0 §4 */
+  --ds-warm-paper:     #FAF7F0;
+  --ds-bone:           #F1ECE0;
+  --ds-linen:          #E6DECB;
+  --ds-hairline:       #D9D2C2;
+
+  /* ── Named palette — Design Bible v1.0 §4 */
+  --ds-sandstone-gold: #E0B888;
+  --ds-ember-brass:    #C5944D;
+  --ds-pearl-cream:    #F2EBDD;
+  --ds-cream:          #E8E2D4;
+  --ds-mist:           #9AA4B2;
+  --ds-verified-sage:  #88A899;
+  --ds-caution-amber:  #E8B26B;
+  --ds-whisper-coral:  #D88478;
+  --ds-slate:          #4A5568;
+  --ds-ink-paper:      #1F2530;
+
+  /* ── Semantic role aliases (reference named tokens above) */
+  --ds-text-primary:   var(--ds-pearl-cream);
+  --ds-text-secondary: var(--ds-cream);
+  --ds-text-tertiary:  var(--ds-mist);
+  --ds-text-inverse:   var(--ds-ink-paper);
+  --ds-accent:         var(--ds-sandstone-gold);
+  --ds-accent-muted:   var(--ds-ember-brass);
+  --ds-accent-subtle:  rgba(224, 184, 136, 0.12);
+  --ds-trust-verified: var(--ds-verified-sage);
+  --ds-trust-partial:  var(--ds-caution-amber);
+  --ds-trust-caveat:   rgba(232, 178, 107, 0.15);
+  --ds-caution:        var(--ds-caution-amber);
+  --ds-warning:        var(--ds-whisper-coral);
+  --ds-parchment:      var(--ds-bone);
+  --ds-aged-paper:     var(--ds-linen);
+
+  /* ── Elevation tokens */
+  --ds-elevation-1:
+    0 1px 2px rgba(0, 0, 0, 0.55),
+    0 4px 12px rgba(0, 0, 0, 0.40);
+  --ds-elevation-2:
+    0 4px 6px rgba(0, 0, 0, 0.50),
+    0 12px 28px rgba(0, 0, 0, 0.40),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --ds-elevation-3:
+    0 8px 16px rgba(0, 0, 0, 0.50),
+    0 24px 48px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --ds-elevation-4:
+    0 16px 32px rgba(0, 0, 0, 0.55),
+    0 40px 80px rgba(0, 0, 0, 0.40),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+
+  /* ── Motion tokens */
+  --ds-duration-fast:     120ms;
+  --ds-duration-standard: 200ms;
+  --ds-duration-slow:     300ms;
+  --ds-easing-standard:   cubic-bezier(0.4, 0, 0.2, 1);
+  --ds-easing-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --ds-easing-accelerate: cubic-bezier(0.4, 0, 1, 1);
+
+  /* ── Spacing scale tokens — Design Bible v1.0 §4 */
+  --ds-space-1:   0.25rem;   /*  4px */
+  --ds-space-2:   0.5rem;    /*  8px */
+  --ds-space-3:   0.75rem;   /* 12px */
+  --ds-space-4:   1rem;      /* 16px */
+  --ds-space-5:   1.25rem;   /* 20px */
+  --ds-space-6:   1.5rem;    /* 24px */
+  --ds-space-8:   2rem;      /* 32px */
+  --ds-space-10:  2.5rem;    /* 40px */
+  --ds-space-12:  3rem;      /* 48px */
+  --ds-space-16:  4rem;      /* 64px */
+
+  /* ── Typography role tokens — Design Bible v1.0 §4.4 */
+  /* size / line-height pairs match the Bible spec exactly */
+
+  /* Display XL: 64 / 68 */
+  --ds-type-display-xl-size:    4rem;
+  --ds-type-display-xl-leading: 4.25rem;
+  --ds-type-display-xl-weight:  700;
+  --ds-type-display-xl-tracking: -0.03em;
+
+  /* Display L: 44 / 50 */
+  --ds-type-display-l-size:    2.75rem;
+  --ds-type-display-l-leading: 3.125rem;
+  --ds-type-display-l-weight:  700;
+  --ds-type-display-l-tracking: -0.025em;
+
+  /* Display M: 32 / 38 */
+  --ds-type-display-m-size:    2rem;
+  --ds-type-display-m-leading: 2.375rem;
+  --ds-type-display-m-weight:  700;
+  --ds-type-display-m-tracking: -0.02em;
+
+  /* Display S: 24 / 30 */
+  --ds-type-display-s-size:    1.5rem;
+  --ds-type-display-s-leading: 1.875rem;
+  --ds-type-display-s-weight:  600;
+  --ds-type-display-s-tracking: -0.015em;
+
+  /* Body L: 18 / 28 */
+  --ds-type-body-l-size:    1.125rem;
+  --ds-type-body-l-leading: 1.75rem;
+  --ds-type-body-l-weight:  400;
+
+  /* Body: 15 / 24 */
+  --ds-type-body-size:    0.9375rem;
+  --ds-type-body-leading: 1.5rem;
+  --ds-type-body-weight:  400;
+
+  /* Body S: 13 / 20 */
+  --ds-type-body-s-size:    0.8125rem;
+  --ds-type-body-s-leading: 1.25rem;
+  --ds-type-body-s-weight:  400;
+
+  /* Caption: 12 / 16 */
+  --ds-type-caption-size:    0.75rem;
+  --ds-type-caption-leading: 1rem;
+  --ds-type-caption-weight:  400;
+
+  /* Overline: 10 / 14 — caps + tracking */
+  --ds-type-overline-size:     0.625rem;
+  --ds-type-overline-leading:  0.875rem;
+  --ds-type-overline-weight:   600;
+  --ds-type-overline-tracking: 0.1em;
+  --ds-type-overline-transform: uppercase;
+
+  /* Mono: 12 / 16 */
+  --ds-type-mono-size:    0.75rem;
+  --ds-type-mono-leading: 1rem;
+  --ds-type-mono-weight:  400;
+
+  /* Quote: 18 / 28 */
+  --ds-type-quote-size:    1.125rem;
+  --ds-type-quote-leading: 1.75rem;
+  --ds-type-quote-weight:  400;
+  --ds-type-quote-style:   italic;
+
+  /* ── Backward-compatible aliases for existing consumers */
+  --ds-type-display-size:     var(--ds-type-display-m-size);
+  --ds-type-display-weight:   700;
+  --ds-type-display-leading:  var(--ds-type-display-m-leading);
+  --ds-type-display-tracking: var(--ds-type-display-m-tracking);
+
+  --ds-type-heading-size:     var(--ds-type-display-s-size);
+  --ds-type-heading-weight:   600;
+  --ds-type-heading-leading:  var(--ds-type-display-s-leading);
+  --ds-type-heading-tracking: var(--ds-type-display-s-tracking);
+
+  --ds-type-subheading-size:    var(--ds-type-body-l-size);
+  --ds-type-subheading-weight:  600;
+  --ds-type-subheading-leading: var(--ds-type-body-l-leading);
+
+  --ds-type-label-size:     var(--ds-type-caption-size);
+  --ds-type-label-weight:   500;
+  --ds-type-label-tracking: 0.04em;
+}
+
 @theme {
   /* ── Sky (kept for secondary links/info) */
   --color-sky-50: #f0f9ff;
@@ -83,11 +252,50 @@
   --color-brand-500: #c8a55c;
   --color-brand-600: #a88438;
   --color-brand-700: #7d5f20;
+
+  /* ── Design token semantic wiring — theme keys read from :root vars */
+  /* Surface */
+  --color-ds-midnight:         var(--ds-midnight-ink);
+  --color-ds-onyx:             var(--ds-onyx-velvet);
+  --color-ds-carbon:           var(--ds-carbon-mist);
+  --color-ds-paper:            var(--ds-warm-paper);
+  --color-ds-bone:             var(--ds-bone);
+  --color-ds-linen:            var(--ds-linen);
+  --color-ds-parchment:        var(--ds-parchment);
+  --color-ds-aged-paper:       var(--ds-aged-paper);
+  /* Divider / border */
+  --color-ds-pen-stroke:       var(--ds-pen-stroke);
+  --color-ds-hairline:         var(--ds-hairline);
+  /* Text */
+  --color-ds-text:             var(--ds-text-primary);
+  --color-ds-text-secondary:   var(--ds-text-secondary);
+  --color-ds-text-tertiary:    var(--ds-text-tertiary);
+  --color-ds-text-inverse:     var(--ds-text-inverse);
+  --color-ds-slate:            var(--ds-slate);
+  /* Accent */
+  --color-ds-accent:           var(--ds-accent);
+  --color-ds-accent-muted:     var(--ds-accent-muted);
+  --color-ds-accent-deep:      var(--ds-ember-brass);
+  /* Trust / caution / warning */
+  --color-ds-trust:            var(--ds-trust-verified);
+  --color-ds-trust-partial:    var(--ds-trust-partial);
+  --color-ds-caution:          var(--ds-caution);
+  --color-ds-warning:          var(--ds-warning);
 }
 
 @layer base {
   *, *::before, *::after {
     box-sizing: border-box;
+  }
+
+  /* ── Reduced-motion global safety (Design Bible v1.0 §4.13) */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   html {
