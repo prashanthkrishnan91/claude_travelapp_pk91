@@ -17,6 +17,18 @@
 import { useState } from "react";
 import { MapPin, Calendar, Users, Building2, Hotel, Star, ExternalLink, Search, Loader2, AlertCircle } from "lucide-react";
 
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+// Parse YYYY-MM-DD by splitting to avoid timezone shifts from new Date(isoDate)
+function formatIsoDateForDisplay(iso: string): string | undefined {
+  const parts = iso.split('-');
+  if (parts.length !== 3) return undefined;
+  const month = parseInt(parts[1], 10);
+  const day = parseInt(parts[2], 10);
+  const year = parseInt(parts[0], 10);
+  if (!month || !day || !year || month < 1 || month > 12) return undefined;
+  return `${MONTHS[month - 1]} ${day} ${year}`;
+}
+
 /**
  * Build a deterministic Google Hotels comparison search URL.
  * External search link-out only — no price, rate, or availability data.
@@ -35,8 +47,10 @@ function buildHotelCompareUrl({
   guests?: number;
 }): string {
   const qParts = [hotelName, destination];
-  if (checkIn) qParts.push(new Date(checkIn).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
-  if (checkOut) qParts.push(`to ${new Date(checkOut).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`);
+  const checkInDisplay = checkIn ? formatIsoDateForDisplay(checkIn) : undefined;
+  const checkOutDisplay = checkOut ? formatIsoDateForDisplay(checkOut) : undefined;
+  if (checkInDisplay) qParts.push(checkInDisplay);
+  if (checkOutDisplay) qParts.push(`to ${checkOutDisplay}`);
   if (guests && guests > 0) qParts.push(`${guests} guest${guests !== 1 ? 's' : ''}`);
   const q = encodeURIComponent(qParts.join(' '));
   let url = `https://www.google.com/travel/hotels?q=${q}`;

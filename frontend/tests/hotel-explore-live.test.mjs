@@ -161,6 +161,15 @@ test('buildHotelCompareUrl q fallback includes dates and guest count context', (
   assert.match(hotelFlow, /qParts\.push.*to /);
 });
 
+test('formatIsoDateForDisplay parses YYYY-MM-DD by string split, not new Date', () => {
+  // Must define a local formatter using split, not new Date(isoDate)
+  assert.match(hotelFlow, /formatIsoDateForDisplay/);
+  assert.match(hotelFlow, /\.split\('-'\)/);
+  // Must not pass checkIn/checkOut directly into new Date() for display formatting
+  assert.doesNotMatch(hotelFlow, /new Date\(checkIn\)/);
+  assert.doesNotMatch(hotelFlow, /new Date\(checkOut\)/);
+});
+
 test('buildContext savedPayload includes compareLink metadata', () => {
   assert.match(hotelFlow, /compareLink/);
 });
