@@ -125,3 +125,75 @@ class TestCanonicalAttractionsSearch:
         repo_root = pathlib.Path(__file__).resolve().parent.parent.parent
         src = (repo_root / "backend" / "app" / "routes" / "search.py").read_text(encoding="utf-8")
         assert '@router.post("/attractions"' in src
+
+
+# ---------------------------------------------------------------------------
+# Canonical /search/hotels — never emits mock data, never calls _mock_hotels
+# ---------------------------------------------------------------------------
+
+class TestCanonicalHotelsSearch:
+    def _search_hotels(self, db):
+        from datetime import date
+        from app.models.search import HotelSearchRequest
+        from app.services.search import SearchService
+
+        return SearchService(db).search_hotels(
+            HotelSearchRequest(
+                location="Boise", check_in=date(2026, 6, 1), check_out=date(2026, 6, 5)
+            )
+        )
+
+    def test_search_hotels_does_not_call_mock_hotels(self):
+        """``search_hotels`` is the canonical Google Places ``HotelProvider``
+        path — ``_mock_hotels`` is dead legacy code and must never be invoked,
+        even when no provider key is configured (fail-closed → empty list)."""
+        from app.services import search as search_service
+        from app.services.hotels_provider import reset_hotel_provider_cache
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("GOOGLE_PLACES_API_KEY", None)
+            reset_hotel_provider_cache()
+            with patch.object(search_service, "_mock_hotels") as mock_fn:
+                db = MagicMock()
+                db.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = []
+                out = self._search_hotels(db)
+        mock_fn.assert_not_called()
+        assert out == []
+
+    def test_search_hotels_never_emits_mock_demo_fixture_rows(self):
+        """Even if ``research_cache`` holds a stale mock-attributed row, the
+        Hotels Product Contract filter discards it — ``search_hotels`` can
+        never emit a ``source ∈ {mock, demo, fixture}`` row."""
+        from datetime import date
+        from app.services import search as search_service
+        from app.services.hotels_provider import reset_hotel_provider_cache
+
+        mock_row = {
+            "id": "htl-mock-1",
+            "name": "Mock Hotel",
+            "location": "Boise",
+            "booking_url": "https://book.example.com/hotels/mock",
+            "rating": 4.5,
+            "check_in": "2026-06-01",
+            "check_out": "2026-06-05",
+            "nights": 4,
+            "price": 400.0,
+            "price_per_night": 100.0,
+            "source": "mock",
+        }
+        db = MagicMock()
+        db.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [
+            {"payload": {"results": [mock_row]}, "expires_at": None}
+        ]
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("GOOGLE_PLACES_API_KEY", None)
+            reset_hotel_provider_cache()
+            with patch.object(search_service, "_mock_hotels") as mock_fn:
+                out = search_service.SearchService(db).search_hotels(
+                    __import__("app.models.search", fromlist=["HotelSearchRequest"]).HotelSearchRequest(
+                        location="Boise", check_in=date(2026, 6, 1), check_out=date(2026, 6, 5)
+                    )
+                )
+        mock_fn.assert_not_called()
+        assert out == []
+        assert all(getattr(r, "source", None) not in {"mock", "demo", "fixture"} for r in out)
