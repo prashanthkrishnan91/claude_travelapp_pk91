@@ -20,7 +20,10 @@ interface CityAutocompleteProps {
 }
 
 export function formatAirportSelection(sel: AirportSelection): string {
-  return `${sel.city}, ${sel.country} (${sel.airports.join(", ")})`;
+  const cityCountry = sel.country ? `${sel.city}, ${sel.country}` : sel.city;
+  return sel.airports.length > 0
+    ? `${cityCountry} (${sel.airports.join(", ")})`
+    : cityCountry;
 }
 
 export function CityAutocomplete({

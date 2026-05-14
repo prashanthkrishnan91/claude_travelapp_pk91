@@ -182,3 +182,64 @@ test('buildContext savedPayload does not assign totalPrice, currency, isAvailabl
   assert.doesNotMatch(hotelFlow, /isAvailable\s*:/);
   assert.doesNotMatch(hotelFlow, /cancellation\s*:/);
 });
+
+// ── 8. Hotel external compare link-out CTA (Scope A) ─────────────────────────
+
+test('HotelCard renders a Compare prices CTA (labeled link-out)', () => {
+  assert.match(hotelFlow, /Compare prices/);
+  assert.match(hotelFlow, /data-testid="hotel-compare-cta"/);
+});
+
+test('Hotel compare CTA is an external link (target=_blank, rel=noopener)', () => {
+  assert.match(hotelFlow, /target="_blank"/);
+  assert.match(hotelFlow, /rel="noopener noreferrer"/);
+});
+
+test('Hotel compare CTA does not render book now, best price, or availability claims', () => {
+  assert.doesNotMatch(hotelFlow, /book now/i);
+  assert.doesNotMatch(hotelFlow, /best price/i);
+  assert.doesNotMatch(hotelFlow, /check availability/i);
+  assert.doesNotMatch(hotelFlow, /priceGuaranteed/);
+});
+
+test('buildHotelCompareUrl utility function exists in HotelExploreFlow', () => {
+  assert.match(hotelFlow, /buildHotelCompareUrl/);
+  assert.match(hotelFlow, /function buildHotelCompareUrl/);
+});
+
+test('buildHotelCompareUrl targets Google Hotels search URL, not an OTA or booking endpoint', () => {
+  assert.match(hotelFlow, /google\.com\/travel\/hotels/);
+  assert.doesNotMatch(hotelFlow, /expedia\.com/i);
+  assert.doesNotMatch(hotelFlow, /booking\.com/i);
+  assert.doesNotMatch(hotelFlow, /trivago\.com/i);
+});
+
+test('buildHotelCompareUrl uses encodeURIComponent for deterministic encoding', () => {
+  assert.match(hotelFlow, /encodeURIComponent/);
+});
+
+test('buildContext savedPayload includes compareLink field (future-friendly metadata)', () => {
+  assert.match(hotelFlow, /compareLink/);
+  // compareLink is not a price, rate, or booking field
+  assert.doesNotMatch(hotelFlow, /compareLink.*price/i);
+  assert.doesNotMatch(hotelFlow, /compareLink.*book/i);
+});
+
+test('HotelCard extracts compareLink from originalPayload without rendering price shells', () => {
+  assert.match(hotelFlow, /compareLink.*originalPayload/);
+  // No empty price container rendered alongside compare CTA
+  assert.doesNotMatch(hotelFlow, /pricePerNight\s*&&/);
+  assert.doesNotMatch(hotelFlow, /bestRate/);
+});
+
+test('Hotel compare CTA preserves maps link separately (not replaced)', () => {
+  // Both the maps icon link and the compare CTA must be present
+  assert.match(hotelFlow, /View.*on Google Maps/);
+  assert.match(hotelFlow, /Compare prices/);
+});
+
+test('HotelCard compare CTA renders with Search icon (not a booking icon)', () => {
+  assert.match(hotelFlow, /Search.*className/);
+  assert.doesNotMatch(hotelFlow, /ShoppingCart/);
+  assert.doesNotMatch(hotelFlow, /CreditCard/);
+});

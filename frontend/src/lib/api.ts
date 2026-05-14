@@ -2399,7 +2399,7 @@ async function seedSavedFlightAsItineraryItem(
  * Create a new trip from a saved item using the full create-with-search seeding
  * flow so the new trip receives flight/hotel/attraction/restaurant candidates,
  * then seed the selected saved item itself as an unscheduled Trip Ideas
- * candidate (day_id: null) so the user's pick is never dropped.
+ * candidate so the user's pick is never dropped.
  *
  * Composes existing POST /trips/create-with-search and POST /itinerary/items
  * routes — no new backend route. Requires origin, destination, start/end dates.
@@ -2407,6 +2407,8 @@ async function seedSavedFlightAsItineraryItem(
 export async function createTripFromSavedItem(args: {
   savedItem: SavedItem;
   formData: TripBuilderFormData;
+  originAirports?: string[];
+  destinationAirports?: string[];
 }): Promise<Trip> {
   const { formData } = args;
   const originCity = (formData.origin || "").trim();
@@ -2421,9 +2423,9 @@ export async function createTripFromSavedItem(args: {
 
   const trip = await createTripWithSearch({
     originCity,
-    originAirports: [],
+    originAirports: args.originAirports ?? [],
     destinationCity,
-    destinationAirports: [],
+    destinationAirports: args.destinationAirports ?? [],
     startDate,
     endDate,
     title: formData.title,
