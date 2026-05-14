@@ -651,9 +651,14 @@ def save_explore_snapshot(trip_id: UUID, payload: ExploreSnapshot, db: DB, user_
 def create_trip_with_search(payload: TripCreateWithSearch, db: DB, user_id: CurrentUserID) -> TripWithResults:
     """Unified concierge flow: resolve airports → search all four verticals → AI-score → create trip.
 
-    Verticals seeded concurrently: flights (one-way), round-trip pairs, hotels,
-    attractions, restaurants.  A per-vertical seeding_status dict is returned so
-    the frontend knows what was harvested and persisted without a follow-up fetch.
+    Verticals seeded concurrently: canonical provider flight offers, hotels,
+    attractions, restaurants.  Round-trip is requested by setting
+    ``return_date`` on the FlightSearchRequest when
+    ``payload.end_date > payload.start_date``; the canonical provider returns
+    each round-trip itinerary with a non-null ``return_leg`` on the same
+    offer.  No legacy round-trip pair path is used by create-with-search.
+    A per-vertical seeding_status dict is returned so the frontend knows
+    what was harvested and persisted without a follow-up fetch.
 
     Flight searches use only the primary (first) airport per city to prevent the
     origin×destination cross-product from exceeding the provider budget.
