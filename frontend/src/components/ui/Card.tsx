@@ -5,8 +5,8 @@ import type { HTMLAttributes, ReactNode } from "react";
 export type CardTone = "dark" | "paper";
 
 const TONE_CLASSES: Record<CardTone, string> = {
-  dark:  "bg-dark-200/90 border-white/[0.07] text-cream-100",
-  paper: "bg-cream-50   border-dark-200/10   text-dark-300",
+  dark:  "bg-ds-onyx  border-ds-pen-stroke text-ds-text",
+  paper: "bg-ds-paper border-ds-hairline   text-ds-text-inverse",
 };
 
 // ── Root ────────────────────────────────────────────────────────────────────

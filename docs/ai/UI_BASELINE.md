@@ -23,20 +23,66 @@ Tracks the state of the design system and UI primitive layer so future prompts a
 
 ### Token categories added
 
-- **Dark surface tokens** — Midnight Ink, Onyx Velvet, Carbon Mist, Pen Stroke (`--ds-midnight-ink`, `--ds-onyx-velvet`, `--ds-carbon-mist`, `--ds-pen-stroke`)
-- **Warm paper surface tokens** — Warm Paper, Parchment, Aged Paper (`--ds-warm-paper`, `--ds-parchment`, `--ds-aged-paper`)
-- **Text role tokens** — primary, secondary, tertiary, inverse (`--ds-text-*`)
-- **Accent tokens** — warm gold accent, muted, subtle alpha (`--ds-accent`, `--ds-accent-muted`, `--ds-accent-subtle`)
-- **Trust signal tokens** — verified (emerald), partial (amber), caveat alpha (`--ds-trust-verified`, `--ds-trust-partial`, `--ds-trust-caveat`)
-- **Caution / warning tokens** — `--ds-caution`, `--ds-warning`
-- **Elevation tokens** — four shadow stack levels (`--ds-elevation-1` through `--ds-elevation-4`)
-- **Motion tokens** — fast/standard/slow durations + standard/decelerate/accelerate easings (`--ds-duration-*`, `--ds-easing-*`)
-- **Spacing scale tokens** — `--ds-space-1` through `--ds-space-12`
-- **Typography role tokens** — display, heading, subheading, body, label, caption (`--ds-type-*`)
+All values are Design Bible v1.0 §4 exact. Named palette tokens are defined first; semantic aliases reference them.
+
+**Dark surface tokens**
+
+| Token | Name | Hex |
+|---|---|---|
+| `--ds-midnight-ink` | Midnight Ink | `#0B1320` |
+| `--ds-onyx-velvet` | Onyx Velvet | `#0F1A2C` |
+| `--ds-carbon-mist` | Carbon Mist | `#1A2538` |
+| `--ds-pen-stroke` | Pen Stroke | `#22324A` |
+
+**Warm paper surface tokens**
+
+| Token | Name | Hex |
+|---|---|---|
+| `--ds-warm-paper` | Warm Paper | `#FAF7F0` |
+| `--ds-bone` | Bone | `#F1ECE0` |
+| `--ds-linen` | Linen | `#E6DECB` |
+| `--ds-hairline` | Hairline | `#D9D2C2` |
+
+**Named palette tokens**
+
+| Token | Name | Hex |
+|---|---|---|
+| `--ds-sandstone-gold` | Sandstone Gold | `#E0B888` |
+| `--ds-ember-brass` | Ember Brass / Brass | `#C5944D` |
+| `--ds-pearl-cream` | Pearl Cream | `#F2EBDD` |
+| `--ds-cream` | Cream | `#E8E2D4` |
+| `--ds-mist` | Mist | `#9AA4B2` |
+| `--ds-verified-sage` | Verified Sage | `#88A899` |
+| `--ds-caution-amber` | Caution Amber | `#E8B26B` |
+| `--ds-whisper-coral` | Whisper Coral | `#D88478` |
+| `--ds-slate` | Slate | `#4A5568` |
+| `--ds-ink-paper` | Ink Paper | `#1F2530` |
+
+**Semantic role aliases** (reference named tokens):
+- Text: `--ds-text-primary` → Pearl Cream, `--ds-text-secondary` → Cream, `--ds-text-tertiary` → Mist, `--ds-text-inverse` → Ink Paper
+- Accent: `--ds-accent` → Sandstone Gold, `--ds-accent-muted` → Ember Brass
+- Trust: `--ds-trust-verified` → Verified Sage, `--ds-trust-partial` → Caution Amber
+- Caution / warning: `--ds-caution` → Caution Amber, `--ds-warning` → Whisper Coral
+
+**Other token categories** (structure unchanged from Phase 0 initial):
+- Elevation tokens — four shadow stack levels (`--ds-elevation-1` through `--ds-elevation-4`)
+- Motion tokens — fast/standard/slow durations + standard/decelerate/accelerate easings (`--ds-duration-*`, `--ds-easing-*`)
+- Spacing scale tokens — `--ds-space-1` through `--ds-space-12`
+- Typography role tokens — display, heading, subheading, body, label, caption (`--ds-type-*`)
 
 ### Tailwind wiring
 
-All `--color-ds-*` entries in `@theme` read from `var(--ds-*)`. No raw hex in `@theme` for design-token entries. Generates Tailwind utilities: `bg-ds-midnight`, `text-ds-accent`, `border-ds-trust`, etc. Existing `--color-*` palette entries and all existing utility classes are unchanged.
+All `--color-ds-*` entries in `@theme` read from `var(--ds-*)`. No raw hex in `@theme` for design-token entries. Generates Tailwind utilities including: `bg-ds-midnight`, `bg-ds-onyx`, `bg-ds-paper`, `text-ds-text`, `text-ds-trust`, `text-ds-caution`, `border-ds-pen-stroke`, `border-ds-hairline`, `text-ds-accent`, `text-ds-accent-deep`, etc. Existing `--color-*` palette entries and all existing utility classes are unchanged.
+
+### Primitive token usage
+
+- `Card.tsx` dark tone uses: `bg-ds-onyx border-ds-pen-stroke text-ds-text`
+- `Card.tsx` paper tone uses: `bg-ds-paper border-ds-hairline text-ds-text-inverse`
+- `TrustStrip.tsx` verified uses: `text-ds-trust` (Verified Sage)
+- `TrustStrip.tsx` high confidence uses: `text-ds-trust`
+- `TrustStrip.tsx` medium confidence uses: `text-ds-caution` (Caution Amber)
+- `TrustStrip.tsx` low confidence / caveat uses: `text-ds-text-tertiary` (Mist)
+- No legacy `emerald-*`, `amber-*`, `cream-*`, `dark-*`, or raw `white/` classes in new primitives.
 
 ### Surface adoption
 

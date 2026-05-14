@@ -7,37 +7,45 @@
    ════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* ── Dark surface tokens (Midnight Ink palette) */
-  --ds-midnight-ink:   #0c0c1a;
-  --ds-onyx-velvet:    #131325;
-  --ds-carbon-mist:    #16162d;
-  --ds-pen-stroke:     rgba(255, 255, 255, 0.07);
-  --ds-pen-stroke-md:  rgba(255, 255, 255, 0.12);
+  /* ── Dark surface tokens — Design Bible v1.0 §4 exact values */
+  --ds-midnight-ink:   #0B1320;
+  --ds-onyx-velvet:    #0F1A2C;
+  --ds-carbon-mist:    #1A2538;
+  --ds-pen-stroke:     #22324A;
 
-  /* ── Warm paper surface tokens */
-  --ds-warm-paper:   #faf8f4;
-  --ds-parchment:    #f2ede4;
-  --ds-aged-paper:   #e8e0d4;
+  /* ── Warm paper surface tokens — Design Bible v1.0 §4 */
+  --ds-warm-paper:     #FAF7F0;
+  --ds-bone:           #F1ECE0;
+  --ds-linen:          #E6DECB;
+  --ds-hairline:       #D9D2C2;
 
-  /* ── Text role tokens */
-  --ds-text-primary:   #f2ede4;
-  --ds-text-secondary: #b8b5c0;
-  --ds-text-tertiary:  #706d80;
-  --ds-text-inverse:   #1a1008;
+  /* ── Named palette — Design Bible v1.0 §4 */
+  --ds-sandstone-gold: #E0B888;
+  --ds-ember-brass:    #C5944D;
+  --ds-pearl-cream:    #F2EBDD;
+  --ds-cream:          #E8E2D4;
+  --ds-mist:           #9AA4B2;
+  --ds-verified-sage:  #88A899;
+  --ds-caution-amber:  #E8B26B;
+  --ds-whisper-coral:  #D88478;
+  --ds-slate:          #4A5568;
+  --ds-ink-paper:      #1F2530;
 
-  /* ── Accent tokens (warm gold) */
-  --ds-accent:        #e8b854;
-  --ds-accent-muted:  #c8a55c;
-  --ds-accent-subtle: rgba(200, 165, 92, 0.12);
-
-  /* ── Trust signal tokens */
-  --ds-trust-verified: #34d399;
-  --ds-trust-partial:  #fcd34d;
-  --ds-trust-caveat:   rgba(251, 191, 36, 0.15);
-
-  /* ── Caution / warning tokens */
-  --ds-caution: #f59e0b;
-  --ds-warning: #ef4444;
+  /* ── Semantic role aliases (reference named tokens above) */
+  --ds-text-primary:   var(--ds-pearl-cream);
+  --ds-text-secondary: var(--ds-cream);
+  --ds-text-tertiary:  var(--ds-mist);
+  --ds-text-inverse:   var(--ds-ink-paper);
+  --ds-accent:         var(--ds-sandstone-gold);
+  --ds-accent-muted:   var(--ds-ember-brass);
+  --ds-accent-subtle:  rgba(224, 184, 136, 0.12);
+  --ds-trust-verified: var(--ds-verified-sage);
+  --ds-trust-partial:  var(--ds-caution-amber);
+  --ds-trust-caveat:   rgba(232, 178, 107, 0.15);
+  --ds-caution:        var(--ds-caution-amber);
+  --ds-warning:        var(--ds-whisper-coral);
+  --ds-parchment:      var(--ds-bone);
+  --ds-aged-paper:     var(--ds-linen);
 
   /* ── Elevation tokens */
   --ds-elevation-1:
@@ -186,18 +194,29 @@
   --color-brand-700: #7d5f20;
 
   /* ── Design token semantic wiring — theme keys read from :root vars */
+  /* Surface */
   --color-ds-midnight:         var(--ds-midnight-ink);
   --color-ds-onyx:             var(--ds-onyx-velvet);
   --color-ds-carbon:           var(--ds-carbon-mist);
   --color-ds-paper:            var(--ds-warm-paper);
+  --color-ds-bone:             var(--ds-bone);
+  --color-ds-linen:            var(--ds-linen);
   --color-ds-parchment:        var(--ds-parchment);
   --color-ds-aged-paper:       var(--ds-aged-paper);
+  /* Divider / border */
+  --color-ds-pen-stroke:       var(--ds-pen-stroke);
+  --color-ds-hairline:         var(--ds-hairline);
+  /* Text */
   --color-ds-text:             var(--ds-text-primary);
   --color-ds-text-secondary:   var(--ds-text-secondary);
   --color-ds-text-tertiary:    var(--ds-text-tertiary);
   --color-ds-text-inverse:     var(--ds-text-inverse);
+  --color-ds-slate:            var(--ds-slate);
+  /* Accent */
   --color-ds-accent:           var(--ds-accent);
   --color-ds-accent-muted:     var(--ds-accent-muted);
+  --color-ds-accent-deep:      var(--ds-ember-brass);
+  /* Trust / caution / warning */
   --color-ds-trust:            var(--ds-trust-verified);
   --color-ds-trust-partial:    var(--ds-trust-partial);
   --color-ds-caution:          var(--ds-caution);

@@ -21,9 +21,9 @@ const CONFIDENCE_LABEL: Record<TrustConfidence, string> = {
 };
 
 const CONFIDENCE_CLASS: Record<TrustConfidence, string> = {
-  high:   "text-emerald-400",
-  medium: "text-amber-400",
-  low:    "text-cream-400 opacity-70",
+  high:   "text-ds-trust",
+  medium: "text-ds-caution",
+  low:    "text-ds-text-tertiary opacity-70",
 };
 
 export function TrustStrip({
@@ -47,7 +47,7 @@ export function TrustStrip({
     >
       {/* "Verified by Google" only when explicitly confirmed — no inference */}
       {verified && (
-        <span className="flex items-center gap-1 font-medium text-emerald-400">
+        <span className="flex items-center gap-1 font-medium text-ds-trust">
           <svg
             aria-hidden="true"
             width="12"
@@ -68,7 +68,7 @@ export function TrustStrip({
       )}
 
       {typeof sourceCount === "number" && sourceCount > 0 && (
-        <span className="text-cream-400">
+        <span className="text-ds-text-secondary">
           <span className="sr-only">Based on </span>
           {sourceCount}&nbsp;source{sourceCount !== 1 ? "s" : ""}
         </span>
@@ -84,7 +84,7 @@ export function TrustStrip({
       )}
 
       {caveat && (
-        <span role="note" className="text-cream-500 italic">
+        <span role="note" className="text-ds-text-tertiary italic">
           {caveat}
         </span>
       )}
