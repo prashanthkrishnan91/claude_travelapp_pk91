@@ -433,59 +433,45 @@ export async function addFlightToTrip(
   });
 }
 
-export async function addRoundTripOutboundToDay(
+/**
+ * Add a canonical round-trip flight candidate to a day as a SINGLE itinerary
+ * item, preserving the full canonical offer details (kind/source_kind,
+ * trip_type/is_round_trip, outbound_leg, return_leg, cash/total price,
+ * google_flights_search_url, booking_link, provider/provider_offer_id/
+ * offer_fingerprint). The card renders both legs from this one row — no bare
+ * "(Outbound)" / "(Return)" placeholder rows.
+ */
+export async function addRoundTripFlightToDay(
   tripId: string,
   dayId: string,
-  outbound: Record<string, unknown>,
+  item: ItineraryItem,
   position: number
 ): Promise<ItineraryItem> {
-  // Leg data arrives camelCase (after toCamel transform); fall back to snake_case for old data
-  const flightNum  = (outbound.flightNumber  ?? outbound.flight_number)  as string | undefined;
-  const depTime    = (outbound.departureTime ?? outbound.departure_time) as string | undefined;
-  const arrTime    = (outbound.arrivalTime   ?? outbound.arrival_time)   as string | undefined;
-  const pointsCost = (outbound.pointsCost    ?? outbound.points_cost)    as number | undefined;
+  const d = (item.details ?? {}) as Record<string, unknown>;
+  // Canonical legs arrive camelCased after toCamel; fall back to snake_case + legacy keys.
+  const outbound = (d.outboundLeg ?? d.outbound_leg ?? d.outbound) as Record<string, unknown> | undefined;
+  const ret = (d.returnLeg ?? d.return_leg ?? d.returnFlight ?? d.return_flight) as Record<string, unknown> | undefined;
+  const startTime = ((outbound?.departureTime ?? outbound?.departure_time) as string | undefined) ?? item.startTime;
+  const endTime = ((ret?.arrivalTime ?? ret?.arrival_time) as string | undefined) ?? item.endTime;
+  const price =
+    (d.cashPrice as number | undefined) ??
+    (d.cash_price as number | undefined) ??
+    (d.totalPrice as number | undefined) ??
+    (d.total_price as number | undefined) ??
+    item.cashPrice;
   const payload = toSnake({
     tripId,
     dayId,
     itemType: "flight",
-    title: `${outbound.airline ?? ""} ${flightNum ?? ""} (Outbound)`.trim(),
-    startTime: depTime,
-    endTime: arrTime,
-    cashPrice: outbound.price,
-    pointsPrice: pointsCost,
-    cppValue: outbound.cpp,
+    title: item.title,
+    startTime,
+    endTime,
+    cashPrice: price,
+    pointsPrice: item.pointsPrice,
     position,
-    details: { ...outbound, leg: "outbound" },
-  });
-  return apiFetch<ItineraryItem>("/itinerary/items", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function addRoundTripReturnToDay(
-  tripId: string,
-  dayId: string,
-  returnFlight: Record<string, unknown>,
-  position: number
-): Promise<ItineraryItem> {
-  // Leg data arrives camelCase (after toCamel transform); fall back to snake_case for old data
-  const flightNum  = (returnFlight.flightNumber  ?? returnFlight.flight_number)  as string | undefined;
-  const depTime    = (returnFlight.departureTime ?? returnFlight.departure_time) as string | undefined;
-  const arrTime    = (returnFlight.arrivalTime   ?? returnFlight.arrival_time)   as string | undefined;
-  const pointsCost = (returnFlight.pointsCost    ?? returnFlight.points_cost)    as number | undefined;
-  const payload = toSnake({
-    tripId,
-    dayId,
-    itemType: "flight",
-    title: `${returnFlight.airline ?? ""} ${flightNum ?? ""} (Return)`.trim(),
-    startTime: depTime,
-    endTime: arrTime,
-    cashPrice: returnFlight.price,
-    pointsPrice: pointsCost,
-    cppValue: returnFlight.cpp,
-    position,
-    details: { ...returnFlight, leg: "return" },
+    // Spread the full canonical offer details so the scheduled item renders
+    // as a real round-trip flight card with both leg details + Google Flights CTA.
+    details: { ...d },
   });
   return apiFetch<ItineraryItem>("/itinerary/items", {
     method: "POST",
@@ -1785,7 +1771,8 @@ export async function callConciergeSearch(
   tripId: string | null,
   userQuery: string,
   clientMessageId?: string,
-  destination?: string
+  destination?: string,
+  allowLiveResearch?: boolean
 ): Promise<ConciergeSearchResult> {
   const raw = await apiFetch<unknown>("/ai/concierge/search", {
     method: "POST",
@@ -1794,6 +1781,9 @@ export async function callConciergeSearch(
       ...(destination ? { destination } : {}),
       user_query: userQuery,
       ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
+      // Only send when explicitly disabling paid live research (default
+      // Explore Hotels). Omitted → backend default (true) for AI Concierge.
+      ...(allowLiveResearch === false ? { allow_live_research: false } : {}),
     }),
   });
   const normalized = normalizeConciergeResponse(raw);

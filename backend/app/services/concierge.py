@@ -261,6 +261,7 @@ class ConciergeService:
         client_message_id: Optional[str] = None,
         prior_identity_keys: Optional[frozenset] = None,
         destination: Optional[str] = None,
+        allow_live_research: bool = True,
     ) -> ConciergeSearchResponse:
         _t_search_start = time.perf_counter()
 
@@ -307,6 +308,7 @@ class ConciergeService:
         live_result = self._fetch_live_research(
             intent, destination, user_query, trip,
             prior_identity_keys=prior_identity_keys,
+            allow_live_research=allow_live_research,
         )
         _fetch_live_research_ms = int((time.perf_counter() - _t0) * 1000)
 
@@ -741,6 +743,7 @@ class ConciergeService:
         user_query: str,
         trip: dict,
         prior_identity_keys: Optional[frozenset] = None,
+        allow_live_research: bool = True,
     ) -> LiveResearchResult:
         """Run live research and return normalized results, never raising.
 
@@ -758,7 +761,23 @@ class ConciergeService:
 
         A failed live-research call must NOT break the concierge flow — fall
         back to existing curated/app-database/sample paths instead.
+
+        When allow_live_research is False (default Explore Hotels and other
+        tripless verified-only callers), the whole live-research pipeline —
+        including paid providers like Tavily — is skipped. Callers fall through
+        to the verified Google-Places-backed search path instead.
         """
+        # ── No-live-research gate (default Explore Hotels) ────────────────────
+        # Enforced before any provider call so paid live research (Tavily) is
+        # never invoked for verified-only callers.
+        if not allow_live_research:
+            logger.info(
+                "concierge.live_research_skipped intent=%s destination=%r "
+                "reason=allow_live_research_false live_provider=none",
+                intent, destination,
+            )
+            return LiveResearchResult()
+
         # ── Semantic Retrieval v1 (highest priority when flag ON) ─────────────
         semantic_enabled = bool(
             getattr(self._settings, "concierge_semantic_retrieval_v1_enabled", False)

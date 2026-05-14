@@ -67,8 +67,7 @@ import {
   fetchTripItems,
   ensureTripDays,
   addOneWayFlightToDay,
-  addRoundTripOutboundToDay,
-  addRoundTripReturnToDay,
+  addRoundTripFlightToDay,
   fetchDayPlan,
   addAttractionToDay,
   addRestaurantToDay,
@@ -1547,50 +1546,37 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     }
   }, [days, selectedDayId, tripId, showToast]);
 
-  // ── Add round-trip pair: outbound to day 1, return to last day ──────────────
+  // ── Add round-trip flight: one scheduled item preserving canonical details ──
 
-  // Outbound goes to Day 1 (departure day); return goes to the final day (arrival home).
+  // A canonical round-trip Duffel offer is added as ONE scheduled flight item
+  // on the start day. Full canonical details (outbound/return legs, prices,
+  // Google Flights URL, provider provenance) are preserved so the card renders
+  // both legs — no bare "(Outbound)" / "(Return)" placeholder rows.
   const handleAddRoundTripToItinerary = useCallback(async (item: ItineraryItem) => {
     setAddingId(item.id);
     try {
-      const d = (item.details ?? {}) as Record<string, unknown>;
-      const outbound = (d.outbound as Record<string, unknown>) ?? {};
-      // toCamel converts return_flight → returnFlight; support both
-      const ret = ((d.returnFlight ?? d.return_flight) as Record<string, unknown>) ?? {};
-
-      const firstDay = days[0];
-      const lastDay  = days.length > 1 ? days[days.length - 1] : days[0];
-
-      if (!firstDay) {
-        showToast("No days available — days are generated from trip dates");
+      const targetDay = days.find((d) => d.id === selectedDayId) ?? days[0];
+      if (!targetDay) {
+        showToast("No day available — days are generated from trip dates");
         return;
       }
 
-      const outboundItem = await addRoundTripOutboundToDay(
-        tripId, firstDay.id, outbound, firstDay.items.length
-      );
-      const returnItem = await addRoundTripReturnToDay(
-        tripId, lastDay.id, ret, lastDay.items.length
+      const newItem = await addRoundTripFlightToDay(
+        tripId, targetDay.id, item, targetDay.items.length
       );
 
       setDays((prev) =>
-        prev.map((day) => {
-          if (day.id === firstDay.id && day.id === lastDay.id) {
-            return { ...day, items: [...day.items, outboundItem, returnItem] };
-          }
-          if (day.id === firstDay.id) return { ...day, items: [...day.items, outboundItem] };
-          if (day.id === lastDay.id)  return { ...day, items: [...day.items, returnItem]  };
-          return day;
-        })
+        prev.map((day) =>
+          day.id === targetDay.id ? { ...day, items: [...day.items, newItem] } : day
+        )
       );
-      const returnDayNum = lastDay.dayNumber;
-      showToast(`Round-trip added — outbound on Day 1, return on Day ${returnDayNum}`);
+      showToast(`Round-trip flight added to Day ${targetDay.dayNumber}`);
     } catch {
       showToast("Failed to add — please try again");
     } finally {
       setAddingId(null);
     }
-  }, [days, tripId, showToast]);
+  }, [days, selectedDayId, tripId, showToast]);
 
   // ── Remove item from a day ───────────────────────────────────────────────────
 

@@ -222,23 +222,42 @@ test('ItineraryItemCard: meal block reads d.tags for pill display', () => {
 test('ItineraryItemCard: flight block still reads origin and destination', () => {
   const flightIdx = itemCard.indexOf('item.itemType === "flight"');
   assert.ok(flightIdx >= 0, 'flight block must exist');
-  const flightBlock = itemCard.slice(flightIdx, flightIdx + 800);
-  assert.match(flightBlock, /d\.origin/, 'Flight block must read d.origin');
-  assert.match(flightBlock, /d\.destination/, 'Flight block must read d.destination');
+  const flightBlock = itemCard.slice(flightIdx, flightIdx + 8000);
+  assert.match(flightBlock, /d\.origin/, 'Flight block must read d.origin (one-way path)');
+  assert.match(flightBlock, /d\.destination/, 'Flight block must read d.destination (one-way path)');
 });
 
 test('ItineraryItemCard: flight block renders departure and arrival times', () => {
   const flightIdx = itemCard.indexOf('item.itemType === "flight"');
-  const flightBlock = itemCard.slice(flightIdx, flightIdx + 800);
+  const flightBlock = itemCard.slice(flightIdx, flightIdx + 8000);
   assert.match(flightBlock, /departure_time|departureTime/, 'Flight block must read departure time');
   assert.match(flightBlock, /arrival_time|arrivalTime/, 'Flight block must read arrival time');
 });
 
 test('ItineraryItemCard: flight block renders leg badge (outbound/return)', () => {
   const flightIdx = itemCard.indexOf('item.itemType === "flight"');
-  const flightBlock = itemCard.slice(flightIdx, flightIdx + 1800);
+  const flightBlock = itemCard.slice(flightIdx, flightIdx + 8000);
   assert.match(flightBlock, /d\.leg/, 'Flight block must read d.leg for outbound/return badge');
-  assert.match(flightBlock, /outbound/, 'Flight block must have outbound badge styling');
+  assert.match(flightBlock, /outbound/i, 'Flight block must have outbound badge styling');
+});
+
+test('ItineraryItemCard: round-trip flight renders both legs in one card', () => {
+  const flightIdx = itemCard.indexOf('item.itemType === "flight"');
+  const flightBlock = itemCard.slice(flightIdx, flightIdx + 8000);
+  // Canonical round-trip detection + both-leg render in a single card.
+  assert.match(flightBlock, /outboundLeg|outbound_leg/, 'must read canonical outbound leg');
+  assert.match(flightBlock, /returnLeg|return_leg/, 'must read canonical return leg');
+  assert.match(flightBlock, /trip_type|tripType/, 'must detect round_trip via trip_type');
+  assert.match(flightBlock, /itinerary-roundtrip-flight/, 'round-trip render has a stable testid');
+  // No bare placeholder-only rows — both legs render with route + airline.
+  assert.match(flightBlock, /renderLeg/, 'must render each leg with full details');
+});
+
+test('ItineraryItemCard: scheduled canonical flight keeps Google Flights CTA', () => {
+  const flightIdx = itemCard.indexOf('item.itemType === "flight"');
+  const flightBlock = itemCard.slice(flightIdx, flightIdx + 8000);
+  assert.match(flightBlock, /googleFlightsSearchUrl|google_flights_search_url/, 'must read canonical Google Flights URL');
+  assert.match(flightBlock, /itinerary-google-flights-cta/, 'must render a Google Flights CTA');
 });
 
 // ── 6. Trip Ideas remains shortlist-only ─────────────────────────────────────

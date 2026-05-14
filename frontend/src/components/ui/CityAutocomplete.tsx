@@ -17,6 +17,12 @@ interface CityAutocompleteProps {
   onChange: (selection: AirportSelection | null) => void;
   className?: string;
   inputClassName?: string;
+  /**
+   * Seeds the search input with an unresolved text value (e.g. a plain saved
+   * destination like "boise"). The text stays visible and editable but is NOT
+   * a resolved selection — the caller must still gate submit on `value`.
+   */
+  initialQuery?: string;
 }
 
 export function formatAirportSelection(sel: AirportSelection): string {
@@ -32,8 +38,9 @@ export function CityAutocomplete({
   onChange,
   className = "",
   inputClassName = "",
+  initialQuery = "",
 }: CityAutocompleteProps) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [suggestions, setSuggestions] = useState<AirportMatch[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);

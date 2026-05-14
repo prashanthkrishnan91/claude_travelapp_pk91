@@ -96,20 +96,26 @@ export function buildTripPrefillFromSavedItem(item: SavedItem): TripPrefill {
 // ── Airport selection helpers ─────────────────────────────────────────────────
 
 /**
- * Convert a prefill string to an initial AirportSelection for CityAutocomplete.
- * - 3-letter IATA codes (e.g. "SEA") → AirportSelection with airports: [code].
- * - Plain city strings (e.g. "Paris") → AirportSelection with airports: [] —
- *   preserves the city visibly without fabricating airport codes.
- * - Empty string → null (no chip).
+ * Convert a prefill string into an initial CityAutocomplete state.
+ * - 3-letter IATA codes (e.g. "SEA") → a resolved AirportSelection
+ *   (airports: [code]); `query` stays blank.
+ * - Plain city strings (e.g. "boise") → NOT a resolved selection. The string
+ *   is returned as `query` so it stays visible and editable, but `selection`
+ *   is null so submit stays blocked until the user picks a real city/airport.
+ * - Empty string → both null/blank.
  */
-function initAirportSelection(prefillStr: string): AirportSelection | null {
+function initFromPrefill(prefillStr: string): {
+  selection: AirportSelection | null;
+  query: string;
+} {
   const trimmed = prefillStr.trim();
-  if (!trimmed) return null;
+  if (!trimmed) return { selection: null, query: "" };
   const upper = trimmed.toUpperCase();
   if (/^[A-Z]{3}$/.test(upper)) {
-    return { city: upper, country: "", airports: [upper] };
+    return { selection: { city: upper, country: "", airports: [upper] }, query: "" };
   }
-  return { city: trimmed, country: "", airports: [] };
+  // Plain (non-IATA) prefill: visible/editable text, but unresolved.
+  return { selection: null, query: trimmed };
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
@@ -128,11 +134,15 @@ export function CreateTripFromSavedModal({
   const prefill = useMemo(() => buildTripPrefillFromSavedItem(item), [item]);
 
   const [title, setTitle] = useState(prefill.title);
-  // Airport autocomplete selections — initialized from prefill via initAirportSelection.
-  // IATA prefills (e.g. "SEA") start as a chip with airports:[code].
-  // Plain city prefills (e.g. "Paris") start as a chip with airports:[] — visible, no fabrication.
-  const [originSel, setOriginSel] = useState<AirportSelection | null>(() => initAirportSelection(prefill.origin));
-  const [destSel, setDestSel] = useState<AirportSelection | null>(() => initAirportSelection(prefill.destination));
+  // Airport autocomplete state — initialized from prefill via initFromPrefill.
+  // IATA prefills (e.g. "SEA") start as a resolved chip with airports:[code].
+  // Plain city prefills (e.g. "boise") start UNRESOLVED — the text is seeded
+  // into CityAutocomplete's input (visible/editable) but selection is null,
+  // so submit stays blocked until the user picks a real city/airport.
+  const originInit = useMemo(() => initFromPrefill(prefill.origin), [prefill.origin]);
+  const destInit = useMemo(() => initFromPrefill(prefill.destination), [prefill.destination]);
+  const [originSel, setOriginSel] = useState<AirportSelection | null>(originInit.selection);
+  const [destSel, setDestSel] = useState<AirportSelection | null>(destInit.selection);
   const [startDate, setStartDate] = useState(prefill.startDate);
   const [endDate, setEndDate] = useState(prefill.endDate);
   const [travelers, setTravelers] = useState<number>(prefill.travelers);
@@ -141,13 +151,19 @@ export function CreateTripFromSavedModal({
   const origin = originSel?.city ?? "";
   const destination = destSel?.city ?? "";
 
+  // A selection counts as resolved only when it carries IATA airport codes —
+  // a plain city string is never treated as a completed airport chip.
+  const originResolved = !!originSel && originSel.airports.length > 0;
+  const destResolved = !!destSel && destSel.airports.length > 0;
+  const airportsUnresolved = !originResolved || !destResolved;
+
   const [state, setState] = useState<SubmitState>("idle");
   const [error, setError] = useState<string | null>(null);
 
   const canSubmit =
     title.trim().length > 0 &&
-    origin.trim().length > 0 &&
-    destination.trim().length > 0 &&
+    originResolved &&
+    destResolved &&
     startDate.length > 0 &&
     endDate.length > 0 &&
     travelers >= 1 &&
@@ -248,6 +264,7 @@ export function CreateTripFromSavedModal({
                 placeholder="City you're flying from"
                 value={originSel}
                 onChange={setOriginSel}
+                initialQuery={originInit.query}
               />
             </div>
           </div>
@@ -261,9 +278,19 @@ export function CreateTripFromSavedModal({
                 placeholder="Destination city"
                 value={destSel}
                 onChange={setDestSel}
+                initialQuery={destInit.query}
               />
             </div>
           </div>
+
+          {airportsUnresolved && (
+            <p
+              className="text-[11px] text-amber-300/90"
+              data-testid="ct-unresolved-hint"
+            >
+              Select a city/airport from suggestions before creating the trip.
+            </p>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>

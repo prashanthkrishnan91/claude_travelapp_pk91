@@ -211,9 +211,18 @@ test('AttractionExploreFlow calls callConciergeSearch with null tripId', () => {
   assert.match(attractionFlow, /callConciergeSearch\(null/);
 });
 
-test('AttractionExploreFlow passes destination as the fourth argument', () => {
-  // signature: callConciergeSearch(null, query, undefined, dest)
-  assert.match(attractionFlow, /callConciergeSearch\(null,\s*query,\s*undefined,\s*dest\)/);
+test('AttractionExploreFlow passes destination + allowLiveResearch=false', () => {
+  // signature: callConciergeSearch(null, query, undefined, dest, false)
+  // Default Explore Attractions must not spend paid Tavily/live-research credits.
+  assert.match(attractionFlow, /callConciergeSearch\(null,\s*query,\s*undefined,\s*dest,\s*false\)/);
+});
+
+test('AttractionExploreFlow disables live research for default Explore (no Tavily spend)', () => {
+  assert.match(
+    attractionFlow,
+    /callConciergeSearch\([^)]*,\s*false\)/,
+    'default Explore Attractions must pass allowLiveResearch=false',
+  );
 });
 
 test('AttractionExploreFlow renders attraction-results testid when results present', () => {

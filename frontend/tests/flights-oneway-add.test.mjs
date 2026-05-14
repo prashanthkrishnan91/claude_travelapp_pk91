@@ -4,7 +4,7 @@
 // Guards that:
 //   1. addOneWayFlightToDay exists in api.ts and sends startTime/endTime/details.
 //   2. handleAddCandidateToItinerary branches on itemType === "flight" and calls addOneWayFlightToDay.
-//   3. Round-trip path still uses addRoundTripOutboundToDay / addRoundTripReturnToDay.
+//   3. Round-trip path adds ONE canonical item via addRoundTripFlightToDay.
 //   4. No book.example.com / fake booking URL in addOneWayFlightToDay.
 //   5. No _mock_flights call in the one-way add path.
 //   6. One-way cards display a "One-way" indicator distinct from round-trip cards.
@@ -81,19 +81,29 @@ test('api.ts: addOneWayFlightToDay does not call _mock_flights', () => {
   );
 });
 
-test('api.ts: addRoundTripOutboundToDay still present (round-trip path preserved)', () => {
+test('api.ts: addRoundTripFlightToDay adds ONE item preserving canonical details', () => {
   assert.match(
     apiSrc,
-    /export async function addRoundTripOutboundToDay\b/,
-    'addRoundTripOutboundToDay must remain for round-trip outbound add',
+    /export async function addRoundTripFlightToDay\b/,
+    'addRoundTripFlightToDay must exist for canonical round-trip add',
   );
+  const fnStart = apiSrc.indexOf('export async function addRoundTripFlightToDay');
+  const fnEnd   = apiSrc.indexOf('\nexport ', fnStart + 1);
+  const fnBody  = apiSrc.slice(fnStart, fnEnd === -1 ? undefined : fnEnd);
+  // Single item, full details spread — no bare "(Outbound)"/"(Return)" titles.
+  assert.match(fnBody, /details:\s*\{\s*\.\.\.\s*d\s*\}/, 'must spread full canonical details');
+  assert.ok(!fnBody.includes('(Outbound)'), 'must not build "(Outbound)" placeholder title');
+  assert.ok(!fnBody.includes('(Return)'), 'must not build "(Return)" placeholder title');
 });
 
-test('api.ts: addRoundTripReturnToDay still present (round-trip path preserved)', () => {
-  assert.match(
-    apiSrc,
-    /export async function addRoundTripReturnToDay\b/,
-    'addRoundTripReturnToDay must remain for round-trip return add',
+test('api.ts: old split round-trip leg helpers are removed', () => {
+  assert.ok(
+    !apiSrc.includes('addRoundTripOutboundToDay'),
+    'addRoundTripOutboundToDay must be removed — produced placeholder-only rows',
+  );
+  assert.ok(
+    !apiSrc.includes('addRoundTripReturnToDay'),
+    'addRoundTripReturnToDay must be removed — produced placeholder-only rows',
   );
 });
 
@@ -123,19 +133,22 @@ test('TripBuilder: handleAddCandidateToItinerary calls addOneWayFlightToDay for 
   );
 });
 
-test('TripBuilder: round-trip add still uses addRoundTripOutboundToDay', () => {
+test('TripBuilder: round-trip add uses addRoundTripFlightToDay (single canonical item)', () => {
   assert.match(
     tripBuilder,
-    /addRoundTripOutboundToDay\s*\(/,
-    'handleAddRoundTripToItinerary must still call addRoundTripOutboundToDay',
+    /addRoundTripFlightToDay\s*\(\s*\n?\s*tripId/,
+    'handleAddRoundTripToItinerary must call addRoundTripFlightToDay(tripId, ...)',
   );
 });
 
-test('TripBuilder: round-trip add still uses addRoundTripReturnToDay', () => {
-  assert.match(
-    tripBuilder,
-    /addRoundTripReturnToDay\s*\(/,
-    'handleAddRoundTripToItinerary must still call addRoundTripReturnToDay',
+test('TripBuilder: round-trip add no longer uses split leg helpers', () => {
+  assert.ok(
+    !tripBuilder.includes('addRoundTripOutboundToDay'),
+    'TripBuilder must not reference removed addRoundTripOutboundToDay',
+  );
+  assert.ok(
+    !tripBuilder.includes('addRoundTripReturnToDay'),
+    'TripBuilder must not reference removed addRoundTripReturnToDay',
   );
 });
 
