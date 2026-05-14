@@ -275,12 +275,31 @@ class ItineraryService:
         if user_id is not None and payload.day_id is not None:
             self._ensure_day_owned(payload.day_id, user_id)
         data = payload.model_dump(mode="json", exclude_none=True)
-        duplicate = self._find_duplicate_item(
-            trip_id=payload.trip_id,
-            title=payload.title,
-            item_type=payload.item_type.value,
-            day_id=payload.day_id,
-        )
+        # Canonical provider-backed flight offers dedupe by a deterministic
+        # offer fingerprint, not title: multiple distinct Duffel offers can
+        # share the same headline title (airline + flight number + route).
+        # Title-based dedupe stays for legacy/manual and non-canonical rows.
+        details = payload.details if isinstance(payload.details, dict) else {}
+        offer_fingerprint = ""
+        if (
+            payload.item_type.value == "flight"
+            and details.get("kind") == "flight_offer"
+            and details.get("source_kind") == "creation_seed"
+        ):
+            offer_fingerprint = str(details.get("offer_fingerprint") or "")
+        if offer_fingerprint:
+            duplicate = self._find_duplicate_flight_offer(
+                trip_id=payload.trip_id,
+                day_id=payload.day_id,
+                offer_fingerprint=offer_fingerprint,
+            )
+        else:
+            duplicate = self._find_duplicate_item(
+                trip_id=payload.trip_id,
+                title=payload.title,
+                item_type=payload.item_type.value,
+                day_id=payload.day_id,
+            )
         if duplicate:
             return ItineraryItem(**duplicate)
         result = _supabase_execute(
@@ -367,5 +386,35 @@ class ItineraryService:
         normalized_title = title.strip().lower()
         for row in existing:
             if (row.get("title") or "").strip().lower() == normalized_title:
+                return row
+        return None
+
+    def _find_duplicate_flight_offer(
+        self,
+        trip_id: UUID,
+        day_id: Optional[UUID],
+        offer_fingerprint: str,
+    ) -> Optional[dict]:
+        """Find an existing canonical flight row with the same offer fingerprint.
+
+        JSON-path filtering support varies across Supabase/PostgREST setups, so
+        the fingerprint comparison is done in Python over a bounded set of the
+        trip/day's flight rows.
+        """
+        query = (
+            self.db.table(ITEMS_TABLE)
+            .select("*")
+            .eq("trip_id", str(trip_id))
+            .eq("item_type", "flight")
+            .limit(100)
+        )
+        if day_id:
+            query = query.eq("day_id", str(day_id))
+        else:
+            query = query.is_("day_id", "null")
+        existing = query.execute().data or []
+        for row in existing:
+            row_details = row.get("details") if isinstance(row.get("details"), dict) else {}
+            if str(row_details.get("offer_fingerprint") or "") == offer_fingerprint:
                 return row
         return None

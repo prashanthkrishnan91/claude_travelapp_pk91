@@ -62,6 +62,7 @@ PR usage notes in the PR body are not sufficient for workflow audits — they ar
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | YYYY-MM-DD | #000 | initial | initial | n/a | workflow/docs | unknown | claude-sonnet-4-6 | same-chat | manual | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unknown | template row — replace | 0 | n/a |
 | 2026-05-13 | stage3-exit-canonical-flight-seeding | initial | initial | n/a | backend/routes,services,tests | web-claude | claude-opus-4-7 | same-chat | manual | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | none | unify /trips/create-with-search flight seeding with /explore/flights via canonical_flight_search helper; persist FlightItineraryOffer as Trip Ideas | 0 | one provider seam → fewer divergent flight pathways |
+| 2026-05-14 | flight-offer-fingerprint-GbKID | initial | initial | n/a | backend/flights | web-claude | claude-opus-4-7 | same-chat | ccusage | 86 | 26669 | 4051596 | 141748 | 4220099 | $3.58 | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | none | anchor reads, itinerary+trips edits, test additions | 0 | replace title-based dedupe for canonical Duffel offers with deterministic offer_fingerprint |
 
 ## Per-prompt delta workflow
 

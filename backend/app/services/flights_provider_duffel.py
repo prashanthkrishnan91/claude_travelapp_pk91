@@ -345,10 +345,14 @@ def _map_offer(
     if not origin or not destination:
         return None
 
+    provider_offer_id = offer.get("id")
+    provider_offer_id = str(provider_offer_id) if provider_offer_id else None
+
     try:
         return FlightItineraryOffer(
             provider="duffel_flights",
             fetched_at=fetched_at,
+            provider_offer_id=provider_offer_id,
             live_cached_status=LiveCachedStatus.LIVE,
             trip_type=TripType.ROUND_TRIP if is_round_trip else TripType.ONE_WAY,
             origin=origin,

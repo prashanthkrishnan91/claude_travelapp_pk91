@@ -237,6 +237,10 @@ class FlightItineraryOffer:
     return_date: Optional[str] = None       # YYYY-MM-DD; None for one-way
     return_leg: Optional[FlightOfferLeg] = None
     ai_score: Optional[float] = None        # optional AI ranking; 0–1 scale
+    # Provider-native offer identifier (e.g. Duffel offer id).  Optional: not
+    # every provider supplies one.  When present it is the strongest identity
+    # signal for deduplicating distinct offers that share a headline title.
+    provider_offer_id: Optional[str] = None
 
     def __post_init__(self) -> None:
         if not self.provider:
