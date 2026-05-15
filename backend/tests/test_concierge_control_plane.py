@@ -34,7 +34,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from app.concierge.evidence_cache import (  # noqa: E402
     CreditROITelemetry,
     NoteDecision,
+    _canonical_concept_label,
+    _distinct_concept_count,
+    _stem_word,
     make_note_decision,
+    should_run_editorial,
 )
 
 
@@ -384,3 +388,217 @@ class TestNoteDecisionTelemetry:
             accepted_editorial_evidence_count=4,
         )
         assert decision.legacy_batched_reasoning_skip_reason is None
+
+
+# ── Section E: Subtype-concept canonicalization ───────────────────────────────
+
+class TestStemWord:
+    """_stem_word strips common English plural suffixes from a single word."""
+
+    def test_trailing_s_stripped(self):
+        assert _stem_word("bars") == "bar"
+        assert _stem_word("restaurants") == "restaurant"
+
+    def test_trailing_s_not_stripped_from_ss(self):
+        assert _stem_word("class") == "class"
+        assert _stem_word("grass") == "grass"
+
+    def test_ies_to_y(self):
+        assert _stem_word("breweries") == "brewery"
+        assert _stem_word("bakeries") == "bakery"
+
+    def test_ches_suffix(self):
+        assert _stem_word("benches") == "bench"
+        assert _stem_word("beaches") == "beach"
+
+    def test_shes_suffix(self):
+        assert _stem_word("dishes") == "dish"
+
+    def test_sses_suffix(self):
+        assert _stem_word("glasses") == "glass"
+
+    def test_no_suffix_unchanged(self):
+        assert _stem_word("sushi") == "sushi"
+        assert _stem_word("brunch") == "brunch"
+        assert _stem_word("jazz") == "jazz"
+
+    def test_short_word_not_mangled(self):
+        # 2-char word: don't strip
+        assert _stem_word("is") == "is"
+
+
+class TestCanonicalConceptLabel:
+    """_canonical_concept_label normalizes multi-word concept labels."""
+
+    def test_trailing_s_on_last_word(self):
+        assert _canonical_concept_label("bars") == "bar"
+        assert _canonical_concept_label("sports") == "sport"
+
+    def test_multiword_each_word_stemmed(self):
+        # "sports bars" → "sport bar"
+        assert _canonical_concept_label("sports bars") == "sport bar"
+        assert _canonical_concept_label("sport bars") == "sport bar"
+        assert _canonical_concept_label("sports bar") == "sport bar"
+
+    def test_case_normalized(self):
+        assert _canonical_concept_label("Bars") == "bar"
+        assert _canonical_concept_label("SPORTS") == "sport"
+
+    def test_punctuation_stripped(self):
+        assert _canonical_concept_label("bar!") == "bar"
+        assert _canonical_concept_label("craft-beer") == "craftbeer"
+
+    def test_singular_unchanged(self):
+        assert _canonical_concept_label("bar") == "bar"
+        assert _canonical_concept_label("brewery") == "brewery"
+
+    def test_breweries_canonicalized(self):
+        assert _canonical_concept_label("breweries") == "brewery"
+
+
+class TestDistinctConceptCount:
+    """_distinct_concept_count collapses singular/plural and duplicate variants."""
+
+    def _make_concept(self, label: str) -> Any:
+        from dataclasses import dataclass
+
+        @dataclass
+        class _Concept:
+            label: str
+
+        return _Concept(label=label)
+
+    def _concepts(self, *labels: str):
+        return [self._make_concept(l) for l in labels]
+
+    # ── Singular/plural collapse ──────────────────────────────────────────────
+
+    def test_sport_sports_collapses_to_one(self):
+        assert _distinct_concept_count(self._concepts("sport", "sports")) == 1
+
+    def test_bar_bars_collapses_to_one(self):
+        assert _distinct_concept_count(self._concepts("bar", "bars")) == 1
+
+    def test_brewery_breweries_collapses_to_one(self):
+        assert _distinct_concept_count(self._concepts("brewery", "breweries")) == 1
+
+    def test_exact_duplicate_collapses_to_one(self):
+        assert _distinct_concept_count(self._concepts("bar", "bar")) == 1
+
+    def test_case_duplicate_collapses_to_one(self):
+        assert _distinct_concept_count(self._concepts("Bar", "bar")) == 1
+
+    def test_multiword_plural_collapses(self):
+        # "sports bars" and "sport bar" are the same canonical form
+        assert _distinct_concept_count(self._concepts("sports bars", "sport bar")) == 1
+
+    # ── Truly distinct concepts ───────────────────────────────────────────────
+
+    def test_bar_brewery_are_distinct(self):
+        assert _distinct_concept_count(self._concepts("bar", "brewery")) == 2
+
+    def test_three_distinct_concepts(self):
+        assert _distinct_concept_count(self._concepts("bar", "brewery", "restaurant")) == 3
+
+    def test_cocktail_bar_and_brewery_are_distinct(self):
+        assert _distinct_concept_count(self._concepts("cocktail bar", "brewery")) == 2
+
+    def test_empty_list_is_zero(self):
+        assert _distinct_concept_count([]) == 0
+
+    def test_single_concept_is_one(self):
+        assert _distinct_concept_count(self._concepts("bar")) == 1
+
+    def test_concept_with_no_label_skipped(self):
+        class _NoLabel:
+            pass
+        assert _distinct_concept_count([_NoLabel(), self._make_concept("bar")]) == 1
+
+
+class TestMultiConceptEditorialGate:
+    """should_run_editorial uses canonical distinct count for multi-concept gate."""
+
+    def _make_frame(self, *labels: str) -> _Frame:
+        return _Frame(
+            subtype_concepts=[_SubtypeConcept(label=l) for l in labels],
+            destination="Chicago",
+        )
+
+    # ── Singular/plural pairs must NOT trigger Tavily ─────────────────────────
+
+    def test_sport_sports_skips_tavily(self):
+        frame = self._make_frame("sport", "sports")
+        should_run, reason = should_run_editorial(frame)
+        assert not should_run, f"Expected skip but got reason={reason}"
+        assert "multi_concept" not in reason
+
+    def test_bar_bars_skips_tavily(self):
+        frame = self._make_frame("bar", "bars")
+        should_run, reason = should_run_editorial(frame)
+        assert not should_run, f"Expected skip but got reason={reason}"
+
+    def test_brewery_breweries_skips_tavily(self):
+        frame = self._make_frame("brewery", "breweries")
+        should_run, reason = should_run_editorial(frame)
+        assert not should_run
+
+    def test_exact_duplicate_skips_tavily(self):
+        frame = self._make_frame("bar", "bar")
+        should_run, reason = should_run_editorial(frame)
+        assert not should_run
+
+    def test_sports_bars_sport_bar_skips_tavily(self):
+        frame = self._make_frame("sports bars", "sport bar")
+        should_run, reason = should_run_editorial(frame)
+        assert not should_run
+
+    # ── Truly distinct pairs MUST trigger Tavily ──────────────────────────────
+
+    def test_bar_and_brewery_allow_tavily(self):
+        frame = self._make_frame("bar", "brewery")
+        should_run, reason = should_run_editorial(frame)
+        assert should_run
+        assert reason == "multi_concept_query"
+
+    def test_three_distinct_concepts_allow_tavily(self):
+        frame = self._make_frame("bar", "brewery", "restaurant")
+        should_run, reason = should_run_editorial(frame)
+        assert should_run
+        assert reason == "multi_concept_query"
+
+    # ── Single concept still skips (existing behavior unchanged) ─────────────
+
+    def test_single_plain_concept_skips_tavily(self):
+        frame = self._make_frame("bar")
+        should_run, reason = should_run_editorial(frame)
+        assert not should_run
+
+    def test_single_plural_concept_skips_tavily(self):
+        frame = self._make_frame("bars")
+        should_run, reason = should_run_editorial(frame)
+        assert not should_run
+
+    # ── NoteDecision propagates the fix end-to-end ───────────────────────────
+
+    def test_sport_sports_frame_note_decision_skips_note_paths(self):
+        """Full end-to-end: singular/plural frame skips all note LLM paths."""
+        frame = self._make_frame("sport", "sports")
+        decision = make_note_decision(
+            frame=frame,
+            cached_notes={},
+            accepted_editorial_evidence_count=0,
+        )
+        assert not decision.should_run_set_writer
+        assert not decision.should_run_legacy_batched_reasoning
+        assert decision.is_plain_category_query
+
+    def test_bar_brewery_frame_note_decision_allows_note_paths_with_evidence(self):
+        """Truly distinct concepts allow note paths when evidence is present."""
+        frame = self._make_frame("bar", "brewery")
+        decision = make_note_decision(
+            frame=frame,
+            cached_notes={},
+            accepted_editorial_evidence_count=3,
+        )
+        assert decision.should_run_set_writer
+        assert decision.should_run_legacy_batched_reasoning

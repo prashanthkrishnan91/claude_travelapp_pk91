@@ -111,6 +111,65 @@ _EDITORIAL_WORTHY_GEO: frozenset = frozenset({
 _QUALITATIVE_RANKING_RE = re.compile(r"\b(?:best|top)\b", re.I)
 
 
+# ── Subtype-concept canonicalization ─────────────────────────────────────────
+# Used by the multi-concept editorial gate to prevent singular/plural or
+# duplicate variants from being counted as truly distinct concepts.
+# Rules are general suffix patterns, never hardcoded example pairs.
+
+def _stem_word(w: str) -> str:
+    """Strip common English plural suffixes from a single normalized word.
+
+    Rules applied in order (most-specific first):
+      'ies' → 'y'     (bakeries→bakery, breweries→brewery)
+      'xes' → 'x'     (boxes→box)
+      'ches' → 'ch'   (benches→bench, beaches→beach)
+      'shes' → 'sh'   (dishes→dish)
+      'sses' → 'ss'   (glasses→glass, masses→mass)
+      trailing 's'     (bars→bar, sports→sport, restaurants→restaurant)
+        — skipped when the word already ends in 'ss' (class, grass)
+    """
+    if w.endswith("ies") and len(w) > 4:
+        return w[:-3] + "y"
+    for suffix, base in (("xes", "x"), ("ches", "ch"), ("shes", "sh"), ("sses", "ss")):
+        if w.endswith(suffix) and len(w) > len(suffix) + 1:
+            return w[: -len(suffix)] + base
+    if w.endswith("s") and len(w) > 2 and not w.endswith("ss"):
+        return w[:-1]
+    return w
+
+
+def _canonical_concept_label(label: str) -> str:
+    """Return a case/whitespace/suffix-normalized form of a concept label.
+
+    Applies word-level suffix stripping so that "sports bar" and "sport bars"
+    and "sports bars" all canonicalize to the same string ("sport bar").
+    """
+    norm = re.sub(r"[^a-z0-9 ]", "", label.lower().strip())
+    return " ".join(_stem_word(w) for w in norm.split() if w)
+
+
+def _distinct_concept_count(subtype_concepts: List[Any]) -> int:
+    """Return the number of genuinely distinct concepts in a subtype list.
+
+    Extracts the 'label' attribute from each concept object, normalizes
+    case/whitespace, singularizes common plural forms via generic suffix rules,
+    and collapses duplicates that share the same canonical stem.  Only truly
+    distinct canonical forms are counted.
+
+    Example: [SubtypeConcept("sport"), SubtypeConcept("sports")] → 1
+             [SubtypeConcept("bar"), SubtypeConcept("brewery")] → 2
+    """
+    seen: set = set()
+    for concept in subtype_concepts:
+        label = getattr(concept, "label", None)
+        if not label:
+            continue
+        canonical = _canonical_concept_label(str(label))
+        if canonical:
+            seen.add(canonical)
+    return len(seen)
+
+
 def should_run_editorial(frame: Any) -> tuple:
     """Decide whether Tavily/editorial enrichment is likely to add value.
 
@@ -155,8 +214,10 @@ def should_run_editorial(frame: Any) -> tuple:
     if value_signals & {"luxury", "budget", "value_for_money", "luxury_for_less", "splurge", "michelin"}:
         return True, "editorial_worthy_value_signal"
 
-    # Multi-concept queries benefit from editorial disambiguation
-    if len(subtype_concepts) >= 2:
+    # Multi-concept queries benefit from editorial disambiguation.
+    # Use canonical distinct count to avoid counting singular/plural or duplicate
+    # variants (e.g. [sport, sports], [bar, bars]) as two separate concepts.
+    if _distinct_concept_count(subtype_concepts) >= 2:
         return True, "multi_concept_query"
 
     # Qualitative ranking/discovery intent — "best X", "top X" in the raw query.
