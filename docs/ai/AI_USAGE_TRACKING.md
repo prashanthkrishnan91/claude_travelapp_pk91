@@ -17,8 +17,9 @@ No product code is touched. All raw data is gitignored and stays local.
 The readiness checker (`scripts/workflow/ai_pr_readiness_check.py`) enforces that PR body usage claims match committed ledger state:
 
 - If a PR body says "usage tracked", "usage ledger updated", or "see usage ledger" but `docs/ai/USAGE_LEDGER.md` did not change in the PR, the checker hard-fails.
-- If `docs/ai/USAGE_LEDGER.md` is unchanged and usage is not explicitly marked unavailable with a reason, Level 1+ PRs hard-fail.
-- If tooling is unavailable, a manual row is still required in `docs/ai/USAGE_LEDGER.md` with metadata fields filled and token/delta fields marked `unavailable`.
+- **Level 1+ PRs must commit a ledger row.** Saying "usage unavailable" means token/delta field values are unavailable, not that the ledger row can be skipped. The row itself must be committed with metadata fields filled and token/delta fields marked `unavailable`.
+- Level 0 docs-only PRs may skip ledger rows entirely.
+- If tooling is unavailable, a manual row is still required in `docs/ai/USAGE_LEDGER.md` with metadata fields filled (phase, prompt ID, model, chat strategy, repo area, main drivers, waste classification) and numeric fields marked `unavailable`.
 - Exact per-prompt deltas require saving a baseline before work. If the baseline was missed, mark delta fields `unavailable` honestly — do not fabricate values.
 - Same-chat continuation must be reflected in the ledger row with `chat: same-chat`.
 - The readiness check runs in CI (`.github/workflows/ai-pr-readiness.yml`) and locally via `python3 scripts/workflow/ai_pr_readiness_check.py`.

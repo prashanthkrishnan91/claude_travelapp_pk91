@@ -21,6 +21,23 @@ Follow-up needed:
 
 ---
 
+### 2026-05-15 — AI PR Readiness Gate v1 permitted Level 1+ PRs to skip ledger rows by claiming "usage unavailable"
+
+Repo: claude_travelapp_pk91
+Area: Workflow enforcement / usage tracking
+Severity: Level 2 readiness gate miss
+Miss: The initial S-grade readiness checker allowed Level 1+ PRs to skip committing a ledger row by writing "Usage unavailable — [reason]" in the PR body. This left no durable audit trail for those PRs; tooling unavailability should mean token/delta values are unavailable, not that the ledger row can be skipped.
+Impact: Incomplete audit trail; some Level 1+ PRs have no ledger rows, breaking the assumption that every non-trivial PR has a committed row.
+What caught it: Workflow review flagged that the exemption was too broad and inconsistent with the intent that Level 1+ PRs must always have ledger rows.
+Root cause: Initial gate implementation conflated two concepts: (1) tooling unavailable → numeric fields marked unavailable; (2) usage unavailable → entire row skipped. These should have been separate.
+What should catch it next time: `scripts/workflow/ai_pr_readiness_check.py` (Check A, strict mode) now requires Level 1+ PRs to change `docs/ai/USAGE_LEDGER.md` regardless of tooling availability. Token/delta fields may be marked `unavailable`, but the row must exist. Updated `AI_USAGE_TRACKING.md` and `AI_PR_READINESS_GATE.md` to clarify the distinction.
+One-off or repeated: One-off implementation issue, caught during initial gate rollout.
+Promotion target: `scripts/workflow/ai_pr_readiness_check.py` (strict ledger enforcement), `AI_USAGE_TRACKING.md` (clarified "unavailable" semantics), `AI_PR_READINESS_GATE.md` (hard-failure documentation).
+Action taken: Updated `ai_pr_readiness_check.py` to enforce strict ledger requirement for Level 1+. Clarified docs. Updated PR template options. Added self-tests proving the enforcement.
+Follow-up needed: Consider backfilling missing ledger rows for Level 1+ PRs that claimed "unavailable" and skipped the ledger.
+
+---
+
 ### 2026-05-15 — Usage-ledger instruction repeatedly omitted from generated prompts
 
 Repo: cross-repo

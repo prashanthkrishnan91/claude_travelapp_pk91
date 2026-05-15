@@ -230,26 +230,41 @@ class Checker:
             self.files is not None
             and (is_product_pr(self.files) or not is_workflow_only(self.files))
         )
+        is_docs_only = (
+            self.files is not None
+            and all(f.startswith("docs/") or f.startswith(".github/") or f in ("CLAUDE.md", "README.md")
+                    for f in self.files)
+        )
+
         if needs_ledger and not self.allow_no_ledger:
-            if self.files is not None and not lchanged and not says_unavailable(self.body):
+            if self.files is not None and not lchanged:
+                if self.level == 0 and is_docs_only:
+                    # Level 0 docs-only PRs may skip ledger
+                    return
+                # Level 1+ PRs must commit a ledger row, even if token values are unavailable.
+                # "Usage unavailable" marks token/delta fields unavailable, but the row itself must exist.
                 self._fail(
-                    f"{LEDGER_PATH} not changed and usage not marked unavailable. "
-                    "Commit a ledger row or add 'Usage ledger row: unavailable — <reason>'."
+                    f"Level {self.level} PR must change {LEDGER_PATH}. "
+                    "Commit a sanitized manual row with metadata fields and token/delta fields marked unavailable, or use --allow-no-ledger with documented reason."
                 )
             elif self.files is None:
                 self._warn(
                     f"Cannot verify {LEDGER_PATH} was updated (git unavailable). "
-                    "Ensure a row is committed or usage is explicitly unavailable."
+                    "Ensure a ledger row is committed for Level 1+ PRs."
                 )
+
         if claims_usage(self.body) and self.files is not None and not lchanged:
             self._fail(
                 f"PR body claims usage is tracked but {LEDGER_PATH} was not changed. "
                 "Remove the claim or commit the ledger row."
             )
+
         if lchanged and self.ledger_text and not ledger_has_data_row(self.ledger_text):
             self._warn(f"{LEDGER_PATH} changed but no substantive data row found.")
+
         if "pending-pr" in self.body.lower():
             self._warn("PR body contains 'pending-pr' — replace with actual PR number before merge.")
+
         if lchanged and self.ledger_text:
             recent = [ln for ln in self.ledger_text.splitlines()[-20:] if ln.startswith("|")]
             if any("unknown" in ln.lower() for ln in recent):
@@ -613,6 +628,51 @@ def run_self_tests() -> int:
     eq("env_template_re_sample", bool(ENV_TEMPLATE_RE.search(".env.sample")), True)
     eq("env_template_re_dist", bool(ENV_TEMPLATE_RE.search(".env.dist")), True)
     eq("env_template_re_non_env", bool(ENV_TEMPLATE_RE.search("config.py")), False)
+
+    # Ledger enforcement tests (strict mode) — these test the logic directly
+    print("\n  === Ledger enforcement logic tests ===")
+    # Test: Level 1 + no ledger change = should require ledger
+    c1 = Checker(body="Level: 1", level=1, allow_no_ledger=False)
+    c1.files = ["src/app.tsx"]
+    c1.check_ledger()
+    eq("Level1_no_ledger_fails", bool(c1.fails), True)
+
+    # Test: Level 1 + ledger changed = should pass
+    c2 = Checker(body="Level: 1", level=1)
+    c2.files = ["src/app.tsx", "docs/ai/USAGE_LEDGER.md"]
+    c2.check_ledger()
+    eq("Level1_ledger_changed_passes", bool(c2.fails), False)
+
+    # Test: Level 0 docs-only + no ledger = should pass
+    c3 = Checker(body="Level: 0", level=0)
+    c3.files = ["docs/ai/HANDOFF.md", "CLAUDE.md"]
+    c3.check_ledger()
+    eq("Level0_docsonly_no_ledger_passes", bool(c3.fails), False)
+
+    # Test: Level 0 mixed with product code + no ledger = should fail
+    c4 = Checker(body="Level: 0", level=0)
+    c4.files = ["docs/ai/HANDOFF.md", "src/app.tsx"]
+    c4.check_ledger()
+    eq("Level0_mixed_no_ledger_fails", bool(c4.fails), True)
+
+    # Test: claims usage tracked + no ledger = should fail
+    c5 = Checker(body="Usage ledger row: committed", level=1)
+    c5.files = ["src/app.tsx"]
+    c5.check_ledger()
+    eq("claims_tracked_no_ledger_fails", bool(c5.fails), True)
+
+    # Test: claims usage tracked + ledger changed = should pass
+    c6 = Checker(body="Usage ledger row: committed", level=1)
+    c6.files = ["src/app.tsx", "docs/ai/USAGE_LEDGER.md"]
+    c6.check_ledger()
+    eq("claims_tracked_ledger_changed_passes", bool(c6.fails), False)
+
+    # Test: allow_no_ledger flag bypasses requirement
+    c7 = Checker(body="Level: 1", level=1, allow_no_ledger=True)
+    c7.files = ["src/app.tsx"]
+    c7.check_ledger()
+    eq("allow_no_ledger_flag_passes", bool(c7.fails), False)
+
     if errors == 0:
         print("All self-tests passed.")
     return errors
