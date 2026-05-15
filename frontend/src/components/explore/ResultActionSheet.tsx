@@ -140,7 +140,7 @@ export function ResultActionSheet({ context, initialSavedItem }: ResultActionShe
   const isLoading = actionState === "saving";
 
   return (
-    <div className="mt-2" data-testid="result-action-sheet">
+    <div data-testid="result-action-sheet">
       {/* Compact trigger row */}
       <div className="flex items-center gap-2">
         {/* Save / Unsave */}
@@ -149,12 +149,13 @@ export function ResultActionSheet({ context, initialSavedItem }: ResultActionShe
           disabled={isLoading}
           aria-label={isSaved ? "Remove from saved" : "Save"}
           className={[
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition",
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2",
             isSaved
-              ? "bg-amber-500/15 text-amber-400 hover:bg-amber-500/25"
-              : "bg-white/[.06] text-cream-400 hover:bg-white/[.10]",
+              ? "text-ds-accent hover:text-ds-accent-muted"
+              : "bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text-secondary",
             isLoading ? "opacity-60 cursor-not-allowed" : "",
           ].join(" ")}
+          style={isSaved ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
           data-testid="save-action-btn"
         >
           {isLoading ? (
@@ -171,7 +172,7 @@ export function ResultActionSheet({ context, initialSavedItem }: ResultActionShe
         <button
           onClick={() => setExpanded((v: boolean) => !v)}
           aria-label={expanded ? "Hide actions" : "More actions"}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-cream-500 bg-white/[.04] hover:bg-white/[.08] transition"
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-ds-text-tertiary bg-ds-carbon hover:bg-ds-pen-stroke hover:text-ds-text-secondary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           data-testid="more-actions-toggle"
         >
           <PlusCircle className="w-3.5 h-3.5" />
@@ -190,7 +191,7 @@ export function ResultActionSheet({ context, initialSavedItem }: ResultActionShe
           {isSaved ? (
             <Link
               href="/saved"
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-cream-300 bg-white/[.05] hover:bg-white/[.10] transition"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-ds-text-secondary bg-ds-carbon hover:bg-ds-pen-stroke transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               aria-label="Manage in Saved"
               data-testid="manage-in-saved-link"
             >
@@ -200,7 +201,7 @@ export function ResultActionSheet({ context, initialSavedItem }: ResultActionShe
             </Link>
           ) : (
             <p
-              className="px-3 py-2 rounded-lg text-xs text-cream-500 bg-white/[.03] leading-snug"
+              className="px-3 py-2 rounded-lg text-xs text-ds-text-tertiary bg-ds-midnight leading-snug"
               data-testid="save-first-hint"
             >
               Save first to add or create a trip from Saved.
@@ -211,7 +212,7 @@ export function ResultActionSheet({ context, initialSavedItem }: ResultActionShe
 
       {/* Error feedback */}
       {actionState === "error" && errorMsg && (
-        <p className="mt-1.5 text-xs text-rose-400" data-testid="action-error">
+        <p className="mt-1.5 text-xs text-ds-warning" data-testid="action-error">
           {errorMsg}
         </p>
       )}

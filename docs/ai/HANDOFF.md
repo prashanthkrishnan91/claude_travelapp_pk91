@@ -8,9 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Phase 1A SHIPPED (2026-05-15).** App shell/navigation frame upgraded with ds-tokens (midnight-ink bg, onyx-velvet nav surfaces, pen-stroke borders, sandstone-gold active states). Glow blobs removed. GSAP shell animation removed. Glass removed from nav (retained only in TripBuilder, which is out of scope for this phase). Phase 0 token + Card + TrustStrip primitives remain in place. Stage 3.5 Phase 1B (Explore result-card adoption) is next. **Active build queue item: Wife-Wow design system foundation.** Exact implementation reference is `docs/product/DESIGN_IMPLEMENTATION_CONTRACT.md`.
+- Roadmap stage: **Stage 3.5 — Phase 1B SHIPPED (2026-05-15).** Explore result cards (restaurants, hotels, attractions) upgraded with Card primitive + ds-tokens. RestaurantCard, HotelCard, AttractionCard adopt `Card tone="dark" as="article"`, Card.Identity/Trust/Meta/Actions slots, TrustStrip (sourceCount where Google Place ID present), sandstone-gold icon accent, ds-text token hierarchy, ds-carbon/pen-stroke interactive surfaces. ResultActionSheet button colors migrated to ds-tokens. All action handlers and payloads unchanged. Phase 1A (shell/nav) and Phase 0 (tokens + primitives) remain in place. **Active build queue item: Wife-Wow design system foundation.** Exact implementation reference is `docs/product/DESIGN_IMPLEMENTATION_CONTRACT.md`.
 - Flights v1 — Duffel search-only LIVE: `DUFFEL_FLIGHTS_ENABLED=1`, `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`, `DUFFEL_DEBUG=false`, `DUFFEL_BOOKING_ENABLED=0`. Each flight card shows "Search on Google Flights" (SEARCH_REDIRECT link-out, not booking). Duffel never creates orders. Ignav DISABLED.
-- Active build queue item: **Wife-Wow design system foundation (Phase 1B — Explore result-card adoption).** Phase 0 token + primitive infrastructure in place. Phase 1A shell/nav frame SHIPPED. Phase 1B: adopt Card primitive + tokens on Explore result cards. Hard stops: no provider/search/API/Tavily changes, no flight/hotel/saved-trip behavior changes. See `docs/ai/UI_BASELINE.md` for full phase inventory.
+- Active build queue item: **Wife-Wow design system foundation (Phase 1C — Saved Ideas paper/scrapbook adoption next).** Phase 0 token + primitive infrastructure in place. Phase 1A shell/nav SHIPPED. Phase 1B Explore result-card adoption SHIPPED. Phase 1C: adopt Card primitive (paper tone) on Saved Ideas surface. Hard stops: no provider/search/API/Tavily changes, no behavior changes. See `docs/ai/UI_BASELINE.md` for full phase inventory.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -31,6 +31,8 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Recent meaningful PRs
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
+
+- 2026-05-15 — **Stage 3.5 Phase 1B — Explore Result-Card Adoption.** `RestaurantCard`, `HotelCard`, `AttractionCard` adopt `Card` primitive (dark tone, article element) with Identity/Trust/Meta/Actions slots. `TrustStrip` renders `sourceCount={1}` where Google Place ID confirms provenance (no `verified` — OPERATIONAL status not in payload). Icon accent → sandstone-gold (`ds-accent-subtle` bg + `text-ds-accent`). Text hierarchy → ds-text tokens. Interactive surfaces → `bg-ds-carbon` / hover `bg-ds-pen-stroke`. All action handlers preserved. `ResultActionSheet` button colors migrated to ds-tokens. No provider/API/behavior/SQL changes.
 
 - 2026-05-15 — **Stage 3.5 Phase 1A — Premium App Shell & Navigation Frame.** Shared shell/nav frame upgraded to ds-tokens. Body bg → midnight ink. Sidebar/mobile nav → onyx-velvet surface, pen-stroke borders. Nav items → ds-text-tertiary/accent tokens. Active state → accent-subtle bg + sandstone-gold. Glow blobs removed (forbidden pattern). GSAP shell card entrance removed (420ms exceeded hard limit). Glass removed from shell nav (retained in TripBuilder only, out of scope). `.nav-section-label` Overline CSS class added. `PageHeader.tsx` → ds-text tokens. No provider/API/behavior changes. No SQL. Docs: `UI_BASELINE.md` + `HANDOFF.md` updated.
 
@@ -76,7 +78,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Stage 3.5 Phase 1B — Explore result-card adoption.** Phase 1A (app shell/nav frame) is now merged. Next: adopt the Card primitive and design tokens on Explore result cards (restaurants, hotels, attractions) as the first Wife-Wow card-level visible slice. Strict no-behavior-change scope continues: no provider/search/API route/Tavily changes, no flight/hotel/saved-trip logic changes. After Phase 1B merges → Phase 1C (Saved Ideas paper-mode card adoption) or Phase 2 (AI Concierge flagship redesign) depending on product priority.
+**Stage 3.5 Phase 1C — Saved Ideas paper/scrapbook adoption.** Phase 1B (Explore result cards) is now merged. Next: adopt the Card primitive (paper tone, warm-paper background, hairline border, ink-paper text) on the Saved Ideas `/saved` surface. Goal: make the saved-ideas list feel like a personal scrapbook (warm paper mode), not a generic list. Strict no-behavior-change scope continues: no provider/search/API/Tavily changes, no flight/hotel/saved-trip logic changes, no storage model changes. After Phase 1C merges → Phase 2 (AI Concierge flagship card-first redesign) as the next major phase.
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 

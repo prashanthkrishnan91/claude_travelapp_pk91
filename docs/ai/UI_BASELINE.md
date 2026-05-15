@@ -8,6 +8,45 @@ Tracks the state of the design system and UI primitive layer so future prompts a
 
 ---
 
+## Stage 3.5 Phase 1B — Explore Result-Card Adoption — SHIPPED (2026-05-15)
+
+**Stage 3.5 · Wife-Wow design system — Explore result cards · Restaurants, Hotels, Attractions**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/components/explore/RestaurantExploreFlow.tsx` | `RestaurantCard` adopts `Card` primitive (dark tone, article element, card-lift). Icon → `ds-accent-subtle` bg + `ds-accent` text. Title → `text-ds-text`. Category/address → `text-ds-text-tertiary`. Google Maps link → `bg-ds-carbon` / hover `bg-ds-pen-stroke`. Rating star → `text-ds-accent fill-current`. Review count → `text-ds-text-tertiary`. Tags → `border-ds-pen-stroke text-ds-text-tertiary`. TrustStrip rendered when Google Place source (`providerPlaceId`/`placeId`). Skeleton → Card primitive + `bg-ds-pen-stroke` bars. Empty/idle text → `text-ds-text-tertiary`. Error → `text-ds-warning`. |
+| `frontend/src/components/explore/HotelExploreFlow.tsx` | `HotelCard` adopts `Card` primitive (dark tone). Same icon/text token treatment. TrustStrip rendered when `googlePlaceId` present. Compare prices link → `text-ds-accent` + `ds-accent-subtle` bg (inline style). All legacy `violet-*` / `amber-*` / `cream-*` replaced. |
+| `frontend/src/components/explore/AttractionExploreFlow.tsx` | `AttractionCard` adopts `Card` primitive (dark tone). Same icon/text treatment. TrustStrip on `googlePlaceId`. Legacy `blue-*` / `amber-*` / `cream-*` replaced. |
+| `frontend/src/components/explore/ResultActionSheet.tsx` | Save button idle: `bg-ds-carbon text-ds-text-tertiary`. Save button saved: `ds-accent-subtle` bg (inline) + `text-ds-accent`. More button: `bg-ds-carbon text-ds-text-tertiary`. Expanded links: `bg-ds-carbon text-ds-text-secondary`. Error: `text-ds-warning`. Outer `mt-2` removed (spacing now from `Card.Actions className="mt-3"`). All save/unsave/expand handlers preserved exactly. |
+
+### Design contract alignment
+
+- **Card primitive adopted:** All 3 Explore result card types wrap with `<Card tone="dark" as="article" className="card-lift">`. Card.Identity, Card.Trust, Card.Meta, Card.Actions slots used.
+- **TrustStrip adopted:** Rendered with `sourceCount={1}` where Google Place ID confirms Google Places provenance. `verified` prop intentionally omitted — OPERATIONAL status not explicitly confirmed in frontend payload (contract §23 compliance).
+- **Token alignment:** All card surfaces reference `--ds-*` tokens. No raw hex in card renderers. Icon bg uses `style={{ backgroundColor: "var(--ds-accent-subtle)" }}` (CSS var direct, not Tailwind wiring since `--color-ds-accent-subtle` not yet in `@theme`). Rating accent unified to `text-ds-accent` (sandstone gold) across all card types.
+- **Forbidden patterns removed:** Legacy `amber-*`, `violet-*`, `blue-*`, `cream-*`, `rose-*`, `white/[.0X]` color utilities removed from result cards.
+- **Accessibility:** All interactive elements (Maps link, Compare prices, Save, More) have `focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2`. Semantic `as="article"` on card root. Icon containers marked `aria-hidden="true"`.
+- **Motion:** `card-lift` hover class preserved (translateY -2px, within motion contract). `transition-colors` used on interactive elements (120ms via global css). No new animation added.
+- **Reduced-motion:** Global `@media (prefers-reduced-motion: reduce)` rule in `@layer base` governs all transitions (shipped Phase 0).
+
+### Invariant confirmations
+
+- No provider, search, API, Tavily, flight, hotel, or backend files changed.
+- No Supabase SQL required.
+- No new dependencies added.
+- No route, auth/session, or data contract changes.
+- Search form fields (MapPin, Calendar, Tag icons) retain legacy `text-cream-500` — search forms are explicitly out of scope.
+- All action handlers (save, unsave, expand, Manage in Saved link) preserved exactly.
+- Add-to-trip, save, maps, compare-prices payloads and routes unchanged.
+
+### Limitation note
+
+`--ds-accent-subtle` (rgba alpha) is defined in `:root` but not wired into `@theme`. Icon backgrounds and compare-prices/save-saved button backgrounds use `style={{ backgroundColor: "var(--ds-accent-subtle)" }}` directly. Adding `--color-ds-accent-subtle` to `@theme` is a logical Phase 1B+ follow-up if Tailwind utility is needed broadly.
+
+---
+
 ## Stage 3.5 Phase 1A — App Shell & Navigation Frame — SHIPPED (2026-05-15)
 
 **Stage 3.5 · Wife-Wow design system — first visible surface adoption · Shared shell/navigation only**
