@@ -40,6 +40,7 @@ Run `bash scripts/ai/usage_snapshot.sh --pr <number> --prompt-id <id> --phase <p
 **Usage note:** Low/Medium/High; source: ccusage/statusline/manual/unavailable; main drivers: [fill]; justified: yes/partially/no; next efficiency improvement: [fill]
 
 ## AI PR readiness
+- [ ] Ran `python3 scripts/workflow/ai_pr_readiness_check.py --pr-body-file /tmp/body.txt --base-ref origin/main` locally before pushing
 - Readiness check: pass / pass-with-known-gaps / not run
 - Usage ledger row: committed / unavailable — [reason]
 - Prompt ID / phase:
