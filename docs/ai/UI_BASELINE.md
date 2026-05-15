@@ -11,13 +11,16 @@ Tracks the state of the design system and UI primitive layer so future prompts a
 ## Stage 3.5 Phase 2A — AI Concierge Flagship Visual Breakthrough — SHIPPED (2026-05-15)
 
 **Stage 3.5 · Wife-Wow design system — AI Concierge `/concierge` surface · Card-first flagship canvas**
+**Behavior change:** Converts `/concierge` from a placeholder page to a live standalone AI Concierge route using the existing `/ai/concierge/search` backend contract (`callConciergeSearch(null, query)`). No backend/API/provider contract changes. Frontend route behavior changes from placeholder → live search.
 
 ### What shipped
 
 | File | Change summary |
 |---|---|
 | `frontend/src/app/concierge/page.tsx` | Route replaced: was a placeholder ("AI Concierge coming soon"), now imports and renders `ConciergePage`. Server component with Metadata. |
-| `frontend/src/components/concierge/ConciergePage.tsx` | NEW. Full-page client component: editorial header (Overline "Private Travel Concierge" + Display S headline), card-first result canvas, sticky composer at bottom. Uses `Card tone="dark"` primitive for result cards. `TrustStrip sourceCount={1}` where `canShowGoogleVerifiedBadge` passes. Cards render `pickCardCategory`, `pickCardReason`, `sanitizeWhyPick`, `pickCardMeta`, map/source links from canonical `googleVerification.googleMapsUri`. All business logic reuses `cardPresentation.js` and `refinementInterpreter.js` unchanged. Refinement chips (Show only casual, Compare top 2, Find cheaper nearby / Find more like these) from existing interpreter. Empty state: 4 editorial prompt chips. Loading: "Searching · Verifying · Composing" typeset breadcrumb + spinner. Error: named constraint + "Try again" link. No add-to-day / save-to-ideas (no trip context on standalone page). `callConciergeSearch(null, query, requestId)` — tripId=null per existing API contract. |
+| `frontend/src/components/concierge/ConciergePage.tsx` | NEW. Full-page client component: editorial header (Overline "Private Travel Concierge" + Display S headline), card-first result canvas, sticky composer at bottom. Uses `Card tone="dark"` primitive for result cards. `TrustStrip confidence={...}` (actual backend `googleVerification.confidence`) where `canShowGoogleVerifiedBadge` passes — no fabricated `sourceCount`. Cards render `pickCardCategory`, `pickCardReason`, `sanitizeWhyPick`, `pickCardMeta`, map/source links from canonical `googleVerification.googleMapsUri`. All business logic reuses `cardPresentation.js` and `refinementInterpreter.js` unchanged. Refinement chips (Show only casual, Compare top 2, Find cheaper nearby / Find more like these) from existing interpreter. Empty state: 4 editorial prompt chips. Loading: "Searching · Verifying · Composing" typeset breadcrumb + spinner. Error: named constraint + "Try again" link. No add-to-day / save-to-ideas (no trip context on standalone page). `callConciergeSearch(null, query, requestId)` — tripId=null per existing API contract. |
+| `frontend/src/components/layout/Sidebar.tsx` | Added `{ label: "Concierge", href: "/concierge", icon: Sparkles }` to `primaryLinks` (after Explore). Desktop sidebar navigation now exposes the Concierge surface. |
+| `frontend/src/components/layout/MobileNav.tsx` | Added `{ label: "Concierge", href: "/concierge", icon: Sparkles }` to `links` (slide-out drawer). Mobile navigation drawer now exposes the Concierge surface. |
 
 ### Design contract alignment
 
@@ -29,7 +32,7 @@ Tracks the state of the design system and UI primitive layer so future prompts a
 - **Loading state (§11):** "Searching · Verifying · Composing" typeset breadcrumb — honest static treatment (no fake stage progression since pipeline timing not exposed to frontend).
 - **Empty state (§11):** Editorial invitation with 4 themed prompt chips. Not "Ask me anything."
 - **Error state (§11):** Named constraint message (`text-ds-warning`) + "Try again" retry action.
-- **Trust strip (§23):** `TrustStrip sourceCount={1}` only when `canShowGoogleVerifiedBadge` passes (OPERATIONAL + high/medium confidence + providerPlaceId). `verified` prop never set (OPERATIONAL status not separately confirmed as a standalone boolean).
+- **Trust strip (§23):** `TrustStrip confidence={...}` only when `canShowGoogleVerifiedBadge` passes (OPERATIONAL + high/medium confidence + providerPlaceId). `confidence` value is read directly from `googleVerification.confidence` on the backend payload — never hardcoded. `sourceCount` never fabricated. `verified` prop never set (OPERATIONAL status is not the same as the "Verified by Google" explicit confirmation contract).
 - **Token alignment:** No raw hex. No legacy `emerald-*`, `amber-*`, `cream-*`, `slate-*`, `white/` classes. All surfaces use `ds-*` Tailwind utilities or `var(--ds-*)` inline styles.
 - **Spacing:** All padding/margin/gap via `var(--ds-space-*)` CSS variables.
 - **Typography:** All font-size/line-height via `var(--ds-type-*-size)` / `var(--ds-type-*-leading)` CSS variables.
@@ -54,8 +57,8 @@ Tracks the state of the design system and UI primitive layer so future prompts a
 - Standalone page has no add-to-trip/save-to-ideas (requires trip context). To add a found place to a trip, user navigates to My Trips and uses the AI Concierge panel there.
 - Conversation history: standalone page maintains session state in component state only (no persistence). Persistent history requires a tripId. This is the correct scope boundary.
 - No left conversation rail (Design Bible §25): standalone page uses a simpler header-only layout. The rail is scoped to the trip-panel variant and can be added in a future Phase 2B when trip context is present.
-- `concierge` is not yet in the sidebar nav (scope of this slice is the page surface only).
 - Area comparison table from AIConciergePanel not ported — this is a trip-specific feature and complex to slot correctly without a trip context.
+- Orchestration helpers (`hasClosedSignal`, `canShowGoogleVerifiedBadge`, `pickCardMeta`) are re-implemented in `ConciergePage.tsx` with identical logic because `AIConciergePanel.tsx` does not export them. Phase 2B should consolidate shared concierge presentation helpers into a shared module.
 
 ---
 

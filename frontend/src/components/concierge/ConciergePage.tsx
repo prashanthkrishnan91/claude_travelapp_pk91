@@ -38,6 +38,7 @@ import {
 import { formatDisplayPrice } from "@/lib/concierge/priceFormatter";
 import { Card } from "@/components/ui/Card";
 import { TrustStrip } from "@/components/ui/TrustStrip";
+import type { TrustConfidence } from "@/components/ui/TrustStrip";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -221,6 +222,7 @@ function ConciergeResultCard({
   mapLink,
   sourceLink,
   isOperational,
+  operationalConfidence,
 }: {
   title: string;
   category: string;
@@ -230,6 +232,7 @@ function ConciergeResultCard({
   mapLink?: string;
   sourceLink?: string;
   isOperational?: boolean;
+  operationalConfidence?: TrustConfidence;
 }) {
   const [expanded, setExpanded] = useState(false);
   const reasonParts = splitReason(reason);
@@ -278,10 +281,10 @@ function ConciergeResultCard({
         )}
       </div>
 
-      {/* Trust strip — only where Google-verified OPERATIONAL */}
-      {isOperational && (
+      {/* Trust strip — only where Google-verified OPERATIONAL; confidence from actual backend field */}
+      {isOperational && operationalConfidence && (
         <div style={{ marginBottom: "var(--ds-space-3)" }}>
-          <TrustStrip sourceCount={1} />
+          <TrustStrip confidence={operationalConfidence} />
         </div>
       )}
 
@@ -863,6 +866,14 @@ export function ConciergePage() {
                       canShowGoogleVerifiedBadge(
                         place as OperationalBadgeCard,
                       );
+                    const rawConfidence = (
+                      place as { googleVerification?: { confidence?: string } }
+                    ).googleVerification?.confidence?.toLowerCase();
+                    const operationalConfidence =
+                      isOperational &&
+                      (rawConfidence === "high" || rawConfidence === "medium")
+                        ? (rawConfidence as TrustConfidence)
+                        : undefined;
                     const meta = pickCardMeta(place as DisplayCard);
                     const mapLink =
                       (
@@ -883,6 +894,7 @@ export function ConciergePage() {
                         mapLink={mapLink}
                         sourceLink={sourceLink}
                         isOperational={isOperational}
+                        operationalConfidence={operationalConfidence}
                       />
                     );
                   })}

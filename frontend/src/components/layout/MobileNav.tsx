@@ -15,19 +15,21 @@ import {
   LogOut,
   Compass,
   Bookmark,
+  Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
 const links = [
-  { label: "Dashboard",    href: "/",         icon: LayoutDashboard },
-  { label: "Explore",      href: "/explore",  icon: Compass },
-  { label: "Saved",        href: "/saved",    icon: Bookmark },
-  { label: "My Trips",     href: "/trips",    icon: Map },
-  { label: "New Trip",     href: "/trips/new", icon: PlusCircle },
-  { label: "Travel Cards", href: "/cards",    icon: CreditCard },
-  { label: "Settings",     href: "/settings", icon: Settings },
+  { label: "Dashboard",    href: "/",            icon: LayoutDashboard },
+  { label: "Explore",      href: "/explore",     icon: Compass },
+  { label: "Concierge",    href: "/concierge",   icon: Sparkles },
+  { label: "Saved",        href: "/saved",       icon: Bookmark },
+  { label: "My Trips",     href: "/trips",       icon: Map },
+  { label: "New Trip",     href: "/trips/new",   icon: PlusCircle },
+  { label: "Travel Cards", href: "/cards",       icon: CreditCard },
+  { label: "Settings",     href: "/settings",    icon: Settings },
 ];
 
 const tabLinks = [
