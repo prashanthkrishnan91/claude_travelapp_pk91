@@ -63,6 +63,8 @@ import { searchHotelsExplore } from "@/lib/api";
 import type { ExploreHotelResult } from "@/lib/api";
 import type { ExploreResultContext } from "./types";
 import { ResultActionSheet } from "./ResultActionSheet";
+import { Card } from "@/components/ui/Card";
+import { TrustStrip } from "@/components/ui/TrustStrip";
 
 interface HotelFormValues {
   destination: string;
@@ -226,7 +228,7 @@ export function HotelExploreFlow() {
 
       {/* Error state */}
       {error && !loading && (
-        <div className="flex items-start gap-2 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-sm">
+        <div className="flex items-start gap-2 p-3 rounded-xl border text-sm text-ds-warning border-ds-warning/20 bg-ds-warning/10">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           {error}
         </div>
@@ -236,24 +238,24 @@ export function HotelExploreFlow() {
       {loading && (
         <div className="space-y-3" aria-label="Loading hotels">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="card p-4 animate-pulse">
+            <Card tone="dark" key={i} className="animate-pulse" style={{ padding: "var(--ds-space-5)" }}>
               <div className="flex gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/[.06] shrink-0" />
+                <div className="w-10 h-10 rounded-xl bg-ds-pen-stroke shrink-0" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-white/[.06] rounded w-3/4" />
-                  <div className="h-3 bg-white/[.06] rounded w-1/2" />
+                  <div className="h-4 bg-ds-pen-stroke rounded w-3/4" />
+                  <div className="h-3 bg-ds-pen-stroke rounded w-1/2" />
                 </div>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}
 
       {/* Empty state */}
       {!loading && searched && results !== null && results.length === 0 && !error && (
-        <div className="text-center py-10 text-cream-500 text-sm">
+        <div className="text-center py-10 text-ds-text-tertiary text-sm">
           No verified hotels found for{" "}
-          <span className="text-cream-300 font-medium">{lastForm?.destination}</span>.
+          <span className="text-ds-text font-medium">{lastForm?.destination}</span>.
           Try a broader area.
         </div>
       )}
@@ -261,7 +263,7 @@ export function HotelExploreFlow() {
       {/* Results */}
       {!loading && results && results.length > 0 && (
         <div className="space-y-3" data-testid="hotel-results">
-          <p className="text-xs text-cream-500 font-medium uppercase tracking-wider px-1">
+          <p className="text-xs text-ds-text-tertiary font-medium uppercase tracking-wider px-1">
             {results.length} hotel{results.length !== 1 ? "s" : ""} in {lastForm?.destination}
           </p>
           {results.map((h, i) => (
@@ -272,7 +274,7 @@ export function HotelExploreFlow() {
 
       {/* Idle prompt */}
       {!searched && !loading && (
-        <div className="text-center py-8 text-cream-500 text-sm">
+        <div className="text-center py-8 text-ds-text-tertiary text-sm">
           Enter your destination to find places to stay.
         </div>
       )}
@@ -291,64 +293,75 @@ function HotelCard({
   const compareLink = (context.originalPayload as Record<string, unknown>).compareLink as string | undefined;
 
   return (
-    <div className="card card-lift p-4">
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-400 flex items-center justify-center shrink-0">
+    <Card tone="dark" as="article" className="card-lift" style={{ padding: "var(--ds-space-5)" }}>
+      <Card.Identity>
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-ds-accent"
+          style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+          aria-hidden="true"
+        >
           <Building2 className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-cream-100 leading-tight truncate">
+              <h3 className="text-sm font-semibold text-ds-text leading-tight truncate">
                 {h.name}
               </h3>
-              <p className="text-xs text-cream-500 mt-0.5 truncate">
+              <p className="text-xs text-ds-text-tertiary mt-0.5 truncate">
                 {h.address || "Hotel"}
               </p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {h.googleMapsUri && (
-                <a
-                  href={h.googleMapsUri}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-1.5 rounded-lg bg-white/[.05] hover:bg-white/[.10] text-cream-400 transition"
-                  aria-label={`View ${h.name} on Google Maps`}
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 mt-2 flex-wrap">
-            {h.rating != null && (
-              <span className="flex items-center gap-0.5 text-xs text-amber-400 font-medium">
-                <Star className="w-3 h-3 fill-amber-400" />
-                {h.rating.toFixed(1)}
-              </span>
-            )}
-          </div>
-
-          {compareLink && (
-            <div className="mt-2">
+            {h.googleMapsUri && (
               <a
-                href={compareLink}
+                href={h.googleMapsUri}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 hover:text-violet-200 text-xs transition"
-                aria-label={`Compare prices for ${h.name}`}
-                data-testid="hotel-compare-cta"
+                className="p-1.5 rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text-secondary transition-colors shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                aria-label={`View ${h.name} on Google Maps`}
               >
-                <Search className="w-3 h-3" />
-                Compare prices
+                <ExternalLink className="w-3.5 h-3.5" />
               </a>
-            </div>
-          )}
-
-          <ResultActionSheet context={context} />
+            )}
+          </div>
         </div>
-      </div>
-    </div>
+      </Card.Identity>
+
+      {h.googlePlaceId && (
+        <Card.Trust className="mt-2">
+          <TrustStrip sourceCount={1} />
+        </Card.Trust>
+      )}
+
+      <Card.Meta className="mt-2">
+        {h.rating != null && (
+          <span className="flex items-center gap-0.5 text-xs text-ds-accent font-medium">
+            <Star className="w-3 h-3 fill-current" />
+            {h.rating.toFixed(1)}
+          </span>
+        )}
+      </Card.Meta>
+
+      {compareLink && (
+        <div className="mt-2">
+          <a
+            href={compareLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-ds-accent text-xs transition-colors hover:text-ds-accent-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+            aria-label={`Compare prices for ${h.name}`}
+            data-testid="hotel-compare-cta"
+          >
+            <Search className="w-3 h-3" />
+            Compare prices
+          </a>
+        </div>
+      )}
+
+      <Card.Actions className="mt-3">
+        <ResultActionSheet context={context} />
+      </Card.Actions>
+    </Card>
   );
 }

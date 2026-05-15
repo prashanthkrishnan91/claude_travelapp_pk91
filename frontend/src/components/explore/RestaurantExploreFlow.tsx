@@ -6,6 +6,8 @@ import { searchRestaurants } from "@/lib/api";
 import type { RestaurantSearchResult } from "@/types";
 import type { ExploreResultContext } from "./types";
 import { ResultActionSheet } from "./ResultActionSheet";
+import { Card } from "@/components/ui/Card";
+import { TrustStrip } from "@/components/ui/TrustStrip";
 
 export function RestaurantExploreFlow() {
   const [destination, setDestination] = useState("");
@@ -84,7 +86,7 @@ export function RestaurantExploreFlow() {
 
       {/* Error state */}
       {error && !loading && (
-        <div className="flex items-start gap-2 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-sm">
+        <div className="flex items-start gap-2 p-3 rounded-xl border text-sm text-ds-warning border-ds-warning/20 bg-ds-warning/10">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           {error}
         </div>
@@ -94,23 +96,23 @@ export function RestaurantExploreFlow() {
       {loading && (
         <div className="space-y-3" aria-label="Loading restaurants">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="card p-4 animate-pulse">
+            <Card tone="dark" key={i} className="animate-pulse" style={{ padding: "var(--ds-space-5)" }}>
               <div className="flex gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/[.06] shrink-0" />
+                <div className="w-10 h-10 rounded-xl bg-ds-pen-stroke shrink-0" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-white/[.06] rounded w-3/4" />
-                  <div className="h-3 bg-white/[.06] rounded w-1/2" />
+                  <div className="h-4 bg-ds-pen-stroke rounded w-3/4" />
+                  <div className="h-3 bg-ds-pen-stroke rounded w-1/2" />
                 </div>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}
 
       {/* Empty state after search */}
       {!loading && searched && results !== null && results.length === 0 && !error && (
-        <div className="text-center py-10 text-cream-500 text-sm">
-          No verified restaurants found for <span className="text-cream-300 font-medium">{lastDestination}</span>.
+        <div className="text-center py-10 text-ds-text-tertiary text-sm">
+          No verified restaurants found for <span className="text-ds-text font-medium">{lastDestination}</span>.
           Try a broader area or different city name.
         </div>
       )}
@@ -118,7 +120,7 @@ export function RestaurantExploreFlow() {
       {/* Results */}
       {!loading && results && results.length > 0 && (
         <div className="space-y-3" data-testid="restaurant-results">
-          <p className="text-xs text-cream-500 font-medium uppercase tracking-wider px-1">
+          <p className="text-xs text-ds-text-tertiary font-medium uppercase tracking-wider px-1">
             {results.length} restaurant{results.length !== 1 ? "s" : ""} in {lastDestination}
           </p>
           {results.map((r) => (
@@ -129,7 +131,7 @@ export function RestaurantExploreFlow() {
 
       {/* Idle prompt */}
       {!searched && !loading && (
-        <div className="text-center py-10 text-cream-500 text-sm">
+        <div className="text-center py-10 text-ds-text-tertiary text-sm">
           Enter a city or area to discover top-rated restaurants.
         </div>
       )}
@@ -145,70 +147,78 @@ function RestaurantCard({
   context: ExploreResultContext;
 }) {
   const priceStr = r.priceLevel != null ? "$".repeat(Math.min(r.priceLevel, 4)) : null;
+  const hasPlaceSource = !!(r.providerPlaceId || r.placeId);
 
   return (
-    <div className="card card-lift p-4">
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
+    <Card tone="dark" as="article" className="card-lift" style={{ padding: "var(--ds-space-5)" }}>
+      <Card.Identity>
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-ds-accent"
+          style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+          aria-hidden="true"
+        >
           <Utensils className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-cream-100 leading-tight truncate">
+              <h3 className="text-sm font-semibold text-ds-text leading-tight truncate">
                 {r.name}
               </h3>
-              <p className="text-xs text-cream-500 mt-0.5 truncate">
+              <p className="text-xs text-ds-text-tertiary mt-0.5 truncate">
                 {r.cuisine}{r.address ? ` · ${r.address}` : ""}
               </p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {r.googleMapsUri && (
-                <a
-                  href={r.googleMapsUri}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-1.5 rounded-lg bg-white/[.05] hover:bg-white/[.10] text-cream-400 transition"
-                  aria-label={`View ${r.name} on Google Maps`}
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              )}
-            </div>
+            {r.googleMapsUri && (
+              <a
+                href={r.googleMapsUri}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text-secondary transition-colors shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                aria-label={`View ${r.name} on Google Maps`}
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
           </div>
+        </div>
+      </Card.Identity>
 
-          <div className="flex items-center gap-3 mt-2 flex-wrap">
-            {r.rating != null && (
-              <span className="flex items-center gap-0.5 text-xs text-amber-400 font-medium">
-                <Star className="w-3 h-3 fill-amber-400" />
-                {r.rating.toFixed(1)}
-                {r.numReviews != null && (
-                  <span className="text-cream-600 font-normal ml-0.5">
-                    ({r.numReviews.toLocaleString()})
-                  </span>
-                )}
+      {hasPlaceSource && (
+        <Card.Trust className="mt-2">
+          <TrustStrip sourceCount={1} />
+        </Card.Trust>
+      )}
+
+      <Card.Meta className="mt-2">
+        {r.rating != null && (
+          <span className="flex items-center gap-0.5 text-xs text-ds-accent font-medium">
+            <Star className="w-3 h-3 fill-current" />
+            {r.rating.toFixed(1)}
+            {r.numReviews != null && (
+              <span className="text-ds-text-tertiary font-normal ml-0.5">
+                ({r.numReviews.toLocaleString()})
               </span>
             )}
-            {priceStr && (
-              <span className="text-xs text-cream-400 font-medium">{priceStr}</span>
-            )}
-            {r.tags && r.tags.length > 0 && (
-              <div className="flex gap-1 flex-wrap">
-                {r.tags.slice(0, 3).map((tag) => (
-                  <span
-                    key={tag}
-                    className="px-1.5 py-0.5 text-[10px] rounded-full bg-white/[.06] text-cream-400"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+          </span>
+        )}
+        {priceStr && (
+          <span className="text-xs text-ds-text-secondary font-medium">{priceStr}</span>
+        )}
+        {r.tags && r.tags.length > 0 &&
+          r.tags.slice(0, 3).map((tag) => (
+            <span
+              key={tag}
+              className="px-1.5 py-0.5 text-[10px] rounded-sm border border-ds-pen-stroke text-ds-text-tertiary"
+            >
+              {tag}
+            </span>
+          ))}
+      </Card.Meta>
 
-          <ResultActionSheet context={context} />
-        </div>
-      </div>
-    </div>
+      <Card.Actions className="mt-3">
+        <ResultActionSheet context={context} />
+      </Card.Actions>
+    </Card>
   );
 }
