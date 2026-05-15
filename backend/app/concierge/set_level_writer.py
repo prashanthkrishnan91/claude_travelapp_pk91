@@ -1431,3 +1431,76 @@ def write_set_notes(
             elapsed_ms, exc,
         )
         return _empty(timed_out=True, reason=f"unhandled_exception:{exc}")
+
+
+# ── Note-cache hydration ───────────────────────────────────────────────────────
+
+
+def make_cached_note_result(
+    curated_result: Any,
+    cached_notes: Dict[str, str],
+    first_card_limit: int = 6,
+) -> "SetWriterResult":
+    """Build a SetWriterResult entirely from pre-approved cached notes.
+
+    Used when the note cache contains valid approved notes for all (or most)
+    cards in the curated set, allowing the LLM writer to be skipped entirely.
+
+    Contracts:
+      - Only non-empty cached notes produce validated=True entries.
+      - Cards without a cache hit get validated=False (no note block shown).
+      - fallback_note_visible_count is always 0.
+      - timed_out is always False (cache reads never time out).
+    """
+    curated_cards = getattr(curated_result, "curated_cards", []) or []
+    target_cards = curated_cards[:first_card_limit]
+
+    notes_by_place_id: Dict[str, SetWriterNote] = {}
+    visible = 0
+    hidden = 0
+    role_counts: Dict[str, int] = {}
+
+    for cc in target_cards:
+        place_id = getattr(cc.entity, "place_id", None) or f"unknown_{id(cc)}"
+        note_text = cached_notes.get(place_id, "")
+        validated = bool(note_text and note_text.strip())
+
+        note_obj = SetWriterNote(
+            place_id=place_id,
+            note=note_text if validated else "",
+            validated=validated,
+            rejection_reason="" if validated else "cache_miss",
+            source=SOURCE_SET_WRITER if validated else SOURCE_OMITTED,
+            role_used_internal=getattr(cc, "role", ""),
+            evidence_terms_used=[],
+            caveat_type="",
+        )
+        notes_by_place_id[place_id] = note_obj
+
+        if validated:
+            visible += 1
+            role = getattr(cc, "role", "")
+            role_counts[role] = role_counts.get(role, 0) + 1
+        else:
+            hidden += 1
+
+    note_source_counts: Dict[str, int] = {}
+    if visible:
+        note_source_counts["note_cache"] = visible
+    if hidden:
+        note_source_counts[SOURCE_OMITTED] = hidden
+
+    return SetWriterResult(
+        notes_by_place_id=notes_by_place_id,
+        visible_note_count=visible,
+        hidden_note_count=hidden,
+        rejected_note_count=0,
+        timed_out=False,
+        fallback_note_visible_count=0,
+        role_note_counts=role_counts,
+        note_source_counts=note_source_counts,
+        repeated_skeleton_count=0,
+        unsupported_claim_count=0,
+        reviewer_telemetry=None,
+        writer_telemetry={"source": "note_cache", "note_cache_hit_count": visible},
+    )

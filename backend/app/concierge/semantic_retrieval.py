@@ -455,11 +455,34 @@ def _run_pipeline(
 
     latency: Dict[str, int] = {}
 
+    # ── Credit ROI telemetry tracker ─────────────────────────────────────────
+    from app.concierge.evidence_cache import (
+        CreditROITelemetry,
+        EvidenceCacheEntry,
+        _EVIDENCE_ATOM_CACHE,
+        _NOTE_CACHE,
+        build_evidence_fingerprint,
+        should_run_editorial,
+    )
+    roi_tel = CreditROITelemetry()
+
     # ── Step 1: ExperienceFrame extraction ───────────────────────────────────
     t0 = time.monotonic()
     from app.concierge.frame_extractor import extract_frame
     frame = extract_frame(user_query, destination)
     latency["frame_ms"] = int((time.monotonic() - t0) * 1000)
+
+    # Build evidence fingerprint now that we have the frame.
+    # Used for evidence cache and note cache lookups throughout the pipeline.
+    evidence_fingerprint = build_evidence_fingerprint(
+        destination=destination,
+        subtype_concepts=[c.label for c in (frame.subtype_concepts or [])],
+        location_modifiers=list(getattr(frame, "location_modifiers", []) or []),
+        geography_hints=list(getattr(frame, "geography_hints", []) or []),
+        normalized_soft_preferences=list(
+            getattr(frame, "normalized_soft_preferences", []) or []
+        ),
+    )
 
     logger.debug(
         "semantic_retrieval_v1.frame query=%r concepts=%r geo=%r locs=%r prefs=%r neg=%r open_class=%s",
@@ -649,16 +672,16 @@ def _run_pipeline(
         cross_source_tel = cross_source_result.telemetry.as_log_dict()
     latency["cross_source_ms"] = cross_source_result.elapsed_ms
 
-    # ── Step 5.56: Editorial Corroboration v1 (PR #276) ──────────────────────
+    # ── Step 5.56: Editorial Corroboration v1 (cache-aware) ──────────────────
     # Tavily + Serper editorial enrichment for already Google-verified cards only.
+    # Now credit-efficient:
+    #   1. Evidence cache is checked first — cache hit skips Tavily entirely.
+    #   2. Selectivity gate decides if Tavily is worth calling for this query.
+    #   3. Accepted atoms are cached even if the LLM note writer later times out.
     # Deadline-bounded and parallel (non-blocking executor lifecycle).
-    # Never blocks card return. Atoms merged into cross_source_result.atoms_by_place_id
-    # so the existing dossier builder consumes them naturally.
+    # Never blocks card return. Atoms merged into cross_source_result.atoms_by_place_id.
     # Tavily/Serper cannot mint cards, override Google identity/addability/
     # operational status, or directly create visible prose.
-    # Editorial data becomes structured evidence atoms first.
-    # Low-confidence entity/article matches are discarded (fail closed).
-    # Keys gracefully absent → no enrichment, cards still returned.
     from app.concierge.editorial_enrichment import (
         EDITORIAL_POST_CROSS_SOURCE_MIN_MS,
         EditorialEnrichmentResult,
@@ -674,10 +697,32 @@ def _run_pipeline(
     try:
         _tavily_key = get_tavily_key()
         _serper_key = get_serper_key()
-        # Opportunistic budget gate: if Step 5.55 (Yelp/FSQ) consumed too much budget,
-        # skip editorial entirely to protect dossier/writer latency. This is separate
-        # from the generic EDITORIAL_BUDGET_RESERVE_MS gate inside run_editorial_enrichment.
-        if _remaining_after_cross_source_ms < EDITORIAL_POST_CROSS_SOURCE_MIN_MS:
+
+        # ── Evidence cache check (skips Tavily on hit) ────────────────────────
+        _evidence_cache_entry = _EVIDENCE_ATOM_CACHE.get(evidence_fingerprint)
+        if _evidence_cache_entry is not None:
+            # Cache hit — reuse accepted atoms, skip Tavily/Serper call entirely.
+            roi_tel.evidence_cache_hit = True
+            roi_tel.accepted_editorial_evidence_count = _evidence_cache_entry.accepted_count
+            editorial_result = EditorialEnrichmentResult(
+                atoms_by_place_id=dict(_evidence_cache_entry.atoms_by_place_id),
+                telemetry=EditorialEnrichmentTelemetry(
+                    enrichment_attempted=False,
+                    skipped_reason="evidence_cache_hit",
+                ),
+                elapsed_ms=0,
+            )
+            logger.info(
+                "semantic_retrieval_v1: editorial_evidence_cache_hit "
+                "fingerprint=%s accepted_count=%d query=%r",
+                evidence_fingerprint,
+                _evidence_cache_entry.accepted_count,
+                user_query,
+            )
+        elif _remaining_after_cross_source_ms < EDITORIAL_POST_CROSS_SOURCE_MIN_MS:
+            # Opportunistic budget gate: Step 5.55 (Yelp/FSQ) consumed too much
+            # budget — skip editorial to protect dossier/writer latency.
+            roi_tel.tavily_skipped_reason = "budget_after_cross_source_too_low"
             logger.info(
                 "semantic_retrieval_v1: editorial_skipped "
                 "reason=budget_after_cross_source_too_low remaining_ms=%d",
@@ -692,14 +737,63 @@ def _run_pipeline(
                 elapsed_ms=0,
             )
         else:
-            editorial_result = run_editorial_enrichment(
-                [e for e, _ in ranked],
-                deadline=deadline,
-                tavily_key=_tavily_key,
-                serper_key=_serper_key,
-                destination=destination,
-                budget_n=first_card_limit,
-            )
+            # ── Selectivity gate ──────────────────────────────────────────────
+            _editorial_should_run, _editorial_selectivity_reason = should_run_editorial(frame)
+            if not _editorial_should_run:
+                # Simple category search — Tavily adds marginal value; skip.
+                roi_tel.tavily_skipped_reason = f"selectivity:{_editorial_selectivity_reason}"
+                logger.info(
+                    "semantic_retrieval_v1: editorial_skipped "
+                    "reason=selectivity selectivity_reason=%s query=%r",
+                    _editorial_selectivity_reason, user_query,
+                )
+                editorial_result = EditorialEnrichmentResult(
+                    atoms_by_place_id={},
+                    telemetry=EditorialEnrichmentTelemetry(
+                        enrichment_attempted=False,
+                        skipped_reason=f"selectivity:{_editorial_selectivity_reason}",
+                    ),
+                    elapsed_ms=0,
+                )
+            else:
+                # ── Run Tavily/Serper ─────────────────────────────────────────
+                roi_tel.tavily_attempted = bool(_tavily_key or _serper_key)
+                editorial_result = run_editorial_enrichment(
+                    [e for e, _ in ranked],
+                    deadline=deadline,
+                    tavily_key=_tavily_key,
+                    serper_key=_serper_key,
+                    destination=destination,
+                    budget_n=first_card_limit,
+                )
+
+                # ── Store accepted atoms to evidence cache ────────────────────
+                # Cache even when notes later fail/time out — prevents re-spending
+                # Tavily credits on the same query when notes eventually succeed.
+                _total_accepted = sum(
+                    len(atoms)
+                    for atoms in editorial_result.atoms_by_place_id.values()
+                )
+                if _total_accepted > 0:
+                    try:
+                        _EVIDENCE_ATOM_CACHE.set(
+                            evidence_fingerprint,
+                            editorial_result.atoms_by_place_id,
+                            _total_accepted,
+                        )
+                        roi_tel.evidence_cache_write = True
+                        roi_tel.accepted_editorial_evidence_count = _total_accepted
+                        logger.info(
+                            "semantic_retrieval_v1: editorial_evidence_cached "
+                            "fingerprint=%s accepted=%d query=%r",
+                            evidence_fingerprint, _total_accepted, user_query,
+                        )
+                    except Exception as _cache_exc:  # noqa: BLE001
+                        logger.debug(
+                            "semantic_retrieval_v1: editorial_cache_write_failed "
+                            "error=%s", _cache_exc,
+                        )
+
         editorial_tel = editorial_result.telemetry.as_log_dict()
         # Merge editorial atoms into cross_source atoms_by_place_id so the
         # existing dossier builder sees all enrichment in one pass.
@@ -802,10 +896,11 @@ def _run_pipeline(
         )
     latency["curator_ms"] = int((time.monotonic() - t0) * 1000)
 
-    # ── Step 5.8: Set-Level Writer v1 (PR #261) ──────────────────────────────
+    # ── Step 5.8: Set-Level Writer v1 (cache-aware) ───────────────────────────
     # Uses CuratedSetResult + PlaceEvidenceDossier to generate evidence-grounded,
-    # set-aware notes. Runs before the deadline check and before Step 6 evidence
-    # bundles so it can use richer dossier evidence.
+    # set-aware notes. Credit-efficient:
+    #   1. Note cache is checked first — cache hit skips the LLM call entirely.
+    #   2. Approved notes from the LLM writer are stored to note cache for reuse.
     # Falls back to the existing batched_reason_builder path on any failure.
     # Never blocks card return.
     #
@@ -817,13 +912,52 @@ def _run_pipeline(
     t0 = time.monotonic()
     from app.concierge.set_level_writer import (
         SetWriterResult,
+        make_cached_note_result,
         write_set_notes,
     )
     set_writer_result: Optional[SetWriterResult] = None
     set_writer_tel: Dict[str, Any] = {"set_writer_fallback_to_existing_path": True}
     _set_writer_remaining_ms = deadline.remaining_ms()
     _set_writer_skipped_budget = _set_writer_remaining_ms < SET_WRITER_MIN_BUDGET_MS
-    if _set_writer_skipped_budget:
+
+    # ── Note cache check ──────────────────────────────────────────────────────
+    # Check for pre-approved cached notes before running the LLM writer.
+    # Cache key: (place_id, evidence_fingerprint) — prevents cross-context bleed.
+    _cached_notes: Dict[str, str] = {}
+    if curated_result is not None and curated_result.output_count > 0:
+        for _cc in (getattr(curated_result, "curated_cards", []) or [])[:first_card_limit]:
+            _pid = getattr(_cc.entity, "place_id", None)
+            if _pid:
+                _note_entry = _NOTE_CACHE.get(_pid, evidence_fingerprint)
+                if _note_entry is not None:
+                    _cached_notes[_pid] = _note_entry.note
+        roi_tel.note_cache_hit_count = len(_cached_notes)
+
+    _n_curated = curated_result.output_count if curated_result is not None else 0
+    _all_notes_cached = (
+        _n_curated > 0
+        and len(_cached_notes) >= min(_n_curated, first_card_limit)
+    )
+
+    if _all_notes_cached:
+        # All cards have cached approved notes — skip LLM writer entirely.
+        logger.info(
+            "semantic_retrieval_v1: note_cache_full_hit "
+            "count=%d fingerprint=%s query=%r",
+            len(_cached_notes), evidence_fingerprint, user_query,
+        )
+        set_writer_result = make_cached_note_result(
+            curated_result=curated_result,
+            cached_notes=_cached_notes,
+            first_card_limit=first_card_limit,
+        )
+        set_writer_tel = set_writer_result.as_telemetry_dict(
+            elapsed_ms=int((time.monotonic() - t0) * 1000)
+        )
+        set_writer_tel["set_writer_fallback_to_existing_path"] = False
+        set_writer_tel["source"] = "note_cache"
+        _set_writer_skipped_budget = False  # note: cache hit, not budget skip
+    elif _set_writer_skipped_budget:
         logger.info(
             "semantic_retrieval_v1: set_writer_skipped_budget "
             "remaining_ms=%d threshold_ms=%d query=%r",
@@ -836,6 +970,7 @@ def _run_pipeline(
         }
     elif curated_result is not None and curated_result.output_count > 0:
         try:
+            roi_tel.note_writer_attempted = True
             set_writer_result = write_set_notes(
                 curated_result=curated_result,
                 frame=frame,
@@ -849,6 +984,47 @@ def _run_pipeline(
                 set_writer_result.timed_out
                 or set_writer_result.visible_note_count == 0
             )
+
+            # Track timeout for ROI telemetry
+            if set_writer_result.timed_out:
+                roi_tel.note_writer_timed_out = True
+                # Evidence is already cached (Step 5.56) — the next matching
+                # search can reuse atoms without re-calling Tavily.
+                logger.info(
+                    "semantic_retrieval_v1: note_writer_timed_out_evidence_cached "
+                    "evidence_cache_written=%s fingerprint=%s query=%r",
+                    roi_tel.evidence_cache_write or roi_tel.evidence_cache_hit,
+                    evidence_fingerprint, user_query,
+                )
+            else:
+                # ── Store approved notes to note cache ────────────────────────
+                # Only validated, non-empty notes are stored. Failed/generic/
+                # timeout notes are never cached.
+                _write_count = 0
+                for _pid, _note_obj in (
+                    set_writer_result.notes_by_place_id or {}
+                ).items():
+                    if _note_obj.validated and _note_obj.note:
+                        try:
+                            _NOTE_CACHE.set(
+                                _pid,
+                                evidence_fingerprint,
+                                _note_obj.note,
+                                _note_obj.source,
+                            )
+                            _write_count += 1
+                        except Exception as _nc_exc:  # noqa: BLE001
+                            logger.debug(
+                                "semantic_retrieval_v1: note_cache_write_failed "
+                                "place_id=%s error=%s", _pid, _nc_exc,
+                            )
+                roi_tel.note_cache_write_count = _write_count
+                if _write_count > 0:
+                    logger.info(
+                        "semantic_retrieval_v1: note_cache_written "
+                        "count=%d fingerprint=%s query=%r",
+                        _write_count, evidence_fingerprint, user_query,
+                    )
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "semantic_retrieval_v1: set_writer_failed query=%r error=%s — "
@@ -1127,6 +1303,18 @@ def _run_pipeline(
         ),
     }
 
+    # ── Finalise credit ROI telemetry ─────────────────────────────────────────
+    roi_tel.approved_note_count = reasoning_result.accepted_count if reasoning_result else 0
+    roi_tel.visible_note_count = visible_note_count
+    roi_tel.credits_spent_but_no_visible_notes = (
+        roi_tel.tavily_attempted and visible_note_count == 0
+    )
+    # Collect omission reasons from card reasons for ROI log
+    for cr_val in card_reasons.values():
+        if not cr_val.validated:
+            _omit_reason = getattr(cr_val, "source", "unknown") or "unknown"
+            roi_tel.record_omission(_omit_reason)
+
     # ── Latency summary fields ────────────────────────────────────────────────
     _elapsed_ms_final = int((time.monotonic() - t_pipeline_start) * 1000)
     _timeout_budget_consumed_pct = min(100, int(_elapsed_ms_final * 100 / DEFAULT_SLA.hard_cutoff_ms))
@@ -1218,6 +1406,12 @@ def _run_pipeline(
         timeout_budget_consumed_pct=_timeout_budget_consumed_pct,
         timeout_branches_triggered=_timeout_branches_triggered,
         set_writer_primary_active=set_writer_primary_active,
+    )
+
+    # ── Credit ROI log (separate line for easy grep) ──────────────────────────
+    logger.info(
+        "semantic_retrieval_v1.credit_roi %r",
+        roi_tel.as_log_dict(),
     )
 
     if not cards:
