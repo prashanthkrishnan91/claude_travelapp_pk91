@@ -413,6 +413,7 @@ def run_semantic_retrieval_v1(
     api_key: Optional[str] = None,
     timeout: float = 5.0,
     max_cards: int = _MAX_CARDS,
+    vertical: str = "restaurants",
 ) -> "LiveResearchResult":  # type: ignore[name-defined]
     """Run the full Semantic Retrieval v1 pipeline for one concierge turn.
 
@@ -423,10 +424,13 @@ def run_semantic_retrieval_v1(
         api_key: Google Places API key (falls back to env var).
         timeout: Per-provider-call deadline in seconds.
         max_cards: Maximum cards to return.
+        vertical: Target result bucket — "restaurants", "attractions", or "hotels".
+            Caller must pass the detected vertical so cards reach the correct bucket
+            in the response. Defaults to "restaurants" for backward compatibility.
 
     Returns:
-        LiveResearchResult with verified restaurant cards, or empty result
-        if the pipeline fails or returns no verified entities.
+        LiveResearchResult with verified place cards in the bucket matching ``vertical``,
+        or empty result if the pipeline fails or returns no verified entities.
         Never raises — falls back to empty on any unhandled error.
     """
     from app.services.live_research import LiveResearchResult
@@ -452,6 +456,7 @@ def run_semantic_retrieval_v1(
             timeout=timeout,
             max_cards=max_cards,
             t_pipeline_start=t_pipeline_start,
+            vertical=vertical,
         )
     except Exception as exc:
         elapsed_ms = int((time.monotonic() - t_pipeline_start) * 1000)
@@ -474,6 +479,7 @@ def _run_pipeline(
     timeout: float,
     max_cards: int,
     t_pipeline_start: float,
+    vertical: str = "restaurants",
 ) -> "LiveResearchResult":  # type: ignore[name-defined]
     from app.services.live_research import LiveResearchResult
     from app.models.concierge import SOURCE_LIVE_SEARCH, SOURCE_NONE, SOURCE_UNAVAILABLE
@@ -1637,6 +1643,20 @@ def _run_pipeline(
     if not cards:
         return LiveResearchResult(source_status=SOURCE_NONE, provider_name=PROVIDER_NAME)
 
+    # Route cards to the correct typed bucket so the concierge service can place
+    # them under restaurants/attractions/hotels without any re-inspection.
+    if vertical == "hotels":
+        return LiveResearchResult(
+            hotels=cards,
+            source_status=SOURCE_LIVE_SEARCH,
+            provider_name=PROVIDER_NAME,
+        )
+    if vertical == "attractions":
+        return LiveResearchResult(
+            attractions=cards,
+            source_status=SOURCE_LIVE_SEARCH,
+            provider_name=PROVIDER_NAME,
+        )
     return LiveResearchResult(
         restaurants=cards,
         source_status=SOURCE_LIVE_SEARCH,

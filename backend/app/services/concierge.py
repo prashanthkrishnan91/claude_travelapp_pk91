@@ -5,7 +5,7 @@ import logging
 import re
 import time
 from datetime import date, timedelta
-from typing import List, Optional, Sequence
+from typing import Any, List, Optional, Sequence
 from uuid import UUID
 from uuid import uuid4
 
@@ -92,6 +92,44 @@ _RESTAURANT_INTENTS = {
     INTENT_LUXURY_VALUE, INTENT_ROMANTIC, INTENT_FAMILY_FRIENDLY, INTENT_NIGHTLIFE,
 }
 _ATTRACTION_INTENTS = {INTENT_ATTRACTIONS, INTENT_PLAN_DAY}
+
+# Intents that are clearly non-place and must never enter the semantic card-first path.
+# Everything NOT in this blocklist is treated as potentially a place-search ask.
+# Using a small blocklist (vs. a small allowlist) ensures open-vocabulary place
+# categories (beaches, viewpoints, markets, gardens, etc.) are not silently excluded.
+_SEMANTIC_PLACE_SEARCH_BLOCKLIST = frozenset({
+    INTENT_PLAN_DAY,             # multi-day itinerary planning
+    INTENT_BEST_AREA,            # neighborhood advice
+    INTENT_AREA_ADVICE,          # alias: INTENT_BEST_AREA
+    INTENT_COMPARE,              # area comparison
+    INTENT_REWARDS_HELP,         # points/miles advice
+    INTENT_GENERAL_DESTINATION,  # broad destination research
+})
+
+# Concept words that signal the hotel vertical — query tokens matched against these
+# trigger vertical="hotels" when the intent is ambiguous (INTENT_GENERAL).
+_HOTEL_VERTICAL_CONCEPTS: frozenset = frozenset({
+    "hotel", "hotels", "resort", "resorts", "hostel", "hostels",
+    "accommodation", "accommodations", "lodging", "inn", "motel",
+    "b&b", "bed and breakfast", "boutique hotel", "luxury hotel",
+    "villa", "villas", "suite", "suites",
+})
+
+# Concept words that signal the attraction vertical for open-class queries.
+# Food/bar/cafe terms are intentionally absent — those default to "restaurants".
+_ATTRACTION_VERTICAL_CONCEPTS: frozenset = frozenset({
+    "beach", "beaches", "viewpoint", "viewpoints", "scenic", "sunset",
+    "sunrise", "lookout", "lookouts", "vista", "panorama",
+    "park", "parks", "garden", "gardens", "botanical",
+    "museum", "museums", "gallery", "galleries",
+    "landmark", "landmarks", "monument", "monuments",
+    "market", "markets", "bazaar", "bazaars", "souk",
+    "temple", "temples", "shrine", "shrines", "castle", "castles",
+    "waterfall", "waterfalls", "nature", "hike", "hiking", "trail", "trails",
+    "attraction", "attractions", "sightseeing", "tour", "tours",
+    "activities", "activity", "experience", "things to do",
+    "food hall", "food halls", "street food",
+})
 _BANNED_REASON_BITS = (
     "sample",
     "static sample",
@@ -498,7 +536,13 @@ class ConciergeService:
                     cached_response = live_result.cached
                     if live_result.provider_name:
                         sources.append(f"Live search · {live_result.provider_name}")
-            retrieval_used = bool(restaurants or attractions)
+                elif live_result.hotels:
+                    hotels = live_result.hotels
+                    source_status = SOURCE_LIVE_SEARCH
+                    cached_response = live_result.cached
+                    if live_result.provider_name:
+                        sources.append(f"Live search · {live_result.provider_name}")
+            retrieval_used = bool(restaurants or attractions or hotels)
 
         # PART 1 — Detect semantic card-first path.
         # When semantic_retrieval_v1 produced the live cards (not Michelin curated or DB fallback),
@@ -508,7 +552,7 @@ class ConciergeService:
         _semantic_card_first = (
             live_provider_name == "semantic_retrieval_v1"
             and source_status == SOURCE_LIVE_SEARCH
-            and bool(restaurants or attractions)
+            and bool(restaurants or attractions or hotels)
         )
 
         _t_legacy_llm = time.perf_counter()
@@ -714,12 +758,11 @@ class ConciergeService:
     # Intent detection
     # ------------------------------------------------------------------
 
-    # Intents where the fast dynamic pipeline is applicable.
-    # INTENT_ATTRACTIONS included: "top attractions", "museums", "parks" must
-    # use the fast Google-verified card-first path, not Tavily/legacy live_research.
-    # The place_kind_hints baseline ("food_and_drink") is a retrieval hint only —
-    # the ranker uses open-vocabulary subtype_fit, so tourist_attraction/museum/park
-    # entities score correctly against attraction queries.
+    # Intents where the fast dynamic fallback pipeline (v1) is applicable.
+    # This gate governs only the secondary fast_dynamic_place_search path.
+    # The primary semantic_retrieval_v1 path now uses the broader blocklist-based
+    # _is_place_search_eligible check (see below) so that beaches, viewpoints,
+    # markets, hotels, and other open-vocabulary categories are not silently excluded.
     _FAST_DYNAMIC_INTENTS = {
         INTENT_RESTAURANTS,
         INTENT_NIGHTLIFE,
@@ -729,13 +772,80 @@ class ConciergeService:
         INTENT_FAMILY_FRIENDLY,
         INTENT_MICHELIN_RESTAURANTS,
         INTENT_ATTRACTIONS,
+        INTENT_HOTELS,
     }
 
-    # Intents where we still consider the open-class place-ask detector.
-    # INTENT_GENERAL is included so unknown venue nouns like "izakaya",
-    # "tea house", or "dessert bar" can enter Semantic Retrieval v1 without
-    # being added to a closed keyword bucket.
+    # Retained for backward-compatible open-class detection in tests.
     _OPEN_CLASS_ELIGIBLE_INTENTS = _FAST_DYNAMIC_INTENTS | {INTENT_GENERAL}
+
+    @classmethod
+    def _is_place_search_eligible(
+        cls,
+        intent: str,
+        open_class_detected: bool,
+        destination: str,
+    ) -> bool:
+        """Return True when this query should enter the semantic/card-first path.
+
+        Uses a small explicit blocklist rather than a small allowlist, so that
+        open-vocabulary place categories (beaches, viewpoints, markets, gardens,
+        hotels, parks, etc.) are eligible without requiring every possible noun
+        to be manually added.
+
+        INTENT_GENERAL is eligible only when open_class_detected=True to keep
+        non-place INTENT_GENERAL queries (currency, weather, packing) out.
+        """
+        if not destination:
+            return False
+        if intent in _SEMANTIC_PLACE_SEARCH_BLOCKLIST:
+            return False
+        if intent == INTENT_GENERAL:
+            return open_class_detected
+        return True
+
+    @classmethod
+    def _detect_semantic_vertical(
+        cls,
+        intent: str,
+        user_query: str,
+        frame: Any = None,
+    ) -> str:
+        """Detect the appropriate result bucket for a semantic place-search query.
+
+        Returns "restaurants", "attractions", or "hotels" based on the intent,
+        query tokens, and extracted frame concepts. The returned value is passed
+        to run_semantic_retrieval_v1 so cards land in the correct typed bucket.
+        """
+        # Hard-typed intents take precedence
+        if intent == INTENT_HOTELS:
+            return "hotels"
+        if intent in _ATTRACTION_INTENTS:
+            return "attractions"
+        if intent in _RESTAURANT_INTENTS or intent == INTENT_NIGHTLIFE:
+            return "restaurants"
+
+        # Open-class / INTENT_GENERAL: check query tokens and frame concepts
+        q_tokens = set(re.findall(r"\b[a-z]+\b", (user_query or "").lower()))
+
+        # Hotel tokens take priority so "boutique hotel" doesn't land in attractions
+        single_hotel = {w for w in _HOTEL_VERTICAL_CONCEPTS if " " not in w}
+        if q_tokens & single_hotel:
+            return "hotels"
+
+        single_attraction = {w for w in _ATTRACTION_VERTICAL_CONCEPTS if " " not in w}
+        if q_tokens & single_attraction:
+            return "attractions"
+
+        # Fall through to frame concepts when query tokens are ambiguous
+        if frame is not None:
+            for concept in getattr(frame, "subtype_concepts", None) or []:
+                label_tokens = set(re.findall(r"\b[a-z]+\b", (concept.label or "").lower()))
+                if label_tokens & single_hotel:
+                    return "hotels"
+                if label_tokens & single_attraction:
+                    return "attractions"
+
+        return "restaurants"  # safest default: consumed by all existing routing branches
 
     def _fetch_live_research(
         self,
@@ -774,22 +884,23 @@ class ConciergeService:
             getattr(self._settings, "concierge_semantic_retrieval_v1_enabled", False)
         )
 
-        # Open-class place-ask detection: lets unknown venue nouns
-        # (e.g., "izakaya", "tea house", "record store") enter semantic
-        # retrieval without being added to a closed keyword bucket. We import
-        # lazily so the existing slow pipeline keeps working when the
-        # frame_extractor module is unavailable.
+        # Open-class place-ask detection: lets unknown venue nouns (e.g.,
+        # "izakaya", "beach clubs", "scenic viewpoints") enter semantic retrieval
+        # without requiring them to be added to a closed keyword bucket.
+        # We also capture the frame here to reuse for vertical detection below.
         open_class_detected = False
+        _open_class_frame: Any = None
         if semantic_enabled and destination:
             try:
                 from app.concierge.frame_extractor import (
                     extract_frame as _open_class_extract_frame,
                     is_open_class_place_ask as _is_open_class_place_ask,
                 )
+                _open_class_frame = _open_class_extract_frame(user_query, destination)
                 open_class_detected = bool(
                     _is_open_class_place_ask(
                         user_query,
-                        _open_class_extract_frame(user_query, destination).subtype_concepts,
+                        _open_class_frame.subtype_concepts,
                     )
                 )
             except Exception as exc:  # never fail eligibility because of detection error
@@ -799,16 +910,11 @@ class ConciergeService:
                 )
                 open_class_detected = False
 
-        semantic_eligible = (
-            semantic_enabled
-            and bool(destination)
-            and (
-                intent in self._FAST_DYNAMIC_INTENTS
-                or (
-                    open_class_detected
-                    and intent in self._OPEN_CLASS_ELIGIBLE_INTENTS
-                )
-            )
+        # Broad place-search eligibility: uses a small blocklist instead of a
+        # small allowlist so open-vocabulary categories (beaches, viewpoints,
+        # hotels, gardens, markets) are eligible without manual per-noun additions.
+        semantic_eligible = semantic_enabled and self._is_place_search_eligible(
+            intent, open_class_detected, destination
         )
 
         if semantic_enabled:
@@ -820,38 +926,49 @@ class ConciergeService:
                     intent, user_query, open_class_detected,
                 )
             elif not semantic_eligible:
+                skip_reason = (
+                    "non_place_intent"
+                    if intent in _SEMANTIC_PLACE_SEARCH_BLOCKLIST
+                    else "intent_not_eligible"
+                )
                 logger.info(
                     "concierge.semantic_skip intent=%s query=%r destination=%r "
-                    "semantic_skip_reason=intent_not_eligible eligible_intents=%s "
+                    "semantic_skip_reason=%s "
                     "open_class_place_detected=%s",
                     intent, user_query, destination,
-                    sorted(self._OPEN_CLASS_ELIGIBLE_INTENTS),
+                    skip_reason,
                     open_class_detected,
                 )
             else:
+                vertical = self._detect_semantic_vertical(
+                    intent, user_query, _open_class_frame
+                )
                 logger.info(
                     "concierge.semantic_eligible intent=%s query=%r destination=%r "
-                    "open_class_place_detected=%s eligibility_path=%s",
-                    intent, user_query, destination, open_class_detected,
-                    "fast_dynamic_intent"
-                    if intent in self._FAST_DYNAMIC_INTENTS
-                    else "open_class",
+                    "open_class_place_detected=%s detected_vertical=%s "
+                    "place_search_eligible=true",
+                    intent, user_query, destination, open_class_detected, vertical,
                 )
 
         if semantic_eligible:
+            vertical = self._detect_semantic_vertical(
+                intent, user_query, _open_class_frame
+            )
             try:
                 from app.concierge.semantic_retrieval import run_semantic_retrieval_v1
                 from app.models.concierge import SOURCE_NONE, SOURCE_UNAVAILABLE
                 logger.info(
-                    "concierge.semantic_retrieval_v1 intent=%s destination=%r query=%r",
-                    intent, destination, user_query,
+                    "concierge.semantic_retrieval_v1 intent=%s destination=%r "
+                    "query=%r vertical=%s",
+                    intent, destination, user_query, vertical,
                 )
                 result = run_semantic_retrieval_v1(
                     user_query=user_query,
                     destination=destination,
                     prior_identity_keys=prior_identity_keys if prior_identity_keys else frozenset(),
+                    vertical=vertical,
                 )
-                if result.restaurants or result.attractions:
+                if result.restaurants or result.attractions or result.hotels:
                     return result
                 # No verified cards or provider unavailable — fall through to fast_dynamic or slow
                 fallback_reason = (
@@ -861,9 +978,9 @@ class ConciergeService:
                 )
                 logger.info(
                     "concierge.semantic_retrieval_v1: falling_through "
-                    "intent=%s destination=%r query=%r "
+                    "intent=%s destination=%r query=%r vertical=%s "
                     "fallback_reason=%s fallback_path=fast_dynamic_or_slow",
-                    intent, destination, user_query, fallback_reason,
+                    intent, destination, user_query, vertical, fallback_reason,
                 )
             except Exception as exc:
                 logger.warning(
