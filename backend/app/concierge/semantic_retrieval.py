@@ -210,6 +210,7 @@ def _assemble_card_reasons(
     user_query: str = "",
     deadline: Any = None,
     remaining_budget_before_reasoning_ms: int = 0,
+    note_decision: Any = None,
 ) -> tuple:
     """Step 7: Assemble card reasons from set-writer output or fallback cascade.
 
@@ -219,7 +220,14 @@ def _assemble_card_reasons(
     branch fires first and discards validated notes that were already computed when
     enrichment steps (Yelp/FSQ, editorial) consumed budget past the 4000ms soft ceiling.
 
-    Returns (card_reasons, set_writer_primary_active, reasoning_result).
+    note_decision: NoteDecision from make_note_decision() — the single shared
+    authority for whether any LLM note path may run. When provided and
+    note_decision.should_run_legacy_batched_reasoning is False, legacy batched
+    reasoning is skipped even when set_writer_result is None. This prevents the
+    production failure where the set-writer is correctly skipped for no editorial
+    evidence but legacy batched reasoning still runs and collapses card count.
+
+    Returns (card_reasons, set_writer_primary_active, reasoning_result, legacy_batched_attempted).
     cards_data must be a list of (entity, evidence, rank_score, det_reason) 4-tuples.
     """
     from app.concierge.batched_reason_builder import (
@@ -229,6 +237,7 @@ def _assemble_card_reasons(
     )
 
     set_writer_primary_active = False
+    _legacy_batched_attempted = False
     if (
         set_writer_result is not None
         and not set_writer_result.timed_out
@@ -368,13 +377,33 @@ def _assemble_card_reasons(
             final_card_count=0,
             final_note_omitted_count=0,
         )
+    elif note_decision is not None and not note_decision.should_run_legacy_batched_reasoning:
+        # NoteDecision gate: no accepted editorial evidence and no cached notes —
+        # skip legacy batched reasoning entirely.  The three-pass cascade would
+        # spend Haiku credits and produce generic/empty notes that fail validation,
+        # yielding the same empty card_reasons with wasted latency.
+        # _assemble_card_set will include all verified Google cards without notes.
+        logger.info(
+            "semantic_retrieval_v1: legacy_batched_reason_skipped_note_decision "
+            "reason=%s query=%r",
+            note_decision.legacy_batched_reasoning_skip_reason, user_query,
+        )
+        card_reasons = {}
+        n_cards = len(cards_data)
+        reasoning_result = ReasoningResultV2(
+            attempted=False,
+            failure_reason="note_paths_skipped_no_editorial_evidence",
+            final_card_count=n_cards,
+            final_note_omitted_count=n_cards,
+        )
     else:
         # ── Fallback: existing three-pass cascade ─────────────────────────────
+        _legacy_batched_attempted = True
         card_reasons, reasoning_result = build_reasons_with_retry(
             cards_data, frame, timeout_s=note_generation_budget_s
         )
 
-    return card_reasons, set_writer_primary_active, reasoning_result
+    return card_reasons, set_writer_primary_active, reasoning_result, _legacy_batched_attempted
 
 
 def run_semantic_retrieval_v1(
@@ -459,11 +488,13 @@ def _run_pipeline(
     from app.concierge.evidence_cache import (
         CreditROITelemetry,
         EvidenceCacheEntry,
+        NoteDecision,
         _EVIDENCE_ATOM_CACHE,
         _NOTE_CACHE,
         _SUPABASE_EVIDENCE_CACHE,
         _SUPABASE_NOTE_CACHE,
         build_evidence_fingerprint,
+        make_note_decision,
         should_run_editorial,
         should_skip_writer_no_evidence,
     )
@@ -989,6 +1020,27 @@ def _run_pipeline(
         and len(_cached_notes) >= min(_n_curated, first_card_limit)
     )
 
+    # ── Shared note/evidence decision (single source of truth) ────────────────
+    # Computed once from frame signals and actual editorial/cache outcomes.
+    # This decision gates ALL optional LLM note paths (set_level_writer,
+    # batched_reason_builder). No note path may run without approval here.
+    _note_decision = make_note_decision(
+        frame=frame,
+        cached_notes=_cached_notes,
+        accepted_editorial_evidence_count=roi_tel.accepted_editorial_evidence_count,
+    )
+    logger.debug(
+        "semantic_retrieval_v1: note_decision "
+        "should_run_set_writer=%s should_run_legacy=%s "
+        "has_editorial=%s has_cached=%s plain_category=%s query=%r",
+        _note_decision.should_run_set_writer,
+        _note_decision.should_run_legacy_batched_reasoning,
+        _note_decision.has_accepted_editorial_evidence,
+        _note_decision.has_cached_approved_notes,
+        _note_decision.is_plain_category_query,
+        user_query,
+    )
+
     if _all_notes_cached:
         # All cards have cached approved notes — skip LLM writer entirely.
         logger.info(
@@ -1018,21 +1070,24 @@ def _run_pipeline(
             "set_writer_skipped_budget": True,
             "set_writer_remaining_ms_at_skip": _set_writer_remaining_ms,
         }
-    elif should_skip_writer_no_evidence(
-        roi_tel.accepted_editorial_evidence_count, _cached_notes
-    ):
-        # Tavily was skipped or produced 0 accepted atoms AND no cached approved
-        # notes exist. The writer has no editorial grounding — it would produce
-        # generic or empty notes that fail the quality gate, wasting Haiku credits
-        # with nothing visible or cacheable as the result.
+    elif not _note_decision.should_run_set_writer:
+        # Shared note decision says skip set-writer: no accepted editorial evidence
+        # AND no cached approved notes. The writer has no editorial grounding —
+        # it would produce generic or empty notes that fail the quality gate,
+        # wasting Haiku credits with nothing visible or cacheable as the result.
+        # The same decision will also gate legacy batched reasoning in _assemble_card_reasons.
         logger.info(
-            "semantic_retrieval_v1: set_writer_skipped_no_editorial_evidence "
-            "accepted_editorial_evidence_count=%d cached_notes=%d query=%r",
-            roi_tel.accepted_editorial_evidence_count, len(_cached_notes), user_query,
+            "semantic_retrieval_v1: set_writer_skipped_note_decision "
+            "reason=%s accepted_editorial=%d cached_notes=%d query=%r",
+            _note_decision.set_writer_skip_reason,
+            roi_tel.accepted_editorial_evidence_count,
+            len(_cached_notes), user_query,
         )
+        roi_tel.set_writer_skipped_reason = _note_decision.set_writer_skip_reason
         set_writer_tel = {
             "set_writer_fallback_to_existing_path": True,
             "set_writer_skipped_no_editorial_evidence": True,
+            "set_writer_skipped_reason": _note_decision.set_writer_skip_reason,
         }
     elif curated_result is not None and curated_result.output_count > 0:
         try:
@@ -1215,16 +1270,19 @@ def _run_pipeline(
         and note_generation_budget_s < _MIN_NOTE_GENERATION_BUDGET_S
     )
 
-    card_reasons, set_writer_primary_active, reasoning_result = _assemble_card_reasons(
-        cards_data=cards_data,
-        set_writer_result=set_writer_result,
-        note_generation_timed_out=note_generation_timed_out,
-        note_generation_low_budget=note_generation_low_budget,
-        note_generation_budget_s=note_generation_budget_s,
-        frame=frame,
-        user_query=user_query,
-        deadline=deadline,
-        remaining_budget_before_reasoning_ms=remaining_budget_before_reasoning_ms,
+    card_reasons, set_writer_primary_active, reasoning_result, _legacy_batched_attempted = (
+        _assemble_card_reasons(
+            cards_data=cards_data,
+            set_writer_result=set_writer_result,
+            note_generation_timed_out=note_generation_timed_out,
+            note_generation_low_budget=note_generation_low_budget,
+            note_generation_budget_s=note_generation_budget_s,
+            frame=frame,
+            user_query=user_query,
+            deadline=deadline,
+            remaining_budget_before_reasoning_ms=remaining_budget_before_reasoning_ms,
+            note_decision=_note_decision,
+        )
     )
     latency["batched_reason_ms"] = int((time.monotonic() - t0) * 1000)
     # optional_reasoning_ms covers all non-critical optional work (dossier, curator,
@@ -1244,6 +1302,7 @@ def _run_pipeline(
     _effective_note_gen_skipped = (
         note_generation_timed_out
         or reasoning_result.failure_reason == "set_writer_attempted_no_fallback"
+        or reasoning_result.failure_reason == "note_paths_skipped_no_editorial_evidence"
     )
     cards, rank_debug, excluded_unvalidated, visible_note_count, cards_without_notes_count = (
         _assemble_card_set(
@@ -1441,6 +1500,13 @@ def _run_pipeline(
     roi_tel.credits_spent_but_no_visible_notes = (
         roi_tel.tavily_attempted and visible_note_count == 0
     )
+    # Control-plane ROI fields
+    roi_tel.legacy_batched_reason_attempted = _legacy_batched_attempted
+    if not _legacy_batched_attempted and reasoning_result.failure_reason:
+        roi_tel.legacy_batched_reason_skipped_reason = reasoning_result.failure_reason
+    roi_tel.final_card_count_before_notes = len(cards_data)
+    roi_tel.final_card_count_after_notes = final_card_count
+    roi_tel.card_count_collapsed_due_to_notes = False  # structural invariant: never true
     # Collect omission reasons from card reasons for ROI log
     for cr_val in card_reasons.values():
         if not cr_val.validated:
@@ -1612,12 +1678,16 @@ def _assemble_card_set(
     Extracted from Step 8 so it can be unit-tested independently.
 
     Rules:
+    - All paths: NEVER exclude a Google-verified card because its note failed
+      validation or no note path ran.  Hide the note block (reason_validated=False)
+      but keep the card.  "Hide invalid notes, not valid cards."
     - Deadline-exceeded path: include all entities without a note block.
     - Set-writer primary path: include all entities; hide note block for any
-      card whose set-writer note failed validation (validated=False).  Do NOT
-      drop the card — "hide invalid notes, not valid cards."
-    - LLM fallback path: exclude entities without a validated note so that
-      unvalidated cards flow to the more-options pool instead.
+      card whose set-writer note failed validation.
+    - Note-paths-skipped path (NoteDecision gate or budget skip): include all
+      entities without a note block.
+    - LLM fallback path: include all entities; cards without a validated note
+      are included without a note block (reason_validated=False).
 
     Returns:
         (cards, rank_debug, excluded_unvalidated, visible_note_count,
@@ -1644,18 +1714,20 @@ def _assemble_card_set(
         else:
             cr = card_reasons.get(str(i), CardReason())
             if not cr.validated:
-                if set_writer_primary_active:
-                    # Card is Google-verified; set-writer note was hidden.
-                    # Include the card without a note rather than dropping it.
-                    card = _entity_to_card(
-                        entity, "", frame,
-                        reason_source="set_level_writer_v1",
-                        reason_validated=False,
-                    )
-                    cards_without_notes_count += 1
-                else:
-                    excluded_unvalidated += 1
-                    continue
+                # Card is Google-verified but note failed validation or no note path ran.
+                # Include the card without a note — never drop a verified card because of
+                # note status.  The note block is hidden on the frontend when
+                # reason_validated=False.  This holds for both set_writer_primary_active
+                # and legacy batched paths.
+                _note_src = cr.source if cr.source else (
+                    "set_level_writer_v1" if set_writer_primary_active else "no_note"
+                )
+                card = _entity_to_card(
+                    entity, "", frame,
+                    reason_source=_note_src,
+                    reason_validated=False,
+                )
+                cards_without_notes_count += 1
             else:
                 card = _entity_to_card(
                     entity, cr.note, frame,

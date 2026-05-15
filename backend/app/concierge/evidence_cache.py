@@ -182,17 +182,92 @@ def should_skip_writer_no_evidence(
 ) -> bool:
     """Return True when the set-level LLM note writer should be skipped.
 
-    Skip when no editorial evidence atoms were accepted (Tavily produced
-    nothing useful or was not run) AND there are no cached approved notes.
-    In that state the writer would receive no editorial grounding, produce
-    generic or empty notes that fail the quality gate, and consume Haiku
-    credits for no visible output.
-
-    Callers that have cached notes (from prior editorial runs) still allow
-    the writer to proceed using those cached notes. The writer is only
-    blocked when both conditions hold simultaneously.
+    Retained for backward compatibility with existing tests.
+    Production code uses make_note_decision() instead.
     """
     return accepted_editorial_evidence_count == 0 and not cached_notes
+
+
+# ── Shared note/evidence decision ─────────────────────────────────────────────
+
+
+@dataclass
+class NoteDecision:
+    """Single shared decision for all optional note/evidence paths in one pipeline turn.
+
+    Computed once from frame signals and actual editorial/cache outcomes after
+    Step 5.56 (editorial enrichment) and the note cache lookup.
+
+    This is the single source of truth for optional Tavily/editorial/LLM note
+    work in semantic retrieval. No note path may run without approval here.
+    """
+
+    should_run_editorial_enrichment: bool
+    editorial_enrichment_skip_reason: Optional[str]
+
+    should_run_set_writer: bool
+    set_writer_skip_reason: Optional[str]
+
+    should_run_legacy_batched_reasoning: bool
+    legacy_batched_reasoning_skip_reason: Optional[str]
+
+    has_cached_approved_notes: bool
+    has_accepted_editorial_evidence: bool
+    is_plain_category_query: bool
+    accepted_editorial_evidence_count: int = 0
+
+
+def make_note_decision(
+    frame: Any,
+    cached_notes: Dict[str, Any],
+    accepted_editorial_evidence_count: int,
+) -> "NoteDecision":
+    """Compute the shared note/evidence decision for one pipeline turn.
+
+    Called after editorial enrichment (Step 5.56) when we know:
+    - The frame's editorial intent (via should_run_editorial)
+    - The actual accepted editorial evidence count
+    - The cached approved notes for this fingerprint
+
+    LLM note paths (set_level_writer, batched_reason_builder) run only when
+    there is evidence grounding: accepted editorial atoms from Tavily/Serper
+    OR pre-approved cached notes. Without either, notes would be generic or
+    empty, fail the quality gate, and waste credits with no visible output.
+
+    Args:
+        frame: ExperienceFrame (may be None).
+        cached_notes: Dict of place_id -> note for pre-approved cached notes.
+        accepted_editorial_evidence_count: Total accepted atoms from Step 5.56.
+
+    Returns:
+        NoteDecision with should_run_* flags and skip reasons.
+    """
+    editorial_should_run, editorial_reason = should_run_editorial(frame)
+
+    has_cached_notes = bool(cached_notes)
+    has_editorial_evidence = accepted_editorial_evidence_count > 0
+
+    # LLM note paths run only when there is evidence grounding.
+    # Without either accepted atoms or cached notes, writers produce generic
+    # or empty notes that fail the quality gate — spending credits for no output.
+    should_run_notes = has_editorial_evidence or has_cached_notes
+
+    note_skip_reason: Optional[str] = (
+        "no_editorial_evidence_no_cached_notes" if not should_run_notes else None
+    )
+
+    return NoteDecision(
+        should_run_editorial_enrichment=editorial_should_run,
+        editorial_enrichment_skip_reason=None if editorial_should_run else editorial_reason,
+        should_run_set_writer=should_run_notes,
+        set_writer_skip_reason=note_skip_reason,
+        should_run_legacy_batched_reasoning=should_run_notes,
+        legacy_batched_reasoning_skip_reason=note_skip_reason,
+        has_cached_approved_notes=has_cached_notes,
+        has_accepted_editorial_evidence=has_editorial_evidence,
+        is_plain_category_query=not editorial_should_run,
+        accepted_editorial_evidence_count=accepted_editorial_evidence_count,
+    )
 
 
 # ── In-memory evidence atom cache ────────────────────────────────────────────
@@ -612,6 +687,14 @@ class CreditROITelemetry:
     # Async late-note storage (0 until async completion is implemented)
     async_late_note_stored_count: int = 0
 
+    # Control-plane decision telemetry (v3 — control-plane fix)
+    set_writer_skipped_reason: Optional[str] = None
+    legacy_batched_reason_attempted: bool = False
+    legacy_batched_reason_skipped_reason: Optional[str] = None
+    final_card_count_before_notes: int = 0
+    final_card_count_after_notes: int = 0
+    card_count_collapsed_due_to_notes: bool = False  # invariant: always False
+
     def record_omission(self, reason: str) -> None:
         """Increment the omitted-note reason counter."""
         self.omitted_note_reasons[reason] = self.omitted_note_reasons.get(reason, 0) + 1
@@ -639,4 +722,11 @@ class CreditROITelemetry:
             "durable_note_cache_hit_count": self.durable_note_cache_hit_count,
             "durable_note_cache_write_count": self.durable_note_cache_write_count,
             "durable_cache_error_count": self.durable_cache_error_count,
+            # Control-plane decision fields (v3)
+            "set_writer_skipped_reason": self.set_writer_skipped_reason,
+            "legacy_batched_reason_attempted": self.legacy_batched_reason_attempted,
+            "legacy_batched_reason_skipped_reason": self.legacy_batched_reason_skipped_reason,
+            "final_card_count_before_notes": self.final_card_count_before_notes,
+            "final_card_count_after_notes": self.final_card_count_after_notes,
+            "card_count_collapsed_due_to_notes": self.card_count_collapsed_due_to_notes,
         }
