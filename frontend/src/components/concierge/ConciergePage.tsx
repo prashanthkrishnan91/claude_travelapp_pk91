@@ -439,25 +439,21 @@ function saveTranscript(msgs: Message[]): void {
 // ─── Main ConciergePage ───────────────────────────────────────────────────────
 
 export function ConciergePage() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  // Lazy initializers run once at mount from localStorage. This prevents the
+  // save-effect race where messages=[] is written to storage before the load
+  // completes when the component re-mounts with a non-empty persisted transcript.
+  const [messages, setMessages] = useState<Message[]>(loadPersistedTranscript);
+  const [lastQuery, setLastQuery] = useState<string | null>(() => {
+    const persisted = loadPersistedTranscript();
+    return [...persisted].reverse().find((m) => m.role === "user")?.text ?? null;
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [destination, setDestination] = useState("");
   const [destinationError, setDestinationError] = useState(false);
-  const [lastQuery, setLastQuery] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-
-  // Load persisted transcript on mount
-  useEffect(() => {
-    const persisted = loadPersistedTranscript();
-    if (persisted.length > 0) {
-      setMessages(persisted);
-      const lastUserMsg = [...persisted].reverse().find((m) => m.role === "user");
-      if (lastUserMsg) setLastQuery(lastUserMsg.text);
-    }
-  }, []);
 
   // Persist transcript whenever messages change
   useEffect(() => {

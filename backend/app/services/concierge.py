@@ -324,6 +324,13 @@ class ConciergeService:
         _save_user_message_ms = int((time.perf_counter() - _t0) * 1000)
 
         destination = trip.get("destination", "")
+        # Track where the destination came from for observability logging.
+        if not destination:
+            _destination_source = "missing"
+        elif trip_id is not None:
+            _destination_source = "trip_context"
+        else:
+            _destination_source = "explicit_request"
         intent = self._detect_intent(user_query)
 
         restaurants: List[UnifiedRestaurantResult] = []
@@ -345,6 +352,7 @@ class ConciergeService:
         live_result = self._fetch_live_research(
             intent, destination, user_query, trip,
             prior_identity_keys=prior_identity_keys,
+            destination_source=_destination_source,
         )
         _fetch_live_research_ms = int((time.perf_counter() - _t0) * 1000)
 
@@ -816,25 +824,29 @@ class ConciergeService:
         query tokens, and extracted frame concepts. The returned value is passed
         to run_semantic_retrieval_v1 so cards land in the correct typed bucket.
         """
-        # Hard-typed intents take precedence
+        # INTENT_HOTELS is unambiguous — return immediately before token check.
         if intent == INTENT_HOTELS:
             return "hotels"
-        if intent in _ATTRACTION_INTENTS:
-            return "attractions"
-        if intent in _RESTAURANT_INTENTS or intent == INTENT_NIGHTLIFE:
-            return "restaurants"
 
-        # Open-class / INTENT_GENERAL: check query tokens and frame concepts
+        # Query token check runs before intent-based restaurant/attraction returns so
+        # that queries like "luxury hotels with a view" (which trigger INTENT_LUXURY_VALUE,
+        # a restaurant intent) still route to the hotels bucket when hotel nouns appear.
         q_tokens = set(re.findall(r"\b[a-z]+\b", (user_query or "").lower()))
-
-        # Hotel tokens take priority so "boutique hotel" doesn't land in attractions
         single_hotel = {w for w in _HOTEL_VERTICAL_CONCEPTS if " " not in w}
         if q_tokens & single_hotel:
             return "hotels"
 
+        # Attraction intent (INTENT_ATTRACTIONS) takes precedence over token check for
+        # attractions — the intent already indicates the user wants attraction-type places.
+        if intent in _ATTRACTION_INTENTS:
+            return "attractions"
+
         single_attraction = {w for w in _ATTRACTION_VERTICAL_CONCEPTS if " " not in w}
         if q_tokens & single_attraction:
             return "attractions"
+
+        if intent in _RESTAURANT_INTENTS or intent == INTENT_NIGHTLIFE:
+            return "restaurants"
 
         # Fall through to frame concepts when query tokens are ambiguous
         if frame is not None:
@@ -854,6 +866,7 @@ class ConciergeService:
         user_query: str,
         trip: dict,
         prior_identity_keys: Optional[frozenset] = None,
+        destination_source: str = "explicit_request",
     ) -> LiveResearchResult:
         """Run live research and return normalized results, never raising.
 
@@ -921,23 +934,23 @@ class ConciergeService:
             if not destination:
                 logger.info(
                     "concierge.semantic_skip intent=%s query=%r "
-                    "semantic_skip_reason=no_destination "
-                    "open_class_place_detected=%s",
-                    intent, user_query, open_class_detected,
+                    "place_search_eligible=false eligibility_reason=no_destination "
+                    "destination_source=%s open_class_place_detected=%s",
+                    intent, user_query, destination_source, open_class_detected,
                 )
             elif not semantic_eligible:
                 skip_reason = (
                     "non_place_intent"
                     if intent in _SEMANTIC_PLACE_SEARCH_BLOCKLIST
+                    else "open_class_not_detected" if intent == INTENT_GENERAL
                     else "intent_not_eligible"
                 )
                 logger.info(
                     "concierge.semantic_skip intent=%s query=%r destination=%r "
-                    "semantic_skip_reason=%s "
-                    "open_class_place_detected=%s",
+                    "place_search_eligible=false eligibility_reason=%s "
+                    "destination_source=%s open_class_place_detected=%s",
                     intent, user_query, destination,
-                    skip_reason,
-                    open_class_detected,
+                    skip_reason, destination_source, open_class_detected,
                 )
             else:
                 vertical = self._detect_semantic_vertical(
@@ -945,9 +958,11 @@ class ConciergeService:
                 )
                 logger.info(
                     "concierge.semantic_eligible intent=%s query=%r destination=%r "
-                    "open_class_place_detected=%s detected_vertical=%s "
-                    "place_search_eligible=true",
-                    intent, user_query, destination, open_class_detected, vertical,
+                    "place_search_eligible=true eligibility_reason=place_search_intent "
+                    "detected_vertical=%s destination_source=%s "
+                    "open_class_place_detected=%s",
+                    intent, user_query, destination, vertical, destination_source,
+                    open_class_detected,
                 )
 
         if semantic_eligible:
@@ -969,6 +984,16 @@ class ConciergeService:
                     vertical=vertical,
                 )
                 if result.restaurants or result.attractions or result.hotels:
+                    card_count = len(
+                        result.restaurants or result.attractions or result.hotels
+                    )
+                    logger.info(
+                        "concierge.semantic_card_first intent=%s query=%r "
+                        "destination=%r vertical=%s destination_source=%s "
+                        "card_count=%d semantic_card_first_path=true",
+                        intent, user_query, destination, vertical,
+                        destination_source, card_count,
+                    )
                     return result
                 # No verified cards or provider unavailable — fall through to fast_dynamic or slow
                 fallback_reason = (
@@ -979,14 +1004,17 @@ class ConciergeService:
                 logger.info(
                     "concierge.semantic_retrieval_v1: falling_through "
                     "intent=%s destination=%r query=%r vertical=%s "
-                    "fallback_reason=%s fallback_path=fast_dynamic_or_slow",
-                    intent, destination, user_query, vertical, fallback_reason,
+                    "destination_source=%s fallback_reason=%s "
+                    "fallback_path=fast_dynamic_or_slow",
+                    intent, destination, user_query, vertical,
+                    destination_source, fallback_reason,
                 )
             except Exception as exc:
                 logger.warning(
                     "concierge.semantic_retrieval_v1 failed, falling_through: %s "
-                    "fallback_reason=semantic_exception fallback_path=fast_dynamic_or_slow",
-                    exc,
+                    "destination_source=%s fallback_reason=semantic_exception "
+                    "fallback_path=fast_dynamic_or_slow",
+                    exc, destination_source,
                 )
 
         # ── Fast dynamic path ─────────────────────────────────────────────────
