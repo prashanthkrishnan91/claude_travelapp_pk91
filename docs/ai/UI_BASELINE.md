@@ -8,6 +8,57 @@ Tracks the state of the design system and UI primitive layer so future prompts a
 
 ---
 
+## Stage 3.5 Phase 2A — AI Concierge Flagship Visual Breakthrough — SHIPPED (2026-05-15)
+
+**Stage 3.5 · Wife-Wow design system — AI Concierge `/concierge` surface · Card-first flagship canvas**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/app/concierge/page.tsx` | Route replaced: was a placeholder ("AI Concierge coming soon"), now imports and renders `ConciergePage`. Server component with Metadata. |
+| `frontend/src/components/concierge/ConciergePage.tsx` | NEW. Full-page client component: editorial header (Overline "Private Travel Concierge" + Display S headline), card-first result canvas, sticky composer at bottom. Uses `Card tone="dark"` primitive for result cards. `TrustStrip sourceCount={1}` where `canShowGoogleVerifiedBadge` passes. Cards render `pickCardCategory`, `pickCardReason`, `sanitizeWhyPick`, `pickCardMeta`, map/source links from canonical `googleVerification.googleMapsUri`. All business logic reuses `cardPresentation.js` and `refinementInterpreter.js` unchanged. Refinement chips (Show only casual, Compare top 2, Find cheaper nearby / Find more like these) from existing interpreter. Empty state: 4 editorial prompt chips. Loading: "Searching · Verifying · Composing" typeset breadcrumb + spinner. Error: named constraint + "Try again" link. No add-to-day / save-to-ideas (no trip context on standalone page). `callConciergeSearch(null, query, requestId)` — tripId=null per existing API contract. |
+
+### Design contract alignment
+
+- **Dark mode surface:** `bg-ds-midnight` body (via AppShell), `Card tone="dark"` for result cards (`bg-ds-onyx border-ds-pen-stroke text-ds-text`).
+- **Tonal hierarchy (§9):** Midnight Ink body → Onyx Velvet cards and composer → Carbon Mist button backgrounds.
+- **Card-first hierarchy (§25):** No chat bubbles. User queries are silent state only. Result cards are the visual hero.
+- **Editorial composition:** Overline + Display S header. Cards use Body L name, Overline category, Body S meta. Concierge note uses Body S with Accent Subtle left-border.
+- **Sticky composer:** `position: sticky; bottom: 0` within the main scroll context. Textarea with resize-on-content. 44×44px minimum send button with accent gold background.
+- **Loading state (§11):** "Searching · Verifying · Composing" typeset breadcrumb — honest static treatment (no fake stage progression since pipeline timing not exposed to frontend).
+- **Empty state (§11):** Editorial invitation with 4 themed prompt chips. Not "Ask me anything."
+- **Error state (§11):** Named constraint message (`text-ds-warning`) + "Try again" retry action.
+- **Trust strip (§23):** `TrustStrip sourceCount={1}` only when `canShowGoogleVerifiedBadge` passes (OPERATIONAL + high/medium confidence + providerPlaceId). `verified` prop never set (OPERATIONAL status not separately confirmed as a standalone boolean).
+- **Token alignment:** No raw hex. No legacy `emerald-*`, `amber-*`, `cream-*`, `slate-*`, `white/` classes. All surfaces use `ds-*` Tailwind utilities or `var(--ds-*)` inline styles.
+- **Spacing:** All padding/margin/gap via `var(--ds-space-*)` CSS variables.
+- **Typography:** All font-size/line-height via `var(--ds-type-*-size)` / `var(--ds-type-*-leading)` CSS variables.
+- **Accessibility:** All interactive elements have `focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2`. `aria-label` on map/source links. `role="status"` on loading state. `role="alert"` on error state. `aria-live="polite"` on result canvas.
+- **Mobile:** Composer `position: sticky; bottom: 0` — always visible on scroll. Textarea auto-resizes. Touch target ≥44px on all interactive elements.
+- **Motion:** `card-lift` for card hover (120ms/200ms via existing motion tokens). `transition-colors duration-[120ms]` on buttons. `animate-spin` on Loader2 icons. No transforms >400ms. No typewriter, no glow, no parallax.
+- **Reduced-motion:** Global `@media (prefers-reduced-motion: reduce)` rule governs all transitions (Phase 0).
+
+### Invariant confirmations
+
+- No provider, search, API, Tavily, backend, or SQL files changed.
+- No new dependencies added.
+- No route rewrites — `/concierge` route preserved.
+- `AIConciergePanel.tsx` unchanged — trip-panel add/save behavior fully preserved.
+- `lib/concierge/cardPresentation.js`, `refinementInterpreter.js`, `types.ts`, `priceFormatter.js` unchanged.
+- `lib/api.ts` unchanged — `callConciergeSearch(null, ...)` pre-existing API contract.
+- All card action handlers, addability gate, verification gate, map/source link derivation preserved from existing library functions.
+- No add-to-day / save-to-ideas on standalone page — these require a `tripId` and belong to the trip-panel flow. Discovery surface only.
+
+### Visual tradeoffs for later phases
+
+- Standalone page has no add-to-trip/save-to-ideas (requires trip context). To add a found place to a trip, user navigates to My Trips and uses the AI Concierge panel there.
+- Conversation history: standalone page maintains session state in component state only (no persistence). Persistent history requires a tripId. This is the correct scope boundary.
+- No left conversation rail (Design Bible §25): standalone page uses a simpler header-only layout. The rail is scoped to the trip-panel variant and can be added in a future Phase 2B when trip context is present.
+- `concierge` is not yet in the sidebar nav (scope of this slice is the page surface only).
+- Area comparison table from AIConciergePanel not ported — this is a trip-specific feature and complex to slot correctly without a trip context.
+
+---
+
 ## Stage 3.5 Phase 1C — Saved Ideas Paper/Scrapbook Adoption — SHIPPED (2026-05-15)
 
 **Stage 3.5 · Wife-Wow design system — Saved Ideas `/saved` surface · Paper/scrapbook warm-paper tone**
