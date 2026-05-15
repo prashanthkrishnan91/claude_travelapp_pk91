@@ -69,6 +69,8 @@ PR usage notes in the PR body are not sufficient for workflow audits — they ar
 | 2026-05-14 | #373 | initial | initial | n/a | design-system-foundation | session_011UyHNpGEMaT2rAEjcLYsZY | claude-sonnet-4-6 | same-chat | manual | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | necessary-follow-up | anchor reads (HANDOFF/ROADMAP/BUILD_QUEUE/Design Bible addendum/globals.css/package.json/tsconfig); 6 file writes (globals.css token block + @theme wiring + reduced-motion, tailwind.config.ts, Card.tsx, TrustStrip.tsx, UI_BASELINE.md, HANDOFF.md) | 2 | PDF unreadable at read time — flag and ask for token values rather than inferring from existing code; run tsc locally before push to catch polymorphic element type errors |
 | 2026-05-14 | #373 | patch-1 | follow-up | #373 | design-system-foundation | session_011UyHNpGEMaT2rAEjcLYsZY | claude-sonnet-4-6 | same-chat | manual | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | necessary-follow-up | Vercel build logs read; 1-line fix (HTMLAttributes<HTMLDivElement> → HTMLAttributes<HTMLElement> to resolve LiHTMLAttributes incompatibility on polymorphic as prop) | 0 | tsc locally before push catches polymorphic element attr conflicts; HTMLElement is the safe base type |
 | 2026-05-14 | #373 | patch-2 | follow-up | #373 | design-system-foundation | session_011UyHNpGEMaT2rAEjcLYsZY | claude-sonnet-4-6 | same-chat | manual | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | preventable-follow-up | 4-file token-value correction (all --ds-* to Bible §4 exact hex); replace legacy palette classes (dark-*, cream-*, emerald-*, amber-*) with ds-* utilities in Card.tsx and TrustStrip.tsx; UI_BASELINE.md table corrected | 0 | read Design Bible PDF before writing tokens; if PDF unreadable flag it — do not infer palette values from pre-existing legacy code |
+| 2026-05-15 | #376 | initial | initial | n/a | workflow/scripts,docs,ci | unknown | claude-sonnet-4-6 | new-chat | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | none | anchor reads (CLAUDE.md, certify, PR template, usage tracking, prompt docs, MISS_LEDGER, hooks); ai_pr_readiness_check.py + CI workflow + hook + command + doc updates | 0 | structural enforcement in scripts/CI removes prompt-level workflow repetition |
+| 2026-05-15 | #376 | patch-1 | follow-up | #376 | workflow/scripts,docs,ci | unknown | claude-sonnet-4-6 | same-chat | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | none | checker fixes (USAGE_CLAIM_RE expansion, JSON mode, env-template exemption, runtime exemption); CLAUDE.md guardrail restoration; dangerous-action scaffold (doc + hook + certify) | 1 | expand USAGE_CLAIM_RE before first CI run; test checker against actual PR body wording before pushing |
 
 ## Per-prompt delta workflow
 
@@ -88,14 +90,6 @@ bash scripts/ai/usage_snapshot.sh --save-baseline before-patch1
 bash scripts/ai/usage_snapshot.sh --pr 124 --prompt-id patch-1 --phase follow-up \
   --linked-pr 123 --delta-from-baseline .ai/usage/baseline-before-patch1.json \
   --waste-classification preventable-follow-up --append-ledger
-
-# c) Same-chat second PR delta
-bash scripts/ai/usage_snapshot.sh --save-baseline before-pr-125-same-chat
-# ... more Claude work in same session ...
-bash scripts/ai/usage_snapshot.sh --pr 125 --prompt-id initial --phase initial \
-  --chat-strategy same-chat \
-  --delta-from-baseline .ai/usage/baseline-before-pr-125-same-chat.json \
-  --append-ledger
 ```
 
 If ccusage is unavailable, delta fields show `unavailable` — that is acceptable.

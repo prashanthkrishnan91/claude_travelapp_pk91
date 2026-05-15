@@ -1,0 +1,21 @@
+name: AI PR Readiness Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  ai-pr-readiness:
+    name: AI PR Readiness Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run AI PR readiness checker
+        run: |
+          python3 scripts/workflow/ai_pr_readiness_check.py \
+            --github-event-path "$GITHUB_EVENT_PATH" \
+            --base-ref "origin/main"

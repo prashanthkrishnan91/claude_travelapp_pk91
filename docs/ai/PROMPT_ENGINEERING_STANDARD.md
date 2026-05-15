@@ -40,7 +40,7 @@ When to stop instead of expanding scope.
 - `<runtime_evidence>` — Railway / provider / cache / route evidence.
 - `<ui_budget>` — phase, max files, primary surfaces, forbidden surfaces (only for UI work).
 - `<sql_manual_actions>` — when SQL or manual deploy/Supabase actions are required.
-- `<examples>` — only when they reduce ambiguity (expected JSON shape, accepted/rejected claim example, before/after card behavior).
+- `<examples>` — only when they reduce ambiguity.
 
 ## What this standard explicitly removes
 
@@ -54,8 +54,6 @@ A prompt is **not required** to include and should usually omit:
 - exhaustive read-first file lists (read anchors only)
 - severity ladder explanation (ISSUE_SEVERITY_ROUTING.md owns it)
 - learning protocol prose (OS_LEARNING_PROTOCOL.md owns it)
-
-If any of those genuinely apply to the slice, name the relevant doc — do not paste it.
 
 ## Safe for blind copy/paste — redefined
 
@@ -73,67 +71,6 @@ A prompt is safe for blind copy/paste when it is:
 - A longer prompt must justify why the repeated context cannot be moved into a safety pack, archetype, or repo-native doc.
 - A prompt that is mostly repeated workflow/process language **fails the gate** and must be rewritten.
 
-## Examples
-
-### Bad (bloated) prompt pattern
-
-```
-Repo: <repo>
-Roadmap stage: <stage>
-Build queue item: <item>
-Source-of-truth files: <12 files>
-[full feature contract template]
-[full success criteria template]
-[full golden scenarios block]
-[paste of all OS skills]
-[paste of all reviewer agents]
-[paste of all repo invariants — Google Places canonical, enrichment-only providers, no keyword patching, AI Concierge card fields, no mock/sample data, latency rules ...]
-[paste of all do-nots — no fabricated cards, no fake notes, no deterministic fallback notes ...]
-[paste of full PR summary template]
-[paste of full tool-failure taxonomy]
-[paste of full validation expectations]
-```
-
-Result: ~3,000 words, prompt is mostly repeated rules, Claude over-guards and produces a tiny patch.
-
-### Good (compressed) prompt pattern
-
-```
-<task_delta>
-Fix Concierge card whyPick alignment so display.displayWhy, supportingDetails.whyPick, and top-level whyPick stay in sync after enrichment merge. Backend-only.
-</task_delta>
-
-<repo_context>
-Roadmap: Stage 2 / build queue: "concierge whyPick alignment". See docs/product/BUILD_QUEUE.md.
-</repo_context>
-
-<safety_packs>
-AI Concierge Card Contract Pack, Enrichment Evidence Only Pack, No Mock/Sample Visible Data Pack, Test Tier Pack.
-</safety_packs>
-
-<build_archetype>
-capability-slice
-</build_archetype>
-
-<acceptance_evidence>
-Tier 1 AI Concierge card contract bundle green (backend + frontend). Snapshot shows aligned fields. No visible UI copy change.
-</acceptance_evidence>
-
-<stop_condition>
-Do not change addable-card source authority. Do not introduce a new provider. If alignment requires schema change, stop and propose a contract-consolidation slice.
-</stop_condition>
-```
-
-Result: ~170 words, every line carries the task delta, packs and archetype carry the rest.
-
-### When a longer prompt is justified
-
-- A Sev 1 runtime bug that requires Railway log excerpts and provider response evidence inline.
-- A migration with manual-action steps that must be inline in the prompt.
-- A first-time pipeline seam where the contract must be sketched in the prompt because no contract doc exists yet.
-
-In these cases the **extra** content is data/evidence, not repeated workflow rules.
-
 ## Coverage-first review prompts
 
 For audits / reviews:
@@ -150,4 +87,14 @@ For Level 2/3 features, produce or verify the feature contract and capability-sl
 
 ## Travel-specific prompt note
 
-When a slice touches addable cards, enrichment, semantic Concierge behavior, AI Concierge card fields, mock/sample data, or latency, name the relevant safety pack(s) from `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section). The pack owns the rules — the prompt does not need to re-state "Google Places canonical", "Yelp/Foursquare enrichment only", "no keyword patching", "card fields aligned", "no visible mock/sample", or "latency budget matters".
+When a slice touches addable cards, enrichment, semantic Concierge behavior, AI Concierge card fields, mock/sample data, or latency, name the relevant safety pack(s) from `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section). The pack owns the rules — the prompt does not need to re-state them.
+
+## Required usage footer for non-trivial prompts
+
+Add this block verbatim at the end of any non-trivial Travel implementation prompt:
+
+```
+Usage ledger: If tooling exists, save a baseline before work; before opening/updating the PR, append one sanitized row to docs/ai/USAGE_LEDGER.md with the actual PR number if available, prompt ID, phase, model, chat strategy, repo area, main drivers, waste classification, follow-up count, and delta fields when available. If tooling is unavailable, still append a manual row with those metadata fields and mark token/delta fields unavailable. Do not claim usage is tracked unless docs/ai/USAGE_LEDGER.md is actually changed in the PR. Keep raw .ai/usage files uncommitted.
+
+Usage discipline: Keep discovery narrow; do not run broad repo scans, parallel agents, or full suites unless focused validation fails or this prompt explicitly asks for them.
+```

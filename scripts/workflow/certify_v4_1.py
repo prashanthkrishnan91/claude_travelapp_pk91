@@ -13,6 +13,10 @@ REQUIRED_ANCHOR_FILES = [
     "docs/ai/AI_REPO_OPERATING_SYSTEM.md",
     ".claude/settings.json",
     "docs/ai/USAGE_LEDGER.md",
+    "scripts/workflow/ai_pr_readiness_check.py",
+    ".github/workflows/ai-pr-readiness.yml",
+    "docs/ai/DANGEROUS_ACTION_GUARD.md",
+    ".claude/hooks/dangerous_action_guard.sh",
 ]
 
 PR_TEMPLATE_ANCHORS = [
@@ -20,14 +24,15 @@ PR_TEMPLATE_ANCHORS = [
     "## Severity",
     "## Validation",
     "## AI usage note",
+    "## AI PR readiness",
     "## Self-audit",
-    "Usage ledger updated",
+    "Usage ledger row",
     "Waste classification",
 ]
 
 SELF_AUDIT_ANCHORS = [
     "Repository PR template used exactly: Yes/No",
-    "Scope stayed workflow-only (no product code): Yes/No",
+    "Scope stayed within requested files/behavior: Yes/No",
 ]
 
 USAGE_LEDGER_ANCHORS = [
@@ -43,6 +48,20 @@ SNAPSHOT_SCRIPT_ANCHORS = [
     "--prompt-id",
     "--phase",
     "--delta-from-baseline",
+]
+
+PROMPT_USAGE_FOOTER_ANCHORS = [
+    "Usage ledger: If tooling exists",
+    "Usage discipline: Keep discovery narrow",
+]
+
+CLAUDE_MD_READINESS_ANCHORS = [
+    "ai_pr_readiness_check.py",
+]
+
+USAGE_TRACKING_ENFORCEMENT_ANCHORS = [
+    "Ledger claim enforcement",
+    "ai_pr_readiness_check.py",
 ]
 
 
@@ -113,6 +132,7 @@ def check_usage_tracking_documents_ledger() -> None:
     text = read_text(tracking_path)
     if "USAGE_LEDGER.md" not in text:
         raise AssertionError("docs/ai/AI_USAGE_TRACKING.md does not document USAGE_LEDGER.md")
+    assert_anchors(text, USAGE_TRACKING_ENFORCEMENT_ANCHORS, "AI_USAGE_TRACKING.md enforcement")
 
 
 def check_snapshot_script_references_ledger() -> None:
@@ -140,6 +160,48 @@ def check_gitignore_excludes_ai_usage() -> None:
         raise AssertionError(".gitignore does not exclude .ai/usage/ (raw snapshots must remain local)")
 
 
+def check_claude_md_references_readiness_checker() -> None:
+    claude_path = ROOT / "CLAUDE.md"
+    if not claude_path.exists():
+        raise AssertionError("CLAUDE.md is missing")
+    text = read_text(claude_path)
+    assert_anchors(text, CLAUDE_MD_READINESS_ANCHORS, "CLAUDE.md readiness checker reference")
+
+
+def check_prompt_standard_usage_footer() -> None:
+    for path_str in ["docs/ai/PROMPT_ENGINEERING_STANDARD.md", "docs/ai/PROMPT_LIBRARY.md"]:
+        path = ROOT / path_str
+        if not path.exists():
+            continue
+        text = read_text(path)
+        missing = [a for a in PROMPT_USAGE_FOOTER_ANCHORS if a not in text]
+        if missing:
+            raise AssertionError(
+                f"{path_str} missing required usage footer anchor(s): {', '.join(missing)}"
+            )
+
+
+def check_readiness_hook_or_doc() -> None:
+    hook = ROOT / ".claude/hooks/ai_pr_readiness_stop.sh"
+    gate_doc = ROOT / "docs/ai/AI_PR_READINESS_GATE.md"
+    if not hook.exists() and not gate_doc.exists():
+        raise AssertionError(
+            "Neither .claude/hooks/ai_pr_readiness_stop.sh nor docs/ai/AI_PR_READINESS_GATE.md found."
+        )
+
+
+def check_dangerous_action_guard() -> None:
+    guard_doc = ROOT / "docs/ai/DANGEROUS_ACTION_GUARD.md"
+    guard_hook = ROOT / ".claude/hooks/dangerous_action_guard.sh"
+    if not guard_doc.exists():
+        raise AssertionError("docs/ai/DANGEROUS_ACTION_GUARD.md missing")
+    if not guard_hook.exists():
+        raise AssertionError(".claude/hooks/dangerous_action_guard.sh missing")
+    hook_text = read_text(guard_hook)
+    if "DANGEROUS_ACTION_GUARD" not in hook_text:
+        raise AssertionError("dangerous_action_guard.sh does not reference DANGEROUS_ACTION_GUARD env var")
+
+
 def main() -> int:
     for file_path in REQUIRED_ANCHOR_FILES:
         assert_file_exists(file_path)
@@ -154,6 +216,10 @@ def main() -> int:
     check_snapshot_script_references_ledger()
     check_usage_ledger_columns()
     check_gitignore_excludes_ai_usage()
+    check_claude_md_references_readiness_checker()
+    check_prompt_standard_usage_footer()
+    check_readiness_hook_or_doc()
+    check_dangerous_action_guard()
 
     print("✅ Travel workflow certification v4.1 checks passed (lightweight, structural, workflow-only).")
     return 0
