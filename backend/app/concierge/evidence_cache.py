@@ -110,6 +110,38 @@ _EDITORIAL_WORTHY_GEO: frozenset = frozenset({
 # Kept deliberately tight: only true superlatives that signal ranking/discovery intent.
 _QUALITATIVE_RANKING_RE = re.compile(r"\b(?:best|top)\b", re.I)
 
+# Broad commodity parent categories — the plainest, most generic place-type
+# labels that require no editorial curation to discover. These are the labels
+# the frame extractor produces for undifferentiated asks like "bars",
+# "restaurants", "coffee shops". Any concept label NOT in this set is
+# considered a specific discovery subtype and is editorial-eligible.
+#
+# Rule: only add labels that are genuine top-level commodity parents with no
+# inherent discovery/curation dimension. Never add subtype concepts here.
+_BROAD_COMMODITY_CONCEPTS: frozenset = frozenset({
+    "bar", "bars",
+    "restaurant", "restaurants",
+    "cafe", "cafes", "coffee", "coffee shop", "coffee shops",
+    "hotel", "hotels",
+    "place", "places",
+    "venue", "venues",
+    "food", "drink", "drinks",
+    "dining",
+    "nightlife",
+    "shop", "shops", "store", "stores",
+})
+
+
+def _is_broad_commodity_concept(label: str) -> bool:
+    """Return True if the concept label is a broad commodity parent category.
+
+    Broad commodity categories are undifferentiated parent types (bar,
+    restaurant, cafe) that Google + Yelp cover without editorial curation.
+    Any label NOT in this set is treated as a specific discovery subtype
+    that benefits from editorial context.
+    """
+    return (label or "").strip().lower() in _BROAD_COMMODITY_CONCEPTS
+
 
 def should_run_editorial(frame: Any) -> tuple:
     """Decide whether Tavily/editorial enrichment is likely to add value.
@@ -166,7 +198,18 @@ def should_run_editorial(frame: Any) -> tuple:
     if literal_ask and _QUALITATIVE_RANKING_RE.search(literal_ask):
         return True, "qualitative_ranking_intent"
 
-    # Simple category search with no discovery modifiers — Google/Yelp is
+    # Specific discovery subtype — the primary concept is narrower than a broad
+    # commodity parent category. A specific subtype (e.g. a niche bar style,
+    # a cuisine variant, a concept-driven dining format) carries inherent
+    # discovery value that editorial sources can enrich, even without explicit
+    # preferences or geo signals. Broad commodity parents (bar, restaurant,
+    # cafe) are skipped because Google + Yelp cover them without curation.
+    if subtype_concepts:
+        primary_label = getattr(subtype_concepts[0], "label", "") or ""
+        if primary_label and not _is_broad_commodity_concept(primary_label):
+            return True, "specific_discovery_subtype"
+
+    # Simple broad-category search with no discovery modifiers — Google/Yelp is
     # sufficient and Tavily adds minimal marginal value.
     if not geo_hints and not loc_mods and not normalized_prefs:
         return False, "low_editorial_value_simple_category"
