@@ -72,23 +72,21 @@ export function Sidebar() {
   const display = user ? getUserDisplay(user) : null;
 
   return (
-    <aside className="hidden lg:flex lg:flex-col w-64 glass border-r border-white/[.07] min-h-screen shadow-[1px_0_0_0_rgba(0,0,0,0.3)]">
+    <aside className="hidden lg:flex lg:flex-col w-64 bg-ds-onyx border-r border-ds-pen-stroke min-h-screen">
       {/* Brand */}
-      <div className="flex items-center gap-2.5 px-5 py-5 border-b border-white/[.06]">
-        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-brand-500 text-dark-50">
-          <Plane className="w-5 h-5" />
+      <div className="flex items-center gap-2.5 px-5 py-5 border-b border-ds-pen-stroke">
+        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-carbon text-ds-accent">
+          <Plane className="w-4 h-4" />
         </div>
         <div>
-          <p className="text-sm font-bold text-cream-100 leading-tight">Travel Concierge</p>
-          <p className="text-xs text-cream-500">Trip Planner</p>
+          <p className="text-sm font-semibold text-ds-text leading-tight">Travel Concierge</p>
+          <p className="text-xs text-ds-text-tertiary">Trip Planner</p>
         </div>
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5">
-        <p className="px-3 mb-2 text-xs font-semibold uppercase tracking-widest text-cream-500">
-          Planning
-        </p>
+        <p className="nav-section-label px-3 mb-2">Planning</p>
         {primaryLinks.map(({ label, href, icon: Icon }) => (
           <Link
             key={href}
@@ -101,9 +99,7 @@ export function Sidebar() {
         ))}
 
         <div className="pt-4">
-          <p className="px-3 mb-2 text-xs font-semibold uppercase tracking-widest text-cream-500">
-            Account
-          </p>
+          <p className="nav-section-label px-3 mb-2">Account</p>
           {secondaryLinks.map(({ label, href, icon: Icon }) => (
             <Link
               key={href}
@@ -118,21 +114,21 @@ export function Sidebar() {
       </nav>
 
       {/* Footer / User */}
-      <div className="px-4 py-4 border-t border-white/[.06] space-y-1">
-        <div className="flex items-center gap-3 rounded-xl px-2 py-2">
-          <div className="w-8 h-8 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center text-sm font-semibold shrink-0">
+      <div className="px-4 py-4 border-t border-ds-pen-stroke space-y-1">
+        <div className="flex items-center gap-3 rounded-lg px-2 py-2">
+          <div className="w-8 h-8 rounded-full bg-ds-carbon text-ds-accent flex items-center justify-center text-sm font-semibold shrink-0">
             {display?.initial ?? "?"}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-cream-200 truncate">{display?.name ?? "…"}</p>
+            <p className="text-sm font-medium text-ds-text truncate">{display?.name ?? "…"}</p>
             {display?.sub && display.sub !== display.name && (
-              <p className="text-xs text-cream-500 truncate">{display.sub}</p>
+              <p className="text-xs text-ds-text-tertiary truncate">{display.sub}</p>
             )}
           </div>
         </div>
         <button
           onClick={handleSignOut}
-          className="nav-item w-full text-cream-500 hover:text-rose-300"
+          className="nav-item w-full text-ds-text-tertiary hover:text-ds-warning"
           aria-label="Sign out"
         >
           <LogOut className="w-4 h-4 shrink-0" />
