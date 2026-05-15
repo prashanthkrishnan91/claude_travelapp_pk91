@@ -403,11 +403,11 @@ function ConciergeResultCard({
 // ─── Editorial prompt chips for empty state ───────────────────────────────────
 
 const EDITORIAL_PROMPTS = [
-  "Best cocktail bars in Tokyo",
-  "Michelin dining in Paris",
-  "Hidden gems in Lisbon",
-  "Romantic restaurants in New York",
-];
+  { label: "Best cocktail bars in Tokyo", query: "Best cocktail bars", destination: "Tokyo" },
+  { label: "Michelin dining in Paris", query: "Michelin dining", destination: "Paris" },
+  { label: "Hidden gems in Lisbon", query: "Hidden gems", destination: "Lisbon" },
+  { label: "Romantic restaurants in New York", query: "Romantic restaurants", destination: "New York" },
+] as const;
 
 // ─── Main ConciergePage ───────────────────────────────────────────────────────
 
@@ -416,6 +416,8 @@ export function ConciergePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState("");
+  const [destination, setDestination] = useState("");
+  const [destinationError, setDestinationError] = useState(false);
   const [lastQuery, setLastQuery] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -489,8 +491,14 @@ export function ConciergePage() {
     ];
   }
 
-  async function sendQuery(query: string) {
+  async function sendQuery(query: string, destOverride?: string) {
     if (!query.trim() || loading) return;
+    const effectiveDest = (destOverride ?? destination).trim();
+    if (!effectiveDest) {
+      setDestinationError(true);
+      return;
+    }
+    setDestinationError(false);
     const requestId =
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
@@ -501,7 +509,7 @@ export function ConciergePage() {
     setMessages((prev) => [...prev, { role: "user", text: query.trim() }]);
     setLoading(true);
     try {
-      const result = await callConciergeSearch(null, query.trim(), requestId);
+      const result = await callConciergeSearch(null, query.trim(), requestId, effectiveDest);
       setMessages((prev) => [...prev, fromSearchResult(result)]);
     } catch (err) {
       console.error("[concierge-page] search failed", err);
@@ -514,15 +522,15 @@ export function ConciergePage() {
     }
   }
 
-  async function handleUserInput(query: string) {
+  async function handleUserInput(query: string, destOverride?: string) {
     const q = query.trim();
     if (!q || loading) return;
     const latestCardMsg = getLatestCardMessage(messages);
     if (latestCardMsg && !looksLikeFreshSearch(q)) {
       const handled = await handleRefinement(q, latestCardMsg);
-      if (!handled) await sendQuery(q);
+      if (!handled) await sendQuery(q, destOverride);
     } else {
-      await sendQuery(q);
+      await sendQuery(q, destOverride);
     }
   }
 
@@ -601,7 +609,7 @@ export function ConciergePage() {
           typeof crypto !== "undefined" && "randomUUID" in crypto
             ? crypto.randomUUID()
             : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-        const result = await callConciergeSearch(null, contextualQuery, requestId);
+        const result = await callConciergeSearch(null, contextualQuery, requestId, destination.trim() || undefined);
         const deduped = dedupeCardsAgainstCurrentSet(
           fromSearchResult(result),
           currentVisibleCards,
@@ -664,7 +672,7 @@ export function ConciergePage() {
           typeof crypto !== "undefined" && "randomUUID" in crypto
             ? crypto.randomUUID()
             : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-        const result = await callConciergeSearch(null, contextualQuery, requestId);
+        const result = await callConciergeSearch(null, contextualQuery, requestId, destination.trim() || undefined);
         setMessages((prev) => [...prev, fromSearchResult(result)]);
       } catch (err) {
         console.error("[concierge-page] refinement fallback failed", err);
@@ -756,9 +764,13 @@ export function ConciergePage() {
             <div className="flex flex-wrap gap-2 justify-center">
               {EDITORIAL_PROMPTS.map((prompt) => (
                 <button
-                  key={prompt}
+                  key={prompt.label}
                   type="button"
-                  onClick={() => handleUserInput(prompt)}
+                  onClick={() => {
+                    setDestination(prompt.destination);
+                    setDestinationError(false);
+                    void handleUserInput(prompt.query, prompt.destination);
+                  }}
                   className="rounded-lg bg-ds-carbon text-ds-text-secondary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   style={{
                     padding: "var(--ds-space-2) var(--ds-space-4)",
@@ -767,7 +779,7 @@ export function ConciergePage() {
                     border: "1px solid var(--ds-pen-stroke)",
                   }}
                 >
-                  {prompt}
+                  {prompt.label}
                 </button>
               ))}
             </div>
@@ -1109,11 +1121,65 @@ export function ConciergePage() {
           </div>
         )}
 
+        {/* Destination field */}
+        <div
+          style={{
+            padding: "var(--ds-space-3) var(--ds-space-4) 0 var(--ds-space-4)",
+          }}
+        >
+          <label htmlFor="concierge-destination" className="sr-only">
+            Destination
+          </label>
+          <div
+            className="flex items-center gap-2 rounded-xl bg-ds-carbon transition-colors duration-[120ms]"
+            style={{
+              border: destinationError
+                ? "1px solid var(--ds-warning)"
+                : "1px solid var(--ds-pen-stroke)",
+              padding: "var(--ds-space-2) var(--ds-space-4)",
+              minHeight: "44px",
+            }}
+          >
+            <MapPin
+              className="h-3.5 w-3.5 shrink-0 text-ds-accent"
+              aria-hidden="true"
+            />
+            <input
+              id="concierge-destination"
+              type="text"
+              value={destination}
+              onChange={(e) => {
+                setDestination(e.target.value);
+                if (destinationError && e.target.value.trim()) setDestinationError(false);
+              }}
+              placeholder="Tokyo, Paris, Barcelona…"
+              disabled={loading}
+              className="flex-1 bg-transparent text-ds-text placeholder:text-ds-text-tertiary focus-visible:outline-none disabled:opacity-50"
+              style={{
+                fontSize: "var(--ds-type-body-size)",
+                lineHeight: "var(--ds-type-body-leading)",
+              }}
+            />
+          </div>
+          {destinationError && (
+            <p
+              className="text-ds-text-secondary"
+              style={{
+                fontSize: "var(--ds-type-caption-size)",
+                lineHeight: "var(--ds-type-caption-leading)",
+                marginTop: "var(--ds-space-2)",
+              }}
+            >
+              Add a destination so the concierge knows where to search.
+            </p>
+          )}
+        </div>
+
         {/* Input row */}
         <div
           className="flex items-end gap-3"
           style={{
-            padding: "var(--ds-space-4)",
+            padding: "var(--ds-space-3) var(--ds-space-4) var(--ds-space-4)",
           }}
         >
           <textarea

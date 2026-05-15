@@ -154,6 +154,47 @@ test("AIConciergePanel still uses isRenderableVerifiedPlace gate", () => {
   );
 });
 
+// ── Destination required for standalone searches ──────────────────────────────
+
+test("ConciergePage passes destination as 4th arg to callConciergeSearch", () => {
+  assert.ok(
+    conciergePage.includes(", effectiveDest)") ||
+      conciergePage.includes(", destination.trim()"),
+    "callConciergeSearch in ConciergePage must pass destination as 4th argument",
+  );
+});
+
+test("ConciergePage blocks search when destination is empty", () => {
+  assert.ok(
+    conciergePage.includes("setDestinationError(true)"),
+    "ConciergePage must call setDestinationError(true) to block submit when destination is empty",
+  );
+});
+
+test("ConciergePage shows inline destination validation message", () => {
+  assert.ok(
+    conciergePage.includes(
+      "Add a destination so the concierge knows where to search",
+    ),
+    "ConciergePage must show the specified inline destination validation message",
+  );
+});
+
+test("Editorial chips include explicit destination field", () => {
+  assert.ok(
+    conciergePage.includes('destination: "Tokyo"') ||
+      conciergePage.includes("destination: 'Tokyo'"),
+    "EDITORIAL_PROMPTS must include destination field (e.g., 'Tokyo')",
+  );
+});
+
+test("Editorial chip handler sets destination before search", () => {
+  assert.ok(
+    conciergePage.includes("setDestination(prompt.destination)"),
+    "Editorial chip onClick must call setDestination with the prompt destination",
+  );
+});
+
 // ── ConciergePage does not render chatbot/debug patterns ─────────────────────
 
 test("ConciergePage has no chatbot avatar or typing dots", () => {
