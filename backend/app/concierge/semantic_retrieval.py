@@ -1036,6 +1036,58 @@ def _run_pipeline(
             set_writer_tel = {"set_writer_fallback_to_existing_path": True}
     latency["set_writer_ms"] = int((time.monotonic() - t0) * 1000)
 
+    # ── Step 5.8.1: Partial note cache merge ─────────────────────────────────
+    # Overlay approved cached notes for cards that the LLM writer did not cover
+    # (partial cache hit + LLM timeout, or partial hit + LLM produced 0 notes).
+    # Only place IDs that have NO validated note in set_writer_result receive a
+    # cached note. LLM-validated notes are never overwritten by cache.
+    # Cards with no cached entry and no LLM note remain note-less — no generic
+    # fallback is created.
+    if _cached_notes:
+        if set_writer_result is None:
+            # Writer was skipped (budget/exception) but we have some cached notes.
+            set_writer_result = make_cached_note_result(
+                curated_result=curated_result,
+                cached_notes=_cached_notes,
+                first_card_limit=first_card_limit,
+            )
+            set_writer_tel["set_writer_fallback_to_existing_path"] = False
+            set_writer_tel["source"] = "note_cache_partial"
+        else:
+            # Writer ran (or timed out): overlay cached notes for uncovered cards.
+            from app.concierge.set_level_writer import SetWriterNote
+            _cache_overlaid = 0
+            for _pid, _cached_text in _cached_notes.items():
+                _existing = set_writer_result.notes_by_place_id.get(_pid)
+                if _existing is None or not _existing.validated:
+                    set_writer_result.notes_by_place_id[_pid] = SetWriterNote(
+                        place_id=_pid,
+                        note=_cached_text,
+                        validated=True,
+                        rejection_reason="",
+                        source="note_cache",
+                        role_used_internal="",
+                        evidence_terms_used=[],
+                        caveat_type="",
+                    )
+                    _cache_overlaid += 1
+            if _cache_overlaid > 0:
+                _merged_visible = sum(
+                    1 for n in set_writer_result.notes_by_place_id.values() if n.validated
+                )
+                _merged_hidden = sum(
+                    1 for n in set_writer_result.notes_by_place_id.values() if not n.validated
+                )
+                set_writer_result.visible_note_count = _merged_visible
+                set_writer_result.hidden_note_count = _merged_hidden
+                if _merged_visible > 0:
+                    set_writer_result.timed_out = False
+                logger.info(
+                    "semantic_retrieval_v1: partial_note_cache_merge "
+                    "overlaid=%d total_visible=%d fingerprint=%s query=%r",
+                    _cache_overlaid, _merged_visible, evidence_fingerprint, user_query,
+                )
+
     # ── Step 6: Evidence bundles + deterministic SafeReasonBuilder ───────────
     t0 = time.monotonic()
     from app.concierge.safe_reason_builder import build_safe_reason

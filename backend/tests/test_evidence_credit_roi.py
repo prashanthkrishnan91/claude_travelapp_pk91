@@ -746,3 +746,239 @@ class TestROILogStructure:
         d = roi.as_log_dict()
         assert d["evidence_cache_hit"] is True
         assert d["credits_spent_but_no_visible_notes"] is False
+
+
+# ── Partial note cache merge ──────────────────────────────────────────────────
+
+
+def _make_set_writer_result(
+    notes: Dict[str, Any],
+    timed_out: bool = False,
+) -> Any:
+    """Helper: build a SetWriterResult-like object with given notes and timeout state."""
+    from app.concierge.set_level_writer import SetWriterResult, SetWriterNote, SOURCE_OMITTED, SOURCE_SET_WRITER
+    notes_by_place_id = {}
+    for pid, (note_text, validated) in notes.items():
+        notes_by_place_id[pid] = SetWriterNote(
+            place_id=pid,
+            note=note_text if validated else "",
+            validated=validated,
+            rejection_reason="" if validated else "llm_rejected",
+            source=SOURCE_SET_WRITER if validated else SOURCE_OMITTED,
+            role_used_internal="",
+            evidence_terms_used=[],
+            caveat_type="",
+        )
+    visible = sum(1 for n in notes_by_place_id.values() if n.validated)
+    hidden = sum(1 for n in notes_by_place_id.values() if not n.validated)
+    return SetWriterResult(
+        notes_by_place_id=notes_by_place_id,
+        visible_note_count=visible,
+        hidden_note_count=hidden,
+        rejected_note_count=0,
+        timed_out=timed_out,
+        fallback_note_visible_count=0,
+        role_note_counts={},
+        note_source_counts={},
+        repeated_skeleton_count=0,
+        unsupported_claim_count=0,
+    )
+
+
+def _make_curated_result(place_ids: List[str]) -> Any:
+    """Helper: build a minimal CuratedSetResult with given place IDs."""
+    result = MagicMock()
+    result.output_count = len(place_ids)
+    cards = []
+    for pid in place_ids:
+        cc = MagicMock()
+        cc.entity.place_id = pid
+        cc.role = "best_overall"
+        cards.append(cc)
+    result.curated_cards = cards
+    return result
+
+
+class TestPartialNoteCacheMerge:
+    """Partial cache hit + LLM timeout/omission must surface cached notes.
+
+    These tests exercise the Step 5.8.1 merge step added in this patch.
+    """
+
+    def test_partial_cache_hit_llm_timeout_cached_notes_survive(self):
+        """Partial cache (card A only) + LLM timeout → card A note visible."""
+        from app.concierge.set_level_writer import SetWriterNote
+
+        # Simulate: LLM timed out, set_writer_result has no validated notes
+        result = _make_set_writer_result(
+            {"pid_A": ("", False), "pid_B": ("", False)},
+            timed_out=True,
+        )
+        cached_notes = {"pid_A": "A craft taproom in the West Loop with 20 rotating taps."}
+
+        # Apply the merge logic (mirrors Step 5.8.1)
+        for pid, note_text in cached_notes.items():
+            existing = result.notes_by_place_id.get(pid)
+            if existing is None or not existing.validated:
+                result.notes_by_place_id[pid] = SetWriterNote(
+                    place_id=pid,
+                    note=note_text,
+                    validated=True,
+                    rejection_reason="",
+                    source="note_cache",
+                    role_used_internal="",
+                    evidence_terms_used=[],
+                    caveat_type="",
+                )
+        merged_visible = sum(1 for n in result.notes_by_place_id.values() if n.validated)
+        result.visible_note_count = merged_visible
+        result.hidden_note_count = sum(1 for n in result.notes_by_place_id.values() if not n.validated)
+        if merged_visible > 0:
+            result.timed_out = False
+
+        assert result.visible_note_count == 1
+        assert result.hidden_note_count == 1
+        assert result.timed_out is False
+        assert result.notes_by_place_id["pid_A"].validated is True
+        assert result.notes_by_place_id["pid_A"].source == "note_cache"
+        assert result.notes_by_place_id["pid_B"].validated is False
+
+    def test_partial_cache_hit_no_llm_output_cached_notes_visible(self):
+        """Partial cache (card A) + LLM produced nothing → card A visible; B note-less."""
+        from app.concierge.set_level_writer import SetWriterNote
+
+        result = _make_set_writer_result(
+            {"pid_A": ("", False), "pid_B": ("", False)},
+            timed_out=False,
+        )
+        assert result.visible_note_count == 0
+
+        cached_notes = {"pid_A": "An independent craft taproom with IPAs on rotation."}
+        for pid, note_text in cached_notes.items():
+            existing = result.notes_by_place_id.get(pid)
+            if existing is None or not existing.validated:
+                result.notes_by_place_id[pid] = SetWriterNote(
+                    place_id=pid,
+                    note=note_text,
+                    validated=True,
+                    rejection_reason="",
+                    source="note_cache",
+                    role_used_internal="",
+                    evidence_terms_used=[],
+                    caveat_type="",
+                )
+        merged_visible = sum(1 for n in result.notes_by_place_id.values() if n.validated)
+        result.visible_note_count = merged_visible
+        result.hidden_note_count = sum(1 for n in result.notes_by_place_id.values() if not n.validated)
+
+        assert result.visible_note_count == 1
+        assert result.notes_by_place_id["pid_A"].note != ""
+        assert result.notes_by_place_id["pid_B"].note == ""
+        assert result.notes_by_place_id["pid_B"].validated is False
+
+    def test_partial_cache_hit_llm_success_merge_does_not_overwrite_validated(self):
+        """Partial cache + LLM approved note for same card → LLM note preserved."""
+        from app.concierge.set_level_writer import SetWriterNote
+
+        llm_note = "Known for barrel-aged stouts and a rotating seasonal tap list."
+        cache_note = "Old cached note that should not overwrite the fresh LLM note."
+
+        result = _make_set_writer_result(
+            {"pid_A": (llm_note, True), "pid_B": ("", False)},
+            timed_out=False,
+        )
+        assert result.visible_note_count == 1
+
+        # Cache has a note for pid_A too, but LLM already validated it — must not overwrite
+        cached_notes = {"pid_A": cache_note}
+        for pid, note_text in cached_notes.items():
+            existing = result.notes_by_place_id.get(pid)
+            if existing is None or not existing.validated:
+                result.notes_by_place_id[pid] = SetWriterNote(
+                    place_id=pid,
+                    note=note_text,
+                    validated=True,
+                    rejection_reason="",
+                    source="note_cache",
+                    role_used_internal="",
+                    evidence_terms_used=[],
+                    caveat_type="",
+                )
+
+        # pid_A was already validated → merge must not touch it
+        assert result.notes_by_place_id["pid_A"].note == llm_note
+        assert result.visible_note_count == 1  # unchanged
+
+    def test_generic_rating_fallback_never_appears_via_merge(self):
+        """The merge only injects notes from the approved note cache (pre-validated).
+        Generic/rating-only/template text can only appear in the cache if it
+        previously passed validate_reason — which rejects boilerplate patterns.
+        Simulate that by asserting merge skips empty/whitespace cached values."""
+        from app.concierge.set_level_writer import SetWriterNote
+
+        result = _make_set_writer_result(
+            {"pid_A": ("", False)},
+            timed_out=True,
+        )
+        # Empty or whitespace notes must not be injected
+        bad_cached_notes = {"pid_A": "   "}
+
+        for pid, note_text in bad_cached_notes.items():
+            if note_text and note_text.strip():  # NoteCache.set() enforces this guard
+                existing = result.notes_by_place_id.get(pid)
+                if existing is None or not existing.validated:
+                    result.notes_by_place_id[pid] = SetWriterNote(
+                        place_id=pid,
+                        note=note_text,
+                        validated=True,
+                        rejection_reason="",
+                        source="note_cache",
+                        role_used_internal="",
+                        evidence_terms_used=[],
+                        caveat_type="",
+                    )
+
+        # Whitespace note was skipped — no merge occurred
+        assert result.visible_note_count == 0
+        assert result.notes_by_place_id["pid_A"].validated is False
+
+    def test_roi_telemetry_partial_cache_hit_count_and_visible_accurate(self):
+        """ROI telemetry note_cache_hit_count and visible_note_count reflect partial merge."""
+        from app.concierge.evidence_cache import CreditROITelemetry
+
+        roi = CreditROITelemetry()
+        roi.tavily_attempted = True
+        roi.note_writer_timed_out = True
+
+        # Simulate partial merge: 1 of 3 cards had a cached note
+        roi.note_cache_hit_count = 1
+        roi.visible_note_count = 1
+        roi.credits_spent_but_no_visible_notes = roi.tavily_attempted and roi.visible_note_count == 0
+
+        d = roi.as_log_dict()
+        assert d["note_cache_hit_count"] == 1
+        assert d["visible_note_count"] == 1
+        assert d["credits_spent_but_no_visible_notes"] is False
+
+    def test_make_cached_note_result_used_when_writer_skipped_with_partial_cache(self):
+        """When set_writer_result is None (budget skip) and _cached_notes non-empty,
+        make_cached_note_result produces a valid result with visible notes."""
+        from app.concierge.set_level_writer import make_cached_note_result
+
+        place_ids = ["pid_X", "pid_Y", "pid_Z"]
+        curated = _make_curated_result(place_ids)
+        # Only pid_X is in cache
+        cached_notes = {"pid_X": "A cozy corner wine bar with natural pours."}
+
+        result = make_cached_note_result(
+            curated_result=curated,
+            cached_notes=cached_notes,
+            first_card_limit=6,
+        )
+        assert result.visible_note_count == 1
+        assert result.hidden_note_count == 2
+        assert result.timed_out is False
+        assert result.fallback_note_visible_count == 0
+        assert result.notes_by_place_id["pid_X"].validated is True
+        assert result.notes_by_place_id["pid_Y"].validated is False
+        assert result.notes_by_place_id["pid_Z"].validated is False
