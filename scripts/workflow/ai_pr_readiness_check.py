@@ -68,7 +68,7 @@ PRODUCT_CODE_RE = re.compile(
 )
 
 WORKFLOW_ONLY_RE = re.compile(
-    r"^(docs/|scripts/|\.github/|\.claude/|CLAUDE\.md$)",
+    r"^(docs/|\.github/|\.claude/|CLAUDE\.md$|scripts/)",
     re.IGNORECASE,
 )
 
@@ -80,6 +80,12 @@ DEPENDENCY_RE = re.compile(
 
 ENV_FILE_RE = re.compile(r"^\.env$|^\.env\.", re.IGNORECASE)
 UI_FILE_RE = re.compile(r"\.(tsx|jsx|html|css|vue)$", re.IGNORECASE)
+
+# Sections/phrases that appear in the PR template but are not product-level runtime claims.
+RUNTIME_TEMPLATE_ONLY_RE = re.compile(
+    r"runtime.{0,30}validation.{0,30}note|runtime.{0,30}n/a|no\s+runtime\s+or\s+design",
+    re.IGNORECASE,
+)
 
 
 def _run(cmd: List[str]) -> Optional[str]:
@@ -280,6 +286,14 @@ class Checker:
     # E — Runtime/production fix gate
     def check_runtime(self) -> None:
         if not self.body or not RUNTIME_RE.search(self.body):
+            return
+        # Workflow-only PRs are exempt: the PR template contains the word "runtime" in a section
+        # header ("Runtime/design validation note") which should not trigger this gate.
+        if self.files is not None and is_workflow_only(self.files):
+            return
+        # Also skip if the only runtime mentions are template-placeholder phrases.
+        body_stripped = RUNTIME_TEMPLATE_ONLY_RE.sub("", self.body)
+        if not RUNTIME_RE.search(body_stripped):
             return
         bl = self.body.lower()
         has_evidence = any(k in bl for k in (
