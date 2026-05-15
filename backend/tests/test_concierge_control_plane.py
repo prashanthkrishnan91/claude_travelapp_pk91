@@ -714,3 +714,117 @@ class TestCompoundVenueHeadControlPlane:
         from app.concierge.evidence_cache import CreditROITelemetry
         tel = CreditROITelemetry()
         assert tel.card_count_collapsed_due_to_notes is False
+
+
+# ── Section G: Wrong-vertical guard runtime wiring ───────────────────────────
+
+class TestWrongVerticalGuardRuntime:
+    """Verify that is_food_bar_query and entity_passes_vertical_guard behave
+    correctly when called from the runtime path, simulating Step 4.6 in
+    semantic_retrieval._run_pipeline.
+
+    These tests operate on the helpers directly — no network or Google API needed.
+    """
+
+    def _make_entity(self, types, primary_type):
+        from dataclasses import dataclass
+        from typing import List
+
+        @dataclass
+        class _E:
+            types: List[str]
+            primary_type: str
+
+        return _E(types=types, primary_type=primary_type)
+
+    def _filter(self, ask: str, entities, destination: str = "Seattle"):
+        """Simulate Step 4.6: compute is_food_bar, apply vertical guard, return survivors."""
+        from app.concierge.retrieval_planner import is_food_bar_query, entity_passes_vertical_guard
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame(ask, destination)
+        is_fb = is_food_bar_query(frame)
+        if not is_fb:
+            return list(entities), 0
+        surviving = [e for e in entities if entity_passes_vertical_guard(e.types, e.primary_type, is_fb)]
+        rejected = len(entities) - len(surviving)
+        return surviving, rejected
+
+    def test_sports_bar_frame_rejects_rehab(self):
+        entities = [
+            self._make_entity(["bar", "sports_bar", "night_club"], "bar"),
+            self._make_entity(["physiotherapist", "health"], "physiotherapist"),
+        ]
+        surviving, rejected = self._filter("sports bars", entities)
+        assert rejected == 1
+        assert surviving[0].primary_type == "bar"
+
+    def test_sports_bar_frame_rejects_gym(self):
+        entities = [
+            self._make_entity(["bar", "night_club"], "bar"),
+            self._make_entity(["gym", "health", "fitness_center"], "gym"),
+        ]
+        surviving, rejected = self._filter("sports bars", entities)
+        assert rejected == 1
+        assert surviving[0].primary_type == "bar"
+
+    def test_sports_bar_frame_rejects_stadium(self):
+        entities = [
+            self._make_entity(["bar", "sports_bar"], "bar"),
+            self._make_entity(["stadium", "sports_complex", "point_of_interest"], "stadium"),
+        ]
+        surviving, rejected = self._filter("sports bars", entities)
+        assert rejected == 1
+        assert surviving[0].primary_type == "bar"
+
+    def test_sports_bar_frame_keeps_bar_entities(self):
+        entities = [
+            self._make_entity(["bar", "sports_bar", "night_club"], "bar"),
+            self._make_entity(["bar", "restaurant"], "bar"),
+        ]
+        surviving, rejected = self._filter("sports bars", entities)
+        assert rejected == 0
+        assert len(surviving) == 2
+
+    def test_cocktail_bar_frame_rejects_medical(self):
+        entities = [
+            self._make_entity(["bar", "night_club"], "bar"),
+            self._make_entity(["physiotherapist", "health", "point_of_interest"], "physiotherapist"),
+        ]
+        surviving, rejected = self._filter("cocktail bars", entities, destination="Chicago")
+        assert rejected == 1
+        assert surviving[0].primary_type == "bar"
+
+    def test_restaurant_frame_rejects_gym(self):
+        entities = [
+            self._make_entity(["restaurant", "food"], "restaurant"),
+            self._make_entity(["gym", "fitness_center"], "gym"),
+        ]
+        surviving, rejected = self._filter("Mexican restaurants", entities, destination="Chicago")
+        assert rejected == 1
+        assert surviving[0].primary_type == "restaurant"
+
+    def test_attractions_frame_guard_off_stadium_passes(self):
+        """For attractions query, is_food_bar=False → no entity rejected."""
+        entities = [
+            self._make_entity(["stadium", "tourist_attraction"], "stadium"),
+            self._make_entity(["museum", "tourist_attraction"], "museum"),
+            self._make_entity(["park", "establishment"], "park"),
+        ]
+        surviving, rejected = self._filter("top attractions", entities, destination="Seattle")
+        assert rejected == 0, f"Guard must be OFF for attractions; rejected={rejected}"
+        assert len(surviving) == 3
+
+    def test_museums_frame_guard_off(self):
+        entities = [
+            self._make_entity(["museum", "tourist_attraction"], "museum"),
+            self._make_entity(["gym", "fitness_center"], "gym"),
+        ]
+        surviving, rejected = self._filter("museums", entities)
+        assert rejected == 0, "Guard must be OFF for museums query"
+
+    def test_hotels_frame_guard_off(self):
+        entities = [
+            self._make_entity(["lodging", "hotel"], "lodging"),
+        ]
+        surviving, rejected = self._filter("hotels", entities)
+        assert rejected == 0, "Guard must be OFF for hotels query"
