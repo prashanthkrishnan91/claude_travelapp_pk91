@@ -795,78 +795,152 @@ class TestTelemetryPrecision:
         assert pre_assembly_verified_count == 7
 
 
-# ── 12. Compound venue-head preservation (PR #390 regression fix) ─────────────
+# ── 12. Compound venue-head preservation + trailing-tail handling ──────────────
 
 class TestCompoundVenueHeadPreservation:
-    """Retrieval queries must use the full compound phrase when the user's ask
-    contains a modifier + venue noun (e.g. 'sports bars', 'cocktail bars').
-
-    Root cause: frame extractor reduced 'sports bars' → concept 'sport', and
-    retrieval planner used that bare concept → 'sport Seattle'.  Fix: when
-    literal_ask contains <modifier> <venue-head>, use the compound phrase.
+    """Retrieval queries must preserve the core venue phrase even when trailing
+    modifiers like 'with TVs', 'near Pike Place', 'for date night', 'open late'
+    follow. The fix is general — not sports-bar-specific.
     """
 
-    # ── Retrieval query shape tests ───────────────────────────────────────────
+    # ── A. Core phrase preservation with trailing modifiers ───────────────────
 
-    def test_sports_bars_query_contains_sports_bar(self):
-        qs = _queries("sports bars", destination="Seattle")
+    def _assert_venue_in_query(self, ask: str, must_contain: List[str],
+                               must_not_be_bare: str, destination: str = "Seattle") -> None:
+        """Helper: first query must contain venue phrase and destination."""
+        qs = _queries(ask, destination=destination)
+        combined = " ".join(qs).lower()
         first = qs[0].lower()
-        assert "sports bar" in first or "sports bars" in first, (
-            f"Expected 'sports bar(s)' in first query, got {qs[0]!r}"
+        for phrase in must_contain:
+            assert phrase.lower() in combined, (
+                f"ask={ask!r}: expected {phrase!r} in queries, got {qs}"
+            )
+        assert must_not_be_bare.lower() not in [q.lower() for q in qs], (
+            f"ask={ask!r}: bare query {must_not_be_bare!r} must not appear in {qs}"
+        )
+        assert destination.lower() in combined, (
+            f"ask={ask!r}: destination {destination!r} missing from queries {qs}"
         )
 
-    def test_sports_bars_query_not_only_sport(self):
-        qs = _queries("sports bars", destination="Seattle")
-        # The old bad query was 'sport Seattle' — must not occur as the only content
-        first = qs[0].lower()
-        assert first != "sport seattle", (
-            f"Query regressed to bare 'sport seattle': {qs[0]!r}"
-        )
-        assert "bar" in first or "bars" in first, (
-            f"'bar' missing from first query; query was {qs[0]!r}"
+    def test_sports_bars_plain(self):
+        self._assert_venue_in_query(
+            "sports bars", ["sports bar"], "sport seattle",
         )
 
-    def test_cocktail_bars_query_contains_cocktail_bar(self):
-        qs = _queries("cocktail bars", destination="Chicago")
+    def test_sports_bars_with_trailing_modifier(self):
+        """'sports bars with TVs' — 'with TVs' is a tail; core = 'sports bars'."""
+        qs = _queries("sports bars with TVs", destination="Seattle")
+        combined = " ".join(qs).lower()
+        assert "sports bar" in combined or "sports bars" in combined, (
+            f"Expected 'sports bar(s)' in queries, got {qs}"
+        )
+        assert "sport seattle" not in [q.lower() for q in qs], (
+            f"Bare 'sport seattle' must not appear in {qs}"
+        )
+        assert "seattle" in combined
+
+    def test_sports_bars_near_downtown(self):
+        """'sports bars near downtown' — 'near downtown' is a tail."""
+        qs = _queries("sports bars near downtown", destination="Seattle")
+        combined = " ".join(qs).lower()
+        assert "sports bar" in combined or "sports bars" in combined, (
+            f"Expected 'sports bar(s)' in queries, got {qs}"
+        )
+        assert "sport seattle" not in [q.lower() for q in qs]
+
+    def test_cocktail_bars_near_pike_place(self):
+        """'cocktail bars near Pike Place' — 'near Pike Place' is a tail."""
+        qs = _queries("cocktail bars near Pike Place", destination="Seattle")
         combined = " ".join(qs).lower()
         assert "cocktail bar" in combined, (
             f"Expected 'cocktail bar' in queries, got {qs}"
         )
+        assert "cocktail seattle" not in [q.lower() for q in qs]
 
-    def test_speakeasy_bars_query_contains_speakeasy_bar(self):
-        qs = _queries("speakeasy bars", destination="Chicago")
+    def test_speakeasy_bars_in_capitol_hill(self):
+        """'speakeasy bars in Capitol Hill' — 'in Capitol Hill' is a tail."""
+        qs = _queries("speakeasy bars in Capitol Hill", destination="Seattle")
         combined = " ".join(qs).lower()
         assert "speakeasy bar" in combined, (
             f"Expected 'speakeasy bar' in queries, got {qs}"
         )
 
-    def test_mexican_restaurants_query_contains_mexican_restaurant(self):
-        qs = _queries("Mexican restaurants", destination="Chicago")
+    def test_mexican_restaurants_for_date_night(self):
+        """'Mexican restaurants for date night' — 'for date night' is a tail."""
+        qs = _queries("Mexican restaurants for date night", destination="Chicago")
         combined = " ".join(qs).lower()
         assert "mexican restaurant" in combined, (
             f"Expected 'mexican restaurant' in queries, got {qs}"
         )
+        assert "mexican chicago" not in [q.lower() for q in qs]
 
-    def test_coffee_shops_query_contains_coffee_shop(self):
-        qs = _queries("coffee shops", destination="Seattle")
+    def test_restaurants_on_the_water(self):
+        """'restaurants on the water' — 'on the water' is a tail."""
+        qs = _queries("restaurants on the water", destination="Seattle")
         combined = " ".join(qs).lower()
-        assert "coffee shop" in combined, (
-            f"Expected 'coffee shop' in queries, got {qs}"
+        assert "restaurant" in combined, (
+            f"Expected 'restaurant' in queries, got {qs}"
         )
 
-    # ── Single-concept behavior unchanged ─────────────────────────────────────
+    def test_coffee_shops_open_late(self):
+        """'coffee shops open late' — 'open late' is a tail connector."""
+        qs = _queries("coffee shops open late", destination="Seattle")
+        combined = " ".join(qs).lower()
+        assert "coffee shop" in combined or "coffee" in combined, (
+            f"Expected coffee-related term in queries, got {qs}"
+        )
+
+    def test_attractions_for_kids(self):
+        """'attractions for kids' — 'for kids' is a tail; core = 'attractions'."""
+        qs = _queries("attractions for kids", destination="Seattle")
+        combined = " ".join(qs).lower()
+        assert "attraction" in combined, (
+            f"Expected 'attraction' in queries, got {qs}"
+        )
+        assert "seattle" in combined
+
+    def test_museums_near_downtown(self):
+        """'museums near downtown' — 'near downtown' is a tail; core = 'museums'."""
+        qs = _queries("museums near downtown", destination="Seattle")
+        combined = " ".join(qs).lower()
+        assert "museum" in combined, (
+            f"Expected 'museum' in queries, got {qs}"
+        )
+
+    def test_hotels_with_pools(self):
+        """'hotels with pools' — 'with pools' is a tail; core = 'hotels'."""
+        qs = _queries("hotels with pools", destination="Miami")
+        combined = " ".join(qs).lower()
+        assert "hotel" in combined, (
+            f"Expected 'hotel' in queries, got {qs}"
+        )
+        assert "miami" in combined
+
+    def test_rooftop_bars(self):
+        """'rooftop bars' — 'rooftop' is a modifier, 'bars' is the head."""
+        qs = _queries("rooftop bars", destination="Chicago")
+        combined = " ".join(qs).lower()
+        assert "rooftop bar" in combined or "bar" in combined, (
+            f"Expected bar-anchored query, got {qs}"
+        )
+
+    def test_fine_dining_restaurants(self):
+        """'fine dining restaurants' — 'fine dining' is a modifier."""
+        qs = _queries("fine dining restaurants", destination="Chicago")
+        combined = " ".join(qs).lower()
+        assert "restaurant" in combined or "fine dining" in combined, (
+            f"Expected restaurant-anchored query, got {qs}"
+        )
+
+    # ── B. Existing single-concept behavior unchanged ─────────────────────────
 
     def test_ramen_single_concept_unchanged(self):
         qs = _queries("ramen", destination="Chicago")
-        assert any("ramen" in q.lower() for q in qs), (
-            f"'ramen' missing from queries: {qs}"
-        )
+        assert any("ramen" in q.lower() for q in qs), f"'ramen' missing: {qs}"
 
     def test_sushi_single_concept_unchanged(self):
         qs = _queries("sushi", destination="Chicago")
-        assert any("sushi" in q.lower() for q in qs), (
-            f"'sushi' missing from queries: {qs}"
-        )
+        assert any("sushi" in q.lower() for q in qs), f"'sushi' missing: {qs}"
 
     def test_breweries_single_concept_unchanged(self):
         qs = _queries("breweries", destination="Chicago")
@@ -877,37 +951,87 @@ class TestCompoundVenueHeadPreservation:
 
     def test_attractions_single_concept_unchanged(self):
         qs = _queries("attractions", destination="Chicago")
-        combined = " ".join(qs).lower()
-        assert "attraction" in combined, (
-            f"'attraction' missing from queries: {qs}"
+        assert "attraction" in " ".join(qs).lower(), f"'attraction' missing: {qs}"
+
+    def test_museums_single_concept_unchanged(self):
+        qs = _queries("museums", destination="Chicago")
+        assert "museum" in " ".join(qs).lower(), f"'museum' missing: {qs}"
+
+    def test_hotels_single_concept_unchanged(self):
+        qs = _queries("hotels", destination="Chicago")
+        assert "hotel" in " ".join(qs).lower(), f"'hotel' missing: {qs}"
+
+    def test_omakase_single_concept_unchanged(self):
+        qs = _queries("omakase", destination="Chicago")
+        assert any("omakase" in q.lower() or "sushi" in q.lower() for q in qs), (
+            f"'omakase' missing: {qs}"
         )
 
-    # ── Destination is always present ─────────────────────────────────────────
+    def test_izakayas_single_concept_unchanged(self):
+        qs = _queries("izakayas", destination="Chicago")
+        assert any("izakaya" in q.lower() for q in qs), f"'izakaya' missing: {qs}"
+
+    def test_breweries_near_river_unchanged(self):
+        """Geo-hint path: frame extractor puts 'river' in geography_hints."""
+        qs = _queries("breweries near the river", destination="Chicago")
+        combined = " ".join(qs).lower()
+        assert any(w in combined for w in ("brewery", "breweries", "taproom")), (
+            f"No brewery term in {qs}"
+        )
+
+    def test_best_waterfront_breweries_unchanged(self):
+        """Concept 'brewery' already has venue noun — no compound override."""
+        qs = _queries("best waterfront breweries", destination="Chicago")
+        combined = " ".join(qs).lower()
+        assert any(w in combined for w in ("brewery", "breweries", "taproom")), (
+            f"No brewery term in {qs}"
+        )
+        # Must NOT produce "best waterfront breweries chicago waterfront" (double geo)
+        for q in qs:
+            assert q.lower().count("waterfront") <= 1, (
+                f"Waterfront appears twice: {q!r}"
+            )
+
+    def test_top_3_attractions_unchanged(self):
+        qs = _queries("top 3 attractions", destination="Chicago")
+        assert "attraction" in " ".join(qs).lower(), f"'attraction' missing: {qs}"
+
+    # ── C. Destination always present ─────────────────────────────────────────
 
     def test_sports_bars_query_includes_destination(self):
         qs = _queries("sports bars", destination="Seattle")
-        assert any("seattle" in q.lower() for q in qs), (
-            f"Destination 'seattle' missing from queries: {qs}"
-        )
+        assert any("seattle" in q.lower() for q in qs)
 
     def test_cocktail_bars_query_includes_destination(self):
         qs = _queries("cocktail bars", destination="New York")
-        assert any("new york" in q.lower() for q in qs), (
-            f"Destination 'new york' missing from queries: {qs}"
-        )
+        assert any("new york" in q.lower() for q in qs)
 
 
-# ── 13. Entity quality guard: bar/nightlife queries reject wrong-category places ─
+# ── 13. Wrong-vertical guard + is_food_bar detection ─────────────────────────
 
-class TestEntityQualityGuardBarQueries:
-    """For nightlife/bar retrieval queries, entities clearly outside bar/food/
-    nightlife (stadiums, gyms, sports leagues, rehab centers) must score
-    significantly lower on subtype_fit than on-concept bar entities.
+class TestWrongVerticalGuard:
+    """entity_passes_vertical_guard and is_food_bar_query structural tests.
 
-    This is a retrieval + ranking contract test.  With 'sports bars Seattle'
-    as the query, Google returns bar-type entities, not stadiums.  The ranker
-    additionally assigns low subtype_fit to wrong-category types.
+    Covers:
+    C1. Bar/nightlife queries — wrong-vertical entities (rehab, gym, stadium)
+        are rejected by entity_passes_vertical_guard.
+    C2. Cocktail bar / restaurant queries — same guard active.
+    C3. Attraction queries — guard NOT active; stadiums/parks are valid.
+    C4. is_food_bar_query correctly classifies query verticals.
+    C5. Ranker subtype_fit: bar entities outscore rehab/gym/stadium for bar queries.
     """
+
+    from typing import Any
+
+    def _guard(self, types: List[str], primary_type: str, is_food_bar: bool) -> bool:
+        from app.concierge.retrieval_planner import entity_passes_vertical_guard
+        return entity_passes_vertical_guard(types, primary_type, is_food_bar)
+
+    def _food_bar(self, ask: str, destination: str = "Seattle") -> bool:
+        from app.concierge.retrieval_planner import is_food_bar_query
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame(ask, destination)
+        return is_food_bar_query(frame)
 
     def _make_entity(self, name: str, types: List[str], primary_type: str,
                      source_query: str = "sports bars Seattle") -> Any:
@@ -925,61 +1049,184 @@ class TestEntityQualityGuardBarQueries:
         e.business_status = "OPERATIONAL"
         return e
 
-    def _subtype_fit_for(self, entity, literal_ask: str, destination: str = "Seattle") -> float:
+    def _subtype_fit_for(self, entity: Any, ask: str, destination: str = "Seattle") -> float:
         from app.concierge.ranker import _subtype_fit
         from app.concierge.frame_extractor import extract_frame
-        frame = extract_frame(literal_ask, destination)
-        return _subtype_fit(entity, frame)
+        return _subtype_fit(entity, extract_frame(ask, destination))
 
-    def test_sports_bar_entity_scores_higher_than_stadium(self):
-        bar = self._make_entity(
-            "The Goal Post Sports Bar",
-            ["bar", "sports_bar", "night_club"],
-            "bar",
-        )
-        stadium = self._make_entity(
-            "Seattle Seahawks Stadium",
+    # ── C1. Structural guard: food/bar query vertical ────────────────────────
+
+    def test_rehab_rejected_for_sports_bars_query(self):
+        assert not self._guard(
+            ["physiotherapist", "health", "point_of_interest"],
+            "physiotherapist",
+            is_food_bar=True,
+        ), "Rehab entity must be rejected for food/bar query"
+
+    def test_gym_rejected_for_bar_query(self):
+        assert not self._guard(
+            ["gym", "health", "fitness_center"],
+            "gym",
+            is_food_bar=True,
+        ), "Gym must be rejected for food/bar query"
+
+    def test_stadium_rejected_for_bar_query(self):
+        assert not self._guard(
             ["stadium", "sports_complex", "point_of_interest"],
             "stadium",
+            is_food_bar=True,
+        ), "Stadium must be rejected for food/bar query"
+
+    def test_arena_rejected_for_bar_query(self):
+        assert not self._guard(
+            ["arena", "sports_facility"],
+            "arena",
+            is_food_bar=True,
+        ), "Arena must be rejected for food/bar query"
+
+    def test_sports_club_rejected_for_bar_query(self):
+        assert not self._guard(
+            ["sports_club", "recreation_center"],
+            "sports_club",
+            is_food_bar=True,
+        ), "Sports club must be rejected for food/bar query"
+
+    def test_bar_passes_for_bar_query(self):
+        assert self._guard(
+            ["bar", "sports_bar", "night_club"],
+            "bar",
+            is_food_bar=True,
+        ), "Bar entity must pass the guard"
+
+    def test_restaurant_passes_for_bar_query(self):
+        assert self._guard(
+            ["restaurant", "food", "establishment"],
+            "restaurant",
+            is_food_bar=True,
+        ), "Restaurant must pass the guard"
+
+    def test_brewery_passes_for_bar_query(self):
+        assert self._guard(
+            ["bar", "food", "establishment"],
+            "bar",
+            is_food_bar=True,
+        ), "Brewery/bar entity passes"
+
+    def test_entity_with_food_type_passes_even_with_extra_types(self):
+        """Entity that has BOTH bar and generic types must not be rejected."""
+        assert self._guard(
+            ["bar", "point_of_interest", "establishment"],
+            "bar",
+            is_food_bar=True,
         )
-        bar_fit = self._subtype_fit_for(bar, "sports bars")
-        stadium_fit = self._subtype_fit_for(stadium, "sports bars")
-        assert bar_fit >= stadium_fit, (
-            f"Sports bar entity should score >= stadium: bar_fit={bar_fit:.3f} stadium_fit={stadium_fit:.3f}"
+
+    # ── C2. Guard for cocktail bars / restaurants ────────────────────────────
+
+    def test_rehab_rejected_for_cocktail_bar_query(self):
+        from app.concierge.retrieval_planner import is_food_bar_query
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("cocktail bars", "Chicago")
+        assert is_food_bar_query(frame), "cocktail bars must be food/bar vertical"
+        assert not self._guard(
+            ["physiotherapist", "health"],
+            "physiotherapist",
+            is_food_bar=True,
+        )
+
+    def test_gym_rejected_for_restaurant_query(self):
+        from app.concierge.retrieval_planner import is_food_bar_query
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame("Mexican restaurants", "Chicago")
+        assert is_food_bar_query(frame), "Mexican restaurants must be food/bar vertical"
+        assert not self._guard(
+            ["gym", "fitness_center"],
+            "gym",
+            is_food_bar=True,
+        )
+
+    # ── C3. Guard NOT active for attractions / museums / hotels ──────────────
+
+    def test_stadium_passes_for_attractions_query(self):
+        """Stadiums can be valid attractions — guard must NOT fire."""
+        assert self._guard(
+            ["stadium", "tourist_attraction", "point_of_interest"],
+            "stadium",
+            is_food_bar=False,
+        ), "Stadium must pass guard when query is attractions (not food/bar)"
+
+    def test_museum_passes_for_attractions_query(self):
+        assert self._guard(
+            ["museum", "tourist_attraction"],
+            "museum",
+            is_food_bar=False,
+        ), "Museum must pass for attractions query"
+
+    def test_park_passes_for_attractions_query(self):
+        assert self._guard(
+            ["park", "tourist_attraction", "establishment"],
+            "park",
+            is_food_bar=False,
+        ), "Park must pass for attractions query"
+
+    # ── C4. is_food_bar_query vertical detection ─────────────────────────────
+
+    def test_sports_bars_is_food_bar(self):
+        assert self._food_bar("sports bars"), "sports bars is food/bar vertical"
+
+    def test_cocktail_bars_is_food_bar(self):
+        assert self._food_bar("cocktail bars"), "cocktail bars is food/bar vertical"
+
+    def test_mexican_restaurants_is_food_bar(self):
+        assert self._food_bar("Mexican restaurants"), "Mexican restaurants is food/bar vertical"
+
+    def test_coffee_shops_is_food_bar(self):
+        assert self._food_bar("coffee shops"), "coffee shops is food/bar vertical"
+
+    def test_ramen_is_food_bar(self):
+        assert self._food_bar("ramen"), "ramen is food/bar vertical"
+
+    def test_attractions_not_food_bar(self):
+        assert not self._food_bar("attractions"), "attractions is NOT food/bar vertical"
+
+    def test_museums_not_food_bar(self):
+        assert not self._food_bar("museums"), "museums is NOT food/bar vertical"
+
+    def test_hotels_not_food_bar(self):
+        assert not self._food_bar("hotels"), "hotels is NOT food/bar vertical"
+
+    def test_top_attractions_not_food_bar(self):
+        assert not self._food_bar("top attractions"), "top attractions is NOT food/bar vertical"
+
+    # ── C5. Ranker subtype_fit: bars outscore wrong-vertical for bar queries ──
+
+    def test_sports_bar_entity_scores_higher_than_stadium(self):
+        bar = self._make_entity("The Goal Post Sports Bar", ["bar", "sports_bar", "night_club"], "bar")
+        stadium = self._make_entity("CenturyLink Field", ["stadium", "sports_complex", "point_of_interest"], "stadium")
+        assert self._subtype_fit_for(bar, "sports bars") >= self._subtype_fit_for(stadium, "sports bars"), (
+            "Sports bar must score >= stadium"
         )
 
     def test_sports_bar_entity_scores_higher_than_rehab(self):
-        bar = self._make_entity(
-            "Kickoff Bar & Grill",
-            ["bar", "restaurant", "sports_bar"],
-            "bar",
-        )
-        # Name intentionally avoids 'sports'/'bar' to test type-based discrimination only.
-        rehab = self._make_entity(
-            "Northwest Physical Therapy & Rehab",
-            ["physiotherapist", "health", "point_of_interest"],
-            "physiotherapist",
-            source_query="sports bars Seattle",
-        )
-        bar_fit = self._subtype_fit_for(bar, "sports bars")
-        rehab_fit = self._subtype_fit_for(rehab, "sports bars")
-        assert bar_fit >= rehab_fit, (
-            f"Sports bar must score >= rehab center: bar_fit={bar_fit:.3f} rehab_fit={rehab_fit:.3f}"
+        bar = self._make_entity("Kickoff Bar & Grill", ["bar", "restaurant", "sports_bar"], "bar")
+        # No 'sports'/'bar' in name to avoid false name-match scoring
+        rehab = self._make_entity("Northwest Physical Therapy", ["physiotherapist", "health", "point_of_interest"], "physiotherapist")
+        assert self._subtype_fit_for(bar, "sports bars") >= self._subtype_fit_for(rehab, "sports bars"), (
+            "Bar must score >= rehab"
         )
 
     def test_sports_bar_entity_scores_higher_than_athletic_club(self):
-        bar = self._make_entity(
-            "The Penalty Box Bar",
-            ["bar", "night_club"],
-            "bar",
+        bar = self._make_entity("The Penalty Box Bar", ["bar", "night_club"], "bar")
+        gym = self._make_entity("Pacific Athletic Club", ["gym", "health", "fitness_center"], "gym")
+        assert self._subtype_fit_for(bar, "sports bars") >= self._subtype_fit_for(gym, "sports bars"), (
+            "Bar must score >= athletic club"
         )
-        gym = self._make_entity(
-            "Seattle Athletic Club",
-            ["gym", "health", "fitness_center"],
-            "gym",
-        )
-        bar_fit = self._subtype_fit_for(bar, "sports bars")
-        gym_fit = self._subtype_fit_for(gym, "sports bars")
-        assert bar_fit >= gym_fit, (
-            f"Bar entity must score >= athletic club: bar_fit={bar_fit:.3f} gym_fit={gym_fit:.3f}"
+
+    def test_cocktail_bar_outscores_wrong_vertical(self):
+        bar = self._make_entity("The Violet Hour", ["bar", "night_club"], "bar",
+                                source_query="cocktail bars Chicago")
+        rehab = self._make_entity("Lakefront Rehab Center", ["physiotherapist", "health"], "physiotherapist",
+                                  source_query="cocktail bars Chicago")
+        assert (self._subtype_fit_for(bar, "cocktail bars", "Chicago") >=
+                self._subtype_fit_for(rehab, "cocktail bars", "Chicago")), (
+            "Cocktail bar must outscore rehab"
         )

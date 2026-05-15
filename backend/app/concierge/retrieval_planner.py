@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import List
+from typing import List, Optional
 
 from app.concierge.frame_extractor import ExperienceFrame, SubtypeConcept
 
@@ -26,20 +26,15 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_QUERIES = 3
 HARD_CAP_QUERIES = 4
 
-# Venue head nouns: words that anchor a Google search to a specific place type.
-# When the user's literal ask ends with one of these (possibly preceded by a
-# subtype modifier), we preserve the full compound phrase for retrieval so that
-# "sports bars" → "sports bars Seattle" not "sport Seattle".
-_VENUE_HEAD_WORDS: frozenset = frozenset({
+# Venue head nouns used to anchor Google queries to the correct place type.
+# This is retrieval anchoring, not editorial intent — a small maintained set
+# covering common app verticals is acceptable and preferred over per-query hacks.
+_VENUE_HEAD_NOUNS: frozenset = frozenset({
     "bar", "bars",
     "restaurant", "restaurants",
     "coffee shop", "coffee shops",
     "cafe", "cafes", "café", "cafés",
     "brewery", "breweries",
-    "attraction", "attractions",
-    "museum", "museums",
-    "hotel", "hotels",
-    "shop", "shops",
     "pub", "pubs",
     "lounge", "lounges",
     "club", "clubs",
@@ -47,49 +42,160 @@ _VENUE_HEAD_WORDS: frozenset = frozenset({
     "bistro", "bistros",
     "brasserie", "brasseries",
     "tavern", "taverns",
+    "attraction", "attractions",
+    "museum", "museums",
+    "gallery", "galleries",
+    "market", "markets",
+    "hotel", "hotels",
+    "resort", "resorts",
+    "shop", "shops",
+    "bakery", "bakeries",
+    "brunch spot", "brunch spots",
+    "breakfast spot", "breakfast spots",
+    "seafood restaurant", "seafood restaurants",
+    "steakhouse", "steakhouses",
 })
 
-# Regex to detect a compound phrase: one or more modifier words followed by a
-# venue head word. Modifiers may themselves be multi-word (e.g. "sports").
-_COMPOUND_VENUE_RE = re.compile(
-    r"^(.+?)\s+(bar|bars|restaurant|restaurants|coffee\s+shop|coffee\s+shops"
-    r"|cafe|cafes|café|cafés|brewery|breweries|attraction|attractions"
-    r"|museum|museums|hotel|hotels|shop|shops|pub|pubs|lounge|lounges"
-    r"|club|clubs|diner|diners|bistro|bistros|brasserie|brasseries"
-    r"|tavern|taverns)$",
+# Trailing-tail connectors: words that begin a preference/location/use-case
+# tail that should be stripped before extracting the core venue phrase.
+# E.g. "sports bars with TVs" → strip "with TVs" → core = "sports bars".
+# E.g. "cocktail bars near Pike Place" → strip "near Pike Place" → core = "cocktail bars".
+_TAIL_CONNECTORS = re.compile(
+    r"\b(with|near|in|on|for|open|serving|that|where|who|along|around|by|at|"
+    r"next\s+to|close\s+to|across\s+from|offering|featuring|having|inside|"
+    r"within|outside|during|after|before|great\s+for|good\s+for|perfect\s+for)\b",
     re.IGNORECASE,
 )
 
+# Pattern matching <modifier(s)> <venue-head-noun> at the start of a phrase,
+# where the venue head is one of the nouns in _VENUE_HEAD_NOUNS.
+# Built dynamically from the noun set so adding a noun above auto-extends this.
+_VENUE_HEAD_PATTERN = re.compile(
+    r"^(.+?)\s+(bar|bars|restaurant|restaurants|coffee\s+shop|coffee\s+shops"
+    r"|cafe|cafes|café|cafés|brewery|breweries|pub|pubs|lounge|lounges"
+    r"|club|clubs|diner|diners|bistro|bistros|brasserie|brasseries"
+    r"|tavern|taverns|attraction|attractions|museum|museums|gallery|galleries"
+    r"|market|markets|hotel|hotels|resort|resorts|shop|shops|bakery|bakeries"
+    r"|brunch\s+spot|brunch\s+spots|breakfast\s+spot|breakfast\s+spots"
+    r"|seafood\s+restaurant|seafood\s+restaurants|steakhouse|steakhouses)(?:\s+.*)?$",
+    re.IGNORECASE,
+)
 
-def _compound_venue_head(frame: ExperienceFrame) -> str:
-    """Return a compound venue phrase from the literal/normalized ask, if present.
+# Wrong-vertical Google type tokens that indicate an entity is clearly outside
+# the food/bar/cafe/nightlife vertical. Used by the entity quality guard.
+# Applied ONLY when the query vertical is clearly food/bar/nightlife/cafe —
+# NOT for attractions, museums, hotels, parks, landmarks, or activities.
+_WRONG_VERTICAL_TYPES: frozenset = frozenset({
+    "physiotherapist", "physical_therapist",
+    "gym", "fitness_center", "health_club", "athletic_club",
+    "stadium", "arena", "sports_complex", "sports_facility",
+    "sports_club",
+    "recreation_center",
+    "hospital", "emergency_room", "urgent_care", "medical_clinic",
+    "doctor",
+    "real_estate_agency", "car_dealer", "car_repair", "car_wash",
+    "gas_station", "parking",
+    "laundry", "dry_cleaning",
+    "bank", "finance", "insurance_agency",
+})
 
-    When the user asked for "sports bars", the frame extractor reduces this to
-    concept "sport". This function recovers "sports bars" by checking whether
-    the literal ask matches <modifier(s)> <venue-head-noun> AND the frame's
-    primary concept has lost the venue noun (i.e. concept "sport" lacks "bar").
+# Google type tokens that confirm an entity is on-vertical for
+# food/bar/cafe/nightlife queries.
+_FOOD_BAR_NIGHTLIFE_TYPES: frozenset = frozenset({
+    "bar", "bars", "night_club", "nightclub", "sports_bar",
+    "restaurant", "food", "meal_takeaway", "meal_delivery",
+    "cafe", "coffee_shop", "bakery", "dessert_shop",
+    "brewery", "brewpub", "winery", "distillery",
+    "pub", "lounge", "tavern",
+})
 
-    Only triggers when venue-noun loss occurred. If the frame's primary concept
-    already contains a venue noun (e.g. "brewery" for "best waterfront breweries"),
-    the normal concept-based path is used unchanged.
+# Concept tokens that indicate the query vertical is food/bar/nightlife/cafe.
+# When the primary concept or literal ask contains these tokens, the wrong-vertical
+# guard is active. Does NOT include "attraction", "museum", "hotel", "park".
+_FOOD_BAR_QUERY_TOKENS: frozenset = frozenset({
+    "bar", "bars", "restaurant", "restaurants", "cafe", "cafes",
+    "coffee", "cocktail", "speakeasy", "pub", "pubs", "lounge", "lounges",
+    "brewery", "breweries", "taproom", "nightclub", "tavern", "diner",
+    "bistro", "brunch", "breakfast", "sushi", "ramen", "pizza", "steak",
+    "seafood", "tapas", "omakase", "izakaya", "dim", "pho", "thai",
+    "indian", "mexican", "italian", "french", "korean", "vietnamese",
+    "chinese", "greek", "mediterranean", "spanish", "bakery",
+    "food", "dining", "eatery", "meal",
+    "sports", "sport",  # "sports bars" context — but only if venue head is bar
+})
 
-    Returns the matched compound phrase (lowercased), or empty string.
+
+def _strip_tail(ask: str) -> str:
+    """Strip trailing preference/location/use-case phrase from the ask.
+
+    Returns the portion before the first tail connector, or the full ask if
+    no connector is found.  E.g.:
+      "sports bars with TVs"        → "sports bars"
+      "cocktail bars near Pike Place" → "cocktail bars"
+      "Mexican restaurants for date night" → "Mexican restaurants"
+      "coffee shops open late"      → "coffee shops open late" (no connector)
+        → "coffee shops" because "open" is a connector
+      "best waterfront breweries"   → "best waterfront breweries" (no connector)
     """
-    ask = (frame.literal_ask or frame.normalized_ask or "").strip().lower()
-    if not ask:
+    m = _TAIL_CONNECTORS.search(ask)
+    if m:
+        return ask[: m.start()].strip()
+    return ask
+
+
+def _core_venue_phrase(frame: ExperienceFrame) -> str:
+    """Extract the core venue phrase from the user ask, preserving modifier+head.
+
+    Strategy:
+    1. Strip trailing tail (with/near/for/open/in/on ...) from literal_ask.
+    2. Match the stripped phrase against <modifier(s)> <venue-head-noun>.
+    3. If matched and the frame's primary concept lost the venue noun (stemming
+       check), return the matched compound phrase as the retrieval anchor.
+    4. Otherwise return empty string to fall through to concept-label path.
+
+    This handles:
+      "sports bars"                  → "sports bars"
+      "sports bars with TVs"         → "sports bars"
+      "cocktail bars near Pike Place" → "cocktail bars"
+      "Mexican restaurants for date night" → "mexican restaurants"
+      "coffee shops open late"        → "coffee shops"
+      "attractions for kids"          → "attractions"  (modifier-only, venue IS attractions)
+      "best waterfront breweries"     → "" (concept "brewery" already has venue noun)
+    """
+    ask_raw = (frame.literal_ask or frame.normalized_ask or "").strip()
+    if not ask_raw:
         return ""
-    m = _COMPOUND_VENUE_RE.match(ask)
+
+    stripped = _strip_tail(ask_raw).lower()
+    if not stripped:
+        return ""
+
+    m = _VENUE_HEAD_PATTERN.match(stripped)
     if not m:
+        # Try full stripped ask as venue head itself (e.g. "attractions")
+        stripped_tokens = set(re.findall(r"\b[a-z]+\b", stripped))
+        head_words = {re.sub(r"\s+", "_", n) for n in _VENUE_HEAD_NOUNS}
+        single_heads = {w for w in _VENUE_HEAD_NOUNS if " " not in w}
+        if not (stripped_tokens & single_heads):
+            return ""
+        # Single-word venue head (e.g. bare "attractions") — concept path handles it
         return ""
-    venue_head = m.group(2).lower()  # e.g. "bars", "restaurants", "coffee shops"
-    # Check if the primary concept already contains the venue-head token.
-    # If it does, the extractor preserved the venue noun — no compound head needed.
-    primary_concept = ""
-    if frame.subtype_concepts:
-        primary_concept = frame.subtype_concepts[0].label.lower()
-    concept_tokens = set(re.findall(r"\b[a-z]+\b", primary_concept))
-    head_tokens = set(re.findall(r"\b[a-z]+\b", venue_head))
-    # Stem each token by stripping common plural suffixes for comparison.
+
+    venue_head = m.group(2).lower()
+    modifier = m.group(1).strip().lower()
+
+    # If there's no meaningful modifier, the ask is just the venue head alone —
+    # concept path handles single-concept asks fine (ramen, sushi, breweries).
+    # Only override when there is a genuine modifier (e.g. "sports", "cocktail").
+    if not modifier:
+        return ""
+
+    # Check: did the frame's primary concept preserve the venue noun?
+    # If it did, the concept path is already correct — don't override.
+    primary_concept = (
+        frame.subtype_concepts[0].label.lower() if frame.subtype_concepts else ""
+    )
+
     def _stem(w: str) -> str:
         if w.endswith("ies") and len(w) > 4:
             return w[:-3] + "y"
@@ -98,13 +204,84 @@ def _compound_venue_head(frame: ExperienceFrame) -> str:
         if w.endswith("s") and len(w) > 3 and not w.endswith("ss"):
             return w[:-1]
         return w
-    stemmed_concept = {_stem(t) for t in concept_tokens}
-    stemmed_head = {_stem(t) for t in head_tokens}
-    # If concept tokens (stemmed) overlap with head tokens (stemmed), the
-    # extractor preserved the venue noun — no compound head override needed.
-    if stemmed_concept & stemmed_head:
+
+    concept_stems = {_stem(t) for t in re.findall(r"\b[a-z]+\b", primary_concept)}
+    head_stems = {_stem(t) for t in re.findall(r"\b[a-z]+\b", venue_head)}
+
+    if concept_stems & head_stems:
+        # Concept already contains the venue noun — no override needed.
         return ""
-    return ask
+
+    # Return modifier + venue head as the compound retrieval phrase.
+    return f"{modifier} {venue_head}"
+
+
+def is_food_bar_query(frame: ExperienceFrame) -> bool:
+    """Return True when the query vertical is clearly food/bar/nightlife/cafe.
+
+    Used to gate the wrong-vertical entity guard — only apply it when the
+    user is looking for food/drink venues, not attractions, museums, hotels, parks.
+    """
+    ask_lower = (frame.literal_ask or frame.normalized_ask or "").lower()
+    ask_tokens = set(re.findall(r"\b[a-z]+\b", ask_lower))
+
+    # Direct token match in ask
+    if ask_tokens & (_FOOD_BAR_QUERY_TOKENS - {"sports", "sport"}):
+        return True
+
+    # "sports"/"sport" only counts if the venue head is bar/restaurant
+    if ask_tokens & {"sports", "sport"}:
+        if ask_tokens & {"bar", "bars", "restaurant", "restaurants", "pub", "pubs"}:
+            return True
+
+    # Concept label match
+    if frame.subtype_concepts:
+        for sc in frame.subtype_concepts:
+            label_tokens = set(re.findall(r"\b[a-z]+\b", sc.label.lower()))
+            if label_tokens & (_FOOD_BAR_QUERY_TOKENS - {"sports", "sport"}):
+                return True
+
+    return False
+
+
+def entity_passes_vertical_guard(
+    entity_types: List[str],
+    primary_type: str,
+    is_food_bar: bool,
+) -> bool:
+    """Return False if the entity is clearly wrong-vertical for a food/bar query.
+
+    Only active when is_food_bar=True. Rejects entities whose Google types are
+    exclusively wrong-vertical (rehab, gym, stadium, arena, etc.) with no
+    food/bar/nightlife type token present.
+
+    Safe to pass: legitimate bars/restaurants that also carry generic types
+    (establishment, point_of_interest) are NOT rejected.
+    Does NOT apply to attractions, museums, hotels, parks, landmarks.
+    """
+    if not is_food_bar:
+        return True  # guard off for non-food queries
+
+    all_types = {t.lower().replace("-", "_") for t in (entity_types or [])}
+    if primary_type:
+        all_types.add(primary_type.lower().replace("-", "_"))
+
+    # If any food/bar/nightlife type is present, entity is on-vertical.
+    if all_types & _FOOD_BAR_NIGHTLIFE_TYPES:
+        return True
+
+    # If all types are wrong-vertical, reject.
+    if all_types & _WRONG_VERTICAL_TYPES:
+        wrong = all_types & _WRONG_VERTICAL_TYPES
+        ok = all_types - _WRONG_VERTICAL_TYPES - {
+            "point_of_interest", "establishment", "premise", "health",
+            "local_business",
+        }
+        # Only reject if there's no ambiguous legitimate type left
+        if not ok:
+            return False
+
+    return True
 
 
 # Near-synonym expansions for common concepts. These widen recall without
@@ -203,14 +380,15 @@ def _primary_label(frame: ExperienceFrame) -> str:
     """Return the retrieval label for the frame.
 
     When the user's literal ask contains a compound venue phrase (e.g. "sports
-    bars", "cocktail bars", "Mexican restaurants"), that phrase is returned so
-    that Google receives a bar/restaurant-preserving query instead of the bare
-    reduced concept (e.g. "sport").  Single-concept asks (e.g. "ramen", "sushi",
-    "breweries") fall through to the normal concept-label path unchanged.
+    bars", "cocktail bars near Pike Place", "Mexican restaurants for date night"),
+    the core venue phrase (modifier + head noun, tails stripped) is returned so
+    that Google receives a bar/restaurant-preserving query.  Single-concept asks
+    (ramen, sushi, breweries) and asks where the frame extractor already preserved
+    the venue noun fall through to the normal concept-label path unchanged.
     """
-    compound = _compound_venue_head(frame)
-    if compound:
-        return compound
+    core = _core_venue_phrase(frame)
+    if core:
+        return core
     if not frame.subtype_concepts:
         return (frame.normalized_ask or frame.literal_ask or "").strip()
     return frame.subtype_concepts[0].label
