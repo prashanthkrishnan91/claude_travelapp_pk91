@@ -106,6 +106,40 @@ Follow-up needed: No.
 
 ---
 
+### 2026-05-15 — GitHub Actions merge-ref race condition caused stale git diff in diff-based CI (PR #381)
+
+Repo: claude_travelapp_pk91
+Area: CI workflow / git
+Severity: Level 2 workflow miss — cost 3 extra CI debug cycles
+Miss: `actions/checkout@v4` for `pull_request` events defaults to checking out `refs/pull/{n}/merge` (a synthetic merge commit GitHub pre-computes). When a new push arrives, GitHub may not update the merge ref before CI starts. A diff-based check (`git diff origin/main...HEAD`) against this stale merge commit sees an outdated file list — in this case missing `USAGE_LEDGER.md` even though it was committed to the branch. The readiness checker then reported it as unchanged, causing a spurious USAGE_LEDGER failure.
+Impact: 3 spurious CI failures; 2 extra commits; ~20 min delay diagnosing an infrastructure issue, not an app issue.
+What caught it: Noticed that CI completed in 4 seconds (very fast), implying HEAD was far behind the branch. Local `git log` confirmed the discrepancy. Fixed by pinning checkout to `github.event.pull_request.head.sha`.
+Root cause: Default checkout ref for `pull_request` CI is the merge ref, not the branch HEAD. Any diff-based CI script that uses `git diff base...HEAD` is vulnerable when the merge ref lags the branch.
+What should catch it next time: Any new CI workflow that does diff-based file inspection must use `ref: ${{ github.event.pull_request.head.sha }}` + `git fetch origin main` — not the default checkout. This pattern is now in `.github/workflows/ai-pr-readiness.yml`. Document in KNOWN_FAILURE_MODES.md.
+One-off or repeated: One-off for this repo, but architectural pattern affects any diff-based CI.
+Promotion target: `docs/ai/KNOWN_FAILURE_MODES.md` — "CI workflow failures" section.
+Action taken: `.github/workflows/ai-pr-readiness.yml` updated (commit `ec19647`). KNOWN_FAILURE_MODES.md updated. This ledger entry added.
+Follow-up needed: No.
+
+---
+
+### 2026-05-15 — PR body section headers used bold inline instead of `##` headers, failing CI substring check (PR #381)
+
+Repo: claude_travelapp_pk91
+Area: PR workflow / ai_pr_readiness_check
+Severity: Level 2 workflow miss
+Miss: Initial PR body for #381 used `**Severity:** Level 2` (bold inline) instead of `## Severity` (markdown header). The readiness checker requires exact substrings `"## Severity"`, `"## Validation"`, etc. Using `**SectionName:**` fails silently — the section content is present, but the gate string doesn't match.
+Impact: One extra CI failure cycle; required a full PR body rewrite.
+What caught it: CI check output showing missing section. Local repro with `--pr-body-file` reproduced immediately.
+Root cause: The PR template file uses `## SectionName` headers throughout, but when filling it in quickly the `##` was dropped in favor of bold inline labels. No reminder in the template itself warns against this substitution.
+What should catch it next time: Added HTML comment at top of `.github/pull_request_template.md` warning that `## Section` headers must be preserved exactly.
+One-off or repeated: Second occurrence (#378 ledger row was first).
+Promotion target: `.github/pull_request_template.md`.
+Action taken: PR template updated with format-compliance note. This ledger entry added.
+Follow-up needed: No.
+
+---
+
 ### 2026-05-15 — PR body not tested locally before push caused 3 CI readiness iterations (PR #379)
 
 Repo: claude_travelapp_pk91
