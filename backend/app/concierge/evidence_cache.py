@@ -102,6 +102,14 @@ _EDITORIAL_WORTHY_GEO: frozenset = frozenset({
     "harbor", "beachfront", "view", "panoramic", "overlook",
 })
 
+# Qualitative ranking/discovery markers in the raw query — "best X", "top X".
+# The frame extractor deliberately strips these words from concept extraction
+# (they are in _FILLER_WORDS), so they never surface in subtype_concepts,
+# normalized_soft_preferences, or value_signals. Checking frame.literal_ask
+# (an existing ExperienceFrame field) is the correct reuse point.
+# Kept deliberately tight: only true superlatives that signal ranking/discovery intent.
+_QUALITATIVE_RANKING_RE = re.compile(r"\b(?:best|top)\b", re.I)
+
 
 def should_run_editorial(frame: Any) -> tuple:
     """Decide whether Tavily/editorial enrichment is likely to add value.
@@ -139,13 +147,24 @@ def should_run_editorial(frame: Any) -> tuple:
     if geo_editorial:
         return True, f"editorial_worthy_geo:{','.join(sorted(geo_editorial)[:2])}"
 
-    # Value/luxury signals suggest editorial sources have useful context
-    if value_signals & {"luxury_for_less", "splurge", "michelin"}:
+    # Value/luxury signals suggest editorial sources have useful context.
+    # Includes actual labels produced by _extract_value_signals() ("luxury",
+    # "budget", "value_for_money") plus any legacy/future labels.
+    if value_signals & {"luxury", "budget", "value_for_money", "luxury_for_less", "splurge", "michelin"}:
         return True, "editorial_worthy_value_signal"
 
     # Multi-concept queries benefit from editorial disambiguation
     if len(subtype_concepts) >= 2:
         return True, "multi_concept_query"
+
+    # Qualitative ranking/discovery intent — "best X", "top X" in the raw query.
+    # frame_extractor strips "best"/"top" from concept extraction (_FILLER_WORDS),
+    # so they never appear in subtype_concepts or normalized_soft_preferences.
+    # Reusing frame.literal_ask (existing ExperienceFrame field) is the correct
+    # signal reuse point without adding a new editorial-intent subsystem.
+    literal_ask = getattr(frame, "literal_ask", "") or ""
+    if literal_ask and _QUALITATIVE_RANKING_RE.search(literal_ask):
+        return True, "qualitative_ranking_intent"
 
     # Simple category search with no discovery modifiers — Google/Yelp is
     # sufficient and Tavily adds minimal marginal value.
