@@ -715,6 +715,11 @@ class ConciergeService:
     # ------------------------------------------------------------------
 
     # Intents where the fast dynamic pipeline is applicable.
+    # INTENT_ATTRACTIONS included: "top attractions", "museums", "parks" must
+    # use the fast Google-verified card-first path, not Tavily/legacy live_research.
+    # The place_kind_hints baseline ("food_and_drink") is a retrieval hint only —
+    # the ranker uses open-vocabulary subtype_fit, so tourist_attraction/museum/park
+    # entities score correctly against attraction queries.
     _FAST_DYNAMIC_INTENTS = {
         INTENT_RESTAURANTS,
         INTENT_NIGHTLIFE,
@@ -723,15 +728,13 @@ class ConciergeService:
         INTENT_ROMANTIC,
         INTENT_FAMILY_FRIENDLY,
         INTENT_MICHELIN_RESTAURANTS,
+        INTENT_ATTRACTIONS,
     }
 
     # Intents where we still consider the open-class place-ask detector.
     # INTENT_GENERAL is included so unknown venue nouns like "izakaya",
     # "tea house", or "dessert bar" can enter Semantic Retrieval v1 without
-    # being added to a closed keyword bucket. INTENT_ATTRACTIONS is
-    # intentionally excluded — the existing live_research path already
-    # handles attractions and the semantic pipeline's place_kind_hints are
-    # food_and_drink biased in Phase 1.
+    # being added to a closed keyword bucket.
     _OPEN_CLASS_ELIGIBLE_INTENTS = _FAST_DYNAMIC_INTENTS | {INTENT_GENERAL}
 
     def _fetch_live_research(
