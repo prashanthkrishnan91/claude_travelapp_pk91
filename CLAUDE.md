@@ -127,16 +127,23 @@ Useful command aliases (call only when relevant): `/test-selector`, `/contract-a
 - No broad discovery. Read primary target files first; fallback only if blocked.
 - Classify severity using `ISSUE_SEVERITY_ROUTING.md` before choosing patch / full-plumbing / split.
 - After one failed patch, reclassify. After two related patches, escalate to full plumbing analysis or split plan.
-- On a tool/test/log failure, run `tool-failure-triage` and classify before patching.
-- Smallest safe patch within the chosen capability slice. No unrelated refactors.
+- On a tool/test/log failure, run `tool-failure-triage` and classify before patching. Do not patch app code for tooling failures.
+- Smallest safe patch within the chosen capability slice. No unrelated refactors. Every changed line must trace to the task.
+- For non-trivial work, state assumptions and success criteria before coding.
+- When runtime evidence matters (Railway/logs), state the failure seam (log key or test name) in the PR body before patching.
 - Fix root causes, not symptoms.
 - Use repo-local skills, safety packs, and archetypes instead of repeating large instruction blocks in prompts.
+- State Supabase SQL requirement in every PR summary.
 - Major design transformation must wait until `docs/ai/DESIGN_VISION.md` timing gate is satisfied.
 - Update `docs/ai/HANDOFF.md` in the same PR for any implementation, bug fix, UI change, architecture change, migration, or workflow change. Update by **replacing or summarizing**, not appending.
 - Stop after opening any Medium-High/High usage PR. Do not propose the next implementation prompt.
 - Every meaningful implementation PR must state its roadmap stage and build queue item.
 - Do not run every reviewer agent by default; use `AGENT_ROUTER.md`.
 - For Level 2/3 implementation, run `feature-contract` and `golden-scenarios` before coding.
+- For review prompts, use coverage-first audit structure. See `PROMPT_LIBRARY.md`.
+- Run prompt-lint on generated prompts before committing them to a library. See `PROMPT_ENGINEERING_STANDARD.md`.
+- Personal Claude skills are accelerators only — they do not replace repo rules, budget gates, or product invariants.
+- Before destructive file/git/deploy operations, consult `docs/ai/DANGEROUS_ACTION_GUARD.md`.
 - Every PR summary must include a compact AI usage note. See `docs/ai/AI_USAGE_TRACKING.md`.
 
 ## Project invariants

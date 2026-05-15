@@ -20,6 +20,9 @@ python3 scripts/workflow/ai_pr_readiness_check.py \
   --github-event-path "$GITHUB_EVENT_PATH" \
   --base-ref "origin/main"
 
+# JSON output (clean JSON only, no text before it):
+python3 scripts/workflow/ai_pr_readiness_check.py --format json
+
 # Self-test:
 python3 scripts/workflow/ai_pr_readiness_check.py --self-test
 ```
@@ -47,15 +50,22 @@ python3 scripts/workflow/ai_pr_readiness_check.py --self-test
 - Subagent fan-out for Level 1 work
 - CLAUDE.md over 200-line budget
 - PR size exceeds soft limits
+- Env template files committed (verify placeholders only)
 
 ## Usage ledger enforcement
 
 The key invariant: **PR body usage claims must match committed ledger state.**
 
-- PR body says "usage tracked" + `USAGE_LEDGER.md` not changed = hard fail
-- Level 1+ PR with product/workflow code + no ledger update + no unavailable note = hard fail
-- Tooling unavailable: manual row still required with metadata; token/delta fields marked unavailable
-- Exact per-prompt deltas require a baseline before work starts; if missed, mark unavailable
+Usage claim patterns that the checker detects (and will hard-fail if ledger is not updated):
+- `Usage ledger row: committed`
+- `Usage ledger row: yes`
+- `Usage ledger: committed`
+- `Usage ledger updated: Yes`
+- `see docs/ai/USAGE_LEDGER.md`
+- `see usage ledger`
+- `ledger row: committed`
+
+If tooling is unavailable: manual row still required with metadata; token/delta fields marked unavailable.
 
 ## Context / same-chat rules
 
@@ -68,7 +78,21 @@ The key invariant: **PR body usage claims must match committed ledger state.**
 
 **Design:** PRs touching design-system files or mentioning design overhaul must classify scope. Foundation-only must plan visible adoption. "Visual transformation" without UI validation and not classified foundation-only = hard fail.
 
-**Runtime:** PRs referencing production/runtime/cache must include failure-seam evidence. Symptom patches without root cause evidence trigger a warning or fail.
+**Runtime:** PRs referencing production/runtime/cache must include failure-seam evidence. Symptom patches without root cause evidence trigger a warning or fail. Workflow-only PRs are exempt (the PR template's section header contains the word "runtime" and should not trigger this gate).
+
+## Dangerous actions
+
+Before any covered action, Claude must pause and confirm with the user. See `docs/ai/DANGEROUS_ACTION_GUARD.md` for the full list of covered actions and rules.
+
+Opt-in local advisory hook: `.claude/hooks/dangerous_action_guard.sh` (set `DANGEROUS_ACTION_GUARD=1` to enable).
+
+Covered actions include:
+- `rm -rf` / destructive deletes
+- Touching `.env` / secrets / token files
+- `git push --force`, `git reset --hard`, `git branch -D`
+- Production deploy commands (`railway deploy`, `vercel --prod`)
+- Migration execution (`supabase db push`, `alembic upgrade`)
+- Broad file rewrites without targeted review
 
 ## Optional local hook
 

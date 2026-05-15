@@ -15,6 +15,8 @@ REQUIRED_ANCHOR_FILES = [
     "docs/ai/USAGE_LEDGER.md",
     "scripts/workflow/ai_pr_readiness_check.py",
     ".github/workflows/ai-pr-readiness.yml",
+    "docs/ai/DANGEROUS_ACTION_GUARD.md",
+    ".claude/hooks/dangerous_action_guard.sh",
 ]
 
 PR_TEMPLATE_ANCHORS = [
@@ -188,6 +190,18 @@ def check_readiness_hook_or_doc() -> None:
         )
 
 
+def check_dangerous_action_guard() -> None:
+    guard_doc = ROOT / "docs/ai/DANGEROUS_ACTION_GUARD.md"
+    guard_hook = ROOT / ".claude/hooks/dangerous_action_guard.sh"
+    if not guard_doc.exists():
+        raise AssertionError("docs/ai/DANGEROUS_ACTION_GUARD.md missing")
+    if not guard_hook.exists():
+        raise AssertionError(".claude/hooks/dangerous_action_guard.sh missing")
+    hook_text = read_text(guard_hook)
+    if "DANGEROUS_ACTION_GUARD" not in hook_text:
+        raise AssertionError("dangerous_action_guard.sh does not reference DANGEROUS_ACTION_GUARD env var")
+
+
 def main() -> int:
     for file_path in REQUIRED_ANCHOR_FILES:
         assert_file_exists(file_path)
@@ -205,6 +219,7 @@ def main() -> int:
     check_claude_md_references_readiness_checker()
     check_prompt_standard_usage_footer()
     check_readiness_hook_or_doc()
+    check_dangerous_action_guard()
 
     print("✅ Travel workflow certification v4.1 checks passed (lightweight, structural, workflow-only).")
     return 0
