@@ -23,11 +23,15 @@ Architecture invariants:
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 # ── Evidence fingerprinting ──────────────────────────────────────────────────
@@ -290,6 +294,236 @@ class NoteCache:
 _NOTE_CACHE = NoteCache(ttl_seconds=7200)
 
 
+# ── Durable (Supabase) cache layer ────────────────────────────────────────────
+
+_DURABLE_EVIDENCE_TTL_DAYS: int = 14
+_DURABLE_NOTE_TTL_DAYS: int = 30
+
+
+def _atom_to_dict(atom: Any) -> Dict[str, Any]:
+    """Serialize an EnrichmentAtom to a JSON-safe dict for Supabase storage."""
+    return {
+        "source_provider": getattr(atom, "source_provider", ""),
+        "evidence_type": getattr(atom, "evidence_type", ""),
+        "normalized_value": getattr(atom, "normalized_value", ""),
+        "confidence": float(getattr(atom, "confidence", 0.0)),
+        "provenance": dict(getattr(atom, "provenance", {}) or {}),
+        "allowed_into_writer": bool(getattr(atom, "allowed_into_writer", False)),
+        "conflict_status": getattr(atom, "conflict_status", "ok"),
+    }
+
+
+def _atom_from_dict(d: Dict[str, Any]) -> Any:
+    """Deserialize an EnrichmentAtom from a JSON dict (Supabase row field)."""
+    from app.concierge.cross_source_enrichment import EnrichmentAtom
+    return EnrichmentAtom(
+        source_provider=d.get("source_provider", ""),
+        evidence_type=d.get("evidence_type", ""),
+        normalized_value=d.get("normalized_value", ""),
+        confidence=float(d.get("confidence", 0.0)),
+        provenance=dict(d.get("provenance", {}) or {}),
+        allowed_into_writer=bool(d.get("allowed_into_writer", False)),
+        conflict_status=d.get("conflict_status", "ok"),
+    )
+
+
+def _parse_iso_datetime(s: str) -> Optional[datetime]:
+    """Parse ISO datetime string to aware datetime, returning None on error."""
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+
+
+class SupabaseEvidenceCache:
+    """Supabase-backed durable evidence atom cache (second read/write layer).
+
+    Used after a miss on the in-memory EvidenceAtomCache hot layer.
+    Serializes EnrichmentAtom objects to/from JSONB for cross-restart durability.
+    All errors are non-fatal: exceptions are logged and the caller falls through
+    to the live Tavily path.
+    """
+
+    def __init__(self, ttl_days: int = _DURABLE_EVIDENCE_TTL_DAYS) -> None:
+        self._ttl_days = ttl_days
+        self._version_salt = _EVIDENCE_VERSION_SALT
+
+    def get(self, fingerprint: str) -> Optional[EvidenceCacheEntry]:
+        """Return a fresh entry from Supabase, or None on miss/expiry/error."""
+        try:
+            from app.db.client import get_supabase
+            db = get_supabase()
+            result = (
+                db.table("concierge_evidence_cache")
+                .select("atoms_by_place_id,accepted_count,expires_at")
+                .eq("evidence_fingerprint", fingerprint)
+                .eq("version_salt", self._version_salt)
+                .limit(1)
+                .execute()
+            )
+            rows = result.data or []
+            if not rows:
+                return None
+            row = rows[0]
+            # Client-side expiry (works with both real Supabase and mock)
+            expires_dt = _parse_iso_datetime(row.get("expires_at", ""))
+            if expires_dt is not None and expires_dt <= datetime.now(timezone.utc):
+                return None
+            atoms_raw = row.get("atoms_by_place_id") or {}
+            atoms_by_place_id: Dict[str, List[Any]] = {}
+            for pid, atom_list in atoms_raw.items():
+                try:
+                    atoms_by_place_id[pid] = [
+                        _atom_from_dict(d) for d in (atom_list or [])
+                    ]
+                except Exception:
+                    atoms_by_place_id[pid] = []
+            return EvidenceCacheEntry(
+                atoms_by_place_id=atoms_by_place_id,
+                accepted_count=int(row.get("accepted_count", 0)),
+                expires_at=time.monotonic() + 3600,
+            )
+        except Exception as exc:
+            logger.debug(
+                "durable_evidence_cache: get_failed fingerprint=%s error=%s",
+                fingerprint, exc,
+            )
+            return None
+
+    def set(
+        self,
+        fingerprint: str,
+        atoms_by_place_id: Dict[str, List[Any]],
+        accepted_count: int,
+        destination: str = "",
+    ) -> bool:
+        """Persist accepted evidence atoms to Supabase. Returns True on success."""
+        try:
+            from app.db.client import get_supabase
+            db = get_supabase()
+            expires_at = (
+                datetime.now(timezone.utc) + timedelta(days=self._ttl_days)
+            ).isoformat()
+            atoms_serialized = {
+                pid: [_atom_to_dict(a) for a in atoms]
+                for pid, atoms in atoms_by_place_id.items()
+            }
+            db.table("concierge_evidence_cache").upsert(
+                {
+                    "evidence_fingerprint": fingerprint,
+                    "destination": destination or "",
+                    "normalized_context": {},
+                    "atoms_by_place_id": atoms_serialized,
+                    "accepted_count": accepted_count,
+                    "version_salt": self._version_salt,
+                    "expires_at": expires_at,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                on_conflict="evidence_fingerprint,version_salt",
+            ).execute()
+            return True
+        except Exception as exc:
+            logger.debug(
+                "durable_evidence_cache: set_failed fingerprint=%s error=%s",
+                fingerprint, exc,
+            )
+            return False
+
+
+class SupabaseNoteCache:
+    """Supabase-backed durable note cache (second read/write layer).
+
+    Used after a miss on the in-memory NoteCache hot layer.
+    Only stores notes that passed the quality gate (validated=True).
+    Generic, rating-only, rejected, template, or empty notes are never stored.
+    All errors are non-fatal: exceptions are logged and the caller falls through.
+    """
+
+    def __init__(self, ttl_days: int = _DURABLE_NOTE_TTL_DAYS) -> None:
+        self._ttl_days = ttl_days
+        self._version_salt = _EVIDENCE_VERSION_SALT
+
+    def get(self, place_id: str, fingerprint: str) -> Optional[NoteCacheEntry]:
+        """Return a fresh note from Supabase, or None on miss/expiry/error."""
+        try:
+            from app.db.client import get_supabase
+            db = get_supabase()
+            result = (
+                db.table("concierge_note_cache")
+                .select("note,source,expires_at")
+                .eq("provider_place_id", place_id)
+                .eq("evidence_fingerprint", fingerprint)
+                .eq("version_salt", self._version_salt)
+                .limit(1)
+                .execute()
+            )
+            rows = result.data or []
+            if not rows:
+                return None
+            row = rows[0]
+            expires_dt = _parse_iso_datetime(row.get("expires_at", ""))
+            if expires_dt is not None and expires_dt <= datetime.now(timezone.utc):
+                return None
+            note = row.get("note", "")
+            if not note or not note.strip():
+                return None
+            return NoteCacheEntry(
+                note=note,
+                source=row.get("source", ""),
+                evidence_fingerprint=fingerprint,
+                expires_at=time.monotonic() + 7200,
+            )
+        except Exception as exc:
+            logger.debug(
+                "durable_note_cache: get_failed place_id=%s error=%s",
+                place_id, exc,
+            )
+            return None
+
+    def set(
+        self,
+        place_id: str,
+        fingerprint: str,
+        note: str,
+        source: str,
+    ) -> bool:
+        """Persist an approved note to Supabase. Returns True on success."""
+        if not note or not note.strip():
+            return False
+        try:
+            from app.db.client import get_supabase
+            db = get_supabase()
+            expires_at = (
+                datetime.now(timezone.utc) + timedelta(days=self._ttl_days)
+            ).isoformat()
+            db.table("concierge_note_cache").upsert(
+                {
+                    "evidence_fingerprint": fingerprint,
+                    "provider_place_id": place_id,
+                    "note": note,
+                    "source": source,
+                    "version_salt": self._version_salt,
+                    "expires_at": expires_at,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                on_conflict="provider_place_id,evidence_fingerprint,version_salt",
+            ).execute()
+            return True
+        except Exception as exc:
+            logger.debug(
+                "durable_note_cache: set_failed place_id=%s error=%s",
+                place_id, exc,
+            )
+            return False
+
+
+# Module-level durable singletons — shared across requests in a single worker.
+_SUPABASE_EVIDENCE_CACHE = SupabaseEvidenceCache()
+_SUPABASE_NOTE_CACHE = SupabaseNoteCache()
+
+
 # ── Credit ROI telemetry ──────────────────────────────────────────────────────
 
 
@@ -329,6 +563,13 @@ class CreditROITelemetry:
     # Credit waste signal: Tavily ran but produced no visible notes
     credits_spent_but_no_visible_notes: bool = False
 
+    # Durable (Supabase) cache fields — v2 addition
+    durable_evidence_cache_hit: bool = False
+    durable_evidence_cache_write: bool = False
+    durable_note_cache_hit_count: int = 0
+    durable_note_cache_write_count: int = 0
+    durable_cache_error_count: int = 0
+
     # Async late-note storage (0 until async completion is implemented)
     async_late_note_stored_count: int = 0
 
@@ -352,6 +593,11 @@ class CreditROITelemetry:
             "visible_note_count": self.visible_note_count,
             "omitted_note_reasons": self.omitted_note_reasons,
             "credits_spent_but_no_visible_notes": self.credits_spent_but_no_visible_notes,
-            "note_cache_write_count": self.note_cache_write_count,
             "async_late_note_stored_count": self.async_late_note_stored_count,
+            # Durable cache fields (v2)
+            "durable_evidence_cache_hit": self.durable_evidence_cache_hit,
+            "durable_evidence_cache_write": self.durable_evidence_cache_write,
+            "durable_note_cache_hit_count": self.durable_note_cache_hit_count,
+            "durable_note_cache_write_count": self.durable_note_cache_write_count,
+            "durable_cache_error_count": self.durable_cache_error_count,
         }

@@ -141,11 +141,23 @@ class _QueryBuilder:
 
             elif self._method == "upsert":
                 row = _deep(self._payload)
-                conflict_key = self._on_conflict
-                if conflict_key and conflict_key in row:
-                    # Find existing row by conflict key
-                    conflict_val = row[conflict_key]
-                    existing = next((r for r in table if r.get(conflict_key) == conflict_val), None)
+                # Support compound conflict keys (e.g. "field1,field2").
+                conflict_fields = [
+                    f.strip()
+                    for f in (self._on_conflict or "").split(",")
+                    if f.strip()
+                ]
+                if conflict_fields:
+                    existing = next(
+                        (
+                            r for r in table
+                            if all(
+                                str(r.get(f, "")) == str(row.get(f, ""))
+                                for f in conflict_fields
+                            )
+                        ),
+                        None,
+                    )
                     if existing:
                         existing.update(row)
                         existing["updated_at"] = _now()
