@@ -8,9 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Phase 1B SHIPPED (2026-05-15).** Explore result cards (restaurants, hotels, attractions) upgraded with Card primitive + ds-tokens. RestaurantCard, HotelCard, AttractionCard adopt `Card tone="dark" as="article"`, Card.Identity/Trust/Meta/Actions slots, TrustStrip (sourceCount where Google Place ID present), sandstone-gold icon accent, ds-text token hierarchy, ds-carbon/pen-stroke interactive surfaces. ResultActionSheet button colors migrated to ds-tokens. All action handlers and payloads unchanged. Phase 1A (shell/nav) and Phase 0 (tokens + primitives) remain in place. **Active build queue item: Wife-Wow design system foundation.** Exact implementation reference is `docs/product/DESIGN_IMPLEMENTATION_CONTRACT.md`.
+- Roadmap stage: **Stage 3.5 — Phase 1C SHIPPED (2026-05-15).** Saved Ideas `/saved` surface upgraded to warm-paper/scrapbook design direction. `SavedShell` container → `bg-ds-linen rounded-2xl` (linen album). `SavedItemCard` → `Card tone="paper" as="article"`, `Card.Identity` slot, paper-mode ds-token text hierarchy, no dark shadows, luminance-only card lift. Phase 1A (shell/nav), Phase 1B (Explore result cards), and Phase 0 (tokens + primitives) remain in place. **Active build queue item: Wife-Wow design system foundation.** Exact implementation reference is `docs/product/DESIGN_IMPLEMENTATION_CONTRACT.md`.
 - Flights v1 — Duffel search-only LIVE: `DUFFEL_FLIGHTS_ENABLED=1`, `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`, `DUFFEL_DEBUG=false`, `DUFFEL_BOOKING_ENABLED=0`. Each flight card shows "Search on Google Flights" (SEARCH_REDIRECT link-out, not booking). Duffel never creates orders. Ignav DISABLED.
-- Active build queue item: **Wife-Wow design system foundation (Phase 1C — Saved Ideas paper/scrapbook adoption next).** Phase 0 token + primitive infrastructure in place. Phase 1A shell/nav SHIPPED. Phase 1B Explore result-card adoption SHIPPED. Phase 1C: adopt Card primitive (paper tone) on Saved Ideas surface. Hard stops: no provider/search/API/Tavily changes, no behavior changes. See `docs/ai/UI_BASELINE.md` for full phase inventory.
+- Active build queue item: **Wife-Wow design system foundation (Phase 2 — AI Concierge flagship card-first redesign next).** Phase 0 token + primitive infrastructure in place. Phase 1A shell/nav SHIPPED. Phase 1B Explore result-card adoption SHIPPED. Phase 1C Saved Ideas paper/scrapbook SHIPPED. Phase 2: AI Concierge flagship redesign — card-first composer + results canvas + prompt chips. Hard stops: no provider/search/API/Tavily changes, no behavior changes. See `docs/ai/UI_BASELINE.md` for full phase inventory.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -31,6 +31,8 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Recent meaningful PRs
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
+
+- 2026-05-15 — **Stage 3.5 Phase 1C — Saved Ideas Paper/Scrapbook Adoption.** `SavedShell` container → `bg-ds-linen rounded-2xl`. `SavedItemCard` → `Card tone="paper"` (warm paper bg, hairline border, no shadow, luminance hover). `Card.tsx` paper TONE_CLASSES adds `card-paper` modifier. `globals.css` adds `.card-paper` + `.card-paper.card-lift` override (shadow-free, luminance-only lift). All action handlers, payloads, grouping, and behavior unchanged. No provider/API/behavior/SQL changes.
 
 - 2026-05-15 — **Stage 3.5 Phase 1B — Explore Result-Card Adoption.** `RestaurantCard`, `HotelCard`, `AttractionCard` adopt `Card` primitive (dark tone, article element) with Identity/Trust/Meta/Actions slots. `TrustStrip` renders `sourceCount={1}` where Google Place ID confirms provenance (no `verified` — OPERATIONAL status not in payload). Icon accent → sandstone-gold (`ds-accent-subtle` bg + `text-ds-accent`). Text hierarchy → ds-text tokens. Interactive surfaces → `bg-ds-carbon` / hover `bg-ds-pen-stroke`. All action handlers preserved. `ResultActionSheet` button colors migrated to ds-tokens. No provider/API/behavior/SQL changes.
 
@@ -78,7 +80,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Stage 3.5 Phase 1C — Saved Ideas paper/scrapbook adoption.** Phase 1B (Explore result cards) is now merged. Next: adopt the Card primitive (paper tone, warm-paper background, hairline border, ink-paper text) on the Saved Ideas `/saved` surface. Goal: make the saved-ideas list feel like a personal scrapbook (warm paper mode), not a generic list. Strict no-behavior-change scope continues: no provider/search/API/Tavily changes, no flight/hotel/saved-trip logic changes, no storage model changes. After Phase 1C merges → Phase 2 (AI Concierge flagship card-first redesign) as the next major phase.
+**Stage 3.5 Phase 2 — AI Concierge flagship card-first redesign.** Phase 1C (Saved Ideas paper/scrapbook) is now merged. Next: redesign the AI Concierge surface (`/ai/concierge`) with card-first hierarchy — composer + results canvas + prompt chips. Contract: `docs/product/DESIGN_IMPLEMENTATION_CONTRACT.md` §25. Strict no-behavior-change scope: no provider/search/API/Tavily changes, no AI model changes, no backend changes. Before coding: run `feature-contract` and `golden-scenarios` (Level 2+ requirement).
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 

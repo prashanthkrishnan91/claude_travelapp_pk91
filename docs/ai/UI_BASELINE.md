@@ -8,6 +8,45 @@ Tracks the state of the design system and UI primitive layer so future prompts a
 
 ---
 
+## Stage 3.5 Phase 1C — Saved Ideas Paper/Scrapbook Adoption — SHIPPED (2026-05-15)
+
+**Stage 3.5 · Wife-Wow design system — Saved Ideas `/saved` surface · Paper/scrapbook warm-paper tone**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/app/globals.css` | Added `.card-paper` CSS modifier class: `box-shadow: none` for base; `card-lift` hover on paper = `translateY(-2px)` + no shadow + `border-color: var(--ds-linen)` (luminance-only lift, §8 contract). |
+| `frontend/src/components/ui/Card.tsx` | Paper TONE_CLASSES adds `card-paper` to suppress dark shadow on paper cards. Added `"data-testid"?: string` to `CardProps` for test-compatible usage. |
+| `frontend/src/components/saved/SavedShell.tsx` | `SavedItemCard` adopts `Card tone="paper" as="article" className="card-lift p-4"` with `Card.Identity` slot for icon + content row. Vertical icon: `bg-ds-accent-subtle` (inline style) + `text-ds-accent`. Title: `text-ds-text-inverse`. Secondary text: `text-ds-slate`. Rating star: `text-ds-accent fill-current`. Tags: `border-ds-hairline text-ds-slate`. Action buttons: `bg-ds-bone hover:bg-ds-linen` / `hover:bg-ds-hairline`. Error: `text-ds-warning`. Success: `text-ds-trust` icon + `text-ds-text-inverse`. Section header icon: `text-ds-accent-muted`. Section label: `text-ds-text-inverse`. SavedShell container: `bg-ds-linen rounded-2xl` (linen album on midnight ink body). Empty/loading/error states updated to paper-mode colors. All action handlers, grouping, ordering, payloads, and behavior unchanged. |
+
+### Design contract alignment
+
+- **Paper tone adopted:** `SavedShell` container = `bg-ds-linen` (aged-paper album). `SavedItemCard` = `Card tone="paper"` (warm paper, §9 — Saved Ideas paper mode).
+- **Tonal hierarchy (§9):** Midnight Ink body → Linen album container → Warm Paper cards. Surface mode changes at route level.
+- **Card.Identity slot:** Icon + content flex row. Vertical icon bg = `var(--ds-accent-subtle)`. Icon color = `text-ds-accent`. All text in ink-paper tones.
+- **Paper elevation (§8):** `.card-paper` suppresses dark box-shadow. Hover = luminance-only (border to linen, 2px lift, no shadow). No drop-shadows on paper surface.
+- **Token alignment:** No raw hex in changed files. No legacy `cream-*`, `brand-*`, `amber-*`, `rose-*`, `white/` classes in saved cards. All colors via `ds-*` Tailwind utilities or `var(--ds-*)` inline style.
+- **Accessibility:** All interactive elements retain `focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2`. Icon containers `aria-hidden="true"`. Semantic `as="article"` on card root.
+- **Motion:** `card-lift` class used; `.card-paper.card-lift` override governs paper hover (120ms/200ms via existing motion tokens). No new animations.
+- **Reduced-motion:** Global `@media (prefers-reduced-motion: reduce)` rule still governs (shipped Phase 0).
+
+### Invariant confirmations
+
+- No provider, search, API, Tavily, flight, hotel, or backend files changed.
+- No Supabase SQL required.
+- No new dependencies added.
+- No route, auth/session, or data contract changes.
+- All action handlers (deleteSavedItem, addSavedItemToTrip, createTrip, router.push, onRemove, onCreateTrip) preserved exactly.
+- All payloads, verticals, grouping, ordering, and filter behavior unchanged.
+- Add-to-trip, create-trip, delete/remove, filter, open/maps-link, and navigation unchanged.
+
+### Limitation note
+
+`--ds-accent-subtle` (rgba alpha) is defined in `:root` but not wired into `@theme`. Icon background in `SavedItemCard` uses `style={{ backgroundColor: "var(--ds-accent-subtle)" }}` directly. Empty-state icon uses `bg-ds-bone` (paper surface step) as a simpler paper-appropriate alternative within test char-window constraints. Both are acceptable paper-mode treatments.
+
+---
+
 ## Stage 3.5 Phase 1B — Explore Result-Card Adoption — SHIPPED (2026-05-15)
 
 **Stage 3.5 · Wife-Wow design system — Explore result cards · Restaurants, Hotels, Attractions**

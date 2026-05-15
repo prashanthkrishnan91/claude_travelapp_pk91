@@ -24,38 +24,15 @@ import {
 import { listSavedItems, deleteSavedItem, fetchTrips, addSavedItemToTrip } from "@/lib/api";
 import type { SavedItem, SavedItemVertical, Trip } from "@/types";
 import { CreateTripFromSavedModal } from "./CreateTripFromSavedModal";
+import { Card } from "@/components/ui/Card";
 
 // ── Vertical config ───────────────────────────────────────────────────────────
 
 const VERTICAL_CONFIG = [
-  {
-    key: "restaurant" as SavedItemVertical,
-    label: "Restaurants",
-    icon: Utensils,
-    iconBg: "bg-amber-500/10",
-    iconColor: "text-amber-400",
-  },
-  {
-    key: "attraction" as SavedItemVertical,
-    label: "Attractions",
-    icon: Landmark,
-    iconBg: "bg-blue-500/10",
-    iconColor: "text-blue-400",
-  },
-  {
-    key: "hotel" as SavedItemVertical,
-    label: "Hotels",
-    icon: Building2,
-    iconBg: "bg-violet-500/10",
-    iconColor: "text-violet-400",
-  },
-  {
-    key: "flight" as SavedItemVertical,
-    label: "Flights",
-    icon: Plane,
-    iconBg: "bg-sky-500/10",
-    iconColor: "text-sky-400",
-  },
+  { key: "restaurant" as SavedItemVertical, label: "Restaurants", icon: Utensils },
+  { key: "attraction" as SavedItemVertical, label: "Attractions", icon: Landmark },
+  { key: "hotel" as SavedItemVertical, label: "Hotels", icon: Building2 },
+  { key: "flight" as SavedItemVertical, label: "Flights", icon: Plane },
 ] as const;
 
 type VerticalCfg = (typeof VERTICAL_CONFIG)[number];
@@ -124,7 +101,7 @@ function SavedItemCard({
   const [addedToTripName, setAddedToTripName] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
 
-  const { icon: Icon, iconBg, iconColor } = vertConfig;
+  const { icon: Icon } = vertConfig;
 
   const name = snapStr(item, "name") ?? item.displayName;
   const destination = snapStr(item, "destination") ?? ctxStr(item, "destination");
@@ -179,24 +156,26 @@ function SavedItemCard({
   }
 
   return (
-    <div className="card card-lift p-4" data-testid="saved-item-card">
-      <div className="flex items-start gap-3">
-        {/* Vertical icon */}
+    <Card tone="paper" as="article" className="card-lift p-4" data-testid="saved-item-card">
+      <Card.Identity>
+        {/* Vertical icon — uniform warm accent treatment (§21 contract) */}
         <div
-          className={`w-10 h-10 rounded-xl ${iconBg} ${iconColor} flex items-center justify-center shrink-0`}
+          aria-hidden="true"
+          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          style={{ backgroundColor: "var(--ds-accent-subtle)" }}
         >
-          <Icon className="w-5 h-5" />
+          <Icon className="w-5 h-5 text-ds-accent" />
         </div>
 
         <div className="flex-1 min-w-0">
           {/* Name + action row */}
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-cream-100 leading-tight truncate">
+              <h3 className="text-sm font-semibold text-ds-text-inverse leading-tight truncate">
                 {name}
               </h3>
               {subtitle && (
-                <p className="text-xs text-cream-500 mt-0.5 truncate">{subtitle}</p>
+                <p className="text-xs text-ds-slate mt-0.5 truncate">{subtitle}</p>
               )}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
@@ -205,7 +184,7 @@ function SavedItemCard({
                   href={googleMapsUri}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-1.5 rounded-lg bg-white/[.05] hover:bg-white/[.10] text-cream-400 transition"
+                  className="p-1.5 rounded-lg bg-ds-bone hover:bg-ds-linen text-ds-slate transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   aria-label={`View ${name} on Google Maps`}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -215,7 +194,7 @@ function SavedItemCard({
                 onClick={handleRemove}
                 disabled={removing}
                 aria-label={`Remove ${name} from saved`}
-                className="p-1.5 rounded-lg bg-white/[.04] hover:bg-rose-500/10 text-cream-600 hover:text-rose-400 transition disabled:opacity-50"
+                className="p-1.5 rounded-lg bg-ds-bone hover:bg-ds-hairline text-ds-slate hover:text-ds-warning transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                 data-testid="remove-saved-btn"
               >
                 {removing ? (
@@ -228,32 +207,34 @@ function SavedItemCard({
           </div>
 
           {/* Rating + price + tags */}
-          <div className="flex items-center gap-3 mt-2 flex-wrap">
-            {rating != null && (
-              <span
-                className="flex items-center gap-0.5 text-xs text-amber-400 font-medium"
-                data-testid="saved-card-rating"
-              >
-                <Star className="w-3 h-3 fill-amber-400" />
-                {rating.toFixed(1)}
-              </span>
-            )}
-            {priceStr && (
-              <span className="text-xs text-cream-400 font-medium">{priceStr}</span>
-            )}
-            {tagList.length > 0 && (
-              <div className="flex gap-1 flex-wrap">
-                {tagList.slice(0, 3).map((tag) => (
-                  <span
-                    key={tag}
-                    className="px-1.5 py-0.5 text-[10px] rounded-full bg-white/[.06] text-cream-400"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+          {(rating != null || priceStr || tagList.length > 0) && (
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {rating != null && (
+                <span
+                  className="flex items-center gap-0.5 text-xs text-ds-text-inverse font-medium"
+                  data-testid="saved-card-rating"
+                >
+                  <Star className="w-3 h-3 text-ds-accent fill-current" />
+                  {rating.toFixed(1)}
+                </span>
+              )}
+              {priceStr && (
+                <span className="text-xs text-ds-slate font-medium">{priceStr}</span>
+              )}
+              {tagList.length > 0 && (
+                <div className="flex gap-1 flex-wrap">
+                  {tagList.slice(0, 3).map((tag) => (
+                    <span
+                      key={tag}
+                      className="px-1.5 py-0.5 text-[10px] rounded-full border border-ds-hairline text-ds-slate"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Hotel: dates + guests from search context — discovery only, no rates */}
           {item.vertical === "hotel" && (checkIn || checkOut || guests != null) && (
@@ -262,13 +243,13 @@ function SavedItemCard({
               data-testid="hotel-search-context"
             >
               {(checkIn || checkOut) && (
-                <span className="flex items-center gap-1 text-xs text-cream-500">
+                <span className="flex items-center gap-1 text-xs text-ds-slate">
                   <Calendar className="w-3 h-3" />
                   {[checkIn, checkOut].filter(Boolean).join(" → ")}
                 </span>
               )}
               {guests != null && (
-                <span className="flex items-center gap-1 text-xs text-cream-500">
+                <span className="flex items-center gap-1 text-xs text-ds-slate">
                   <Users className="w-3 h-3" />
                   {guests} {guests === 1 ? "guest" : "guests"}
                 </span>
@@ -277,16 +258,16 @@ function SavedItemCard({
           )}
 
           {/* Saved date */}
-          <p className="text-[10px] text-cream-700 mt-2">Saved {savedDate}</p>
+          <p className="text-[10px] text-ds-slate opacity-60 mt-2">Saved {savedDate}</p>
 
-          {/* Create Trip — all verticals (Stage 3 v3) */}
+          {/* Create Trip — all verticals */}
           <div className="mt-2" data-testid="create-trip-section">
             <button
               onClick={() => onCreateTrip(item)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-brand-500/10 text-brand-300 hover:bg-brand-500/20 transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-ds-bone text-ds-text-inverse hover:bg-ds-linen transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               data-testid="create-trip-btn"
             >
-              <Sparkles className="w-3.5 h-3.5" />
+              <Sparkles className="w-3.5 h-3.5 text-ds-accent" />
               Create Trip
             </button>
           </div>
@@ -297,10 +278,10 @@ function SavedItemCard({
               {addState === "idle" && (
                 <button
                   onClick={() => setAddState("picking")}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/[.06] text-cream-400 hover:bg-white/[.10] transition"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-ds-bone text-ds-text-inverse hover:bg-ds-linen transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   data-testid="add-to-trip-btn"
                 >
-                  <PlusCircle className="w-3.5 h-3.5" />
+                  <PlusCircle className="w-3.5 h-3.5 text-ds-slate" />
                   Add to Trip
                 </button>
               )}
@@ -308,22 +289,22 @@ function SavedItemCard({
               {addState === "picking" && (
                 <div className="space-y-1" data-testid="trip-picker">
                   {trips.length === 0 ? (
-                    <p className="text-xs text-cream-500 py-1">
+                    <p className="text-xs text-ds-slate py-1">
                       No trips yet.{" "}
-                      <Link href="/trips/new" className="text-brand-400 hover:underline">
+                      <Link href="/trips/new" className="text-ds-text-inverse underline hover:opacity-70 transition-opacity">
                         Create one
                       </Link>
                     </p>
                   ) : (
                     <>
-                      <p className="text-[10px] text-cream-600 uppercase tracking-wide">
+                      <p className="text-[10px] text-ds-slate uppercase tracking-wide">
                         Choose a trip
                       </p>
                       {trips.map((trip) => (
                         <button
                           key={trip.id}
                           onClick={() => handleAddToTrip(trip)}
-                          className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-cream-300 bg-white/[.05] hover:bg-white/[.10] transition truncate"
+                          className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-ds-text-inverse bg-ds-bone hover:bg-ds-linen transition-colors truncate focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                           data-testid="trip-picker-option"
                         >
                           {trip.title} · {trip.destination}
@@ -333,7 +314,7 @@ function SavedItemCard({
                   )}
                   <button
                     onClick={() => setAddState("idle")}
-                    className="text-[10px] text-cream-600 hover:text-cream-400 transition"
+                    className="text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
                   >
                     Cancel
                   </button>
@@ -341,7 +322,7 @@ function SavedItemCard({
               )}
 
               {addState === "adding" && (
-                <div className="flex items-center gap-1.5 text-xs text-cream-500 py-1">
+                <div className="flex items-center gap-1.5 text-xs text-ds-slate py-1">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   Adding to trip…
                 </div>
@@ -350,15 +331,15 @@ function SavedItemCard({
               {addState === "added" && (
                 <div className="space-y-1">
                   <div
-                    className="flex items-center gap-1.5 text-xs text-brand-400"
+                    className="flex items-center gap-1.5 text-xs text-ds-text-inverse"
                     data-testid="add-to-trip-success"
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-ds-trust" />
                     Added to {addedToTripName}
                   </div>
                   <button
                     onClick={() => setAddState("idle")}
-                    className="text-[10px] text-cream-600 hover:text-cream-400 transition"
+                    className="text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
                   >
                     Add to another trip
                   </button>
@@ -367,12 +348,12 @@ function SavedItemCard({
 
               {addState === "error" && (
                 <div className="space-y-1">
-                  <p className="text-xs text-rose-400" data-testid="add-to-trip-error">
+                  <p className="text-xs text-ds-warning" data-testid="add-to-trip-error">
                     {addError}
                   </p>
                   <button
                     onClick={() => setAddState("idle")}
-                    className="text-[10px] text-cream-500 hover:text-cream-300 transition"
+                    className="text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
                   >
                     Try again
                   </button>
@@ -383,13 +364,13 @@ function SavedItemCard({
 
           {/* Remove error */}
           {removeError && (
-            <p className="text-xs text-rose-400 mt-1" data-testid="remove-error">
+            <p className="text-xs text-ds-warning mt-1" data-testid="remove-error">
               {removeError}
             </p>
           )}
         </div>
-      </div>
-    </div>
+      </Card.Identity>
+    </Card>
   );
 }
 
@@ -410,16 +391,16 @@ function VerticalGroup({
 }) {
   if (items.length === 0) return null;
 
-  const { icon: Icon, iconColor, label, key } = config;
+  const { icon: Icon, label, key } = config;
 
   return (
     <section data-testid={`saved-group-${key}`}>
       <div className="flex items-center gap-2 mb-3">
-        <Icon className={`w-4 h-4 ${iconColor}`} />
-        <h2 className="text-sm font-semibold text-cream-200 uppercase tracking-wide">
+        <Icon className="w-4 h-4 text-ds-accent-muted" aria-hidden="true" />
+        <h2 className="text-sm font-semibold text-ds-text-inverse uppercase tracking-wide">
           {label}
         </h2>
-        <span className="text-xs text-cream-600 font-medium">{items.length}</span>
+        <span className="text-xs text-ds-slate font-medium">{items.length}</span>
       </div>
       <div className="space-y-3">
         {items.map((item) => (
@@ -481,22 +462,27 @@ export function SavedShell() {
   const hasAny = items.length > 0;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 space-y-8" data-testid="saved-shell">
+    /* Warm-paper scrapbook surface — linen album on midnight ink shell (§9 contract) */
+    <div className="max-w-2xl mx-auto bg-ds-linen rounded-2xl px-6 py-6 space-y-8" data-testid="saved-shell">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-brand-500/10 text-brand-400 flex items-center justify-center">
-          <Bookmark className="w-5 h-5" />
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center"
+          style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+          aria-hidden="true"
+        >
+          <Bookmark className="w-5 h-5 text-ds-accent" />
         </div>
         <div>
-          <h1 className="text-lg font-bold text-cream-100">Saved Ideas</h1>
-          <p className="text-xs text-cream-500">Your pre-trip inspiration board.</p>
+          <h1 className="text-lg font-bold text-ds-text-inverse">Saved Ideas</h1>
+          <p className="text-xs text-ds-slate">Your personal travel scrapbook.</p>
         </div>
       </div>
 
       {/* Loading */}
       {loading && (
         <div
-          className="flex items-center justify-center py-16 text-cream-500"
+          className="flex items-center justify-center py-16 text-ds-slate"
           data-testid="saved-loading"
         >
           <Loader2 className="w-6 h-6 animate-spin mr-2" />
@@ -510,11 +496,11 @@ export function SavedShell() {
           className="flex flex-col items-center gap-3 py-12 text-center"
           data-testid="saved-error"
         >
-          <AlertCircle className="w-8 h-8 text-rose-400" />
-          <p className="text-sm text-cream-400">{error}</p>
+          <AlertCircle className="w-8 h-8 text-ds-warning" />
+          <p className="text-sm text-ds-slate">{error}</p>
           <button
             onClick={load}
-            className="px-4 py-2 rounded-lg bg-white/[.06] text-cream-300 text-sm hover:bg-white/[.10] transition"
+            className="px-4 py-2 rounded-lg bg-ds-bone text-ds-text-inverse text-sm hover:bg-ds-hairline transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           >
             Try again
           </button>
@@ -523,24 +509,17 @@ export function SavedShell() {
 
       {/* Empty state */}
       {!loading && !error && !hasAny && (
-        <div
-          className="flex flex-col items-center gap-4 py-16 text-center"
-          data-testid="saved-empty"
-        >
-          <div className="w-14 h-14 rounded-2xl bg-brand-500/10 text-brand-400 flex items-center justify-center">
-            <Bookmark className="w-7 h-7" />
+        <div className="flex flex-col items-center gap-4 py-16 text-center" data-testid="saved-empty">
+          <div className="w-14 h-14 rounded-2xl bg-ds-bone flex items-center justify-center" aria-hidden="true">
+            <Bookmark className="w-7 h-7 text-ds-accent" />
           </div>
           <div>
-            <p className="text-base font-semibold text-cream-200">Nothing saved yet</p>
-            <p className="text-sm text-cream-500 mt-1">
+            <p className="text-base font-semibold text-ds-text-inverse">Nothing saved yet</p>
+            <p className="text-sm text-ds-slate mt-1">
               Explore restaurants, attractions, and hotels — then save the ones that inspire you.
             </p>
           </div>
-          <Link
-            href="/explore"
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-500 text-dark-50 text-sm font-medium hover:bg-brand-600 transition"
-            data-testid="saved-empty-explore-link"
-          >
+          <Link href="/explore" className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-ds-bone text-ds-text-inverse text-sm font-medium hover:bg-ds-hairline transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2" data-testid="saved-empty-explore-link">
             <Compass className="w-4 h-4" />
             Start Exploring
           </Link>
