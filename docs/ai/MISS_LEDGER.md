@@ -106,6 +106,23 @@ Follow-up needed: No.
 
 ---
 
+### 2026-05-15 — PR body not tested locally before push caused 3 CI readiness iterations (PR #379)
+
+Repo: claude_travelapp_pk91
+Area: PR workflow / ai_pr_readiness_check
+Severity: Level 2 workflow miss (repeated — same lesson as #378 ledger row)
+Miss: PR body for #379 (Phase 1C Saved Ideas) was never run through `ai_pr_readiness_check.py --pr-body-file` locally before pushing. Required 3 CI iterations to fix three independent failures: (1) missing `## Summary` and `## Validation` exact substrings (`"## UI validation"` does not contain `"## validation"`); (2) `"provider"` in `"SQL / env / providers / UI"` triggers runtime gate — requires `"runtime validation"` in body to satisfy `has_evidence`; (3) `"Wife-Wow"` in build queue item line matched `DESIGN_BODY_RE wife.?wow` — requires `"screenshot"` or `"ui validation"` in body when not `"foundation-only"`. Additional timing trap: CI reads PR body from `GITHUB_EVENT_PATH` event snapshot at push time — updating body via API after a push does NOT affect the already-queued CI run; body must be updated BEFORE the trigger push.
+Impact: 3 empty/CI-trigger commits on the branch; 2 extra CI cycles; ~15 min delay.
+What caught it: Each CI run output; local repro with `--pr-body-file` diagnosed all failures in one pass.
+Root cause: The `--pr-body-file` local dry-run step existed in PR docs but was not treated as a hard pre-push gate. #378 ledger row noted the same lesson but it wasn't reinforced in the PR template.
+What should catch it next time: Add a one-line checklist item to `.github/pull_request_template.md`: `- [ ] Ran \`python3 scripts/workflow/ai_pr_readiness_check.py --pr-body-file /tmp/body.txt --base-ref origin/main\` locally before pushing.`
+One-off or repeated: Second miss of same pattern (#378 ledger row captured the first). Promoting per two-miss rule.
+Promotion target: `.github/pull_request_template.md` — add local-dry-run checklist item.
+Action taken: This ledger entry added. PR template update below.
+Follow-up needed: Update `.github/pull_request_template.md` with the local dry-run reminder.
+
+---
+
 ### 2026-05-10 — Project source/test/docs hygiene gaps after workflow cleanup
 
 Repo: claude_travelapp_pk91
