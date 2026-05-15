@@ -461,6 +461,8 @@ def _run_pipeline(
         EvidenceCacheEntry,
         _EVIDENCE_ATOM_CACHE,
         _NOTE_CACHE,
+        _SUPABASE_EVIDENCE_CACHE,
+        _SUPABASE_NOTE_CACHE,
         build_evidence_fingerprint,
         should_run_editorial,
     )
@@ -699,9 +701,29 @@ def _run_pipeline(
         _serper_key = get_serper_key()
 
         # ── Evidence cache check (skips Tavily on hit) ────────────────────────
+        # Read order: 1. in-memory hot layer, 2. Supabase durable layer, 3. live path.
         _evidence_cache_entry = _EVIDENCE_ATOM_CACHE.get(evidence_fingerprint)
+        if _evidence_cache_entry is None:
+            # Memory miss — check durable Supabase layer before running Tavily.
+            _durable_ev_entry = _SUPABASE_EVIDENCE_CACHE.get(evidence_fingerprint)
+            if _durable_ev_entry is not None:
+                # Warm in-memory cache so the next request on this worker is free.
+                _EVIDENCE_ATOM_CACHE.set(
+                    evidence_fingerprint,
+                    _durable_ev_entry.atoms_by_place_id,
+                    _durable_ev_entry.accepted_count,
+                )
+                _evidence_cache_entry = _durable_ev_entry
+                roi_tel.durable_evidence_cache_hit = True
+                logger.info(
+                    "semantic_retrieval_v1: durable_evidence_cache_hit "
+                    "fingerprint=%s accepted_count=%d query=%r",
+                    evidence_fingerprint,
+                    _durable_ev_entry.accepted_count,
+                    user_query,
+                )
         if _evidence_cache_entry is not None:
-            # Cache hit — reuse accepted atoms, skip Tavily/Serper call entirely.
+            # Cache hit (memory or durable) — reuse accepted atoms, skip Tavily entirely.
             roi_tel.evidence_cache_hit = True
             roi_tel.accepted_editorial_evidence_count = _evidence_cache_entry.accepted_count
             editorial_result = EditorialEnrichmentResult(
@@ -714,10 +736,11 @@ def _run_pipeline(
             )
             logger.info(
                 "semantic_retrieval_v1: editorial_evidence_cache_hit "
-                "fingerprint=%s accepted_count=%d query=%r",
+                "fingerprint=%s accepted_count=%d query=%r durable=%s",
                 evidence_fingerprint,
                 _evidence_cache_entry.accepted_count,
                 user_query,
+                roi_tel.durable_evidence_cache_hit,
             )
         elif _remaining_after_cross_source_ms < EDITORIAL_POST_CROSS_SOURCE_MIN_MS:
             # Opportunistic budget gate: Step 5.55 (Yelp/FSQ) consumed too much
@@ -793,6 +816,22 @@ def _run_pipeline(
                             "semantic_retrieval_v1: editorial_cache_write_failed "
                             "error=%s", _cache_exc,
                         )
+                    # Also write to durable Supabase layer.
+                    _durable_ok = _SUPABASE_EVIDENCE_CACHE.set(
+                        evidence_fingerprint,
+                        editorial_result.atoms_by_place_id,
+                        _total_accepted,
+                        destination=destination,
+                    )
+                    if _durable_ok:
+                        roi_tel.durable_evidence_cache_write = True
+                        logger.info(
+                            "semantic_retrieval_v1: durable_evidence_cache_write "
+                            "fingerprint=%s accepted=%d query=%r",
+                            evidence_fingerprint, _total_accepted, user_query,
+                        )
+                    else:
+                        roi_tel.durable_cache_error_count += 1
 
         editorial_tel = editorial_result.telemetry.as_log_dict()
         # Merge editorial atoms into cross_source atoms_by_place_id so the
@@ -921,9 +960,10 @@ def _run_pipeline(
     _set_writer_skipped_budget = _set_writer_remaining_ms < SET_WRITER_MIN_BUDGET_MS
 
     # ── Note cache check ──────────────────────────────────────────────────────
-    # Check for pre-approved cached notes before running the LLM writer.
+    # Read order: 1. in-memory hot layer, 2. Supabase durable layer.
     # Cache key: (place_id, evidence_fingerprint) — prevents cross-context bleed.
     _cached_notes: Dict[str, str] = {}
+    _durable_note_hits = 0
     if curated_result is not None and curated_result.output_count > 0:
         for _cc in (getattr(curated_result, "curated_cards", []) or [])[:first_card_limit]:
             _pid = getattr(_cc.entity, "place_id", None)
@@ -931,7 +971,16 @@ def _run_pipeline(
                 _note_entry = _NOTE_CACHE.get(_pid, evidence_fingerprint)
                 if _note_entry is not None:
                     _cached_notes[_pid] = _note_entry.note
+                else:
+                    # Memory miss — check durable layer.
+                    _dn = _SUPABASE_NOTE_CACHE.get(_pid, evidence_fingerprint)
+                    if _dn is not None:
+                        # Warm in-memory cache.
+                        _NOTE_CACHE.set(_pid, evidence_fingerprint, _dn.note, _dn.source)
+                        _cached_notes[_pid] = _dn.note
+                        _durable_note_hits += 1
         roi_tel.note_cache_hit_count = len(_cached_notes)
+        roi_tel.durable_note_cache_hit_count = _durable_note_hits
 
     _n_curated = curated_result.output_count if curated_result is not None else 0
     _all_notes_cached = (
@@ -1001,6 +1050,7 @@ def _run_pipeline(
                 # Only validated, non-empty notes are stored. Failed/generic/
                 # timeout notes are never cached.
                 _write_count = 0
+                _durable_note_writes = 0
                 for _pid, _note_obj in (
                     set_writer_result.notes_by_place_id or {}
                 ).items():
@@ -1018,12 +1068,25 @@ def _run_pipeline(
                                 "semantic_retrieval_v1: note_cache_write_failed "
                                 "place_id=%s error=%s", _pid, _nc_exc,
                             )
+                        # Also write to durable Supabase layer.
+                        _dn_ok = _SUPABASE_NOTE_CACHE.set(
+                            _pid,
+                            evidence_fingerprint,
+                            _note_obj.note,
+                            _note_obj.source,
+                        )
+                        if _dn_ok:
+                            _durable_note_writes += 1
+                        else:
+                            roi_tel.durable_cache_error_count += 1
                 roi_tel.note_cache_write_count = _write_count
+                roi_tel.durable_note_cache_write_count = _durable_note_writes
                 if _write_count > 0:
                     logger.info(
                         "semantic_retrieval_v1: note_cache_written "
-                        "count=%d fingerprint=%s query=%r",
-                        _write_count, evidence_fingerprint, user_query,
+                        "count=%d durable_writes=%d fingerprint=%s query=%r",
+                        _write_count, _durable_note_writes,
+                        evidence_fingerprint, user_query,
                     )
         except Exception as exc:  # noqa: BLE001
             logger.warning(
