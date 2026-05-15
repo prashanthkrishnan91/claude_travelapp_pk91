@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ChevronDown,
@@ -8,6 +8,7 @@ import {
   Loader2,
   MapPin,
   Send,
+  Trash2,
 } from "lucide-react";
 import { callConciergeSearch } from "@/lib/api";
 import type {
@@ -409,6 +410,32 @@ const EDITORIAL_PROMPTS = [
   { label: "Romantic restaurants in New York", query: "Romantic restaurants", destination: "New York" },
 ] as const;
 
+// ─── localStorage transcript persistence ──────────────────────────────────────
+
+const TRANSCRIPT_KEY = "concierge_outside_trip_transcript_v1";
+
+function loadPersistedTranscript(): Message[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(TRANSCRIPT_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed as Message[];
+  } catch {
+    return [];
+  }
+}
+
+function saveTranscript(msgs: Message[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(TRANSCRIPT_KEY, JSON.stringify(msgs));
+  } catch {
+    // storage quota exceeded or unavailable — silently skip
+  }
+}
+
 // ─── Main ConciergePage ───────────────────────────────────────────────────────
 
 export function ConciergePage() {
@@ -421,6 +448,30 @@ export function ConciergePage() {
   const [lastQuery, setLastQuery] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Load persisted transcript on mount
+  useEffect(() => {
+    const persisted = loadPersistedTranscript();
+    if (persisted.length > 0) {
+      setMessages(persisted);
+      const lastUserMsg = [...persisted].reverse().find((m) => m.role === "user");
+      if (lastUserMsg) setLastQuery(lastUserMsg.text);
+    }
+  }, []);
+
+  // Persist transcript whenever messages change
+  useEffect(() => {
+    saveTranscript(messages);
+  }, [messages]);
+
+  function clearTranscript() {
+    setMessages([]);
+    setLastQuery(null);
+    setError(null);
+    if (typeof window !== "undefined") {
+      try { window.localStorage.removeItem(TRANSCRIPT_KEY); } catch { /* ignore */ }
+    }
+  }
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -786,10 +837,29 @@ export function ConciergePage() {
           </div>
         )}
 
-        {/* Messages — user messages are silent; only assistant content renders */}
+        {/* Messages — transcript: user turns + assistant card groups in order */}
         <div className="space-y-4">
           {messages.map((msg, idx) => {
-            if (msg.role === "user") return null;
+            // User turn: show the submitted message as a right-aligned bubble
+            if (msg.role === "user") {
+              return (
+                <div key={idx} className="flex justify-end">
+                  <div
+                    className="text-ds-text rounded-2xl rounded-tr-sm"
+                    style={{
+                      background: "var(--ds-accent-subtle)",
+                      padding: "var(--ds-space-3) var(--ds-space-4)",
+                      fontSize: "var(--ds-type-body-size)",
+                      lineHeight: "var(--ds-type-body-leading)",
+                      maxWidth: "80%",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {msg.text}
+                  </div>
+                </div>
+              );
+            }
 
             // Refinement text-only note (no cards)
             if (
@@ -1182,6 +1252,27 @@ export function ConciergePage() {
             padding: "var(--ds-space-3) var(--ds-space-4) var(--ds-space-4)",
           }}
         >
+          {/* Clear-chat — only shown when transcript has messages */}
+          {messages.length > 0 && !loading && (
+            <button
+              type="button"
+              onClick={clearTranscript}
+              aria-label="Clear chat"
+              title="Clear chat"
+              className="shrink-0 rounded-xl bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              style={{
+                padding: "var(--ds-space-3)",
+                minWidth: "44px",
+                minHeight: "44px",
+                border: "1px solid var(--ds-pen-stroke)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
           <textarea
             ref={inputRef}
             value={input}
