@@ -154,6 +154,7 @@ def _make_frame(
     location_modifiers=None,
     subtype_concepts=None,
     value_signals=None,
+    literal_ask=None,
 ):
     frame = MagicMock()
     frame.normalized_soft_preferences = normalized_soft_preferences or []
@@ -161,6 +162,7 @@ def _make_frame(
     frame.location_modifiers = location_modifiers or []
     frame.subtype_concepts = subtype_concepts or []
     frame.value_signals = value_signals or []
+    frame.literal_ask = literal_ask or ""
     return frame
 
 
@@ -221,6 +223,63 @@ class TestEditorialSelectivityGate:
         frame = _make_frame(value_signals=["luxury_for_less"])
         should_run, reason = should_run_editorial(frame)
         assert should_run is True
+
+    def test_actual_luxury_label_allows_editorial(self):
+        """frame_extractor produces 'luxury' not 'luxury_for_less' — must match."""
+        frame = _make_frame(value_signals=["luxury"])
+        should_run, reason = should_run_editorial(frame)
+        assert should_run is True
+        assert "value_signal" in reason
+
+    def test_actual_budget_label_allows_editorial(self):
+        frame = _make_frame(value_signals=["budget"])
+        should_run, reason = should_run_editorial(frame)
+        assert should_run is True
+        assert "value_signal" in reason
+
+    def test_actual_value_for_money_label_allows_editorial(self):
+        frame = _make_frame(value_signals=["value_for_money"])
+        should_run, reason = should_run_editorial(frame)
+        assert should_run is True
+        assert "value_signal" in reason
+
+    def test_best_cocktail_bars_allows_editorial(self):
+        """'Best cocktail bars' — 'best' stripped by _FILLER_WORDS, no soft_prefs.
+        Must be caught by literal_ask qualitative ranking check."""
+        frame = _make_frame(
+            subtype_concepts=[MagicMock(label="cocktail")],
+            normalized_soft_preferences=[],
+            geography_hints=[],
+            location_modifiers=[],
+            value_signals=[],
+            literal_ask="Best cocktail bars",
+        )
+        should_run, reason = should_run_editorial(frame)
+        assert should_run is True
+        assert reason == "qualitative_ranking_intent"
+
+    def test_top_rated_restaurants_allows_editorial(self):
+        frame = _make_frame(
+            subtype_concepts=[MagicMock(label="restaurant")],
+            literal_ask="top rated restaurants in Kyoto",
+        )
+        should_run, reason = should_run_editorial(frame)
+        assert should_run is True
+        assert reason == "qualitative_ranking_intent"
+
+    def test_plain_cocktail_bars_without_ranking_skips_editorial(self):
+        """'Cocktail bars' with no qualitative markers, no geo, no prefs → skips."""
+        frame = _make_frame(
+            subtype_concepts=[MagicMock(label="cocktail")],
+            normalized_soft_preferences=[],
+            geography_hints=[],
+            location_modifiers=[],
+            value_signals=[],
+            literal_ask="cocktail bars",
+        )
+        should_run, reason = should_run_editorial(frame)
+        assert should_run is False
+        assert "low_editorial_value" in reason
 
     def test_none_frame_allows_editorial(self):
         should_run, reason = should_run_editorial(None)
