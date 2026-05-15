@@ -465,6 +465,7 @@ def _run_pipeline(
         _SUPABASE_NOTE_CACHE,
         build_evidence_fingerprint,
         should_run_editorial,
+        should_skip_writer_no_evidence,
     )
     roi_tel = CreditROITelemetry()
 
@@ -1016,6 +1017,22 @@ def _run_pipeline(
             "set_writer_fallback_to_existing_path": True,
             "set_writer_skipped_budget": True,
             "set_writer_remaining_ms_at_skip": _set_writer_remaining_ms,
+        }
+    elif should_skip_writer_no_evidence(
+        roi_tel.accepted_editorial_evidence_count, _cached_notes
+    ):
+        # Tavily was skipped or produced 0 accepted atoms AND no cached approved
+        # notes exist. The writer has no editorial grounding — it would produce
+        # generic or empty notes that fail the quality gate, wasting Haiku credits
+        # with nothing visible or cacheable as the result.
+        logger.info(
+            "semantic_retrieval_v1: set_writer_skipped_no_editorial_evidence "
+            "accepted_editorial_evidence_count=%d cached_notes=%d query=%r",
+            roi_tel.accepted_editorial_evidence_count, len(_cached_notes), user_query,
+        )
+        set_writer_tel = {
+            "set_writer_fallback_to_existing_path": True,
+            "set_writer_skipped_no_editorial_evidence": True,
         }
     elif curated_result is not None and curated_result.output_count > 0:
         try:

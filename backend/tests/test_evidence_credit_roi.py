@@ -31,6 +31,7 @@ import pytest
 from app.concierge.evidence_cache import (
     build_evidence_fingerprint,
     should_run_editorial,
+    should_skip_writer_no_evidence,
     EvidenceAtomCache,
     NoteCache,
     CreditROITelemetry,
@@ -267,9 +268,13 @@ class TestEditorialSelectivityGate:
         assert should_run is True
         assert reason == "qualitative_ranking_intent"
 
-    def test_plain_cocktail_bars_is_specific_subtype_allows_editorial(self):
-        """'Cocktail bars' → concept label 'cocktail' is a specific subtype, not a broad
-        commodity category. Editorial sources add value for subtype discovery."""
+    def test_plain_cocktail_bars_no_signals_skips_editorial(self):
+        """'Cocktail bars' with no preference/geo/best-top signal skips Tavily.
+
+        PR #388 made any non-broad subtype editorial-worthy. That behavior is
+        reverted: without an explicit signal (best/top, preference, geo, value,
+        multi-concept) the subtype alone is not sufficient to justify Tavily.
+        """
         frame = _make_frame(
             subtype_concepts=[MagicMock(label="cocktail")],
             normalized_soft_preferences=[],
@@ -279,8 +284,72 @@ class TestEditorialSelectivityGate:
             literal_ask="cocktail bars",
         )
         should_run, reason = should_run_editorial(frame)
+        assert should_run is False
+        assert "low_editorial_value" in reason
+
+    def test_sports_bars_no_signals_skips_editorial(self):
+        """'Sports bars' without editorial signals must not hit Tavily.
+
+        Production logs showed 'sports bars' hitting Tavily, accepting zero
+        editorial evidence, and producing nothing visible or cacheable.
+        """
+        frame = _make_frame(
+            subtype_concepts=[MagicMock(label="sport")],
+            normalized_soft_preferences=[],
+            geography_hints=[],
+            location_modifiers=[],
+            value_signals=[],
+            literal_ask="sports bars",
+        )
+        should_run, reason = should_run_editorial(frame)
+        assert should_run is False
+        assert "low_editorial_value" in reason
+
+    def test_speakeasy_bars_no_signals_skips_editorial(self):
+        """'Speakeasy bars' without editorial signals must not hit Tavily.
+
+        Production logs showed 'speakeasy bars' hitting Tavily, accepting zero
+        editorial evidence, Haiku timing out, and nothing cached.
+        """
+        frame = _make_frame(
+            subtype_concepts=[MagicMock(label="speakeasy")],
+            normalized_soft_preferences=[],
+            geography_hints=[],
+            location_modifiers=[],
+            value_signals=[],
+            literal_ask="speakeasy bars",
+        )
+        should_run, reason = should_run_editorial(frame)
+        assert should_run is False
+        assert "low_editorial_value" in reason
+
+    def test_best_speakeasy_bars_allows_editorial(self):
+        """'Best speakeasy bars' → qualitative ranking intent allows Tavily."""
+        frame = _make_frame(
+            subtype_concepts=[MagicMock(label="speakeasy")],
+            normalized_soft_preferences=[],
+            geography_hints=[],
+            location_modifiers=[],
+            value_signals=[],
+            literal_ask="best speakeasy bars",
+        )
+        should_run, reason = should_run_editorial(frame)
         assert should_run is True
-        assert reason == "specific_discovery_subtype"
+        assert reason == "qualitative_ranking_intent"
+
+    def test_romantic_speakeasy_bars_allows_editorial(self):
+        """'Romantic speakeasy bars' → romantic preference allows Tavily."""
+        frame = _make_frame(
+            subtype_concepts=[MagicMock(label="speakeasy")],
+            normalized_soft_preferences=["romantic"],
+            geography_hints=[],
+            location_modifiers=[],
+            value_signals=[],
+            literal_ask="romantic speakeasy bars",
+        )
+        should_run, reason = should_run_editorial(frame)
+        assert should_run is True
+        assert "editorial_worthy_pref" in reason
 
     def test_broad_category_bar_skips_editorial(self):
         """Plain 'bars' → concept label 'bar' is a broad commodity parent → skips."""
@@ -324,11 +393,12 @@ class TestEditorialSelectivityGate:
         assert should_run is False
         assert "low_editorial_value" in reason
 
-    def test_specific_subtype_concept_allows_editorial_without_hardcoded_terms(self):
-        """A specific subtype concept (not in the broad commodity set) is editorial-eligible
-        regardless of what the specific term is. The gate distinguishes by commodity
-        parent membership, not by allowlist of subtype terms."""
-        # Use a fabricated label to confirm no hardcoded allowlist is in play.
+    def test_plain_subtype_only_no_signals_skips_editorial(self):
+        """Any plain subtype-only query without preference/geo/value/ranking skips Tavily.
+
+        The PR #388 'non-broad subtype => Tavily' rule is reverted. Without an
+        explicit editorial signal the subtype label alone does not warrant Tavily.
+        """
         frame = _make_frame(
             subtype_concepts=[MagicMock(label="xyzzy_niche_bar_type")],
             normalized_soft_preferences=[],
@@ -338,8 +408,8 @@ class TestEditorialSelectivityGate:
             literal_ask="xyzzy niche bar type",
         )
         should_run, reason = should_run_editorial(frame)
-        assert should_run is True
-        assert reason == "specific_discovery_subtype"
+        assert should_run is False
+        assert "low_editorial_value" in reason
 
     def test_broad_category_bars_label_skips_editorial(self):
         """The plural 'bars' label also skips — both singular and plural covered."""
@@ -1114,3 +1184,33 @@ class TestPartialNoteCacheMerge:
         assert result.notes_by_place_id["pid_X"].validated is True
         assert result.notes_by_place_id["pid_Y"].validated is False
         assert result.notes_by_place_id["pid_Z"].validated is False
+
+
+# ── Writer skip gate: no editorial evidence + no cached notes ─────────────────
+
+class TestShouldSkipWriterNoEvidence:
+    """should_skip_writer_no_evidence guards the LLM writer against pointless runs.
+
+    When Tavily was skipped or produced 0 accepted atoms AND there are no cached
+    approved notes, the writer has no editorial grounding and would waste Haiku
+    credits producing notes that fail the quality gate.
+    """
+
+    def test_skips_when_no_evidence_and_no_cached_notes(self):
+        """Core case: 0 accepted atoms + empty cache => skip writer."""
+        assert should_skip_writer_no_evidence(0, {}) is True
+
+    def test_does_not_skip_when_evidence_present(self):
+        """Accepted editorial atoms available => writer may proceed."""
+        assert should_skip_writer_no_evidence(3, {}) is False
+
+    def test_does_not_skip_when_cached_notes_present(self):
+        """Cached approved notes => writer may proceed (will use them)."""
+        assert should_skip_writer_no_evidence(0, {"pid_A": "A note."}) is False
+
+    def test_does_not_skip_when_both_evidence_and_cached(self):
+        assert should_skip_writer_no_evidence(2, {"pid_A": "A note."}) is False
+
+    def test_skips_with_multiple_zero_evidence_and_empty_cache(self):
+        """Explicitly zero evidence count (not None) still triggers skip."""
+        assert should_skip_writer_no_evidence(0, {}) is True
