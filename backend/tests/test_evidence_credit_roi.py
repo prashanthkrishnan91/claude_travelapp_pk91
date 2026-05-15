@@ -267,8 +267,9 @@ class TestEditorialSelectivityGate:
         assert should_run is True
         assert reason == "qualitative_ranking_intent"
 
-    def test_plain_cocktail_bars_without_ranking_skips_editorial(self):
-        """'Cocktail bars' with no qualitative markers, no geo, no prefs → skips."""
+    def test_plain_cocktail_bars_is_specific_subtype_allows_editorial(self):
+        """'Cocktail bars' → concept label 'cocktail' is a specific subtype, not a broad
+        commodity category. Editorial sources add value for subtype discovery."""
         frame = _make_frame(
             subtype_concepts=[MagicMock(label="cocktail")],
             normalized_soft_preferences=[],
@@ -276,6 +277,78 @@ class TestEditorialSelectivityGate:
             location_modifiers=[],
             value_signals=[],
             literal_ask="cocktail bars",
+        )
+        should_run, reason = should_run_editorial(frame)
+        assert should_run is True
+        assert reason == "specific_discovery_subtype"
+
+    def test_broad_category_bar_skips_editorial(self):
+        """Plain 'bars' → concept label 'bar' is a broad commodity parent → skips."""
+        frame = _make_frame(
+            subtype_concepts=[MagicMock(label="bar")],
+            normalized_soft_preferences=[],
+            geography_hints=[],
+            location_modifiers=[],
+            value_signals=[],
+            literal_ask="bars",
+        )
+        should_run, reason = should_run_editorial(frame)
+        assert should_run is False
+        assert "low_editorial_value" in reason
+
+    def test_broad_category_restaurant_skips_editorial(self):
+        """Plain 'restaurants' → broad commodity concept → skips."""
+        frame = _make_frame(
+            subtype_concepts=[MagicMock(label="restaurant")],
+            normalized_soft_preferences=[],
+            geography_hints=[],
+            location_modifiers=[],
+            value_signals=[],
+            literal_ask="restaurants",
+        )
+        should_run, reason = should_run_editorial(frame)
+        assert should_run is False
+        assert "low_editorial_value" in reason
+
+    def test_broad_category_coffee_skips_editorial(self):
+        """Plain 'coffee shops' → concept label 'coffee' is a broad commodity → skips."""
+        frame = _make_frame(
+            subtype_concepts=[MagicMock(label="coffee")],
+            normalized_soft_preferences=[],
+            geography_hints=[],
+            location_modifiers=[],
+            value_signals=[],
+            literal_ask="coffee shops",
+        )
+        should_run, reason = should_run_editorial(frame)
+        assert should_run is False
+        assert "low_editorial_value" in reason
+
+    def test_specific_subtype_concept_allows_editorial_without_hardcoded_terms(self):
+        """A specific subtype concept (not in the broad commodity set) is editorial-eligible
+        regardless of what the specific term is. The gate distinguishes by commodity
+        parent membership, not by allowlist of subtype terms."""
+        # Use a fabricated label to confirm no hardcoded allowlist is in play.
+        frame = _make_frame(
+            subtype_concepts=[MagicMock(label="xyzzy_niche_bar_type")],
+            normalized_soft_preferences=[],
+            geography_hints=[],
+            location_modifiers=[],
+            value_signals=[],
+            literal_ask="xyzzy niche bar type",
+        )
+        should_run, reason = should_run_editorial(frame)
+        assert should_run is True
+        assert reason == "specific_discovery_subtype"
+
+    def test_broad_category_bars_label_skips_editorial(self):
+        """The plural 'bars' label also skips — both singular and plural covered."""
+        frame = _make_frame(
+            subtype_concepts=[MagicMock(label="bars")],
+            normalized_soft_preferences=[],
+            geography_hints=[],
+            location_modifiers=[],
+            value_signals=[],
         )
         should_run, reason = should_run_editorial(frame)
         assert should_run is False
