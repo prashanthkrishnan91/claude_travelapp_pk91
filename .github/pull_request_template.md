@@ -1,3 +1,7 @@
+<!-- FORMAT COMPLIANCE: Keep all `## SectionName` headers exactly as written below.
+     The CI readiness gate checks for exact substrings (`## Severity`, `## Validation`, etc.).
+     Using `**SectionName:**` bold inline instead of `## SectionName` headers will fail the gate. -->
+
 ## Summary
 
 ## Severity
