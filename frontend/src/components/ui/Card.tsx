@@ -6,14 +6,15 @@ export type CardTone = "dark" | "paper";
 
 const TONE_CLASSES: Record<CardTone, string> = {
   dark:  "bg-ds-onyx  border-ds-pen-stroke text-ds-text",
-  paper: "bg-ds-paper border-ds-hairline   text-ds-text-inverse",
+  paper: "bg-ds-paper border-ds-hairline   text-ds-text-inverse card-paper",
 };
 
 // ── Root ────────────────────────────────────────────────────────────────────
 export interface CardProps extends HTMLAttributes<HTMLElement> {
-  tone?:      CardTone;
-  as?:        "article" | "div" | "li" | "section";
-  children?:  ReactNode;
+  tone?:           CardTone;
+  as?:             "article" | "div" | "li" | "section";
+  children?:       ReactNode;
+  "data-testid"?:  string;
 }
 
 function CardRoot({

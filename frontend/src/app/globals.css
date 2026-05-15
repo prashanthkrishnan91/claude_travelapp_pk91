@@ -651,6 +651,20 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 
+  /* ── Paper card — no dark shadow, luminance-only hover (§8 contract) */
+  .card-paper {
+    box-shadow: none;
+  }
+  .card-paper.card-lift:hover {
+    transform: translateY(-2px) scale(1.003);
+    box-shadow: none;
+    border-color: var(--ds-linen);
+  }
+  .card-paper.card-lift:active {
+    transform: translateY(0);
+    box-shadow: none;
+  }
+
   /* ── Hover scale utility ─────────────────────────────────────── */
   .hover-scale {
     transition: transform 0.18s ease;
