@@ -26,6 +26,87 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_QUERIES = 3
 HARD_CAP_QUERIES = 4
 
+# Venue head nouns: words that anchor a Google search to a specific place type.
+# When the user's literal ask ends with one of these (possibly preceded by a
+# subtype modifier), we preserve the full compound phrase for retrieval so that
+# "sports bars" → "sports bars Seattle" not "sport Seattle".
+_VENUE_HEAD_WORDS: frozenset = frozenset({
+    "bar", "bars",
+    "restaurant", "restaurants",
+    "coffee shop", "coffee shops",
+    "cafe", "cafes", "café", "cafés",
+    "brewery", "breweries",
+    "attraction", "attractions",
+    "museum", "museums",
+    "hotel", "hotels",
+    "shop", "shops",
+    "pub", "pubs",
+    "lounge", "lounges",
+    "club", "clubs",
+    "diner", "diners",
+    "bistro", "bistros",
+    "brasserie", "brasseries",
+    "tavern", "taverns",
+})
+
+# Regex to detect a compound phrase: one or more modifier words followed by a
+# venue head word. Modifiers may themselves be multi-word (e.g. "sports").
+_COMPOUND_VENUE_RE = re.compile(
+    r"^(.+?)\s+(bar|bars|restaurant|restaurants|coffee\s+shop|coffee\s+shops"
+    r"|cafe|cafes|café|cafés|brewery|breweries|attraction|attractions"
+    r"|museum|museums|hotel|hotels|shop|shops|pub|pubs|lounge|lounges"
+    r"|club|clubs|diner|diners|bistro|bistros|brasserie|brasseries"
+    r"|tavern|taverns)$",
+    re.IGNORECASE,
+)
+
+
+def _compound_venue_head(frame: ExperienceFrame) -> str:
+    """Return a compound venue phrase from the literal/normalized ask, if present.
+
+    When the user asked for "sports bars", the frame extractor reduces this to
+    concept "sport". This function recovers "sports bars" by checking whether
+    the literal ask matches <modifier(s)> <venue-head-noun> AND the frame's
+    primary concept has lost the venue noun (i.e. concept "sport" lacks "bar").
+
+    Only triggers when venue-noun loss occurred. If the frame's primary concept
+    already contains a venue noun (e.g. "brewery" for "best waterfront breweries"),
+    the normal concept-based path is used unchanged.
+
+    Returns the matched compound phrase (lowercased), or empty string.
+    """
+    ask = (frame.literal_ask or frame.normalized_ask or "").strip().lower()
+    if not ask:
+        return ""
+    m = _COMPOUND_VENUE_RE.match(ask)
+    if not m:
+        return ""
+    venue_head = m.group(2).lower()  # e.g. "bars", "restaurants", "coffee shops"
+    # Check if the primary concept already contains the venue-head token.
+    # If it does, the extractor preserved the venue noun — no compound head needed.
+    primary_concept = ""
+    if frame.subtype_concepts:
+        primary_concept = frame.subtype_concepts[0].label.lower()
+    concept_tokens = set(re.findall(r"\b[a-z]+\b", primary_concept))
+    head_tokens = set(re.findall(r"\b[a-z]+\b", venue_head))
+    # Stem each token by stripping common plural suffixes for comparison.
+    def _stem(w: str) -> str:
+        if w.endswith("ies") and len(w) > 4:
+            return w[:-3] + "y"
+        if w.endswith("es") and len(w) > 4 and w[-3] in "shc":
+            return w[:-2]
+        if w.endswith("s") and len(w) > 3 and not w.endswith("ss"):
+            return w[:-1]
+        return w
+    stemmed_concept = {_stem(t) for t in concept_tokens}
+    stemmed_head = {_stem(t) for t in head_tokens}
+    # If concept tokens (stemmed) overlap with head tokens (stemmed), the
+    # extractor preserved the venue noun — no compound head override needed.
+    if stemmed_concept & stemmed_head:
+        return ""
+    return ask
+
+
 # Near-synonym expansions for common concepts. These widen recall without
 # hardcoding category membership. Not a closed enum — unknown concepts get
 # no expansion and still work via direct name matching.
@@ -119,7 +200,17 @@ _GEO_QUERY_TERMS: dict = {
 
 
 def _primary_label(frame: ExperienceFrame) -> str:
-    """Return the most confident concept label from the frame."""
+    """Return the retrieval label for the frame.
+
+    When the user's literal ask contains a compound venue phrase (e.g. "sports
+    bars", "cocktail bars", "Mexican restaurants"), that phrase is returned so
+    that Google receives a bar/restaurant-preserving query instead of the bare
+    reduced concept (e.g. "sport").  Single-concept asks (e.g. "ramen", "sushi",
+    "breweries") fall through to the normal concept-label path unchanged.
+    """
+    compound = _compound_venue_head(frame)
+    if compound:
+        return compound
     if not frame.subtype_concepts:
         return (frame.normalized_ask or frame.literal_ask or "").strip()
     return frame.subtype_concepts[0].label

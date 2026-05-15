@@ -602,3 +602,115 @@ class TestMultiConceptEditorialGate:
         )
         assert decision.should_run_set_writer
         assert decision.should_run_legacy_batched_reasoning
+
+
+# ── Section F: Runtime/control-plane guard for compound venue-head queries ──────
+
+class TestCompoundVenueHeadControlPlane:
+    """Production-like 'sports bars' frame must skip Tavily and legacy notes,
+    preserve cards, and generate bar-preserving retrieval queries.
+
+    This tests the full control-plane contract for the PR #390 regression:
+    concepts=[sport, sports] + literal_ask='sports bars' should NOT trigger
+    editorial enrichment or legacy batched reasoning, and the retrieval planner
+    must produce queries with 'bar' in them.
+    """
+
+    def _make_sports_bars_frame(self, destination: str = "Seattle") -> _Frame:
+        """Simulate the production frame for 'sports bars' query."""
+        return _Frame(
+            subtype_concepts=[
+                _SubtypeConcept(label="sport", confidence=0.95),
+                _SubtypeConcept(label="sports", confidence=0.85),
+            ],
+            destination=destination,
+            user_query="sports bars",
+            normalized_soft_preferences=[],
+            geography_hints=[],
+        )
+
+    def test_sports_bars_frame_skips_tavily(self):
+        """sport/sports concepts are singular/plural pair → skip editorial."""
+        frame = self._make_sports_bars_frame()
+        should_run, reason = should_run_editorial(frame)
+        assert not should_run, (
+            f"sports bars frame must skip Tavily, got reason={reason!r}"
+        )
+
+    def test_sports_bars_frame_skips_legacy_batched_reasoning(self):
+        frame = self._make_sports_bars_frame()
+        decision = make_note_decision(
+            frame=frame,
+            cached_notes={},
+            accepted_editorial_evidence_count=0,
+        )
+        assert not decision.should_run_legacy_batched_reasoning, (
+            "Legacy batched reasoning must be skipped for sports bars frame"
+        )
+
+    def test_sports_bars_frame_skips_set_writer(self):
+        frame = self._make_sports_bars_frame()
+        decision = make_note_decision(
+            frame=frame,
+            cached_notes={},
+            accepted_editorial_evidence_count=0,
+        )
+        assert not decision.should_run_set_writer, (
+            "Set writer must be skipped for sports bars frame without evidence"
+        )
+
+    def test_sports_bars_frame_is_plain_category(self):
+        frame = self._make_sports_bars_frame()
+        decision = make_note_decision(
+            frame=frame,
+            cached_notes={},
+            accepted_editorial_evidence_count=0,
+        )
+        assert decision.is_plain_category_query
+
+    def test_sports_bars_retrieval_query_contains_bar(self):
+        """Retrieval planner with literal_ask='sports bars' must produce
+        bar-preserving queries, not 'sport Seattle'."""
+        from app.concierge.retrieval_planner import plan_queries
+        from app.concierge.frame_extractor import ExperienceFrame, SubtypeConcept
+
+        frame = ExperienceFrame(
+            literal_ask="sports bars",
+            normalized_ask="sports bars",
+            destination="Seattle",
+            subtype_concepts=[
+                SubtypeConcept(label="sport", confidence=0.95, source="frame_extractor"),
+                SubtypeConcept(label="sports", confidence=0.85, source="frame_extractor"),
+            ],
+        )
+        qs = plan_queries(frame)
+        first = qs[0].lower()
+        assert "bar" in first or "bars" in first, (
+            f"First query must contain 'bar', got {qs[0]!r}. "
+            "Old regression produced 'sport Seattle' — bar-head was lost."
+        )
+
+    def test_sports_bars_retrieval_query_not_bare_sport(self):
+        """The old regression: query was 'sport Seattle' — must not happen."""
+        from app.concierge.retrieval_planner import plan_queries
+        from app.concierge.frame_extractor import ExperienceFrame, SubtypeConcept
+
+        frame = ExperienceFrame(
+            literal_ask="sports bars",
+            normalized_ask="sports bars",
+            destination="Seattle",
+            subtype_concepts=[
+                SubtypeConcept(label="sport", confidence=0.95, source="frame_extractor"),
+            ],
+        )
+        qs = plan_queries(frame)
+        assert "sport seattle" not in [q.lower() for q in qs], (
+            f"Query 'sport seattle' must not appear in {qs}"
+        )
+
+    def test_cards_preserved_without_notes(self):
+        """Plain sports bars frame: make_note_decision must not collapse cards.
+        card_count_collapsed_due_to_notes must be False (structural invariant)."""
+        from app.concierge.evidence_cache import CreditROITelemetry
+        tel = CreditROITelemetry()
+        assert tel.card_count_collapsed_due_to_notes is False

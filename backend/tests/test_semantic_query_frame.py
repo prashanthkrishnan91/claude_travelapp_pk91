@@ -793,3 +793,193 @@ class TestTelemetryPrecision:
         # After the fix: pre_assembly_verified_count correctly shows 7.
         pre_assembly_verified_count = verified_count
         assert pre_assembly_verified_count == 7
+
+
+# ── 12. Compound venue-head preservation (PR #390 regression fix) ─────────────
+
+class TestCompoundVenueHeadPreservation:
+    """Retrieval queries must use the full compound phrase when the user's ask
+    contains a modifier + venue noun (e.g. 'sports bars', 'cocktail bars').
+
+    Root cause: frame extractor reduced 'sports bars' → concept 'sport', and
+    retrieval planner used that bare concept → 'sport Seattle'.  Fix: when
+    literal_ask contains <modifier> <venue-head>, use the compound phrase.
+    """
+
+    # ── Retrieval query shape tests ───────────────────────────────────────────
+
+    def test_sports_bars_query_contains_sports_bar(self):
+        qs = _queries("sports bars", destination="Seattle")
+        first = qs[0].lower()
+        assert "sports bar" in first or "sports bars" in first, (
+            f"Expected 'sports bar(s)' in first query, got {qs[0]!r}"
+        )
+
+    def test_sports_bars_query_not_only_sport(self):
+        qs = _queries("sports bars", destination="Seattle")
+        # The old bad query was 'sport Seattle' — must not occur as the only content
+        first = qs[0].lower()
+        assert first != "sport seattle", (
+            f"Query regressed to bare 'sport seattle': {qs[0]!r}"
+        )
+        assert "bar" in first or "bars" in first, (
+            f"'bar' missing from first query; query was {qs[0]!r}"
+        )
+
+    def test_cocktail_bars_query_contains_cocktail_bar(self):
+        qs = _queries("cocktail bars", destination="Chicago")
+        combined = " ".join(qs).lower()
+        assert "cocktail bar" in combined, (
+            f"Expected 'cocktail bar' in queries, got {qs}"
+        )
+
+    def test_speakeasy_bars_query_contains_speakeasy_bar(self):
+        qs = _queries("speakeasy bars", destination="Chicago")
+        combined = " ".join(qs).lower()
+        assert "speakeasy bar" in combined, (
+            f"Expected 'speakeasy bar' in queries, got {qs}"
+        )
+
+    def test_mexican_restaurants_query_contains_mexican_restaurant(self):
+        qs = _queries("Mexican restaurants", destination="Chicago")
+        combined = " ".join(qs).lower()
+        assert "mexican restaurant" in combined, (
+            f"Expected 'mexican restaurant' in queries, got {qs}"
+        )
+
+    def test_coffee_shops_query_contains_coffee_shop(self):
+        qs = _queries("coffee shops", destination="Seattle")
+        combined = " ".join(qs).lower()
+        assert "coffee shop" in combined, (
+            f"Expected 'coffee shop' in queries, got {qs}"
+        )
+
+    # ── Single-concept behavior unchanged ─────────────────────────────────────
+
+    def test_ramen_single_concept_unchanged(self):
+        qs = _queries("ramen", destination="Chicago")
+        assert any("ramen" in q.lower() for q in qs), (
+            f"'ramen' missing from queries: {qs}"
+        )
+
+    def test_sushi_single_concept_unchanged(self):
+        qs = _queries("sushi", destination="Chicago")
+        assert any("sushi" in q.lower() for q in qs), (
+            f"'sushi' missing from queries: {qs}"
+        )
+
+    def test_breweries_single_concept_unchanged(self):
+        qs = _queries("breweries", destination="Chicago")
+        assert any(
+            w in " ".join(qs).lower()
+            for w in ("brewery", "breweries", "taproom", "brewpub")
+        ), f"No brewery-anchored query in {qs}"
+
+    def test_attractions_single_concept_unchanged(self):
+        qs = _queries("attractions", destination="Chicago")
+        combined = " ".join(qs).lower()
+        assert "attraction" in combined, (
+            f"'attraction' missing from queries: {qs}"
+        )
+
+    # ── Destination is always present ─────────────────────────────────────────
+
+    def test_sports_bars_query_includes_destination(self):
+        qs = _queries("sports bars", destination="Seattle")
+        assert any("seattle" in q.lower() for q in qs), (
+            f"Destination 'seattle' missing from queries: {qs}"
+        )
+
+    def test_cocktail_bars_query_includes_destination(self):
+        qs = _queries("cocktail bars", destination="New York")
+        assert any("new york" in q.lower() for q in qs), (
+            f"Destination 'new york' missing from queries: {qs}"
+        )
+
+
+# ── 13. Entity quality guard: bar/nightlife queries reject wrong-category places ─
+
+class TestEntityQualityGuardBarQueries:
+    """For nightlife/bar retrieval queries, entities clearly outside bar/food/
+    nightlife (stadiums, gyms, sports leagues, rehab centers) must score
+    significantly lower on subtype_fit than on-concept bar entities.
+
+    This is a retrieval + ranking contract test.  With 'sports bars Seattle'
+    as the query, Google returns bar-type entities, not stadiums.  The ranker
+    additionally assigns low subtype_fit to wrong-category types.
+    """
+
+    def _make_entity(self, name: str, types: List[str], primary_type: str,
+                     source_query: str = "sports bars Seattle") -> Any:
+        from unittest.mock import MagicMock
+        e = MagicMock()
+        e.name = name
+        e.types = types
+        e.primary_type = primary_type
+        e.source_query = source_query
+        e.formatted_address = "123 Main St, Seattle, WA"
+        e.rating = 4.3
+        e.user_rating_count = 200
+        e.editorial_summary = ""
+        e.place_id = f"ChIJ_{name[:4]}"
+        e.business_status = "OPERATIONAL"
+        return e
+
+    def _subtype_fit_for(self, entity, literal_ask: str, destination: str = "Seattle") -> float:
+        from app.concierge.ranker import _subtype_fit
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame(literal_ask, destination)
+        return _subtype_fit(entity, frame)
+
+    def test_sports_bar_entity_scores_higher_than_stadium(self):
+        bar = self._make_entity(
+            "The Goal Post Sports Bar",
+            ["bar", "sports_bar", "night_club"],
+            "bar",
+        )
+        stadium = self._make_entity(
+            "Seattle Seahawks Stadium",
+            ["stadium", "sports_complex", "point_of_interest"],
+            "stadium",
+        )
+        bar_fit = self._subtype_fit_for(bar, "sports bars")
+        stadium_fit = self._subtype_fit_for(stadium, "sports bars")
+        assert bar_fit >= stadium_fit, (
+            f"Sports bar entity should score >= stadium: bar_fit={bar_fit:.3f} stadium_fit={stadium_fit:.3f}"
+        )
+
+    def test_sports_bar_entity_scores_higher_than_rehab(self):
+        bar = self._make_entity(
+            "Kickoff Bar & Grill",
+            ["bar", "restaurant", "sports_bar"],
+            "bar",
+        )
+        # Name intentionally avoids 'sports'/'bar' to test type-based discrimination only.
+        rehab = self._make_entity(
+            "Northwest Physical Therapy & Rehab",
+            ["physiotherapist", "health", "point_of_interest"],
+            "physiotherapist",
+            source_query="sports bars Seattle",
+        )
+        bar_fit = self._subtype_fit_for(bar, "sports bars")
+        rehab_fit = self._subtype_fit_for(rehab, "sports bars")
+        assert bar_fit >= rehab_fit, (
+            f"Sports bar must score >= rehab center: bar_fit={bar_fit:.3f} rehab_fit={rehab_fit:.3f}"
+        )
+
+    def test_sports_bar_entity_scores_higher_than_athletic_club(self):
+        bar = self._make_entity(
+            "The Penalty Box Bar",
+            ["bar", "night_club"],
+            "bar",
+        )
+        gym = self._make_entity(
+            "Seattle Athletic Club",
+            ["gym", "health", "fitness_center"],
+            "gym",
+        )
+        bar_fit = self._subtype_fit_for(bar, "sports bars")
+        gym_fit = self._subtype_fit_for(gym, "sports bars")
+        assert bar_fit >= gym_fit, (
+            f"Bar entity must score >= athletic club: bar_fit={bar_fit:.3f} gym_fit={gym_fit:.3f}"
+        )
