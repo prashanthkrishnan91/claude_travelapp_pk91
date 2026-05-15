@@ -21,31 +21,25 @@ Before giving any Claude/Codex prompt, ChatGPT must silently check:
 3. Repo memory instead of repeated context?
 4. Minimal file scope (anchor files only)?
 5. Compressed constraints — would this prompt still work if repeated workflow boilerplate were removed?
-6. Can this task safely **batch** adjacent steps into one capability slice, or is the proposed split actually reducing risk?
+6. Can this task safely **batch** adjacent steps into one capability slice?
 7. Is this split reducing risk, or just slowing progress?
-8. Are tests **tiered correctly** per `docs/ai/TEST_ROUTING.md`, instead of full-suite or default unit-test ceremony?
-9. Have generic constraints been replaced by a **named safety pack** from `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md`?
+8. Are tests **tiered correctly** per `docs/ai/TEST_ROUTING.md`?
+9. Have generic constraints been replaced by a **named safety pack**?
 10. Is the **build archetype** named?
-11. Is acceptance evidence specific (test bundle / snapshot / Concierge card field / screenshot)?
+11. Is acceptance evidence specific?
 12. Is the stop condition explicit?
 13. HANDOFF.md required inside PR? **Update by replacing/summarizing, not appending.**
 14. README excluded unless public/setup changed?
 15. Mobile-safe copy block?
 16. Usage estimate included?
 17. For PR review: cheap merge gate first, deep audit only if suspicious?
-18. Budget gate: can this be split/downgraded to avoid extra usage? If extra usage may be needed, did the Code Committee approve it?
+18. Budget gate: can this be split/downgraded to avoid extra usage?
 19. For UI work: did the UI budget gate approve the scope?
-20. After heavy Claude PR: does the prompt tell user to stop that Claude session and review elsewhere?
+20. After heavy Claude PR: does the prompt tell user to stop that Claude session?
 21. Does any Medium/High prompt include a timeout/checkpoint rule?
-22. For complex refactors: did the split gate reduce the task to one coherent **capability slice** (not a micro-phase)?
+22. For complex refactors: did the split gate reduce the task to one coherent **capability slice**?
 
 If any check fails, rewrite before showing the user.
-
-## Prompt / workflow effectiveness rule
-
-- Every meaningful PR must include the **Prompt / workflow effectiveness** section (see PR template).
-- Only failures or repeated patterns should be promoted to `MISS_LEDGER.md`.
-- Do not expand `HANDOFF.md` for routine prompt-effectiveness notes.
 
 ## Compact templates
 
@@ -89,23 +83,19 @@ Scaffold [feature] disabled behind [flag/contract]. No visible behavior change.
 </task_delta>
 
 <safety_packs>
-Backend-only Scaffold Pack, No Visible Behavior Change Pack, AI Concierge Card Contract Pack (if Concierge-adjacent), Test Tier Pack.
+Backend-only Scaffold Pack, No Visible Behavior Change Pack, Test Tier Pack.
 </safety_packs>
 
 <build_archetype>
 disabled-promotion-scaffold
 </build_archetype>
 
-<anchor_files>
-[Primary backend files. No UI files.]
-</anchor_files>
-
 <acceptance_evidence>
-[Tier 1 contract bundle green per TEST_ROUTING.md. Visible surfaces unchanged. Flag/gate verified off.]
+[Tier 1 contract bundle green. Visible surfaces unchanged.]
 </acceptance_evidence>
 
 <stop_condition>
-Do not flip visibility. Do not change card contract shape. If promotion is requested, propose a follow-up shadow-to-visible-governance slice.
+Do not flip visibility. Do not change card contract shape.
 </stop_condition>
 ```
 
@@ -117,23 +107,19 @@ Fix [symptom] root cause across [seam]. Restore [behavior] end-to-end.
 </task_delta>
 
 <safety_packs>
-Runtime/API Contract Pack, Evidence/Claim Safety Pack, Latency Budget Pack (if latency-sensitive), Test Tier Pack, [domain pack].
+Runtime/API Contract Pack, Evidence/Claim Safety Pack, Test Tier Pack, [domain pack].
 </safety_packs>
 
 <build_archetype>
 full-plumbing-root-cause-fix
 </build_archetype>
 
-<anchor_files>
-[Files implicated by the trace.]
-</anchor_files>
-
 <runtime_evidence>
 [Railway log excerpt, provider response, snapshot diff. Inline only the relevant lines.]
 </runtime_evidence>
 
 <acceptance_evidence>
-[Specific Tier 1 bundle from TEST_ROUTING.md previously failing now passes. Runtime trace shows fix. No regression in adjacent surfaces.]
+[Specific Tier 1 bundle previously failing now passes. No regression.]
 </acceptance_evidence>
 
 <stop_condition>
@@ -149,7 +135,7 @@ Polish [surface] under [phase].
 </task_delta>
 
 <safety_packs>
-No Mock/Sample Visible Data Pack, AI Concierge Card Contract Pack (if Concierge cards), No Visible Behavior Change Pack (visual-only), Test Tier Pack.
+No Mock/Sample Visible Data Pack, AI Concierge Card Contract Pack, Test Tier Pack.
 </safety_packs>
 
 <build_archetype>
@@ -161,24 +147,19 @@ Phase: [one page / one component]
 Max files: [n]
 Primary surfaces: [screens/components]
 Forbidden surfaces: [what not to touch]
-Stop condition: [when to stop instead of expanding]
 Decision: APPROVE
 </ui_budget>
 
-<anchor_files>
-[Primary UI files only.]
-</anchor_files>
-
 <acceptance_evidence>
-[Screenshot diff. Visual merge gate. No backend/API/business-logic change. Concierge card field contract preserved.]
+[Screenshot diff. Visual merge gate. No backend/API/business-logic change.]
 </acceptance_evidence>
 
 <stop_condition>
-Do not exceed max files. No backend changes. If primary surfaces are unknown, stop and request a Codex surface map.
+Do not exceed max files. No backend changes.
 </stop_condition>
 ```
 
-### 5. PR Merge Gate (cheap, Codex preferred)
+### 5. PR Merge Gate
 
 ```
 <task_delta>
@@ -193,16 +174,12 @@ Evidence/Claim Safety Pack, [domain pack if relevant].
 merge-gate
 </build_archetype>
 
-<anchor_files>
-PR diff and changed files only.
-</anchor_files>
-
 <acceptance_evidence>
-Merge recommendation: MERGE / DO NOT MERGE; blocking issues only; tests run + results (state TEST_ROUTING.md tier); Supabase SQL Yes/No; HANDOFF.md edited Yes/No; up to 3 non-blocking follow-ups.
+Merge recommendation: MERGE / DO NOT MERGE; blocking issues only; tests run + results; SQL Yes/No; HANDOFF.md edited Yes/No.
 </acceptance_evidence>
 
 <stop_condition>
-Do not fix; report. Do not run broad discovery. If a blocker is found, stop and report.
+Do not fix; report. Do not run broad discovery.
 </stop_condition>
 ```
 
@@ -221,84 +198,32 @@ Workflow update only — no product code, no UI, no SQL.
 workflow-update
 </build_archetype>
 
-<anchor_files>
-[Workflow docs to change.]
-</anchor_files>
-
 <acceptance_evidence>
-Docs read cleanly; named gates exist; references to safety packs / archetypes / TEST_ROUTING.md are correct; HANDOFF.md updated by replacing/summarizing (not appending).
+Docs read cleanly; named gates exist; HANDOFF.md updated by replacing/summarizing (not appending).
 </acceptance_evidence>
 
 <stop_condition>
-No product code changes. Do not introduce new OS version labels (e.g., v4.2 / v5).
+No product code changes. Do not introduce new OS version labels.
 </stop_condition>
 ```
 
 ## HANDOFF update guidance
 
-`docs/ai/HANDOFF.md` is current state only — not a historical log. Every prompt that touches HANDOFF must follow these rules:
-
-- The PR's HANDOFF edit replaces or summarizes the affected section. It does **not** append a new dated entry per PR.
-- Recent meaningful PRs section lists at most 5–10 lines, one-liners only. Older entries roll out as new ones roll in.
-- If HANDOFF.md is approaching ~500 lines, the prompt must include a compaction step **before** adding any new content.
-- Resolved risks / closed issues are removed, not preserved.
-- Durable historical detail belongs in `docs/ai/MISS_LEDGER.md` or `docs/product/DECISION_LOG.md`, not in HANDOFF.
-
-This matches the `Handoff maintenance rule` in `docs/ai/AI_REPO_OPERATING_SYSTEM.md` and the read-first anchor in `CLAUDE.md`.
+`docs/ai/HANDOFF.md` is current state only — not a historical log. The PR's HANDOFF edit replaces or summarizes the affected section. If HANDOFF.md is approaching ~500 lines, compact first.
 
 ## Budget gate
 
-Default monthly budget target: ChatGPT Plus + Claude Pro only. Avoid extra usage.
+Default monthly budget target: ChatGPT Plus + Claude Pro only. Avoid extra usage. Before any Medium-High/High usage prompt, try Codex first if the task is a bug fix, audit, refactor, or <=3 primary files.
 
-Before any prompt likely to be Medium-High or High usage:
+## Required usage footer for non-trivial prompts
 
-1. Try Codex first if task is bug fix, audit, refactor, or <=3 primary files.
-2. Prefer one coherent capability slice; split only on the explicit batch-vs-split criteria.
-3. Limit primary edit targets to the smallest set the slice needs.
-4. Move logs/examples into compact `<runtime_evidence>` only when they materially help.
-5. Exclude README unless public/setup behavior changed.
-6. Use cheap merge gate before any deep audit.
-7. Defer non-blocking improvements to a follow-up list, not the current prompt.
+Add this block verbatim at the end of any non-trivial Travel implementation prompt:
 
-## UI budget gate
+```
+Usage ledger: If tooling exists, save a baseline before work; before opening/updating the PR, append one sanitized row to docs/ai/USAGE_LEDGER.md with the actual PR number if available, prompt ID, phase, model, chat strategy, repo area, main drivers, waste classification, follow-up count, and delta fields when available. If tooling is unavailable, still append a manual row with those metadata fields and mark token/delta fields unavailable. Do not claim usage is tracked unless docs/ai/USAGE_LEDGER.md is actually changed in the PR. Keep raw .ai/usage files uncommitted.
 
-Any prompt containing UI / visual / design / premium / polish / redesign / theme / layout / aesthetic must include a `<ui_budget>` block (see template 4). Hard rules:
-
-- Full-app UI upgrades default to SPLIT.
-- Sonnet UI implementation max scope: 6 files unless Code Committee explicitly approves more.
-- If primary UI files are unknown, run Codex surface map first; do not use Sonnet discovery.
-- Page-specific UI polish targets one page/screen at a time.
-- UI merge gates use Codex by default and read diff only.
-- No prompt may say "make the whole app premium" without max files + phase boundary.
-
-## Extra usage approval gate
-
-If extra usage may be required, do not present the prompt until the Code Committee review is complete (Need / Cheapest path / Risk of not doing / Estimated usage / Extra usage risk / Decision). Default decision is REJECT unless blocking, security/data-loss, or rework-avoiding.
-
-## Usage estimate rule
-
-Every prompt must include outside the copy block:
-
-- Expected session usage: Low / Medium / High
-- Expected extra cost risk: Low / Medium / High
-- Why: one sentence
-
-## Discovery budget rule
-
-When paths are known, the prompt should specify:
-
-- no find/grep/glob for initial exploration
-- read primary anchor + tests first
-- fallback files only if blocked, and state why
-- focused tests only per `docs/ai/TEST_ROUTING.md`; broader tier only if focused tests fail for unknown reasons
-
-## Timeout / continue budget rule
-
-For Medium/High prompts include:
-
-- checkpoint before time/context limit
-- max two continues, then fresh chat with checkpoint summary
-- do not start broad new discovery after a continue
+Usage discipline: Keep discovery narrow; do not run broad repo scans, parallel agents, or full suites unless focused validation fails or this prompt explicitly asks for them.
+```
 
 ## Session stop rule
 

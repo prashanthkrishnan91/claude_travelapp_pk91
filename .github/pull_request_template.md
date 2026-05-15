@@ -39,15 +39,19 @@ Run `bash scripts/ai/usage_snapshot.sh --pr <number> --prompt-id <id> --phase <p
 
 **Usage note:** Low/Medium/High; source: ccusage/statusline/manual/unavailable; main drivers: [fill]; justified: yes/partially/no; next efficiency improvement: [fill]
 
-**Usage ledger updated:** Yes / No / Not available
-**Prompt ID / phase:** [e.g. initial / follow-up]
-**Linked PR if follow-up:** [n/a or #PR]
-**Main token drivers:** [fill]
-**Follow-up patches required:** [n]
-**Waste classification:** none / preventable-follow-up / necessary-follow-up / exploration / unknown
-**Next efficiency improvement:** [fill]
+## AI PR readiness
+- Readiness check: pass / pass-with-known-gaps / not run
+- Usage ledger row: committed / unavailable — [reason]
+- Prompt ID / phase:
+- Model:
+- Chat strategy: new-chat / same-chat
+- Main token drivers:
+- Waste classification: none / preventable-follow-up / necessary-follow-up / exploration / unknown
+- Follow-up count:
+- Scope drift: none / explained
+- Runtime/design validation note if relevant:
 
 ## Self-audit
 - Repository PR template used exactly: Yes/No
-- Scope stayed workflow-only (no product code): Yes/No
+- Scope stayed within requested files/behavior: Yes/No
 - Downstream consumers reviewed (if relevant): Yes/No

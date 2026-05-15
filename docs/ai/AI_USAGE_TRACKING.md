@@ -12,6 +12,17 @@ No product code is touched. All raw data is gitignored and stays local.
 
 **PR usage notes in the PR body are not sufficient for workflow audits.** They are too lossy once the PR is merged. The committed ledger (`docs/ai/USAGE_LEDGER.md`) is the durable audit source.
 
+## Ledger claim enforcement
+
+The readiness checker (`scripts/workflow/ai_pr_readiness_check.py`) enforces that PR body usage claims match committed ledger state:
+
+- If a PR body says "usage tracked", "usage ledger updated", or "see usage ledger" but `docs/ai/USAGE_LEDGER.md` did not change in the PR, the checker hard-fails.
+- If `docs/ai/USAGE_LEDGER.md` is unchanged and usage is not explicitly marked unavailable with a reason, Level 1+ PRs hard-fail.
+- If tooling is unavailable, a manual row is still required in `docs/ai/USAGE_LEDGER.md` with metadata fields filled and token/delta fields marked `unavailable`.
+- Exact per-prompt deltas require saving a baseline before work. If the baseline was missed, mark delta fields `unavailable` honestly — do not fabricate values.
+- Same-chat continuation must be reflected in the ledger row with `chat: same-chat`.
+- The readiness check runs in CI (`.github/workflows/ai-pr-readiness.yml`) and locally via `python3 scripts/workflow/ai_pr_readiness_check.py`.
+
 ## Quick start (manual — preferred)
 
 ```bash
@@ -55,9 +66,9 @@ This script is **not run automatically**. No network calls or package execution 
 ## How it works
 
 1. Calls `npx ccusage@latest session --json` to read session token/cost data.
-2. Normalizes the ccusage response: handles `{sessions/totals}`, `{data/summary}`, single object, bare array.
+2. Normalizes the ccusage response.
 3. If `--save-baseline <name>`: saves numeric totals to `.ai/usage/baseline-<name>.json` (gitignored).
-4. If `--delta-from-baseline <path>`: loads baseline and computes per-prompt delta = current − baseline.
+4. If `--delta-from-baseline <path>`: loads baseline and computes per-prompt delta.
 5. Writes a raw JSON snapshot to `.ai/usage/` (gitignored, never committed).
 6. Prints a compact usage note for the PR body.
 7. Prints a sanitized 26-column Markdown ledger row.
@@ -95,8 +106,6 @@ The repo's `.claude/settings.json` includes a `Stop` hook entry that runs `usage
 ```bash
 export AI_USAGE_SNAPSHOT_ON_STOP=1   # add to your ~/.zshrc or ~/.bashrc
 ```
-
-The hook writes to `.ai/usage/` only (gitignored), never blocks the session, is silent if the env var is absent.
 
 ## Limitations
 
