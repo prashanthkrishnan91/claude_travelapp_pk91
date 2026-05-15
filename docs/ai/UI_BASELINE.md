@@ -1,10 +1,46 @@
 # UI Baseline
 
-Last updated: 2026-05-14
+Last updated: 2026-05-15
 
 ## Purpose
 
 Tracks the state of the design system and UI primitive layer so future prompts and PRs can reason accurately about what exists and what has been adopted.
+
+---
+
+## Stage 3.5 Phase 1A — App Shell & Navigation Frame — SHIPPED (2026-05-15)
+
+**Stage 3.5 · Wife-Wow design system — first visible surface adoption · Shared shell/navigation only**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/app/globals.css` | Body bg → `var(--ds-midnight-ink)` (solid, replaces purple gradient). Body/heading color → `var(--ds-text-primary)`. `.nav-item` → ds-text-tertiary color + ds-accent-subtle active state + ds-accent active color + color-mix hover bg + focus-visible sandstone ring. `.nav-section-label` → Overline token (10px, 600, 0.1em, uppercase). |
+| `frontend/src/components/layout/AppShell.tsx` | Removed 3 forbidden glow blobs (radial-gradient ambient blobs). Removed GSAP card entrance animation (420ms exceeded 400ms hard limit). Loading state → `bg-ds-midnight text-ds-text-tertiary`. Removed `text-cream-100` from main content wrapper. |
+| `frontend/src/components/layout/Sidebar.tsx` | Replaced `.glass` with `bg-ds-onyx` (ink-ladder elevation). `border-white/[.07]` → `border-ds-pen-stroke`. Brand mark → `bg-ds-carbon text-ds-accent`. Section labels → `.nav-section-label`. User avatar → `bg-ds-carbon text-ds-accent`. All text → ds-text tokens. Sign-out hover → `text-ds-warning`. |
+| `frontend/src/components/layout/MobileNav.tsx` | Same glass→onyx treatment for top bar, drawer, bottom tab bar. Brand marks → ds tokens. Tab active state → `text-ds-accent`. "New Trip" FAB → `bg-ds-accent text-ds-text-inverse`. Drawer slide → 200ms (ds-duration-standard). Menu toggle focus ring. |
+| `frontend/src/components/layout/PageHeader.tsx` | `text-cream-100` → `text-ds-text`. `text-cream-500` → `text-ds-text-tertiary`. |
+
+### Design contract alignment
+
+- **Forbidden patterns removed:** Glow blobs (§31 "No glow pulses"), GSAP animation >400ms (§7 hard limit), glass on navigation (§8 "No glass on … navigation").
+- **Ink-ladder elevation applied:** Body = midnight ink, nav/sidebar = onyx velvet, brand marks = carbon mist (two steps up).
+- **Token alignment:** All nav colors reference `--ds-*` tokens. No raw hex in changed files. No legacy `brand-*`, `cream-*`, `dark-*` classes in shell.
+- **Accessibility:** Focus ring added to all nav items (2px sandstone-gold, 2px offset). Touch targets preserved. Reduced-motion global rule still governs.
+- **Motion:** Nav transitions use `--ds-duration-standard` (200ms) and `--ds-duration-fast` (120ms) via token vars.
+
+### Invariant confirmations
+
+- No provider, search, API, Tavily, flight, hotel, saved-trip, or backend files changed.
+- No Supabase SQL required.
+- No new dependencies added (GSAP still in package.json for TripBuilder; no new packages).
+- No route, auth/session, or card action behavior changes.
+- No new design tokens (`.nav-section-label` uses existing `--ds-type-overline-*` tokens).
+
+### Limitation note
+
+Glass class (`.glass`) is retained in `globals.css` because `TripBuilder.tsx` still references it. Its removal from shell components is the scope-correct change for this phase. TripBuilder glass removal is deferred to the TripBuilder/Itinerary surface adoption phase.
 
 ---
 

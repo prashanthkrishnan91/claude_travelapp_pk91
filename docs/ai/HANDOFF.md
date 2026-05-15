@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-14
+Last updated: 2026-05-15
 
 ## Purpose
 
@@ -8,9 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Design Foundation Phase 0 SHIPPED (2026-05-14).** Design token layer (`--ds-*`) + Card primitive + TrustStrip primitive in place. No surface adoption yet. Stage 3 functionally exited. Stage 3.5 Phase 1 (surface adoption) is next. **Active build queue item: Wife-Wow design system foundation.** Exact implementation reference is now `docs/product/DESIGN_IMPLEMENTATION_CONTRACT.md` — all future design prompts must cite this contract, not infer from PDF.
+- Roadmap stage: **Stage 3.5 — Phase 1A SHIPPED (2026-05-15).** App shell/navigation frame upgraded with ds-tokens (midnight-ink bg, onyx-velvet nav surfaces, pen-stroke borders, sandstone-gold active states). Glow blobs removed. GSAP shell animation removed. Glass removed from nav (retained only in TripBuilder, which is out of scope for this phase). Phase 0 token + Card + TrustStrip primitives remain in place. Stage 3.5 Phase 1B (Explore result-card adoption) is next. **Active build queue item: Wife-Wow design system foundation.** Exact implementation reference is `docs/product/DESIGN_IMPLEMENTATION_CONTRACT.md`.
 - Flights v1 — Duffel search-only LIVE: `DUFFEL_FLIGHTS_ENABLED=1`, `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`, `DUFFEL_DEBUG=false`, `DUFFEL_BOOKING_ENABLED=0`. Each flight card shows "Search on Google Flights" (SEARCH_REDIRECT link-out, not booking). Duffel never creates orders. Ignav DISABLED.
-- Active build queue item: **Wife-Wow design system foundation (Phase 1 — surface adoption).** Token + primitive infrastructure shipped in Phase 0. Phase 1: adopt Card primitive + tokens on one surface. Hard stops: no provider/search/API/Tavily changes, no flight/hotel/saved-trip behavior changes. See `docs/ai/UI_BASELINE.md` for Phase 0 inventory.
+- Active build queue item: **Wife-Wow design system foundation (Phase 1B — Explore result-card adoption).** Phase 0 token + primitive infrastructure in place. Phase 1A shell/nav frame SHIPPED. Phase 1B: adopt Card primitive + tokens on Explore result cards. Hard stops: no provider/search/API/Tavily changes, no flight/hotel/saved-trip behavior changes. See `docs/ai/UI_BASELINE.md` for full phase inventory.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -32,7 +32,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
 
-- 2026-05-14 — **Design Foundation Phase 0 (this PR).** `globals.css`: `--ds-*` semantic token `:root` block (dark surfaces, warm paper, text, accent, trust, caution, elevation, motion, spacing, typography) + `@theme` semantic color wiring (`--color-ds-*: var(--ds-*)`) + global reduced-motion rule. `tailwind.config.ts`: minimal Tailwind v4 content config. `Card.tsx`: composable primitive shell (7 named slots: Identity, Trust, Media, Why, Meta, Actions, Caveat; tone=dark|paper). `TrustStrip.tsx`: trust signal primitive (verified/sourceCount/confidence/caveat; "Verified by Google" only when `verified=true`). No surface adoption. No code behavior, provider/search/API/Tavily/flight/hotel/saved-trip logic changed. No SQL. New baseline doc: `docs/ai/UI_BASELINE.md`.
+- 2026-05-15 — **Stage 3.5 Phase 1A — Premium App Shell & Navigation Frame.** Shared shell/nav frame upgraded to ds-tokens. Body bg → midnight ink. Sidebar/mobile nav → onyx-velvet surface, pen-stroke borders. Nav items → ds-text-tertiary/accent tokens. Active state → accent-subtle bg + sandstone-gold. Glow blobs removed (forbidden pattern). GSAP shell card entrance removed (420ms exceeded hard limit). Glass removed from shell nav (retained in TripBuilder only, out of scope). `.nav-section-label` Overline CSS class added. `PageHeader.tsx` → ds-text tokens. No provider/API/behavior changes. No SQL. Docs: `UI_BASELINE.md` + `HANDOFF.md` updated.
+
+- 2026-05-14 — **Design Foundation Phase 0.** `globals.css`: `--ds-*` semantic token `:root` block + `@theme` wiring + global reduced-motion rule. `tailwind.config.ts`: minimal Tailwind v4 content config. `Card.tsx`: composable primitive shell (7 slots). `TrustStrip.tsx`: trust signal primitive. No surface adoption. No behavior changes. No SQL.
 
 - 2026-05-14 — **Design Bible Addendum v1.1.** New `docs/product/DESIGN_BIBLE_ADDENDUM_V1_1.md` — concise Stage 3.5 sharpening of Design Bible v1.0 (private atelier principle, Concierge search-bar grammar, trip-as-story model, future experience-lane IA, constraint-first feasibility UX). Docs only — no code, SQL, provider, or env changes.
 
@@ -74,7 +76,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Design Foundation Phase 1 (surface adoption).** Phase 0 token + primitive infrastructure is now in place. Next: adopt the Card primitive and design tokens in one surface (e.g., Explore result cards or Saved list cards) as the first Wife-Wow visible slice. Strict no-behavior-change scope continues: no provider/search/API route/Tavily changes, no flight/hotel/saved-trip logic changes. After design foundation Phase 1+ merges → Stage 4 AI destination intelligence entry contract.
+**Stage 3.5 Phase 1B — Explore result-card adoption.** Phase 1A (app shell/nav frame) is now merged. Next: adopt the Card primitive and design tokens on Explore result cards (restaurants, hotels, attractions) as the first Wife-Wow card-level visible slice. Strict no-behavior-change scope continues: no provider/search/API route/Tavily changes, no flight/hotel/saved-trip logic changes. After Phase 1B merges → Phase 1C (Saved Ideas paper-mode card adoption) or Phase 2 (AI Concierge flagship redesign) depending on product priority.
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 

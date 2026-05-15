@@ -75,17 +75,17 @@ export function MobileNav() {
 
   return (
     <>
-      {/* ── Glass top bar ───────────────────────────────────── */}
-      <header className="lg:hidden sticky top-0 z-40 flex items-center justify-between px-4 py-3 glass border-b border-white/[.07]">
+      {/* ── Top bar ─────────────────────────────────────────── */}
+      <header className="lg:hidden sticky top-0 z-40 flex items-center justify-between px-4 py-3 bg-ds-onyx border-b border-ds-pen-stroke">
         <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-500 text-dark-50">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-carbon text-ds-accent">
             <Plane className="w-4 h-4" />
           </div>
-          <span className="text-sm font-bold text-cream-100">Travel Concierge</span>
+          <span className="text-sm font-semibold text-ds-text">Travel Concierge</span>
         </div>
         <button
           onClick={() => setOpen(!open)}
-          className="p-2 rounded-lg text-cream-400 hover:bg-white/[.06] transition"
+          className="p-2 rounded-lg text-ds-text-secondary hover:bg-white/5 transition-colors focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           aria-label="Toggle menu"
         >
           {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -103,16 +103,16 @@ export function MobileNav() {
       {/* ── Slide-out drawer ────────────────────────────────── */}
       <div
         className={clsx(
-          "lg:hidden fixed inset-y-0 left-0 z-40 w-64 glass border-r border-white/[.07] flex flex-col",
-          "transition-transform duration-300 ease-out",
+          "lg:hidden fixed inset-y-0 left-0 z-40 w-64 bg-ds-onyx border-r border-ds-pen-stroke flex flex-col",
+          "transition-transform duration-200 ease-out",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex items-center gap-2 px-5 py-4 border-b border-white/[.06]">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-500 text-dark-50">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-ds-pen-stroke">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-carbon text-ds-accent">
             <Plane className="w-4 h-4" />
           </div>
-          <span className="text-sm font-bold text-cream-100">Travel Concierge</span>
+          <span className="text-sm font-semibold text-ds-text">Travel Concierge</span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5">
           {links.map(({ label, href, icon: Icon }) => (
@@ -129,18 +129,18 @@ export function MobileNav() {
         </nav>
 
         {/* User identity + sign out at bottom of drawer */}
-        <div className="px-4 py-4 border-t border-white/[.06] space-y-1">
+        <div className="px-4 py-4 border-t border-ds-pen-stroke space-y-1">
           {display && (
             <div className="flex items-center gap-3 px-2 py-2">
-              <div className="w-7 h-7 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center text-xs font-semibold shrink-0">
+              <div className="w-7 h-7 rounded-full bg-ds-carbon text-ds-accent flex items-center justify-center text-xs font-semibold shrink-0">
                 {display.initial}
               </div>
-              <p className="text-sm font-medium text-cream-200 truncate">{display.name}</p>
+              <p className="text-sm font-medium text-ds-text truncate">{display.name}</p>
             </div>
           )}
           <button
             onClick={handleSignOut}
-            className="nav-item w-full text-cream-500 hover:text-rose-300"
+            className="nav-item w-full text-ds-text-tertiary hover:text-ds-warning"
             aria-label="Sign out"
           >
             <LogOut className="w-4 h-4 shrink-0" />
@@ -149,8 +149,8 @@ export function MobileNav() {
         </div>
       </div>
 
-      {/* ── Bottom tab bar (Apple-style) ─────────────────────── */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 glass border-t border-white/[.07] flex items-stretch pb-safe">
+      {/* ── Bottom tab bar ───────────────────────────────────── */}
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-ds-onyx border-t border-ds-pen-stroke flex items-stretch pb-safe">
         {tabLinks.map(({ label, href, icon: Icon }) => {
           const active = isActive(href);
           const isNew = href === "/trips/new";
@@ -160,20 +160,20 @@ export function MobileNav() {
               href={href}
               className={clsx(
                 "flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 min-w-0 transition-colors",
-                active ? "text-brand-400" : "text-cream-500 hover:text-cream-300"
+                active ? "text-ds-accent" : "text-ds-text-tertiary hover:text-ds-text-secondary"
               )}
               aria-label={label}
             >
               <span
                 className={clsx(
-                  "flex items-center justify-center rounded-xl transition-all",
+                  "flex items-center justify-center rounded-lg transition-all",
                   isNew
-                    ? "w-10 h-10 bg-brand-500 text-dark-50 shadow-md shadow-brand-500/30 -mt-4"
+                    ? "w-10 h-10 bg-ds-accent text-ds-text-inverse -mt-4 shadow-[var(--ds-elevation-1)]"
                     : "w-7 h-7",
-                  isNew && active && "bg-brand-600"
+                  isNew && active && "opacity-90"
                 )}
               >
-                <Icon className={isNew ? "w-5 h-5" : "w-5 h-5"} />
+                <Icon className="w-5 h-5" />
               </span>
               <span className={clsx("text-[10px] font-medium leading-none", isNew && "mt-0.5")}>
                 {label === "New Trip" ? "New" : label === "Travel Cards" ? "Cards" : label}
