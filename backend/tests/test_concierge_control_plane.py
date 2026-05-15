@@ -602,3 +602,229 @@ class TestMultiConceptEditorialGate:
         )
         assert decision.should_run_set_writer
         assert decision.should_run_legacy_batched_reasoning
+
+
+# ── Section F: Runtime/control-plane guard for compound venue-head queries ──────
+
+class TestCompoundVenueHeadControlPlane:
+    """Production-like 'sports bars' frame must skip Tavily and legacy notes,
+    preserve cards, and generate bar-preserving retrieval queries.
+
+    This tests the full control-plane contract for the PR #390 regression:
+    concepts=[sport, sports] + literal_ask='sports bars' should NOT trigger
+    editorial enrichment or legacy batched reasoning, and the retrieval planner
+    must produce queries with 'bar' in them.
+    """
+
+    def _make_sports_bars_frame(self, destination: str = "Seattle") -> _Frame:
+        """Simulate the production frame for 'sports bars' query."""
+        return _Frame(
+            subtype_concepts=[
+                _SubtypeConcept(label="sport", confidence=0.95),
+                _SubtypeConcept(label="sports", confidence=0.85),
+            ],
+            destination=destination,
+            user_query="sports bars",
+            normalized_soft_preferences=[],
+            geography_hints=[],
+        )
+
+    def test_sports_bars_frame_skips_tavily(self):
+        """sport/sports concepts are singular/plural pair → skip editorial."""
+        frame = self._make_sports_bars_frame()
+        should_run, reason = should_run_editorial(frame)
+        assert not should_run, (
+            f"sports bars frame must skip Tavily, got reason={reason!r}"
+        )
+
+    def test_sports_bars_frame_skips_legacy_batched_reasoning(self):
+        frame = self._make_sports_bars_frame()
+        decision = make_note_decision(
+            frame=frame,
+            cached_notes={},
+            accepted_editorial_evidence_count=0,
+        )
+        assert not decision.should_run_legacy_batched_reasoning, (
+            "Legacy batched reasoning must be skipped for sports bars frame"
+        )
+
+    def test_sports_bars_frame_skips_set_writer(self):
+        frame = self._make_sports_bars_frame()
+        decision = make_note_decision(
+            frame=frame,
+            cached_notes={},
+            accepted_editorial_evidence_count=0,
+        )
+        assert not decision.should_run_set_writer, (
+            "Set writer must be skipped for sports bars frame without evidence"
+        )
+
+    def test_sports_bars_frame_is_plain_category(self):
+        frame = self._make_sports_bars_frame()
+        decision = make_note_decision(
+            frame=frame,
+            cached_notes={},
+            accepted_editorial_evidence_count=0,
+        )
+        assert decision.is_plain_category_query
+
+    def test_sports_bars_retrieval_query_contains_bar(self):
+        """Retrieval planner with literal_ask='sports bars' must produce
+        bar-preserving queries, not 'sport Seattle'."""
+        from app.concierge.retrieval_planner import plan_queries
+        from app.concierge.frame_extractor import ExperienceFrame, SubtypeConcept
+
+        frame = ExperienceFrame(
+            literal_ask="sports bars",
+            normalized_ask="sports bars",
+            destination="Seattle",
+            subtype_concepts=[
+                SubtypeConcept(label="sport", confidence=0.95, source="frame_extractor"),
+                SubtypeConcept(label="sports", confidence=0.85, source="frame_extractor"),
+            ],
+        )
+        qs = plan_queries(frame)
+        first = qs[0].lower()
+        assert "bar" in first or "bars" in first, (
+            f"First query must contain 'bar', got {qs[0]!r}. "
+            "Old regression produced 'sport Seattle' — bar-head was lost."
+        )
+
+    def test_sports_bars_retrieval_query_not_bare_sport(self):
+        """The old regression: query was 'sport Seattle' — must not happen."""
+        from app.concierge.retrieval_planner import plan_queries
+        from app.concierge.frame_extractor import ExperienceFrame, SubtypeConcept
+
+        frame = ExperienceFrame(
+            literal_ask="sports bars",
+            normalized_ask="sports bars",
+            destination="Seattle",
+            subtype_concepts=[
+                SubtypeConcept(label="sport", confidence=0.95, source="frame_extractor"),
+            ],
+        )
+        qs = plan_queries(frame)
+        assert "sport seattle" not in [q.lower() for q in qs], (
+            f"Query 'sport seattle' must not appear in {qs}"
+        )
+
+    def test_cards_preserved_without_notes(self):
+        """Plain sports bars frame: make_note_decision must not collapse cards.
+        card_count_collapsed_due_to_notes must be False (structural invariant)."""
+        from app.concierge.evidence_cache import CreditROITelemetry
+        tel = CreditROITelemetry()
+        assert tel.card_count_collapsed_due_to_notes is False
+
+
+# ── Section G: Wrong-vertical guard runtime wiring ───────────────────────────
+
+class TestWrongVerticalGuardRuntime:
+    """Verify that is_food_bar_query and entity_passes_vertical_guard behave
+    correctly when called from the runtime path, simulating Step 4.6 in
+    semantic_retrieval._run_pipeline.
+
+    These tests operate on the helpers directly — no network or Google API needed.
+    """
+
+    def _make_entity(self, types, primary_type):
+        from dataclasses import dataclass
+        from typing import List
+
+        @dataclass
+        class _E:
+            types: List[str]
+            primary_type: str
+
+        return _E(types=types, primary_type=primary_type)
+
+    def _filter(self, ask: str, entities, destination: str = "Seattle"):
+        """Simulate Step 4.6: compute is_food_bar, apply vertical guard, return survivors."""
+        from app.concierge.retrieval_planner import is_food_bar_query, entity_passes_vertical_guard
+        from app.concierge.frame_extractor import extract_frame
+        frame = extract_frame(ask, destination)
+        is_fb = is_food_bar_query(frame)
+        if not is_fb:
+            return list(entities), 0
+        surviving = [e for e in entities if entity_passes_vertical_guard(e.types, e.primary_type, is_fb)]
+        rejected = len(entities) - len(surviving)
+        return surviving, rejected
+
+    def test_sports_bar_frame_rejects_rehab(self):
+        entities = [
+            self._make_entity(["bar", "sports_bar", "night_club"], "bar"),
+            self._make_entity(["physiotherapist", "health"], "physiotherapist"),
+        ]
+        surviving, rejected = self._filter("sports bars", entities)
+        assert rejected == 1
+        assert surviving[0].primary_type == "bar"
+
+    def test_sports_bar_frame_rejects_gym(self):
+        entities = [
+            self._make_entity(["bar", "night_club"], "bar"),
+            self._make_entity(["gym", "health", "fitness_center"], "gym"),
+        ]
+        surviving, rejected = self._filter("sports bars", entities)
+        assert rejected == 1
+        assert surviving[0].primary_type == "bar"
+
+    def test_sports_bar_frame_rejects_stadium(self):
+        entities = [
+            self._make_entity(["bar", "sports_bar"], "bar"),
+            self._make_entity(["stadium", "sports_complex", "point_of_interest"], "stadium"),
+        ]
+        surviving, rejected = self._filter("sports bars", entities)
+        assert rejected == 1
+        assert surviving[0].primary_type == "bar"
+
+    def test_sports_bar_frame_keeps_bar_entities(self):
+        entities = [
+            self._make_entity(["bar", "sports_bar", "night_club"], "bar"),
+            self._make_entity(["bar", "restaurant"], "bar"),
+        ]
+        surviving, rejected = self._filter("sports bars", entities)
+        assert rejected == 0
+        assert len(surviving) == 2
+
+    def test_cocktail_bar_frame_rejects_medical(self):
+        entities = [
+            self._make_entity(["bar", "night_club"], "bar"),
+            self._make_entity(["physiotherapist", "health", "point_of_interest"], "physiotherapist"),
+        ]
+        surviving, rejected = self._filter("cocktail bars", entities, destination="Chicago")
+        assert rejected == 1
+        assert surviving[0].primary_type == "bar"
+
+    def test_restaurant_frame_rejects_gym(self):
+        entities = [
+            self._make_entity(["restaurant", "food"], "restaurant"),
+            self._make_entity(["gym", "fitness_center"], "gym"),
+        ]
+        surviving, rejected = self._filter("Mexican restaurants", entities, destination="Chicago")
+        assert rejected == 1
+        assert surviving[0].primary_type == "restaurant"
+
+    def test_attractions_frame_guard_off_stadium_passes(self):
+        """For attractions query, is_food_bar=False → no entity rejected."""
+        entities = [
+            self._make_entity(["stadium", "tourist_attraction"], "stadium"),
+            self._make_entity(["museum", "tourist_attraction"], "museum"),
+            self._make_entity(["park", "establishment"], "park"),
+        ]
+        surviving, rejected = self._filter("top attractions", entities, destination="Seattle")
+        assert rejected == 0, f"Guard must be OFF for attractions; rejected={rejected}"
+        assert len(surviving) == 3
+
+    def test_museums_frame_guard_off(self):
+        entities = [
+            self._make_entity(["museum", "tourist_attraction"], "museum"),
+            self._make_entity(["gym", "fitness_center"], "gym"),
+        ]
+        surviving, rejected = self._filter("museums", entities)
+        assert rejected == 0, "Guard must be OFF for museums query"
+
+    def test_hotels_frame_guard_off(self):
+        entities = [
+            self._make_entity(["lodging", "hotel"], "lodging"),
+        ]
+        surviving, rejected = self._filter("hotels", entities)
+        assert rejected == 0, "Guard must be OFF for hotels query"

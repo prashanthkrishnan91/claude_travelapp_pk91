@@ -605,6 +605,28 @@ def _run_pipeline(
                 _entity_type_gate_rejected, user_query, len(entities),
             )
 
+    # ── Step 4.6: Wrong-vertical guard for food/bar/nightlife queries ───────────
+    # Rejects entities whose Google types are clearly wrong-vertical (rehab, gym,
+    # stadium, arena, sports complex, medical) when the query is food/bar/nightlife.
+    # Guard is off for attractions, museums, hotels, parks — those verticals pass
+    # through unchanged. Uses helpers defined in retrieval_planner.py.
+    from app.concierge.retrieval_planner import is_food_bar_query, entity_passes_vertical_guard
+    _is_food_bar = is_food_bar_query(frame)
+    wrong_vertical_rejected_count = 0
+    if _is_food_bar and entities:
+        _before_vg = len(entities)
+        entities = [
+            e for e in entities
+            if entity_passes_vertical_guard(e.types, e.primary_type, _is_food_bar)
+        ]
+        wrong_vertical_rejected_count = _before_vg - len(entities)
+        if wrong_vertical_rejected_count > 0:
+            logger.info(
+                "semantic_retrieval_v1: wrong_vertical_rejected=%d query=%r "
+                "is_food_bar=%s entities_remaining=%d",
+                wrong_vertical_rejected_count, user_query, _is_food_bar, len(entities),
+            )
+
     if not entities:
         logger.warning(
             "semantic_retrieval_v1: no_verified_entities "
