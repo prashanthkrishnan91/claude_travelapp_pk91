@@ -34,7 +34,7 @@ python3 scripts/workflow/ai_pr_readiness_check.py --self-test
 ## Hard failures vs warnings
 
 **Hard failures** (exit 1) — must be fixed before opening/updating the PR:
-- Level 1+ PR does not change `USAGE_LEDGER.md` and does not mark usage unavailable
+- Level 1+ PR does not change `USAGE_LEDGER.md` (even if usage tooling is unavailable)
 - PR body claims usage tracking but `USAGE_LEDGER.md` was not changed
 - Production/runtime PR lacks failure-seam evidence
 - Design overhaul PR missing scope classification
@@ -54,9 +54,12 @@ python3 scripts/workflow/ai_pr_readiness_check.py --self-test
 
 ## Usage ledger enforcement
 
-The key invariant: **PR body usage claims must match committed ledger state.**
+The key invariants:
+1. **PR body usage claims must match committed ledger state.** If you claim "usage tracked", the ledger row must exist.
+2. **Level 1+ PRs must commit a ledger row.** Even if token/delta tooling is unavailable, the row itself is mandatory with metadata fields (phase, prompt ID, model, chat strategy, drivers, waste) filled and numeric fields marked `unavailable`.
+3. **"Usage unavailable" is not a ledger-row exemption.** It marks token/delta values as unavailable, not the row. Only Level 0 docs-only PRs are exempt from the ledger requirement.
 
-Usage claim patterns that the checker detects (and will hard-fail if ledger is not updated):
+Usage claim patterns that hard-fail if ledger is not updated:
 - `Usage ledger row: committed`
 - `Usage ledger row: yes`
 - `Usage ledger: committed`
@@ -65,7 +68,7 @@ Usage claim patterns that the checker detects (and will hard-fail if ledger is n
 - `see usage ledger`
 - `ledger row: committed`
 
-If tooling is unavailable: manual row still required with metadata; token/delta fields marked unavailable.
+Fallback if tooling is unavailable: append a manual row to `docs/ai/USAGE_LEDGER.md` with all metadata fields filled and token/delta fields marked `unavailable`.
 
 ## Context / same-chat rules
 
