@@ -17,10 +17,10 @@ import { suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from 
 type DayPart = "morning" | "afternoon" | "evening" | "unscheduled";
 
 const DAY_PART_META: Record<DayPart, { label: string; timeHint: string; colorClass: string }> = {
-  morning:     { label: "Morning",     timeHint: "5 AM – 12 PM",  colorClass: "text-amber-300" },
-  afternoon:   { label: "Afternoon",   timeHint: "12 PM – 5 PM",  colorClass: "text-sky-300" },
-  evening:     { label: "Evening",     timeHint: "5 PM – 10 PM",  colorClass: "text-violet-300" },
-  unscheduled: { label: "Unscheduled", timeHint: "no time set",   colorClass: "text-slate-400" },
+  morning:     { label: "Morning",     timeHint: "5 AM – 12 PM",  colorClass: "text-ds-accent" },
+  afternoon:   { label: "Afternoon",   timeHint: "12 PM – 5 PM",  colorClass: "text-ds-text-secondary" },
+  evening:     { label: "Evening",     timeHint: "5 PM – 10 PM",  colorClass: "text-ds-accent-muted" },
+  unscheduled: { label: "Unscheduled", timeHint: "no time set",   colorClass: "text-ds-text-tertiary" },
 };
 
 function getItemDayPart(item: ItineraryItem): DayPart {
@@ -117,9 +117,9 @@ function renderItemsWithConnectors(
     if (hint.kind === "missing_location") {
       connector = (
         <div key={`hint-${item.id}`} className="flex items-center gap-1.5 px-3 py-1">
-          <div className="w-px h-4 bg-slate-800 ml-[17px] flex-shrink-0" />
-          <MapPin className="w-3 h-3 text-slate-600 flex-shrink-0" />
-          <span className="text-[10px] text-slate-600 leading-snug italic">{hint.label}</span>
+          <div className="w-px h-4 bg-ds-pen-stroke ml-[17px] flex-shrink-0" />
+          <MapPin className="w-3 h-3 text-ds-text-tertiary flex-shrink-0" />
+          <span className="text-[10px] text-ds-text-tertiary leading-snug italic">{hint.label}</span>
         </div>
       );
     } else if (hint.kind === "far_apart") {
@@ -129,17 +129,17 @@ function renderItemsWithConnectors(
       connector = (
         <div key={`travel-${item.id}`} className="flex flex-col gap-1 px-3 py-1">
           <div className="flex items-center gap-1.5">
-            <div className="w-px h-4 bg-slate-700 ml-[17px] flex-shrink-0" />
+            <div className="w-px h-4 bg-ds-pen-stroke ml-[17px] flex-shrink-0" />
             {mode === "walk" ? (
-              <Footprints className="w-3 h-3 text-slate-500 flex-shrink-0" />
+              <Footprints className="w-3 h-3 text-ds-text-tertiary flex-shrink-0" />
             ) : (
-              <Car className="w-3 h-3 text-slate-500 flex-shrink-0" />
+              <Car className="w-3 h-3 text-ds-text-tertiary flex-shrink-0" />
             )}
-            <span className="text-[10px] text-slate-500 leading-snug">{timeLabel}</span>
-            <span className="text-[10px] text-slate-600 leading-snug">· {est.distanceKm} km</span>
+            <span className="text-[10px] text-ds-text-tertiary leading-snug">{timeLabel}</span>
+            <span className="text-[10px] text-ds-text-tertiary/60 leading-snug">· {est.distanceKm} km</span>
           </div>
           <div className="flex items-center gap-1 pl-[29px] pr-1">
-            <span className="text-[10px] text-amber-500/70 leading-snug">{hint.label}</span>
+            <span className="text-[10px] text-ds-warning/70 leading-snug">{hint.label}</span>
           </div>
         </div>
       );
@@ -148,14 +148,14 @@ function renderItemsWithConnectors(
       const mode = est.walkMinutes <= 20 ? "walk" : "drive";
       connector = (
         <div key={`travel-${item.id}`} className="flex items-center gap-1.5 px-3 py-1">
-          <div className="w-px h-4 bg-slate-700 ml-[17px] flex-shrink-0" />
+          <div className="w-px h-4 bg-ds-pen-stroke ml-[17px] flex-shrink-0" />
           {mode === "walk" ? (
-            <Footprints className="w-3 h-3 text-slate-500 flex-shrink-0" />
+            <Footprints className="w-3 h-3 text-ds-text-tertiary flex-shrink-0" />
           ) : (
-            <Car className="w-3 h-3 text-slate-500 flex-shrink-0" />
+            <Car className="w-3 h-3 text-ds-text-tertiary flex-shrink-0" />
           )}
-          <span className="text-[10px] text-slate-500 leading-snug">{hint.label}</span>
-          <span className="text-[10px] text-slate-600 leading-snug">· {est.distanceKm} km</span>
+          <span className="text-[10px] text-ds-text-tertiary leading-snug">{hint.label}</span>
+          <span className="text-[10px] text-ds-text-tertiary/60 leading-snug">· {est.distanceKm} km</span>
         </div>
       );
     }
@@ -185,8 +185,8 @@ function TimelineSections({
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-1.5 px-1 pt-1 pb-0.5">
-          <Clock className="w-3 h-3 text-slate-500 flex-shrink-0" />
-          <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
+          <Clock className="w-3 h-3 text-ds-text-tertiary flex-shrink-0" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary">
             Unscheduled · {items.length} {items.length === 1 ? "item" : "items"}
           </span>
         </div>
@@ -207,10 +207,10 @@ function TimelineSections({
           <div key={part} className="space-y-1.5">
             <div className="flex items-center gap-1.5 px-1 pt-0.5">
               <Clock className={`w-3 h-3 flex-shrink-0 ${meta.colorClass}`} />
-              <span className={`text-[10px] font-semibold uppercase tracking-wide ${meta.colorClass}`}>
+              <span className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${meta.colorClass}`}>
                 {meta.label}
               </span>
-              <span className="text-[10px] text-slate-600">{meta.timeHint}</span>
+              <span className="text-[10px] text-ds-text-tertiary">{meta.timeHint}</span>
             </div>
             <div className="space-y-2">
               {renderItemsWithConnectors(sectionItems, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet, onUpdateTimeline)}
@@ -225,10 +225,10 @@ function TimelineSections({
 // ─── SuggestionsReviewPanel ───────────────────────────────────────────────────
 
 const DAY_PART_COLOR: Record<string, string> = {
-  morning:     "text-amber-300",
-  afternoon:   "text-sky-300",
-  evening:     "text-violet-300",
-  unscheduled: "text-slate-400",
+  morning:     "text-ds-accent",
+  afternoon:   "text-ds-text-secondary",
+  evening:     "text-ds-accent-muted",
+  unscheduled: "text-ds-text-tertiary",
 };
 
 interface SuggestionsReviewPanelProps {
@@ -248,15 +248,15 @@ function SuggestionsReviewPanel({
 }: SuggestionsReviewPanelProps) {
   const itemMap = new Map(items.map((i) => [i.id, i]));
   return (
-    <div className="rounded-xl border border-slate-700/80 bg-slate-900/80 p-3 mb-2 space-y-2">
+    <div className="rounded-lg border border-ds-pen-stroke bg-ds-carbon p-3 mb-2 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-slate-200 flex items-center gap-1.5">
-          <Sparkles className="w-3 h-3 text-amber-300" />
+        <span className="text-[11px] font-semibold text-ds-text flex items-center gap-1.5">
+          <Sparkles className="w-3 h-3 text-ds-accent" />
           Suggested timing for {suggestions.length} {suggestions.length === 1 ? "item" : "items"}
         </span>
         <button
           onClick={onDismiss}
-          className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+          className="flex items-center justify-center -m-2 min-w-[44px] min-h-[44px] rounded-lg text-ds-text-tertiary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           aria-label="Dismiss suggestions"
         >
           <X className="w-3.5 h-3.5" />
@@ -267,15 +267,15 @@ function SuggestionsReviewPanel({
         {suggestions.map((s) => {
           const item = itemMap.get(s.itemId);
           if (!item) return null;
-          const colorClass = DAY_PART_COLOR[s.dayPart] ?? "text-slate-400";
+          const colorClass = DAY_PART_COLOR[s.dayPart] ?? "text-ds-text-tertiary";
           return (
             <div key={s.itemId} className="flex items-center gap-2 text-[11px]">
-              <span className="truncate flex-1 text-slate-300">{item.title}</span>
+              <span className="truncate flex-1 text-ds-text-secondary">{item.title}</span>
               <span className={`font-medium ${colorClass} flex-shrink-0`}>
                 {s.dayPart.charAt(0).toUpperCase() + s.dayPart.slice(1)}
               </span>
               {s.timeLabel && (
-                <span className="text-slate-500 flex-shrink-0">· {s.timeLabel}</span>
+                <span className="text-ds-text-tertiary flex-shrink-0">· {s.timeLabel}</span>
               )}
             </div>
           );
@@ -285,7 +285,8 @@ function SuggestionsReviewPanel({
       <button
         onClick={onApply}
         disabled={applying}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-400/30 text-[11px] font-semibold transition-colors disabled:opacity-50"
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-ds-pen-stroke text-ds-accent text-[11px] font-semibold transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
+        style={{ backgroundColor: "var(--ds-accent-subtle)" }}
       >
         {applying ? (
           <Loader2 className="w-3 h-3 animate-spin" />
@@ -316,9 +317,9 @@ function DayTravelHintBar({ items }: { items: ItineraryItem[] }) {
   }
 
   return (
-    <div className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-slate-900/50 border border-slate-800/50 mt-1.5">
-      <Info className="w-3 h-3 text-slate-500 flex-shrink-0 mt-px" />
-      <span className="text-[10px] text-slate-500 leading-tight">{message} Rough hints only.</span>
+    <div className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-ds-carbon border border-ds-pen-stroke mt-1.5">
+      <Info className="w-3 h-3 text-ds-text-tertiary flex-shrink-0 mt-px" />
+      <span className="text-[10px] text-ds-text-tertiary leading-tight">{message} Rough hints only.</span>
     </div>
   );
 }
@@ -453,12 +454,22 @@ export function ItineraryDayColumn({
     .map(([type, count]) => `${count} ${type}${count > 1 ? "s" : ""}`)
     .join(" · ");
 
+  // Shared icon-button class for compact header actions (44×44px touch target)
+  const iconBtnClass =
+    "flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text border border-ds-pen-stroke transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 disabled:opacity-50";
+
   return (
-    <div className={`overflow-hidden rounded-2xl border border-slate-800/90 bg-gradient-to-b from-slate-900 to-slate-950 shadow-[0_16px_40px_rgba(2,6,23,0.45)] transition-all ${isSelected ? "ring-2 ring-amber-400/55 ring-offset-1 ring-offset-slate-950 shadow-[0_0_0_1px_rgba(251,191,36,0.22),0_18px_38px_rgba(2,6,23,0.5)]" : ""}`}>
-      {/* Day header — click to set as the target day for left-panel additions */}
+    <div
+      className={`overflow-hidden rounded-lg border bg-ds-onyx transition-all duration-[200ms] shadow-[var(--ds-elevation-2)] ${
+        isSelected
+          ? "border-ds-accent/40 ring-1 ring-ds-accent/20 ring-offset-1 ring-offset-ds-midnight"
+          : "border-ds-pen-stroke"
+      }`}
+    >
+      {/* ── Chapter header — click to set as target day ────────────── */}
       <div
-        className={`shrink-0 flex items-center justify-between px-3 py-2 border-b border-slate-800 transition-colors cursor-pointer ${
-          isSelected ? "bg-slate-800/90" : "bg-slate-900/80 hover:bg-slate-800/80"
+        className={`shrink-0 flex items-center justify-between px-3 py-2.5 border-b border-ds-pen-stroke transition-colors duration-[120ms] cursor-pointer ${
+          isSelected ? "bg-ds-carbon" : "bg-ds-onyx hover:bg-ds-carbon"
         }`}
         onClick={() => {
           onSelect?.(day.id);
@@ -466,24 +477,38 @@ export function ItineraryDayColumn({
         }}
         title={isSelected ? "Currently adding to this day" : "Click to add items to this day"}
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <div className={`w-6 h-6 rounded-md text-white flex items-center justify-center text-[11px] font-bold ${isSelected ? "bg-amber-500" : "bg-slate-700"}`}>
-            {day.dayNumber}
+        {/* Chapter identity */}
+        <div className="flex items-center gap-3 min-w-0">
+          {/* Chapter number marker */}
+          <div
+            className={`flex-shrink-0 flex items-center justify-center w-7 h-7 rounded text-[11px] font-bold tracking-tight transition-colors duration-[120ms] ${
+              isSelected
+                ? "bg-ds-accent text-ds-text-inverse"
+                : "bg-ds-pen-stroke text-ds-text-tertiary"
+            }`}
+          >
+            {String(day.dayNumber).padStart(2, "0")}
           </div>
+          {/* Chapter title + date */}
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-slate-100 truncate">{`Day ${day.dayNumber}`}</h3>
+            <h3 className="text-sm font-semibold text-ds-text tracking-tight leading-snug">
+              Day {day.dayNumber}
+            </h3>
             {day.date && (
-              <p className="text-[11px] text-slate-400 flex items-center gap-1">
-                <CalendarDays className="w-3 h-3" />
+              <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary leading-none mt-0.5">
+                <CalendarDays className="w-2.5 h-2.5 flex-shrink-0" />
                 {formatDate(day.date)}
               </p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className="text-[11px] text-slate-300 bg-slate-800/80 border border-slate-700 rounded-full px-2 py-0.5">
-            {day.items.length} {day.items.length === 1 ? "item" : "items"}
+
+        {/* Header actions */}
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="text-[11px] text-ds-text-tertiary bg-ds-carbon border border-ds-pen-stroke rounded-full px-2 py-0.5 mr-0.5">
+            {day.items.length}
           </span>
+
           {onPlanDay && (
             <button
               onClick={(e) => {
@@ -492,7 +517,8 @@ export function ItineraryDayColumn({
               }}
               disabled={planDayLoading}
               title="Generate AI day plan"
-              className="flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/35 text-[11px] font-medium transition-colors disabled:opacity-50"
+              className="flex items-center gap-1 px-2.5 rounded-lg text-ds-accent border border-ds-pen-stroke text-[11px] font-medium transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
+              style={{ backgroundColor: "var(--ds-accent-subtle)" }}
             >
               {planDayLoading ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -502,6 +528,7 @@ export function ItineraryDayColumn({
               Plan My Day
             </button>
           )}
+
           {day.items.length > 0 && (
             <button
               onClick={(e) => {
@@ -511,7 +538,7 @@ export function ItineraryDayColumn({
               disabled={suggestingTimeline || applyingTimeline}
               title="Suggest timing for items on this day"
               aria-label="Suggest day timing"
-              className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-700/60 hover:bg-slate-700 text-slate-300 border border-slate-600/50 text-[11px] font-medium transition-colors disabled:opacity-50"
+              className="flex items-center gap-1 px-2.5 rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text border border-ds-pen-stroke text-[11px] font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 disabled:opacity-50 min-h-[44px]"
             >
               {suggestingTimeline ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -521,23 +548,25 @@ export function ItineraryDayColumn({
               Suggest Timing
             </button>
           )}
+
           <button
             onClick={(e) => {
               e.stopPropagation();
               onSelect?.(day.id);
               onAddItem(day.id);
             }}
-            className="w-6 h-6 rounded-md bg-slate-800 hover:bg-amber-500/20 hover:text-amber-300 text-slate-300 border border-slate-700 flex items-center justify-center transition-colors"
+            className={iconBtnClass}
             aria-label={`Add item to Day ${day.dayNumber}`}
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
+
           <button
             onClick={(e) => {
               e.stopPropagation();
               onToggleExpanded?.(day.dayNumber);
             }}
-            className="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center justify-center transition-colors"
+            className={iconBtnClass}
             aria-label={`${isExpanded ? "Collapse" : "Expand"} Day ${day.dayNumber}`}
           >
             {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -545,105 +574,130 @@ export function ItineraryDayColumn({
         </div>
       </div>
 
+      {/* ── Collapsed summary ──────────────────────────────────────── */}
       {!isExpanded ? (
         <div
           ref={setNodeRef}
-          className={`p-2.5 border-t border-slate-800 transition-colors duration-150 ${
-            isOver ? "bg-amber-500/10" : "bg-slate-950/70"
-          }`}
+          className="px-3 py-2.5 transition-colors duration-[120ms]"
+          style={{ backgroundColor: isOver ? "var(--ds-accent-subtle)" : "var(--ds-midnight-ink)" }}
         >
           {day.items.length === 0 ? (
-            <p className="text-xs text-slate-500">No items yet.</p>
+            <p className="text-xs text-ds-text-tertiary italic">No plans yet.</p>
           ) : (
-            <div className="space-y-1">
-              <p className="text-xs text-slate-200 truncate">{firstItem?.title ?? "Itinerary item"}</p>
-              <p className="text-[11px] text-slate-500">
-                {hiddenItemsCount > 0 ? `+${hiddenItemsCount} more item${hiddenItemsCount > 1 ? "s" : ""}` : "1 item"}
-                {itemSummary ? ` · ${itemSummary}` : ""}
+            <div className="space-y-0.5">
+              <p className="text-xs text-ds-text-secondary truncate">{firstItem?.title ?? "Itinerary item"}</p>
+              <p className="text-[11px] text-ds-text-tertiary">
+                {hiddenItemsCount > 0 ? `+${hiddenItemsCount} more · ` : ""}
+                {itemSummary}
               </p>
             </div>
           )}
         </div>
       ) : (
-      <div
-        ref={setNodeRef}
-        className={`p-3 min-h-[68px] h-auto overflow-hidden space-y-1.5 border-t border-slate-800 transition-colors duration-150 ${
-          isOver ? "bg-amber-500/10" : "bg-slate-950/70"
-        }`}
-      >
-        {timelineSuggestions && (
-          <SuggestionsReviewPanel
-            suggestions={timelineSuggestions}
-            items={day.items}
-            applying={applyingTimeline}
-            onApply={handleApplyTimeline}
-            onDismiss={() => setTimelineSuggestions(null)}
-          />
-        )}
-
-        <SortableContext
-          items={itemIds}
-          strategy={verticalListSortingStrategy}
+        /* ── Expanded body ─────────────────────────────────────────── */
+        <div
+          ref={setNodeRef}
+          className="p-3 min-h-[68px] h-auto overflow-hidden space-y-2 transition-colors duration-[120ms]"
+          style={{ backgroundColor: isOver ? "var(--ds-accent-subtle)" : "var(--ds-midnight-ink)" }}
         >
-          <div className={`relative rounded-xl p-1 ${isSelected ? "bg-slate-900/55 ring-1 ring-amber-300/20" : "bg-transparent"}`}>
-            <TimelineSections
-              items={visibleItems}
-              dayId={day.id}
-              onRemoveItem={onRemoveItem}
-              onMoveItemToIdeas={onMoveItemToIdeas}
-              onToggleCompare={onToggleCompare}
-              compareSet={compareSet}
-              onUpdateTimeline={handleTimelineUpdated}
+          {timelineSuggestions && (
+            <SuggestionsReviewPanel
+              suggestions={timelineSuggestions}
+              items={day.items}
+              applying={applyingTimeline}
+              onApply={handleApplyTimeline}
+              onDismiss={() => setTimelineSuggestions(null)}
             />
-            {!showAllItems && hasHiddenItems && (
-              <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-14 bg-gradient-to-b from-transparent to-slate-950/95" />
-            )}
-          </div>
-        </SortableContext>
+          )}
 
-        {visibleItems.length >= 2 && <DayTravelHintBar items={visibleItems} />}
-
-        {day.items.length === 0 ? (
-          <div
-            className={`flex-1 flex flex-col items-center justify-center border border-dashed rounded-lg py-2.5 px-2 gap-0.5 transition-colors duration-150 ${
-              isOver
-                ? "border-amber-400/70 bg-amber-500/10 text-amber-300"
-                : "border-slate-700 text-slate-500"
-            }`}
-          >
-            <p className="text-[11px] text-center">
-              {isOver ? "Drop here" : "No plans yet for Day " + day.dayNumber}
-            </p>
-            {!isOver && (
-              <p className="text-[10px] text-center text-slate-500">
-                Drag items here or use +
-              </p>
-            )}
-          </div>
-        ) : isOver && (
-          <div className="border-2 border-dashed border-amber-400/70 rounded-xl py-2 flex items-center justify-center transition-colors duration-150 bg-amber-500/10">
-            <p className="text-xs text-amber-300 font-medium">Drop here</p>
-          </div>
-        )}
-
-        {hasHiddenItems && (
-          <div className="mt-3 flex justify-center border-t border-slate-800 pt-3">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setExpandedItemDays((prev) => ({
-                  ...prev,
-                  [day.dayNumber]: !showAllItems,
-                }));
-              }}
-              className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-300 shadow-sm hover:bg-slate-800"
+          <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+            <div
+              className={`relative rounded-lg p-1 transition-colors duration-[120ms] ${
+                isSelected ? "ring-1 ring-ds-accent/15 bg-ds-midnight" : ""
+              }`}
             >
-              {showAllItems ? "Show less ↑" : `Show all ${day.items.length} items ↓`}
-            </button>
-          </div>
-        )}
-      </div>
+              <TimelineSections
+                items={visibleItems}
+                dayId={day.id}
+                onRemoveItem={onRemoveItem}
+                onMoveItemToIdeas={onMoveItemToIdeas}
+                onToggleCompare={onToggleCompare}
+                compareSet={compareSet}
+                onUpdateTimeline={handleTimelineUpdated}
+              />
+              {!showAllItems && hasHiddenItems && (
+                <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-14 bg-gradient-to-b from-transparent to-ds-midnight" />
+              )}
+            </div>
+          </SortableContext>
+
+          {visibleItems.length >= 2 && <DayTravelHintBar items={visibleItems} />}
+
+          {/* ── Empty day invitation ─────────────────────────────────── */}
+          {day.items.length === 0 && (
+            <div
+              className={`flex-1 flex flex-col items-center justify-center border border-dashed rounded-lg py-5 px-3 gap-1.5 transition-colors duration-[120ms] ${
+                isOver
+                  ? "border-ds-accent/60 text-ds-accent"
+                  : "border-ds-pen-stroke text-ds-text-tertiary"
+              }`}
+              style={isOver ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
+            >
+              {isOver ? (
+                <p className="text-xs font-medium text-center">Drop here</p>
+              ) : (
+                <>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ds-text-tertiary">
+                    Day {day.dayNumber}
+                  </p>
+                  <p className="text-xs text-center text-ds-text-tertiary">
+                    Drag items here or use{" "}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelect?.(day.id);
+                        onAddItem(day.id);
+                      }}
+                      className="inline-flex items-center min-h-[44px] min-w-[44px] px-1 text-ds-accent hover:text-ds-text-secondary underline underline-offset-2 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                    >
+                      + Add
+                    </button>{" "}
+                    to start building.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Active drop indicator (when day already has items) ────── */}
+          {day.items.length > 0 && isOver && (
+            <div
+              className="border border-dashed border-ds-accent/60 rounded-lg py-2 flex items-center justify-center transition-colors duration-[120ms]"
+              style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+            >
+              <p className="text-xs text-ds-accent font-medium">Drop here</p>
+            </div>
+          )}
+
+          {/* ── Show all / show less ──────────────────────────────────── */}
+          {hasHiddenItems && (
+            <div className="mt-2 flex justify-center border-t border-ds-pen-stroke pt-3">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpandedItemDays((prev) => ({
+                    ...prev,
+                    [day.dayNumber]: !showAllItems,
+                  }));
+                }}
+                className="rounded-full border border-ds-pen-stroke bg-ds-carbon px-4 text-sm font-medium text-ds-text-secondary hover:bg-ds-pen-stroke transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
+              >
+                {showAllItems ? "Show less ↑" : `Show all ${day.items.length} items ↓`}
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

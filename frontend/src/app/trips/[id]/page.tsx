@@ -143,13 +143,13 @@ export default function TripDetailPage() {
     return (
       <>
         <div className="mb-6">
-          <Link href="/trips" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition">
+          <Link href="/trips" className="inline-flex items-center gap-1.5 text-sm text-ds-text-tertiary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent">
             <ChevronLeft className="w-4 h-4" />
             My Trips
           </Link>
         </div>
         <PageHeader title="Loading…" description={`Trip ID: ${id}`} />
-        <div className="card p-8 text-center text-slate-400 text-sm">Loading trip details…</div>
+        <div className="rounded-lg border border-ds-pen-stroke bg-ds-onyx p-8 text-center text-ds-text-tertiary text-sm">Loading trip details…</div>
       </>
     );
   }
@@ -169,7 +169,7 @@ export default function TripDetailPage() {
       )}
 
       {toast && (
-        <div className="fixed bottom-4 right-4 z-50 bg-slate-800 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
+        <div className="fixed bottom-4 right-4 z-50 bg-ds-onyx border border-ds-pen-stroke text-ds-text text-sm px-4 py-2 rounded-lg shadow-[var(--ds-elevation-2)]">
           {toast}
         </div>
       )}
@@ -251,7 +251,7 @@ export default function TripDetailPage() {
       )}
 
       <div className="mb-6">
-        <Link href="/trips" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition">
+        <Link href="/trips" className="inline-flex items-center gap-1.5 text-sm text-ds-text-tertiary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent">
           <ChevronLeft className="w-4 h-4" />
           My Trips
         </Link>
@@ -261,16 +261,17 @@ export default function TripDetailPage() {
       {(contextLoading || tripContext) && (
         <div className="mb-4 flex items-center gap-2">
           {contextLoading ? (
-            <p className="text-sm text-slate-400 italic">Fetching destination vibe…</p>
+            <p className="text-sm text-ds-text-tertiary italic">Fetching destination vibe…</p>
           ) : tripContext ? (
             <>
               <span
-                className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-brand-600/15 border border-brand-500/30 text-brand-300"
+                className="inline-flex items-center justify-center h-6 w-6 rounded-full border border-ds-pen-stroke text-ds-accent"
+                style={{ backgroundColor: "var(--ds-accent-subtle)" }}
                 aria-hidden="true"
               >
                 <Compass className="w-3.5 h-3.5" />
               </span>
-              <p className="text-sm font-medium text-cream-300 tracking-wide">
+              <p className="text-sm font-medium text-ds-text tracking-wide">
                 {tripContext.dateRange
                   ? `${tripContext.vibe} • ${tripContext.dateRange}`
                   : tripContext.vibe}
