@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ChevronLeft, Compass, Pencil, Sparkles, Trash2, X, Zap } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TripBuilder } from "@/components/trips/TripBuilder";
+import { TripReadinessCockpit } from "@/components/trips/TripReadinessCockpit";
 import { OptimizeTripModal } from "@/components/trips/OptimizeTripModal";
 import { AIConciergePanel } from "@/components/trips/AIConciergePanel";
 import { fetchTrip, ensureTripDays, fetchTripContext, updateTrip, deleteTrip } from "@/lib/api";
@@ -305,6 +306,16 @@ export default function TripDetailPage() {
           </div>
         }
       />
+
+      {trip && (
+        <TripReadinessCockpit
+          trip={trip}
+          itineraryDays={itineraryDays}
+          onOpenConcierge={() => setConciergeOpen(true)}
+          onOpenOptimize={() => setOptimizeOpen(true)}
+          onOpenEdit={openEdit}
+        />
+      )}
 
       <TripBuilder
         key={tripBuilderKey}
