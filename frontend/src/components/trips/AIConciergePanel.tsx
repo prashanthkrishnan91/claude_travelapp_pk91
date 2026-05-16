@@ -196,7 +196,7 @@ function cardKey(name: string, dayId?: string): string {
   return `${name.trim().toLowerCase()}::${dayId ?? "trip"}`;
 }
 
-function pickCardDetail(place: { supportingDetails?: { conciergeNote?: string } }): string[] {
+function pickCardDetail(place: { supportingDetails?: { conciergeNote?: string | null } | null }): string[] {
   const note = place.supportingDetails?.conciergeNote;
   return note ? [note] : [];
 }
