@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Map, Plane, CreditCard, Coins, PlusCircle } from "lucide-react";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { StatCard } from "@/components/ui/StatCard";
 import { RecentTrips } from "@/components/dashboard/RecentTrips";
 import { QuickActions } from "@/components/dashboard/QuickActions";
@@ -52,7 +51,6 @@ export function DashboardClient() {
         fetchCards(),
         fetchDealsFeed(),
       ]);
-      console.log("[dashboard] loaded summary:", summaryData);
       setSummary(summaryData);
       setTrips(tripsData);
       setCards(cardsData);
@@ -72,16 +70,21 @@ export function DashboardClient() {
 
   return (
     <>
-      <PageHeader
-        title="Dashboard"
-        description="Welcome back. Here's your travel overview."
-        action={
-          <Link href="/trips/new" className="btn-primary">
+      {/* Page header */}
+      <div className="flex items-start justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-2xl font-semibold text-ds-text">Dashboard</h1>
+          <p className="mt-1 text-sm text-ds-text-tertiary">
+            Welcome back. Here&apos;s your travel overview.
+          </p>
+        </div>
+        <div className="shrink-0">
+          <Link href="/trips/new" className="btn-primary inline-flex items-center min-h-[44px]">
             <PlusCircle className="w-4 h-4" />
             New Trip
           </Link>
-        }
-      />
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
         <StatCard
@@ -90,7 +93,7 @@ export function DashboardClient() {
           icon={<Map className="w-5 h-5" />}
           trend={upcomingCount > 0 ? `${upcomingCount} in planning` : undefined}
           trendUp={upcomingCount > 0}
-          colorClass="bg-brand-500/15 text-brand-400"
+          colorClass="bg-ds-accent-subtle text-ds-accent"
         />
         <StatCard
           label="Upcoming"
