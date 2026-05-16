@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-16 (Phase 6 shipped — premium My Journeys dashboard)
+Last updated: 2026-05-16 (Phase 6 shipped — premium My Journeys dashboard; CI readiness sections added)
 
 ## Purpose
 
