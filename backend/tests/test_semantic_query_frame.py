@@ -475,7 +475,7 @@ class TestSetWriterCardCountContract:
         # whether reason_validated was True/False — no pydantic required.
         call_log: List[dict] = []
 
-        def _fake_entity_to_card(entity, reason, frame, reason_source="", reason_validated=False):
+        def _fake_entity_to_card(entity, reason, frame, reason_source="", reason_validated=False, vertical=None):
             m = MagicMock()
             m.name = entity.name
             m.display = MagicMock()
@@ -516,10 +516,11 @@ class TestSetWriterCardCountContract:
         # cards_without_notes_count counts the hidden-note card.
         assert cards_without_notes_count == 1
 
-    def test_step8_llm_fallback_drops_unvalidated_card(self):
-        """In the LLM fallback path (set_writer_primary_active=False), cards
-        without validated notes are excluded — this is the intended behavior for
-        that path.  The set-writer fix must not change LLM fallback behavior."""
+    def test_step8_llm_fallback_includes_unvalidated_card_without_note(self):
+        """Google-verified cards are never dropped regardless of note status (PR #393 behavior).
+        In the LLM fallback path (set_writer_primary_active=False), cards without validated notes
+        are included with reason_validated=False so the frontend hides the note block.
+        excluded_unvalidated is always 0 — no verified card is silently discarded."""
         from unittest.mock import patch, MagicMock
         from app.concierge.semantic_retrieval import _assemble_card_set
         from app.concierge.frame_extractor import extract_frame
@@ -527,7 +528,7 @@ class TestSetWriterCardCountContract:
         cards_data, card_reasons = self._make_entities_and_reasons()
         frame = extract_frame("izakayas", "Chicago")
 
-        def _fake_entity_to_card(entity, reason, frame, reason_source="", reason_validated=False):
+        def _fake_entity_to_card(entity, reason, frame, reason_source="", reason_validated=False, vertical=None):
             m = MagicMock()
             m.name = entity.name
             m.display = MagicMock()
@@ -545,10 +546,17 @@ class TestSetWriterCardCountContract:
                 )
             )
 
-        # Only 1 card (the validated one) must be returned in LLM fallback mode.
-        assert len(cards) == 1
-        assert cards[0].name == "Sakura Izakaya"
-        assert excluded_unvalidated == 1
+        # Both cards included — verified cards are never dropped regardless of note status.
+        assert len(cards) == 2, (
+            f"Expected 2 cards (verified cards are never dropped), got {len(cards)}"
+        )
+        assert excluded_unvalidated == 0
+        # Validated card has visible note; unvalidated card has hidden note.
+        validated_card = next(c for c in cards if c.name == "Sakura Izakaya")
+        assert validated_card.display.display_why_validated is True
+        hidden_card = next(c for c in cards if c.name == "Midtown Izakaya")
+        assert hidden_card.display.display_why_validated is False
+        assert cards_without_notes_count == 1
 
     def test_step8_fallback_note_visible_count_zero_invariant(self):
         """After Step 8 assembly with hidden note, fallback_note_visible_count
@@ -565,7 +573,7 @@ class TestSetWriterCardCountContract:
 
         validated_as_true_calls: List[dict] = []
 
-        def _fake_entity_to_card(entity, reason, frame, reason_source="", reason_validated=False):
+        def _fake_entity_to_card(entity, reason, frame, reason_source="", reason_validated=False, vertical=None):
             if reason_validated and not reason:
                 # Would be a visible fallback/deterministic note — must never happen.
                 validated_as_true_calls.append({"entity": entity.name, "reason": reason})
