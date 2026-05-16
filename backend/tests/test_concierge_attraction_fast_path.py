@@ -362,6 +362,54 @@ class TestVerticalDetection:
         result = svc._detect_semantic_vertical(INTENT_GENERAL, "izakaya near Shibuya")
         assert result == "restaurants"
 
+    # ── Venue-head precedence regression tests ────────────────────────────────
+
+    @pytest.mark.parametrize("query", [
+        "sunset restaurants in San Diego",
+        "scenic cafes in Seattle",
+        "restaurants near the beach in Miami",
+        "beach clubs in Ibiza",
+        "rooftop bars with sunset views",
+    ])
+    def test_food_bar_head_overrides_attraction_modifier(self, query):
+        """Queries with explicit venue heads must not be misbucketed as attractions."""
+        svc = _svc()
+        intent = svc._detect_intent(query)
+        result = svc._detect_semantic_vertical(intent, query)
+        assert result == "restaurants", (
+            f"Query {query!r} (intent={intent!r}): venue head should win over modifier "
+            f"tokens — expected 'restaurants', got {result!r}"
+        )
+
+    @pytest.mark.parametrize("query", [
+        "hotels near the beach",
+        "hotels with sunset views",
+    ])
+    def test_hotel_head_overrides_attraction_modifier(self, query):
+        """Hotel venue heads must still win even when modifier tokens are present."""
+        svc = _svc()
+        intent = svc._detect_intent(query)
+        result = svc._detect_semantic_vertical(intent, query)
+        assert result == "hotels", (
+            f"Query {query!r} (intent={intent!r}): hotel head must win — "
+            f"expected 'hotels', got {result!r}"
+        )
+
+    @pytest.mark.parametrize("query", [
+        "best sunset points in San Diego",
+        "best beaches in Miami",
+        "scenic viewpoints in Seattle",
+    ])
+    def test_attraction_head_with_no_venue_head(self, query):
+        """Attraction tokens win when no food/bar/hotel venue head is present."""
+        svc = _svc()
+        intent = svc._detect_intent(query)
+        result = svc._detect_semantic_vertical(intent, query)
+        assert result == "attractions", (
+            f"Query {query!r} (intent={intent!r}): attraction tokens should win — "
+            f"expected 'attractions', got {result!r}"
+        )
+
 
 # ── Section D: Bucket correctness (semantic_retrieval_v1) ────────────────────
 

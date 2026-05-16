@@ -130,6 +130,30 @@ _ATTRACTION_VERTICAL_CONCEPTS: frozenset = frozenset({
     "activities", "activity", "experience", "things to do",
     "food hall", "food halls", "street food",
 })
+
+# Explicit venue-head nouns for the food/bar/nightlife vertical.
+# Checked before attraction modifier tokens so that "sunset restaurants" or
+# "rooftop bars with sunset views" are not misbucketed as attractions.
+# Modifier-only words (scenic, sunset, rooftop, beach, waterfront) should not
+# override these venue heads.
+_FOOD_BAR_HEAD_TOKENS: frozenset = frozenset({
+    "restaurant", "restaurants",
+    "cafe", "cafes",
+    "bar", "bars",
+    "pub", "pubs",
+    "club", "clubs",
+    "lounge", "lounges",
+    "brewery", "breweries",
+    "taproom", "taprooms",
+    "bakery", "bakeries",
+    "brunch",
+    "bistro", "bistros",
+    "diner", "diners",
+    "eatery", "eateries",
+    "tavern", "taverns",
+    "speakeasy", "speakeasies",
+    "coffee",
+})
 _BANNED_REASON_BITS = (
     "sample",
     "static sample",
@@ -835,6 +859,14 @@ class ConciergeService:
         single_hotel = {w for w in _HOTEL_VERTICAL_CONCEPTS if " " not in w}
         if q_tokens & single_hotel:
             return "hotels"
+
+        # Venue-head precedence: explicit food/bar nouns win over attraction modifier tokens.
+        # "sunset restaurants" and "rooftop bars with sunset views" must not be misbucketed
+        # as attractions because "sunset" appears in _ATTRACTION_VERTICAL_CONCEPTS.
+        # This check runs before the attraction token scan so modifiers (scenic, sunset,
+        # beach, rooftop, waterfront) cannot override an explicit venue head.
+        if q_tokens & _FOOD_BAR_HEAD_TOKENS:
+            return "restaurants"
 
         # Attraction intent (INTENT_ATTRACTIONS) takes precedence over token check for
         # attractions — the intent already indicates the user wants attraction-type places.
