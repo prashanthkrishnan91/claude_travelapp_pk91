@@ -21,6 +21,23 @@ Follow-up needed:
 
 ---
 
+### 2026-05-16 — PR #397: PR body composed from scratch → same CI hard-fail as PR #394
+
+Repo: claude_travelapp_pk91
+Area: Workflow enforcement / PR readiness gate
+Severity: Level 2 gate failure (required fix commit + re-run)
+Miss: PR #397 body missing `## Severity`, `## Validation`, `SQL / env / providers / UI` — same as the 2026-05-16 PR #394 entry. PR body authored from scratch instead of from `.github/pull_request_template.md`.
+Impact: CI AI PR Readiness Check red on first push; required a PR body edit and new trigger commit.
+What caught it: CI failure on `AI PR Readiness Check` job.
+Root cause: Repeated: PR body generated from memory rather than from the template, even after the same miss was recorded for PR #394.
+What should catch it next time: The `pr-summary` skill must explicitly state "start from `.github/pull_request_template.md` verbatim — do not compose from scratch." Same rule added to `docs/ai/KNOWN_FAILURE_MODES.md`.
+One-off or repeated: **Repeated** (second occurrence — same root cause as 2026-05-16 PR #394 entry).
+Promotion target: `docs/ai/KNOWN_FAILURE_MODES.md` — add explicit entry for "PR body composed from scratch → CI section failures." (Two-miss threshold reached.)
+Action taken: Edited PR body to add all required sections; pushed trigger commit; CI passed on second run.
+Follow-up needed: Promotion applied to `KNOWN_FAILURE_MODES.md` in same commit as this ledger entry.
+
+---
+
 ### 2026-05-16 — PR body sections missing → CI hard-fail despite local PASS
 
 Repo: claude_travelapp_pk91
