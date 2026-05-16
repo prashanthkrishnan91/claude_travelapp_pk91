@@ -181,3 +181,70 @@ test('FlightExploreFlow: no legacy cream/dark/brand colors', () => {
   assert.ok(!src.includes('bg-dark-'), 'no bg-dark- in FlightExploreFlow');
   assert.ok(!src.includes('text-brand-'), 'no text-brand- in FlightExploreFlow');
 });
+
+// ── Hardening: rgba() ban ──────────────────────────────────────────────────────
+// Phase 3 migrated files must not use raw rgba() inline styles.
+// var(--ds-accent-subtle) is an established token and does not contain "rgba(" literally.
+
+test('no raw rgba() in TripBuilder', () => {
+  assert.ok(!tripBuilderSrc.includes('rgba('), 'TripBuilder must not use raw rgba() inline styles');
+});
+
+test('no raw rgba() in ItineraryItemCard', () => {
+  assert.ok(!itineraryCardSrc.includes('rgba('), 'ItineraryItemCard must not use raw rgba() inline styles');
+});
+
+test('no raw rgba() in SearchResultCard', () => {
+  assert.ok(!searchResultCardSrc.includes('rgba('), 'SearchResultCard must not use raw rgba() inline styles');
+});
+
+test('no raw rgba() in TripIdeasPanel', () => {
+  assert.ok(!tripIdeasPanelSrc.includes('rgba('), 'TripIdeasPanel must not use raw rgba() inline styles');
+});
+
+test('no raw rgba() in FlightExploreFlow', () => {
+  assert.ok(!flightExploreSrc.includes('rgba('), 'FlightExploreFlow must not use raw rgba() inline styles');
+});
+
+// ── Hardening: touch target compliance ────────────────────────────────────────
+// Interactive icon buttons must use invisible-padding approach (-m-* p-*) not w-5/w-6 on button itself.
+
+test('SearchResultCard: icon buttons use touch-compliant hit area not w-6 h-6 on button', () => {
+  // After fix, buttons use -m-2.5 p-2.5 for 44px hit area; w-6 h-6 only on inner visual spans
+  assert.ok(searchResultCardSrc.includes('-m-2.5 p-2.5'), 'SearchResultCard buttons use -m-2.5 p-2.5 for 44px hit area');
+  assert.ok(searchResultCardSrc.includes('-m-3.5 p-3.5'), 'SearchResultCard drag handle uses -m-3.5 p-3.5 for 44px hit area');
+});
+
+test('ItineraryItemCard: icon buttons use touch-compliant hit area not w-5 h-5 on button', () => {
+  // After fix, buttons use -m-3 p-3 for 44px hit area; w-5 h-5 only on inner visual spans
+  assert.ok(itineraryCardSrc.includes('-m-3 p-3'), 'ItineraryItemCard buttons use -m-3 p-3 for 44px hit area');
+  assert.ok(itineraryCardSrc.includes('-m-3.5 p-3.5'), 'ItineraryItemCard drag handle uses -m-3.5 p-3.5 for 44px hit area');
+});
+
+// ── Hardening: Card.tsx ref cleanliness ──────────────────────────────────────
+
+const cardPrimitiveSrc = readFileSync(
+  new URL('../src/components/ui/Card.tsx', import.meta.url),
+  'utf8',
+);
+
+test('Card.tsx: no eslint-disable for no-explicit-any', () => {
+  assert.ok(
+    !cardPrimitiveSrc.includes('eslint-disable') || !cardPrimitiveSrc.includes('no-explicit-any'),
+    'Card.tsx must not suppress the no-explicit-any rule'
+  );
+});
+
+test('Card.tsx: no ref as any cast in CardRoot', () => {
+  assert.ok(!cardPrimitiveSrc.includes('ref as any'), 'Card.tsx must not use ref as any cast');
+  assert.ok(!cardPrimitiveSrc.includes('rest as any'), 'Card.tsx must not use rest as any cast');
+});
+
+test('Card.tsx: DnD callers wrap with outer div not Card ref', () => {
+  // SearchResultCard must use an outer <div> wrapper for the DnD ref,
+  // not pass it directly to <Card>. Pattern: <div ref={setNodeRef} before <Card
+  assert.ok(searchResultCardSrc.includes('<div ref={setNodeRef}'), 'SearchResultCard must use outer div wrapper for DnD ref');
+  // Card element itself must not carry the DnD ref
+  const cardOpenTag = searchResultCardSrc.match(/<Card[^>]*>/)?.[0] ?? '';
+  assert.ok(!cardOpenTag.includes('ref='), 'Card element must not carry a ref= prop in SearchResultCard');
+});

@@ -209,14 +209,13 @@ function RecTag({ tag }: { tag: string }) {
 
 function AiScoreBadge({ score }: { score?: number | null }) {
   if (typeof score !== "number" || !Number.isFinite(score) || score <= 0) return null;
-  const { text, ring, bg } =
-    score >= 70 ? { text: "text-ds-trust-verified", ring: "ring-ds-trust-verified/45", bg: "rgba(136, 168, 153, 0.15)" } :
-    score >= 50 ? { text: "text-ds-caution",        ring: "ring-ds-caution/45",        bg: "rgba(232, 178, 107, 0.15)" } :
-                  { text: "text-ds-text-tertiary",  ring: "ring-ds-pen-stroke",        bg: "transparent" };
+  const { text, ring } =
+    score >= 70 ? { text: "text-ds-trust-verified", ring: "ring-ds-trust-verified/45" } :
+    score >= 50 ? { text: "text-ds-caution",        ring: "ring-ds-caution/45" } :
+                  { text: "text-ds-text-tertiary",  ring: "ring-ds-pen-stroke" };
   return (
     <div
       className={`flex flex-col items-center justify-center w-10 h-10 rounded-full ring-2 ${ring} flex-shrink-0`}
-      style={{ backgroundColor: bg }}
     >
       <p className={`text-xs font-bold leading-none ${text}`}>{Math.round(score ?? 0)}</p>
       <p className="text-[9px] text-ds-text-tertiary leading-none mt-0.5">score</p>
@@ -743,7 +742,6 @@ function HotelCandidateCard({
           {proximityLabel && (
             <span
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium text-ds-trust-verified border border-ds-trust-verified/30"
-              style={{ backgroundColor: "rgba(136, 168, 153, 0.15)" }}
             >
               <MapPin className="w-2.5 h-2.5" />
               {proximityLabel}

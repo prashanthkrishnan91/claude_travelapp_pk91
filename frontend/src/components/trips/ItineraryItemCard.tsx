@@ -139,11 +139,11 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           : "bg-ds-onyx border-ds-pen-stroke shadow-[var(--ds-elevation-1)] hover:border-ds-carbon hover:shadow-[var(--ds-elevation-2)]"
       }`}
     >
-      {/* Drag handle */}
+      {/* Drag handle — -m-3.5 p-3.5 yields 44px hit area (16px icon + 14px*2 padding) */}
       <button
         {...listeners}
         {...attributes}
-        className="mt-0.5 flex-shrink-0 cursor-grab active:cursor-grabbing text-ds-text-tertiary group-hover:text-ds-text-secondary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+        className="mt-0.5 flex-shrink-0 -m-3.5 p-3.5 flex items-center justify-center cursor-grab active:cursor-grabbing text-ds-text-tertiary group-hover:text-ds-text-secondary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         aria-label="Drag to reorder"
       >
         <GripVertical className="w-4 h-4" />
@@ -174,17 +174,20 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                 Move to Ideas
               </button>
             )}
+            {/* Icon buttons use -m-3 p-3: 20px visual + 12px*2 padding = 44px hit area */}
             {onToggleCompare && (
               <button
                 onClick={() => onToggleCompare(item)}
-                className={`w-5 h-5 rounded-md flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 ${
+                className={`group -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2`}
+                aria-label={isComparing ? `Remove ${item.title} from compare` : `Add ${item.title} to compare`}
+              >
+                <span className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
                   isComparing
                     ? "opacity-100 bg-ds-accent text-ds-text-inverse"
                     : "opacity-0 group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary hover:text-ds-accent"
-                }`}
-                aria-label={isComparing ? `Remove ${item.title} from compare` : `Add ${item.title} to compare`}
-              >
-                <Scale className="w-3 h-3" />
+                }`}>
+                  <Scale className="w-3 h-3" />
+                </span>
               </button>
             )}
             {/* Timeline edit trigger */}
@@ -197,32 +200,40 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                   handleOpenTimeline();
                 }
               }}
-              className={`flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 ${
-                timelineOpen
-                  ? "opacity-100 text-ds-accent"
-                  : hasSchedule
-                    ? "opacity-75 bg-ds-carbon text-ds-text-tertiary hover:text-ds-accent"
-                    : "opacity-100 md:opacity-0 md:group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary hover:text-ds-accent"
-              }`}
-              style={timelineOpen ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
+              className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               aria-label="Set timeline"
               title="Set timeline"
             >
-              <Clock className="w-3 h-3" />
+              <span
+                className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
+                  timelineOpen
+                    ? "opacity-100 text-ds-accent"
+                    : hasSchedule
+                      ? "opacity-75 bg-ds-carbon text-ds-text-tertiary group-hover:text-ds-accent"
+                      : "opacity-100 md:opacity-0 md:group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary group-hover:text-ds-accent"
+                }`}
+                style={timelineOpen ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
+              >
+                <Clock className="w-3 h-3" />
+              </span>
             </button>
             <button
               onClick={() => setBookingOpen(true)}
-              className="flex-shrink-0 w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text-secondary flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               aria-label={`Book ${item.title}`}
             >
-              <Ticket className="w-3 h-3" />
+              <span className="w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-ds-carbon group-hover:bg-ds-pen-stroke text-ds-text-tertiary group-hover:text-ds-text-secondary flex items-center justify-center transition-all">
+                <Ticket className="w-3 h-3" />
+              </span>
             </button>
             <button
               onClick={() => onRemove(item.id)}
-              className="flex-shrink-0 w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary hover:text-ds-warning flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               aria-label={`Remove ${item.title}`}
             >
-              <X className="w-3 h-3" />
+              <span className="w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary group-hover:text-ds-warning flex items-center justify-center transition-all">
+                <X className="w-3 h-3" />
+              </span>
             </button>
           </div>
         </div>
@@ -406,11 +417,6 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                           ? "text-ds-caution border-ds-caution/30"
                           : "bg-ds-carbon text-ds-text-tertiary border-ds-pen-stroke"
                     }`}
-                    style={areaLabel === "In Best Area"
-                      ? { backgroundColor: "rgba(136, 168, 153, 0.15)" }
-                      : areaLabel === "Close to Best Area"
-                        ? { backgroundColor: "rgba(232, 178, 107, 0.15)" }
-                        : undefined}
                     >{areaLabel}</span>
                   )}
                   {proximityLabel && proximityLabel.toLowerCase() !== (areaLabel ?? "").toLowerCase() && (

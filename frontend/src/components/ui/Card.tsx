@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import type { HTMLAttributes, ReactNode, Ref } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 
 // ── Tone ────────────────────────────────────────────────────────────────────
 export type CardTone = "dark" | "paper";
@@ -15,7 +15,6 @@ export interface CardProps extends HTMLAttributes<HTMLElement> {
   as?:             "article" | "div" | "li" | "section";
   children?:       ReactNode;
   "data-testid"?:  string;
-  ref?:            Ref<HTMLElement>;
 }
 
 function CardRoot({
@@ -23,12 +22,10 @@ function CardRoot({
   as: Tag = "div",
   className,
   children,
-  ref,
   ...rest
 }: CardProps) {
   return (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    <Tag ref={ref as any} className={clsx("card", TONE_CLASSES[tone], className)} {...rest}>
+    <Tag className={clsx("card", TONE_CLASSES[tone], className)} {...rest}>
       {children}
     </Tag>
   );

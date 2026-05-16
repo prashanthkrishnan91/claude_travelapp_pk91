@@ -192,14 +192,11 @@ function FlightCard({ offer }: { offer: FlightItineraryOffer }) {
       <div className="flex items-center justify-between pt-1 border-t border-ds-pen-stroke">
         <span
           className={[
-            "text-[10px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wide",
+            "text-[10px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wide border",
             offer.liveCachedStatus === "live"
-              ? "text-ds-trust-verified"
-              : "text-ds-caution",
+              ? "text-ds-trust-verified border-ds-trust-verified/30"
+              : "text-ds-caution border-ds-caution/30",
           ].join(" ")}
-          style={{ backgroundColor: offer.liveCachedStatus === "live"
-            ? "rgba(136, 168, 153, 0.12)"
-            : "rgba(232, 178, 107, 0.12)" }}
           data-testid="flight-live-status"
         >
           {offer.liveCachedStatus}
@@ -330,8 +327,7 @@ function EmptyState({
 function ErrorState({ message }: { message?: string }) {
   return (
     <div
-      className="rounded-2xl border border-ds-warning/20 p-5 flex items-start gap-3"
-      style={{ backgroundColor: "rgba(216, 132, 120, 0.05)" }}
+      className="rounded-2xl border border-ds-warning/20 p-5 flex items-start gap-3 bg-ds-onyx"
       data-testid="flight-error-state"
       role="alert"
     >
