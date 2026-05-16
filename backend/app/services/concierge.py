@@ -263,6 +263,17 @@ _NIGHTLIFE_PAT = _kw_pattern(
 _ATTRACTION_PAT = _kw_pattern(
     "attractions", "attraction", "museum", "museums", "tour", "sightseeing",
     "things to do", "activity", "activities", "visit", "see", "landmark", "landmarks",
+    # Viewpoint / scenic-point phrases listed here so they match before _REWARDS_PAT
+    # fires on the bare word "points". Phrase context wins: "sunset points" and
+    # "lookout points" mean scenic viewpoints in a travel context, not reward-points.
+    "viewpoint", "viewpoints", "view point", "view points",
+    "lookout point", "lookout points", "lookout", "lookouts",
+    "scenic overlook", "scenic overlooks",
+    "scenic point", "scenic points",
+    "sunset point", "sunset points",
+    "sunset spot", "sunset spots",
+    "photo spot", "photo spots",
+    "vantage point", "vantage points",
 )
 _HOTEL_PAT = _kw_pattern(
     "hotels", "hotel", "accommodation", "where to stay", "hostel", "resort",

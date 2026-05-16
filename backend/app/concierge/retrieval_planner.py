@@ -331,6 +331,20 @@ _SYNONYM_EXPANSIONS: dict = {
     "korean": ["korean restaurant", "korean bbq"],
     "vietnamese": ["vietnamese restaurant"],
     "spanish": ["spanish restaurant", "tapas"],
+    # Natural-feature / coastal attraction synonyms — widens recall for place searches
+    # where the concept label alone is too narrow for Google Text Search (e.g.
+    # "beach Miami" retrieves far fewer results than "public beach Miami").
+    "beach": ["beach", "public beach", "beach park"],
+    "beaches": ["beaches", "public beach", "beach park"],
+    "viewpoint": ["scenic overlook", "viewpoint", "scenic viewpoint"],
+    "viewpoints": ["scenic overlooks", "viewpoints", "scenic viewpoints"],
+    "sunset": ["sunset viewpoint", "scenic overlook", "sunset spot"],
+    "lookout": ["scenic overlook", "lookout point", "viewpoint"],
+    "lookout point": ["scenic overlook", "lookout", "viewpoint"],
+    "lookout points": ["scenic overlooks", "lookouts", "viewpoints"],
+    "sunset point": ["sunset viewpoint", "scenic overlook"],
+    "sunset points": ["sunset viewpoints", "scenic overlooks"],
+    "scenic": ["scenic overlook", "scenic viewpoint", "viewpoint"],
 }
 
 # Preference query modifiers: canonical soft-preference label → list of query
@@ -463,11 +477,14 @@ def plan_queries(
                 seen_pm.add(pm)
 
     # Use the first synonym as the "preference primary" for pref queries when it
-    # is a more descriptive variant (e.g., "cocktail bar" for concept "cocktail").
+    # is richer than the raw concept label (e.g. "sunset" → "sunset viewpoint").
+    # Compare against the CONCEPT LABEL, not primary, so that compound venue phrases
+    # like "sports bars" (primary) are not downgraded to their concept label "sport".
     pref_primary = primary
     if frame.subtype_concepts:
         variants = _synonym_variants(frame.subtype_concepts[0])
-        if variants and variants[0] and variants[0].lower() != primary.lower():
+        concept_label = frame.subtype_concepts[0].label.lower()
+        if variants and variants[0] and variants[0].lower() != concept_label:
             pref_primary = variants[0]
 
     if pref_modifiers and not geo_term and not loc_anchor:
@@ -511,8 +528,10 @@ def plan_queries(
         else:
             _add(f"{primary} {destination}")
 
-        # Query 2: pure venue + destination — broader recall.
-        _add(f"{primary} {destination}")
+        # Query 2: most-descriptive synonym + destination for wider recall.
+        # Uses pref_primary (first synonym when it is richer than the raw label)
+        # so natural-feature queries like "sunset" → "sunset viewpoint <city>".
+        _add(f"{pref_primary} {destination}")
 
         # Query 3: venue synonym variant + destination + (loc anchor or geo).
         if frame.subtype_concepts:
