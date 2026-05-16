@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     brave_search_api_key: str = ""
     serper_api_key: str = ""
     live_research_enabled: bool = True
+    # Production hard kill switch: ALLOW_LIVE_RESEARCH_CALLS=false blocks all
+    # Tavily/Serper/Brave/editorial calls from every Concierge path.
+    # Takes precedence over live_research_enabled; live_research.py also reads
+    # this directly via _live_research_calls_allowed() for legacy paths.
+    allow_live_research_calls: bool = True
     live_research_cache_ttl_seconds: int = 1800
     live_research_timeout_seconds: float = 6.0
     concierge_router_v2: bool = False

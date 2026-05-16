@@ -974,141 +974,165 @@ def _run_pipeline(
     editorial_tel: Dict[str, Any] = {}
     _remaining_after_cross_source_ms = deadline.remaining_ms()
     try:
-        _tavily_key = get_tavily_key()
-        _serper_key = get_serper_key()
-
-        # ── Evidence cache check (skips Tavily on hit) ────────────────────────
-        # Read order: 1. in-memory hot layer, 2. Supabase durable layer, 3. live path.
-        _evidence_cache_entry = _EVIDENCE_ATOM_CACHE.get(evidence_fingerprint)
-        if _evidence_cache_entry is None:
-            # Memory miss — check durable Supabase layer before running Tavily.
-            _durable_ev_entry = _SUPABASE_EVIDENCE_CACHE.get(evidence_fingerprint)
-            if _durable_ev_entry is not None:
-                # Warm in-memory cache so the next request on this worker is free.
-                _EVIDENCE_ATOM_CACHE.set(
-                    evidence_fingerprint,
-                    _durable_ev_entry.atoms_by_place_id,
-                    _durable_ev_entry.accepted_count,
-                )
-                _evidence_cache_entry = _durable_ev_entry
-                roi_tel.durable_evidence_cache_hit = True
-                logger.info(
-                    "semantic_retrieval_v1: durable_evidence_cache_hit "
-                    "fingerprint=%s accepted_count=%d query=%r",
-                    evidence_fingerprint,
-                    _durable_ev_entry.accepted_count,
-                    user_query,
-                )
-        if _evidence_cache_entry is not None:
-            # Cache hit (memory or durable) — reuse accepted atoms, skip Tavily entirely.
-            roi_tel.evidence_cache_hit = True
-            roi_tel.accepted_editorial_evidence_count = _evidence_cache_entry.accepted_count
-            editorial_result = EditorialEnrichmentResult(
-                atoms_by_place_id=dict(_evidence_cache_entry.atoms_by_place_id),
-                telemetry=EditorialEnrichmentTelemetry(
-                    enrichment_attempted=False,
-                    skipped_reason="evidence_cache_hit",
-                ),
-                elapsed_ms=0,
-            )
-            logger.info(
-                "semantic_retrieval_v1: editorial_evidence_cache_hit "
-                "fingerprint=%s accepted_count=%d query=%r durable=%s",
-                evidence_fingerprint,
-                _evidence_cache_entry.accepted_count,
-                user_query,
-                roi_tel.durable_evidence_cache_hit,
-            )
-        elif _remaining_after_cross_source_ms < EDITORIAL_POST_CROSS_SOURCE_MIN_MS:
-            # Opportunistic budget gate: Step 5.55 (Yelp/FSQ) consumed too much
-            # budget — skip editorial to protect dossier/writer latency.
-            roi_tel.tavily_skipped_reason = "budget_after_cross_source_too_low"
+        # ── Kill switch: ALLOW_LIVE_RESEARCH_CALLS ────────────────────────────
+        # Global hard gate: when ALLOW_LIVE_RESEARCH_CALLS is false (production
+        # default), no Tavily/Serper/Brave/editorial call may happen from any
+        # Concierge path. Checked before key reads so no provider path is entered.
+        # Google Places fanout (Steps 1–5.5) is unaffected — it is the verified
+        # card provider, not the editorial/live-research path.
+        from app.services.live_research import _live_research_calls_allowed
+        if not _live_research_calls_allowed():
+            roi_tel.tavily_skipped_reason = "allow_live_research_calls_false"
             logger.info(
                 "semantic_retrieval_v1: editorial_skipped "
-                "reason=budget_after_cross_source_too_low remaining_ms=%d",
-                _remaining_after_cross_source_ms,
+                "editorial_skipped_reason=allow_live_research_calls_false "
+                "tavily_attempted=0 serper_attempted=0 brave_attempted=0 query=%r",
+                user_query,
             )
             editorial_result = EditorialEnrichmentResult(
                 atoms_by_place_id={},
                 telemetry=EditorialEnrichmentTelemetry(
                     enrichment_attempted=False,
-                    skipped_reason="budget_after_cross_source_too_low",
+                    skipped_reason="allow_live_research_calls_false",
                 ),
                 elapsed_ms=0,
             )
         else:
-            # ── Selectivity gate ──────────────────────────────────────────────
-            _editorial_should_run, _editorial_selectivity_reason = should_run_editorial(frame)
-            if not _editorial_should_run:
-                # Simple category search — Tavily adds marginal value; skip.
-                roi_tel.tavily_skipped_reason = f"selectivity:{_editorial_selectivity_reason}"
+            _tavily_key = get_tavily_key()
+            _serper_key = get_serper_key()
+
+            # ── Evidence cache check (skips Tavily on hit) ────────────────────────
+            # Read order: 1. in-memory hot layer, 2. Supabase durable layer, 3. live path.
+            _evidence_cache_entry = _EVIDENCE_ATOM_CACHE.get(evidence_fingerprint)
+            if _evidence_cache_entry is None:
+                # Memory miss — check durable Supabase layer before running Tavily.
+                _durable_ev_entry = _SUPABASE_EVIDENCE_CACHE.get(evidence_fingerprint)
+                if _durable_ev_entry is not None:
+                    # Warm in-memory cache so the next request on this worker is free.
+                    _EVIDENCE_ATOM_CACHE.set(
+                        evidence_fingerprint,
+                        _durable_ev_entry.atoms_by_place_id,
+                        _durable_ev_entry.accepted_count,
+                    )
+                    _evidence_cache_entry = _durable_ev_entry
+                    roi_tel.durable_evidence_cache_hit = True
+                    logger.info(
+                        "semantic_retrieval_v1: durable_evidence_cache_hit "
+                        "fingerprint=%s accepted_count=%d query=%r",
+                        evidence_fingerprint,
+                        _durable_ev_entry.accepted_count,
+                        user_query,
+                    )
+            if _evidence_cache_entry is not None:
+                # Cache hit (memory or durable) — reuse accepted atoms, skip Tavily entirely.
+                roi_tel.evidence_cache_hit = True
+                roi_tel.accepted_editorial_evidence_count = _evidence_cache_entry.accepted_count
+                editorial_result = EditorialEnrichmentResult(
+                    atoms_by_place_id=dict(_evidence_cache_entry.atoms_by_place_id),
+                    telemetry=EditorialEnrichmentTelemetry(
+                        enrichment_attempted=False,
+                        skipped_reason="evidence_cache_hit",
+                    ),
+                    elapsed_ms=0,
+                )
+                logger.info(
+                    "semantic_retrieval_v1: editorial_evidence_cache_hit "
+                    "fingerprint=%s accepted_count=%d query=%r durable=%s",
+                    evidence_fingerprint,
+                    _evidence_cache_entry.accepted_count,
+                    user_query,
+                    roi_tel.durable_evidence_cache_hit,
+                )
+            elif _remaining_after_cross_source_ms < EDITORIAL_POST_CROSS_SOURCE_MIN_MS:
+                # Opportunistic budget gate: Step 5.55 (Yelp/FSQ) consumed too much
+                # budget — skip editorial to protect dossier/writer latency.
+                roi_tel.tavily_skipped_reason = "budget_after_cross_source_too_low"
                 logger.info(
                     "semantic_retrieval_v1: editorial_skipped "
-                    "reason=selectivity selectivity_reason=%s query=%r",
-                    _editorial_selectivity_reason, user_query,
+                    "reason=budget_after_cross_source_too_low remaining_ms=%d",
+                    _remaining_after_cross_source_ms,
                 )
                 editorial_result = EditorialEnrichmentResult(
                     atoms_by_place_id={},
                     telemetry=EditorialEnrichmentTelemetry(
                         enrichment_attempted=False,
-                        skipped_reason=f"selectivity:{_editorial_selectivity_reason}",
+                        skipped_reason="budget_after_cross_source_too_low",
                     ),
                     elapsed_ms=0,
                 )
             else:
-                # ── Run Tavily/Serper ─────────────────────────────────────────
-                roi_tel.tavily_attempted = bool(_tavily_key or _serper_key)
-                editorial_result = run_editorial_enrichment(
-                    [e for e, _ in ranked],
-                    deadline=deadline,
-                    tavily_key=_tavily_key,
-                    serper_key=_serper_key,
-                    destination=destination,
-                    budget_n=first_card_limit,
-                )
+                # ── Selectivity gate ──────────────────────────────────────────────
+                _editorial_should_run, _editorial_selectivity_reason = should_run_editorial(frame)
+                if not _editorial_should_run:
+                    # Simple category search — Tavily adds marginal value; skip.
+                    roi_tel.tavily_skipped_reason = f"selectivity:{_editorial_selectivity_reason}"
+                    logger.info(
+                        "semantic_retrieval_v1: editorial_skipped "
+                        "reason=selectivity selectivity_reason=%s query=%r",
+                        _editorial_selectivity_reason, user_query,
+                    )
+                    editorial_result = EditorialEnrichmentResult(
+                        atoms_by_place_id={},
+                        telemetry=EditorialEnrichmentTelemetry(
+                            enrichment_attempted=False,
+                            skipped_reason=f"selectivity:{_editorial_selectivity_reason}",
+                        ),
+                        elapsed_ms=0,
+                    )
+                else:
+                    # ── Run Tavily/Serper ─────────────────────────────────────────
+                    roi_tel.tavily_attempted = bool(_tavily_key or _serper_key)
+                    editorial_result = run_editorial_enrichment(
+                        [e for e, _ in ranked],
+                        deadline=deadline,
+                        tavily_key=_tavily_key,
+                        serper_key=_serper_key,
+                        destination=destination,
+                        budget_n=first_card_limit,
+                    )
 
-                # ── Store accepted atoms to evidence cache ────────────────────
-                # Cache even when notes later fail/time out — prevents re-spending
-                # Tavily credits on the same query when notes eventually succeed.
-                _total_accepted = sum(
-                    len(atoms)
-                    for atoms in editorial_result.atoms_by_place_id.values()
-                )
-                if _total_accepted > 0:
-                    try:
-                        _EVIDENCE_ATOM_CACHE.set(
+                    # ── Store accepted atoms to evidence cache ────────────────────
+                    # Cache even when notes later fail/time out — prevents re-spending
+                    # Tavily credits on the same query when notes eventually succeed.
+                    _total_accepted = sum(
+                        len(atoms)
+                        for atoms in editorial_result.atoms_by_place_id.values()
+                    )
+                    if _total_accepted > 0:
+                        try:
+                            _EVIDENCE_ATOM_CACHE.set(
+                                evidence_fingerprint,
+                                editorial_result.atoms_by_place_id,
+                                _total_accepted,
+                            )
+                            roi_tel.evidence_cache_write = True
+                            roi_tel.accepted_editorial_evidence_count = _total_accepted
+                            logger.info(
+                                "semantic_retrieval_v1: editorial_evidence_cached "
+                                "fingerprint=%s accepted=%d query=%r",
+                                evidence_fingerprint, _total_accepted, user_query,
+                            )
+                        except Exception as _cache_exc:  # noqa: BLE001
+                            logger.debug(
+                                "semantic_retrieval_v1: editorial_cache_write_failed "
+                                "error=%s", _cache_exc,
+                            )
+                        # Also write to durable Supabase layer.
+                        _durable_ok = _SUPABASE_EVIDENCE_CACHE.set(
                             evidence_fingerprint,
                             editorial_result.atoms_by_place_id,
                             _total_accepted,
+                            destination=destination,
                         )
-                        roi_tel.evidence_cache_write = True
-                        roi_tel.accepted_editorial_evidence_count = _total_accepted
-                        logger.info(
-                            "semantic_retrieval_v1: editorial_evidence_cached "
-                            "fingerprint=%s accepted=%d query=%r",
-                            evidence_fingerprint, _total_accepted, user_query,
-                        )
-                    except Exception as _cache_exc:  # noqa: BLE001
-                        logger.debug(
-                            "semantic_retrieval_v1: editorial_cache_write_failed "
-                            "error=%s", _cache_exc,
-                        )
-                    # Also write to durable Supabase layer.
-                    _durable_ok = _SUPABASE_EVIDENCE_CACHE.set(
-                        evidence_fingerprint,
-                        editorial_result.atoms_by_place_id,
-                        _total_accepted,
-                        destination=destination,
-                    )
-                    if _durable_ok:
-                        roi_tel.durable_evidence_cache_write = True
-                        logger.info(
-                            "semantic_retrieval_v1: durable_evidence_cache_write "
-                            "fingerprint=%s accepted=%d query=%r",
-                            evidence_fingerprint, _total_accepted, user_query,
-                        )
-                    else:
-                        roi_tel.durable_cache_error_count += 1
+                        if _durable_ok:
+                            roi_tel.durable_evidence_cache_write = True
+                            logger.info(
+                                "semantic_retrieval_v1: durable_evidence_cache_write "
+                                "fingerprint=%s accepted=%d query=%r",
+                                evidence_fingerprint, _total_accepted, user_query,
+                            )
+                        else:
+                            roi_tel.durable_cache_error_count += 1
 
         editorial_tel = editorial_result.telemetry.as_log_dict()
         # Merge editorial atoms into cross_source atoms_by_place_id so the
