@@ -140,6 +140,23 @@ test('ItineraryDayColumn: empty-state includes actionable "+ Add" inline link', 
   assert.ok(dayColumnSrc.includes('+ Add'), 'missing "+ Add" actionable link in empty state');
 });
 
+test('ItineraryDayColumn: no raw rgba() color values (must use ds-* tokens)', () => {
+  assert.ok(!dayColumnSrc.includes('rgba('), 'found raw rgba() — replace with ds-* token');
+});
+
+test('ItineraryDayColumn: empty-state "+ Add" button has 44px hit-area (min-h-[44px] on the button containing onAddItem and + Add)', () => {
+  // Find the button that contains both + Add text and onAddItem call — verify min-h-[44px] is on it
+  const addBtnMatch = dayColumnSrc.match(/className="([^"]*min-h-\[44px\][^"]*)"[\s\S]{0,200}?\+\s*Add|className="([^"]*)"[\s\S]{0,100}?onAddItem[\s\S]{0,200}?min-h-\[44px\]/);
+  // Simpler: confirm the inline-flex + min-h-[44px] pattern exists near the + Add text
+  const emptyStateIdx = dayColumnSrc.indexOf('+ Add');
+  assert.ok(emptyStateIdx !== -1, 'missing + Add text');
+  const surroundingContext = dayColumnSrc.slice(Math.max(0, emptyStateIdx - 300), emptyStateIdx + 50);
+  assert.ok(
+    surroundingContext.includes('min-h-[44px]'),
+    'empty-state "+ Add" button lacks min-h-[44px] touch-target within 300 chars before the text'
+  );
+});
+
 // ── ItineraryDayColumn: selected-day uses ds-accent ──────────────────────────
 
 test('ItineraryDayColumn: selected day number marker uses bg-ds-accent', () => {

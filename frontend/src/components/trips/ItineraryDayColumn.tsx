@@ -613,9 +613,8 @@ export function ItineraryDayColumn({
           <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
             <div
               className={`relative rounded-lg p-1 transition-colors duration-[120ms] ${
-                isSelected ? "ring-1 ring-ds-accent/15" : ""
+                isSelected ? "ring-1 ring-ds-accent/15 bg-ds-midnight" : ""
               }`}
-              style={isSelected ? { backgroundColor: "rgba(11, 19, 32, 0.5)" } : undefined}
             >
               <TimelineSections
                 items={visibleItems}
@@ -659,7 +658,7 @@ export function ItineraryDayColumn({
                         onSelect?.(day.id);
                         onAddItem(day.id);
                       }}
-                      className="text-ds-accent hover:text-ds-text-secondary underline underline-offset-2 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                      className="inline-flex items-center min-h-[44px] min-w-[44px] px-1 text-ds-accent hover:text-ds-text-secondary underline underline-offset-2 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                     >
                       + Add
                     </button>{" "}
