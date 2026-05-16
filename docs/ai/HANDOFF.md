@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-16 (Phase 8A shipped — Private Atelier Home + Journey Shelf)
+Last updated: 2026-05-16 (Phase 8B shipped — Trip Detail Travel Chapter + Planning Canvas Overhaul)
 
 ## Purpose
 
@@ -8,9 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Phase 8A SHIPPED (2026-05-16).** Private Atelier Home + Journey Shelf. `/` home transformed: removed KPI stat cards; new `AtelierGreeting` (time-based + real `tripCount`), `ConciergeEntry` as primary instrument (elevation-2 card), `ContinuePlanningStrip` (real trip data), `JourneyShelfTeaser` (link to /trips), `EmptyAtelierHome`, `AtelierPlanningStrip`. `/trips` JourneyCard upgraded to travel-volume cover style: destination (`trip.destination`) is now the large editorial hero text; trip title is the `<Link>` subtitle; editorial footer with dates + "Open →"; all edit/delete/create/open affordances preserved. ContinuePlanningHero elevated with editorial destination overline. Page header gains "Your Travel Shelf" overline. 56 new tests in `atelier-home-journey-shelf.test.mjs`. **892 total tests, 0 failures.** Phase 8A is visible adoption — first impression now feels like a private travel atelier. Phases 0, 1A–1C, 2A, 2B, 3–7 all previously shipped.
+- Roadmap stage: **Stage 3.5 — Phase 8B SHIPPED (2026-05-16).** Trip Detail Travel Chapter + Planning Canvas Overhaul. `/trips/[id]` transformed: removed colorful OTA-style destination-gradient backgrounds (raw hex), `PageHeader`, and context-header widget strip. New editorial `TripChapterCover` `<section>`: destination as `<h1>` chapter heading, trip title as subtitle, italic tripContext vibe, dates/day-count caption row, 4 semantic action buttons (AI Concierge/Optimize/Edit Trip/Delete) with `min-h-[44px]` + `focus-visible:outline-ds-accent`. `TripReadinessCockpit` reworked to advisor briefing: "Concierge Notes" overline (not "Trip Briefing"), no score fraction (removed X/4 KPI indicator), no dashboard section labels ("DAY COVERAGE"/"NEXT STEP"/"ALSO TRY"), italic advisor prose for next-step recommendation. Modal dialogs updated to ds-tokens. 70 new tests in `trip-chapter-overhaul.test.mjs`. **962 total tests, 0 failures.** Phase 8B is visible adoption — `/trips/[id]` now reads like a travel chapter, not a planning board. Phases 0, 1A–1C, 2A, 2B, 3–7, 8A all previously shipped.
 - Flights v1 — Duffel search-only LIVE: `DUFFEL_FLIGHTS_ENABLED=1`, `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`, `DUFFEL_DEBUG=false`, `DUFFEL_BOOKING_ENABLED=0`. Each flight card shows "Search on Google Flights" (SEARCH_REDIRECT link-out, not booking). Duffel never creates orders. Ignav DISABLED.
-- Active build queue item: **Wife-Wow design system foundation — Phase 8A Atelier Home + Journey Shelf SHIPPED.** Full ds-* token coverage now spans: shell, nav, explore cards, saved items, concierge, trip-planning surfaces (all card components, CandidatePanel, Activities section, compare bar, cockpit header, day selector), itinerary day columns, trip detail canvas shell, My Journeys landing dashboard, Trip Readiness Cockpit, **and the home page (`/`) + My Journeys (`/trips`) which now feel like a private travel atelier and journey shelf respectively.** See `docs/ai/UI_BASELINE.md` for full phase inventory.
+- Active build queue item: **Wife-Wow design system foundation — Phase 8B Trip Detail Chapter Overhaul SHIPPED.** Full ds-* token coverage now spans: shell, nav, explore cards, saved items, concierge, trip-planning surfaces (all card components, CandidatePanel, Activities section, compare bar, cockpit header, day selector), itinerary day columns, trip detail canvas shell, My Journeys landing dashboard, Trip Readiness Cockpit, home page (`/`), My Journeys (`/trips`), **and the trip detail page (`/trips/[id]`) which now feels like a private travel chapter with editorial cover + advisor briefing.** See `docs/ai/UI_BASELINE.md` for full phase inventory.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -31,6 +31,8 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Recent meaningful PRs
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
+
+- 2026-05-16 — **Stage 3.5 Phase 8B — Trip Detail Travel Chapter + Planning Canvas Overhaul.** `/trips/[id]` transformed: OTA-style destination-color gradients removed; new `TripChapterCover` section (destination h1, trip-title subtitle, italic vibe, dates, 4 semantic action buttons); `TripReadinessCockpit` reworked to advisor briefing (Concierge Notes overline, no KPI score, no dashboard section labels, italic advisor prose). Modal dialogs migrated to ds-tokens. 70 new tests. 962 total, 0 failures. No backend/SQL/provider/flights/Supabase changes.
 
 - 2026-05-16 — **Stage 3.5 Phase 8A — Private Atelier Home + Journey Shelf.** `/` home transformed from KPI dashboard to private travel atelier: editorial time-based greeting + real trip count, Concierge as primary instrument (elevation-2 card), continue-planning strip (real trip data), journey shelf teaser, discovery tools. `/trips` JourneyCard upgraded to travel-volume cover style: destination as large hero text, trip title as semantic link subtitle, editorial footer. Page header gains "Your Travel Shelf" overline. 56 new tests. 892 total, 0 failures. No backend/SQL/provider changes.
 
@@ -100,10 +102,10 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 - Latency Budget Pack
 - Backend-only Scaffold Pack / No Visible Behavior Change Pack / Test Tier Pack (cross-cutting)
 
-## Type-check / test baseline (confirmed 2026-05-16, Phase 8A)
+## Type-check / test baseline (confirmed 2026-05-16, Phase 8B)
 
 - **`npm run type-check` (frontend): CLEAN — 0 errors.** Requires `npm install` first (standard; `node_modules` is gitignored). After install: `tsc --noEmit` exits 0 with no diagnostics.
-- **`npm test` (frontend): 892 tests, 0 failures.**
+- **`npm test` (frontend): 962 tests, 0 failures.**
 - Any future session reporting "pre-existing TypeScript errors" is seeing an uninstalled `node_modules` environment — run `npm install` in `frontend/` before type-check.
 
 ## Known risks / unresolved issues
@@ -117,7 +119,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Stage 3.5 Phase 7 complete.** Trip detail now has a premium Trip Readiness / Review Cockpit: editorial trip briefing header, day-coverage pills, 4 category signals, contextual next-step CTA, quick-access planning tool links. Full ds-* token coverage now spans every trip-planning surface from dashboard entry point through trip detail and planning canvas. Next direction options: (A) motion polish (within reduced-motion token limits), (B) product feature work (deal alerts, Watchtower, trip-level compare), (C) cockpit collapse/expand toggle. Roadmap guidance: `docs/product/ROADMAP.md`.
+**Stage 3.5 Phase 8B complete.** `/trips/[id]` now feels like a travel chapter: editorial chapter cover (destination h1, dates, advisor vibe, semantic action cluster), advisor briefing (Concierge Notes, no KPI score), and the planning canvas (TripBuilder + itinerary days) integrated into one coherent story. Design Bible atelier transformation now covers `/` (Phase 8A), `/trips` (Phase 8A), and `/trips/[id]` (Phase 8B). Next direction options: (A) motion polish (within reduced-motion token limits), (B) product feature work (deal alerts, Watchtower, trip-level compare), (C) ItineraryItemCard chapter-style editorial polish. Roadmap guidance: `docs/product/ROADMAP.md`.
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 

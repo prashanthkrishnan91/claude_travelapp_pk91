@@ -3,8 +3,15 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Compass, Pencil, Sparkles, Trash2, X, Zap } from "lucide-react";
-import { PageHeader } from "@/components/layout/PageHeader";
+import {
+  CalendarDays,
+  ChevronLeft,
+  Pencil,
+  Sparkles,
+  Trash2,
+  X,
+  Zap,
+} from "lucide-react";
 import { TripBuilder } from "@/components/trips/TripBuilder";
 import { TripReadinessCockpit } from "@/components/trips/TripReadinessCockpit";
 import { OptimizeTripModal } from "@/components/trips/OptimizeTripModal";
@@ -12,36 +19,20 @@ import { AIConciergePanel } from "@/components/trips/AIConciergePanel";
 import { fetchTrip, ensureTripDays, fetchTripContext, updateTrip, deleteTrip } from "@/lib/api";
 import type { Trip, TripContext, ItineraryDay } from "@/types";
 
-const DESTINATION_GRADIENTS: Array<{ keywords: string[]; gradient: string }> = [
-  { keywords: ["honolulu","hawaii","maui","oahu","waikiki","pacific"],          gradient: "linear-gradient(160deg,#0077b6 0%,#00b4d8 40%,#90e0ef 75%,#caf0f8 100%)" },
-  { keywords: ["maldives","caribbean","bahamas","cancun","aruba","turks"],      gradient: "linear-gradient(160deg,#06b6d4 0%,#22d3ee 40%,#67e8f9 75%,#a5f3fc 100%)" },
-  { keywords: ["tokyo","japan","osaka","kyoto","shibuya","shinjuku"],           gradient: "linear-gradient(160deg,#0f0c29 0%,#302b63 40%,#4c1d95 75%,#6d28d9 100%)" },
-  { keywords: ["new york","nyc","manhattan","chicago","london","hong kong","las vegas","singapore"], gradient: "linear-gradient(160deg,#1c1c2e 0%,#374151 40%,#6b7280 75%,#9ca3af 100%)" },
-  { keywords: ["paris","france","nice","lyon","bordeaux","provence"],           gradient: "linear-gradient(160deg,#c9a96e 0%,#d4a853 40%,#e8d5b0 75%,#fef3c7 100%)" },
-  { keywords: ["rome","italy","florence","venice","tuscany","amalfi","sicily"], gradient: "linear-gradient(160deg,#9c4221 0%,#dd6b20 40%,#f6ad55 75%,#fef3c7 100%)" },
-  { keywords: ["santorini","greece","athens","mykonos","crete","mediterranean"],gradient: "linear-gradient(160deg,#1d4ed8 0%,#3b82f6 40%,#93c5fd 75%,#dbeafe 100%)" },
-  { keywords: ["bali","indonesia","thailand","phuket","bangkok","lombok"],      gradient: "linear-gradient(160deg,#1a472a 0%,#52b788 40%,#b7e4c7 75%,#ffd166 100%)" },
-  { keywords: ["dubai","abu dhabi","morocco","marrakech","sahara","desert"],    gradient: "linear-gradient(160deg,#e76f51 0%,#f4a261 40%,#e9c46a 75%,#ffd166 100%)" },
-  { keywords: ["swiss","switzerland","alps","nepal","himalaya","mountain","colorado","rockies","norway"], gradient: "linear-gradient(160deg,#264653 0%,#2a9d8f 40%,#a8dadc 75%,#e9f5f5 100%)" },
-  { keywords: ["barcelona","spain","madrid","lisbon","portugal","seville"],     gradient: "linear-gradient(160deg,#b5179e 0%,#f72585 40%,#ff9a3c 75%,#ffd166 100%)" },
-  { keywords: ["sydney","australia","melbourne","queensland","great barrier"],  gradient: "linear-gradient(160deg,#0077b6 0%,#0096c7 40%,#48cae4 75%,#ade8f4 100%)" },
-];
-
-const DEFAULT_GRADIENT = "linear-gradient(160deg,#0ea5e9 0%,#38bdf8 40%,#7dd3fc 75%,#e0f2fe 100%)";
-
-function getDestinationGradient(destination: string): string {
-  const lower = destination.toLowerCase();
-  for (const theme of DESTINATION_GRADIENTS) {
-    if (theme.keywords.some((kw) => lower.includes(kw))) return theme.gradient;
-  }
-  return DEFAULT_GRADIENT;
-}
-
 interface EditForm {
   title: string;
   startDate: string;
   endDate: string;
 }
+
+// ── Shared button classes ─────────────────────────────────────────────────────
+
+const COVER_BTN_BASE =
+  "inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-lg text-xs font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
+
+const COVER_PRIMARY = `${COVER_BTN_BASE} bg-ds-accent text-ds-text-inverse hover:opacity-90`;
+const COVER_GHOST = `${COVER_BTN_BASE} border border-ds-pen-stroke text-ds-text-secondary hover:bg-ds-carbon`;
+const COVER_DANGER = `${COVER_BTN_BASE} border border-ds-pen-stroke text-ds-warning hover:bg-ds-carbon`;
 
 export default function TripDetailPage() {
   const params = useParams();
@@ -135,42 +126,39 @@ export default function TripDetailPage() {
     showToast("Plan added to your itinerary!");
   }
 
-  const pageTitle    = trip?.title ?? "Trip Builder";
-  const pageSubtitle = trip?.destination
-    ? `${trip.destination}${trip.startDate ? ` · ${trip.startDate}` : ""}`
-    : `Trip ID: ${id}`;
+  // ── Loading state ─────────────────────────────────────────────────────────
 
   if (loading) {
     return (
       <>
-        <div className="mb-6">
-          <Link href="/trips" className="inline-flex items-center gap-1.5 text-sm text-ds-text-tertiary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent">
-            <ChevronLeft className="w-4 h-4" />
-            My Trips
+        <div className="mb-4">
+          <Link
+            href="/trips"
+            className="inline-flex items-center gap-1.5 text-xs text-ds-text-tertiary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" aria-hidden="true" />
+            My Journeys
           </Link>
         </div>
-        <PageHeader title="Loading…" description={`Trip ID: ${id}`} />
-        <div className="rounded-lg border border-ds-pen-stroke bg-ds-onyx p-8 text-center text-ds-text-tertiary text-sm">Loading trip details…</div>
+        <div className="mb-8 rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-2)] p-6 animate-pulse">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary mb-2">Travel Chapter</p>
+          <div className="h-7 w-48 rounded bg-ds-carbon mb-2" />
+          <div className="h-4 w-32 rounded bg-ds-carbon" />
+        </div>
       </>
     );
   }
 
+  // ── Main render ───────────────────────────────────────────────────────────
+
   return (
     <>
-      {/* Destination-aware background */}
-      {trip?.destination && (
-        <>
-          <div
-            aria-hidden="true"
-            className="destination-bg"
-            style={{ background: getDestinationGradient(trip.destination) }}
-          />
-          <div aria-hidden="true" className="destination-overlay" />
-        </>
-      )}
-
       {toast && (
-        <div className="fixed bottom-4 right-4 z-50 bg-ds-onyx border border-ds-pen-stroke text-ds-text text-sm px-4 py-2 rounded-lg shadow-[var(--ds-elevation-2)]">
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 right-4 z-50 bg-ds-onyx border border-ds-pen-stroke text-ds-text text-sm px-4 py-2 rounded-lg shadow-[var(--ds-elevation-2)]"
+        >
           {toast}
         </div>
       )}
@@ -187,45 +175,49 @@ export default function TripDetailPage() {
 
       {/* Edit Modal */}
       {editOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-slate-900">Edit Trip</h2>
-              <button onClick={() => setEditOpen(false)} className="p-1 rounded hover:bg-slate-100 text-slate-400">
-                <X className="w-4 h-4" />
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-ds-onyx border border-ds-pen-stroke rounded-2xl shadow-[var(--ds-elevation-4)] p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-semibold text-ds-text">Edit Trip</h2>
+              <button
+                onClick={() => setEditOpen(false)}
+                aria-label="Close edit dialog"
+                className="p-1.5 rounded-lg hover:bg-ds-carbon text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              >
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Trip Name</label>
+                <label className="block text-xs font-medium text-ds-text-secondary mb-1.5">Trip Name</label>
                 <input
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text placeholder:text-ds-text-tertiary focus:outline-none focus:ring-2 focus:ring-ds-accent"
                   value={editForm.title}
                   onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Start Date</label>
+                <label className="block text-xs font-medium text-ds-text-secondary mb-1.5">Start Date</label>
                 <input
                   type="date"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text focus:outline-none focus:ring-2 focus:ring-ds-accent"
                   value={editForm.startDate}
                   onChange={(e) => setEditForm((f) => ({ ...f, startDate: e.target.value }))}
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">End Date</label>
+                <label className="block text-xs font-medium text-ds-text-secondary mb-1.5">End Date</label>
                 <input
                   type="date"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text focus:outline-none focus:ring-2 focus:ring-ds-accent"
                   value={editForm.endDate}
                   onChange={(e) => setEditForm((f) => ({ ...f, endDate: e.target.value }))}
                 />
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setEditOpen(false)} className="btn-ghost">Cancel</button>
-              <button onClick={handleUpdate} disabled={saving || !editForm.title.trim()} className="btn-primary">
+              <button onClick={() => setEditOpen(false)} className={COVER_GHOST}>Cancel</button>
+              <button onClick={handleUpdate} disabled={saving || !editForm.title.trim()} className={COVER_PRIMARY}>
                 {saving ? "Saving…" : "Save Changes"}
               </button>
             </div>
@@ -235,15 +227,18 @@ export default function TripDetailPage() {
 
       {/* Delete Confirmation */}
       {confirmDelete && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
-            <h2 className="text-base font-semibold text-slate-900 mb-2">Delete Trip</h2>
-            <p className="text-sm text-slate-500 mb-6">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-ds-onyx border border-ds-pen-stroke rounded-2xl shadow-[var(--ds-elevation-4)] p-6 w-full max-w-sm">
+            <h2 className="text-base font-semibold text-ds-text mb-2">Delete Trip</h2>
+            <p className="text-sm text-ds-text-secondary mb-6 leading-relaxed">
               This will permanently delete the trip and all its itinerary items. This cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirmDelete(false)} className="btn-ghost">Cancel</button>
-              <button onClick={handleDelete} className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+              <button onClick={() => setConfirmDelete(false)} className={COVER_GHOST}>Cancel</button>
+              <button
+                onClick={handleDelete}
+                className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] text-sm font-medium bg-ds-warning text-ds-text-inverse rounded-lg hover:opacity-90 transition-opacity duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              >
                 Delete Trip
               </button>
             </div>
@@ -251,62 +246,118 @@ export default function TripDetailPage() {
         </div>
       )}
 
-      <div className="mb-6">
-        <Link href="/trips" className="inline-flex items-center gap-1.5 text-sm text-ds-text-tertiary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent">
-          <ChevronLeft className="w-4 h-4" />
-          My Trips
-        </Link>
-      </div>
-
-      {/* Trip context header */}
-      {(contextLoading || tripContext) && (
-        <div className="mb-4 flex items-center gap-2">
-          {contextLoading ? (
-            <p className="text-sm text-ds-text-tertiary italic">Fetching destination vibe…</p>
-          ) : tripContext ? (
-            <>
-              <span
-                className="inline-flex items-center justify-center h-6 w-6 rounded-full border border-ds-pen-stroke text-ds-accent"
-                style={{ backgroundColor: "var(--ds-accent-subtle)" }}
-                aria-hidden="true"
-              >
-                <Compass className="w-3.5 h-3.5" />
-              </span>
-              <p className="text-sm font-medium text-ds-text tracking-wide">
-                {tripContext.dateRange
-                  ? `${tripContext.vibe} • ${tripContext.dateRange}`
-                  : tripContext.vibe}
-              </p>
-            </>
-          ) : null}
+      {/* ── Trip Chapter Cover ─────────────────────────────────────────────── */}
+      <section
+        data-testid="trip-chapter-cover"
+        aria-labelledby="chapter-destination-heading"
+        className="mb-8 rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-2)] overflow-hidden"
+      >
+        {/* Back navigation */}
+        <div className="px-6 pt-5">
+          <Link
+            href="/trips"
+            className="inline-flex items-center gap-1.5 text-xs text-ds-text-tertiary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" aria-hidden="true" />
+            My Journeys
+          </Link>
         </div>
-      )}
 
-      <PageHeader
-        title={pageTitle}
-        description={pageSubtitle}
-        action={
-          <div className="flex items-center gap-2">
-            <button onClick={() => setConfirmDelete(true)} className="btn-ghost text-red-500 hover:text-red-600 hover:bg-red-50">
-              <Trash2 className="w-4 h-4" />
-              Delete Trip
-            </button>
-            <button onClick={openEdit} className="btn-ghost">
-              <Pencil className="w-4 h-4" />
-              Edit
-            </button>
-            <button onClick={() => setOptimizeOpen(true)} className="btn-ghost">
-              <Zap className="w-4 h-4" />
-              Optimize My Trip
-            </button>
-            <button onClick={() => setConciergeOpen(true)} className="btn-primary">
-              <Sparkles className="w-4 h-4" />
+        {/* Chapter cover body */}
+        <div className="px-6 pt-4 pb-6">
+          {/* Overline: chapter classification */}
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary mb-2">
+            Travel Chapter
+          </p>
+
+          {/* Destination as editorial chapter heading */}
+          <h1
+            id="chapter-destination-heading"
+            className="text-2xl font-bold tracking-tight text-ds-text leading-tight sm:text-3xl"
+          >
+            {trip?.destination ?? trip?.title ?? "Your Trip"}
+          </h1>
+
+          {/* Trip title — subtitle if not same as destination */}
+          {trip?.title && trip.title !== trip.destination && (
+            <p className="mt-1 text-base text-ds-text-secondary leading-snug">
+              {trip.title}
+            </p>
+          )}
+
+          {/* Destination context / vibe — shown when available */}
+          {contextLoading && (
+            <p className="mt-2 text-sm italic text-ds-text-tertiary">
+              Composing destination context…
+            </p>
+          )}
+          {tripContext && !contextLoading && (
+            <p className="mt-2 text-sm italic text-ds-text-tertiary leading-snug">
+              {tripContext.dateRange
+                ? `${tripContext.vibe} · ${tripContext.dateRange}`
+                : tripContext.vibe}
+            </p>
+          )}
+
+          {/* Dates + duration — caption row */}
+          {(trip?.startDate || trip?.endDate) && (
+            <div className="mt-3 flex items-center flex-wrap gap-x-4 gap-y-1">
+              <span className="inline-flex items-center gap-1.5 text-xs text-ds-text-tertiary">
+                <CalendarDays className="w-3.5 h-3.5 text-ds-accent" aria-hidden="true" />
+                {trip.startDate && trip.endDate
+                  ? `${trip.startDate} – ${trip.endDate}`
+                  : trip.startDate || trip.endDate}
+              </span>
+              {itineraryDays.length > 0 && (
+                <span className="text-xs text-ds-text-tertiary">
+                  {itineraryDays.length} day{itineraryDays.length !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Action cluster — semantic buttons, not a toolbar */}
+          <div
+            className="mt-5 flex items-center flex-wrap gap-2"
+            data-testid="chapter-actions"
+          >
+            <button
+              onClick={() => setConciergeOpen(true)}
+              data-testid="chapter-action-concierge"
+              className={COVER_PRIMARY}
+            >
+              <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
               AI Concierge
             </button>
+            <button
+              onClick={() => setOptimizeOpen(true)}
+              data-testid="chapter-action-optimize"
+              className={COVER_GHOST}
+            >
+              <Zap className="w-3.5 h-3.5" aria-hidden="true" />
+              Optimize
+            </button>
+            <button
+              onClick={openEdit}
+              data-testid="chapter-action-edit"
+              className={COVER_GHOST}
+            >
+              <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+              Edit Trip
+            </button>
+            <button
+              onClick={() => setConfirmDelete(true)}
+              data-testid="chapter-action-delete"
+              className={COVER_DANGER}
+            >
+              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+              Delete
+            </button>
           </div>
-        }
-      />
+        </div>
+      </section>
 
+      {/* ── Advisor Briefing (TripReadinessCockpit) ────────────────────────── */}
       {trip && (
         <TripReadinessCockpit
           trip={trip}
@@ -317,6 +368,7 @@ export default function TripDetailPage() {
         />
       )}
 
+      {/* ── Planning Canvas (TripBuilder) ──────────────────────────────────── */}
       <TripBuilder
         key={tripBuilderKey}
         tripId={id}
@@ -339,6 +391,7 @@ export default function TripDetailPage() {
         }}
       />
 
+      {/* ── AI Concierge Panel ─────────────────────────────────────────────── */}
       <AIConciergePanel
         tripId={id}
         destination={trip?.destination ?? ""}

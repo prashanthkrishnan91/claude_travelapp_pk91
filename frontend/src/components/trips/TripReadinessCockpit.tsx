@@ -194,86 +194,76 @@ export function TripReadinessCockpit({
       data-testid="trip-readiness-cockpit"
       className="mb-6 rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-2)] overflow-hidden"
     >
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between px-5 pt-4 pb-3 border-b border-ds-pen-stroke">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary">
-            Trip Briefing
-          </p>
-          <h2
-            id="trip-readiness-heading"
-            className="mt-0.5 text-sm font-semibold text-ds-text leading-snug"
-          >
-            {getHeadline()}
-          </h2>
-        </div>
-        <div
-          aria-label={`${coveredCount} of ${signals.length} planning areas covered`}
-          className="flex-shrink-0 ml-4 flex items-baseline gap-0.5"
+      {/* ── Header: advisor note — no score/KPI indicator ──────────────────── */}
+      <div className="px-5 pt-4 pb-3 border-b border-ds-pen-stroke">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary">
+          Concierge Notes
+        </p>
+        <h2
+          id="trip-readiness-heading"
+          className="mt-0.5 text-sm font-semibold text-ds-text leading-snug"
         >
-          <span className="text-lg font-bold text-ds-accent tabular-nums">{coveredCount}</span>
-          <span className="text-xs text-ds-text-tertiary">/{signals.length}</span>
-        </div>
+          {getHeadline()}
+        </h2>
       </div>
 
-      {/* ── Day coverage ────────────────────────────────────────────────────── */}
+      {/* ── Day coverage: compact pills, no dashboard-grid header ─────────── */}
       {r.totalDays > 0 && (
         <div
           className="px-5 py-3 border-b border-ds-pen-stroke"
           data-testid="day-coverage-strip"
         >
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary mb-2">
-            Day Coverage
-          </p>
-          <div
-            className="flex items-center flex-wrap gap-1.5"
-            role="list"
-            aria-label="Day coverage"
-          >
-            {itineraryDays.map((day) => {
-              const hasItems = (day.items ?? []).length > 0;
-              return (
-                <span
-                  key={day.id}
-                  role="listitem"
-                  aria-label={`Day ${day.dayNumber}: ${hasItems ? "has plans" : "no plans yet"}`}
-                  className={[
-                    "inline-flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-semibold select-none",
-                    hasItems
-                      ? "bg-ds-accent text-ds-text-inverse"
-                      : "border border-ds-pen-stroke text-ds-text-tertiary",
-                  ].join(" ")}
-                >
-                  {day.dayNumber}
-                </span>
-              );
-            })}
-            <span className="ml-1 text-xs text-ds-text-tertiary">
+          <div className="flex items-center flex-wrap gap-2">
+            <div
+              role="list"
+              aria-label="Day coverage"
+              className="flex items-center flex-wrap gap-1.5"
+            >
+              {itineraryDays.map((day) => {
+                const hasItems = (day.items ?? []).length > 0;
+                return (
+                  <span
+                    key={day.id}
+                    role="listitem"
+                    aria-label={`Day ${day.dayNumber}: ${hasItems ? "has plans" : "no plans yet"}`}
+                    className={[
+                      "inline-flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-semibold select-none",
+                      hasItems
+                        ? "bg-ds-accent text-ds-text-inverse"
+                        : "border border-ds-pen-stroke text-ds-text-tertiary",
+                    ].join(" ")}
+                  >
+                    {day.dayNumber}
+                  </span>
+                );
+              })}
+            </div>
+            <span className="text-xs text-ds-text-tertiary">
               {r.activeDayCount === r.totalDays
                 ? "All days covered"
                 : r.activeDayCount === 0
                 ? "No days planned yet"
-                : `${r.activeDayCount} of ${r.totalDays} days have plans`}
+                : `${r.activeDayCount} of ${r.totalDays} days planned`}
             </span>
           </div>
         </div>
       )}
 
-      {/* ── Signal grid ─────────────────────────────────────────────────────── */}
+      {/* ── Signal observations — advisor note style, 2×2 grid ───────────── */}
       <div
-        className="grid grid-cols-2 gap-x-4 gap-y-4 px-5 py-4 sm:grid-cols-4"
+        className="grid grid-cols-2 gap-x-4 gap-y-3 px-5 py-4 sm:grid-cols-4"
         data-testid="readiness-signals"
       >
         {signals.map((signal) => (
           <div
             key={signal.key}
             data-testid={`readiness-signal-${signal.key}`}
-            className="flex items-start gap-2.5"
+            className="flex items-center gap-2.5"
           >
             <span
               aria-hidden="true"
               className={[
-                "mt-0.5 flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center",
+                "flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center",
                 signal.present
                   ? "text-ds-accent"
                   : "border border-ds-pen-stroke text-ds-text-tertiary",
@@ -282,28 +272,20 @@ export function TripReadinessCockpit({
             >
               {signal.icon}
             </span>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary">
-                {signal.label}
-              </p>
-              <p className="text-xs text-ds-text-secondary mt-0.5 leading-snug">
-                {signal.present ? signal.presentCopy : signal.missingCopy}
-              </p>
-            </div>
+            <p className="text-xs text-ds-text-secondary leading-snug">
+              {signal.present ? signal.presentCopy : signal.missingCopy}
+            </p>
           </div>
         ))}
       </div>
 
-      {/* ── Next best action ─────────────────────────────────────────────────── */}
+      {/* ── Advisor recommendation — advisor prose, flows naturally ─────── */}
       <div
         className="px-5 pb-4 pt-3 border-t border-ds-pen-stroke bg-ds-carbon"
         data-testid="next-action-area"
       >
-        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary mb-2">
-          Next Step
-        </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-ds-text-secondary leading-snug max-w-prose">
+          <p className="text-sm italic text-ds-text-secondary leading-snug max-w-prose">
             {nextStepDescription}
           </p>
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
@@ -313,14 +295,11 @@ export function TripReadinessCockpit({
         </div>
       </div>
 
-      {/* ── Quick-access planning tools ──────────────────────────────────────── */}
+      {/* ── Planning tools — subtle, no section label ─────────────────────── */}
       <div
         className="px-5 py-3 border-t border-ds-pen-stroke flex items-center gap-4 flex-wrap"
         data-testid="planning-tools-strip"
       >
-        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary">
-          Also try
-        </p>
         <Link
           href="/explore"
           className="inline-flex items-center gap-1 text-xs text-ds-text-secondary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded"
