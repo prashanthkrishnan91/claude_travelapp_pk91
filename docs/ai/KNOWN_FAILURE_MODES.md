@@ -38,6 +38,7 @@ Use this file before non-trivial implementation, review, or follow-up prompts. A
 
 - Any diff-based CI check (`git diff base...HEAD`) must use `ref: ${{ github.event.pull_request.head.sha }}` + `git fetch origin <base>` in `actions/checkout@v4`. The default checkout for `pull_request` events is `refs/pull/{n}/merge` (a synthetic merge commit). GitHub may not update this ref before CI starts, causing the diff to see a stale file list.
 - PR body section headers must use `## SectionName` markdown headers exactly. Using `**SectionName:**` bold inline fails the substring gate even when the content is correct.
+- **Always start from `.github/pull_request_template.md` verbatim — never compose a PR body from scratch.** Composing from scratch reliably omits required anchors (`## Severity`, `## Validation`, `SQL / env / providers / UI`) and causes CI hard-failures. This miss occurred twice (PR #394 and PR #397). The local checker silently skips section checks when no `--pr-body-file` is given, giving a false PASS that CI then rejects.
 - PR body updates via the GitHub API after a push do NOT affect already-queued CI runs. The body in `GITHUB_EVENT_PATH` is snapshot at trigger time. Body must be correct before the triggering push, or a new commit is required to re-trigger CI with the updated body.
 
 ## Validation failures
