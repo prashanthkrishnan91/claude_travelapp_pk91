@@ -992,9 +992,13 @@ class TestSemanticSkipObservability:
             "and the query is not a place-like ask. "
             f"Got logs: {[r.message for r in caplog.records]}"
         )
-        assert any("intent_not_eligible" in m for m in skip_logs), (
-            f"Expected semantic_skip_reason=intent_not_eligible in skip logs: {skip_logs}"
-        )
+        # For INTENT_GENERAL with non-place query the skip reason is open_class_not_detected;
+        # for other non-place intents it is non_place_intent or intent_not_eligible.
+        assert any(
+            reason in m
+            for m in skip_logs
+            for reason in ("intent_not_eligible", "open_class_not_detected", "non_place_intent")
+        ), (f"Expected a skip eligibility_reason in skip logs: {skip_logs}")
 
     def test_open_class_place_ask_enters_semantic(self, caplog):
         """When flag ON and the query is an open-class place ask with INTENT_GENERAL,
@@ -1012,7 +1016,7 @@ class TestSemanticSkipObservability:
             )
         skip_logs = [
             r.message for r in caplog.records
-            if "concierge.semantic_skip" in r.message and "intent_not_eligible" in r.message
+            if "concierge.semantic_skip" in r.message
         ]
         eligible_logs = [r.message for r in caplog.records if "semantic_eligible" in r.message]
         assert not skip_logs, (

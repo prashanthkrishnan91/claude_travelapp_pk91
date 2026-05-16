@@ -59,10 +59,24 @@ test('TRANSCRIPT_KEY constant is defined', () => {
   );
 });
 
-test('localStorage.getItem is called on mount for transcript recovery', () => {
+test('localStorage.getItem is called for transcript recovery', () => {
   assert.ok(
-    src.includes('localStorage.getItem') || src.includes('localStorage.getItem'),
-    'ConciergePage must read from localStorage to restore the transcript on mount.',
+    src.includes('localStorage.getItem'),
+    'ConciergePage must read from localStorage to restore the transcript.',
+  );
+});
+
+test('lazy useState initializer prevents empty-state save race on re-mount', () => {
+  // Fix: use useState(loadPersistedTranscript) so the initial value is already the
+  // persisted transcript. Without this, the save effect fires with messages=[] before
+  // the load effect can set persisted data, wiping localStorage on every re-mount.
+  const hasLazyInit =
+    src.includes('useState<Message[]>(loadPersistedTranscript)') ||
+    src.includes('useState(loadPersistedTranscript)');
+  assert.ok(
+    hasLazyInit,
+    'ConciergePage must use lazy useState(loadPersistedTranscript) initializer to prevent ' +
+      'the re-mount race where saveTranscript([]) fires before persisted data is loaded.',
   );
 });
 
