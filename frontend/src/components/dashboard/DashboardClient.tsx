@@ -2,36 +2,330 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Map, Plane, CreditCard, Coins, PlusCircle } from "lucide-react";
-import { StatCard } from "@/components/ui/StatCard";
-import { RecentTrips } from "@/components/dashboard/RecentTrips";
-import { QuickActions } from "@/components/dashboard/QuickActions";
-import { PointsSummary } from "@/components/dashboard/PointsSummary";
-import { DealsFeed } from "@/components/dashboard/DealsFeed";
+import {
+  Map,
+  Sparkles,
+  BookmarkCheck,
+  Compass,
+  PlusCircle,
+  ArrowRight,
+  Calendar,
+  Users,
+  MapPin,
+} from "lucide-react";
+import { Card } from "@/components/ui/Card";
+import { TripStatusBadge } from "@/components/ui/TripStatusBadge";
 import {
   fetchDashboardSummary,
   fetchTrips,
-  fetchCards,
-  fetchDealsFeed,
   type DashboardSummary,
 } from "@/lib/api";
-import type { Trip, TravelCard, DealItem } from "@/types";
+import { getDisplayTripStatus, getTripStatusGroup } from "@/lib/tripStatus";
+import type { Trip } from "@/types";
 
-const TODAY = new Date().toISOString().slice(0, 10);
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-function isUpcoming(trip: Trip): boolean {
-  const upcoming = ["planned", "booked", "researching"];
-  return upcoming.includes(trip.status) && (!trip.startDate || trip.startDate >= TODAY);
+function getTimeGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning.";
+  if (hour < 18) return "Good afternoon.";
+  return "Good evening.";
 }
 
-function nextTripLabel(trips: Trip[]): string | undefined {
-  const upcomingWithDate = trips
-    .filter((t) => t.startDate && t.startDate >= TODAY)
-    .sort((a, b) => (a.startDate! < b.startDate! ? -1 : 1));
-  if (!upcomingWithDate.length) return undefined;
-  const d = new Date(upcomingWithDate[0].startDate!);
-  return `Next: ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+function formatDateRange(start?: string, end?: string) {
+  if (!start) return "Dates TBD";
+  const fmt = (d: string) =>
+    new Date(d).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  return end ? `${fmt(start)} – ${fmt(end)}` : fmt(start);
 }
+
+const STATUS_PRIORITY: Record<string, number> = {
+  researching: 0,
+  planned: 1,
+  booked: 2,
+  draft: 3,
+};
+
+function pickContinuePlanning(trips: Trip[]): Trip | null {
+  const active = trips.filter((t) => getTripStatusGroup(t) === "Active");
+  if (!active.length) return null;
+  return active.sort(
+    (a, b) =>
+      (STATUS_PRIORITY[a.status] ?? 99) - (STATUS_PRIORITY[b.status] ?? 99),
+  )[0];
+}
+
+// ── Overline type role ────────────────────────────────────────────────────────
+
+function Overline({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary">
+      {children}
+    </p>
+  );
+}
+
+// ── Atelier greeting ──────────────────────────────────────────────────────────
+
+function AtelierGreeting({ tripCount }: { tripCount: number }) {
+  const greeting = getTimeGreeting();
+  return (
+    <header data-testid="atelier-greeting">
+      <Overline>Private Travel Concierge</Overline>
+      <h1 className="text-2xl font-semibold text-ds-text mt-2 mb-1">
+        {greeting}
+      </h1>
+      <p className="text-sm text-ds-text-tertiary">
+        {tripCount > 0
+          ? `${tripCount} trip${tripCount !== 1 ? "s" : ""} on your shelf.`
+          : "Your private travel atelier. Plan, discover, and refine."}
+      </p>
+    </header>
+  );
+}
+
+// ── Primary concierge instrument ──────────────────────────────────────────────
+
+function ConciergeEntry() {
+  return (
+    <section aria-label="AI Concierge" data-testid="concierge-entry">
+      <Card
+        as="div"
+        tone="dark"
+        className="p-6"
+        style={{ boxShadow: "var(--ds-elevation-2)" }}
+      >
+        <div className="flex items-start gap-4">
+          <div
+            className="flex items-center justify-center w-12 h-12 rounded-xl bg-ds-accent-subtle text-ds-accent shrink-0"
+            aria-hidden="true"
+          >
+            <Sparkles className="w-6 h-6" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <Overline>Primary planning instrument</Overline>
+            <h2 className="text-base font-semibold text-ds-text mt-1.5 mb-1.5">
+              AI Travel Concierge
+            </h2>
+            <p className="text-sm text-ds-text-secondary leading-relaxed mb-4">
+              Ask for restaurants, hotels, or activities — anywhere. Your
+              private concierge, ready when you are.
+            </p>
+            <Link
+              href="/concierge"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-ds-accent text-ds-text-inverse text-sm font-semibold hover:opacity-90 transition-opacity min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            >
+              Open Concierge
+              <ArrowRight className="w-4 h-4" aria-hidden="true" />
+            </Link>
+          </div>
+        </div>
+      </Card>
+    </section>
+  );
+}
+
+// ── Continue planning ─────────────────────────────────────────────────────────
+
+function ContinuePlanningStrip({ trip }: { trip: Trip }) {
+  return (
+    <section
+      aria-label="Continue planning"
+      data-testid="atelier-continue-planning"
+    >
+      <Overline>Continue planning</Overline>
+      <Card
+        as="article"
+        tone="dark"
+        className="mt-3 p-5 hover:border-ds-accent/40 transition-colors duration-200"
+        style={{ boxShadow: "var(--ds-elevation-1)" }}
+      >
+        <div className="flex items-start gap-4">
+          <div
+            className="flex items-center justify-center w-10 h-10 rounded-xl bg-ds-accent-subtle text-ds-accent shrink-0"
+            aria-hidden="true"
+          >
+            <MapPin className="w-4 h-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <TripStatusBadge status={getDisplayTripStatus(trip)} />
+            <h3 className="text-sm font-semibold text-ds-text mt-1.5 mb-0.5">
+              {trip.title}
+            </h3>
+            <p className="text-xs text-ds-text-secondary truncate">
+              {trip.destination}
+            </p>
+            <p className="text-xs text-ds-text-tertiary mt-1 flex items-center gap-1.5 flex-wrap">
+              <Calendar className="w-3 h-3" aria-hidden="true" />
+              {formatDateRange(trip.startDate, trip.endDate)}
+              {trip.travelers > 1 && (
+                <>
+                  {" "}
+                  ·{" "}
+                  <Users className="w-3 h-3" aria-hidden="true" />
+                  {trip.travelers} travelers
+                </>
+              )}
+            </p>
+          </div>
+          <Link
+            href={`/trips/${trip.id}`}
+            className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-ds-accent hover:text-ds-accent-muted transition min-h-[44px] self-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          >
+            Open <ArrowRight className="w-3 h-3" aria-hidden="true" />
+          </Link>
+        </div>
+      </Card>
+    </section>
+  );
+}
+
+// ── Journey shelf teaser ──────────────────────────────────────────────────────
+
+function JourneyShelfTeaser({ count }: { count: number }) {
+  return (
+    <section
+      aria-label="Your travel shelf"
+      data-testid="journey-shelf-teaser"
+    >
+      <div className="flex items-center justify-between mb-3">
+        <Overline>Your travel shelf</Overline>
+        <Link
+          href="/trips"
+          className="text-xs text-ds-accent hover:text-ds-accent-muted font-medium transition flex items-center gap-1"
+        >
+          View all <ArrowRight className="w-3 h-3" aria-hidden="true" />
+        </Link>
+      </div>
+      <Link
+        href="/trips"
+        className="flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-carbon hover:border-ds-accent/40 hover:bg-ds-onyx transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+      >
+        <div
+          className="flex items-center justify-center w-9 h-9 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0"
+          aria-hidden="true"
+        >
+          <Map className="w-4 h-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-ds-text">
+            {count} trip{count !== 1 ? "s" : ""} planned
+          </p>
+          <p className="text-xs text-ds-text-tertiary">
+            Browse your full journey shelf
+          </p>
+        </div>
+        <ArrowRight
+          className="w-4 h-4 text-ds-text-tertiary shrink-0"
+          aria-hidden="true"
+        />
+      </Link>
+    </section>
+  );
+}
+
+// ── Empty atelier state ───────────────────────────────────────────────────────
+
+function EmptyAtelierHome() {
+  return (
+    <section
+      aria-label="Start your first journey"
+      data-testid="atelier-empty-state"
+      className="space-y-6"
+    >
+      <div className="text-center py-10 px-4">
+        <div
+          className="flex items-center justify-center w-16 h-16 rounded-2xl bg-ds-accent-subtle text-ds-accent mx-auto mb-5"
+          aria-hidden="true"
+        >
+          <Map className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-semibold text-ds-text mb-2">
+          Your travel shelf is empty.
+        </h2>
+        <p className="text-sm text-ds-text-tertiary max-w-sm mx-auto leading-relaxed">
+          Plan your first trip, or ask the concierge to help you discover where
+          to go.
+        </p>
+      </div>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <Link
+          href="/trips/new"
+          className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-ds-accent text-ds-text-inverse text-sm font-semibold hover:opacity-90 transition-opacity min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+        >
+          <PlusCircle className="w-4 h-4" aria-hidden="true" />
+          Plan a Trip
+        </Link>
+        <Link
+          href="/concierge"
+          className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-ds-pen-stroke bg-ds-carbon text-ds-text text-sm font-medium hover:border-ds-accent/40 hover:text-ds-accent transition-all min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+        >
+          <Sparkles className="w-4 h-4" aria-hidden="true" />
+          Open Concierge
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+// ── Discovery tools strip ─────────────────────────────────────────────────────
+
+function AtelierPlanningStrip() {
+  return (
+    <section
+      aria-label="Discovery tools"
+      data-testid="atelier-planning-strip"
+    >
+      <Overline>Discovery tools</Overline>
+      <div className="grid grid-cols-2 gap-3 mt-3">
+        <Link
+          href="/explore"
+          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-carbon hover:border-ds-accent/40 hover:bg-ds-onyx transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+        >
+          <span
+            className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0"
+            aria-hidden="true"
+          >
+            <Compass className="w-4 h-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-ds-text group-hover:text-ds-accent transition truncate">
+              Explore
+            </p>
+            <p className="text-xs text-ds-text-tertiary truncate">
+              Hotels, dining &amp; more
+            </p>
+          </div>
+        </Link>
+        <Link
+          href="/saved"
+          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-carbon hover:border-ds-accent/40 hover:bg-ds-onyx transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+        >
+          <span
+            className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0"
+            aria-hidden="true"
+          >
+            <BookmarkCheck className="w-4 h-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-ds-text group-hover:text-ds-accent transition truncate">
+              Saved Ideas
+            </p>
+            <p className="text-xs text-ds-text-tertiary truncate">
+              Your travel scrapbook
+            </p>
+          </div>
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export function DashboardClient() {
   const [summary, setSummary] = useState<DashboardSummary>({
@@ -40,99 +334,55 @@ export function DashboardClient() {
     itineraryCount: 0,
   });
   const [trips, setTrips] = useState<Trip[]>([]);
-  const [cards, setCards] = useState<TravelCard[]>([]);
-  const [deals, setDeals] = useState<DealItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      const [summaryData, tripsData, cardsData, dealsData] = await Promise.all([
+      const [summaryData, tripsData] = await Promise.all([
         fetchDashboardSummary(),
         fetchTrips(),
-        fetchCards(),
-        fetchDealsFeed(),
       ]);
       setSummary(summaryData);
       setTrips(tripsData);
-      setCards(cardsData);
-      setDeals(dealsData);
+      setLoading(false);
     }
     load();
   }, []);
 
-  const upcomingCount = trips.filter(isUpcoming).length;
-  const totalPoints = cards.reduce((s, c) => s + (c.pointsBalance ?? 0), 0);
-  const avgCpp =
-    cards.length > 0
-      ? cards.reduce((s, c) => s + (c.pointValueCpp ?? 0), 0) / cards.length
-      : 0;
-  const pointsValue = avgCpp > 0 ? (totalPoints * avgCpp) / 100 : 0;
-  const nextTrip = nextTripLabel(trips);
+  if (loading) {
+    return (
+      <div
+        className="space-y-6"
+        aria-busy="true"
+        aria-label="Loading your atelier"
+      >
+        <div className="space-y-2">
+          <div className="h-3 w-28 bg-ds-pen-stroke rounded animate-pulse" />
+          <div className="h-7 w-44 bg-ds-pen-stroke rounded animate-pulse" />
+          <div className="h-4 w-36 bg-ds-pen-stroke rounded animate-pulse" />
+        </div>
+        <div className="h-36 bg-ds-onyx border border-ds-pen-stroke rounded-lg animate-pulse" />
+        <div className="h-24 bg-ds-onyx border border-ds-pen-stroke rounded-lg animate-pulse" />
+      </div>
+    );
+  }
+
+  const continuePlanning = pickContinuePlanning(trips);
+  const hasTrips = trips.length > 0;
 
   return (
-    <>
-      {/* Page header */}
-      <div className="flex items-start justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl font-semibold text-ds-text">Dashboard</h1>
-          <p className="mt-1 text-sm text-ds-text-tertiary">
-            Welcome back. Here&apos;s your travel overview.
-          </p>
-        </div>
-        <div className="shrink-0">
-          <Link href="/trips/new" className="btn-primary inline-flex items-center min-h-[44px]">
-            <PlusCircle className="w-4 h-4" />
-            New Trip
-          </Link>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-        <StatCard
-          label="Total Trips"
-          value={summary.tripCount}
-          icon={<Map className="w-5 h-5" />}
-          trend={upcomingCount > 0 ? `${upcomingCount} in planning` : undefined}
-          trendUp={upcomingCount > 0}
-          colorClass="bg-ds-accent-subtle text-ds-accent"
-        />
-        <StatCard
-          label="Upcoming"
-          value={upcomingCount}
-          icon={<Plane className="w-5 h-5" />}
-          trend={nextTrip}
-          trendUp={!!nextTrip}
-          colorClass="bg-violet-500/15 text-violet-400"
-        />
-        <StatCard
-          label="Travel Cards"
-          value={summary.cardCount}
-          icon={<CreditCard className="w-5 h-5" />}
-          colorClass="bg-emerald-500/15 text-emerald-400"
-        />
-        <StatCard
-          label="Total Points"
-          value={totalPoints > 0 ? totalPoints.toLocaleString() : "0"}
-          icon={<Coins className="w-5 h-5" />}
-          trend={
-            pointsValue > 0
-              ? `≈ ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(pointsValue)} in value`
-              : undefined
-          }
-          trendUp={pointsValue > 0}
-          colorClass="bg-amber-500/15 text-amber-400"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <RecentTrips trips={trips} />
-          <QuickActions />
-        </div>
-        <div className="space-y-6">
-          <PointsSummary cards={cards} />
-          <DealsFeed deals={deals} />
-        </div>
-      </div>
-    </>
+    <div className="space-y-8" data-testid="atelier-home">
+      <AtelierGreeting tripCount={summary.tripCount} />
+      <ConciergeEntry />
+      {hasTrips && continuePlanning && (
+        <ContinuePlanningStrip trip={continuePlanning} />
+      )}
+      {hasTrips ? (
+        <JourneyShelfTeaser count={summary.tripCount} />
+      ) : (
+        <EmptyAtelierHome />
+      )}
+      <AtelierPlanningStrip />
+    </div>
   );
 }

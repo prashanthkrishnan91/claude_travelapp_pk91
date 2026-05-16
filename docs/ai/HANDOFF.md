@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-16 (Phase 7 shipped — Trip Readiness / Review Cockpit)
+Last updated: 2026-05-16 (Phase 8A shipped — Private Atelier Home + Journey Shelf)
 
 ## Purpose
 
@@ -8,9 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Phase 7 SHIPPED (2026-05-16).** Trip Readiness / Review Cockpit. `TripReadinessCockpit.tsx` created: premium `<section>` with editorial "Trip Briefing" Overline + h2 headline, score indicator (N/4), day-coverage pills (per-day filled/empty rings), 4 category signals (Flights/Stay/Dining/Activities derived from `itemType`), contextual "Next Step" footer with prioritized CTA (dates→flights→hotel→empty days→all good), "Also try" quick links to Explore/Saved Ideas/Concierge. All ds-* tokens. Full a11y: `aria-labelledby`, `aria-hidden` on icons, `min-h-[44px]`, `focus-visible` rings, real Link/button elements. 65 new tests in `trip-readiness-cockpit.test.mjs`. **836 total tests, 0 failures.** Phases 0, 1A–1C, 2A, 2B, 3–6 all previously shipped.
+- Roadmap stage: **Stage 3.5 — Phase 8A SHIPPED (2026-05-16).** Private Atelier Home + Journey Shelf. `/` home transformed: removed KPI stat cards; new `AtelierGreeting` (time-based + real `tripCount`), `ConciergeEntry` as primary instrument (elevation-2 card), `ContinuePlanningStrip` (real trip data), `JourneyShelfTeaser` (link to /trips), `EmptyAtelierHome`, `AtelierPlanningStrip`. `/trips` JourneyCard upgraded to travel-volume cover style: destination (`trip.destination`) is now the large editorial hero text; trip title is the `<Link>` subtitle; editorial footer with dates + "Open →"; all edit/delete/create/open affordances preserved. ContinuePlanningHero elevated with editorial destination overline. Page header gains "Your Travel Shelf" overline. 56 new tests in `atelier-home-journey-shelf.test.mjs`. **892 total tests, 0 failures.** Phase 8A is visible adoption — first impression now feels like a private travel atelier. Phases 0, 1A–1C, 2A, 2B, 3–7 all previously shipped.
 - Flights v1 — Duffel search-only LIVE: `DUFFEL_FLIGHTS_ENABLED=1`, `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`, `DUFFEL_DEBUG=false`, `DUFFEL_BOOKING_ENABLED=0`. Each flight card shows "Search on Google Flights" (SEARCH_REDIRECT link-out, not booking). Duffel never creates orders. Ignav DISABLED.
-- Active build queue item: **Wife-Wow design system foundation — Phase 7 Trip Readiness Cockpit SHIPPED.** Full ds-* token coverage now spans: shell, nav, explore cards, saved items, concierge, trip-planning surfaces (all card components, CandidatePanel, Activities section, compare bar, cockpit header, day selector), itinerary day columns, trip detail canvas shell, My Journeys landing dashboard, **and the Trip Readiness / Review Cockpit inside trip detail** (`TripReadinessCockpit`). See `docs/ai/UI_BASELINE.md` for full phase inventory.
+- Active build queue item: **Wife-Wow design system foundation — Phase 8A Atelier Home + Journey Shelf SHIPPED.** Full ds-* token coverage now spans: shell, nav, explore cards, saved items, concierge, trip-planning surfaces (all card components, CandidatePanel, Activities section, compare bar, cockpit header, day selector), itinerary day columns, trip detail canvas shell, My Journeys landing dashboard, Trip Readiness Cockpit, **and the home page (`/`) + My Journeys (`/trips`) which now feel like a private travel atelier and journey shelf respectively.** See `docs/ai/UI_BASELINE.md` for full phase inventory.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -31,6 +31,8 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Recent meaningful PRs
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
+
+- 2026-05-16 — **Stage 3.5 Phase 8A — Private Atelier Home + Journey Shelf.** `/` home transformed from KPI dashboard to private travel atelier: editorial time-based greeting + real trip count, Concierge as primary instrument (elevation-2 card), continue-planning strip (real trip data), journey shelf teaser, discovery tools. `/trips` JourneyCard upgraded to travel-volume cover style: destination as large hero text, trip title as semantic link subtitle, editorial footer. Page header gains "Your Travel Shelf" overline. 56 new tests. 892 total, 0 failures. No backend/SQL/provider changes.
 
 - 2026-05-16 — **Stage 3.5 Phase 7 — Trip Readiness / Review Cockpit.** `TripReadinessCockpit.tsx` created: editorial Trip Briefing section with score indicator, day-coverage pills, 4 category signals (Flights/Stay/Dining/Activities from `itemType`), contextual next-step CTA, Explore/Saved/Concierge quick links. Integrated into `trips/[id]/page.tsx` between PageHeader and TripBuilder. 65 new tests. 836 total, 0 failures. No backend/SQL/provider changes.
 
@@ -98,10 +100,10 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 - Latency Budget Pack
 - Backend-only Scaffold Pack / No Visible Behavior Change Pack / Test Tier Pack (cross-cutting)
 
-## Type-check / test baseline (confirmed 2026-05-16, Phase 6)
+## Type-check / test baseline (confirmed 2026-05-16, Phase 8A)
 
 - **`npm run type-check` (frontend): CLEAN — 0 errors.** Requires `npm install` first (standard; `node_modules` is gitignored). After install: `tsc --noEmit` exits 0 with no diagnostics.
-- **`npm test` (frontend): 836 tests, 0 failures.**
+- **`npm test` (frontend): 892 tests, 0 failures.**
 - Any future session reporting "pre-existing TypeScript errors" is seeing an uninstalled `node_modules` environment — run `npm install` in `frontend/` before type-check.
 
 ## Known risks / unresolved issues
