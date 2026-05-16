@@ -439,6 +439,82 @@ class TestBucketCorrectness:
             f"Expected vertical='attractions' forwarded to _run_pipeline, got {captured.get('vertical')!r}"
         )
 
+    # ── Type-shape assertions: _entity_to_card must return the correct model type ──
+
+    def _make_entity(self):
+        """Minimal PlaceEntity for _entity_to_card tests."""
+        from app.concierge.place_entity_layer import PlaceEntity
+        return PlaceEntity(
+            place_id="ChIJ_test",
+            name="Test Place",
+            formatted_address="123 Main St, Seattle, WA",
+            lat=47.6,
+            lng=-122.3,
+            business_status="OPERATIONAL",
+            google_maps_uri="https://maps.google.com/?q=test",
+            types=["tourist_attraction", "point_of_interest"],
+            primary_type="tourist_attraction",
+            rating=4.5,
+            user_rating_count=1200,
+            price_level=None,
+            website_uri=None,
+        )
+
+    def _make_frame(self):
+        """Minimal ExperienceFrame for _entity_to_card tests."""
+        from app.concierge.frame_extractor import ExperienceFrame
+        return ExperienceFrame(
+            literal_ask="top attractions",
+            normalized_ask="top attractions",
+            destination="Seattle",
+        )
+
+    def test_entity_to_card_restaurants_returns_UnifiedRestaurantResult(self):
+        from app.concierge.semantic_retrieval import _entity_to_card
+        from app.models.concierge import UnifiedRestaurantResult, UnifiedAttractionResult, UnifiedHotelResult
+
+        card = _entity_to_card(self._make_entity(), "Great spot", self._make_frame(), vertical="restaurants")
+        assert isinstance(card, UnifiedRestaurantResult), (
+            f"vertical='restaurants' must return UnifiedRestaurantResult, got {type(card).__name__}"
+        )
+        assert not isinstance(card, UnifiedAttractionResult)
+        assert not isinstance(card, UnifiedHotelResult)
+
+    def test_entity_to_card_attractions_returns_UnifiedAttractionResult(self):
+        from app.concierge.semantic_retrieval import _entity_to_card
+        from app.models.concierge import UnifiedAttractionResult, UnifiedRestaurantResult, UnifiedHotelResult
+
+        card = _entity_to_card(self._make_entity(), "Must-see landmark", self._make_frame(), vertical="attractions")
+        assert isinstance(card, UnifiedAttractionResult), (
+            f"vertical='attractions' must return UnifiedAttractionResult, got {type(card).__name__}"
+        )
+        assert not isinstance(card, UnifiedRestaurantResult), (
+            "attraction bucket must NOT contain restaurant-shaped objects"
+        )
+        assert not isinstance(card, UnifiedHotelResult)
+        assert card.category is not None and card.category != "", "UnifiedAttractionResult.category must be non-empty"
+
+    def test_entity_to_card_hotels_returns_UnifiedHotelResult(self):
+        from app.concierge.semantic_retrieval import _entity_to_card
+        from app.models.concierge import UnifiedHotelResult, UnifiedRestaurantResult, UnifiedAttractionResult
+
+        card = _entity_to_card(self._make_entity(), "Great location", self._make_frame(), vertical="hotels")
+        assert isinstance(card, UnifiedHotelResult), (
+            f"vertical='hotels' must return UnifiedHotelResult, got {type(card).__name__}"
+        )
+        assert not isinstance(card, UnifiedRestaurantResult), (
+            "hotel bucket must NOT contain restaurant-shaped objects"
+        )
+        assert not isinstance(card, UnifiedAttractionResult)
+
+    def test_entity_to_card_default_vertical_is_restaurants(self):
+        """Calling _entity_to_card without vertical= must default to restaurant card."""
+        from app.concierge.semantic_retrieval import _entity_to_card
+        from app.models.concierge import UnifiedRestaurantResult
+
+        card = _entity_to_card(self._make_entity(), "Tasty", self._make_frame())
+        assert isinstance(card, UnifiedRestaurantResult)
+
 
 # ── Section E: Wrong-vertical guard not applied to attractions ────────────────
 

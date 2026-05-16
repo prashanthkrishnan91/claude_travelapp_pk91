@@ -1339,6 +1339,7 @@ def _run_pipeline(
             frame=frame,
             note_generation_timed_out=_effective_note_gen_skipped,
             set_writer_primary_active=set_writer_primary_active,
+            vertical=vertical,
         )
     )
 
@@ -1714,6 +1715,7 @@ def _assemble_card_set(
     frame: Any,
     note_generation_timed_out: bool,
     set_writer_primary_active: bool,
+    vertical: str = "restaurants",
 ) -> tuple:
     """Assemble the final ordered card list from ranked entities and note reasons.
 
@@ -1751,6 +1753,7 @@ def _assemble_card_set(
                 entity, "", frame,
                 reason_source="timed_out",
                 reason_validated=False,
+                vertical=vertical,
             )
             cards_without_notes_count += 1
         else:
@@ -1768,6 +1771,7 @@ def _assemble_card_set(
                     entity, "", frame,
                     reason_source=_note_src,
                     reason_validated=False,
+                    vertical=vertical,
                 )
                 cards_without_notes_count += 1
             else:
@@ -1775,6 +1779,7 @@ def _assemble_card_set(
                     entity, cr.note, frame,
                     reason_source=cr.source,
                     reason_validated=True,
+                    vertical=vertical,
                 )
                 if card is not None:
                     visible_note_count += 1
@@ -1793,13 +1798,16 @@ def _entity_to_card(
     frame: "ExperienceFrame",  # type: ignore[name-defined]
     reason_source: str = "deterministic_safe_v1",
     reason_validated: bool = False,
+    vertical: str = "restaurants",
 ) -> Optional[Any]:
-    """Convert a verified PlaceEntity to a UnifiedRestaurantResult card."""
+    """Convert a verified PlaceEntity to the correct card type for the given vertical."""
     try:
         from app.models.concierge import (
             ConciergeDisplayFields,
             GoogleVerification,
             PlaceSupportingDetails,
+            UnifiedAttractionResult,
+            UnifiedHotelResult,
             UnifiedRestaurantResult,
         )
 
@@ -1842,6 +1850,71 @@ def _entity_to_card(
         entity_price_range: Optional[Dict[str, Any]] = getattr(entity, "price_range", None) or None
         display_price = _format_display_price(entity_price_level, entity_price_range)
 
+        _supporting = PlaceSupportingDetails(
+            why_pick=reason,
+            meta_line=meta_line,
+            address=entity.formatted_address,
+            category_label=display_category,
+            price_level=entity_price_level,
+            price_range=entity_price_range,
+        )
+        _display = ConciergeDisplayFields(
+            display_name=entity.name,
+            display_category=display_category,
+            display_meta_line=meta_line,
+            display_why=reason,
+            display_price=display_price,
+            display_badges=[],
+            addability="addable",
+            display_why_source=reason_source,
+            display_why_validated=reason_validated,
+        )
+        _maps = entity.google_maps_uri or fallback_map
+
+        if vertical == "attractions":
+            return UnifiedAttractionResult(
+                name=entity.name,
+                source="Google Places",
+                category=display_category or "Attraction",
+                description=reason,
+                neighborhood=entity.formatted_address,
+                address=entity.formatted_address,
+                rating=rating_display,
+                review_count=entity.user_rating_count,
+                maps_link=_maps,
+                source_url=entity.website_uri,
+                verified_place=True,
+                google_verification=gv,
+                primary_reason=reason,
+                reason_source=reason_source,
+                why_pick=reason,
+                confidence="high",
+                supporting_details=_supporting,
+                display=_display,
+                tags=[],
+            )
+
+        if vertical == "hotels":
+            return UnifiedHotelResult(
+                name=entity.name,
+                source="Google Places",
+                area_label=entity.formatted_address,
+                rating=rating_display,
+                maps_link=_maps,
+                booking_url=entity.website_uri,
+                source_url=entity.website_uri,
+                verified_place=True,
+                google_verification=gv,
+                reason=reason,
+                primary_reason=reason,
+                reason_source=reason_source,
+                why_pick=reason,
+                confidence="high",
+                supporting_details=_supporting,
+                display=_display,
+                tags=[],
+            )
+
         return UnifiedRestaurantResult(
             name=entity.name,
             source="Google Places",
@@ -1855,26 +1928,9 @@ def _entity_to_card(
             why_pick=reason,
             verified_place=True,
             google_verification=gv,
-            supporting_details=PlaceSupportingDetails(
-                why_pick=reason,
-                meta_line=meta_line,
-                address=entity.formatted_address,
-                category_label=display_category,
-                price_level=entity_price_level,
-                price_range=entity_price_range,
-            ),
-            display=ConciergeDisplayFields(
-                display_name=entity.name,
-                display_category=display_category,
-                display_meta_line=meta_line,
-                display_why=reason,
-                display_price=display_price,
-                display_badges=[],
-                addability="addable",
-                display_why_source=reason_source,
-                display_why_validated=reason_validated,
-            ),
-            maps_link=entity.google_maps_uri or fallback_map,
+            supporting_details=_supporting,
+            display=_display,
+            maps_link=_maps,
             booking_link=entity.website_uri,
             tags=[],
         )
