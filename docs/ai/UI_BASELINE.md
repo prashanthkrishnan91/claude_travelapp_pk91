@@ -1,10 +1,44 @@
 # UI Baseline
 
-Last updated: 2026-05-16
+Last updated: 2026-05-16 (Phase 5)
 
 ## Purpose
 
 Tracks the state of the design system and UI primitive layer so future prompts and PRs can reason accurately about what exists and what has been adopted.
+
+---
+
+## Stage 3.5 Phase 5 — TripBuilder Command Surface — SHIPPED (2026-05-16)
+
+**Stage 3.5 · Wife-Wow design system — TripBuilder left-panel search + CandidatePanel command center**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/components/trips/TripBuilder.tsx` | CandidatePanel: removed `accentColor` prop, root → `rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-1)]`, toggle button `min-h-[44px] px-4 py-3`, count badge → styled pill with `var(--ds-accent-subtle)` bg + `text-ds-accent border-ds-pen-stroke`. Activities section: `.card p-3` → `rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-1)]` with ds-token header row. Compare bar: `shadow-2xl` → `shadow-[var(--ds-elevation-4)]`, added Overline "Compare" label + `tracking-[0.1em]`, dots `w-2 h-2` → `w-1.5 h-1.5`. DragOverlay + toast: `shadow-2xl` → `shadow-[var(--ds-elevation-3)]`. Right panel header: "Itinerary" plain h2 → Overline "Your Itinerary" + item count as `text-ds-text-tertiary`. Target day selector: bare select → `bg-ds-carbon rounded-xl border-ds-pen-stroke` container with Overline "Add to" label. Add Day button: `btn-ghost` → explicit ds-token button with `min-h-[44px]`. Explore header: `tracking-wider` → `tracking-[0.1em]`. Planning cockpit header: new `destination` + selected day context above SummaryBar. Flight sub-labels: `tracking-[0.08em]` → `tracking-[0.1em]`, added `px-1 pb-1` / `pt-2 pb-1`. Filter-empty copy: "No X match..." → "Nothing matches the current filters — try widening the selection." |
+| `frontend/tests/tripbuilder-command-surface.test.mjs` | NEW. 32 static/contract tests: no legacy classes, ds-token coverage, Overline tracking, planning cockpit header, compare bar, Add Day touch target, behavior preservation. |
+| `frontend/package.json` | Added `tripbuilder-command-surface.test.mjs` to test script. |
+
+### Test results
+- **724 tests, 0 failures** (was 692; +32 new Phase 5 command surface contract tests)
+- All pre-existing tests continue to pass
+
+### Design contract alignment
+
+- **CandidatePanel chrome:** Full ds-token card pattern; count badge is a styled pill with accent-subtle bg. No legacy `.card` class.
+- **Overline type role:** All section/area labels use exact `text-[10px] font-semibold uppercase tracking-[0.1em]` Overline pattern.
+- **Planning cockpit header:** Destination + selected day context above SummaryBar — clear command center orientation.
+- **Compare bar:** Elevation-4 shadow, Overline "Compare" label, smaller dots. More editorial, less dashboard.
+- **Target day selector:** Contained in `bg-ds-carbon rounded-xl border-ds-pen-stroke` with "Add to" Overline label. Clear context of which day will receive additions.
+- **Add Day button:** Explicit ds-token button with `min-h-[44px]` touch target. No legacy `btn-ghost`.
+- **Behaviors preserved:** DnD, compare, Google Flights link-out, round-trip one-card rendering, GSAP `candidate-card` class, hotel/attraction/restaurant/flight add-to-itinerary all unchanged.
+
+### Invariant confirmations
+- No backend files; no API/search/provider/Tavily/cache changes.
+- No Supabase SQL; no new env vars; no new dependencies.
+- No new fonts; no route rewrites; no data model changes.
+- No new booking behavior; no fake data.
 
 ---
 

@@ -1160,7 +1160,6 @@ function CandidatePanel({
   icon,
   count,
   totalCount,
-  accentColor,
   open,
   onToggle,
   sortControls,
@@ -1172,7 +1171,6 @@ function CandidatePanel({
   icon: React.ReactNode;
   count: number;
   totalCount?: number;
-  accentColor: string;
   open: boolean;
   onToggle: () => void;
   sortControls?: React.ReactNode;
@@ -1181,32 +1179,41 @@ function CandidatePanel({
   children: React.ReactNode;
 }) {
   const hasData = (totalCount ?? count) > 0;
+  const displayCount = totalCount !== undefined && totalCount !== count
+    ? `${count}/${totalCount}` : count;
   return (
-    <div className="card p-3 flex flex-col gap-2">
+    <div className="rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-1)]">
       <button
         onClick={onToggle}
-        className="flex items-center justify-between w-full text-sm font-semibold text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+        className="flex items-center justify-between w-full px-4 py-3 min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
       >
-        <span className="flex items-center gap-1.5">
+        <span className="flex items-center gap-2">
           {icon}
-          {title}
-          <span className={`text-xs font-normal ${accentColor}`}>
-            ({totalCount !== undefined && totalCount !== count ? `${count}/${totalCount}` : count})
+          <span className="text-sm font-semibold text-ds-text">{title}</span>
+          <span
+            className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-ds-accent border border-ds-pen-stroke"
+            style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+          >
+            {displayCount}
           </span>
         </span>
         {open
-          ? <ChevronUp className="w-3.5 h-3.5 text-ds-text-tertiary" />
-          : <ChevronDown className="w-3.5 h-3.5 text-ds-text-tertiary" />}
+          ? <ChevronUp className="w-4 h-4 text-ds-text-tertiary" />
+          : <ChevronDown className="w-4 h-4 text-ds-text-tertiary" />}
       </button>
-      {open && sortControls && <div className="pt-0.5">{sortControls}</div>}
-      {open && !hasData && (
-        <p className="text-xs text-ds-text-tertiary py-2 text-center">
-          {emptyMessage}
-        </p>
-      )}
-      {open && hasData && (
-        <div ref={listRef} className="flex flex-col gap-3 max-h-[540px] overflow-y-auto py-1 px-0.5">
-          {children}
+      {open && (
+        <div className="border-t border-ds-pen-stroke">
+          {sortControls && (
+            <div className="px-4 py-3 border-b border-ds-pen-stroke">{sortControls}</div>
+          )}
+          {!hasData && (
+            <p className="px-4 py-4 text-xs text-ds-text-tertiary text-center">{emptyMessage}</p>
+          )}
+          {hasData && (
+            <div ref={listRef} className="flex flex-col gap-3 max-h-[540px] overflow-y-auto py-3 px-4">
+              {children}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1913,6 +1920,22 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
           {/* ── Left Panel: AI-ranked candidates ──────────────────────────── */}
           <div className="w-80 flex-shrink-0 flex flex-col gap-3 overflow-y-auto pr-0.5">
 
+            {/* Planning cockpit context header */}
+            <div className="flex flex-col gap-0.5 px-1 pt-1 pb-0.5">
+              <span className="text-[10px] font-semibold text-ds-text-tertiary uppercase tracking-[0.1em]">Planning</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-semibold text-ds-text truncate">{destination}</span>
+                {selectedDayId && displayDays.find((d) => d.id === selectedDayId) && (
+                  <>
+                    <span className="text-ds-text-tertiary text-sm">·</span>
+                    <span className="text-xs text-ds-accent font-medium">
+                      Day {displayDays.find((d) => d.id === selectedDayId)!.dayNumber}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
             {/* Summary bar */}
             <SummaryBar topFlight={topFlight} topHotel={topHotel} />
 
@@ -1921,7 +1944,6 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
               title="Flights"
               icon={<Plane className="w-3.5 h-3.5 text-ds-accent" />}
               count={sortedFlights.length}
-              accentColor="text-ds-accent"
               open={flightPanelOpen}
               onToggle={() => setFlightPanelOpen((v) => !v)}
               emptyMessage="No flight options are available yet. Try refreshing this trip or creating it again if this continues."
@@ -1963,7 +1985,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                 const nodes: React.ReactNode[] = [];
                 if (showOWLabel) {
                   nodes.push(
-                    <p key="ow-label" className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ds-text-tertiary">
+                    <p key="ow-label" className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary px-1 pb-1">
                       One-way options
                     </p>
                   );
@@ -1984,7 +2006,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                 });
                 if (showRTLabel) {
                   nodes.push(
-                    <p key="rt-label" className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ds-text-tertiary pt-1">
+                    <p key="rt-label" className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary pt-2 pb-1 px-1">
                       Round-trip pairs
                     </p>
                   );
@@ -2010,7 +2032,6 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
               title="Hotels"
               icon={<Hotel className="w-3.5 h-3.5 text-ds-accent" />}
               count={sortedHotels.length}
-              accentColor="text-ds-accent"
               open={hotelPanelOpen}
               onToggle={() => setHotelPanelOpen((v) => !v)}
               emptyMessage="No hotel options are available yet. Try refreshing this trip or creating it again if this continues."
@@ -2049,12 +2070,12 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
             </CandidatePanel>
 
             {/* ── Explore: List / Map / Group toggle ────────────────────── */}
-            <div className="flex items-center justify-between px-1 pt-0.5">
-              <span className="text-[10px] font-semibold text-ds-text-tertiary uppercase tracking-wider">Explore</span>
+            <div className="flex items-center justify-between px-1 pt-1">
+              <span className="text-[10px] font-semibold text-ds-text-tertiary uppercase tracking-[0.1em]">Explore</span>
               <div className="flex items-center bg-ds-carbon rounded-lg p-0.5 gap-0.5">
                 <button
                   onClick={() => setViewMode("list")}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 ${
+                  className={`flex items-center gap-1 px-2.5 min-h-[44px] rounded-md text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 ${
                     viewMode === "list"
                       ? "bg-ds-onyx text-ds-text shadow-sm"
                       : "text-ds-text-secondary hover:text-ds-text"
@@ -2065,7 +2086,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                 </button>
                 <button
                   onClick={() => setViewMode("map")}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 ${
+                  className={`flex items-center gap-1 px-2.5 min-h-[44px] rounded-md text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 ${
                     viewMode === "map"
                       ? "bg-ds-onyx text-ds-text shadow-sm"
                       : "text-ds-text-secondary hover:text-ds-text"
@@ -2100,7 +2121,6 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                   icon={<Sparkles className="w-3.5 h-3.5 text-ds-accent" />}
                   count={filteredAttractions.length}
                   totalCount={candidateAttractions.length}
-                  accentColor="text-ds-accent"
                   open={attractionPanelOpen}
                   onToggle={() => setAttractionPanelOpen((v) => !v)}
                   emptyMessage="No attractions are available yet. Try refreshing this trip or creating it again if this continues."
@@ -2144,7 +2164,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                   listRef={attractionListRef}
                 >
                   {filteredAttractions.length === 0 ? (
-                    <p className="text-xs text-ds-text-tertiary py-4 text-center">No attractions match the selected filters.</p>
+                    <p className="text-xs text-ds-text-tertiary py-4 text-center">Nothing matches the current filters — try widening the selection.</p>
                   ) : (
                     (() => {
                       const top20 = Math.max(1, Math.ceil(filteredAttractions.length * 0.2));
@@ -2178,7 +2198,6 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                   icon={<UtensilsCrossed className="w-3.5 h-3.5 text-ds-accent" />}
                   count={filteredRestaurants.length}
                   totalCount={candidateRestaurants.length}
-                  accentColor="text-ds-accent"
                   open={restaurantPanelOpen}
                   onToggle={() => setRestaurantPanelOpen((v) => !v)}
                   emptyMessage="No restaurants are available yet. Try refreshing this trip or creating it again if this continues."
@@ -2232,7 +2251,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                   listRef={restaurantListRef}
                 >
                   {filteredRestaurants.length === 0 ? (
-                    <p className="text-xs text-ds-text-tertiary py-4 text-center">No restaurants match the selected filters.</p>
+                    <p className="text-xs text-ds-text-tertiary py-4 text-center">Nothing matches the current filters — try widening the selection.</p>
                   ) : (
                     (() => {
                       const top20 = Math.max(1, Math.ceil(filteredRestaurants.length * 0.2));
@@ -2264,12 +2283,15 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
             {/* Activities / research results */}
             {results.length > 0 && (
-              <div className="card p-3 flex flex-col gap-2">
-                <h2 className="text-sm font-semibold text-ds-text flex items-center gap-1.5">
+              <div className="rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-1)]">
+                <div className="px-4 py-3 flex items-center gap-2 border-b border-ds-pen-stroke">
                   <Sparkles className="w-3.5 h-3.5 text-ds-accent" />
-                  Activities
-                </h2>
-                <div className="flex flex-col gap-2 max-h-[360px] overflow-y-auto">
+                  <span className="text-sm font-semibold text-ds-text">Activities</span>
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-ds-accent border border-ds-pen-stroke" style={{ backgroundColor: "var(--ds-accent-subtle)" }}>
+                    {results.length}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-2 max-h-[360px] overflow-y-auto py-3 px-4">
                   {results.map((result) => (
                     <SearchResultCard
                       key={result.id}
@@ -2285,21 +2307,21 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
           {/* ── Right Panel: Itinerary Timeline ───────────────────────────── */}
           <div className="flex-1 flex flex-col gap-3 overflow-visible">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <h2 className="text-sm font-semibold text-ds-text">
-                Itinerary
-                <span className="ml-2 text-ds-text-tertiary font-normal">
-                  {days.reduce((sum, d) => sum + d.items.length, 0)} items across {days.length} day{days.length !== 1 ? "s" : ""}
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] font-semibold text-ds-text-tertiary uppercase tracking-[0.1em]">Your Itinerary</span>
+                <span className="text-xs text-ds-text-tertiary">
+                  {days.reduce((sum, d) => sum + d.items.length, 0)} items · {days.length} day{days.length !== 1 ? "s" : ""}
                 </span>
-              </h2>
+              </div>
               <div className="flex items-center gap-2">
                 {/* Target day selector — left-panel "+" buttons add to this day */}
                 {days.length > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-ds-text-tertiary font-medium uppercase tracking-wide">Adding to:</span>
+                  <label className="flex items-center gap-2 bg-ds-carbon rounded-xl border border-ds-pen-stroke px-3 min-h-[44px] cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-ds-accent focus-within:outline-offset-2 transition-colors">
+                    <span className="text-[10px] font-semibold text-ds-text-tertiary uppercase tracking-[0.1em] whitespace-nowrap">Add to</span>
                     <select
                       value={selectedDayId ?? ""}
                       onChange={(e) => setSelectedDayId(e.target.value || null)}
-                      className="text-xs font-semibold text-ds-text bg-ds-carbon border border-ds-pen-stroke rounded-lg px-2 py-1 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent"
+                      className="text-xs font-semibold text-ds-text bg-ds-carbon border-none outline-none focus:outline-none focus-visible:outline-none cursor-pointer py-0"
                     >
                       {displayDays.map((d) => (
                         <option key={d.id} value={d.id}>
@@ -2307,11 +2329,14 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                         </option>
                       ))}
                     </select>
-                  </div>
+                  </label>
                 )}
                 {/* "Add Day" only shown when days are not auto-derived from trip dates */}
                 {canManuallyAddExpectedDay && (
-                  <button onClick={handleAddDay} className="btn-ghost py-1.5 text-xs">
+                  <button
+                    onClick={handleAddDay}
+                    className="flex items-center gap-1.5 min-h-[44px] px-3 rounded-xl border border-ds-pen-stroke bg-ds-carbon text-xs font-medium text-ds-text-secondary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  >
                     <CalendarPlus className="w-3.5 h-3.5" />
                     Add Day
                   </button>
@@ -2366,13 +2391,16 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
         {/* ── Compare bar ──────────────────────────────────────────────────── */}
         {compareSet.size > 0 && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 bg-ds-onyx border border-ds-pen-stroke rounded-2xl shadow-2xl">
-            <Scale className="w-4 h-4 text-ds-accent flex-shrink-0" />
-            <div className="flex items-center gap-1">
-              {Array.from({ length: Math.min(compareSet.size, 10) }).map((_, i) => (
-                <div key={i} className="w-2 h-2 rounded-full bg-ds-accent" />
-              ))}
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 bg-ds-onyx border border-ds-pen-stroke rounded-2xl shadow-[var(--ds-elevation-4)]">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] font-semibold text-ds-text-tertiary uppercase tracking-[0.1em]">Compare</span>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(compareSet.size, 10) }).map((_, i) => (
+                  <div key={i} className="w-1.5 h-1.5 rounded-full bg-ds-accent" />
+                ))}
+              </div>
             </div>
+            <div className="w-px h-6 bg-ds-pen-stroke" />
             <span className="text-sm font-medium text-ds-text">
               {compareSet.size} item{compareSet.size !== 1 ? "s" : ""}
               {compareSet.size < 2 && <span className="text-ds-text-tertiary text-xs ml-1">(need 2+)</span>}
@@ -2390,14 +2418,14 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
             <button
               onClick={handleCompare}
               disabled={compareSet.size < 2 || compareLoading}
-              className="px-4 py-1.5 rounded-lg bg-ds-accent hover:bg-ds-accent-muted text-ds-text-inverse disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold transition-colors flex items-center gap-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              className="min-h-[44px] px-4 rounded-lg bg-ds-accent hover:bg-ds-accent-muted text-ds-text-inverse disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold transition-colors flex items-center gap-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
             >
               {compareLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BarChart2 className="w-3.5 h-3.5" />}
               Compare
             </button>
             <button
               onClick={() => { setCompareSet(new Set()); compareDataRef.current.clear(); }}
-              className="text-ds-text-tertiary hover:text-ds-text text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center text-ds-text-tertiary hover:text-ds-text text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
             >
               Clear
             </button>
@@ -2407,12 +2435,12 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         {/* ── Drag Overlay ─────────────────────────────────────────────────── */}
         <DragOverlay>
           {activeDragItem && isResultDrag && (
-            <div className="rotate-1 scale-105 shadow-2xl opacity-95 w-72">
+            <div className="rotate-1 scale-105 shadow-[var(--ds-elevation-3)] opacity-95 w-72">
               <SearchResultCard result={activeDragItem as ResearchResult} onAdd={() => {}} />
             </div>
           )}
           {activeDragItem && !isResultDrag && (
-            <div className="rotate-1 scale-105 shadow-2xl opacity-95">
+            <div className="rotate-1 scale-105 shadow-[var(--ds-elevation-3)] opacity-95">
               <ItineraryItemCard item={activeDragItem as ItineraryItem} onRemove={() => {}} />
             </div>
           )}
@@ -2436,10 +2464,10 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
       {/* ── Toast ────────────────────────────────────────────────────────────── */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 bg-ds-onyx border border-ds-pen-stroke text-ds-text rounded-xl shadow-2xl text-sm font-medium animate-in fade-in slide-in-from-bottom-2">
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 bg-ds-onyx border border-ds-pen-stroke text-ds-text rounded-xl shadow-[var(--ds-elevation-3)] text-sm font-medium animate-in fade-in slide-in-from-bottom-2">
           <CheckCircle2 className="w-4 h-4 text-ds-trust-verified flex-shrink-0" />
           {toast}
-          <button onClick={() => setToast(null)} className="ml-1 text-ds-text-tertiary hover:text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2">
+          <button onClick={() => setToast(null)} className="ml-1 min-h-[44px] min-w-[44px] flex items-center justify-center text-ds-text-tertiary hover:text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>

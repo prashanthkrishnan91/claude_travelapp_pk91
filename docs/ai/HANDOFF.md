@@ -8,9 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Phase 4 SHIPPED (2026-05-16).** Trip detail planning canvas and itinerary day system redesign. `ItineraryDayColumn.tsx`: full ds-* migration, chapter-style day headers (zero-padded number + Overline date), day-part Overline labels (morning=`text-ds-accent`, evening=`text-ds-accent-muted`), editorial empty-day invitation, ink-ladder expanded body, all 44px touch targets. `trips/[id]/page.tsx`: context header + toast + back link → ds-tokens. `TripBuilder.tsx`: no-days empty state → ds-tokens. 57 new contract tests. 692 total tests, 0 failures. Phases 0, 1A–1C, 2A, 2B, 3 all previously shipped.
+- Roadmap stage: **Stage 3.5 — Phase 5 SHIPPED (2026-05-16).** TripBuilder command surface redesign. `TripBuilder.tsx`: CandidatePanel chrome → ds-token card pattern with styled count badge, planning cockpit context header (destination + selected day), target day selector in `bg-ds-carbon` container with Overline "Add to" label, "Your Itinerary" Overline header, Add Day button with `min-h-[44px]`, Activities section → ds-token card, compare bar → `ds-elevation-4` + Overline "Compare" label, all `shadow-2xl` → elevation tokens, Explore header tracking fixed, flight sub-labels → `tracking-[0.1em]`, editorial filter-empty copy. 32 new contract tests in `tripbuilder-command-surface.test.mjs`. 724 total tests, 0 failures. Phases 0, 1A–1C, 2A, 2B, 3, 4 all previously shipped.
 - Flights v1 — Duffel search-only LIVE: `DUFFEL_FLIGHTS_ENABLED=1`, `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`, `DUFFEL_DEBUG=false`, `DUFFEL_BOOKING_ENABLED=0`. Each flight card shows "Search on Google Flights" (SEARCH_REDIRECT link-out, not booking). Duffel never creates orders. Ignav DISABLED.
-- Active build queue item: **Wife-Wow design system foundation — Phase 4 trip canvas SHIPPED.** Full ds-* token coverage now spans: shell, nav, explore cards, saved items, concierge, trip-planning surfaces, itinerary day columns, and trip detail canvas shell. See `docs/ai/UI_BASELINE.md` for full phase inventory.
+- Active build queue item: **Wife-Wow design system foundation — Phase 5 TripBuilder command surface SHIPPED.** Full ds-* token coverage now spans: shell, nav, explore cards, saved items, concierge, trip-planning surfaces (all card components, CandidatePanel, Activities section, compare bar, cockpit header, day selector), itinerary day columns, and trip detail canvas shell. See `docs/ai/UI_BASELINE.md` for full phase inventory.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -31,6 +31,8 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Recent meaningful PRs
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
+
+- 2026-05-16 — **Stage 3.5 Phase 5 — TripBuilder command surface.** `TripBuilder.tsx`: CandidatePanel → ds-token card + styled count badge. Planning cockpit header (destination + day context). Target day selector in `bg-ds-carbon` container. Add Day button with `min-h-[44px]`. Activities → ds-token. Compare bar → `ds-elevation-4` + Overline "Compare". All `shadow-2xl` → elevation tokens. Overline tracking corrected throughout. 32 new contract tests in `tripbuilder-command-surface.test.mjs`. 724 tests, 0 failures. No backend/SQL/provider changes.
 
 - 2026-05-16 — **Stage 3.5 Phase 4 — Trip detail planning canvas.** `ItineraryDayColumn.tsx`: full ds-* migration, chapter-style headers, editorial empty-day invitation, 44px touch targets, ink-ladder expanded body. `trips/[id]/page.tsx`: context header + toast + back link migrated. `TripBuilder.tsx`: no-days empty state migrated. 57 new contract tests in `trip-canvas-day-system.test.mjs`. 692 tests, 0 failures. No backend/SQL/provider changes.
 
@@ -103,7 +105,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Stage 3.5 Phase 4 complete.** Trip detail planning canvas and itinerary day system are now visibly premium: chapter headers, Overline date labels, editorial empty-day invitations, ink-ladder depth, all 44px touch targets. Full ds-* token coverage now spans every trip-planning surface. Next direction options: (A) motion polish (card-lift choreography, day-section entrance within reduced-motion token limits), (B) TripBuilder left-panel search form / CandidatePanel chrome migration, (C) product feature work (deal alerts, Watchtower). Roadmap guidance: `docs/product/ROADMAP.md`.
+**Stage 3.5 Phase 5 complete.** TripBuilder command surface is now visibly premium: editorial CandidatePanel chrome, planning cockpit context header, target day container, Overline section labels throughout, ds-elevation shadow stack. Full ds-* token coverage now spans every trip-planning surface. Next direction options: (A) motion polish (card-lift choreography, day-section entrance within reduced-motion token limits), (B) product feature work (deal alerts, Watchtower, trip-level compare). Roadmap guidance: `docs/product/ROADMAP.md`.
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 
