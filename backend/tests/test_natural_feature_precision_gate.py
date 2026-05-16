@@ -59,6 +59,8 @@ from app.concierge.semantic_retrieval import (
     _NATURAL_FEATURE_HARD_REJECTED_TYPES,
     _BEACH_NATURAL_FEATURE_TYPES,
     _VIEWPOINT_NATURAL_FEATURE_TYPES,
+    _STRONG_VIEWPOINT_NAME_TOKENS,
+    _BEACH_CONFIRMING_NAME_TOKENS,
     _MIN_NATURAL_FEATURE_GATE_CANDIDATES,
 )
 from app.concierge.evidence_cache import should_run_editorial
@@ -721,3 +723,270 @@ class TestConceptIsNaturalFeature:
     ])
     def test_is_not_natural_feature(self, label: str):
         assert not _concept_is_natural_feature(label), f"'{label}' should NOT be a natural-feature concept"
+
+
+# ── 11. Gate order: hard-reject before name-token ─────────────────────────────
+
+class TestGateOrderHardRejectFirst:
+    """Blocker: hard type rejection must run BEFORE any name-token accept.
+
+    A venue named "Sunset Tower Bar" or "Panorama Lounge" must be rejected even
+    though its name contains tokens that sound like viewpoint vocabulary.
+    """
+
+    def test_sunset_tower_bar_rejected_viewpoint(self):
+        """'Sunset Tower Bar' (bar types) must be rejected despite 'tower' in name."""
+        entity = _make_entity(
+            "Sunset Tower Bar",
+            types=["bar", "night_club", "establishment", "point_of_interest"],
+            primary_type="bar",
+        )
+        assert not _entity_passes_natural_feature_gate(entity, "viewpoint"), (
+            "Hard type rejection must fire before name token check"
+        )
+
+    def test_panorama_lounge_rejected_viewpoint(self):
+        """'Panorama Lounge' (lounge/bar types) rejected despite 'panorama' in name."""
+        entity = _make_entity(
+            "Panorama Lounge",
+            types=["lounge", "bar", "establishment"],
+            primary_type="lounge",
+        )
+        assert not _entity_passes_natural_feature_gate(entity, "viewpoint")
+
+    def test_terrace_restaurant_rejected_viewpoint(self):
+        """'Terrace Restaurant' (restaurant types) rejected despite 'terrace' in name."""
+        entity = _make_entity(
+            "Terrace Restaurant",
+            types=["restaurant", "food", "establishment"],
+            primary_type="restaurant",
+        )
+        assert not _entity_passes_natural_feature_gate(entity, "viewpoint")
+
+    def test_sunset_view_hotel_rejected_viewpoint(self):
+        """'Sunset View Hotel' (hotel types) rejected despite 'view' in name."""
+        entity = _make_entity(
+            "Sunset View Hotel",
+            types=["hotel", "lodging", "establishment"],
+            primary_type="hotel",
+        )
+        assert not _entity_passes_natural_feature_gate(entity, "viewpoint")
+
+    def test_ocean_view_restaurant_rejected_beach(self):
+        """'Ocean View Restaurant' (restaurant types) rejected for beach query."""
+        entity = _make_entity(
+            "Ocean View Restaurant",
+            types=["restaurant", "food", "establishment"],
+            primary_type="restaurant",
+        )
+        assert not _entity_passes_natural_feature_gate(entity, "beach"), (
+            "Restaurant must be rejected even with 'ocean' in name"
+        )
+
+    def test_beach_hotel_with_specific_types_rejected(self):
+        """'Beach Hotel' (hotel types) rejected for beach query."""
+        entity = _make_entity(
+            "Beach Hotel",
+            types=["hotel", "lodging", "establishment"],
+            primary_type="hotel",
+        )
+        assert not _entity_passes_natural_feature_gate(entity, "beach")
+
+
+# ── 12. Tighter acceptance: generic-only requires strong name evidence ─────────
+
+class TestGenericOnlyNeedsNameEvidence:
+    """Generic-typed entities (only establishment/point_of_interest) must provide
+    unambiguous name evidence to pass the natural-feature gate.
+
+    'tower' / 'terrace' / 'panorama' alone are insufficient for viewpoint.
+    """
+
+    def test_tower_alone_generic_rejected_viewpoint(self):
+        """'The Tower' with only generic types rejected — 'tower' is not a
+        strong viewpoint token (too common in venue names)."""
+        entity = _make_entity(
+            "The Tower",
+            types=["establishment", "point_of_interest"],
+            primary_type="",
+        )
+        assert not _entity_passes_natural_feature_gate(entity, "viewpoint"), (
+            "'tower' alone must not confirm a viewpoint"
+        )
+
+    def test_terrace_alone_generic_rejected_viewpoint(self):
+        """'The Terrace' with only generic types rejected — ambiguous venue name."""
+        entity = _make_entity(
+            "The Terrace",
+            types=["establishment"],
+            primary_type="",
+        )
+        assert not _entity_passes_natural_feature_gate(entity, "viewpoint"), (
+            "'terrace' alone must not confirm a viewpoint"
+        )
+
+    def test_panorama_alone_generic_rejected_viewpoint(self):
+        """'Panorama' with only generic types rejected — ambiguous venue name."""
+        entity = _make_entity(
+            "Panorama",
+            types=["establishment", "point_of_interest"],
+            primary_type="",
+        )
+        assert not _entity_passes_natural_feature_gate(entity, "viewpoint"), (
+            "'panorama' alone must not confirm a viewpoint"
+        )
+
+    def test_overlook_generic_accepted_viewpoint(self):
+        """'City Overlook' with only generic types accepted — 'overlook' is a
+        strong viewpoint token."""
+        entity = _make_entity(
+            "City Overlook",
+            types=["establishment", "point_of_interest"],
+            primary_type="",
+        )
+        assert _entity_passes_natural_feature_gate(entity, "viewpoint")
+
+    def test_belvedere_generic_accepted_viewpoint(self):
+        """'Belvedere des Invalides' with only generic types accepted."""
+        entity = _make_entity(
+            "Belvedere des Invalides",
+            types=["establishment", "point_of_interest"],
+            primary_type="",
+        )
+        assert _entity_passes_natural_feature_gate(entity, "viewpoint")
+
+    def test_observation_generic_accepted_viewpoint(self):
+        """'Observation Point' with only generic types accepted."""
+        entity = _make_entity(
+            "Observation Point",
+            types=["point_of_interest"],
+            primary_type="",
+        )
+        assert _entity_passes_natural_feature_gate(entity, "viewpoint")
+
+    def test_beach_name_generic_accepted_beach(self):
+        """'Sandy Beach' with only generic types accepted — 'beach' in name."""
+        entity = _make_entity(
+            "Sandy Beach",
+            types=["establishment", "point_of_interest"],
+            primary_type="",
+        )
+        assert _entity_passes_natural_feature_gate(entity, "beach")
+
+    def test_generic_no_beach_name_rejected_beach(self):
+        """'Unnamed Area' with only generic types and no beach name evidence rejected."""
+        entity = _make_entity(
+            "Unnamed Area",
+            types=["establishment", "point_of_interest"],
+            primary_type="",
+        )
+        assert not _entity_passes_natural_feature_gate(entity, "beach"), (
+            "Generic-only entity without beach name evidence must be rejected"
+        )
+
+    def test_generic_no_viewpoint_name_rejected_viewpoint(self):
+        """'Unnamed Area' with only generic types and no viewpoint name evidence rejected."""
+        entity = _make_entity(
+            "Unnamed Area",
+            types=["establishment", "point_of_interest"],
+            primary_type="",
+        )
+        assert not _entity_passes_natural_feature_gate(entity, "viewpoint")
+
+
+# ── 13. Non-confirmed non-rejected types rejected ─────────────────────────────
+
+class TestNonConfirmedTypesRejected:
+    """Entities with specific types outside both the confirmed and rejected sets
+    (museums, shops, transit) must be rejected — wrong cards worse than empty."""
+
+    def test_museum_rejected_for_viewpoint(self):
+        """Museum is not a confirmed viewpoint type — rejected."""
+        entity = _make_entity(
+            "City Museum",
+            types=["museum", "establishment"],
+            primary_type="museum",
+        )
+        assert not _entity_passes_natural_feature_gate(entity, "viewpoint")
+
+    def test_museum_rejected_for_beach(self):
+        """Museum is not a confirmed beach type — rejected."""
+        entity = _make_entity(
+            "Beach Museum",
+            types=["museum", "establishment"],
+            primary_type="museum",
+        )
+        assert not _entity_passes_natural_feature_gate(entity, "beach")
+
+    def test_transit_station_rejected_viewpoint(self):
+        """Transit station rejected for viewpoint query."""
+        entity = _make_entity(
+            "Sunset Station",
+            types=["transit_station", "subway_station", "establishment"],
+            primary_type="transit_station",
+        )
+        assert not _entity_passes_natural_feature_gate(entity, "viewpoint")
+
+    def test_shop_rejected_for_beach(self):
+        """Retail shop rejected for beach query."""
+        entity = _make_entity(
+            "Beach Souvenir Shop",
+            types=["store", "establishment"],
+            primary_type="store",
+        )
+        assert not _entity_passes_natural_feature_gate(entity, "beach")
+
+
+# ── 14. Strong name token constants ───────────────────────────────────────────
+
+class TestStrongViewpointNameTokenConstants:
+    """_STRONG_VIEWPOINT_NAME_TOKENS must include unambiguous viewpoint terms
+    and must NOT include ambiguous venue-compatible terms."""
+
+    @pytest.mark.parametrize("tok", [
+        "viewpoint", "overlook", "lookout", "observation", "belvedere", "mirador",
+    ])
+    def test_strong_tokens_present(self, tok: str):
+        assert tok in _STRONG_VIEWPOINT_NAME_TOKENS, (
+            f"'{tok}' must be in _STRONG_VIEWPOINT_NAME_TOKENS"
+        )
+
+    @pytest.mark.parametrize("tok", ["tower", "terrace", "panorama", "view"])
+    def test_ambiguous_tokens_absent(self, tok: str):
+        assert tok not in _STRONG_VIEWPOINT_NAME_TOKENS, (
+            f"'{tok}' must NOT be in _STRONG_VIEWPOINT_NAME_TOKENS — "
+            "too common in venue names (Sunset Tower Bar, Panorama Lounge)"
+        )
+
+    @pytest.mark.parametrize("tok", ["beach", "coast", "oceanfront", "shore", "beachfront"])
+    def test_beach_confirming_tokens_present(self, tok: str):
+        assert tok in _BEACH_CONFIRMING_NAME_TOKENS
+
+
+# ── 15. Attraction bucket for natural-feature queries ─────────────────────────
+
+class TestAttractionVerticalForNaturalFeatureQueries:
+    """Beach and viewpoint queries must route to the 'attractions' vertical so
+    results render as attraction cards, not restaurant cards."""
+
+    @pytest.mark.parametrize("query,intent_str", [
+        ("best beaches in Miami", "attractions"),
+        ("sunset viewpoints in Paris", "attractions"),
+        ("scenic overlooks in Barcelona", "attractions"),
+        ("lookout points in San Diego", "attractions"),
+        ("best waterfalls in Iceland", "attractions"),
+    ])
+    def test_natural_feature_vertical_is_attractions(self, query: str, intent_str: str):
+        from app.services.concierge import ConciergeService
+        from app.models.concierge import INTENT_ATTRACTIONS
+        svc = object.__new__(ConciergeService)
+        intent = svc._detect_intent(query)
+        assert intent == INTENT_ATTRACTIONS, (
+            f"Query {query!r}: expected INTENT_ATTRACTIONS, got {intent!r}"
+        )
+        vertical = ConciergeService._detect_semantic_vertical(
+            intent=intent, user_query=query
+        )
+        assert vertical == "attractions", (
+            f"Query {query!r}: expected vertical='attractions', got {vertical!r}"
+        )

@@ -143,11 +143,20 @@ _NATURAL_FEATURE_HARD_REJECTED_TYPES: frozenset = frozenset({
     "cocktail_bar", "wine_bar", "gastropub",
 })
 
-# Name tokens that confirm viewpoint/observation evidence when Google types are ambiguous.
-_VIEWPOINT_CONFIRMING_NAME_TOKENS: frozenset = frozenset({
-    "viewpoint", "overlook", "vista", "lookout", "observation",
-    "belvedere", "mirador", "panorama", "terrace", "tower",
-    "belvédère", "belvedere",
+# Strong name tokens that unambiguously confirm a viewpoint/observation place.
+# "tower", "terrace", "panorama" are intentionally excluded — too common in venue
+# names ("Sunset Tower Bar", "Panorama Lounge", "Terrace Restaurant") to be safe
+# as confirmation signals. Only tokens that cannot reasonably appear in a food/bar
+# venue name are included.
+_STRONG_VIEWPOINT_NAME_TOKENS: frozenset = frozenset({
+    "viewpoint", "overlook", "lookout", "observation",
+    "belvedere", "mirador", "belvédère",
+})
+
+# Name tokens that confirm beach/coastal evidence for generic-typed entities.
+_BEACH_CONFIRMING_NAME_TOKENS: frozenset = frozenset({
+    "beach", "coast", "coastal", "oceanfront", "ocean", "shore",
+    "shoreline", "beachfront", "seaside",
 })
 
 # Minimum candidates required after precision gate to proceed.
@@ -206,9 +215,16 @@ def _is_natural_feature_query(frame: Any) -> "tuple[bool, str]":
 def _entity_passes_natural_feature_gate(entity: Any, concept_category: str) -> bool:
     """Return True when entity is plausible for a natural-feature query.
 
-    Rejects food/bar/nightlife/hotel entities that only match via name coincidence
-    (e.g. "Sunset Boulevard" bar for "sunset viewpoint" query).
-    Passes through entities with natural-feature Google types or unknown typing.
+    Order of checks — designed so hard rejections cannot be overridden by name tokens:
+
+    1. HARD REJECT first: if specific types are exclusively food/bar/nightlife/hotel,
+       reject immediately — entity name ("Sunset Tower Bar", "Panorama Lounge") cannot
+       override this decision.
+    2. ACCEPT: confirmed natural-feature Google type present.
+    3. GENERIC-ONLY: no specific types — accept only with supporting name evidence
+       (beach/coast tokens for beach; strong viewpoint vocabulary for viewpoint).
+    4. REJECT: any other specific types outside the confirmed set — for this
+       containment, wrong cards are worse than empty cards.
 
     concept_category: "beach" | "viewpoint" | other
     """
@@ -217,38 +233,37 @@ def _entity_passes_natural_feature_gate(entity: Any, concept_category: str) -> b
     if primary:
         all_types.add(primary.lower().replace("-", "_"))
 
-    # No specific typing beyond generic markers — be permissive (unknown type).
     _generic = {"establishment", "point_of_interest", "premise", "local_business", "place"}
     non_generic = all_types - _generic
-    if not non_generic:
-        return True
 
-    # Select confirmed types for this concept category.
+    # Step 1 — HARD REJECT: exclusively food/bar/nightlife/hotel types.
+    # This runs before any name-token check so venue names ("Sunset Tower Bar",
+    # "Panorama Lounge", "Terrace Restaurant") cannot override typed rejection.
+    if non_generic and non_generic <= _NATURAL_FEATURE_HARD_REJECTED_TYPES:
+        return False
+
+    # Step 2 — ACCEPT: at least one confirmed natural-feature type.
     confirmed_types = (
         _BEACH_NATURAL_FEATURE_TYPES
         if concept_category == "beach"
         else _VIEWPOINT_NATURAL_FEATURE_TYPES
     )
-
-    # Accept: entity has at least one confirmed natural-feature type.
     if all_types & confirmed_types:
         return True
 
-    # For viewpoint category: also accept when entity name contains strong
-    # viewpoint/observation vocabulary (e.g. "Tour Eiffel Belvedere").
-    if concept_category == "viewpoint":
+    # Step 3 — GENERIC-ONLY: no specific types — use name evidence conservatively.
+    if not non_generic:
         name_lower = (getattr(entity, "name", "") or "").lower()
-        if any(tok in name_lower for tok in _VIEWPOINT_CONFIRMING_NAME_TOKENS):
-            return True
+        if concept_category == "beach":
+            return any(tok in name_lower for tok in _BEACH_CONFIRMING_NAME_TOKENS)
+        # viewpoint: only accept with strong, unambiguous viewpoint vocabulary.
+        # "tower"/"terrace"/"panorama" are excluded — too common in venue names.
+        return any(tok in name_lower for tok in _STRONG_VIEWPOINT_NAME_TOKENS)
 
-    # Reject: entity's specific types are exclusively food/bar/nightlife/hotel
-    # with no natural-feature type present.
-    if non_generic <= _NATURAL_FEATURE_HARD_REJECTED_TYPES:
-        return False
-
-    # Has specific types outside rejected set but not in confirmed set
-    # (e.g., a museum, shop) — allow through conservatively.
-    return True
+    # Step 4 — REJECT: specific types present but outside confirmed AND rejected sets
+    # (museum, shop, transit, etc.). For this containment fix, wrong cards worse than
+    # empty cards.
+    return False
 
 
 def _normalize_brand_name(name: str) -> str:
