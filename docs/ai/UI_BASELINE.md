@@ -1,10 +1,49 @@
 # UI Baseline
 
-Last updated: 2026-05-16 (Phase 5)
+Last updated: 2026-05-16 (Phase 7)
 
 ## Purpose
 
 Tracks the state of the design system and UI primitive layer so future prompts and PRs can reason accurately about what exists and what has been adopted.
+
+---
+
+## Stage 3.5 Phase 7 — Trip Readiness / Review Cockpit — SHIPPED (2026-05-16)
+
+**Stage 3.5 · Wife-Wow design system — Trip detail `trips/[id]` surface · Premium trip-planning intelligence cockpit**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/components/trips/TripReadinessCockpit.tsx` | **NEW.** `<section aria-labelledby>` root with 5 zones: (1) header bar — Overline "Trip Briefing" + `<h2>` headline + N/4 score indicator; (2) day coverage strip — filled/empty day pills (`bg-ds-accent` / `border-ds-pen-stroke`) with `role="list"` + per-pill `aria-label`; (3) signal grid — 4 category signals (Flights/Stay/Dining/Activities) with `bg-[var(--ds-accent-subtle)]` icon ring when present; (4) next-step footer — contextual CTA prioritised dates→flights→hotel→empty days→all good, real `<button>` callbacks + `<Link>` routes; (5) planning tools strip — Explore / Saved Ideas / AI Concierge links. All ds-* tokens. `min-h-[44px]` on action buttons. `focus-visible:outline-ds-accent` on all interactives. `aria-hidden="true"` on all icons. |
+| `frontend/src/app/trips/[id]/page.tsx` | Import + conditional render of `TripReadinessCockpit` (guarded by `trip !== null`) between `PageHeader` and `TripBuilder`. Props: `trip`, `itineraryDays`, `onOpenConcierge`, `onOpenOptimize`, `onOpenEdit`. |
+| `frontend/tests/trip-readiness-cockpit.test.mjs` | **NEW.** 65 static/contract tests: semantic section/h2 structure, data-testid contract, ds-* token coverage, Overline pattern, aria-hidden icons, 44px touch targets, focus-visible rings, real Link/button elements only, no card-level onClick, no backend imports, no fake data, signal key coverage, empty-data defensive handling, page integration wiring. |
+| `frontend/package.json` | Added `trip-readiness-cockpit.test.mjs` to test script. |
+
+### Test results
+- **836 tests, 0 failures** (was 771; +65 new Phase 7 readiness cockpit contract tests)
+- All pre-existing tests continue to pass
+
+### Design contract alignment
+
+- **Editorial advisory tone:** Overline "Trip Briefing" + `<h2>` headline copy adapts to data density ("Start by adding your travel dates" / "Good progress — a few gaps to fill" / "Your trip is looking well-planned"). Reads like a private advisor's briefing, not a SaaS checklist.
+- **Dark tone surface:** Root `bg-ds-onyx border-ds-pen-stroke shadow-[var(--ds-elevation-2)]` — correct ink-ladder elevation above body.
+- **Footer tonal shift:** Next-step area uses `bg-ds-carbon` — one step darker, creates editorial anchor at bottom of section.
+- **Signal icons:** Present = `bg-[var(--ds-accent-subtle)] text-ds-accent` round icon; missing = `border-ds-pen-stroke text-ds-text-tertiary` empty ring. Clear visual grammar without traffic-light colors.
+- **Day coverage pills:** Filled = `bg-ds-accent text-ds-text-inverse`; empty = `border-ds-pen-stroke text-ds-text-tertiary`. Compact at `w-7 h-7`. Adaptive summary text.
+- **Overline labels:** All section labels use exact `text-[10px] font-semibold uppercase tracking-[0.1em]` Overline pattern.
+- **Next-step CTAs:** Primary = `bg-ds-accent text-ds-text-inverse`; secondary = `border-ds-pen-stroke text-ds-text-secondary hover:bg-ds-carbon`. Real `<button>` for callbacks, `<Link>` for routes.
+- **Accessibility:** Full semantic structure — `<section aria-labelledby>`, `<h2 id>`, `role="list"` on day pills, `role="listitem"` on each pill, `aria-label` on pills and icon-only button, `aria-hidden` on all decorative icons.
+- **Touch targets:** `min-h-[44px]` on action buttons. Planning tools strip links are text links (not primary actions).
+- **No card-level click-only navigation:** Root `<section>` has no `onClick`. All navigation via real `<button>` or `<Link>`. Confirmed by contract test.
+
+### Invariant confirmations
+- No backend files; no API/search/provider/Tavily/cache changes.
+- No Supabase SQL; no new env vars; no new dependencies.
+- No new fonts; no route rewrites; no data model changes.
+- No new booking behavior; no fake data.
+- Existing TripBuilder, ItineraryDayColumn, ItineraryItemCard, AIConciergePanel behavior fully preserved.
 
 ---
 
