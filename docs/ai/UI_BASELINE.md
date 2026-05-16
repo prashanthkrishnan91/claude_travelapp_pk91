@@ -1,10 +1,49 @@
 # UI Baseline
 
-Last updated: 2026-05-16 (Phase 7)
+Last updated: 2026-05-16 (Phase 8A)
 
 ## Purpose
 
 Tracks the state of the design system and UI primitive layer so future prompts and PRs can reason accurately about what exists and what has been adopted.
+
+---
+
+## Stage 3.5 Phase 8A — Private Atelier Home + Journey Shelf — SHIPPED (2026-05-16)
+
+**Stage 3.5 · Wife-Wow design system — `/` home + `/trips` My Journeys surfaces · Atelier-home transformation + travel-volume journey shelf**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/components/dashboard/DashboardClient.tsx` | **Major redesign.** Removed 4 KPI stat cards (Total Trips, Upcoming, Travel Cards, Total Points), RecentTrips, QuickActions, PointsSummary, DealsFeed. New layout: (1) `AtelierGreeting` — editorial time-based greeting + real `summary.tripCount` shelf count, Overline "Private Travel Concierge"; (2) `ConciergeEntry` — primary ds-elevation-2 card with Sparkles icon, "AI Travel Concierge" h2, description, `Open Concierge` link with 44px target + focus-visible ring; (3) `ContinuePlanningStrip` — most-active trip card using real `getTripStatusGroup`/`STATUS_PRIORITY` sort, with `Link href=/trips/${trip.id}`, `TripStatusBadge`, destination + dates from real data; (4) `JourneyShelfTeaser` — `Link href=/trips` with real `summary.tripCount`, "Browse your full journey shelf" copy; (5) `EmptyAtelierHome` — editorial empty state with Plan a Trip + Open Concierge CTAs; (6) `AtelierPlanningStrip` — 2-column Explore + Saved Ideas grid. All ds-* tokens, `bg-ds-accent-subtle`, `text-ds-accent`, focus-visible rings, no legacy colors. `fetchDealsFeed`/`fetchCards` calls removed. |
+| `frontend/src/app/trips/page.tsx` | **Visual upgrade.** `JourneyCard` redesigned as travel-volume cover: destination (`trip.destination`) is now the large `text-lg font-semibold` hero text; trip title is the `<Link href=/trips/${trip.id}>` subtitle (semantic navigation); status badge at top; card-footer has date+travelers + "Open →" Link (44px); edit/delete buttons with aria-labels preserved; MapPin icon removed (destination text is the identity). `ContinuePlanningHero` elevated: destination is now an editorial overline above the trip title `<h2>`; action footer separated with `border-t`. Page header gains editorial "Your Travel Shelf" overline above "My Journeys" h1. All existing function names, props, interfaces, and modals unchanged. |
+| `frontend/src/app/page.tsx` | Metadata title changed from `"Dashboard"` to `"Home"`. |
+| `frontend/tests/atelier-home-journey-shelf.test.mjs` | **NEW.** 56 Phase 8A contract tests: atelier-greeting/concierge-entry/atelier-home testids, time-based greeting, real tripCount, no KPI imports, ds-token contract, no legacy colors, no card-level onClick nav, no fake data, focus-visible rings, ConciergeEntry semantic Link, ContinuePlanningStrip real trip id link, JourneyShelfTeaser /trips link, AtelierPlanningStrip Explore/Saved links, JourneyCard destination-as-hero, travel-volume footer, editorial overline in page header, preserved create/edit/delete/open affordances, no backend/provider imports. |
+| `frontend/package.json` | Added `atelier-home-journey-shelf.test.mjs` to test script. |
+
+### Test results
+- **892 tests, 0 failures** (was 836; +56 new Phase 8A atelier home + journey shelf contract tests)
+- All pre-existing tests continue to pass
+
+### Design contract alignment
+
+- **Private atelier home:** `/` no longer leads with KPI stat tiles. It opens with a time-based editorial greeting using real trip count, then positions the AI Concierge as the primary planning instrument (elevation-2 card, prominent CTA). Secondary: continue-planning strip (real data), journey shelf teaser, discovery tools. No fake personalization, no user name invented, no fabricated stats.
+- **Journey shelf:** `/trips` JourneyCard now reads destination as the large editorial title (like the front of a travel volume). Status is a quiet overline marker. Trip title is the semantic navigation link. Dates and traveler count anchor the footer. The card communicates "this is a travel place" not "this is a SaaS record."
+- **Concierge elevation:** Concierge is now the lead CTA on the home page — not buried in a "Quick Actions" grid. This matches Design Bible Addendum §1 (private atelier) and Design Bible §26 (AI launch pill).
+- **Editorial greeting:** "Good morning/afternoon/evening." + "{N} trips on your shelf." — all real data (time of day + `summary.tripCount`). No invented name, no fake stat.
+- **Token contract:** No raw hex, no legacy `cream-*`/`brand-*`/`violet-*`/`emerald-*`/`amber-*` colors in changed files. All surfaces use ds-* tokens. `bg-ds-accent-subtle` on icon wrappers. `text-ds-accent` on accent elements. `border-ds-pen-stroke` / `bg-ds-carbon` / `bg-ds-onyx` on surfaces.
+- **Semantic navigation:** All navigation via real `<Link href>` or `<button onClick>`. No `onClick={() => router.push}` patterns. No card-level click-only navigation.
+- **Touch targets:** `min-h-[44px]` on all primary CTAs and action buttons. `min-w-[44px]` on icon-only buttons.
+- **Accessibility:** `focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2` on all interactive elements. `aria-label` on icon-only buttons. `aria-hidden="true"` on decorative icons. `aria-busy="true"` on loading skeleton.
+- **Mobile:** 2-column discovery strip (Explore + Saved). EmptyAtelierHome uses `flex-col sm:flex-row` for stacked-then-side-by-side CTAs. JourneyCard grid `md:grid-cols-2 xl:grid-cols-3` for responsive shelf.
+
+### Invariant confirmations
+- No backend files, no API/search/provider/Tavily/cache changes.
+- No Supabase SQL, no new env vars, no new dependencies.
+- No new fonts, no route rewrites, no data model changes.
+- No new booking behavior, no fake data.
+- All existing edit/delete/create/open affordances preserved on `/trips`.
 
 ---
 
