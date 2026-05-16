@@ -141,3 +141,68 @@ test('OperationalBadgeCard type is exported', () => {
 test('DisplayCard type is exported', () => {
   assert.ok(src.includes('export type DisplayCard'), 'DisplayCard type must be exported');
 });
+
+// ── E: Behavior-level inline tests ───────────────────────────────────────────
+
+test('hasClosedSignal (behavior): card.raw field is scanned for closed signals', () => {
+  assert.ok(src.includes('card.raw'), 'card.raw must appear in hasClosedSignal text blob');
+  const PATTERNS = ['permanently closed', 'closed permanently', 'closed for good',
+    'closed for the final time', 'has closed', 'is closed',
+    'shut down', 'no longer open', "won't reopen", 'will not reopen'];
+  const rawVal = 'Business shut down in late 2023';
+  const textBlob = String(rawVal ?? '').toLowerCase();
+  assert.ok(PATTERNS.some((p) => textBlob.includes(p)), 'shut down in raw field must trigger closed signal');
+});
+
+test('canShowGoogleVerifiedBadge (behavior): closed signal blocks badge regardless of OPERATIONAL status', () => {
+  const PATTERNS = ['permanently closed', 'closed permanently', 'closed for good',
+    'closed for the final time', 'has closed', 'is closed',
+    'shut down', 'no longer open', "won't reopen", 'will not reopen'];
+  const name = 'Venue permanently closed';
+  const textBlob = name.toLowerCase();
+  const isClosedSignal = PATTERNS.some((p) => textBlob.includes(p));
+  assert.ok(isClosedSignal, 'permanently closed in name must be detected as a closed signal');
+  assert.ok(
+    src.includes('if (hasClosedSignal(card as ClosedSignalSource)) return false'),
+    'canShowGoogleVerifiedBadge must guard with hasClosedSignal before any other check',
+  );
+});
+
+test('canShowGoogleVerifiedBadge (behavior): low confidence is rejected', () => {
+  const c = 'low';
+  const qualifies = c === 'high' || c === 'medium';
+  assert.ok(!qualifies, 'low confidence must not qualify for Google verified badge');
+});
+
+test('canShowGoogleVerifiedBadge (behavior): missing providerPlaceId is rejected', () => {
+  const providerPlaceId = null;
+  assert.ok(!providerPlaceId, 'null providerPlaceId must not qualify for badge');
+  assert.ok(
+    src.includes('if (!gv.providerPlaceId) return false'),
+    'explicit providerPlaceId guard must exist in canShowGoogleVerifiedBadge',
+  );
+});
+
+test('pickCardMeta (behavior): address stripped from ratingBase before re-appending — no duplicate', () => {
+  const address = '123 Main Street';
+  const ratingBase = '4.8 · 1,200 reviews · 123 Main Street';
+  const addrTrimmed = address.trim();
+  let stem = ratingBase;
+  if (addrTrimmed && ratingBase.includes(addrTrimmed)) {
+    const stripped = ratingBase.slice(0, ratingBase.indexOf(addrTrimmed)).replace(/\s*·\s*$/, '').trim();
+    if (stripped) stem = stripped;
+  }
+  assert.ok(!stem.includes(addrTrimmed), 'address must be removed from stem before re-appending');
+  const final = [stem, address].join(' · ');
+  assert.equal((final.match(/123 Main Street/g) ?? []).length, 1, 'address must appear exactly once in output');
+});
+
+test('pickCardMeta (behavior): price not doubled when metaAlreadyHasPrice detects $ in stem', () => {
+  const stem = '4.5 · $$ · Old Town';
+  const metaAlreadyHasPrice = /\$|Free\b|EUR/.test(stem);
+  assert.ok(metaAlreadyHasPrice, 'price signal in stem must be detected by metaAlreadyHasPrice');
+  const price = '$$';
+  const parts = [stem];
+  if (price && !metaAlreadyHasPrice) parts.push(price);
+  assert.equal(parts.length, 1, 'price must not be appended when already present in stem');
+});

@@ -251,46 +251,48 @@ function ConciergeCard({
       style={{ padding: "var(--ds-space-4)" }}
     >
       {/* Identity */}
-      <div style={{ marginBottom: "var(--ds-space-3)" }}>
-        <h3
-          className="text-ds-text font-semibold"
-          style={{
-            fontSize: "var(--ds-type-body-l-size)",
-            lineHeight: "var(--ds-type-body-l-leading)",
-          }}
-        >
-          {title}
-        </h3>
-        <p
-          className="text-ds-text-tertiary uppercase tracking-[0.1em]"
-          style={{
-            fontSize: "var(--ds-type-overline-size)",
-            lineHeight: "var(--ds-type-overline-leading)",
-            fontWeight: "var(--ds-type-overline-weight)",
-            marginTop: "var(--ds-space-1)",
-          }}
-        >
-          {category}
-        </p>
-        {meta.length > 0 && (
-          <p
-            className="text-ds-text-secondary"
+      <Card.Identity style={{ marginBottom: "var(--ds-space-3)" }}>
+        <div>
+          <h3
+            className="text-ds-text font-semibold"
             style={{
-              fontSize: "var(--ds-type-body-s-size)",
-              lineHeight: "var(--ds-type-body-s-leading)",
-              marginTop: "var(--ds-space-2)",
+              fontSize: "var(--ds-type-body-l-size)",
+              lineHeight: "var(--ds-type-body-l-leading)",
             }}
           >
-            {meta.join(" · ")}
+            {title}
+          </h3>
+          <p
+            className="text-ds-text-tertiary uppercase tracking-[0.1em]"
+            style={{
+              fontSize: "var(--ds-type-overline-size)",
+              lineHeight: "var(--ds-type-overline-leading)",
+              fontWeight: "var(--ds-type-overline-weight)",
+              marginTop: "var(--ds-space-1)",
+            }}
+          >
+            {category}
           </p>
-        )}
-      </div>
+          {meta.length > 0 && (
+            <p
+              className="text-ds-text-secondary"
+              style={{
+                fontSize: "var(--ds-type-body-s-size)",
+                lineHeight: "var(--ds-type-body-s-leading)",
+                marginTop: "var(--ds-space-2)",
+              }}
+            >
+              {meta.join(" · ")}
+            </p>
+          )}
+        </div>
+      </Card.Identity>
 
       {/* Trust strip — only where Google-verified OPERATIONAL; confidence from actual backend field */}
       {isOperational && operationalConfidence && (
-        <div style={{ marginBottom: "var(--ds-space-3)" }} aria-label="Google verified">
+        <Card.Trust aria-label="Google verified" style={{ marginBottom: "var(--ds-space-3)" }}>
           <TrustStrip confidence={operationalConfidence} />
-        </div>
+        </Card.Trust>
       )}
 
       {/* Concierge note — backend reason rendered verbatim, no paraphrase */}
@@ -314,7 +316,7 @@ function ConciergeCard({
           >
             Concierge note
           </p>
-          <p
+          <Card.Why
             className="text-ds-text-secondary"
             style={{
               fontSize: "var(--ds-type-body-s-size)",
@@ -322,7 +324,7 @@ function ConciergeCard({
             }}
           >
             {reasonParts.short}
-          </p>
+          </Card.Why>
           {hasDetail && (
             <>
               <button
@@ -371,10 +373,10 @@ function ConciergeCard({
                 added ? "text-ds-trust" : "text-ds-text-inverse hover:brightness-110"
               }`}
               style={{
-                background: added ? "rgba(136, 168, 153, 0.15)" : "var(--ds-accent)",
+                background: added ? "color-mix(in srgb, var(--ds-trust-verified) 15%, transparent)" : "var(--ds-accent)",
                 padding: "var(--ds-space-2) var(--ds-space-3)",
                 fontSize: "var(--ds-type-body-s-size)",
-                minHeight: "36px",
+                minHeight: "44px",
               }}
             >
               {adding ? (
@@ -398,7 +400,7 @@ function ConciergeCard({
                 padding: "var(--ds-space-2) var(--ds-space-3)",
                 fontSize: "var(--ds-type-body-s-size)",
                 border: "1px solid var(--ds-pen-stroke)",
-                minHeight: "36px",
+                minHeight: "44px",
               }}
             >
               {savingIdea ? (
@@ -423,6 +425,7 @@ function ConciergeCard({
               padding: "var(--ds-space-2) var(--ds-space-3)",
               fontSize: "var(--ds-type-body-s-size)",
               border: "1px solid var(--ds-pen-stroke)",
+              minHeight: "44px",
             }}
           >
             <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
@@ -446,7 +449,7 @@ function ConciergeCard({
             style={{
               padding: "var(--ds-space-2) var(--ds-space-3)",
               border: "1px solid var(--ds-pen-stroke)",
-              minHeight: "36px",
+              minHeight: "44px",
             }}
           >
             <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
@@ -462,7 +465,7 @@ function ConciergeCard({
             style={{
               padding: "var(--ds-space-2) var(--ds-space-3)",
               border: "1px solid var(--ds-pen-stroke)",
-              minHeight: "36px",
+              minHeight: "44px",
             }}
           >
             <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1118,7 +1121,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
           )}
 
           {error && (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>
+            <div className="rounded-lg border border-ds-pen-stroke bg-ds-carbon px-3 py-2 text-xs text-ds-warning">{error}</div>
           )}
 
           {historyWarning && (
@@ -1131,11 +1134,11 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
             <div key={idx} className="space-y-2">
               <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                 {msg.role === "assistant" && msg.intent === "compare" ? (
-                  <div className="w-full rounded-xl border border-indigo-200 bg-indigo-50 p-3">
+                  <div className="w-full rounded-xl border border-ds-pen-stroke bg-ds-carbon p-3">
                     <div className="mb-1.5 flex items-center gap-1.5">
-                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">Comparison</span>
+                      <span className="rounded-full bg-ds-onyx px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ds-accent">Comparison</span>
                     </div>
-                    <p className="text-xs leading-relaxed text-slate-700">{msg.text}</p>
+                    <p className="text-xs leading-relaxed text-ds-text-secondary">{msg.text}</p>
                   </div>
                 ) : (
                   <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${msg.role === "user" ? "rounded-br-sm bg-ds-accent/15 text-ds-text ring-1 ring-ds-accent/30" : "rounded-bl-sm bg-ds-carbon text-ds-text"}`}>
@@ -1148,9 +1151,9 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                 <>
                   {msg.intent === "compare" && (msg.areaComparisons?.length ?? 0) > 0 && (
                     <>
-                      <div className="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white md:block">
+                      <div className="hidden overflow-x-auto rounded-xl border border-ds-pen-stroke bg-ds-carbon md:block">
                         <table className="w-full text-left text-xs">
-                          <thead className="bg-slate-50 text-slate-600">
+                          <thead className="bg-ds-onyx text-ds-text-secondary">
                             <tr>
                               <th className="px-2 py-2 font-semibold">Area</th>
                               <th className="px-2 py-2 font-semibold">Vibe</th>
@@ -1161,12 +1164,12 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                           </thead>
                           <tbody>
                             {msg.areaComparisons?.map((area) => (
-                              <tr key={area.area} className="border-t border-slate-100 align-top">
-                                <td className="px-2 py-2 font-medium text-slate-900">{area.area}</td>
-                                <td className="px-2 py-2 text-slate-700">{area.vibe}</td>
-                                <td className="px-2 py-2 text-slate-700">{area.bestFor}</td>
-                                <td className="px-2 py-2 text-slate-700">{area.logistics}</td>
-                                <td className="px-2 py-2 text-slate-700">{area.valueSignal}</td>
+                              <tr key={area.area} className="border-t border-ds-pen-stroke align-top">
+                                <td className="px-2 py-2 font-medium text-ds-text">{area.area}</td>
+                                <td className="px-2 py-2 text-ds-text-secondary">{area.vibe}</td>
+                                <td className="px-2 py-2 text-ds-text-secondary">{area.bestFor}</td>
+                                <td className="px-2 py-2 text-ds-text-secondary">{area.logistics}</td>
+                                <td className="px-2 py-2 text-ds-text-secondary">{area.valueSignal}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -1174,15 +1177,15 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                       </div>
                       <div className="space-y-2 md:hidden">
                         {msg.areaComparisons?.map((area) => (
-                          <div key={area.area} className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
-                            <p className="font-semibold text-slate-900">{area.area}</p>
-                            <p className="mt-1 text-slate-700">{area.vibe}</p>
-                            <p className="mt-1 text-slate-600"><span className="font-medium">Best for:</span> {area.bestFor}</p>
-                            <p className="mt-1 text-slate-600"><span className="font-medium">Pros:</span> {area.pros.join(" · ")}</p>
-                            <p className="mt-1 text-slate-600"><span className="font-medium">Cons:</span> {area.cons.join(" · ")}</p>
-                            <p className="mt-1 text-slate-600"><span className="font-medium">Logistics:</span> {area.logistics}</p>
-                            <p className="mt-1 text-slate-600"><span className="font-medium">Value:</span> {area.valueSignal}</p>
-                            <p className="mt-1 text-slate-700"><span className="font-medium">Verdict:</span> {area.recommendation}</p>
+                          <div key={area.area} className="rounded-xl border border-ds-pen-stroke bg-ds-carbon p-3 text-xs">
+                            <p className="font-semibold text-ds-text">{area.area}</p>
+                            <p className="mt-1 text-ds-text-secondary">{area.vibe}</p>
+                            <p className="mt-1 text-ds-text-secondary"><span className="font-medium">Best for:</span> {area.bestFor}</p>
+                            <p className="mt-1 text-ds-text-secondary"><span className="font-medium">Pros:</span> {area.pros.join(" · ")}</p>
+                            <p className="mt-1 text-ds-text-secondary"><span className="font-medium">Cons:</span> {area.cons.join(" · ")}</p>
+                            <p className="mt-1 text-ds-text-secondary"><span className="font-medium">Logistics:</span> {area.logistics}</p>
+                            <p className="mt-1 text-ds-text-secondary"><span className="font-medium">Value:</span> {area.valueSignal}</p>
+                            <p className="mt-1 text-ds-text-secondary"><span className="font-medium">Verdict:</span> {area.recommendation}</p>
                           </div>
                         ))}
                       </div>
@@ -1190,51 +1193,51 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                   )}
 
                   {msg.refinementAction === ACTION.COMPARE_CURRENT_SET && msg.refinementComparison && msg.refinementComparison.length > 0 && (
-                    <div className="rounded-xl border border-slate-600/40 bg-slate-800/30 px-3 py-2.5 text-xs">
-                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">Quick comparison</p>
+                    <div className="rounded-xl border border-ds-pen-stroke bg-ds-carbon px-3 py-2.5 text-xs">
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary">Quick comparison</p>
                       {/* Wide screens: side-by-side table */}
                       <table className="hidden w-full border-collapse sm:table">
                         <thead>
                           <tr>
-                            <th className="w-16 pb-1.5 pr-3 text-left text-[10px] font-normal text-slate-500" />
+                            <th className="w-16 pb-1.5 pr-3 text-left text-[10px] font-normal text-ds-text-tertiary" />
                             {msg.refinementComparison.map((card) => (
                               <th key={card.name} className="pb-1.5 text-left">
-                                <span className="font-semibold text-slate-200">{card.name}</span>
-                                {card.category && <span className="ml-1 font-normal text-slate-400">· {card.category}</span>}
+                                <span className="font-semibold text-ds-text">{card.name}</span>
+                                {card.category && <span className="ml-1 font-normal text-ds-text-tertiary">· {card.category}</span>}
                               </th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {msg.refinementComparison.some((c) => c.rating) && (
-                            <tr className="border-t border-slate-700/40">
-                              <td className="py-1 pr-3 text-slate-500">Rating</td>
+                            <tr className="border-t border-ds-pen-stroke">
+                              <td className="py-1 pr-3 text-ds-text-tertiary">Rating</td>
                               {msg.refinementComparison.map((card) => (
-                                <td key={card.name} className="py-1 text-slate-300">{card.rating ?? "—"}</td>
+                                <td key={card.name} className="py-1 text-ds-text-secondary">{card.rating ?? "—"}</td>
                               ))}
                             </tr>
                           )}
                           {msg.refinementComparison.some((c) => c.price) && (
-                            <tr className="border-t border-slate-700/40">
-                              <td className="py-1 pr-3 text-slate-500">Price</td>
+                            <tr className="border-t border-ds-pen-stroke">
+                              <td className="py-1 pr-3 text-ds-text-tertiary">Price</td>
                               {msg.refinementComparison.map((card) => (
-                                <td key={card.name} className="py-1 text-slate-300">{card.price ?? "—"}</td>
+                                <td key={card.name} className="py-1 text-ds-text-secondary">{card.price ?? "—"}</td>
                               ))}
                             </tr>
                           )}
                           {msg.refinementComparison.some((c) => c.area) && (
-                            <tr className="border-t border-slate-700/40">
-                              <td className="py-1 pr-3 text-slate-500">Area</td>
+                            <tr className="border-t border-ds-pen-stroke">
+                              <td className="py-1 pr-3 text-ds-text-tertiary">Area</td>
                               {msg.refinementComparison.map((card) => (
-                                <td key={card.name} className="py-1 text-slate-300 leading-snug">{card.area ?? "—"}</td>
+                                <td key={card.name} className="py-1 text-ds-text-secondary leading-snug">{card.area ?? "—"}</td>
                               ))}
                             </tr>
                           )}
                           {msg.refinementComparison.some((c) => c.bestFor) && (
-                            <tr className="border-t border-slate-700/40">
-                              <td className="py-1 pr-3 text-slate-500">Best for</td>
+                            <tr className="border-t border-ds-pen-stroke">
+                              <td className="py-1 pr-3 text-ds-text-tertiary">Best for</td>
                               {msg.refinementComparison.map((card) => (
-                                <td key={card.name} className="py-1 italic text-slate-300 leading-snug">{card.bestFor ?? "—"}</td>
+                                <td key={card.name} className="py-1 italic text-ds-text-secondary leading-snug">{card.bestFor ?? "—"}</td>
                               ))}
                             </tr>
                           )}
@@ -1243,14 +1246,14 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                       {/* Narrow screens: stacked cards — prevents column crush */}
                       <div className="flex flex-col gap-3 sm:hidden">
                         {msg.refinementComparison.map((card) => (
-                          <div key={card.name} className="rounded-lg border border-slate-700/40 px-2.5 py-2">
-                            <p className="mb-1.5 font-semibold text-slate-200 break-words">{card.name}
-                              {card.category && <span className="ml-1 font-normal text-slate-400">· {card.category}</span>}
+                          <div key={card.name} className="rounded-lg border border-ds-pen-stroke px-2.5 py-2">
+                            <p className="mb-1.5 font-semibold text-ds-text break-words">{card.name}
+                              {card.category && <span className="ml-1 font-normal text-ds-text-tertiary">· {card.category}</span>}
                             </p>
-                            {card.rating && <p className="text-slate-300"><span className="text-slate-500 mr-1">Rating</span>{card.rating}</p>}
-                            {card.price && <p className="text-slate-300"><span className="text-slate-500 mr-1">Price</span>{card.price}</p>}
-                            {card.area && <p className="text-slate-300 leading-snug break-words"><span className="text-slate-500 mr-1">Area</span>{card.area}</p>}
-                            {card.bestFor && <p className="italic text-slate-300 leading-snug break-words"><span className="not-italic text-slate-500 mr-1">Best for</span>{card.bestFor}</p>}
+                            {card.rating && <p className="text-ds-text-secondary"><span className="text-ds-text-tertiary mr-1">Rating</span>{card.rating}</p>}
+                            {card.price && <p className="text-ds-text-secondary"><span className="text-ds-text-tertiary mr-1">Price</span>{card.price}</p>}
+                            {card.area && <p className="text-ds-text-secondary leading-snug break-words"><span className="text-ds-text-tertiary mr-1">Area</span>{card.area}</p>}
+                            {card.bestFor && <p className="italic text-ds-text-secondary leading-snug break-words"><span className="not-italic text-ds-text-tertiary mr-1">Best for</span>{card.bestFor}</p>}
                           </div>
                         ))}
                       </div>
@@ -1317,15 +1320,15 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
                       {shouldShowCollapsedSources(msg) && (
                         <div className="pt-1">
-                          <details className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                            <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          <details className="rounded-lg border border-ds-pen-stroke bg-ds-carbon px-3 py-2">
+                            <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-ds-text-tertiary">
                               Sources used ({msg.researchSources?.filter((s) => s.type === "research_source").length ?? 0})
                             </summary>
-                            <ul className="mt-2 space-y-1 text-xs text-slate-600">
+                            <ul className="mt-2 space-y-1 text-xs text-ds-text-secondary">
                               {msg.researchSources?.filter((s) => s.type === "research_source").map((s) => (
                                 <li key={`${s.title}-${s.sourceUrl ?? "source"}`} className="truncate">
                                   {s.sourceUrl ? (
-                                    <a href={s.sourceUrl} target="_blank" rel="noreferrer" className="underline decoration-slate-300 underline-offset-2 hover:text-slate-800">
+                                    <a href={s.sourceUrl} target="_blank" rel="noreferrer" className="underline decoration-ds-pen-stroke underline-offset-2 hover:text-ds-text">
                                       {s.title}
                                     </a>
                                   ) : s.title}
@@ -1341,9 +1344,9 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                   {msg.warnings && msg.warnings.length > 0 && (
                     <div className="space-y-1">
                       {msg.warnings.map((warning, i) => (
-                        <div key={i} className="flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 text-amber-500" />
-                          <p className="text-xs text-amber-700">{warning}</p>
+                        <div key={i} className="flex items-start gap-1.5 rounded-lg border border-ds-pen-stroke bg-ds-carbon px-3 py-2">
+                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 text-ds-caution" />
+                          <p className="text-xs text-ds-caution">{warning}</p>
                         </div>
                       ))}
                     </div>

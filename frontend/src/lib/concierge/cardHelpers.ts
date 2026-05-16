@@ -44,6 +44,7 @@ export function hasClosedSignal(card: ClosedSignalSource): boolean {
     card.url,
     card.sourceUrl,
     card.snippet,
+    card.raw,
   ]
     .map((v) => String(v ?? "").toLowerCase())
     .join("\n");
