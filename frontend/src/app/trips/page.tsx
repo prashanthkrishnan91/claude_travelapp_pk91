@@ -197,18 +197,21 @@ function EmptyDashboard() {
 
 // ── Continue planning hero ────────────────────────────────────────────────────
 
-function ContinuePlanningHero({ trip }: { trip: Trip }) {
-  const router = useRouter();
+interface ContinuePlanningHeroProps {
+  trip: Trip;
+  onEdit: (trip: Trip) => void;
+  onDelete: (id: string) => void;
+}
 
+function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroProps) {
   return (
     <section aria-label="Continue planning your trip">
       <Overline>Continue planning</Overline>
       <Card
         as="article"
         tone="dark"
-        className="p-6 hover:border-ds-accent/40 transition-colors duration-200 cursor-pointer"
+        className="p-6 hover:border-ds-accent/40 transition-colors duration-200"
         style={{ boxShadow: "var(--ds-elevation-2)" }}
-        onClick={() => router.push(`/trips/${trip.id}`)}
         data-testid="continue-planning-hero"
       >
         <div className="flex flex-col sm:flex-row sm:items-start gap-4">
@@ -218,12 +221,32 @@ function ContinuePlanningHero({ trip }: { trip: Trip }) {
           </div>
 
           <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2 mb-1">
-              <h2 className="text-lg font-semibold text-ds-text leading-snug">
-                {trip.title}
-              </h2>
-              <TripStatusBadge status={getDisplayTripStatus(trip)} />
+            {/* Title row with edit/delete controls */}
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-semibold text-ds-text leading-snug">
+                  {trip.title}
+                </h2>
+                <TripStatusBadge status={getDisplayTripStatus(trip)} />
+              </div>
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button
+                  onClick={() => onEdit(trip)}
+                  className="p-1.5 rounded-lg hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  aria-label={`Edit ${trip.title}`}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => onDelete(trip.id)}
+                  className="p-1.5 rounded-lg hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-warning transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  aria-label={`Delete ${trip.title}`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
+
             <p className="text-sm text-ds-text-secondary mb-3">
               {trip.destination}
             </p>
@@ -249,11 +272,8 @@ function ContinuePlanningHero({ trip }: { trip: Trip }) {
               )}
             </div>
 
-            {/* Actions — stop card click propagation */}
-            <div
-              className="flex flex-wrap gap-2"
-              onClick={(e) => e.stopPropagation()}
-            >
+            {/* Primary actions */}
+            <div className="flex flex-wrap gap-2">
               <Link
                 href={`/trips/${trip.id}`}
                 className="btn-primary inline-flex items-center min-h-[44px]"
@@ -762,7 +782,11 @@ export default function TripsPage() {
         <div className="space-y-8">
           {/* Continue planning hero */}
           {continuePlanning && (
-            <ContinuePlanningHero trip={continuePlanning} />
+            <ContinuePlanningHero
+              trip={continuePlanning}
+              onEdit={openEdit}
+              onDelete={(id) => setConfirmDeleteId(id)}
+            />
           )}
 
           {/* Active journeys grid (excluding the hero trip) */}

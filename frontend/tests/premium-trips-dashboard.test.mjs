@@ -64,6 +64,69 @@ test("trips page ContinuePlanningHero uses elevation token", () => {
   assert.match(tripsPage, /ds-elevation-2/);
 });
 
+test("ContinuePlanningHero accepts onEdit and onDelete props", () => {
+  assert.match(tripsPage, /ContinuePlanningHeroProps/);
+  assert.match(tripsPage, /onEdit: \(trip: Trip\) => void/);
+  assert.match(tripsPage, /onDelete: \(id: string\) => void/);
+});
+
+test("ContinuePlanningHero exposes an edit button with aria-label", () => {
+  const heroSection = tripsPage.slice(
+    tripsPage.indexOf("function ContinuePlanningHero"),
+    tripsPage.indexOf("function JourneyCard"),
+  );
+  assert.match(heroSection, /onEdit\(trip\)/);
+  assert.match(heroSection, /aria-label=\{`Edit \$\{trip\.title\}`\}/);
+});
+
+test("ContinuePlanningHero exposes a delete button with aria-label", () => {
+  const heroSection = tripsPage.slice(
+    tripsPage.indexOf("function ContinuePlanningHero"),
+    tripsPage.indexOf("function JourneyCard"),
+  );
+  assert.match(heroSection, /onDelete\(trip\.id\)/);
+  assert.match(heroSection, /aria-label=\{`Delete \$\{trip\.title\}`\}/);
+});
+
+test("ContinuePlanningHero edit/delete buttons have 44px touch targets", () => {
+  const heroSection = tripsPage.slice(
+    tripsPage.indexOf("function ContinuePlanningHero"),
+    tripsPage.indexOf("function JourneyCard"),
+  );
+  assert.match(heroSection, /min-h-\[44px\]/);
+  assert.match(heroSection, /min-w-\[44px\]/);
+});
+
+test("ContinuePlanningHero edit button uses ds-text-tertiary token", () => {
+  const heroSection = tripsPage.slice(
+    tripsPage.indexOf("function ContinuePlanningHero"),
+    tripsPage.indexOf("function JourneyCard"),
+  );
+  assert.match(heroSection, /text-ds-text-tertiary/);
+});
+
+test("ContinuePlanningHero delete button uses ds-warning token", () => {
+  const heroSection = tripsPage.slice(
+    tripsPage.indexOf("function ContinuePlanningHero"),
+    tripsPage.indexOf("function JourneyCard"),
+  );
+  assert.match(heroSection, /ds-warning/);
+});
+
+test("ContinuePlanningHero open action is a real Link (not only article onClick)", () => {
+  const heroSection = tripsPage.slice(
+    tripsPage.indexOf("function ContinuePlanningHero"),
+    tripsPage.indexOf("function JourneyCard"),
+  );
+  assert.match(heroSection, /href=\{`\/trips\/\$\{trip\.id\}`\}/);
+  assert.doesNotMatch(heroSection, /onClick=\{\(\) => router\.push/);
+});
+
+test("ContinuePlanningHero is wired with onEdit and onDelete at call site", () => {
+  assert.match(tripsPage, /ContinuePlanningHero[\s\S]{0,200}onEdit=\{openEdit\}/);
+  assert.match(tripsPage, /ContinuePlanningHero[\s\S]{0,200}onDelete=\{/);
+});
+
 test("trips page has pickContinuePlanning helper that sorts by status priority", () => {
   assert.match(tripsPage, /pickContinuePlanning/);
   assert.match(tripsPage, /STATUS_PRIORITY/);
