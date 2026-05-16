@@ -8,9 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Phase 2B SHIPPED (2026-05-16).** Shared concierge card helpers extracted to `frontend/src/lib/concierge/cardHelpers.ts` (`hasClosedSignal`, `canShowGoogleVerifiedBadge`, `pickCardMeta`, exported types). `AIConciergePanel.tsx` now uses `Card tone="dark"` + `TrustStrip` for place cards; panel chrome migrated to ds-* tokens. `ConciergePage.tsx` (Phase 2A flagship) imports from cardHelpers — all duplication removed. 21 new tests in `concierge-shared-helpers.test.mjs`. Phase 2A (standalone concierge flagship), Phase 1A–1C, and Phase 0 all previously shipped.
+- Roadmap stage: **Stage 3.5 — Phase 3 SHIPPED (2026-05-16).** Card variant breadth across all trip-planning surfaces. `ItineraryItemCard`, `TripIdeasPanel`, `SearchResultCard`, `TripBuilder` (all candidate card components + shell), `FlightExploreFlow` — all migrated to `ds-*` tokens. No legacy `cream-*`/`brand-*`/`dark-*`/`sky-*`/`violet-*`/`emerald-*`/`rose-*`/`amber-*`/`slate-*` color classes remain in these files. 24 new token-coverage tests. 614 total tests, 0 failures. Phases 0, 1A–1C, 2A, 2B all previously shipped.
 - Flights v1 — Duffel search-only LIVE: `DUFFEL_FLIGHTS_ENABLED=1`, `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`, `DUFFEL_DEBUG=false`, `DUFFEL_BOOKING_ENABLED=0`. Each flight card shows "Search on Google Flights" (SEARCH_REDIRECT link-out, not booking). Duffel never creates orders. Ignav DISABLED.
-- Active build queue item: **Wife-Wow design system foundation — Phase 2B concierge shared helpers + trip-context polish SHIPPED.** Next: Phase 3 — card variant breadth across other surfaces. See `docs/ai/UI_BASELINE.md` for full phase inventory and tradeoffs.
+- Active build queue item: **Wife-Wow design system foundation — Phase 3 card variant breadth SHIPPED.** Full ds-* token coverage across all trip-planning surfaces. Wife-wow readiness now spans: shell, nav, explore cards, saved items, concierge, and trip-planning surfaces. See `docs/ai/UI_BASELINE.md` for full phase inventory and tradeoffs.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -31,6 +31,8 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Recent meaningful PRs
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
+
+- 2026-05-16 — **Stage 3.5 Phase 3 — Trip planning card system breadth.** Full ds-* token migration: `ItineraryItemCard`, `TripIdeasPanel`, `SearchResultCard`, `TripBuilder` (all 8 card components + shell UI), `FlightExploreFlow`. `SearchResultCard` adopts `Card` primitive with Identity/Meta slots. All top-pick badges → `bg-ds-accent text-ds-text-inverse`. AiScoreBadge → ds-trust-verified/ds-caution. SortControl/FilterPills active → `bg-ds-accent`. Compare bar + toast → `bg-ds-onyx border-ds-pen-stroke`. 24 new tests in `trip-planning-card-tokens.test.mjs`. 614 tests, 0 failures. No backend/SQL/provider changes.
 
 - 2026-05-16 — **Stage 3.5 Phase 2B — Concierge shared presentation and trip-context polish (+ hardening patch).** `frontend/src/lib/concierge/cardHelpers.ts` created: shared `hasClosedSignal` (now scans all 12 fields including `card.raw`), `canShowGoogleVerifiedBadge`, `pickCardMeta` extracted from both `ConciergePage.tsx` and `AIConciergePanel.tsx`. `AIConciergePanel.tsx`: `ConciergeCard` rebuilt with `Card.Identity` / `Card.Trust` / `Card.Why` named slots + `TrustStrip`; all action touch targets raised to 44px; legacy `rgba()`/`rose-*`/`indigo-*`/`slate-*`/`amber-*` replaced with ds tokens (`ds-warning`, `ds-caution`, `color-mix` trust). `ConciergePage.tsx` updated to import from shared module. 27 tests in `concierge-shared-helpers.test.mjs` (21 structural + 6 behavior-level). No backend, SQL, or provider changes. 953 tests, 950 pass (3 pre-existing FlightCard failures).
 
@@ -99,7 +101,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Stage 3.5 Phase 2B complete.** Concierge shared helpers extracted; trip-context panel (AIConciergePanel) now uses Card + TrustStrip + ds-* tokens matching the flagship. Next: Phase 3 — card variant breadth across other surfaces. Contract: `docs/product/DESIGN_IMPLEMENTATION_CONTRACT.md` §25. Before coding: run `feature-contract` and `golden-scenarios` (Level 2+ requirement).
+**Stage 3.5 Phase 3 complete.** All primary trip-planning card surfaces now use ds-* tokens. Wife-wow design system is now consistent across: shell, explore cards, saved items, concierge, and trip-planning surfaces. Next direction options: (A) deeper interactive polish (motion, micro-animations within token limits), (B) itinerary day column header polish (`ItineraryDayColumn.tsx`), (C) product feature work (deal alerts, Watchtower). Roadmap guidance: `docs/product/ROADMAP.md`.
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 

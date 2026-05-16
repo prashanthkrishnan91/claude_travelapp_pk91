@@ -1,10 +1,51 @@
 # UI Baseline
 
-Last updated: 2026-05-15
+Last updated: 2026-05-16
 
 ## Purpose
 
 Tracks the state of the design system and UI primitive layer so future prompts and PRs can reason accurately about what exists and what has been adopted.
+
+---
+
+## Stage 3.5 Phase 3 — Trip Planning Card System Breadth — SHIPPED (2026-05-16)
+
+**Stage 3.5 · Wife-Wow design system — Trip planning surfaces · Card variant breadth**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/components/trips/ItineraryItemCard.tsx` | Full ds-* migration: root bg/border/shadow → `bg-ds-onyx border-ds-pen-stroke shadow-[var(--ds-elevation-1)]`. All typeConfig icons → unified `text-ds-accent` + inline `var(--ds-accent-subtle)`. All text colors → ds-text-*/ds-text-tertiary. Google Flights link → `text-ds-text-secondary hover:text-ds-accent`. Remove button hover → `text-ds-warning`. Hotel area badges → `text-ds-trust-verified`/`text-ds-caution` + inline rgba. Timeline input → `bg-ds-carbon border-ds-pen-stroke`. Focus rings on all interactive elements. |
+| `frontend/src/components/trips/TripIdeasPanel.tsx` | Full ds-* migration: IdeaCard border/bg → `border-ds-pen-stroke bg-ds-onyx`. Status options, filter chips, inputs, selects, buttons → ds-* tokens. Panel header/active count/Add to Day button → ds-accent. Show more/less → `border-ds-pen-stroke bg-ds-onyx text-ds-text-secondary`. |
+| `frontend/src/components/trips/SearchResultCard.tsx` | Migrated to `Card tone="dark" as="article"`. Uses `Card.Identity` + `Card.Meta` slots. Category icon → unified `text-ds-accent` + inline accent-subtle. Compare/add buttons → ds-* tokens. Area badges → `text-ds-trust-verified`/`text-ds-caution` + inline rgba. Tags → `bg-ds-carbon text-ds-text-tertiary border-ds-pen-stroke`. |
+| `frontend/src/components/trips/TripBuilder.tsx` | PREMIUM_CARD_BASE/SECONDARY_CTA/PRIMARY_CTA → ds-* tokens (candidate-card class preserved). AiScoreBadge → ds-trust-verified/ds-caution with inline rgba bg. SortControl/FilterPills active → `bg-ds-accent text-ds-text-inverse`. All card components (FlightCandidateCard, FlightLegRow, RoundTripFlightCard, HotelCandidateCard, AttractionCandidateCard, RestaurantCandidateCard) → ds-* tokens. RecTag/AttractionTag/RestaurantTag → unified `text-ds-accent border-ds-pen-stroke` + inline accent-subtle. Top pick badges (Best Pick/Best Pair/Top Hotel/Top Pick) → `bg-ds-accent text-ds-text-inverse`. Compare bar → `bg-ds-onyx border-ds-pen-stroke`. Toast → ds-* tokens. CandidatePanel section icons → `text-ds-accent`. Explore toggle → `bg-ds-carbon`/`bg-ds-onyx`. SummaryBar → `bg-ds-onyx border-ds-pen-stroke`. |
+| `frontend/src/components/explore/FlightExploreFlow.tsx` | FlightCard → `Card tone="dark" as="article"`. All flight card, leg row, empty/error/unavailable states → ds-* tokens. Search form icon residuals → `text-ds-text-tertiary`. |
+| `frontend/tests/trip-planning-card-tokens.test.mjs` | 24 new token-coverage tests verifying ds-* adoption and no-legacy-class invariants across all 5 migrated files. |
+| `frontend/package.json` | Added `trip-planning-card-tokens.test.mjs` to the test script. |
+
+### Test results
+- **614 tests, 0 failures** (was 590; +24 new Phase 3 token coverage tests)
+- All pre-existing tests continue to pass
+
+### Design contract alignment
+
+- **Dark tone cards:** All trip-planning card surfaces use `tone="dark"` or equivalent `bg-ds-onyx border-ds-pen-stroke` treatment.
+- **Token alignment:** No raw hex, no legacy `cream-*`/`brand-*`/`dark-*`/`sky-*`/`violet-*`/`emerald-*`/`rose-*`/`amber-*`/`slate-*`/`white/` classes in any migrated card or helper function.
+- **Unified accent:** All tag badges, icons, and active states use `text-ds-accent` (sandstone gold).
+- **Semantic status:** Trust indicators (`text-ds-trust-verified`), caution (`text-ds-caution`), warning (`text-ds-warning`) — no raw color for semantic signals.
+- **Inline accent-subtle:** `var(--ds-accent-subtle)` used as inline style for bg since not in `@theme`.
+- **Focus rings:** `focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2` on all interactive elements.
+- **44px touch targets:** Preserved on all buttons/links/drag handles.
+- **candidate-card class:** Preserved in PREMIUM_CARD_BASE for GSAP querySelector targeting.
+- **All existing actions preserved exactly:** DnD drag/drop, add-to-itinerary, compare, Google Flights link-out, round-trip add, hotel/attraction/restaurant add, remove, save/unsave, sort, filter.
+
+### Invariant confirmations
+
+- No backend files, no API/provider/Tavily/cache changes, no Supabase SQL.
+- No new dependencies, no new fonts, no route rewrites, no data model changes.
+- No new booking behavior, no fake data.
+- Pre-existing 3 FlightCard test failures: unchanged (outside this scope).
 
 ---
 
