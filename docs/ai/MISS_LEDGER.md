@@ -21,6 +21,23 @@ Follow-up needed:
 
 ---
 
+### 2026-05-16 — PR body sections missing → CI hard-fail despite local PASS
+
+Repo: claude_travelapp_pk91
+Area: Workflow enforcement / PR readiness gate
+Severity: Level 2 gate failure (blocked merge until patched)
+Miss: PR #394 body was missing `## Severity`, `## Validation`, and `SQL / env / providers / UI` anchors, plus runtime failure-seam evidence. Local `ai_pr_readiness_check.py` passed because without `--github-event-path` the body is None and `check_sections()` is skipped. CI reads the real body from the GitHub event JSON and enforces all required sections as hard failures.
+Impact: CI red on first push; required a follow-up PR body update and new commit to rerun CI.
+What caught it: Reviewer listed the exact missing anchors; CI log confirmed 4 hard failures.
+Root cause: PR body generated from memory rather than from the PR template. Local checker silently skips section checks when no body file/event path is provided, creating a false PASS signal that doesn't match CI behavior.
+What should catch it next time: (1) Always write PR bodies from `.github/pull_request_template.md` — do not compose from scratch. (2) Run `python3 scripts/workflow/ai_pr_readiness_check.py --pr-body-file <file>` locally using an actual body file before pushing, not the no-arg form. (3) Add `## Severity` and `## Validation` with `SQL / env / providers / UI` to the PR template as named anchors so they cannot be accidentally omitted.
+One-off or repeated: One-off for this PR; the CI-vs-local divergence is a latent risk for every PR.
+Promotion target: `.github/pull_request_template.md` — add explicit `## Severity` and `## Validation` sections; `docs/ai/KNOWN_FAILURE_MODES.md` — note CI-vs-local checker divergence.
+Action taken: Added missing sections to PR body; added failure-seam evidence; pushed fix commit.
+Follow-up needed: Update `.github/pull_request_template.md` to include `## Severity`, `## Validation`, and `SQL / env / providers / UI` as first-class sections.
+
+---
+
 ### 2026-05-15 — AI PR Readiness Gate v1 permitted Level 1+ PRs to skip ledger rows by claiming "usage unavailable"
 
 Repo: claude_travelapp_pk91
