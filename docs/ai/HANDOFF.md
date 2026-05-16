@@ -8,9 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Phase 2A SHIPPED (2026-05-15).** AI Concierge `/concierge` surface flagship redesign complete. Full-page card-first concierge canvas: editorial header, card-first result canvas using `Card primitive (dark tone)`, sticky composer, premium empty/loading/error states. Nav discoverability shipped: Concierge link in Sidebar (desktop) and MobileNav drawer. Phase 1A (shell/nav), Phase 1B (Explore result cards), Phase 1C (Saved Ideas paper), and Phase 0 (tokens + primitives) all shipped. **Active build queue item: Wife-Wow design system foundation.** Exact implementation reference is `docs/product/DESIGN_IMPLEMENTATION_CONTRACT.md`.
+- Roadmap stage: **Stage 3.5 — Phase 2B SHIPPED (2026-05-16).** Shared concierge card helpers extracted to `frontend/src/lib/concierge/cardHelpers.ts` (`hasClosedSignal`, `canShowGoogleVerifiedBadge`, `pickCardMeta`, exported types). `AIConciergePanel.tsx` now uses `Card tone="dark"` + `TrustStrip` for place cards; panel chrome migrated to ds-* tokens. `ConciergePage.tsx` (Phase 2A flagship) imports from cardHelpers — all duplication removed. 21 new tests in `concierge-shared-helpers.test.mjs`. Phase 2A (standalone concierge flagship), Phase 1A–1C, and Phase 0 all previously shipped.
 - Flights v1 — Duffel search-only LIVE: `DUFFEL_FLIGHTS_ENABLED=1`, `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`, `DUFFEL_DEBUG=false`, `DUFFEL_BOOKING_ENABLED=0`. Each flight card shows "Search on Google Flights" (SEARCH_REDIRECT link-out, not booking). Duffel never creates orders. Ignav DISABLED.
-- Active build queue item: **Wife-Wow design system foundation — Phase 2A AI Concierge flagship SHIPPED (nav included).** Next: Phase 2B or Phase 3. Options: (a) Phase 2B trip-context concierge integration (left conversation rail, add/save from standalone, consolidate shared helpers), (b) Phase 3 card variant breadth across other surfaces. See `docs/ai/UI_BASELINE.md` for full phase inventory and tradeoffs.
+- Active build queue item: **Wife-Wow design system foundation — Phase 2B concierge shared helpers + trip-context polish SHIPPED.** Next: Phase 3 — card variant breadth across other surfaces. See `docs/ai/UI_BASELINE.md` for full phase inventory and tradeoffs.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -31,6 +31,8 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Recent meaningful PRs
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
+
+- 2026-05-16 — **Stage 3.5 Phase 2B — Concierge shared presentation and trip-context polish.** `frontend/src/lib/concierge/cardHelpers.ts` created: shared `hasClosedSignal`, `canShowGoogleVerifiedBadge`, `pickCardMeta` extracted from both `ConciergePage.tsx` and `AIConciergePanel.tsx`. `AIConciergePanel.tsx`: `ConciergeCard` rebuilt with `Card tone="dark"` + `TrustStrip`; panel chrome migrated from `slate-*/amber-*/emerald-*` to `ds-*` tokens. `ConciergePage.tsx` updated to import from shared module. 21 new tests in `concierge-shared-helpers.test.mjs`. No backend, SQL, or provider changes. 947 tests, 944 pass (3 pre-existing FlightCard failures).
 
 - 2026-05-16 — **ALLOW_LIVE_RESEARCH_CALLS kill switch enforcement (follow-up to PR #396, Level 2 cost-control).** Production uses `ALLOW_LIVE_RESEARCH_CALLS=false` but `semantic_retrieval_v1` Step 5.56 was not checking it before entering the editorial/Tavily path. Fix: kill switch check added as FIRST statement in Step 5.56's try block; if off, logs `editorial_skipped_reason=allow_live_research_calls_false tavily_attempted=0 serper_attempted=0 brave_attempted=0` and skips all key reads. Google Places fanout (Steps 1–5.5) is unaffected. `Settings.allow_live_research_calls: bool = True` added to pydantic-settings for canonical env→config mapping. 17 new tests in `test_live_research_killswitch.py`. No SQL, no frontend, no new providers.
 
@@ -97,7 +99,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Return to Design Bible visual implementation.** Kill switch enforcement PR complete (follow-up to #396 — no more backend cost-control work). Next: Stage 3.5 Phase 2B or Phase 3 — AI Concierge flagship card-first redesign or card variant breadth. Contract: `docs/product/DESIGN_IMPLEMENTATION_CONTRACT.md` §25. Before coding: run `feature-contract` and `golden-scenarios` (Level 2+ requirement).
+**Stage 3.5 Phase 2B complete.** Concierge shared helpers extracted; trip-context panel (AIConciergePanel) now uses Card + TrustStrip + ds-* tokens matching the flagship. Next: Phase 3 — card variant breadth across other surfaces. Contract: `docs/product/DESIGN_IMPLEMENTATION_CONTRACT.md` §25. Before coding: run `feature-contract` and `golden-scenarios` (Level 2+ requirement).
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 

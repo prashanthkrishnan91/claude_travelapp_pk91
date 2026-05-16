@@ -33,7 +33,19 @@ import type {
 import type { ItineraryDay, ItineraryItem } from "@/types";
 import { pickCardReason, pickCardCategory, sanitizeWhyPick, shouldShowCollapsedSources, splitReason, normalizeTitle, isAddableCanonicalCard } from "@/lib/concierge/cardPresentation";
 import { ACTION, parseRefinementAction, applyRefinementToMessage, buildContextualSearchQuery, selectBestCard, looksLikeFreshSearch, dedupeCardsAgainstCurrentSet, hasGooglePriceSignals, getBaselinePriceLevel } from "@/lib/concierge/refinementInterpreter";
-import { formatDisplayPrice } from "@/lib/concierge/priceFormatter";
+import {
+  hasClosedSignal,
+  canShowGoogleVerifiedBadge,
+  pickCardMeta,
+} from "@/lib/concierge/cardHelpers";
+import type {
+  ClosedSignalSource,
+  OperationalBadgeCard,
+  DisplayCard,
+} from "@/lib/concierge/cardHelpers";
+import { Card } from "@/components/ui/Card";
+import { TrustStrip } from "@/components/ui/TrustStrip";
+import type { TrustConfidence } from "@/components/ui/TrustStrip";
 
 type MessageRole = "user" | "assistant";
 
@@ -78,18 +90,6 @@ interface Props {
 }
 
 const CONCIERGE_CACHE_VERSION = 5;
-const CLOSED_SIGNAL_PATTERNS = [
-  "permanently closed",
-  "closed permanently",
-  "closed for good",
-  "closed for the final time",
-  "has closed",
-  "is closed",
-  "shut down",
-  "no longer open",
-  "won't reopen",
-  "will not reopen",
-];
 
 interface ConciergeClientCacheEntry {
   version: number;
@@ -97,21 +97,6 @@ interface ConciergeClientCacheEntry {
   destination: string;
   messages: Message[];
 }
-
-type ClosedSignalCard = Partial<{
-  name: string | null;
-  title: string | null;
-  summary: string | null;
-  description: string | null;
-  reason: string | null;
-  source: string | null;
-  sourceText: string | null;
-  rawText: string | null;
-  url: string | null;
-  sourceUrl: string | null;
-  snippet: string | null;
-  raw: unknown;
-}>;
 
 function conciergeCacheKey(tripId: string, destination: string): string {
   return `concierge_cache::${tripId}::${destination.trim().toLowerCase()}`;
@@ -211,140 +196,15 @@ function cardKey(name: string, dayId?: string): string {
   return `${name.trim().toLowerCase()}::${dayId ?? "trip"}`;
 }
 
-type DisplayCard = {
-  primaryReason?: string | null;
-  whyPick?: { text?: string | null; generationMethod?: string | null } | string | null;
-  rating?: number;
-  reviewCount?: number;
-  neighborhood?: string;
-  address?: string;
-  supportingDetails?: {
-    rating?: string | null;
-    reviewCount?: number | null;
-    address?: string | null;
-    metaLine?: string | null;
-    whyPick?: { text?: string | null; generationMethod?: string | null } | string | null;
-    conciergeNote?: string | null;
-    categoryLabel?: string | null;
-    priceLevel?: string | null;
-    priceRange?: Record<string, unknown> | null;
-  } | null;
-  display?: {
-    displayWhy?: string | null;
-    displayWhyValidated?: boolean | null;
-    displayWhySource?: string | null;
-    displayCategory?: string | null;
-    displayMetaLine?: string | null;
-    displayBadges?: string[];
-    addability?: string | null;
-    displayPrice?: string | null;
-  } | null;
-};
-
-// Compose the subheader/meta line: `★ 4.8 (9,483 reviews) · $$ · Address`.
-// Reads only the canonical display contract (PR #287):
-//   • display.displayMetaLine / supportingDetails.metaLine for rating + reviews
-//   • display.displayPrice / supportingDetails.price{Level,Range} for price
-//   • supportingDetails.address for address
-// We intentionally do NOT fall back to top-level `rating`, `reviewCount`,
-// `address`, or `neighborhood` — those reads were the legacy ladder that
-// silently masked missing canonical fields.  When the canonical contract has
-// no meta_line we emit an empty meta block; the card will render without a
-// subheader rather than synthesising one from raw fields.
-function pickCardMeta(card: DisplayCard): string[] {
-  const details = card.supportingDetails;
-
-  const price =
-    card.display?.displayPrice ??
-    formatDisplayPrice(
-      (details?.priceLevel as string | null | undefined) ?? null,
-      (details?.priceRange as Record<string, unknown> | null | undefined) ?? null,
-    ) ??
-    undefined;
-  const address = details?.address ?? undefined;
-
-  const ratingBase = card.display?.displayMetaLine ?? details?.metaLine;
-  if (!ratingBase && !price && !address) return [];
-
-  if (ratingBase) {
-    const addrTrimmed = address?.trim() ?? "";
-    let stem = ratingBase;
-    if (addrTrimmed && ratingBase.includes(addrTrimmed)) {
-      const stripped = ratingBase.slice(0, ratingBase.indexOf(addrTrimmed)).replace(/\s*·\s*$/, "").trim();
-      if (stripped) stem = stripped;
-    }
-    const parts: string[] = [stem];
-    const metaAlreadyHasPrice = /\$|Free\b|EUR/.test(stem);
-    if (price && !metaAlreadyHasPrice) parts.push(price);
-    if (address) parts.push(address);
-    return [parts.join(" · ")];
-  }
-
-  const parts: string[] = [];
-  if (price) parts.push(price);
-  if (address) parts.push(address);
-  return parts.length > 0 ? [parts.join(" · ")] : [];
-}
-
-// Expanded view: only show the optional concierge note. Backend metadata
-// (evidence counts, source badges, provider names, verification scores) is
-// never surfaced on the card.
-function pickCardDetail(card: DisplayCard): string[] {
-  const note = card.supportingDetails?.conciergeNote;
+function pickCardDetail(place: { supportingDetails?: { conciergeNote?: string } }): string[] {
+  const note = place.supportingDetails?.conciergeNote;
   return note ? [note] : [];
-}
-
-interface OperationalBadgeCard {
-  source?: string | null;
-  sourceUrl?: string | null;
-  verifiedPlace?: boolean | null;
-  confidence?: string | null;
-  lastVerifiedAt?: string | null;
-  googleVerification?: {
-    businessStatus?: string | null;
-    confidence?: string | null;
-    providerPlaceId?: string | null;
-  } | null;
-}
-
-// Only Google-verified OPERATIONAL venues get the "Google verified" badge.
-// Tavily/Serper/Brave alone — even with a source URL — never qualify.
-function canShowGoogleVerifiedBadge(card: OperationalBadgeCard): boolean {
-  if (hasClosedSignal(card)) return false;
-  const gv = card.googleVerification;
-  if (!gv) return false;
-  if (gv.businessStatus !== "OPERATIONAL") return false;
-  const gvConfidence = (gv.confidence ?? "").toLowerCase();
-  if (gvConfidence !== "high" && gvConfidence !== "medium") return false;
-  if (!gv.providerPlaceId) return false;
-  return true;
-}
-
-function hasClosedSignal(card: ClosedSignalCard): boolean {
-  const textBlob = [
-    card.name,
-    card.title,
-    card.summary,
-    card.description,
-    card.reason,
-    card.source,
-    card.sourceText,
-    card.rawText,
-    card.url,
-    card.sourceUrl,
-    card.snippet,
-    card.raw,
-  ]
-    .map((value) => String(value ?? "").toLowerCase())
-    .join("\n");
-  return CLOSED_SIGNAL_PATTERNS.some((signal) => textBlob.includes(signal));
 }
 
 function ConciergeCard({
   title,
   category,
   meta,
-  tags,
   reason,
   extraDetail,
   mapLink,
@@ -355,7 +215,7 @@ function ConciergeCard({
   savedIdea,
   savingIdea,
   isOperational,
-  verifiedAt,
+  operationalConfidence,
   onAdd,
   onSaveIdea,
   canAdd = true,
@@ -363,7 +223,6 @@ function ConciergeCard({
   title: string;
   category: string;
   meta: string[];
-  tags: string[];
   reason?: string;
   extraDetail?: string[];
   mapLink?: string;
@@ -374,7 +233,7 @@ function ConciergeCard({
   savedIdea: boolean;
   savingIdea: boolean;
   isOperational?: boolean;
-  verifiedAt?: string | null;
+  operationalConfidence?: TrustConfidence;
   onAdd: () => void;
   onSaveIdea: () => void;
   canAdd?: boolean;
@@ -385,51 +244,114 @@ function ConciergeCard({
   const hasDetail = expandableDetail.length > 0;
 
   return (
-    <div className="rounded-2xl border border-amber-200/20 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-3.5 shadow-[0_16px_36px_rgba(2,6,23,0.45)]">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <p className="truncate text-sm font-semibold tracking-tight text-slate-100">{title}</p>
-            {isOperational && (
-              <span
-                className="rounded-full border border-amber-300/40 bg-amber-200/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-amber-100"
-                title={verifiedAt ?? "Verified by Google Places"}
-              >
-                Google verified
-              </span>
-            )}
-          </div>
-          <p className="mt-0.5 text-[11px] uppercase tracking-[0.1em] text-slate-400">{category}</p>
-          {meta.length > 0 && <p className="mt-1 text-xs leading-relaxed text-slate-300">{meta.join(" · ")}</p>}
-        </div>
+    <Card
+      tone="dark"
+      as="article"
+      className="card-lift"
+      style={{ padding: "var(--ds-space-4)" }}
+    >
+      {/* Identity */}
+      <div style={{ marginBottom: "var(--ds-space-3)" }}>
+        <h3
+          className="text-ds-text font-semibold"
+          style={{
+            fontSize: "var(--ds-type-body-l-size)",
+            lineHeight: "var(--ds-type-body-l-leading)",
+          }}
+        >
+          {title}
+        </h3>
+        <p
+          className="text-ds-text-tertiary uppercase tracking-[0.1em]"
+          style={{
+            fontSize: "var(--ds-type-overline-size)",
+            lineHeight: "var(--ds-type-overline-leading)",
+            fontWeight: "var(--ds-type-overline-weight)",
+            marginTop: "var(--ds-space-1)",
+          }}
+        >
+          {category}
+        </p>
+        {meta.length > 0 && (
+          <p
+            className="text-ds-text-secondary"
+            style={{
+              fontSize: "var(--ds-type-body-s-size)",
+              lineHeight: "var(--ds-type-body-s-leading)",
+              marginTop: "var(--ds-space-2)",
+            }}
+          >
+            {meta.join(" · ")}
+          </p>
+        )}
       </div>
 
-      {tags.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {tags.slice(0, 3).map((tag) => (
-            <span key={tag} className="rounded-full border border-slate-700 bg-slate-800/70 px-2 py-0.5 text-[10px] text-slate-300">
-              {tag}
-            </span>
-          ))}
+      {/* Trust strip — only where Google-verified OPERATIONAL; confidence from actual backend field */}
+      {isOperational && operationalConfidence && (
+        <div style={{ marginBottom: "var(--ds-space-3)" }} aria-label="Google verified">
+          <TrustStrip confidence={operationalConfidence} />
         </div>
       )}
 
+      {/* Concierge note — backend reason rendered verbatim, no paraphrase */}
       {reasonParts.short && (
-        <div className="mt-3 rounded-xl border border-slate-700/80 bg-slate-900/60 px-3 py-2 text-xs leading-relaxed text-slate-200">
-          <span className="font-semibold uppercase tracking-[0.1em] text-[10px] text-amber-200/90">Concierge note</span>
-          <p className="mt-1 break-words">{reasonParts.short}</p>
+        <div
+          className="border-l-2"
+          style={{
+            borderColor: "var(--ds-accent-subtle)",
+            paddingLeft: "var(--ds-space-3)",
+            marginBottom: "var(--ds-space-3)",
+          }}
+        >
+          <p
+            className="text-ds-text-tertiary uppercase tracking-[0.1em]"
+            style={{
+              fontSize: "var(--ds-type-overline-size)",
+              lineHeight: "var(--ds-type-overline-leading)",
+              fontWeight: "var(--ds-type-overline-weight)",
+              marginBottom: "var(--ds-space-1)",
+            }}
+          >
+            Concierge note
+          </p>
+          <p
+            className="text-ds-text-secondary"
+            style={{
+              fontSize: "var(--ds-type-body-s-size)",
+              lineHeight: "var(--ds-type-body-s-leading)",
+            }}
+          >
+            {reasonParts.short}
+          </p>
           {hasDetail && (
             <>
               <button
+                type="button"
                 onClick={() => setExpanded((v) => !v)}
-                className="mt-1 inline-flex items-center gap-0.5 text-[11px] font-medium text-amber-200/80 hover:text-amber-100"
+                className="inline-flex items-center gap-0.5 text-ds-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                style={{
+                  fontSize: "var(--ds-type-caption-size)",
+                  marginTop: "var(--ds-space-1)",
+                }}
               >
                 {expanded ? "Less" : "More"}
-                <ChevronDown className={`h-3 w-3 transition ${expanded ? "rotate-180" : ""}`} />
+                <ChevronDown
+                  className={`h-3 w-3 transition-transform duration-[120ms] ${expanded ? "rotate-180" : ""}`}
+                  aria-hidden="true"
+                />
               </button>
               {expanded && (
-                <div className="mt-1 space-y-1 text-[11px] leading-relaxed text-slate-300/90">
-                  {expandableDetail.map((line) => <p key={line}>{line}</p>)}
+                <div
+                  className="text-ds-text-tertiary"
+                  style={{
+                    marginTop: "var(--ds-space-1)",
+                    fontSize: "var(--ds-type-caption-size)",
+                    lineHeight: "var(--ds-type-caption-leading)",
+                  }}
+                >
+                  {expandableDetail.map((line) => (
+                    <p key={line}>{line}</p>
+                  ))}
                 </div>
               )}
             </>
@@ -437,31 +359,58 @@ function ConciergeCard({
         </div>
       )}
 
-      <div className="mt-2 flex items-center gap-2">
+      {/* Actions: trip actions (add-to-day, save) + map/source links */}
+      <Card.Actions style={{ marginTop: "var(--ds-space-3)", flexWrap: "wrap" }}>
         {canAdd ? (
           <>
             <button
+              type="button"
               onClick={onAdd}
               disabled={adding || added}
-              className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                added
-                  ? "bg-emerald-300/15 text-emerald-200 ring-1 ring-emerald-300/30"
-                  : "bg-amber-200/15 text-amber-100 ring-1 ring-amber-300/40 hover:bg-amber-200/25"
+              className={`flex-1 rounded-lg text-center transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 disabled:opacity-50 ${
+                added ? "text-ds-trust" : "text-ds-text-inverse hover:brightness-110"
               }`}
+              style={{
+                background: added ? "rgba(136, 168, 153, 0.15)" : "var(--ds-accent)",
+                padding: "var(--ds-space-2) var(--ds-space-3)",
+                fontSize: "var(--ds-type-body-s-size)",
+                minHeight: "36px",
+              }}
             >
-              {adding ? <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" /> : added ? <span className="inline-flex items-center gap-1"><Check className="h-3 w-3" /> Added</span> : actionLabel ?? "Add to Day"}
+              {adding ? (
+                <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : added ? (
+                <span className="inline-flex items-center gap-1">
+                  <Check className="h-3 w-3" aria-hidden="true" />
+                  Added
+                </span>
+              ) : (
+                actionLabel ?? "Add to Day"
+              )}
             </button>
             <button
+              type="button"
               onClick={onSaveIdea}
               disabled={savingIdea || savedIdea}
               title={savedIdea ? "Saved to trip ideas" : "Save to trip ideas without assigning a day"}
-              className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition ring-1 ${
-                savedIdea
-                  ? "bg-slate-700/60 text-slate-300 ring-slate-600/50"
-                  : "bg-slate-800 text-slate-300 ring-slate-600 hover:bg-slate-700 hover:text-slate-100"
-              }`}
+              className="rounded-lg bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 disabled:opacity-50"
+              style={{
+                padding: "var(--ds-space-2) var(--ds-space-3)",
+                fontSize: "var(--ds-type-body-s-size)",
+                border: "1px solid var(--ds-pen-stroke)",
+                minHeight: "36px",
+              }}
             >
-              {savingIdea ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : savedIdea ? <span className="inline-flex items-center gap-1"><Check className="h-3 w-3" /> Saved to Ideas</span> : "Save"}
+              {savingIdea ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : savedIdea ? (
+                <span className="inline-flex items-center gap-1">
+                  <Check className="h-3 w-3" aria-hidden="true" />
+                  Saved
+                </span>
+              ) : (
+                "Save"
+              )}
             </button>
           </>
         ) : sourceLink ? (
@@ -469,27 +418,58 @@ function ConciergeCard({
             href={sourceLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            style={{
+              padding: "var(--ds-space-2) var(--ds-space-3)",
+              fontSize: "var(--ds-type-body-s-size)",
+              border: "1px solid var(--ds-pen-stroke)",
+            }}
           >
-            <ExternalLink className="h-3 w-3" /> Open source
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+            View source
           </a>
         ) : (
-          <span className="flex-1 rounded-lg bg-slate-800 px-3 py-1.5 text-center text-xs font-medium text-slate-300">
+          <span
+            className="text-ds-text-tertiary"
+            style={{ fontSize: "var(--ds-type-caption-size)" }}
+          >
             Research only
           </span>
         )}
         {mapLink && (
-          <a href={mapLink} target="_blank" rel="noopener noreferrer" title="View on map" aria-label="View on map" className="rounded-lg bg-slate-800 px-2 py-1.5 text-xs text-slate-200 hover:bg-slate-700">
-            <MapPin className="h-3.5 w-3.5" />
+          <a
+            href={mapLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`View ${title} on Google Maps`}
+            className="inline-flex items-center rounded-lg bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            style={{
+              padding: "var(--ds-space-2) var(--ds-space-3)",
+              border: "1px solid var(--ds-pen-stroke)",
+              minHeight: "36px",
+            }}
+          >
+            <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
           </a>
         )}
         {sourceLink && sourceLink !== mapLink && canAdd && (
-          <a href={sourceLink} target="_blank" rel="noopener noreferrer" title="View source / book" aria-label="View source or book" className="rounded-lg bg-amber-200/15 px-2 py-1.5 text-xs text-amber-100 hover:bg-amber-200/25">
-            <ExternalLink className="h-3.5 w-3.5" />
+          <a
+            href={sourceLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`View source for ${title}`}
+            className="inline-flex items-center rounded-lg bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            style={{
+              padding: "var(--ds-space-2) var(--ds-space-3)",
+              border: "1px solid var(--ds-pen-stroke)",
+              minHeight: "36px",
+            }}
+          >
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
           </a>
         )}
-      </div>
-    </div>
+      </Card.Actions>
+    </Card>
   );
 }
 
@@ -1092,32 +1072,32 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
   return (
     <div className="fixed inset-0 z-50 flex justify-end" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative flex h-full w-full max-w-md flex-col border-l border-amber-200/20 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-700/80 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-4 py-3">
-          <div className="flex items-center gap-2 text-amber-100">
-            <Sparkles className="h-4 w-4" />
+      <div className="relative flex h-full w-full max-w-md flex-col border-l border-ds-pen-stroke bg-ds-midnight text-ds-text shadow-2xl">
+        <div className="flex items-center justify-between border-b border-ds-pen-stroke bg-ds-onyx px-4 py-3">
+          <div className="flex items-center gap-2 text-ds-text">
+            <Sparkles className="h-4 w-4 text-ds-accent" />
             <span className="text-sm font-semibold">AI Concierge</span>
-            {destination && <span className="text-xs text-slate-300">· {destination}</span>}
+            {destination && <span className="text-xs text-ds-text-tertiary">· {destination}</span>}
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleClearChat}
-              className="rounded border border-slate-600 bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-slate-100 hover:bg-slate-700"
+              className="rounded border border-ds-pen-stroke bg-ds-carbon px-2.5 py-1 text-[11px] font-medium text-ds-text hover:bg-ds-pen-stroke focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
             >
               Clear chat
             </button>
-            <button onClick={onClose} className="rounded p-1 text-slate-300 hover:bg-slate-700" aria-label="Close">
+            <button onClick={onClose} className="rounded p-1 text-ds-text-tertiary hover:bg-ds-carbon focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2" aria-label="Close">
               <X className="h-4 w-4" />
             </button>
           </div>
         </div>
 
-        <div className="border-b border-slate-700/80 bg-slate-900/70 px-4 py-2.5">
-          <label className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">Target day for Add to Day</label>
+        <div className="border-b border-ds-pen-stroke bg-ds-onyx px-4 py-2.5">
+          <label className="text-[11px] font-medium uppercase tracking-[0.08em] text-ds-text-tertiary">Target day for Add to Day</label>
           <select
             value={selectedDayId}
             onChange={(e) => setSelectedDayId(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-2 py-1.5 text-xs text-slate-100"
+            className="mt-1 w-full rounded-lg border border-ds-pen-stroke bg-ds-carbon px-2 py-1.5 text-xs text-ds-text"
           >
             {tripDays.length === 0 && <option value="">No days yet</option>}
             {tripDays.map((day) => (
@@ -1130,11 +1110,11 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
           {loadingHistory && (
-            <div className="rounded-lg bg-slate-800 px-3 py-2 text-xs text-slate-300">Loading previous chat…</div>
+            <div className="rounded-lg bg-ds-carbon px-3 py-2 text-xs text-ds-text-secondary">Loading previous chat…</div>
           )}
 
           {loading && messages.length === 0 && (
-            <div className="rounded-lg bg-slate-800 px-3 py-2 text-xs text-slate-300">Loading concierge…</div>
+            <div className="rounded-lg bg-ds-carbon px-3 py-2 text-xs text-ds-text-secondary">Loading concierge…</div>
           )}
 
           {error && (
@@ -1142,7 +1122,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
           )}
 
           {historyWarning && (
-            <div className="rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs text-slate-300">
+            <div className="rounded-lg border border-ds-pen-stroke bg-ds-carbon px-3 py-2 text-xs text-ds-text-secondary">
               {historyWarning}
             </div>
           )}
@@ -1158,7 +1138,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                     <p className="text-xs leading-relaxed text-slate-700">{msg.text}</p>
                   </div>
                 ) : (
-                  <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${msg.role === "user" ? "rounded-br-sm bg-amber-200/20 text-amber-50 ring-1 ring-amber-300/30" : "rounded-bl-sm bg-slate-800 text-slate-100"}`}>
+                  <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${msg.role === "user" ? "rounded-br-sm bg-ds-accent/15 text-ds-text ring-1 ring-ds-accent/30" : "rounded-bl-sm bg-ds-carbon text-ds-text"}`}>
                     {msg.text}
                   </div>
                 )}
@@ -1299,9 +1279,11 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                           const baseReason = pickCardReason(place);
                           const reason = sanitizeWhyPick(baseReason, title, allTitles);
                           const extraDetail = pickCardDetail(place);
-                          const isClosed = hasClosedSignal(place);
-                          const isOperational = !isClosed && canShowGoogleVerifiedBadge(place);
-                          const meta = pickCardMeta(place);
+                          const isClosed = hasClosedSignal(place as ClosedSignalSource);
+                          const isOperational = !isClosed && canShowGoogleVerifiedBadge(place as OperationalBadgeCard);
+                          const rawConfidence = (place as { googleVerification?: { confidence?: string } }).googleVerification?.confidence?.toLowerCase();
+                          const operationalConfidence: TrustConfidence | undefined = isOperational && (rawConfidence === "high" || rawConfidence === "medium") ? (rawConfidence as TrustConfidence) : undefined;
+                          const meta = pickCardMeta(place as DisplayCard);
                           // Maps URL prefers Google's googleMapsUri (canonical Google
                           // identity) and falls back to the explicit mapsLink that the
                           // backend already derives from providerPlaceId.  No top-level
@@ -1315,13 +1297,12 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                               title={title}
                               category={displayCategory}
                               meta={meta}
-                              tags={[]}
                               reason={reason}
                               extraDetail={extraDetail}
                               mapLink={mapLink}
                               sourceLink={sourceLink}
                               isOperational={isOperational}
-                              verifiedAt={null}
+                              operationalConfidence={operationalConfidence}
                               added={addedItems.has(key)}
                               adding={addingItems.has(key)}
                               savedIdea={savedIdeaItems.has(normalizedName)}
@@ -1369,7 +1350,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                   )}
 
                   {msg.retrievalUsed && footerSourceLabel(msg) && (
-                    <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                    <div className="flex items-center gap-1 text-[10px] text-ds-text-tertiary">
                       <Info className="h-3 w-3" />
                       <span>{footerSourceLabel(msg)}</span>
                     </div>
@@ -1385,7 +1366,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                 <button
                   key={prompt}
                   onClick={() => handleUserInput(prompt)}
-                  className="rounded-full border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700"
+                  className="rounded-full border border-ds-pen-stroke bg-ds-carbon px-3 py-1.5 text-xs font-medium text-ds-text-secondary hover:bg-ds-pen-stroke hover:text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                 >
                   {prompt}
                 </button>
@@ -1395,9 +1376,9 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
 
           {loading && (
             <div className="flex justify-start">
-              <div className="flex items-center gap-2 rounded-2xl rounded-bl-sm bg-slate-800 px-3 py-2">
-                <Loader2 className="h-3 w-3 animate-spin text-slate-300" />
-                <span className="text-xs text-slate-300">Researching options…</span>
+              <div className="flex items-center gap-2 rounded-2xl rounded-bl-sm bg-ds-carbon px-3 py-2">
+                <Loader2 className="h-3 w-3 animate-spin text-ds-text-tertiary" />
+                <span className="text-xs text-ds-text-secondary">Researching options…</span>
               </div>
             </div>
           )}
@@ -1405,9 +1386,9 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
           <div ref={bottomRef} />
         </div>
 
-        <div className="border-t border-slate-700/80 bg-slate-950/90 px-4 py-3">
+        <div className="border-t border-ds-pen-stroke bg-ds-midnight px-4 py-3">
           {toast && (
-            <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+            <div className="mb-2 rounded-lg border border-ds-pen-stroke bg-ds-carbon px-3 py-2 text-xs text-ds-trust">
               {toast}
             </div>
           )}
@@ -1417,7 +1398,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                 <button
                   key={prompt}
                   onClick={() => refinementChips ? handleUserInput(prompt) : sendQuery(prompt)}
-                  className="shrink-0 rounded-full border border-slate-600 bg-slate-800 px-3 py-1.5 text-[11px] font-medium text-slate-200 hover:bg-slate-700"
+                  className="shrink-0 rounded-full border border-ds-pen-stroke bg-ds-carbon px-3 py-1.5 text-[11px] font-medium text-ds-text-secondary hover:bg-ds-pen-stroke hover:text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                 >
                   {prompt}
                 </button>
@@ -1433,12 +1414,12 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleUserInput(input.trim())}
               placeholder="Ask, refine, or compare the results…"
               disabled={loading}
-              className="flex-1 rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-300/60 disabled:opacity-60"
+              className="flex-1 rounded-xl border border-ds-pen-stroke bg-ds-onyx px-3 py-2 text-sm text-ds-text placeholder:text-ds-text-tertiary focus:outline-none focus:ring-2 focus:ring-ds-accent/60 disabled:opacity-60"
             />
             <button
               onClick={() => handleUserInput(input.trim())}
               disabled={loading || !input.trim()}
-              className="rounded-xl bg-amber-200/20 px-3 py-2 text-amber-100 ring-1 ring-amber-300/40 transition hover:bg-amber-200/30 disabled:opacity-50"
+              className="rounded-xl bg-ds-accent px-3 py-2 text-ds-text-inverse transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 disabled:opacity-50"
               aria-label="Send"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
