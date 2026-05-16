@@ -29,10 +29,10 @@ import { updateItemTimeline } from "@/lib/api";
 // ─── Timeline day-part options ────────────────────────────────────────────────
 
 const DAY_PARTS = [
-  { value: "morning",     label: "Morning",     activeClass: "bg-amber-500/20 border-amber-400/50 text-amber-300" },
-  { value: "afternoon",   label: "Afternoon",   activeClass: "bg-sky-500/20 border-sky-400/50 text-sky-300" },
-  { value: "evening",     label: "Evening",     activeClass: "bg-violet-500/20 border-violet-400/50 text-violet-300" },
-  { value: "unscheduled", label: "Unscheduled", activeClass: "bg-slate-700/60 border-slate-500/50 text-slate-300" },
+  { value: "morning",     label: "Morning",     activeClass: "border-ds-accent/50 text-ds-accent" },
+  { value: "afternoon",   label: "Afternoon",   activeClass: "border-ds-accent/50 text-ds-accent" },
+  { value: "evening",     label: "Evening",     activeClass: "border-ds-accent/50 text-ds-accent" },
+  { value: "unscheduled", label: "Unscheduled", activeClass: "border-ds-pen-stroke text-ds-text-tertiary" },
 ] as const;
 
 // ─── Type icon config ─────────────────────────────────────────────────────────
@@ -46,46 +46,13 @@ interface ItineraryItemCardProps {
   onTimelineUpdated?: (updatedItem: ItineraryItem) => void;
 }
 
-const typeConfig: Record<
-  ItemType,
-  { icon: React.ReactNode; colorClass: string; bgClass: string; borderClass: string }
-> = {
-  flight: {
-    icon: <Plane className="w-3.5 h-3.5" />,
-    colorClass: "text-sky-300",
-    bgClass: "bg-sky-500/10",
-    borderClass: "border-sky-500/25",
-  },
-  hotel: {
-    icon: <Hotel className="w-3.5 h-3.5" />,
-    colorClass: "text-violet-300",
-    bgClass: "bg-violet-500/10",
-    borderClass: "border-violet-500/25",
-  },
-  activity: {
-    icon: <MapPin className="w-3.5 h-3.5" />,
-    colorClass: "text-emerald-300",
-    bgClass: "bg-emerald-500/10",
-    borderClass: "border-emerald-500/25",
-  },
-  meal: {
-    icon: <Utensils className="w-3.5 h-3.5" />,
-    colorClass: "text-amber-300",
-    bgClass: "bg-amber-500/10",
-    borderClass: "border-amber-500/25",
-  },
-  transit: {
-    icon: <Train className="w-3.5 h-3.5" />,
-    colorClass: "text-slate-300",
-    bgClass: "bg-slate-700/40",
-    borderClass: "border-slate-600/60",
-  },
-  note: {
-    icon: <FileText className="w-3.5 h-3.5" />,
-    colorClass: "text-rose-300",
-    bgClass: "bg-rose-500/10",
-    borderClass: "border-rose-500/25",
-  },
+const typeConfig: Record<ItemType, { icon: React.ReactNode }> = {
+  flight:   { icon: <Plane className="w-3.5 h-3.5" /> },
+  hotel:    { icon: <Hotel className="w-3.5 h-3.5" /> },
+  activity: { icon: <MapPin className="w-3.5 h-3.5" /> },
+  meal:     { icon: <Utensils className="w-3.5 h-3.5" /> },
+  transit:  { icon: <Train className="w-3.5 h-3.5" /> },
+  note:     { icon: <FileText className="w-3.5 h-3.5" /> },
 };
 
 function formatClock(value?: string): string | null {
@@ -168,52 +135,59 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
       style={style}
       className={`group relative flex items-start gap-2 p-2 rounded-lg border transition-all duration-200 ${
         isDragging
-          ? "opacity-60 shadow-xl scale-95 border-amber-400/70 bg-slate-900/85 backdrop-blur-md"
-          : "bg-slate-900/90 border-slate-700 shadow-sm hover:border-slate-600 hover:shadow-md"
+          ? "opacity-60 scale-95 border-ds-accent/70 bg-ds-onyx/85 backdrop-blur-md shadow-[var(--ds-elevation-4)]"
+          : "bg-ds-onyx border-ds-pen-stroke shadow-[var(--ds-elevation-1)] hover:border-ds-carbon hover:shadow-[var(--ds-elevation-2)]"
       }`}
     >
-      {/* Drag handle */}
+      {/* Drag handle — -m-3.5 p-3.5 yields 44px hit area (16px icon + 14px*2 padding) */}
       <button
         {...listeners}
         {...attributes}
-        className="mt-0.5 flex-shrink-0 cursor-grab active:cursor-grabbing text-slate-600 group-hover:text-slate-400 transition-colors"
+        className="mt-0.5 flex-shrink-0 -m-3.5 p-3.5 flex items-center justify-center cursor-grab active:cursor-grabbing text-ds-text-tertiary group-hover:text-ds-text-secondary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         aria-label="Drag to reorder"
       >
         <GripVertical className="w-4 h-4" />
       </button>
 
       {/* Type icon */}
-      <div className={`flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center ${config.bgClass} ${config.colorClass}`}>
+      <div
+        className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-ds-accent"
+        style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+        aria-hidden="true"
+      >
         {config.icon}
       </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-1">
-          <span className="text-xs font-semibold text-slate-100 leading-tight line-clamp-1" title={item.title}>
+          <span className="text-xs font-semibold text-ds-text leading-tight line-clamp-1" title={item.title}>
             {item.title}
           </span>
           <div className="flex items-center gap-1 flex-shrink-0">
             {showMoveToIdeasAction && (
               <button
                 onClick={() => onMoveToIdeas(item.id)}
-                className="flex-shrink-0 rounded-md border border-amber-300/35 bg-amber-300/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-200 hover:bg-amber-300/20 transition-colors"
+                className="flex-shrink-0 min-h-[44px] inline-flex items-center justify-center rounded-md border border-ds-pen-stroke px-1.5 text-[10px] font-medium text-ds-text-secondary hover:border-ds-accent hover:text-ds-accent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                 aria-label={`Move ${item.title} back to Trip Ideas`}
               >
                 Move to Ideas
               </button>
             )}
+            {/* Icon buttons use -m-3 p-3: 20px visual + 12px*2 padding = 44px hit area */}
             {onToggleCompare && (
               <button
                 onClick={() => onToggleCompare(item)}
-                className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
-                  isComparing
-                    ? "opacity-100 bg-violet-600 text-white"
-                    : "opacity-0 group-hover:opacity-100 bg-slate-800 hover:bg-violet-500/20 text-slate-400 hover:text-violet-300"
-                }`}
+                className={`group -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2`}
                 aria-label={isComparing ? `Remove ${item.title} from compare` : `Add ${item.title} to compare`}
               >
-                <Scale className="w-3 h-3" />
+                <span className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
+                  isComparing
+                    ? "opacity-100 bg-ds-accent text-ds-text-inverse"
+                    : "opacity-0 group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary hover:text-ds-accent"
+                }`}>
+                  <Scale className="w-3 h-3" />
+                </span>
               </button>
             )}
             {/* Timeline edit trigger */}
@@ -226,37 +200,46 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                   handleOpenTimeline();
                 }
               }}
-              className={`flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center transition-all ${
-                timelineOpen
-                  ? "opacity-100 bg-amber-500/20 text-amber-300"
-                  : hasSchedule
-                    ? "opacity-75 bg-slate-800 text-slate-500 hover:bg-amber-500/15 hover:text-amber-300"
-                    : "opacity-100 md:opacity-0 md:group-hover:opacity-100 bg-slate-800 hover:bg-amber-500/15 text-slate-400 hover:text-amber-300"
-              }`}
+              className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               aria-label="Set timeline"
               title="Set timeline"
             >
-              <Clock className="w-3 h-3" />
+              <span
+                className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
+                  timelineOpen
+                    ? "opacity-100 text-ds-accent"
+                    : hasSchedule
+                      ? "opacity-75 bg-ds-carbon text-ds-text-tertiary group-hover:text-ds-accent"
+                      : "opacity-100 md:opacity-0 md:group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary group-hover:text-ds-accent"
+                }`}
+                style={timelineOpen ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
+              >
+                <Clock className="w-3 h-3" />
+              </span>
             </button>
             <button
               onClick={() => setBookingOpen(true)}
-              className="flex-shrink-0 w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 flex items-center justify-center transition-all"
+              className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               aria-label={`Book ${item.title}`}
             >
-              <Ticket className="w-3 h-3" />
+              <span className="w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-ds-carbon group-hover:bg-ds-pen-stroke text-ds-text-tertiary group-hover:text-ds-text-secondary flex items-center justify-center transition-all">
+                <Ticket className="w-3 h-3" />
+              </span>
             </button>
             <button
               onClick={() => onRemove(item.id)}
-              className="flex-shrink-0 w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 flex items-center justify-center transition-all"
+              className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               aria-label={`Remove ${item.title}`}
             >
-              <X className="w-3 h-3" />
+              <span className="w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary group-hover:text-ds-warning flex items-center justify-center transition-all">
+                <X className="w-3 h-3" />
+              </span>
             </button>
           </div>
         </div>
 
         {item.description && (
-          <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+          <p className="text-[11px] text-ds-text-tertiary mt-0.5 line-clamp-1">
             {item.description}
           </p>
         )}
@@ -285,7 +268,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
             (bookingLinkObj?.url as string | undefined) ??
             undefined;
 
-          const renderLeg = (leg: Record<string, unknown> | undefined, label: string, accent: string) => {
+          const renderLeg = (leg: Record<string, unknown> | undefined, label: string) => {
             if (!leg) return null;
             const segs = (leg.segments as Array<Record<string, unknown>> | undefined) ?? [];
             const seg0 = segs[0] as Record<string, unknown> | undefined;
@@ -299,16 +282,16 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
             const lArr = formatClock(((leg.arrivalTime ?? leg.arrival_time) as string | undefined) ?? undefined);
             if (!lOrigin && !lDest && !lAirline) return null;
             return (
-              <div className="text-[11px] text-slate-400 space-y-0.5">
-                <span className="flex items-center gap-1 font-medium text-slate-200 min-w-0">
-                  <Plane className="w-3 h-3 text-sky-300 flex-shrink-0" />
+              <div className="text-[11px] text-ds-text-tertiary space-y-0.5">
+                <span className="flex items-center gap-1 font-medium text-ds-text-secondary min-w-0">
+                  <Plane className="w-3 h-3 text-ds-accent flex-shrink-0" />
                   <span className="truncate" title={`${lOrigin ?? "?"} → ${lDest ?? "?"}`}>
                     {lOrigin ?? "?"} → {lDest ?? "?"}
                   </span>
-                  <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${accent}`}>{label}</span>
+                  <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold text-ds-text-tertiary border border-ds-pen-stroke">{label}</span>
                 </span>
                 {(lAirline || lFlightNum || lDep) && (
-                  <span className="flex items-center gap-1 text-slate-400 min-w-0">
+                  <span className="flex items-center gap-1 text-ds-text-tertiary min-w-0">
                     <span className="truncate" title={`${lAirline}${lFlightNum ? ` ${lFlightNum}` : ""}`}>
                       {lAirline}{lFlightNum ? ` ${lFlightNum}` : ""}
                     </span>
@@ -322,18 +305,18 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           if (isRoundTrip && (outboundLeg || returnLeg)) {
             return (
               <div className="mt-0.5 space-y-1" data-testid="itinerary-roundtrip-flight">
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-indigo-500/20 text-indigo-200 inline-block">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold text-ds-accent border border-ds-pen-stroke inline-block">
                   Round-trip
                 </span>
-                {renderLeg(outboundLeg, "Outbound", "bg-sky-500/20 text-sky-200")}
-                {renderLeg(returnLeg, "Return", "bg-indigo-500/20 text-indigo-200")}
+                {renderLeg(outboundLeg, "Outbound")}
+                {renderLeg(returnLeg, "Return")}
                 {googleFlightsUrl && (
                   <a
                     href={googleFlightsUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-0.5 text-[11px] text-sky-400/80 hover:text-sky-300 transition-colors"
+                    className="inline-flex items-center gap-0.5 text-[11px] text-ds-text-secondary hover:text-ds-accent transition-colors -my-3.5 py-3.5"
                     aria-label="Search on Google Flights"
                     data-testid="itinerary-google-flights-cta"
                   >
@@ -357,18 +340,18 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           const leg         = d.leg as string | undefined;
           if (!origin && !destination) return null;
           return (
-            <div className="mt-0.5 text-[11px] text-slate-400 space-y-0.5">
+            <div className="mt-0.5 text-[11px] text-ds-text-tertiary space-y-0.5">
               {(origin || destination) && (
-                <span className="flex items-center gap-1 font-medium text-slate-200 min-w-0">
-                  <Plane className="w-3 h-3 text-sky-300 flex-shrink-0" />
+                <span className="flex items-center gap-1 font-medium text-ds-text-secondary min-w-0">
+                  <Plane className="w-3 h-3 text-ds-accent flex-shrink-0" />
                   <span className="truncate" title={`${origin ?? "?"} → ${destination ?? "?"}`}>
                     {origin ?? "?"} → {destination ?? "?"}
                   </span>
-                  {leg && <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${leg === "outbound" ? "bg-sky-500/20 text-sky-200" : "bg-indigo-500/20 text-indigo-200"}`}>{leg}</span>}
+                  {leg && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold text-ds-text-tertiary border border-ds-pen-stroke">{leg}</span>}
                 </span>
               )}
               {(airline || flightNum || dep) && (
-                <span className="flex items-center gap-1 text-slate-400 min-w-0">
+                <span className="flex items-center gap-1 text-ds-text-tertiary min-w-0">
                   <span className="truncate" title={`${airline}${flightNum ? ` ${flightNum}` : ""}`}>
                     {airline}{flightNum ? ` ${flightNum}` : ""}
                   </span>
@@ -381,7 +364,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-0.5 text-[11px] text-sky-400/80 hover:text-sky-300 transition-colors"
+                  className="inline-flex items-center gap-0.5 text-[11px] text-ds-text-secondary hover:text-ds-accent transition-colors"
                   aria-label="Search on Google Flights"
                   data-testid="itinerary-google-flights-cta"
                 >
@@ -416,32 +399,35 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           if (!hasAny) return null;
           return (
             <div className="mt-0.5 space-y-0.5">
-              <div className="flex items-center gap-1 text-[11px] text-violet-300 font-medium min-w-0 flex-wrap">
+              <div className="flex items-center gap-1 text-[11px] text-ds-accent font-medium min-w-0 flex-wrap">
                 <Hotel className="w-3 h-3 flex-shrink-0" />
                 {stars != null && (
-                  <span className="text-amber-400 flex-shrink-0">{"★".repeat(Math.min(5, Math.round(stars)))}</span>
+                  <span className="text-ds-accent flex-shrink-0">{"★".repeat(Math.min(5, Math.round(stars)))}</span>
                 )}
                 {checkIn || checkOut ? <span className="shrink-0">Stay: {checkIn ?? "?"} → {checkOut ?? "?"}</span> : null}
-                {rating ? <span className="text-amber-300 font-semibold flex-shrink-0">{checkIn || checkOut ? " · " : ""}★ {rating.toFixed(1)}</span> : null}
+                {rating ? <span className="text-ds-accent font-semibold flex-shrink-0">{checkIn || checkOut ? " · " : ""}★ {rating.toFixed(1)}</span> : null}
               </div>
               {(areaLabel || proximityLabel) && (
                 <div className="flex items-center gap-1 flex-wrap pl-4">
                   {areaLabel && (
-                    <span className={`px-1.5 py-0 text-[10px] font-semibold rounded-full ${
-                      areaLabel === "In Best Area" ? "bg-emerald-900/50 text-emerald-300 border border-emerald-800/40" :
-                      areaLabel === "Close to Best Area" ? "bg-amber-900/50 text-amber-300 border border-amber-800/40" :
-                      "bg-slate-800/60 text-slate-400 border border-slate-700/50"
-                    }`}>{areaLabel}</span>
+                    <span className={`px-1.5 py-0 text-[10px] font-semibold rounded-full border ${
+                      areaLabel === "In Best Area"
+                        ? "text-ds-trust-verified border-ds-trust-verified/30"
+                        : areaLabel === "Close to Best Area"
+                          ? "text-ds-caution border-ds-caution/30"
+                          : "bg-ds-carbon text-ds-text-tertiary border-ds-pen-stroke"
+                    }`}
+                    >{areaLabel}</span>
                   )}
                   {proximityLabel && proximityLabel.toLowerCase() !== (areaLabel ?? "").toLowerCase() && (
-                    <span className="text-[10px] text-slate-500">{proximityLabel}</span>
+                    <span className="text-[10px] text-ds-text-tertiary">{proximityLabel}</span>
                   )}
                 </div>
               )}
               {richTags.length > 0 && (
                 <div className="flex flex-wrap gap-1 pl-4">
                   {richTags.map((tag) => (
-                    <span key={tag} className="px-1.5 py-0 text-[10px] rounded-full bg-violet-900/40 text-violet-300/70 border border-violet-800/50">{tag}</span>
+                    <span key={tag} className="px-1.5 py-0 text-[10px] rounded-full bg-ds-carbon text-ds-text-tertiary border border-ds-pen-stroke">{tag}</span>
                   ))}
                 </div>
               )}
@@ -464,23 +450,23 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
             <div className="mt-0.5 space-y-0.5">
               <div className="flex items-center gap-2 flex-wrap">
                 {rating != null && (
-                  <span className="flex items-center gap-0.5 text-[11px] text-amber-400 font-medium">
-                    <Star className="w-3 h-3 fill-amber-400" />
+                  <span className="flex items-center gap-0.5 text-[11px] text-ds-accent font-medium">
+                    <Star className="w-3 h-3 fill-current" />
                     {rating.toFixed(1)}
                     {numReviews != null && (
-                      <span className="text-slate-500 font-normal ml-0.5">
+                      <span className="text-ds-text-tertiary font-normal ml-0.5">
                         ({numReviews >= 1000 ? `${(numReviews / 1000).toFixed(0)}k` : numReviews})
                       </span>
                     )}
                   </span>
                 )}
-                {category && <span className="text-[11px] text-emerald-300/80">{category}</span>}
+                {category && <span className="text-[11px] text-ds-text-secondary">{category}</span>}
                 {mapsLink && (
                   <a
                     href={mapsLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-0.5 text-[11px] text-sky-400/70 hover:text-sky-300 transition-colors"
+                    className="flex items-center gap-0.5 text-[11px] text-ds-text-tertiary hover:text-ds-accent transition-colors -my-3.5 py-3.5"
                     onClick={(e) => e.stopPropagation()}
                     aria-label="Open in Google Maps"
                   >
@@ -492,7 +478,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
               {tags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {tags.map((tag) => (
-                    <span key={tag} className="px-1.5 py-0 text-[10px] rounded-full bg-emerald-900/40 text-emerald-300/70 border border-emerald-800/50">{tag}</span>
+                    <span key={tag} className="px-1.5 py-0 text-[10px] rounded-full bg-ds-carbon text-ds-text-tertiary border border-ds-pen-stroke">{tag}</span>
                   ))}
                 </div>
               )}
@@ -513,24 +499,24 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           return (
             <div className="mt-0.5 space-y-0.5">
               <div className="flex items-center gap-2 flex-wrap">
-                {cuisine && <span className="text-[11px] text-amber-300/80">{cuisine}</span>}
+                {cuisine && <span className="text-[11px] text-ds-text-secondary">{cuisine}</span>}
                 {rating != null && (
-                  <span className="flex items-center gap-0.5 text-[11px] text-amber-400 font-medium">
-                    <Star className="w-3 h-3 fill-amber-400" />
+                  <span className="flex items-center gap-0.5 text-[11px] text-ds-accent font-medium">
+                    <Star className="w-3 h-3 fill-current" />
                     {rating.toFixed(1)}
                     {numReviews != null && (
-                      <span className="text-slate-500 font-normal ml-0.5">
+                      <span className="text-ds-text-tertiary font-normal ml-0.5">
                         ({numReviews >= 1000 ? `${(numReviews / 1000).toFixed(0)}k` : numReviews})
                       </span>
                     )}
                   </span>
                 )}
-                {priceLevelStr && <span className="text-[11px] text-slate-400 font-medium">{priceLevelStr}</span>}
+                {priceLevelStr && <span className="text-[11px] text-ds-text-tertiary font-medium">{priceLevelStr}</span>}
               </div>
               {tags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {tags.map((tag) => (
-                    <span key={tag} className="px-1.5 py-0 text-[10px] rounded-full bg-amber-900/40 text-amber-300/70 border border-amber-800/50">{tag}</span>
+                    <span key={tag} className="px-1.5 py-0 text-[10px] rounded-full bg-ds-carbon text-ds-text-tertiary border border-ds-pen-stroke">{tag}</span>
                   ))}
                 </div>
               )}
@@ -540,7 +526,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
 
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           {item.itemType !== "flight" && (item.startTime || item.endTime) && (
-            <span className="flex items-center gap-1 text-xs text-slate-400">
+            <span className="flex items-center gap-1 text-xs text-ds-text-tertiary">
               <Clock className="w-3 h-3" />
               {item.startTime}
               {item.endTime && ` – ${item.endTime}`}
@@ -548,20 +534,20 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           )}
           {/* Show user-set timeLabel when present and no startTime */}
           {!item.startTime && timeLabelValue && (
-            <span className="flex items-center gap-1 text-[10px] text-slate-500">
+            <span className="flex items-center gap-1 text-[10px] text-ds-text-tertiary">
               <Clock className="w-2.5 h-2.5" />
               {timeLabelValue}
             </span>
           )}
           {item.location && (
-            <span className="flex items-center gap-1 text-xs text-slate-400 min-w-0">
+            <span className="flex items-center gap-1 text-xs text-ds-text-tertiary min-w-0">
               <MapPin className="w-3 h-3" />
               <span className="truncate" title={item.location}>{item.location}</span>
             </span>
           )}
           {item.cashPrice != null && item.cashPrice > 0 && (
             <span className={`flex items-center gap-0.5 text-xs font-medium ${
-              item.bestOption === "cash" ? "text-emerald-700 font-semibold" : "text-emerald-600"
+              item.bestOption === "cash" ? "text-ds-trust-verified font-semibold" : "text-ds-text-secondary"
             }`}>
               <DollarSign className="w-3 h-3" />
               {item.cashPrice.toLocaleString()}{" "}
@@ -570,7 +556,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           )}
           {item.pointsPrice != null && (
             <span className={`flex items-center gap-0.5 text-xs font-medium ${
-              item.bestOption === "points" ? "text-violet-700 font-semibold" : "text-violet-600"
+              item.bestOption === "points" ? "text-ds-accent font-semibold" : "text-ds-text-tertiary"
             }`}>
               <Coins className="w-3 h-3" />
               {item.pointsPrice.toLocaleString()} pts
@@ -593,19 +579,26 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
 
         {/* Inline timeline editor */}
         {timelineOpen && (
-          <div className="mt-2 pt-2 border-t border-slate-700/60">
+          <div className="mt-2 pt-2 border-t border-ds-pen-stroke/60">
             <div className="flex flex-wrap gap-1 mb-1.5">
               {DAY_PARTS.map((part) => (
                 <button
                   key={part.value}
                   onClick={() => setSelectedPart(part.value)}
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${
-                    selectedPart === part.value
-                      ? part.activeClass
-                      : "border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-300"
-                  }`}
+                  className="group min-h-[44px] flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                 >
-                  {part.label}
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${
+                      selectedPart === part.value
+                        ? part.activeClass
+                        : "border-ds-pen-stroke text-ds-text-tertiary group-hover:border-ds-carbon group-hover:text-ds-text-secondary"
+                    }`}
+                    style={selectedPart === part.value && part.value !== "unscheduled"
+                      ? { backgroundColor: "var(--ds-accent-subtle)" }
+                      : undefined}
+                  >
+                    {part.label}
+                  </span>
                 </button>
               ))}
             </div>
@@ -620,12 +613,13 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                 }}
                 placeholder="Time label, e.g. 9:00 AM (optional)"
                 maxLength={40}
-                className="flex-1 min-w-0 text-[10px] bg-slate-800 border border-slate-700 rounded px-1.5 py-1 text-slate-300 placeholder-slate-600 focus:outline-none focus:border-slate-500"
+                className="flex-1 min-w-0 text-[10px] bg-ds-carbon border border-ds-pen-stroke rounded px-1.5 py-1 text-ds-text-secondary placeholder-ds-text-tertiary focus:outline-none focus:border-ds-carbon"
               />
               <button
                 onClick={handleSaveTimeline}
                 disabled={saving}
-                className="flex-shrink-0 px-2 py-1 rounded text-[10px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-colors disabled:opacity-50"
+                className="flex-shrink-0 min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2 rounded text-[10px] font-medium text-ds-accent border border-ds-pen-stroke hover:border-ds-accent transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                style={{ backgroundColor: "var(--ds-accent-subtle)" }}
               >
                 {saving ? "…" : "Save"}
               </button>

@@ -31,6 +31,7 @@ import type { FlightItineraryOffer, ExploreResultContext } from "./types";
 import { ResultActionSheet } from "./ResultActionSheet";
 import { CityAutocomplete } from "@/components/ui/CityAutocomplete";
 import type { AirportSelection } from "@/components/ui/CityAutocomplete";
+import { Card } from "@/components/ui/Card";
 
 // ---------------------------------------------------------------------------
 // Form types
@@ -140,36 +141,38 @@ function FlightCard({ offer }: { offer: FlightItineraryOffer }) {
   const context = buildFlightContext(offer);
 
   return (
-    <div
-      className="rounded-2xl border border-white/[.08] bg-white/[.03] p-4 space-y-3"
+    <Card
+      tone="dark"
+      as="article"
+      className="p-4 space-y-3"
       data-testid="flight-card"
     >
       {/* Header row: airline + price */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <Card.Identity>
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <Plane className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+            <Plane className="w-3.5 h-3.5 text-ds-accent shrink-0" />
             <span
-              className="text-sm font-semibold text-cream-100 truncate"
+              className="text-sm font-semibold text-ds-text truncate"
               data-testid="flight-airline"
             >
               {airline}
             </span>
-            <span className="text-xs text-cream-600">{flightNumbers}</span>
+            <span className="text-xs text-ds-text-tertiary">{flightNumbers}</span>
           </div>
-          <p className="text-xs text-cream-500 mt-0.5">
+          <p className="text-xs text-ds-text-tertiary mt-0.5">
             {cabinLabel(offer.cabinClass)} ·{" "}
             {offer.passengers} pax
           </p>
         </div>
         <div className="text-right shrink-0">
           <p
-            className="text-base font-bold text-cream-100"
+            className="text-base font-bold text-ds-text"
             data-testid="flight-price"
           >
             {formatPrice(offer.price.currency, offer.price.totalAmount)}
           </p>
-          <p className="text-[10px] text-cream-600 uppercase tracking-wide">
+          <p className="text-[10px] text-ds-text-tertiary uppercase tracking-wide">
             {offer.price.taxesFeesIncluded === true
               ? "taxes incl."
               : offer.price.taxesFeesIncluded === false
@@ -177,7 +180,7 @@ function FlightCard({ offer }: { offer: FlightItineraryOffer }) {
               : "total"}
           </p>
         </div>
-      </div>
+      </Card.Identity>
 
       {/* Outbound leg */}
       <LegRow leg={ob} label={offer.tripType === "round_trip" ? "Outbound" : undefined} />
@@ -186,13 +189,13 @@ function FlightCard({ offer }: { offer: FlightItineraryOffer }) {
       {ret && <LegRow leg={ret} label="Return" />}
 
       {/* Live status badge + booking CTA */}
-      <div className="flex items-center justify-between pt-1 border-t border-white/[.05]">
+      <div className="flex items-center justify-between pt-1 border-t border-ds-pen-stroke">
         <span
           className={[
-            "text-[10px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wide",
+            "text-[10px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wide border",
             offer.liveCachedStatus === "live"
-              ? "bg-emerald-500/10 text-emerald-400"
-              : "bg-amber-500/10 text-amber-400",
+              ? "text-ds-trust-verified border-ds-trust-verified/30"
+              : "text-ds-caution border-ds-caution/30",
           ].join(" ")}
           data-testid="flight-live-status"
         >
@@ -204,7 +207,8 @@ function FlightCard({ offer }: { offer: FlightItineraryOffer }) {
             href={bookingUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/15 text-sky-300 text-xs font-medium hover:bg-sky-500/25 transition"
+            className="min-h-[44px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-ds-accent text-xs font-medium hover:border-ds-accent transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            style={{ backgroundColor: "var(--ds-accent-subtle)" }}
             data-testid={isSearchRedirect ? "flight-search-link" : "flight-book-link"}
             aria-label={isSearchRedirect ? "Search on Google Flights" : `Book flight on ${offer.bookingLink.providerName}`}
           >
@@ -212,7 +216,7 @@ function FlightCard({ offer }: { offer: FlightItineraryOffer }) {
             {isSearchRedirect ? "Search on Google Flights" : "Book"}
           </a>
         ) : (
-          <span className="text-xs text-cream-700 italic">
+          <span className="text-xs text-ds-text-tertiary italic">
             Booking link unavailable
           </span>
         )}
@@ -220,7 +224,7 @@ function FlightCard({ offer }: { offer: FlightItineraryOffer }) {
 
       {/* Save action */}
       <ResultActionSheet context={context} />
-    </div>
+    </Card>
   );
 }
 
@@ -234,22 +238,22 @@ function LegRow({
   return (
     <div className="space-y-1">
       {label && (
-        <p className="text-[10px] uppercase tracking-wide text-cream-600 font-medium">
+        <p className="text-[10px] uppercase tracking-wide text-ds-text-tertiary font-medium">
           {label}
         </p>
       )}
       <div className="flex items-center gap-2 text-sm">
-        <span className="font-semibold text-cream-100 w-11 shrink-0">
+        <span className="font-semibold text-ds-text w-11 shrink-0">
           {formatTime(leg.departureTime)}
         </span>
-        <span className="text-cream-500 font-medium">{leg.origin}</span>
-        <ArrowRight className="w-3 h-3 text-cream-600 shrink-0" />
-        <span className="text-cream-500 font-medium">{leg.destination}</span>
-        <span className="font-semibold text-cream-100">
+        <span className="text-ds-text-secondary font-medium">{leg.origin}</span>
+        <ArrowRight className="w-3 h-3 text-ds-text-tertiary shrink-0" />
+        <span className="text-ds-text-secondary font-medium">{leg.destination}</span>
+        <span className="font-semibold text-ds-text">
           {formatTime(leg.arrivalTime)}
         </span>
       </div>
-      <div className="flex items-center gap-3 text-xs text-cream-600">
+      <div className="flex items-center gap-3 text-xs text-ds-text-tertiary">
         <span className="flex items-center gap-1">
           <Clock className="w-3 h-3" />
           {formatDuration(leg.durationMinutes)}
@@ -273,21 +277,22 @@ function LegRow({
 function UnavailableState() {
   return (
     <div
-      className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-6 text-center space-y-3"
+      className="rounded-2xl border border-ds-pen-stroke bg-ds-onyx p-6 text-center space-y-3"
       data-testid="flight-unavailable-state"
       role="status"
       aria-live="polite"
     >
       <div className="flex justify-center">
-        <div className="w-12 h-12 rounded-full bg-sky-500/10 text-sky-400 flex items-center justify-center">
+        <div className="w-12 h-12 rounded-full text-ds-accent flex items-center justify-center"
+          style={{ backgroundColor: "var(--ds-accent-subtle)" }}>
           <Construction className="w-6 h-6" />
         </div>
       </div>
       <div>
-        <p className="text-cream-200 font-semibold text-sm">
+        <p className="text-ds-text font-semibold text-sm">
           Flight search unavailable
         </p>
-        <p className="text-cream-500 text-xs mt-1">
+        <p className="text-ds-text-tertiary text-xs mt-1">
           Live flight search is not available at the moment. Please try again
           later.
         </p>
@@ -305,13 +310,13 @@ function EmptyState({
 }) {
   return (
     <div
-      className="rounded-2xl border border-white/[.06] bg-white/[.02] p-6 text-center space-y-2"
+      className="rounded-2xl border border-ds-pen-stroke bg-ds-onyx p-6 text-center space-y-2"
       data-testid="flight-empty-state"
       role="status"
     >
-      <Plane className="w-8 h-8 text-cream-600 mx-auto" />
-      <p className="text-cream-300 text-sm font-medium">No flights found</p>
-      <p className="text-cream-600 text-xs">
+      <Plane className="w-8 h-8 text-ds-text-tertiary mx-auto" />
+      <p className="text-ds-text-secondary text-sm font-medium">No flights found</p>
+      <p className="text-ds-text-tertiary text-xs">
         No available flights for {origin} → {destination}. Try different dates
         or airports.
       </p>
@@ -322,14 +327,14 @@ function EmptyState({
 function ErrorState({ message }: { message?: string }) {
   return (
     <div
-      className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-5 flex items-start gap-3"
+      className="rounded-2xl border border-ds-warning/20 p-5 flex items-start gap-3 bg-ds-onyx"
       data-testid="flight-error-state"
       role="alert"
     >
-      <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+      <AlertCircle className="w-5 h-5 text-ds-warning shrink-0 mt-0.5" />
       <div>
-        <p className="text-sm font-medium text-rose-300">Search failed</p>
-        <p className="text-xs text-cream-500 mt-0.5">
+        <p className="text-sm font-medium text-ds-warning">Search failed</p>
+        <p className="text-xs text-ds-text-tertiary mt-0.5">
           {message ?? "Could not complete flight search. Please try again."}
         </p>
       </div>
@@ -422,7 +427,7 @@ export function FlightExploreFlow() {
         {/* Dates */}
         <div className="grid grid-cols-2 gap-3">
           <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cream-500 pointer-events-none" />
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ds-text-tertiary pointer-events-none" />
             <input
               type="date"
               value={form.departure}
@@ -433,7 +438,7 @@ export function FlightExploreFlow() {
             />
           </div>
           <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cream-500 pointer-events-none" />
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ds-text-tertiary pointer-events-none" />
             <input
               type="date"
               value={form.returnDate}
@@ -448,7 +453,7 @@ export function FlightExploreFlow() {
         {/* Passengers + Cabin */}
         <div className="grid grid-cols-2 gap-3">
           <div className="relative">
-            <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cream-500 pointer-events-none" />
+            <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ds-text-tertiary pointer-events-none" />
             <input
               type="number"
               value={form.passengers}
@@ -496,7 +501,7 @@ export function FlightExploreFlow() {
 
       {/* Results area */}
       {searchState.kind === "idle" && (
-        <div className="text-center py-8 text-cream-500 text-sm">
+        <div className="text-center py-8 text-ds-text-tertiary text-sm">
           Search by city name or airport code.
         </div>
       )}
@@ -510,7 +515,7 @@ export function FlightExploreFlow() {
                 className="space-y-4"
                 data-testid="flight-results-list"
               >
-                <p className="text-xs text-cream-500">
+                <p className="text-xs text-ds-text-tertiary">
                   {response.offers.length} flight
                   {response.offers.length !== 1 ? "s" : ""} found · prices from
                   live provider

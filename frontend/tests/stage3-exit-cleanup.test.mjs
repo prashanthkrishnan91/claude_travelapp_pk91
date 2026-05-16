@@ -147,13 +147,24 @@ test('HANDOFF.md flags Stage 3 exit/status decision as current work', () => {
     'HANDOFF must reference Stage 3 exit decision');
 });
 
-test('BUILD_QUEUE.md keeps Stage 3 exit/status decision under Now', () => {
+test('BUILD_QUEUE.md keeps active design-foundation work under Now', () => {
   const nowIdx = buildQueue.indexOf('## Now');
   const nextIdx = buildQueue.indexOf('## Next');
   assert.ok(nowIdx >= 0 && nextIdx > nowIdx, 'Now/Next sections missing');
   const nowBlock = buildQueue.slice(nowIdx, nextIdx);
-  assert.ok(/Stage 3 exit/i.test(nowBlock),
-    'Stage 3 exit/status decision must remain the active item');
+  // Stage 3 exit is now Completed; the active item is Wife-Wow / Stage 3.5 design-foundation work
+  assert.ok(
+    /Stage 3\.5|Wife-Wow|design.*foundation|card.*variant|Phase 3/i.test(nowBlock),
+    'BUILD_QUEUE Now must reference the active Wife-Wow / Stage 3.5 design-foundation item'
+  );
+});
+
+test('BUILD_QUEUE.md Stage 3 exit appears in Completed (not lost)', () => {
+  const completedIdx = buildQueue.indexOf('## Completed');
+  assert.ok(completedIdx >= 0, '## Completed section missing');
+  const completedBlock = buildQueue.slice(completedIdx);
+  assert.ok(/Stage 3 exit/i.test(completedBlock),
+    'Stage 3 exit must appear in the Completed section');
 });
 
 test('BUILD_QUEUE.md does not promote Stage 4 to a Now-bullet subject', () => {

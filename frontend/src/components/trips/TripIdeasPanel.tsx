@@ -31,10 +31,10 @@ function groupIdeasByVertical(ideas: ItineraryItem[]): VerticalGroup[] {
     }
   }
   const groups: VerticalGroup[] = [
-    { key: "activity", label: "Attractions", icon: <Sparkles className="h-3 w-3 text-emerald-300" />, items: buckets.activity },
-    { key: "meal",     label: "Restaurants", icon: <UtensilsCrossed className="h-3 w-3 text-rose-300" />, items: buckets.meal     },
-    { key: "hotel",    label: "Hotels",      icon: <Hotel className="h-3 w-3 text-violet-300" />,        items: buckets.hotel    },
-    { key: "flight",   label: "Flights",     icon: <Plane className="h-3 w-3 text-sky-300" />,           items: buckets.flight   },
+    { key: "activity", label: "Attractions", icon: <Sparkles className="h-3 w-3 text-ds-accent" />,       items: buckets.activity },
+    { key: "meal",     label: "Restaurants", icon: <UtensilsCrossed className="h-3 w-3 text-ds-accent" />, items: buckets.meal     },
+    { key: "hotel",    label: "Hotels",      icon: <Hotel className="h-3 w-3 text-ds-accent" />,           items: buckets.hotel    },
+    { key: "flight",   label: "Flights",     icon: <Plane className="h-3 w-3 text-ds-accent" />,           items: buckets.flight   },
   ];
   return groups.filter((g) => g.items.length > 0);
 }
@@ -47,9 +47,9 @@ interface Props {
 }
 
 const STATUS_OPTIONS = [
-  { value: "must_do", label: "Must-do", activeClass: "bg-emerald-400/15 text-emerald-300 ring-emerald-400/40" },
-  { value: "maybe",   label: "Maybe",   activeClass: "bg-amber-200/15 text-amber-200 ring-amber-300/40" },
-  { value: "skipped", label: "Skip",    activeClass: "bg-slate-600/40 text-slate-400 ring-slate-500/40" },
+  { value: "must_do", label: "Must-do", activeClass: "text-ds-trust-verified ring-ds-trust-verified/40" },
+  { value: "maybe",   label: "Maybe",   activeClass: "text-ds-caution ring-ds-caution/40" },
+  { value: "skipped", label: "Skip",    activeClass: "text-ds-text-tertiary ring-ds-pen-stroke/40" },
 ] as const;
 
 type IdeaStatus = "must_do" | "maybe" | "skipped";
@@ -200,23 +200,23 @@ function IdeaCard({
   }
 
   return (
-    <div className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-3">
+    <div className="rounded-xl border border-ds-pen-stroke bg-ds-onyx p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-slate-100">{item.title}</p>
-          <p className="mt-0.5 text-[11px] uppercase tracking-[0.08em] text-slate-400">{ideaCategory(item)}</p>
-          {rating && <p className="mt-0.5 text-xs text-slate-300">{rating}</p>}
+          <p className="truncate text-sm font-semibold text-ds-text">{item.title}</p>
+          <p className="mt-0.5 text-[11px] uppercase tracking-[0.08em] text-ds-text-tertiary">{ideaCategory(item)}</p>
+          {rating && <p className="mt-0.5 text-xs text-ds-text-secondary">{rating}</p>}
           {item.location && item.location !== item.title && (
-            <p className="mt-0.5 text-[11px] text-slate-400">{item.location}</p>
+            <p className="mt-0.5 text-[11px] text-ds-text-tertiary">{item.location}</p>
           )}
         </div>
         <div className="flex items-center gap-1">
-          {savingMeta && <Loader2 className="h-3 w-3 animate-spin text-slate-500" />}
+          {savingMeta && <Loader2 className="h-3 w-3 animate-spin text-ds-text-tertiary" />}
           <button
             onClick={onRemove}
             disabled={removing}
             title="Remove from trip ideas"
-            className="flex-shrink-0 rounded p-1 text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition"
+            className="flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center rounded text-ds-text-tertiary hover:bg-ds-carbon hover:text-ds-text-secondary transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           >
             {removing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
           </button>
@@ -230,18 +230,25 @@ function IdeaCard({
             key={opt.value}
             onClick={() => handleStatusChange(opt.value)}
             disabled={savingMeta}
-            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 transition ${
-              status === opt.value
-                ? opt.activeClass
-                : "text-slate-500 ring-slate-600/40 hover:text-slate-300 hover:ring-slate-500/60"
-            }`}
+            className="group min-h-[44px] flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           >
-            {opt.label}
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 transition ${
+                status === opt.value
+                  ? opt.activeClass
+                  : "text-ds-text-tertiary ring-ds-pen-stroke/40 group-hover:text-ds-text-secondary group-hover:ring-ds-pen-stroke"
+              }`}
+              style={status === opt.value && opt.value !== "skipped"
+                ? { backgroundColor: "var(--ds-accent-subtle)" }
+                : undefined}
+            >
+              {opt.label}
+            </span>
           </button>
         ))}
         <button
           onClick={() => setNoteOpen((v) => !v)}
-          className="ml-auto text-[10px] text-slate-500 hover:text-slate-300 transition"
+          className="ml-auto min-h-[44px] min-w-[44px] flex items-center justify-center px-1 text-[10px] text-ds-text-tertiary hover:text-ds-text-secondary transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         >
           {note ? "note ✎" : "+ note"}
         </button>
@@ -254,7 +261,7 @@ function IdeaCard({
           onChange={(e) => handleNoteChange(e.target.value)}
           placeholder="Add a note…"
           rows={2}
-          className="mt-1.5 w-full resize-none rounded-lg border border-slate-600 bg-slate-800 px-2 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-300/50"
+          className="mt-1.5 w-full resize-none rounded-lg border border-ds-pen-stroke bg-ds-carbon px-2 py-1.5 text-xs text-ds-text-secondary placeholder-ds-text-tertiary focus:outline-none focus:ring-1 focus:ring-ds-accent"
         />
       )}
 
@@ -264,7 +271,7 @@ function IdeaCard({
             value={selectedDay}
             onChange={(e) => setSelectedDay(e.target.value)}
             disabled={assigning}
-            className="flex-1 rounded-lg border border-slate-600 bg-slate-800 px-2 py-1.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-300/50"
+            className="flex-1 min-h-[44px] rounded-lg border border-ds-pen-stroke bg-ds-carbon px-2 py-1.5 text-xs text-ds-text-secondary focus:outline-none focus:ring-1 focus:ring-ds-accent"
           >
             {days.map((day) => (
               <option key={day.id} value={day.id}>
@@ -275,7 +282,8 @@ function IdeaCard({
           <button
             onClick={() => onAssign(selectedDay)}
             disabled={assigning || !selectedDay}
-            className="flex-shrink-0 rounded-lg bg-amber-200/15 px-2.5 py-1.5 text-xs font-medium text-amber-100 ring-1 ring-amber-300/40 hover:bg-amber-200/25 transition disabled:opacity-50"
+            className="flex-shrink-0 min-h-[44px] inline-flex items-center justify-center rounded-lg px-2.5 text-xs font-medium text-ds-accent ring-1 ring-ds-accent/40 hover:ring-ds-accent transition disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            style={{ backgroundColor: "var(--ds-accent-subtle)" }}
           >
             {assigning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Add to Day"}
           </button>
@@ -374,48 +382,49 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
   }
 
   return (
-    <div className="rounded-2xl border border-amber-200/15 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 shadow-sm">
+    <div className="rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-1)]">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-3.5 py-3 text-left"
+        className="flex w-full items-center justify-between px-3.5 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded-2xl"
       >
         <div className="flex items-center gap-2">
-          <Bookmark className="h-3.5 w-3.5 text-amber-200/70" />
+          <Bookmark className="h-3.5 w-3.5 text-ds-accent" />
           <div className="flex flex-col">
-            <span className="text-sm font-semibold text-slate-100">Trip Ideas</span>
-            <span className="text-[10px] text-slate-400">Saved from AI Concierge · add to a day when ready</span>
+            <span className="text-sm font-semibold text-ds-text">Trip Ideas</span>
+            <span className="text-[10px] text-ds-text-tertiary">Saved from AI Concierge · add to a day when ready</span>
           </div>
           {activeCount > 0 && (
-            <span className="rounded-full bg-amber-200/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-200">
+            <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-ds-accent border border-ds-pen-stroke"
+              style={{ backgroundColor: "var(--ds-accent-subtle)" }}>
               {activeCount}
             </span>
           )}
         </div>
-        <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`h-4 w-4 text-ds-text-tertiary transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
-        <div className="border-t border-slate-700/60 px-3.5 pb-3.5 pt-3">
+        <div className="border-t border-ds-pen-stroke px-3.5 pb-3.5 pt-3">
           {loading ? (
-            <div className="flex items-center gap-2 py-2 text-xs text-slate-400">
+            <div className="flex items-center gap-2 py-2 text-xs text-ds-text-tertiary">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Loading ideas…
             </div>
           ) : ideas.length === 0 ? (
-            <p className="py-2 text-xs text-slate-400">Save recommendations from AI Concierge and schedule them later.</p>
+            <p className="py-2 text-xs text-ds-text-tertiary">Save recommendations from AI Concierge and schedule them later.</p>
           ) : (
             <>
               {/* Compact filter / search / sort controls */}
               <div className="mb-3 space-y-2">
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+                  <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ds-text-tertiary" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search ideas…"
                     aria-label="Search trip ideas"
-                    className="w-full rounded-lg border border-slate-600 bg-slate-800 py-1.5 pl-7 pr-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-300/50"
+                    className="w-full rounded-lg border border-ds-pen-stroke bg-ds-carbon py-1.5 pl-7 pr-2 text-xs text-ds-text-secondary placeholder-ds-text-tertiary focus:outline-none focus:ring-1 focus:ring-ds-accent"
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
@@ -424,20 +433,25 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                       key={opt.value}
                       onClick={() => setStatusFilter(opt.value)}
                       aria-pressed={statusFilter === opt.value}
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 transition ${
-                        statusFilter === opt.value
-                          ? "bg-amber-200/15 text-amber-200 ring-amber-300/40"
-                          : "text-slate-500 ring-slate-600/40 hover:text-slate-300 hover:ring-slate-500/60"
-                      }`}
+                      className="group min-h-[44px] flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                     >
-                      {opt.label}
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 transition ${
+                          statusFilter === opt.value
+                            ? "text-ds-accent ring-ds-accent/40"
+                            : "text-ds-text-tertiary ring-ds-pen-stroke/40 group-hover:text-ds-text-secondary group-hover:ring-ds-pen-stroke"
+                        }`}
+                        style={statusFilter === opt.value ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
+                      >
+                        {opt.label}
+                      </span>
                     </button>
                   ))}
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as SortOption)}
                     aria-label="Sort ideas"
-                    className="ml-auto rounded-lg border border-slate-600 bg-slate-800 px-2 py-1 text-[10px] text-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-300/50"
+                    className="ml-auto min-h-[44px] rounded-lg border border-ds-pen-stroke bg-ds-carbon px-2 py-1 text-[10px] text-ds-text-tertiary focus:outline-none focus:ring-1 focus:ring-ds-accent"
                   >
                     {SORT_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -447,7 +461,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                     <button
                       onClick={handleReset}
                       aria-label="Reset filters"
-                      className="text-[10px] text-slate-500 hover:text-slate-300 transition"
+                      className="min-h-[44px] min-w-[44px] flex items-center justify-center px-1 text-[10px] text-ds-text-tertiary hover:text-ds-text-secondary transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                     >
                       Clear ×
                     </button>
@@ -456,7 +470,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
               </div>
 
               {filteredAndSorted.length === 0 ? (
-                <p className="py-2 text-xs text-slate-400">No ideas match your current filters.</p>
+                <p className="py-2 text-xs text-ds-text-tertiary">No ideas match your current filters.</p>
               ) : (
                 <div className="space-y-3">
                   {groupIdeasByVertical(filteredAndSorted).map((group) => {
@@ -467,10 +481,10 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                     const overflow = group.items.length - visible.length;
                     return (
                       <div key={group.key} data-vertical={group.key}>
-                        <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-300">
+                        <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-ds-text-secondary">
                           {group.icon}
                           {group.label}
-                          <span className="text-slate-500">({group.items.length})</span>
+                          <span className="text-ds-text-tertiary">({group.items.length})</span>
                         </div>
                         <div className="space-y-2">
                           {visible.map((idea) => (
@@ -489,7 +503,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                         {overflow > 0 && (
                           <button
                             onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.key]: true }))}
-                            className="mt-1.5 w-full rounded-lg border border-slate-700/60 bg-slate-900/40 py-1 text-[10px] font-medium text-slate-300 hover:bg-slate-800/60 transition"
+                            className="mt-1.5 w-full min-h-[44px] flex items-center justify-center rounded-lg border border-ds-pen-stroke bg-ds-onyx text-[10px] font-medium text-ds-text-secondary hover:bg-ds-carbon transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                           >
                             Show {overflow} more
                           </button>
@@ -497,7 +511,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                         {expanded && group.items.length > DEFAULT_VISIBLE_PER_VERTICAL && (
                           <button
                             onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.key]: false }))}
-                            className="mt-1.5 w-full rounded-lg border border-slate-700/60 bg-slate-900/40 py-1 text-[10px] font-medium text-slate-300 hover:bg-slate-800/60 transition"
+                            className="mt-1.5 w-full min-h-[44px] flex items-center justify-center rounded-lg border border-ds-pen-stroke bg-ds-onyx text-[10px] font-medium text-ds-text-secondary hover:bg-ds-carbon transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                           >
                             Show less
                           </button>

@@ -189,19 +189,6 @@ function formatTime(iso: string): string {
 // ─── Recommendation tag badge ─────────────────────────────────────────────────
 
 function RecTag({ tag }: { tag: string }) {
-  const style =
-    tag === "Points Better"   ? "bg-violet-100 text-violet-700" :
-    tag === "Best Value"      ? "bg-emerald-100 text-emerald-700" :
-    tag === "Great Rating"    ? "bg-amber-100 text-amber-700" :
-    tag === "Budget Pick"     ? "bg-teal-100 text-teal-700" :
-    tag === "High CPP"        ? "bg-purple-100 text-purple-700" :
-    tag === "Non-stop"        ? "bg-sky-100 text-sky-700" :
-    tag === "Cheapest"        ? "bg-green-100 text-green-700" :
-    tag === "Luxury Pick"     ? "bg-rose-100 text-rose-700" :
-    tag === "Budget Friendly" ? "bg-teal-100 text-teal-700" :
-    tag === "Top Rated"       ? "bg-amber-100 text-amber-700" :
-    tag === "Cash Better"     ? "bg-slate-100 text-slate-500" :
-    "bg-slate-100 text-slate-500";
   const icon =
     tag === "Points Better"   ? <Zap className="w-2.5 h-2.5" /> :
     tag === "Best Value"      ? <Star className="w-2.5 h-2.5" /> :
@@ -209,7 +196,10 @@ function RecTag({ tag }: { tag: string }) {
     tag === "Top Rated"       ? <Star className="w-2.5 h-2.5" /> :
     null;
   return (
-    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold ${style}`}>
+    <span
+      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold text-ds-accent border border-ds-pen-stroke"
+      style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+    >
       {icon}{tag}
     </span>
   );
@@ -219,21 +209,23 @@ function RecTag({ tag }: { tag: string }) {
 
 function AiScoreBadge({ score }: { score?: number | null }) {
   if (typeof score !== "number" || !Number.isFinite(score) || score <= 0) return null;
-  const { bg, text, ring } =
-    score >= 70 ? { bg: "bg-emerald-500/15", text: "text-emerald-200", ring: "ring-emerald-400/45" } :
-    score >= 50 ? { bg: "bg-amber-500/15",   text: "text-amber-200",   ring: "ring-amber-400/45"   } :
-                  { bg: "bg-slate-500/15",   text: "text-slate-200",   ring: "ring-white/20"   };
+  const { text, ring } =
+    score >= 70 ? { text: "text-ds-trust-verified", ring: "ring-ds-trust-verified/45" } :
+    score >= 50 ? { text: "text-ds-caution",        ring: "ring-ds-caution/45" } :
+                  { text: "text-ds-text-tertiary",  ring: "ring-ds-pen-stroke" };
   return (
-    <div className={`flex flex-col items-center justify-center w-10 h-10 rounded-full ring-2 ${ring} ${bg} flex-shrink-0`}>
+    <div
+      className={`flex flex-col items-center justify-center w-10 h-10 rounded-full ring-2 ${ring} flex-shrink-0`}
+    >
       <p className={`text-xs font-bold leading-none ${text}`}>{Math.round(score ?? 0)}</p>
-      <p className="text-[9px] text-cream-300 leading-none mt-0.5">score</p>
+      <p className="text-[9px] text-ds-text-tertiary leading-none mt-0.5">score</p>
     </div>
   );
 }
 
-const PREMIUM_CARD_BASE = "candidate-card relative border rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 shadow-sm hover:shadow-md border-white/12 bg-gradient-to-br from-dark-200/95 to-dark-300/95 hover:border-white/25";
-const SECONDARY_CTA = "flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border border-white/15 bg-dark-300/75 text-cream-200 hover:bg-dark-200 hover:border-white/30 text-xs font-medium transition-all";
-const PRIMARY_CTA = "flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-brand-500 hover:bg-brand-400 text-dark-900 text-xs font-semibold transition-all disabled:opacity-50 shadow-sm";
+const PREMIUM_CARD_BASE = "candidate-card relative border border-ds-pen-stroke rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 bg-ds-onyx shadow-[var(--ds-elevation-1)] hover:shadow-[var(--ds-elevation-2)] hover:border-ds-carbon";
+const SECONDARY_CTA = "flex-1 min-h-[44px] flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border border-ds-pen-stroke bg-ds-carbon text-ds-text-secondary hover:bg-ds-pen-stroke hover:border-ds-carbon text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
+const PRIMARY_CTA = "flex-1 min-h-[44px] flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-ds-accent hover:bg-ds-accent-muted text-ds-text-inverse text-xs font-semibold transition-all disabled:opacity-50 shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
 
 // ─── Sort control ─────────────────────────────────────────────────────────────
 
@@ -248,18 +240,20 @@ function SortControl({
 }) {
   return (
     <div className="flex items-center gap-1 flex-wrap">
-      <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Sort:</span>
+      <span className="text-[10px] text-ds-text-tertiary font-semibold uppercase tracking-wide">Sort:</span>
       {keys.map(({ key, label }) => (
         <button
           key={key}
           onClick={() => onChange(key)}
-          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all ${
-            current === key
-              ? "bg-brand-500/85 text-dark-900 shadow-sm"
-              : "bg-dark-300/80 text-cream-300 border border-white/10 hover:bg-dark-200"
-          }`}
+          className="group min-h-[44px] flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         >
-          {label}
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all border ${
+            current === key
+              ? "bg-ds-accent text-ds-text-inverse border-ds-accent shadow-sm"
+              : "bg-ds-carbon text-ds-text-secondary border-ds-pen-stroke group-hover:bg-ds-pen-stroke group-hover:text-ds-text"
+          }`}>
+            {label}
+          </span>
         </button>
       ))}
     </div>
@@ -285,32 +279,32 @@ function SummaryBar({
   const topDest     = isRoundTrip ? (outFd.destination as string) : (fd.destination as string);
   const topPrice    = isRoundTrip ? (fd.total_price as number) : (fd.price as number);
   return (
-    <div className="glass border border-white/12 rounded-2xl p-3 flex gap-3 shadow-sm">
+    <div className="bg-ds-onyx border border-ds-pen-stroke rounded-2xl p-3 flex gap-3 shadow-sm">
       {topFlight && (
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] text-cream-300 uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
-            <Plane className="w-3 h-3 text-brand-300" /> {isRoundTrip ? "Best Round-Trip" : "Best Flight"}
+          <p className="text-[10px] text-ds-text-tertiary uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
+            <Plane className="w-3 h-3 text-ds-accent" /> {isRoundTrip ? "Best Round-Trip" : "Best Flight"}
           </p>
-          <p className="text-xs font-bold text-cream-100 truncate">
+          <p className="text-xs font-bold text-ds-text truncate">
             {topAirline ?? topFlight.title}
           </p>
-          <p className="text-xs text-cream-300">
+          <p className="text-xs text-ds-text-tertiary">
             {topOrigin ?? ""}
             {topDest ? ` → ${topDest}` : ""}
             {topPrice ? ` · $${Math.round(topPrice)}` : ""}
           </p>
         </div>
       )}
-      {topFlight && topHotel && <div className="w-px bg-white/12 self-stretch" />}
+      {topFlight && topHotel && <div className="w-px bg-ds-pen-stroke self-stretch" />}
       {topHotel && (
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] text-cream-300 uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
-            <Hotel className="w-3 h-3 text-brand-400" /> Best Hotel
+          <p className="text-[10px] text-ds-text-tertiary uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
+            <Hotel className="w-3 h-3 text-ds-accent" /> Best Hotel
           </p>
-          <p className="text-xs font-bold text-cream-100 truncate">
+          <p className="text-xs font-bold text-ds-text truncate">
             {(hd.name as string) ?? topHotel.title}
           </p>
-          <p className="text-xs text-cream-300">
+          <p className="text-xs text-ds-text-tertiary">
             {hd.pricePerNight ? `$${Math.round(hd.pricePerNight as number)}/night` : ""}
             {hd.rating ? ` · ★ ${(hd.rating as number).toFixed(1)}` : ""}
           </p>
@@ -362,13 +356,13 @@ function FlightCandidateCard({
   // Legacy rows: bookingUrl present and not a SEARCH_REDIRECT canonical row
   const legacyBookingUrl = !isSearchRedirect ? ((d.bookingUrl as string) ?? "") : "";
 
-  const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-brand-400/45" : ""} ${isLowScore ? "opacity-55" : ""}`;
+  const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-ds-accent/45" : ""} ${isLowScore ? "opacity-55" : ""}`;
 
   return (
     <div className={containerClass}>
       {isTopPick && (
         <div className="absolute -top-2.5 left-3">
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-ds-accent text-ds-text-inverse shadow-sm">
             <Zap className="w-2.5 h-2.5" />
             Best Pick
           </span>
@@ -379,10 +373,10 @@ function FlightCandidateCard({
       <div className="flex items-start justify-between gap-2 pt-0.5">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <p className="text-sm font-bold text-cream-100 leading-tight">{airline || flightNum}</p>
-            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-sky-500/15 text-sky-300 border border-sky-400/20">One-way</span>
+            <p className="text-sm font-bold text-ds-text leading-tight">{airline || flightNum}</p>
+            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold text-ds-text-tertiary border border-ds-pen-stroke" style={{ backgroundColor: "var(--ds-accent-subtle)" }}>One-way</span>
           </div>
-          {airline && <p className="text-xs text-cream-300 mt-0.5">{flightNum}</p>}
+          {airline && <p className="text-xs text-ds-text-tertiary mt-0.5">{flightNum}</p>}
         </div>
         <AiScoreBadge score={aiScore} />
       </div>
@@ -391,24 +385,24 @@ function FlightCandidateCard({
       {origin && destination && (
         <div className="flex items-center gap-2">
           <div className="text-center min-w-[40px]">
-            <p className="text-sm font-bold text-cream-100">{origin}</p>
-            {depTime && <p className="text-[11px] text-cream-300">{formatTime(depTime)}</p>}
+            <p className="text-sm font-bold text-ds-text">{origin}</p>
+            {depTime && <p className="text-[11px] text-ds-text-tertiary">{formatTime(depTime)}</p>}
           </div>
           <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
             <div className="flex items-center gap-1 w-full">
-              <div className="flex-1 h-px bg-white/20" />
-              <Plane className="w-3 h-3 text-sky-500" />
-              <div className="flex-1 h-px bg-white/20" />
+              <div className="flex-1 h-px bg-ds-pen-stroke" />
+              <Plane className="w-3 h-3 text-ds-accent" />
+              <div className="flex-1 h-px bg-ds-pen-stroke" />
             </div>
-            <p className="text-[10px] text-cream-300 text-center">
+            <p className="text-[10px] text-ds-text-tertiary text-center">
               {duration > 0 ? formatDuration(duration) : ""}
               {duration > 0 && " · "}
               {stops === 0 ? "Nonstop" : `${stops} stop${stops > 1 ? "s" : ""}`}
             </p>
           </div>
           <div className="text-center min-w-[40px]">
-            <p className="text-sm font-bold text-cream-100">{destination}</p>
-            {arrTime && <p className="text-[11px] text-cream-300">{formatTime(arrTime)}</p>}
+            <p className="text-sm font-bold text-ds-text">{destination}</p>
+            {arrTime && <p className="text-[11px] text-ds-text-tertiary">{formatTime(arrTime)}</p>}
           </div>
         </div>
       )}
@@ -421,25 +415,25 @@ function FlightCandidateCard({
       )}
 
       {/* Pricing grid */}
-      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/10">
+      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-ds-pen-stroke">
         {price > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-cream-300 uppercase tracking-wide">Cash</p>
-            <p className="text-sm font-bold text-cream-100">${Math.round(price)}</p>
+            <p className="text-[10px] text-ds-text-tertiary uppercase tracking-wide">Cash</p>
+            <p className="text-sm font-bold text-ds-text">${Math.round(price)}</p>
           </div>
         )}
         {points > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-cream-300 uppercase tracking-wide">Points</p>
-            <p className="text-sm font-bold text-brand-300">
+            <p className="text-[10px] text-ds-text-tertiary uppercase tracking-wide">Points</p>
+            <p className="text-sm font-bold text-ds-accent">
               {points >= 1000 ? `${(points / 1000).toFixed(0)}k` : points}
             </p>
           </div>
         )}
         {cpp > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-cream-300 uppercase tracking-wide">CPP</p>
-            <p className={`text-sm font-bold ${cpp >= 2 ? "text-emerald-300" : "text-cream-200"}`}>
+            <p className="text-[10px] text-ds-text-tertiary uppercase tracking-wide">CPP</p>
+            <p className={`text-sm font-bold ${cpp >= 2 ? "text-ds-trust-verified" : "text-ds-text-secondary"}`}>
               {cpp.toFixed(2)}¢
             </p>
           </div>
@@ -452,7 +446,7 @@ function FlightCandidateCard({
           <button
             onClick={() => onToggleCompare(item)}
             title="Compare"
-            className={`${SECONDARY_CTA} ${isComparing ? "bg-brand-500/25 border-brand-400/40 text-brand-200" : ""}`}
+            className={`${SECONDARY_CTA} ${isComparing ? "bg-ds-accent/20 border-ds-accent/40 text-ds-accent" : ""}`}
           >
             <Scale className="w-3.5 h-3.5" />
             Compare
@@ -524,32 +518,32 @@ function FlightLegRow({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-cream-300">{label}</span>
-        <span className="text-xs text-cream-200">{airline} <span className="text-cream-300">{flightNum}</span></span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-ds-text-tertiary">{label}</span>
+        <span className="text-xs text-ds-text-secondary">{airline} <span className="text-ds-text-tertiary">{flightNum}</span></span>
       </div>
       <div className="flex items-center gap-2">
         <div className="text-center min-w-[36px]">
-          <p className="text-sm font-bold text-cream-100">{origin}</p>
-          {depTime && <p className="text-[10px] text-cream-300">{formatTime(depTime)}</p>}
+          <p className="text-sm font-bold text-ds-text">{origin}</p>
+          {depTime && <p className="text-[10px] text-ds-text-tertiary">{formatTime(depTime)}</p>}
         </div>
         <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
           <div className="flex items-center gap-1 w-full">
-            <div className="flex-1 h-px bg-white/20" />
-            <Plane className="w-3 h-3 text-sky-400" />
-            <div className="flex-1 h-px bg-white/20" />
+            <div className="flex-1 h-px bg-ds-pen-stroke" />
+            <Plane className="w-3 h-3 text-ds-accent" />
+            <div className="flex-1 h-px bg-ds-pen-stroke" />
           </div>
-          <p className="text-[10px] text-cream-300">
+          <p className="text-[10px] text-ds-text-tertiary">
             {duration > 0 ? formatDuration(duration) : ""}
             {duration > 0 && " · "}
             {stops === 0 ? "Nonstop" : `${stops} stop${stops > 1 ? "s" : ""}`}
           </p>
         </div>
         <div className="text-center min-w-[36px]">
-          <p className="text-sm font-bold text-cream-100">{dest}</p>
-          {arrTime && <p className="text-[10px] text-cream-300">{formatTime(arrTime)}</p>}
+          <p className="text-sm font-bold text-ds-text">{dest}</p>
+          {arrTime && <p className="text-[10px] text-ds-text-tertiary">{formatTime(arrTime)}</p>}
         </div>
         {price > 0 && (
-          <p className="text-xs font-semibold text-cream-200 ml-1">${Math.round(price)}</p>
+          <p className="text-xs font-semibold text-ds-text-secondary ml-1">${Math.round(price)}</p>
         )}
       </div>
     </div>
@@ -587,13 +581,13 @@ function RoundTripFlightCard({
   const rtLinkType         = (rtBookingLinkObj.linkType as string) || (rtBookingLinkObj.link_type as string) || (rtBookingLinkObj.kind as string) || "";
   const rtIsSearchRedirect = rtLinkType === "search_redirect" || rtLinkType === "search_redirect_only";
 
-  const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-brand-400/45" : ""} ${isLowScore ? "opacity-55" : ""}`;
+  const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-ds-accent/45" : ""} ${isLowScore ? "opacity-55" : ""}`;
 
   return (
     <div className={containerClass}>
       {isTopPick && (
         <div className="absolute -top-2.5 left-3">
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-ds-accent text-ds-text-inverse shadow-sm">
             <Zap className="w-2.5 h-2.5" />
             Best Pair
           </span>
@@ -603,42 +597,42 @@ function RoundTripFlightCard({
       {/* Header: round-trip label + AI score */}
       <div className="flex items-start justify-between gap-2 pt-0.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-cream-100 leading-tight">Round-Trip</p>
-          <p className="text-xs text-cream-300 mt-0.5">Outbound + Return pair</p>
+          <p className="text-sm font-bold text-ds-text leading-tight">Round-Trip</p>
+          <p className="text-xs text-ds-text-tertiary mt-0.5">Outbound + Return pair</p>
         </div>
         <AiScoreBadge score={aiScore} />
       </div>
 
       {/* Outbound leg */}
-      <div className="rounded-xl bg-dark-300/70 border border-white/10 px-3 py-2.5">
+      <div className="rounded-xl bg-ds-carbon border border-ds-pen-stroke px-3 py-2.5">
         <FlightLegRow leg={outbound} label="Outbound" />
       </div>
 
       {/* Return leg */}
-      <div className="rounded-xl bg-dark-300/70 border border-white/10 px-3 py-2.5">
+      <div className="rounded-xl bg-ds-carbon border border-ds-pen-stroke px-3 py-2.5">
         <FlightLegRow leg={returnFlight} label="Return" />
       </div>
 
       {/* Combined pricing */}
-      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/10">
+      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-ds-pen-stroke">
         {totalPrice > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-cream-300 uppercase tracking-wide">Total Cash</p>
-            <p className="text-sm font-bold text-cream-100">${Math.round(totalPrice)}</p>
+            <p className="text-[10px] text-ds-text-tertiary uppercase tracking-wide">Total Cash</p>
+            <p className="text-sm font-bold text-ds-text">${Math.round(totalPrice)}</p>
           </div>
         )}
         {totalPoints > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-cream-300 uppercase tracking-wide">Total Pts</p>
-            <p className="text-sm font-bold text-brand-300">
+            <p className="text-[10px] text-ds-text-tertiary uppercase tracking-wide">Total Pts</p>
+            <p className="text-sm font-bold text-ds-accent">
               {totalPoints >= 1000 ? `${(totalPoints / 1000).toFixed(0)}k` : totalPoints}
             </p>
           </div>
         )}
         {combinedCpp > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-cream-300 uppercase tracking-wide">CPP</p>
-            <p className={`text-sm font-bold ${combinedCpp >= 2 ? "text-emerald-300" : "text-cream-200"}`}>
+            <p className="text-[10px] text-ds-text-tertiary uppercase tracking-wide">CPP</p>
+            <p className={`text-sm font-bold ${combinedCpp >= 2 ? "text-ds-trust-verified" : "text-ds-text-secondary"}`}>
               {combinedCpp.toFixed(2)}¢
             </p>
           </div>
@@ -710,13 +704,13 @@ function HotelCandidateCard({
   const proximityLabel  = (d.proximity_label as string) ?? null;
   const areaLabel       = (d.area_label      as string) ?? null;
 
-  const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-brand-400/45" : ""} ${isLowScore ? "opacity-55" : ""}`;
+  const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-ds-accent/45" : ""} ${isLowScore ? "opacity-55" : ""}`;
 
   return (
     <div className={containerClass}>
       {isTopPick && (
         <div className="absolute -top-2.5 left-3">
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-violet-500 text-white shadow-sm">
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-ds-accent text-ds-text-inverse shadow-sm">
             <Star className="w-2.5 h-2.5" />
             Top Hotel
           </span>
@@ -726,15 +720,15 @@ function HotelCandidateCard({
       {/* Header: name + stars + AI score */}
       <div className="flex items-start justify-between gap-2 pt-0.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-cream-100 leading-tight">{name}</p>
+          <p className="text-sm font-bold text-ds-text leading-tight">{name}</p>
           <div className="flex items-center gap-2 mt-0.5">
             {stars != null && (
-              <span className="text-xs text-amber-400">{"★".repeat(Math.min(5, Math.round(stars)))}</span>
+              <span className="text-xs text-ds-caution">{"★".repeat(Math.min(5, Math.round(stars)))}</span>
             )}
             {/* Only show raw location when it differs from the hotel name and no richer
                 area/proximity badges are available — avoids repeating the address as filler. */}
             {location && location.trim().toLowerCase() !== name.trim().toLowerCase() && !(proximityLabel && areaLabel) && (
-              <span className="flex items-center gap-0.5 text-xs text-cream-300 truncate">
+              <span className="flex items-center gap-0.5 text-xs text-ds-text-tertiary truncate">
                 <MapPin className="w-3 h-3 flex-shrink-0" />
                 {location}
               </span>
@@ -748,22 +742,27 @@ function HotelCandidateCard({
       {(proximityLabel || areaLabel) && (
         <div className="flex flex-wrap gap-1.5">
           {proximityLabel && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium text-ds-trust-verified border border-ds-trust-verified/30"
+            >
               <MapPin className="w-2.5 h-2.5" />
               {proximityLabel}
             </span>
           )}
           {areaLabel && areaLabel !== "Farther from center" && (
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-              areaLabel === "In best area"
-                ? "bg-violet-50 text-violet-700 border-violet-200"
-                : "bg-sky-50 text-sky-700 border-sky-200"
-            }`}>
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                areaLabel === "In best area"
+                  ? "text-ds-accent border-ds-accent/30"
+                  : "text-ds-text-secondary border-ds-pen-stroke"
+              }`}
+              style={areaLabel === "In best area" ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
+            >
               {areaLabel === "In best area" ? "★ " : ""}{areaLabel}
             </span>
           )}
           {locationScore !== null && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-50 text-slate-500 border border-slate-200">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-ds-carbon text-ds-text-tertiary border border-ds-pen-stroke">
               Location {Math.round(locationScore)}/100
             </span>
           )}
@@ -779,27 +778,27 @@ function HotelCandidateCard({
 
       {/* Explanation */}
       {explanation && (
-        <p className="text-xs text-cream-300 leading-relaxed">{explanation}</p>
+        <p className="text-xs text-ds-text-tertiary leading-relaxed">{explanation}</p>
       )}
 
       {/* Pricing grid */}
-      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/10">
+      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-ds-pen-stroke">
         {pricePerNight > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Per Night</p>
-            <p className="text-sm font-bold text-cream-100">${Math.round(pricePerNight)}</p>
+            <p className="text-[10px] text-ds-text-tertiary uppercase tracking-wide">Per Night</p>
+            <p className="text-sm font-bold text-ds-text">${Math.round(pricePerNight)}</p>
           </div>
         )}
         {nights > 1 && pricePerNight > 0 && (
           <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Total</p>
-            <p className="text-sm font-bold text-cream-100">${Math.round(pricePerNight * nights)}</p>
+            <p className="text-[10px] text-ds-text-tertiary uppercase tracking-wide">Total</p>
+            <p className="text-sm font-bold text-ds-text">${Math.round(pricePerNight * nights)}</p>
           </div>
         )}
         {rating != null && (
           <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Rating</p>
-            <p className="text-sm font-bold text-amber-600">★ {rating.toFixed(1)}</p>
+            <p className="text-[10px] text-ds-text-tertiary uppercase tracking-wide">Rating</p>
+            <p className="text-sm font-bold text-ds-caution">★ {rating.toFixed(1)}</p>
           </div>
         )}
       </div>
@@ -808,7 +807,7 @@ function HotelCandidateCard({
       {amenities.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {amenities.slice(0, 3).map((a) => (
-            <span key={a} className="px-2 py-0.5 bg-white/10 border border-white/10 rounded-full text-xs text-cream-300">{a}</span>
+            <span key={a} className="px-2 py-0.5 bg-ds-carbon border border-ds-pen-stroke rounded-full text-xs text-ds-text-tertiary">{a}</span>
           ))}
         </div>
       )}
@@ -819,7 +818,7 @@ function HotelCandidateCard({
           <button
             onClick={() => onToggleCompare(item)}
             title="Compare"
-            className={`${SECONDARY_CTA} ${isComparing ? "bg-brand-500/25 border-brand-400/40 text-brand-200" : ""}`}
+            className={`${SECONDARY_CTA} ${isComparing ? "bg-ds-accent/20 border-ds-accent/40 text-ds-accent" : ""}`}
           >
             <Scale className="w-3.5 h-3.5" />
             Compare
@@ -854,20 +853,16 @@ function HotelCandidateCard({
 // ─── Attraction tag badge ──────────────────────────────────────────────────────
 
 function AttractionTag({ tag }: { tag: string }) {
-  const style =
-    tag === "Must Visit"       ? "bg-emerald-100 text-emerald-700" :
-    tag === "Highly Rated"     ? "bg-amber-100 text-amber-700" :
-    tag === "Top Rated"        ? "bg-amber-100 text-amber-600" :
-    tag === "Tourist Favorite" ? "bg-sky-100 text-sky-700" :
-    tag === "Hidden Gem"       ? "bg-violet-100 text-violet-700" :
-    "bg-slate-100 text-slate-500";
   const icon =
-    tag === "Must Visit"       ? <Zap className="w-2.5 h-2.5" /> :
-    tag === "Highly Rated"     ? <Star className="w-2.5 h-2.5" /> :
-    tag === "Hidden Gem"       ? <Sparkles className="w-2.5 h-2.5" /> :
+    tag === "Must Visit"   ? <Zap className="w-2.5 h-2.5" /> :
+    tag === "Highly Rated" ? <Star className="w-2.5 h-2.5" /> :
+    tag === "Hidden Gem"   ? <Sparkles className="w-2.5 h-2.5" /> :
     null;
   return (
-    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold ${style}`}>
+    <span
+      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold text-ds-accent border border-ds-pen-stroke"
+      style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+    >
       {icon}{tag}
     </span>
   );
@@ -881,7 +876,7 @@ function PriceLevelDots({ level }: { level: number }) {
       {[0, 1, 2, 3].map((i) => (
         <DollarSign
           key={i}
-          className={`w-2.5 h-2.5 ${i < level ? "text-slate-600" : "text-slate-200"}`}
+          className={`w-2.5 h-2.5 ${i < level ? "text-ds-text" : "text-ds-text-tertiary"}`}
         />
       ))}
     </span>
@@ -906,13 +901,13 @@ function AttractionCandidateCard({
   const numReviews    = attraction.numReviews;
   const mapsUrl       = `https://www.google.com/maps/search/${encodeURIComponent(attraction.name + " " + attraction.location)}`;
 
-  const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-brand-400/45" : ""}`;
+  const containerClass = `${PREMIUM_CARD_BASE} ${isTopPick ? "border-ds-accent/45" : ""}`;
 
   return (
     <div className={containerClass}>
       {isTopPick && (
         <div className="absolute -top-2.5 left-3">
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-ds-accent text-ds-text-inverse shadow-sm">
             <Zap className="w-2.5 h-2.5" />
             Top Pick
           </span>
@@ -922,13 +917,13 @@ function AttractionCandidateCard({
       {/* Header: name + AI score */}
       <div className="flex items-start justify-between gap-2 pt-0.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-cream-100 leading-tight">{attraction.name}</p>
+          <p className="text-sm font-bold text-ds-text leading-tight">{attraction.name}</p>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {rating != null && (
-              <span className="text-xs text-amber-500 font-semibold">★ {rating.toFixed(1)}</span>
+              <span className="text-xs text-ds-caution font-semibold">★ {rating.toFixed(1)}</span>
             )}
             {numReviews != null && (
-              <span className="text-xs text-cream-300">
+              <span className="text-xs text-ds-text-tertiary">
                 {numReviews >= 1000 ? `${(numReviews / 1000).toFixed(0)}k` : numReviews} reviews
               </span>
             )}
@@ -939,7 +934,7 @@ function AttractionCandidateCard({
 
       {/* Description */}
       {attraction.description && (
-        <p className="text-xs text-cream-300 leading-relaxed line-clamp-2">{attraction.description}</p>
+        <p className="text-xs text-ds-text-tertiary leading-relaxed line-clamp-2">{attraction.description}</p>
       )}
 
       {/* Tags */}
@@ -952,20 +947,20 @@ function AttractionCandidateCard({
       {/* Meta row: address, hours, duration, price */}
       <div className="flex flex-col gap-1">
         {attraction.address && (
-          <div className="flex items-center gap-1 text-xs text-cream-300">
+          <div className="flex items-center gap-1 text-xs text-ds-text-tertiary">
             <MapPin className="w-3 h-3 flex-shrink-0" />
             <span className="truncate">{attraction.address}</span>
           </div>
         )}
         <div className="flex items-center gap-3 flex-wrap">
           {attraction.openingHours && (
-            <div className="flex items-center gap-1 text-xs text-cream-300">
+            <div className="flex items-center gap-1 text-xs text-ds-text-tertiary">
               <Clock className="w-3 h-3 flex-shrink-0" />
               <span>{attraction.openingHours}</span>
             </div>
           )}
           {attraction.durationMinutes != null && (
-            <span className="text-xs text-cream-300">
+            <span className="text-xs text-ds-text-tertiary">
               {formatDuration(attraction.durationMinutes)}
             </span>
           )}
@@ -1002,13 +997,14 @@ function AttractionCandidateCard({
 // ─── Restaurant tag badge ──────────────────────────────────────────────────────
 
 function RestaurantTag({ tag }: { tag: string }) {
-  const style =
-    tag === "Must Try"       ? "bg-rose-100 text-rose-700" :
-    tag === "Local Favorite" ? "bg-amber-100 text-amber-700" :
-    tag === "Fine Dining"    ? "bg-violet-100 text-violet-700" :
-    tag === "Budget Friendly"? "bg-green-100 text-green-700" :
-                               "bg-slate-100 text-slate-600";
-  return <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${style}`}>{tag}</span>;
+  return (
+    <span
+      className="text-[10px] font-medium px-1.5 py-0.5 rounded-full text-ds-accent border border-ds-pen-stroke"
+      style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+    >
+      {tag}
+    </span>
+  );
 }
 
 // ─── Restaurant candidate card ─────────────────────────────────────────────────
@@ -1036,25 +1032,28 @@ function RestaurantCandidateCard({
           ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(restaurant.placeId)}`
           : `https://www.google.com/maps/search/${encodeURIComponent(restaurant.name + " " + restaurant.location)}`;
 
-  const containerClass = `${PREMIUM_CARD_BASE} gap-2 p-3 ${isTopPick ? "border-brand-400/45" : ""}`;
+  const containerClass = `${PREMIUM_CARD_BASE} gap-2 p-3 ${isTopPick ? "border-ds-accent/45" : ""}`;
 
   return (
     <div className={containerClass}>
       {isTopPick && (
-        <span className="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wide text-brand-200 bg-brand-500/20 border border-brand-400/30 px-1.5 py-0.5 rounded-full">Top Pick</span>
+        <span
+          className="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wide text-ds-accent border border-ds-pen-stroke px-1.5 py-0.5 rounded-full"
+          style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+        >Top Pick</span>
       )}
 
       <div className="flex items-start justify-between gap-2 pt-0.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-cream-100 leading-tight">{restaurant.name}</p>
+          <p className="text-sm font-bold text-ds-text leading-tight">{restaurant.name}</p>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <span className="text-[10px] text-cream-300 font-medium">{restaurant.cuisine}</span>
+            <span className="text-[10px] text-ds-text-tertiary font-medium">{restaurant.cuisine}</span>
             {rating != null && (
-              <span className="flex items-center gap-0.5 text-xs text-amber-500 font-semibold">
-                <Star className="w-3 h-3 fill-amber-400 stroke-amber-400" />
+              <span className="flex items-center gap-0.5 text-xs text-ds-caution font-semibold">
+                <Star className="w-3 h-3 fill-current" />
                 {rating.toFixed(1)}
                 {numReviews != null && (
-                  <span className="text-slate-400 font-normal ml-0.5">
+                  <span className="text-ds-text-tertiary font-normal ml-0.5">
                     ({numReviews >= 1000 ? `${(numReviews / 1000).toFixed(0)}k` : numReviews})
                   </span>
                 )}
@@ -1075,14 +1074,14 @@ function RestaurantCandidateCard({
       {/* Meta row */}
       <div className="flex flex-col gap-1">
         {restaurant.address && (
-          <div className="flex items-center gap-1 text-xs text-cream-300">
+          <div className="flex items-center gap-1 text-xs text-ds-text-tertiary">
             <MapPin className="w-3 h-3 flex-shrink-0" />
             <span className="truncate">{restaurant.address}</span>
           </div>
         )}
         <div className="flex items-center gap-3 flex-wrap">
           {restaurant.openingHours && (
-            <div className="flex items-center gap-1 text-xs text-cream-300">
+            <div className="flex items-center gap-1 text-xs text-ds-text-tertiary">
               <Clock className="w-3 h-3 flex-shrink-0" />
               <span>{restaurant.openingHours}</span>
             </div>
@@ -1132,19 +1131,21 @@ function FilterPills({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[9px] font-semibold uppercase tracking-wider text-cream-300">{label}</span>
+      <span className="text-[9px] font-semibold uppercase tracking-wider text-ds-text-tertiary">{label}</span>
       <div className="flex flex-wrap gap-1">
         {options.map((opt) => (
           <button
             key={String(opt.value ?? "all")}
             onClick={() => onChange(opt.value === value ? null : opt.value)}
-            className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-all border ${
-              opt.value === value
-                ? "bg-brand-500/80 text-dark-900 border-brand-400"
-                : "bg-dark-300/60 text-cream-300 border-white/15 hover:border-white/35 hover:text-cream-100"
-            }`}
+            className="group min-h-[44px] flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           >
-            {opt.label}
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-all border ${
+              opt.value === value
+                ? "bg-ds-accent text-ds-text-inverse border-ds-accent"
+                : "bg-ds-carbon text-ds-text-secondary border-ds-pen-stroke group-hover:border-ds-carbon group-hover:text-ds-text"
+            }`}>
+              {opt.label}
+            </span>
           </button>
         ))}
       </div>
@@ -1184,7 +1185,7 @@ function CandidatePanel({
     <div className="card p-3 flex flex-col gap-2">
       <button
         onClick={onToggle}
-        className="flex items-center justify-between w-full text-sm font-semibold text-cream-100"
+        className="flex items-center justify-between w-full text-sm font-semibold text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
       >
         <span className="flex items-center gap-1.5">
           {icon}
@@ -1194,12 +1195,12 @@ function CandidatePanel({
           </span>
         </span>
         {open
-          ? <ChevronUp className="w-3.5 h-3.5 text-cream-300" />
-          : <ChevronDown className="w-3.5 h-3.5 text-cream-300" />}
+          ? <ChevronUp className="w-3.5 h-3.5 text-ds-text-tertiary" />
+          : <ChevronDown className="w-3.5 h-3.5 text-ds-text-tertiary" />}
       </button>
       {open && sortControls && <div className="pt-0.5">{sortControls}</div>}
       {open && !hasData && (
-        <p className="text-xs text-slate-400 py-2 text-center">
+        <p className="text-xs text-ds-text-tertiary py-2 text-center">
           {emptyMessage}
         </p>
       )}
@@ -1918,9 +1919,9 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
             {/* Flights section */}
             <CandidatePanel
               title="Flights"
-              icon={<Plane className="w-3.5 h-3.5 text-sky-500" />}
+              icon={<Plane className="w-3.5 h-3.5 text-ds-accent" />}
               count={sortedFlights.length}
-              accentColor="text-sky-500"
+              accentColor="text-ds-accent"
               open={flightPanelOpen}
               onToggle={() => setFlightPanelOpen((v) => !v)}
               emptyMessage="No flight options are available yet. Try refreshing this trip or creating it again if this continues."
@@ -1962,7 +1963,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                 const nodes: React.ReactNode[] = [];
                 if (showOWLabel) {
                   nodes.push(
-                    <p key="ow-label" className="text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-400/70">
+                    <p key="ow-label" className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ds-text-tertiary">
                       One-way options
                     </p>
                   );
@@ -1983,7 +1984,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                 });
                 if (showRTLabel) {
                   nodes.push(
-                    <p key="rt-label" className="text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-400/70 pt-1">
+                    <p key="rt-label" className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ds-text-tertiary pt-1">
                       Round-trip pairs
                     </p>
                   );
@@ -2007,9 +2008,9 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
             {/* Hotels section */}
             <CandidatePanel
               title="Hotels"
-              icon={<Hotel className="w-3.5 h-3.5 text-violet-500" />}
+              icon={<Hotel className="w-3.5 h-3.5 text-ds-accent" />}
               count={sortedHotels.length}
-              accentColor="text-violet-500"
+              accentColor="text-ds-accent"
               open={hotelPanelOpen}
               onToggle={() => setHotelPanelOpen((v) => !v)}
               emptyMessage="No hotel options are available yet. Try refreshing this trip or creating it again if this continues."
@@ -2049,14 +2050,14 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
             {/* ── Explore: List / Map / Group toggle ────────────────────── */}
             <div className="flex items-center justify-between px-1 pt-0.5">
-              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Explore</span>
-              <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
+              <span className="text-[10px] font-semibold text-ds-text-tertiary uppercase tracking-wider">Explore</span>
+              <div className="flex items-center bg-ds-carbon rounded-lg p-0.5 gap-0.5">
                 <button
                   onClick={() => setViewMode("list")}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 ${
                     viewMode === "list"
-                      ? "bg-white text-slate-700 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700"
+                      ? "bg-ds-onyx text-ds-text shadow-sm"
+                      : "text-ds-text-secondary hover:text-ds-text"
                   }`}
                 >
                   <LayoutList className="w-3 h-3" />
@@ -2064,10 +2065,10 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                 </button>
                 <button
                   onClick={() => setViewMode("map")}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 ${
                     viewMode === "map"
-                      ? "bg-white text-slate-700 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700"
+                      ? "bg-ds-onyx text-ds-text shadow-sm"
+                      : "text-ds-text-secondary hover:text-ds-text"
                   }`}
                 >
                   <MapIcon className="w-3 h-3" />
@@ -2096,10 +2097,10 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                 {/* Attractions section */}
                 <CandidatePanel
                   title="Attractions"
-                  icon={<Sparkles className="w-3.5 h-3.5 text-emerald-500" />}
+                  icon={<Sparkles className="w-3.5 h-3.5 text-ds-accent" />}
                   count={filteredAttractions.length}
                   totalCount={candidateAttractions.length}
-                  accentColor="text-emerald-500"
+                  accentColor="text-ds-accent"
                   open={attractionPanelOpen}
                   onToggle={() => setAttractionPanelOpen((v) => !v)}
                   emptyMessage="No attractions are available yet. Try refreshing this trip or creating it again if this continues."
@@ -2143,7 +2144,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                   listRef={attractionListRef}
                 >
                   {filteredAttractions.length === 0 ? (
-                    <p className="text-xs text-slate-400 py-4 text-center">No attractions match the selected filters.</p>
+                    <p className="text-xs text-ds-text-tertiary py-4 text-center">No attractions match the selected filters.</p>
                   ) : (
                     (() => {
                       const top20 = Math.max(1, Math.ceil(filteredAttractions.length * 0.2));
@@ -2155,7 +2156,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                           onMouseLeave={() => setActiveMarkerId(null)}
                           className={`rounded-2xl transition-all ${
                             activeMarkerId === attraction.id
-                              ? "ring-2 ring-sky-400 ring-offset-1"
+                              ? "ring-2 ring-ds-accent ring-offset-1"
                               : ""
                           }`}
                         >
@@ -2174,10 +2175,10 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                 {/* Restaurants section */}
                 <CandidatePanel
                   title="Restaurants"
-                  icon={<UtensilsCrossed className="w-3.5 h-3.5 text-rose-500" />}
+                  icon={<UtensilsCrossed className="w-3.5 h-3.5 text-ds-accent" />}
                   count={filteredRestaurants.length}
                   totalCount={candidateRestaurants.length}
-                  accentColor="text-rose-500"
+                  accentColor="text-ds-accent"
                   open={restaurantPanelOpen}
                   onToggle={() => setRestaurantPanelOpen((v) => !v)}
                   emptyMessage="No restaurants are available yet. Try refreshing this trip or creating it again if this continues."
@@ -2231,7 +2232,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                   listRef={restaurantListRef}
                 >
                   {filteredRestaurants.length === 0 ? (
-                    <p className="text-xs text-slate-400 py-4 text-center">No restaurants match the selected filters.</p>
+                    <p className="text-xs text-ds-text-tertiary py-4 text-center">No restaurants match the selected filters.</p>
                   ) : (
                     (() => {
                       const top20 = Math.max(1, Math.ceil(filteredRestaurants.length * 0.2));
@@ -2243,7 +2244,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                           onMouseLeave={() => setActiveMarkerId(null)}
                           className={`rounded-2xl transition-all ${
                             activeMarkerId === restaurant.id
-                              ? "ring-2 ring-orange-400 ring-offset-1"
+                              ? "ring-2 ring-ds-accent ring-offset-1"
                               : ""
                           }`}
                         >
@@ -2264,8 +2265,8 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
             {/* Activities / research results */}
             {results.length > 0 && (
               <div className="card p-3 flex flex-col gap-2">
-                <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-slate-400" />
+                <h2 className="text-sm font-semibold text-ds-text flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-ds-accent" />
                   Activities
                 </h2>
                 <div className="flex flex-col gap-2 max-h-[360px] overflow-y-auto">
@@ -2284,9 +2285,9 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
           {/* ── Right Panel: Itinerary Timeline ───────────────────────────── */}
           <div className="flex-1 flex flex-col gap-3 overflow-visible">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <h2 className="text-sm font-semibold text-slate-700">
+              <h2 className="text-sm font-semibold text-ds-text">
                 Itinerary
-                <span className="ml-2 text-slate-400 font-normal">
+                <span className="ml-2 text-ds-text-tertiary font-normal">
                   {days.reduce((sum, d) => sum + d.items.length, 0)} items across {days.length} day{days.length !== 1 ? "s" : ""}
                 </span>
               </h2>
@@ -2294,11 +2295,11 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                 {/* Target day selector — left-panel "+" buttons add to this day */}
                 {days.length > 0 && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Adding to:</span>
+                    <span className="text-[10px] text-ds-text-tertiary font-medium uppercase tracking-wide">Adding to:</span>
                     <select
                       value={selectedDayId ?? ""}
                       onChange={(e) => setSelectedDayId(e.target.value || null)}
-                      className="text-xs font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                      className="text-xs font-semibold text-ds-text bg-ds-carbon border border-ds-pen-stroke rounded-lg px-2 py-1 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent"
                     >
                       {displayDays.map((d) => (
                         <option key={d.id} value={d.id}>
@@ -2349,9 +2350,9 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
               </SortableContext>
 
               {days.length === 0 && (
-                <div className="card p-8 text-center text-slate-400">
-                  <CalendarPlus className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                  <p className="text-sm font-medium text-slate-500">No days yet</p>
+                <div className="card p-8 text-center text-ds-text-tertiary">
+                  <CalendarPlus className="w-8 h-8 mx-auto mb-2 text-ds-text-tertiary" />
+                  <p className="text-sm font-medium text-ds-text-secondary">No days yet</p>
                   <p className="text-xs mt-1">
                     {daysAreDateLocked
                       ? "Days are being generated from your trip dates…"
@@ -2365,38 +2366,38 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
         {/* ── Compare bar ──────────────────────────────────────────────────── */}
         {compareSet.size > 0 && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 bg-slate-900 text-white rounded-2xl shadow-2xl ring-1 ring-white/10">
-            <Scale className="w-4 h-4 text-violet-400 flex-shrink-0" />
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 bg-ds-onyx border border-ds-pen-stroke rounded-2xl shadow-2xl">
+            <Scale className="w-4 h-4 text-ds-accent flex-shrink-0" />
             <div className="flex items-center gap-1">
               {Array.from({ length: Math.min(compareSet.size, 10) }).map((_, i) => (
-                <div key={i} className="w-2 h-2 rounded-full bg-violet-400" />
+                <div key={i} className="w-2 h-2 rounded-full bg-ds-accent" />
               ))}
             </div>
-            <span className="text-sm font-medium text-slate-200">
+            <span className="text-sm font-medium text-ds-text">
               {compareSet.size} item{compareSet.size !== 1 ? "s" : ""}
-              {compareSet.size < 2 && <span className="text-slate-400 text-xs ml-1">(need 2+)</span>}
+              {compareSet.size < 2 && <span className="text-ds-text-tertiary text-xs ml-1">(need 2+)</span>}
             </span>
             {compareRouteSummary && (
               <>
-                <div className="w-px h-4 bg-slate-700" />
-                <span className="flex items-center gap-1 text-xs text-emerald-400">
+                <div className="w-px h-4 bg-ds-pen-stroke" />
+                <span className="flex items-center gap-1 text-xs text-ds-trust-verified">
                   <Navigation className="w-3 h-3" />
                   {compareRouteSummary.totalKm} km · ~{compareRouteSummary.totalDriveMin} min drive
                 </span>
               </>
             )}
-            <div className="w-px h-4 bg-slate-700" />
+            <div className="w-px h-4 bg-ds-pen-stroke" />
             <button
               onClick={handleCompare}
               disabled={compareSet.size < 2 || compareLoading}
-              className="px-4 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold transition-colors flex items-center gap-1.5"
+              className="px-4 py-1.5 rounded-lg bg-ds-accent hover:bg-ds-accent-muted text-ds-text-inverse disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold transition-colors flex items-center gap-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
             >
               {compareLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BarChart2 className="w-3.5 h-3.5" />}
               Compare
             </button>
             <button
               onClick={() => { setCompareSet(new Set()); compareDataRef.current.clear(); }}
-              className="text-slate-500 hover:text-slate-200 text-xs transition-colors"
+              className="text-ds-text-tertiary hover:text-ds-text text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
             >
               Clear
             </button>
@@ -2435,10 +2436,10 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
       {/* ── Toast ────────────────────────────────────────────────────────────── */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 bg-slate-900 text-white rounded-xl shadow-2xl ring-1 ring-white/10 text-sm font-medium animate-in fade-in slide-in-from-bottom-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 bg-ds-onyx border border-ds-pen-stroke text-ds-text rounded-xl shadow-2xl text-sm font-medium animate-in fade-in slide-in-from-bottom-2">
+          <CheckCircle2 className="w-4 h-4 text-ds-trust-verified flex-shrink-0" />
           {toast}
-          <button onClick={() => setToast(null)} className="ml-1 text-slate-400 hover:text-slate-200">
+          <button onClick={() => setToast(null)} className="ml-1 text-ds-text-tertiary hover:text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
