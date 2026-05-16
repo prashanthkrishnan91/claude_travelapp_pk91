@@ -197,6 +197,26 @@ def should_run_editorial(frame: Any) -> tuple:
     subtype_concepts = getattr(frame, "subtype_concepts", []) or []
     value_signals = set(getattr(frame, "value_signals", []) or [])
 
+    # Natural-feature concepts (beach, viewpoint, sunset, lookout, trail, etc.)
+    # do not benefit from editorial enrichment — there are no editorial write-ups
+    # for geographic natural features in the Tavily/Serper format. Skip editorial
+    # early (before qualitative_ranking_intent check) so "best beaches" and
+    # "best sunset points" do not trigger a wasted Tavily credit spend.
+    _NATURAL_FEATURE_EDITORIAL_SKIP: frozenset = frozenset({
+        "beach", "beaches",
+        "sunset", "sunsets", "sunrise", "sunrises",
+        "viewpoint", "viewpoints", "lookout", "lookouts",
+        "scenic", "overlook", "vista", "vistas", "panorama",
+        "waterfall", "waterfalls", "trail", "trails",
+        "garden", "gardens",
+        "sunset point", "sunset spot", "sunset viewpoint",
+        "lookout point", "scenic overlook", "scenic viewpoint",
+    })
+    if subtype_concepts:
+        _primary_label = (getattr(subtype_concepts[0], "label", "") or "").lower()
+        if _primary_label in _NATURAL_FEATURE_EDITORIAL_SKIP:
+            return False, "natural_feature_no_editorial_value"
+
     # Editorial-worthy soft preferences (discovery/vibe/occasion signals)
     matched_prefs = normalized_prefs & _EDITORIAL_WORTHY_PREFS
     if matched_prefs:

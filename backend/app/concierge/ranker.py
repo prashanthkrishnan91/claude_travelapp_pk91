@@ -106,6 +106,31 @@ _WATER_GEO_TERMS = frozenset({
 
 _OUTDOOR_GEO_TERMS = frozenset({"rooftop", "patio", "terrace", "outdoor", "garden"})
 
+# ── Natural-feature concept tokens ───────────────────────────────────────────
+# These concept labels commonly appear as venue names (e.g. "Sunset Boulevard"
+# bar, "The Beach Club" restaurant, "Panorama Lounge") but do NOT confirm the
+# entity belongs to the requested natural-feature category. For these concepts,
+# name-token match alone is insufficient: the entity must also have supporting
+# Google type/category evidence. Name match is capped at a low value when entity
+# types are exclusively food/bar/nightlife/hotel.
+_NATURAL_FEATURE_CONCEPT_TOKENS: frozenset = frozenset({
+    "beach", "sunset", "sunrise", "viewpoint",
+    "lookout", "scenic", "overlook", "vista", "panorama",
+    "waterfall", "trail", "garden",
+})
+
+# Google type tokens that unambiguously identify a food/bar/nightlife/hotel venue.
+# When an entity's specific (non-generic) types are exclusively from this set AND
+# the concept is a natural-feature label, name-match evidence is suppressed.
+_FOOD_BAR_HOTEL_VENUE_TYPES: frozenset = frozenset({
+    "restaurant", "food", "cafe", "coffee_shop", "bakery",
+    "bar", "night_club", "nightclub", "pub", "lounge",
+    "cocktail_bar", "wine_bar", "gastropub",
+    "meal_takeaway", "meal_delivery",
+    "hotel", "lodging", "motel", "inn",
+    "brewery", "winery", "distillery",
+})
+
 # Near-synonym sets for subtype matching.
 # Each frozenset groups synonymous labels. If the user's concept matches any
 # element, the whole set contributes to the match score.
@@ -134,6 +159,20 @@ _SYNONYM_SETS: List[FrozenSet[str]] = [
     frozenset({"mediterranean", "greek", "middle eastern"}),
     frozenset({"french", "bistro", "brasserie", "crepe"}),
     frozenset({"brunch", "breakfast", "eggs benedict", "mimosa"}),
+    # Natural-feature synonym sets — required so these concepts are "recognized"
+    # by _has_known_synonym_set() and the post-rank wrong-category filter applies.
+    # Type-confirming terms (tourist attraction, observation deck, landmark, natural
+    # feature, park) are included so entities with matching Google types get
+    # meaningful type_match scores rather than relying solely on name matching.
+    frozenset({"beach", "public beach", "beach park", "coastline", "shoreline",
+               "beachfront", "natural feature", "swimming area"}),
+    frozenset({"viewpoint", "scenic viewpoint", "scenic overlook", "observation deck",
+               "vista point", "vista", "lookout", "lookout point", "overlook",
+               "belvedere", "mirador", "tourist attraction", "natural feature",
+               "landmark", "park"}),
+    frozenset({"sunset point", "sunset spot", "sunset viewpoint", "sunset",
+               "scenic overlook", "scenic point", "observation deck",
+               "tourist attraction", "landmark"}),
 ]
 
 
@@ -209,6 +248,18 @@ class RankerStats:
 
 # ── Feature computation ───────────────────────────────────────────────────────
 
+def _concept_is_natural_feature(label: str) -> bool:
+    """Return True when the concept label is a natural-feature token.
+
+    Natural-feature labels (beach, sunset, viewpoint, lookout, etc.) commonly
+    appear in venue names without indicating category membership. Name-match
+    evidence must be suppressed for these concepts when entity types are
+    exclusively food/bar/hotel.
+    """
+    label_toks = _token_set(label)
+    return bool(label_toks & _NATURAL_FEATURE_CONCEPT_TOKENS)
+
+
 def _concept_synonym_set(label: str) -> Optional[FrozenSet[str]]:
     """Return the synonym set containing label, or None."""
     label_l = label.lower()
@@ -238,7 +289,16 @@ def _subtype_fit(entity: PlaceEntity, frame: ExperienceFrame) -> float:
         return 0.5  # neutral when no concept extracted
 
     name_tokens = _token_set(entity.name)
-    type_tokens = _token_set(" ".join(entity.types or []))
+    # Exclude generic Google type names before tokenizing so their component
+    # words (e.g. "point" from "point_of_interest", "local" from "local_business")
+    # don't create false concept matches. Only specific venue/feature types
+    # (restaurant, bar, beach, tourist_attraction, etc.) participate in matching.
+    _GENERIC_TYPE_SKIP = frozenset({
+        "establishment", "point_of_interest", "premise",
+        "local_business", "place", "geocode", "political",
+    })
+    _specific_types = [t for t in (entity.types or []) if t not in _GENERIC_TYPE_SKIP]
+    type_tokens = _token_set(" ".join(_specific_types))
     primary_type_tokens = _token_set(entity.primary_type or "")
     query_tokens = _token_set(entity.source_query)
 
@@ -257,6 +317,25 @@ def _subtype_fit(entity: PlaceEntity, frame: ExperienceFrame) -> float:
             if syn_toks & name_tokens:
                 name_match = max(name_match, 1.0 if syn_toks <= name_tokens else 0.85)
                 break
+
+        # Natural-feature name-match suppressor: concept labels like "sunset",
+        # "beach", "viewpoint", "lookout", "scenic" appear in food/bar/hotel venue
+        # names ("Sunset Boulevard" bar, "The Beach Club" restaurant) without
+        # indicating category membership. When the concept is a natural-feature
+        # token AND the entity's specific Google types are exclusively
+        # food/bar/nightlife/hotel, cap name_match so the wrong-category penalty
+        # fires and the post-rank filter can reject the entity.
+        if name_match > 0.15 and _concept_is_natural_feature(label):
+            _entity_types_lower = {t.lower().replace("-", "_") for t in (entity.types or [])}
+            if entity.primary_type:
+                _entity_types_lower.add(entity.primary_type.lower().replace("-", "_"))
+            _non_generic_types = _entity_types_lower - {
+                "establishment", "point_of_interest", "premise",
+                "local_business", "place",
+            }
+            if _non_generic_types and _non_generic_types <= _FOOD_BAR_HOTEL_VENUE_TYPES:
+                # Entity is exclusively a food/bar/hotel — name match is coincidental.
+                name_match = 0.15
 
         # Type match: any synonym in Google types
         type_match = 0.0
