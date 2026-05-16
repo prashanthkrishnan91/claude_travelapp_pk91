@@ -159,6 +159,33 @@ test("trips page journey cards have 44px min touch targets on action buttons", (
   assert.match(tripsPage, /min-w-\[44px\]/);
 });
 
+test("JourneyCard has a real Link to open the trip (not router.push)", () => {
+  const cardSection = tripsPage.slice(
+    tripsPage.indexOf("function JourneyCard"),
+    tripsPage.indexOf("function TripSection"),
+  );
+  assert.match(cardSection, /href=\{`\/trips\/\$\{trip\.id\}`\}/);
+  assert.doesNotMatch(cardSection, /onClick=\{\(\) => router\.push/);
+});
+
+test("JourneyCard edit and delete buttons have aria-labels", () => {
+  const cardSection = tripsPage.slice(
+    tripsPage.indexOf("function JourneyCard"),
+    tripsPage.indexOf("function TripSection"),
+  );
+  assert.match(cardSection, /aria-label=\{`Edit \$\{trip\.title\}`\}/);
+  assert.match(cardSection, /aria-label=\{`Delete \$\{trip\.title\}`\}/);
+});
+
+test("JourneyCard edit and delete buttons have 44px touch targets", () => {
+  const cardSection = tripsPage.slice(
+    tripsPage.indexOf("function JourneyCard"),
+    tripsPage.indexOf("function TripSection"),
+  );
+  assert.match(cardSection, /min-h-\[44px\]/);
+  assert.match(cardSection, /min-w-\[44px\]/);
+});
+
 test("trips page groups trips with getTripStatusGroup", () => {
   assert.match(tripsPage, /getTripStatusGroup/);
 });

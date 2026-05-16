@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   PlusCircle,
@@ -305,16 +304,12 @@ interface JourneyCardProps {
 }
 
 function JourneyCard({ trip, onEdit, onDelete }: JourneyCardProps) {
-  const router = useRouter();
-
   return (
     <Card
       as="article"
       tone="dark"
-      className="p-5 flex flex-col gap-3 cursor-pointer hover:border-ds-accent/40 transition-colors duration-200 group"
+      className="p-5 flex flex-col gap-3 hover:border-ds-accent/40 transition-colors duration-200"
       style={{ boxShadow: "var(--ds-elevation-1)" }}
-      onClick={() => router.push(`/trips/${trip.id}`)}
-      aria-label={`${trip.title} — ${getDisplayTripStatus(trip)}`}
       data-testid="journey-card"
     >
       {/* Header */}
@@ -324,13 +319,15 @@ function JourneyCard({ trip, onEdit, onDelete }: JourneyCardProps) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-1">
-            <h3 className="text-sm font-semibold text-ds-text group-hover:text-ds-accent transition leading-snug">
-              {trip.title}
+            <h3 className="text-sm font-semibold leading-snug">
+              <Link
+                href={`/trips/${trip.id}`}
+                className="text-ds-text hover:text-ds-accent transition"
+              >
+                {trip.title}
+              </Link>
             </h3>
-            <div
-              className="flex items-center gap-0.5 shrink-0"
-              onClick={(e) => e.stopPropagation()}
-            >
+            <div className="flex items-center gap-0.5 shrink-0">
               <button
                 onClick={() => onEdit(trip)}
                 className="p-1.5 rounded-lg hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text transition min-h-[44px] min-w-[44px] flex items-center justify-center"
