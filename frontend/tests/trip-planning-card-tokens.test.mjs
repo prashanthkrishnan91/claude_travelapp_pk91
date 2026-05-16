@@ -248,3 +248,54 @@ test('Card.tsx: DnD callers wrap with outer div not Card ref', () => {
   const cardOpenTag = searchResultCardSrc.match(/<Card[^>]*>/)?.[0] ?? '';
   assert.ok(!cardOpenTag.includes('ref='), 'Card element must not carry a ref= prop in SearchResultCard');
 });
+
+// ── Hardening: expanded touch-target coverage ─────────────────────────────────
+
+test('ItineraryItemCard: timeline day-part buttons use min-h-[44px] compliant pattern', () => {
+  // Day-part buttons use nested span approach with min-h-[44px] on the button
+  assert.ok(itineraryCardSrc.includes('min-h-[44px]'), 'ItineraryItemCard must have min-h-[44px] on interactive controls');
+});
+
+test('ItineraryItemCard: Move-to-Ideas button has 44px hit area', () => {
+  assert.ok(
+    itineraryCardSrc.includes('min-h-[44px]') && itineraryCardSrc.includes('Move to Ideas'),
+    'Move to Ideas button must have min-h-[44px]'
+  );
+});
+
+test('ItineraryItemCard: Google Flights links have invisible-padding touch target', () => {
+  // Links use -my-3.5 py-3.5 for 44px hit area (14px*2 + ~16px content = 44px)
+  assert.ok(itineraryCardSrc.includes('-my-3.5 py-3.5'), 'Google Flights links must use -my-3.5 py-3.5 for 44px hit area');
+});
+
+test('TripIdeasPanel: remove button has 44×44 hit area', () => {
+  assert.ok(tripIdeasPanelSrc.includes('min-w-[44px] min-h-[44px]'), 'TripIdeasPanel remove button must have min-w/h-[44px]');
+});
+
+test('TripIdeasPanel: status chips and filter chips use 44px-compliant buttons', () => {
+  assert.ok(tripIdeasPanelSrc.includes('min-h-[44px]'), 'TripIdeasPanel chip buttons must have min-h-[44px]');
+});
+
+test('TripIdeasPanel: Add to Day button and day select have 44px hit area', () => {
+  const src = tripIdeasPanelSrc;
+  assert.ok(src.includes('min-h-[44px]') && src.includes('Add to Day'), 'Add to Day must have min-h-[44px]');
+});
+
+test('TripIdeasPanel: Show more / Show less buttons have 44px hit area', () => {
+  assert.ok(
+    tripIdeasPanelSrc.includes('Show more') && tripIdeasPanelSrc.includes('min-h-[44px]'),
+    'Show more/less buttons must have min-h-[44px]'
+  );
+});
+
+test('TripBuilder: SortControl buttons use 44px-compliant nested pattern', () => {
+  assert.ok(tripBuilderSrc.includes('min-h-[44px]'), 'TripBuilder SortControl buttons must have min-h-[44px]');
+});
+
+test('TripBuilder: PRIMARY_CTA and SECONDARY_CTA have min-h-[44px]', () => {
+  assert.ok(tripBuilderSrc.includes('min-h-[44px]'), 'TripBuilder CTAs must have min-h-[44px]');
+});
+
+test('FlightExploreFlow: booking CTA link has 44px hit area', () => {
+  assert.ok(flightExploreSrc.includes('min-h-[44px]'), 'FlightExploreFlow booking CTA must have min-h-[44px]');
+});

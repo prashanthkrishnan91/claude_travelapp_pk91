@@ -168,7 +168,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
             {showMoveToIdeasAction && (
               <button
                 onClick={() => onMoveToIdeas(item.id)}
-                className="flex-shrink-0 rounded-md border border-ds-pen-stroke px-1.5 py-0.5 text-[10px] font-medium text-ds-text-secondary hover:border-ds-accent hover:text-ds-accent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                className="flex-shrink-0 min-h-[44px] inline-flex items-center justify-center rounded-md border border-ds-pen-stroke px-1.5 text-[10px] font-medium text-ds-text-secondary hover:border-ds-accent hover:text-ds-accent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                 aria-label={`Move ${item.title} back to Trip Ideas`}
               >
                 Move to Ideas
@@ -316,7 +316,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-0.5 text-[11px] text-ds-text-secondary hover:text-ds-accent transition-colors"
+                    className="inline-flex items-center gap-0.5 text-[11px] text-ds-text-secondary hover:text-ds-accent transition-colors -my-3.5 py-3.5"
                     aria-label="Search on Google Flights"
                     data-testid="itinerary-google-flights-cta"
                   >
@@ -466,7 +466,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                     href={mapsLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-0.5 text-[11px] text-ds-text-tertiary hover:text-ds-accent transition-colors"
+                    className="flex items-center gap-0.5 text-[11px] text-ds-text-tertiary hover:text-ds-accent transition-colors -my-3.5 py-3.5"
                     onClick={(e) => e.stopPropagation()}
                     aria-label="Open in Google Maps"
                   >
@@ -585,16 +585,20 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                 <button
                   key={part.value}
                   onClick={() => setSelectedPart(part.value)}
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 ${
-                    selectedPart === part.value
-                      ? part.activeClass
-                      : "border-ds-pen-stroke text-ds-text-tertiary hover:border-ds-carbon hover:text-ds-text-secondary"
-                  }`}
-                  style={selectedPart === part.value && part.value !== "unscheduled"
-                    ? { backgroundColor: "var(--ds-accent-subtle)" }
-                    : undefined}
+                  className="group min-h-[44px] flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                 >
-                  {part.label}
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${
+                      selectedPart === part.value
+                        ? part.activeClass
+                        : "border-ds-pen-stroke text-ds-text-tertiary group-hover:border-ds-carbon group-hover:text-ds-text-secondary"
+                    }`}
+                    style={selectedPart === part.value && part.value !== "unscheduled"
+                      ? { backgroundColor: "var(--ds-accent-subtle)" }
+                      : undefined}
+                  >
+                    {part.label}
+                  </span>
                 </button>
               ))}
             </div>
@@ -614,7 +618,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
               <button
                 onClick={handleSaveTimeline}
                 disabled={saving}
-                className="flex-shrink-0 px-2 py-1 rounded text-[10px] font-medium text-ds-accent border border-ds-pen-stroke hover:border-ds-accent transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                className="flex-shrink-0 min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2 rounded text-[10px] font-medium text-ds-accent border border-ds-pen-stroke hover:border-ds-accent transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                 style={{ backgroundColor: "var(--ds-accent-subtle)" }}
               >
                 {saving ? "…" : "Save"}

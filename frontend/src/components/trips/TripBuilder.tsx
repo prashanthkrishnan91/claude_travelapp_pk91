@@ -224,8 +224,8 @@ function AiScoreBadge({ score }: { score?: number | null }) {
 }
 
 const PREMIUM_CARD_BASE = "candidate-card relative border border-ds-pen-stroke rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 bg-ds-onyx shadow-[var(--ds-elevation-1)] hover:shadow-[var(--ds-elevation-2)] hover:border-ds-carbon";
-const SECONDARY_CTA = "flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border border-ds-pen-stroke bg-ds-carbon text-ds-text-secondary hover:bg-ds-pen-stroke hover:border-ds-carbon text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
-const PRIMARY_CTA = "flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-ds-accent hover:bg-ds-accent-muted text-ds-text-inverse text-xs font-semibold transition-all disabled:opacity-50 shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
+const SECONDARY_CTA = "flex-1 min-h-[44px] flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border border-ds-pen-stroke bg-ds-carbon text-ds-text-secondary hover:bg-ds-pen-stroke hover:border-ds-carbon text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
+const PRIMARY_CTA = "flex-1 min-h-[44px] flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-ds-accent hover:bg-ds-accent-muted text-ds-text-inverse text-xs font-semibold transition-all disabled:opacity-50 shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
 
 // ─── Sort control ─────────────────────────────────────────────────────────────
 
@@ -245,13 +245,15 @@ function SortControl({
         <button
           key={key}
           onClick={() => onChange(key)}
-          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all border focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 ${
+          className="group min-h-[44px] flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+        >
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all border ${
             current === key
               ? "bg-ds-accent text-ds-text-inverse border-ds-accent shadow-sm"
-              : "bg-ds-carbon text-ds-text-secondary border-ds-pen-stroke hover:bg-ds-pen-stroke hover:text-ds-text"
-          }`}
-        >
-          {label}
+              : "bg-ds-carbon text-ds-text-secondary border-ds-pen-stroke group-hover:bg-ds-pen-stroke group-hover:text-ds-text"
+          }`}>
+            {label}
+          </span>
         </button>
       ))}
     </div>
@@ -1135,13 +1137,15 @@ function FilterPills({
           <button
             key={String(opt.value ?? "all")}
             onClick={() => onChange(opt.value === value ? null : opt.value)}
-            className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-all border focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 ${
+            className="group min-h-[44px] flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          >
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-all border ${
               opt.value === value
                 ? "bg-ds-accent text-ds-text-inverse border-ds-accent"
-                : "bg-ds-carbon text-ds-text-secondary border-ds-pen-stroke hover:border-ds-carbon hover:text-ds-text"
-            }`}
-          >
-            {opt.label}
+                : "bg-ds-carbon text-ds-text-secondary border-ds-pen-stroke group-hover:border-ds-carbon group-hover:text-ds-text"
+            }`}>
+              {opt.label}
+            </span>
           </button>
         ))}
       </div>

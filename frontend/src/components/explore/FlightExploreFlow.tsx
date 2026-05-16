@@ -207,7 +207,7 @@ function FlightCard({ offer }: { offer: FlightItineraryOffer }) {
             href={bookingUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-ds-accent text-xs font-medium hover:border-ds-accent transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            className="min-h-[44px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-ds-accent text-xs font-medium hover:border-ds-accent transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
             style={{ backgroundColor: "var(--ds-accent-subtle)" }}
             data-testid={isSearchRedirect ? "flight-search-link" : "flight-book-link"}
             aria-label={isSearchRedirect ? "Search on Google Flights" : `Book flight on ${offer.bookingLink.providerName}`}
