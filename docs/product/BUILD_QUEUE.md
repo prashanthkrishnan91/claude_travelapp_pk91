@@ -6,7 +6,7 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Now
 
-- **Wife-Wow design system foundation** (Stage 3 exit → pre-Stage-4 design foundation). Strict scope: design tokens / visual primitives, app shell / premium surface language, shared buttons/cards/forms/actions, vertical result-card visual foundation. **Hard stops**: no provider/search behavior changes, no API route changes, no Tavily/live-research changes, no flight/hotel/saved-trip behavior changes. Deliver as one coherent design foundation PR; no incremental style micro-patches.
+- **Stage 3.5 Phase 3 — Card variant breadth across other surfaces.** Apply `Card` primitive + ds-* token polish to remaining surfaces: `FlightCard`, `TripBuilder` card slots, `ItineraryItemCard`, and any other surfaces still using raw div / legacy colors. Contract: `docs/product/DESIGN_IMPLEMENTATION_CONTRACT.md` §25. Run `feature-contract` + `golden-scenarios` before coding (Level 2 requirement). Hard stops: same as Wife-Wow umbrella (no provider/API/SQL/behavior changes).
 
 ## Next
 
@@ -15,6 +15,8 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 - Optional: Trip-workspace Explore parity (reuse Explore's canonical Flights search and hotel discovery inside `TripBuilder`) — accepted open gap, schedule separately if needed.
 
 ## Completed
+
+- **Stage 3.5 Phase 2B — Concierge shared helpers + trip-context polish (2026-05-16, merged PR #399).** `cardHelpers.ts` created (shared `hasClosedSignal`/`canShowGoogleVerifiedBadge`/`pickCardMeta`, 12-field scan including `card.raw`). `AIConciergePanel` uses `Card.Identity`/`Card.Trust`/`Card.Why` named slots, 44px touch targets, full ds-token palette. 953 tests, 950 pass.
 
 - **Stage 3 exit — functionally complete (2026-05-14).** Stage 3 v1/v2/v3 shipped. Stage 3 is accepted as functionally unblocked for current private-use scope. Saved-list board reorganization/edit is an accepted open gap (not required before design foundation). Trip-workspace search parity with Explore is an accepted open gap (schedule separately). Canonical provider routing contract locked (see below). Next: Wife-Wow design system foundation.
 
