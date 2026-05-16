@@ -172,3 +172,61 @@ test('TripBuilder: selectedDayId state preserved', () => {
 test('TripBuilder: CandidatePanel component exported/defined', () => {
   assert.ok(src.includes('function CandidatePanel'), 'CandidatePanel function missing');
 });
+
+// ── Touch targets and focus rings — hardening ─────────────────────────────────
+
+test('TripBuilder: target-day selector wrapper has min-h-[44px] touch target', () => {
+  const labelIdx = src.indexOf('focus-within:outline-ds-accent');
+  assert.ok(labelIdx !== -1, 'missing focus-within:outline-ds-accent on target-day wrapper');
+  const ctx = src.slice(Math.max(0, labelIdx - 200), labelIdx + 50);
+  assert.ok(ctx.includes('min-h-[44px]'), 'target-day selector wrapper missing min-h-[44px]');
+});
+
+test('TripBuilder: target-day selector uses focus-within ring on wrapper (not focus-visible:outline-none on select)', () => {
+  assert.ok(src.includes('focus-within:outline-ds-accent'), 'missing focus-within:outline-ds-accent on target-day label wrapper');
+  const selectIdx = src.indexOf('focus-visible:outline-none cursor-pointer');
+  assert.ok(selectIdx !== -1, 'select should suppress its own outline in favour of the label wrapper ring');
+});
+
+test('TripBuilder: List/Map toggle buttons have min-h-[44px] touch target', () => {
+  const listBtnIdx = src.indexOf('setViewMode("list")');
+  assert.ok(listBtnIdx !== -1, 'missing setViewMode list button');
+  const listCtx = src.slice(listBtnIdx, listBtnIdx + 300);
+  assert.ok(listCtx.includes('min-h-[44px]'), 'List toggle button missing min-h-[44px]');
+
+  const mapBtnIdx = src.indexOf('setViewMode("map")');
+  assert.ok(mapBtnIdx !== -1, 'missing setViewMode map button');
+  const mapCtx = src.slice(mapBtnIdx, mapBtnIdx + 300);
+  assert.ok(mapCtx.includes('min-h-[44px]'), 'Map toggle button missing min-h-[44px]');
+});
+
+test('TripBuilder: Compare button has min-h-[44px] touch target', () => {
+  // Find the button that calls handleCompare via onClick — look for onClick={handleCompare}
+  const matches = [...src.matchAll(/onClick={handleCompare}/g)];
+  assert.ok(matches.length > 0, 'missing onClick={handleCompare} button');
+  const found = matches.some((m) => {
+    const ctx = src.slice(Math.max(0, m.index - 50), m.index + 400);
+    return ctx.includes('min-h-[44px]');
+  });
+  assert.ok(found, 'Compare button missing min-h-[44px]');
+});
+
+test('TripBuilder: Clear button has min-h-[44px] and min-w-[44px] touch target', () => {
+  // Clear button sits adjacent to the Compare button; anchor on compareDataRef.current.clear()
+  const clearFnIdx = src.indexOf('compareDataRef.current.clear()');
+  assert.ok(clearFnIdx !== -1, 'missing compareDataRef.current.clear() in Clear button handler');
+  const ctx = src.slice(Math.max(0, clearFnIdx - 100), clearFnIdx + 300);
+  assert.ok(ctx.includes('min-h-[44px]'), 'Clear button missing min-h-[44px]');
+  assert.ok(ctx.includes('min-w-[44px]'), 'Clear button missing min-w-[44px]');
+});
+
+test('TripBuilder: toast dismiss button has min-h-[44px] and min-w-[44px] touch target', () => {
+  // Find all setToast(null) occurrences; the button one is in JSX onClick
+  const matches = [...src.matchAll(/setToast\(null\)/g)];
+  assert.ok(matches.length > 0, 'missing setToast(null)');
+  const found = matches.some((m) => {
+    const ctx = src.slice(m.index, m.index + 300);
+    return ctx.includes('min-h-[44px]') && ctx.includes('min-w-[44px]');
+  });
+  assert.ok(found, 'toast dismiss button missing min-h-[44px] / min-w-[44px] touch target');
+});

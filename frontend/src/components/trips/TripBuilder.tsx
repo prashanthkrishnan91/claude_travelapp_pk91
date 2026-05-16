@@ -2075,7 +2075,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
               <div className="flex items-center bg-ds-carbon rounded-lg p-0.5 gap-0.5">
                 <button
                   onClick={() => setViewMode("list")}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 ${
+                  className={`flex items-center gap-1 px-2.5 min-h-[44px] rounded-md text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 ${
                     viewMode === "list"
                       ? "bg-ds-onyx text-ds-text shadow-sm"
                       : "text-ds-text-secondary hover:text-ds-text"
@@ -2086,7 +2086,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                 </button>
                 <button
                   onClick={() => setViewMode("map")}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 ${
+                  className={`flex items-center gap-1 px-2.5 min-h-[44px] rounded-md text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 ${
                     viewMode === "map"
                       ? "bg-ds-onyx text-ds-text shadow-sm"
                       : "text-ds-text-secondary hover:text-ds-text"
@@ -2316,12 +2316,12 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
               <div className="flex items-center gap-2">
                 {/* Target day selector — left-panel "+" buttons add to this day */}
                 {days.length > 0 && (
-                  <div className="flex items-center gap-2 bg-ds-carbon rounded-xl border border-ds-pen-stroke px-3 py-1.5">
+                  <label className="flex items-center gap-2 bg-ds-carbon rounded-xl border border-ds-pen-stroke px-3 min-h-[44px] cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-ds-accent focus-within:outline-offset-2 transition-colors">
                     <span className="text-[10px] font-semibold text-ds-text-tertiary uppercase tracking-[0.1em] whitespace-nowrap">Add to</span>
                     <select
                       value={selectedDayId ?? ""}
                       onChange={(e) => setSelectedDayId(e.target.value || null)}
-                      className="text-xs font-semibold text-ds-text bg-ds-carbon border-none outline-none focus:outline-none focus-visible:outline-none cursor-pointer"
+                      className="text-xs font-semibold text-ds-text bg-ds-carbon border-none outline-none focus:outline-none focus-visible:outline-none cursor-pointer py-0"
                     >
                       {displayDays.map((d) => (
                         <option key={d.id} value={d.id}>
@@ -2329,7 +2329,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                         </option>
                       ))}
                     </select>
-                  </div>
+                  </label>
                 )}
                 {/* "Add Day" only shown when days are not auto-derived from trip dates */}
                 {canManuallyAddExpectedDay && (
@@ -2418,14 +2418,14 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
             <button
               onClick={handleCompare}
               disabled={compareSet.size < 2 || compareLoading}
-              className="px-4 py-1.5 rounded-lg bg-ds-accent hover:bg-ds-accent-muted text-ds-text-inverse disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold transition-colors flex items-center gap-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              className="min-h-[44px] px-4 rounded-lg bg-ds-accent hover:bg-ds-accent-muted text-ds-text-inverse disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold transition-colors flex items-center gap-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
             >
               {compareLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BarChart2 className="w-3.5 h-3.5" />}
               Compare
             </button>
             <button
               onClick={() => { setCompareSet(new Set()); compareDataRef.current.clear(); }}
-              className="text-ds-text-tertiary hover:text-ds-text text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center text-ds-text-tertiary hover:text-ds-text text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
             >
               Clear
             </button>
@@ -2467,7 +2467,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 bg-ds-onyx border border-ds-pen-stroke text-ds-text rounded-xl shadow-[var(--ds-elevation-3)] text-sm font-medium animate-in fade-in slide-in-from-bottom-2">
           <CheckCircle2 className="w-4 h-4 text-ds-trust-verified flex-shrink-0" />
           {toast}
-          <button onClick={() => setToast(null)} className="ml-1 text-ds-text-tertiary hover:text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2">
+          <button onClick={() => setToast(null)} className="ml-1 min-h-[44px] min-w-[44px] flex items-center justify-center text-ds-text-tertiary hover:text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
