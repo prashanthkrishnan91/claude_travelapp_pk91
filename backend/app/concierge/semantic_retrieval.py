@@ -95,6 +95,176 @@ _PRICE_LEVEL_SYMBOL: Dict[str, str] = {
     "PRICE_LEVEL_VERY_EXPENSIVE": "$$$$",
 }
 
+# ── Natural-feature precision gate (Step 4.7) ─────────────────────────────────
+# Concept labels (from frame extractor, after singularization) that indicate the
+# user is searching for a natural geographic feature, not a named venue.
+# For these concepts, candidate entities must have Google type/category evidence
+# confirming they are natural features — not lexical name matches.
+_NATURAL_FEATURE_CONCEPT_LABELS: frozenset = frozenset({
+    "beach", "beaches",
+    "sunset", "sunsets",
+    "sunrise", "sunrises",
+    "viewpoint", "viewpoints",
+    "lookout", "lookouts",
+    "scenic", "overlook",
+    "vista", "vistas",
+    "panorama",
+    "waterfall", "waterfalls",
+    "trail", "trails",
+    "garden", "gardens",
+    # Compound labels the frame extractor may produce
+    "sunset point", "sunset spot", "sunset viewpoint",
+    "lookout point", "scenic overlook", "scenic viewpoint",
+    "scenic point",
+})
+
+# Google type tokens that confirm beach/coastal natural feature evidence.
+_BEACH_NATURAL_FEATURE_TYPES: frozenset = frozenset({
+    "beach", "public_beach", "beach_park", "natural_feature",
+    "park", "swimming_area", "water_park",
+})
+
+# Google type tokens that confirm viewpoint/scenic/sightseeing evidence.
+_VIEWPOINT_NATURAL_FEATURE_TYPES: frozenset = frozenset({
+    "scenic_viewpoint", "viewpoint", "observation_deck",
+    "tourist_attraction", "natural_feature",
+    "park", "national_park", "state_park",
+    "landmark",
+})
+
+# Google type tokens that unambiguously reject an entity for natural-feature queries.
+# An entity whose specific types are exclusively from this set (no natural-feature
+# type present) is rejected by the precision gate.
+_NATURAL_FEATURE_HARD_REJECTED_TYPES: frozenset = frozenset({
+    "restaurant", "food", "cafe", "coffee_shop", "bakery",
+    "bar", "night_club", "nightclub", "pub", "lounge",
+    "meal_takeaway", "meal_delivery",
+    "hotel", "lodging",
+    "cocktail_bar", "wine_bar", "gastropub",
+})
+
+# Strong name tokens that unambiguously confirm a viewpoint/observation place.
+# "tower", "terrace", "panorama" are intentionally excluded — too common in venue
+# names ("Sunset Tower Bar", "Panorama Lounge", "Terrace Restaurant") to be safe
+# as confirmation signals. Only tokens that cannot reasonably appear in a food/bar
+# venue name are included.
+_STRONG_VIEWPOINT_NAME_TOKENS: frozenset = frozenset({
+    "viewpoint", "overlook", "lookout", "observation",
+    "belvedere", "mirador", "belvédère",
+})
+
+# Name tokens that confirm beach/coastal evidence for generic-typed entities.
+_BEACH_CONFIRMING_NAME_TOKENS: frozenset = frozenset({
+    "beach", "coast", "coastal", "oceanfront", "ocean", "shore",
+    "shoreline", "beachfront", "seaside",
+})
+
+# Minimum candidates required after precision gate to proceed.
+# If fewer pass, return honest empty state rather than falling back to Tavily.
+_MIN_NATURAL_FEATURE_GATE_CANDIDATES: int = 1
+
+
+_VENUE_HEAD_TOKENS: frozenset = frozenset({
+    "bar", "bars", "pub", "pubs", "club", "clubs", "nightclub", "nightclubs",
+    "restaurant", "restaurants", "cafe", "cafes", "lounge", "lounges",
+    "hotel", "hotels", "hostel", "hostels",
+    "brewery", "breweries", "winery", "wineries", "distillery",
+})
+
+
+def _is_natural_feature_query(frame: Any) -> "tuple[bool, str]":
+    """Return (is_natural_feature, concept_category) for this query frame.
+
+    concept_category: "beach" | "viewpoint" | other label | "" when not applicable.
+    The gate runs only when is_natural_feature=True.
+
+    Returns False when the query has an explicit venue head (e.g. "beach bars",
+    "sunset cocktail bars") — those are venue-type queries, not feature searches.
+    """
+    if not frame or not getattr(frame, "subtype_concepts", None):
+        return False, ""
+
+    primary_label = (frame.subtype_concepts[0].label or "").lower()
+    if primary_label not in _NATURAL_FEATURE_CONCEPT_LABELS:
+        return False, ""
+
+    # If the query contains an explicit venue-type head ("bars", "clubs",
+    # "restaurants", "hotels"), the user wants venues near a feature, not the
+    # feature itself — do not apply the natural-feature gate.
+    ask = (getattr(frame, "literal_ask", None) or getattr(frame, "normalized_ask", None) or "").lower()
+    import re as _re
+    ask_tokens = set(_re.findall(r"\b[a-z]+\b", ask))
+    if ask_tokens & _VENUE_HEAD_TOKENS:
+        return False, ""
+
+    beach_tokens = {"beach", "beaches"}
+    viewpoint_tokens = {
+        "sunset", "sunsets", "sunrise", "sunrises",
+        "viewpoint", "viewpoints", "lookout", "lookouts",
+        "scenic", "overlook", "vista", "vistas", "panorama",
+        "sunset point", "sunset spot", "sunset viewpoint",
+        "lookout point", "scenic overlook", "scenic viewpoint", "scenic point",
+    }
+    if primary_label in beach_tokens:
+        return True, "beach"
+    if primary_label in viewpoint_tokens:
+        return True, "viewpoint"
+    return True, primary_label
+
+
+def _entity_passes_natural_feature_gate(entity: Any, concept_category: str) -> bool:
+    """Return True when entity is plausible for a natural-feature query.
+
+    Order of checks — designed so hard rejections cannot be overridden by name tokens:
+
+    1. HARD REJECT first: if specific types are exclusively food/bar/nightlife/hotel,
+       reject immediately — entity name ("Sunset Tower Bar", "Panorama Lounge") cannot
+       override this decision.
+    2. ACCEPT: confirmed natural-feature Google type present.
+    3. GENERIC-ONLY: no specific types — accept only with supporting name evidence
+       (beach/coast tokens for beach; strong viewpoint vocabulary for viewpoint).
+    4. REJECT: any other specific types outside the confirmed set — for this
+       containment, wrong cards are worse than empty cards.
+
+    concept_category: "beach" | "viewpoint" | other
+    """
+    all_types = {t.lower().replace("-", "_") for t in (getattr(entity, "types", None) or [])}
+    primary = getattr(entity, "primary_type", None)
+    if primary:
+        all_types.add(primary.lower().replace("-", "_"))
+
+    _generic = {"establishment", "point_of_interest", "premise", "local_business", "place"}
+    non_generic = all_types - _generic
+
+    # Step 1 — HARD REJECT: exclusively food/bar/nightlife/hotel types.
+    # This runs before any name-token check so venue names ("Sunset Tower Bar",
+    # "Panorama Lounge", "Terrace Restaurant") cannot override typed rejection.
+    if non_generic and non_generic <= _NATURAL_FEATURE_HARD_REJECTED_TYPES:
+        return False
+
+    # Step 2 — ACCEPT: at least one confirmed natural-feature type.
+    confirmed_types = (
+        _BEACH_NATURAL_FEATURE_TYPES
+        if concept_category == "beach"
+        else _VIEWPOINT_NATURAL_FEATURE_TYPES
+    )
+    if all_types & confirmed_types:
+        return True
+
+    # Step 3 — GENERIC-ONLY: no specific types — use name evidence conservatively.
+    if not non_generic:
+        name_lower = (getattr(entity, "name", "") or "").lower()
+        if concept_category == "beach":
+            return any(tok in name_lower for tok in _BEACH_CONFIRMING_NAME_TOKENS)
+        # viewpoint: only accept with strong, unambiguous viewpoint vocabulary.
+        # "tower"/"terrace"/"panorama" are excluded — too common in venue names.
+        return any(tok in name_lower for tok in _STRONG_VIEWPOINT_NAME_TOKENS)
+
+    # Step 4 — REJECT: specific types present but outside confirmed AND rejected sets
+    # (museum, shop, transit, etc.). For this containment fix, wrong cards worse than
+    # empty cards.
+    return False
+
 
 def _normalize_brand_name(name: str) -> str:
     """Lowercase, apostrophe-stripped name for same-brand detection.
@@ -655,6 +825,53 @@ def _run_pipeline(
             outcome="no_verified_entities",
         )
         return LiveResearchResult(source_status=SOURCE_NONE, provider_name=PROVIDER_NAME)
+
+    # ── Step 4.7: Natural-feature precision gate ─────────────────────────────
+    # For queries targeting natural geographic features (beach, sunset viewpoint,
+    # scenic overlook, lookout, waterfall, garden), require Google type evidence
+    # confirming the entity belongs to the right category. Rejects food/bar/hotel
+    # entities whose names happen to contain the natural-feature word (e.g.
+    # "Sunset Boulevard" bar for "sunset points", "The Beach Club" restaurant for
+    # "best beaches"). Honest empty state: if no candidates pass, return no cards
+    # rather than falling back to Tavily/editorial or fabricating results.
+    _is_natural_feature, _natural_feature_category = _is_natural_feature_query(frame)
+    natural_feature_gate_rejected_count = 0
+    if _is_natural_feature and entities:
+        _before_nf_gate = len(entities)
+        entities = [
+            e for e in entities
+            if _entity_passes_natural_feature_gate(e, _natural_feature_category)
+        ]
+        natural_feature_gate_rejected_count = _before_nf_gate - len(entities)
+        if natural_feature_gate_rejected_count > 0:
+            logger.info(
+                "semantic_retrieval_v1: natural_feature_gate_rejected=%d "
+                "concept_category=%r query=%r entities_remaining=%d",
+                natural_feature_gate_rejected_count, _natural_feature_category,
+                user_query, len(entities),
+            )
+        if len(entities) < _MIN_NATURAL_FEATURE_GATE_CANDIDATES:
+            logger.info(
+                "semantic_retrieval_v1: natural_feature_gate_no_candidates "
+                "concept_category=%r query=%r gate_rejected=%d returning_honest_empty=true",
+                _natural_feature_category, user_query, natural_feature_gate_rejected_count,
+            )
+            _log_semantic_turn(
+                user_query=user_query,
+                frame=frame,
+                queries=queries,
+                latency=latency,
+                provider_call_count=provider_call_count,
+                provider_success_count=provider_success_count,
+                raw_candidate_count=raw_count,
+                deduped_candidate_count=verified_count,
+                verified_entity_count=0,
+                rejection_stats={"natural_feature_gate_rejected": natural_feature_gate_rejected_count},
+                final_card_count=0,
+                t_pipeline_start=t_pipeline_start,
+                outcome="natural_feature_gate_no_candidates",
+            )
+            return LiveResearchResult(source_status=SOURCE_NONE, provider_name=PROVIDER_NAME)
 
     # ── Step 5: SemanticRanker v1 ────────────────────────────────────────────
     t0 = time.monotonic()
