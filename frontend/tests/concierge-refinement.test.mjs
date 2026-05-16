@@ -494,6 +494,13 @@ const aiConciergePanel = readFileSync(
   'utf8'
 );
 
+// pickCardMeta, hasClosedSignal, canShowGoogleVerifiedBadge, and their helpers
+// are now implemented in the shared cardHelpers module.
+const cardHelpersSource = readFileSync(
+  new URL('../src/lib/concierge/cardHelpers.ts', import.meta.url),
+  'utf8'
+);
+
 test('AIConciergePanel imports refinementInterpreter', () => {
   assert.match(aiConciergePanel, /refinementInterpreter/);
   assert.match(aiConciergePanel, /parseRefinementAction/);
@@ -1108,8 +1115,8 @@ test('compareCards: does not expose old meta/note fields', () => {
 // ---------------------------------------------------------------------------
 
 test('AIConciergePanel: pickCardMeta includes price between rating and address', () => {
-  // The price should appear in the meta line composition, after rating/reviews
-  assert.match(aiConciergePanel, /price.*parts\.push|parts\.push.*price/s);
+  // pickCardMeta is implemented in the shared cardHelpers module
+  assert.match(cardHelpersSource, /price.*parts\.push|parts\.push.*price/s);
 });
 
 test('AIConciergePanel: comparison rendering uses structured table rows', () => {
@@ -1130,9 +1137,10 @@ test('AIConciergePanel: comparison rendering references card.price and card.rati
   assert.match(aiConciergePanel, /card\.rating/);
 });
 
-test('AIConciergePanel: imports formatDisplayPrice from priceFormatter', () => {
-  assert.match(aiConciergePanel, /formatDisplayPrice/);
-  assert.match(aiConciergePanel, /priceFormatter/);
+test('cardHelpers: imports formatDisplayPrice from priceFormatter', () => {
+  // formatDisplayPrice is used by pickCardMeta in the shared cardHelpers module
+  assert.match(cardHelpersSource, /formatDisplayPrice/);
+  assert.match(cardHelpersSource, /priceFormatter/);
 });
 
 test('AIConciergePanel: keeps canonical actionable cards below comparison', () => {
@@ -1179,15 +1187,15 @@ test('hasGooglePriceSignals: false for priceRange with all zero units', () => {
   assert.equal(hasGooglePriceSignals([card]), false);
 });
 
-test('AIConciergePanel: pickCardMeta no longer early-returns displayMetaLine (price always appended)', () => {
+test('cardHelpers: pickCardMeta no longer early-returns displayMetaLine (price always appended)', () => {
   // The old early-return pattern "if displayMetaLine return [displayMetaLine]" is gone.
   // Instead ratingBase is used so price is always appended.
-  assert.doesNotMatch(aiConciergePanel, /if \(card\.display\?\.displayMetaLine\) return \[card\.display\.displayMetaLine\]/);
-  assert.match(aiConciergePanel, /ratingBase/);
+  assert.doesNotMatch(cardHelpersSource, /if \(card\.display\?\.displayMetaLine\) return \[card\.display\.displayMetaLine\]/);
+  assert.match(cardHelpersSource, /ratingBase/);
 });
 
-test('AIConciergePanel: pickCardMeta guards against duplicate price in pre-formatted meta base', () => {
-  assert.match(aiConciergePanel, /metaAlreadyHasPrice/);
+test('cardHelpers: pickCardMeta guards against duplicate price in pre-formatted meta base', () => {
+  assert.match(cardHelpersSource, /metaAlreadyHasPrice/);
 });
 
 test('AIConciergePanel: imports getBaselinePriceLevel from refinementInterpreter', () => {
@@ -1211,25 +1219,25 @@ test('AIConciergePanel: cheaper follow-up shows honest caveat when lacking price
 // Sev1 regression — address deduplication in pickCardMeta
 // ---------------------------------------------------------------------------
 
-test('AIConciergePanel: pickCardMeta strips address from ratingBase before re-appending (no duplicate)', () => {
+test('cardHelpers: pickCardMeta strips address from ratingBase before re-appending (no duplicate)', () => {
   // The strip logic must detect address in the pre-built meta string and remove it
   // before re-appending address in correct position (rating · price · address).
-  assert.match(aiConciergePanel, /ratingBase\.includes\(addrTrimmed\)/);
-  assert.match(aiConciergePanel, /ratingBase\.slice\(0, ratingBase\.indexOf\(addrTrimmed\)\)/);
+  assert.match(cardHelpersSource, /ratingBase\.includes\(addrTrimmed\)/);
+  assert.match(cardHelpersSource, /ratingBase\.slice\(0, ratingBase\.indexOf\(addrTrimmed\)\)/);
 });
 
-test('AIConciergePanel: pickCardMeta calls formatDisplayPrice with priceLevel and priceRange as fallback', () => {
+test('cardHelpers: pickCardMeta calls formatDisplayPrice with priceLevel and priceRange as fallback', () => {
   // When display.displayPrice is absent, pickCardMeta must fall back to
   // formatDisplayPrice(priceLevel, priceRange) so priceRange data reaches the UI.
-  assert.match(aiConciergePanel, /details\?\.priceRange/);
+  assert.match(cardHelpersSource, /details\?\.priceRange/);
 });
 
-test('AIConciergePanel: pickCardMeta price always goes through formatDisplayPrice, never raw enum', () => {
+test('cardHelpers: pickCardMeta price always goes through formatDisplayPrice, never raw enum', () => {
   // In pickCardMeta, the `price` variable is sourced from display.displayPrice OR
   // formatDisplayPrice(), which maps enums to $ symbols.  The raw PRICE_LEVEL_ enum
   // strings are only used as keys in PRICE_ORD for numeric comparison, never as
   // displayable text.  Confirm the price derivation chain passes through formatDisplayPrice.
-  assert.match(aiConciergePanel, /display\?\.displayPrice.*\?\?[\s\S]{0,60}formatDisplayPrice/);
+  assert.match(cardHelpersSource, /display\?\.displayPrice.*\?\?[\s\S]{0,60}formatDisplayPrice/);
 });
 
 // ---------------------------------------------------------------------------
