@@ -8,6 +8,44 @@ Tracks the state of the design system and UI primitive layer so future prompts a
 
 ---
 
+## Stage 3.5 Phase 4 — Trip Detail Planning Canvas / Itinerary Day System — SHIPPED (2026-05-16)
+
+**Stage 3.5 · Wife-Wow design system — Trip planning canvas · Day-column hierarchy and empty-state redesign**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/components/trips/ItineraryDayColumn.tsx` | Full ds-* migration: all `slate-*`/`amber-*`/`sky-*`/`violet-*` classes removed. Day column root → `bg-ds-onyx border-ds-pen-stroke shadow-[var(--ds-elevation-2)]`. Chapter header: zero-padded number marker (`bg-ds-accent` when selected), `Day N` title in `text-ds-text`, date as Overline (`text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary`). Day-part colors: morning=`text-ds-accent`, afternoon=`text-ds-text-secondary`, evening=`text-ds-accent-muted`, unscheduled=`text-ds-text-tertiary`. Expanded body bg → `var(--ds-midnight-ink)` (ink-ladder depth). All action buttons: `min-h-[44px] min-w-[44px]` touch targets + `focus-visible:outline-ds-accent`. Empty-day invitation: editorial "Day N / Drag items here or use + Add" with `border-dashed border-ds-pen-stroke` (normal) and `border-ds-accent/60 + var(--ds-accent-subtle)` bg (drag-over). Travel connectors → `bg-ds-pen-stroke`/`text-ds-text-tertiary`/`text-ds-warning`. SuggestionsReviewPanel → `bg-ds-carbon border-ds-pen-stroke`. DayTravelHintBar → `bg-ds-carbon border-ds-pen-stroke`. Show all/less → `border-ds-pen-stroke bg-ds-carbon text-ds-text-secondary`. |
+| `frontend/src/app/trips/[id]/page.tsx` | Trip context header: `bg-brand-600/15 border-brand-500/30 text-brand-300` → `border-ds-pen-stroke text-ds-accent bg-[var(--ds-accent-subtle)]`. `text-cream-300` → `text-ds-text`. Toast: `bg-slate-800 text-white` → `bg-ds-onyx border-ds-pen-stroke text-ds-text shadow-[var(--ds-elevation-2)]`. Back link + loading state → `text-ds-text-tertiary hover:text-ds-text`. Loading card → `border-ds-pen-stroke bg-ds-onyx rounded-lg`. |
+| `frontend/src/components/trips/TripBuilder.tsx` | No-days empty state: `.card p-8` → `rounded-lg border border-ds-pen-stroke bg-ds-onyx p-8`. |
+| `frontend/tests/trip-canvas-day-system.test.mjs` | 57 new static/contract tests: ds-token coverage, 44px touch targets, focus rings, Overline tracking, empty-state editorial design, selected-day accent, behavior contract preservation, trip detail page legacy removal, TripBuilder no-days state. |
+| `frontend/package.json` | Added `trip-canvas-day-system.test.mjs` to test script. |
+
+### Test results
+- **692 tests, 0 failures** (was 614; +57 new Phase 4 day-canvas contract tests + carried through from previous phases)
+- All pre-existing tests continue to pass
+
+### Design contract alignment
+
+- **Chapter hierarchy:** Day columns have chapter-style headers: zero-padded number marker, "Day N" title, Overline date. Editorial weight, not dashboard chrome.
+- **Ink-ladder elevation:** Expanded body uses `var(--ds-midnight-ink)` (darker than `bg-ds-onyx` card shell) — correct depth relationship per Design Bible §8 ink-ladder.
+- **Day-part Overline labels:** `text-[10px] font-semibold uppercase tracking-[0.1em]` — matches Overline type role exactly.
+- **Empty-day invitation:** No utilitarian "No plans yet." Editorial invitation with actionable "+ Add" inline link. Dashed border with accent on drag-over.
+- **Touch targets:** All header action buttons at `min-w-[44px] min-h-[44px]`. Inline empty-state + Add link is a button with focus-visible ring.
+- **Selected state:** `border-ds-accent/40 ring-ds-accent/20` on column root. Number marker: `bg-ds-accent text-ds-text-inverse`. Header: `bg-ds-carbon`.
+- **Travel connectors:** Subdued — `bg-ds-pen-stroke` divider, `text-ds-text-tertiary` for distance/time, `text-ds-warning/70` for far-apart alert.
+- **No legacy classes:** Zero `slate-*`, `amber-*`, `sky-*`, `violet-*` in ItineraryDayColumn. Zero `brand-*`, `cream-*` in trip detail page shell.
+- **Behavior preserved:** DnD droppable, SortableContext, isExpanded, PREVIEW_ITEM_LIMIT, handleSuggestTimeline, handleApplyTimeline, onPlanDay, onUpdateTimeline, onMoveItemToIdeas, itemOverrides all unchanged.
+
+### Invariant confirmations
+- No backend files, no API/provider/Tavily/cache changes, no Supabase SQL.
+- No new dependencies, no new fonts, no route rewrites, no data model changes.
+- No new booking behavior, no fake data, no new animation library.
+- Pre-existing TypeScript errors in TripBuilder.tsx (missing module types): unchanged, pre-existing.
+
+---
+
 ## Stage 3.5 Phase 3 — Trip Planning Card System Breadth — SHIPPED (2026-05-16)
 
 **Stage 3.5 · Wife-Wow design system — Trip planning surfaces · Card variant breadth**
