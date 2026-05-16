@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-16 (Phase 6 shipped — premium My Journeys dashboard; CI readiness sections added)
+Last updated: 2026-05-16 (Phase 7 shipped — Trip Readiness / Review Cockpit)
 
 ## Purpose
 
@@ -8,9 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Phase 6 SHIPPED (2026-05-16).** Premium My Trips / Journey Dashboard. `trips/page.tsx` fully redesigned: "My Journeys" title, `ContinuePlanningHero` featuring the most urgent active trip (`STATUS_PRIORITY` sort: researching → planned → booked → draft), `JourneyCard` using `Card` primitive + ds-* tokens + 44px touch targets, `TripSection` Overline section labels, `EmptyDashboard` editorial hero + two action cards (Plan a Trip / AI Concierge), `PlanningToolsStrip` (Concierge / Saved Ideas / Explore links), all modals migrated to `Card` primitive + `ds-elevation-4`, toast → `ds-onyx`/`ds-pen-stroke`, `DashboardClient.tsx` header/token polish, `RecentTrips.tsx` fully on ds-* tokens + `Card` primitive, `QuickActions.tsx` on ds-* tokens + `Card`. 41 new contract tests in `premium-trips-dashboard.test.mjs`. 771 total tests, 0 failures. Phases 0, 1A–1C, 2A, 2B, 3, 4, 5 all previously shipped.
+- Roadmap stage: **Stage 3.5 — Phase 7 SHIPPED (2026-05-16).** Trip Readiness / Review Cockpit. `TripReadinessCockpit.tsx` created: premium `<section>` with editorial "Trip Briefing" Overline + h2 headline, score indicator (N/4), day-coverage pills (per-day filled/empty rings), 4 category signals (Flights/Stay/Dining/Activities derived from `itemType`), contextual "Next Step" footer with prioritized CTA (dates→flights→hotel→empty days→all good), "Also try" quick links to Explore/Saved Ideas/Concierge. All ds-* tokens. Full a11y: `aria-labelledby`, `aria-hidden` on icons, `min-h-[44px]`, `focus-visible` rings, real Link/button elements. 65 new tests in `trip-readiness-cockpit.test.mjs`. **836 total tests, 0 failures.** Phases 0, 1A–1C, 2A, 2B, 3–6 all previously shipped.
 - Flights v1 — Duffel search-only LIVE: `DUFFEL_FLIGHTS_ENABLED=1`, `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`, `DUFFEL_DEBUG=false`, `DUFFEL_BOOKING_ENABLED=0`. Each flight card shows "Search on Google Flights" (SEARCH_REDIRECT link-out, not booking). Duffel never creates orders. Ignav DISABLED.
-- Active build queue item: **Wife-Wow design system foundation — Phase 6 My Journeys dashboard SHIPPED.** Full ds-* token coverage now spans: shell, nav, explore cards, saved items, concierge, trip-planning surfaces (all card components, CandidatePanel, Activities section, compare bar, cockpit header, day selector), itinerary day columns, trip detail canvas shell, **and the My Journeys landing dashboard** (JourneyCard, ContinuePlanningHero, PlanningToolsStrip, RecentTrips, QuickActions, DashboardClient). See `docs/ai/UI_BASELINE.md` for full phase inventory.
+- Active build queue item: **Wife-Wow design system foundation — Phase 7 Trip Readiness Cockpit SHIPPED.** Full ds-* token coverage now spans: shell, nav, explore cards, saved items, concierge, trip-planning surfaces (all card components, CandidatePanel, Activities section, compare bar, cockpit header, day selector), itinerary day columns, trip detail canvas shell, My Journeys landing dashboard, **and the Trip Readiness / Review Cockpit inside trip detail** (`TripReadinessCockpit`). See `docs/ai/UI_BASELINE.md` for full phase inventory.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -31,6 +31,8 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Recent meaningful PRs
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
+
+- 2026-05-16 — **Stage 3.5 Phase 7 — Trip Readiness / Review Cockpit.** `TripReadinessCockpit.tsx` created: editorial Trip Briefing section with score indicator, day-coverage pills, 4 category signals (Flights/Stay/Dining/Activities from `itemType`), contextual next-step CTA, Explore/Saved/Concierge quick links. Integrated into `trips/[id]/page.tsx` between PageHeader and TripBuilder. 65 new tests. 836 total, 0 failures. No backend/SQL/provider changes.
 
 - 2026-05-16 — **Stage 3.5 Phase 6 — Premium My Journeys dashboard.** `trips/page.tsx` rebuilt as journey command center: ContinuePlanningHero, JourneyCard (Card primitive + ds-* tokens + 44px targets), EmptyDashboard editorial hero, PlanningToolsStrip. `DashboardClient.tsx`, `RecentTrips.tsx`, `QuickActions.tsx` fully on ds-* tokens + Card primitive. 41 new tests. 771 tests, 0 failures. No backend/SQL/provider changes.
 
@@ -99,7 +101,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 ## Type-check / test baseline (confirmed 2026-05-16, Phase 6)
 
 - **`npm run type-check` (frontend): CLEAN — 0 errors.** Requires `npm install` first (standard; `node_modules` is gitignored). After install: `tsc --noEmit` exits 0 with no diagnostics.
-- **`npm test` (frontend): 771 tests, 0 failures.**
+- **`npm test` (frontend): 836 tests, 0 failures.**
 - Any future session reporting "pre-existing TypeScript errors" is seeing an uninstalled `node_modules` environment — run `npm install` in `frontend/` before type-check.
 
 ## Known risks / unresolved issues
@@ -113,7 +115,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Stage 3.5 Phase 6 complete.** My Journeys dashboard is now a premium journey command center: ContinuePlanningHero featuring the most urgent active trip, JourneyCard grid with editorial empty/loading/populated states, PlanningToolsStrip (Concierge / Saved Ideas / Explore). Full ds-* token coverage now spans every trip-planning surface including the dashboard entry point. Next direction options: (A) motion polish (card-lift choreography, day-section entrance within reduced-motion token limits), (B) product feature work (deal alerts, Watchtower, trip-level compare). Roadmap guidance: `docs/product/ROADMAP.md`.
+**Stage 3.5 Phase 7 complete.** Trip detail now has a premium Trip Readiness / Review Cockpit: editorial trip briefing header, day-coverage pills, 4 category signals, contextual next-step CTA, quick-access planning tool links. Full ds-* token coverage now spans every trip-planning surface from dashboard entry point through trip detail and planning canvas. Next direction options: (A) motion polish (within reduced-motion token limits), (B) product feature work (deal alerts, Watchtower, trip-level compare), (C) cockpit collapse/expand toggle. Roadmap guidance: `docs/product/ROADMAP.md`.
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 
