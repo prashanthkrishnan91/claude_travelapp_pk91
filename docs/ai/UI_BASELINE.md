@@ -44,6 +44,9 @@ Tracks the state of the design system and UI primitive layer so future prompts a
 - Google Flights link-out: preserved (`itinerary-google-flights-cta` testid, `aria-label="Search on Google Flights"`, canonical URL fields, `-my-3.5 py-3.5` touch target).
 - All TripBuilder logic, add-to-day behavior, ItineraryDayColumn, and AI Concierge panel unchanged.
 
+### Accessibility / motion note
+- No new motion, gradients, glass blur, or animations introduced in Phase 8C. The dragging state uses `opacity-60 scale-95 backdrop-blur-md` inherited from Phase 3 (pre-existing). No reduced-motion accommodation required for new Phase 8C changes. All interactive elements use `focus-visible:ring-2 focus-visible:ring-ds-accent` inherited patterns; no new interactive patterns added.
+
 ---
 
 ## Stage 3.5 Phase 8B — Trip Detail Travel Chapter + Planning Canvas Overhaul — SHIPPED (2026-05-16)
