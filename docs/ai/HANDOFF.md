@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-16 (Phase 8B shipped — Trip Detail Travel Chapter + Planning Canvas Overhaul)
+Last updated: 2026-05-17 (Phase 8C shipped — Itinerary ItemCard Chapter-Style Editorial Polish)
 
 ## Purpose
 
@@ -8,9 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Phase 8B SHIPPED (2026-05-16).** Trip Detail Travel Chapter + Planning Canvas Overhaul. `/trips/[id]` transformed: removed colorful OTA-style destination-gradient backgrounds (raw hex), `PageHeader`, and context-header widget strip. New editorial `TripChapterCover` `<section>`: destination as `<h1>` chapter heading, trip title as subtitle, italic tripContext vibe, dates/day-count caption row, 4 semantic action buttons (AI Concierge/Optimize/Edit Trip/Delete) with `min-h-[44px]` + `focus-visible:outline-ds-accent`. `TripReadinessCockpit` reworked to advisor briefing: "Concierge Notes" overline (not "Trip Briefing"), no score fraction (removed X/4 KPI indicator), no dashboard section labels ("DAY COVERAGE"/"NEXT STEP"/"ALSO TRY"), italic advisor prose for next-step recommendation. Modal dialogs updated to ds-tokens. 70 new tests in `trip-chapter-overhaul.test.mjs`. **962 total tests, 0 failures.** Phase 8B is visible adoption — `/trips/[id]` now reads like a travel chapter, not a planning board. Phases 0, 1A–1C, 2A, 2B, 3–7, 8A all previously shipped.
+- Roadmap stage: **Stage 3.5 — Phase 8C SHIPPED (2026-05-17).** Itinerary ItemCard Chapter-Style Editorial Polish. `ItineraryItemCard.tsx` transformed: root changed to `<article>` semantic element; `TYPE_LABELS` editorial overline map added (Flight/Stay/Activity/Dining/Transit/Note); type icon + Overline type label in a new header row (left) with action cluster (right); title promoted from `text-xs` to `text-[13px]`; type-specific sections (flight, hotel, activity, meal) gain a hairline top separator for editorial rhythm; padding increased from `p-2` to `p-3`; `data-testid="itinerary-item-card"`, `data-testid="item-type-overline"`, `data-testid="item-title"` added. All existing behavior preserved: round-trip one-card rendering, Google Flights link-out, add-to-day, drag/DnD, compare, move-to-ideas, timeline editor, booking checklist. 63 new tests in `itinerary-chapter-editorial.test.mjs`. **1025 total tests, 0 failures.** Phase 8C is visible adoption — itinerary items now read as editorial chapter entries, not generic board cards. Phases 0, 1A–1C, 2A, 2B, 3–7, 8A, 8B all previously shipped.
 - Flights v1 — Duffel search-only LIVE: `DUFFEL_FLIGHTS_ENABLED=1`, `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`, `DUFFEL_DEBUG=false`, `DUFFEL_BOOKING_ENABLED=0`. Each flight card shows "Search on Google Flights" (SEARCH_REDIRECT link-out, not booking). Duffel never creates orders. Ignav DISABLED.
-- Active build queue item: **Wife-Wow design system foundation — Phase 8B Trip Detail Chapter Overhaul SHIPPED.** Full ds-* token coverage now spans: shell, nav, explore cards, saved items, concierge, trip-planning surfaces (all card components, CandidatePanel, Activities section, compare bar, cockpit header, day selector), itinerary day columns, trip detail canvas shell, My Journeys landing dashboard, Trip Readiness Cockpit, home page (`/`), My Journeys (`/trips`), **and the trip detail page (`/trips/[id]`) which now feels like a private travel chapter with editorial cover + advisor briefing.** See `docs/ai/UI_BASELINE.md` for full phase inventory.
+- Active build queue item: **Wife-Wow design system foundation — Phase 8C Itinerary ItemCard Editorial Polish SHIPPED.** Full ds-* token coverage now spans: shell, nav, explore cards, saved items, concierge, trip-planning surfaces (all card components, CandidatePanel, Activities section, compare bar, cockpit header, day selector), itinerary day columns, trip detail canvas shell, My Journeys landing dashboard, Trip Readiness Cockpit, home page (`/`), My Journeys (`/trips`), trip detail page (`/trips/[id]`), **and itinerary item cards which now feel like editorial chapter entries with Overline type identity, promoted headline, and hairline section rhythm.** See `docs/ai/UI_BASELINE.md` for full phase inventory.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -31,6 +31,8 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Recent meaningful PRs
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
+
+- 2026-05-17 — **Stage 3.5 Phase 8C — Itinerary ItemCard Chapter-Style Editorial Polish.** `ItineraryItemCard.tsx` transformed: root → `<article>`; `TYPE_LABELS` Overline map (Flight/Stay/Activity/Dining/Transit/Note); type icon + Overline label in header row + action cluster; title promoted to `text-[13px]`; type-specific sections gain hairline top separator; padding `p-2`→`p-3`. All behavior preserved (round-trip one-card, Google Flights link-out, DnD, compare, move-to-ideas, timeline, booking). 63 new tests. 1025 total, 0 failures. No backend/SQL/provider/flights/Supabase changes.
 
 - 2026-05-16 — **Stage 3.5 Phase 8B — Trip Detail Travel Chapter + Planning Canvas Overhaul.** `/trips/[id]` transformed: OTA-style destination-color gradients removed; new `TripChapterCover` section (destination h1, trip-title subtitle, italic vibe, dates, 4 semantic action buttons); `TripReadinessCockpit` reworked to advisor briefing (Concierge Notes overline, no KPI score, no dashboard section labels, italic advisor prose). Modal dialogs migrated to ds-tokens. 70 new tests. 962 total, 0 failures. No backend/SQL/provider/flights/Supabase changes.
 
@@ -105,7 +107,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 ## Type-check / test baseline (confirmed 2026-05-16, Phase 8B)
 
 - **`npm run type-check` (frontend): CLEAN — 0 errors.** Requires `npm install` first (standard; `node_modules` is gitignored). After install: `tsc --noEmit` exits 0 with no diagnostics.
-- **`npm test` (frontend): 962 tests, 0 failures.**
+- **`npm test` (frontend): 1025 tests, 0 failures.**
 - Any future session reporting "pre-existing TypeScript errors" is seeing an uninstalled `node_modules` environment — run `npm install` in `frontend/` before type-check.
 
 ## Known risks / unresolved issues
@@ -119,7 +121,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Stage 3.5 Phase 8B complete.** `/trips/[id]` now feels like a travel chapter: editorial chapter cover (destination h1, dates, advisor vibe, semantic action cluster), advisor briefing (Concierge Notes, no KPI score), and the planning canvas (TripBuilder + itinerary days) integrated into one coherent story. Design Bible atelier transformation now covers `/` (Phase 8A), `/trips` (Phase 8A), and `/trips/[id]` (Phase 8B). Next direction options: (A) motion polish (within reduced-motion token limits), (B) product feature work (deal alerts, Watchtower, trip-level compare), (C) ItineraryItemCard chapter-style editorial polish. Roadmap guidance: `docs/product/ROADMAP.md`.
+**Stage 3.5 Phase 8C complete.** Itinerary items now feel like editorial chapter entries inside a travel volume: Overline type identity (FLIGHT/STAY/ACTIVITY/DINING/TRANSIT/NOTE), promoted headline, hairline section separators, more breathing room. Design Bible atelier transformation now covers `/` (Phase 8A), `/trips` (Phase 8A), `/trips/[id]` (Phase 8B), and itinerary item cards (Phase 8C). Next direction options: (A) motion polish (within reduced-motion token limits), (B) product feature work (deal alerts, Watchtower, trip-level compare), (C) ItineraryDayColumn further editorial framing. Roadmap guidance: `docs/product/ROADMAP.md`.
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 
