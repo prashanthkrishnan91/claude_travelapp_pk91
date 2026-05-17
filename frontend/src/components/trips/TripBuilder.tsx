@@ -1238,11 +1238,14 @@ interface TripBuilderProps {
   ideasRefreshKey?: number;
   /** Called when a saved idea is assigned to a day from TripIdeasPanel. */
   onIdeaAssigned?: () => void;
+  /** Mobile workspace IA — controls which panel is visible on mobile.
+   *  null (or omitted) = show all panels (desktop behaviour). */
+  mobileWorkspace?: "build" | "itinerary" | "ideas" | null;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned }: TripBuilderProps) {
+export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned, mobileWorkspace }: TripBuilderProps) {
   const [days,           setDays]          = useState<ItineraryDay[]>(
     [...initialDays].sort((a, b) => a.dayNumber - b.dayNumber)
   );
@@ -1921,7 +1924,12 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         <div className="flex flex-col gap-4 min-h-[500px] lg:flex-row lg:items-start">
 
           {/* ── Left Panel: AI-ranked candidates ──────────────────────────── */}
-          <div className="w-full flex flex-col gap-3 overflow-y-auto pr-0.5 lg:w-80 lg:flex-shrink-0">
+          <div
+            data-testid="trip-mobile-panel-build"
+            className={`w-full flex flex-col gap-3 overflow-y-auto pr-0.5 lg:w-80 lg:flex-shrink-0 ${
+              mobileWorkspace != null && mobileWorkspace !== "build" ? "hidden lg:flex" : ""
+            }`}
+          >
 
             {/* Planning cockpit context header */}
             <div className="flex flex-col gap-0.5 px-1 pt-1 pb-0.5">
@@ -2310,7 +2318,9 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
           </div>
 
           {/* ── Right Panel: Itinerary Timeline ───────────────────────────── */}
-          <div className="flex-1 flex flex-col gap-3 overflow-visible">
+          <div className={`flex-1 flex flex-col gap-3 overflow-visible ${
+            mobileWorkspace === "build" ? "hidden lg:flex" : ""
+          }`}>
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex flex-col gap-0.5">
                 <span className="text-[10px] font-semibold text-ds-text-tertiary uppercase tracking-[0.1em]">Your Itinerary</span>
@@ -2350,14 +2360,24 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
               </div>
             </div>
 
-            <TripIdeasPanel
-              tripId={tripId}
-              days={displayDays}
-              refreshKey={(ideasRefreshKey ?? 0) + ideasRefreshNonce}
-              onIdeaAssigned={onIdeaAssigned}
-            />
+            <div
+              data-testid="trip-mobile-panel-ideas"
+              className={mobileWorkspace != null && mobileWorkspace !== "ideas" ? "hidden lg:block" : ""}
+            >
+              <TripIdeasPanel
+                tripId={tripId}
+                days={displayDays}
+                refreshKey={(ideasRefreshKey ?? 0) + ideasRefreshNonce}
+                onIdeaAssigned={onIdeaAssigned}
+              />
+            </div>
 
-            <div className="flex flex-col gap-3 pr-0.5 overflow-visible">
+            <div
+              data-testid="trip-mobile-panel-itinerary"
+              className={`flex flex-col gap-3 pr-0.5 overflow-visible ${
+                mobileWorkspace != null && mobileWorkspace !== "itinerary" ? "hidden lg:flex" : ""
+              }`}
+            >
               <SortableContext items={days.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                 {displayDays.map((day) => (
                   <ItineraryDayColumn
