@@ -261,7 +261,7 @@ export default function TripDetailPage() {
       )}
 
       {/* ── Mobile workspace shell ─────────────────────────────────────────── */}
-      <div data-testid="trip-mobile-workspace">
+      <div data-testid="trip-mobile-workspace" className="editorial-scene">
 
         {/* Mobile-only workspace switcher */}
         <nav
@@ -306,8 +306,9 @@ export default function TripDetailPage() {
       <section
         data-testid="trip-chapter-cover"
         aria-labelledby="chapter-destination-heading"
-        className="mb-8 rounded-2xl border border-ds-pen-stroke bg-ds-onyx boutique-instrument overflow-hidden"
+        className="mb-6 advisor-desk-panel boutique-instrument"
       >
+        <div className="folio-cover-tab" aria-hidden="true" />
         {/* Back navigation */}
         <div className="px-4 pt-5 sm:px-6">
           <Link
@@ -416,6 +417,8 @@ export default function TripDetailPage() {
           </div>
         </div>
       </section>
+
+      <div className="editorial-section-rule mb-6" aria-hidden="true" />
 
       {/* ── Advisor Briefing (TripReadinessCockpit) ────────────────────────── */}
       {trip && (

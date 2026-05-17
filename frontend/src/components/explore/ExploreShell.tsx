@@ -61,7 +61,7 @@ export function ExploreShell() {
 
   if (active) {
     return (
-      <div className="space-y-6" data-testid="explore-vertical-flow">
+      <div className="space-y-6 editorial-scene" data-testid="explore-vertical-flow">
         {/* Editorial breadcrumb */}
         <div className="flex items-center gap-3" data-testid="explore-lounge-breadcrumb">
           <button
@@ -81,10 +81,12 @@ export function ExploreShell() {
 
         {/* Search instrument section */}
         <section
-          className="rounded-xl border border-ds-pen-stroke bg-ds-onyx p-4 sm:p-6 boutique-instrument"
+          className="rounded-xl border border-ds-pen-stroke bg-ds-onyx boutique-instrument overflow-hidden"
           data-testid={`${active}-flow`}
           aria-label={`${VERTICAL_TITLES[active]} search`}
         >
+          <div className="folio-cover-tab" aria-hidden="true" />
+          <div className="p-4 sm:p-6">
           <div className="mb-5" data-testid="explore-instrument-header">
             <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-accent">
               {VERTICAL_OVERLINES[active]}
@@ -97,13 +99,14 @@ export function ExploreShell() {
           {active === "attractions" && <AttractionExploreFlow />}
           {active === "hotels" && <HotelExploreFlow />}
           {active === "flights" && <FlightExploreFlow />}
+          </div>
         </section>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8" data-testid="explore-home">
+    <div className="space-y-8 editorial-scene" data-testid="explore-home">
       {/* Editorial lounge header */}
       <header data-testid="explore-lounge-header">
         <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-accent mb-1">
@@ -114,6 +117,7 @@ export function ExploreShell() {
           Flights, hotels, restaurants, and attractions — verified, no trip required.
         </p>
       </header>
+      <div className="editorial-section-rule" aria-hidden="true" />
 
       {/* Discovery trays */}
       <div
@@ -140,7 +144,7 @@ function VerticalCard({
     <button
       type="button"
       onClick={onSelect}
-      className="rounded-xl border border-ds-pen-stroke bg-ds-onyx card-lift p-5 text-left flex items-start gap-4 w-full min-h-[44px] transition-colors atelier-surface-depth focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+      className="rounded-xl border border-ds-pen-stroke bg-ds-onyx card-lift p-5 text-left flex items-start gap-4 w-full min-h-[44px] transition-colors atelier-surface-depth boutique-folio focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
       aria-label={`Explore ${meta.label}`}
       data-testid={`vertical-card-${meta.id}`}
     >

@@ -52,6 +52,23 @@
  * 48.  scrapbook-page defined after boutique-folio (source-order).
  * 49.  clipping-card defined after scrapbook-page (source-order).
  * 50.  .advisor-desk-panel has overflow:hidden for brass accent clipping.
+ * 51.  Trip Detail chapter cover uses advisor-desk-panel composition.
+ * 52.  Trip Detail chapter cover has folio-cover-tab top accent.
+ * 53.  Trip Detail workspace wrapper uses editorial-scene.
+ * 54.  Trip Detail has editorial-section-rule between chapter cover and briefing.
+ * 55.  Trip Detail retains trip-chapter-cover testid (behavior preservation).
+ * 56.  Trip Detail retains trip-mobile-workspace-switcher (8K preservation).
+ * 57.  Trip Detail retains boutique-instrument on chapter cover (8N-B).
+ * 58.  TripBuilder CollapsiblePanel has folio-cover-tab top accent.
+ * 59.  TripBuilder CollapsiblePanel still uses boutique-folio (8N-B).
+ * 60.  ExploreShell home view uses editorial-scene.
+ * 61.  ExploreShell home view has editorial-section-rule after header.
+ * 62.  ExploreShell VerticalCard uses boutique-folio composition.
+ * 63.  ExploreShell vertical flow view uses editorial-scene.
+ * 64.  ExploreShell active search instrument has folio-cover-tab.
+ * 65.  ExploreShell retains boutique-instrument on search section (8N-B).
+ * 66.  ExploreShell retains explore-lounge-header testid (8F preservation).
+ * 67.  No backend/provider/SQL/env/package drift on patched files.
  */
 
 import { describe, it } from "node:test";
@@ -80,6 +97,8 @@ const tripBuilderForm = readSrc("components/trips/TripBuilderForm.tsx");
 const appShell        = readSrc("components/layout/AppShell.tsx");
 const tripDetailPage  = readSrc("app/trips/[id]/page.tsx");
 const itineraryDay    = readSrc("components/trips/ItineraryDayColumn.tsx");
+const tripBuilder     = readSrc("components/trips/TripBuilder.tsx");
+const exploreShell    = readSrc("components/explore/ExploreShell.tsx");
 
 // ── 1–16. globals.css composition primitives ──────────────────────────────────
 
@@ -501,6 +520,144 @@ describe("Phase 8N-C: invariants and preservation", () => {
     assert.ok(
       block.includes("overflow: hidden") || block.includes("overflow:hidden"),
       ".advisor-desk-panel must have overflow:hidden so brass accent is clipped to border-radius"
+    );
+  });
+});
+
+// ── 51–57. Trip Detail composition adoption ───────────────────────────────────
+
+describe("Phase 8N-C patch: Trip Detail composition adoption", () => {
+  it("51. Trip Detail chapter cover uses advisor-desk-panel composition", () => {
+    assert.ok(
+      tripDetailPage.includes("advisor-desk-panel"),
+      "trips/[id]/page must use advisor-desk-panel on chapter cover section"
+    );
+  });
+
+  it("52. Trip Detail chapter cover has folio-cover-tab top accent", () => {
+    assert.ok(
+      tripDetailPage.includes("folio-cover-tab"),
+      "trips/[id]/page chapter cover must include folio-cover-tab element"
+    );
+  });
+
+  it("53. Trip Detail workspace wrapper uses editorial-scene", () => {
+    assert.ok(
+      tripDetailPage.includes("editorial-scene"),
+      "trips/[id]/page trip-mobile-workspace wrapper must have editorial-scene class"
+    );
+  });
+
+  it("54. Trip Detail has editorial-section-rule between chapter cover and briefing", () => {
+    assert.ok(
+      tripDetailPage.includes("editorial-section-rule"),
+      "trips/[id]/page must have editorial-section-rule divider between chapter cover and briefing"
+    );
+  });
+
+  it("55. Trip Detail retains trip-chapter-cover testid (behavior preservation)", () => {
+    assert.ok(
+      tripDetailPage.includes('data-testid="trip-chapter-cover"'),
+      "trips/[id]/page must retain trip-chapter-cover testid"
+    );
+  });
+
+  it("56. Trip Detail retains trip-mobile-workspace-switcher (8K preservation)", () => {
+    assert.ok(
+      tripDetailPage.includes("trip-mobile-workspace-switcher"),
+      "trips/[id]/page must retain trip-mobile-workspace-switcher (8K contract)"
+    );
+  });
+
+  it("57. Trip Detail chapter cover retains boutique-instrument (8N-B preservation)", () => {
+    assert.ok(
+      tripDetailPage.includes("boutique-instrument"),
+      "trips/[id]/page chapter cover must still include boutique-instrument (8N-B)"
+    );
+  });
+});
+
+// ── 58–59. TripBuilder composition adoption ───────────────────────────────────
+
+describe("Phase 8N-C patch: TripBuilder composition adoption", () => {
+  it("58. TripBuilder CollapsiblePanel has folio-cover-tab top accent", () => {
+    assert.ok(
+      tripBuilder.includes("folio-cover-tab"),
+      "TripBuilder CollapsiblePanel must include folio-cover-tab element"
+    );
+  });
+
+  it("59. TripBuilder CollapsiblePanel still uses boutique-folio (8N-B preservation)", () => {
+    assert.ok(
+      tripBuilder.includes("boutique-folio"),
+      "TripBuilder CollapsiblePanel must still include boutique-folio class (8N-B)"
+    );
+  });
+});
+
+// ── 60–67. ExploreShell composition adoption ──────────────────────────────────
+
+describe("Phase 8N-C patch: ExploreShell composition adoption", () => {
+  it("60. ExploreShell home view uses editorial-scene", () => {
+    assert.ok(
+      exploreShell.includes("editorial-scene"),
+      "ExploreShell explore-home wrapper must use editorial-scene"
+    );
+  });
+
+  it("61. ExploreShell home view has editorial-section-rule after header", () => {
+    assert.ok(
+      exploreShell.includes("editorial-section-rule"),
+      "ExploreShell explore-home must include editorial-section-rule below the header"
+    );
+  });
+
+  it("62. ExploreShell VerticalCard uses boutique-folio composition", () => {
+    assert.ok(
+      exploreShell.includes("boutique-folio"),
+      "ExploreShell VerticalCard button must include boutique-folio class"
+    );
+  });
+
+  it("63. ExploreShell vertical flow view uses editorial-scene", () => {
+    const flowIdx = exploreShell.indexOf("explore-vertical-flow");
+    assert.ok(flowIdx !== -1, "explore-vertical-flow testid must exist");
+    const flowBlock = exploreShell.slice(Math.max(0, flowIdx - 100), flowIdx + 200);
+    assert.ok(
+      flowBlock.includes("editorial-scene"),
+      "explore-vertical-flow wrapper must include editorial-scene class"
+    );
+  });
+
+  it("64. ExploreShell active search instrument has folio-cover-tab", () => {
+    assert.ok(
+      exploreShell.includes("folio-cover-tab"),
+      "ExploreShell active search instrument section must include folio-cover-tab element"
+    );
+  });
+
+  it("65. ExploreShell retains boutique-instrument on search section (8N-B preservation)", () => {
+    assert.ok(
+      exploreShell.includes("boutique-instrument"),
+      "ExploreShell search section must still include boutique-instrument class (8N-B)"
+    );
+  });
+
+  it("66. ExploreShell retains explore-lounge-header testid (8F preservation)", () => {
+    assert.ok(
+      exploreShell.includes('data-testid="explore-lounge-header"'),
+      "ExploreShell must retain explore-lounge-header testid (8F contract)"
+    );
+  });
+
+  it("67. No backend/provider/SQL/env/package drift on patched files", () => {
+    const backendPattern = /from ['"].*backend.*['"]/;
+    assert.ok(!backendPattern.test(tripDetailPage), "trips/[id]/page must not import backend");
+    assert.ok(!backendPattern.test(tripBuilder), "TripBuilder must not import new backend modules");
+    assert.ok(!backendPattern.test(exploreShell), "ExploreShell must not import backend modules");
+    assert.ok(
+      !exploreShell.includes("supabase") && !exploreShell.includes("fetchTrip"),
+      "ExploreShell must not reference database or trip fetch calls"
     );
   });
 });

@@ -1184,7 +1184,8 @@ function CandidatePanel({
   const displayCount = totalCount !== undefined && totalCount !== count
     ? `${count}/${totalCount}` : count;
   return (
-    <div className="rounded-2xl border border-ds-pen-stroke bg-ds-onyx boutique-folio">
+    <div className="rounded-2xl border border-ds-pen-stroke bg-ds-onyx boutique-folio overflow-hidden">
+      <div className="folio-cover-tab" aria-hidden="true" />
       <button
         type="button"
         onClick={onToggle}
