@@ -78,8 +78,11 @@ test('ExploreShell active section uses border-ds-pen-stroke hairline', () => {
   assert.match(exploreShell, /border-ds-pen-stroke/);
 });
 
-test('ExploreShell active section uses ds-elevation shadow', () => {
-  assert.match(exploreShell, /shadow-\[var\(--ds-elevation-2\)\]/);
+test('ExploreShell active section uses elevation or boutique shadow treatment', () => {
+  assert.ok(
+    /shadow-\[var\(--ds-elevation-2\)\]/.test(exploreShell) || exploreShell.includes("boutique-instrument"),
+    "ExploreShell must apply elevation shadow or boutique-instrument to active section"
+  );
 });
 
 test('ExploreShell has VERTICAL_OVERLINES constant with all four verticals', () => {

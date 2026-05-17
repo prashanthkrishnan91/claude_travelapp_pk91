@@ -11,8 +11,8 @@
      Central home for all atelier-atmosphere custom properties.
      Reference these in atmosphere utilities; never scatter raw values. */
 
-  /* Warm dark atelier base — slightly warmer/richer than pure midnight */
-  --ds-atelier-base:        #0A1018;
+  /* Warm dark atelier base — warm near-black, no blue tint */
+  --ds-atelier-base:        #0B0A08;
   /* Paper/linen noise-like texture overlay — warm off-white on dark */
   --ds-atelier-texture-tint: rgba(240, 225, 195, 0.028);
   /* Vignette gradient — soft darkening toward edges */
@@ -26,11 +26,11 @@
   /* Ambient warm glow from center — subtle radial warmth */
   --ds-atelier-ambient:     rgba(180, 130, 60, 0.04);
 
-  /* ── Dark surface tokens — Design Bible v1.0 §4 exact values */
-  --ds-midnight-ink:   #0B1320;
-  --ds-onyx-velvet:    #0F1A2C;
-  --ds-carbon-mist:    #1A2538;
-  --ds-pen-stroke:     #22324A;
+  /* ── Dark surface tokens — Phase 8N-B: warmed from cold navy to warm dark */
+  --ds-midnight-ink:   #0D0C0A;
+  --ds-onyx-velvet:    #141210;
+  --ds-carbon-mist:    #1E1A16;
+  --ds-pen-stroke:     #2C2620;
 
   /* ── Warm paper surface tokens — Design Bible v1.0 §4 */
   --ds-warm-paper:     #FAF7F0;
@@ -341,15 +341,15 @@
   /* ── Card shell ──────────────────────────────────────────────── */
   .card {
     border-radius: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    background: rgba(22, 22, 42, 0.88);
+    border: 1px solid rgba(220, 205, 180, 0.07);
+    background: rgba(18, 17, 14, 0.95);
     backdrop-filter: blur(20px) saturate(1.4);
     -webkit-backdrop-filter: blur(20px) saturate(1.4);
     box-shadow:
       0 1px 2px 0 rgba(0, 0, 0, 0.55),
       0 4px 12px 0 rgba(0, 0, 0, 0.40),
       0 12px 32px 0 rgba(0, 0, 0, 0.28),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      inset 0 1px 0 rgba(235, 222, 198, 0.07);
   }
 
   /* ── Buttons ─────────────────────────────────────────────────── */
@@ -1111,5 +1111,36 @@
      on featured section headers for a warmer editorial divider. */
   .atelier-accent-line {
     border-top: 1px solid color-mix(in srgb, var(--ds-ember-brass) 18%, var(--ds-pen-stroke));
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     VISIBLE BOUTIQUE ART DIRECTION — Phase 8N-B
+     Applied to real component surfaces. Overrides base .card shadow
+     (source-order wins within @layer components).
+     ════════════════════════════════════════════════════════════════ */
+
+  /* ── Editorial folio card — journey / trip surface
+     Used on JourneyCard, SavedItemCard-style folio surfaces.
+     Warm brass border ring + editorial depth. */
+  .boutique-folio {
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.50),
+      0 8px 24px rgba(0, 0, 0, 0.35),
+      0 0 0 1px rgba(197, 148, 77, 0.13),
+      inset 0 1px 0 rgba(235, 222, 198, 0.08),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.10);
+  }
+
+  /* ── Primary instrument surface — Concierge entry, hero cards
+     Used on the primary focal surface of each page.
+     Stronger warm brass aura + deeper editorial presence. */
+  .boutique-instrument {
+    box-shadow:
+      0 4px 8px rgba(0, 0, 0, 0.55),
+      0 16px 40px rgba(0, 0, 0, 0.45),
+      0 0 40px rgba(180, 130, 60, 0.07),
+      0 0 0 1px rgba(197, 148, 77, 0.18),
+      inset 0 1px 0 rgba(235, 222, 198, 0.10),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.10);
   }
 }

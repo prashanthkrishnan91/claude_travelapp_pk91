@@ -223,7 +223,7 @@ function AiScoreBadge({ score }: { score?: number | null }) {
   );
 }
 
-const PREMIUM_CARD_BASE = "candidate-card relative border border-ds-pen-stroke rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 bg-ds-onyx shadow-[var(--ds-elevation-1)] hover:shadow-[var(--ds-elevation-2)] hover:border-ds-carbon";
+const PREMIUM_CARD_BASE = "candidate-card relative border border-ds-pen-stroke rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 bg-ds-onyx boutique-folio hover:shadow-[var(--ds-elevation-2)] hover:border-ds-carbon";
 const SECONDARY_CTA = "flex-1 min-h-[44px] flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border border-ds-pen-stroke bg-ds-carbon text-ds-text-secondary hover:bg-ds-pen-stroke hover:border-ds-carbon text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
 const PRIMARY_CTA = "flex-1 min-h-[44px] flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-ds-accent hover:bg-ds-accent-muted text-ds-text-inverse text-xs font-semibold transition-all disabled:opacity-50 shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
 
@@ -280,7 +280,7 @@ function SummaryBar({
   const topDest     = isRoundTrip ? (outFd.destination as string) : (fd.destination as string);
   const topPrice    = isRoundTrip ? (fd.total_price as number) : (fd.price as number);
   return (
-    <div className="bg-ds-onyx border border-ds-pen-stroke rounded-2xl p-3 flex gap-3 shadow-sm">
+    <div className="bg-ds-onyx border border-ds-pen-stroke rounded-2xl p-3 flex gap-3 atelier-surface-depth">
       {topFlight && (
         <div className="flex-1 min-w-0">
           <p className="text-[10px] text-ds-text-tertiary uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
@@ -1184,7 +1184,7 @@ function CandidatePanel({
   const displayCount = totalCount !== undefined && totalCount !== count
     ? `${count}/${totalCount}` : count;
   return (
-    <div className="rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-1)]">
+    <div className="rounded-2xl border border-ds-pen-stroke bg-ds-onyx boutique-folio">
       <button
         type="button"
         onClick={onToggle}
@@ -2296,7 +2296,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
             {/* Activities / research results */}
             {results.length > 0 && (
-              <div className="rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-1)]">
+              <div className="rounded-2xl border border-ds-pen-stroke bg-ds-onyx boutique-folio">
                 <div className="px-4 py-3 flex items-center gap-2 border-b border-ds-pen-stroke">
                   <Sparkles className="w-3.5 h-3.5 text-ds-accent" />
                   <span className="text-sm font-semibold text-ds-text">Activities</span>

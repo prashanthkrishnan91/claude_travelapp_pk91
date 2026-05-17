@@ -109,8 +109,8 @@ export function TripBuilderForm() {
   // ── Step loader view ────────────────────────────────────────────────────────
   if (creating) {
     return (
-      <div className="w-full max-w-md" data-testid="new-trip-loading-state">
-        <div className="rounded-xl border border-ds-pen-stroke bg-ds-onyx p-8 text-center" style={{ boxShadow: "var(--ds-elevation-2)" }}>
+      <div className="w-full max-w-md atelier-transition" data-testid="new-trip-loading-state">
+        <div className="rounded-xl border border-ds-pen-stroke bg-ds-onyx p-8 text-center boutique-instrument">
           <div className="w-14 h-14 rounded-2xl bg-ds-accent-subtle flex items-center justify-center mx-auto mb-5">
             <Sparkles className="w-7 h-7 text-ds-accent animate-pulse" />
           </div>
@@ -149,8 +149,8 @@ export function TripBuilderForm() {
 
   // ── Form view ───────────────────────────────────────────────────────────────
   return (
-    <div className="w-full max-w-lg" data-testid="new-trip-form-container">
-      <form onSubmit={handleCreate} className="rounded-xl border border-ds-pen-stroke bg-ds-onyx p-6 sm:p-8 space-y-5" style={{ boxShadow: "var(--ds-elevation-1)" }} data-testid="new-trip-builder-form">
+    <div className="w-full max-w-lg atelier-transition" data-testid="new-trip-form-container">
+      <form onSubmit={handleCreate} className="rounded-xl border border-ds-pen-stroke bg-ds-onyx p-6 sm:p-8 space-y-5 boutique-folio" data-testid="new-trip-builder-form">
         <div>
           <label className="label">Flying from</label>
           <CityAutocomplete

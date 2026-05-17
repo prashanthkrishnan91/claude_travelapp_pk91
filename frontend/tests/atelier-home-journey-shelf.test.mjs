@@ -70,8 +70,11 @@ test("DashboardClient ConciergeEntry open link has 44px touch target", () => {
   assert.match(section, /min-h-\[44px\]/);
 });
 
-test("DashboardClient has elevated Concierge section (ds-elevation-2 token)", () => {
-  assert.match(dashboardClient, /ds-elevation-2/);
+test("DashboardClient has elevated Concierge section (boutique-instrument or ds-elevation-2 token)", () => {
+  assert.ok(
+    dashboardClient.includes("boutique-instrument") || dashboardClient.includes("ds-elevation-2"),
+    "DashboardClient must elevate the Concierge section via boutique-instrument or ds-elevation-2"
+  );
 });
 
 test("DashboardClient ConciergeEntry is a client-side section element with aria-label", () => {

@@ -152,7 +152,7 @@ export default function TripDetailPage() {
             My Journeys
           </Link>
         </div>
-        <div className="mb-8 rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-2)] p-6 animate-pulse">
+        <div className="mb-8 rounded-2xl border border-ds-pen-stroke bg-ds-onyx boutique-instrument p-6 animate-pulse">
           <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary mb-2">Travel Chapter</p>
           <div className="h-7 w-48 rounded bg-ds-carbon mb-2" />
           <div className="h-4 w-32 rounded bg-ds-carbon" />
@@ -267,7 +267,7 @@ export default function TripDetailPage() {
         <nav
           data-testid="trip-mobile-workspace-switcher"
           aria-label="Trip workspace"
-          className="lg:hidden flex items-stretch mb-4 rounded-xl border border-ds-pen-stroke bg-ds-onyx overflow-hidden"
+          className="lg:hidden flex items-stretch mb-4 rounded-xl border border-ds-pen-stroke bg-ds-onyx atelier-surface-depth overflow-hidden"
         >
           {WORKSPACE_TABS.map((tab) => {
             const isActive = activeMobileWorkspace === tab.id;
@@ -306,7 +306,7 @@ export default function TripDetailPage() {
       <section
         data-testid="trip-chapter-cover"
         aria-labelledby="chapter-destination-heading"
-        className="mb-8 rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-2)] overflow-hidden"
+        className="mb-8 rounded-2xl border border-ds-pen-stroke bg-ds-onyx boutique-instrument overflow-hidden"
       >
         {/* Back navigation */}
         <div className="px-4 pt-5 sm:px-6">

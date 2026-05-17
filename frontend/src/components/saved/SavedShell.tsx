@@ -164,7 +164,7 @@ function SavedItemCard({
   }
 
   return (
-    <Card tone="paper" as="article" className="card-lift p-4" data-testid="saved-item-card">
+    <Card tone="paper" as="article" className="boutique-folio card-lift p-4" data-testid="saved-item-card">
       <Card.Identity>
         {/* Vertical icon — uniform warm accent treatment */}
         <div
@@ -503,7 +503,7 @@ export function SavedShell() {
   return (
     /* Warm-paper scrapbook surface — linen album on midnight ink shell (§9) */
     <div
-      className="max-w-2xl mx-auto bg-ds-linen rounded-2xl px-6 py-6 space-y-8"
+      className="max-w-2xl mx-auto bg-ds-linen rounded-2xl px-6 py-6 space-y-8 atelier-transition"
       data-testid="saved-shell"
     >
       {/* Scrapbook editorial header */}
