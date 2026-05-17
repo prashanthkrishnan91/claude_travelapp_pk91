@@ -216,3 +216,27 @@ test('ItineraryItemCard timeline button is a single non-duplicated control', () 
   const ariaMatches = (itemCard.match(/aria-label="Set timeline"/g) ?? []).length;
   assert.equal(ariaMatches, 1, 'only one aria-label="Set timeline" button must exist');
 });
+
+
+// 25. Early-morning (00:00-04:59) classification should be morning, not unscheduled
+ test('ItineraryDayColumn classifies early-morning hours as morning', () => {
+  assert.match(dayColumn, /hour\s*>?=\s*0\s*&&\s*hour\s*<\s*12/, 'early hours must classify as morning');
+});
+
+// 26. startTime HH:MM parsing path preserved (e.g., "03:05")
+test('ItineraryDayColumn parses HH:MM startTime values', () => {
+  assert.ok(dayColumn.includes('input.match(/^(\\d{1,2}):\\d{2}/)'), 'HH:MM parser must exist for startTime values');
+});
+
+// 27. Flight fallback departure fields are considered when startTime is absent
+ test('ItineraryDayColumn reads known flight departure fallback fields from details', () => {
+  assert.match(dayColumn, /departureTime/, 'details.departureTime fallback required');
+  assert.match(dayColumn, /departure_time/, 'details.departure_time fallback required');
+  assert.match(dayColumn, /departureDateTime/, 'details.departureDateTime fallback required');
+  assert.match(dayColumn, /departure_datetime/, 'details.departure_datetime fallback required');
+});
+
+// 28. Explicit unscheduled override remains intentional contract
+ test('ItineraryDayColumn preserves explicit details.dayPart=unscheduled override', () => {
+  assert.match(dayColumn, /explicit\s*===\s*"unscheduled"\)\s*return\s*"unscheduled"/, 'explicit unscheduled override must be preserved');
+});
