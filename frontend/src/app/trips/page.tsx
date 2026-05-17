@@ -208,11 +208,13 @@ function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroPr
       <Card
         as="article"
         tone="dark"
-        className="hover:border-ds-accent/40 transition-colors duration-200 boutique-instrument"
+        className="hover:border-ds-accent/40 transition-colors duration-200 boutique-instrument advisor-desk-panel"
         data-testid="continue-planning-hero"
       >
+        {/* Folio cover tab — visible brass at very top of hero */}
+        <div className="folio-cover-tab" aria-hidden="true" />
         {/* Editorial destination / title header */}
-        <div className="p-6 border-b border-ds-pen-stroke">
+        <div className="p-6 border-b border-ds-pen-stroke concierge-desk-header">
           <div className="flex items-start justify-between gap-2 mb-4">
             <div className="min-w-0 flex-1">
               <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary mb-1.5">
@@ -303,6 +305,8 @@ function JourneyCard({ trip, onEdit, onDelete }: JourneyCardProps) {
       className="flex flex-col hover:border-ds-accent/40 transition-colors duration-200 boutique-folio"
       data-testid="journey-card"
     >
+      {/* Folio cover tab — visible brass accent that makes each card look like a folio cover */}
+      <div className="folio-cover-tab" aria-hidden="true" />
       {/* Volume cover — destination as hero */}
       <div className="flex-1 p-5 pb-4 flex flex-col gap-3">
         {/* Status marker + edit/delete controls */}
@@ -757,7 +761,7 @@ export default function TripsPage() {
       {!hasAny ? (
         <EmptyDashboard />
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-8 editorial-scene">
           {/* Continue planning hero */}
           {continuePlanning && (
             <ContinuePlanningHero

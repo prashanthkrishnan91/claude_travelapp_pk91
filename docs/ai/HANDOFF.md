@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-17 (Phase 8N-B — Visible Boutique Art Direction Adoption; PR open)
+Last updated: 2026-05-17 (Phase 8N-C — Real Boutique Visual Composition Pass; PR open)
 
 ## Purpose
 
@@ -8,7 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Phase 8N-B (2026-05-17).** Visible Boutique Art Direction Adoption — 8N foundation visibly adopted on real surfaces. `globals.css`: 4 core surface tokens warmed (midnight-ink `#0D0C0A`, onyx-velvet `#141210`, carbon-mist `#1E1A16`, pen-stroke `#2C2620` — cold navy blues eliminated); `.card` background warmed from cold `rgba(22,22,42,0.88)` to warm `rgba(18,17,14,0.95)`; 2 new boutique utilities: `.boutique-folio` (editorial trip/journey card depth) + `.boutique-instrument` (primary hero surface). Component adoption: `DashboardClient.tsx` — concierge entry gets `boutique-instrument`, continue-planning + discovery tiles get `atelier-surface-depth`, wrapper gets `atelier-transition`; `trips/page.tsx` — ContinuePlanningHero gets `boutique-instrument`, JourneyCard gets `boutique-folio`, PlanningToolsStrip + empty-state cards get `atelier-surface-depth`; `ExploreShell.tsx` — active instrument gets `boutique-instrument`, VerticalCard gets `atelier-surface-depth`; `AppShell.tsx` — page content wrapper gets `atelier-transition`. 45 new contract tests in `boutique-art-direction-adoption-8nb.test.mjs`; 3 old elevation-token tests updated to accept boutique approach. **1927 total tests, 0 failures.** No backend/SQL/provider/env/Supabase changes. 8J/8K/8L/8M/8N all preserved. 8O final cleanup deferred.
+- Roadmap stage: **Stage 3.5 — Phase 8N-C (2026-05-17).** Real Boutique Visual Composition Pass — actual editorial composition system added; prior phases were shadow/token-only and insufficient. `globals.css`: 9 new composition primitives: `.editorial-scene` (warm ambient page canvas), `.advisor-desk-panel` + `::before/after` (visible 2-zone desk panel: warm radial glow + brass accent rule at top), `.concierge-desk-header` (darker header zone with warm side-light), `.scrapbook-page` + `::before/after` (warm paper gradient + visible 4px brass binding spine + right page stack), `.folio-cover-tab` (visible 3px brass gradient top accent for folio cards), `.atelier-stamp` (circular postmark mark), `.editorial-section-rule` (warm brass left-weighted divider), `.mapline-rule` (route-line motif), `.clipping-card` (warm white press-clipping card). All classes use CSS tokens/color-mix only (no raw hex). `DashboardClient.tsx`: main wrapper adds `editorial-scene`; ConciergeEntry replaced Card with `advisor-desk-panel boutique-instrument` div — visible 2-zone interior (`concierge-desk-header` zone: darker, `atelier-stamp` mark + overline; body zone: description + CTA); `mapline-rule` after greeting; `editorial-section-rule` before discovery tools. `SavedShell.tsx`: container changed from `bg-ds-linen` to `scrapbook-page` (warm paper gradient + brass binding spine visible); `editorial-section-rule` in header; `SavedItemCard` changed from `Card tone="paper"` to `article.clipping-card` (bright white clipping card on warm paper ground). `trips/page.tsx`: `folio-cover-tab` div at top of JourneyCard (visible brass tab); `advisor-desk-panel concierge-desk-header` on ContinuePlanningHero header; `editorial-scene` on body content. `ConciergePage.tsx`: `editorial-scene` wrapper; `mapline-rule` between header + results; `folio-cover-tab` on ConciergeResultCard (recommendation slip). `TripBuilderForm.tsx`: `editorial-scene` + `advisor-desk-panel` on form element. **50 new 8N-C contract tests in `boutique-visual-composition-8nc.test.mjs`. 1993 total tests, 0 failures.** No backend/SQL/provider/env/Supabase/API/route/package changes. All 8J/8K/8L/8M/8N/8N-B testids preserved.
+
+- Previous stage: **Phase 8N-B SHIPPED (2026-05-17).** Visible Boutique Art Direction Adoption — shadow-only adoption of boutique-folio/boutique-instrument on real surfaces. Replaced by 8N-C which introduces actual visual composition. 1927 tests, 0 failures. Details summarized into 8N-C above.
 
 - Previous stage: **Phase 8N SHIPPED (2026-05-17).** Atmospheric Boutique Art Direction — CSS-only warm atelier atmosphere layer added globally. `globals.css`: 8 new `--ds-atelier-*` custom properties (base, texture-tint, vignette, edge-glow, card-border, surface-highlight, ambient) all in `:root`. New component classes: `.atelier-atmosphere-root` (warm dark base + radial ambient glow), `.atelier-vignette-layer` (fixed CSS vignette, entrance animation), `.atelier-texture-layer` (fixed CSS-only SVG fractalNoise grain via data-URI + `mix-blend-mode: soft-light`), `.atelier-surface-depth` (boutique card edge lighting), `.atelier-transition`, `.shadow-elevation-warm`, `.atelier-accent-line`. All motion guarded by `prefers-reduced-motion`. `AppShell.tsx`: `atelier-atmosphere-root` wrapper + two fixed decorative layers (`atelier-vignette-layer`, `atelier-texture-layer`) with `aria-hidden="true"`; `reduced-motion-safe-atmosphere` testid on `<main>`. 50 new contract tests in `atmospheric-boutique-art-direction-8n.test.mjs`. **1882 total tests, 0 failures.** No backend/SQL/provider/env/Supabase changes. 8J/8K/8L/8M preserved. 8O final cleanup + screenshot certification remains deferred.
 
@@ -134,10 +136,10 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 - Latency Budget Pack
 - Backend-only Scaffold Pack / No Visible Behavior Change Pack / Test Tier Pack (cross-cutting)
 
-## Type-check / test baseline (confirmed 2026-05-17, Phase 8L)
+## Type-check / test baseline (confirmed 2026-05-17, Phase 8N-C)
 
 - **`npm run type-check` (frontend): CLEAN — 0 errors.** Requires `npm install` first (standard; `node_modules` is gitignored). After install: `tsc --noEmit` exits 0 with no diagnostics.
-- **`npm test` (frontend): 1882 tests, 0 failures.** (includes 50 Phase 8N contract tests in `atmospheric-boutique-art-direction-8n.test.mjs`, wired into `npm test` explicit list in `package.json`)
+- **`npm test` (frontend): 1993 tests, 0 failures.** (includes 50 Phase 8N-C contract tests in `boutique-visual-composition-8nc.test.mjs`, wired into `npm test` explicit list in `package.json`)
 - Any future session reporting "pre-existing TypeScript errors" is seeing an uninstalled `node_modules` environment — run `npm install` in `frontend/` before type-check.
 
 ## Known risks / unresolved issues
@@ -151,7 +153,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Stage 3.5 Phase 8N-B open (PR pending).** Visible boutique art direction adoption: 4 surface tokens warmed, `.card` background warmed, `.boutique-folio` + `.boutique-instrument` applied to real surfaces (DashboardClient, trips/page, ExploreShell). App should look materially warmer and more editorial than pre-8N-B. 1927 tests, 0 failures. After merge: Phase 8O final cleanup + screenshot certification, or product feature work (deal alerts, Watchtower). Roadmap guidance: `docs/product/ROADMAP.md`.
+**Stage 3.5 Phase 8N-C open (PR pending — boutique-visual-composition-8nc).** Real composition primitives shipped: `advisor-desk-panel`, `scrapbook-page`, `folio-cover-tab`, `editorial-scene`, `mapline-rule`, `atelier-stamp`, `editorial-section-rule`, `clipping-card`. Home/Concierge/Saved/My Trips/New Trip all carry visible art direction. 1993 tests, 0 failures. After merge: Phase 8O screenshot certification pass, or product feature work (deal alerts, Watchtower). Roadmap guidance: `docs/product/ROADMAP.md`.
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 

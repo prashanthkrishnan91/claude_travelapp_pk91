@@ -164,7 +164,10 @@ function SavedItemCard({
   }
 
   return (
-    <Card tone="paper" as="article" className="boutique-folio card-lift p-4" data-testid="saved-item-card">
+    <article
+      className="boutique-folio card-lift clipping-card p-4"
+      data-testid="saved-item-card"
+    >
       <Card.Identity>
         {/* Vertical icon — uniform warm accent treatment */}
         <div
@@ -407,7 +410,7 @@ function SavedItemCard({
           )}
         </div>
       </Card.Identity>
-    </Card>
+    </article>
   );
 }
 
@@ -501,9 +504,9 @@ export function SavedShell() {
   const hasAny = items.length > 0;
 
   return (
-    /* Warm-paper scrapbook surface — linen album on midnight ink shell (§9) */
+    /* Scrapbook page composition — warm paper gradient + brass binding spine (8N-C) */
     <div
-      className="max-w-2xl mx-auto bg-ds-linen rounded-2xl px-6 py-6 space-y-8 atelier-transition"
+      className="max-w-2xl mx-auto scrapbook-page rounded-2xl pl-7 pr-6 py-6 space-y-8 atelier-transition"
       data-testid="saved-shell"
     >
       {/* Scrapbook editorial header */}
@@ -511,12 +514,11 @@ export function SavedShell() {
         <div className="flex items-start gap-3">
           <div
             aria-hidden="true"
-            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
-            style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+            className="w-10 h-10 rounded-xl flex items-center justify-center bg-ds-accent-subtle shrink-0 mt-0.5"
           >
-            <Bookmark className="w-5 h-5 text-ds-accent" />
+            <Bookmark className="w-5 h-5 text-ds-accent-muted" />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <p
               className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-accent"
               data-testid="saved-scrapbook-overline"
@@ -536,6 +538,8 @@ export function SavedShell() {
             )}
           </div>
         </div>
+        {/* Editorial section rule below the scrapbook header */}
+        <div className="editorial-section-rule mt-4" aria-hidden="true" />
       </header>
 
       {/* Loading */}

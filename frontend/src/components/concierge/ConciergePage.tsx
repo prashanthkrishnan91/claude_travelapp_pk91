@@ -155,159 +155,164 @@ function ConciergeResultCard({
     <Card
       tone="dark"
       as="article"
-      className="boutique-folio card-lift"
-      style={{ padding: "var(--ds-space-5)" }}
+      className="boutique-folio card-lift flex flex-col"
+      style={{ padding: "0", overflow: "hidden" }}
     >
-      {/* Identity */}
-      <div style={{ marginBottom: "var(--ds-space-3)" }}>
-        <h3
-          className="text-ds-text font-semibold"
-          style={{
-            fontSize: "var(--ds-type-body-l-size)",
-            lineHeight: "var(--ds-type-body-l-leading)",
-          }}
-        >
-          {title}
-        </h3>
-        <p
-          className="text-ds-text-tertiary uppercase tracking-[0.1em]"
-          style={{
-            fontSize: "var(--ds-type-overline-size)",
-            lineHeight: "var(--ds-type-overline-leading)",
-            fontWeight: "var(--ds-type-overline-weight)",
-            marginTop: "var(--ds-space-1)",
-          }}
-        >
-          {category}
-        </p>
-        {meta.length > 0 && (
-          <p
-            className="text-ds-text-secondary"
+      {/* Folio cover tab — makes each result card feel like a recommendation slip */}
+      <div className="folio-cover-tab" aria-hidden="true" />
+      {/* Card content — all interior content in a padded container */}
+      <div style={{ padding: "var(--ds-space-5)" }}>
+        {/* Identity */}
+        <div style={{ marginBottom: "var(--ds-space-3)" }}>
+          <h3
+            className="text-ds-text font-semibold"
             style={{
-              fontSize: "var(--ds-type-body-s-size)",
-              lineHeight: "var(--ds-type-body-s-leading)",
-              marginTop: "var(--ds-space-2)",
+              fontSize: "var(--ds-type-body-l-size)",
+              lineHeight: "var(--ds-type-body-l-leading)",
             }}
           >
-            {meta.join(" · ")}
-          </p>
-        )}
-      </div>
-
-      {/* Trust strip — only where Google-verified OPERATIONAL; confidence from actual backend field */}
-      {isOperational && operationalConfidence && (
-        <div style={{ marginBottom: "var(--ds-space-3)" }}>
-          <TrustStrip confidence={operationalConfidence} />
-        </div>
-      )}
-
-      {/* Concierge note — backend reason, rendered verbatim */}
-      {reasonParts.short && (
-        <div
-          className="border-l-2 text-ds-text-secondary"
-          style={{
-            borderColor: "var(--ds-accent-subtle)",
-            paddingLeft: "var(--ds-space-3)",
-            marginBottom: "var(--ds-space-3)",
-          }}
-        >
+            {title}
+          </h3>
           <p
             className="text-ds-text-tertiary uppercase tracking-[0.1em]"
             style={{
               fontSize: "var(--ds-type-overline-size)",
               lineHeight: "var(--ds-type-overline-leading)",
               fontWeight: "var(--ds-type-overline-weight)",
-              marginBottom: "var(--ds-space-1)",
+              marginTop: "var(--ds-space-1)",
             }}
           >
-            Concierge note
+            {category}
           </p>
-          <p
-            style={{
-              fontSize: "var(--ds-type-body-s-size)",
-              lineHeight: "var(--ds-type-body-s-leading)",
-            }}
-          >
-            {reasonParts.short}
-          </p>
-          {hasDetail && (
-            <>
-              <button
-                type="button"
-                onClick={() => setExpanded((v) => !v)}
-                className="inline-flex items-center gap-0.5 text-ds-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-                style={{
-                  fontSize: "var(--ds-type-caption-size)",
-                  marginTop: "var(--ds-space-1)",
-                }}
-              >
-                {expanded ? "Less" : "More"}
-                <ChevronDown
-                  className={`h-3 w-3 transition-transform duration-[120ms] ${expanded ? "rotate-180" : ""}`}
-                  aria-hidden="true"
-                />
-              </button>
-              {expanded && (
-                <div
-                  className="text-ds-text-tertiary"
-                  style={{
-                    marginTop: "var(--ds-space-1)",
-                    fontSize: "var(--ds-type-caption-size)",
-                    lineHeight: "var(--ds-type-caption-leading)",
-                  }}
-                >
-                  {extraDetail?.map((line) => (
-                    <p key={line}>{line}</p>
-                  ))}
-                </div>
-              )}
-            </>
+          {meta.length > 0 && (
+            <p
+              className="text-ds-text-secondary"
+              style={{
+                fontSize: "var(--ds-type-body-s-size)",
+                lineHeight: "var(--ds-type-body-s-leading)",
+                marginTop: "var(--ds-space-2)",
+              }}
+            >
+              {meta.join(" · ")}
+            </p>
           )}
         </div>
-      )}
 
-      {/* Actions: map link + source link only (no add-to-day — no trip context) */}
-      <div className="flex items-center gap-2" style={{ marginTop: "var(--ds-space-3)" }}>
-        {mapLink && (
-          <a
-            href={mapLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`View ${title} on Google Maps`}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+        {/* Trust strip — only where Google-verified OPERATIONAL */}
+        {isOperational && operationalConfidence && (
+          <div style={{ marginBottom: "var(--ds-space-3)" }}>
+            <TrustStrip confidence={operationalConfidence} />
+          </div>
+        )}
+
+        {/* Concierge note — backend reason, rendered verbatim */}
+        {reasonParts.short && (
+          <div
+            className="border-l-2 text-ds-text-secondary"
             style={{
-              padding: "var(--ds-space-2) var(--ds-space-3)",
-              fontSize: "var(--ds-type-body-s-size)",
+              borderColor: "var(--ds-accent-subtle)",
+              paddingLeft: "var(--ds-space-3)",
+              marginBottom: "var(--ds-space-3)",
             }}
           >
-            <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-            Map
-          </a>
+            <p
+              className="text-ds-text-tertiary uppercase tracking-[0.1em]"
+              style={{
+                fontSize: "var(--ds-type-overline-size)",
+                lineHeight: "var(--ds-type-overline-leading)",
+                fontWeight: "var(--ds-type-overline-weight)",
+                marginBottom: "var(--ds-space-1)",
+              }}
+            >
+              Concierge note
+            </p>
+            <p
+              style={{
+                fontSize: "var(--ds-type-body-s-size)",
+                lineHeight: "var(--ds-type-body-s-leading)",
+              }}
+            >
+              {reasonParts.short}
+            </p>
+            {hasDetail && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setExpanded((v) => !v)}
+                  className="inline-flex items-center gap-0.5 text-ds-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  style={{
+                    fontSize: "var(--ds-type-caption-size)",
+                    marginTop: "var(--ds-space-1)",
+                  }}
+                >
+                  {expanded ? "Less" : "More"}
+                  <ChevronDown
+                    className={`h-3 w-3 transition-transform duration-[120ms] ${expanded ? "rotate-180" : ""}`}
+                    aria-hidden="true"
+                  />
+                </button>
+                {expanded && (
+                  <div
+                    className="text-ds-text-tertiary"
+                    style={{
+                      marginTop: "var(--ds-space-1)",
+                      fontSize: "var(--ds-type-caption-size)",
+                      lineHeight: "var(--ds-type-caption-leading)",
+                    }}
+                  >
+                    {extraDetail?.map((line) => (
+                      <p key={line}>{line}</p>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         )}
-        {sourceLink && (
-          <a
-            href={sourceLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`View source for ${title}`}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-            style={{
-              padding: "var(--ds-space-2) var(--ds-space-3)",
-              fontSize: "var(--ds-type-body-s-size)",
-            }}
-          >
-            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-            Source
-          </a>
-        )}
-        {!mapLink && !sourceLink && (
-          <span
-            className="text-ds-text-tertiary"
-            style={{ fontSize: "var(--ds-type-caption-size)" }}
-          >
-            Research only
-          </span>
-        )}
+
+        {/* Actions: map link + source link only */}
+        <div className="flex items-center gap-2" style={{ marginTop: "var(--ds-space-3)" }}>
+          {mapLink && (
+            <a
+              href={mapLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`View ${title} on Google Maps`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              style={{
+                padding: "var(--ds-space-2) var(--ds-space-3)",
+                fontSize: "var(--ds-type-body-s-size)",
+              }}
+            >
+              <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+              Map
+            </a>
+          )}
+          {sourceLink && (
+            <a
+              href={sourceLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`View source for ${title}`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              style={{
+                padding: "var(--ds-space-2) var(--ds-space-3)",
+                fontSize: "var(--ds-type-body-s-size)",
+              }}
+            >
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              Source
+            </a>
+          )}
+          {!mapLink && !sourceLink && (
+            <span
+              className="text-ds-text-tertiary"
+              style={{ fontSize: "var(--ds-type-caption-size)" }}
+            >
+              Research only
+            </span>
+          )}
+        </div>
       </div>
     </Card>
   );
@@ -653,7 +658,7 @@ export function ConciergePage() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div data-testid="concierge-page" className="flex flex-col atelier-transition" style={{ minHeight: "calc(100svh - 10rem)" }}>
+    <div data-testid="concierge-page" className="flex flex-col atelier-transition editorial-scene" style={{ minHeight: "calc(100svh - 10rem)" }}>
       {/* ── Concierge desk instrument header ─────────────────────────────── */}
       <header
         data-testid="concierge-instrument-header"
@@ -697,6 +702,9 @@ export function ConciergePage() {
           </p>
         )}
       </header>
+
+      {/* Editorial mapline — visual rhythm between header and results canvas */}
+      <div className="mapline-rule mx-auto" style={{ maxWidth: "42rem" }} aria-hidden="true" />
 
       {/* ── Result canvas ─────────────────────────────────────────────────── */}
       <main
