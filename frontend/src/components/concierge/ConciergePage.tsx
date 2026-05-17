@@ -155,7 +155,7 @@ function ConciergeResultCard({
     <Card
       tone="dark"
       as="article"
-      className="card-lift"
+      className="boutique-folio card-lift"
       style={{ padding: "var(--ds-space-5)" }}
     >
       {/* Identity */}
@@ -653,7 +653,7 @@ export function ConciergePage() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div data-testid="concierge-page" className="flex flex-col" style={{ minHeight: "calc(100svh - 10rem)" }}>
+    <div data-testid="concierge-page" className="flex flex-col atelier-transition" style={{ minHeight: "calc(100svh - 10rem)" }}>
       {/* ── Concierge desk instrument header ─────────────────────────────── */}
       <header
         data-testid="concierge-instrument-header"
@@ -1074,7 +1074,7 @@ export function ConciergePage() {
       {/* ── Concierge search instrument ───────────────────────────────────── */}
       <div
         data-testid="concierge-instrument-composer"
-        className="sticky z-10 concierge-sticky-bottom"
+        className="sticky z-10 concierge-sticky-bottom boutique-instrument"
         style={{
           background: "var(--ds-onyx-velvet)",
           borderTop: "1px solid var(--ds-pen-stroke)",

@@ -75,6 +75,8 @@ const tripDetailPage  = readSrc("app/trips/[id]/page.tsx");
 const itineraryDay    = readSrc("components/trips/ItineraryDayColumn.tsx");
 const tripBuilderForm = readSrc("components/trips/TripBuilderForm.tsx");
 const conciergePage   = readSrc("components/concierge/ConciergePage.tsx");
+const savedShell      = readSrc("components/saved/SavedShell.tsx");
+const tripBuilder     = readSrc("components/trips/TripBuilder.tsx");
 
 // ── 1–5. Surface token warmth ───────────────────────────────────────────────
 
@@ -483,6 +485,139 @@ describe("Phase 8N-B: Additional adoption and cleanup checks", () => {
     assert.ok(
       tripsPage.includes("boutique-folio"),
       "JourneyCard must use boutique-folio class in trips/page"
+    );
+  });
+});
+
+// ── 46–50. Saved Ideas boutique adoption ────────────────────────────────────
+
+describe("Phase 8N-B: Saved Ideas boutique adoption (direct, not token-only)", () => {
+  it("46. SavedItemCard applies boutique-folio class directly", () => {
+    assert.ok(
+      savedShell.includes("boutique-folio"),
+      "SavedShell must apply boutique-folio to SavedItemCard — token warming alone is not sufficient"
+    );
+  });
+
+  it("47. SavedShell applies atelier-transition to outer wrapper", () => {
+    assert.ok(
+      savedShell.includes("atelier-transition"),
+      "SavedShell outer wrapper must apply atelier-transition for page entrance"
+    );
+  });
+
+  it("48. SavedShell has no backend or provider imports", () => {
+    assert.ok(
+      !savedShell.includes("from '@/backend") &&
+      !savedShell.includes("from '../backend") &&
+      !savedShell.includes("from '@/services"),
+      "SavedShell must not import from backend or services"
+    );
+  });
+});
+
+// ── 51–55. Concierge boutique adoption ──────────────────────────────────────
+
+describe("Phase 8N-B: Concierge boutique adoption (direct, not token-only)", () => {
+  it("51. ConciergeResultCard applies boutique-folio class directly", () => {
+    assert.ok(
+      conciergePage.includes("boutique-folio"),
+      "ConciergePage must apply boutique-folio to result cards — token warming alone is not sufficient"
+    );
+  });
+
+  it("52. Concierge composer instrument applies boutique-instrument class", () => {
+    assert.ok(
+      conciergePage.includes("boutique-instrument"),
+      "concierge-instrument-composer must apply boutique-instrument as primary focal surface"
+    );
+  });
+
+  it("53. ConciergePage root applies atelier-transition", () => {
+    assert.ok(
+      conciergePage.includes("atelier-transition"),
+      "ConciergePage root div must apply atelier-transition for page entrance"
+    );
+  });
+
+  it("54. ConciergePage concierge-sticky-bottom preserved from 8M", () => {
+    assert.ok(
+      conciergePage.includes("concierge-sticky-bottom"),
+      "ConciergePage must retain concierge-sticky-bottom from Phase 8M"
+    );
+  });
+});
+
+// ── 56–59. New Trip boutique adoption ───────────────────────────────────────
+
+describe("Phase 8N-B: New Trip boutique adoption (direct, not token-only)", () => {
+  it("56. TripBuilderForm form container applies boutique-folio class", () => {
+    assert.ok(
+      tripBuilderForm.includes("boutique-folio"),
+      "TripBuilderForm form must apply boutique-folio — inline elevation-1 must be replaced"
+    );
+  });
+
+  it("57. TripBuilderForm loading state applies boutique-instrument class", () => {
+    assert.ok(
+      tripBuilderForm.includes("boutique-instrument"),
+      "TripBuilderForm loading state card must apply boutique-instrument"
+    );
+  });
+
+  it("58. TripBuilderForm outer wrapper applies atelier-transition", () => {
+    assert.ok(
+      tripBuilderForm.includes("atelier-transition"),
+      "TripBuilderForm outer wrapper must apply atelier-transition for page entrance"
+    );
+  });
+
+  it("59. TripBuilderForm no longer uses cold inline elevation-1 or elevation-2", () => {
+    assert.ok(
+      !tripBuilderForm.includes('"var(--ds-elevation-1)"') &&
+      !tripBuilderForm.includes('"var(--ds-elevation-2)"'),
+      "TripBuilderForm must not use inline elevation boxShadow — replaced with boutique classes"
+    );
+  });
+});
+
+// ── 60–63. Trip Detail workspace boutique adoption ──────────────────────────
+
+describe("Phase 8N-B: Trip Detail workspace boutique adoption (direct, not token-only)", () => {
+  it("60. Trip chapter cover applies boutique-instrument (not shadow-elevation-2)", () => {
+    assert.ok(
+      tripDetailPage.includes("boutique-instrument"),
+      "trip-chapter-cover section must apply boutique-instrument as primary editorial focal surface"
+    );
+  });
+
+  it("61. Mobile workspace switcher applies atelier-surface-depth", () => {
+    assert.ok(
+      tripDetailPage.includes("atelier-surface-depth"),
+      "trip-mobile-workspace-switcher must apply atelier-surface-depth"
+    );
+  });
+
+  it("62. Trip detail loading skeleton also uses boutique-instrument (not inline shadow)", () => {
+    const skeletonIdx = tripDetailPage.indexOf("animate-pulse");
+    const skeletonBlock = tripDetailPage.slice(Math.max(0, skeletonIdx - 200), skeletonIdx + 100);
+    assert.ok(
+      skeletonBlock.includes("boutique-instrument"),
+      "Trip detail loading skeleton must use boutique-instrument, not inline elevation shadow"
+    );
+  });
+
+  it("63. TripBuilder workspace panels apply boutique-folio to CollapsiblePanel and candidate cards", () => {
+    assert.ok(
+      tripBuilder.includes("boutique-folio"),
+      "TripBuilder must apply boutique-folio to CollapsiblePanel containers and candidate card surfaces"
+    );
+  });
+
+  it("64. TripBuilder SummaryBar applies atelier-surface-depth", () => {
+    assert.ok(
+      tripBuilder.includes("atelier-surface-depth"),
+      "TripBuilder SummaryBar must apply atelier-surface-depth"
     );
   });
 });
