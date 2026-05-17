@@ -17,7 +17,7 @@ import { suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from 
 type DayPart = "morning" | "afternoon" | "evening" | "unscheduled";
 
 const DAY_PART_META: Record<DayPart, { label: string; timeHint: string; colorClass: string }> = {
-  morning:     { label: "Morning",     timeHint: "5 AM – 12 PM",  colorClass: "text-ds-accent" },
+  morning:     { label: "Morning",     timeHint: "12 AM – 12 PM", colorClass: "text-ds-accent" },
   afternoon:   { label: "Afternoon",   timeHint: "12 PM – 5 PM",  colorClass: "text-ds-text-secondary" },
   evening:     { label: "Evening",     timeHint: "5 PM – 10 PM",  colorClass: "text-ds-accent-muted" },
   unscheduled: { label: "Unscheduled", timeHint: "no time set",   colorClass: "text-ds-text-tertiary" },
@@ -65,10 +65,15 @@ function getItemDayPart(item: ItineraryItem): DayPart {
     parseHour((flightDetails?.outboundLeg as Record<string, unknown> | undefined)?.departureDateTime) ??
     parseHour((flightDetails?.outbound_leg as Record<string, unknown> | undefined)?.departure_datetime);
 
-  if (hour !== null) {
-    if (hour >= 0 && hour < 12) return "morning";
-    if (hour >= 12 && hour < 17) return "afternoon";
-    if (hour >= 17) return "evening";
+  const normalizedHour =
+    typeof hour === "number" && Number.isFinite(hour) && hour >= 0 && hour <= 23
+      ? hour
+      : null;
+
+  if (normalizedHour !== null) {
+    if (normalizedHour >= 0 && normalizedHour < 12) return "morning";
+    if (normalizedHour >= 12 && normalizedHour < 17) return "afternoon";
+    if (normalizedHour >= 17) return "evening";
   }
 
   return "unscheduled";

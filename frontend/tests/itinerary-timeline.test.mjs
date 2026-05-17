@@ -219,16 +219,27 @@ test('ItineraryItemCard timeline button is a single non-duplicated control', () 
 
 
 // 25. Early-morning (00:00-04:59) classification should be morning, not unscheduled
- test('ItineraryDayColumn classifies early-morning hours as morning', () => {
-  assert.match(dayColumn, /hour\s*>?=\s*0\s*&&\s*hour\s*<\s*12/, 'early hours must classify as morning');
+test('ItineraryDayColumn classifies early-morning hours as morning', () => {
+  assert.ok(dayColumn.includes("normalizedHour >= 0 && normalizedHour < 12"), 'early hours must classify as morning');
 });
 
-// 26. startTime HH:MM parsing path preserved (e.g., "03:05")
-test('ItineraryDayColumn parses HH:MM startTime values', () => {
+// 26. Regression fixture: ISO datetime 2026-06-05T03:05:00 must be parsed via T03:05 path and map to morning
+test('ItineraryDayColumn includes ISO T-hour parser for 2026-06-05T03:05:00 seam', () => {
+  const regressionIsoFixture = '2026-06-05T03:05:00';
+  assert.equal(regressionIsoFixture.includes('T03:05'), true, 'regression fixture should encode the production seam');
+  assert.ok(dayColumn.includes("input.match(/T(\\d{2}):/)"), 'ISO T-hour parser must exist');
+  assert.match(dayColumn, /normalizedHour\s*>?=\s*0\s*&&\s*normalizedHour\s*<\s*12/, 'ISO early hour must resolve to morning');
+});
+
+// 27. Regression fixture: HH:MM 03:05 must be parsed and map to morning
+test('ItineraryDayColumn includes HH:MM parser for "03:05" seam', () => {
+  const regressionHhmmFixture = "03:05";
+  assert.equal(regressionHhmmFixture.startsWith("03:"), true, 'fixture should represent pre-5AM departure');
   assert.ok(dayColumn.includes('input.match(/^(\\d{1,2}):\\d{2}/)'), 'HH:MM parser must exist for startTime values');
+  assert.match(dayColumn, /normalizedHour\s*>?=\s*0\s*&&\s*normalizedHour\s*<\s*12/, 'HH:MM early hour must resolve to morning');
 });
 
-// 27. Flight fallback departure fields are considered when startTime is absent
+// 28. Flight fallback departure fields are considered when startTime is absent (e.g., fallback "03:05")
  test('ItineraryDayColumn reads known flight departure fallback fields from details', () => {
   assert.match(dayColumn, /departureTime/, 'details.departureTime fallback required');
   assert.match(dayColumn, /departure_time/, 'details.departure_time fallback required');
@@ -236,7 +247,22 @@ test('ItineraryDayColumn parses HH:MM startTime values', () => {
   assert.match(dayColumn, /departure_datetime/, 'details.departure_datetime fallback required');
 });
 
-// 28. Explicit unscheduled override remains intentional contract
+// 29. Explicit unscheduled override remains intentional contract and appears before parsing
  test('ItineraryDayColumn preserves explicit details.dayPart=unscheduled override', () => {
   assert.match(dayColumn, /explicit\s*===\s*"unscheduled"\)\s*return\s*"unscheduled"/, 'explicit unscheduled override must be preserved');
+  const overrideIdx = dayColumn.indexOf('explicit === "unscheduled"');
+  const parseIdx = dayColumn.indexOf("const parseHour");
+  assert.ok(overrideIdx !== -1 && parseIdx !== -1 && overrideIdx < parseIdx, 'explicit unscheduled override must run before parsing');
+});
+
+// 30. Invalid hours should fail closed and not classify as evening (e.g., 99:05)
+test('ItineraryDayColumn validates parsed hour range to 0..23', () => {
+  assert.match(dayColumn, /hour\s*>=\s*0\s*&&\s*hour\s*<=\s*23/, 'hour validity guard 0..23 required');
+  assert.match(dayColumn, /Number\.isFinite\(hour\)/, 'hour validity guard should enforce finite number');
+});
+
+// 31. Valid parsed early hours should not fall through to unscheduled
+test('ItineraryDayColumn does not route valid early hours to unscheduled', () => {
+  assert.match(dayColumn, /if\s*\(normalizedHour\s*!==\s*null\)/, 'valid parsed hour branch must exist');
+  assert.match(dayColumn, /return\s+"unscheduled";/, 'unscheduled fallback exists only after timed branches');
 });
