@@ -83,7 +83,7 @@ export function AttractionExploreFlow() {
     <div className="space-y-6">
       {/* Search form */}
       <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
             <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ds-text-tertiary pointer-events-none" />
             <input
@@ -96,7 +96,7 @@ export function AttractionExploreFlow() {
               required
             />
           </div>
-          <div className="relative w-44 shrink-0">
+          <div className="relative sm:w-44 sm:shrink-0">
             <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ds-text-tertiary pointer-events-none" />
             <input
               type="text"
@@ -110,7 +110,7 @@ export function AttractionExploreFlow() {
           <button
             type="submit"
             disabled={loading || !destination.trim()}
-            className="btn-primary flex items-center gap-2 shrink-0"
+            className="btn-primary flex items-center justify-center gap-2 w-full sm:w-auto sm:shrink-0"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />

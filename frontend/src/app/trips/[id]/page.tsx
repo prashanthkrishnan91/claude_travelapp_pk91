@@ -180,9 +180,10 @@ export default function TripDetailPage() {
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-base font-semibold text-ds-text">Edit Trip</h2>
               <button
+                type="button"
                 onClick={() => setEditOpen(false)}
                 aria-label="Close edit dialog"
-                className="p-1.5 rounded-lg hover:bg-ds-carbon text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                className="p-1.5 rounded-lg hover:bg-ds-carbon text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -191,7 +192,7 @@ export default function TripDetailPage() {
               <div>
                 <label className="block text-xs font-medium text-ds-text-secondary mb-1.5">Trip Name</label>
                 <input
-                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text placeholder:text-ds-text-tertiary focus:outline-none focus:ring-2 focus:ring-ds-accent"
+                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text placeholder:text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   value={editForm.title}
                   onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
                 />
@@ -200,7 +201,7 @@ export default function TripDetailPage() {
                 <label className="block text-xs font-medium text-ds-text-secondary mb-1.5">Start Date</label>
                 <input
                   type="date"
-                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text focus:outline-none focus:ring-2 focus:ring-ds-accent"
+                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   value={editForm.startDate}
                   onChange={(e) => setEditForm((f) => ({ ...f, startDate: e.target.value }))}
                 />
@@ -209,15 +210,15 @@ export default function TripDetailPage() {
                 <label className="block text-xs font-medium text-ds-text-secondary mb-1.5">End Date</label>
                 <input
                   type="date"
-                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text focus:outline-none focus:ring-2 focus:ring-ds-accent"
+                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   value={editForm.endDate}
                   onChange={(e) => setEditForm((f) => ({ ...f, endDate: e.target.value }))}
                 />
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setEditOpen(false)} className={COVER_GHOST}>Cancel</button>
-              <button onClick={handleUpdate} disabled={saving || !editForm.title.trim()} className={COVER_PRIMARY}>
+              <button type="button" onClick={() => setEditOpen(false)} className={COVER_GHOST}>Cancel</button>
+              <button type="button" onClick={handleUpdate} disabled={saving || !editForm.title.trim()} className={COVER_PRIMARY}>
                 {saving ? "Saving…" : "Save Changes"}
               </button>
             </div>
@@ -234,8 +235,9 @@ export default function TripDetailPage() {
               This will permanently delete the trip and all its itinerary items. This cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirmDelete(false)} className={COVER_GHOST}>Cancel</button>
+              <button type="button" onClick={() => setConfirmDelete(false)} className={COVER_GHOST}>Cancel</button>
               <button
+                type="button"
                 onClick={handleDelete}
                 className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] text-sm font-medium bg-ds-warning text-ds-text-inverse rounded-lg hover:opacity-90 transition-opacity duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               >
@@ -253,7 +255,7 @@ export default function TripDetailPage() {
         className="mb-8 rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-2)] overflow-hidden"
       >
         {/* Back navigation */}
-        <div className="px-6 pt-5">
+        <div className="px-4 pt-5 sm:px-6">
           <Link
             href="/trips"
             className="inline-flex items-center gap-1.5 text-xs text-ds-text-tertiary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
@@ -264,7 +266,7 @@ export default function TripDetailPage() {
         </div>
 
         {/* Chapter cover body */}
-        <div className="px-6 pt-4 pb-6">
+        <div className="px-4 pt-4 pb-6 sm:px-6">
           {/* Overline: chapter classification */}
           <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary mb-2">
             Travel Chapter
@@ -322,6 +324,7 @@ export default function TripDetailPage() {
             data-testid="chapter-actions"
           >
             <button
+              type="button"
               onClick={() => setConciergeOpen(true)}
               data-testid="chapter-action-concierge"
               className={COVER_PRIMARY}
@@ -330,6 +333,7 @@ export default function TripDetailPage() {
               AI Concierge
             </button>
             <button
+              type="button"
               onClick={() => setOptimizeOpen(true)}
               data-testid="chapter-action-optimize"
               className={COVER_GHOST}
@@ -338,6 +342,7 @@ export default function TripDetailPage() {
               Optimize
             </button>
             <button
+              type="button"
               onClick={openEdit}
               data-testid="chapter-action-edit"
               className={COVER_GHOST}
@@ -346,6 +351,7 @@ export default function TripDetailPage() {
               Edit Trip
             </button>
             <button
+              type="button"
               onClick={() => setConfirmDelete(true)}
               data-testid="chapter-action-delete"
               className={COVER_DANGER}
