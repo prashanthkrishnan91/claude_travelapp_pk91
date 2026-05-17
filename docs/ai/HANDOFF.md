@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-17 (Phase 8F shipped — Explore / Discover Curated Search Lounge)
+Last updated: 2026-05-17 (Phase 8F shipped + patch — Explore / Discover Curated Search Lounge)
 
 ## Purpose
 
@@ -32,7 +32,7 @@ This file is **current operational state**, not a historical log. It is meant to
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
 
-- 2026-05-17 — **Stage 3.5 Phase 8F — Explore / Discover Curated Search Lounge.** `ExploreShell.tsx` transformed: legacy sky/violet/amber/emerald palette removed; uniform sandstone-gold accent icons; Overline "Curated Discovery" + h1 "Discover" editorial identity; VerticalCard ds-onyx card shell + Overline category label; active section → editorial instrument frame (section + Overline + heading + explore-instrument-header); breadcrumb ds-tokens. HotelExploreFlow/AttractionExploreFlow/RestaurantExploreFlow: cream-500 icon fix; tracking-[0.1em] result count Overline; explore-results-header testid. 99 new tests. **1284 total, 0 failures.** No backend/SQL/provider/flights/Supabase changes.
+- 2026-05-17 — **Stage 3.5 Phase 8F — Explore / Discover Curated Search Lounge + patch.** `ExploreShell.tsx` transformed: legacy sky/violet/amber/emerald palette removed; uniform sandstone-gold accent icons; Overline "Curated Discovery" + h1 "Discover" editorial identity; VerticalCard ds-onyx card shell + Overline category label; active section → editorial instrument frame (section + Overline + heading + explore-instrument-header); breadcrumb ds-tokens. HotelExploreFlow/AttractionExploreFlow/RestaurantExploreFlow: cream-500 icon fix; tracking-[0.1em] result count Overline; explore-results-header testid. Patch: hardcoded city examples (Paris/Marais/Barcelona/Tokyo/Shinjuku) removed from placeholders → generic "City or area"/"Destination city"; icon-only Google Maps links → `min-w-[44px] min-h-[44px] flex items-center justify-center` (44px touch target). 114 new tests (99 initial + 15 patch). **1299 total, 0 failures.** No backend/SQL/provider/flights/Supabase changes.
 
 - 2026-05-17 — **Stage 3.5 Phase 8E — Concierge Search Instrument + Results Presentation Overhaul.** `ConciergePage.tsx` + `AIConciergePanel.tsx`: chat bubbles → left-border italic query markers; AIConciergePanel header → editorial overline "Private Travel Concierge" + destination heading; day selector label → "Add to Day"; panel loading → "Searching · Verifying · Composing" instrument style; panel input → focus-visible + aria-label + 44px; chips → rounded-lg; destination label → visible Overline "Where"; copy → first-person. 79 new tests. **1185 total, 0 failures.** No backend/SQL/provider/flights/Supabase changes.
 
