@@ -194,12 +194,22 @@ function JourneyShelfTeaser({ count }: { count: number }) {
     >
       <div className="flex items-center justify-between mb-3">
         <Overline>Your travel shelf</Overline>
-        <Link
-          href="/trips"
-          className="text-xs text-ds-accent hover:text-ds-accent-muted font-medium transition flex items-center gap-1"
-        >
-          View all <ArrowRight className="w-3 h-3" aria-hidden="true" />
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/trips/new"
+            className="flex items-center gap-1 text-xs font-medium text-ds-accent hover:text-ds-accent-muted transition min-h-[44px]"
+            data-testid="home-new-trip-action"
+          >
+            <PlusCircle className="w-3 h-3" aria-hidden="true" />
+            New
+          </Link>
+          <Link
+            href="/trips"
+            className="text-xs text-ds-accent hover:text-ds-accent-muted font-medium transition flex items-center gap-1 min-h-[44px]"
+          >
+            View all <ArrowRight className="w-3 h-3" aria-hidden="true" />
+          </Link>
+        </div>
       </div>
       <Link
         href="/trips"
@@ -256,6 +266,7 @@ function EmptyAtelierHome() {
         <Link
           href="/trips/new"
           className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-ds-accent text-ds-text-inverse text-sm font-semibold hover:opacity-90 transition-opacity min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          data-testid="home-new-trip-action"
         >
           <PlusCircle className="w-4 h-4" aria-hidden="true" />
           Plan a Trip

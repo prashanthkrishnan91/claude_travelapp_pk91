@@ -1,10 +1,53 @@
 # UI Baseline
 
-Last updated: 2026-05-17 (Phase 8I — Mobile-First Premium Pass)
+Last updated: 2026-05-17 (Phase 8J — Mobile Shell/Nav Rescue)
 
 ## Purpose
 
 Tracks the state of the design system and UI primitive layer so future prompts and PRs can reason accurately about what exists and what has been adopted.
+
+---
+
+## Stage 3.5 Phase 8J — Mobile Shell/Nav Rescue (Pocket Travel Atelier) — SHIPPED (2026-05-17)
+
+**Stage 3.5 · Wife-Wow mobile shell — Boutique mobile design language + app shell/nav overhaul**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `docs/product/MOBILE_DESIGN_LANGUAGE.md` | **NEW.** Canonical "Pocket Travel Atelier" mobile design language document: 4-tab nav rule, contextual primary actions, 44px touch targets, safe-area rules, mobile page spacing, boutique visual tokens, tray/sheet language for 8K+. |
+| `frontend/src/components/layout/MobileNav.tsx` | **Bottom nav rescue.** 5-tab nav (with giant center `New Trip`) → quiet 4-tab boutique nav (Home / Discover / Saved / My Trips). `isNew` special-case and `-mt-4` elevated center button removed. Each tab: `.mobile-tab-item` CSS class with `env(safe-area-inset-bottom)` native handling; `.mobile-tab-active-dot` sandstone indicator bar; `.mobile-tab-icon/-active` (44px wide); `.mobile-tab-label/-active`. Static `testid` keys per tab. **Top bar:** `.mobile-top-bar` class (midnight-ink base vs. prior onyx). `type="button"` on all non-submit buttons. Full drawer still contains all destinations including `/trips/new`. |
+| `frontend/src/components/layout/AppShell.tsx` | **Content clearance.** `pb-24 lg:pb-8` → `mobile-nav-spacer` CSS utility. `data-testid="mobile-page-content"` added to content wrapper. |
+| `frontend/src/app/globals.css` | **Mobile shell utilities.** `.mobile-top-bar` (midnight-ink, pen-stroke border). `.mobile-bottom-nav` (midnight-ink + warm brass inset shadow). `.mobile-tab-item` (flex column, `calc(3.5rem + env(safe-area-inset-bottom))`). `.mobile-tab-active-dot` (sandstone bar, top edge, 1.25rem wide, 2px tall). `.mobile-tab-icon` (2.75rem wide, mist color). `.mobile-tab-icon-active` (sandstone-gold). `.mobile-tab-label` / `.mobile-tab-label-active`. `.mobile-nav-spacer` (`max(5.5rem, calc(3.75rem + env(safe-area-inset-bottom)))` with `@media lg` override). All use ds-tokens; no raw hex. |
+| `frontend/src/components/dashboard/DashboardClient.tsx` | **Contextual New Trip.** `JourneyShelfTeaser` header gains "New" link → `/trips/new` (`data-testid="home-new-trip-action"`). Empty state Plan a Trip button also gets `home-new-trip-action` testid. |
+| `frontend/src/app/trips/page.tsx` | **Contextual New Trip.** Existing Plan a Trip header Link gets `data-testid="trips-new-trip-action"`. |
+| `frontend/tests/mobile-shell-nav-rescue-8j.test.mjs` | **NEW.** 95 Phase 8J contract tests. |
+| `frontend/package.json` | Added `mobile-shell-nav-rescue-8j.test.mjs` to test script. |
+
+### Test results
+- **1658 tests, 0 failures** (was 1563; +95 new Phase 8J contract tests)
+
+### Design contract alignment
+- **4-tab quiet boutique bottom nav:** Home / Discover / Saved / My Trips. No permanent New Trip chrome.
+- **Contextual New Trip:** Available on Home (shelf header + empty state) and My Trips (page header).
+- **Safe-area native:** CSS `env(safe-area-inset-bottom)` on `.mobile-tab-item`; no reliance on `pb-safe` Tailwind class.
+- **Touch targets:** Tab items are `3.5rem + safe-area` (56px+); icon zones are 2.75rem (44px) wide.
+- **Boutique atelier top bar:** Midnight-ink background, pen-stroke border — warmer and deeper than prior onyx.
+- **Content clearance:** `mobile-nav-spacer` uses `max()` calc to protect content from nav overlap on all devices.
+- **Mobile design language doc:** Canonical rules now live at `docs/product/MOBILE_DESIGN_LANGUAGE.md` for 8K+ reference.
+
+### Invariant confirmations
+- No backend files; no API/search/provider/Tavily/Google Places/Duffel/flights/Supabase/env changes.
+- All existing testids, handlers, and routes preserved. Drawer retains all 8 destination links.
+- No fake/mock/sample visible data introduced.
+- No new navigation destinations; all routes backed by existing pages.
+
+### Deferred to next phases
+- Trip Detail IA + workspace mobile redesign → **Phase 8K**
+- Itinerary Day mobile redesign → **Phase 8L**
+- Full mobile surface pass (Explore, Saved, Concierge content) → **Phase 8M**
+- Atmospheric boutique art direction (texture, lighting, motion) → **Phase 8N**
 
 ---
 

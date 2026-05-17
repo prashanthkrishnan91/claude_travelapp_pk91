@@ -744,8 +744,12 @@ export default function TripsPage() {
           )}
         </div>
         <div className="shrink-0">
-          <Link href="/trips/new" className="btn-primary inline-flex items-center min-h-[44px]">
-            <PlusCircle className="w-4 h-4" />
+          <Link
+            href="/trips/new"
+            className="btn-primary inline-flex items-center min-h-[44px]"
+            data-testid="trips-new-trip-action"
+          >
+            <PlusCircle className="w-4 h-4" aria-hidden="true" />
             Plan a Trip
           </Link>
         </div>
