@@ -17,7 +17,7 @@ import { suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from 
 type DayPart = "morning" | "afternoon" | "evening" | "unscheduled";
 
 const DAY_PART_META: Record<DayPart, { label: string; timeHint: string; colorClass: string }> = {
-  morning:     { label: "Morning",     timeHint: "5 AM – 12 PM",  colorClass: "text-ds-accent" },
+  morning:     { label: "Morning",     timeHint: "12 AM – 12 PM", colorClass: "text-ds-accent" },
   afternoon:   { label: "Afternoon",   timeHint: "12 PM – 5 PM",  colorClass: "text-ds-text-secondary" },
   evening:     { label: "Evening",     timeHint: "5 PM – 10 PM",  colorClass: "text-ds-accent-muted" },
   unscheduled: { label: "Unscheduled", timeHint: "no time set",   colorClass: "text-ds-text-tertiary" },
@@ -29,7 +29,7 @@ function getItemDayPart(item: ItineraryItem): DayPart {
   // Explicit override stored in details.dayPart
   const explicit = d.dayPart as string | undefined;
   if (explicit === "morning" || explicit === "afternoon" || explicit === "evening") return explicit;
-  // Explicit unscheduled override — bypasses startTime classification
+  // Explicit unscheduled override — bypasses time classification by contract
   if (explicit === "unscheduled") return "unscheduled";
 
   // Keyword in details.timeLabel
@@ -38,23 +38,42 @@ function getItemDayPart(item: ItineraryItem): DayPart {
   if (label.includes("afternoon")) return "afternoon";
   if (label.includes("evening") || label.includes("night")) return "evening";
 
-  // Parse startTime (ISO datetime or HH:MM)
-  const raw = item.startTime;
-  if (raw) {
-    const isoMatch = raw.match(/T(\d{2}):/);
-    const hour = isoMatch
-      ? Number(isoMatch[1])
-      : (() => {
-          const hhMM = raw.match(/^(\d{1,2}):\d{2}/);
-          if (hhMM) return Number(hhMM[1]);
-          const parsed = new Date(raw);
-          return isNaN(parsed.getTime()) ? null : parsed.getHours();
-        })();
-    if (hour !== null) {
-      if (hour >= 5 && hour < 12) return "morning";
-      if (hour >= 12 && hour < 17) return "afternoon";
-      if (hour >= 17) return "evening";
-    }
+  const parseHour = (raw: unknown): number | null => {
+    if (typeof raw !== "string" || raw.trim().length === 0) return null;
+    const input = raw.trim();
+
+    const isoMatch = input.match(/T(\d{2}):/);
+    if (isoMatch) return Number(isoMatch[1]);
+
+    const hhMM = input.match(/^(\d{1,2}):\d{2}/);
+    if (hhMM) return Number(hhMM[1]);
+
+    const parsed = new Date(input);
+    return isNaN(parsed.getTime()) ? null : parsed.getHours();
+  };
+
+  // Prefer canonical startTime, then known persisted flight departure keys.
+  const flightDetails = item.itemType === "flight" ? (d as Record<string, unknown>) : null;
+  const hour =
+    parseHour(item.startTime) ??
+    parseHour(flightDetails?.departureTime) ??
+    parseHour(flightDetails?.departure_time) ??
+    parseHour(flightDetails?.departureDateTime) ??
+    parseHour(flightDetails?.departure_datetime) ??
+    parseHour((flightDetails?.outboundLeg as Record<string, unknown> | undefined)?.departureTime) ??
+    parseHour((flightDetails?.outbound_leg as Record<string, unknown> | undefined)?.departure_time) ??
+    parseHour((flightDetails?.outboundLeg as Record<string, unknown> | undefined)?.departureDateTime) ??
+    parseHour((flightDetails?.outbound_leg as Record<string, unknown> | undefined)?.departure_datetime);
+
+  const normalizedHour =
+    typeof hour === "number" && Number.isFinite(hour) && hour >= 0 && hour <= 23
+      ? hour
+      : null;
+
+  if (normalizedHour !== null) {
+    if (normalizedHour >= 0 && normalizedHour < 12) return "morning";
+    if (normalizedHour >= 12 && normalizedHour < 17) return "afternoon";
+    if (normalizedHour >= 17) return "evening";
   }
 
   return "unscheduled";
