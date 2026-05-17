@@ -331,6 +331,30 @@ test('AttractionExploreFlow has no mock/sample data', () => {
   assert.doesNotMatch(attractionFlow, /\bsampleAttraction/);
 });
 
+test('RestaurantExploreFlow placeholder has no hardcoded city examples', () => {
+  assert.doesNotMatch(restaurantFlow, /placeholder="[^"]*(?:Paris|Marais|Barcelona|Tokyo|Shinjuku|New York|London)/);
+});
+
+test('HotelExploreFlow placeholder has no hardcoded city examples', () => {
+  assert.doesNotMatch(hotelFlow, /placeholder="[^"]*(?:Paris|Marais|Barcelona|Tokyo|Shinjuku|New York|London)/);
+});
+
+test('AttractionExploreFlow placeholder has no hardcoded city examples', () => {
+  assert.doesNotMatch(attractionFlow, /placeholder="[^"]*(?:Paris|Marais|Barcelona|Tokyo|Shinjuku|New York|London)/);
+});
+
+test('RestaurantExploreFlow destination placeholder is generic', () => {
+  assert.match(restaurantFlow, /placeholder="City or area"/);
+});
+
+test('HotelExploreFlow destination placeholder is generic', () => {
+  assert.match(hotelFlow, /placeholder="Destination city"/);
+});
+
+test('AttractionExploreFlow destination placeholder is generic', () => {
+  assert.match(attractionFlow, /placeholder="City or area"/);
+});
+
 // ── G. Accessibility and Semantic Actions ─────────────────────────────────────
 
 test('VerticalCard is a semantic <button> element (not div onClick)', () => {
@@ -473,4 +497,45 @@ test('ExploreShell VerticalCard icon does not use group-hover:scale (forbidden d
 
 test('ExploreShell uses var(--ds-space-6) for section padding (spacing token contract)', () => {
   assert.match(exploreShell, /var\(--ds-space-6\)/);
+});
+
+// ── L. Icon-Only Map Link Touch Targets (44px minimum) ───────────────────────
+
+test('RestaurantCard Google Maps link has min-w-[44px] touch target', () => {
+  assert.match(restaurantFlow, /min-w-\[44px\]/);
+});
+
+test('RestaurantCard Google Maps link has min-h-[44px] touch target', () => {
+  assert.match(restaurantFlow, /min-h-\[44px\]/);
+});
+
+test('HotelCard Google Maps link has min-w-[44px] touch target', () => {
+  assert.match(hotelFlow, /min-w-\[44px\]/);
+});
+
+test('HotelCard Google Maps link has min-h-[44px] touch target', () => {
+  assert.match(hotelFlow, /min-h-\[44px\]/);
+});
+
+test('AttractionCard Google Maps link has min-w-[44px] touch target', () => {
+  assert.match(attractionFlow, /min-w-\[44px\]/);
+});
+
+test('AttractionCard Google Maps link has min-h-[44px] touch target', () => {
+  assert.match(attractionFlow, /min-h-\[44px\]/);
+});
+
+test('RestaurantCard Google Maps link preserves aria-label and href', () => {
+  assert.match(restaurantFlow, /aria-label=\{`View \$\{r\.name\} on Google Maps`\}/);
+  assert.match(restaurantFlow, /href=\{r\.googleMapsUri\}/);
+});
+
+test('HotelCard Google Maps link preserves aria-label and href', () => {
+  assert.match(hotelFlow, /aria-label=\{`View \$\{h\.name\} on Google Maps`\}/);
+  assert.match(hotelFlow, /href=\{h\.googleMapsUri\}/);
+});
+
+test('AttractionCard Google Maps link preserves aria-label and href', () => {
+  assert.match(attractionFlow, /aria-label=\{`View \$\{a\.name\} on Google Maps`\}/);
+  assert.match(attractionFlow, /href=\{a\.googleMapsUri\}/);
 });

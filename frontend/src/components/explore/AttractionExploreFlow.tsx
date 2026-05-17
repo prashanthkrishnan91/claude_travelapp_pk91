@@ -90,7 +90,7 @@ export function AttractionExploreFlow() {
               type="text"
               value={destination}
               onChange={(e) => setDestination(e.target.value)}
-              placeholder="City or area (e.g. Tokyo, Shinjuku)"
+              placeholder="City or area"
               className="input pl-9 w-full"
               aria-label="Destination"
               required
@@ -210,7 +210,7 @@ function AttractionCard({
                 href={a.googleMapsUri}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-1.5 rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text-secondary transition-colors shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text-secondary transition-colors shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                 aria-label={`View ${a.name} on Google Maps`}
               >
                 <ExternalLink className="w-3.5 h-3.5" />
