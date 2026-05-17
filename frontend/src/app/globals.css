@@ -339,12 +339,12 @@
     align-items: center;
     gap: 0.5rem;
     border-radius: 0.75rem;
-    background: linear-gradient(135deg, #e8b854 0%, #c8a55c 55%, #a88438 100%);
+    background: linear-gradient(135deg, var(--ds-accent) 0%, var(--ds-accent-muted) 55%, color-mix(in srgb, var(--ds-accent-muted) 78%, black) 100%);
     padding: 0.625rem 1rem;
     min-height: 2.75rem;
     font-size: 0.875rem;
     font-weight: 600;
-    color: #1a1000;
+    color: var(--ds-text-inverse);
     box-shadow:
       0 1px 2px 0 rgba(0, 0, 0, 0.40),
       0 4px 14px 0 rgba(200, 165, 92, 0.45),
@@ -378,7 +378,7 @@
     gap: 0.5rem;
     border-radius: 0.75rem;
     border: 1px solid var(--ds-pen-stroke);
-    background: var(--ds-carbon);
+    background: var(--ds-carbon-mist);
     padding: 0.625rem 1rem;
     min-height: 2.75rem;
     font-size: 0.875rem;

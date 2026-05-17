@@ -213,6 +213,7 @@ function IdeaCard({
         <div className="flex items-center gap-1">
           {savingMeta && <Loader2 className="h-3 w-3 animate-spin text-ds-text-tertiary" />}
           <button
+            type="button"
             onClick={onRemove}
             disabled={removing}
             title="Remove from trip ideas"
@@ -227,6 +228,7 @@ function IdeaCard({
       <div className="mt-2 flex items-center gap-1">
         {STATUS_OPTIONS.map((opt) => (
           <button
+            type="button"
             key={opt.value}
             onClick={() => handleStatusChange(opt.value)}
             disabled={savingMeta}
@@ -247,6 +249,7 @@ function IdeaCard({
           </button>
         ))}
         <button
+          type="button"
           onClick={() => setNoteOpen((v) => !v)}
           className="ml-auto min-h-[44px] min-w-[44px] flex items-center justify-center px-1 text-[10px] text-ds-text-tertiary hover:text-ds-text-secondary transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         >
@@ -280,6 +283,7 @@ function IdeaCard({
             ))}
           </select>
           <button
+            type="button"
             onClick={() => onAssign(selectedDay)}
             disabled={assigning || !selectedDay}
             className="flex-shrink-0 min-h-[44px] inline-flex items-center justify-center rounded-lg px-2.5 text-xs font-medium text-ds-accent ring-1 ring-ds-accent/40 hover:ring-ds-accent transition disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
@@ -384,6 +388,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
   return (
     <div className="rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-1)]">
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between px-3.5 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded-2xl"
       >
@@ -430,6 +435,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                 <div className="flex flex-wrap items-center gap-1">
                   {STATUS_FILTER_OPTIONS.map((opt) => (
                     <button
+                      type="button"
                       key={opt.value}
                       onClick={() => setStatusFilter(opt.value)}
                       aria-pressed={statusFilter === opt.value}
@@ -459,6 +465,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                   </select>
                   {hasActiveFilters && (
                     <button
+                      type="button"
                       onClick={handleReset}
                       aria-label="Reset filters"
                       className="min-h-[44px] min-w-[44px] flex items-center justify-center px-1 text-[10px] text-ds-text-tertiary hover:text-ds-text-secondary transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
@@ -502,6 +509,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                         </div>
                         {overflow > 0 && (
                           <button
+                            type="button"
                             onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.key]: true }))}
                             className="mt-1.5 w-full min-h-[44px] flex items-center justify-center rounded-lg border border-ds-pen-stroke bg-ds-onyx text-[10px] font-medium text-ds-text-secondary hover:bg-ds-carbon transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                           >
@@ -510,6 +518,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                         )}
                         {expanded && group.items.length > DEFAULT_VISIBLE_PER_VERTICAL && (
                           <button
+                            type="button"
                             onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.key]: false }))}
                             className="mt-1.5 w-full min-h-[44px] flex items-center justify-center rounded-lg border border-ds-pen-stroke bg-ds-onyx text-[10px] font-medium text-ds-text-secondary hover:bg-ds-carbon transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                           >

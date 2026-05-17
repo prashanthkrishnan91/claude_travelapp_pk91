@@ -145,6 +145,7 @@ export function ResultActionSheet({ context, initialSavedItem }: ResultActionShe
       <div className="flex items-center gap-2">
         {/* Save / Unsave */}
         <button
+          type="button"
           onClick={isSaved ? handleUnsave : handleSave}
           disabled={isLoading}
           aria-label={isSaved ? "Remove from saved" : "Save"}
@@ -170,6 +171,7 @@ export function ResultActionSheet({ context, initialSavedItem }: ResultActionShe
 
         {/* More actions toggle */}
         <button
+          type="button"
           onClick={() => setExpanded((v: boolean) => !v)}
           aria-label={expanded ? "Hide actions" : "More actions"}
           className="flex items-center gap-1 px-2 py-1.5 min-h-[44px] rounded-lg text-xs text-ds-text-tertiary bg-ds-carbon hover:bg-ds-pen-stroke hover:text-ds-text-secondary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
@@ -191,7 +193,7 @@ export function ResultActionSheet({ context, initialSavedItem }: ResultActionShe
           {isSaved ? (
             <Link
               href="/saved"
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-ds-text-secondary bg-ds-carbon hover:bg-ds-pen-stroke transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              className="flex items-center gap-2 px-3 py-2 min-h-[44px] rounded-lg text-xs text-ds-text-secondary bg-ds-carbon hover:bg-ds-pen-stroke transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               aria-label="Manage in Saved"
               data-testid="manage-in-saved-link"
             >

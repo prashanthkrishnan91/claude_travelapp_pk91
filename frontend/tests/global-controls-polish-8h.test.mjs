@@ -158,9 +158,9 @@ test('.btn-secondary uses var(--ds-pen-stroke) border', () => {
   assert.ok(btnSection.includes('var(--ds-pen-stroke)'), '.btn-secondary must use var(--ds-pen-stroke)');
 });
 
-test('.btn-secondary uses var(--ds-carbon) background', () => {
+test('.btn-secondary uses var(--ds-carbon-mist) background (defined token)', () => {
   const btnSection = globals.slice(globals.indexOf('.btn-secondary {'), globals.indexOf('.btn-secondary:hover'));
-  assert.ok(btnSection.includes('var(--ds-carbon)'), '.btn-secondary must use var(--ds-carbon)');
+  assert.ok(btnSection.includes('var(--ds-carbon-mist)'), '.btn-secondary must use var(--ds-carbon-mist) not undefined var(--ds-carbon)');
 });
 
 test('.btn-secondary uses var(--ds-text-secondary) color', () => {
@@ -444,4 +444,119 @@ test('globals.css .btn-primary:focus-visible uses var(--ds-accent) not raw hex #
   const block = globals.slice(idx, globals.indexOf('}', idx) + 1);
   assert.ok(block.includes('var(--ds-accent)'), '.btn-primary:focus-visible must use var(--ds-accent)');
   assert.ok(!block.includes('#e8b854'), '.btn-primary:focus-visible must not use raw hex #e8b854');
+});
+
+// ── PATCH: Issue 1 — .btn-secondary undefined var(--ds-carbon) fix ───────────
+
+test('.btn-secondary background is defined token (not undefined var(--ds-carbon))', () => {
+  const btnSection = globals.slice(globals.indexOf('.btn-secondary {'), globals.indexOf('.btn-secondary:hover'));
+  const bgLine = btnSection.split('\n').find(l => l.trim().startsWith('background:'));
+  assert.ok(bgLine, '.btn-secondary must have a background: property');
+  assert.ok(!bgLine.trim().endsWith('var(--ds-carbon);'), `.btn-secondary must not use undefined var(--ds-carbon): ${bgLine.trim()}`);
+  assert.ok(bgLine.includes('var(--ds-carbon-mist)'), `.btn-secondary background must use var(--ds-carbon-mist): ${bgLine.trim()}`);
+});
+
+// ── PATCH: Issue 2 — .btn-primary raw hex removed ────────────────────────────
+
+test('globals.css .btn-primary base block has no raw hex for gradient or color', () => {
+  const idx = globals.indexOf('.btn-primary {');
+  const endIdx = globals.indexOf('.btn-primary:hover');
+  const block = globals.slice(idx, endIdx);
+  const colorLines = block.split('\n').filter(l =>
+    l.trim().startsWith('background:') || l.trim().startsWith('color:')
+  );
+  for (const line of colorLines) {
+    assert.ok(!line.match(/#[0-9a-fA-F]{3,6}/), `.btn-primary color/background must not use raw hex: ${line.trim()}`);
+  }
+});
+
+test('globals.css .btn-primary gradient uses var(--ds-accent)', () => {
+  const idx = globals.indexOf('.btn-primary {');
+  const endIdx = globals.indexOf('.btn-primary:hover');
+  const block = globals.slice(idx, endIdx);
+  assert.ok(block.includes('var(--ds-accent)'), '.btn-primary gradient must include var(--ds-accent)');
+});
+
+test('globals.css .btn-primary color uses var(--ds-text-inverse)', () => {
+  const idx = globals.indexOf('.btn-primary {');
+  const endIdx = globals.indexOf('.btn-primary:hover');
+  const block = globals.slice(idx, endIdx);
+  assert.ok(block.includes('var(--ds-text-inverse)'), '.btn-primary text color must use var(--ds-text-inverse)');
+});
+
+// ── PATCH: Issue 3 — ResultActionSheet type="button" and manage-in-saved-link ─
+
+test('ResultActionSheet save-action-btn has type="button"', () => {
+  const idx = actionSheet.indexOf('save-action-btn');
+  const btnStart = actionSheet.lastIndexOf('<button', idx);
+  const ctx = actionSheet.slice(btnStart, btnStart + 300);
+  assert.ok(ctx.includes('type="button"'), 'save-action-btn must have type="button"');
+});
+
+test('ResultActionSheet more-actions-toggle has type="button"', () => {
+  const idx = actionSheet.indexOf('more-actions-toggle');
+  const btnStart = actionSheet.lastIndexOf('<button', idx);
+  const ctx = actionSheet.slice(btnStart, btnStart + 300);
+  assert.ok(ctx.includes('type="button"'), 'more-actions-toggle must have type="button"');
+});
+
+test('ResultActionSheet manage-in-saved-link has min-h-[44px]', () => {
+  const idx = actionSheet.indexOf('manage-in-saved-link');
+  const linkStart = actionSheet.lastIndexOf('<Link', idx);
+  const ctx = actionSheet.slice(linkStart, linkStart + 400);
+  assert.ok(ctx.includes('min-h-[44px]'), 'manage-in-saved-link must have min-h-[44px] touch target');
+});
+
+// ── PATCH: Issue 4 — TripIdeasPanel type="button" on non-submit buttons ──────
+
+function buttonCtx(src, anchor) {
+  const idx = src.indexOf(anchor);
+  if (idx === -1) return '';
+  const start = src.lastIndexOf('<button', idx);
+  return start === -1 ? '' : src.slice(start, start + 350);
+}
+
+test('TripIdeasPanel panel-toggle button has type="button"', () => {
+  const ctx = buttonCtx(ideasPanel, 'setOpen((v) => !v)');
+  assert.ok(ctx.includes('type="button"'), 'panel open/close button must have type="button"');
+});
+
+test('TripIdeasPanel remove-idea button has type="button"', () => {
+  const ctx = buttonCtx(ideasPanel, 'onClick={onRemove}');
+  assert.ok(ctx.includes('type="button"'), 'remove idea button must have type="button"');
+});
+
+test('TripIdeasPanel status-option buttons have type="button"', () => {
+  const ctx = buttonCtx(ideasPanel, 'handleStatusChange(opt.value)');
+  assert.ok(ctx.includes('type="button"'), 'status option buttons must have type="button"');
+});
+
+test('TripIdeasPanel note-toggle button has type="button"', () => {
+  const ctx = buttonCtx(ideasPanel, 'setNoteOpen((v) => !v)');
+  assert.ok(ctx.includes('type="button"'), 'note toggle button must have type="button"');
+});
+
+test('TripIdeasPanel assign button has type="button"', () => {
+  const ctx = buttonCtx(ideasPanel, 'onAssign(selectedDay)');
+  assert.ok(ctx.includes('type="button"'), 'assign/add-to-day button must have type="button"');
+});
+
+test('TripIdeasPanel status-filter buttons have type="button"', () => {
+  const ctx = buttonCtx(ideasPanel, 'setStatusFilter(opt.value)');
+  assert.ok(ctx.includes('type="button"'), 'status filter buttons must have type="button"');
+});
+
+test('TripIdeasPanel reset-filters button has type="button"', () => {
+  const ctx = buttonCtx(ideasPanel, 'onClick={handleReset}');
+  assert.ok(ctx.includes('type="button"'), 'reset filters button must have type="button"');
+});
+
+test('TripIdeasPanel show-more button has type="button"', () => {
+  const ctx = buttonCtx(ideasPanel, '[group.key]: true }))');
+  assert.ok(ctx.includes('type="button"'), 'show more button must have type="button"');
+});
+
+test('TripIdeasPanel show-less button has type="button"', () => {
+  const ctx = buttonCtx(ideasPanel, '[group.key]: false }))');
+  assert.ok(ctx.includes('type="button"'), 'show less button must have type="button"');
 });
