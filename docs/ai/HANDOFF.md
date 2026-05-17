@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-17 (Phase 8C shipped — Itinerary ItemCard Chapter-Style Editorial Polish)
+Last updated: 2026-05-17 (Phase 8D shipped — Itinerary DayColumn Editorial Chapter Frame)
 
 ## Purpose
 
@@ -8,9 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Phase 8C SHIPPED (2026-05-17).** Itinerary ItemCard Chapter-Style Editorial Polish. `ItineraryItemCard.tsx` transformed: root changed to `<article>` semantic element; `TYPE_LABELS` editorial overline map added (Flight/Stay/Activity/Dining/Transit/Note); type icon + Overline type label in a new header row (left) with action cluster (right); title promoted from `text-xs` to `text-[13px]`; type-specific sections (flight, hotel, activity, meal) gain a hairline top separator for editorial rhythm; padding increased from `p-2` to `p-3`; `data-testid="itinerary-item-card"`, `data-testid="item-type-overline"`, `data-testid="item-title"` added. All existing behavior preserved: round-trip one-card rendering, Google Flights link-out, add-to-day, drag/DnD, compare, move-to-ideas, timeline editor, booking checklist. 63 new tests in `itinerary-chapter-editorial.test.mjs`. **1025 total tests, 0 failures.** Phase 8C is visible adoption — itinerary items now read as editorial chapter entries, not generic board cards. Phases 0, 1A–1C, 2A, 2B, 3–7, 8A, 8B all previously shipped.
+- Roadmap stage: **Stage 3.5 — Phase 8D SHIPPED (2026-05-17).** Itinerary DayColumn Editorial Chapter Frame. `ItineraryDayColumn.tsx` transformed: `data-testid` contract added throughout (day-chapter-frame, day-chapter-header, day-chapter-number, day-chapter-title, day-chapter-date, day-item-count, day-part-section, day-part-label, empty-day-chapter); `h3` promoted `text-sm`→`text-base` for stronger editorial heading weight; day-part sections refactored from `orderedSections.map` to `filledSections` array with `border-t border-ds-pen-stroke/30` hairline rhythm between non-empty sections; time hint made `italic` for editorial register; empty day invitation changed from board-lane copy ("Drag items here… to start building") to editorial chapter prompt ("Begin this chapter — use + Add or drag a stop here."); tracking corrected `tracking-[0.08em]`→`tracking-[0.1em]` in empty state Overline. All behavior preserved: DnD, SortableContext, groupByDayPart, DAY_PART_META, handleSuggestTimeline, handleApplyTimeline, onPlanDay, onUpdateTimeline, onMoveItemToIdeas, ItineraryItemCard rendering. 76 new tests in `itinerary-day-chapter-frame.test.mjs`. **1101 total tests, 0 failures.** Phase 8D is visible adoption — itinerary day columns now read as editorial chapter pages, not kanban board lanes. Phases 0, 1A–1C, 2A, 2B, 3–7, 8A, 8B, 8C all previously shipped.
 - Flights v1 — Duffel search-only LIVE: `DUFFEL_FLIGHTS_ENABLED=1`, `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1`, `DUFFEL_DEBUG=false`, `DUFFEL_BOOKING_ENABLED=0`. Each flight card shows "Search on Google Flights" (SEARCH_REDIRECT link-out, not booking). Duffel never creates orders. Ignav DISABLED.
-- Active build queue item: **Wife-Wow design system foundation — Phase 8C Itinerary ItemCard Editorial Polish SHIPPED.** Full ds-* token coverage now spans: shell, nav, explore cards, saved items, concierge, trip-planning surfaces (all card components, CandidatePanel, Activities section, compare bar, cockpit header, day selector), itinerary day columns, trip detail canvas shell, My Journeys landing dashboard, Trip Readiness Cockpit, home page (`/`), My Journeys (`/trips`), trip detail page (`/trips/[id]`), **and itinerary item cards which now feel like editorial chapter entries with Overline type identity, promoted headline, and hairline section rhythm.** See `docs/ai/UI_BASELINE.md` for full phase inventory.
+- Active build queue item: **Wife-Wow design system foundation — Phase 8D Itinerary DayColumn Editorial Chapter Frame SHIPPED.** Full ds-* token coverage now spans: shell, nav, explore cards, saved items, concierge, trip-planning surfaces (all card components, CandidatePanel, Activities section, compare bar, cockpit header, day selector), **itinerary day columns (now feel like chapter pages: promoted heading, hairline day-part rhythm, editorial empty-day invitation)**, trip detail canvas shell, My Journeys landing dashboard, Trip Readiness Cockpit, home page (`/`), My Journeys (`/trips`), trip detail page (`/trips/[id]`), and itinerary item cards. See `docs/ai/UI_BASELINE.md` for full phase inventory.
 - Current north-star reminder: Discover → Search → Save → Plan → Optimize → Watch. The app must be useful before a trip exists. Wife-wow goal applies. See `docs/product/NORTH_STAR.md`.
 
 ## Current architecture / runtime state
@@ -31,6 +31,8 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Recent meaningful PRs
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
+
+- 2026-05-17 — **Stage 3.5 Phase 8D — Itinerary DayColumn Editorial Chapter Frame.** `ItineraryDayColumn.tsx` transformed: data-testid contract (day-chapter-frame/header/number/title/date/item-count + day-part-section/label + empty-day-chapter); `h3` promoted `text-sm`→`text-base`; day-part sections refactored to `filledSections` with `border-t border-ds-pen-stroke/30` hairline between sections; time hint `italic`; empty day "Begin this chapter" chapter-prompt copy (replaced board-lane "Drag items here… to start building"); Overline tracking `0.08em`→`0.1em` in empty state. All behavior preserved (DnD, SortableContext, groupByDayPart, DAY_PART_META, onPlanDay, handleSuggestTimeline, handleApplyTimeline, onMoveItemToIdeas, ItineraryItemCard rendering). 76 new tests. 1101 total, 0 failures. No backend/SQL/provider/flights/Supabase changes.
 
 - 2026-05-17 — **Stage 3.5 Phase 8C — Itinerary ItemCard Chapter-Style Editorial Polish.** `ItineraryItemCard.tsx` transformed: root → `<article>`; `TYPE_LABELS` Overline map (Flight/Stay/Activity/Dining/Transit/Note); type icon + Overline label in header row + action cluster; title promoted to `text-[13px]`; type-specific sections gain hairline top separator; padding `p-2`→`p-3`. All behavior preserved (round-trip one-card, Google Flights link-out, DnD, compare, move-to-ideas, timeline, booking). 63 new tests. 1025 total, 0 failures. No backend/SQL/provider/flights/Supabase changes.
 
@@ -104,10 +106,10 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 - Latency Budget Pack
 - Backend-only Scaffold Pack / No Visible Behavior Change Pack / Test Tier Pack (cross-cutting)
 
-## Type-check / test baseline (confirmed 2026-05-16, Phase 8B)
+## Type-check / test baseline (confirmed 2026-05-17, Phase 8D)
 
 - **`npm run type-check` (frontend): CLEAN — 0 errors.** Requires `npm install` first (standard; `node_modules` is gitignored). After install: `tsc --noEmit` exits 0 with no diagnostics.
-- **`npm test` (frontend): 1025 tests, 0 failures.**
+- **`npm test` (frontend): 1101 tests, 0 failures.**
 - Any future session reporting "pre-existing TypeScript errors" is seeing an uninstalled `node_modules` environment — run `npm install` in `frontend/` before type-check.
 
 ## Known risks / unresolved issues
@@ -121,7 +123,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Stage 3.5 Phase 8C complete.** Itinerary items now feel like editorial chapter entries inside a travel volume: Overline type identity (FLIGHT/STAY/ACTIVITY/DINING/TRANSIT/NOTE), promoted headline, hairline section separators, more breathing room. Design Bible atelier transformation now covers `/` (Phase 8A), `/trips` (Phase 8A), `/trips/[id]` (Phase 8B), and itinerary item cards (Phase 8C). Next direction options: (A) motion polish (within reduced-motion token limits), (B) product feature work (deal alerts, Watchtower, trip-level compare), (C) ItineraryDayColumn further editorial framing. Roadmap guidance: `docs/product/ROADMAP.md`.
+**Stage 3.5 Phase 8D complete.** The full trip-story layer now reads as editorial chapters. `/` (Phase 8A), `/trips` (Phase 8A), `/trips/[id]` (Phase 8B), itinerary item cards (Phase 8C), and **itinerary day columns (Phase 8D)** all feel like pages in a personal travel volume. Day columns now open with a promoted `text-base` chapter heading and date, then sections (Morning / Afternoon / Evening / Unscheduled) separated by hairlines and labeled in Overline — not kanban lanes. Empty days invite with "Begin this chapter", not a blank drop zone. Next direction options: (A) motion polish (within reduced-motion token limits), (B) product feature work (deal alerts, Watchtower, trip-level compare), (C) mobile-specific layout refinements. Roadmap guidance: `docs/product/ROADMAP.md`.
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 
