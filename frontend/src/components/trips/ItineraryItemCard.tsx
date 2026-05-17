@@ -11,6 +11,7 @@ import {
   Train,
   FileText,
   GripVertical,
+  MoreHorizontal,
   X,
   Clock,
   DollarSign,
@@ -90,6 +91,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
   const [selectedPart, setSelectedPart] = useState<string>("unscheduled");
   const [timeLabelInput, setTimeLabelInput] = useState("");
   const [saving, setSaving] = useState(false);
+  const [mobileOverflowOpen, setMobileOverflowOpen] = useState(false);
 
   const {
     attributes,
@@ -163,10 +165,10 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
       </button>
 
       {/* Chapter-entry content area */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0" data-testid="itinerary-item-mobile-timeline-card">
 
         {/* Entry header: type identity (icon + overline label) + action cluster */}
-        <div className="flex items-center justify-between gap-1 mb-1.5">
+        <div className="flex items-center justify-between gap-1 mb-1.5" data-testid="itinerary-item-mobile-primary-row">
           <div className="flex items-center gap-1.5 min-w-0">
             {/* Type icon */}
             <div
@@ -187,78 +189,105 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
 
           {/* Action cluster */}
           <div className="flex items-center gap-0.5 flex-shrink-0">
-            {showMoveToIdeasAction && (
+            {/* Desktop action cluster — hover-reveal behavior, hidden on mobile */}
+            <div className="hidden lg:flex items-center gap-0.5">
+              {/* Icon buttons use -m-3 p-3: 20px visual + 12px*2 padding = 44px hit area */}
+              {onToggleCompare && (
+                <button
+                  onClick={() => onToggleCompare(item)}
+                  className={`group -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2`}
+                  aria-label={isComparing ? `Remove ${item.title} from compare` : `Add ${item.title} to compare`}
+                >
+                  <span className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
+                    isComparing
+                      ? "opacity-100 bg-ds-accent text-ds-text-inverse"
+                      : "opacity-0 group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary hover:text-ds-accent"
+                  }`}>
+                    <Scale className="w-3 h-3" />
+                  </span>
+                </button>
+              )}
+              {/* Timeline edit trigger */}
               <button
-                onClick={() => onMoveToIdeas(item.id)}
-                className="flex-shrink-0 min-h-[44px] inline-flex items-center justify-center rounded-md border border-ds-pen-stroke px-1.5 text-[10px] font-medium text-ds-text-secondary hover:border-ds-accent hover:text-ds-accent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-                aria-label={`Move ${item.title} back to Trip Ideas`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (timelineOpen) {
+                    setTimelineOpen(false);
+                  } else {
+                    handleOpenTimeline();
+                  }
+                }}
+                className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                aria-label="Set timeline"
+                title="Set timeline"
               >
-                Move to Ideas
-              </button>
-            )}
-            {/* Icon buttons use -m-3 p-3: 20px visual + 12px*2 padding = 44px hit area */}
-            {onToggleCompare && (
-              <button
-                onClick={() => onToggleCompare(item)}
-                className={`group -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2`}
-                aria-label={isComparing ? `Remove ${item.title} from compare` : `Add ${item.title} to compare`}
-              >
-                <span className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
-                  isComparing
-                    ? "opacity-100 bg-ds-accent text-ds-text-inverse"
-                    : "opacity-0 group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary hover:text-ds-accent"
-                }`}>
-                  <Scale className="w-3 h-3" />
+                <span
+                  className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
+                    timelineOpen
+                      ? "opacity-100 text-ds-accent"
+                      : hasSchedule
+                        ? "opacity-75 bg-ds-carbon text-ds-text-tertiary group-hover:text-ds-accent"
+                        : "opacity-100 md:opacity-0 md:group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary group-hover:text-ds-accent"
+                  }`}
+                  style={timelineOpen ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
+                >
+                  <Clock className="w-3 h-3" />
                 </span>
               </button>
-            )}
-            {/* Timeline edit trigger */}
+              <button
+                onClick={() => setBookingOpen(true)}
+                className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                aria-label={`Book ${item.title}`}
+              >
+                <span className="w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-ds-carbon group-hover:bg-ds-pen-stroke text-ds-text-tertiary group-hover:text-ds-text-secondary flex items-center justify-center transition-all">
+                  <Ticket className="w-3 h-3" />
+                </span>
+              </button>
+              <button
+                onClick={() => onRemove(item.id)}
+                className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                aria-label={`Remove ${item.title}`}
+              >
+                <span className="w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary group-hover:text-ds-warning flex items-center justify-center transition-all">
+                  <X className="w-3 h-3" />
+                </span>
+              </button>
+            </div>
+
+            {/* Mobile overflow toggle — quiet single tap for all secondary actions */}
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                if (timelineOpen) {
-                  setTimelineOpen(false);
-                } else {
-                  handleOpenTimeline();
-                }
+                setMobileOverflowOpen((v) => !v);
               }}
-              className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-              aria-label="Set timeline"
-              title="Set timeline"
+              className="lg:hidden flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              aria-label={`Actions for ${item.title}`}
+              data-testid="itinerary-item-mobile-overflow-toggle"
             >
-              <span
-                className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
-                  timelineOpen
-                    ? "opacity-100 text-ds-accent"
-                    : hasSchedule
-                      ? "opacity-75 bg-ds-carbon text-ds-text-tertiary group-hover:text-ds-accent"
-                      : "opacity-100 md:opacity-0 md:group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary group-hover:text-ds-accent"
-                }`}
-                style={timelineOpen ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
-              >
-                <Clock className="w-3 h-3" />
-              </span>
-            </button>
-            <button
-              onClick={() => setBookingOpen(true)}
-              className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-              aria-label={`Book ${item.title}`}
-            >
-              <span className="w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-ds-carbon group-hover:bg-ds-pen-stroke text-ds-text-tertiary group-hover:text-ds-text-secondary flex items-center justify-center transition-all">
-                <Ticket className="w-3 h-3" />
-              </span>
-            </button>
-            <button
-              onClick={() => onRemove(item.id)}
-              className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-              aria-label={`Remove ${item.title}`}
-            >
-              <span className="w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary group-hover:text-ds-warning flex items-center justify-center transition-all">
-                <X className="w-3 h-3" />
+              <span className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
+                mobileOverflowOpen
+                  ? "bg-ds-accent text-ds-text-inverse"
+                  : "bg-ds-carbon text-ds-text-tertiary"
+              }`}>
+                <MoreHorizontal className="w-3 h-3" />
               </span>
             </button>
           </div>
         </div>
+
+        {/* Concierge idea return action — standalone always-visible (only when applicable) */}
+        {showMoveToIdeasAction && (
+          <div className="mb-1.5">
+            <button
+              onClick={() => onMoveToIdeas(item.id)}
+              className="flex-shrink-0 min-h-[44px] inline-flex items-center justify-center rounded-md border border-ds-pen-stroke px-1.5 text-[10px] font-medium text-ds-text-secondary hover:border-ds-accent hover:text-ds-accent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              aria-label={`Move ${item.title} back to Trip Ideas`}
+            >
+              Move to Ideas
+            </button>
+          </div>
+        )}
 
         {/* Entry headline — chapter-entry title */}
         <p
@@ -653,6 +682,73 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                 style={{ backgroundColor: "var(--ds-accent-subtle)" }}
               >
                 {saving ? "…" : "Save"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Mobile overflow actions tray — all secondary actions accessible on phone */}
+        {mobileOverflowOpen && (
+          <div
+            className="lg:hidden mt-2 pt-2 border-t border-ds-pen-stroke/40"
+            data-testid="itinerary-item-mobile-overflow-actions"
+          >
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {onToggleCompare && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onToggleCompare(item);
+                    setMobileOverflowOpen(false);
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-medium transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 ${
+                    isComparing
+                      ? "border-ds-accent/50 text-ds-accent"
+                      : "border-ds-pen-stroke text-ds-text-secondary hover:border-ds-accent hover:text-ds-accent"
+                  }`}
+                  style={isComparing ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
+                  aria-label={isComparing ? `Remove ${item.title} from compare` : `Add ${item.title} to compare`}
+                >
+                  <Scale className="w-3 h-3" />
+                  {isComparing ? "In Compare" : "Compare"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!timelineOpen) handleOpenTimeline();
+                  setMobileOverflowOpen(false);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ds-pen-stroke text-[10px] font-medium text-ds-text-secondary hover:border-ds-accent hover:text-ds-accent transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                aria-label={`Schedule ${item.title}`}
+              >
+                <Clock className="w-3 h-3" />
+                Timeline
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setBookingOpen(true);
+                  setMobileOverflowOpen(false);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ds-pen-stroke text-[10px] font-medium text-ds-text-secondary hover:border-ds-pen-stroke hover:text-ds-text transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                aria-label={`Book ${item.title}`}
+              >
+                <Ticket className="w-3 h-3" />
+                Book
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onRemove(item.id);
+                  setMobileOverflowOpen(false);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ds-pen-stroke text-[10px] font-medium text-ds-text-secondary hover:border-ds-warning hover:text-ds-warning transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                aria-label={`Remove ${item.title}`}
+              >
+                <X className="w-3 h-3" />
+                Remove
               </button>
             </div>
           </div>
