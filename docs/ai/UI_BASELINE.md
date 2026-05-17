@@ -1,10 +1,51 @@
 # UI Baseline
 
-Last updated: 2026-05-16 (Phase 8B)
+Last updated: 2026-05-17 (Phase 8C)
 
 ## Purpose
 
 Tracks the state of the design system and UI primitive layer so future prompts and PRs can reason accurately about what exists and what has been adopted.
+
+---
+
+## Stage 3.5 Phase 8C — Itinerary ItemCard Chapter-Style Editorial Polish — SHIPPED (2026-05-17)
+
+**Stage 3.5 · Wife-Wow design system — `ItineraryItemCard.tsx` · Trip-story chapter-entry card**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/components/trips/ItineraryItemCard.tsx` | **Editorial transformation.** Root changed from `<div>` to `<article data-testid="itinerary-item-card">` for semantic chapter-entry identity. `TYPE_LABELS` map added: flight→Flight, hotel→Stay, activity→Activity, meal→Dining, transit→Transit, note→Note. New **entry header row**: type icon (existing, moved inside content) + Overline type label (`text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary`, `data-testid="item-type-overline"`) on left; action cluster (move-to-ideas, compare, timeline, booking, remove) on right. Title promoted from `text-xs font-semibold` to `text-[13px] font-semibold` with `data-testid="item-title"`. Flight/hotel/activity/meal type-specific sections gain `pt-1 border-t border-ds-pen-stroke/40` hairline top separator for editorial rhythm. Padding increased `p-2`→`p-3`. All behavior preserved exactly: round-trip one-card rendering (`itinerary-roundtrip-flight` testid, both legs via `renderLeg`), Google Flights link-out (`itinerary-google-flights-cta`, `-my-3.5 py-3.5` touch target), DnD sortable, compare toggle, move-to-ideas conditional, timeline editor, booking checklist. No `rgba()`, no raw hex, no legacy palette classes. `var(--ds-accent-subtle)` inline style for icon/button backgrounds. |
+| `frontend/tests/itinerary-chapter-editorial.test.mjs` | **NEW.** 63 Phase 8C contract tests: TYPE_LABELS map, item-type-overline testid, Overline typography role (tracking/uppercase/10px/semibold), title prominence, article semantic element, itinerary-item-card testid, no raw hex/rgba/legacy palette, ds-token surface classes, semantic button/link actions, no card-level onClick navigation, no fake/mock/sample data, no backend imports, all preserved actions (remove/compare/move-to-ideas/booking/timeline/DnD), round-trip one-card rendering, Google Flights link-out contract (URL fields, testid, aria-label, touch target, rel), mobile-safe layout (flex-shrink-0, min-h-[44px], -m-3 p-3, -m-3.5 p-3.5), day column behavior preservation. |
+| `frontend/package.json` | Added `itinerary-chapter-editorial.test.mjs` to test script. |
+
+### Test results
+- **1025 tests, 0 failures** (was 962; +63 new Phase 8C chapter editorial contract tests)
+- All pre-existing tests continue to pass (including all itinerary-card-finalized-display, trip-flight-cards-canonical, hotel-itinerary-display, itinerary-timeline, trip-planning-card-tokens, trip-canvas-day-system tests)
+
+### Design contract alignment
+
+- **Chapter entry, not generic card:** Each itinerary item opens with an Overline type identity line (FLIGHT/STAY/ACTIVITY/DINING/TRANSIT/NOTE) + the type icon. The item title is the headline. Type-specific details (route legs, check-in dates, rating, cuisine) follow with a hairline separator. The card reads top-down like a chapter entry, not a tile with an icon bolted on.
+- **Editorial type labels:** `TYPE_LABELS` maps backend `ItemType` values to editorially meaningful labels. Hotel → "Stay" (not "Hotel"), meal → "Dining" (not "Meal"). This aligns with the travel-chapter register.
+- **Promoted title:** `text-[13px] font-semibold` vs old `text-xs font-semibold` — one step up in the typography ladder, enough to feel like a headline without competing with the day-column chapter heading.
+- **Hairline rhythm:** Type-specific sections (flight route, hotel stay span, activity rating, dining details) gain `pt-1 border-t border-ds-pen-stroke/40` — a subtle visual separator that gives each block its own editorial space.
+- **More breathing:** `p-3` (vs `p-2`) gives the card slightly more interior breathing, matching the editorial register of day-column chapter headers above.
+- **Semantic element:** `<article>` is the correct HTML semantic for a self-contained chapter entry in a trip's itinerary.
+- **Overline type role exact:** `text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary` — matches Design Bible Overline type role exactly (§4.4).
+- **Action cluster unchanged in behavior:** All actions (remove, compare, move-to-ideas, timeline, booking, drag) are unchanged in handler wiring. They now live in the overline row's right side for cleaner layout.
+
+### Invariant confirmations
+- No backend files; no API/search/provider/Tavily/cache/Supabase/env changes.
+- No Google Flights URL generation changes; no Duffel provider changes.
+- No new fonts, route rewrites, or data model changes.
+- No new booking behavior; no fake data.
+- Round-trip one-card rendering: preserved (`itinerary-roundtrip-flight` testid, `renderLeg(outboundLeg)` + `renderLeg(returnLeg)` in single card).
+- Google Flights link-out: preserved (`itinerary-google-flights-cta` testid, `aria-label="Search on Google Flights"`, canonical URL fields, `-my-3.5 py-3.5` touch target).
+- All TripBuilder logic, add-to-day behavior, ItineraryDayColumn, and AI Concierge panel unchanged.
+
+### Accessibility / motion note
+- No new motion, gradients, glass blur, or animations introduced in Phase 8C. The dragging state uses `opacity-60 scale-95 backdrop-blur-md` inherited from Phase 3 (pre-existing). No reduced-motion accommodation required for new Phase 8C changes. All interactive elements use `focus-visible:ring-2 focus-visible:ring-ds-accent` inherited patterns; no new interactive patterns added.
 
 ---
 

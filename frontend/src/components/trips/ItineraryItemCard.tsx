@@ -35,6 +35,18 @@ const DAY_PARTS = [
   { value: "unscheduled", label: "Unscheduled", activeClass: "border-ds-pen-stroke text-ds-text-tertiary" },
 ] as const;
 
+// ─── Editorial type labels (Overline role) ────────────────────────────────────
+// Maps each item type to its chapter-entry identity label.
+
+const TYPE_LABELS: Record<ItemType, string> = {
+  flight:   "Flight",
+  hotel:    "Stay",
+  activity: "Activity",
+  meal:     "Dining",
+  transit:  "Transit",
+  note:     "Note",
+};
+
 // ─── Type icon config ─────────────────────────────────────────────────────────
 
 interface ItineraryItemCardProps {
@@ -130,10 +142,11 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
 
   return (
     <>
-    <div
+    <article
+      data-testid="itinerary-item-card"
       ref={setNodeRef}
       style={style}
-      className={`group relative flex items-start gap-2 p-2 rounded-lg border transition-all duration-200 ${
+      className={`group relative flex items-start gap-2 p-3 rounded-lg border transition-all duration-200 ${
         isDragging
           ? "opacity-60 scale-95 border-ds-accent/70 bg-ds-onyx/85 backdrop-blur-md shadow-[var(--ds-elevation-4)]"
           : "bg-ds-onyx border-ds-pen-stroke shadow-[var(--ds-elevation-1)] hover:border-ds-carbon hover:shadow-[var(--ds-elevation-2)]"
@@ -149,22 +162,31 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
         <GripVertical className="w-4 h-4" />
       </button>
 
-      {/* Type icon */}
-      <div
-        className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-ds-accent"
-        style={{ backgroundColor: "var(--ds-accent-subtle)" }}
-        aria-hidden="true"
-      >
-        {config.icon}
-      </div>
-
-      {/* Content */}
+      {/* Chapter-entry content area */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-1">
-          <span className="text-xs font-semibold text-ds-text leading-tight line-clamp-1" title={item.title}>
-            {item.title}
-          </span>
-          <div className="flex items-center gap-1 flex-shrink-0">
+
+        {/* Entry header: type identity (icon + overline label) + action cluster */}
+        <div className="flex items-center justify-between gap-1 mb-1.5">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {/* Type icon */}
+            <div
+              className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-ds-accent"
+              style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+              aria-hidden="true"
+            >
+              {config.icon}
+            </div>
+            {/* Overline type label — chapter-entry identity */}
+            <span
+              className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary flex-shrink-0"
+              data-testid="item-type-overline"
+            >
+              {TYPE_LABELS[item.itemType]}
+            </span>
+          </div>
+
+          {/* Action cluster */}
+          <div className="flex items-center gap-0.5 flex-shrink-0">
             {showMoveToIdeasAction && (
               <button
                 onClick={() => onMoveToIdeas(item.id)}
@@ -238,8 +260,17 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           </div>
         </div>
 
+        {/* Entry headline — chapter-entry title */}
+        <p
+          className="text-[13px] font-semibold text-ds-text leading-snug line-clamp-2 mb-0.5"
+          title={item.title}
+          data-testid="item-title"
+        >
+          {item.title}
+        </p>
+
         {item.description && (
-          <p className="text-[11px] text-ds-text-tertiary mt-0.5 line-clamp-1">
+          <p className="text-[11px] text-ds-text-tertiary mt-0.5 line-clamp-2 mb-1">
             {item.description}
           </p>
         )}
@@ -304,7 +335,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
 
           if (isRoundTrip && (outboundLeg || returnLeg)) {
             return (
-              <div className="mt-0.5 space-y-1" data-testid="itinerary-roundtrip-flight">
+              <div className="mt-1 space-y-1.5 pt-1 border-t border-ds-pen-stroke/40" data-testid="itinerary-roundtrip-flight">
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold text-ds-accent border border-ds-pen-stroke inline-block">
                   Round-trip
                 </span>
@@ -340,7 +371,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           const leg         = d.leg as string | undefined;
           if (!origin && !destination) return null;
           return (
-            <div className="mt-0.5 text-[11px] text-ds-text-tertiary space-y-0.5">
+            <div className="mt-1 text-[11px] text-ds-text-tertiary space-y-0.5 pt-1 border-t border-ds-pen-stroke/40">
               {(origin || destination) && (
                 <span className="flex items-center gap-1 font-medium text-ds-text-secondary min-w-0">
                   <Plane className="w-3 h-3 text-ds-accent flex-shrink-0" />
@@ -364,7 +395,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-0.5 text-[11px] text-ds-text-secondary hover:text-ds-accent transition-colors"
+                  className="inline-flex items-center gap-0.5 text-[11px] text-ds-text-secondary hover:text-ds-accent transition-colors -my-3.5 py-3.5"
                   aria-label="Search on Google Flights"
                   data-testid="itinerary-google-flights-cta"
                 >
@@ -398,7 +429,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           const hasAny = !!(checkIn || checkOut || rating || stars || areaLabel || proximityLabel || richTags.length);
           if (!hasAny) return null;
           return (
-            <div className="mt-0.5 space-y-0.5">
+            <div className="mt-1 space-y-0.5 pt-1 border-t border-ds-pen-stroke/40">
               <div className="flex items-center gap-1 text-[11px] text-ds-accent font-medium min-w-0 flex-wrap">
                 <Hotel className="w-3 h-3 flex-shrink-0" />
                 {stars != null && (
@@ -447,7 +478,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           const mapsLink = mapsUri ?? (placeId ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(placeId)}` : null);
           if (!rating && !category && tags.length === 0) return null;
           return (
-            <div className="mt-0.5 space-y-0.5">
+            <div className="mt-1 space-y-0.5 pt-1 border-t border-ds-pen-stroke/40">
               <div className="flex items-center gap-2 flex-wrap">
                 {rating != null && (
                   <span className="flex items-center gap-0.5 text-[11px] text-ds-accent font-medium">
@@ -497,7 +528,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           const priceLevelStr = priceLevel != null ? "$".repeat(Math.min(4, Math.max(1, Math.round(priceLevel)))) : null;
           if (!rating && !cuisine && !priceLevelStr && tags.length === 0) return null;
           return (
-            <div className="mt-0.5 space-y-0.5">
+            <div className="mt-1 space-y-0.5 pt-1 border-t border-ds-pen-stroke/40">
               <div className="flex items-center gap-2 flex-wrap">
                 {cuisine && <span className="text-[11px] text-ds-text-secondary">{cuisine}</span>}
                 {rating != null && (
@@ -524,7 +555,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           );
         })()}
 
-        <div className="flex items-center gap-2 mt-1 flex-wrap">
+        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
           {item.itemType !== "flight" && (item.startTime || item.endTime) && (
             <span className="flex items-center gap-1 text-xs text-ds-text-tertiary">
               <Clock className="w-3 h-3" />
@@ -627,7 +658,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           </div>
         )}
       </div>
-    </div>
+    </article>
 
       {bookingOpen && (
         <BookingChecklistModal item={item} onClose={() => setBookingOpen(false)} />
