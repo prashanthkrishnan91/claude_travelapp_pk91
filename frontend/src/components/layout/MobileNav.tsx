@@ -21,9 +21,10 @@ import clsx from "clsx";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
-const links = [
-  { label: "Dashboard",    href: "/",            icon: LayoutDashboard },
-  { label: "Explore",      href: "/explore",     icon: Compass },
+// Full drawer navigation (all destinations)
+const drawerLinks = [
+  { label: "Home",         href: "/",            icon: LayoutDashboard },
+  { label: "Discover",     href: "/explore",     icon: Compass },
   { label: "Concierge",    href: "/concierge",   icon: Sparkles },
   { label: "Saved",        href: "/saved",       icon: Bookmark },
   { label: "My Trips",     href: "/trips",       icon: Map },
@@ -32,12 +33,12 @@ const links = [
   { label: "Settings",     href: "/settings",    icon: Settings },
 ];
 
+// Bottom 4-tab quiet boutique nav — no giant center CTA
 const tabLinks = [
-  { label: "Dashboard",    href: "/",         icon: LayoutDashboard },
-  { label: "Explore",      href: "/explore",  icon: Compass },
-  { label: "Saved",        href: "/saved",    icon: Bookmark },
-  { label: "New Trip",     href: "/trips/new", icon: PlusCircle },
-  { label: "My Trips",     href: "/trips",    icon: Map },
+  { label: "Home",     href: "/",        icon: LayoutDashboard, testid: "mobile-nav-tab-home" },
+  { label: "Discover", href: "/explore", icon: Compass,          testid: "mobile-nav-tab-discover" },
+  { label: "Saved",    href: "/saved",   icon: Bookmark,         testid: "mobile-nav-tab-saved" },
+  { label: "My Trips", href: "/trips",   icon: Map,              testid: "mobile-nav-tab-my-trips" },
 ];
 
 function getUserDisplay(user: User): { name: string; initial: string } {
@@ -77,24 +78,31 @@ export function MobileNav() {
 
   return (
     <>
-      {/* ── Top bar ─────────────────────────────────────────── */}
-      <header className="lg:hidden sticky top-0 z-40 flex items-center justify-between px-4 py-3 bg-ds-onyx border-b border-ds-pen-stroke">
+      {/* ── Top bar — boutique atelier header ─────────────────── */}
+      <header
+        className="lg:hidden sticky top-0 z-40 flex items-center justify-between px-4 py-2.5 mobile-top-bar"
+        data-testid="mobile-top-bar"
+      >
         <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-carbon text-ds-accent">
-            <Plane className="w-4 h-4" />
+          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-ds-carbon text-ds-accent">
+            <Plane className="w-3.5 h-3.5" aria-hidden="true" />
           </div>
-          <span className="text-sm font-semibold text-ds-text">Travel Concierge</span>
+          <span className="text-sm font-semibold text-ds-text tracking-tight">
+            Travel Concierge
+          </span>
         </div>
         <button
+          type="button"
           onClick={() => setOpen(!open)}
-          className="p-2 rounded-lg text-ds-text-secondary hover:bg-white/5 transition-colors focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          className="p-2 rounded-lg text-ds-text-secondary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           aria-label="Toggle menu"
+          aria-expanded={open}
         >
-          {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          {open ? <X className="w-5 h-5" aria-hidden="true" /> : <Menu className="w-5 h-5" aria-hidden="true" />}
         </button>
       </header>
 
-      {/* ── Drawer overlay ──────────────────────────────────── */}
+      {/* ── Drawer overlay ──────────────────────────────────────── */}
       {open && (
         <div
           className="lg:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-sm"
@@ -102,35 +110,36 @@ export function MobileNav() {
         />
       )}
 
-      {/* ── Slide-out drawer ────────────────────────────────── */}
+      {/* ── Slide-out drawer ────────────────────────────────────── */}
       <div
         className={clsx(
           "lg:hidden fixed inset-y-0 left-0 z-40 w-64 bg-ds-onyx border-r border-ds-pen-stroke flex flex-col",
           "transition-transform duration-200 ease-out",
           open ? "translate-x-0" : "-translate-x-full"
         )}
+        data-testid="mobile-drawer"
       >
         <div className="flex items-center gap-2 px-5 py-4 border-b border-ds-pen-stroke">
           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-carbon text-ds-accent">
-            <Plane className="w-4 h-4" />
+            <Plane className="w-4 h-4" aria-hidden="true" />
           </div>
           <span className="text-sm font-semibold text-ds-text">Travel Concierge</span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {links.map(({ label, href, icon: Icon }) => (
+          {drawerLinks.map(({ label, href, icon: Icon }) => (
             <Link
               key={href}
               href={href}
               onClick={() => setOpen(false)}
               className={clsx("nav-item", isActive(href) && "nav-item-active")}
             >
-              <Icon className="w-4 h-4 shrink-0" />
+              <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
               {label}
             </Link>
           ))}
         </nav>
 
-        {/* User identity + sign out at bottom of drawer */}
+        {/* User identity + sign-out at bottom of drawer */}
         <div className="px-4 py-4 border-t border-ds-pen-stroke space-y-1">
           {display && (
             <div className="flex items-center gap-3 px-2 py-2">
@@ -141,44 +150,42 @@ export function MobileNav() {
             </div>
           )}
           <button
+            type="button"
             onClick={handleSignOut}
             className="nav-item w-full text-ds-text-tertiary hover:text-ds-warning"
             aria-label="Sign out"
           >
-            <LogOut className="w-4 h-4 shrink-0" />
+            <LogOut className="w-4 h-4 shrink-0" aria-hidden="true" />
             Sign out
           </button>
         </div>
       </div>
 
-      {/* ── Bottom tab bar ───────────────────────────────────── */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-ds-onyx border-t border-ds-pen-stroke flex items-stretch pb-safe">
-        {tabLinks.map(({ label, href, icon: Icon }) => {
+      {/* ── Bottom tab bar — quiet boutique 4-tab nav ─────────── */}
+      <nav
+        className="lg:hidden fixed bottom-0 inset-x-0 z-40 flex items-stretch mobile-bottom-nav"
+        aria-label="Main navigation"
+        data-testid="mobile-bottom-nav"
+      >
+        {tabLinks.map(({ label, href, icon: Icon, testid }) => {
           const active = isActive(href);
-          const isNew = href === "/trips/new";
           return (
             <Link
               key={href}
               href={href}
-              className={clsx(
-                "flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 min-w-0 transition-colors",
-                active ? "text-ds-accent" : "text-ds-text-tertiary hover:text-ds-text-secondary"
-              )}
+              className="mobile-tab-item"
               aria-label={label}
+              aria-current={active ? "page" : undefined}
+              data-testid={testid}
             >
-              <span
-                className={clsx(
-                  "flex items-center justify-center rounded-lg transition-all",
-                  isNew
-                    ? "w-10 h-10 bg-ds-accent text-ds-text-inverse -mt-4 shadow-[var(--ds-elevation-1)]"
-                    : "w-7 h-7",
-                  isNew && active && "opacity-90"
-                )}
-              >
-                <Icon className="w-5 h-5" />
+              {active && (
+                <span className="mobile-tab-active-dot" aria-hidden="true" />
+              )}
+              <span className={clsx("mobile-tab-icon", active && "mobile-tab-icon-active")}>
+                <Icon className="w-[1.1rem] h-[1.1rem]" aria-hidden="true" />
               </span>
-              <span className={clsx("text-[10px] font-medium leading-none", isNew && "mt-0.5")}>
-                {label === "New Trip" ? "New" : label === "Travel Cards" ? "Cards" : label}
+              <span className={clsx("mobile-tab-label", active && "mobile-tab-label-active")}>
+                {label}
               </span>
             </Link>
           );
