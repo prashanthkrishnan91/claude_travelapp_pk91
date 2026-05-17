@@ -34,6 +34,17 @@ const COVER_PRIMARY = `${COVER_BTN_BASE} bg-ds-accent text-ds-text-inverse hover
 const COVER_GHOST = `${COVER_BTN_BASE} border border-ds-pen-stroke text-ds-text-secondary hover:bg-ds-carbon`;
 const COVER_DANGER = `${COVER_BTN_BASE} border border-ds-pen-stroke text-ds-warning hover:bg-ds-carbon`;
 
+// ── Mobile workspace IA ───────────────────────────────────────────────────────
+
+type MobileWorkspace = "brief" | "build" | "itinerary" | "ideas";
+
+const WORKSPACE_TABS: { id: MobileWorkspace; label: string; testId: string }[] = [
+  { id: "brief",     label: "Brief",     testId: "trip-mobile-tab-brief"     },
+  { id: "build",     label: "Build",     testId: "trip-mobile-tab-build"     },
+  { id: "itinerary", label: "Itinerary", testId: "trip-mobile-tab-itinerary" },
+  { id: "ideas",     label: "Ideas",     testId: "trip-mobile-tab-ideas"     },
+];
+
 export default function TripDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -53,6 +64,7 @@ export default function TripDetailPage() {
   const [conciergeOpen, setConciergeOpen] = useState(false);
   const [tripBuilderKey, setTripBuilderKey] = useState(0);
   const [tripIdeasKey,  setTripIdeasKey]  = useState(0);
+  const [activeMobileWorkspace, setActiveMobileWorkspace] = useState<MobileWorkspace>("brief");
 
   useEffect(() => {
     if (!id) return;
@@ -248,6 +260,48 @@ export default function TripDetailPage() {
         </div>
       )}
 
+      {/* ── Mobile workspace shell ─────────────────────────────────────────── */}
+      <div data-testid="trip-mobile-workspace">
+
+        {/* Mobile-only workspace switcher */}
+        <nav
+          data-testid="trip-mobile-workspace-switcher"
+          aria-label="Trip workspace"
+          className="lg:hidden flex items-stretch mb-4 rounded-xl border border-ds-pen-stroke bg-ds-onyx overflow-hidden"
+        >
+          {WORKSPACE_TABS.map((tab) => {
+            const isActive = activeMobileWorkspace === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                data-testid={tab.testId}
+                aria-pressed={isActive}
+                onClick={() => setActiveMobileWorkspace(tab.id)}
+                className={`flex-1 flex flex-col items-center justify-center min-h-[44px] py-2.5 gap-0.5 relative text-[10px] font-semibold uppercase tracking-[0.1em] transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 ${
+                  isActive
+                    ? "text-ds-accent"
+                    : "text-ds-text-tertiary hover:text-ds-text-secondary"
+                }`}
+              >
+                {tab.label}
+                {isActive && (
+                  <span
+                    className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-ds-accent"
+                    aria-hidden="true"
+                  />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Brief panel — trip chapter cover + readiness (mobile: brief only; desktop: always) */}
+        <div
+          data-testid="trip-mobile-panel-brief"
+          className={activeMobileWorkspace !== "brief" ? "hidden lg:block" : ""}
+        >
+
       {/* ── Trip Chapter Cover ─────────────────────────────────────────────── */}
       <section
         data-testid="trip-chapter-cover"
@@ -374,28 +428,36 @@ export default function TripDetailPage() {
         />
       )}
 
-      {/* ── Planning Canvas (TripBuilder) ──────────────────────────────────── */}
-      <TripBuilder
-        key={tripBuilderKey}
-        tripId={id}
-        destination={trip?.destination ?? ""}
-        startDate={trip?.startDate}
-        endDate={trip?.endDate}
-        initialDays={itineraryDays}
-        initialResults={[]}
-        ideasRefreshKey={tripIdeasKey}
-        onIdeaAssigned={() => {
-          const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
-            ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;
-          const endDate = (trip as (Trip & { end_date?: string }) | null)?.endDate
-            ?? (trip as (Trip & { end_date?: string }) | null)?.end_date;
-          ensureTripDays(id, startDate, endDate).then((days) => {
-            setItineraryDays(days);
-            setTripBuilderKey((k) => k + 1);
-            showToast("Added to itinerary!");
-          });
-        }}
-      />
+        </div>{/* end trip-mobile-panel-brief */}
+
+        {/* Build / Itinerary / Ideas workspaces — hidden on mobile when brief is active */}
+        <div className={activeMobileWorkspace === "brief" ? "hidden lg:block" : ""}>
+          {/* ── Planning Canvas (TripBuilder) ──────────────────────────────── */}
+          <TripBuilder
+            key={tripBuilderKey}
+            tripId={id}
+            destination={trip?.destination ?? ""}
+            startDate={trip?.startDate}
+            endDate={trip?.endDate}
+            initialDays={itineraryDays}
+            initialResults={[]}
+            ideasRefreshKey={tripIdeasKey}
+            mobileWorkspace={activeMobileWorkspace === "brief" ? null : activeMobileWorkspace}
+            onIdeaAssigned={() => {
+              const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
+                ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;
+              const endDate = (trip as (Trip & { end_date?: string }) | null)?.endDate
+                ?? (trip as (Trip & { end_date?: string }) | null)?.end_date;
+              ensureTripDays(id, startDate, endDate).then((days) => {
+                setItineraryDays(days);
+                setTripBuilderKey((k) => k + 1);
+                showToast("Added to itinerary!");
+              });
+            }}
+          />
+        </div>
+
+      </div>{/* end trip-mobile-workspace */}
 
       {/* ── AI Concierge Panel ─────────────────────────────────────────────── */}
       <AIConciergePanel
