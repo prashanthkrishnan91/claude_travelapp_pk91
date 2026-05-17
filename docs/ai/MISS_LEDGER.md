@@ -21,6 +21,40 @@ Follow-up needed:
 
 ---
 
+### 2026-05-17 — PR #420: test file created but not wired into npm test script
+
+Repo: claude_travelapp_pk91
+Area: Test wiring / package.json test script
+Severity: Level 1 (pre-merge catch; no production impact)
+Miss: `itinerary-day-mobile-redesign-8l.test.mjs` was created and committed in the 8L PR but not added to the explicit file list in `frontend/package.json`. The `npm test` command uses an explicit file list (not a glob), so new test files must be manually appended. The PR body claimed "1715 tests, 0 failures" — the 63 new tests were never running; the real count after wiring was 1778.
+Impact: PR body overstated test coverage; new 8L contract tests were not executed by CI or local `npm test`. Caught pre-merge via a follow-up task.
+What caught it: External review noting the test file was not in package.json.
+Root cause: `frontend/package.json` uses an explicit file list (not a glob pattern like `tests/**/*.test.mjs`). Each new test file requires a manual addition. This was overlooked during initial implementation.
+What should catch it next time: Whenever creating a new test file in `frontend/tests/`, immediately add it to the `npm test` script in `package.json` in the same commit. Run `npm test` locally and verify the new test file's describe block appears in output before pushing.
+One-off or repeated: One-off so far; the explicit-list pattern is a latent risk every time a test file is added.
+Promotion target: `docs/ai/KNOWN_FAILURE_MODES.md` — add "new test file not wired into package.json npm test script" as a known failure mode.
+Action taken: Added `tests/itinerary-day-mobile-redesign-8l.test.mjs` to `package.json` npm test script; test count corrected to 1778 in PR body and HANDOFF.md.
+Follow-up needed: None — fixed before merge.
+
+---
+
+### 2026-05-17 — PR #420: PR body used `###` headings → CI hard-fail on required `##` section check
+
+Repo: claude_travelapp_pk91
+Area: Workflow enforcement / PR readiness gate
+Severity: Level 2 gate failure (required follow-up commit + trigger commit)
+Miss: PR #420 body used `### Summary`, `### Changes`, etc. (3-hash) instead of `## Summary`, `## Severity`, etc. (2-hash). The readiness checker does substring matching: `"## summary"` is NOT a substring of `"### summary"` because the third `#` replaces the space. All 6 required anchors (`## Summary`, `## Severity`, `## Validation`, `SQL / env / providers / UI`, `AI usage note`, `AI PR readiness`) were absent. Additionally, `docs/ai/USAGE_LEDGER.md` was not updated, causing a second hard failure (Level 1+ PR must commit a ledger row). Local readiness check passed because body was None (no `--github-event-path`), so `check_sections()` was skipped entirely.
+Impact: CI red on first two pushes; required a USAGE_LEDGER commit, a PR body update, and an empty trigger commit.
+What caught it: GitHub webhook CI failure notification.
+Root cause: Third repeated occurrence of PR body composed from memory rather than from `.github/pull_request_template.md`. MISS_LEDGER had two prior entries for the same root cause; the promotion to `KNOWN_FAILURE_MODES.md` did not prevent recurrence.
+What should catch it next time: (1) Always start PR body from `.github/pull_request_template.md` verbatim. (2) Run readiness check with an actual body file: `python3 scripts/workflow/ai_pr_readiness_check.py --pr-body-file /tmp/body.txt --base-ref origin/main`. (3) Commit USAGE_LEDGER row in the same initial commit as code changes.
+One-off or repeated: **Repeated** (third occurrence). Root cause identical to 2026-05-16 PR #394 and PR #397 entries.
+Promotion target: `docs/ai/KNOWN_FAILURE_MODES.md` — strengthen existing entry; note that `### headings` silently fail the `##` substring check.
+Action taken: Added USAGE_LEDGER row; updated PR body with all required `##`-level sections; pushed trigger commit; CI passed.
+Follow-up needed: None — fixed before merge.
+
+---
+
 ### 2026-05-16 — PR #397: PR body composed from scratch → same CI hard-fail as PR #394
 
 Repo: claude_travelapp_pk91
