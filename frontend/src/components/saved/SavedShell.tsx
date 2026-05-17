@@ -37,6 +37,14 @@ const VERTICAL_CONFIG = [
 
 type VerticalCfg = (typeof VERTICAL_CONFIG)[number];
 
+// Overline type labels for scrapbook idea identity (§8C TYPE_LABELS pattern)
+const TYPE_OVERLINES: Record<SavedItemVertical, string> = {
+  restaurant: "Restaurant",
+  attraction: "Attraction",
+  hotel: "Hotel",
+  flight: "Flight",
+};
+
 // ── Snapshot / context field helpers ─────────────────────────────────────────
 
 function snapStr(item: SavedItem, key: string): string | null {
@@ -158,53 +166,63 @@ function SavedItemCard({
   return (
     <Card tone="paper" as="article" className="card-lift p-4" data-testid="saved-item-card">
       <Card.Identity>
-        {/* Vertical icon — uniform warm accent treatment (§21 contract) */}
+        {/* Vertical icon — uniform warm accent treatment */}
         <div
           aria-hidden="true"
-          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
           style={{ backgroundColor: "var(--ds-accent-subtle)" }}
         >
           <Icon className="w-5 h-5 text-ds-accent" />
         </div>
 
         <div className="flex-1 min-w-0">
-          {/* Name + action row */}
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-ds-text-inverse leading-tight truncate">
-                {name}
-              </h3>
-              {subtitle && (
-                <p className="text-xs text-ds-slate mt-0.5 truncate">{subtitle}</p>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
+          {/* Type overline + action cluster */}
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <p
+              className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-accent-muted"
+              data-testid="saved-item-type-overline"
+            >
+              {TYPE_OVERLINES[item.vertical]}
+            </p>
+            <div className="flex items-center gap-0.5 shrink-0">
               {googleMapsUri && (
                 <a
                   href={googleMapsUri}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-1.5 rounded-lg bg-ds-bone hover:bg-ds-linen text-ds-slate transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg bg-ds-bone hover:bg-ds-linen text-ds-slate transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   aria-label={`View ${name} on Google Maps`}
                 >
-                  <ExternalLink className="w-3.5 h-3.5" />
+                  <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
                 </a>
               )}
               <button
+                type="button"
                 onClick={handleRemove}
                 disabled={removing}
                 aria-label={`Remove ${name} from saved`}
-                className="p-1.5 rounded-lg bg-ds-bone hover:bg-ds-hairline text-ds-slate hover:text-ds-warning transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg bg-ds-bone hover:bg-ds-hairline text-ds-slate hover:text-ds-warning transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                 data-testid="remove-saved-btn"
               >
                 {removing ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                 ) : (
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                 )}
               </button>
             </div>
           </div>
+
+          {/* Name + subtitle */}
+          <h3
+            className="text-sm font-semibold text-ds-text-inverse leading-tight truncate"
+            data-testid="saved-item-name"
+          >
+            {name}
+          </h3>
+          {subtitle && (
+            <p className="text-xs text-ds-slate mt-0.5 truncate">{subtitle}</p>
+          )}
 
           {/* Rating + price + tags */}
           {(rating != null || priceStr || tagList.length > 0) && (
@@ -214,7 +232,7 @@ function SavedItemCard({
                   className="flex items-center gap-0.5 text-xs text-ds-text-inverse font-medium"
                   data-testid="saved-card-rating"
                 >
-                  <Star className="w-3 h-3 text-ds-accent fill-current" />
+                  <Star className="w-3 h-3 text-ds-accent fill-current" aria-hidden="true" />
                   {rating.toFixed(1)}
                 </span>
               )}
@@ -244,13 +262,13 @@ function SavedItemCard({
             >
               {(checkIn || checkOut) && (
                 <span className="flex items-center gap-1 text-xs text-ds-slate">
-                  <Calendar className="w-3 h-3" />
+                  <Calendar className="w-3 h-3" aria-hidden="true" />
                   {[checkIn, checkOut].filter(Boolean).join(" → ")}
                 </span>
               )}
               {guests != null && (
                 <span className="flex items-center gap-1 text-xs text-ds-slate">
-                  <Users className="w-3 h-3" />
+                  <Users className="w-3 h-3" aria-hidden="true" />
                   {guests} {guests === 1 ? "guest" : "guests"}
                 </span>
               )}
@@ -260,107 +278,126 @@ function SavedItemCard({
           {/* Saved date */}
           <p className="text-[10px] text-ds-slate opacity-60 mt-2">Saved {savedDate}</p>
 
-          {/* Create Trip — all verticals */}
-          <div className="mt-2" data-testid="create-trip-section">
-            <button
-              onClick={() => onCreateTrip(item)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-ds-bone text-ds-text-inverse hover:bg-ds-linen transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-              data-testid="create-trip-btn"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-ds-accent" />
-              Create Trip
-            </button>
-          </div>
+          {/* Planning bridge — Create Trip + Add to Trip */}
+          <div
+            className="mt-3 pt-2.5 border-t border-ds-hairline/60"
+            data-testid="saved-planning-bridge"
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-slate mb-2">
+              Plan with this
+            </p>
 
-          {/* Add to Trip */}
-          {canAddToTrip && (
-            <div className="mt-2" data-testid="add-to-trip-section">
-              {addState === "idle" && (
-                <button
-                  onClick={() => setAddState("picking")}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-ds-bone text-ds-text-inverse hover:bg-ds-linen transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-                  data-testid="add-to-trip-btn"
-                >
-                  <PlusCircle className="w-3.5 h-3.5 text-ds-slate" />
-                  Add to Trip
-                </button>
-              )}
-
-              {addState === "picking" && (
-                <div className="space-y-1" data-testid="trip-picker">
-                  {trips.length === 0 ? (
-                    <p className="text-xs text-ds-slate py-1">
-                      No trips yet.{" "}
-                      <Link href="/trips/new" className="text-ds-text-inverse underline hover:opacity-70 transition-opacity">
-                        Create one
-                      </Link>
-                    </p>
-                  ) : (
-                    <>
-                      <p className="text-[10px] text-ds-slate uppercase tracking-wide">
-                        Choose a trip
-                      </p>
-                      {trips.map((trip) => (
-                        <button
-                          key={trip.id}
-                          onClick={() => handleAddToTrip(trip)}
-                          className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-ds-text-inverse bg-ds-bone hover:bg-ds-linen transition-colors truncate focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-                          data-testid="trip-picker-option"
-                        >
-                          {trip.title} · {trip.destination}
-                        </button>
-                      ))}
-                    </>
-                  )}
-                  <button
-                    onClick={() => setAddState("idle")}
-                    className="text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
-
-              {addState === "adding" && (
-                <div className="flex items-center gap-1.5 text-xs text-ds-slate py-1">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Adding to trip…
-                </div>
-              )}
-
-              {addState === "added" && (
-                <div className="space-y-1">
-                  <div
-                    className="flex items-center gap-1.5 text-xs text-ds-text-inverse"
-                    data-testid="add-to-trip-success"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5 text-ds-trust" />
-                    Added to {addedToTripName}
-                  </div>
-                  <button
-                    onClick={() => setAddState("idle")}
-                    className="text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
-                  >
-                    Add to another trip
-                  </button>
-                </div>
-              )}
-
-              {addState === "error" && (
-                <div className="space-y-1">
-                  <p className="text-xs text-ds-warning" data-testid="add-to-trip-error">
-                    {addError}
-                  </p>
-                  <button
-                    onClick={() => setAddState("idle")}
-                    className="text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
-                  >
-                    Try again
-                  </button>
-                </div>
-              )}
+            {/* Create Trip — all verticals */}
+            <div className="mb-1.5" data-testid="create-trip-section">
+              <button
+                type="button"
+                onClick={() => onCreateTrip(item)}
+                className="min-h-[44px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-ds-bone text-ds-text-inverse hover:bg-ds-linen transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                data-testid="create-trip-btn"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-ds-accent" aria-hidden="true" />
+                Create Trip
+              </button>
             </div>
-          )}
+
+            {/* Add to Trip — non-flight verticals */}
+            {canAddToTrip && (
+              <div data-testid="add-to-trip-section">
+                {addState === "idle" && (
+                  <button
+                    type="button"
+                    onClick={() => setAddState("picking")}
+                    className="min-h-[44px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-ds-bone text-ds-text-inverse hover:bg-ds-linen transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                    data-testid="add-to-trip-btn"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5 text-ds-slate" aria-hidden="true" />
+                    Add to Trip
+                  </button>
+                )}
+
+                {addState === "picking" && (
+                  <div className="space-y-1" data-testid="trip-picker">
+                    {trips.length === 0 ? (
+                      <p className="text-xs text-ds-slate py-1">
+                        No trips yet.{" "}
+                        <Link
+                          href="/trips/new"
+                          className="text-ds-text-inverse underline hover:opacity-70 transition-opacity"
+                        >
+                          Create one
+                        </Link>
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-[10px] text-ds-slate uppercase tracking-[0.1em]">
+                          Choose a trip
+                        </p>
+                        {trips.map((trip) => (
+                          <button
+                            type="button"
+                            key={trip.id}
+                            onClick={() => handleAddToTrip(trip)}
+                            className="min-h-[44px] w-full text-left px-3 py-1.5 rounded-lg text-xs text-ds-text-inverse bg-ds-bone hover:bg-ds-linen transition-colors truncate focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                            data-testid="trip-picker-option"
+                          >
+                            {trip.title} · {trip.destination}
+                          </button>
+                        ))}
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setAddState("idle")}
+                      className="min-h-[44px] flex items-center text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+
+                {addState === "adding" && (
+                  <div className="flex items-center gap-1.5 text-xs text-ds-slate py-1">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                    Adding to trip…
+                  </div>
+                )}
+
+                {addState === "added" && (
+                  <div className="space-y-1">
+                    <div
+                      className="flex items-center gap-1.5 text-xs text-ds-text-inverse"
+                      data-testid="add-to-trip-success"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-ds-trust" aria-hidden="true" />
+                      Added to {addedToTripName}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAddState("idle")}
+                      className="min-h-[44px] flex items-center text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
+                    >
+                      Add to another trip
+                    </button>
+                  </div>
+                )}
+
+                {addState === "error" && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-ds-warning" data-testid="add-to-trip-error">
+                      {addError}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setAddState("idle")}
+                      className="min-h-[44px] flex items-center text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Remove error */}
           {removeError && (
@@ -391,16 +428,18 @@ function VerticalGroup({
 }) {
   if (items.length === 0) return null;
 
-  const { icon: Icon, label, key } = config;
+  const { label, key } = config;
 
   return (
-    <section data-testid={`saved-group-${key}`}>
-      <div className="flex items-center gap-2 mb-3">
-        <Icon className="w-4 h-4 text-ds-accent-muted" aria-hidden="true" />
-        <h2 className="text-sm font-semibold text-ds-text-inverse uppercase tracking-wide">
+    <section data-testid={`saved-section-${key}`} aria-label={`${label} ideas`}>
+      <div className="flex items-center justify-between mb-3 pb-2 border-b border-ds-hairline">
+        <p
+          className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-accent-muted"
+          data-testid={`saved-section-label-${key}`}
+        >
           {label}
-        </h2>
-        <span className="text-xs text-ds-slate font-medium">{items.length}</span>
+        </p>
+        <span className="text-[10px] text-ds-slate font-medium">{items.length}</span>
       </div>
       <div className="space-y-3">
         {items.map((item) => (
@@ -462,22 +501,42 @@ export function SavedShell() {
   const hasAny = items.length > 0;
 
   return (
-    /* Warm-paper scrapbook surface — linen album on midnight ink shell (§9 contract) */
-    <div className="max-w-2xl mx-auto bg-ds-linen rounded-2xl px-6 py-6 space-y-8" data-testid="saved-shell">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center"
-          style={{ backgroundColor: "var(--ds-accent-subtle)" }}
-          aria-hidden="true"
-        >
-          <Bookmark className="w-5 h-5 text-ds-accent" />
+    /* Warm-paper scrapbook surface — linen album on midnight ink shell (§9) */
+    <div
+      className="max-w-2xl mx-auto bg-ds-linen rounded-2xl px-6 py-6 space-y-8"
+      data-testid="saved-shell"
+    >
+      {/* Scrapbook editorial header */}
+      <header data-testid="saved-scrapbook-header">
+        <div className="flex items-start gap-3">
+          <div
+            aria-hidden="true"
+            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+            style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+          >
+            <Bookmark className="w-5 h-5 text-ds-accent" />
+          </div>
+          <div>
+            <p
+              className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-accent"
+              data-testid="saved-scrapbook-overline"
+            >
+              Your Travel Scrapbook
+            </p>
+            <h1
+              className="text-xl font-bold text-ds-text-inverse leading-tight"
+              data-testid="saved-scrapbook-heading"
+            >
+              Saved Ideas
+            </h1>
+            {!loading && !error && hasAny && (
+              <p className="text-xs text-ds-slate mt-0.5" data-testid="saved-scrapbook-count">
+                {items.length} {items.length === 1 ? "idea" : "ideas"} in your collection
+              </p>
+            )}
+          </div>
         </div>
-        <div>
-          <h1 className="text-lg font-bold text-ds-text-inverse">Saved Ideas</h1>
-          <p className="text-xs text-ds-slate">Your personal travel scrapbook.</p>
-        </div>
-      </div>
+      </header>
 
       {/* Loading */}
       {loading && (
@@ -485,7 +544,7 @@ export function SavedShell() {
           className="flex items-center justify-center py-16 text-ds-slate"
           data-testid="saved-loading"
         >
-          <Loader2 className="w-6 h-6 animate-spin mr-2" />
+          <Loader2 className="w-6 h-6 animate-spin mr-2" aria-hidden="true" />
           <span className="text-sm">Loading your saved ideas…</span>
         </div>
       )}
@@ -496,11 +555,12 @@ export function SavedShell() {
           className="flex flex-col items-center gap-3 py-12 text-center"
           data-testid="saved-error"
         >
-          <AlertCircle className="w-8 h-8 text-ds-warning" />
+          <AlertCircle className="w-8 h-8 text-ds-warning" aria-hidden="true" />
           <p className="text-sm text-ds-slate">{error}</p>
           <button
+            type="button"
             onClick={load}
-            className="px-4 py-2 rounded-lg bg-ds-bone text-ds-text-inverse text-sm hover:bg-ds-hairline transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            className="min-h-[44px] px-4 py-2 rounded-lg bg-ds-bone text-ds-text-inverse text-sm hover:bg-ds-hairline transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           >
             Try again
           </button>
@@ -509,8 +569,14 @@ export function SavedShell() {
 
       {/* Empty state */}
       {!loading && !error && !hasAny && (
-        <div className="flex flex-col items-center gap-4 py-16 text-center" data-testid="saved-empty">
-          <div className="w-14 h-14 rounded-2xl bg-ds-bone flex items-center justify-center" aria-hidden="true">
+        <div
+          className="flex flex-col items-center gap-4 py-16 text-center"
+          data-testid="saved-empty"
+        >
+          <div
+            className="w-14 h-14 rounded-2xl bg-ds-bone flex items-center justify-center"
+            aria-hidden="true"
+          >
             <Bookmark className="w-7 h-7 text-ds-accent" />
           </div>
           <div>
@@ -519,8 +585,12 @@ export function SavedShell() {
               Explore restaurants, attractions, and hotels — then save the ones that inspire you.
             </p>
           </div>
-          <Link href="/explore" className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-ds-bone text-ds-text-inverse text-sm font-medium hover:bg-ds-hairline transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2" data-testid="saved-empty-explore-link">
-            <Compass className="w-4 h-4" />
+          <Link
+            href="/explore"
+            className="min-h-[44px] flex items-center gap-2 px-5 py-2.5 rounded-xl bg-ds-bone text-ds-text-inverse text-sm font-medium hover:bg-ds-hairline transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            data-testid="saved-empty-explore-link"
+          >
+            <Compass className="w-4 h-4" aria-hidden="true" />
             Start Exploring
           </Link>
         </div>

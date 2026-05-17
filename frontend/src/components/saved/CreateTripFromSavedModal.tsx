@@ -217,16 +217,16 @@ export function CreateTripFromSavedModal({
       aria-modal="true"
       aria-labelledby="create-trip-title"
     >
-      <div className="w-full max-w-md rounded-2xl bg-dark-100 border border-white/[.08] p-5 space-y-4">
+      <div className="w-full max-w-md rounded-2xl bg-ds-onyx border border-ds-pen-stroke p-5 space-y-4 shadow-[var(--ds-elevation-4)]">
         <div className="flex items-start justify-between">
           <div>
             <h2
               id="create-trip-title"
-              className="text-base font-semibold text-cream-100"
+              className="text-base font-semibold text-ds-text"
             >
               Create a new trip
             </h2>
-            <p className="text-xs text-cream-500 mt-0.5">
+            <p className="text-xs text-ds-text-tertiary mt-0.5">
               Prefilled from your saved {item.vertical}. Edit anything before saving.
             </p>
           </div>
@@ -234,15 +234,15 @@ export function CreateTripFromSavedModal({
             onClick={onClose}
             disabled={state === "submitting"}
             aria-label="Close"
-            className="p-1.5 rounded-lg bg-white/[.04] hover:bg-white/[.10] text-cream-500 transition disabled:opacity-50"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3" data-testid="create-trip-form">
           <div>
-            <label className="block text-[10px] uppercase tracking-wide text-cream-500 mb-1">
+            <label className="block text-[10px] uppercase tracking-[0.1em] text-ds-text-tertiary mb-1">
               Trip title
             </label>
             <input
@@ -250,13 +250,13 @@ export function CreateTripFromSavedModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
-              className="w-full px-3 py-2 rounded-lg bg-white/[.04] border border-white/[.06] text-sm text-cream-100 focus:outline-none focus:border-brand-400"
+              className="w-full px-3 py-2 rounded-lg bg-ds-carbon border border-ds-pen-stroke text-sm text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               data-testid="ct-title"
             />
           </div>
 
           <div>
-            <label className="block text-[10px] uppercase tracking-wide text-cream-500 mb-1">
+            <label className="block text-[10px] uppercase tracking-[0.1em] text-ds-text-tertiary mb-1">
               Origin
             </label>
             <div data-testid="ct-origin">
@@ -270,7 +270,7 @@ export function CreateTripFromSavedModal({
           </div>
 
           <div>
-            <label className="block text-[10px] uppercase tracking-wide text-cream-500 mb-1">
+            <label className="block text-[10px] uppercase tracking-[0.1em] text-ds-text-tertiary mb-1">
               Destination
             </label>
             <div data-testid="ct-destination">
@@ -285,7 +285,7 @@ export function CreateTripFromSavedModal({
 
           {airportsUnresolved && (
             <p
-              className="text-[11px] text-amber-300/90"
+              className="text-[11px] text-ds-caution"
               data-testid="ct-unresolved-hint"
             >
               Select a city/airport from suggestions before creating the trip.
@@ -294,7 +294,7 @@ export function CreateTripFromSavedModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[10px] uppercase tracking-wide text-cream-500 mb-1">
+              <label className="block text-[10px] uppercase tracking-[0.1em] text-ds-text-tertiary mb-1">
                 Start date
               </label>
               <input
@@ -302,12 +302,12 @@ export function CreateTripFromSavedModal({
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 required
-                className="w-full px-3 py-2 rounded-lg bg-white/[.04] border border-white/[.06] text-sm text-cream-100 focus:outline-none focus:border-brand-400"
+                className="w-full px-3 py-2 rounded-lg bg-ds-carbon border border-ds-pen-stroke text-sm text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                 data-testid="ct-start-date"
               />
             </div>
             <div>
-              <label className="block text-[10px] uppercase tracking-wide text-cream-500 mb-1">
+              <label className="block text-[10px] uppercase tracking-[0.1em] text-ds-text-tertiary mb-1">
                 End date
               </label>
               <input
@@ -315,14 +315,14 @@ export function CreateTripFromSavedModal({
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 required
-                className="w-full px-3 py-2 rounded-lg bg-white/[.04] border border-white/[.06] text-sm text-cream-100 focus:outline-none focus:border-brand-400"
+                className="w-full px-3 py-2 rounded-lg bg-ds-carbon border border-ds-pen-stroke text-sm text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                 data-testid="ct-end-date"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-[10px] uppercase tracking-wide text-cream-500 mb-1">
+            <label className="block text-[10px] uppercase tracking-[0.1em] text-ds-text-tertiary mb-1">
               Travelers
             </label>
             <input
@@ -330,17 +330,17 @@ export function CreateTripFromSavedModal({
               min={1}
               value={travelers}
               onChange={(e) => setTravelers(Math.max(1, Number(e.target.value) || 1))}
-              className="w-full px-3 py-2 rounded-lg bg-white/[.04] border border-white/[.06] text-sm text-cream-100 focus:outline-none focus:border-brand-400"
+              className="w-full px-3 py-2 rounded-lg bg-ds-carbon border border-ds-pen-stroke text-sm text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               data-testid="ct-travelers"
             />
           </div>
 
           {state === "error" && error && (
             <div
-              className="flex items-start gap-2 px-3 py-2 rounded-lg bg-rose-500/10 text-rose-300 text-xs"
+              className="flex items-start gap-2 px-3 py-2 rounded-lg bg-ds-carbon text-ds-warning text-xs"
               data-testid="ct-error"
             >
-              <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
               <span>{error}</span>
             </div>
           )}
@@ -350,19 +350,19 @@ export function CreateTripFromSavedModal({
               type="button"
               onClick={onClose}
               disabled={state === "submitting"}
-              className="px-3 py-2 rounded-lg text-xs text-cream-400 hover:text-cream-200 transition disabled:opacity-50"
+              className="min-h-[44px] px-3 py-2 rounded-lg text-xs text-ds-text-tertiary hover:text-ds-text transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!canSubmit}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500 text-dark-50 text-xs font-medium hover:bg-brand-600 transition disabled:opacity-50"
+              className="min-h-[44px] flex items-center gap-2 px-4 py-2 rounded-lg bg-ds-accent text-ds-text-inverse text-xs font-medium hover:bg-ds-accent-muted transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               data-testid="ct-submit"
             >
               {state === "submitting" ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                   Creating trip…
                 </>
               ) : (

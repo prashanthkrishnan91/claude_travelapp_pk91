@@ -1,10 +1,55 @@
 # UI Baseline
 
-Last updated: 2026-05-17 (Phase 8F)
+Last updated: 2026-05-17 (Phase 8G)
 
 ## Purpose
 
 Tracks the state of the design system and UI primitive layer so future prompts and PRs can reason accurately about what exists and what has been adopted.
+
+---
+
+## Stage 3.5 Phase 8G — Saved Ideas Scrapbook + Planning Bridge — SHIPPED (2026-05-17)
+
+**Stage 3.5 · Wife-Wow design system — `/saved` Saved surface · Scrapbook editorial identity + planning bridge**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/components/saved/SavedShell.tsx` | **Scrapbook editorial transformation.** `TYPE_OVERLINES` constant added (Restaurant/Attraction/Hotel/Flight overline labels). **Header**: plain div replaced with semantic `<header data-testid="saved-scrapbook-header">` containing Overline "Your Travel Scrapbook" (`data-testid="saved-scrapbook-overline"`, `tracking-[0.1em] uppercase text-[10px] font-semibold text-ds-accent`) + `<h1 data-testid="saved-scrapbook-heading">Saved Ideas</h1>` + real collection count (`data-testid="saved-scrapbook-count"`). **SavedItemCard**: type Overline added above name (`data-testid="saved-item-type-overline"`, `TYPE_OVERLINES[item.vertical]`, `tracking-[0.1em] uppercase text-[10px] font-semibold text-ds-accent-muted`); `<h3 data-testid="saved-item-name">` for place name; maps + remove action buttons upgraded to `min-w-[44px] min-h-[44px] flex items-center justify-center` (44px touch targets); `mt-0.5` on icon wrapper; planning bridge section `data-testid="saved-planning-bridge"` with `border-t border-ds-hairline/60` + Overline "Plan with this" label wrapping Create Trip + Add to Trip. **VerticalGroup**: `saved-group-${key}` → `saved-section-${key}`; icon removed from section header; section header gains `border-b border-ds-hairline` + Overline `data-testid="saved-section-label-${key}"` + right-aligned count. All existing action testids preserved. |
+| `frontend/src/components/saved/CreateTripFromSavedModal.tsx` | **ds-token migration.** `bg-dark-100 border border-white/[.08]` → `bg-ds-onyx border border-ds-pen-stroke shadow-[var(--ds-elevation-4)]`; `text-cream-100` → `text-ds-text`; `text-cream-500` → `text-ds-text-tertiary`; `bg-white/[.04] hover:bg-white/[.10] text-cream-500` → `bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary` on close button; close button gains `min-w-[44px] min-h-[44px] flex items-center justify-center`; all form inputs `bg-white/[.04] border border-white/[.06] text-cream-100 focus:border-brand-400` → `bg-ds-carbon border border-ds-pen-stroke text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2`; form label `tracking-wide` → `tracking-[0.1em]`; unresolved hint `text-amber-300/90` → `text-ds-caution`; error `bg-rose-500/10 text-rose-300` → `bg-ds-carbon text-ds-warning`; cancel button `text-cream-400 hover:text-cream-200` → `text-ds-text-tertiary hover:text-ds-text`; submit `bg-brand-500 text-dark-50 hover:bg-brand-600` → `bg-ds-accent text-ds-text-inverse hover:bg-ds-accent-muted`. All behavior, logic, and data-testids preserved. |
+| `frontend/tests/saved-scrapbook-8g.test.mjs` | **NEW.** 135 Phase 8G contract tests: scrapbook shell structure (saved-scrapbook-header/overline/heading/count testids, semantic header element, "Your Travel Scrapbook" overline text, h1 "Saved Ideas"), Overline typography role (tracking-[0.1em]/uppercase/text-[10px]/font-semibold on overline and section labels), TYPE_OVERLINES constant (all 4 verticals), saved-item-type-overline testid + typography, saved-item-name h3 testid, planning bridge (saved-planning-bridge testid, "Plan with this" editorial label, border-t separator, create-trip-btn/add-to-trip-btn preserved), semantic buttons/links (no card-level onClick nav, Create Trip is button, Add to Trip is button, Explore link is Link), 44px touch targets (maps link min-w/h-[44px], remove button min-w/h-[44px]), section editorial structure (saved-section-${key}/saved-section-label-${key}, border-b hairline, tracking-[0.1em]), no fake/hardcoded city data, no backend imports, no raw rgba/hex in SavedShell, no legacy palette (cream-*/brand-*/slate-*), CreateTripFromSavedModal ds-token contract (bg-ds-onyx/border-ds-pen-stroke/text-ds-text/bg-ds-carbon/focus-visible:outline-ds-accent/bg-ds-accent/text-ds-caution/text-ds-warning), no legacy modal colors, modal submit/close/error/unresolved-hint ds-token checks, all action handlers preserved (deleteSavedItem/addSavedItemToTrip/createTripFromSavedItem/listSavedItems/fetchTrips), hotel discovery-only, mobile-safe layout, empty/loading/error states preserved. |
+| `frontend/package.json` | Added `saved-scrapbook-8g.test.mjs` to test script. |
+
+### Test results
+- **1419 tests, 0 failures** (was 1284; +135 new Phase 8G saved scrapbook contract tests)
+- All pre-existing tests continue to pass (including saved-lists-foundation, saved-trip-conversion, create-trip-from-saved, saved-items-action-wiring)
+
+### Design contract alignment
+
+- **Warm personal scrapbook, not generic list:** SavedShell now opens with a semantic `<header>` containing an Overline "Your Travel Scrapbook" — the same editorial grammar as Explore ("Curated Discovery") and Concierge ("Private Travel Concierge"). The h1 "Saved Ideas" is the page identity. A real collection count ("N ideas in your collection") appears once items load — no fabricated stats.
+- **Idea identity per card:** Every saved item now opens with an Overline type label (RESTAURANT / ATTRACTION / HOTEL / FLIGHT), matching the TYPE_LABELS pattern from Phase 8C (itinerary cards). This gives each scrapbook entry immediate editorial identity before the name is read.
+- **Planning bridge clarity:** The Create Trip + Add to Trip actions now live in a clearly framed planning bridge section: `border-t border-ds-hairline/60` separator + Overline "Plan with this" label. The path from scrapbook idea → trip planning is structurally visible. No behavior changes; only the structural framing is new.
+- **Section rhythm:** VerticalGroup section headers are now `border-b border-ds-hairline` Overline labels — same hairline-separated editorial rhythm used in Phase 8D (day column sections). Each section is a `<section>` with `aria-label`.
+- **44px touch targets:** Maps link and Remove button now use `min-w-[44px] min-h-[44px] flex items-center justify-center` — correct mobile touch target pattern, matching other Phase 8* surfaces.
+- **Modal ds-token migration:** CreateTripFromSavedModal was the last Saved surface using legacy colors (`bg-dark-100`, `cream-*`, `brand-*`, `rose-*`, `amber-*`). Full ds-token migration completed. Modal now reads as a dark ink-ladder dialog (bg-ds-onyx, border-ds-pen-stroke, elevation-4 shadow) — matching trip-detail modal treatment from Phase 8B.
+
+### Invariant confirmations
+- No backend files; no API/search/provider/Tavily/cache/Supabase/env changes.
+- No Google Flights URL changes; no Duffel provider changes.
+- No new fonts, route rewrites, or data model changes.
+- No new booking behavior; no fake data; no hardcoded destinations.
+- All existing SavedShell testids preserved: saved-shell, saved-loading, saved-error, saved-empty, saved-empty-explore-link, saved-item-card, saved-card-rating, hotel-search-context, remove-saved-btn, remove-error, create-trip-section, create-trip-btn, add-to-trip-section, add-to-trip-btn, trip-picker, trip-picker-option, add-to-trip-success, add-to-trip-error.
+- All CreateTripFromSavedModal testids preserved: create-trip-modal, create-trip-form, ct-title, ct-origin, ct-destination, ct-unresolved-hint, ct-start-date, ct-end-date, ct-travelers, ct-error, ct-submit.
+- Hotel discovery-only contract preserved: no rates, availability, or booking copy.
+- Flight exclusion from add-to-trip (`canAddToTrip = item.vertical !== "flight"`) preserved.
+
+### Accessibility / motion note
+- No new motion introduced. `card-lift` (translateY -2px, 120ms) is pre-existing and within the motion contract.
+- `border-t border-ds-hairline/60` and `border-b border-ds-hairline` are CSS borders — no animation; reduced-motion safe.
+- Maps link and Remove button have `aria-hidden="true"` on icons and `aria-label` on the anchor/button.
+- Planning bridge "Plan with this" label is a presentational `<p>` — no interaction.
+- All interactive elements use `focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2` pattern.
 
 ---
 
