@@ -1,10 +1,54 @@
 # UI Baseline
 
-Last updated: 2026-05-17 (Phase 8C)
+Last updated: 2026-05-17 (Phase 8D)
 
 ## Purpose
 
 Tracks the state of the design system and UI primitive layer so future prompts and PRs can reason accurately about what exists and what has been adopted.
+
+---
+
+## Stage 3.5 Phase 8D — Itinerary DayColumn Editorial Chapter Frame — SHIPPED (2026-05-17)
+
+**Stage 3.5 · Wife-Wow design system — `ItineraryDayColumn.tsx` · Trip-story day-chapter page**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/components/trips/ItineraryDayColumn.tsx` | **Editorial chapter-frame transformation.** `data-testid` contract added throughout: `day-chapter-frame` (root), `day-chapter-header` (header div), `day-chapter-number` (number marker), `day-chapter-title` (h3), `day-chapter-date` (date paragraph), `day-item-count` (quiet item count badge), `day-part-section` (each section container), `day-part-label` (each Overline label), `empty-day-chapter` (empty state). **`h3` promoted `text-sm`→`text-base`** for stronger editorial heading weight. **Day-part sections refactored** from `orderedSections.map` (returning null for empty) to `filledSections.filter` array, enabling `border-t border-ds-pen-stroke/30` hairline rhythm between non-empty sections (idx > 0 only). **Time hint made `italic`** to differentiate from the Overline section label — editorial register, not KPI. **Empty day invitation rewritten**: board-lane copy ("Drag items here or use + Add to start building.") replaced with editorial chapter prompt ("Begin this chapter — use + Add or drag a stop here."); Overline tracking corrected `tracking-[0.08em]`→`tracking-[0.1em]`. All behavior preserved exactly: DnD droppable (useDroppable, setNodeRef, isOver), SortableContext, groupByDayPart, DAY_PART_META, onPlanDay, handleSuggestTimeline, handleApplyTimeline, itemOverrides, onMoveItemToIdeas, ItineraryItemCard rendering via renderItemsWithConnectors, computeAdjacentHints, PREVIEW_ITEM_LIMIT, show-all/show-less pagination. No rgba(), no raw hex, no legacy palette classes. |
+| `frontend/tests/itinerary-day-chapter-frame.test.mjs` | **NEW.** 76 Phase 8D contract tests: data-testid structure contract (all 9 testids), h3 text-base chapter heading, Overline tracking, formatDate real data, filledSections hairline variable, border-t hairline class, italic time hint, day-part-section/label testids, empty-day-chapter testid, chapter-prompt copy ("Begin this chapter"), no board-lane copy ("to start building" / "Drag items here"), border-dashed + accent drag-over, 44px touch target near chapter prompt, semantic `<button>` for + Add, ds-token contract (no raw hex/rgba/slate/amber), no backend/provider/Supabase imports, all DnD primitives (useDroppable/SortableContext/verticalListSortingStrategy/isOver/setNodeRef), groupByDayPart/getItemDayPart/TimelineSections/DAY_PART_META/orderedSections preserved, ItineraryItemCard/renderItemsWithConnectors/onMoveItemToIdeas/onMoveToIdeas/onRemove/onToggleCompare/onTimelineUpdated preserved, timeline AI (handleSuggestTimeline/handleApplyTimeline/SuggestionsReviewPanel/itemOverrides), isExpanded/PREVIEW_ITEM_LIMIT/showAllItems/DayTravelHintBar/onPlanDay/onUpdateTimeline preserved. |
+| `frontend/package.json` | Added `itinerary-day-chapter-frame.test.mjs` to test script. |
+
+### Test results
+- **1101 tests, 0 failures** (was 1025; +76 new Phase 8D day chapter frame contract tests)
+- All pre-existing tests continue to pass (including trip-canvas-day-system, itinerary-chapter-editorial, trip-chapter-overhaul, itinerary-timeline, smart-timeline, travel-time-hints)
+
+### Design contract alignment
+
+- **Day chapter, not board lane:** Each day column opens with a promoted `text-base font-semibold` chapter heading ("Day N") — one step up from `text-sm`. The number marker (zero-padded, accent when selected) is a chapter index, not a tile counter.
+- **Editorial date treatment:** `CalendarDays` icon + uppercase Overline date below the heading gives each day its calendar identity without making it look like a SaaS task status.
+- **Hairline section rhythm:** Day-part sections (Morning / Afternoon / Evening / Unscheduled) now have `border-t border-ds-pen-stroke/30` hairlines between non-empty sections, creating visual page-paragraph separators. Only non-empty sections render; gaps between them feel like editorial breathing room.
+- **Italic time hint:** `5 AM – 12 PM`, `12 PM – 5 PM`, `5 PM – 10 PM` appear in italic next to each Overline section label — annotative, not instructional.
+- **Chapter-prompt empty state:** "Begin this chapter — use + Add or drag a stop here." — contextual, inviting, not a blank drop zone.
+- **Quiet item count:** `text-[11px] text-ds-text-tertiary rounded-full` badge in the header — visible but not a KPI tile.
+- **Semantic data-testids:** Full testid contract enables integration testing of the chapter structure without relying on text-match fragility.
+- **Mobile:** All content in the chapter header and day-part sections is single-axis flex, wraps cleanly on narrow screens. No horizontal overflow risk. `min-h-[44px]` on all action buttons.
+
+### Invariant confirmations
+- No backend files; no API/search/provider/Tavily/cache/Supabase/env changes.
+- No Google Flights URL generation changes; no Duffel provider changes.
+- No new fonts, route rewrites, or data model changes.
+- No new booking behavior; no fake data.
+- `ItineraryItemCard.tsx` untouched (no class compatibility adjustment needed).
+- `TripBuilder.tsx` untouched.
+- All DnD (useDroppable, SortableContext, isOver, setNodeRef), groupByDayPart, DAY_PART_META, timeline AI planning, move-to-ideas, compare, remove, booking checklist, show-all pagination: all preserved.
+
+### Accessibility / motion note
+- No new motion, gradients, glass blur, or animations introduced in Phase 8D.
+- Hairline `border-t border-ds-pen-stroke/30` is a CSS border — no animation involved; reduced-motion safe.
+- `italic` on time hint is a CSS property — no animation. Reduced-motion safe.
+- All interactive elements use inherited `focus-visible:outline-ds-accent` pattern. No new interactive patterns added.
 
 ---
 

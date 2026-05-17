@@ -183,10 +183,10 @@ function TimelineSections({
   // When nothing is timed, render plain list with a single "Unscheduled" label
   if (!hasTimedItems) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-2" data-testid="day-part-section">
         <div className="flex items-center gap-1.5 px-1 pt-1 pb-0.5">
           <Clock className="w-3 h-3 text-ds-text-tertiary flex-shrink-0" />
-          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary" data-testid="day-part-label">
             Unscheduled · {items.length} {items.length === 1 ? "item" : "items"}
           </span>
         </div>
@@ -197,20 +197,29 @@ function TimelineSections({
     );
   }
 
+  // Collect non-empty sections to add editorial hairline rhythm between them
+  const filledSections = orderedSections.filter((part) => grouped[part].length > 0);
+
   return (
-    <div className="space-y-3">
-      {orderedSections.map((part) => {
+    <div className="space-y-0">
+      {filledSections.map((part, idx) => {
         const sectionItems = grouped[part];
-        if (sectionItems.length === 0) return null;
         const meta = DAY_PART_META[part];
         return (
-          <div key={part} className="space-y-1.5">
+          <div
+            key={part}
+            className={`space-y-1.5 ${idx > 0 ? "mt-3 pt-2.5 border-t border-ds-pen-stroke/30" : ""}`}
+            data-testid="day-part-section"
+          >
             <div className="flex items-center gap-1.5 px-1 pt-0.5">
               <Clock className={`w-3 h-3 flex-shrink-0 ${meta.colorClass}`} />
-              <span className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${meta.colorClass}`}>
+              <span
+                className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${meta.colorClass}`}
+                data-testid="day-part-label"
+              >
                 {meta.label}
               </span>
-              <span className="text-[10px] text-ds-text-tertiary">{meta.timeHint}</span>
+              <span className="text-[10px] text-ds-text-tertiary italic">{meta.timeHint}</span>
             </div>
             <div className="space-y-2">
               {renderItemsWithConnectors(sectionItems, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet, onUpdateTimeline)}
@@ -460,27 +469,33 @@ export function ItineraryDayColumn({
 
   return (
     <div
+      data-testid="day-chapter-frame"
       className={`overflow-hidden rounded-lg border bg-ds-onyx transition-all duration-[200ms] shadow-[var(--ds-elevation-2)] ${
         isSelected
           ? "border-ds-accent/40 ring-1 ring-ds-accent/20 ring-offset-1 ring-offset-ds-midnight"
           : "border-ds-pen-stroke"
       }`}
     >
-      {/* ── Chapter header — click to set as target day ────────────── */}
+      {/* ── Chapter header ──────────────────────────────────────────── */}
       <div
-        className={`shrink-0 flex items-center justify-between px-3 py-2.5 border-b border-ds-pen-stroke transition-colors duration-[120ms] cursor-pointer ${
-          isSelected ? "bg-ds-carbon" : "bg-ds-onyx hover:bg-ds-carbon"
+        data-testid="day-chapter-header"
+        className={`shrink-0 flex items-center justify-between px-3 py-2.5 border-b border-ds-pen-stroke transition-colors duration-[120ms] ${
+          isSelected ? "bg-ds-carbon" : "bg-ds-onyx"
         }`}
-        onClick={() => {
-          onSelect?.(day.id);
-          onToggleExpanded?.(day.dayNumber);
-        }}
-        title={isSelected ? "Currently adding to this day" : "Click to add items to this day"}
       >
-        {/* Chapter identity */}
-        <div className="flex items-center gap-3 min-w-0">
+        {/* Chapter identity — semantic button for select + expand */}
+        <button
+          type="button"
+          onClick={() => {
+            onSelect?.(day.id);
+            onToggleExpanded?.(day.dayNumber);
+          }}
+          aria-label={isSelected ? `Day ${day.dayNumber} — currently active` : `Select Day ${day.dayNumber}`}
+          className="flex items-center gap-3 min-w-0 text-left min-h-[44px] rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 transition-colors duration-[120ms]"
+        >
           {/* Chapter number marker */}
           <div
+            data-testid="day-chapter-number"
             className={`flex-shrink-0 flex items-center justify-center w-7 h-7 rounded text-[11px] font-bold tracking-tight transition-colors duration-[120ms] ${
               isSelected
                 ? "bg-ds-accent text-ds-text-inverse"
@@ -491,21 +506,21 @@ export function ItineraryDayColumn({
           </div>
           {/* Chapter title + date */}
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-ds-text tracking-tight leading-snug">
+            <h3 data-testid="day-chapter-title" className="text-base font-semibold text-ds-text tracking-tight leading-snug">
               Day {day.dayNumber}
             </h3>
             {day.date && (
-              <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary leading-none mt-0.5">
+              <p data-testid="day-chapter-date" className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary leading-none mt-0.5">
                 <CalendarDays className="w-2.5 h-2.5 flex-shrink-0" />
                 {formatDate(day.date)}
               </p>
             )}
           </div>
-        </div>
+        </button>
 
         {/* Header actions */}
         <div className="flex items-center gap-1 shrink-0">
-          <span className="text-[11px] text-ds-text-tertiary bg-ds-carbon border border-ds-pen-stroke rounded-full px-2 py-0.5 mr-0.5">
+          <span data-testid="day-item-count" className="text-[11px] text-ds-text-tertiary bg-ds-carbon border border-ds-pen-stroke rounded-full px-2 py-0.5 mr-0.5">
             {day.items.length}
           </span>
 
@@ -636,6 +651,7 @@ export function ItineraryDayColumn({
           {/* ── Empty day invitation ─────────────────────────────────── */}
           {day.items.length === 0 && (
             <div
+              data-testid="empty-day-chapter"
               className={`flex-1 flex flex-col items-center justify-center border border-dashed rounded-lg py-5 px-3 gap-1.5 transition-colors duration-[120ms] ${
                 isOver
                   ? "border-ds-accent/60 text-ds-accent"
@@ -647,11 +663,11 @@ export function ItineraryDayColumn({
                 <p className="text-xs font-medium text-center">Drop here</p>
               ) : (
                 <>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ds-text-tertiary">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary">
                     Day {day.dayNumber}
                   </p>
                   <p className="text-xs text-center text-ds-text-tertiary">
-                    Drag items here or use{" "}
+                    Begin this chapter — use{" "}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -662,7 +678,7 @@ export function ItineraryDayColumn({
                     >
                       + Add
                     </button>{" "}
-                    to start building.
+                    or drag a stop here.
                   </p>
                 </>
               )}
