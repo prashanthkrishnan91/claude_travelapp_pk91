@@ -261,7 +261,7 @@ function IdeaCard({
           onChange={(e) => handleNoteChange(e.target.value)}
           placeholder="Add a note…"
           rows={2}
-          className="mt-1.5 w-full resize-none rounded-lg border border-ds-pen-stroke bg-ds-carbon px-2 py-1.5 text-xs text-ds-text-secondary placeholder-ds-text-tertiary focus:outline-none focus:ring-1 focus:ring-ds-accent"
+          className="mt-1.5 w-full resize-none rounded-lg border border-ds-pen-stroke bg-ds-carbon px-2 py-1.5 text-xs text-ds-text-secondary placeholder-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         />
       )}
 
@@ -271,7 +271,7 @@ function IdeaCard({
             value={selectedDay}
             onChange={(e) => setSelectedDay(e.target.value)}
             disabled={assigning}
-            className="flex-1 min-h-[44px] rounded-lg border border-ds-pen-stroke bg-ds-carbon px-2 py-1.5 text-xs text-ds-text-secondary focus:outline-none focus:ring-1 focus:ring-ds-accent"
+            className="flex-1 min-h-[44px] rounded-lg border border-ds-pen-stroke bg-ds-carbon px-2 py-1.5 text-xs text-ds-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           >
             {days.map((day) => (
               <option key={day.id} value={day.id}>
@@ -424,7 +424,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search ideas…"
                     aria-label="Search trip ideas"
-                    className="w-full rounded-lg border border-ds-pen-stroke bg-ds-carbon py-1.5 pl-7 pr-2 text-xs text-ds-text-secondary placeholder-ds-text-tertiary focus:outline-none focus:ring-1 focus:ring-ds-accent"
+                    className="w-full rounded-lg border border-ds-pen-stroke bg-ds-carbon py-1.5 pl-7 pr-2 text-xs text-ds-text-secondary placeholder-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
@@ -451,7 +451,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as SortOption)}
                     aria-label="Sort ideas"
-                    className="ml-auto min-h-[44px] rounded-lg border border-ds-pen-stroke bg-ds-carbon px-2 py-1 text-[10px] text-ds-text-tertiary focus:outline-none focus:ring-1 focus:ring-ds-accent"
+                    className="ml-auto min-h-[44px] rounded-lg border border-ds-pen-stroke bg-ds-carbon px-2 py-1 text-[10px] text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   >
                     {SORT_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>

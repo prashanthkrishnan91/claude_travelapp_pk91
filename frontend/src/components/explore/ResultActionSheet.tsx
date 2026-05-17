@@ -149,7 +149,7 @@ export function ResultActionSheet({ context, initialSavedItem }: ResultActionShe
           disabled={isLoading}
           aria-label={isSaved ? "Remove from saved" : "Save"}
           className={[
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2",
+            "flex items-center gap-1.5 px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2",
             isSaved
               ? "text-ds-accent hover:text-ds-accent-muted"
               : "bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text-secondary",
@@ -172,7 +172,7 @@ export function ResultActionSheet({ context, initialSavedItem }: ResultActionShe
         <button
           onClick={() => setExpanded((v: boolean) => !v)}
           aria-label={expanded ? "Hide actions" : "More actions"}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-ds-text-tertiary bg-ds-carbon hover:bg-ds-pen-stroke hover:text-ds-text-secondary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          className="flex items-center gap-1 px-2 py-1.5 min-h-[44px] rounded-lg text-xs text-ds-text-tertiary bg-ds-carbon hover:bg-ds-pen-stroke hover:text-ds-text-secondary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           data-testid="more-actions-toggle"
         >
           <PlusCircle className="w-3.5 h-3.5" />

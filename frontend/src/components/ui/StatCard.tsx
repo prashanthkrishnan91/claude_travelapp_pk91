@@ -16,21 +16,22 @@ export function StatCard({
   icon,
   trend,
   trendUp,
-  colorClass = "bg-brand-500/15 text-brand-400",
+  colorClass = "text-ds-accent",
 }: StatCardProps) {
   return (
     <div className="card p-6 flex items-start gap-4">
-      <div className={clsx("flex items-center justify-center w-11 h-11 rounded-xl shrink-0", colorClass)}>
+      <div className={clsx("flex items-center justify-center w-11 h-11 rounded-xl shrink-0", colorClass)}
+        style={{ backgroundColor: "var(--ds-accent-subtle)" }}>
         {icon}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm text-cream-500 font-medium">{label}</p>
-        <p className="text-2xl font-bold text-cream-100 mt-0.5">{value}</p>
+        <p className="text-sm text-ds-text-tertiary font-medium">{label}</p>
+        <p className="text-2xl font-bold text-ds-text mt-0.5">{value}</p>
         {trend && (
           <p
             className={clsx(
               "text-xs mt-1 font-medium",
-              trendUp ? "text-emerald-400" : "text-cream-500"
+              trendUp ? "text-ds-trust" : "text-ds-text-tertiary"
             )}
           >
             {trend}
