@@ -6,7 +6,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Info, Loader2, MapPin, Plus, Sparkles, X } from "lucide-react";
+import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Info, Loader2, MapPin, MoreHorizontal, Plus, Sparkles, X } from "lucide-react";
 import { ItineraryDay, ItineraryItem } from "@/types";
 import { ItineraryItemCard } from "./ItineraryItemCard";
 import { computeAdjacentHints, summarizeHints } from "@/lib/travelHints";
@@ -387,6 +387,8 @@ export function ItineraryDayColumn({
   const [suggestingTimeline, setSuggestingTimeline] = useState(false);
   const [timelineSuggestions, setTimelineSuggestions] = useState<TimelineSuggestion[] | null>(null);
   const [applyingTimeline, setApplyingTimeline] = useState(false);
+  // Mobile action tray — shows secondary actions (Plan My Day, Suggest Timing) on phones
+  const [mobileActionTrayOpen, setMobileActionTrayOpen] = useState(false);
 
   useEffect(() => {
     if (!isExpanded) {
@@ -470,6 +472,7 @@ export function ItineraryDayColumn({
   return (
     <div
       data-testid="day-chapter-frame"
+      data-chapter-id="itinerary-day-mobile-chapter"
       className={`overflow-hidden rounded-lg border bg-ds-onyx transition-all duration-[200ms] shadow-[var(--ds-elevation-2)] ${
         isSelected
           ? "border-ds-accent/40 ring-1 ring-ds-accent/20 ring-offset-1 ring-offset-ds-midnight"
@@ -479,6 +482,7 @@ export function ItineraryDayColumn({
       {/* ── Chapter header ──────────────────────────────────────────── */}
       <div
         data-testid="day-chapter-header"
+        data-header-id="itinerary-day-mobile-header"
         className={`shrink-0 flex items-center justify-between px-3 py-2.5 border-b border-ds-pen-stroke transition-colors duration-[120ms] ${
           isSelected ? "bg-ds-carbon" : "bg-ds-onyx"
         }`}
@@ -532,7 +536,7 @@ export function ItineraryDayColumn({
               }}
               disabled={planDayLoading}
               title="Generate AI day plan"
-              className="flex items-center gap-1 px-2.5 rounded-lg text-ds-accent border border-ds-pen-stroke text-[11px] font-medium transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
+              className="hidden lg:flex items-center gap-1 px-2.5 rounded-lg text-ds-accent border border-ds-pen-stroke text-[11px] font-medium transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
               style={{ backgroundColor: "var(--ds-accent-subtle)" }}
             >
               {planDayLoading ? (
@@ -553,7 +557,7 @@ export function ItineraryDayColumn({
               disabled={suggestingTimeline || applyingTimeline}
               title="Suggest timing for items on this day"
               aria-label="Suggest day timing"
-              className="flex items-center gap-1 px-2.5 rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text border border-ds-pen-stroke text-[11px] font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 disabled:opacity-50 min-h-[44px]"
+              className="hidden lg:flex items-center gap-1 px-2.5 rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text border border-ds-pen-stroke text-[11px] font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 disabled:opacity-50 min-h-[44px]"
             >
               {suggestingTimeline ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -563,6 +567,20 @@ export function ItineraryDayColumn({
               Suggest Timing
             </button>
           )}
+
+          {/* Mobile-only overflow toggle for secondary day actions */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMobileActionTrayOpen((v) => !v);
+            }}
+            className="lg:hidden flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text border border-ds-pen-stroke transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            aria-label={`Day ${day.dayNumber} actions`}
+            data-testid="itinerary-day-mobile-action-tray"
+          >
+            <MoreHorizontal className="w-3.5 h-3.5" />
+          </button>
 
           <button
             onClick={(e) => {
@@ -589,10 +607,58 @@ export function ItineraryDayColumn({
         </div>
       </div>
 
+      {/* ── Mobile action tray — secondary day actions (shown when overflow open) ── */}
+      {mobileActionTrayOpen && (
+        <div className="lg:hidden border-b border-ds-pen-stroke bg-ds-carbon px-3 py-2.5 flex items-center gap-2 flex-wrap">
+          {onPlanDay && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMobileActionTrayOpen(false);
+                onPlanDay(day.id, day.dayNumber);
+              }}
+              disabled={planDayLoading}
+              className="flex items-center gap-1.5 px-3 rounded-lg text-ds-accent border border-ds-pen-stroke text-[11px] font-medium transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
+              style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+              aria-label={`Plan Day ${day.dayNumber}`}
+            >
+              {planDayLoading ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Sparkles className="w-3 h-3" />
+              )}
+              Plan My Day
+            </button>
+          )}
+          {day.items.length > 0 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMobileActionTrayOpen(false);
+                handleSuggestTimeline();
+              }}
+              disabled={suggestingTimeline || applyingTimeline}
+              className="flex items-center gap-1.5 px-3 rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text border border-ds-pen-stroke text-[11px] font-medium transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
+              aria-label={`Suggest timing for Day ${day.dayNumber}`}
+            >
+              {suggestingTimeline ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Clock className="w-3 h-3" />
+              )}
+              Suggest Timing
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ── Collapsed summary ──────────────────────────────────────── */}
       {!isExpanded ? (
         <div
           ref={setNodeRef}
+          data-testid="itinerary-day-mobile-summary"
           className="px-3 py-2.5 transition-colors duration-[120ms]"
           style={{ backgroundColor: isOver ? "var(--ds-accent-subtle)" : "var(--ds-midnight-ink)" }}
         >
@@ -612,6 +678,7 @@ export function ItineraryDayColumn({
         /* ── Expanded body ─────────────────────────────────────────── */
         <div
           ref={setNodeRef}
+          data-testid="itinerary-day-mobile-expanded"
           className="p-3 min-h-[68px] h-auto overflow-hidden space-y-2 transition-colors duration-[120ms]"
           style={{ backgroundColor: isOver ? "var(--ds-accent-subtle)" : "var(--ds-midnight-ink)" }}
         >
@@ -627,10 +694,16 @@ export function ItineraryDayColumn({
 
           <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
             <div
+              data-testid="itinerary-day-mobile-timeline"
               className={`relative rounded-lg p-1 transition-colors duration-[120ms] ${
                 isSelected ? "ring-1 ring-ds-accent/15 bg-ds-midnight" : ""
               }`}
             >
+              {/* Mobile timeline vertical rail — editorial day-chapter flow */}
+              <div
+                className="lg:hidden absolute left-3 top-2 bottom-2 w-px bg-ds-pen-stroke/30"
+                aria-hidden="true"
+              />
               <TimelineSections
                 items={visibleItems}
                 dayId={day.id}
