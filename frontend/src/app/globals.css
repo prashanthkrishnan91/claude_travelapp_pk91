@@ -1143,4 +1143,267 @@
       inset 0 1px 0 rgba(235, 222, 198, 0.10),
       inset 0 -1px 0 rgba(0, 0, 0, 0.10);
   }
+
+  /* ════════════════════════════════════════════════════════════════
+     BOUTIQUE VISUAL COMPOSITION — Phase 8N-C
+     Real editorial composition primitives that create visible scene
+     differences in screenshots. Not shadow-only — actual colored zones,
+     binding marks, desk-lamp glows, folio tabs, and motif accents.
+     All motion guarded by prefers-reduced-motion (global rule above).
+     ════════════════════════════════════════════════════════════════ */
+
+  /* ── Editorial page scene wrapper
+     Subtle warm radial at top — like a desk lamp above the page canvas.
+     Apply to main page content wrappers (div.space-y-8 etc.). */
+  .editorial-scene {
+    position: relative;
+    background-image:
+      radial-gradient(
+        ellipse 70% 28% at 50% 0%,
+        rgba(197, 148, 77, 0.07) 0%,
+        transparent 100%
+      );
+  }
+
+  /* ── Advisor desk instrument panel
+     The primary editorial hero surface for Concierge entry and hero panels.
+     Has a visible warm desk-lamp glow + brass accent rule at top edge.
+     Apply alongside boutique-instrument on primary focal cards. */
+  .advisor-desk-panel {
+    position: relative;
+    border-radius: 1.25rem;
+    border: 1px solid rgba(197, 148, 77, 0.24);
+    background:
+      linear-gradient(
+        160deg,
+        rgba(30, 26, 22, 0.99) 0%,
+        rgba(22, 20, 17, 1) 50%,
+        rgba(18, 17, 14, 1) 100%
+      );
+    overflow: hidden;
+    box-shadow:
+      0 8px 16px rgba(0, 0, 0, 0.55),
+      0 24px 56px rgba(0, 0, 0, 0.45),
+      0 0 60px rgba(180, 130, 60, 0.08),
+      0 0 0 1px rgba(197, 148, 77, 0.18),
+      inset 0 1px 0 rgba(235, 222, 198, 0.12);
+  }
+
+  /* Desk-lamp warm radial — visible warm glow in upper half of panel */
+  .advisor-desk-panel::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 55%;
+    background: radial-gradient(
+      ellipse 80% 100% at 50% 0%,
+      rgba(197, 148, 77, 0.10) 0%,
+      transparent 100%
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Brass accent rule at top — visible editorial brass bar */
+  .advisor-desk-panel::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 1.5rem;
+    right: 1.5rem;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(197, 148, 77, 0.45) 20%,
+      rgba(224, 184, 136, 0.70) 50%,
+      rgba(197, 148, 77, 0.45) 80%,
+      transparent 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Ensure panel children render above pseudo-layers */
+  .advisor-desk-panel > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── Concierge desk header zone
+     The darker upper zone inside advisor-desk-panel for the header/masthead.
+     Creates a visible two-tone interior: header (warmer/darker) + body. */
+  .concierge-desk-header {
+    background:
+      linear-gradient(
+        160deg,
+        rgba(28, 24, 20, 1) 0%,
+        rgba(24, 21, 17, 1) 100%
+      );
+    border-bottom: 1px solid rgba(197, 148, 77, 0.20);
+    position: relative;
+  }
+
+  /* Subtle warm side-light in the desk header */
+  .concierge-desk-header::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(
+      ellipse 55% 100% at 15% 50%,
+      rgba(197, 148, 77, 0.07) 0%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+
+  /* ── Scrapbook page composition
+     Replace flat bg-ds-linen with a warm layered paper scene.
+     Has a visible left binding spine + warm paper gradient + stacking depth.
+     Apply to the Saved Ideas page container. */
+  .scrapbook-page {
+    position: relative;
+    background: linear-gradient(
+      168deg,
+      var(--ds-warm-paper) 0%,
+      color-mix(in srgb, var(--ds-warm-paper) 50%, var(--ds-bone)) 52%,
+      var(--ds-bone) 100%
+    );
+    overflow: hidden;
+    box-shadow:
+      0 4px 8px rgba(0, 0, 0, 0.14),
+      0 16px 48px rgba(0, 0, 0, 0.10),
+      inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  }
+
+  /* Left binding spine — visible warm brass strip (4px) */
+  .scrapbook-page::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(
+      to bottom,
+      rgba(197, 148, 77, 0.60) 0%,
+      rgba(224, 184, 136, 0.35) 35%,
+      rgba(197, 148, 77, 0.55) 65%,
+      rgba(180, 130, 60, 0.30) 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Right-edge page stacking illusion — subtle depth shadow */
+  .scrapbook-page::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 0.5rem;
+    bottom: 0.5rem;
+    width: 3px;
+    background: rgba(0, 0, 0, 0.055);
+    border-radius: 0 2px 2px 0;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* ── Folio cover tab
+     A visible warm brass gradient bar at the top of folio/journey cards.
+     Insert as the first child div of a flex-col card.
+     height: 3px, border-radius matches the parent card's 1rem corners. */
+  .folio-cover-tab {
+    height: 3px;
+    border-radius: 1rem 1rem 0 0;
+    background: linear-gradient(
+      90deg,
+      rgba(197, 148, 77, 0.0) 0%,
+      rgba(197, 148, 77, 0.50) 15%,
+      rgba(224, 184, 136, 0.75) 40%,
+      rgba(197, 148, 77, 0.60) 70%,
+      rgba(197, 148, 77, 0.0) 100%
+    );
+    pointer-events: none;
+    flex-shrink: 0;
+  }
+
+  /* ── Atelier stamp mark
+     Small circular decorative postmark/stamp accent for section headers.
+     Shows "AT" or similar short label. Use sparingly near editorial headers. */
+  .atelier-stamp {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9999px;
+    border: 1.5px solid rgba(197, 148, 77, 0.40);
+    background: rgba(197, 148, 77, 0.07);
+    color: var(--ds-ember-brass);
+    font-size: 0.5rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    opacity: 0.85;
+  }
+
+  /* ── Editorial section rule
+     Warm brass accent divider — left-weighted, fades right.
+     Use between sections to create editorial rhythm. */
+  .editorial-section-rule {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      rgba(197, 148, 77, 0.45) 0%,
+      rgba(197, 148, 77, 0.18) 30%,
+      rgba(197, 148, 77, 0.06) 60%,
+      transparent 100%
+    );
+    margin-bottom: 1.25rem;
+  }
+
+  /* ── Mapline rule
+     A dotted route-line decorative element between sections or below headings.
+     Creates the subtle editorial travel-route framing. */
+  .mapline-rule {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      rgba(197, 148, 77, 0.0) 0%,
+      rgba(197, 148, 77, 0.28) 15%,
+      rgba(197, 148, 77, 0.18) 50%,
+      rgba(197, 148, 77, 0.28) 85%,
+      rgba(197, 148, 77, 0.0) 100%
+    );
+    margin-block: 1rem;
+  }
+
+  /* ── Clipping card — individual saved-idea card as a press clipping
+     Use as a direct CSS class on the saved item card article.
+     Warm white card with paper-stack shadow on the scrapbook-page background. */
+  .clipping-card {
+    background: var(--ds-warm-paper);
+    border: 1px solid color-mix(in srgb, var(--ds-hairline) 85%, transparent);
+    border-radius: 0.5rem;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.08),
+      0 4px 12px rgba(0, 0, 0, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  }
+
+  /* ── Reduced-motion safe: no-op for purely decorative elements */
+  @media (prefers-reduced-motion: reduce) {
+    .advisor-desk-panel::before,
+    .advisor-desk-panel::after,
+    .concierge-desk-header::after,
+    .scrapbook-page::before,
+    .scrapbook-page::after { opacity: 1; }
+  }
 }

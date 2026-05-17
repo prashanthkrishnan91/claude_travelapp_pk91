@@ -84,6 +84,8 @@ function AtelierGreeting({ tripCount }: { tripCount: number }) {
           ? `${tripCount} trip${tripCount !== 1 ? "s" : ""} on your shelf.`
           : "Your private travel atelier. Plan, discover, and refine."}
       </p>
+      {/* Editorial mapline — route-motif accent below the greeting */}
+      <div className="mapline-rule mt-4" aria-hidden="true" />
     </header>
   );
 }
@@ -93,37 +95,46 @@ function AtelierGreeting({ tripCount }: { tripCount: number }) {
 function ConciergeEntry() {
   return (
     <section aria-label="AI Concierge" data-testid="concierge-entry">
-      <Card
-        as="div"
-        tone="dark"
-        className="p-6 boutique-instrument"
-      >
-        <div className="flex items-start gap-4">
-          <div
-            className="flex items-center justify-center w-12 h-12 rounded-xl bg-ds-accent-subtle text-ds-accent shrink-0"
-            aria-hidden="true"
-          >
-            <Sparkles className="w-6 h-6" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <Overline>Primary planning instrument</Overline>
-            <h2 className="text-base font-semibold text-ds-text mt-1.5 mb-1.5">
-              AI Travel Concierge
-            </h2>
-            <p className="text-sm text-ds-text-secondary leading-relaxed mb-4">
-              Ask for restaurants, hotels, or activities — anywhere. Your
-              private concierge, ready when you are.
-            </p>
-            <Link
-              href="/concierge"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-ds-accent text-ds-text-inverse text-sm font-semibold hover:opacity-90 transition-opacity min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+      {/* advisor-desk-panel: visible 2-zone desk composition (brass rule + warm glow) */}
+      <div className="advisor-desk-panel boutique-instrument" data-testid="concierge-advisor-desk">
+        {/* Desk header zone — warmer/darker band with stamp mark */}
+        <div className="concierge-desk-header px-6 pt-5 pb-4">
+          <div className="flex items-center gap-3">
+            <div
+              className="atelier-stamp shrink-0"
+              aria-hidden="true"
             >
-              Open Concierge
-              <ArrowRight className="w-4 h-4" aria-hidden="true" />
-            </Link>
+              AI
+            </div>
+            <div className="flex-1 min-w-0">
+              <Overline>Private Travel Concierge</Overline>
+              <h2 className="text-base font-semibold text-ds-text mt-0.5 leading-snug">
+                AI Travel Concierge
+              </h2>
+            </div>
+            <div
+              className="flex items-center justify-center w-9 h-9 rounded-xl bg-ds-accent-subtle text-ds-accent shrink-0"
+              aria-hidden="true"
+            >
+              <Sparkles className="w-4 h-4" />
+            </div>
           </div>
         </div>
-      </Card>
+        {/* Desk body — description and primary CTA */}
+        <div className="px-6 py-5">
+          <p className="text-sm text-ds-text-secondary leading-relaxed mb-4">
+            Ask for restaurants, hotels, or activities — anywhere. Your
+            private concierge, ready when you are.
+          </p>
+          <Link
+            href="/concierge"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-ds-accent text-ds-text-inverse text-sm font-semibold hover:opacity-90 transition-opacity min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          >
+            Open Concierge
+            <ArrowRight className="w-4 h-4" aria-hidden="true" />
+          </Link>
+        </div>
+      </div>
     </section>
   );
 }
@@ -289,6 +300,7 @@ function AtelierPlanningStrip() {
       aria-label="Discovery tools"
       data-testid="atelier-planning-strip"
     >
+      <div className="editorial-section-rule" aria-hidden="true" />
       <Overline>Discovery tools</Overline>
       <div className="grid grid-cols-2 gap-3 mt-3">
         <Link
@@ -380,7 +392,7 @@ export function DashboardClient() {
   const hasTrips = trips.length > 0;
 
   return (
-    <div className="space-y-8 atelier-transition" data-testid="atelier-home">
+    <div className="space-y-8 atelier-transition editorial-scene" data-testid="atelier-home">
       <AtelierGreeting tripCount={summary.tripCount} />
       <ConciergeEntry />
       {hasTrips && continuePlanning && (

@@ -149,8 +149,8 @@ export function TripBuilderForm() {
 
   // ── Form view ───────────────────────────────────────────────────────────────
   return (
-    <div className="w-full max-w-lg atelier-transition" data-testid="new-trip-form-container">
-      <form onSubmit={handleCreate} className="rounded-xl border border-ds-pen-stroke bg-ds-onyx p-6 sm:p-8 space-y-5 boutique-folio" data-testid="new-trip-builder-form">
+    <div className="w-full max-w-lg atelier-transition editorial-scene" data-testid="new-trip-form-container">
+      <form onSubmit={handleCreate} className="rounded-xl border border-ds-pen-stroke bg-ds-onyx p-6 sm:p-8 space-y-5 boutique-folio advisor-desk-panel" data-testid="new-trip-builder-form">
         <div>
           <label className="label">Flying from</label>
           <CityAutocomplete
