@@ -1398,6 +1398,55 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.95);
   }
 
+  /* ════════════════════════════════════════════════════════════════
+     SAVED IDEAS SURFACE RESCUE — Phase 8N-E
+     Replaces the cream-slab-on-black composition with an integrated
+     clipping desk layout. The scrapbook-page is scoped to the header
+     zone only; cards (clipping-card) float on the dark atelier surface
+     as actual travel clippings. Not a global background change.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* ── Saved clipping desk — outer shell
+     Transparent shell that sits on the dark atelier background.
+     Provides only a gentle warm lamp-glow at the top (header accent);
+     individual clipping-card items supply the paper warmth.
+     Contrast with scrapbook-page: no hard-edged cream block fill. */
+  .saved-clipping-desk {
+    position: relative;
+    background-image:
+      radial-gradient(
+        ellipse 70% 24% at 50% 0%,
+        rgba(197, 148, 77, 0.06) 0%,
+        transparent 100%
+      );
+  }
+
+  /* ── Saved clipping card accent
+     Applied to each SavedItemCard alongside .clipping-card.
+     Adds a subtle warm top-edge accent — like a tape or label mark
+     where the clipping was pinned to the desk. */
+  .saved-clipping-card {
+    position: relative;
+  }
+  .saved-clipping-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 1rem;
+    right: 1rem;
+    height: 1.5px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(197, 148, 77, 0.38) 20%,
+      rgba(197, 148, 77, 0.22) 65%,
+      transparent 100%
+    );
+    border-radius: 0 0 1px 1px;
+    pointer-events: none;
+    z-index: 1;
+  }
+
   /* ── Reduced-motion safe: no-op for purely decorative elements */
   @media (prefers-reduced-motion: reduce) {
     .advisor-desk-panel::before,
@@ -1405,5 +1454,6 @@
     .concierge-desk-header::after,
     .scrapbook-page::before,
     .scrapbook-page::after { opacity: 1; }
+    .saved-clipping-card::before { opacity: 1; }
   }
 }
