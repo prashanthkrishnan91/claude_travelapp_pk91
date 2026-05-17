@@ -1074,7 +1074,7 @@ export function ConciergePage() {
       {/* ── Concierge search instrument ───────────────────────────────────── */}
       <div
         data-testid="concierge-instrument-composer"
-        className="sticky bottom-0 z-10"
+        className="sticky z-10 concierge-sticky-bottom"
         style={{
           background: "var(--ds-onyx-velvet)",
           borderTop: "1px solid var(--ds-pen-stroke)",

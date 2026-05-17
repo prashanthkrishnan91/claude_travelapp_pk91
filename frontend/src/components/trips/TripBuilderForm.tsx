@@ -109,15 +109,15 @@ export function TripBuilderForm() {
   // ── Step loader view ────────────────────────────────────────────────────────
   if (creating) {
     return (
-      <div className="max-w-md">
-        <div className="card p-8 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-sky-50 flex items-center justify-center mx-auto mb-5">
-            <Sparkles className="w-7 h-7 text-sky-500 animate-pulse" />
+      <div className="w-full max-w-md" data-testid="new-trip-loading-state">
+        <div className="rounded-xl border border-ds-pen-stroke bg-ds-onyx p-8 text-center" style={{ boxShadow: "var(--ds-elevation-2)" }}>
+          <div className="w-14 h-14 rounded-2xl bg-ds-accent-subtle flex items-center justify-center mx-auto mb-5">
+            <Sparkles className="w-7 h-7 text-ds-accent animate-pulse" />
           </div>
-          <h2 className="text-lg font-bold text-slate-900 mb-1">Your AI concierge is working</h2>
-          <p className="text-sm text-slate-500 mb-7">Finding the best flights and hotels for your trip…</p>
+          <h2 className="text-lg font-semibold text-ds-text mb-1">Your AI concierge is working</h2>
+          <p className="text-sm text-ds-text-tertiary mb-7">Finding the best flights and hotels for your trip…</p>
 
-          <div className="space-y-3 text-left">
+          <div className="space-y-3 text-left" data-testid="new-trip-step-loader">
             {CREATION_STEPS.map((step, i) => {
               const done    = i < stepIndex;
               const active  = i === stepIndex;
@@ -129,13 +129,13 @@ export function TripBuilderForm() {
                   className={`flex items-center gap-3 text-sm transition-opacity ${pending ? "opacity-30" : "opacity-100"}`}
                 >
                   {done ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-ds-trust flex-shrink-0" />
                   ) : active ? (
-                    <Loader2 className="w-4 h-4 text-sky-500 animate-spin flex-shrink-0" />
+                    <Loader2 className="w-4 h-4 text-ds-accent animate-spin flex-shrink-0" />
                   ) : (
-                    <Icon className="w-4 h-4 text-slate-300 flex-shrink-0" />
+                    <Icon className="w-4 h-4 text-ds-pen-stroke flex-shrink-0" />
                   )}
-                  <span className={done ? "text-slate-500" : active ? "text-slate-900 font-medium" : "text-slate-400"}>
+                  <span className={done ? "text-ds-text-tertiary" : active ? "text-ds-text font-medium" : "text-ds-text-tertiary opacity-60"}>
                     {step.label}
                   </span>
                 </div>
@@ -149,8 +149,8 @@ export function TripBuilderForm() {
 
   // ── Form view ───────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-lg">
-      <form onSubmit={handleCreate} className="card p-6 sm:p-8 space-y-5">
+    <div className="w-full max-w-lg" data-testid="new-trip-form-container">
+      <form onSubmit={handleCreate} className="rounded-xl border border-ds-pen-stroke bg-ds-onyx p-6 sm:p-8 space-y-5" style={{ boxShadow: "var(--ds-elevation-1)" }} data-testid="new-trip-builder-form">
         <div>
           <label className="label">Flying from</label>
           <CityAutocomplete
@@ -159,7 +159,7 @@ export function TripBuilderForm() {
             onChange={setOriginSel}
           />
           {originSel && originSel.airports.length > 1 && (
-            <p className="mt-1 text-xs text-sky-600 flex items-center gap-1">
+            <p className="mt-1 text-xs text-ds-accent flex items-center gap-1">
               <Plane className="w-3 h-3" />
               {originSel.airports.length} airports: {originSel.airports.join(", ")}
             </p>
@@ -174,14 +174,14 @@ export function TripBuilderForm() {
             onChange={setDestSel}
           />
           {destSel && destSel.airports.length > 1 && (
-            <p className="mt-1 text-xs text-sky-600 flex items-center gap-1">
+            <p className="mt-1 text-xs text-ds-accent flex items-center gap-1">
               <Plane className="w-3 h-3" />
               {destSel.airports.length} airports: {destSel.airports.join(", ")}
             </p>
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="label" htmlFor="start-date">Departure date</label>
             <input
@@ -208,8 +208,8 @@ export function TripBuilderForm() {
         </div>
 
         {startDate && endDate && (
-          <div className="rounded-xl bg-sky-50 border border-sky-100 px-4 py-2.5 text-sm text-sky-700">
-            <span className="font-medium">Trip length: </span>
+          <div className="rounded-xl border border-ds-pen-stroke bg-ds-carbon px-4 py-2.5 text-sm text-ds-text-secondary" data-testid="trip-length-info">
+            <span className="font-medium text-ds-text">Trip length: </span>
             {Math.max(1, Math.ceil(
               (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)
             ))}{" "}
@@ -221,15 +221,16 @@ export function TripBuilderForm() {
           <div
             role="alert"
             data-testid="trip-builder-provider-unavailable"
-            className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 space-y-2"
+            className="rounded-xl border border-ds-caution/20 px-4 py-3 text-sm space-y-2"
+            style={{ background: "color-mix(in srgb, var(--ds-caution) 8%, transparent)" }}
           >
-            <p className="font-medium">Flights & hotels search is temporarily unavailable</p>
-            <p>{PROVIDER_UNAVAILABLE_COPY}</p>
+            <p className="font-semibold text-ds-caution">Flights &amp; hotels search is temporarily unavailable</p>
+            <p className="text-ds-text-tertiary">{PROVIDER_UNAVAILABLE_COPY}</p>
             <button
               type="button"
               onClick={handleCreateBlankTrip}
               disabled={creatingBlank || !destSel || !startDate || !endDate}
-              className="inline-flex items-center gap-1.5 text-amber-900 underline underline-offset-2 hover:text-amber-950 disabled:opacity-50 disabled:no-underline"
+              className="inline-flex items-center gap-1.5 text-ds-accent underline underline-offset-2 hover:text-ds-accent-muted disabled:opacity-50 disabled:no-underline"
             >
               {creatingBlank ? (
                 <>
@@ -244,7 +245,11 @@ export function TripBuilderForm() {
         )}
 
         {error && (
-          <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          <div
+            role="alert"
+            className="rounded-xl border border-ds-warning/30 px-4 py-3 text-sm text-ds-warning"
+            style={{ background: "color-mix(in srgb, var(--ds-warning) 8%, transparent)" }}
+          >
             {error}
           </div>
         )}
@@ -258,7 +263,7 @@ export function TripBuilderForm() {
           Create Trip
         </button>
 
-        <p className="text-xs text-slate-400 text-center">
+        <p className="text-xs text-ds-text-tertiary text-center">
           Your AI concierge will automatically find and rank the best flights and hotels.
         </p>
       </form>

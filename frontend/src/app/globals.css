@@ -963,4 +963,12 @@
   @media (min-width: 1024px) {
     .mobile-nav-spacer { padding-bottom: 2rem; }
   }
+
+  /* Concierge sticky search bar — clears mobile bottom nav on phones */
+  .concierge-sticky-bottom {
+    bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+  }
+  @media (min-width: 1024px) {
+    .concierge-sticky-bottom { bottom: 0; }
+  }
 }

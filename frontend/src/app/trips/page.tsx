@@ -733,8 +733,8 @@ export default function TripsPage() {
       )}
 
       {/* Page header — editorial shelf heading */}
-      <div className="flex items-start justify-between gap-4 mb-8">
-        <div>
+      <div className="flex items-start justify-between gap-4 mb-8" data-testid="my-trips-page-header">
+        <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary mb-1">
             Your Travel Shelf
           </p>

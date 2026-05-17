@@ -6,12 +6,12 @@ export const metadata: Metadata = { title: "New Trip" };
 
 export default function NewTripPage() {
   return (
-    <>
+    <div data-testid="new-trip-page">
       <PageHeader
         title="Plan a New Trip"
         description="Fill in the details and let the AI concierge build your perfect itinerary."
       />
       <TripBuilderForm />
-    </>
+    </div>
   );
 }
