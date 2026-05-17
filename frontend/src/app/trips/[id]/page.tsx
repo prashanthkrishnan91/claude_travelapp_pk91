@@ -180,6 +180,7 @@ export default function TripDetailPage() {
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-base font-semibold text-ds-text">Edit Trip</h2>
               <button
+                type="button"
                 onClick={() => setEditOpen(false)}
                 aria-label="Close edit dialog"
                 className="p-1.5 rounded-lg hover:bg-ds-carbon text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
@@ -216,8 +217,8 @@ export default function TripDetailPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setEditOpen(false)} className={COVER_GHOST}>Cancel</button>
-              <button onClick={handleUpdate} disabled={saving || !editForm.title.trim()} className={COVER_PRIMARY}>
+              <button type="button" onClick={() => setEditOpen(false)} className={COVER_GHOST}>Cancel</button>
+              <button type="button" onClick={handleUpdate} disabled={saving || !editForm.title.trim()} className={COVER_PRIMARY}>
                 {saving ? "Saving…" : "Save Changes"}
               </button>
             </div>
@@ -234,8 +235,9 @@ export default function TripDetailPage() {
               This will permanently delete the trip and all its itinerary items. This cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirmDelete(false)} className={COVER_GHOST}>Cancel</button>
+              <button type="button" onClick={() => setConfirmDelete(false)} className={COVER_GHOST}>Cancel</button>
               <button
+                type="button"
                 onClick={handleDelete}
                 className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] text-sm font-medium bg-ds-warning text-ds-text-inverse rounded-lg hover:opacity-90 transition-opacity duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               >
@@ -322,6 +324,7 @@ export default function TripDetailPage() {
             data-testid="chapter-actions"
           >
             <button
+              type="button"
               onClick={() => setConciergeOpen(true)}
               data-testid="chapter-action-concierge"
               className={COVER_PRIMARY}
@@ -330,6 +333,7 @@ export default function TripDetailPage() {
               AI Concierge
             </button>
             <button
+              type="button"
               onClick={() => setOptimizeOpen(true)}
               data-testid="chapter-action-optimize"
               className={COVER_GHOST}
@@ -338,6 +342,7 @@ export default function TripDetailPage() {
               Optimize
             </button>
             <button
+              type="button"
               onClick={openEdit}
               data-testid="chapter-action-edit"
               className={COVER_GHOST}
@@ -346,6 +351,7 @@ export default function TripDetailPage() {
               Edit Trip
             </button>
             <button
+              type="button"
               onClick={() => setConfirmDelete(true)}
               data-testid="chapter-action-delete"
               className={COVER_DANGER}

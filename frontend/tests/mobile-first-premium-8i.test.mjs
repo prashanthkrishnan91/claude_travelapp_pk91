@@ -384,3 +384,174 @@ test('TripBuilder lg:items-start used for lg-breakpoint alignment', () => {
   assert.ok(tripBuilder.includes('lg:items-start'),
     'TripBuilder must use lg:items-start so candidate panel and itinerary align at top on desktop');
 });
+
+// ── Phase 8I patch: semantic type="button" and 44px touch targets ────────────
+
+// ExploreShell
+test('ExploreShell Back breadcrumb button has type="button"', () => {
+  const breadcrumb = exploreShell.slice(
+    exploreShell.indexOf('explore-lounge-breadcrumb'),
+    exploreShell.indexOf('explore-lounge-breadcrumb') + 600
+  );
+  assert.ok(breadcrumb.includes('type="button"'),
+    'Breadcrumb Back button must have type="button"');
+});
+
+test('ExploreShell Back breadcrumb button has min-h-[44px] touch target', () => {
+  const breadcrumb = exploreShell.slice(
+    exploreShell.indexOf('explore-lounge-breadcrumb'),
+    exploreShell.indexOf('explore-lounge-breadcrumb') + 600
+  );
+  assert.ok(breadcrumb.includes('min-h-[44px]'),
+    'Breadcrumb Back button must have min-h-[44px] touch target');
+});
+
+test('ExploreShell VerticalCard button has type="button"', () => {
+  const cardFn = exploreShell.slice(exploreShell.indexOf('function VerticalCard'));
+  assert.ok(cardFn.includes('type="button"'),
+    'VerticalCard button must have type="button"');
+});
+
+test('ExploreShell VerticalCard button has min-h-[44px] touch target', () => {
+  const cardFn = exploreShell.slice(exploreShell.indexOf('function VerticalCard'));
+  assert.ok(cardFn.includes('min-h-[44px]'),
+    'VerticalCard button must have min-h-[44px] touch target');
+});
+
+// HotelExploreFlow
+test('HotelExploreFlow hotel-compare-cta has min-h-[44px] touch target', () => {
+  const ctaSection = hotelFlow.slice(
+    hotelFlow.indexOf('hotel-compare-cta') - 500,
+    hotelFlow.indexOf('hotel-compare-cta') + 200
+  );
+  assert.ok(ctaSection.includes('min-h-[44px]'),
+    'hotel-compare-cta link must have min-h-[44px] touch target');
+});
+
+test('HotelExploreFlow hotel-compare-cta preserves href and target="_blank"', () => {
+  const ctaSection = hotelFlow.slice(
+    hotelFlow.indexOf('hotel-compare-cta') - 600,
+    hotelFlow.indexOf('hotel-compare-cta') + 100
+  );
+  assert.ok(ctaSection.includes('href={compareLink}') || ctaSection.includes('href='),
+    'hotel-compare-cta must preserve its href');
+  assert.ok(ctaSection.includes('target="_blank"'),
+    'hotel-compare-cta must preserve target="_blank"');
+});
+
+// ConciergePage starter prompt chips
+test('ConciergePage starter prompt chips have min-h-[44px] touch target', () => {
+  // Search from the JSX map call (not the const definition which is far above)
+  const mapIdx = conciergePage.indexOf('EDITORIAL_PROMPTS.map');
+  const emptyState = conciergePage.slice(mapIdx, mapIdx + 600);
+  assert.ok(emptyState.includes('min-h-[44px]'),
+    'Starter prompt chips must have min-h-[44px] touch target');
+});
+
+test('ConciergePage starter prompt chips remain type="button"', () => {
+  const emptyState = conciergePage.slice(
+    conciergePage.indexOf('concierge-empty-state'),
+    conciergePage.indexOf('concierge-empty-state') + 800
+  );
+  assert.ok(emptyState.includes('type="button"'),
+    'Starter prompt chips must remain type="button"');
+});
+
+test('ConciergePage starter prompt chips only populate input, do not auto-submit', () => {
+  const chipOnClick = conciergePage.slice(
+    conciergePage.indexOf('EDITORIAL_PROMPTS.map'),
+    conciergePage.indexOf('EDITORIAL_PROMPTS.map') + 400
+  );
+  assert.ok(chipOnClick.includes('setInput(prompt)'),
+    'Chip onClick must call setInput to populate input');
+  assert.ok(chipOnClick.includes("inputRef.current?.focus()"),
+    'Chip onClick must focus the input');
+  assert.ok(!chipOnClick.includes('handleUserInput') && !chipOnClick.includes('sendQuery'),
+    'Chip onClick must NOT call handleUserInput or sendQuery — chips only populate input');
+});
+
+test('ConciergePage starter prompt chips do not set hardcoded destination', () => {
+  const chipOnClick = conciergePage.slice(
+    conciergePage.indexOf('EDITORIAL_PROMPTS.map'),
+    conciergePage.indexOf('EDITORIAL_PROMPTS.map') + 400
+  );
+  assert.ok(!chipOnClick.includes('setDestination('),
+    'Chip onClick must not call setDestination — chips only populate query input, not destination');
+});
+
+// TripDetail chapter action buttons
+test('TripDetail chapter-action-concierge button has type="button"', () => {
+  const conciergeBtn = tripDetailPage.slice(
+    tripDetailPage.indexOf('chapter-action-concierge') - 200,
+    tripDetailPage.indexOf('chapter-action-concierge') + 50
+  );
+  assert.ok(conciergeBtn.includes('type="button"'),
+    'chapter-action-concierge must have type="button"');
+});
+
+test('TripDetail chapter-action-edit button has type="button"', () => {
+  const editBtn = tripDetailPage.slice(
+    tripDetailPage.indexOf('chapter-action-edit') - 200,
+    tripDetailPage.indexOf('chapter-action-edit') + 50
+  );
+  assert.ok(editBtn.includes('type="button"'),
+    'chapter-action-edit must have type="button"');
+});
+
+test('TripDetail edit modal close button has type="button"', () => {
+  const closeBtn = tripDetailPage.slice(
+    tripDetailPage.indexOf('Close edit dialog') - 100,
+    tripDetailPage.indexOf('Close edit dialog') + 50
+  );
+  assert.ok(closeBtn.includes('type="button"'),
+    'Edit modal close button must have type="button"');
+});
+
+test('TripDetail modal Cancel buttons have type="button"', () => {
+  assert.ok(tripDetailPage.includes('type="button"'),
+    'TripDetail must have type="button" on non-submit buttons');
+});
+
+// TripBuilder control surface type="button"
+test('TripBuilder SortControl option buttons have type="button"', () => {
+  const sortSection = tripBuilder.slice(
+    tripBuilder.indexOf('function SortControl'),
+    tripBuilder.indexOf('function SortControl') + 600
+  );
+  assert.ok(sortSection.includes('type="button"'),
+    'SortControl option buttons must have type="button"');
+});
+
+test('TripBuilder CandidatePanel toggle button has type="button"', () => {
+  const panelSection = tripBuilder.slice(
+    tripBuilder.indexOf('function CandidatePanel'),
+    tripBuilder.indexOf('function CandidatePanel') + 1200
+  );
+  assert.ok(panelSection.includes('type="button"'),
+    'CandidatePanel toggle button must have type="button"');
+});
+
+test('TripBuilder List/Map view toggle buttons have type="button"', () => {
+  const viewSection = tripBuilder.slice(
+    tripBuilder.indexOf('setViewMode("list")') - 50,
+    tripBuilder.indexOf('setViewMode("map")') + 200
+  );
+  assert.ok(viewSection.includes('type="button"'),
+    'List/Map view toggle buttons must have type="button"');
+});
+
+test('TripBuilder Add Day button has type="button"', () => {
+  // Use JSX onClick usage, not the callback definition
+  const jsxIdx = tripBuilder.indexOf('onClick={handleAddDay}');
+  const addDaySection = tripBuilder.slice(jsxIdx - 200, jsxIdx + 100);
+  assert.ok(addDaySection.includes('type="button"'),
+    'Add Day button must have type="button"');
+});
+
+test('TripBuilder Compare bar buttons have type="button"', () => {
+  // Use JSX onClick usage to find the compare button
+  const jsxIdx = tripBuilder.indexOf('onClick={handleCompare}');
+  const compareSection = tripBuilder.slice(jsxIdx - 200, jsxIdx + 300);
+  assert.ok(compareSection.includes('type="button"'),
+    'Compare bar buttons must have type="button"');
+});

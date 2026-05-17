@@ -348,7 +348,7 @@ function HotelCard({
             href={compareLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-ds-accent text-xs transition-colors hover:text-ds-accent-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-[44px] rounded-lg text-ds-accent text-xs transition-colors hover:text-ds-accent-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
             style={{ backgroundColor: "var(--ds-accent-subtle)" }}
             aria-label={`Compare prices for ${h.name}`}
             data-testid="hotel-compare-cta"

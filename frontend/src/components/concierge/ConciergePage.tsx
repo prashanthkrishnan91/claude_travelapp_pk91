@@ -733,7 +733,7 @@ export function ConciergePage() {
                     setInput(prompt);
                     inputRef.current?.focus();
                   }}
-                  className="rounded-lg bg-ds-carbon text-ds-text-secondary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  className="rounded-lg bg-ds-carbon text-ds-text-secondary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
                   style={{
                     padding: "var(--ds-space-2) var(--ds-space-4)",
                     fontSize: "var(--ds-type-body-s-size)",

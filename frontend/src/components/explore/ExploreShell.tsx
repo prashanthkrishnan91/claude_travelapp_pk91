@@ -65,8 +65,9 @@ export function ExploreShell() {
         {/* Editorial breadcrumb */}
         <div className="flex items-center gap-3" data-testid="explore-lounge-breadcrumb">
           <button
+            type="button"
             onClick={() => setActive(null)}
-            className="flex items-center gap-1.5 text-sm text-ds-text-tertiary hover:text-ds-text transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            className="flex items-center gap-1.5 min-h-[44px] text-sm text-ds-text-tertiary hover:text-ds-text transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
             aria-label="Back to Explore"
           >
             <ArrowLeft className="w-4 h-4" aria-hidden="true" />
@@ -137,8 +138,9 @@ function VerticalCard({
   const Icon = meta.icon;
   return (
     <button
+      type="button"
       onClick={onSelect}
-      className="rounded-xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-1)] hover:bg-ds-carbon card-lift p-5 text-left flex items-start gap-4 w-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+      className="rounded-xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-1)] hover:bg-ds-carbon card-lift p-5 text-left flex items-start gap-4 w-full min-h-[44px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
       aria-label={`Explore ${meta.label}`}
       data-testid={`vertical-card-${meta.id}`}
     >
