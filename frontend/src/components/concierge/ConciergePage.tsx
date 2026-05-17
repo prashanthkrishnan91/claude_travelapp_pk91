@@ -651,14 +651,15 @@ export function ConciergePage() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col" style={{ minHeight: "calc(100svh - 10rem)" }}>
-      {/* ── Editorial header ─────────────────────────────────────────────── */}
+    <div data-testid="concierge-page" className="flex flex-col" style={{ minHeight: "calc(100svh - 10rem)" }}>
+      {/* ── Concierge desk instrument header ─────────────────────────────── */}
       <header
+        data-testid="concierge-instrument-header"
         className="text-center"
         style={{ paddingBottom: "var(--ds-space-8)" }}
       >
         <p
-          className="text-ds-accent uppercase tracking-[0.12em]"
+          className="text-ds-accent uppercase tracking-[0.1em]"
           style={{
             fontSize: "var(--ds-type-overline-size)",
             lineHeight: "var(--ds-type-overline-leading)",
@@ -677,7 +678,7 @@ export function ConciergePage() {
             marginTop: "var(--ds-space-2)",
           }}
         >
-          {lastQuery ? `"${lastQuery}"` : "Where would you like to go?"}
+          {lastQuery ? `"${lastQuery}"` : "What can I find for you?"}
         </h1>
         {!lastQuery && (
           <p
@@ -691,13 +692,14 @@ export function ConciergePage() {
           >
             Describe a mood, a neighbourhood, or an occasion.
             <br />
-            We surface verified places worth your time.
+            I surface verified places worth your time.
           </p>
         )}
       </header>
 
       {/* ── Result canvas ─────────────────────────────────────────────────── */}
       <main
+        data-testid="concierge-results-canvas"
         aria-label="Concierge results"
         aria-live="polite"
         aria-atomic="false"
@@ -707,6 +709,7 @@ export function ConciergePage() {
         {/* Empty / initial state */}
         {!loading && !hasResults && messages.length === 0 && (
           <div
+            data-testid="concierge-empty-state"
             className="flex flex-col items-center"
             style={{ paddingTop: "var(--ds-space-6)" }}
           >
@@ -718,7 +721,7 @@ export function ConciergePage() {
                 marginBottom: "var(--ds-space-5)",
               }}
             >
-              A few starting points to get you going:
+              Starting points — tell me where to search:
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
               {EDITORIAL_PROMPTS.map((prompt) => (
@@ -748,23 +751,27 @@ export function ConciergePage() {
         {/* Messages — transcript: user turns + assistant card groups in order */}
         <div className="space-y-4">
           {messages.map((msg, idx) => {
-            // User turn: show the submitted message as a right-aligned bubble
+            // User turn: quiet query marker — not a chat bubble. The search query
+            // appears as a left-border annotation, keeping transcript usable without
+            // dominating the concierge result cards.
             if (msg.role === "user") {
               return (
-                <div key={idx} className="flex justify-end">
-                  <div
-                    className="text-ds-text rounded-2xl rounded-tr-sm"
+                <div
+                  key={idx}
+                  data-testid="concierge-user-query"
+                  className="border-l-2 pl-3 my-2"
+                  style={{ borderColor: "var(--ds-pen-stroke)" }}
+                >
+                  <p
+                    className="text-ds-text-tertiary italic"
                     style={{
-                      background: "var(--ds-accent-subtle)",
-                      padding: "var(--ds-space-3) var(--ds-space-4)",
-                      fontSize: "var(--ds-type-body-size)",
-                      lineHeight: "var(--ds-type-body-leading)",
-                      maxWidth: "80%",
+                      fontSize: "var(--ds-type-body-s-size)",
+                      lineHeight: "var(--ds-type-body-s-leading)",
                       wordBreak: "break-word",
                     }}
                   >
                     {msg.text}
-                  </div>
+                  </p>
                 </div>
               );
             }
@@ -831,7 +838,7 @@ export function ConciergePage() {
             );
 
             return (
-              <section key={idx} aria-label="Place recommendations">
+              <section key={idx} data-testid="concierge-result-section" aria-label="Place recommendations">
                 <div className="space-y-3">
                   {addablePlaces.map(({ place, sourceLink }) => {
                     const title =
@@ -992,6 +999,7 @@ export function ConciergePage() {
         {/* Loading state — honest staged text, no fake progress */}
         {loading && (
           <div
+            data-testid="concierge-loading-state"
             className="flex items-center gap-3"
             style={{ marginTop: "var(--ds-space-6)" }}
             role="status"
@@ -1014,6 +1022,7 @@ export function ConciergePage() {
         {/* Error state — named constraint + retry */}
         {error && !loading && (
           <div
+            data-testid="concierge-error-state"
             className="flex items-start gap-3 rounded-lg"
             style={{
               border: "1px solid var(--ds-warning)",
@@ -1062,8 +1071,9 @@ export function ConciergePage() {
         <div ref={bottomRef} style={{ height: "var(--ds-space-1)" }} />
       </main>
 
-      {/* ── Sticky composer ───────────────────────────────────────────────── */}
+      {/* ── Concierge search instrument ───────────────────────────────────── */}
       <div
+        data-testid="concierge-instrument-composer"
         className="sticky bottom-0 z-10"
         style={{
           background: "var(--ds-onyx-velvet)",
@@ -1099,14 +1109,25 @@ export function ConciergePage() {
           </div>
         )}
 
-        {/* Destination field */}
+        {/* Destination field — visible label for instrument clarity */}
         <div
+          data-testid="concierge-destination-field"
           style={{
             padding: "var(--ds-space-3) var(--ds-space-4) 0 var(--ds-space-4)",
           }}
         >
-          <label htmlFor="concierge-destination" className="sr-only">
-            Destination
+          <label
+            htmlFor="concierge-destination"
+            className="text-ds-text-tertiary uppercase tracking-[0.1em]"
+            style={{
+              display: "block",
+              fontSize: "var(--ds-type-overline-size)",
+              fontWeight: "var(--ds-type-overline-weight)",
+              lineHeight: "var(--ds-type-overline-leading)",
+              marginBottom: "var(--ds-space-1)",
+            }}
+          >
+            Where
           </label>
           <div
             className="flex items-center gap-2 rounded-xl bg-ds-carbon transition-colors duration-[120ms]"
@@ -1153,7 +1174,7 @@ export function ConciergePage() {
           )}
         </div>
 
-        {/* Input row */}
+        {/* Input row — instrument search entry */}
         <div
           className="flex items-end gap-3"
           style={{
@@ -1165,8 +1186,9 @@ export function ConciergePage() {
             <button
               type="button"
               onClick={clearTranscript}
-              aria-label="Clear chat"
-              title="Clear chat"
+              aria-label="Clear search history"
+              title="Clear search history"
+              data-testid="concierge-clear-chat"
               className="shrink-0 rounded-xl bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               style={{
                 padding: "var(--ds-space-3)",
@@ -1195,10 +1217,11 @@ export function ConciergePage() {
                 void handleUserInput(input.trim());
               }
             }}
-            placeholder="Describe what you're looking for…"
+            placeholder="What can I find for you?"
             disabled={loading}
             rows={1}
             aria-label="Concierge query"
+            data-testid="concierge-query-input"
             className="flex-1 resize-none rounded-xl bg-ds-carbon text-ds-text placeholder:text-ds-text-tertiary border border-ds-pen-stroke hover:border-ds-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 disabled:opacity-50 transition-colors duration-[120ms]"
             style={{
               padding: "var(--ds-space-3) var(--ds-space-4)",
@@ -1212,6 +1235,7 @@ export function ConciergePage() {
             onClick={() => void handleUserInput(input.trim())}
             disabled={loading || !input.trim()}
             aria-label="Submit query"
+            data-testid="concierge-submit-button"
             className="shrink-0 rounded-xl text-ds-text-inverse disabled:opacity-40 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 hover:brightness-110"
             style={{
               background: "var(--ds-accent)",

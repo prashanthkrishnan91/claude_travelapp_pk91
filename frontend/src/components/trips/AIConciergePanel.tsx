@@ -1075,32 +1075,83 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
   return (
     <div className="fixed inset-0 z-50 flex justify-end" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative flex h-full w-full max-w-md flex-col border-l border-ds-pen-stroke bg-ds-midnight text-ds-text shadow-2xl">
-        <div className="flex items-center justify-between border-b border-ds-pen-stroke bg-ds-onyx px-4 py-3">
-          <div className="flex items-center gap-2 text-ds-text">
-            <Sparkles className="h-4 w-4 text-ds-accent" />
-            <span className="text-sm font-semibold">AI Concierge</span>
-            {destination && <span className="text-xs text-ds-text-tertiary">· {destination}</span>}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleClearChat}
-              className="rounded border border-ds-pen-stroke bg-ds-carbon px-2.5 py-1 text-[11px] font-medium text-ds-text hover:bg-ds-pen-stroke focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-            >
-              Clear chat
-            </button>
-            <button onClick={onClose} className="rounded p-1 text-ds-text-tertiary hover:bg-ds-carbon focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2" aria-label="Close">
-              <X className="h-4 w-4" />
-            </button>
+      {/* Panel — travel chapter sidebar instrument */}
+      <div data-testid="ai-concierge-panel" className="relative flex h-full w-full max-w-md flex-col border-l border-ds-pen-stroke bg-ds-midnight text-ds-text shadow-[var(--ds-elevation-4)]">
+
+        {/* Editorial panel header — mirrors standalone concierge desk grammar */}
+        <div data-testid="concierge-panel-header" className="border-b border-ds-pen-stroke bg-ds-onyx px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="h-3 w-3 text-ds-accent shrink-0" aria-hidden="true" />
+                <span
+                  className="text-ds-accent uppercase tracking-[0.1em]"
+                  style={{
+                    fontSize: "var(--ds-type-overline-size)",
+                    fontWeight: "var(--ds-type-overline-weight)",
+                    lineHeight: "var(--ds-type-overline-leading)",
+                  }}
+                >
+                  Private Travel Concierge
+                </span>
+              </div>
+              {destination && (
+                <p
+                  className="text-ds-text font-semibold truncate mt-0.5"
+                  style={{
+                    fontSize: "var(--ds-type-body-size)",
+                    lineHeight: "var(--ds-type-body-leading)",
+                  }}
+                >
+                  {destination}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleClearChat}
+                data-testid="concierge-panel-clear"
+                className="rounded-lg border border-ds-pen-stroke bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                style={{
+                  padding: "var(--ds-space-1) var(--ds-space-2)",
+                  fontSize: "var(--ds-type-overline-size)",
+                  fontWeight: "var(--ds-type-overline-weight)",
+                }}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                data-testid="concierge-panel-close"
+                className="rounded-lg p-1.5 text-ds-text-tertiary hover:bg-ds-carbon hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                aria-label="Close Concierge"
+                style={{ minWidth: "32px", minHeight: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="border-b border-ds-pen-stroke bg-ds-onyx px-4 py-2.5">
-          <label className="text-[11px] font-medium uppercase tracking-[0.08em] text-ds-text-tertiary">Target day for Add to Day</label>
+        {/* Day selector — editorial Overline label, correct tracking */}
+        <div data-testid="concierge-panel-day-selector" className="border-b border-ds-pen-stroke bg-ds-onyx px-4 py-2.5">
+          <label
+            className="text-ds-text-tertiary uppercase tracking-[0.1em]"
+            style={{
+              fontSize: "var(--ds-type-overline-size)",
+              fontWeight: "var(--ds-type-overline-weight)",
+              lineHeight: "var(--ds-type-overline-leading)",
+            }}
+          >
+            Add to Day
+          </label>
           <select
             value={selectedDayId}
             onChange={(e) => setSelectedDayId(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-ds-pen-stroke bg-ds-carbon px-2 py-1.5 text-xs text-ds-text"
+            className="mt-1 w-full rounded-lg border border-ds-pen-stroke bg-ds-carbon px-2 py-1.5 text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            style={{ fontSize: "var(--ds-type-body-s-size)", lineHeight: "var(--ds-type-body-s-leading)" }}
           >
             {tripDays.length === 0 && <option value="">No days yet</option>}
             {tripDays.map((day) => (
@@ -1111,41 +1162,78 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
           </select>
         </div>
 
-        <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+        <div data-testid="concierge-panel-transcript" className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
           {loadingHistory && (
-            <div className="rounded-lg bg-ds-carbon px-3 py-2 text-xs text-ds-text-secondary">Loading previous chat…</div>
+            <div className="rounded-lg border border-ds-pen-stroke bg-ds-carbon px-3 py-2 text-ds-text-secondary" style={{ fontSize: "var(--ds-type-body-s-size)" }}>
+              Loading previous sessions…
+            </div>
           )}
 
           {loading && messages.length === 0 && (
-            <div className="rounded-lg bg-ds-carbon px-3 py-2 text-xs text-ds-text-secondary">Loading concierge…</div>
+            <div className="rounded-lg border border-ds-pen-stroke bg-ds-carbon px-3 py-2 text-ds-text-secondary" style={{ fontSize: "var(--ds-type-body-s-size)" }}>
+              Preparing your concierge…
+            </div>
           )}
 
           {error && (
-            <div className="rounded-lg border border-ds-pen-stroke bg-ds-carbon px-3 py-2 text-xs text-ds-warning">{error}</div>
+            <div className="rounded-lg border border-ds-pen-stroke bg-ds-carbon px-3 py-2 text-ds-warning" style={{ fontSize: "var(--ds-type-body-s-size)" }}>{error}</div>
           )}
 
           {historyWarning && (
-            <div className="rounded-lg border border-ds-pen-stroke bg-ds-carbon px-3 py-2 text-xs text-ds-text-secondary">
+            <div className="rounded-lg border border-ds-pen-stroke bg-ds-carbon px-3 py-2 text-ds-text-secondary" style={{ fontSize: "var(--ds-type-body-s-size)" }}>
               {historyWarning}
             </div>
           )}
 
           {messages.map((msg, idx) => (
             <div key={idx} className="space-y-2">
-              <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                {msg.role === "assistant" && msg.intent === "compare" ? (
-                  <div className="w-full rounded-xl border border-ds-pen-stroke bg-ds-carbon p-3">
-                    <div className="mb-1.5 flex items-center gap-1.5">
-                      <span className="rounded-full bg-ds-onyx px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ds-accent">Comparison</span>
-                    </div>
-                    <p className="text-xs leading-relaxed text-ds-text-secondary">{msg.text}</p>
-                  </div>
-                ) : (
-                  <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${msg.role === "user" ? "rounded-br-sm bg-ds-accent/15 text-ds-text ring-1 ring-ds-accent/30" : "rounded-bl-sm bg-ds-carbon text-ds-text"}`}>
+              {/* User turn: quiet query marker — not a chat bubble */}
+              {msg.role === "user" && (
+                <div
+                  data-testid="concierge-panel-user-query"
+                  className="border-l-2 pl-3 py-0.5"
+                  style={{ borderColor: "var(--ds-pen-stroke)" }}
+                >
+                  <p
+                    className="text-ds-text-tertiary italic"
+                    style={{
+                      fontSize: "var(--ds-type-body-s-size)",
+                      lineHeight: "var(--ds-type-body-s-leading)",
+                      wordBreak: "break-word",
+                    }}
+                  >
                     {msg.text}
+                  </p>
+                </div>
+              )}
+
+              {/* Compare intent — keep special compare widget */}
+              {msg.role === "assistant" && msg.intent === "compare" && (
+                <div className="w-full rounded-xl border border-ds-pen-stroke bg-ds-carbon p-3">
+                  <div className="mb-1.5 flex items-center gap-1.5">
+                    <span
+                      className="rounded-lg bg-ds-onyx px-2 py-0.5 text-ds-accent uppercase tracking-[0.1em]"
+                      style={{ fontSize: "var(--ds-type-overline-size)", fontWeight: "var(--ds-type-overline-weight)" }}
+                    >
+                      Comparison
+                    </span>
                   </div>
-                )}
-              </div>
+                  <p className="text-ds-text-secondary" style={{ fontSize: "var(--ds-type-body-s-size)", lineHeight: "var(--ds-type-body-s-leading)" }}>{msg.text}</p>
+                </div>
+              )}
+
+              {/* Regular assistant text — plain, no bubble */}
+              {msg.role === "assistant" && msg.intent !== "compare" && (
+                <p
+                  className="text-ds-text-secondary"
+                  style={{
+                    fontSize: "var(--ds-type-body-s-size)",
+                    lineHeight: "var(--ds-type-body-s-leading)",
+                  }}
+                >
+                  {msg.text}
+                </p>
+              )}
 
               {msg.role === "assistant" && (
                 <>
@@ -1368,8 +1456,10 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
               {quickActions.map((prompt) => (
                 <button
                   key={prompt}
+                  type="button"
                   onClick={() => handleUserInput(prompt)}
-                  className="rounded-full border border-ds-pen-stroke bg-ds-carbon px-3 py-1.5 text-xs font-medium text-ds-text-secondary hover:bg-ds-pen-stroke hover:text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  className="rounded-lg border border-ds-pen-stroke bg-ds-carbon text-ds-text-secondary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  style={{ padding: "var(--ds-space-2) var(--ds-space-3)", fontSize: "var(--ds-type-body-s-size)", lineHeight: "var(--ds-type-body-s-leading)" }}
                 >
                   {prompt}
                 </button>
@@ -1377,21 +1467,35 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
             </div>
           )}
 
+          {/* Loading state — instrument style, consistent with standalone concierge */}
           {loading && (
-            <div className="flex justify-start">
-              <div className="flex items-center gap-2 rounded-2xl rounded-bl-sm bg-ds-carbon px-3 py-2">
-                <Loader2 className="h-3 w-3 animate-spin text-ds-text-tertiary" />
-                <span className="text-xs text-ds-text-secondary">Researching options…</span>
-              </div>
+            <div
+              data-testid="concierge-panel-loading"
+              className="flex items-center gap-3"
+              role="status"
+              aria-live="polite"
+            >
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-ds-accent shrink-0" aria-hidden="true" />
+              <p style={{ fontSize: "var(--ds-type-body-s-size)" }}>
+                <span className="text-ds-text">Searching</span>
+                <span className="text-ds-text-tertiary mx-1">·</span>
+                <span className="text-ds-text-tertiary">Verifying</span>
+                <span className="text-ds-text-tertiary mx-1">·</span>
+                <span className="text-ds-text-tertiary">Composing</span>
+              </p>
             </div>
           )}
 
           <div ref={bottomRef} />
         </div>
 
-        <div className="border-t border-ds-pen-stroke bg-ds-midnight px-4 py-3">
+        {/* Panel instrument composer — same visual grammar as standalone */}
+        <div data-testid="concierge-panel-composer" className="border-t border-ds-pen-stroke bg-ds-midnight px-4 py-3">
           {toast && (
-            <div className="mb-2 rounded-lg border border-ds-pen-stroke bg-ds-carbon px-3 py-2 text-xs text-ds-trust">
+            <div
+              className="mb-2 rounded-lg border border-ds-pen-stroke bg-ds-carbon text-ds-trust"
+              style={{ padding: "var(--ds-space-2) var(--ds-space-3)", fontSize: "var(--ds-type-body-s-size)" }}
+            >
               {toast}
             </div>
           )}
@@ -1400,8 +1504,10 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
               {(refinementChips ?? followUpActions).map((prompt) => (
                 <button
                   key={prompt}
+                  type="button"
                   onClick={() => refinementChips ? handleUserInput(prompt) : sendQuery(prompt)}
-                  className="shrink-0 rounded-full border border-ds-pen-stroke bg-ds-carbon px-3 py-1.5 text-[11px] font-medium text-ds-text-secondary hover:bg-ds-pen-stroke hover:text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  className="shrink-0 rounded-lg border border-ds-pen-stroke bg-ds-carbon text-ds-text-secondary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  style={{ padding: "var(--ds-space-1) var(--ds-space-3)", fontSize: "var(--ds-type-overline-size)", fontWeight: "var(--ds-type-overline-weight)", whiteSpace: "nowrap" }}
                 >
                   {prompt}
                 </button>
@@ -1415,17 +1521,36 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleUserInput(input.trim())}
-              placeholder="Ask, refine, or compare the results…"
+              placeholder="Refine, compare, or start a new search…"
               disabled={loading}
-              className="flex-1 rounded-xl border border-ds-pen-stroke bg-ds-onyx px-3 py-2 text-sm text-ds-text placeholder:text-ds-text-tertiary focus:outline-none focus:ring-2 focus:ring-ds-accent/60 disabled:opacity-60"
+              aria-label="Concierge query"
+              data-testid="concierge-panel-input"
+              className="flex-1 rounded-xl border border-ds-pen-stroke bg-ds-onyx text-ds-text placeholder:text-ds-text-tertiary hover:border-ds-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 disabled:opacity-60 transition-colors duration-[120ms]"
+              style={{
+                padding: "var(--ds-space-2) var(--ds-space-3)",
+                fontSize: "var(--ds-type-body-size)",
+                lineHeight: "var(--ds-type-body-leading)",
+                minHeight: "44px",
+              }}
             />
             <button
+              type="button"
               onClick={() => handleUserInput(input.trim())}
               disabled={loading || !input.trim()}
-              className="rounded-xl bg-ds-accent px-3 py-2 text-ds-text-inverse transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 disabled:opacity-50"
               aria-label="Send"
+              data-testid="concierge-panel-submit"
+              className="rounded-xl text-ds-text-inverse transition-colors duration-[120ms] hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 disabled:opacity-50"
+              style={{
+                background: "var(--ds-accent)",
+                padding: "var(--ds-space-2) var(--ds-space-3)",
+                minWidth: "44px",
+                minHeight: "44px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
             </button>
           </div>
         </div>

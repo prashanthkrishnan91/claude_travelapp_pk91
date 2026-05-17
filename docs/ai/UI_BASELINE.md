@@ -1,10 +1,54 @@
 # UI Baseline
 
-Last updated: 2026-05-17 (Phase 8D)
+Last updated: 2026-05-17 (Phase 8E)
 
 ## Purpose
 
 Tracks the state of the design system and UI primitive layer so future prompts and PRs can reason accurately about what exists and what has been adopted.
+
+---
+
+## Stage 3.5 Phase 8E — Concierge Search Instrument + Results Presentation Overhaul — SHIPPED (2026-05-17)
+
+**Stage 3.5 · Wife-Wow design system — `ConciergePage.tsx` + `AIConciergePanel.tsx` · Private travel desk instrument**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/components/concierge/ConciergePage.tsx` | **Instrument transformation.** `data-testid` contract: `concierge-page` (root), `concierge-instrument-header`, `concierge-results-canvas`, `concierge-empty-state`, `concierge-result-section`, `concierge-loading-state`, `concierge-error-state`, `concierge-instrument-composer`, `concierge-destination-field`, `concierge-query-input`, `concierge-submit-button`, `concierge-clear-chat`, `concierge-user-query`. **User turns**: right-aligned `rounded-2xl rounded-tr-sm` chat bubble removed; replaced with left-border italic `border-l-2 border-ds-pen-stroke pl-3 my-2` query marker — quiet, editorial, not chatbot. **Destination label**: `sr-only` removed; visible Overline "Where" label rendered above field with `tracking-[0.1em]`. **Instruction copy**: "We surface" → "I surface verified places worth your time" (first-person concierge voice). **Header h1 default**: "Where would you like to go?" → "What can I find for you?". **Empty state**: "A few starting points to get you going:" → "Starting points — tell me where to search:". **Textarea placeholder**: "Describe what you're looking for…" → "What can I find for you?". **Overline tracking**: `tracking-[0.12em]` → `tracking-[0.1em]` in header. All behavior preserved: callConciergeSearch(null, ...), transcript, clearTranscript, localStorage persistence, refinement chips, editorial prompt chips. No raw hex, no legacy palette classes. |
+| `frontend/src/components/trips/AIConciergePanel.tsx` | **Panel instrument transformation.** `data-testid` contract: `ai-concierge-panel` (root), `concierge-panel-header`, `concierge-panel-day-selector`, `concierge-panel-transcript`, `concierge-panel-user-query`, `concierge-panel-loading`, `concierge-panel-composer`, `concierge-panel-input`, `concierge-panel-submit`, `concierge-panel-clear`, `concierge-panel-close`. **Header**: generic "AI Concierge · destination" → Sparkles icon + Overline "Private Travel Concierge" + `{destination}` as separate `p.text-ds-text.font-semibold` heading. Clear/close buttons → `rounded-lg` with ds-token sizing. **Day selector**: label "Target day for Add to Day" → "Add to Day"; tracking `0.08em` → `0.1em`; select → `text-ds-text focus-visible:outline`. **User turns**: `rounded-2xl rounded-br-sm bg-ds-accent/15 ring-1 ring-ds-accent/30` chat bubble removed; left-border italic query marker (same grammar as standalone). **Assistant text**: `rounded-2xl rounded-bl-sm bg-ds-carbon` bubble removed; plain `p.text-ds-text-secondary`. **Loading state**: chatbot bubble ("Researching options…") → instrument style ("Searching · Verifying · Composing") with `Loader2 text-ds-accent` + `role="status"`. **Quick actions**: `rounded-full` chatbot pills → `rounded-lg` instrument chips. **Refinement chips**: `rounded-full` → `rounded-lg`. **Panel input**: `focus:outline-none focus:ring-2 focus:ring-ds-accent/60` → `focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2`; `aria-label="Concierge query"` added; `minHeight: "44px"` added; placeholder "Ask, refine, or compare…" → "Refine, compare, or start a new search…". **Submit button**: `type="button"` + `data-testid`; min-width/height 44px via inline style. `shadow-2xl` → `shadow-[var(--ds-elevation-4)]` on panel root. All behavior preserved: callConciergeSearch(tripId, ...), CONCIERGE_CACHE_VERSION, isRenderableVerifiedPlace, add-to-day, save-to-ideas, maps, card actions, handleClearChat, selectedDayId. No raw hex, no legacy palette classes. |
+| `frontend/tests/concierge-instrument-8e.test.mjs` | **NEW.** 79 Phase 8E contract tests: instrument structure (12 testids on ConciergePage, 11 on AIConciergePanel), premium composer grammar (visible label, Overline tracking, focus-visible, aria-label, 44px), no chat-bubble user turns (flex justify-end removed, rounded-2xl removed, italic query marker), first-person copy, no backend imports, no fake data, preserved behavior (transcript, clear-chat, add-to-day, save, maps, cards, refinement chips, callConciergeSearch contract), no raw hex, panel editorial header (overline, no inline "· destination" suffix), day selector editorial (Add to Day, no jargon), loading instrument style, input touch target. |
+| `frontend/package.json` | Added `concierge-instrument-8e.test.mjs` to test script. |
+
+### Test results
+- **1185 tests, 0 failures** (was 1106; +79 new Phase 8E concierge instrument contract tests)
+- All pre-existing tests continue to pass (including concierge-page-static, concierge-shared-helpers, concierge-renderers, concierge-refinement, concierge-transcript-persistence)
+
+### Design contract alignment
+
+- **Search instrument, not chatbot:** User turns in both surfaces are now quiet left-border italic query markers — not right-aligned chat bubbles. The result cards dominate visually; the transcript is usable but not chatbot-styled.
+- **Panel header editorial identity:** AIConciergePanel opens with the same editorial grammar as the standalone page: Overline "Private Travel Concierge" (accent color, 0.1em tracking) + destination as a separate named heading below — not "AI Concierge · destination" inline label.
+- **Day selector precision:** "Add to Day" is the correct editorial action label. "Target day for Add to Day" was functional jargon; removing it makes the control feel intentional.
+- **Loading as instrument state:** "Searching · Verifying · Composing" is an honest description of the pipeline stages. It matches the standalone concierge and removes the chatbot bubble ("Researching options…").
+- **Destination label visible:** Overline "Where" label renders above the destination field — not sr-only. Makes the composer feel structured (destination → query → submit), not a bare textarea.
+- **First-person voice:** "I surface verified places worth your time" — the concierge speaks as a person, not a system.
+- **Mobile:** Left-border query markers take less horizontal space than chat bubbles, reducing overflow risk on narrow screens. Panel input now has `minHeight: "44px"` for reliable touch target.
+
+### Invariant confirmations
+- No backend files; no API/search/provider/Tavily/cache/Supabase/env changes.
+- No Google Flights URL changes; no Duffel provider changes.
+- No new fonts, route rewrites, or data model changes.
+- No new booking behavior; no fake data.
+- All add-to-day (addStructuredConciergeItemToTrip), save-to-ideas (saveToTripIdeas), maps (googleMapsUri/mapsLink), card actions (onAdd/onSaveIdea), and transcript behavior: fully preserved.
+- AIConciergePanel CONCIERGE_CACHE_VERSION, isRenderableVerifiedPlace, fetchConciergeMessages, clearConciergeCache: all preserved.
+- ConciergePage loadPersistedTranscript, saveTranscript, clearTranscript, TRANSCRIPT_KEY, refinement chips: all preserved.
+
+### Accessibility / motion note
+- No new motion, gradients, glass blur, or animations introduced in Phase 8E.
+- Left-border marker (`border-l-2`) is a CSS border — no animation; reduced-motion safe.
+- `italic` on query text is a CSS property — no animation; reduced-motion safe.
+- All interactive elements use `focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2` pattern. No new interactive patterns added.
 
 ---
 
