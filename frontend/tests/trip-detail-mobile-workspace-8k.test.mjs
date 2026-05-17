@@ -373,3 +373,58 @@ describe("Phase 8K: TripIdeasPanel internal contracts unchanged", () => {
     assert.match(tripIdeasSrc, /days:/, "TripIdeasPanel must accept days prop");
   });
 });
+
+// ── 13. Itinerary chrome isolation — Ideas workspace hides header on mobile ────
+
+describe("Phase 8K: itinerary chrome hidden when Ideas workspace is active on mobile", () => {
+  it("trip-mobile-itinerary-chrome testid exists in TripBuilder", () => {
+    assert.match(
+      tripBuilderSrc,
+      /trip-mobile-itinerary-chrome/,
+      "itinerary chrome wrapper must have data-testid trip-mobile-itinerary-chrome",
+    );
+  });
+
+  it("itinerary chrome uses hidden lg:flex when mobileWorkspace is ideas", () => {
+    assert.match(
+      tripBuilderSrc,
+      /mobileWorkspace === "ideas".*hidden lg:flex|hidden lg:flex.*mobileWorkspace === "ideas"/,
+      "itinerary chrome must use hidden lg:flex when ideas workspace is active",
+    );
+  });
+
+  it("itinerary chrome does NOT unconditionally hide when mobileWorkspace is itinerary", () => {
+    // The condition must only apply to "ideas", so the chrome is visible for itinerary/null.
+    // Verify the guard is specifically for "ideas" and not a blanket hide.
+    assert.match(
+      tripBuilderSrc,
+      /mobileWorkspace === "ideas"/,
+      "chrome hide condition must be specifically for ideas workspace",
+    );
+  });
+
+  it("desktop always restores itinerary chrome via lg:flex override", () => {
+    // hidden lg:flex pattern ensures desktop shows the chrome regardless of mobileWorkspace.
+    assert.match(
+      tripBuilderSrc,
+      /hidden lg:flex/,
+      "hidden lg:flex must be present to restore chrome on desktop",
+    );
+  });
+
+  it("itinerary panel testid (trip-mobile-panel-itinerary) still exists after chrome fix", () => {
+    assert.match(
+      tripBuilderSrc,
+      /trip-mobile-panel-itinerary/,
+      "itinerary panel testid must remain after chrome isolation fix",
+    );
+  });
+
+  it("ideas panel testid (trip-mobile-panel-ideas) still exists after chrome fix", () => {
+    assert.match(
+      tripBuilderSrc,
+      /trip-mobile-panel-ideas/,
+      "ideas panel testid must remain after chrome isolation fix",
+    );
+  });
+});

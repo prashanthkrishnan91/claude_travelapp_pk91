@@ -2321,7 +2321,12 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
           <div className={`flex-1 flex flex-col gap-3 overflow-visible ${
             mobileWorkspace === "build" ? "hidden lg:flex" : ""
           }`}>
-            <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div
+              data-testid="trip-mobile-itinerary-chrome"
+              className={`flex items-center justify-between gap-2 flex-wrap ${
+                mobileWorkspace === "ideas" ? "hidden lg:flex" : ""
+              }`}
+            >
               <div className="flex flex-col gap-0.5">
                 <span className="text-[10px] font-semibold text-ds-text-tertiary uppercase tracking-[0.1em]">Your Itinerary</span>
                 <span className="text-xs text-ds-text-tertiary">
