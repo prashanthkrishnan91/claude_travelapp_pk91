@@ -197,6 +197,7 @@ function SavedItemCard({
                 </a>
               )}
               <button
+                type="button"
                 onClick={handleRemove}
                 disabled={removing}
                 aria-label={`Remove ${name} from saved`}
@@ -289,8 +290,9 @@ function SavedItemCard({
             {/* Create Trip — all verticals */}
             <div className="mb-1.5" data-testid="create-trip-section">
               <button
+                type="button"
                 onClick={() => onCreateTrip(item)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-ds-bone text-ds-text-inverse hover:bg-ds-linen transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                className="min-h-[44px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-ds-bone text-ds-text-inverse hover:bg-ds-linen transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                 data-testid="create-trip-btn"
               >
                 <Sparkles className="w-3.5 h-3.5 text-ds-accent" aria-hidden="true" />
@@ -303,8 +305,9 @@ function SavedItemCard({
               <div data-testid="add-to-trip-section">
                 {addState === "idle" && (
                   <button
+                    type="button"
                     onClick={() => setAddState("picking")}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-ds-bone text-ds-text-inverse hover:bg-ds-linen transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                    className="min-h-[44px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-ds-bone text-ds-text-inverse hover:bg-ds-linen transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                     data-testid="add-to-trip-btn"
                   >
                     <PlusCircle className="w-3.5 h-3.5 text-ds-slate" aria-hidden="true" />
@@ -331,9 +334,10 @@ function SavedItemCard({
                         </p>
                         {trips.map((trip) => (
                           <button
+                            type="button"
                             key={trip.id}
                             onClick={() => handleAddToTrip(trip)}
-                            className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-ds-text-inverse bg-ds-bone hover:bg-ds-linen transition-colors truncate focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                            className="min-h-[44px] w-full text-left px-3 py-1.5 rounded-lg text-xs text-ds-text-inverse bg-ds-bone hover:bg-ds-linen transition-colors truncate focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                             data-testid="trip-picker-option"
                           >
                             {trip.title} · {trip.destination}
@@ -342,8 +346,9 @@ function SavedItemCard({
                       </>
                     )}
                     <button
+                      type="button"
                       onClick={() => setAddState("idle")}
-                      className="text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
+                      className="min-h-[44px] flex items-center text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
                     >
                       Cancel
                     </button>
@@ -367,8 +372,9 @@ function SavedItemCard({
                       Added to {addedToTripName}
                     </div>
                     <button
+                      type="button"
                       onClick={() => setAddState("idle")}
-                      className="text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
+                      className="min-h-[44px] flex items-center text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
                     >
                       Add to another trip
                     </button>
@@ -381,8 +387,9 @@ function SavedItemCard({
                       {addError}
                     </p>
                     <button
+                      type="button"
                       onClick={() => setAddState("idle")}
-                      className="text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
+                      className="min-h-[44px] flex items-center text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
                     >
                       Try again
                     </button>
@@ -551,8 +558,9 @@ export function SavedShell() {
           <AlertCircle className="w-8 h-8 text-ds-warning" aria-hidden="true" />
           <p className="text-sm text-ds-slate">{error}</p>
           <button
+            type="button"
             onClick={load}
-            className="px-4 py-2 rounded-lg bg-ds-bone text-ds-text-inverse text-sm hover:bg-ds-hairline transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            className="min-h-[44px] px-4 py-2 rounded-lg bg-ds-bone text-ds-text-inverse text-sm hover:bg-ds-hairline transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           >
             Try again
           </button>
@@ -579,7 +587,7 @@ export function SavedShell() {
           </div>
           <Link
             href="/explore"
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-ds-bone text-ds-text-inverse text-sm font-medium hover:bg-ds-hairline transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            className="min-h-[44px] flex items-center gap-2 px-5 py-2.5 rounded-xl bg-ds-bone text-ds-text-inverse text-sm font-medium hover:bg-ds-hairline transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
             data-testid="saved-empty-explore-link"
           >
             <Compass className="w-4 h-4" aria-hidden="true" />

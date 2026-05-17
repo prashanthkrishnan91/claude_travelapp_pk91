@@ -350,14 +350,14 @@ export function CreateTripFromSavedModal({
               type="button"
               onClick={onClose}
               disabled={state === "submitting"}
-              className="px-3 py-2 rounded-lg text-xs text-ds-text-tertiary hover:text-ds-text transition-colors disabled:opacity-50"
+              className="min-h-[44px] px-3 py-2 rounded-lg text-xs text-ds-text-tertiary hover:text-ds-text transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!canSubmit}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ds-accent text-ds-text-inverse text-xs font-medium hover:bg-ds-accent-muted transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              className="min-h-[44px] flex items-center gap-2 px-4 py-2 rounded-lg bg-ds-accent text-ds-text-inverse text-xs font-medium hover:bg-ds-accent-muted transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               data-testid="ct-submit"
             >
               {state === "submitting" ? (

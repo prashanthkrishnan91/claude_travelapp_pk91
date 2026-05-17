@@ -34,6 +34,9 @@
  * 30. Mobile-safe layout: max-w-2xl, space-y-*, flex-wrap.
  * 31. Empty state: no hardcoded destinations, Explore link preserved.
  * 32. Loading and error states preserved.
+ * 33. Primary planning actions 44px touch targets (create-trip-btn, add-to-trip-btn, trip-picker-option, Cancel, Add to another trip, error Try again, shell error Try again, empty Explore link).
+ * 34. type="button" on non-submit planning buttons (create-trip-btn, add-to-trip-btn, trip-picker-option).
+ * 35. Modal bottom action 44px touch targets (Cancel, submit).
  */
 
 import test from 'node:test';
@@ -679,4 +682,98 @@ test('Modal preserves create-trip-modal data-testid', () => {
 
 test('Modal preserves create-trip-form data-testid', () => {
   assert.ok(modal.includes('data-testid="create-trip-form"'), 'create-trip-form testid must be preserved');
+});
+
+// ── 33. Primary planning action 44px touch targets ────────────────────────────
+
+test('create-trip-btn has min-h-[44px] touch target', () => {
+  const btnIdx = savedShell.indexOf('create-trip-btn');
+  const slice = savedShell.slice(Math.max(0, btnIdx - 500), btnIdx + 50);
+  assert.ok(slice.includes('min-h-[44px]'), 'create-trip-btn must have min-h-[44px]');
+});
+
+test('add-to-trip-btn has min-h-[44px] touch target', () => {
+  const btnIdx = savedShell.indexOf('add-to-trip-btn');
+  const slice = savedShell.slice(Math.max(0, btnIdx - 500), btnIdx + 50);
+  assert.ok(slice.includes('min-h-[44px]'), 'add-to-trip-btn must have min-h-[44px]');
+});
+
+test('trip-picker-option has min-h-[44px] touch target', () => {
+  const optIdx = savedShell.indexOf('trip-picker-option');
+  const slice = savedShell.slice(Math.max(0, optIdx - 400), optIdx + 50);
+  assert.ok(slice.includes('min-h-[44px]'), 'trip-picker-option must have min-h-[44px]');
+});
+
+test('Trip picker Cancel has min-h-[44px] touch target', () => {
+  const pickerIdx = savedShell.indexOf('data-testid="trip-picker"');
+  // Cancel button is ~1800 chars after trip-picker testid (inside nested conditional rendering)
+  const pickerSection = savedShell.slice(pickerIdx, pickerIdx + 2000);
+  const cancelRelIdx = pickerSection.indexOf('Cancel');
+  const cancelWindow = pickerSection.slice(Math.max(0, cancelRelIdx - 200), cancelRelIdx + 100);
+  assert.ok(cancelWindow.includes('min-h-[44px]'), 'trip picker Cancel must have min-h-[44px]');
+});
+
+test('"Add to another trip" button has min-h-[44px] touch target', () => {
+  const anotherTripIdx = savedShell.indexOf('Add to another trip');
+  const slice = savedShell.slice(Math.max(0, anotherTripIdx - 250), anotherTripIdx + 100);
+  assert.ok(slice.includes('min-h-[44px]'), '"Add to another trip" must have min-h-[44px]');
+});
+
+test('Add-to-trip error Try again has min-h-[44px] touch target', () => {
+  const addErrIdx = savedShell.indexOf('data-testid="add-to-trip-error"');
+  // Try again is ~393 chars after the testid; use 500 to ensure full capture
+  const errSection = savedShell.slice(addErrIdx, addErrIdx + 500);
+  const tryAgainRelIdx = errSection.indexOf('Try again');
+  const tryAgainWindow = errSection.slice(Math.max(0, tryAgainRelIdx - 250), tryAgainRelIdx + 100);
+  assert.ok(tryAgainWindow.includes('min-h-[44px]'), 'add-to-trip error Try again must have min-h-[44px]');
+});
+
+test('Saved error state Try again has min-h-[44px] touch target', () => {
+  const savedErrIdx = savedShell.indexOf('data-testid="saved-error"');
+  const errSection = savedShell.slice(savedErrIdx, savedErrIdx + 700);
+  const tryAgainRelIdx = errSection.indexOf('Try again');
+  const tryAgainWindow = errSection.slice(Math.max(0, tryAgainRelIdx - 250), tryAgainRelIdx + 100);
+  assert.ok(tryAgainWindow.includes('min-h-[44px]'), 'saved-error Try again must have min-h-[44px]');
+});
+
+test('Empty state Explore link has min-h-[44px] touch target', () => {
+  const exploreIdx = savedShell.indexOf('saved-empty-explore-link');
+  const slice = savedShell.slice(Math.max(0, exploreIdx - 500), exploreIdx + 50);
+  assert.ok(slice.includes('min-h-[44px]'), 'empty state explore link must have min-h-[44px]');
+});
+
+// ── 34. type="button" on non-submit planning buttons ─────────────────────────
+
+test('create-trip-btn has type="button"', () => {
+  const btnIdx = savedShell.indexOf('create-trip-btn');
+  const slice = savedShell.slice(Math.max(0, btnIdx - 500), btnIdx + 50);
+  assert.ok(slice.includes('type="button"'), 'create-trip-btn must have type="button"');
+});
+
+test('add-to-trip-btn has type="button"', () => {
+  const btnIdx = savedShell.indexOf('add-to-trip-btn');
+  // type="button" is ~397 chars before testid; create-trip-btn is ~817 chars before (no overlap risk)
+  const slice = savedShell.slice(Math.max(0, btnIdx - 430), btnIdx + 50);
+  assert.ok(slice.includes('type="button"'), 'add-to-trip-btn must have type="button"');
+});
+
+test('trip-picker-option has type="button"', () => {
+  const optIdx = savedShell.indexOf('trip-picker-option');
+  // type="button" is ~450 chars before testid (button has many props)
+  const slice = savedShell.slice(Math.max(0, optIdx - 490), optIdx + 50);
+  assert.ok(slice.includes('type="button"'), 'trip-picker-option must have type="button"');
+});
+
+// ── 35. Modal bottom action 44px touch targets ────────────────────────────────
+
+test('Modal Cancel button has min-h-[44px]', () => {
+  const cancelIdx = modal.indexOf('Cancel');
+  const slice = modal.slice(Math.max(0, cancelIdx - 300), cancelIdx + 100);
+  assert.ok(slice.includes('min-h-[44px]'), 'modal Cancel must have min-h-[44px]');
+});
+
+test('Modal submit button has min-h-[44px]', () => {
+  const submitIdx = modal.indexOf('data-testid="ct-submit"');
+  const slice = modal.slice(Math.max(0, submitIdx - 400), submitIdx + 50);
+  assert.ok(slice.includes('min-h-[44px]'), 'modal submit must have min-h-[44px]');
 });
