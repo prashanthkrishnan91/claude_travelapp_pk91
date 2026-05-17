@@ -1,10 +1,45 @@
 # UI Baseline
 
-Last updated: 2026-05-16 (Phase 8A)
+Last updated: 2026-05-16 (Phase 8B)
 
 ## Purpose
 
 Tracks the state of the design system and UI primitive layer so future prompts and PRs can reason accurately about what exists and what has been adopted.
+
+---
+
+## Stage 3.5 Phase 8B — Trip Detail Travel Chapter + Planning Canvas Overhaul — SHIPPED (2026-05-16)
+
+**Stage 3.5 · Wife-Wow design system — `/trips/[id]` trip detail surface · Travel-chapter cover + advisor briefing**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/app/trips/[id]/page.tsx` | **Major redesign.** Removed: `DESTINATION_GRADIENTS`/`DEFAULT_GRADIENT`/`getDestinationGradient` (raw hex gradients), `destination-bg`/`destination-overlay` divs, `PageHeader` import+usage, inline tripContext header strip. New **TripChapterCover** `<section>` with: `data-testid="trip-chapter-cover"`, `aria-labelledby="chapter-destination-heading"`, back "My Journeys" Link, Overline "Travel Chapter", `<h1 id>` with real `trip.destination`, italic tripContext vibe, `CalendarDays text-ds-accent` dates row, day-count caption. Action cluster (`data-testid="chapter-actions"`) with 4 semantic buttons: AI Concierge (`COVER_PRIMARY`), Optimize, Edit Trip, Delete (`COVER_DANGER`) — all `min-h-[44px]`, `focus-visible:outline-ds-accent`. Modal dialogs updated from `bg-white/text-slate-*/border-slate-*` to `bg-ds-onyx/text-ds-text/border-ds-pen-stroke`. All `ds-elevation-4` for modals. Loading state updated to editorial chapter cover skeleton. All behavior (edit/delete/optimize/concierge/trip-builder/add-to-day) preserved. |
+| `frontend/src/components/trips/TripReadinessCockpit.tsx` | **Advisor briefing transformation.** Removed: score indicator (`coveredCount/signals.length` fraction), "Trip Briefing" overline text → changed to "Concierge Notes", "Day Coverage" section overline label, "Next Step" overline label, "Also try" section label. Kept: all `data-testid` attributes, `aria-labelledby/id` pairing, all callbacks (onOpenConcierge/onOpenOptimize/onOpenEdit), all signal keys/itemType checks, all copy ("Looks like…"/"Still needs…"), day pills with `aria-label`, `role="list"`, signal grid. Signal grid changed from `items-start gap-2.5` to `items-center gap-2.5`. Next-step description now has `italic` for advisor tone. Day coverage summary phrase changed from "have plans" to "days planned". Planning tools strip: "Also try" label removed; links remain. |
+| `frontend/tests/trip-chapter-overhaul.test.mjs` | **NEW.** 70 Phase 8B contract tests: chapter cover section/h1/aria structure, Overline pattern, destination-as-heading, trip-title-subtitle, context vibe italic, dates/day-count row, back link to /trips, action cluster testids, all 4 semantic buttons, min-h-[44px] via constant, focus-visible outline, no card-level onClick on section, ds-token coverage, no raw hex (no DESTINATION_GRADIENTS/destination-bg), no bg-white/text-slate/border-slate/sky-500 in modals, no PageHeader import, no fake/mock data, no backend/provider imports, preserved TripReadinessCockpit/TripBuilder/AIConciergePanel/OptimizeTripModal, chapter-before-cockpit ordering, cockpit-before-builder ordering, preserved callbacks, advisor briefing structure (Concierge Notes overline, no score, no DAY COVERAGE/NEXT STEP/ALSO TRY labels, italic next-step, honest signal copy). |
+| `frontend/package.json` | Added `trip-chapter-overhaul.test.mjs` to test script. |
+
+### Test results
+- **962 tests, 0 failures** (was 892; +70 new Phase 8B chapter overhaul contract tests)
+- All pre-existing tests continue to pass (including trip-canvas-day-system, trip-readiness-cockpit)
+
+### Design contract alignment
+
+- **Travel chapter, not dashboard:** `/trips/[id]` now opens with a `<section>` editorial chapter cover rather than a PageHeader + context widget + toolbar. Destination is the large `<h1>` heading, trip title is a subtitle, context vibe is italic caption prose. No score tiles, no progress rings, no KPI indicators.
+- **Destination identity:** `trip.destination` is now the primary h1 heading. The old colorful OTA-style destination-gradient backgrounds (raw hex, conflict with Design Bible dark-mode system) are removed. The page uses the dark ink-ladder system consistently.
+- **Advisor briefing:** TripReadinessCockpit "Concierge Notes" overline + adaptive h2 headline. No score fraction. Day pills remain (contextual at-a-glance), but the "DAY COVERAGE" dashboard label is gone. Signals present as natural advisor observations. Next-step prose is italic. No labels ("NEXT STEP", "ALSO TRY") that read like productivity UI chrome.
+- **Semantic actions:** All 4 actions (AI Concierge, Optimize, Edit Trip, Delete) are real `<button>` elements with explicit `onClick`, `data-testid`, `min-h-[44px]`, `focus-visible:outline-ds-accent`. Arranged naturally within the chapter cover — not a toolbar.
+- **Modal ds-tokens:** Edit and Delete modals updated from `bg-white/text-slate-*/border-slate-*/ring-sky-500` to `bg-ds-onyx/text-ds-text/border-ds-pen-stroke/ring-ds-accent`.
+- **Mobile:** Cover, advisor briefing, and planning canvas stack cleanly. Action cluster wraps with `flex-wrap`. No horizontal overflow risk.
+
+### Invariant confirmations
+- No backend files; no API/search/provider/Tavily/cache/Supabase/env changes.
+- No Google Flights URL changes; no Duffel provider changes.
+- No new fonts, route rewrites, or data model changes.
+- No new booking behavior; no fake data.
+- All TripBuilder logic, add-to-day behavior, itinerary item cards, and AI Concierge panel unchanged.
 
 ---
 

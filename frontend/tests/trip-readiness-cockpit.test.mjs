@@ -105,7 +105,7 @@ test("uses text-ds-text-tertiary for Overline labels", () => {
   assert.match(cockpit, /text-ds-text-tertiary/);
 });
 
-test("uses text-ds-accent for accent color (score and icon)", () => {
+test("uses text-ds-accent for accent color (icon)", () => {
   assert.match(cockpit, /text-ds-accent/);
 });
 
