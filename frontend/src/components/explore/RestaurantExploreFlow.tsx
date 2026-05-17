@@ -58,7 +58,7 @@ export function RestaurantExploreFlow() {
       <form onSubmit={handleSearch} className="space-y-3">
         <div className="flex gap-3">
           <div className="relative flex-1">
-            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cream-500 pointer-events-none" />
+            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ds-text-tertiary pointer-events-none" />
             <input
               type="text"
               value={destination}
@@ -120,7 +120,7 @@ export function RestaurantExploreFlow() {
       {/* Results */}
       {!loading && results && results.length > 0 && (
         <div className="space-y-3" data-testid="restaurant-results">
-          <p className="text-xs text-ds-text-tertiary font-medium uppercase tracking-wider px-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary px-1" data-testid="explore-results-header">
             {results.length} restaurant{results.length !== 1 ? "s" : ""} in {lastDestination}
           </p>
           {results.map((r) => (

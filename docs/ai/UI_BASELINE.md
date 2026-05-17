@@ -1,10 +1,60 @@
 # UI Baseline
 
-Last updated: 2026-05-17 (Phase 8E)
+Last updated: 2026-05-17 (Phase 8F)
 
 ## Purpose
 
 Tracks the state of the design system and UI primitive layer so future prompts and PRs can reason accurately about what exists and what has been adopted.
+
+---
+
+## Stage 3.5 Phase 8F — Explore / Discover Curated Search Lounge — SHIPPED (2026-05-17)
+
+**Stage 3.5 · Wife-Wow design system — Explore surface · Curated discovery lounge transformation**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/components/explore/ExploreShell.tsx` | **Lounge transformation.** `VerticalMeta` interface: `iconBg`/`iconColor`/`badge` removed; all four vertical icon colors unified to sandstone-gold (`style={{ backgroundColor: "var(--ds-accent-subtle)" }}` + `text-ds-accent`). `VERTICAL_TITLES` updated to clean editorial labels. `VERTICAL_OVERLINES` constant added (Search/Stays/Dining/Experiences). **Home state**: editorial `<header data-testid="explore-lounge-header">` with Overline "Curated Discovery" + `<h1>Discover</h1>` + `text-ds-text-tertiary` subtext; `data-testid="explore-home"` preserved. **VerticalCard**: `className="card card-lift p-5 group..."` → `rounded-xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-1)] hover:bg-ds-carbon card-lift w-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2`; `group-hover:scale-105 transition-transform` forbidden decorative motion removed; Overline category label (`text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary`) added above card title. **Active vertical state**: breadcrumb `text-cream-*` → `text-ds-text-tertiary hover:text-ds-text`; back button `focus-visible:outline-ds-accent`; `data-testid="explore-lounge-breadcrumb"`; `.card p-6` container → `<section rounded-xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-2)]>` with `<div data-testid="explore-instrument-header">` containing Overline + heading inside. All behavior preserved: `useState` vertical selection, four vertical flows, back navigation, `data-testid="${active}-flow"`. |
+| `frontend/src/components/explore/RestaurantExploreFlow.tsx` | `text-cream-500` → `text-ds-text-tertiary` on MapPin icon. Result count: `text-xs font-medium uppercase tracking-wider` → `text-[10px] font-semibold uppercase tracking-[0.1em]`; `data-testid="explore-results-header"` added. |
+| `frontend/src/components/explore/HotelExploreFlow.tsx` | `text-cream-500` → `text-ds-text-tertiary` on MapPin/Calendar/Users icons (3 instances). Result count: same Overline upgrade + `data-testid="explore-results-header"`. |
+| `frontend/src/components/explore/AttractionExploreFlow.tsx` | `text-cream-500` → `text-ds-text-tertiary` on MapPin/Tag icons (2 instances). Result count: same Overline upgrade + `data-testid="explore-results-header"`. |
+| `frontend/tests/explore-discovery-lounge-8f.test.mjs` | **NEW.** 99 Phase 8F contract tests: lounge structure (explore-lounge-header/breadcrumb/instrument-header testids, "Curated Discovery" overline, "Discover" h1, "no trip required" copy), search instrument visual (focus-visible ring, card-lift, tracking-[0.1em], var(--ds-accent-subtle) icon bg, shadow-elevation), no legacy colors (sky-*/violet-*/amber-*/emerald-*/cream-* in ExploreShell + all three flow components), no raw rgba( or raw hex in ExploreShell, preserved vertical behavior (all 4 flows, ResultActionSheet, Google Maps, hotel compare CTA, save/unsave), no AI Concierge routing (Hotel/Attraction flows), no fake/mock data or hardcoded city prompts, accessibility (semantic buttons, aria-labels, no card-level onClick nav), mobile layout (grid-cols-1 sm:grid-cols-2), result count Overline (tracking-[0.1em] in all 3 flows), no backend imports, design contract audit (no .card class, no iconBg, no group-hover:scale). |
+| `frontend/package.json` | Added `explore-discovery-lounge-8f.test.mjs` to test script. |
+
+### Test results
+- **1284 tests, 0 failures** (was 1185; +99 new Phase 8F explore discovery lounge contract tests)
+- All pre-existing tests continue to pass (including global-explore-shell, explore-restaurants-trust-contract, hotel-explore-live, hotels-discovery-only)
+
+### Design contract alignment
+
+- **Discovery lounge, not utility dashboard:** ExploreShell now opens with an editorial header (Overline "Curated Discovery" + h1 "Discover") that frames the surface as a curated destination, not a SaaS form page. The four vertical cards read as discovery trays — uniform sandstone-gold accent icons, clean card shells, Overline category labels.
+- **Instrument section framing:** When a vertical is active, the flow is wrapped in a `<section>` with `bg-ds-onyx border-ds-pen-stroke shadow-elevation-2` — the same ink-ladder elevation pattern used by other editorial surfaces (TripReadinessCockpit, AIConciergePanel). The Overline + heading inside the section gives each vertical search a clear editorial identity before the form appears.
+- **Uniform icon palette:** The old per-vertical legacy colors (sky-400/violet-400/amber-400/emerald-400) broke the Design Bible's "no legacy palette utilities in touched surfaces" rule. All four icons now use the uniform sandstone-gold token (`--ds-accent-subtle` bg + `text-ds-accent`), matching the convention established in Concierge, itinerary cards, and other Phase 8* surfaces.
+- **No decorative motion:** `group-hover:scale-105 transition-transform` on the icon wrapper was an unnecessary scale animation. Removed per Design Bible §12 (no decorative motion). `card-lift` (translateY -2px, 120ms) is the permitted hover response.
+- **Form icon token fix:** `text-cream-500` in search form icons (MapPin, Calendar, Users, Tag) across all three vertical flows replaced with `text-ds-text-tertiary`. This completes the token migration started in Phase 1B (result cards) and ensures search controls are visually consistent with the instrument framing.
+- **Result count Overline:** `tracking-wider text-xs font-medium` upgraded to Design Bible §4.3 Overline-exact `tracking-[0.1em] text-[10px] font-semibold` across all three flows. Minor but completes the Overline type role consistency.
+- **Mobile:** Responsive `grid-cols-1 sm:grid-cols-2` grid preserved. No horizontal overflow risk. Instrument section padding via `var(--ds-space-6)` (CSS var, not Tailwind hardcoded value).
+
+### Invariant confirmations
+- No backend files; no API/search/provider/Tavily/cache/Supabase/env changes.
+- No Google Flights URL generation changes; no Duffel provider changes.
+- No new fonts, route rewrites, or data model changes.
+- No new booking behavior; no fake data.
+- Default Explore Hotels/Attractions do NOT route through AI Concierge (`callConciergeSearch` absent from both flows).
+- All ResultActionSheet (save/unsave/expand/manage-in-saved) actions: preserved.
+- All Google Maps link-outs: preserved.
+- Hotel compare prices CTA (`hotel-compare-cta`): preserved.
+- TrustStrip rendering on Google Place identity: preserved.
+- FlightExploreFlow (FlightCard, ResultActionSheet, Google Flights link-out): unchanged.
+
+### Accessibility / motion note
+- No new motion introduced. `card-lift` (translateY -2px, 120ms) is pre-existing and within the motion contract.
+- `group-hover:scale-105` removed — was a forbidden decorative scale animation.
+- `focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2` added to VerticalCard and back button.
+- `aria-hidden="true"` on icon wrappers.
+- Semantic `<header>` for page identity, `<section>` for instrument area.
 
 ---
 

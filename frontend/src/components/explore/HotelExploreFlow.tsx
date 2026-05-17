@@ -166,7 +166,7 @@ export function HotelExploreFlow() {
       {/* Search form */}
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="relative">
-          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cream-500 pointer-events-none" />
+          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ds-text-tertiary pointer-events-none" />
           <input
             type="text"
             value={form.destination}
@@ -179,7 +179,7 @@ export function HotelExploreFlow() {
         </div>
         <div className="grid grid-cols-3 gap-3">
           <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cream-500 pointer-events-none" />
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ds-text-tertiary pointer-events-none" />
             <input
               type="date"
               value={form.checkIn}
@@ -189,7 +189,7 @@ export function HotelExploreFlow() {
             />
           </div>
           <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cream-500 pointer-events-none" />
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ds-text-tertiary pointer-events-none" />
             <input
               type="date"
               value={form.checkOut}
@@ -200,7 +200,7 @@ export function HotelExploreFlow() {
             />
           </div>
           <div className="relative">
-            <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cream-500 pointer-events-none" />
+            <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ds-text-tertiary pointer-events-none" />
             <input
               type="number"
               value={form.guests}
@@ -263,7 +263,7 @@ export function HotelExploreFlow() {
       {/* Results */}
       {!loading && results && results.length > 0 && (
         <div className="space-y-3" data-testid="hotel-results">
-          <p className="text-xs text-ds-text-tertiary font-medium uppercase tracking-wider px-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary px-1" data-testid="explore-results-header">
             {results.length} hotel{results.length !== 1 ? "s" : ""} in {lastForm?.destination}
           </p>
           {results.map((h, i) => (

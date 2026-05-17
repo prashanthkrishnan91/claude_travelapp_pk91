@@ -13,9 +13,6 @@ interface VerticalMeta {
   label: string;
   description: string;
   icon: React.ElementType;
-  iconBg: string;
-  iconColor: string;
-  badge?: string;
 }
 
 const VERTICALS: VerticalMeta[] = [
@@ -24,40 +21,39 @@ const VERTICALS: VerticalMeta[] = [
     label: "Flights",
     description: "Search live flights by route and dates with a Google Flights link-out",
     icon: Plane,
-    iconBg: "bg-sky-500/10",
-    iconColor: "text-sky-400",
   },
   {
     id: "hotels",
     label: "Hotels",
     description: "Discover Google-verified hotels at any destination",
     icon: Hotel,
-    iconBg: "bg-violet-500/10",
-    iconColor: "text-violet-400",
   },
   {
     id: "restaurants",
     label: "Restaurants",
     description: "Discover top-rated restaurants anywhere in the world",
     icon: Utensils,
-    iconBg: "bg-amber-500/10",
-    iconColor: "text-amber-400",
   },
   {
     id: "attractions",
     label: "Attractions",
     description: "Explore must-see sights and local experiences",
     icon: MapPin,
-    iconBg: "bg-emerald-500/10",
-    iconColor: "text-emerald-400",
   },
 ];
 
 const VERTICAL_TITLES: Record<ExploreVertical, string> = {
-  flights: "Search Flights",
-  hotels: "Search Hotels",
-  restaurants: "Discover Restaurants",
-  attractions: "Explore Attractions",
+  flights: "Flights",
+  hotels: "Hotels",
+  restaurants: "Restaurants",
+  attractions: "Attractions",
+};
+
+const VERTICAL_OVERLINES: Record<ExploreVertical, string> = {
+  flights: "Search",
+  hotels: "Stays",
+  restaurants: "Dining",
+  attractions: "Experiences",
 };
 
 export function ExploreShell() {
@@ -66,43 +62,60 @@ export function ExploreShell() {
   if (active) {
     return (
       <div className="space-y-6" data-testid="explore-vertical-flow">
-        {/* Back nav */}
-        <div className="flex items-center gap-3">
+        {/* Editorial breadcrumb */}
+        <div className="flex items-center gap-3" data-testid="explore-lounge-breadcrumb">
           <button
             onClick={() => setActive(null)}
-            className="flex items-center gap-1.5 text-sm text-cream-400 hover:text-cream-200 transition"
+            className="flex items-center gap-1.5 text-sm text-ds-text-tertiary hover:text-ds-text transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
             aria-label="Back to Explore"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4" aria-hidden="true" />
             Explore
           </button>
-          <span className="text-cream-600">/</span>
-          <h2 className="text-sm font-semibold text-cream-200">
+          <span className="text-ds-pen-stroke" aria-hidden="true">/</span>
+          <h2 className="text-sm font-semibold text-ds-text">
             {VERTICAL_TITLES[active]}
           </h2>
         </div>
 
-        {/* Active vertical flow */}
-        <div className="card p-6" data-testid={`${active}-flow`}>
+        {/* Search instrument section */}
+        <section
+          className="rounded-xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-2)]"
+          style={{ padding: "var(--ds-space-6)" }}
+          data-testid={`${active}-flow`}
+          aria-label={`${VERTICAL_TITLES[active]} search`}
+        >
+          <div className="mb-5" data-testid="explore-instrument-header">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-accent">
+              {VERTICAL_OVERLINES[active]}
+            </p>
+            <h3 className="text-base font-semibold text-ds-text mt-0.5">
+              {VERTICAL_TITLES[active]}
+            </h3>
+          </div>
           {active === "restaurants" && <RestaurantExploreFlow />}
           {active === "attractions" && <AttractionExploreFlow />}
           {active === "hotels" && <HotelExploreFlow />}
           {active === "flights" && <FlightExploreFlow />}
-        </div>
+        </section>
       </div>
     );
   }
 
   return (
     <div className="space-y-8" data-testid="explore-home">
-      <div>
-        <h1 className="text-2xl font-bold text-cream-100">Explore</h1>
-        <p className="text-sm text-cream-500 mt-1">
-          Discover flights, hotels, restaurants, and attractions — no trip required.
+      {/* Editorial lounge header */}
+      <header data-testid="explore-lounge-header">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-accent mb-1">
+          Curated Discovery
         </p>
-      </div>
+        <h1 className="text-2xl font-bold text-ds-text">Discover</h1>
+        <p className="text-sm text-ds-text-tertiary mt-1 leading-snug">
+          Flights, hotels, restaurants, and attractions — verified, no trip required.
+        </p>
+      </header>
 
-      {/* Vertical entry grid */}
+      {/* Discovery trays */}
       <div
         className="grid grid-cols-1 sm:grid-cols-2 gap-4"
         data-testid="explore-vertical-grid"
@@ -126,25 +139,27 @@ function VerticalCard({
   return (
     <button
       onClick={onSelect}
-      className="card card-lift p-5 text-left flex items-start gap-4 group transition"
+      className="rounded-xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-1)] hover:bg-ds-carbon card-lift p-5 text-left flex items-start gap-4 w-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
       aria-label={`Explore ${meta.label}`}
       data-testid={`vertical-card-${meta.id}`}
     >
       <div
-        className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${meta.iconBg} ${meta.iconColor} group-hover:scale-105 transition-transform`}
+        className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-ds-accent"
+        style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+        aria-hidden="true"
       >
-        <Icon className="w-6 h-6" />
+        <Icon className="w-5 h-5" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <h3 className="text-base font-semibold text-cream-100">{meta.label}</h3>
-          {meta.badge && (
-            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-white/[.07] text-cream-500">
-              {meta.badge}
-            </span>
-          )}
-        </div>
-        <p className="text-sm text-cream-500 mt-0.5 leading-snug">{meta.description}</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary mb-0.5">
+          {VERTICAL_OVERLINES[meta.id]}
+        </p>
+        <h3 className="text-sm font-semibold text-ds-text leading-tight">
+          {meta.label}
+        </h3>
+        <p className="text-xs text-ds-text-tertiary mt-1 leading-snug">
+          {meta.description}
+        </p>
       </div>
     </button>
   );
