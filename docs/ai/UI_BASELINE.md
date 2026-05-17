@@ -1,10 +1,48 @@
 # UI Baseline
 
-Last updated: 2026-05-17 (Phase 8H)
+Last updated: 2026-05-17 (Phase 8I — Mobile-First Premium Pass)
 
 ## Purpose
 
 Tracks the state of the design system and UI primitive layer so future prompts and PRs can reason accurately about what exists and what has been adopted.
+
+---
+
+## Stage 3.5 Phase 8I — Mobile-First Premium Pass — SHIPPED (2026-05-17)
+
+**Stage 3.5 · Wife-Wow mobile ergonomics — Primary mobile flow feel on all rebuilt surfaces**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/components/trips/TripBuilder.tsx` | **Critical mobile layout fix.** Main canvas `flex items-start gap-4` → `flex flex-col gap-4 lg:flex-row lg:items-start`; candidate panel `w-80 flex-shrink-0` → `w-full lg:w-80 lg:flex-shrink-0` (was forcing a 320px panel on 390px phones, leaving ~54px for itinerary); compare bar gets `max-w-[calc(100vw-2rem)] sm:bottom-6 sm:px-5`. |
+| `frontend/src/components/explore/HotelExploreFlow.tsx` | **Form row responsive.** Date/guests `grid grid-cols-3 gap-3` → `grid grid-cols-1 sm:grid-cols-3 gap-3`. |
+| `frontend/src/components/explore/AttractionExploreFlow.tsx` | **Form row responsive.** Search row `flex gap-3` → `flex flex-col gap-3 sm:flex-row`; interest input `relative w-44 shrink-0` → `relative sm:w-44 sm:shrink-0`; button `btn-primary shrink-0` → `w-full sm:w-auto sm:shrink-0`. |
+| `frontend/src/app/trips/[id]/page.tsx` | **Touch targets + focus-visible.** Edit modal close button gets `min-h-[44px] min-w-[44px] flex items-center justify-center`; 2 legacy `focus:outline-none focus:ring-2 focus:ring-ds-accent` replaced with `focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2`; back nav + chapter cover body `px-6` → `px-4 sm:px-6`. |
+| `frontend/src/components/concierge/ConciergePage.tsx` | **Header padding responsive.** Inline `style={{ paddingBottom: "var(--ds-space-8)" }}` removed; `className="text-center pb-5 sm:pb-8"` added. |
+| `frontend/src/components/trips/AIConciergePanel.tsx` | **Clear button 44px.** Clear button gets `min-h-[44px] flex items-center` in className; padding updated. |
+| `frontend/src/components/explore/ExploreShell.tsx` | **Active section responsive padding.** Inline `style={{ padding: "var(--ds-space-6)" }}` removed; `p-4 sm:p-6` added to className. |
+| `frontend/tests/mobile-first-premium-8i.test.mjs` | **NEW.** 51 Phase 8I contract tests covering all 7 surfaces above, plus preserved testids and handler contracts. |
+| `frontend/tests/explore-discovery-lounge-8f.test.mjs` | **2 tests updated.** Old assertions checking for inline `padding: "var(--ds-space-6)"` updated to accept responsive Tailwind classes (OR the old inline style — backward-compatible). |
+| `frontend/package.json` | Added `mobile-first-premium-8i.test.mjs` to test script. |
+
+### Test results
+- **1563 tests, 0 failures** (was 1512; +51 new Phase 8I contract tests)
+- All pre-existing tests continue to pass
+
+### Design contract alignment
+- **TripBuilder is now mobile-first:** The planning canvas stacks vertically on phones (flex-col) and shifts to side-by-side only at lg (1024px+). The candidate panel takes full width on mobile.
+- **Explore form rows no longer cram on small screens:** Hotel dates/guests and Attraction search/interest/button rows now stack vertically on mobile.
+- **44px touch targets enforced on all remaining modal controls:** TripDetail edit modal close button meets minimum.
+- **Focus-visible standardized on all TripDetail modal inputs:** No remaining `focus:ring-*` legacy patterns in the codebase surfaces touched by Phase 8.
+- **Responsive padding throughout:** Header pads, section pads, and back-nav pads all use mobile-first breakpoint classes rather than fixed inline styles.
+
+### Invariant confirmations
+- No backend files; no API/search/provider/Tavily/cache/Supabase/env changes.
+- All existing testids, handlers, and page logic preserved.
+- No fake/mock/sample visible data introduced.
+- No new booking behavior; no Google Places/Duffel/flights contract changes.
 
 ---
 

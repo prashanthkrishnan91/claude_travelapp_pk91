@@ -410,7 +410,9 @@ test('ExploreShell vertical card layout is flex with items-start (mobile-safe)',
 });
 
 test('ExploreShell instrument section uses CSS var padding (mobile-responsive)', () => {
-  assert.match(exploreShell, /padding: "var\(--ds-space-6\)"/);
+  // Updated in Phase 8I: inline padding replaced with responsive Tailwind classes p-4 sm:p-6
+  assert.ok(exploreShell.includes('p-4 sm:p-6') || exploreShell.includes('padding: "var(--ds-space-6)"'),
+    'ExploreShell active section must use responsive padding');
 });
 
 test('HotelExploreFlow date inputs use grid-cols-3 (structured mobile layout)', () => {
@@ -495,8 +497,10 @@ test('ExploreShell VerticalCard icon does not use group-hover:scale (forbidden d
   assert.doesNotMatch(exploreShell, /group-hover:scale/);
 });
 
-test('ExploreShell uses var(--ds-space-6) for section padding (spacing token contract)', () => {
-  assert.match(exploreShell, /var\(--ds-space-6\)/);
+test('ExploreShell uses responsive padding for section (spacing token contract)', () => {
+  // Updated in Phase 8I: inline var(--ds-space-6) replaced with responsive p-4 sm:p-6
+  assert.ok(exploreShell.includes('p-4 sm:p-6') || exploreShell.includes('var(--ds-space-6)'),
+    'ExploreShell active section must use responsive or token-based padding');
 });
 
 // ── L. Icon-Only Map Link Touch Targets (44px minimum) ───────────────────────

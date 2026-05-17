@@ -80,8 +80,7 @@ export function ExploreShell() {
 
         {/* Search instrument section */}
         <section
-          className="rounded-xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-2)]"
-          style={{ padding: "var(--ds-space-6)" }}
+          className="rounded-xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-2)] p-4 sm:p-6"
           data-testid={`${active}-flow`}
           aria-label={`${VERTICAL_TITLES[active]} search`}
         >

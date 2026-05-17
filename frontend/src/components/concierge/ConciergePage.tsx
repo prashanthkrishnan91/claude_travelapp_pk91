@@ -657,8 +657,7 @@ export function ConciergePage() {
       {/* ── Concierge desk instrument header ─────────────────────────────── */}
       <header
         data-testid="concierge-instrument-header"
-        className="text-center"
-        style={{ paddingBottom: "var(--ds-space-8)" }}
+        className="text-center pb-5 sm:pb-8"
       >
         <p
           className="text-ds-accent uppercase tracking-[0.1em]"

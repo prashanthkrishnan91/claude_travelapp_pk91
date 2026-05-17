@@ -1915,10 +1915,10 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex items-start gap-4 min-h-[500px]">
+        <div className="flex flex-col gap-4 min-h-[500px] lg:flex-row lg:items-start">
 
           {/* ── Left Panel: AI-ranked candidates ──────────────────────────── */}
-          <div className="w-80 flex-shrink-0 flex flex-col gap-3 overflow-y-auto pr-0.5">
+          <div className="w-full flex flex-col gap-3 overflow-y-auto pr-0.5 lg:w-80 lg:flex-shrink-0">
 
             {/* Planning cockpit context header */}
             <div className="flex flex-col gap-0.5 px-1 pt-1 pb-0.5">
@@ -2391,7 +2391,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
         {/* ── Compare bar ──────────────────────────────────────────────────── */}
         {compareSet.size > 0 && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 bg-ds-onyx border border-ds-pen-stroke rounded-2xl shadow-[var(--ds-elevation-4)]">
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-3 bg-ds-onyx border border-ds-pen-stroke rounded-2xl shadow-[var(--ds-elevation-4)] max-w-[calc(100vw-2rem)] sm:bottom-6 sm:px-5">
             <div className="flex flex-col gap-0.5">
               <span className="text-[10px] font-semibold text-ds-text-tertiary uppercase tracking-[0.1em]">Compare</span>
               <div className="flex items-center gap-1">

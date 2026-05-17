@@ -182,7 +182,7 @@ export default function TripDetailPage() {
               <button
                 onClick={() => setEditOpen(false)}
                 aria-label="Close edit dialog"
-                className="p-1.5 rounded-lg hover:bg-ds-carbon text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                className="p-1.5 rounded-lg hover:bg-ds-carbon text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -191,7 +191,7 @@ export default function TripDetailPage() {
               <div>
                 <label className="block text-xs font-medium text-ds-text-secondary mb-1.5">Trip Name</label>
                 <input
-                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text placeholder:text-ds-text-tertiary focus:outline-none focus:ring-2 focus:ring-ds-accent"
+                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text placeholder:text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   value={editForm.title}
                   onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
                 />
@@ -200,7 +200,7 @@ export default function TripDetailPage() {
                 <label className="block text-xs font-medium text-ds-text-secondary mb-1.5">Start Date</label>
                 <input
                   type="date"
-                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text focus:outline-none focus:ring-2 focus:ring-ds-accent"
+                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   value={editForm.startDate}
                   onChange={(e) => setEditForm((f) => ({ ...f, startDate: e.target.value }))}
                 />
@@ -209,7 +209,7 @@ export default function TripDetailPage() {
                 <label className="block text-xs font-medium text-ds-text-secondary mb-1.5">End Date</label>
                 <input
                   type="date"
-                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text focus:outline-none focus:ring-2 focus:ring-ds-accent"
+                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   value={editForm.endDate}
                   onChange={(e) => setEditForm((f) => ({ ...f, endDate: e.target.value }))}
                 />
@@ -253,7 +253,7 @@ export default function TripDetailPage() {
         className="mb-8 rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-2)] overflow-hidden"
       >
         {/* Back navigation */}
-        <div className="px-6 pt-5">
+        <div className="px-4 pt-5 sm:px-6">
           <Link
             href="/trips"
             className="inline-flex items-center gap-1.5 text-xs text-ds-text-tertiary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
@@ -264,7 +264,7 @@ export default function TripDetailPage() {
         </div>
 
         {/* Chapter cover body */}
-        <div className="px-6 pt-4 pb-6">
+        <div className="px-4 pt-4 pb-6 sm:px-6">
           {/* Overline: chapter classification */}
           <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary mb-2">
             Travel Chapter

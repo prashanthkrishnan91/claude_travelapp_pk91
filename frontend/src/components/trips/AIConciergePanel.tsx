@@ -1112,9 +1112,9 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                 type="button"
                 onClick={handleClearChat}
                 data-testid="concierge-panel-clear"
-                className="rounded-lg border border-ds-pen-stroke bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                className="rounded-lg border border-ds-pen-stroke bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px] flex items-center"
                 style={{
-                  padding: "var(--ds-space-1) var(--ds-space-2)",
+                  padding: "var(--ds-space-1) var(--ds-space-3)",
                   fontSize: "var(--ds-type-overline-size)",
                   fontWeight: "var(--ds-type-overline-weight)",
                 }}
