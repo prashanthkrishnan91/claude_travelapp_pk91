@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-17 (Phase 8N fully merged — Atmospheric Boutique Art Direction)
+Last updated: 2026-05-17 (Phase 8N fully merged — Atmospheric Boutique Art Direction; PR #422 body updated for CI readiness)
 
 ## Purpose
 
