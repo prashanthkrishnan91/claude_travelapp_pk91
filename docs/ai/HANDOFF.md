@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-17 (Phase 8N-D — Old-Format Modal Surface Rescue; PR open)
+Last updated: 2026-05-17 (Phase 8N-D — Old-Format Modal Surface Rescue; PR #426 open; PR body updated with all required readiness sections)
 
 ## Purpose
 
