@@ -7,6 +7,25 @@
    ════════════════════════════════════════════════════════════════ */
 
 :root {
+  /* ── Atmospheric boutique tokens — Phase 8N
+     Central home for all atelier-atmosphere custom properties.
+     Reference these in atmosphere utilities; never scatter raw values. */
+
+  /* Warm dark atelier base — slightly warmer/richer than pure midnight */
+  --ds-atelier-base:        #0A1018;
+  /* Paper/linen noise-like texture overlay — warm off-white on dark */
+  --ds-atelier-texture-tint: rgba(240, 225, 195, 0.028);
+  /* Vignette gradient — soft darkening toward edges */
+  --ds-atelier-vignette:    rgba(6, 9, 14, 0.55);
+  /* Edge glow — warm brass rim light for surface depth */
+  --ds-atelier-edge-glow:   rgba(197, 148, 77, 0.06);
+  /* Surface inner highlight — hairline top-edge brightening */
+  --ds-atelier-surface-highlight: rgba(255, 248, 235, 0.04);
+  /* Sandstone/brass card border refinement */
+  --ds-atelier-card-border: rgba(197, 148, 77, 0.10);
+  /* Ambient warm glow from center — subtle radial warmth */
+  --ds-atelier-ambient:     rgba(180, 130, 60, 0.04);
+
   /* ── Dark surface tokens — Design Bible v1.0 §4 exact values */
   --ds-midnight-ink:   #0B1320;
   --ds-onyx-velvet:    #0F1A2C;
@@ -970,5 +989,127 @@
   }
   @media (min-width: 1024px) {
     .concierge-sticky-bottom { bottom: 0; }
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     ATMOSPHERIC BOUTIQUE ART DIRECTION — Phase 8N
+     CSS-only warm atelier atmosphere. No image assets, no JS.
+     Applied via .atelier-atmosphere-root on the app shell wrapper.
+     Sub-layers use pseudo-elements to keep DOM clean.
+     All motion obeys prefers-reduced-motion via the global rule above.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* ── Atelier atmosphere root
+     The outermost authenticated wrapper. Provides the warm dark base
+     and coordinates child pseudo-element layers. */
+  .atelier-atmosphere-root {
+    position: relative;
+    /* Slightly warmer than pure midnight-ink, giving a dark paper feel */
+    background-color: var(--ds-atelier-base);
+    /* Soft ambient center warmth — like a single warm light source above */
+    background-image:
+      radial-gradient(
+        ellipse 80% 50% at 50% -10%,
+        var(--ds-atelier-ambient) 0%,
+        transparent 70%
+      );
+  }
+
+  /* ── Vignette layer
+     Fixed pseudo-element that darkens the viewport edges.
+     Gives the boutique hotel "framed" feel without being heavy. */
+  .atelier-vignette-layer {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background:
+      radial-gradient(
+        ellipse 100% 100% at 50% 50%,
+        transparent 45%,
+        var(--ds-atelier-vignette) 100%
+      );
+    /* Separate edge darkening on all four sides */
+    mask-image: radial-gradient(ellipse 95% 95% at 50% 50%, transparent 40%, black 100%);
+    -webkit-mask-image: radial-gradient(ellipse 95% 95% at 50% 50%, transparent 40%, black 100%);
+    opacity: 0.6;
+    /* Entrance fade — reduced-motion safe (global rule collapses to 0.01ms) */
+    animation: atelier-vignette-in var(--ds-duration-slow) var(--ds-easing-decelerate) both;
+  }
+
+  @keyframes atelier-vignette-in {
+    from { opacity: 0; }
+    to   { opacity: 0.6; }
+  }
+
+  /* ── Texture layer
+     CSS-only noise/grain pattern using SVG filter data-URI.
+     Gives the warm paper/linen tactile quality without an image file.
+     Opacity is deliberately very low — visible on close inspection, not dominant. */
+  .atelier-texture-layer {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    /* Fine grain via repeating SVG turbulence — purely CSS, no external asset */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 180px 180px;
+    /* Warm tint blended over the grain for a linen feel */
+    mix-blend-mode: soft-light;
+    opacity: 0.045;
+  }
+
+  /* ── Surface depth — boutique card refinement
+     Applied to card/panel surfaces to add subtle edge lighting and
+     a warm inner hairline at the top. Does not override existing .card shadow. */
+  .atelier-surface-depth {
+    /* Warm brass edge glow + inner highlight hairline */
+    box-shadow:
+      0 0 0 1px var(--ds-atelier-card-border),
+      inset 0 1px 0 var(--ds-atelier-surface-highlight),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.12);
+  }
+
+  /* ── Reduced-motion safe atmosphere marker
+     Present on the atmosphere root when reduced-motion is active.
+     Tests can verify this selector compiles. Animations are already
+     collapsed by the global reduced-motion rule in @layer base. */
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-vignette-layer {
+      animation: none;
+      opacity: 0.5;
+    }
+    .atelier-texture-layer {
+      opacity: 0.03;
+    }
+  }
+
+  /* ── Boutique transition utility
+     Restrained page-content transitions. Use on content containers
+     that benefit from a gentle entrance. Respects reduced-motion. */
+  .atelier-transition {
+    transition:
+      opacity var(--ds-duration-standard) var(--ds-easing-decelerate),
+      transform var(--ds-duration-standard) var(--ds-easing-decelerate);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-transition { transition: none; }
+  }
+
+  /* ── Elevation with warmth
+     Overrides plain elevation-2 with an additional warm brass glow.
+     Use sparingly on hero cards / featured surfaces only. */
+  .shadow-elevation-warm {
+    box-shadow:
+      var(--ds-elevation-2),
+      0 0 40px rgba(197, 148, 77, 0.08);
+  }
+
+  /* ── Sandstone accent hairline
+     A brass-tinted 1px top border. Replaces raw border-ds-pen-stroke
+     on featured section headers for a warmer editorial divider. */
+  .atelier-accent-line {
+    border-top: 1px solid color-mix(in srgb, var(--ds-ember-brass) 18%, var(--ds-pen-stroke));
   }
 }
