@@ -313,13 +313,15 @@ function ConciergeResultCard({
   );
 }
 
-// ─── Editorial prompt chips for empty state ───────────────────────────────────
+// ─── Generic starter prompts — no hardcoded destinations ─────────────────────
+// Chips populate the query input only; they never auto-set destination or
+// auto-submit. The concierge must not pretend to know the user's city.
 
 const EDITORIAL_PROMPTS = [
-  { label: "Best cocktail bars in Tokyo", query: "Best cocktail bars", destination: "Tokyo" },
-  { label: "Michelin dining in Paris", query: "Michelin dining", destination: "Paris" },
-  { label: "Hidden gems in Lisbon", query: "Hidden gems", destination: "Lisbon" },
-  { label: "Romantic restaurants in New York", query: "Romantic restaurants", destination: "New York" },
+  "Cocktail bars with a view",
+  "Design-forward boutique hotels",
+  "A romantic dinner",
+  "Hidden neighbourhood gems",
 ] as const;
 
 // ─── localStorage transcript persistence ──────────────────────────────────────
@@ -726,12 +728,11 @@ export function ConciergePage() {
             <div className="flex flex-wrap gap-2 justify-center">
               {EDITORIAL_PROMPTS.map((prompt) => (
                 <button
-                  key={prompt.label}
+                  key={prompt}
                   type="button"
                   onClick={() => {
-                    setDestination(prompt.destination);
-                    setDestinationError(false);
-                    void handleUserInput(prompt.query, prompt.destination);
+                    setInput(prompt);
+                    inputRef.current?.focus();
                   }}
                   className="rounded-lg bg-ds-carbon text-ds-text-secondary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   style={{
@@ -741,7 +742,7 @@ export function ConciergePage() {
                     border: "1px solid var(--ds-pen-stroke)",
                   }}
                 >
-                  {prompt.label}
+                  {prompt}
                 </button>
               ))}
             </div>
@@ -908,7 +909,7 @@ export function ConciergePage() {
                     }}
                   >
                     <summary
-                      className="cursor-pointer text-ds-text-tertiary uppercase tracking-[0.08em]"
+                      className="cursor-pointer text-ds-text-tertiary uppercase tracking-[0.1em]"
                       style={{
                         padding: "var(--ds-space-3) var(--ds-space-4)",
                         fontSize: "var(--ds-type-overline-size)",
@@ -973,7 +974,7 @@ export function ConciergePage() {
                         className="flex items-start gap-2 rounded-lg"
                         style={{
                           border: "1px solid var(--ds-caution-amber)",
-                          background: "rgba(232, 178, 107, 0.08)",
+                          background: "color-mix(in srgb, var(--ds-caution) 10%, transparent)",
                           padding: "var(--ds-space-3) var(--ds-space-4)",
                         }}
                       >
@@ -1026,7 +1027,7 @@ export function ConciergePage() {
             className="flex items-start gap-3 rounded-lg"
             style={{
               border: "1px solid var(--ds-warning)",
-              background: "rgba(216, 132, 120, 0.08)",
+              background: "color-mix(in srgb, var(--ds-warning) 10%, transparent)",
               padding: "var(--ds-space-4)",
               marginTop: "var(--ds-space-5)",
             }}

@@ -1127,7 +1127,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                 data-testid="concierge-panel-close"
                 className="rounded-lg p-1.5 text-ds-text-tertiary hover:bg-ds-carbon hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                 aria-label="Close Concierge"
-                style={{ minWidth: "32px", minHeight: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}
+                style={{ minWidth: "44px", minHeight: "44px", display: "flex", alignItems: "center", justifyContent: "center" }}
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -1409,7 +1409,7 @@ export function AIConciergePanel({ tripId, destination, tripDays: tripDaysProp =
                       {shouldShowCollapsedSources(msg) && (
                         <div className="pt-1">
                           <details className="rounded-lg border border-ds-pen-stroke bg-ds-carbon px-3 py-2">
-                            <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-ds-text-tertiary">
+                            <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary">
                               Sources used ({msg.researchSources?.filter((s) => s.type === "research_source").length ?? 0})
                             </summary>
                             <ul className="mt-2 space-y-1 text-xs text-ds-text-secondary">

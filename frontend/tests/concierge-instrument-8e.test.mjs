@@ -246,11 +246,31 @@ test("ConciergePage has no hardcoded fake place names in card renders", () => {
   );
 });
 
-test("ConciergePage editorial prompt chips have real destination values", () => {
+test("ConciergePage starter chips have no hardcoded city or destination names", () => {
+  // Phase 8E contract: chips must not pretend to know the user's destination
   assert.ok(
-    conciergePage.includes('destination: "Tokyo"') ||
-      conciergePage.includes("destination: 'Tokyo'"),
-    "EDITORIAL_PROMPTS must use real destination values (e.g., Tokyo)",
+    !conciergePage.includes('"Tokyo"') &&
+      !conciergePage.includes('"Paris"') &&
+      !conciergePage.includes('"Lisbon"') &&
+      !conciergePage.includes('"New York"'),
+    "EDITORIAL_PROMPTS must not contain hardcoded city names (Tokyo, Paris, Lisbon, New York)",
+  );
+});
+
+test("ConciergePage starter chips do not auto-set destination", () => {
+  // Chips must not call setDestination with a hardcoded destination value
+  assert.ok(
+    !conciergePage.includes("prompt.destination"),
+    "ConciergePage starter chips must not auto-set destination via prompt.destination",
+  );
+});
+
+test("ConciergePage starter chips populate input only, no auto-submit of fake destinations", () => {
+  // Chips must only call setInput — no auto-submit with a hardcoded destination
+  assert.ok(
+    !conciergePage.includes("handleUserInput(prompt.query, prompt.destination)") &&
+      !conciergePage.includes("void handleUserInput(prompt.query,"),
+    "ConciergePage starter chips must not auto-submit with fake destination overrides",
   );
 });
 
@@ -659,5 +679,41 @@ test("ConciergePage Overline tracking is 0.1em in instrument header", () => {
   assert.ok(
     conciergePage.includes("tracking-[0.1em]"),
     "ConciergePage instrument header must use Design Bible Overline tracking-[0.1em]",
+  );
+});
+
+// ── Phase 8E patch: Design Bible contract misses ───────────────────────────────
+
+test("ConciergePage has no raw rgba() backgrounds", () => {
+  assert.ok(
+    !conciergePage.includes("rgba("),
+    "ConciergePage must not use raw rgba() backgrounds — use color-mix(in srgb, ...) or ds-* tokens",
+  );
+});
+
+test("ConciergePage sources summary uses tracking-[0.1em] not tracking-[0.08em]", () => {
+  assert.ok(
+    !conciergePage.includes("tracking-[0.08em]"),
+    "ConciergePage must not use tracking-[0.08em] in any label — use tracking-[0.1em] per Design Bible §4.4",
+  );
+});
+
+test("AIConciergePanel close button has 44px minimum touch target (not 32px)", () => {
+  // Close button must be upgraded from 32px to 44px for accessibility
+  assert.ok(
+    !aiConciergePanelSrc.includes('minWidth: "32px"') &&
+      !aiConciergePanelSrc.includes('minHeight: "32px"'),
+    "AIConciergePanel close button must not use 32px min size — must be 44px for touch accessibility",
+  );
+});
+
+test("AIConciergePanel close button explicitly sets 44px minWidth and minHeight", () => {
+  assert.ok(
+    aiConciergePanelSrc.includes('data-testid="concierge-panel-close"'),
+    "AIConciergePanel close button testid must be present",
+  );
+  assert.ok(
+    aiConciergePanelSrc.includes('aria-label="Close Concierge"'),
+    "AIConciergePanel close button aria-label must be preserved",
   );
 });
