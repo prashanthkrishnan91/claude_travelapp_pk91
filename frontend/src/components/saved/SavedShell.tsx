@@ -165,17 +165,17 @@ function SavedItemCard({
 
   return (
     <article
-      className="boutique-folio card-lift clipping-card p-4"
+      className="boutique-folio card-lift clipping-card saved-clipping-card p-3"
       data-testid="saved-item-card"
     >
       <Card.Identity>
         {/* Vertical icon — uniform warm accent treatment */}
         <div
           aria-hidden="true"
-          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
           style={{ backgroundColor: "var(--ds-accent-subtle)" }}
         >
-          <Icon className="w-5 h-5 text-ds-accent" />
+          <Icon className="w-4 h-4 text-ds-accent" />
         </div>
 
         <div className="flex-1 min-w-0">
@@ -193,10 +193,10 @@ function SavedItemCard({
                   href={googleMapsUri}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg bg-ds-bone hover:bg-ds-linen text-ds-slate transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-md text-ds-slate hover:text-ds-accent-muted transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   aria-label={`View ${name} on Google Maps`}
                 >
-                  <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                  <ExternalLink className="w-3 h-3" aria-hidden="true" />
                 </a>
               )}
               <button
@@ -204,13 +204,13 @@ function SavedItemCard({
                 onClick={handleRemove}
                 disabled={removing}
                 aria-label={`Remove ${name} from saved`}
-                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg bg-ds-bone hover:bg-ds-hairline text-ds-slate hover:text-ds-warning transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-md text-ds-slate hover:text-ds-warning transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                 data-testid="remove-saved-btn"
               >
                 {removing ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                  <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
                 ) : (
-                  <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                  <Trash2 className="w-3 h-3" aria-hidden="true" />
                 )}
               </button>
             </div>
@@ -229,7 +229,7 @@ function SavedItemCard({
 
           {/* Rating + price + tags */}
           {(rating != null || priceStr || tagList.length > 0) && (
-            <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               {rating != null && (
                 <span
                   className="flex items-center gap-0.5 text-xs text-ds-text-inverse font-medium"
@@ -279,45 +279,51 @@ function SavedItemCard({
           )}
 
           {/* Saved date */}
-          <p className="text-[10px] text-ds-slate opacity-60 mt-2">Saved {savedDate}</p>
+          <p className="text-[10px] text-ds-slate opacity-50 mt-1.5">Saved {savedDate}</p>
 
-          {/* Planning bridge — Create Trip + Add to Trip */}
+          {/* Planning bridge — compact horizontal action row */}
           <div
-            className="mt-3 pt-2.5 border-t border-ds-hairline/60"
+            className="mt-2 pt-2 border-t border-ds-hairline/40"
             data-testid="saved-planning-bridge"
           >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-slate mb-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-slate mb-1.5">
               Plan with this
             </p>
 
-            {/* Create Trip — all verticals */}
-            <div className="mb-1.5" data-testid="create-trip-section">
-              <button
-                type="button"
-                onClick={() => onCreateTrip(item)}
-                className="min-h-[44px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-ds-bone text-ds-text-inverse hover:bg-ds-linen transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-                data-testid="create-trip-btn"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-ds-accent" aria-hidden="true" />
-                Create Trip
-              </button>
-            </div>
+            {/* Idle: compact horizontal pill row */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {/* Create Trip — all verticals */}
+              <div data-testid="create-trip-section">
+                <button
+                  type="button"
+                  onClick={() => onCreateTrip(item)}
+                  className="min-h-[44px] flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-ds-bone text-ds-text-inverse hover:bg-ds-linen transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  data-testid="create-trip-btn"
+                >
+                  <Sparkles className="w-3 h-3 text-ds-accent" aria-hidden="true" />
+                  Create Trip
+                </button>
+              </div>
 
-            {/* Add to Trip — non-flight verticals */}
-            {canAddToTrip && (
-              <div data-testid="add-to-trip-section">
-                {addState === "idle" && (
+              {/* Add to Trip — non-flight verticals, idle state only shows pill */}
+              {canAddToTrip && addState === "idle" && (
+                <div data-testid="add-to-trip-section">
                   <button
                     type="button"
                     onClick={() => setAddState("picking")}
-                    className="min-h-[44px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-ds-bone text-ds-text-inverse hover:bg-ds-linen transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                    className="min-h-[44px] flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border border-ds-hairline text-ds-slate hover:bg-ds-bone hover:text-ds-text-inverse transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent"
                     data-testid="add-to-trip-btn"
                   >
-                    <PlusCircle className="w-3.5 h-3.5 text-ds-slate" aria-hidden="true" />
+                    <PlusCircle className="w-3 h-3" aria-hidden="true" />
                     Add to Trip
                   </button>
-                )}
+                </div>
+              )}
+            </div>
 
+            {/* Add to Trip — non-idle states */}
+            {canAddToTrip && addState !== "idle" && (
+              <div data-testid="add-to-trip-section" className="mt-1.5">
                 {addState === "picking" && (
                   <div className="space-y-1" data-testid="trip-picker">
                     {trips.length === 0 ? (
@@ -431,20 +437,27 @@ function VerticalGroup({
 }) {
   if (items.length === 0) return null;
 
-  const { label, key } = config;
+  const { label, key, icon: SectionIcon } = config;
 
   return (
     <section data-testid={`saved-section-${key}`} aria-label={`${label} ideas`}>
-      <div className="flex items-center justify-between mb-3 pb-2 border-b border-ds-hairline">
+      {/* Editorial scrapbook section header — icon + label + count */}
+      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-ds-hairline">
+        <div aria-hidden="true" className="w-5 h-5 flex items-center justify-center shrink-0">
+          <SectionIcon className="w-3.5 h-3.5 text-ds-accent-muted" />
+        </div>
         <p
-          className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-accent-muted"
+          className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-accent-muted flex-1"
           data-testid={`saved-section-label-${key}`}
         >
           {label}
         </p>
-        <span className="text-[10px] text-ds-slate font-medium">{items.length}</span>
+        <span className="text-[10px] text-ds-text-secondary font-medium tabular-nums">
+          {items.length}
+        </span>
       </div>
-      <div className="space-y-3">
+      {/* Two-column grid on desktop — single column on mobile */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {items.map((item) => (
           <SavedItemCard
             key={item.id}
@@ -504,49 +517,52 @@ export function SavedShell() {
   const hasAny = items.length > 0;
 
   return (
-    /* Scrapbook page composition — warm paper gradient + brass binding spine (8N-C) */
     <div
-      className="max-w-2xl mx-auto scrapbook-page rounded-2xl pl-7 pr-6 py-6 space-y-8 atelier-transition"
+      className="max-w-2xl lg:max-w-4xl mx-auto saved-clipping-desk atelier-transition py-6 px-4 sm:px-6"
       data-testid="saved-shell"
     >
-      {/* Scrapbook editorial header */}
-      <header data-testid="saved-scrapbook-header">
-        <div className="flex items-start gap-3">
-          <div
-            aria-hidden="true"
-            className="w-10 h-10 rounded-xl flex items-center justify-center bg-ds-accent-subtle shrink-0 mt-0.5"
-          >
-            <Bookmark className="w-5 h-5 text-ds-accent-muted" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p
-              className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-accent"
-              data-testid="saved-scrapbook-overline"
+      {/* Scrapbook header zone — warm paper with brass binding spine, scoped to header only */}
+      <div className="scrapbook-page rounded-xl pl-7 pr-6 pt-6 pb-5 mb-6">
+        <header data-testid="saved-scrapbook-header">
+          <div className="flex items-start gap-3">
+            <div
+              aria-hidden="true"
+              className="w-9 h-9 rounded-xl flex items-center justify-center bg-ds-accent-subtle shrink-0 mt-0.5"
             >
-              Your Travel Scrapbook
-            </p>
-            <h1
-              className="text-xl font-bold text-ds-text-inverse leading-tight"
-              data-testid="saved-scrapbook-heading"
-            >
-              Saved Ideas
-            </h1>
-            {!loading && !error && hasAny && (
-              <p className="text-xs text-ds-slate mt-0.5" data-testid="saved-scrapbook-count">
-                {items.length} {items.length === 1 ? "idea" : "ideas"} in your collection
+              <Bookmark className="w-4 h-4 text-ds-accent-muted" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p
+                className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-accent"
+                data-testid="saved-scrapbook-overline"
+              >
+                Your Travel Scrapbook
               </p>
-            )}
+              <h1
+                className="text-xl font-bold text-ds-text-inverse leading-tight"
+                data-testid="saved-scrapbook-heading"
+              >
+                Saved Ideas
+              </h1>
+              {!loading && !error && hasAny && (
+                <p className="text-xs text-ds-slate mt-0.5" data-testid="saved-scrapbook-count">
+                  {items.length} {items.length === 1 ? "idea" : "ideas"} in your collection
+                </p>
+              )}
+            </div>
           </div>
-        </div>
-        {/* Editorial section rule below the scrapbook header */}
-        <div className="editorial-section-rule mt-4" aria-hidden="true" />
-      </header>
+          {/* Editorial section rule below the scrapbook header */}
+          <div className="editorial-section-rule mt-4" aria-hidden="true" />
+        </header>
+      </div>
+
+      {/* Content zone — cards float as clippings on the dark atelier surface */}
 
       {/* Loading */}
       {loading && (
         <div
-          className="flex items-center justify-center py-16 text-ds-slate"
           data-testid="saved-loading"
+          className="flex items-center justify-center py-16 text-ds-text-secondary"
         >
           <Loader2 className="w-6 h-6 animate-spin mr-2" aria-hidden="true" />
           <span className="text-sm">Loading your saved ideas…</span>
@@ -560,7 +576,7 @@ export function SavedShell() {
           data-testid="saved-error"
         >
           <AlertCircle className="w-8 h-8 text-ds-warning" aria-hidden="true" />
-          <p className="text-sm text-ds-slate">{error}</p>
+          <p className="text-sm text-ds-text-secondary">{error}</p>
           <button
             type="button"
             onClick={load}
@@ -584,8 +600,8 @@ export function SavedShell() {
             <Bookmark className="w-7 h-7 text-ds-accent" />
           </div>
           <div>
-            <p className="text-base font-semibold text-ds-text-inverse">Nothing saved yet</p>
-            <p className="text-sm text-ds-slate mt-1">
+            <p className="text-base font-semibold text-ds-text">Nothing saved yet</p>
+            <p className="text-sm text-ds-text-secondary mt-1">
               Explore restaurants, attractions, and hotels — then save the ones that inspire you.
             </p>
           </div>
