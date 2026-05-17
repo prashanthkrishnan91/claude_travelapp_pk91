@@ -50,10 +50,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      {/* Phase 8N: fixed atmospheric layers — vignette + CSS grain texture */}
+      <div className="atelier-vignette-layer" data-testid="atelier-vignette-layer" aria-hidden="true" />
+      <div className="atelier-texture-layer" data-testid="atelier-texture-layer" aria-hidden="true" />
       <MobileNav />
-      <div className="flex h-full min-h-screen">
+      <div
+        className="atelier-atmosphere-root flex h-full min-h-screen"
+        data-testid="atelier-atmosphere-root"
+      >
         <Sidebar />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto" data-testid="reduced-motion-safe-atmosphere">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 sm:pt-8 mobile-nav-spacer" data-testid="mobile-page-content">
             {children}
           </div>
