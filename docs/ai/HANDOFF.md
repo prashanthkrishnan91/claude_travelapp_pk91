@@ -136,10 +136,10 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 - Latency Budget Pack
 - Backend-only Scaffold Pack / No Visible Behavior Change Pack / Test Tier Pack (cross-cutting)
 
-## Type-check / test baseline (confirmed 2026-05-17, Phase 8N-C)
+## Type-check / test baseline (confirmed 2026-05-17, Phase 8N-C — merged PR #424)
 
 - **`npm run type-check` (frontend): CLEAN — 0 errors.** Requires `npm install` first (standard; `node_modules` is gitignored). After install: `tsc --noEmit` exits 0 with no diagnostics.
-- **`npm test` (frontend): 1993 tests, 0 failures.** (includes 50 Phase 8N-C contract tests in `boutique-visual-composition-8nc.test.mjs`, wired into `npm test` explicit list in `package.json`)
+- **`npm test` (frontend): 2010 tests, 0 failures.** (includes 67 Phase 8N-C contract tests in `boutique-visual-composition-8nc.test.mjs`, wired into `npm test` explicit list in `package.json`)
 - Any future session reporting "pre-existing TypeScript errors" is seeing an uninstalled `node_modules` environment — run `npm install` in `frontend/` before type-check.
 
 ## Known risks / unresolved issues
@@ -153,7 +153,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Stage 3.5 Phase 8N-C open (PR pending — boutique-visual-composition-8nc).** Real composition primitives shipped: `advisor-desk-panel`, `scrapbook-page`, `folio-cover-tab`, `editorial-scene`, `mapline-rule`, `atelier-stamp`, `editorial-section-rule`, `clipping-card`. Home/Concierge/Saved/My Trips/New Trip all carry visible art direction. 1993 tests, 0 failures. After merge: Phase 8O screenshot certification pass, or product feature work (deal alerts, Watchtower). Roadmap guidance: `docs/product/ROADMAP.md`.
+**Stage 3.5 Phase 8N-C merged (PR #424).** 9 CSS composition primitives (`advisor-desk-panel`, `scrapbook-page`, `folio-cover-tab`, `editorial-scene`, `mapline-rule`, `atelier-stamp`, `editorial-section-rule`, `clipping-card`, `concierge-desk-header`) applied to all 7 primary surfaces: Home, Saved Ideas, Concierge, My Trips, New Trip, Trip Detail, and Explore. TripBuilder CollapsiblePanels also carry `folio-cover-tab`. 2010 tests, 0 failures. **Next**: Phase 8O screenshot certification pass (validate actual rendered output against boutique fail gates), then product feature work (deal alerts, Watchtower). Roadmap guidance: `docs/product/ROADMAP.md`.
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 
