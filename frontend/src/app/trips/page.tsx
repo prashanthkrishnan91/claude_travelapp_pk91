@@ -129,7 +129,7 @@ function EmptyDashboard() {
         <Card
           as="div"
           tone="dark"
-          className="p-6 flex flex-col gap-4 hover:border-ds-accent/50 transition-colors duration-200"
+          className="p-6 flex flex-col gap-4 hover:border-ds-accent/50 transition-colors duration-200 boutique-folio"
         >
           <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-ds-accent-subtle text-ds-accent">
             <PlusCircle className="w-6 h-6" />
@@ -154,7 +154,7 @@ function EmptyDashboard() {
         <Card
           as="div"
           tone="dark"
-          className="p-6 flex flex-col gap-4 hover:border-ds-accent/50 transition-colors duration-200"
+          className="p-6 flex flex-col gap-4 hover:border-ds-accent/50 transition-colors duration-200 boutique-folio"
         >
           <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-ds-accent-subtle text-ds-accent">
             <Sparkles className="w-6 h-6" />
@@ -208,8 +208,7 @@ function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroPr
       <Card
         as="article"
         tone="dark"
-        className="hover:border-ds-accent/40 transition-colors duration-200"
-        style={{ boxShadow: "var(--ds-elevation-2)" }}
+        className="hover:border-ds-accent/40 transition-colors duration-200 boutique-instrument"
         data-testid="continue-planning-hero"
       >
         {/* Editorial destination / title header */}
@@ -301,8 +300,7 @@ function JourneyCard({ trip, onEdit, onDelete }: JourneyCardProps) {
     <Card
       as="article"
       tone="dark"
-      className="flex flex-col hover:border-ds-accent/40 transition-colors duration-200"
-      style={{ boxShadow: "var(--ds-elevation-1)" }}
+      className="flex flex-col hover:border-ds-accent/40 transition-colors duration-200 boutique-folio"
       data-testid="journey-card"
     >
       {/* Volume cover — destination as hero */}
@@ -404,7 +402,7 @@ function PlanningToolsStrip() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Link
           href="/concierge"
-          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-carbon hover:border-ds-accent/40 hover:bg-ds-onyx transition-all duration-200"
+          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-onyx hover:border-ds-accent/40 transition-all duration-200 atelier-surface-depth"
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0">
             <Sparkles className="w-4 h-4" aria-hidden="true" />
@@ -425,7 +423,7 @@ function PlanningToolsStrip() {
 
         <Link
           href="/saved"
-          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-carbon hover:border-ds-accent/40 hover:bg-ds-onyx transition-all duration-200"
+          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-onyx hover:border-ds-accent/40 transition-all duration-200 atelier-surface-depth"
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0">
             <BookmarkCheck className="w-4 h-4" aria-hidden="true" />
@@ -446,7 +444,7 @@ function PlanningToolsStrip() {
 
         <Link
           href="/explore"
-          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-carbon hover:border-ds-accent/40 hover:bg-ds-onyx transition-all duration-200"
+          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-onyx hover:border-ds-accent/40 transition-all duration-200 atelier-surface-depth"
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0">
             <Compass className="w-4 h-4" aria-hidden="true" />

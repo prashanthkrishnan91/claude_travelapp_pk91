@@ -96,8 +96,7 @@ function ConciergeEntry() {
       <Card
         as="div"
         tone="dark"
-        className="p-6"
-        style={{ boxShadow: "var(--ds-elevation-2)" }}
+        className="p-6 boutique-instrument"
       >
         <div className="flex items-start gap-4">
           <div
@@ -141,8 +140,7 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
       <Card
         as="article"
         tone="dark"
-        className="mt-3 p-5 hover:border-ds-accent/40 transition-colors duration-200"
-        style={{ boxShadow: "var(--ds-elevation-1)" }}
+        className="mt-3 p-5 hover:border-ds-accent/40 transition-colors duration-200 atelier-surface-depth"
       >
         <div className="flex items-start gap-4">
           <div
@@ -213,7 +211,7 @@ function JourneyShelfTeaser({ count }: { count: number }) {
       </div>
       <Link
         href="/trips"
-        className="flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-carbon hover:border-ds-accent/40 hover:bg-ds-onyx transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+        className="flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-onyx hover:border-ds-accent/40 transition-all duration-200 atelier-surface-depth focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
       >
         <div
           className="flex items-center justify-center w-9 h-9 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0"
@@ -295,7 +293,7 @@ function AtelierPlanningStrip() {
       <div className="grid grid-cols-2 gap-3 mt-3">
         <Link
           href="/explore"
-          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-carbon hover:border-ds-accent/40 hover:bg-ds-onyx transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-onyx hover:border-ds-accent/40 transition-all duration-200 atelier-surface-depth focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         >
           <span
             className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0"
@@ -314,7 +312,7 @@ function AtelierPlanningStrip() {
         </Link>
         <Link
           href="/saved"
-          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-carbon hover:border-ds-accent/40 hover:bg-ds-onyx transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-onyx hover:border-ds-accent/40 transition-all duration-200 atelier-surface-depth focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         >
           <span
             className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0"
@@ -382,7 +380,7 @@ export function DashboardClient() {
   const hasTrips = trips.length > 0;
 
   return (
-    <div className="space-y-8" data-testid="atelier-home">
+    <div className="space-y-8 atelier-transition" data-testid="atelier-home">
       <AtelierGreeting tripCount={summary.tripCount} />
       <ConciergeEntry />
       {hasTrips && continuePlanning && (

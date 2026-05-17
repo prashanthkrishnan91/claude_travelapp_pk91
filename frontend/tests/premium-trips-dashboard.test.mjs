@@ -60,8 +60,11 @@ test("trips page has Continue Planning section", () => {
   assert.match(tripsPage, /ContinuePlanningHero/);
 });
 
-test("trips page ContinuePlanningHero uses elevation token", () => {
-  assert.match(tripsPage, /ds-elevation-2/);
+test("trips page ContinuePlanningHero uses elevation or boutique surface token", () => {
+  assert.ok(
+    tripsPage.includes("ds-elevation-2") || tripsPage.includes("boutique-instrument"),
+    "ContinuePlanningHero must use ds-elevation-2 or boutique-instrument surface class"
+  );
 });
 
 test("ContinuePlanningHero accepts onEdit and onDelete props", () => {

@@ -60,7 +60,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         <Sidebar />
         <main className="flex-1 overflow-y-auto" data-testid="reduced-motion-safe-atmosphere">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 sm:pt-8 mobile-nav-spacer" data-testid="mobile-page-content">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 sm:pt-8 mobile-nav-spacer atelier-transition" data-testid="mobile-page-content">
             {children}
           </div>
         </main>

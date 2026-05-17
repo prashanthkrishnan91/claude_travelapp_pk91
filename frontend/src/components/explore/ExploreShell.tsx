@@ -81,7 +81,7 @@ export function ExploreShell() {
 
         {/* Search instrument section */}
         <section
-          className="rounded-xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-2)] p-4 sm:p-6"
+          className="rounded-xl border border-ds-pen-stroke bg-ds-onyx p-4 sm:p-6 boutique-instrument"
           data-testid={`${active}-flow`}
           aria-label={`${VERTICAL_TITLES[active]} search`}
         >
@@ -140,7 +140,7 @@ function VerticalCard({
     <button
       type="button"
       onClick={onSelect}
-      className="rounded-xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-1)] hover:bg-ds-carbon card-lift p-5 text-left flex items-start gap-4 w-full min-h-[44px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+      className="rounded-xl border border-ds-pen-stroke bg-ds-onyx card-lift p-5 text-left flex items-start gap-4 w-full min-h-[44px] transition-colors atelier-surface-depth focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
       aria-label={`Explore ${meta.label}`}
       data-testid={`vertical-card-${meta.id}`}
     >
