@@ -1,10 +1,57 @@
 # UI Baseline
 
-Last updated: 2026-05-17 (Phase 8G)
+Last updated: 2026-05-17 (Phase 8H)
 
 ## Purpose
 
 Tracks the state of the design system and UI primitive layer so future prompts and PRs can reason accurately about what exists and what has been adopted.
+
+---
+
+## Stage 3.5 Phase 8H — Global Controls, Forms, Action Sheets, and Modal Interaction Polish — SHIPPED (2026-05-17)
+
+**Stage 3.5 · Wife-Wow design system — Shared control layer · Premium input/button/label/action sheet polish**
+
+### What shipped
+
+| File | Change summary |
+|---|---|
+| `frontend/src/app/globals.css` | **`.input` ds-token migration.** `border: 1px solid rgba(...)` → `var(--ds-pen-stroke)`; `background: rgba(7,7,18,0.65)` → `var(--ds-midnight-ink)`; removed `backdrop-filter` (glass forbidden on content surfaces); `color: #f2ede4` → `var(--ds-text-primary)`; `::placeholder` → `var(--ds-text-tertiary)`; `outline: none` removed; `:focus` → `:focus-visible` with `outline: 2px solid var(--ds-accent); outline-offset: 2px; border-color: var(--ds-accent-muted)`; disabled state → `color-mix(in srgb, var(--ds-pen-stroke) 30%, transparent)` bg; `min-height: 2.75rem` (44px). **`.select`** same pattern. **`.label`** → Overline grammar: `var(--ds-type-overline-size/weight/tracking)`, `text-transform: uppercase`, `var(--ds-text-tertiary)`. **`.btn-primary`** focus-visible raw hex `#e8b854` → `var(--ds-accent)`; `min-height: 2.75rem`. **`.btn-secondary`** (new): ink-on-dark outlined button — `bg-ds-carbon`, `border: 1px solid var(--ds-pen-stroke)`, `color: var(--ds-text-secondary)`, `min-height: 2.75rem`, hover `bg-ds-pen-stroke/text-ds-text-primary`, `focus-visible: outline 2px solid var(--ds-accent)`. **`.btn-ghost`** rgba border/bg → `color-mix(in srgb, var(--ds-pen-stroke) 35/60%, transparent)`; `color: #d8d4ca` → `var(--ds-text-secondary)`; `min-height: 2.75rem`; focus-visible → `var(--ds-accent)`. |
+| `frontend/src/components/ui/EmptyState.tsx` | **ds-token migration.** `bg-white/[.06]` → `bg-ds-carbon`; `border-white/[.07]` → `border-ds-pen-stroke`; `text-cream-400` → `text-ds-text-tertiary`; `text-cream-200` → `text-ds-text`. |
+| `frontend/src/components/ui/StatCard.tsx` | **ds-token migration.** Default `colorClass` `bg-brand-500/15 text-brand-400` → `text-ds-accent`; icon container gets `style={{ backgroundColor: "var(--ds-accent-subtle)" }}`; `text-cream-500` → `text-ds-text-tertiary`; `text-cream-100` → `text-ds-text`; positive trend `text-emerald-400` → `text-ds-trust`; negative trend `text-cream-500` → `text-ds-text-tertiary`. |
+| `frontend/src/components/explore/ResultActionSheet.tsx` | **44px touch targets.** `save-action-btn` and `more-actions-toggle` buttons both gain `min-h-[44px]` in className. All handlers, testids, and behavior preserved. |
+| `frontend/src/components/trips/TripIdeasPanel.tsx` | **focus-visible pattern.** 4 instances of `focus:outline-none focus:ring-1 focus:ring-ds-accent` replaced with `focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2` (textarea note, day selector, search input, sort select). |
+| `frontend/tests/global-controls-polish-8h.test.mjs` | **NEW.** 77 Phase 8H contract tests: `.input` ds-token (pen-stroke/midnight-ink/text-primary), focus-visible pattern, 44px touch target; `.select` mirrors `.input`; `.label` Overline grammar (overline-size/tracking/uppercase/text-tertiary); `.btn-primary` focus-visible `var(--ds-accent)` + 44px; `.btn-secondary` defined/ds-token/focus-visible/44px; `.btn-ghost` focus-visible `var(--ds-accent)` + 44px + no raw rgba for color; `EmptyState` no cream-*/white/[ legacy; `StatCard` no cream-*/brand-*/emerald-* legacy; `ResultActionSheet` save/more-actions `min-h-[44px]`; `ResultActionSheet` handlers/testids preserved; `ResultActionSheet` no backend imports; `TripIdeasPanel` no focus:ring-* legacy; no nested interactive controls; no raw hex in focus-visible color properties. |
+| `frontend/package.json` | Added `global-controls-polish-8h.test.mjs` to test script. |
+
+### Test results
+- **1496 tests, 0 failures** (was 1419; +77 new Phase 8H contract tests)
+- All pre-existing tests continue to pass
+
+### Design contract alignment
+
+- **Controls match the atelier interface:** `.input` fields now read as design-native (pen-stroke border, midnight-ink background, text-primary text, no glass backdrop). `.label` in Overline grammar makes field labels consistent with card section labels and nav section labels across every rebuilt surface.
+- **Focus-visible everywhere:** All touched controls now use the Design Bible §4.12 standard: `2px solid var(--ds-accent)` with `2px offset`. No `outline: none` suppressions, no `focus:ring-*` legacy patterns. Keyboard navigation is equally premium on all touched surfaces.
+- **44px minimum targets:** `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.input`, `.select`, `save-action-btn`, `more-actions-toggle` all have `min-height: 2.75rem` (44px). Completes the touch target pass for the shared control layer.
+- **`.btn-secondary` establishes a durable second-level CTA:** Future surfaces can now use `className="btn-secondary"` for ink-on-dark outlined actions — consistent with the `btn-primary` gold premium CTA but visually subordinate.
+- **Shared UI primitives clean:** `EmptyState` and `StatCard` were the last two `components/ui/` primitives still using cream-\*/brand-\*/emerald-\* legacy palette. Both fully migrated to ds-tokens.
+
+### Invariant confirmations
+- No backend files; no API/search/provider/Tavily/cache/Supabase/env changes.
+- No Google Flights URL changes; no Duffel provider changes.
+- No new fonts, route rewrites, or data model changes.
+- No new booking behavior; no fake data; no hardcoded destinations.
+- `ResultActionSheet` testid contract fully preserved: `result-action-sheet`, `save-action-btn`, `more-actions-toggle`, `manage-in-saved-link`, `save-first-hint`, `trip-actions-guidance`, `action-error`.
+- `ResultActionSheet` handler contract preserved: `handleSave`, `handleUnsave`, `saveItem`, `deleteSavedItem`, `buildSavePayload`.
+- `TripIdeasPanel` behavior preserved: all `handleAssign`, `handleRemove`, `handleUpdate`, filter/sort/search logic unchanged.
+- `.label` class name preserved — all existing consumers (TripBuilderForm, auth pages, trips page, cards page) keep working.
+- `.btn-primary`, `.btn-ghost` class names preserved. `.btn-secondary` is additive (no existing code broken).
+
+### Accessibility / motion note
+- No new motion introduced. `card-lift` (translateY -2px, 120ms) is pre-existing.
+- `.btn-ghost` backdrop-filter retained — TripBuilder glass context is the established exception per HANDOFF Phase 8B.
+- All focus-visible patterns use the 2px sandstone-gold ring from Design Bible §4.12.
+- `min-height: 2.75rem` on inputs and buttons ensures 44px touch target across mobile/tablet.
 
 ---
 
