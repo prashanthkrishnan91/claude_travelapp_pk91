@@ -96,26 +96,25 @@ const PROVIDER_UNAVAILABLE_BODY =
 
 const RANK_LABELS = ["Best Value", "Runner-Up", "Budget Pick"];
 const RANK_BADGE = [
-  "bg-emerald-100 text-emerald-700",
-  "bg-sky-100 text-sky-700",
-  "bg-amber-100 text-amber-700",
+  "text-ds-accent",
+  "text-ds-text-secondary",
+  "text-ds-text-tertiary",
 ];
 const RANK_BORDER = [
-  "border-emerald-400",
-  "border-sky-300",
-  "border-amber-300",
+  "border-ds-accent",
+  "border-ds-pen-stroke",
+  "border-ds-pen-stroke",
 ];
-const RANK_BANNER = ["bg-emerald-50", "bg-sky-50", "bg-amber-50"];
 const RANK_GLOW = [
-  "shadow-lg shadow-emerald-200/60 ring-1 ring-emerald-300/50",
-  "shadow-sm",
-  "shadow-sm",
+  "boutique-instrument",
+  "boutique-folio",
+  "",
 ];
 
 function scoreColor(s: number): string {
-  if (s >= 70) return "text-emerald-600";
-  if (s >= 50) return "text-amber-600";
-  return "text-slate-400";
+  if (s >= 70) return "text-ds-trust";
+  if (s >= 50) return "text-ds-caution";
+  return "text-ds-text-tertiary";
 }
 
 function fmtDuration(mins: number): string {
@@ -287,69 +286,80 @@ export function OptimizeTripModal({ trip, itineraryDays, onClose, onPlanSelected
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl my-8">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center p-4 overflow-y-auto">
+      {/* Modal shell — boutique atelier dark surface */}
+      <div
+        data-testid="optimize-trip-modal"
+        className="advisor-desk-panel w-full max-w-4xl my-8"
+      >
+        {/* Header — two-zone desk header */}
+        <div className="concierge-desk-header flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-sky-500" />
-            <h2 className="text-base font-semibold text-slate-900">Optimize My Trip</h2>
+            <Sparkles className="w-5 h-5 text-ds-accent" />
+            <h2 className="text-base font-semibold text-ds-text">Optimize My Trip</h2>
             {trip.destination && (
-              <span className="text-sm text-slate-400">— {trip.destination}</span>
+              <span className="text-sm text-ds-text-tertiary">— {trip.destination}</span>
             )}
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition"
+            aria-label="Close optimize modal"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-ds-pen-stroke text-ds-text-tertiary transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <div className="p-6">
-          {/* Loading */}
+          {/* Loading — atelier search state, not sky-blue spinner */}
           {phase === "loading" && (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-              <Loader2 className="w-10 h-10 text-sky-400 animate-spin" />
-              <p className="text-sm font-medium text-slate-700">Finding best options…</p>
-              <p className="text-xs text-slate-400">Analyzing flights, hotels & rewards value</p>
+            <div
+              data-testid="optimize-loading-state"
+              className="flex flex-col items-center justify-center py-16 gap-3 text-center"
+            >
+              <Loader2 className="w-10 h-10 text-ds-accent animate-spin" />
+              <p className="text-sm font-medium text-ds-text-secondary">Finding best options…</p>
+              <p className="text-xs text-ds-text-tertiary">Analyzing flights, hotels & rewards value</p>
             </div>
           )}
 
-          {/* Error */}
+          {/* Error — editorial warning state */}
           {phase === "error" && (
-            <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
-              <AlertCircle className="w-8 h-8 text-red-400" />
-              <p className="text-sm font-medium text-slate-700">{error}</p>
+            <div
+              data-testid="optimize-error-state"
+              className="flex flex-col items-center justify-center py-12 gap-3 text-center"
+            >
+              <AlertCircle className="w-8 h-8 text-ds-warning" />
+              <p className="text-sm font-medium text-ds-text-secondary">{error}</p>
               <button
                 onClick={run}
-                className="mt-1 px-4 py-2 text-sm font-medium bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition"
+                className="btn-primary mt-1"
               >
                 Try Again
               </button>
             </div>
           )}
 
-          {/* Provider unavailable — Fail-Closed UX v1 */}
+          {/* Provider unavailable — Fail-Closed UX v1 — honest boutique advisory */}
           {phase === "provider_unavailable" && (
             <div
               role="alert"
               data-testid="optimize-provider-unavailable"
               className="flex flex-col items-center justify-center py-12 gap-3 text-center"
             >
-              <AlertCircle className="w-8 h-8 text-amber-500" />
-              <p className="text-sm font-semibold text-slate-800">{PROVIDER_UNAVAILABLE_TITLE}</p>
-              <p className="text-sm text-slate-600 max-w-md">{PROVIDER_UNAVAILABLE_BODY}</p>
+              <AlertCircle className="w-8 h-8 text-ds-caution" />
+              <p className="text-sm font-semibold text-ds-text">{PROVIDER_UNAVAILABLE_TITLE}</p>
+              <p className="text-sm text-ds-text-secondary max-w-md">{PROVIDER_UNAVAILABLE_BODY}</p>
               <button
                 onClick={onClose}
-                className="mt-1 px-4 py-2 text-sm font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
+                className="btn-ghost mt-1"
               >
                 Build trip manually
               </button>
             </div>
           )}
 
-          {/* Results */}
+          {/* Results — boutique rank cards */}
           {phase === "results" && options.length > 0 && (() => {
             const avgCost = options.reduce((s, o) => s + o.totalCost, 0) / options.length;
             const bestSavings = options[0] ? Math.round(avgCost - options[0].totalCost) : 0;
@@ -357,207 +367,211 @@ export function OptimizeTripModal({ trip, itineraryDays, onClose, onPlanSelected
             const avgCpp = cppVals.length ? cppVals.reduce((s, c) => s + c, 0) / cppVals.length : null;
 
             return (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
-              {options.map((opt, idx) => (
-                <div
-                  key={opt.rank}
-                  className={`rounded-xl border-2 ${RANK_BORDER[idx]} ${RANK_GLOW[idx]} overflow-hidden flex flex-col transition-shadow`}
-                >
-                  {/* Primary Recommendation crown banner */}
-                  {idx === 0 && (
-                    <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-1.5 flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <Crown className="w-3 h-3 text-white/90" />
-                        <span className="text-[11px] font-semibold text-white uppercase tracking-wider">
-                          Primary Recommendation
-                        </span>
-                      </div>
-                      {bestSavings > 0 && (
-                        <span className="text-[10px] font-medium text-emerald-100">
-                          Save ${bestSavings.toLocaleString()} vs avg
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Rank banner */}
-                  <div className={`px-4 py-3 flex items-center justify-between ${RANK_BANNER[idx]}`}>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${RANK_BADGE[idx]}`}>
-                      Option {opt.rank} · {RANK_LABELS[idx]}
-                    </span>
-                    <span className={`text-xl font-bold leading-none ${scoreColor(opt.totalValueScore)}`}>
-                      {Math.round(opt.totalValueScore)}
-                      <span className="text-xs font-normal text-slate-400 ml-0.5">/100</span>
-                    </span>
-                  </div>
-
-                  <div className={`${idx === 0 ? "p-5" : "p-4"} flex flex-col gap-3 flex-1`}>
-                    {/* Flight */}
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Plane className="w-3.5 h-3.5 text-sky-500" />
-                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
-                          Flight
-                        </span>
-                      </div>
-                      <p className="text-sm font-semibold text-slate-800">
-                        {opt.flight.airline} {opt.flight.flightNumber}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {fmtDuration(opt.flight.durationMinutes)} ·{" "}
-                        {opt.flight.stops === 0
-                          ? "Nonstop"
-                          : `${opt.flight.stops} stop${opt.flight.stops > 1 ? "s" : ""}`}{" "}
-                        · {opt.flight.cabinClass}
-                      </p>
-                      <p className="text-sm font-medium text-slate-700 mt-1">
-                        ${opt.flight.price.toLocaleString()}
-                        {opt.flight.pointsCost > 0 && (
-                          <span className="text-xs text-sky-600 ml-1.5">
-                            · {opt.flight.pointsCost.toLocaleString()} pts
+              <div
+                data-testid="optimize-results"
+                className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start"
+              >
+                {options.map((opt, idx) => (
+                  <div
+                    key={opt.rank}
+                    data-testid={`optimize-result-card-${idx}`}
+                    className={`rounded-xl border bg-ds-onyx ${RANK_BORDER[idx]} ${RANK_GLOW[idx]} overflow-hidden flex flex-col transition-shadow`}
+                  >
+                    {/* Primary Recommendation banner — warm atelier treatment */}
+                    {idx === 0 && (
+                      <div className="concierge-desk-header px-4 py-1.5 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Crown className="w-3 h-3 text-ds-accent" />
+                          <span className="text-[11px] font-semibold text-ds-accent uppercase tracking-wider">
+                            Primary Recommendation
                           </span>
-                        )}
-                      </p>
-                    </div>
-
-                    <div className="h-px bg-slate-100" />
-
-                    {/* Hotel */}
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Building2 className="w-3.5 h-3.5 text-violet-500" />
-                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
-                          Hotel
-                        </span>
-                      </div>
-                      <p className="text-sm font-semibold text-slate-800 line-clamp-1">{opt.hotel.name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {opt.hotel.rating != null && (
-                          <span className="flex items-center gap-0.5 text-xs text-amber-600">
-                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                            {opt.hotel.rating.toFixed(1)}
-                          </span>
-                        )}
-                        {opt.hotel.areaLabel && (
-                          <span className="text-xs text-slate-400">{opt.hotel.areaLabel}</span>
-                        )}
-                      </div>
-                      <p className="text-sm font-medium text-slate-700 mt-1">
-                        ${opt.hotel.pricePerNight.toLocaleString()}/night · {opt.hotel.nights}n
-                      </p>
-                    </div>
-
-                    {/* Expanded score breakdown */}
-                    {expanded === idx && (
-                      <>
-                        <div className="h-px bg-slate-100" />
-                        <div className="grid grid-cols-3 gap-2 text-center">
-                          {[
-                            { label: "Flight", score: opt.flightScore },
-                            { label: "Hotel", score: opt.hotelScore },
-                            { label: "Rewards", score: opt.rewardsEfficiency },
-                          ].map(({ label, score }) => (
-                            <div
-                              key={label}
-                              className="rounded-lg bg-slate-50 border border-slate-100 p-2"
-                            >
-                              <p className="text-[10px] text-slate-400">{label}</p>
-                              <p className={`text-sm font-bold ${scoreColor(score)}`}>
-                                {Math.round(score)}
-                              </p>
-                            </div>
-                          ))}
                         </div>
-                        {opt.flight.explanation && (
-                          <p className="text-xs text-slate-500 leading-relaxed italic">
-                            {opt.flight.explanation}
-                          </p>
+                        {bestSavings > 0 && (
+                          <span className="text-[10px] font-medium text-ds-text-tertiary">
+                            Save ${bestSavings.toLocaleString()} vs avg
+                          </span>
                         )}
-                      </>
+                      </div>
                     )}
 
-                    <div className="h-px bg-slate-100" />
+                    {/* Rank banner */}
+                    <div className="px-4 py-3 flex items-center justify-between border-b border-ds-pen-stroke">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded bg-ds-carbon border border-ds-pen-stroke ${RANK_BADGE[idx]}`}>
+                        Option {opt.rank} · {RANK_LABELS[idx]}
+                      </span>
+                      <span className={`text-xl font-bold leading-none ${scoreColor(opt.totalValueScore)}`}>
+                        {Math.round(opt.totalValueScore)}
+                        <span className="text-xs font-normal text-ds-text-tertiary ml-0.5">/100</span>
+                      </span>
+                    </div>
 
-                    {/* Totals + summary */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-slate-400">Total cost</span>
-                        <span className={`font-bold ${idx === 0 ? "text-base text-slate-900" : "text-sm text-slate-900"}`}>
-                          ${opt.totalCost.toLocaleString()}
-                        </span>
+                    <div className={`${idx === 0 ? "p-5" : "p-4"} flex flex-col gap-3 flex-1`}>
+                      {/* Flight */}
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Plane className="w-3.5 h-3.5 text-ds-accent" />
+                          <span className="text-[10px] font-semibold text-ds-text-tertiary uppercase tracking-widest">
+                            Flight
+                          </span>
+                        </div>
+                        <p className="text-sm font-semibold text-ds-text">
+                          {opt.flight.airline} {opt.flight.flightNumber}
+                        </p>
+                        <p className="text-xs text-ds-text-secondary mt-0.5">
+                          {fmtDuration(opt.flight.durationMinutes)} ·{" "}
+                          {opt.flight.stops === 0
+                            ? "Nonstop"
+                            : `${opt.flight.stops} stop${opt.flight.stops > 1 ? "s" : ""}`}{" "}
+                          · {opt.flight.cabinClass}
+                        </p>
+                        <p className="text-sm font-medium text-ds-text-secondary mt-1">
+                          ${opt.flight.price.toLocaleString()}
+                          {opt.flight.pointsCost > 0 && (
+                            <span className="text-xs text-ds-accent ml-1.5">
+                              · {opt.flight.pointsCost.toLocaleString()} pts
+                            </span>
+                          )}
+                        </p>
                       </div>
-                      {opt.totalPoints > 0 && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-400">Points used</span>
-                          <span className="text-xs font-semibold text-sky-600">
-                            {opt.totalPoints.toLocaleString()} pts
+
+                      <div className="h-px bg-ds-pen-stroke" />
+
+                      {/* Hotel */}
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Building2 className="w-3.5 h-3.5 text-ds-accent-muted" />
+                          <span className="text-[10px] font-semibold text-ds-text-tertiary uppercase tracking-widest">
+                            Hotel
                           </span>
                         </div>
+                        <p className="text-sm font-semibold text-ds-text line-clamp-1">{opt.hotel.name}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {opt.hotel.rating != null && (
+                            <span className="flex items-center gap-0.5 text-xs text-ds-caution">
+                              <Star className="w-3 h-3 fill-ds-caution text-ds-caution" />
+                              {opt.hotel.rating.toFixed(1)}
+                            </span>
+                          )}
+                          {opt.hotel.areaLabel && (
+                            <span className="text-xs text-ds-text-tertiary">{opt.hotel.areaLabel}</span>
+                          )}
+                        </div>
+                        <p className="text-sm font-medium text-ds-text-secondary mt-1">
+                          ${opt.hotel.pricePerNight.toLocaleString()}/night · {opt.hotel.nights}n
+                        </p>
+                      </div>
+
+                      {/* Expanded score breakdown */}
+                      {expanded === idx && (
+                        <>
+                          <div className="h-px bg-ds-pen-stroke" />
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            {[
+                              { label: "Flight", score: opt.flightScore },
+                              { label: "Hotel", score: opt.hotelScore },
+                              { label: "Rewards", score: opt.rewardsEfficiency },
+                            ].map(({ label, score }) => (
+                              <div
+                                key={label}
+                                className="rounded-lg bg-ds-carbon border border-ds-pen-stroke p-2"
+                              >
+                                <p className="text-[10px] text-ds-text-tertiary">{label}</p>
+                                <p className={`text-sm font-bold ${scoreColor(score)}`}>
+                                  {Math.round(score)}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                          {opt.flight.explanation && (
+                            <p className="text-xs text-ds-text-secondary leading-relaxed italic">
+                              {opt.flight.explanation}
+                            </p>
+                          )}
+                        </>
                       )}
-                      {opt.flight.cpp != null && (
+
+                      <div className="h-px bg-ds-pen-stroke" />
+
+                      {/* Totals + summary */}
+                      <div className="space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-400">CPP</span>
-                          <span className="text-xs font-semibold text-sky-600">
-                            {opt.flight.cpp.toFixed(2)}¢
-                            {idx === 0 && avgCpp != null && opt.flight.cpp > avgCpp && (
-                              <span className="ml-1 font-normal text-emerald-500">
-                                +{(opt.flight.cpp - avgCpp).toFixed(1)}¢ vs avg
-                              </span>
-                            )}
+                          <span className="text-xs text-ds-text-tertiary">Total cost</span>
+                          <span className={`font-bold ${idx === 0 ? "text-base text-ds-text" : "text-sm text-ds-text"}`}>
+                            ${opt.totalCost.toLocaleString()}
                           </span>
                         </div>
-                      )}
-                      <p className="text-xs text-slate-500 italic leading-relaxed pt-1">
-                        {opt.summary}
-                      </p>
+                        {opt.totalPoints > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-ds-text-tertiary">Points used</span>
+                            <span className="text-xs font-semibold text-ds-accent">
+                              {opt.totalPoints.toLocaleString()} pts
+                            </span>
+                          </div>
+                        )}
+                        {opt.flight.cpp != null && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-ds-text-tertiary">CPP</span>
+                            <span className="text-xs font-semibold text-ds-accent">
+                              {opt.flight.cpp.toFixed(2)}¢
+                              {idx === 0 && avgCpp != null && opt.flight.cpp > avgCpp && (
+                                <span className="ml-1 font-normal text-ds-trust">
+                                  +{(opt.flight.cpp - avgCpp).toFixed(1)}¢ vs avg
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        <p className="text-xs text-ds-text-secondary italic leading-relaxed pt-1">
+                          {opt.summary}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="px-4 pb-4 flex flex-col gap-2 border-t border-ds-pen-stroke pt-4">
+                      <button
+                        onClick={() => handleSelect(opt, idx)}
+                        disabled={selecting !== null || selected !== null}
+                        className={`w-full rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition min-h-[44px] ${
+                          selected === idx
+                            ? "bg-ds-carbon text-ds-trust border border-ds-pen-stroke cursor-default"
+                            : "btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                        }`}
+                      >
+                        {selecting === idx ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Adding…
+                          </>
+                        ) : selected === idx ? (
+                          <>
+                            <Check className="w-4 h-4" />
+                            Added to Itinerary
+                          </>
+                        ) : (
+                          "Select This Plan"
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setExpanded(expanded === idx ? null : idx)}
+                        className="btn-ghost w-full flex items-center justify-center gap-1 text-xs"
+                      >
+                        {expanded === idx ? (
+                          <>
+                            <ChevronUp className="w-3.5 h-3.5" />
+                            Hide Details
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="w-3.5 h-3.5" />
+                            View Details
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
-
-                  {/* Actions */}
-                  <div className="px-4 pb-4 flex flex-col gap-2">
-                    <button
-                      onClick={() => handleSelect(opt, idx)}
-                      disabled={selecting !== null || selected !== null}
-                      className={`w-full py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition ${
-                        selected === idx
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      }`}
-                    >
-                      {selecting === idx ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Adding…
-                        </>
-                      ) : selected === idx ? (
-                        <>
-                          <Check className="w-4 h-4" />
-                          Added to Itinerary
-                        </>
-                      ) : (
-                        "Select This Plan"
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setExpanded(expanded === idx ? null : idx)}
-                      className="w-full py-1.5 rounded-lg text-xs text-slate-500 hover:bg-slate-50 border border-slate-200 flex items-center justify-center gap-1 transition"
-                    >
-                      {expanded === idx ? (
-                        <>
-                          <ChevronUp className="w-3.5 h-3.5" />
-                          Hide Details
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="w-3.5 h-3.5" />
-                          View Details
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
             );
           })()}
         </div>
