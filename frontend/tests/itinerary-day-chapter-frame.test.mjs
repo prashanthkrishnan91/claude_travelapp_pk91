@@ -401,3 +401,54 @@ test('Phase 8D: onUpdateTimeline timeline update prop preserved', () => {
 test('Phase 8D: ItineraryDayColumn exported correctly', () => {
   assert.ok(src.includes('export function ItineraryDayColumn'), 'ItineraryDayColumn export missing');
 });
+
+// ── Semantic button fix: day-chapter-header must not be a clickable div ───────
+
+test('Phase 8D patch: day-chapter-header wrapper div has no onClick', () => {
+  const headerIdx = src.indexOf('data-testid="day-chapter-header"');
+  assert.ok(headerIdx !== -1, 'day-chapter-header not found');
+  const headerClose = src.indexOf('>', headerIdx);
+  const headerAttrs = src.slice(headerIdx, headerClose);
+  assert.ok(!headerAttrs.includes('onClick'), 'day-chapter-header wrapper div has onClick — card-level click pattern forbidden');
+});
+
+test('Phase 8D patch: day-chapter-header wrapper div has no cursor-pointer', () => {
+  const headerIdx = src.indexOf('data-testid="day-chapter-header"');
+  assert.ok(headerIdx !== -1, 'day-chapter-header not found');
+  const headerClose = src.indexOf('>', headerIdx);
+  const headerAttrs = src.slice(headerIdx, headerClose);
+  assert.ok(!headerAttrs.includes('cursor-pointer'), 'day-chapter-header wrapper div has cursor-pointer — move it to the semantic button');
+});
+
+test('Phase 8D patch: chapter identity action is a semantic <button type="button">', () => {
+  // The chapter identity (left side of header) must be a real button
+  assert.ok(
+    src.includes('<button') && src.includes('type="button"'),
+    'missing semantic <button type="button"> for chapter identity'
+  );
+  // The button should be inside the header region (before Header actions comment)
+  const headerIdx = src.indexOf('data-testid="day-chapter-header"');
+  const actionsIdx = src.indexOf('Header actions', headerIdx);
+  const identityRegion = src.slice(headerIdx, actionsIdx);
+  assert.ok(
+    identityRegion.includes('type="button"'),
+    'chapter identity <button type="button"> not found in header identity region'
+  );
+});
+
+test('Phase 8D patch: chapter identity button has aria-label', () => {
+  const headerIdx = src.indexOf('data-testid="day-chapter-header"');
+  const actionsIdx = src.indexOf('Header actions', headerIdx);
+  const identityRegion = src.slice(headerIdx, actionsIdx);
+  assert.ok(identityRegion.includes('aria-label'), 'chapter identity button missing aria-label');
+});
+
+test('Phase 8D patch: no nested interactive controls (button inside button)', () => {
+  // Chapter identity is a button; no child buttons/links should be nested inside it
+  const headerIdx = src.indexOf('data-testid="day-chapter-header"');
+  const actionsIdx = src.indexOf('Header actions', headerIdx);
+  const identityRegion = src.slice(headerIdx, actionsIdx);
+  // Count opening button tags — only one (the identity button itself)
+  const buttonOpens = (identityRegion.match(/<button/g) || []).length;
+  assert.ok(buttonOpens <= 1, `found ${buttonOpens} <button> opens in chapter identity region — nested buttons forbidden`);
+});

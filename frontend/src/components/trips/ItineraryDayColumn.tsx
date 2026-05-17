@@ -476,20 +476,23 @@ export function ItineraryDayColumn({
           : "border-ds-pen-stroke"
       }`}
     >
-      {/* ── Chapter header — click to set as target day ────────────── */}
+      {/* ── Chapter header ──────────────────────────────────────────── */}
       <div
         data-testid="day-chapter-header"
-        className={`shrink-0 flex items-center justify-between px-3 py-2.5 border-b border-ds-pen-stroke transition-colors duration-[120ms] cursor-pointer ${
-          isSelected ? "bg-ds-carbon" : "bg-ds-onyx hover:bg-ds-carbon"
+        className={`shrink-0 flex items-center justify-between px-3 py-2.5 border-b border-ds-pen-stroke transition-colors duration-[120ms] ${
+          isSelected ? "bg-ds-carbon" : "bg-ds-onyx"
         }`}
-        onClick={() => {
-          onSelect?.(day.id);
-          onToggleExpanded?.(day.dayNumber);
-        }}
-        title={isSelected ? "Currently adding to this day" : "Click to add items to this day"}
       >
-        {/* Chapter identity */}
-        <div className="flex items-center gap-3 min-w-0">
+        {/* Chapter identity — semantic button for select + expand */}
+        <button
+          type="button"
+          onClick={() => {
+            onSelect?.(day.id);
+            onToggleExpanded?.(day.dayNumber);
+          }}
+          aria-label={isSelected ? `Day ${day.dayNumber} — currently active` : `Select Day ${day.dayNumber}`}
+          className="flex items-center gap-3 min-w-0 text-left min-h-[44px] rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 transition-colors duration-[120ms]"
+        >
           {/* Chapter number marker */}
           <div
             data-testid="day-chapter-number"
@@ -513,7 +516,7 @@ export function ItineraryDayColumn({
               </p>
             )}
           </div>
-        </div>
+        </button>
 
         {/* Header actions */}
         <div className="flex items-center gap-1 shrink-0">
