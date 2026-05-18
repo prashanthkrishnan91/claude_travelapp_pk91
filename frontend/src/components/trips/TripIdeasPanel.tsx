@@ -200,24 +200,24 @@ function IdeaCard({
   }
 
   return (
-    <div className="rounded-xl border border-ds-pen-stroke bg-ds-onyx p-3">
+    <div className="folio-paper-item p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-ds-text">{item.title}</p>
-          <p className="mt-0.5 text-[11px] uppercase tracking-[0.08em] text-ds-text-tertiary">{ideaCategory(item)}</p>
-          {rating && <p className="mt-0.5 text-xs text-ds-text-secondary">{rating}</p>}
+          <p className="truncate text-sm font-semibold text-ds-folio-ink">{item.title}</p>
+          <p className="mt-0.5 text-[11px] uppercase tracking-[0.08em] text-ds-folio-ink-mist">{ideaCategory(item)}</p>
+          {rating && <p className="mt-0.5 text-xs text-ds-folio-ink-mist">{rating}</p>}
           {item.location && item.location !== item.title && (
-            <p className="mt-0.5 text-[11px] text-ds-text-tertiary">{item.location}</p>
+            <p className="mt-0.5 text-[11px] text-ds-folio-ink-mist">{item.location}</p>
           )}
         </div>
         <div className="flex items-center gap-1">
-          {savingMeta && <Loader2 className="h-3 w-3 animate-spin text-ds-text-tertiary" />}
+          {savingMeta && <Loader2 className="h-3 w-3 animate-spin text-ds-folio-ink-mist" />}
           <button
             type="button"
             onClick={onRemove}
             disabled={removing}
             title="Remove from trip ideas"
-            className="flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center rounded text-ds-text-tertiary hover:bg-ds-carbon hover:text-ds-text-secondary transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            className="flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center rounded text-ds-folio-ink-mist hover:bg-ds-linen hover:text-ds-folio-ink transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           >
             {removing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
           </button>
@@ -264,7 +264,7 @@ function IdeaCard({
           onChange={(e) => handleNoteChange(e.target.value)}
           placeholder="Add a note…"
           rows={2}
-          className="mt-1.5 w-full resize-none rounded-lg border border-ds-pen-stroke bg-ds-carbon px-2 py-1.5 text-xs text-ds-text-secondary placeholder-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          className="mt-1.5 w-full resize-none rounded-lg border border-ds-hairline bg-ds-bone px-2 py-1.5 text-xs text-ds-folio-ink placeholder-ds-folio-ink-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         />
       )}
 
@@ -274,7 +274,7 @@ function IdeaCard({
             value={selectedDay}
             onChange={(e) => setSelectedDay(e.target.value)}
             disabled={assigning}
-            className="flex-1 min-h-[44px] rounded-lg border border-ds-pen-stroke bg-ds-carbon px-2 py-1.5 text-xs text-ds-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            className="flex-1 min-h-[44px] rounded-lg border border-ds-hairline bg-ds-bone px-2 py-1.5 text-xs text-ds-folio-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           >
             {days.map((day) => (
               <option key={day.id} value={day.id}>
@@ -386,7 +386,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
   }
 
   return (
-    <div className="rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-1)]">
+    <div className="folio-paper-panel">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -395,41 +395,41 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
         <div className="flex items-center gap-2">
           <Bookmark className="h-3.5 w-3.5 text-ds-accent" />
           <div className="flex flex-col">
-            <span className="text-sm font-semibold text-ds-text">Trip Ideas</span>
-            <span className="text-[10px] text-ds-text-tertiary">Saved from AI Concierge · add to a day when ready</span>
+            <span className="text-sm font-semibold text-ds-folio-ink">Trip Ideas</span>
+            <span className="text-[10px] text-ds-folio-ink-mist">Saved from AI Concierge · add to a day when ready</span>
           </div>
           {activeCount > 0 && (
-            <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-ds-accent border border-ds-pen-stroke"
+            <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-ds-accent border border-ds-hairline"
               style={{ backgroundColor: "var(--ds-accent-subtle)" }}>
               {activeCount}
             </span>
           )}
         </div>
-        <ChevronDown className={`h-4 w-4 text-ds-text-tertiary transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`h-4 w-4 text-ds-folio-ink-mist transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
-        <div className="border-t border-ds-pen-stroke px-3.5 pb-3.5 pt-3">
+        <div className="border-t border-ds-hairline px-3.5 pb-3.5 pt-3">
           {loading ? (
-            <div className="flex items-center gap-2 py-2 text-xs text-ds-text-tertiary">
+            <div className="flex items-center gap-2 py-2 text-xs text-ds-folio-ink-mist">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Loading ideas…
             </div>
           ) : ideas.length === 0 ? (
-            <p className="py-2 text-xs text-ds-text-tertiary">Save recommendations from AI Concierge and schedule them later.</p>
+            <p className="py-2 text-xs text-ds-folio-ink-mist">Save recommendations from AI Concierge and schedule them later.</p>
           ) : (
             <>
               {/* Compact filter / search / sort controls */}
               <div className="mb-3 space-y-2">
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ds-text-tertiary" />
+                  <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ds-folio-ink-mist" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search ideas…"
                     aria-label="Search trip ideas"
-                    className="w-full rounded-lg border border-ds-pen-stroke bg-ds-carbon py-1.5 pl-7 pr-2 text-xs text-ds-text-secondary placeholder-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                    className="w-full rounded-lg border border-ds-hairline bg-ds-bone py-1.5 pl-7 pr-2 text-xs text-ds-folio-ink placeholder-ds-folio-ink-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
@@ -445,7 +445,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                         className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 transition ${
                           statusFilter === opt.value
                             ? "text-ds-accent ring-ds-accent/40"
-                            : "text-ds-text-tertiary ring-ds-pen-stroke/40 group-hover:text-ds-text-secondary group-hover:ring-ds-pen-stroke"
+                            : "text-ds-folio-ink-mist ring-ds-hairline group-hover:text-ds-folio-ink group-hover:ring-ds-accent/30"
                         }`}
                         style={statusFilter === opt.value ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
                       >
@@ -457,7 +457,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as SortOption)}
                     aria-label="Sort ideas"
-                    className="ml-auto min-h-[44px] rounded-lg border border-ds-pen-stroke bg-ds-carbon px-2 py-1 text-[10px] text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                    className="ml-auto min-h-[44px] rounded-lg border border-ds-hairline bg-ds-bone px-2 py-1 text-[10px] text-ds-folio-ink-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   >
                     {SORT_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -468,7 +468,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                       type="button"
                       onClick={handleReset}
                       aria-label="Reset filters"
-                      className="min-h-[44px] min-w-[44px] flex items-center justify-center px-1 text-[10px] text-ds-text-tertiary hover:text-ds-text-secondary transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                      className="min-h-[44px] min-w-[44px] flex items-center justify-center px-1 text-[10px] text-ds-folio-ink-mist hover:text-ds-folio-ink transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                     >
                       Clear ×
                     </button>
@@ -477,7 +477,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
               </div>
 
               {filteredAndSorted.length === 0 ? (
-                <p className="py-2 text-xs text-ds-text-tertiary">No ideas match your current filters.</p>
+                <p className="py-2 text-xs text-ds-folio-ink-mist">No ideas match your current filters.</p>
               ) : (
                 <div className="space-y-3">
                   {groupIdeasByVertical(filteredAndSorted).map((group) => {
@@ -488,10 +488,10 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                     const overflow = group.items.length - visible.length;
                     return (
                       <div key={group.key} data-vertical={group.key}>
-                        <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-ds-text-secondary">
+                        <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-ds-folio-ink-mist">
                           {group.icon}
                           {group.label}
-                          <span className="text-ds-text-tertiary">({group.items.length})</span>
+                          <span className="text-ds-folio-ink-mist opacity-70">({group.items.length})</span>
                         </div>
                         <div className="space-y-2">
                           {visible.map((idea) => (

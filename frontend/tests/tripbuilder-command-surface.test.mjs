@@ -53,10 +53,11 @@ test('TripBuilder: uses border-ds-pen-stroke for borders', () => {
   assert.ok(src.includes('border-ds-pen-stroke'), 'missing border-ds-pen-stroke');
 });
 
-test('TripBuilder: activity card uses elevation or boutique surface treatment', () => {
+test('TripBuilder: activity card uses elevation or paper surface treatment', () => {
   assert.ok(
-    src.includes('var(--ds-elevation-1)') || src.includes('boutique-folio'),
-    'TripBuilder activity/candidate card must use elevation token or boutique-folio surface class'
+    src.includes('var(--ds-elevation-1)') || src.includes('boutique-folio') ||
+    src.includes('var(--ds-paper-elevation-1)') || src.includes('folio-paper-panel') || src.includes('bg-ds-bone'),
+    'TripBuilder activity/candidate card must use elevation token or paper surface class'
   );
 });
 
@@ -135,11 +136,12 @@ test('TripBuilder: right panel has "Your Itinerary" Overline label', () => {
 
 // ── Activities section uses ds-token pattern ─────────────────────────────────
 
-test('TripBuilder: Activities section uses rounded-2xl border border-ds-pen-stroke bg-ds-onyx pattern', () => {
+test('TripBuilder: Activities section uses folio-paper-panel pattern (paper-world)', () => {
   assert.ok(
+    src.includes('folio-paper-panel') ||
     src.includes('rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-1)]') ||
     src.includes('rounded-2xl border border-ds-pen-stroke bg-ds-onyx boutique-folio'),
-    'Activities section missing ds-token card pattern (elevation or boutique-folio)'
+    'Activities section must use paper-world card pattern (folio-paper-panel or legacy dark pattern)'
   );
 });
 

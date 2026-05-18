@@ -157,6 +157,7 @@ export function TripBuilderForm() {
             placeholder="Origin city — e.g. New York, London…"
             value={originSel}
             onChange={setOriginSel}
+            inputClassName="folio-input"
           />
           {originSel && originSel.airports.length > 1 && (
             <p className="mt-1 text-xs text-ds-marine-ink flex items-center gap-1">
@@ -172,6 +173,7 @@ export function TripBuilderForm() {
             placeholder="Destination city — e.g. Tokyo, Paris…"
             value={destSel}
             onChange={setDestSel}
+            inputClassName="folio-input"
           />
           {destSel && destSel.airports.length > 1 && (
             <p className="mt-1 text-xs text-ds-marine-ink flex items-center gap-1">
