@@ -27,6 +27,45 @@ import { BookingChecklistModal } from "./BookingChecklistModal";
 import { RewardsIntelligencePanel } from "./RewardsIntelligencePanel";
 import { updateItemTimeline } from "@/lib/api";
 
+// ─── URL-aware description renderer ──────────────────────────────────────────
+
+const URL_RE = /https?:\/\/\S+/g;
+const MAPS_RE = /maps\.google|google\.com\/maps|maps\.app\.goo\.gl|goo\.gl\/maps/i;
+
+function renderDescriptionWithLinks(text: string): React.ReactNode {
+  const segments: React.ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  URL_RE.lastIndex = 0;
+  let key = 0;
+  while ((match = URL_RE.exec(text)) !== null) {
+    if (match.index > last) {
+      segments.push(text.slice(last, match.index));
+    }
+    const url = match[0].replace(/[.,;!?)]+$/, ""); // strip trailing punctuation
+    const label = MAPS_RE.test(url) ? "Open map link" : "Open link";
+    segments.push(
+      <a
+        key={key++}
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        data-testid="note-description-link"
+        className="inline-flex items-center gap-0.5 text-ds-accent underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {label}
+        <ExternalLink className="inline h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+      </a>
+    );
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) {
+    segments.push(text.slice(last));
+  }
+  return segments.length > 0 ? <>{segments}</> : text;
+}
+
 // ─── Timeline day-part options ────────────────────────────────────────────────
 
 const DAY_PARTS = [
@@ -299,8 +338,8 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
         </p>
 
         {item.description && (
-          <p className="text-[11px] text-ds-text-tertiary mt-0.5 line-clamp-2 mb-1">
-            {item.description}
+          <p className="text-[11px] text-ds-text-tertiary mt-0.5 line-clamp-2 mb-1" data-testid="item-description">
+            {renderDescriptionWithLinks(item.description)}
           </p>
         )}
 

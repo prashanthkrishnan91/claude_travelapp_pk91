@@ -533,3 +533,94 @@ test('Issue6: existing drag-drop handlers unchanged', () => {
     'Drag-drop handler must still be present',
   );
 });
+
+// ─── Note link rendering (URL-aware description) ──────────────────────────────
+
+const itineraryItemCard = readFileSync(
+  new URL('../src/components/trips/ItineraryItemCard.tsx', import.meta.url),
+  'utf8',
+);
+
+test('NoteLinks: ItineraryItemCard defines renderDescriptionWithLinks', () => {
+  assert.match(
+    itineraryItemCard,
+    /renderDescriptionWithLinks/,
+    'ItineraryItemCard must define renderDescriptionWithLinks helper',
+  );
+});
+
+test('NoteLinks: renderDescriptionWithLinks detects https URLs via URL_RE', () => {
+  assert.match(
+    itineraryItemCard,
+    /URL_RE\s*=\s*\/https\?/,
+    'URL_RE must match https? URLs',
+  );
+});
+
+test('NoteLinks: Google Maps URLs labeled "Open map link"', () => {
+  assert.match(
+    itineraryItemCard,
+    /Open map link/,
+    'Google Maps URLs must be labeled "Open map link"',
+  );
+  assert.match(
+    itineraryItemCard,
+    /MAPS_RE\s*=.*maps/s,
+    'MAPS_RE must include a maps pattern for Google Maps URL detection',
+  );
+});
+
+test('NoteLinks: generic URLs labeled "Open link"', () => {
+  assert.match(
+    itineraryItemCard,
+    /Open link/,
+    'Non-Maps URLs must be labeled "Open link"',
+  );
+});
+
+test('NoteLinks: links use target="_blank" and rel="noreferrer"', () => {
+  assert.match(
+    itineraryItemCard,
+    /target="_blank"/,
+    'Note links must open in new tab',
+  );
+  assert.match(
+    itineraryItemCard,
+    /rel="noreferrer"/,
+    'Note links must use rel="noreferrer" for security',
+  );
+});
+
+test('NoteLinks: links have note-description-link testid', () => {
+  assert.match(
+    itineraryItemCard,
+    /note-description-link/,
+    'Link elements must have data-testid="note-description-link"',
+  );
+});
+
+test('NoteLinks: description renders via renderDescriptionWithLinks (not raw text)', () => {
+  // The description paragraph must call renderDescriptionWithLinks
+  assert.match(
+    itineraryItemCard,
+    /renderDescriptionWithLinks\(item\.description\)/,
+    'Description must be rendered via renderDescriptionWithLinks, not as plain text',
+  );
+});
+
+test('NoteLinks: plain notes without URLs still render normally', () => {
+  // The function must handle the case where no URL is found (last slice appended)
+  assert.match(
+    itineraryItemCard,
+    /last\s*<\s*text\.length/,
+    'Non-URL text segments must be appended for plain notes',
+  );
+});
+
+test('NoteLinks: no Google Places / provider calls introduced', () => {
+  // URL renderer must not import or call any place search API
+  assert.ok(
+    !itineraryItemCard.includes('fetchPlace') && !itineraryItemCard.includes('searchPlaces'),
+    'Note link rendering must not introduce provider calls',
+  );
+});
