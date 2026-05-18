@@ -375,13 +375,13 @@ test('Issue4: DayPlanModal still supports Add and Accept All', () => {
   assert.match(dayPlanModal, /handleAdd/, 'DayPlanModal must still have handleAdd');
 });
 
-test('Issue4: plan.py still returns honest empty attractions list (no mock)', () => {
-  // The endpoint fails closed for attractions (no canonical attraction provider).
-  // attractions=[] is the honest state.
+test('Issue4: plan.py fails closed to empty attractions on error/empty provider', () => {
+  // The no-cluster path now calls canonical Google Places attraction search and
+  // fails closed (planned_attractions = []) when the provider returns nothing.
   assert.match(
     planRouterSrc,
-    /attractions=\[\]/,
-    'plan.py must still return empty attractions list when no cluster is provided',
+    /planned_attractions\s*=\s*\[\]/,
+    'plan.py must have a fail-closed path that assigns planned_attractions = []',
   );
   // Verify no active mock call (comments mentioning _mock_attractions are OK; calls are not)
   assert.ok(

@@ -130,8 +130,16 @@ export function CityAutocomplete({
     );
   }
 
+  // When open or showing manual fallback, raise this wrapper above sibling form fields.
+  // z-[60] on the container creates a stacking context that wins over un-indexed siblings;
+  // z-[100] on the dropdown panel wins within that context (and globally on the form).
+  const isDropdownVisible = open || showManual;
+
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
+    <div
+      ref={containerRef}
+      className={`relative ${isDropdownVisible ? "z-[60] isolate" : ""} ${className}`}
+    >
       <div className="relative">
         <input
           type="text"
@@ -151,7 +159,7 @@ export function CityAutocomplete({
       </div>
 
       {open && suggestions.length > 0 && (
-        <ul className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <ul className="absolute z-[100] top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {suggestions.map((s) => (
             <li key={`${s.city}-${s.country}`}>
               <button
