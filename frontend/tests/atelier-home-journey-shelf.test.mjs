@@ -70,10 +70,13 @@ test("DashboardClient ConciergeEntry open link has 44px touch target", () => {
   assert.match(section, /min-h-\[44px\]/);
 });
 
-test("DashboardClient has elevated Concierge section (folio-paper-panel or boutique-instrument or ds-elevation-2 token)", () => {
+test("DashboardClient has elevated Concierge section (folio-paper-panel or boutique-instrument or ds-elevation-2 token, or FolioPanel primitive)", () => {
   assert.ok(
-    dashboardClient.includes("folio-paper-panel") || dashboardClient.includes("boutique-instrument") || dashboardClient.includes("ds-elevation-2"),
-    "DashboardClient must elevate the Concierge section via folio-paper-panel, boutique-instrument, or ds-elevation-2"
+    dashboardClient.includes("folio-paper-panel") ||
+      dashboardClient.includes("boutique-instrument") ||
+      dashboardClient.includes("ds-elevation-2") ||
+      dashboardClient.includes("<FolioPanel"),
+    "DashboardClient must elevate the Concierge section via folio-paper-panel, boutique-instrument, ds-elevation-2, or the FolioPanel primitive"
   );
 });
 

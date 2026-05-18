@@ -193,10 +193,13 @@ describe("Trips page — paper card surfaces", () => {
     assert.ok(block.includes("folio-paper-header"), "ContinuePlanningHero header must use folio-paper-header");
   });
 
-  it("EmptyDashboard action cards use folio-paper-card", () => {
+  it("EmptyDashboard action cards use folio-paper-card or FolioCard primitive", () => {
     const idx = page.indexOf("trips-empty-state");
     const block = page.slice(idx - 100, idx + 2000);
-    assert.ok(block.includes("folio-paper-card"), "EmptyDashboard action cards must use folio-paper-card");
+    assert.ok(
+      block.includes("folio-paper-card") || block.includes("<FolioCard"),
+      "EmptyDashboard action cards must use folio-paper-card (literal) or FolioCard primitive"
+    );
   });
 
   it("EmptyDashboard Plan a Trip CTA uses btn-marine", () => {
@@ -298,10 +301,13 @@ describe("Trip detail page — paper planning panels", () => {
 describe("ItineraryDayColumn — paper day page surfaces", () => {
   const col = readSrc("components/trips/ItineraryDayColumn.tsx");
 
-  it("day-chapter-frame uses folio-paper-card", () => {
+  it("day-chapter-frame uses folio-paper-card or FolioCard primitive", () => {
     const idx = col.indexOf("day-chapter-frame");
     const block = col.slice(idx - 100, idx + 400);
-    assert.ok(block.includes("folio-paper-card"), "day-chapter-frame must use folio-paper-card");
+    assert.ok(
+      block.includes("folio-paper-card") || block.includes("<FolioCard"),
+      "day-chapter-frame must use folio-paper-card (literal) or FolioCard primitive"
+    );
   });
 
   it("day-chapter-frame does not use bg-ds-onyx or bg-ds-midnight-ink", () => {

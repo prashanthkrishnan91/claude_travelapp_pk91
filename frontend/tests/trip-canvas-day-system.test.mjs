@@ -77,9 +77,12 @@ test('ItineraryDayColumn: paper-world secondary surface token', () => {
   );
 });
 
-test('ItineraryDayColumn: uses folio-paper-card for card root surface (Slice 2 paper conversion)', () => {
-  assert.ok(dayColumnSrc.includes('folio-paper-card'), 'missing folio-paper-card root surface');
-  assert.ok(!dayColumnSrc.includes('"bg-ds-onyx"'), 'folio-paper-card must replace bg-ds-onyx');
+test('ItineraryDayColumn: uses folio-paper-card or FolioCard primitive for card root surface (Slice 2 paper conversion + Unified UI Architecture)', () => {
+  assert.ok(
+    dayColumnSrc.includes('folio-paper-card') || dayColumnSrc.includes('<FolioCard'),
+    'missing folio-paper-card / FolioCard primitive root surface'
+  );
+  assert.ok(!dayColumnSrc.includes('"bg-ds-onyx"'), 'must not use bg-ds-onyx on day column surface');
 });
 
 test('ItineraryDayColumn: uses bone/warm-paper inline style for expanded body (Slice 2 paper conversion)', () => {
@@ -93,8 +96,11 @@ test('ItineraryDayColumn: uses ds-accent-subtle inline style for drag-over tint'
   assert.ok(dayColumnSrc.includes('var(--ds-accent-subtle)'), 'missing var(--ds-accent-subtle) inline style');
 });
 
-test('ItineraryDayColumn: uses folio-paper-card which carries shadow (Slice 2 paper conversion)', () => {
-  assert.ok(dayColumnSrc.includes('folio-paper-card'), 'folio-paper-card carries shadow (replaced inline ds-elevation-2)');
+test('ItineraryDayColumn: uses folio-paper-card or FolioCard primitive which carries shadow (Slice 2 paper conversion + Unified UI Architecture)', () => {
+  assert.ok(
+    dayColumnSrc.includes('folio-paper-card') || dayColumnSrc.includes('<FolioCard'),
+    'folio-paper-card / FolioCard primitive carries shadow via CSS class'
+  );
 });
 
 test('ItineraryDayColumn: uses text-ds-warning for far-apart travel hints', () => {

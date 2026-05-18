@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Bookmark, ChevronDown, Loader2, Plane, Hotel, Sparkles, UtensilsCrossed, Search, X } from "lucide-react";
 import { fetchTripIdeas, assignIdeaToDay, deleteItem, updateIdeaMeta } from "@/lib/api";
 import type { ItemType, ItineraryDay, ItineraryItem } from "@/types";
+import { FolioButton, FolioCard, FolioChip, FolioPanel } from "@/components/ui/Folio";
 
 // Default visible items per vertical before "Show more" — keeps the panel
 // usable when a user accumulates many saved ideas. See Level 3 Trip Data
@@ -200,7 +201,7 @@ function IdeaCard({
   }
 
   return (
-    <div className="folio-paper-item p-3">
+    <FolioCard className="folio-paper-item p-3" data-testid="trip-idea-card">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-ds-folio-ink">{item.title}</p>
@@ -293,7 +294,7 @@ function IdeaCard({
           </button>
         </div>
       )}
-    </div>
+    </FolioCard>
   );
 }
 
@@ -386,7 +387,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
   }
 
   return (
-    <div className="folio-paper-panel">
+    <FolioPanel data-testid="trip-ideas-panel-root">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -508,22 +509,22 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                           ))}
                         </div>
                         {overflow > 0 && (
-                          <button
-                            type="button"
+                          <FolioButton
+                            variant="secondary"
                             onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.key]: true }))}
-                            className="mt-1.5 w-full min-h-[44px] flex items-center justify-center rounded-lg border border-ds-hairline bg-ds-linen text-[10px] font-medium text-ds-folio-ink-soft hover:bg-ds-bone hover:text-ds-folio-ink transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                            className="mt-1.5 w-full justify-center text-[10px]"
                           >
                             Show {overflow} more
-                          </button>
+                          </FolioButton>
                         )}
                         {expanded && group.items.length > DEFAULT_VISIBLE_PER_VERTICAL && (
-                          <button
-                            type="button"
+                          <FolioButton
+                            variant="secondary"
                             onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.key]: false }))}
-                            className="mt-1.5 w-full min-h-[44px] flex items-center justify-center rounded-lg border border-ds-hairline bg-ds-linen text-[10px] font-medium text-ds-folio-ink-soft hover:bg-ds-bone hover:text-ds-folio-ink transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                            className="mt-1.5 w-full justify-center text-[10px]"
                           >
                             Show less
-                          </button>
+                          </FolioButton>
                         )}
                       </div>
                     );
@@ -534,6 +535,6 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
           )}
         </div>
       )}
-    </div>
+    </FolioPanel>
   );
 }

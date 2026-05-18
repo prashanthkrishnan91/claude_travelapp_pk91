@@ -2288,4 +2288,27 @@
     outline-offset: 2px;
   }
   .btn-folio-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* ════════════════════════════════════════════════════════════════
+     UNIFIED FOLIO/CINEMA PAGE PRIMITIVES — Stage 3.5
+     Backs the canonical React primitives in `components/ui/Folio.tsx`.
+     Page-level classes carry no visual surface of their own — the
+     atelier-atmosphere-root and the paper/cinema wrappers inside the
+     page (folio-paper-panel, folio-cinema-lounge, etc.) own the
+     visible surface. These classes exist as durable hooks so feature
+     files can compose primitives without inventing local stacks.
+     ════════════════════════════════════════════════════════════════ */
+
+  .folio-page {
+    position: relative;
+    /* Paper world inherits warm-paper from atelier-atmosphere-root above. */
+    color: var(--ds-folio-ink);
+  }
+
+  .cinema-page {
+    position: relative;
+    /* Cinema world surfaces explicit cream text by default so cinema
+       primitives inside don't need to repeat text-ds-text on every node. */
+    color: var(--ds-text-primary);
+  }
 }

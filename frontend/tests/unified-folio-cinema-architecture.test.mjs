@@ -255,3 +255,116 @@ test("Cinema-world RestaurantCard continues to use Card primitive tone='dark'", 
   const rest = read("src/components/explore/RestaurantExploreFlow.tsx");
   assert.match(rest, /tone="dark"/);
 });
+
+// ── 10. CSS primitives back the React primitives — no dangling class names ──
+//
+// FolioPage emits className "folio-page" and CinemaPage emits "cinema-page".
+// If those classes don't exist in globals.css, the primitive renders to a
+// no-op selector — the unified architecture would have a hole. Guard.
+
+test("globals.css defines .folio-page so FolioPage primitive renders to a real class", () => {
+  const css = read("src/app/globals.css");
+  assert.match(
+    css,
+    /\.folio-page\s*\{/,
+    "globals.css must declare .folio-page (FolioPage primitive emits this class)",
+  );
+});
+
+test("globals.css defines .cinema-page so CinemaPage primitive renders to a real class", () => {
+  const css = read("src/app/globals.css");
+  assert.match(
+    css,
+    /\.cinema-page\s*\{/,
+    "globals.css must declare .cinema-page (CinemaPage primitive emits this class)",
+  );
+});
+
+// ── 11. Real adoption: feature files import + use the canonical primitives ──
+//
+// A primitive layer that no one imports is a no-op. These tests enforce that
+// real screenshot-visible paper-world surfaces actually pull from Folio.tsx,
+// not just live next to it.
+
+const folioImporters = [
+  "src/components/dashboard/DashboardClient.tsx",
+  "src/components/trips/TripIdeasPanel.tsx",
+  "src/components/trips/ItineraryDayColumn.tsx",
+  "src/components/trips/TripBuilder.tsx",
+  "src/app/trips/page.tsx",
+];
+
+for (const rel of folioImporters) {
+  const src = read(rel);
+  test(`feature file imports from @/components/ui/Folio: ${rel}`, () => {
+    assert.match(
+      src,
+      /from\s+["']@\/components\/ui\/Folio["']/,
+      `${rel} must import at least one primitive from the canonical Folio layer`,
+    );
+  });
+}
+
+test("DashboardClient adopts FolioPanel on ConciergeEntry", () => {
+  const src = read("src/components/dashboard/DashboardClient.tsx");
+  assert.match(src, /<FolioPanel\b[^>]*concierge-advisor-desk/);
+});
+
+test("TripIdeasPanel adopts FolioPanel on the outer panel and FolioCard on IdeaCard", () => {
+  const src = read("src/components/trips/TripIdeasPanel.tsx");
+  assert.match(src, /<FolioPanel\b[^>]*trip-ideas-panel-root/);
+  assert.match(src, /<FolioCard\b[^>]*trip-idea-card/);
+});
+
+test("TripIdeasPanel adopts FolioButton on Show more / Show less buttons", () => {
+  const src = read("src/components/trips/TripIdeasPanel.tsx");
+  const matches = src.match(/<FolioButton\b/g) || [];
+  assert.ok(
+    matches.length >= 2,
+    `TripIdeasPanel must adopt FolioButton on at least 2 places (Show more, Show less). Found ${matches.length}.`,
+  );
+});
+
+test("ItineraryDayColumn adopts FolioCard on day-chapter-frame", () => {
+  const src = read("src/components/trips/ItineraryDayColumn.tsx");
+  assert.match(src, /<FolioCard\b[^>]*day-chapter-frame/);
+});
+
+test("TripBuilder adopts FolioPanel on the Activities/research panel", () => {
+  const src = read("src/components/trips/TripBuilder.tsx");
+  assert.match(src, /<FolioPanel\b[^>]*trip-build-activities-panel/);
+});
+
+test("trips/page.tsx EmptyDashboard adopts FolioCard on both action cards", () => {
+  const src = read("src/app/trips/page.tsx");
+  const matches = src.match(/<FolioCard\b/g) || [];
+  assert.ok(
+    matches.length >= 2,
+    `trips/page.tsx must adopt FolioCard on at least 2 EmptyDashboard action cards. Found ${matches.length}.`,
+  );
+});
+
+// ── 12. No repeated raw paper-card class stack in migrated surfaces ─────────
+//
+// After adoption, raw `folio-paper-card` / `folio-paper-panel` literals should
+// appear only where a primitive isn't appropriate (legacy or one-off layouts).
+// Migrated files should have ≤1 raw use each — if they have more, the primitive
+// hasn't replaced the local stack.
+
+const rawCeiling = {
+  "src/components/trips/TripIdeasPanel.tsx": { "folio-paper-panel": 0, "folio-paper-card": 1 },
+  "src/components/dashboard/DashboardClient.tsx": { "folio-paper-panel": 0 },
+};
+
+for (const [rel, limits] of Object.entries(rawCeiling)) {
+  const src = read(rel);
+  for (const [literal, max] of Object.entries(limits)) {
+    const count = (src.match(new RegExp(literal.replace(/-/g, "-"), "g")) || []).length;
+    test(`${rel}: raw "${literal}" class usage ≤ ${max} (primitive should replace it)`, () => {
+      assert.ok(
+        count <= max,
+        `${rel} has ${count} raw "${literal}" uses (ceiling ${max}). Adopt the React primitive instead.`,
+      );
+    });
+  }
+}

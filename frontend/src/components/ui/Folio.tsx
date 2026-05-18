@@ -142,18 +142,20 @@ export function FolioButton({
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost";
 }) {
+  const base =
+    "inline-flex items-center gap-1.5 min-h-[44px] transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
   const variants: Record<string, string> = {
     primary:
-      "min-h-[44px] px-4 rounded-xl bg-ds-accent hover:bg-ds-accent-muted text-ds-text-inverse text-sm font-semibold transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2",
+      "px-4 rounded-xl bg-ds-accent hover:bg-ds-accent-muted text-ds-text-inverse text-sm font-semibold",
     secondary:
-      "min-h-[44px] px-4 rounded-xl bg-ds-linen hover:bg-ds-bone text-ds-folio-ink-soft hover:text-ds-folio-ink border border-ds-hairline text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2",
+      "px-4 rounded-xl bg-ds-linen hover:bg-ds-bone text-ds-folio-ink-soft hover:text-ds-folio-ink border border-ds-hairline text-sm font-medium",
     ghost: "btn-folio-ghost",
   };
   return (
     <button
       type="button"
       data-folio-world="paper"
-      className={clsx(variants[variant], className)}
+      className={clsx(base, variants[variant], className)}
       {...rest}
     >
       {children}
@@ -168,7 +170,7 @@ export function CinemaPage({ className, children, ...rest }: DivProps) {
   return (
     <div
       data-folio-world="cinema"
-      className={clsx("space-y-6", className)}
+      className={clsx("cinema-page space-y-6", className)}
       {...rest}
     >
       {children}

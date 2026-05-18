@@ -212,10 +212,10 @@ describe("Phase 8N-B: New boutique CSS utility classes", () => {
 // ── 13–16. DashboardClient visual adoption ───────────────────────────────────
 
 describe("Phase 8N-B: DashboardClient boutique adoption", () => {
-  it("13. DashboardClient ConciergeEntry uses folio-paper-panel (paper-world conversion)", () => {
+  it("13. DashboardClient ConciergeEntry uses folio-paper-panel or FolioPanel primitive (paper-world conversion)", () => {
     assert.ok(
-      dashboardClient.includes("folio-paper-panel"),
-      "DashboardClient ConciergeEntry must use folio-paper-panel (paper-world — no orphan dark on linen)"
+      dashboardClient.includes("folio-paper-panel") || dashboardClient.includes("<FolioPanel"),
+      "DashboardClient ConciergeEntry must use folio-paper-panel or FolioPanel primitive (paper-world — no orphan dark on linen)"
     );
   });
 
@@ -447,11 +447,13 @@ describe("Phase 8N-B: CSS source-order and inset highlights", () => {
 // ── 41–45. Additional adoption checks ───────────────────────────────────────
 
 describe("Phase 8N-B: Additional adoption and cleanup checks", () => {
-  it("41. trips/page applies folio-paper-card to empty-state action cards (Slice 2 paper conversion)", () => {
-    const count = (tripsPage.match(/folio-paper-card/g) || []).length;
+  it("41. trips/page applies folio-paper-card or FolioCard primitive to empty-state action cards (Slice 2 paper conversion)", () => {
+    const count =
+      (tripsPage.match(/folio-paper-card/g) || []).length +
+      (tripsPage.match(/<FolioCard\b/g) || []).length;
     assert.ok(
       count >= 2,
-      "trips/page must apply folio-paper-card to multiple surfaces (JourneyCard + empty state cards)"
+      "trips/page must apply folio-paper-card (literal) or FolioCard primitive to multiple surfaces (JourneyCard + empty state cards)"
     );
   });
 
@@ -462,14 +464,14 @@ describe("Phase 8N-B: Additional adoption and cleanup checks", () => {
     );
   });
 
-  it("43. ConciergeEntry uses folio-paper-panel (no dark surface on linen)", () => {
+  it("43. ConciergeEntry uses folio-paper-panel or FolioPanel primitive (no dark surface on linen)", () => {
     const conciergeEntrySection = dashboardClient.slice(
       dashboardClient.indexOf("concierge-entry"),
       dashboardClient.indexOf("concierge-entry") + 400
     );
     assert.ok(
-      conciergeEntrySection.includes("folio-paper-panel"),
-      "ConciergeEntry must use folio-paper-panel — no dark orphan card on paper/linen background"
+      conciergeEntrySection.includes("folio-paper-panel") || conciergeEntrySection.includes("<FolioPanel"),
+      "ConciergeEntry must use folio-paper-panel or FolioPanel primitive — no dark orphan card on paper/linen background"
     );
   });
 

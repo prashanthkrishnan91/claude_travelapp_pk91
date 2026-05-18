@@ -20,6 +20,7 @@ import {
   type DashboardSummary,
 } from "@/lib/api";
 import { getDisplayTripStatus, getTripStatusGroup } from "@/lib/tripStatus";
+import { FolioPanel } from "@/components/ui/Folio";
 import type { Trip } from "@/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -94,7 +95,7 @@ function AtelierGreeting({ tripCount }: { tripCount: number }) {
 function ConciergeEntry() {
   return (
     <section aria-label="AI Concierge" data-testid="concierge-entry">
-      <div className="folio-paper-panel" data-testid="concierge-advisor-desk">
+      <FolioPanel data-testid="concierge-advisor-desk">
         <div className="px-6 pt-5 pb-4 border-b border-ds-hairline">
           <div className="flex items-center gap-3">
             <div
@@ -130,7 +131,7 @@ function ConciergeEntry() {
             <ArrowRight className="w-4 h-4" aria-hidden="true" />
           </Link>
         </div>
-      </div>
+      </FolioPanel>
     </section>
   );
 }

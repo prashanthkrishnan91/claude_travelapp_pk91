@@ -84,6 +84,7 @@ import { CompareModal } from "./CompareModal";
 import { DayPlanModal } from "./DayPlanModal";
 import { TripMapView } from "./TripMapView";
 import { TripIdeasPanel } from "./TripIdeasPanel";
+import { FolioPanel } from "@/components/ui/Folio";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -2395,11 +2396,11 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
             {/* Activities / research results */}
             {results.length > 0 && (
-              <div className="folio-paper-panel">
+              <FolioPanel data-testid="trip-build-activities-panel">
                 <div className="px-4 py-3 flex items-center gap-2 border-b border-ds-hairline">
                   <Sparkles className="w-3.5 h-3.5 text-ds-accent" />
                   <span className="text-sm font-semibold text-ds-folio-ink">Activities</span>
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-ds-accent border border-ds-pen-stroke" style={{ backgroundColor: "var(--ds-accent-subtle)" }}>
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-ds-accent border border-ds-hairline" style={{ backgroundColor: "var(--ds-accent-subtle)" }}>
                     {results.length}
                   </span>
                 </div>
@@ -2412,7 +2413,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                     />
                   ))}
                 </div>
-              </div>
+              </FolioPanel>
             )}
           </div>
 

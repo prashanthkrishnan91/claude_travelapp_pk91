@@ -53,8 +53,9 @@ export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }
   return (
     <div ref={setNodeRef} style={style}>
     <Card
-      tone="dark"
+      tone="paper"
       as="article"
+      data-folio-world="paper"
       className={`card-lift p-3 select-none ${isDragging ? "opacity-50 shadow-lg scale-95" : ""}`}
     >
       <Card.Identity>

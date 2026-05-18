@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { TripStatusBadge } from "@/components/ui/TripStatusBadge";
 import { fetchTrips, updateTrip, deleteTrip } from "@/lib/api";
 import { getDisplayTripStatus, getTripStatusGroup } from "@/lib/tripStatus";
+import { FolioCard } from "@/components/ui/Folio";
 import type { Trip, TripStatus } from "@/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -125,7 +126,7 @@ function EmptyDashboard() {
 
       {/* Action cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="folio-paper-card p-6 flex flex-col gap-4 transition-shadow duration-200">
+        <FolioCard className="p-6 flex flex-col gap-4 transition-shadow duration-200" data-testid="trips-empty-action-plan">
           <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-ds-accent-subtle text-ds-accent">
             <PlusCircle className="w-6 h-6" />
           </div>
@@ -144,9 +145,9 @@ function EmptyDashboard() {
               New Trip
             </Link>
           </div>
-        </div>
+        </FolioCard>
 
-        <div className="folio-paper-card p-6 flex flex-col gap-4 transition-shadow duration-200">
+        <FolioCard className="p-6 flex flex-col gap-4 transition-shadow duration-200" data-testid="trips-empty-action-concierge">
           <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-ds-accent-subtle text-ds-accent">
             <Sparkles className="w-6 h-6" />
           </div>
@@ -167,7 +168,7 @@ function EmptyDashboard() {
               Open Concierge <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
-        </div>
+        </FolioCard>
       </div>
 
       {/* Saved ideas nudge */}

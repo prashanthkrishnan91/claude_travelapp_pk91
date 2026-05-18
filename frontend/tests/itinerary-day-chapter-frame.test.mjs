@@ -178,8 +178,11 @@ test('Phase 8D: no legacy amber-NNN classes', () => {
   assert.ok(!/\bamber-\d+\b/.test(src), 'found legacy amber-NNN class');
 });
 
-test('Phase 8D: uses folio-paper-card for column root surface (Slice 2 paper conversion)', () => {
-  assert.ok(src.includes('folio-paper-card'), 'missing folio-paper-card on column surface (replaced bg-ds-onyx in Slice 2)');
+test('Phase 8D: uses folio-paper-card or FolioCard primitive for column root surface (Slice 2 paper conversion + Unified UI Architecture)', () => {
+  assert.ok(
+    src.includes('folio-paper-card') || src.includes('<FolioCard'),
+    'missing folio-paper-card / FolioCard primitive on column surface'
+  );
 });
 
 test('Phase 8D: uses hairline tokens for paper column borders', () => {
@@ -190,8 +193,11 @@ test('Phase 8D: uses hairline tokens for paper column borders', () => {
   );
 });
 
-test('Phase 8D: uses folio-paper-card which carries shadow (Slice 2 paper conversion)', () => {
-  assert.ok(src.includes('folio-paper-card'), 'folio-paper-card carries shadow via CSS class (replaced inline ds-elevation-2 in Slice 2)');
+test('Phase 8D: uses folio-paper-card or FolioCard primitive which carries shadow (Slice 2 paper conversion + Unified UI Architecture)', () => {
+  assert.ok(
+    src.includes('folio-paper-card') || src.includes('<FolioCard'),
+    'folio-paper-card / FolioCard primitive carries shadow via CSS class'
+  );
 });
 
 test('Phase 8D: uses bg-ds-marine-ink for selected state number marker (Slice 2 paper conversion)', () => {

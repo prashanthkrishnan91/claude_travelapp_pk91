@@ -8,6 +8,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Info, Loader2, MapPin, MoreHorizontal, Plus, Sparkles, X } from "lucide-react";
 import { ItineraryDay, ItineraryItem } from "@/types";
+import { FolioCard } from "@/components/ui/Folio";
 import { ItineraryItemCard } from "./ItineraryItemCard";
 import { computeAdjacentHints, summarizeHints } from "@/lib/travelHints";
 import { suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from "@/lib/api";
@@ -489,10 +490,10 @@ export function ItineraryDayColumn({
     "flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg bg-ds-bone hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink border border-ds-hairline transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 disabled:opacity-50";
 
   return (
-    <div
+    <FolioCard
       data-testid="day-chapter-frame"
       data-chapter-id="itinerary-day-mobile-chapter"
-      className={`folio-paper-card transition-all duration-[200ms] ${
+      className={`transition-all duration-[200ms] ${
         isSelected
           ? "border-ds-marine-ink/40 ring-1 ring-ds-marine-ink/20 ring-offset-1 ring-offset-ds-bone"
           : ""
@@ -807,6 +808,6 @@ export function ItineraryDayColumn({
           )}
         </div>
       )}
-    </div>
+    </FolioCard>
   );
 }
