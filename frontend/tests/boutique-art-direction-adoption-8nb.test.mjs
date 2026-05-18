@@ -219,18 +219,18 @@ describe("Phase 8N-B: DashboardClient boutique adoption", () => {
     );
   });
 
-  it("14. DashboardClient applies atelier-surface-depth to ContinuePlanningStrip", () => {
+  it("14. DashboardClient applies folio-home-cinema-card to ContinuePlanningStrip (Slice 4B)", () => {
     assert.ok(
-      dashboardClient.includes("atelier-surface-depth"),
-      "DashboardClient must apply atelier-surface-depth to card surfaces"
+      dashboardClient.includes("folio-home-cinema-card"),
+      "DashboardClient must apply folio-home-cinema-card to card surfaces (Slice 4B replaced atelier-surface-depth)"
     );
   });
 
-  it("15. DashboardClient discovery tiles use atelier-surface-depth", () => {
-    const count = (dashboardClient.match(/atelier-surface-depth/g) || []).length;
+  it("15. DashboardClient discovery tiles use folio-home-cinema-card (Slice 4B)", () => {
+    const count = (dashboardClient.match(/folio-home-cinema-card/g) || []).length;
     assert.ok(
       count >= 2,
-      "DashboardClient must apply atelier-surface-depth to multiple surfaces (discovery tiles + planning strip)"
+      "DashboardClient must apply folio-home-cinema-card to multiple surfaces (Slice 4B replaced atelier-surface-depth stack)"
     );
   });
 
@@ -270,17 +270,17 @@ describe("Phase 8N-B: My Trips page boutique adoption", () => {
 // ── 20–21. ExploreShell visual adoption ──────────────────────────────────────
 
 describe("Phase 8N-B: ExploreShell boutique adoption", () => {
-  it("20. ExploreShell applies boutique-instrument to active vertical instrument section", () => {
+  it("20. ExploreShell uses folio-cinema-lounge on active flow (Slice 4B replaced boutique-instrument)", () => {
     assert.ok(
-      exploreShell.includes("boutique-instrument"),
-      "ExploreShell must apply boutique-instrument to active instrument section"
+      exploreShell.includes("folio-cinema-lounge"),
+      "ExploreShell must use folio-cinema-lounge (Slice 4B replaced boutique-instrument additive stack)"
     );
   });
 
-  it("21. ExploreShell applies atelier-surface-depth to VerticalCard", () => {
+  it("21. ExploreShell uses folio-cinema-tile for VerticalCard (Slice 4B replaced atelier-surface-depth)", () => {
     assert.ok(
-      exploreShell.includes("atelier-surface-depth"),
-      "ExploreShell must apply atelier-surface-depth to VerticalCard tiles"
+      exploreShell.includes("folio-cinema-tile"),
+      "ExploreShell must use folio-cinema-tile for VerticalCard tiles (Slice 4B replaced atelier-surface-depth)"
     );
   });
 });
@@ -455,10 +455,10 @@ describe("Phase 8N-B: Additional adoption and cleanup checks", () => {
     );
   });
 
-  it("42. DashboardClient JourneyShelfTeaser link uses atelier-surface-depth", () => {
+  it("42. DashboardClient JourneyShelfTeaser link uses folio-home-cinema-card (Slice 4B)", () => {
     assert.ok(
-      dashboardClient.includes("atelier-surface-depth"),
-      "DashboardClient must apply atelier-surface-depth to JourneyShelfTeaser link card"
+      dashboardClient.includes("folio-home-cinema-card"),
+      "DashboardClient must apply folio-home-cinema-card to JourneyShelfTeaser link card (Slice 4B)"
     );
   });
 
@@ -492,12 +492,11 @@ describe("Phase 8N-B: Additional adoption and cleanup checks", () => {
 // ── 46–50. Saved Ideas boutique adoption ────────────────────────────────────
 
 describe("Phase 8N-B: Saved Ideas boutique adoption (direct, not token-only)", () => {
-  it("46. SavedItemCard applies a dark folio card class (8N-F: saved-folio-card replaces boutique-folio)", () => {
-    // boutique-folio was removed from SavedItemCard in Phase 8N-F (true visual correction).
-    // The dark atelier saved-folio-card class is now the canonical saved card surface.
+  it("46. SavedItemCard applies folio-collection-card (Slice 4B: replaced saved-folio-card)", () => {
+    // saved-folio-card was replaced in Slice 4B by folio-collection-card (single intentional composition).
     assert.ok(
-      savedShell.includes("saved-folio-card"),
-      "SavedShell must apply saved-folio-card to SavedItemCard (dark atelier surface, replaces boutique-folio after 8N-F)"
+      savedShell.includes("folio-collection-card"),
+      "SavedShell must apply folio-collection-card to SavedItemCard (Slice 4B replaced saved-folio-card)"
     );
   });
 
@@ -528,10 +527,10 @@ describe("Phase 8N-B: Concierge boutique adoption (direct, not token-only)", () 
     );
   });
 
-  it("52. Concierge composer instrument applies boutique-instrument class", () => {
+  it("52. Concierge composer uses folio-cinema-composer (Slice 4B replaced boutique-instrument)", () => {
     assert.ok(
-      conciergePage.includes("boutique-instrument"),
-      "concierge-instrument-composer must apply boutique-instrument as primary focal surface"
+      conciergePage.includes("folio-cinema-composer"),
+      "concierge-instrument-composer must use folio-cinema-composer (Slice 4B replaced boutique-instrument)"
     );
   });
 

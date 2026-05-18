@@ -13,7 +13,6 @@ import {
   Users,
   MapPin,
 } from "lucide-react";
-import { Card } from "@/components/ui/Card";
 import { TripStatusBadge } from "@/components/ui/TripStatusBadge";
 import {
   fetchDashboardSummary,
@@ -148,11 +147,7 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
       data-testid="atelier-continue-planning"
     >
       <Overline>Continue planning</Overline>
-      <Card
-        as="article"
-        tone="dark"
-        className="mt-3 p-5 hover:border-ds-accent/40 transition-colors duration-200 atelier-surface-depth"
-      >
+      <article className="folio-home-cinema-card mt-3 p-5">
         <div className="flex items-start gap-4">
           <div
             className="flex items-center justify-center w-10 h-10 rounded-xl bg-ds-accent-subtle text-ds-accent shrink-0"
@@ -188,7 +183,7 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
             Open <ArrowRight className="w-3 h-3" aria-hidden="true" />
           </Link>
         </div>
-      </Card>
+      </article>
     </section>
   );
 }
@@ -222,7 +217,7 @@ function JourneyShelfTeaser({ count }: { count: number }) {
       </div>
       <Link
         href="/trips"
-        className="flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-onyx hover:border-ds-accent/40 transition-all duration-200 atelier-surface-depth focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+        className="folio-home-cinema-card flex items-center gap-3 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
       >
         <div
           className="flex items-center justify-center w-9 h-9 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0"
@@ -263,10 +258,10 @@ function EmptyAtelierHome() {
         >
           <Map className="w-8 h-8" />
         </div>
-        <h2 className="text-xl font-semibold text-ds-text mb-2">
+        <h2 className="text-xl font-semibold text-ds-folio-ink mb-2">
           Your travel shelf is empty.
         </h2>
-        <p className="text-sm text-ds-text-tertiary max-w-sm mx-auto leading-relaxed">
+        <p className="text-sm text-ds-folio-ink-mist max-w-sm mx-auto leading-relaxed">
           Plan your first trip, or ask the concierge to help you discover where
           to go.
         </p>
@@ -305,7 +300,7 @@ function AtelierPlanningStrip() {
       <div className="grid grid-cols-2 gap-3 mt-3">
         <Link
           href="/explore"
-          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-onyx hover:border-ds-accent/40 transition-all duration-200 atelier-surface-depth focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          className="folio-home-cinema-card group flex items-center gap-3 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         >
           <span
             className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0"
@@ -324,7 +319,7 @@ function AtelierPlanningStrip() {
         </Link>
         <Link
           href="/saved"
-          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-onyx hover:border-ds-accent/40 transition-all duration-200 atelier-surface-depth focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          className="folio-home-cinema-card group flex items-center gap-3 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         >
           <span
             className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0"

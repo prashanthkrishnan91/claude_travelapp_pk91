@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-18 (Stage 3.5 Slice 4 — Legible Paper + Cinematic Concierge World — open PR)
+Last updated: 2026-05-18 (Stage 3.5 Slice 4B — Visual World Enforcement — open PR)
 
 ## Purpose
 
@@ -8,7 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 Slice 4 — Legible Paper + Cinematic Concierge World (2026-05-18).** Two-scope slice: (A) **Paper-world legibility baseline** — `DashboardClient.tsx` `AtelierGreeting` and `trips/page.tsx` `EmptyDashboard` hero text fixed from invisible cream tokens (`text-ds-text`, `text-ds-text-tertiary`) to folio-ink (`text-ds-folio-ink`, `text-ds-folio-ink-mist`). Root cause: `--ds-text-primary = var(--ds-pearl-cream) = #F2EBDD` is invisible on warm paper (#FAF7F0) body. (B) **Cinematic Concierge/Discovery world** — 6 new CSS cinema primitives in `globals.css`: `.folio-cinema-shell`, `.folio-cinema-card`, `.folio-cinema-header`, `.folio-cinema-input`, `.folio-cinema-result-card`, `.folio-mapline-field`. Two new `:root` tokens: `--ds-cinema-deep: #0D0B08`, `--ds-brass-field-border: rgba(197, 148, 77, 0.18)`. Applied additively to `ConciergePage.tsx`, `ExploreShell.tsx`, `SavedShell.tsx`. All existing classes kept for backward-test compatibility. PR #431 logic paths untouched. 52 new Slice 4 contract tests in `legible-paper-cinematic-slice4.test.mjs`. **2562 total tests, 0 failures.**
+- Roadmap stage: **Stage 3.5 Slice 4B — Visual World Enforcement (2026-05-18).** Replaces Slice 4's additive class stacking with single intentional visual compositions on all five cinema-world surfaces. (A) **Paper readability (Scope A)** — `TripBuilder.tsx` Planning cockpit context header: `text-ds-text-tertiary`/`text-ds-text`/`text-ds-accent` → `text-ds-folio-ink-mist`/`text-ds-folio-ink`/`text-ds-marine-ink` (invisible cream tokens on paper background fixed). (B) **Discover visual enforcement (Scope B)** — `ExploreShell.tsx`: wrappers replaced `editorial-scene folio-cinema-shell` → `folio-cinema-lounge`; VerticalCard replaced `folio-cinema-card atelier-surface-depth card-lift boutique-folio` → `folio-cinema-tile`; active section replaced `rounded-xl border border-ds-pen-stroke bg-ds-onyx boutique-instrument` → `folio-cinema-card rounded-xl`. (C) **Saved visual enforcement (Scope C)** — `SavedShell.tsx`: outer shell replaced `saved-clipping-desk folio-cinema-shell` → `folio-cinema-collection`; SavedItemCard replaced `saved-folio-card card-lift` → `folio-collection-card`. (D) **Concierge visual enforcement (Scope D)** — `ConciergePage.tsx`: main wrapper replaced `editorial-scene folio-cinema-shell` → `folio-cinema-desk`; sticky composer replaced `folio-cinema-header boutique-instrument` → `folio-cinema-composer`. (E) **Home cinematic cards (Scope E)** — `DashboardClient.tsx`: ContinuePlanningStrip replaced `Card tone="dark" atelier-surface-depth` → `article.folio-home-cinema-card`; JourneyShelfTeaser + AtelierPlanningStrip links replaced `bg-ds-onyx border-ds-pen-stroke atelier-surface-depth` → `folio-home-cinema-card`; EmptyAtelierHome `text-ds-text`/`text-ds-text-tertiary` → `text-ds-folio-ink`/`text-ds-folio-ink-mist` (paper legibility). 7 new CSS enforcement primitives in `globals.css`: `.folio-cinema-lounge`, `.folio-cinema-tile`, `.folio-cinema-collection`, `.folio-collection-card`, `.folio-cinema-desk`, `.folio-cinema-composer`, `.folio-home-cinema-card`. Unused `Card` import removed from DashboardClient. All PR #431 paths untouched. 50 new Slice 4B contract tests in `visual-world-enforcement-slice4b.test.mjs`. Updated 6 older test files (8nb, 8nc, 8f, 8ne, 8nf, slice4) to reflect superseded assertions. **2612 total tests, 0 failures.**
+
+- Previous roadmap stage: **Stage 3.5 Slice 4 — Legible Paper + Cinematic Concierge World (2026-05-18).** (A) Paper-world legibility: `DashboardClient.tsx`/`trips/page.tsx` cream tokens → folio-ink. (B) Cinema primitives: 6 new CSS classes (`.folio-cinema-shell/card/header/input/result-card`, `.folio-mapline-field`) + 2 tokens applied additively to ConciergePage/ExploreShell/SavedShell. 52 new tests. 2562 total tests, 0 failures.
 
 - Previous roadmap stage: **Stage 3.5 — Paper Planning Objects Slice 3 (2026-05-18).** `ItineraryItemCard`, `TripBuilderForm`, `OptimizeTripModal`, `DayPlanModal` converted to paper world. 46 new tests. 2510 total tests, 0 failures.
 
@@ -57,6 +59,8 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Recent meaningful PRs
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
+
+- 2026-05-18 — **Stage 3.5 Slice 4B — Visual World Enforcement.** 5 scopes (A–E): replaced additive class stacking with single intentional visual compositions on all cinema-world surfaces. `globals.css`: 7 new enforcement primitives (`.folio-cinema-lounge/tile/collection`, `.folio-collection-card`, `.folio-cinema-desk/composer`, `.folio-home-cinema-card`). `ExploreShell.tsx`, `SavedShell.tsx`, `ConciergePage.tsx`: old stacks replaced. `DashboardClient.tsx`: Card import removed, home cards use `folio-home-cinema-card`, paper text tokens fixed. `TripBuilder.tsx`: Planning header paper tokens fixed. 50 new tests in `visual-world-enforcement-slice4b.test.mjs`; 6 older test files updated. **2612 total tests, 0 failures.** No backend/SQL/provider/env changes.
 
 - 2026-05-18 — **Stage 3.5 Slice 4 — Legible Paper + Cinematic Concierge World.** `DashboardClient.tsx` AtelierGreeting + `trips/page.tsx` EmptyDashboard: cream tokens → folio-ink (paper legibility fix). `globals.css`: 6 new cinema primitives (`.folio-cinema-shell/card/header/input/result-card`; `.folio-mapline-field`) + 2 new `:root` tokens (`--ds-cinema-deep`, `--ds-brass-field-border`). `ConciergePage.tsx`, `ExploreShell.tsx`, `SavedShell.tsx`: cinema classes applied additively alongside existing classes. All PR #431 paths untouched. 52 new tests in `legible-paper-cinematic-slice4.test.mjs`. **2562 total tests, 0 failures.** No backend/SQL/provider/env/behavior/dependency changes.
 
@@ -156,10 +160,10 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 - Latency Budget Pack
 - Backend-only Scaffold Pack / No Visible Behavior Change Pack / Test Tier Pack (cross-cutting)
 
-## Type-check / test baseline (confirmed 2026-05-18, Slice 4 — Legible Paper + Cinematic World)
+## Type-check / test baseline (confirmed 2026-05-18, Slice 4B — Visual World Enforcement)
 
-- **`npm run type-check` (frontend): pre-existing errors in `TrustStrip.tsx` (JSX implicit any), `lib/api.ts`, `lib/supabase.ts` (`process` not found), `tailwind.config.ts` (module not found) — none introduced by Slice 4.** Slice 4 changed files (`DashboardClient.tsx`, `trips/page.tsx`, `ExploreShell.tsx`, `ConciergePage.tsx`, `SavedShell.tsx`, `globals.css`) have zero new TypeScript errors.
-- **`npm test` (frontend): 2562 tests, 0 failures.** (includes 52 new Slice 4 contract tests in `legible-paper-cinematic-slice4.test.mjs`)
+- **`npm run type-check` (frontend): pre-existing errors in `TrustStrip.tsx` (JSX implicit any), `lib/api.ts`, `lib/supabase.ts` (`process` not found), `tailwind.config.ts` (module not found) — none introduced by Slice 4B.** Slice 4B changed files (`DashboardClient.tsx`, `ExploreShell.tsx`, `ConciergePage.tsx`, `SavedShell.tsx`, `TripBuilder.tsx`, `globals.css`) have zero new TypeScript errors.
+- **`npm test` (frontend): 2612 tests, 0 failures.** (includes 50 new Slice 4B contract tests in `visual-world-enforcement-slice4b.test.mjs`; 6 older test files updated for superseded assertions)
 - Any future session reporting "pre-existing TypeScript errors" is seeing an uninstalled `node_modules` environment — run `npm install` in `frontend/` before type-check.
 
 ## Known risks / unresolved issues
@@ -173,7 +177,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Stage 3.5 Slice 5 — Cinema World Surface Refinement.** Remaining work: (A) `ExploreShell` result cards (`RestaurantCard`, `HotelCard`, `AttractionCard`) — still use plain `card/boutique-folio` without `folio-cinema-result-card`; apply cinema skin addively; (B) TripBuilder `CollapsiblePanel` — boutique-folio dark panels in the build canvas could benefit from `folio-cinema-card` treatment; (C) `AIConciergePanel` (trip-context) — concierge result cards in trip context should adopt `folio-cinema-result-card` to match standalone ConciergePage; (D) Concierge sticky bottom composer in `AIConciergePanel` — apply `folio-cinema-input` to the panel input field. **Hard stop rule**: Slice 5 must not touch PR #431 logic paths or break existing test contracts.
+**Stage 3.5 Slice 5 — Cinema World Surface Refinement.** Remaining work: (A) `ExploreShell` result cards (`RestaurantCard`, `HotelCard`, `AttractionCard`) — still use plain `card/boutique-folio` without `folio-cinema-result-card`; apply cinema skin; (B) `AIConciergePanel` (trip-context) — concierge result cards in trip context should adopt `folio-cinema-result-card` to match standalone ConciergePage; (C) Concierge sticky bottom composer in `AIConciergePanel` — apply `folio-cinema-input` to the panel input field; (D) TripBuilder `CollapsiblePanel` — boutique-folio dark panels in the build canvas could use `folio-cinema-card` treatment. **Hard stop rule**: Slice 5 must not touch PR #431 logic paths or break existing test contracts. Slice 4B is complete — all additive class stacking replaced with intentional compositions.
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 

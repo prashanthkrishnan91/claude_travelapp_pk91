@@ -69,8 +69,8 @@ const pkgJson = read('package.json');
 
 // ── 1. Outer root uses saved-clipping-desk ────────────────────────────────────
 
-test('8N-E: SavedShell outer root uses saved-clipping-desk class', () => {
-  assert.ok(savedShell.includes('saved-clipping-desk'), 'outer shell must use saved-clipping-desk class');
+test('8N-E: SavedShell outer root uses folio-cinema-collection class (Slice 4B replaced saved-clipping-desk)', () => {
+  assert.ok(savedShell.includes('folio-cinema-collection'), 'outer shell must use folio-cinema-collection class (Slice 4B replaced saved-clipping-desk)');
 });
 
 // ── 2. scrapbook-page scoped to header zone, not full outer wrapper ────────────
@@ -84,10 +84,10 @@ test('8N-E: scrapbook-page is NOT on the same element as saved-shell testid', ()
   assert.ok(!outerDiv.includes('scrapbook-page'), 'saved-shell root element must NOT have scrapbook-page class (not a cream slab)');
 });
 
-test('8N-E: saved-clipping-desk and saved-shell testid are on the same element', () => {
+test('8N-E: folio-cinema-collection and saved-shell testid are on the same element (Slice 4B)', () => {
   const shellIdx = savedShell.indexOf('data-testid="saved-shell"');
   const outerDiv = savedShell.slice(Math.max(0, shellIdx - 400), shellIdx + 50);
-  assert.ok(outerDiv.includes('saved-clipping-desk'), 'saved-clipping-desk must be on the outer div with saved-shell testid');
+  assert.ok(outerDiv.includes('folio-cinema-collection'), 'folio-cinema-collection must be on the outer div with saved-shell testid (Slice 4B)');
 });
 
 // ── 3. CSS primitive: saved-clipping-desk ────────────────────────────────────
@@ -112,9 +112,9 @@ test('8N-E: .saved-clipping-card defined after .clipping-card in globals.css', (
 
 // ── 6. SavedItemCard uses dark folio card class (8N-F supersedes saved-clipping-card) ─────
 
-test('8N-E/F: SavedItemCard uses a dark folio card class (saved-folio-card after 8N-F)', () => {
-  // saved-clipping-card was removed in Phase 8N-F and replaced with saved-folio-card.
-  assert.ok(savedShell.includes('saved-folio-card'), 'SavedItemCard must use saved-folio-card (dark folio, 8N-F)');
+test('8N-E/F: SavedItemCard uses folio-collection-card (Slice 4B replaced saved-folio-card)', () => {
+  // saved-folio-card was replaced in Slice 4B by folio-collection-card.
+  assert.ok(savedShell.includes('folio-collection-card'), 'SavedItemCard must use folio-collection-card (Slice 4B replaced saved-folio-card)');
 });
 
 // ── 8. Desktop: lg:grid-cols-2 for two-column card layout ────────────────────
@@ -378,12 +378,10 @@ test('8N-E: no new packages added to package.json', () => {
 
 // ── 24. saved-clipping-desk outer wrapper has no scrapbook-page ───────────────
 
-test('8N-E: saved-clipping-desk wrapper does not also contain scrapbook-page', () => {
-  // Find the start of the outer div with saved-clipping-desk
-  const deskIdx = savedShell.indexOf('saved-clipping-desk');
-  // Look at the element this class is on (within a short window of the class)
-  const deskCtx = savedShell.slice(Math.max(0, deskIdx - 50), deskIdx + 200);
-  assert.ok(!deskCtx.includes('scrapbook-page'), 'saved-clipping-desk element must not also have scrapbook-page class');
+test('8N-E: folio-cinema-collection wrapper does not contain scrapbook-page (Slice 4B)', () => {
+  const deskIdx = savedShell.indexOf('folio-cinema-collection');
+  const deskCtx = deskIdx !== -1 ? savedShell.slice(Math.max(0, deskIdx - 50), deskIdx + 200) : '';
+  assert.ok(!deskCtx.includes('scrapbook-page'), 'folio-cinema-collection element must not have scrapbook-page class (Slice 4B)');
 });
 
 // ── 25. saved-clipping-card has position:relative in globals.css ─────────────

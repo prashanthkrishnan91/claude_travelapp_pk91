@@ -70,18 +70,25 @@ test('ExploreShell active state has explore-instrument-header testid on section 
   assert.match(exploreShell, /data-testid="explore-instrument-header"/);
 });
 
-test('ExploreShell active section uses bg-ds-onyx (ink-ladder elevation)', () => {
-  assert.match(exploreShell, /bg-ds-onyx/);
-});
-
-test('ExploreShell active section uses border-ds-pen-stroke hairline', () => {
-  assert.match(exploreShell, /border-ds-pen-stroke/);
-});
-
-test('ExploreShell active section uses elevation or boutique shadow treatment', () => {
+test('ExploreShell active section uses folio-cinema-card (Slice 4B replaced bg-ds-onyx)', () => {
   assert.ok(
-    /shadow-\[var\(--ds-elevation-2\)\]/.test(exploreShell) || exploreShell.includes("boutique-instrument"),
-    "ExploreShell must apply elevation shadow or boutique-instrument to active section"
+    exploreShell.includes("folio-cinema-card"),
+    "ExploreShell active section must use folio-cinema-card (Slice 4B replaced bg-ds-onyx stack)"
+  );
+});
+
+test('ExploreShell active section has intentional border via folio-cinema-card', () => {
+  // folio-cinema-card provides the border — no raw utility class needed
+  assert.ok(
+    exploreShell.includes("folio-cinema-card"),
+    "ExploreShell active section must use folio-cinema-card which provides the border (Slice 4B)"
+  );
+});
+
+test('ExploreShell active section uses folio-cinema-card for elevation (Slice 4B)', () => {
+  assert.ok(
+    exploreShell.includes("folio-cinema-card"),
+    "ExploreShell active section must use folio-cinema-card for elevation treatment (Slice 4B)"
   );
 });
 
@@ -103,8 +110,11 @@ test('VerticalCard has focus-visible outline with ds-accent ring', () => {
   assert.match(exploreShell, /focus-visible:outline-ds-accent/);
 });
 
-test('VerticalCard uses card-lift for discovery-tray hover', () => {
-  assert.match(exploreShell, /card-lift/);
+test('VerticalCard uses folio-cinema-tile for discovery-tray hover (Slice 4B)', () => {
+  assert.ok(
+    exploreShell.includes("folio-cinema-tile"),
+    "ExploreShell VerticalCard must use folio-cinema-tile which provides hover lift (Slice 4B replaced card-lift)"
+  );
 });
 
 test('VerticalCard icon uses var(--ds-accent-subtle) background (no legacy colors)', () => {
@@ -136,8 +146,11 @@ test('ExploreShell breadcrumb heading uses text-ds-text', () => {
   assert.match(exploreShell, /className="text-sm font-semibold text-ds-text"/);
 });
 
-test('ExploreShell instrument section has rounded-xl border style', () => {
-  assert.match(exploreShell, /rounded-xl border border-ds-pen-stroke bg-ds-onyx/);
+test('ExploreShell instrument section uses folio-cinema-card rounded-xl (Slice 4B)', () => {
+  assert.ok(
+    exploreShell.includes("folio-cinema-card rounded-xl"),
+    "ExploreShell instrument section must use folio-cinema-card rounded-xl (Slice 4B replaced bg-ds-onyx stack)"
+  );
 });
 
 // ── C. No Legacy Colors in Touched Surfaces ───────────────────────────────────

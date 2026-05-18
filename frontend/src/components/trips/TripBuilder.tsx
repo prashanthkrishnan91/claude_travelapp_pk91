@@ -2033,13 +2033,13 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
             {/* Planning cockpit context header */}
             <div className="flex flex-col gap-0.5 px-1 pt-1 pb-0.5">
-              <span className="text-[10px] font-semibold text-ds-text-tertiary uppercase tracking-[0.1em]">Planning</span>
+              <span className="text-[10px] font-semibold text-ds-folio-ink-mist uppercase tracking-[0.1em]">Planning</span>
               <div className="flex items-center gap-1.5">
-                <span className="text-sm font-semibold text-ds-text truncate">{destination}</span>
+                <span className="text-sm font-semibold text-ds-folio-ink truncate">{destination}</span>
                 {selectedDayId && displayDays.find((d) => d.id === selectedDayId) && (
                   <>
-                    <span className="text-ds-text-tertiary text-sm">·</span>
-                    <span className="text-xs text-ds-accent font-medium">
+                    <span className="text-ds-folio-ink-mist text-sm">·</span>
+                    <span className="text-xs text-ds-marine-ink font-medium">
                       Day {displayDays.find((d) => d.id === selectedDayId)!.dayNumber}
                     </span>
                   </>
