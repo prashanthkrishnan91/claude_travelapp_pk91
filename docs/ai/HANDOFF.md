@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-18 (Post-#430 Portal + Round-Trip Root Cause Fix — PR open)
+Last updated: 2026-05-18 (Stage 3.5 Slice 3 — Paper Planning Objects — PR open)
 
 ## Purpose
 
@@ -8,7 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Core Paper Planning Surfaces Slice 2 (2026-05-18).** Dashboard/trip cards, itinerary day columns, readiness cockpit, and mobile top chrome converted from dark SaaS to warm Private Travel Atelier paper surfaces. 8 paper primitives added (`folio-paper-card`, `folio-paper-panel`, `folio-paper-section`, `folio-paper-header`, `folio-divider`, `folio-muted-label`, `folio-chip`, `folio-input`). Primary CTAs in paper routes migrated to `btn-marine`/marine-ink. Mobile top bar converted from midnight to bone/hairline (8J test constraint updated). PR #431 logic paths (CityAutocomplete portal, addRoundTripLegToDay, handleAddRoundTripToItinerary, isExplicitlyOneWay) untouched. 92 new Slice 2 contract tests in `core-paper-planning-slice2.test.mjs`.
+- Roadmap stage: **Stage 3.5 — Paper Planning Objects Slice 3 (2026-05-18).** `ItineraryItemCard`, `TripBuilderForm`, `OptimizeTripModal`, and `DayPlanModal` converted from dark boutique surfaces to warm paper-world equivalents. Two new CSS primitives added to `globals.css`: `.folio-paper-item` (card without overflow:hidden) and `.btn-folio-ghost` (paper-world secondary button). Two new CSS custom properties: `--ds-paper-elevation-1` and `--ds-paper-elevation-2` (warm folio-ink shadows). All dark-world tokens replaced: `bg-ds-onyx/carbon` → `bg-ds-bone/linen`, `border-ds-pen-stroke` → `border-ds-hairline`, `text-ds-text*` → `text-ds-folio-ink*`, `text-ds-accent` → `text-ds-marine-ink`, `btn-primary` → `btn-marine`, `btn-ghost` → `btn-folio-ghost`, `advisor-desk-panel` → `folio-paper-panel`, `concierge-desk-header` → `folio-paper-header`. PR #431 protected logic paths untouched (CityAutocomplete portal, addRoundTripLegToDay, handleAddRoundTripToItinerary, isExplicitlyOneWay, round-trip detection). 46 new Slice 3 contract tests in `paper-planning-objects-slice3.test.mjs`. **2510 total tests, 0 failures.**
+
+- Previous roadmap stage: **Stage 3.5 — Core Paper Planning Surfaces Slice 2 (2026-05-18).** Dashboard/trip cards, itinerary day columns, readiness cockpit, and mobile top chrome converted from dark SaaS to warm Private Travel Atelier paper surfaces. 8 paper primitives added (`folio-paper-card`, `folio-paper-panel`, `folio-paper-section`, `folio-paper-header`, `folio-divider`, `folio-muted-label`, `folio-chip`, `folio-input`). Primary CTAs in paper routes migrated to `btn-marine`/marine-ink. Mobile top bar converted from midnight to bone/hairline (8J test constraint updated). PR #431 logic paths untouched. 92 new Slice 2 contract tests in `core-paper-planning-slice2.test.mjs`.
 
 - Previous roadmap stage: **Stage 3.5 — Folio Foundation Slice 1 (2026-05-18).** Paper-world shell, Fraunces editorial serif, marine ink accent, ambient drift.
 
@@ -53,6 +55,8 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Recent meaningful PRs
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
+
+- 2026-05-18 — **Stage 3.5 Slice 3 — Paper Planning Objects.** `ItineraryItemCard.tsx`, `TripBuilderForm.tsx`, `OptimizeTripModal.tsx`, `DayPlanModal.tsx` converted from dark boutique (`advisor-desk-panel`, `bg-ds-onyx`, `border-ds-pen-stroke`, `text-ds-accent`, `btn-primary`) to paper world (`folio-paper-panel/item/header`, `bg-ds-bone/linen`, `border-ds-hairline`, `text-ds-folio-ink*`, `text-ds-marine-ink`, `btn-marine`, `btn-folio-ghost`). Two new CSS classes (`.folio-paper-item`, `.btn-folio-ghost`) and two shadow tokens (`--ds-paper-elevation-1/2`) added to `globals.css`. Round-trip detection logic untouched. 46 new contract tests in `paper-planning-objects-slice3.test.mjs`. **2510 total tests, 0 failures.** No backend/SQL/provider/env/behavior/dependency changes.
 
 - 2026-05-17 — **Stage 3.5 Phase 8N — Atmospheric Boutique Art Direction.** `globals.css`: 8 `--ds-atelier-*` tokens + `.atelier-atmosphere-root` / `.atelier-vignette-layer` / `.atelier-texture-layer` / `.atelier-surface-depth` / `.atelier-transition` / `.shadow-elevation-warm` / `.atelier-accent-line` CSS-only atmosphere classes. SVG fractalNoise grain via inline data-URI. Radial-gradient vignette entrance animation. All motion guarded by `prefers-reduced-motion`. `AppShell.tsx`: atmosphere-root wrapper + two fixed `aria-hidden` decorative layers + `reduced-motion-safe-atmosphere` testid. 50 new 8N contract tests. **1882 total tests, 0 failures.** No backend/SQL/provider/env/Supabase changes.
 
@@ -148,10 +152,10 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 - Latency Budget Pack
 - Backend-only Scaffold Pack / No Visible Behavior Change Pack / Test Tier Pack (cross-cutting)
 
-## Type-check / test baseline (confirmed 2026-05-18, Core Paper Planning Surfaces Slice 2)
+## Type-check / test baseline (confirmed 2026-05-18, Paper Planning Objects Slice 3)
 
-- **`npm run type-check` (frontend): pre-existing errors in `TrustStrip.tsx`, `supabase.ts`, `tailwind.config.ts` — not introduced by Slice 2.** Requires `npm install` first. Slice 2 changed files have no new TypeScript errors.
-- **`npm test` (frontend): 2460 tests, 0 failures.** (includes 92 new Slice 2 contract tests in `core-paper-planning-slice2.test.mjs`)
+- **`npm run type-check` (frontend): pre-existing errors from missing `next`/`react`/`lucide-react` modules (environment, not installed) — not introduced by Slice 3.** Requires `npm install` first. Slice 3 changed files have no new TypeScript errors.
+- **`npm test` (frontend): 2510 tests, 0 failures.** (includes 46 new Slice 3 contract tests in `paper-planning-objects-slice3.test.mjs`)
 - Any future session reporting "pre-existing TypeScript errors" is seeing an uninstalled `node_modules` environment — run `npm install` in `frontend/` before type-check.
 
 ## Known risks / unresolved issues
@@ -165,7 +169,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Stage 3.5 Slice 3 — Paper World Remaining Surfaces.** Remaining surfaces not covered in Slice 2: (A) Concierge panel and result cards — convert from dark atelier to paper world when displayed in trip context; (B) OptimizeTripModal + DayPlanModal — currently dark `advisor-desk-panel`; consider whether trip-planning flow modals should be warm paper or keep cinematic dark; (C) ItineraryItemCard — still dark `bg-ds-onyx`; converting to paper would unify the full itinerary experience; (D) ExploreShell VerticalCard / ResultCards — explore discovery is dark atelier; Slice 3 could introduce hybrid (dark Explore, paper Plan) or unify; (E) TripBuilder CollapsiblePanel — boutique-folio dark; converting to paper would complete the build canvas. **Hard stop rule**: Slice 3 must not touch PR #431 logic paths (CityAutocomplete portal, addRoundTripLegToDay, handleAddRoundTripToItinerary, ItineraryItemCard round-trip detection). Any Slice 3 work should open a separate PR from Slice 2.
+**Stage 3.5 Slice 4 — Paper World Remaining Surfaces.** Remaining dark surfaces not covered in Slices 1–3: (A) ExploreShell VerticalCard / ResultCards — explore discovery is still dark atelier; Slice 4 could introduce hybrid (dark Explore, paper Plan) or unify; (B) TripBuilder CollapsiblePanel — boutique-folio dark panels in the build canvas; (C) Concierge panel result cards — dark when shown in trip context; (D) SavedShell / SavedItemCard — `saved-folio-card` dark surface; may stay cinematic or convert to paper. Recommend: keep Explore + Saved dark cinematic (cinema punctuation rule), convert TripBuilder CollapsiblePanel to paper in Slice 4. **Hard stop rule**: Slice 4 must not touch PR #431 logic paths.
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 

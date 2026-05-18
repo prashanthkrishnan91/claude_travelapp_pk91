@@ -553,17 +553,17 @@ describe("Phase 8N-B: Concierge boutique adoption (direct, not token-only)", () 
 // ── 56–59. New Trip boutique adoption ───────────────────────────────────────
 
 describe("Phase 8N-B: New Trip boutique adoption (direct, not token-only)", () => {
-  it("56. TripBuilderForm form container applies boutique-folio class", () => {
+  it("56. TripBuilderForm form container applies folio-paper-panel class (Slice 3 paper conversion)", () => {
     assert.ok(
-      tripBuilderForm.includes("boutique-folio"),
-      "TripBuilderForm form must apply boutique-folio — inline elevation-1 must be replaced"
+      tripBuilderForm.includes("folio-paper-panel"),
+      "TripBuilderForm form must apply folio-paper-panel — converted from boutique-folio in Slice 3"
     );
   });
 
-  it("57. TripBuilderForm loading state applies boutique-instrument class", () => {
+  it("57. TripBuilderForm loading state applies folio-paper-card class (Slice 3 paper conversion)", () => {
     assert.ok(
-      tripBuilderForm.includes("boutique-instrument"),
-      "TripBuilderForm loading state card must apply boutique-instrument"
+      tripBuilderForm.includes("folio-paper-card"),
+      "TripBuilderForm loading state card must apply folio-paper-card — converted from boutique-instrument in Slice 3"
     );
   });
 

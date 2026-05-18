@@ -162,25 +162,25 @@ describe("Phase 8M: TripBuilderForm testids and mobile surface", () => {
     }
   });
 
-  it("8. loading state uses ds-token color classes", () => {
+  it("8. loading state uses paper-world ds-token color classes (Slice 3 paper conversion)", () => {
     assert.ok(
-      tripBuilderForm.includes("text-ds-accent animate-pulse"),
-      "loading state Sparkles icon must use text-ds-accent animate-pulse"
+      tripBuilderForm.includes("text-ds-marine-ink animate-pulse"),
+      "loading state Sparkles icon must use text-ds-marine-ink animate-pulse — converted from text-ds-accent in Slice 3"
     );
     assert.ok(
       tripBuilderForm.includes("text-ds-trust"),
       "done step icon must use text-ds-trust"
     );
     assert.ok(
-      tripBuilderForm.includes("text-ds-text-tertiary"),
-      "loading state text must use text-ds-text-tertiary"
+      tripBuilderForm.includes("text-ds-folio-ink-mist"),
+      "loading state text must use text-ds-folio-ink-mist — converted from text-ds-text-tertiary in Slice 3"
     );
   });
 
-  it("9. loading card uses bg-ds-onyx surface", () => {
+  it("9. loading card uses folio-paper-card surface (Slice 3 paper conversion)", () => {
     assert.ok(
-      tripBuilderForm.includes("bg-ds-onyx"),
-      "TripBuilderForm loading card must use bg-ds-onyx surface"
+      tripBuilderForm.includes("folio-paper-card"),
+      "TripBuilderForm loading card must use folio-paper-card — converted from bg-ds-onyx in Slice 3"
     );
   });
 
@@ -206,17 +206,17 @@ describe("Phase 8M: TripBuilderForm testids and mobile surface", () => {
     );
   });
 
-  it("12. footer note uses text-ds-text-tertiary", () => {
+  it("12. footer note uses text-ds-folio-ink-mist (Slice 3 paper conversion)", () => {
     assert.ok(
-      tripBuilderForm.includes("text-ds-text-tertiary text-center"),
-      "footer note must use text-ds-text-tertiary text-center"
+      tripBuilderForm.includes("text-ds-folio-ink-mist text-center"),
+      "footer note must use text-ds-folio-ink-mist text-center — converted from text-ds-text-tertiary in Slice 3"
     );
   });
 
   it("53. primary submit button uses w-full", () => {
     assert.ok(
-      tripBuilderForm.includes('className="btn-primary w-full"'),
-      "TripBuilderForm submit button must have w-full for mobile"
+      tripBuilderForm.includes('className="btn-marine w-full"'),
+      "TripBuilderForm submit button must have w-full for mobile (btn-marine in Slice 3 paper world)"
     );
   });
 

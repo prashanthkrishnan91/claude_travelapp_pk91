@@ -428,8 +428,8 @@ describe("Phase 8L: desktop layout stability", () => {
     assert.ok(dayColSrc.includes("folio-paper-card"), "folio-paper-card carries shadow via CSS class (replaced inline ds-elevation-2 in Slice 2)");
   });
 
-  it("ItineraryItemCard still uses bg-ds-onyx card surface", () => {
-    assert.ok(itemCardSrc.includes("bg-ds-onyx"), "bg-ds-onyx card surface must be preserved");
+  it("ItineraryItemCard uses folio-paper-item card surface (Slice 3 paper conversion)", () => {
+    assert.ok(itemCardSrc.includes("folio-paper-item"), "folio-paper-item must be the card surface (converted from bg-ds-onyx in Slice 3)");
   });
 
   it("Plan My Day uses lg:flex for desktop restoration", () => {

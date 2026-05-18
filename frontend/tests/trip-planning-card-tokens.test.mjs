@@ -124,15 +124,15 @@ test('ItineraryItemCard: no legacy color classes', () => {
   assert.ok(!src.includes('text-sky-'), 'no text-sky- in ItineraryItemCard');
 });
 
-test('ItineraryItemCard: uses ds-* tokens for typography and borders', () => {
-  assert.ok(itineraryCardSrc.includes('text-ds-text'), 'uses text-ds-text');
-  assert.ok(itineraryCardSrc.includes('text-ds-text-tertiary'), 'uses text-ds-text-tertiary');
-  assert.ok(itineraryCardSrc.includes('border-ds-pen-stroke'), 'uses border-ds-pen-stroke');
-  assert.ok(itineraryCardSrc.includes('bg-ds-onyx'), 'uses bg-ds-onyx');
+test('ItineraryItemCard: uses paper-world ds-* tokens for typography and borders (Slice 3)', () => {
+  assert.ok(itineraryCardSrc.includes('text-ds-folio-ink'), 'uses text-ds-folio-ink (paper typography)');
+  assert.ok(itineraryCardSrc.includes('text-ds-folio-ink-mist'), 'uses text-ds-folio-ink-mist (paper muted text)');
+  assert.ok(itineraryCardSrc.includes('border-ds-hairline'), 'uses border-ds-hairline (paper border)');
+  assert.ok(itineraryCardSrc.includes('folio-paper-item'), 'uses folio-paper-item (paper card surface)');
 });
 
-test('ItineraryItemCard: focus rings use ds-accent', () => {
-  assert.ok(itineraryCardSrc.includes('focus-visible:outline-ds-accent'), 'focus ring uses ds-accent');
+test('ItineraryItemCard: focus rings use ds-marine-ink (Slice 3 paper conversion)', () => {
+  assert.ok(itineraryCardSrc.includes('focus-visible:outline-ds-marine-ink'), 'focus ring uses ds-marine-ink');
 });
 
 // ── SearchResultCard.tsx ────────────────────────────────────────────────────────
