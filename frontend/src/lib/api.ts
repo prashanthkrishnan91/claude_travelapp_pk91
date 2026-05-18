@@ -499,14 +499,47 @@ export async function addRoundTripLegToDay(
   const ret = (d.returnLeg ?? d.return_leg ?? d.returnFlight ?? d.return_flight) as Record<string, unknown> | undefined;
 
   const legData = leg === "outbound" ? outbound : ret;
-  const seg0 = Array.isArray((legData as Record<string, unknown> | undefined)?.segments)
-    ? ((legData as Record<string, unknown>).segments as Record<string, unknown>[])[0]
-    : undefined;
+  const segs = Array.isArray((legData as Record<string, unknown> | undefined)?.segments)
+    ? ((legData as Record<string, unknown>).segments as Record<string, unknown>[])
+    : [];
+  const seg0 = segs[0] as Record<string, unknown> | undefined;
+  const segLast = segs.length > 0 ? segs[segs.length - 1] as Record<string, unknown> : seg0;
 
-  const airline = ((legData?.airline ?? (seg0 as Record<string, unknown> | undefined)?.airline ?? d.airline) as string | undefined) ?? "";
-  const flightNum = ((legData?.flightNumber ?? (legData as Record<string, unknown> | undefined)?.flight_number ?? (seg0 as Record<string, unknown> | undefined)?.flightNumber ?? (seg0 as Record<string, unknown> | undefined)?.flight_number) as string | undefined) ?? "";
-  const depTime = ((legData as Record<string, unknown> | undefined)?.departureTime ?? (legData as Record<string, unknown> | undefined)?.departure_time) as string | undefined;
-  const arrTime = ((legData as Record<string, unknown> | undefined)?.arrivalTime ?? (legData as Record<string, unknown> | undefined)?.arrival_time) as string | undefined;
+  const airline = ((legData?.airline ?? seg0?.airline ?? d.airline) as string | undefined) ?? "";
+  const flightNum = ((legData?.flightNumber ?? (legData as Record<string, unknown> | undefined)?.flight_number ?? seg0?.flightNumber ?? seg0?.flight_number) as string | undefined) ?? "";
+
+  // Robust departure extraction — matches extractLegDepartureDate paths in TripBuilder
+  const depTime = (
+    (legData?.departureTime as string | undefined) ??
+    (legData?.departure_time as string | undefined) ??
+    (legData?.departureDateTime as string | undefined) ??
+    (legData?.departure_datetime as string | undefined) ??
+    (legData?.departureDate as string | undefined) ??
+    (legData?.departure_date as string | undefined) ??
+    (legData?.date as string | undefined) ??
+    (seg0?.departureTime as string | undefined) ??
+    (seg0?.departure_time as string | undefined) ??
+    (seg0?.departureDateTime as string | undefined) ??
+    (seg0?.departure_datetime as string | undefined) ??
+    (seg0?.departureDate as string | undefined) ??
+    (seg0?.departure_date as string | undefined)
+  );
+
+  // Robust arrival extraction — uses last segment so multi-stop legs get final arrival
+  const arrTime = (
+    (legData?.arrivalTime as string | undefined) ??
+    (legData?.arrival_time as string | undefined) ??
+    (legData?.arrivalDateTime as string | undefined) ??
+    (legData?.arrival_datetime as string | undefined) ??
+    (legData?.arrivalDate as string | undefined) ??
+    (legData?.arrival_date as string | undefined) ??
+    (segLast?.arrivalTime as string | undefined) ??
+    (segLast?.arrival_time as string | undefined) ??
+    (segLast?.arrivalDateTime as string | undefined) ??
+    (segLast?.arrival_datetime as string | undefined) ??
+    (segLast?.arrivalDate as string | undefined) ??
+    (segLast?.arrival_date as string | undefined)
+  );
 
   const fullPrice =
     (d.cashPrice as number | undefined) ??
@@ -517,17 +550,36 @@ export async function addRoundTripLegToDay(
 
   const title = [airline, flightNum].filter(Boolean).join(" ") || (leg === "outbound" ? "Outbound Flight" : "Return Flight");
 
+  // Build a clean one-way-shaped details object for this leg only.
+  // Do NOT spread ...d — that would include outboundLeg + returnLeg on both items,
+  // causing ItineraryItemCard to detect them as round-trip cards regardless of the flags.
   const legDetails: Record<string, unknown> = {
-    ...d,
+    // Leg-specific route/timing fields
     airline,
     flight_number: flightNum,
+    origin: ((legData?.origin ?? (seg0 as Record<string, unknown> | undefined)?.origin) as string | undefined),
+    destination: ((legData?.destination ?? (seg0 as Record<string, unknown> | undefined)?.destination) as string | undefined),
     departure_time: depTime,
+    departureTime: depTime,
     arrival_time: arrTime,
+    arrivalTime: arrTime,
+    duration_minutes: ((legData?.durationMinutes ?? legData?.duration_minutes) as number | undefined),
+    stops: (legData?.stops as number | undefined),
+    cabin_class: ((legData?.cabinClass ?? legData?.cabin_class) as string | undefined),
     price: leg === "outbound" ? fullPrice : 0,
-    // Disable round-trip rendering — each leg is a standalone one-way card.
+    // Preserve Google Flights CTA and offer provenance from the original offer
+    google_flights_search_url: (d.googleFlightsSearchUrl ?? d.google_flights_search_url) as string | undefined,
+    booking_link: (d.bookingLink ?? d.booking_link) as Record<string, unknown> | undefined,
+    provider: d.provider as string | undefined,
+    provider_offer_id: (d.providerOfferId ?? d.provider_offer_id) as string | undefined,
+    offer_fingerprint: (d.offerFingerprint ?? d.offer_fingerprint) as string | undefined,
+    source_kind: (d.sourceKind ?? d.source_kind) as string | undefined,
+    // Explicit one-way identity flags — ItineraryItemCard uses these to render as one-way,
+    // even if a stale persisted row somehow carries both leg keys.
     is_round_trip: false,
     trip_type: "one_way",
     leg_of_round_trip: leg,
+    leg_label: leg === "outbound" ? "Outbound" : "Return",
     round_trip_price_included: leg === "return",
   };
 

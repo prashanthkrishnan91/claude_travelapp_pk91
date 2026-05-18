@@ -1,10 +1,11 @@
 /**
  * Post-merge fixes — contract tests.
  *
- * Issue A — CityAutocomplete stacking:
- *   The root wrapper raises z-index and creates an isolate stacking context
- *   when the suggestions dropdown or manual fallback panel is visible, so it
- *   renders above sibling form fields on mobile and desktop.
+ * Issue A — CityAutocomplete portal:
+ *   The suggestions dropdown and manual fallback are rendered via React DOM portal
+ *   into document.body at fixed coordinates anchored to the input, so they always
+ *   appear above sibling form fields regardless of ancestor overflow/stacking context.
+ *   Previous z-[60]+isolate fix was insufficient — portal is the real fix.
  *
  * Issue B — Plan My Day canonical attractions:
  *   The no-cluster backend path now calls canonical Google Places attraction
@@ -37,42 +38,58 @@ const dayPlanModalSrc = readFileSync(
   'utf8',
 );
 
-// ─── Issue A: CityAutocomplete stacking context ───────────────────────────────
+// ─── Issue A: CityAutocomplete portal approach ───────────────────────────────
 
-test('IssueA: root wrapper applies z-[60] when dropdown is open', () => {
+test('IssueA: uses createPortal to render dropdown into document.body', () => {
   assert.match(
     autocompleteSrc,
-    /z-\[60\]/,
-    'Container must apply z-[60] to raise above sibling fields when open',
+    /createPortal/,
+    'CityAutocomplete must use createPortal to escape the form stacking context',
   );
 });
 
-test('IssueA: root wrapper uses isolate class when dropdown is open', () => {
+test('IssueA: portal uses fixed positioning (not absolute)', () => {
   assert.match(
     autocompleteSrc,
-    /isolate/,
-    'Container must use isolate to create a stacking context when open',
+    /position.*["']?fixed["']?|fixed.*position/,
+    'Portal dropdown must use position:fixed so it is anchored to the viewport',
   );
 });
 
-test('IssueA: z-[60] and isolate are conditional on dropdown or manual visibility', () => {
-  // Both classes should be gated on a visibility flag, not always applied.
+test('IssueA: portal layer uses high z-index (9999)', () => {
+  assert.match(
+    autocompleteSrc,
+    /zIndex.*9999|9999.*zIndex/,
+    'Portal dropdown must use zIndex:9999 to appear above all page content',
+  );
+});
+
+test('IssueA: dropdown position derived from getBoundingClientRect', () => {
+  assert.match(
+    autocompleteSrc,
+    /getBoundingClientRect/,
+    'Dropdown position must be measured from the input container via getBoundingClientRect',
+  );
+});
+
+test('IssueA: position updates on resize and scroll events', () => {
+  assert.match(
+    autocompleteSrc,
+    /resize/,
+    'Position must update on window resize',
+  );
+  assert.match(
+    autocompleteSrc,
+    /scroll/,
+    'Position must update on scroll events',
+  );
+});
+
+test('IssueA: visibility gated on isDropdownVisible or open/showManual', () => {
   assert.match(
     autocompleteSrc,
     /isDropdownVisible|open.*showManual|showManual.*open/,
-    'z-[60] and isolate must be conditional on open/showManual state',
-  );
-});
-
-test('IssueA: suggestions dropdown uses z-[100] (higher than previous z-50)', () => {
-  assert.match(
-    autocompleteSrc,
-    /z-\[100\]/,
-    'Suggestion dropdown must use z-[100] to render above all siblings',
-  );
-  assert.ok(
-    !autocompleteSrc.includes('z-50'),
-    'Legacy z-50 must be replaced with z-[100] on the dropdown',
+    'Portal must only render when dropdown or manual fallback is visible',
   );
 });
 
@@ -84,11 +101,16 @@ test('IssueA: handleSelect behavior preserved', () => {
   );
 });
 
-test('IssueA: outside-click behavior preserved via containerRef', () => {
+test('IssueA: outside-click behavior checks both containerRef and portalRef', () => {
   assert.match(
     autocompleteSrc,
     /containerRef/,
     'containerRef must still be used for outside-click detection',
+  );
+  assert.match(
+    autocompleteSrc,
+    /portalRef/,
+    'portalRef must also be checked so clicks inside the portal are not mistaken for outside-clicks',
   );
   assert.match(
     autocompleteSrc,
@@ -105,21 +127,21 @@ test('IssueA: airport resolution API call preserved', () => {
   );
 });
 
-test('IssueA: TripBuilderForm still has overflow:visible to allow dropdown escape', () => {
+test('IssueA: TripBuilderForm overflow:visible can remain without being the sole fix', () => {
   assert.match(
     tripBuilderFormSrc,
     /overflow.*visible/,
-    'TripBuilderForm form element must keep overflow:visible',
+    'TripBuilderForm may keep overflow:visible but the portal approach is the real fix',
   );
 });
 
-test('IssueA: no layout jump — z-index change is scoped to the open state only', () => {
-  // Container gets z-[60] only when isDropdownVisible, not always.
-  // If always applied, it would create a permanent stacking context change.
-  const alwaysZ60 = /className=.*z-\[60\](?!.*isDropdownVisible|.*open|.*show)/;
+test('IssueA: dropdown not rendered inside form DOM when open (portal approach)', () => {
+  // The root container div must not contain the dropdown (ul or manual panel)
+  // as a direct sibling inside the non-portal container — it is rendered via portal.
+  // This verifies there is no fallback absolute-positioned dropdown inside the container.
   assert.ok(
-    !alwaysZ60.test(autocompleteSrc.replace(/\s+/g, ' ')),
-    'z-[60] must not be unconditionally applied — only when the dropdown is visible',
+    !autocompleteSrc.includes('z-[60]') && !autocompleteSrc.includes('z-[100]'),
+    'Old z-[60]/z-[100] classes must be absent — portal replaces the z-index-only approach',
   );
 });
 

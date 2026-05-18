@@ -122,19 +122,21 @@ test('Issue1: TripBuilder resolves return day from normalizeIsoDate of return de
   );
 });
 
-test('Issue1: handleAddRoundTripToItinerary falls back to days[0] for outbound when no date match', () => {
+test('Issue1: handleAddRoundTripToItinerary shows toast when outbound date is missing (no blind fallback)', () => {
+  // The old first/last-day blind fallback was removed in the post-#430 fix.
+  // Missing dates now cause a descriptive toast and create nothing.
   assert.match(
     tripBuilder,
-    /days\[0\]/,
-    'Must fall back to days[0] as outbound day when no date match',
+    /Could not place round-trip flight because flight dates were missing/,
+    'Must show a descriptive toast when leg dates cannot be extracted — no blind fallback',
   );
 });
 
-test('Issue1: handleAddRoundTripToItinerary falls back to last day for return when no date match', () => {
+test('Issue1: handleAddRoundTripToItinerary shows toast when date does not match any itinerary day', () => {
   assert.match(
     tripBuilder,
-    /days\[days\.length\s*-\s*1\]/,
-    'Must fall back to last day as return day when no date match',
+    /Flight date does not match this trip/,
+    'Must show a toast when extracted date has no matching itinerary day',
   );
 });
 
@@ -319,15 +321,16 @@ test('Issue3: TripBuilderForm form has overflow:visible to allow dropdown above 
   );
 });
 
-test('Issue3: CityAutocomplete dropdown has high z-index (z-50)', () => {
+test('Issue3: CityAutocomplete dropdown uses high z-index via portal (zIndex:9999 or createPortal)', () => {
   const autocompleteSrc = readFileSync(
     new URL('../src/components/ui/CityAutocomplete.tsx', import.meta.url),
     'utf8',
   );
+  // Portal approach uses inline zIndex:9999; previous z-[60]/z-[100] Tailwind approach was insufficient.
   assert.match(
     autocompleteSrc,
-    /z-50|z-\[/,
-    'CityAutocomplete dropdown must have z-50 or higher z-index',
+    /zIndex.*9999|9999.*zIndex|createPortal/,
+    'CityAutocomplete dropdown must use portal with zIndex:9999 to appear above all content',
   );
 });
 

@@ -1565,12 +1565,48 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     }
   }, [days, selectedDayId, tripId, showToast]);
 
-  // ── Add round-trip flight: two leg items on correct departure days ───────────
+  // ── Add round-trip flight: two leg items on actual departure days ────────────
+
+  // Extract a plain ISO date (YYYY-MM-DD) from a round-trip leg object.
+  // Tries camelCase, snake_case, and segment[0] departure fields in sequence.
+  // Returns undefined (never today's date) when no valid date is found.
+  const extractLegDepartureDate = useCallback(
+    (legData: Record<string, unknown> | undefined): string | undefined => {
+      if (!legData) return undefined;
+      const segs = Array.isArray(legData.segments) ? (legData.segments as Record<string, unknown>[]) : [];
+      const seg0 = segs[0] as Record<string, unknown> | undefined;
+      const raw =
+        (legData.departureTime as string | undefined) ??
+        (legData.departure_time as string | undefined) ??
+        (legData.departureDateTime as string | undefined) ??
+        (legData.departure_datetime as string | undefined) ??
+        (legData.departureDate as string | undefined) ??
+        (legData.departure_date as string | undefined) ??
+        (legData.date as string | undefined) ??
+        (seg0?.departureTime as string | undefined) ??
+        (seg0?.departure_time as string | undefined) ??
+        (seg0?.departureDateTime as string | undefined) ??
+        (seg0?.departure_datetime as string | undefined) ??
+        (seg0?.departureDate as string | undefined) ??
+        (seg0?.departure_date as string | undefined);
+      return normalizeIsoDate(raw?.slice(0, 10));
+    },
+    []
+  );
+
+  // Find the itinerary day whose date matches the given ISO date exactly.
+  const resolveItineraryDayByDate = useCallback(
+    (isoDate: string | undefined): import("@/types").ItineraryDay | null => {
+      if (!isoDate) return null;
+      return days.find((dy) => normalizeIsoDate(dy.date) === isoDate) ?? null;
+    },
+    [days]
+  );
 
   // A canonical round-trip Duffel offer is split into two standalone one-way
   // flight items: outbound on the outbound departure day, return on the return
-  // departure day. Days are resolved from each leg's departure timestamp;
-  // if no matching day exists we fall back to the first / last day.
+  // departure day. Days are resolved from each leg's departure timestamp.
+  // If dates cannot be extracted or matched, nothing is persisted and a toast explains why.
   // Price: outbound carries the full round-trip price; return carries 0.
   const handleAddRoundTripToItinerary = useCallback(async (item: ItineraryItem) => {
     setAddingId(item.id);
@@ -1584,21 +1620,22 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       const outbound = (d.outboundLeg ?? d.outbound_leg ?? d.outbound) as Record<string, unknown> | undefined;
       const ret = (d.returnLeg ?? d.return_leg ?? d.returnFlight ?? d.return_flight) as Record<string, unknown> | undefined;
 
-      // Extract ISO date from each leg's departure timestamp
-      const outboundDate = normalizeIsoDate(
-        ((outbound?.departureTime ?? outbound?.departure_time) as string | undefined)?.slice(0, 10)
-      );
-      const returnDate = normalizeIsoDate(
-        ((ret?.departureTime ?? ret?.departure_time) as string | undefined)?.slice(0, 10)
-      );
+      const outboundDate = extractLegDepartureDate(outbound);
+      const returnDate = extractLegDepartureDate(ret);
 
-      // Resolve target days; fall back to first/last day
-      const outboundDay =
-        (outboundDate ? days.find((dy) => normalizeIsoDate(dy.date) === outboundDate) : null) ??
-        days[0];
-      const returnDay =
-        (returnDate ? days.find((dy) => normalizeIsoDate(dy.date) === returnDate) : null) ??
-        days[days.length - 1];
+      // Fail closed — never place legs on arbitrary days if dates are missing
+      if (!outboundDate || !returnDate) {
+        showToast("Could not place round-trip flight because flight dates were missing.");
+        return;
+      }
+
+      const outboundDay = resolveItineraryDayByDate(outboundDate);
+      const returnDay = resolveItineraryDayByDate(returnDate);
+
+      if (!outboundDay || !returnDay) {
+        showToast("Flight date does not match this trip's itinerary days.");
+        return;
+      }
 
       const outboundItem = await addRoundTripLegToDay(
         tripId, outboundDay.id, item, "outbound", outboundDay.items.length
@@ -1642,7 +1679,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     } finally {
       setAddingId(null);
     }
-  }, [days, tripId, showToast]);
+  }, [days, tripId, showToast, extractLegDepartureDate, resolveItineraryDayByDate]);
 
   // ── Remove item from a day ───────────────────────────────────────────────────
 

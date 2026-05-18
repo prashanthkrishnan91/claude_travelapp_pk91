@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-18 (Core Trip-Flow Regression Rescue — PR open)
+Last updated: 2026-05-18 (Post-#430 Portal + Round-Trip Root Cause Fix — PR open)
 
 ## Purpose
 
@@ -8,7 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Post-PR #429 Defect Fixes (2026-05-18).** Two product-usability defects fixed: (A) CityAutocomplete dropdown now renders above sibling form fields on mobile via `z-[60] isolate` on the open container + `z-[100]` on the suggestions list (prev fix was `overflow:visible` only, insufficient); (B) Plan My Day no-cluster path now calls canonical Google Places attraction search (`SearchService.search_attraction_results / AttractionSearchRequest`), rotates by `day_number`, returns 2-3 attractions per day, fails closed to `[]` on provider error/empty. No AI Concierge, Tavily, mock data, SQL, env, or new package changes. 2264 total tests, 0 failures. 38 new contract tests in `post-merge-fixes-autocomplete-attractions.test.mjs`.
+- Roadmap stage: **Stage 3.5 — Post-#430 Portal + Round-Trip Root Cause Fix (2026-05-18).** Two root causes fixed after two failed z-index attempts: (A) `CityAutocomplete` now renders via React DOM `createPortal` into `document.body` with `position:fixed` + `zIndex:9999`, anchored via `getBoundingClientRect`; updates on resize + captured scroll; outside-click checks both `containerRef` and `portalRef`; old `z-[60]+isolate+z-[100]` approach gone. (B) Round-trip leg rendering: `addRoundTripLegToDay` no longer spreads `...d` (was preserving both `outboundLeg`+`returnLeg` on every leg item); `legDetails` built field-by-field with selected leg data + Google Flights URL + provenance only; `ItineraryItemCard` now checks `isExplicitlyOneWay` (`trip_type:"one_way"`, `is_round_trip:false`, `leg_of_round_trip`) before round-trip detection; `handleAddRoundTripToItinerary` uses `extractLegDepartureDate` (12 field paths incl. camelCase/snake/segment) + `resolveItineraryDayByDate`; blind `days[0]`/`days[days.length-1]` fallback removed — missing/mismatched dates show toast and create nothing. No SQL, no env, no provider, no new packages. **2307 total tests, 0 failures.** 43 new contract tests in `fix-failed-posts-portal-roundtrip.test.mjs`; existing test files updated for portal approach and no-fallback behavior.
+
+- Previous stage: **Stage 3.5 — Post-PR #429 Defect Fixes (2026-05-18).** (A) CityAutocomplete `z-[60]+isolate+z-[100]` z-index-only fix (failed on mobile — form ancestor stacking context still covered dropdown). (B) Plan My Day no-cluster path calls canonical Google Places attraction search. 2264 tests, 0 failures. 38 new contract tests in `post-merge-fixes-autocomplete-attractions.test.mjs`.
 
 - Previous stage: **Stage 3.5 — Phase 8N-F (2026-05-18).** Saved Ideas True Visual Correction — `SavedShell.tsx`: `scrapbook-page` fully removed from header zone (was failing cream slab); replaced with `saved-folio-header` (dark integrated, brass-rule only `::before`); `SavedItemCard` article changes from `boutique-folio clipping-card saved-clipping-card` (cream card) to `saved-folio-card` (dark carbon `var(--ds-carbon-mist)` surface + brass top accent `::before`); all `text-ds-text-inverse` (dark ink) on card changed to `text-ds-text` (light on dark); button colors migrated from `bg-ds-bone`/`bg-ds-linen` to `bg-ds-accent-subtle`/`bg-ds-carbon`/`border-ds-pen-stroke` dark-integrated variants; planning bridge buttons now dark-folio pill style; `globals.css`: two new composition classes `.saved-folio-header` (position:relative + brass `::before` rule) and `.saved-folio-card` (`bg: var(--ds-carbon-mist)` + pen-stroke border + box-shadow + brass `::before` top accent strip). Stale cream-class tests removed from 8N-B/8N-C/8N-E test files and replaced with dark-folio assertions. **33 new 8N-F contract tests in `saved-ideas-true-visual-correction-8nf.test.mjs`. 2178 total tests, 0 failures.** No backend/SQL/provider/env/Supabase/API/route/package/behavior changes. All 25+ testids preserved. All handlers preserved (deleteSavedItem, addSavedItemToTrip, listSavedItems, fetchTrips, CreateTripFromSavedModal). Previous Phase 8N-E: outer shell `saved-clipping-desk` preserved; compact horizontal planning bridge preserved; `lg:grid-cols-2` desktop grid preserved; `lg:max-w-4xl` width preserved.
 
@@ -142,10 +144,10 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 - Latency Budget Pack
 - Backend-only Scaffold Pack / No Visible Behavior Change Pack / Test Tier Pack (cross-cutting)
 
-## Type-check / test baseline (confirmed 2026-05-18, post-PR #429 fixes)
+## Type-check / test baseline (confirmed 2026-05-18, post-portal + round-trip fix)
 
 - **`npm run type-check` (frontend): CLEAN — 0 errors.** Requires `npm install` first (standard; `node_modules` is gitignored). After install: `tsc --noEmit` exits 0 with no diagnostics.
-- **`npm test` (frontend): 2264 tests, 0 failures.** (includes 38 new post-merge contract tests in `post-merge-fixes-autocomplete-attractions.test.mjs` and updated `trip-flow-regression-fixes.test.mjs`, wired into `npm test` explicit list in `package.json`)
+- **`npm test` (frontend): 2307 tests, 0 failures.** (includes 43 new contract tests in `fix-failed-posts-portal-roundtrip.test.mjs`; updated `post-merge-fixes-autocomplete-attractions.test.mjs` and `trip-flow-regression-fixes.test.mjs` for portal approach and no-fallback behavior)
 - Any future session reporting "pre-existing TypeScript errors" is seeing an uninstalled `node_modules` environment — run `npm install` in `frontend/` before type-check.
 
 ## Known risks / unresolved issues
