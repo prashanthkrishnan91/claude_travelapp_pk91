@@ -517,14 +517,30 @@ export async function addRoundTripLegToDay(
 
   const title = [airline, flightNum].filter(Boolean).join(" ") || (leg === "outbound" ? "Outbound Flight" : "Return Flight");
 
+  // Build a clean one-way-shaped details object for this leg only.
+  // Do NOT spread ...d — that would include outboundLeg + returnLeg on both items,
+  // causing ItineraryItemCard to detect them as round-trip cards regardless of the flags.
   const legDetails: Record<string, unknown> = {
-    ...d,
+    // Leg-specific route/timing fields
     airline,
     flight_number: flightNum,
+    origin: ((legData?.origin ?? (seg0 as Record<string, unknown> | undefined)?.origin) as string | undefined),
+    destination: ((legData?.destination ?? (seg0 as Record<string, unknown> | undefined)?.destination) as string | undefined),
     departure_time: depTime,
     arrival_time: arrTime,
+    duration_minutes: ((legData?.durationMinutes ?? legData?.duration_minutes) as number | undefined),
+    stops: (legData?.stops as number | undefined),
+    cabin_class: ((legData?.cabinClass ?? legData?.cabin_class) as string | undefined),
     price: leg === "outbound" ? fullPrice : 0,
-    // Disable round-trip rendering — each leg is a standalone one-way card.
+    // Preserve Google Flights CTA and offer provenance from the original offer
+    google_flights_search_url: (d.googleFlightsSearchUrl ?? d.google_flights_search_url) as string | undefined,
+    booking_link: (d.bookingLink ?? d.booking_link) as Record<string, unknown> | undefined,
+    provider: d.provider as string | undefined,
+    provider_offer_id: (d.providerOfferId ?? d.provider_offer_id) as string | undefined,
+    offer_fingerprint: (d.offerFingerprint ?? d.offer_fingerprint) as string | undefined,
+    source_kind: (d.sourceKind ?? d.source_kind) as string | undefined,
+    // Explicit one-way identity flags — ItineraryItemCard uses these to render as one-way,
+    // even if a stale persisted row somehow carries both leg keys.
     is_round_trip: false,
     trip_type: "one_way",
     leg_of_round_trip: leg,

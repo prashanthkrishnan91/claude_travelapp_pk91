@@ -352,12 +352,26 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           // toCamel) or trip_type === "round_trip".
           const outboundLeg = (d.outboundLeg ?? d.outbound_leg ?? d.outbound) as Record<string, unknown> | undefined;
           const returnLeg = (d.returnLeg ?? d.return_leg ?? d.returnFlight ?? d.return_flight) as Record<string, unknown> | undefined;
+
+          // Explicit one-way flags win — split round-trip leg items carry
+          // is_round_trip:false + trip_type:"one_way" + leg_of_round_trip so they
+          // render as individual one-way cards even if both leg keys happen to exist.
+          const isExplicitlyOneWay =
+            d.trip_type === "one_way" ||
+            d.tripType === "one_way" ||
+            d.is_round_trip === false ||
+            d.isRoundTrip === false ||
+            !!d.leg_of_round_trip ||
+            !!d.legOfRoundTrip;
+
           const isRoundTrip =
-            d.tripType === "round_trip" ||
-            d.trip_type === "round_trip" ||
-            d.isRoundTrip === true ||
-            d.is_round_trip === true ||
-            (!!outboundLeg && !!returnLeg);
+            !isExplicitlyOneWay && (
+              d.tripType === "round_trip" ||
+              d.trip_type === "round_trip" ||
+              d.isRoundTrip === true ||
+              d.is_round_trip === true ||
+              (!!outboundLeg && !!returnLeg)
+            );
 
           // Google Flights CTA (SEARCH_REDIRECT) preserved for canonical offers.
           const bookingLinkObj = (d.bookingLink ?? d.booking_link) as Record<string, unknown> | undefined;

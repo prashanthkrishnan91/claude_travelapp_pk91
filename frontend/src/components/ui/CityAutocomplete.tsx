@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Loader2, MapPin, X } from "lucide-react";
 import { resolveAirports } from "@/lib/api";
 import type { AirportMatch } from "@/lib/api";
@@ -32,6 +33,8 @@ export function formatAirportSelection(sel: AirportSelection): string {
     : cityCountry;
 }
 
+interface DropdownPos { top: number; left: number; width: number }
+
 export function CityAutocomplete({
   placeholder = "City or airport…",
   value,
@@ -46,8 +49,40 @@ export function CityAutocomplete({
   const [open, setOpen] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [manualCode, setManualCode] = useState("");
+  const [mounted, setMounted] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState<DropdownPos | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const portalRef = useRef<HTMLDivElement>(null);
+
+  // SSR guard — portal needs document.body
+  useEffect(() => { setMounted(true); }, []);
+
+  // Compute fixed position from the input container's bounding rect
+  const updateDropdownPos = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+  }, []);
+
+  const isDropdownVisible = open || showManual;
+
+  // Recompute position whenever the dropdown becomes visible or content changes
+  useEffect(() => {
+    if (isDropdownVisible) updateDropdownPos();
+  }, [isDropdownVisible, suggestions, showManual, updateDropdownPos]);
+
+  // Keep position in sync on resize and captured scroll from any ancestor
+  useEffect(() => {
+    if (!isDropdownVisible) return;
+    const update = () => updateDropdownPos();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [isDropdownVisible, updateDropdownPos]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -76,10 +111,15 @@ export function CityAutocomplete({
     };
   }, [query]);
 
+  // Outside-click closes dropdown; checks both the input container and the portal layer
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const inContainer = containerRef.current?.contains(target);
+      const inPortal = portalRef.current?.contains(target);
+      if (!inContainer && !inPortal) {
         setOpen(false);
+        setShowManual(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -130,36 +170,20 @@ export function CityAutocomplete({
     );
   }
 
-  // When open or showing manual fallback, raise this wrapper above sibling form fields.
-  // z-[60] on the container creates a stacking context that wins over un-indexed siblings;
-  // z-[100] on the dropdown panel wins within that context (and globally on the form).
-  const isDropdownVisible = open || showManual;
-
-  return (
+  // Portal dropdown — rendered into document.body at fixed coordinates anchored to the input
+  const portalDropdown = mounted && isDropdownVisible && dropdownPos ? createPortal(
     <div
-      ref={containerRef}
-      className={`relative ${isDropdownVisible ? "z-[60] isolate" : ""} ${className}`}
+      ref={portalRef}
+      style={{
+        position: "fixed",
+        top: dropdownPos.top,
+        left: dropdownPos.left,
+        width: dropdownPos.width,
+        zIndex: 9999,
+      }}
     >
-      <div className="relative">
-        <input
-          type="text"
-          placeholder={loading ? "Finding airports…" : placeholder}
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setShowManual(false);
-          }}
-          onFocus={() => suggestions.length > 0 && setOpen(true)}
-          className={`input w-full ${inputClassName}`}
-          autoComplete="off"
-        />
-        {loading && (
-          <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 animate-spin pointer-events-none" />
-        )}
-      </div>
-
       {open && suggestions.length > 0 && (
-        <ul className="absolute z-[100] top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <ul className="bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {suggestions.map((s) => (
             <li key={`${s.city}-${s.country}`}>
               <button
@@ -203,6 +227,35 @@ export function CityAutocomplete({
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
+  ) : null;
+
+  return (
+    <>
+      <div
+        ref={containerRef}
+        className={`relative ${className}`}
+      >
+        <div className="relative">
+          <input
+            type="text"
+            placeholder={loading ? "Finding airports…" : placeholder}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setShowManual(false);
+            }}
+            onFocus={() => suggestions.length > 0 && setOpen(true)}
+            className={`input w-full ${inputClassName}`}
+            autoComplete="off"
+          />
+          {loading && (
+            <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 animate-spin pointer-events-none" />
+          )}
+        </div>
+      </div>
+      {portalDropdown}
+    </>
   );
 }
