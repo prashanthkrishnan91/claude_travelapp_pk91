@@ -95,17 +95,17 @@ describe("Phase 8N-D: OptimizeTripModal visual rescue", () => {
     );
   });
 
-  it("2. OptimizeTripModal uses advisor-desk-panel boutique shell", () => {
+  it("2. OptimizeTripModal uses folio-paper-panel paper shell (Slice 3 paper conversion)", () => {
     assert.ok(
-      optimizeModal.includes("advisor-desk-panel"),
-      "OptimizeTripModal must use advisor-desk-panel for the boutique modal shell"
+      optimizeModal.includes("folio-paper-panel"),
+      "OptimizeTripModal must use folio-paper-panel — converted from advisor-desk-panel in Slice 3"
     );
   });
 
-  it("3. OptimizeTripModal loading spinner uses text-ds-accent (atelier gold)", () => {
+  it("3. OptimizeTripModal loading spinner uses text-ds-marine-ink (Slice 3 paper conversion)", () => {
     assert.ok(
-      optimizeModal.includes("text-ds-accent animate-spin"),
-      "OptimizeTripModal loading spinner must use text-ds-accent animate-spin"
+      optimizeModal.includes("text-ds-marine-ink animate-spin"),
+      "OptimizeTripModal loading spinner must use text-ds-marine-ink animate-spin"
     );
   });
 
@@ -137,44 +137,39 @@ describe("Phase 8N-D: OptimizeTripModal visual rescue", () => {
     );
   });
 
-  it("8. OptimizeTripModal provider unavailable title uses text-ds-text", () => {
-    // text-ds-text appears in the provider unavailable section title
+  it("8. OptimizeTripModal provider unavailable title uses text-ds-folio-ink (Slice 3 paper conversion)", () => {
     assert.ok(
-      optimizeModal.includes("text-ds-text"),
-      "OptimizeTripModal must use text-ds-text for provider unavailable title"
+      optimizeModal.includes("text-ds-folio-ink"),
+      "OptimizeTripModal must use text-ds-folio-ink for provider unavailable title — converted from text-ds-text in Slice 3"
     );
   });
 
-  it("9. OptimizeTripModal provider unavailable uses btn-ghost (not bg-slate-900)", () => {
+  it("9. OptimizeTripModal provider unavailable uses btn-folio-ghost (Slice 3 paper conversion)", () => {
     assert.ok(
       !optimizeModal.includes("bg-slate-900"),
-      "OptimizeTripModal provider unavailable must not use bg-slate-900 — use btn-ghost"
+      "OptimizeTripModal provider unavailable must not use bg-slate-900"
     );
     assert.ok(
-      optimizeModal.includes("btn-ghost"),
-      "OptimizeTripModal provider unavailable must use btn-ghost for the dismiss action"
+      optimizeModal.includes("btn-folio-ghost"),
+      "OptimizeTripModal must use btn-folio-ghost for secondary actions — converted from btn-ghost in Slice 3"
     );
   });
 
-  it("10. OptimizeTripModal result cards use bg-ds-onyx (not light surfaces)", () => {
+  it("10. OptimizeTripModal result cards use bg-ds-bone paper surface (Slice 3 paper conversion)", () => {
     assert.ok(
-      optimizeModal.includes("bg-ds-onyx"),
-      "OptimizeTripModal result cards must use bg-ds-onyx (dark atelier surface)"
+      optimizeModal.includes("bg-ds-bone"),
+      "OptimizeTripModal result cards must use bg-ds-bone — converted from bg-ds-onyx in Slice 3"
     );
   });
 
-  it("11. OptimizeTripModal result cards use boutique shadow classes", () => {
+  it("11. OptimizeTripModal result cards use paper elevation shadow (Slice 3 paper conversion)", () => {
     assert.ok(
-      optimizeModal.includes("boutique-instrument"),
-      "OptimizeTripModal result cards must include boutique-instrument shadow class"
-    );
-    assert.ok(
-      optimizeModal.includes("boutique-folio"),
-      "OptimizeTripModal result cards must include boutique-folio shadow class"
+      optimizeModal.includes("ds-paper-elevation"),
+      "OptimizeTripModal result cards must use ds-paper-elevation shadow — converted from boutique shadow classes in Slice 3"
     );
   });
 
-  it("12. OptimizeTripModal rank badge uses bg-ds-carbon (not bg-emerald-100/bg-sky-100)", () => {
+  it("12. OptimizeTripModal rank badge uses bg-ds-linen (Slice 3 paper conversion)", () => {
     assert.ok(
       !optimizeModal.includes("bg-emerald-100"),
       "OptimizeTripModal RANK_BADGE must not use bg-emerald-100"
@@ -188,12 +183,12 @@ describe("Phase 8N-D: OptimizeTripModal visual rescue", () => {
       "OptimizeTripModal RANK_BADGE must not use bg-amber-100"
     );
     assert.ok(
-      optimizeModal.includes("bg-ds-carbon"),
-      "OptimizeTripModal rank badge must use bg-ds-carbon"
+      optimizeModal.includes("bg-ds-linen"),
+      "OptimizeTripModal rank badge must use bg-ds-linen — converted from bg-ds-carbon in Slice 3"
     );
   });
 
-  it("13. OptimizeTripModal RANK_BORDER uses border-ds-* tokens (not border-emerald-400)", () => {
+  it("13. OptimizeTripModal RANK_BORDER uses border-ds-marine-ink (Slice 3 paper conversion)", () => {
     assert.ok(
       !optimizeModal.includes("border-emerald-400"),
       "OptimizeTripModal must not use border-emerald-400"
@@ -207,8 +202,8 @@ describe("Phase 8N-D: OptimizeTripModal visual rescue", () => {
       "OptimizeTripModal must not use border-amber-300"
     );
     assert.ok(
-      optimizeModal.includes("border-ds-accent"),
-      "OptimizeTripModal RANK_BORDER[0] must use border-ds-accent for primary card"
+      optimizeModal.includes("border-ds-marine-ink"),
+      "OptimizeTripModal RANK_BORDER[0] must use border-ds-marine-ink — converted from border-ds-accent in Slice 3"
     );
   });
 
@@ -250,25 +245,25 @@ describe("Phase 8N-D: OptimizeTripModal visual rescue", () => {
     );
   });
 
-  it("17. OptimizeTripModal hotel section uses text-ds-accent-muted (not text-violet-5)", () => {
+  it("17. OptimizeTripModal hotel section uses text-ds-marine-soft (Slice 3 paper conversion)", () => {
     assert.ok(
       !optimizeModal.includes("text-violet-5"),
       "OptimizeTripModal hotel Building2 icon must not use text-violet-5*"
     );
     assert.ok(
-      optimizeModal.includes("text-ds-accent-muted"),
-      "OptimizeTripModal hotel icon must use text-ds-accent-muted"
+      optimizeModal.includes("text-ds-marine-soft"),
+      "OptimizeTripModal hotel icon must use text-ds-marine-soft — converted from text-ds-accent-muted in Slice 3"
     );
   });
 
-  it("18. OptimizeTripModal dividers use bg-ds-pen-stroke (not bg-slate-100)", () => {
+  it("18. OptimizeTripModal dividers use border-ds-hairline (Slice 3 paper conversion)", () => {
     assert.ok(
       !optimizeModal.includes("bg-slate-100"),
       "OptimizeTripModal dividers must not use bg-slate-100"
     );
     assert.ok(
-      optimizeModal.includes("bg-ds-pen-stroke"),
-      "OptimizeTripModal dividers must use bg-ds-pen-stroke"
+      optimizeModal.includes("border-ds-hairline"),
+      "OptimizeTripModal dividers must use border-ds-hairline — converted from bg-ds-pen-stroke in Slice 3"
     );
   });
 
@@ -280,14 +275,14 @@ describe("Phase 8N-D: OptimizeTripModal visual rescue", () => {
     // bg-ds-carbon checked in test 12
   });
 
-  it("20. OptimizeTripModal select button uses btn-primary (not bg-sky-600)", () => {
+  it("20. OptimizeTripModal select button uses btn-marine (Slice 3 paper conversion)", () => {
     assert.ok(
       !optimizeModal.includes("bg-sky-600"),
       "OptimizeTripModal select button must not use bg-sky-600"
     );
     assert.ok(
-      optimizeModal.includes("btn-primary"),
-      "OptimizeTripModal select button must use btn-primary"
+      optimizeModal.includes("btn-marine"),
+      "OptimizeTripModal select button must use btn-marine — converted from btn-primary in Slice 3"
     );
   });
 
@@ -306,10 +301,10 @@ describe("Phase 8N-D: OptimizeTripModal visual rescue", () => {
     // btn-ghost already checked in test 9
   });
 
-  it("23. OptimizeTripModal header uses concierge-desk-header zone", () => {
+  it("23. OptimizeTripModal header uses folio-paper-header zone (Slice 3 paper conversion)", () => {
     assert.ok(
-      optimizeModal.includes("concierge-desk-header"),
-      "OptimizeTripModal header must use concierge-desk-header for two-zone interior"
+      optimizeModal.includes("folio-paper-header"),
+      "OptimizeTripModal header must use folio-paper-header — converted from concierge-desk-header in Slice 3"
     );
   });
 
@@ -327,10 +322,10 @@ describe("Phase 8N-D: OptimizeTripModal visual rescue", () => {
     );
   });
 
-  it("26. OptimizeTripModal header Sparkles uses text-ds-accent", () => {
+  it("26. OptimizeTripModal header Sparkles uses text-ds-marine-ink (Slice 3 paper conversion)", () => {
     assert.ok(
-      optimizeModal.includes("text-ds-accent"),
-      "OptimizeTripModal Sparkles icon must use text-ds-accent"
+      optimizeModal.includes("text-ds-marine-ink"),
+      "OptimizeTripModal Sparkles icon must use text-ds-marine-ink — converted from text-ds-accent in Slice 3"
     );
   });
 
@@ -352,17 +347,17 @@ describe("Phase 8N-D: DayPlanModal visual rescue", () => {
     );
   });
 
-  it("29. DayPlanModal uses advisor-desk-panel boutique shell", () => {
+  it("29. DayPlanModal uses folio-paper-panel paper shell (Slice 3 paper conversion)", () => {
     assert.ok(
-      dayPlanModal.includes("advisor-desk-panel"),
-      "DayPlanModal must use advisor-desk-panel for the boutique modal shell"
+      dayPlanModal.includes("folio-paper-panel"),
+      "DayPlanModal must use folio-paper-panel — converted from advisor-desk-panel in Slice 3"
     );
   });
 
-  it("30. DayPlanModal uses concierge-desk-header for header zone", () => {
+  it("30. DayPlanModal uses folio-paper-header for header zone (Slice 3 paper conversion)", () => {
     assert.ok(
-      dayPlanModal.includes("concierge-desk-header"),
-      "DayPlanModal must use concierge-desk-header for two-zone header interior"
+      dayPlanModal.includes("folio-paper-header"),
+      "DayPlanModal must use folio-paper-header — converted from concierge-desk-header in Slice 3"
     );
   });
 
@@ -380,36 +375,36 @@ describe("Phase 8N-D: DayPlanModal visual rescue", () => {
     );
   });
 
-  it("33. DayPlanModal attraction cards use bg-ds-carbon (not bg-slate-50/40)", () => {
+  it("33. DayPlanModal attraction cards use bg-ds-linen paper surface (Slice 3 paper conversion)", () => {
     assert.ok(
       !dayPlanModal.includes("bg-slate-50/40"),
       "DayPlanModal attraction cards must not use bg-slate-50/40"
     );
     assert.ok(
-      dayPlanModal.includes("bg-ds-carbon"),
-      "DayPlanModal attraction cards must use bg-ds-carbon for default state"
+      dayPlanModal.includes("bg-ds-linen"),
+      "DayPlanModal attraction cards must use bg-ds-linen — converted from bg-ds-carbon in Slice 3"
     );
   });
 
-  it("34. DayPlanModal attraction cards use border-ds-pen-stroke (not border-slate-100)", () => {
+  it("34. DayPlanModal attraction cards use border-ds-hairline (Slice 3 paper conversion)", () => {
     assert.ok(
       !dayPlanModal.includes("border-slate-100"),
       "DayPlanModal cards must not use border-slate-100"
     );
     assert.ok(
-      dayPlanModal.includes("border-ds-pen-stroke"),
-      "DayPlanModal cards must use border-ds-pen-stroke"
+      dayPlanModal.includes("border-ds-hairline"),
+      "DayPlanModal cards must use border-ds-hairline — converted from border-ds-pen-stroke in Slice 3"
     );
   });
 
-  it("35. DayPlanModal add buttons use bg-ds-accent (not bg-emerald-600)", () => {
+  it("35. DayPlanModal add buttons use bg-ds-marine-ink (Slice 3 paper conversion)", () => {
     assert.ok(
       !dayPlanModal.includes("bg-emerald-600"),
       "DayPlanModal add buttons must not use bg-emerald-600"
     );
     assert.ok(
-      dayPlanModal.includes("bg-ds-accent"),
-      "DayPlanModal add buttons must use bg-ds-accent"
+      dayPlanModal.includes("bg-ds-marine-ink"),
+      "DayPlanModal add buttons must use bg-ds-marine-ink — converted from bg-ds-accent in Slice 3"
     );
   });
 
@@ -442,21 +437,21 @@ describe("Phase 8N-D: DayPlanModal visual rescue", () => {
     );
   });
 
-  it("39. DayPlanModal dining meal label uses text-ds-accent (not text-rose-5)", () => {
+  it("39. DayPlanModal dining meal label uses text-ds-marine-ink (Slice 3 paper conversion)", () => {
     assert.ok(
       !dayPlanModal.includes("text-rose-500"),
       "DayPlanModal dining label must not use text-rose-500"
     );
     assert.ok(
-      dayPlanModal.includes("text-ds-accent"),
-      "DayPlanModal dining label must use text-ds-accent"
+      dayPlanModal.includes("text-ds-marine-ink"),
+      "DayPlanModal dining label must use text-ds-marine-ink — converted from text-ds-accent in Slice 3"
     );
   });
 
-  it("40. DayPlanModal dining section icon uses text-ds-accent-muted (not text-rose-5)", () => {
+  it("40. DayPlanModal dining section icon uses text-ds-marine-soft (Slice 3 paper conversion)", () => {
     assert.ok(
-      dayPlanModal.includes("text-ds-accent-muted"),
-      "DayPlanModal UtensilsCrossed icon must use text-ds-accent-muted"
+      dayPlanModal.includes("text-ds-marine-soft"),
+      "DayPlanModal UtensilsCrossed icon must use text-ds-marine-soft — converted from text-ds-accent-muted in Slice 3"
     );
   });
 
@@ -471,23 +466,21 @@ describe("Phase 8N-D: DayPlanModal visual rescue", () => {
     );
   });
 
-  it("42. DayPlanModal footer border uses border-ds-pen-stroke (not border-slate-100)", () => {
-    // border-slate-100 absence already verified in test 34
-    // confirm border-ds-pen-stroke in footer area
+  it("42. DayPlanModal footer border uses border-t border-ds-hairline (Slice 3 paper conversion)", () => {
     assert.ok(
-      dayPlanModal.includes("border-t border-ds-pen-stroke"),
-      "DayPlanModal footer must use border-t border-ds-pen-stroke"
+      dayPlanModal.includes("border-t border-ds-hairline"),
+      "DayPlanModal footer must use border-t border-ds-hairline — converted from border-ds-pen-stroke in Slice 3"
     );
   });
 
-  it("43. DayPlanModal header title uses text-ds-text (not text-slate-9)", () => {
+  it("43. DayPlanModal header title uses text-ds-folio-ink (Slice 3 paper conversion)", () => {
     assert.ok(
       !dayPlanModal.includes("text-slate-900"),
       "DayPlanModal header must not use text-slate-900"
     );
     assert.ok(
-      dayPlanModal.includes("text-ds-text"),
-      "DayPlanModal header must use text-ds-text for title"
+      dayPlanModal.includes("text-ds-folio-ink"),
+      "DayPlanModal header must use text-ds-folio-ink — converted from text-ds-text in Slice 3"
     );
   });
 
@@ -499,14 +492,14 @@ describe("Phase 8N-D: DayPlanModal visual rescue", () => {
     // text-ds-accent already checked in test 39
   });
 
-  it("45. DayPlanModal description text uses text-ds-text-tertiary (not text-slate-4)", () => {
+  it("45. DayPlanModal description text uses text-ds-folio-ink-mist (Slice 3 paper conversion)", () => {
     assert.ok(
       !dayPlanModal.includes("text-slate-400"),
       "DayPlanModal description must not use text-slate-400"
     );
     assert.ok(
-      dayPlanModal.includes("text-ds-text-tertiary"),
-      "DayPlanModal description must use text-ds-text-tertiary"
+      dayPlanModal.includes("text-ds-folio-ink-mist"),
+      "DayPlanModal description must use text-ds-folio-ink-mist — converted from text-ds-text-tertiary in Slice 3"
     );
   });
 });

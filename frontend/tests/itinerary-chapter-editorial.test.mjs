@@ -106,20 +106,20 @@ test('ItineraryItemCard: no raw rgba() inline styles', () => {
   assert.doesNotMatch(src, /rgba\(/, 'must use var(--ds-accent-subtle) not raw rgba()');
 });
 
-test('ItineraryItemCard: uses bg-ds-onyx for card surface', () => {
-  assert.match(src, /bg-ds-onyx/, 'must use bg-ds-onyx for dark card surface');
+test('ItineraryItemCard: uses folio-paper-item for card surface (Slice 3 paper conversion)', () => {
+  assert.match(src, /folio-paper-item/, 'must use folio-paper-item for paper card surface — converted from bg-ds-onyx in Slice 3');
 });
 
-test('ItineraryItemCard: uses border-ds-pen-stroke for card border', () => {
-  assert.match(src, /border-ds-pen-stroke/, 'must use border-ds-pen-stroke for card border');
+test('ItineraryItemCard: uses border-ds-hairline for card border (Slice 3 paper conversion)', () => {
+  assert.match(src, /border-ds-hairline/, 'must use border-ds-hairline for paper card border — converted from border-ds-pen-stroke in Slice 3');
 });
 
-test('ItineraryItemCard: uses text-ds-text for title', () => {
-  assert.match(src, /text-ds-text\b/, 'title must use text-ds-text');
+test('ItineraryItemCard: uses text-ds-folio-ink for title (Slice 3 paper conversion)', () => {
+  assert.match(src, /text-ds-folio-ink\b/, 'title must use text-ds-folio-ink — converted from text-ds-text in Slice 3');
 });
 
-test('ItineraryItemCard: uses text-ds-text-tertiary for secondary content', () => {
-  assert.match(src, /text-ds-text-tertiary/, 'secondary content must use text-ds-text-tertiary');
+test('ItineraryItemCard: uses text-ds-folio-ink-mist for secondary content (Slice 3 paper conversion)', () => {
+  assert.match(src, /text-ds-folio-ink-mist/, 'secondary content must use text-ds-folio-ink-mist — converted from text-ds-text-tertiary in Slice 3');
 });
 
 test('ItineraryItemCard: no legacy cream color classes', () => {
@@ -163,8 +163,8 @@ test('ItineraryItemCard: Google Flights link-out is a real <a> with target="_bla
   );
 });
 
-test('ItineraryItemCard: focus rings use ds-accent on all interactive elements', () => {
-  assert.match(src, /focus-visible:outline-ds-accent/, 'focus rings must use ds-accent');
+test('ItineraryItemCard: focus rings use ds-marine-ink on all interactive elements (Slice 3 paper conversion)', () => {
+  assert.match(src, /focus-visible:outline-ds-marine-ink/, 'focus rings must use ds-marine-ink — converted from ds-accent in Slice 3');
 });
 
 // ── 4. No card-level click-only navigation ────────────────────────────────────

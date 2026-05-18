@@ -410,17 +410,17 @@ describe("Phase 8N-C: Concierge and New Trip visual composition", () => {
     );
   });
 
-  it("39. TripBuilderForm uses editorial-scene wrapper", () => {
+  it("39. TripBuilderForm uses atelier-transition on outer wrapper (Slice 3 paper conversion)", () => {
     assert.ok(
-      tripBuilderForm.includes("editorial-scene"),
-      "TripBuilderForm container must use editorial-scene for intake form framing"
+      tripBuilderForm.includes("atelier-transition"),
+      "TripBuilderForm outer container must use atelier-transition — converted from editorial-scene in Slice 3"
     );
   });
 
-  it("40. TripBuilderForm uses advisor-desk-panel on form", () => {
+  it("40. TripBuilderForm uses folio-paper-panel on form (Slice 3 paper conversion)", () => {
     assert.ok(
-      tripBuilderForm.includes("advisor-desk-panel"),
-      "TripBuilderForm form element must use advisor-desk-panel composition"
+      tripBuilderForm.includes("folio-paper-panel"),
+      "TripBuilderForm form element must use folio-paper-panel — converted from advisor-desk-panel in Slice 3"
     );
   });
 });

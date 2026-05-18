@@ -51,7 +51,7 @@ function renderDescriptionWithLinks(text: string): React.ReactNode {
         target="_blank"
         rel="noreferrer"
         data-testid="note-description-link"
-        className="inline-flex items-center gap-0.5 text-ds-accent underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+        className="inline-flex items-center gap-0.5 text-ds-marine-ink underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
         onClick={(e) => e.stopPropagation()}
       >
         {label}
@@ -69,10 +69,10 @@ function renderDescriptionWithLinks(text: string): React.ReactNode {
 // ─── Timeline day-part options ────────────────────────────────────────────────
 
 const DAY_PARTS = [
-  { value: "morning",     label: "Morning",     activeClass: "border-ds-accent/50 text-ds-accent" },
-  { value: "afternoon",   label: "Afternoon",   activeClass: "border-ds-accent/50 text-ds-accent" },
-  { value: "evening",     label: "Evening",     activeClass: "border-ds-accent/50 text-ds-accent" },
-  { value: "unscheduled", label: "Unscheduled", activeClass: "border-ds-pen-stroke text-ds-text-tertiary" },
+  { value: "morning",     label: "Morning",     activeClass: "border-ds-marine-ink/50 text-ds-marine-ink" },
+  { value: "afternoon",   label: "Afternoon",   activeClass: "border-ds-marine-ink/50 text-ds-marine-ink" },
+  { value: "evening",     label: "Evening",     activeClass: "border-ds-marine-ink/50 text-ds-marine-ink" },
+  { value: "unscheduled", label: "Unscheduled", activeClass: "border-ds-hairline text-ds-folio-ink-mist" },
 ] as const;
 
 // ─── Editorial type labels (Overline role) ────────────────────────────────────
@@ -187,17 +187,17 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
       data-testid="itinerary-item-card"
       ref={setNodeRef}
       style={style}
-      className={`group relative flex items-start gap-2 p-3 rounded-lg border transition-all duration-200 ${
+      className={`group relative flex items-start gap-2 p-3 transition-all duration-200 ${
         isDragging
-          ? "opacity-60 scale-95 border-ds-accent/70 bg-ds-onyx/85 backdrop-blur-md shadow-[var(--ds-elevation-4)]"
-          : "bg-ds-onyx border-ds-pen-stroke shadow-[var(--ds-elevation-1)] hover:border-ds-carbon hover:shadow-[var(--ds-elevation-2)]"
+          ? "opacity-60 scale-95 rounded-xl border border-ds-marine-ink/40 bg-ds-bone/70"
+          : "folio-paper-item"
       }`}
     >
       {/* Drag handle — -m-3.5 p-3.5 yields 44px hit area (16px icon + 14px*2 padding) */}
       <button
         {...listeners}
         {...attributes}
-        className="mt-0.5 flex-shrink-0 -m-3.5 p-3.5 flex items-center justify-center cursor-grab active:cursor-grabbing text-ds-text-tertiary group-hover:text-ds-text-secondary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+        className="mt-0.5 flex-shrink-0 -m-3.5 p-3.5 flex items-center justify-center cursor-grab active:cursor-grabbing text-ds-folio-ink-mist group-hover:text-ds-folio-ink-soft transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
         aria-label="Drag to reorder"
       >
         <GripVertical className="w-4 h-4" />
@@ -211,15 +211,15 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           <div className="flex items-center gap-1.5 min-w-0">
             {/* Type icon */}
             <div
-              className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-ds-accent"
-              style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+              className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-ds-marine-ink"
+              style={{ backgroundColor: "color-mix(in srgb, var(--ds-marine-ink) 10%, transparent)" }}
               aria-hidden="true"
             >
               {config.icon}
             </div>
             {/* Overline type label — chapter-entry identity */}
             <span
-              className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary flex-shrink-0"
+              className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-folio-ink-mist flex-shrink-0"
               data-testid="item-type-overline"
             >
               {TYPE_LABELS[item.itemType]}
@@ -234,13 +234,13 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
               {onToggleCompare && (
                 <button
                   onClick={() => onToggleCompare(item)}
-                  className={`group -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2`}
+                  className={`group -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2`}
                   aria-label={isComparing ? `Remove ${item.title} from compare` : `Add ${item.title} to compare`}
                 >
                   <span className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
                     isComparing
-                      ? "opacity-100 bg-ds-accent text-ds-text-inverse"
-                      : "opacity-0 group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary hover:text-ds-accent"
+                      ? "opacity-100 bg-ds-marine-ink text-ds-paper"
+                      : "opacity-0 group-hover:opacity-100 bg-ds-linen text-ds-folio-ink-mist hover:text-ds-marine-ink"
                   }`}>
                     <Scale className="w-3 h-3" />
                   </span>
@@ -256,38 +256,38 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                     handleOpenTimeline();
                   }
                 }}
-                className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
                 aria-label="Set timeline"
                 title="Set timeline"
               >
                 <span
                   className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
                     timelineOpen
-                      ? "opacity-100 text-ds-accent"
+                      ? "opacity-100 text-ds-marine-ink"
                       : hasSchedule
-                        ? "opacity-75 bg-ds-carbon text-ds-text-tertiary group-hover:text-ds-accent"
-                        : "opacity-100 md:opacity-0 md:group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary group-hover:text-ds-accent"
+                        ? "opacity-75 bg-ds-linen text-ds-folio-ink-mist group-hover:text-ds-marine-ink"
+                        : "opacity-100 md:opacity-0 md:group-hover:opacity-100 bg-ds-linen text-ds-folio-ink-mist group-hover:text-ds-marine-ink"
                   }`}
-                  style={timelineOpen ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
+                  style={timelineOpen ? { backgroundColor: "color-mix(in srgb, var(--ds-marine-ink) 10%, transparent)" } : undefined}
                 >
                   <Clock className="w-3 h-3" />
                 </span>
               </button>
               <button
                 onClick={() => setBookingOpen(true)}
-                className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
                 aria-label={`Book ${item.title}`}
               >
-                <span className="w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-ds-carbon group-hover:bg-ds-pen-stroke text-ds-text-tertiary group-hover:text-ds-text-secondary flex items-center justify-center transition-all">
+                <span className="w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-ds-linen group-hover:bg-ds-hairline text-ds-folio-ink-mist group-hover:text-ds-folio-ink-soft flex items-center justify-center transition-all">
                   <Ticket className="w-3 h-3" />
                 </span>
               </button>
               <button
                 onClick={() => onRemove(item.id)}
-                className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
                 aria-label={`Remove ${item.title}`}
               >
-                <span className="w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-ds-carbon text-ds-text-tertiary group-hover:text-ds-warning flex items-center justify-center transition-all">
+                <span className="w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-ds-linen text-ds-folio-ink-mist group-hover:text-ds-warning flex items-center justify-center transition-all">
                   <X className="w-3 h-3" />
                 </span>
               </button>
@@ -300,14 +300,14 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                 e.stopPropagation();
                 setMobileOverflowOpen((v) => !v);
               }}
-              className="lg:hidden flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              className="lg:hidden flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
               aria-label={`Actions for ${item.title}`}
               data-testid="itinerary-item-mobile-overflow-toggle"
             >
               <span className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
                 mobileOverflowOpen
-                  ? "bg-ds-accent text-ds-text-inverse"
-                  : "bg-ds-carbon text-ds-text-tertiary"
+                  ? "bg-ds-marine-ink text-ds-paper"
+                  : "bg-ds-linen text-ds-folio-ink-mist"
               }`}>
                 <MoreHorizontal className="w-3 h-3" />
               </span>
@@ -320,7 +320,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           <div className="mb-1.5">
             <button
               onClick={() => onMoveToIdeas(item.id)}
-              className="flex-shrink-0 min-h-[44px] inline-flex items-center justify-center rounded-md border border-ds-pen-stroke px-1.5 text-[10px] font-medium text-ds-text-secondary hover:border-ds-accent hover:text-ds-accent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              className="flex-shrink-0 min-h-[44px] inline-flex items-center justify-center rounded-md border border-ds-hairline px-1.5 text-[10px] font-medium text-ds-folio-ink-soft hover:border-ds-marine-ink hover:text-ds-marine-ink transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
               aria-label={`Move ${item.title} back to Trip Ideas`}
             >
               Move to Ideas
@@ -330,7 +330,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
 
         {/* Entry headline — chapter-entry title */}
         <p
-          className="text-[13px] font-semibold text-ds-text leading-snug line-clamp-2 mb-0.5"
+          className="text-[13px] font-semibold text-ds-folio-ink leading-snug line-clamp-2 mb-0.5"
           title={item.title}
           data-testid="item-title"
         >
@@ -338,7 +338,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
         </p>
 
         {item.description && (
-          <p className="text-[11px] text-ds-text-tertiary mt-0.5 line-clamp-2 mb-1" data-testid="item-description">
+          <p className="text-[11px] text-ds-folio-ink-mist mt-0.5 line-clamp-2 mb-1" data-testid="item-description">
             {renderDescriptionWithLinks(item.description)}
           </p>
         )}
@@ -395,16 +395,16 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
             const lArr = formatClock(((leg.arrivalTime ?? leg.arrival_time) as string | undefined) ?? undefined);
             if (!lOrigin && !lDest && !lAirline) return null;
             return (
-              <div className="text-[11px] text-ds-text-tertiary space-y-0.5">
-                <span className="flex items-center gap-1 font-medium text-ds-text-secondary min-w-0">
-                  <Plane className="w-3 h-3 text-ds-accent flex-shrink-0" />
+              <div className="text-[11px] text-ds-folio-ink-mist space-y-0.5">
+                <span className="flex items-center gap-1 font-medium text-ds-folio-ink-soft min-w-0">
+                  <Plane className="w-3 h-3 text-ds-marine-ink flex-shrink-0" />
                   <span className="truncate" title={`${lOrigin ?? "?"} → ${lDest ?? "?"}`}>
                     {lOrigin ?? "?"} → {lDest ?? "?"}
                   </span>
-                  <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold text-ds-text-tertiary border border-ds-pen-stroke">{label}</span>
+                  <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold text-ds-folio-ink-mist border border-ds-hairline">{label}</span>
                 </span>
                 {(lAirline || lFlightNum || lDep) && (
-                  <span className="flex items-center gap-1 text-ds-text-tertiary min-w-0">
+                  <span className="flex items-center gap-1 text-ds-folio-ink-mist min-w-0">
                     <span className="truncate" title={`${lAirline}${lFlightNum ? ` ${lFlightNum}` : ""}`}>
                       {lAirline}{lFlightNum ? ` ${lFlightNum}` : ""}
                     </span>
@@ -417,8 +417,8 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
 
           if (isRoundTrip && (outboundLeg || returnLeg)) {
             return (
-              <div className="mt-1 space-y-1.5 pt-1 border-t border-ds-pen-stroke/40" data-testid="itinerary-roundtrip-flight">
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold text-ds-accent border border-ds-pen-stroke inline-block">
+              <div className="mt-1 space-y-1.5 pt-1 border-t border-ds-hairline" data-testid="itinerary-roundtrip-flight">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold text-ds-marine-ink border border-ds-hairline inline-block">
                   Round-trip
                 </span>
                 {renderLeg(outboundLeg, "Outbound")}
@@ -429,7 +429,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-0.5 text-[11px] text-ds-text-secondary hover:text-ds-accent transition-colors -my-3.5 py-3.5"
+                    className="inline-flex items-center gap-0.5 text-[11px] text-ds-folio-ink-mist hover:text-ds-marine-ink transition-colors -my-3.5 py-3.5"
                     aria-label="Search on Google Flights"
                     data-testid="itinerary-google-flights-cta"
                   >
@@ -453,18 +453,18 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           const leg         = d.leg as string | undefined;
           if (!origin && !destination) return null;
           return (
-            <div className="mt-1 text-[11px] text-ds-text-tertiary space-y-0.5 pt-1 border-t border-ds-pen-stroke/40">
+            <div className="mt-1 text-[11px] text-ds-folio-ink-mist space-y-0.5 pt-1 border-t border-ds-hairline">
               {(origin || destination) && (
-                <span className="flex items-center gap-1 font-medium text-ds-text-secondary min-w-0">
-                  <Plane className="w-3 h-3 text-ds-accent flex-shrink-0" />
+                <span className="flex items-center gap-1 font-medium text-ds-folio-ink-soft min-w-0">
+                  <Plane className="w-3 h-3 text-ds-marine-ink flex-shrink-0" />
                   <span className="truncate" title={`${origin ?? "?"} → ${destination ?? "?"}`}>
                     {origin ?? "?"} → {destination ?? "?"}
                   </span>
-                  {leg && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold text-ds-text-tertiary border border-ds-pen-stroke">{leg}</span>}
+                  {leg && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold text-ds-folio-ink-mist border border-ds-hairline">{leg}</span>}
                 </span>
               )}
               {(airline || flightNum || dep) && (
-                <span className="flex items-center gap-1 text-ds-text-tertiary min-w-0">
+                <span className="flex items-center gap-1 text-ds-folio-ink-mist min-w-0">
                   <span className="truncate" title={`${airline}${flightNum ? ` ${flightNum}` : ""}`}>
                     {airline}{flightNum ? ` ${flightNum}` : ""}
                   </span>
@@ -477,7 +477,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-0.5 text-[11px] text-ds-text-secondary hover:text-ds-accent transition-colors -my-3.5 py-3.5"
+                  className="inline-flex items-center gap-0.5 text-[11px] text-ds-folio-ink-mist hover:text-ds-marine-ink transition-colors -my-3.5 py-3.5"
                   aria-label="Search on Google Flights"
                   data-testid="itinerary-google-flights-cta"
                 >
@@ -511,14 +511,14 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           const hasAny = !!(checkIn || checkOut || rating || stars || areaLabel || proximityLabel || richTags.length);
           if (!hasAny) return null;
           return (
-            <div className="mt-1 space-y-0.5 pt-1 border-t border-ds-pen-stroke/40">
-              <div className="flex items-center gap-1 text-[11px] text-ds-accent font-medium min-w-0 flex-wrap">
+            <div className="mt-1 space-y-0.5 pt-1 border-t border-ds-hairline">
+              <div className="flex items-center gap-1 text-[11px] text-ds-marine-ink font-medium min-w-0 flex-wrap">
                 <Hotel className="w-3 h-3 flex-shrink-0" />
                 {stars != null && (
-                  <span className="text-ds-accent flex-shrink-0">{"★".repeat(Math.min(5, Math.round(stars)))}</span>
+                  <span className="text-ds-marine-ink flex-shrink-0">{"★".repeat(Math.min(5, Math.round(stars)))}</span>
                 )}
                 {checkIn || checkOut ? <span className="shrink-0">Stay: {checkIn ?? "?"} → {checkOut ?? "?"}</span> : null}
-                {rating ? <span className="text-ds-accent font-semibold flex-shrink-0">{checkIn || checkOut ? " · " : ""}★ {rating.toFixed(1)}</span> : null}
+                {rating ? <span className="text-ds-marine-ink font-semibold flex-shrink-0">{checkIn || checkOut ? " · " : ""}★ {rating.toFixed(1)}</span> : null}
               </div>
               {(areaLabel || proximityLabel) && (
                 <div className="flex items-center gap-1 flex-wrap pl-4">
@@ -528,19 +528,19 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                         ? "text-ds-trust-verified border-ds-trust-verified/30"
                         : areaLabel === "Close to Best Area"
                           ? "text-ds-caution border-ds-caution/30"
-                          : "bg-ds-carbon text-ds-text-tertiary border-ds-pen-stroke"
+                          : "bg-ds-linen text-ds-folio-ink-mist border-ds-hairline"
                     }`}
                     >{areaLabel}</span>
                   )}
                   {proximityLabel && proximityLabel.toLowerCase() !== (areaLabel ?? "").toLowerCase() && (
-                    <span className="text-[10px] text-ds-text-tertiary">{proximityLabel}</span>
+                    <span className="text-[10px] text-ds-folio-ink-mist">{proximityLabel}</span>
                   )}
                 </div>
               )}
               {richTags.length > 0 && (
                 <div className="flex flex-wrap gap-1 pl-4">
                   {richTags.map((tag) => (
-                    <span key={tag} className="px-1.5 py-0 text-[10px] rounded-full bg-ds-carbon text-ds-text-tertiary border border-ds-pen-stroke">{tag}</span>
+                    <span key={tag} className="px-1.5 py-0 text-[10px] rounded-full bg-ds-linen text-ds-folio-ink-mist border border-ds-hairline">{tag}</span>
                   ))}
                 </div>
               )}
@@ -560,26 +560,26 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           const mapsLink = mapsUri ?? (placeId ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(placeId)}` : null);
           if (!rating && !category && tags.length === 0) return null;
           return (
-            <div className="mt-1 space-y-0.5 pt-1 border-t border-ds-pen-stroke/40">
+            <div className="mt-1 space-y-0.5 pt-1 border-t border-ds-hairline">
               <div className="flex items-center gap-2 flex-wrap">
                 {rating != null && (
-                  <span className="flex items-center gap-0.5 text-[11px] text-ds-accent font-medium">
+                  <span className="flex items-center gap-0.5 text-[11px] text-ds-marine-ink font-medium">
                     <Star className="w-3 h-3 fill-current" />
                     {rating.toFixed(1)}
                     {numReviews != null && (
-                      <span className="text-ds-text-tertiary font-normal ml-0.5">
+                      <span className="text-ds-folio-ink-mist font-normal ml-0.5">
                         ({numReviews >= 1000 ? `${(numReviews / 1000).toFixed(0)}k` : numReviews})
                       </span>
                     )}
                   </span>
                 )}
-                {category && <span className="text-[11px] text-ds-text-secondary">{category}</span>}
+                {category && <span className="text-[11px] text-ds-folio-ink-soft">{category}</span>}
                 {mapsLink && (
                   <a
                     href={mapsLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-0.5 text-[11px] text-ds-text-tertiary hover:text-ds-accent transition-colors -my-3.5 py-3.5"
+                    className="flex items-center gap-0.5 text-[11px] text-ds-folio-ink-mist hover:text-ds-marine-ink transition-colors -my-3.5 py-3.5"
                     onClick={(e) => e.stopPropagation()}
                     aria-label="Open in Google Maps"
                   >
@@ -591,7 +591,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
               {tags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {tags.map((tag) => (
-                    <span key={tag} className="px-1.5 py-0 text-[10px] rounded-full bg-ds-carbon text-ds-text-tertiary border border-ds-pen-stroke">{tag}</span>
+                    <span key={tag} className="px-1.5 py-0 text-[10px] rounded-full bg-ds-linen text-ds-folio-ink-mist border border-ds-hairline">{tag}</span>
                   ))}
                 </div>
               )}
@@ -610,26 +610,26 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           const priceLevelStr = priceLevel != null ? "$".repeat(Math.min(4, Math.max(1, Math.round(priceLevel)))) : null;
           if (!rating && !cuisine && !priceLevelStr && tags.length === 0) return null;
           return (
-            <div className="mt-1 space-y-0.5 pt-1 border-t border-ds-pen-stroke/40">
+            <div className="mt-1 space-y-0.5 pt-1 border-t border-ds-hairline">
               <div className="flex items-center gap-2 flex-wrap">
-                {cuisine && <span className="text-[11px] text-ds-text-secondary">{cuisine}</span>}
+                {cuisine && <span className="text-[11px] text-ds-folio-ink-soft">{cuisine}</span>}
                 {rating != null && (
-                  <span className="flex items-center gap-0.5 text-[11px] text-ds-accent font-medium">
+                  <span className="flex items-center gap-0.5 text-[11px] text-ds-marine-ink font-medium">
                     <Star className="w-3 h-3 fill-current" />
                     {rating.toFixed(1)}
                     {numReviews != null && (
-                      <span className="text-ds-text-tertiary font-normal ml-0.5">
+                      <span className="text-ds-folio-ink-mist font-normal ml-0.5">
                         ({numReviews >= 1000 ? `${(numReviews / 1000).toFixed(0)}k` : numReviews})
                       </span>
                     )}
                   </span>
                 )}
-                {priceLevelStr && <span className="text-[11px] text-ds-text-tertiary font-medium">{priceLevelStr}</span>}
+                {priceLevelStr && <span className="text-[11px] text-ds-folio-ink-mist font-medium">{priceLevelStr}</span>}
               </div>
               {tags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {tags.map((tag) => (
-                    <span key={tag} className="px-1.5 py-0 text-[10px] rounded-full bg-ds-carbon text-ds-text-tertiary border border-ds-pen-stroke">{tag}</span>
+                    <span key={tag} className="px-1.5 py-0 text-[10px] rounded-full bg-ds-linen text-ds-folio-ink-mist border border-ds-hairline">{tag}</span>
                   ))}
                 </div>
               )}
@@ -639,7 +639,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
 
         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
           {item.itemType !== "flight" && (item.startTime || item.endTime) && (
-            <span className="flex items-center gap-1 text-xs text-ds-text-tertiary">
+            <span className="flex items-center gap-1 text-xs text-ds-folio-ink-mist">
               <Clock className="w-3 h-3" />
               {item.startTime}
               {item.endTime && ` – ${item.endTime}`}
@@ -647,20 +647,20 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           )}
           {/* Show user-set timeLabel when present and no startTime */}
           {!item.startTime && timeLabelValue && (
-            <span className="flex items-center gap-1 text-[10px] text-ds-text-tertiary">
+            <span className="flex items-center gap-1 text-[10px] text-ds-folio-ink-mist">
               <Clock className="w-2.5 h-2.5" />
               {timeLabelValue}
             </span>
           )}
           {item.location && (
-            <span className="flex items-center gap-1 text-xs text-ds-text-tertiary min-w-0">
+            <span className="flex items-center gap-1 text-xs text-ds-folio-ink-mist min-w-0">
               <MapPin className="w-3 h-3" />
               <span className="truncate" title={item.location}>{item.location}</span>
             </span>
           )}
           {item.cashPrice != null && item.cashPrice > 0 && (
             <span className={`flex items-center gap-0.5 text-xs font-medium ${
-              item.bestOption === "cash" ? "text-ds-trust-verified font-semibold" : "text-ds-text-secondary"
+              item.bestOption === "cash" ? "text-ds-trust-verified font-semibold" : "text-ds-folio-ink-soft"
             }`}>
               <DollarSign className="w-3 h-3" />
               {item.cashPrice.toLocaleString()}{" "}
@@ -669,7 +669,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
           )}
           {item.pointsPrice != null && (
             <span className={`flex items-center gap-0.5 text-xs font-medium ${
-              item.bestOption === "points" ? "text-ds-accent font-semibold" : "text-ds-text-tertiary"
+              item.bestOption === "points" ? "text-ds-marine-ink font-semibold" : "text-ds-folio-ink-mist"
             }`}>
               <Coins className="w-3 h-3" />
               {item.pointsPrice.toLocaleString()} pts
@@ -692,22 +692,22 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
 
         {/* Inline timeline editor */}
         {timelineOpen && (
-          <div className="mt-2 pt-2 border-t border-ds-pen-stroke/60">
+          <div className="mt-2 pt-2 border-t border-ds-hairline">
             <div className="flex flex-wrap gap-1 mb-1.5">
               {DAY_PARTS.map((part) => (
                 <button
                   key={part.value}
                   onClick={() => setSelectedPart(part.value)}
-                  className="group min-h-[44px] flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  className="group min-h-[44px] flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
                 >
                   <span
                     className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${
                       selectedPart === part.value
-                        ? part.activeClass
-                        : "border-ds-pen-stroke text-ds-text-tertiary group-hover:border-ds-carbon group-hover:text-ds-text-secondary"
+                        ? "border-ds-marine-ink/50 text-ds-marine-ink"
+                        : "border-ds-hairline text-ds-folio-ink-mist group-hover:border-ds-linen group-hover:text-ds-folio-ink-soft"
                     }`}
                     style={selectedPart === part.value && part.value !== "unscheduled"
-                      ? { backgroundColor: "var(--ds-accent-subtle)" }
+                      ? { backgroundColor: "color-mix(in srgb, var(--ds-marine-ink) 10%, transparent)" }
                       : undefined}
                   >
                     {part.label}
@@ -726,13 +726,13 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                 }}
                 placeholder="Time label, e.g. 9:00 AM (optional)"
                 maxLength={40}
-                className="flex-1 min-w-0 text-[10px] bg-ds-carbon border border-ds-pen-stroke rounded px-1.5 py-1 text-ds-text-secondary placeholder-ds-text-tertiary focus:outline-none focus:border-ds-carbon"
+                className="folio-input flex-1 min-w-0 text-[10px] py-1 px-1.5"
               />
               <button
                 onClick={handleSaveTimeline}
                 disabled={saving}
-                className="flex-shrink-0 min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2 rounded text-[10px] font-medium text-ds-accent border border-ds-pen-stroke hover:border-ds-accent transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-                style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+                className="flex-shrink-0 min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2 rounded text-[10px] font-medium text-ds-marine-ink border border-ds-hairline hover:border-ds-marine-ink transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+                style={{ backgroundColor: "color-mix(in srgb, var(--ds-marine-ink) 10%, transparent)" }}
               >
                 {saving ? "…" : "Save"}
               </button>
@@ -743,7 +743,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
         {/* Mobile overflow actions tray — all secondary actions accessible on phone */}
         {mobileOverflowOpen && (
           <div
-            className="lg:hidden mt-2 pt-2 border-t border-ds-pen-stroke/40"
+            className="lg:hidden mt-2 pt-2 border-t border-ds-hairline"
             data-testid="itinerary-item-mobile-overflow-actions"
           >
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -754,12 +754,12 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                     onToggleCompare(item);
                     setMobileOverflowOpen(false);
                   }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-medium transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-medium transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 ${
                     isComparing
-                      ? "border-ds-accent/50 text-ds-accent"
-                      : "border-ds-pen-stroke text-ds-text-secondary hover:border-ds-accent hover:text-ds-accent"
+                      ? "border-ds-marine-ink/40 text-ds-marine-ink"
+                      : "border-ds-hairline text-ds-folio-ink-soft hover:border-ds-marine-ink hover:text-ds-marine-ink"
                   }`}
-                  style={isComparing ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
+                  style={isComparing ? { backgroundColor: "color-mix(in srgb, var(--ds-marine-ink) 10%, transparent)" } : undefined}
                   aria-label={isComparing ? `Remove ${item.title} from compare` : `Add ${item.title} to compare`}
                 >
                   <Scale className="w-3 h-3" />
@@ -773,7 +773,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                   if (!timelineOpen) handleOpenTimeline();
                   setMobileOverflowOpen(false);
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ds-pen-stroke text-[10px] font-medium text-ds-text-secondary hover:border-ds-accent hover:text-ds-accent transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ds-hairline text-[10px] font-medium text-ds-folio-ink-soft hover:border-ds-marine-ink hover:text-ds-marine-ink transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
                 aria-label={`Schedule ${item.title}`}
               >
                 <Clock className="w-3 h-3" />
@@ -785,7 +785,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                   setBookingOpen(true);
                   setMobileOverflowOpen(false);
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ds-pen-stroke text-[10px] font-medium text-ds-text-secondary hover:border-ds-pen-stroke hover:text-ds-text transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ds-hairline text-[10px] font-medium text-ds-folio-ink-mist hover:border-ds-linen hover:text-ds-folio-ink-soft transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
                 aria-label={`Book ${item.title}`}
               >
                 <Ticket className="w-3 h-3" />
@@ -797,7 +797,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                   onRemove(item.id);
                   setMobileOverflowOpen(false);
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ds-pen-stroke text-[10px] font-medium text-ds-text-secondary hover:border-ds-warning hover:text-ds-warning transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ds-hairline text-[10px] font-medium text-ds-folio-ink-mist hover:border-ds-warning hover:text-ds-warning transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
                 aria-label={`Remove ${item.title}`}
               >
                 <X className="w-3 h-3" />
