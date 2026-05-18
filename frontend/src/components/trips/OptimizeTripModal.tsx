@@ -85,14 +85,14 @@ interface Props {
   onPlanSelected: () => void;
 }
 
-// Provider-unavailable copy. Used when /search/flights or /search/hotels
-// returns no results — currently the dominant case while flights/hotels
-// search is not yet provider-backed (Fail-Closed UX v1). Do NOT suggest
-// the user adjust dates: dates are not the problem.
+// Provider-unavailable copy. Dominant case: hotel price comparison is not
+// yet available (no real per-night rates from a provider). Flights via
+// Duffel are live, but the optimizer requires priced hotel packages.
+// Do NOT suggest the user adjust dates — dates are not the problem.
 const PROVIDER_UNAVAILABLE_TITLE =
-  "Flights & hotels search is temporarily unavailable";
+  "Package optimization needs hotel pricing";
 const PROVIDER_UNAVAILABLE_BODY =
-  "Provider-backed flight and hotel search is not enabled yet. You can still build the trip manually and add details later.";
+  "Comparing flight + hotel packages requires real nightly rates, which are not available yet. Use Explore to search flights, or build your trip manually and add items as you find them.";
 
 const RANK_LABELS = ["Best Value", "Runner-Up", "Budget Pick"];
 const RANK_BADGE = [

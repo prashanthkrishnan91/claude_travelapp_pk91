@@ -74,14 +74,15 @@ test('OptimizeTripModal: removed misleading "Try adjusting your dates" copy', ()
 });
 
 test('OptimizeTripModal: shows honest provider-unavailable copy', () => {
+  // New copy: specific about hotel pricing being the blocker (not both flights and hotels).
   assert.match(
     optimizeModal,
-    /Provider-backed flight and hotel search is not enabled yet/i,
-    'Expected honest provider-unavailable body copy.',
+    /nightly rates|hotel pricing|hotel price/i,
+    'Expected honest provider-unavailable body copy mentioning hotel pricing.',
   );
   assert.match(
     optimizeModal,
-    /You can still build the trip manually/i,
+    /build.*trip manually|manually/i,
     'Expected guidance that the user can still build the trip manually.',
   );
   assert.match(
