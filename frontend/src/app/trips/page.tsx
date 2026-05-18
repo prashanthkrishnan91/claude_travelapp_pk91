@@ -113,10 +113,10 @@ function EmptyDashboard() {
         <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-ds-accent-subtle border border-ds-pen-stroke text-ds-accent mx-auto mb-6">
           <Map className="w-8 h-8" />
         </div>
-        <h2 className="text-2xl font-semibold text-ds-text tracking-tight mb-2">
+        <h2 className="text-2xl font-semibold text-ds-folio-ink tracking-tight mb-2">
           Your journey starts here.
         </h2>
-        <p className="text-ds-text-tertiary max-w-sm mx-auto leading-relaxed text-sm">
+        <p className="text-ds-folio-ink-mist max-w-sm mx-auto leading-relaxed text-sm">
           Plan your first trip with an AI travel concierge that thinks about
           every detail — flights, stays, restaurants, and the moments in
           between.

@@ -32,6 +32,10 @@
   --ds-carbon-mist:    #1E1A16;
   --ds-pen-stroke:     #2C2620;
 
+  /* ── Cinema world tokens — Stage 3.5 Slice 4 */
+  --ds-cinema-deep:       #0D0B08;
+  --ds-brass-field-border: rgba(197, 148, 77, 0.18);
+
   /* ── Warm paper surface tokens — Design Bible v1.0 §4 */
   --ds-warm-paper:     #FAF7F0;
   --ds-bone:           #F1ECE0;
@@ -1727,6 +1731,144 @@
 
   @media (max-width: 600px) {
     .folio-ambient::after { animation: none; }
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     CINEMA WORLD PRIMITIVES — Stage 3.5 Slice 4
+     Intentional cinematic surface system for AI Concierge, Explore,
+     Discover, and discovery/scrapbook contexts. Warm umber/ink —
+     never pure black. Marine ink accent; brass as hairline/detail only.
+     Apply alongside editorial-scene (additive); cinema-shell provides
+     the dark base that makes text-ds-text (cream) readable.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* folio-cinema-shell: outermost dark wrapper for cinema-world routes.
+     Provides warm dark base (ds-cinema-deep) for AI Concierge, Explore, Discover.
+     Apply alongside editorial-scene; cinema-shell wins background-image
+     (later declaration). Children render cream/pearl text correctly. */
+  .folio-cinema-shell {
+    position: relative;
+    background-color: var(--ds-cinema-deep);
+    background-image:
+      radial-gradient(
+        ellipse 80% 40% at 50% -5%,
+        rgba(180, 130, 60, 0.08) 0%,
+        transparent 70%
+      );
+  }
+
+  /* folio-cinema-card: warm dark velvet card for cinema-world surfaces.
+     Use for VerticalCard (Explore), discovery tiles, collection cards.
+     Replaces generic bg-ds-onyx on cinema surfaces with named identity. */
+  .folio-cinema-card {
+    position: relative;
+    background: var(--ds-carbon-mist);
+    border: 1px solid rgba(197, 148, 77, 0.13);
+    border-radius: 0.75rem;
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.50),
+      0 8px 24px rgba(0, 0, 0, 0.35),
+      inset 0 1px 0 rgba(235, 222, 198, 0.07);
+  }
+  .folio-cinema-card:hover {
+    border-color: rgba(197, 148, 77, 0.22);
+    box-shadow:
+      0 2px 12px rgba(0, 0, 0, 0.55),
+      0 12px 32px rgba(0, 0, 0, 0.40),
+      inset 0 1px 0 rgba(235, 222, 198, 0.09);
+  }
+
+  /* folio-cinema-header: cinema header zone — darker warm band.
+     Use for sticky composer panels and section headers in cinema routes.
+     Creates visible two-zone composition: darker header + body. */
+  .folio-cinema-header {
+    position: relative;
+    background:
+      linear-gradient(
+        160deg,
+        rgba(28, 24, 20, 1) 0%,
+        rgba(22, 20, 17, 1) 100%
+      );
+    border-top: 1px solid rgba(197, 148, 77, 0.18);
+  }
+  .folio-cinema-header::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40%;
+    background: radial-gradient(
+      ellipse 60% 100% at 50% 0%,
+      rgba(197, 148, 77, 0.06) 0%,
+      transparent 100%
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* folio-cinema-input: dark cinema input for search/query surfaces.
+     Warm dark surface (ds-pen-stroke), brass hairline border on focus. */
+  .folio-cinema-input {
+    width: 100%;
+    background: var(--ds-pen-stroke);
+    border: 1px solid rgba(197, 148, 77, 0.14);
+    border-radius: 0.75rem;
+    color: var(--ds-text-primary);
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    line-height: 1.5rem;
+    min-height: 2.75rem;
+    transition:
+      border-color var(--ds-duration-fast) var(--ds-easing-standard),
+      box-shadow var(--ds-duration-fast) var(--ds-easing-standard);
+  }
+  .folio-cinema-input::placeholder { color: var(--ds-text-tertiary); }
+  .folio-cinema-input:focus-visible {
+    outline: none;
+    border-color: rgba(197, 148, 77, 0.45);
+    box-shadow: 0 0 0 3px rgba(197, 148, 77, 0.08);
+  }
+
+  /* folio-cinema-result-card: concierge recommendation slip / result card.
+     Overflow:hidden variant of folio-cinema-card for image/accent clipping.
+     Use for AI Concierge result cards alongside boutique-folio. */
+  .folio-cinema-result-card {
+    position: relative;
+    background: var(--ds-carbon-mist);
+    border: 1px solid rgba(197, 148, 77, 0.13);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.45),
+      0 8px 24px rgba(0, 0, 0, 0.30),
+      inset 0 1px 0 rgba(235, 222, 198, 0.06);
+  }
+
+  /* folio-mapline-field: subtle route-line framing for destination inputs.
+     Apply to destination/origin input wrappers in cinema-world search surfaces. */
+  .folio-mapline-field {
+    position: relative;
+  }
+  .folio-mapline-field::after {
+    content: "";
+    position: absolute;
+    bottom: -1px;
+    left: 0.75rem;
+    right: 0.75rem;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(197, 148, 77, 0.30) 25%,
+      rgba(197, 148, 77, 0.18) 75%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .folio-cinema-header::before { opacity: 1; }
   }
 
   /* ════════════════════════════════════════════════════════════════

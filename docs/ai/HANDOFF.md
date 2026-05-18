@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-18 (Stage 3.5 Slice 3 — Paper Planning Objects — merged PR #436)
+Last updated: 2026-05-18 (Stage 3.5 Slice 4 — Legible Paper + Cinematic Concierge World — open PR)
 
 ## Purpose
 
@@ -8,7 +8,9 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Paper Planning Objects Slice 3 (2026-05-18).** `ItineraryItemCard`, `TripBuilderForm`, `OptimizeTripModal`, and `DayPlanModal` converted from dark boutique surfaces to warm paper-world equivalents. Two new CSS primitives added to `globals.css`: `.folio-paper-item` (card without overflow:hidden) and `.btn-folio-ghost` (paper-world secondary button). Two new CSS custom properties: `--ds-paper-elevation-1` and `--ds-paper-elevation-2` (warm folio-ink shadows). All dark-world tokens replaced: `bg-ds-onyx/carbon` → `bg-ds-bone/linen`, `border-ds-pen-stroke` → `border-ds-hairline`, `text-ds-text*` → `text-ds-folio-ink*`, `text-ds-accent` → `text-ds-marine-ink`, `btn-primary` → `btn-marine`, `btn-ghost` → `btn-folio-ghost`, `advisor-desk-panel` → `folio-paper-panel`, `concierge-desk-header` → `folio-paper-header`. PR #431 protected logic paths untouched (CityAutocomplete portal, addRoundTripLegToDay, handleAddRoundTripToItinerary, isExplicitlyOneWay, round-trip detection). 46 new Slice 3 contract tests in `paper-planning-objects-slice3.test.mjs`. **2510 total tests, 0 failures.**
+- Roadmap stage: **Stage 3.5 Slice 4 — Legible Paper + Cinematic Concierge World (2026-05-18).** Two-scope slice: (A) **Paper-world legibility baseline** — `DashboardClient.tsx` `AtelierGreeting` and `trips/page.tsx` `EmptyDashboard` hero text fixed from invisible cream tokens (`text-ds-text`, `text-ds-text-tertiary`) to folio-ink (`text-ds-folio-ink`, `text-ds-folio-ink-mist`). Root cause: `--ds-text-primary = var(--ds-pearl-cream) = #F2EBDD` is invisible on warm paper (#FAF7F0) body. (B) **Cinematic Concierge/Discovery world** — 6 new CSS cinema primitives in `globals.css`: `.folio-cinema-shell`, `.folio-cinema-card`, `.folio-cinema-header`, `.folio-cinema-input`, `.folio-cinema-result-card`, `.folio-mapline-field`. Two new `:root` tokens: `--ds-cinema-deep: #0D0B08`, `--ds-brass-field-border: rgba(197, 148, 77, 0.18)`. Applied additively to `ConciergePage.tsx`, `ExploreShell.tsx`, `SavedShell.tsx`. All existing classes kept for backward-test compatibility. PR #431 logic paths untouched. 52 new Slice 4 contract tests in `legible-paper-cinematic-slice4.test.mjs`. **2562 total tests, 0 failures.**
+
+- Previous roadmap stage: **Stage 3.5 — Paper Planning Objects Slice 3 (2026-05-18).** `ItineraryItemCard`, `TripBuilderForm`, `OptimizeTripModal`, `DayPlanModal` converted to paper world. 46 new tests. 2510 total tests, 0 failures.
 
 - Previous roadmap stage: **Stage 3.5 — Core Paper Planning Surfaces Slice 2 (2026-05-18).** Dashboard/trip cards, itinerary day columns, readiness cockpit, and mobile top chrome converted from dark SaaS to warm Private Travel Atelier paper surfaces. 8 paper primitives added (`folio-paper-card`, `folio-paper-panel`, `folio-paper-section`, `folio-paper-header`, `folio-divider`, `folio-muted-label`, `folio-chip`, `folio-input`). Primary CTAs in paper routes migrated to `btn-marine`/marine-ink. Mobile top bar converted from midnight to bone/hairline (8J test constraint updated). PR #431 logic paths untouched. 92 new Slice 2 contract tests in `core-paper-planning-slice2.test.mjs`.
 
@@ -55,6 +57,8 @@ This file is **current operational state**, not a historical log. It is meant to
 ## Recent meaningful PRs
 
 Keep this section small. Only entries that affect future work; replace older lines as they age out.
+
+- 2026-05-18 — **Stage 3.5 Slice 4 — Legible Paper + Cinematic Concierge World.** `DashboardClient.tsx` AtelierGreeting + `trips/page.tsx` EmptyDashboard: cream tokens → folio-ink (paper legibility fix). `globals.css`: 6 new cinema primitives (`.folio-cinema-shell/card/header/input/result-card`; `.folio-mapline-field`) + 2 new `:root` tokens (`--ds-cinema-deep`, `--ds-brass-field-border`). `ConciergePage.tsx`, `ExploreShell.tsx`, `SavedShell.tsx`: cinema classes applied additively alongside existing classes. All PR #431 paths untouched. 52 new tests in `legible-paper-cinematic-slice4.test.mjs`. **2562 total tests, 0 failures.** No backend/SQL/provider/env/behavior/dependency changes.
 
 - 2026-05-18 — **Stage 3.5 Slice 3 — Paper Planning Objects.** `ItineraryItemCard.tsx`, `TripBuilderForm.tsx`, `OptimizeTripModal.tsx`, `DayPlanModal.tsx` converted from dark boutique (`advisor-desk-panel`, `bg-ds-onyx`, `border-ds-pen-stroke`, `text-ds-accent`, `btn-primary`) to paper world (`folio-paper-panel/item/header`, `bg-ds-bone/linen`, `border-ds-hairline`, `text-ds-folio-ink*`, `text-ds-marine-ink`, `btn-marine`, `btn-folio-ghost`). Two new CSS classes (`.folio-paper-item`, `.btn-folio-ghost`) and two shadow tokens (`--ds-paper-elevation-1/2`) added to `globals.css`. Round-trip detection logic untouched. 46 new contract tests in `paper-planning-objects-slice3.test.mjs`. **2510 total tests, 0 failures.** No backend/SQL/provider/env/behavior/dependency changes.
 
@@ -152,10 +156,10 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 - Latency Budget Pack
 - Backend-only Scaffold Pack / No Visible Behavior Change Pack / Test Tier Pack (cross-cutting)
 
-## Type-check / test baseline (confirmed 2026-05-18, Paper Planning Objects Slice 3)
+## Type-check / test baseline (confirmed 2026-05-18, Slice 4 — Legible Paper + Cinematic World)
 
-- **`npm run type-check` (frontend): pre-existing errors from missing `next`/`react`/`lucide-react` modules (environment, not installed) — not introduced by Slice 3.** Requires `npm install` first. Slice 3 changed files have no new TypeScript errors.
-- **`npm test` (frontend): 2510 tests, 0 failures.** (includes 46 new Slice 3 contract tests in `paper-planning-objects-slice3.test.mjs`)
+- **`npm run type-check` (frontend): pre-existing errors in `TrustStrip.tsx` (JSX implicit any), `lib/api.ts`, `lib/supabase.ts` (`process` not found), `tailwind.config.ts` (module not found) — none introduced by Slice 4.** Slice 4 changed files (`DashboardClient.tsx`, `trips/page.tsx`, `ExploreShell.tsx`, `ConciergePage.tsx`, `SavedShell.tsx`, `globals.css`) have zero new TypeScript errors.
+- **`npm test` (frontend): 2562 tests, 0 failures.** (includes 52 new Slice 4 contract tests in `legible-paper-cinematic-slice4.test.mjs`)
 - Any future session reporting "pre-existing TypeScript errors" is seeing an uninstalled `node_modules` environment — run `npm install` in `frontend/` before type-check.
 
 ## Known risks / unresolved issues
@@ -169,7 +173,7 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 
 ## Next recommended step
 
-**Stage 3.5 Slice 4 — Paper World Remaining Surfaces.** Remaining dark surfaces not covered in Slices 1–3: (A) ExploreShell VerticalCard / ResultCards — explore discovery is still dark atelier; Slice 4 could introduce hybrid (dark Explore, paper Plan) or unify; (B) TripBuilder CollapsiblePanel — boutique-folio dark panels in the build canvas; (C) Concierge panel result cards — dark when shown in trip context; (D) SavedShell / SavedItemCard — `saved-folio-card` dark surface; may stay cinematic or convert to paper. Recommend: keep Explore + Saved dark cinematic (cinema punctuation rule), convert TripBuilder CollapsiblePanel to paper in Slice 4. **Hard stop rule**: Slice 4 must not touch PR #431 logic paths.
+**Stage 3.5 Slice 5 — Cinema World Surface Refinement.** Remaining work: (A) `ExploreShell` result cards (`RestaurantCard`, `HotelCard`, `AttractionCard`) — still use plain `card/boutique-folio` without `folio-cinema-result-card`; apply cinema skin addively; (B) TripBuilder `CollapsiblePanel` — boutique-folio dark panels in the build canvas could benefit from `folio-cinema-card` treatment; (C) `AIConciergePanel` (trip-context) — concierge result cards in trip context should adopt `folio-cinema-result-card` to match standalone ConciergePage; (D) Concierge sticky bottom composer in `AIConciergePanel` — apply `folio-cinema-input` to the panel input field. **Hard stop rule**: Slice 5 must not touch PR #431 logic paths or break existing test contracts.
 
 Active env state: `DUFFEL_API_KEY` + `DUFFEL_FLIGHTS_ENABLED=1` + `DUFFEL_SCHEDULE_TRUST_CERTIFIED=1` + `DUFFEL_BOOKING_ENABLED=0`. Key server-side only; never `NEXT_PUBLIC_`. `IGNAV_FLIGHTS_ENABLED=0`.
 

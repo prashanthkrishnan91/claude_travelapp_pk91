@@ -61,9 +61,9 @@ function pickContinuePlanning(trips: Trip[]): Trip | null {
 
 // ── Overline type role ────────────────────────────────────────────────────────
 
-function Overline({ children }: { children: React.ReactNode }) {
+function Overline({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary">
+    <p className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${className ?? "text-ds-text-tertiary"}`}>
       {children}
     </p>
   );
@@ -75,11 +75,11 @@ function AtelierGreeting({ tripCount }: { tripCount: number }) {
   const greeting = getTimeGreeting();
   return (
     <header data-testid="atelier-greeting">
-      <Overline>Private Travel Concierge</Overline>
-      <h1 className="text-2xl font-semibold text-ds-text mt-2 mb-1">
+      <Overline className="text-ds-folio-ink-mist">Private Travel Concierge</Overline>
+      <h1 className="text-2xl font-semibold text-ds-folio-ink mt-2 mb-1">
         {greeting}
       </h1>
-      <p className="text-sm text-ds-text-tertiary">
+      <p className="text-sm text-ds-folio-ink-mist">
         {tripCount > 0
           ? `${tripCount} trip${tripCount !== 1 ? "s" : ""} on your shelf.`
           : "Your private travel atelier. Plan, discover, and refine."}

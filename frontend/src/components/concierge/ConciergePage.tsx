@@ -163,7 +163,7 @@ function ConciergeResultCard({
     <Card
       tone="dark"
       as="article"
-      className="boutique-folio card-lift flex flex-col"
+      className="boutique-folio folio-cinema-result-card card-lift flex flex-col"
       style={{ padding: "0", overflow: "hidden" }}
     >
       {/* Folio cover tab — makes each result card feel like a recommendation slip */}
@@ -743,7 +743,7 @@ export function ConciergePage() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div data-testid="concierge-page" className="flex flex-col atelier-transition editorial-scene" style={{ minHeight: "calc(100svh - 10rem)" }}>
+    <div data-testid="concierge-page" className="flex flex-col atelier-transition editorial-scene folio-cinema-shell" style={{ minHeight: "calc(100svh - 10rem)" }}>
       {/* ── Concierge desk instrument header ─────────────────────────────── */}
       <header
         data-testid="concierge-instrument-header"
@@ -1176,10 +1176,8 @@ export function ConciergePage() {
       {/* ── Concierge search instrument ───────────────────────────────────── */}
       <div
         data-testid="concierge-instrument-composer"
-        className="sticky z-10 concierge-sticky-bottom boutique-instrument"
+        className="sticky z-10 concierge-sticky-bottom folio-cinema-header boutique-instrument"
         style={{
-          background: "var(--ds-onyx-velvet)",
-          borderTop: "1px solid var(--ds-pen-stroke)",
           marginTop: "var(--ds-space-8)",
         }}
       >
@@ -1232,11 +1230,11 @@ export function ConciergePage() {
             Where
           </label>
           <div
-            className="flex items-center gap-2 rounded-xl bg-ds-carbon transition-colors duration-[120ms]"
+            className="flex items-center gap-2 rounded-xl bg-ds-carbon transition-colors duration-[120ms] folio-mapline-field"
             style={{
               border: destinationError
                 ? "1px solid var(--ds-warning)"
-                : "1px solid var(--ds-pen-stroke)",
+                : "1px solid var(--ds-brass-field-border)",
               padding: "var(--ds-space-2) var(--ds-space-4)",
               minHeight: "44px",
             }}
