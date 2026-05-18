@@ -21,27 +21,27 @@
  * 17.  DashboardClient AtelierGreeting does NOT use text-ds-text for h1 (washed-out).
  * 18.  trips/page EmptyDashboard hero h2 uses text-ds-folio-ink (readable on paper).
  * 19.  trips/page EmptyDashboard hero p uses text-ds-folio-ink-mist.
- * 20.  ConciergePage uses folio-cinema-shell on main wrapper.
- * 21.  ConciergePage sticky composer uses folio-cinema-header.
+ * 20.  ConciergePage uses folio-cinema-desk on main wrapper (Slice 4B: replaced folio-cinema-shell).
+ * 21.  ConciergePage sticky composer uses folio-cinema-composer (Slice 4B: replaced folio-cinema-header).
  * 22.  ConciergePage ConciergeResultCard uses folio-cinema-result-card.
  * 23.  ConciergePage destination field uses folio-mapline-field.
- * 24.  ConciergePage still uses editorial-scene (backward compat).
+ * 24.  [Superseded by Slice 4B] ConciergePage editorial-scene removed — see visual-world-enforcement-slice4b.
  * 25.  ConciergePage ConciergeResultCard still has folio-cover-tab (8N-C preservation).
  * 26.  ConciergePage ConciergeResultCard still has boutique-folio (8N-B preservation).
  * 27.  ConciergePage save/map/source actions preserved in result card.
  * 28.  ConciergePage ConciergeResultCard component preserved.
- * 29.  ExploreShell uses folio-cinema-shell on explore-home wrapper.
- * 30.  ExploreShell uses folio-cinema-shell on explore-vertical-flow wrapper.
- * 31.  ExploreShell VerticalCard uses folio-cinema-card.
- * 32.  ExploreShell still uses editorial-scene (backward compat).
- * 33.  ExploreShell still has boutique-folio (8N-B preservation).
+ * 29.  ExploreShell uses folio-cinema-lounge on explore-home wrapper (Slice 4B: replaced folio-cinema-shell).
+ * 30.  ExploreShell uses folio-cinema-lounge on explore-vertical-flow wrapper (Slice 4B: replaced folio-cinema-shell).
+ * 31.  ExploreShell active section uses folio-cinema-card (instrument section preserved).
+ * 32.  [Superseded by Slice 4B] ExploreShell editorial-scene removed — see visual-world-enforcement-slice4b.
+ * 33.  [Superseded by Slice 4B] ExploreShell boutique-folio removed — see visual-world-enforcement-slice4b.
  * 34.  ExploreShell VerticalCard text is readable (text-ds-text-tertiary preserved).
- * 35.  ExploreShell active section still has bg-ds-onyx (instrument elevation).
+ * 35.  [Superseded by Slice 4B] ExploreShell active section uses folio-cinema-card not bg-ds-onyx.
  * 36.  ExploreShell explore-lounge-header testid preserved.
- * 37.  SavedShell uses folio-cinema-shell on outer wrapper.
- * 38.  SavedShell still uses saved-clipping-desk (8N-E preservation).
+ * 37.  SavedShell uses folio-cinema-collection on outer wrapper (Slice 4B: replaced folio-cinema-shell).
+ * 38.  [Superseded by Slice 4B] SavedShell saved-clipping-desk removed — see visual-world-enforcement-slice4b.
  * 39.  SavedShell still uses saved-folio-header (8N-F preservation).
- * 40.  SavedShell still uses saved-folio-card (8N-F preservation).
+ * 40.  SavedShell uses folio-collection-card (Slice 4B: replaced saved-folio-card).
  * 41.  SavedShell saved-scrapbook-header testid preserved.
  * 42.  SavedShell saved-planning-bridge testid preserved.
  * 43.  Paper planning surfaces not regressed: ItineraryItemCard uses folio-paper-item.
@@ -260,17 +260,17 @@ describe("Slice 4: Paper-world legibility — trips/page", () => {
 // ── 20–28. ConciergePage cinema conversion ───────────────────────────────────
 
 describe("Slice 4: ConciergePage cinema conversion", () => {
-  it("20. ConciergePage uses folio-cinema-shell on main wrapper", () => {
+  it("20. ConciergePage uses folio-cinema-desk on main wrapper (Slice 4B)", () => {
     assert.ok(
-      conciergePage.includes("folio-cinema-shell"),
-      "ConciergePage must use folio-cinema-shell on main wrapper for dark cinema base"
+      conciergePage.includes("folio-cinema-desk"),
+      "ConciergePage must use folio-cinema-desk on main wrapper (Slice 4B replaced folio-cinema-shell)"
     );
   });
 
-  it("21. ConciergePage sticky composer uses folio-cinema-header", () => {
+  it("21. ConciergePage sticky composer uses folio-cinema-composer (Slice 4B)", () => {
     assert.ok(
-      conciergePage.includes("folio-cinema-header"),
-      "ConciergePage sticky composer must use folio-cinema-header for intentional cinema header identity"
+      conciergePage.includes("folio-cinema-composer"),
+      "ConciergePage sticky composer must use folio-cinema-composer (Slice 4B replaced folio-cinema-header)"
     );
   });
 
@@ -288,10 +288,10 @@ describe("Slice 4: ConciergePage cinema conversion", () => {
     );
   });
 
-  it("24. ConciergePage still uses editorial-scene (backward compat with 8N-C)", () => {
+  it("24. [Slice 4B] ConciergePage editorial-scene replaced by folio-cinema-desk", () => {
     assert.ok(
-      conciergePage.includes("editorial-scene"),
-      "ConciergePage must retain editorial-scene for backward compatibility (8N-C tests)"
+      !conciergePage.includes("editorial-scene"),
+      "ConciergePage must NOT use editorial-scene — Slice 4B replaced it with folio-cinema-desk"
     );
   });
 
@@ -331,44 +331,44 @@ describe("Slice 4: ConciergePage cinema conversion", () => {
 // ── 29–36. ExploreShell cinema conversion ────────────────────────────────────
 
 describe("Slice 4: ExploreShell cinema conversion", () => {
-  it("29. ExploreShell explore-home wrapper uses folio-cinema-shell", () => {
+  it("29. ExploreShell explore-home wrapper uses folio-cinema-lounge (Slice 4B)", () => {
     const homeIdx = exploreShell.indexOf("explore-home");
     assert.ok(homeIdx !== -1, "explore-home testid must exist");
     const homeBlock = exploreShell.slice(Math.max(0, homeIdx - 120), homeIdx + 50);
     assert.ok(
-      homeBlock.includes("folio-cinema-shell"),
-      "ExploreShell explore-home div must include folio-cinema-shell for dark cinema base"
+      homeBlock.includes("folio-cinema-lounge"),
+      "ExploreShell explore-home div must include folio-cinema-lounge (Slice 4B replaced folio-cinema-shell)"
     );
   });
 
-  it("30. ExploreShell explore-vertical-flow wrapper uses folio-cinema-shell", () => {
+  it("30. ExploreShell explore-vertical-flow wrapper uses folio-cinema-lounge (Slice 4B)", () => {
     const flowIdx = exploreShell.indexOf("explore-vertical-flow");
     assert.ok(flowIdx !== -1, "explore-vertical-flow testid must exist");
     const flowBlock = exploreShell.slice(Math.max(0, flowIdx - 120), flowIdx + 50);
     assert.ok(
-      flowBlock.includes("folio-cinema-shell"),
-      "ExploreShell explore-vertical-flow div must include folio-cinema-shell"
+      flowBlock.includes("folio-cinema-lounge"),
+      "ExploreShell explore-vertical-flow div must include folio-cinema-lounge (Slice 4B replaced folio-cinema-shell)"
     );
   });
 
-  it("31. ExploreShell VerticalCard uses folio-cinema-card", () => {
+  it("31. ExploreShell active section uses folio-cinema-card (instrument section)", () => {
     assert.ok(
       exploreShell.includes("folio-cinema-card"),
-      "ExploreShell VerticalCard must use folio-cinema-card for intentional cinema discovery-card identity"
+      "ExploreShell active search instrument section must use folio-cinema-card"
     );
   });
 
-  it("32. ExploreShell still uses editorial-scene (backward compat)", () => {
+  it("32. [Slice 4B] ExploreShell editorial-scene replaced — no longer present", () => {
     assert.ok(
-      exploreShell.includes("editorial-scene"),
-      "ExploreShell must retain editorial-scene class for backward compatibility (8N-C tests)"
+      !exploreShell.includes("editorial-scene"),
+      "ExploreShell must NOT use editorial-scene — Slice 4B replaced it with folio-cinema-lounge"
     );
   });
 
-  it("33. ExploreShell still has boutique-folio (8N-B preservation)", () => {
+  it("33. [Slice 4B] ExploreShell boutique-folio replaced by folio-cinema-tile", () => {
     assert.ok(
-      exploreShell.includes("boutique-folio"),
-      "ExploreShell VerticalCard must retain boutique-folio shadow class (8N-B backward compat)"
+      !exploreShell.includes("boutique-folio"),
+      "ExploreShell must NOT use boutique-folio — Slice 4B replaced it with folio-cinema-tile"
     );
   });
 
@@ -379,10 +379,11 @@ describe("Slice 4: ExploreShell cinema conversion", () => {
     );
   });
 
-  it("35. ExploreShell active section still has bg-ds-onyx (instrument elevation)", () => {
+  it("35. [Slice 4B] ExploreShell active section uses folio-cinema-card (not bg-ds-onyx)", () => {
+    const activeIdx = exploreShell.indexOf("folio-cinema-card");
     assert.ok(
-      exploreShell.includes("bg-ds-onyx"),
-      "ExploreShell active search instrument section must retain bg-ds-onyx elevation"
+      activeIdx !== -1,
+      "ExploreShell active section must use folio-cinema-card (Slice 4B replaced bg-ds-onyx)"
     );
   });
 
@@ -397,17 +398,17 @@ describe("Slice 4: ExploreShell cinema conversion", () => {
 // ── 37–42. SavedShell cinema conversion ──────────────────────────────────────
 
 describe("Slice 4: SavedShell cinema conversion", () => {
-  it("37. SavedShell outer wrapper uses folio-cinema-shell", () => {
+  it("37. SavedShell outer wrapper uses folio-cinema-collection (Slice 4B)", () => {
     assert.ok(
-      savedShell.includes("folio-cinema-shell"),
-      "SavedShell outer wrapper must use folio-cinema-shell for dark cinema base (Saved is cinema-world discovery)"
+      savedShell.includes("folio-cinema-collection"),
+      "SavedShell outer wrapper must use folio-cinema-collection (Slice 4B replaced folio-cinema-shell)"
     );
   });
 
-  it("38. SavedShell still uses saved-clipping-desk (8N-E preservation)", () => {
+  it("38. [Slice 4B] SavedShell saved-clipping-desk replaced by folio-cinema-collection", () => {
     assert.ok(
-      savedShell.includes("saved-clipping-desk"),
-      "SavedShell must retain saved-clipping-desk class (8N-E contract)"
+      !savedShell.includes("saved-clipping-desk"),
+      "SavedShell must NOT use saved-clipping-desk — Slice 4B replaced it with folio-cinema-collection"
     );
   });
 
@@ -418,10 +419,10 @@ describe("Slice 4: SavedShell cinema conversion", () => {
     );
   });
 
-  it("40. SavedShell still uses saved-folio-card (8N-F preservation)", () => {
+  it("40. SavedShell uses folio-collection-card (Slice 4B replaced saved-folio-card)", () => {
     assert.ok(
-      savedShell.includes("saved-folio-card"),
-      "SavedShell must retain saved-folio-card for dark atelier item cards (8N-F contract)"
+      savedShell.includes("folio-collection-card"),
+      "SavedShell must use folio-collection-card for item cards (Slice 4B replaced saved-folio-card)"
     );
   });
 

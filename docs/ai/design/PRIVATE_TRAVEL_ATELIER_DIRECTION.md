@@ -4,7 +4,7 @@
 
 - **Visual concept source:** [`docs/ai/concepts/folio-concept-v1.html`](../concepts/folio-concept-v1.html) — open in a browser to see the three reference frames (desktop trip studio, mobile day folio, mobile concierge correspondence).
 - **Functional stability:** the autocomplete portal behaviour and round-trip flight leg behaviour fixed in PR #431 are **not in scope** for any design slice. Visual work must not regress them; if a slice touches `CityAutocomplete`, `api.ts:addRoundTripLegToDay`, `TripBuilder.handleAddRoundTripToItinerary`, or `ItineraryItemCard` round-trip detection, treat it as out-of-bounds and stop.
-- **Status:** Slice 1 shipped (folio globals, Fraunces font, Sidebar, mobile nav paper shift). Slice 2 shipped (trips/dashboard cards, trip detail panels, ItineraryDayColumn, mobile top bar, btn-marine CTAs). See Section 16 for resolved decisions.
+- **Status:** Slice 1 shipped (folio globals, Fraunces font, Sidebar, mobile nav paper shift). Slice 2 shipped (trips/dashboard cards, trip detail panels, ItineraryDayColumn, mobile top bar, btn-marine CTAs). Slice 3 shipped (paper planning objects — ItineraryItemCard, TripBuilderForm, OptimizeTripModal, DayPlanModal). Slice 4 (legible paper + cinematic foundation) shipped — cinema-world CSS primitives added, cinema classes applied to Discover/Saved/Concierge/Home shells. Slice 4B shipped (visual world enforcement — additive cinema stacks replaced with single intentional compositions on 5 surfaces). See Sections 16–19 for resolved decisions.
 
 ---
 
@@ -281,11 +281,26 @@ These were open questions before Slice 2. All resolved and implemented.
 3. **CTA migration:** Primary CTAs in trips/dashboard routes migrated to `btn-marine`. `ContinuePlanningHero` action buttons, `JourneyCard` edit/delete actions, and trip detail workspace tabs use `btn-marine`. `btn-primary` (gold) retained only on explicit booking/payment flows.
 4. **Paper primitives added to globals.css:** `folio-paper-card`, `folio-paper-panel`, `folio-paper-section`, `folio-paper-header`, `folio-divider`, `folio-muted-label`, `folio-chip`, `folio-input` — all using `--ds-bone`/`--ds-warm-paper`/`--ds-linen` surfaces with `--ds-hairline` borders and `--ds-folio-ink` text.
 
-## 18. Open questions — Slice 3+
+## 18. Resolved decisions (Slice 3 — 2026-05-18)
 
-1. **Remaining surfaces:** Concierge panel (AIConciergePanel), OptimizeTripModal, DayPlanModal, ItineraryItemCard, ExploreShell cards, TripBuilder CollapsiblePanel all still use dark/boutique tokens. Slice 3 converts these to paper-world where appropriate.
-2. **Folio serial + masthead:** Issue masthead, folio serials, large day numerals deferred to Slice 3 (Framed Cinema Moments) and Slice 4 (Editorial Motion).
-3. **Dark cinematic surfaces:** AI Concierge composer + result cards remain dark-cinema per the dual-world contract. These should NOT be converted to paper.
+1. **Paper planning objects:** ItineraryItemCard, TripBuilderForm, OptimizeTripModal, DayPlanModal all converted to paper-world (`folio-paper-item`, `folio-paper-panel`, `folio-paper-header`, `bg-ds-bone`/`bg-ds-linen` cards). Dark/boutique tokens removed from these surfaces.
+2. **Cinema surfaces excluded from paper conversion:** AI Concierge composer + result cards remain cinema-world per dual-world contract. ExploreShell, SavedShell, DashboardClient cinema panels likewise remain dark.
+3. **Folio serial + masthead:** Deferred to Slice 5.
+
+## 19. Resolved decisions (Slice 4 + 4B — 2026-05-18)
+
+1. **Cinema CSS primitives defined:** 7 new enforcement classes added to `globals.css` in the CINEMA WORLD ENFORCEMENT section: `folio-cinema-lounge` (Discover wrapper), `folio-cinema-tile` (Discover VerticalCard), `folio-cinema-collection` (Saved outer shell), `folio-collection-card` (Saved item card), `folio-cinema-desk` (Concierge main wrapper), `folio-cinema-composer` (Concierge sticky composer), `folio-home-cinema-card` (Dashboard cinema cards).
+2. **Additive stacks replaced:** Slice 4 had applied cinema classes additively on top of old boutique/editorial classes (e.g. `editorial-scene folio-cinema-shell`), so visual composition did not change. Slice 4B explicitly replaces old stacks — the old classes are absent from the component source.
+3. **DashboardClient cinematic cards:** `Card tone="dark"` (which applied `bg-ds-onyx` as a Tailwind utility overriding component-level CSS) replaced with plain `<article className="folio-home-cinema-card">` to avoid specificity conflict between `@layer utilities` and `@layer components`.
+4. **TripBuilder planning cockpit:** Paper-world context header tokens corrected — `text-ds-text-tertiary`/`text-ds-text`/`text-ds-accent` (cream, invisible on warm-paper) replaced with `text-ds-folio-ink-mist`/`text-ds-folio-ink`/`text-ds-marine-ink`.
+5. **Brass hairline border:** All cinema enforcement primitives use `var(--ds-brass-field-border)` (a warm amber at ~8% opacity) as a hairline border, not a full brass fill. This is the correct token for subtle cinema panel framing.
+6. **`reduced-motion` guards:** All cinema enforcement primitives that include `transition` or `transform` are wrapped in `@media (prefers-reduced-motion: reduce)` overrides.
+
+## 20. Open questions — Slice 5
+
+1. **Folio serial + masthead:** Issue masthead, folio serials, large day numerals (currently deferred). Slice 5 is the natural home.
+2. **TripBuilder CollapsiblePanel:** Still uses `bg-ds-carbon`/`bg-ds-onyx` — visual correctness for the paper world day-folio view. Candidate for Slice 5 or a standalone Slice 4C.
+3. **Destination-aware mood tint:** Trip-aware ambient hue from hero — deferred to Slice 5.
 
 ---
 

@@ -309,12 +309,11 @@ describe("Phase 8N-C: SavedShell visual composition", () => {
     );
   });
 
-  it("26. SavedShell uses dark folio card on saved items (8N-F: clipping-card cream surface replaced)", () => {
-    // clipping-card was removed in Phase 8N-F (true visual correction — cream card gate).
-    // The dark saved-folio-card class is now the canonical card surface.
+  it("26. SavedShell uses folio-collection-card on saved items (Slice 4B: replaced saved-folio-card)", () => {
+    // saved-folio-card was replaced in Slice 4B by folio-collection-card (single intentional composition).
     assert.ok(
-      savedShell.includes("saved-folio-card"),
-      "SavedShell SavedItemCard must use saved-folio-card CSS class (dark atelier surface, replaces clipping-card after 8N-F)"
+      savedShell.includes("folio-collection-card"),
+      "SavedShell SavedItemCard must use folio-collection-card CSS class (Slice 4B replaced saved-folio-card)"
     );
   });
 
@@ -389,10 +388,10 @@ describe("Phase 8N-C: trips/page visual composition", () => {
 // ── 36–40. Concierge and New Trip visual composition ─────────────────────────
 
 describe("Phase 8N-C: Concierge and New Trip visual composition", () => {
-  it("36. ConciergePage uses editorial-scene wrapper", () => {
+  it("36. ConciergePage uses folio-cinema-desk wrapper (Slice 4B replaced editorial-scene)", () => {
     assert.ok(
-      conciergePage.includes("editorial-scene"),
-      "ConciergePage must use editorial-scene on main wrapper"
+      conciergePage.includes("folio-cinema-desk"),
+      "ConciergePage must use folio-cinema-desk on main wrapper (Slice 4B replaced editorial-scene)"
     );
   });
 
@@ -602,10 +601,10 @@ describe("Phase 8N-C patch: TripBuilder composition adoption", () => {
 // ── 60–67. ExploreShell composition adoption ──────────────────────────────────
 
 describe("Phase 8N-C patch: ExploreShell composition adoption", () => {
-  it("60. ExploreShell home view uses editorial-scene", () => {
+  it("60. ExploreShell home view uses folio-cinema-lounge (Slice 4B replaced editorial-scene)", () => {
     assert.ok(
-      exploreShell.includes("editorial-scene"),
-      "ExploreShell explore-home wrapper must use editorial-scene"
+      exploreShell.includes("folio-cinema-lounge"),
+      "ExploreShell explore-home wrapper must use folio-cinema-lounge (Slice 4B replaced editorial-scene)"
     );
   });
 
@@ -616,20 +615,20 @@ describe("Phase 8N-C patch: ExploreShell composition adoption", () => {
     );
   });
 
-  it("62. ExploreShell VerticalCard uses boutique-folio composition", () => {
+  it("62. ExploreShell VerticalCard uses folio-cinema-tile (Slice 4B replaced boutique-folio)", () => {
     assert.ok(
-      exploreShell.includes("boutique-folio"),
-      "ExploreShell VerticalCard button must include boutique-folio class"
+      exploreShell.includes("folio-cinema-tile"),
+      "ExploreShell VerticalCard button must include folio-cinema-tile class (Slice 4B replaced boutique-folio)"
     );
   });
 
-  it("63. ExploreShell vertical flow view uses editorial-scene", () => {
+  it("63. ExploreShell vertical flow view uses folio-cinema-lounge (Slice 4B replaced editorial-scene)", () => {
     const flowIdx = exploreShell.indexOf("explore-vertical-flow");
     assert.ok(flowIdx !== -1, "explore-vertical-flow testid must exist");
     const flowBlock = exploreShell.slice(Math.max(0, flowIdx - 100), flowIdx + 200);
     assert.ok(
-      flowBlock.includes("editorial-scene"),
-      "explore-vertical-flow wrapper must include editorial-scene class"
+      flowBlock.includes("folio-cinema-lounge"),
+      "explore-vertical-flow wrapper must include folio-cinema-lounge class (Slice 4B replaced editorial-scene)"
     );
   });
 
@@ -640,10 +639,10 @@ describe("Phase 8N-C patch: ExploreShell composition adoption", () => {
     );
   });
 
-  it("65. ExploreShell retains boutique-instrument on search section (8N-B preservation)", () => {
+  it("65. ExploreShell active section uses folio-cinema-card (Slice 4B replaced boutique-instrument)", () => {
     assert.ok(
-      exploreShell.includes("boutique-instrument"),
-      "ExploreShell search section must still include boutique-instrument class (8N-B)"
+      exploreShell.includes("folio-cinema-card"),
+      "ExploreShell active search section must use folio-cinema-card (Slice 4B replaced boutique-instrument)"
     );
   });
 

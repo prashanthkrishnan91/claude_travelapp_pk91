@@ -165,7 +165,7 @@ function SavedItemCard({
 
   return (
     <article
-      className="saved-folio-card card-lift p-3"
+      className="folio-collection-card p-3"
       data-testid="saved-item-card"
     >
       <Card.Identity>
@@ -518,7 +518,7 @@ export function SavedShell() {
 
   return (
     <div
-      className="max-w-2xl lg:max-w-4xl mx-auto saved-clipping-desk folio-cinema-shell atelier-transition py-6 px-4 sm:px-6"
+      className="max-w-2xl lg:max-w-4xl mx-auto folio-cinema-collection atelier-transition py-6 px-4 sm:px-6"
       data-testid="saved-shell"
     >
       {/* Folio header — dark integrated shelf label, no cream slab */}

@@ -61,7 +61,7 @@ export function ExploreShell() {
 
   if (active) {
     return (
-      <div className="space-y-6 editorial-scene folio-cinema-shell" data-testid="explore-vertical-flow">
+      <div className="space-y-6 folio-cinema-lounge" data-testid="explore-vertical-flow">
         {/* Editorial breadcrumb */}
         <div className="flex items-center gap-3" data-testid="explore-lounge-breadcrumb">
           <button
@@ -81,7 +81,7 @@ export function ExploreShell() {
 
         {/* Search instrument section */}
         <section
-          className="rounded-xl border border-ds-pen-stroke bg-ds-onyx boutique-instrument overflow-hidden"
+          className="folio-cinema-card rounded-xl overflow-hidden"
           data-testid={`${active}-flow`}
           aria-label={`${VERTICAL_TITLES[active]} search`}
         >
@@ -106,7 +106,7 @@ export function ExploreShell() {
   }
 
   return (
-    <div className="space-y-8 editorial-scene folio-cinema-shell" data-testid="explore-home">
+    <div className="space-y-8 folio-cinema-lounge" data-testid="explore-home">
       {/* Editorial lounge header */}
       <header data-testid="explore-lounge-header">
         <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-accent mb-1">
@@ -144,7 +144,7 @@ function VerticalCard({
     <button
       type="button"
       onClick={onSelect}
-      className="folio-cinema-card atelier-surface-depth rounded-xl card-lift p-5 text-left flex items-start gap-4 w-full min-h-[44px] transition-colors boutique-folio focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+      className="folio-cinema-tile p-5 text-left flex items-start gap-4 w-full min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
       aria-label={`Explore ${meta.label}`}
       data-testid={`vertical-card-${meta.id}`}
     >

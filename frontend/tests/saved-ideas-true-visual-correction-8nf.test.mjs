@@ -82,20 +82,20 @@ test('8N-F: SavedItemCard article does NOT use boutique-folio', () => {
 
 // ── 4. saved-folio-card used for item cards (dark surface gate) ───────────────
 
-test('8N-F: SavedShell uses saved-folio-card class for item cards', () => {
+test('8N-F: SavedShell uses folio-collection-card class for item cards (Slice 4B replaced saved-folio-card)', () => {
   assert.ok(
-    savedShell.includes('saved-folio-card'),
-    'SavedShell must use saved-folio-card class for the dark atelier card surface'
+    savedShell.includes('folio-collection-card'),
+    'SavedShell must use folio-collection-card class for the dark atelier card surface (Slice 4B)'
   );
 });
 
-test('8N-F: saved-folio-card is on the saved-item-card article element', () => {
+test('8N-F: folio-collection-card is on the saved-item-card article element (Slice 4B)', () => {
   const cardIdx = savedShell.indexOf('data-testid="saved-item-card"');
   assert.ok(cardIdx >= 0, 'saved-item-card testid must exist');
   const articleSlice = savedShell.slice(Math.max(0, cardIdx - 250), cardIdx + 50);
   assert.ok(
-    articleSlice.includes('saved-folio-card'),
-    'saved-folio-card must be on the article element with saved-item-card testid'
+    articleSlice.includes('folio-collection-card'),
+    'folio-collection-card must be on the article element with saved-item-card testid (Slice 4B)'
   );
 });
 
@@ -172,16 +172,16 @@ test('8N-F: .saved-folio-header::before defines warm brass top rule', () => {
 
 // ── 11. Outer shell still uses saved-clipping-desk (8N-E preservation) ────────
 
-test('8N-F: SavedShell outer root still uses saved-clipping-desk (8N-E preserved)', () => {
+test('8N-F: SavedShell outer root uses folio-cinema-collection (Slice 4B replaced saved-clipping-desk)', () => {
   assert.ok(
-    savedShell.includes('saved-clipping-desk'),
-    'saved-clipping-desk must be preserved on the outer shell (8N-E contract)'
+    savedShell.includes('folio-cinema-collection'),
+    'folio-cinema-collection must be on the outer shell (Slice 4B replaced saved-clipping-desk)'
   );
   const shellIdx = savedShell.indexOf('data-testid="saved-shell"');
   const outerSlice = savedShell.slice(Math.max(0, shellIdx - 400), shellIdx + 50);
   assert.ok(
-    outerSlice.includes('saved-clipping-desk'),
-    'saved-clipping-desk must be on the same element as saved-shell testid'
+    outerSlice.includes('folio-cinema-collection'),
+    'folio-cinema-collection must be on the same element as saved-shell testid (Slice 4B)'
   );
 });
 
