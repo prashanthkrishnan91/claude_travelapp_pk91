@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Bookmark, ChevronDown, Loader2, Plane, Hotel, Sparkles, UtensilsCrossed, Search, X } from "lucide-react";
 import { fetchTripIdeas, assignIdeaToDay, deleteItem, updateIdeaMeta } from "@/lib/api";
 import type { ItemType, ItineraryDay, ItineraryItem } from "@/types";
-import { FolioButton, FolioCard, FolioChip, FolioPanel } from "@/components/ui/Folio";
+import { FolioButton, FolioCard, FolioPanel } from "@/components/ui/Folio";
 
 // Default visible items per vertical before "Show more" — keeps the panel
 // usable when a user accumulates many saved ideas. See Level 3 Trip Data
