@@ -362,13 +362,13 @@ describe("Slice 4B: ConciergePage visual enforcement", () => {
 // ── 34–41. DashboardClient visual enforcement ─────────────────────────────────
 
 describe("Slice 4B: DashboardClient visual enforcement", () => {
-  it("34. ContinuePlanningStrip uses folio-home-cinema-card", () => {
+  it("34. ContinuePlanningStrip uses folio-paper-card (paper-world conversion)", () => {
     const sectionIdx = dashboardClient.indexOf("atelier-continue-planning");
     assert.ok(sectionIdx !== -1, "atelier-continue-planning testid must exist");
     const sectionCtx = dashboardClient.slice(sectionIdx, sectionIdx + 300);
     assert.ok(
-      sectionCtx.includes("folio-home-cinema-card"),
-      "ContinuePlanningStrip must use folio-home-cinema-card (replaced dark Card)"
+      sectionCtx.includes("folio-paper-card"),
+      "ContinuePlanningStrip must use folio-paper-card (paper-world conversion — no orphan dark on linen)"
     );
   });
 
@@ -382,24 +382,24 @@ describe("Slice 4B: DashboardClient visual enforcement", () => {
     );
   });
 
-  it("36. JourneyShelfTeaser link uses folio-home-cinema-card", () => {
+  it("36. JourneyShelfTeaser link uses folio-paper-card (paper-world conversion)", () => {
     const shelfIdx = dashboardClient.indexOf("journey-shelf-teaser");
     assert.ok(shelfIdx !== -1, "journey-shelf-teaser testid must exist");
     const shelfCtx = dashboardClient.slice(shelfIdx, shelfIdx + 1000);
     assert.ok(
-      shelfCtx.includes("folio-home-cinema-card"),
-      "JourneyShelfTeaser shelf link must use folio-home-cinema-card"
+      shelfCtx.includes("folio-paper-card"),
+      "JourneyShelfTeaser shelf link must use folio-paper-card (paper-world conversion)"
     );
   });
 
-  it("37. AtelierPlanningStrip links use folio-home-cinema-card", () => {
+  it("37. AtelierPlanningStrip links use folio-paper-card (paper-world conversion)", () => {
     const stripIdx = dashboardClient.indexOf("atelier-planning-strip");
     assert.ok(stripIdx !== -1, "atelier-planning-strip testid must exist");
     const stripCtx = dashboardClient.slice(stripIdx, stripIdx + 1400);
-    const count = (stripCtx.match(/folio-home-cinema-card/g) || []).length;
+    const count = (stripCtx.match(/folio-paper-card/g) || []).length;
     assert.ok(
       count >= 2,
-      `AtelierPlanningStrip must have at least 2 folio-home-cinema-card links (Explore + Saved Ideas), found ${count}`
+      `AtelierPlanningStrip must have at least 2 folio-paper-card links (Explore + Saved Ideas), found ${count}`
     );
   });
 

@@ -240,17 +240,17 @@ describe("Phase 8N-C: globals.css composition primitives", () => {
 // ── 17–24. DashboardClient visual composition ─────────────────────────────────
 
 describe("Phase 8N-C: DashboardClient visual composition", () => {
-  it("17. DashboardClient uses advisor-desk-panel on ConciergeEntry", () => {
+  it("17. DashboardClient ConciergeEntry uses folio-paper-panel (paper-world conversion)", () => {
     assert.ok(
-      dashboardClient.includes("advisor-desk-panel"),
-      "DashboardClient ConciergeEntry must use advisor-desk-panel composition class"
+      dashboardClient.includes("folio-paper-panel"),
+      "DashboardClient ConciergeEntry must use folio-paper-panel (paper-world conversion — no orphan dark on linen)"
     );
   });
 
-  it("18. DashboardClient ConciergeEntry has concierge-desk-header zone", () => {
+  it("18. DashboardClient ConciergeEntry has concierge-advisor-desk testid (preserved)", () => {
     assert.ok(
-      dashboardClient.includes("concierge-desk-header"),
-      "DashboardClient ConciergeEntry must have concierge-desk-header two-zone interior"
+      dashboardClient.includes("concierge-advisor-desk"),
+      "DashboardClient ConciergeEntry must retain concierge-advisor-desk testid for accessibility"
     );
   });
 
@@ -275,10 +275,10 @@ describe("Phase 8N-C: DashboardClient visual composition", () => {
     );
   });
 
-  it("22. DashboardClient still has boutique-instrument (8N-B preservation)", () => {
+  it("22. DashboardClient uses folio-paper-card for discovery strips (paper-world)", () => {
     assert.ok(
-      dashboardClient.includes("boutique-instrument"),
-      "DashboardClient must still reference boutique-instrument (8N-B compatibility)"
+      dashboardClient.includes("folio-paper-card"),
+      "DashboardClient must use folio-paper-card for Explore/Saved strip cards (paper-world coherence)"
     );
   });
 
@@ -583,17 +583,17 @@ describe("Phase 8N-C patch: Trip Detail composition adoption", () => {
 // ── 58–59. TripBuilder composition adoption ───────────────────────────────────
 
 describe("Phase 8N-C patch: TripBuilder composition adoption", () => {
-  it("58. TripBuilder CollapsiblePanel has folio-cover-tab top accent", () => {
+  it("58. TripBuilder CollapsiblePanel uses folio-paper-panel (paper-world conversion)", () => {
     assert.ok(
-      tripBuilder.includes("folio-cover-tab"),
-      "TripBuilder CollapsiblePanel must include folio-cover-tab element"
+      tripBuilder.includes("folio-paper-panel"),
+      "TripBuilder CollapsiblePanel must use folio-paper-panel (paper-world conversion — no orphan dark on linen)"
     );
   });
 
-  it("59. TripBuilder CollapsiblePanel still uses boutique-folio (8N-B preservation)", () => {
+  it("59. TripBuilder candidate cards use folio-paper-item or bg-ds-bone (paper-world)", () => {
     assert.ok(
-      tripBuilder.includes("boutique-folio"),
-      "TripBuilder CollapsiblePanel must still include boutique-folio class (8N-B)"
+      tripBuilder.includes("bg-ds-bone") || tripBuilder.includes("folio-paper-item"),
+      "TripBuilder candidate cards must use paper-world surface (bg-ds-bone or folio-paper-item)"
     );
   });
 });

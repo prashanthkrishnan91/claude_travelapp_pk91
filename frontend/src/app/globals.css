@@ -1909,34 +1909,52 @@
     .folio-cinema-lounge { padding: 2rem; }
   }
 
-  /* folio-cinema-tile: clean intentional destination tile for Discover.
-     Replaces the overcrowded folio-cinema-card + atelier-surface-depth
-     + boutique-folio + card-lift stack on VerticalCard buttons.
-     Warm gradient, brass hairline border, editorial elevation. */
+  /* folio-cinema-tile: cinematic destination tile for Discover.
+     Surface is materially lighter than the lounge background so tiles
+     are clearly legible on mobile. Brass ::before rule gives each tile
+     an editorial top accent. */
   .folio-cinema-tile {
     position: relative;
     background: linear-gradient(
       160deg,
-      rgba(28, 24, 20, 0.99) 0%,
-      rgba(22, 18, 15, 1) 100%
+      rgba(40, 33, 24, 1) 0%,
+      rgba(30, 24, 18, 1) 100%
     );
-    border: 1px solid rgba(197, 148, 77, 0.14);
+    border: 1px solid rgba(197, 148, 77, 0.26);
     border-radius: 0.75rem;
+    overflow: hidden;
     box-shadow:
       0 2px 8px rgba(0, 0, 0, 0.42),
       0 6px 20px rgba(0, 0, 0, 0.30),
-      inset 0 1px 0 rgba(235, 222, 198, 0.07);
+      inset 0 1px 0 rgba(235, 222, 198, 0.08);
     transition:
       border-color var(--ds-duration-standard) var(--ds-easing-standard),
       box-shadow var(--ds-duration-standard) var(--ds-easing-standard),
       transform var(--ds-duration-fast) var(--ds-easing-standard);
   }
+  .folio-cinema-tile::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(197, 148, 77, 0.50) 25%,
+      rgba(224, 184, 136, 0.38) 60%,
+      transparent 100%
+    );
+    border-radius: 0.75rem 0.75rem 0 0;
+    pointer-events: none;
+  }
   .folio-cinema-tile:hover {
-    border-color: rgba(197, 148, 77, 0.26);
+    border-color: rgba(197, 148, 77, 0.40);
     box-shadow:
       0 2px 12px rgba(0, 0, 0, 0.48),
       0 10px 28px rgba(0, 0, 0, 0.34),
-      inset 0 1px 0 rgba(235, 222, 198, 0.09);
+      inset 0 1px 0 rgba(235, 222, 198, 0.10);
     transform: translateY(-1px);
   }
   .folio-cinema-tile:active {
@@ -1945,50 +1963,50 @@
   }
 
   /* folio-cinema-collection: curated collection shell for Saved route.
-     Warmer, more premium than the flat saved-clipping-desk + folio-cinema-shell
-     stack. Provides ambient warmth from two radial sources (top + left). */
+     Uses onyx-velvet (not cinema-deep) so collection-cards sit with
+     clear visible contrast against the shell. */
   .folio-cinema-collection {
     position: relative;
-    background-color: var(--ds-cinema-deep);
+    background-color: var(--ds-onyx-velvet);
     background-image:
       radial-gradient(
         ellipse 65% 28% at 50% 0%,
-        rgba(180, 130, 60, 0.08) 0%,
+        rgba(180, 130, 60, 0.10) 0%,
         transparent 70%
       ),
       radial-gradient(
         ellipse 45% 25% at 15% 30%,
-        rgba(180, 130, 60, 0.04) 0%,
+        rgba(180, 130, 60, 0.05) 0%,
         transparent 60%
       );
   }
 
   /* folio-collection-card: individual collection card for Saved items.
-     Replaces generic saved-folio-card with warm velvet gradient + brass
-     top detail. Feels like a curated index card on a velvet shelf. */
+     Surface sits clearly above the onyx-velvet collection shell.
+     Brass ::before accent strengthened to read against the warmer base. */
   .folio-collection-card {
     position: relative;
     background: linear-gradient(
       160deg,
-      rgba(30, 26, 22, 0.99) 0%,
-      rgba(22, 18, 15, 1) 100%
+      rgba(44, 37, 28, 1) 0%,
+      rgba(32, 26, 20, 1) 100%
     );
-    border: 1px solid rgba(197, 148, 77, 0.16);
+    border: 1px solid rgba(197, 148, 77, 0.28);
     border-radius: 0.625rem;
     box-shadow:
       0 2px 8px rgba(0, 0, 0, 0.40),
       0 4px 16px rgba(0, 0, 0, 0.24),
-      inset 0 1px 0 rgba(235, 222, 198, 0.07);
+      inset 0 1px 0 rgba(235, 222, 198, 0.08);
     transition:
       border-color var(--ds-duration-standard) var(--ds-easing-standard),
       box-shadow var(--ds-duration-standard) var(--ds-easing-standard);
   }
   .folio-collection-card:hover {
-    border-color: rgba(197, 148, 77, 0.26);
+    border-color: rgba(197, 148, 77, 0.42);
     box-shadow:
       0 2px 10px rgba(0, 0, 0, 0.45),
       0 6px 20px rgba(0, 0, 0, 0.28),
-      inset 0 1px 0 rgba(235, 222, 198, 0.09);
+      inset 0 1px 0 rgba(235, 222, 198, 0.10);
   }
   .folio-collection-card::before {
     content: "";
@@ -2000,8 +2018,8 @@
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(197, 148, 77, 0.40) 20%,
-      rgba(224, 184, 136, 0.30) 65%,
+      rgba(197, 148, 77, 0.60) 20%,
+      rgba(224, 184, 136, 0.45) 65%,
       transparent 100%
     );
     border-radius: 0.625rem 0.625rem 0 0;
@@ -2017,13 +2035,13 @@
     background-color: var(--ds-cinema-deep);
     background-image:
       radial-gradient(
-        ellipse 70% 35% at 50% -5%,
-        rgba(180, 130, 60, 0.09) 0%,
+        ellipse 80% 45% at 50% -5%,
+        rgba(180, 130, 60, 0.13) 0%,
         transparent 65%
       ),
       radial-gradient(
-        ellipse 40% 20% at 15% 50%,
-        rgba(180, 130, 60, 0.04) 0%,
+        ellipse 50% 25% at 15% 50%,
+        rgba(180, 130, 60, 0.07) 0%,
         transparent 55%
       );
   }
@@ -2071,9 +2089,8 @@
   }
 
   /* folio-home-cinema-card: intentional cinematic card for Home page.
-     Replaces generic bg-ds-onyx border-ds-pen-stroke atelier-surface-depth
-     stacks on Home discovery/shelf/planning-strip cards. Warm gradient
-     + brass hairline — clearly cinematic but not generic SaaS. */
+     ::before adds a centered brass top rule — each card reads as an
+     editorial panel, not a generic black box, on the paper ground. */
   .folio-home-cinema-card {
     position: relative;
     background: linear-gradient(
@@ -2081,7 +2098,7 @@
       rgba(28, 24, 20, 0.98) 0%,
       rgba(20, 17, 14, 1) 100%
     );
-    border: 1px solid rgba(197, 148, 77, 0.14);
+    border: 1px solid rgba(197, 148, 77, 0.20);
     border-radius: 0.75rem;
     box-shadow:
       0 2px 6px rgba(0, 0, 0, 0.40),
@@ -2092,12 +2109,40 @@
       box-shadow var(--ds-duration-standard) var(--ds-easing-standard);
     overflow: hidden;
   }
+  .folio-home-cinema-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 1rem;
+    right: 1rem;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(197, 148, 77, 0.40) 25%,
+      rgba(224, 184, 136, 0.55) 50%,
+      rgba(197, 148, 77, 0.40) 75%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
   .folio-home-cinema-card:hover {
-    border-color: rgba(197, 148, 77, 0.24);
+    border-color: rgba(197, 148, 77, 0.32);
     box-shadow:
       0 2px 8px rgba(0, 0, 0, 0.45),
       0 12px 32px rgba(0, 0, 0, 0.30),
       inset 0 1px 0 rgba(235, 222, 198, 0.09);
+  }
+
+  /* folio-concierge-chip: starter prompt chip for the AI Concierge empty state.
+     Warm velvet surface reads clearly against the folio-cinema-desk background. */
+  .folio-concierge-chip {
+    background: rgba(52, 43, 30, 1);
+    border: 1px solid rgba(197, 148, 77, 0.30);
+  }
+  .folio-concierge-chip:hover {
+    background: rgba(62, 52, 38, 1);
+    border-color: rgba(197, 148, 77, 0.45);
   }
 
   @media (prefers-reduced-motion: reduce) {

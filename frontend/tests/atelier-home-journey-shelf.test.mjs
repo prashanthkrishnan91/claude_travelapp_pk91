@@ -70,10 +70,10 @@ test("DashboardClient ConciergeEntry open link has 44px touch target", () => {
   assert.match(section, /min-h-\[44px\]/);
 });
 
-test("DashboardClient has elevated Concierge section (boutique-instrument or ds-elevation-2 token)", () => {
+test("DashboardClient has elevated Concierge section (folio-paper-panel or boutique-instrument or ds-elevation-2 token)", () => {
   assert.ok(
-    dashboardClient.includes("boutique-instrument") || dashboardClient.includes("ds-elevation-2"),
-    "DashboardClient must elevate the Concierge section via boutique-instrument or ds-elevation-2"
+    dashboardClient.includes("folio-paper-panel") || dashboardClient.includes("boutique-instrument") || dashboardClient.includes("ds-elevation-2"),
+    "DashboardClient must elevate the Concierge section via folio-paper-panel, boutique-instrument, or ds-elevation-2"
   );
 });
 
@@ -122,10 +122,17 @@ test("DashboardClient uses text-ds-accent for accent elements", () => {
   assert.match(dashboardClient, /text-ds-accent/);
 });
 
-test("DashboardClient uses ds-text tokens for text hierarchy", () => {
-  assert.match(dashboardClient, /text-ds-text\b/);
-  assert.match(dashboardClient, /text-ds-text-secondary/);
-  assert.match(dashboardClient, /text-ds-text-tertiary/);
+test("DashboardClient uses paper-world text tokens for text hierarchy", () => {
+  // Paper-world uses folio-ink tokens for readability on linen/bone backgrounds.
+  // text-ds-text-secondary was replaced by text-ds-folio-ink-mist in paper-world conversion.
+  assert.ok(
+    dashboardClient.includes("text-ds-folio-ink") || dashboardClient.includes("text-ds-text"),
+    "DashboardClient must use text-ds-folio-ink or text-ds-text for primary text hierarchy"
+  );
+  assert.ok(
+    dashboardClient.includes("text-ds-folio-ink-mist") || dashboardClient.includes("text-ds-text-tertiary"),
+    "DashboardClient must use text-ds-folio-ink-mist or text-ds-text-tertiary for muted text"
+  );
 });
 
 test("DashboardClient uses focus-visible outline tokens for keyboard accessibility", () => {

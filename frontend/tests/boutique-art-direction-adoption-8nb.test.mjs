@@ -212,25 +212,25 @@ describe("Phase 8N-B: New boutique CSS utility classes", () => {
 // ── 13–16. DashboardClient visual adoption ───────────────────────────────────
 
 describe("Phase 8N-B: DashboardClient boutique adoption", () => {
-  it("13. DashboardClient applies boutique-instrument to ConciergeEntry card", () => {
+  it("13. DashboardClient ConciergeEntry uses folio-paper-panel (paper-world conversion)", () => {
     assert.ok(
-      dashboardClient.includes("boutique-instrument"),
-      "DashboardClient must apply boutique-instrument class to primary concierge card"
+      dashboardClient.includes("folio-paper-panel"),
+      "DashboardClient ConciergeEntry must use folio-paper-panel (paper-world — no orphan dark on linen)"
     );
   });
 
-  it("14. DashboardClient applies folio-home-cinema-card to ContinuePlanningStrip (Slice 4B)", () => {
+  it("14. DashboardClient applies folio-paper-card to ContinuePlanningStrip (paper-world)", () => {
     assert.ok(
-      dashboardClient.includes("folio-home-cinema-card"),
-      "DashboardClient must apply folio-home-cinema-card to card surfaces (Slice 4B replaced atelier-surface-depth)"
+      dashboardClient.includes("folio-paper-card"),
+      "DashboardClient must apply folio-paper-card to card surfaces (paper-world conversion)"
     );
   });
 
-  it("15. DashboardClient discovery tiles use folio-home-cinema-card (Slice 4B)", () => {
-    const count = (dashboardClient.match(/folio-home-cinema-card/g) || []).length;
+  it("15. DashboardClient discovery tiles use folio-paper-card (paper-world)", () => {
+    const count = (dashboardClient.match(/folio-paper-card/g) || []).length;
     assert.ok(
       count >= 2,
-      "DashboardClient must apply folio-home-cinema-card to multiple surfaces (Slice 4B replaced atelier-surface-depth stack)"
+      "DashboardClient must apply folio-paper-card to multiple surfaces (Explore + Saved Ideas + shelf)"
     );
   });
 
@@ -455,22 +455,21 @@ describe("Phase 8N-B: Additional adoption and cleanup checks", () => {
     );
   });
 
-  it("42. DashboardClient JourneyShelfTeaser link uses folio-home-cinema-card (Slice 4B)", () => {
+  it("42. DashboardClient JourneyShelfTeaser link uses folio-paper-card (paper-world)", () => {
     assert.ok(
-      dashboardClient.includes("folio-home-cinema-card"),
-      "DashboardClient must apply folio-home-cinema-card to JourneyShelfTeaser link card (Slice 4B)"
+      dashboardClient.includes("folio-paper-card"),
+      "DashboardClient must apply folio-paper-card to JourneyShelfTeaser link card (paper-world conversion)"
     );
   });
 
-  it("43. ConciergeEntry no longer uses cold inline boxShadow elevation-2", () => {
+  it("43. ConciergeEntry uses folio-paper-panel (no dark surface on linen)", () => {
     const conciergeEntrySection = dashboardClient.slice(
       dashboardClient.indexOf("concierge-entry"),
-      dashboardClient.indexOf("concierge-entry") + 600
+      dashboardClient.indexOf("concierge-entry") + 400
     );
     assert.ok(
-      !conciergeEntrySection.includes('"var(--ds-elevation-2)"') ||
-      conciergeEntrySection.includes("boutique-instrument"),
-      "ConciergeEntry must use boutique-instrument class instead of inline elevation-2"
+      conciergeEntrySection.includes("folio-paper-panel"),
+      "ConciergeEntry must use folio-paper-panel — no dark orphan card on paper/linen background"
     );
   });
 
@@ -608,17 +607,18 @@ describe("Phase 8N-B: Trip Detail workspace boutique adoption (direct, not token
     );
   });
 
-  it("63. TripBuilder workspace panels apply boutique-folio to CollapsiblePanel and candidate cards", () => {
+  it("63. TripBuilder workspace panels apply folio-paper-panel to CollapsiblePanel (paper-world)", () => {
     assert.ok(
-      tripBuilder.includes("boutique-folio"),
-      "TripBuilder must apply boutique-folio to CollapsiblePanel containers and candidate card surfaces"
+      tripBuilder.includes("folio-paper-panel") || tripBuilder.includes("boutique-folio"),
+      "TripBuilder CollapsiblePanel must use folio-paper-panel or boutique-folio"
     );
   });
 
-  it("64. TripBuilder SummaryBar applies atelier-surface-depth", () => {
+  it("64. TripBuilder uses paper-world or cinematic surface depth treatment", () => {
     assert.ok(
-      tripBuilder.includes("atelier-surface-depth"),
-      "TripBuilder SummaryBar must apply atelier-surface-depth"
+      tripBuilder.includes("atelier-surface-depth") || tripBuilder.includes("bg-ds-bone") ||
+      tripBuilder.includes("folio-paper-panel") || tripBuilder.includes("var(--ds-elevation-4)"),
+      "TripBuilder must apply surface depth treatment on primary surfaces"
     );
   });
 });

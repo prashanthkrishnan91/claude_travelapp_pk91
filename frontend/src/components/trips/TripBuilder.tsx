@@ -224,8 +224,8 @@ function AiScoreBadge({ score }: { score?: number | null }) {
   );
 }
 
-const PREMIUM_CARD_BASE = "candidate-card relative border border-ds-pen-stroke rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 bg-ds-onyx boutique-folio hover:shadow-[var(--ds-elevation-2)] hover:border-ds-carbon";
-const SECONDARY_CTA = "flex-1 min-h-[44px] flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border border-ds-pen-stroke bg-ds-carbon text-ds-text-secondary hover:bg-ds-pen-stroke hover:border-ds-carbon text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
+const PREMIUM_CARD_BASE = "candidate-card relative border border-ds-hairline rounded-2xl p-4 flex flex-col gap-3 transition-all duration-200 bg-ds-bone hover:shadow-[var(--ds-paper-elevation-1)] hover:border-ds-accent/30";
+const SECONDARY_CTA = "flex-1 min-h-[44px] flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border border-ds-hairline bg-ds-linen text-ds-folio-ink-mist hover:bg-ds-bone hover:border-ds-accent/40 hover:text-ds-folio-ink text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
 const PRIMARY_CTA = "flex-1 min-h-[44px] flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-ds-accent hover:bg-ds-accent-muted text-ds-text-inverse text-xs font-semibold transition-all disabled:opacity-50 shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
 
 // ─── Sort control ─────────────────────────────────────────────────────────────
@@ -281,32 +281,32 @@ function SummaryBar({
   const topDest     = isRoundTrip ? (outFd.destination as string) : (fd.destination as string);
   const topPrice    = isRoundTrip ? (fd.total_price as number) : (fd.price as number);
   return (
-    <div className="bg-ds-onyx border border-ds-pen-stroke rounded-2xl p-3 flex gap-3 atelier-surface-depth">
+    <div className="bg-ds-bone border border-ds-hairline rounded-2xl p-3 flex gap-3">
       {topFlight && (
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] text-ds-text-tertiary uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
+          <p className="text-[10px] text-ds-folio-ink-mist uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
             <Plane className="w-3 h-3 text-ds-accent" /> {isRoundTrip ? "Best Round-Trip" : "Best Flight"}
           </p>
-          <p className="text-xs font-bold text-ds-text truncate">
+          <p className="text-xs font-bold text-ds-folio-ink truncate">
             {topAirline ?? topFlight.title}
           </p>
-          <p className="text-xs text-ds-text-tertiary">
+          <p className="text-xs text-ds-folio-ink-mist">
             {topOrigin ?? ""}
             {topDest ? ` → ${topDest}` : ""}
             {topPrice ? ` · $${Math.round(topPrice)}` : ""}
           </p>
         </div>
       )}
-      {topFlight && topHotel && <div className="w-px bg-ds-pen-stroke self-stretch" />}
+      {topFlight && topHotel && <div className="w-px bg-ds-hairline self-stretch" />}
       {topHotel && (
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] text-ds-text-tertiary uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
+          <p className="text-[10px] text-ds-folio-ink-mist uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
             <Hotel className="w-3 h-3 text-ds-accent" /> Best Hotel
           </p>
-          <p className="text-xs font-bold text-ds-text truncate">
+          <p className="text-xs font-bold text-ds-folio-ink truncate">
             {(hd.name as string) ?? topHotel.title}
           </p>
-          <p className="text-xs text-ds-text-tertiary">
+          <p className="text-xs text-ds-folio-ink-mist">
             {hd.pricePerNight ? `$${Math.round(hd.pricePerNight as number)}/night` : ""}
             {hd.rating ? ` · ★ ${(hd.rating as number).toFixed(1)}` : ""}
           </p>
@@ -606,12 +606,12 @@ function RoundTripFlightCard({
       </div>
 
       {/* Outbound leg */}
-      <div className="rounded-xl bg-ds-carbon border border-ds-pen-stroke px-3 py-2.5">
+      <div className="rounded-xl bg-ds-linen border border-ds-hairline px-3 py-2.5">
         <FlightLegRow leg={outbound} label="Outbound" />
       </div>
 
       {/* Return leg */}
-      <div className="rounded-xl bg-ds-carbon border border-ds-pen-stroke px-3 py-2.5">
+      <div className="rounded-xl bg-ds-linen border border-ds-hairline px-3 py-2.5">
         <FlightLegRow leg={returnFlight} label="Return" />
       </div>
 
@@ -1185,8 +1185,7 @@ function CandidatePanel({
   const displayCount = totalCount !== undefined && totalCount !== count
     ? `${count}/${totalCount}` : count;
   return (
-    <div className="rounded-2xl border border-ds-pen-stroke bg-ds-onyx boutique-folio overflow-hidden">
-      <div className="folio-cover-tab" aria-hidden="true" />
+    <div className="folio-paper-panel overflow-hidden">
       <button
         type="button"
         onClick={onToggle}
@@ -1194,25 +1193,25 @@ function CandidatePanel({
       >
         <span className="flex items-center gap-2">
           {icon}
-          <span className="text-sm font-semibold text-ds-text">{title}</span>
+          <span className="text-sm font-semibold text-ds-folio-ink">{title}</span>
           <span
-            className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-ds-accent border border-ds-pen-stroke"
+            className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-ds-accent border border-ds-hairline"
             style={{ backgroundColor: "var(--ds-accent-subtle)" }}
           >
             {displayCount}
           </span>
         </span>
         {open
-          ? <ChevronUp className="w-4 h-4 text-ds-text-tertiary" />
-          : <ChevronDown className="w-4 h-4 text-ds-text-tertiary" />}
+          ? <ChevronUp className="w-4 h-4 text-ds-folio-ink-mist" />
+          : <ChevronDown className="w-4 h-4 text-ds-folio-ink-mist" />}
       </button>
       {open && (
-        <div className="border-t border-ds-pen-stroke">
+        <div className="border-t border-ds-hairline">
           {sortControls && (
-            <div className="px-4 py-3 border-b border-ds-pen-stroke">{sortControls}</div>
+            <div className="px-4 py-3 border-b border-ds-hairline">{sortControls}</div>
           )}
           {!hasData && (
-            <p className="px-4 py-4 text-xs text-ds-text-tertiary text-center">{emptyMessage}</p>
+            <p className="px-4 py-4 text-xs text-ds-folio-ink-mist text-center">{emptyMessage}</p>
           )}
           {hasData && (
             <div ref={listRef} className="flex flex-col gap-3 max-h-[540px] overflow-y-auto py-3 px-4">
@@ -2182,15 +2181,15 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
             {/* ── Explore: List / Map / Group toggle ────────────────────── */}
             <div className="flex items-center justify-between px-1 pt-1">
-              <span className="text-[10px] font-semibold text-ds-text-tertiary uppercase tracking-[0.1em]">Explore</span>
-              <div className="flex items-center bg-ds-carbon rounded-lg p-0.5 gap-0.5">
+              <span className="text-[10px] font-semibold text-ds-folio-ink-mist uppercase tracking-[0.1em]">Explore</span>
+              <div className="flex items-center bg-ds-linen rounded-lg p-0.5 gap-0.5 border border-ds-hairline">
                 <button
                   type="button"
                   onClick={() => setViewMode("list")}
                   className={`flex items-center gap-1 px-2.5 min-h-[44px] rounded-md text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 ${
                     viewMode === "list"
-                      ? "bg-ds-onyx text-ds-text shadow-sm"
-                      : "text-ds-text-secondary hover:text-ds-text"
+                      ? "bg-ds-bone text-ds-folio-ink shadow-sm"
+                      : "text-ds-folio-ink-mist hover:text-ds-folio-ink"
                   }`}
                 >
                   <LayoutList className="w-3 h-3" />
@@ -2201,8 +2200,8 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                   onClick={() => setViewMode("map")}
                   className={`flex items-center gap-1 px-2.5 min-h-[44px] rounded-md text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 ${
                     viewMode === "map"
-                      ? "bg-ds-onyx text-ds-text shadow-sm"
-                      : "text-ds-text-secondary hover:text-ds-text"
+                      ? "bg-ds-bone text-ds-folio-ink shadow-sm"
+                      : "text-ds-folio-ink-mist hover:text-ds-folio-ink"
                   }`}
                 >
                   <MapIcon className="w-3 h-3" />
@@ -2396,10 +2395,10 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
             {/* Activities / research results */}
             {results.length > 0 && (
-              <div className="rounded-2xl border border-ds-pen-stroke bg-ds-onyx boutique-folio">
-                <div className="px-4 py-3 flex items-center gap-2 border-b border-ds-pen-stroke">
+              <div className="folio-paper-panel">
+                <div className="px-4 py-3 flex items-center gap-2 border-b border-ds-hairline">
                   <Sparkles className="w-3.5 h-3.5 text-ds-accent" />
-                  <span className="text-sm font-semibold text-ds-text">Activities</span>
+                  <span className="text-sm font-semibold text-ds-folio-ink">Activities</span>
                   <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-ds-accent border border-ds-pen-stroke" style={{ backgroundColor: "var(--ds-accent-subtle)" }}>
                     {results.length}
                   </span>
