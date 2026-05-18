@@ -56,7 +56,7 @@ function deriveReadiness(trip: Trip, days: ItineraryDay[]): ReadinessData {
 const ACTION_BTN =
   "inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-lg text-xs font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2";
 
-const PRIMARY_BTN = `${ACTION_BTN} bg-ds-marine-ink text-ds-warm-paper hover:bg-ds-marine-soft`;
+const PRIMARY_BTN = `${ACTION_BTN} bg-ds-marine-ink text-ds-paper hover:bg-ds-marine-soft`;
 const GHOST_BTN = `${ACTION_BTN} border border-ds-hairline text-ds-folio-ink-soft hover:bg-ds-linen`;
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -229,7 +229,7 @@ export function TripReadinessCockpit({
                     className={[
                       "inline-flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-semibold select-none",
                       hasItems
-                        ? "bg-ds-marine-ink text-ds-warm-paper"
+                        ? "bg-ds-marine-ink text-ds-paper"
                         : "border border-ds-hairline text-ds-folio-ink-mist",
                     ].join(" ")}
                   >

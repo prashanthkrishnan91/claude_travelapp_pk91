@@ -594,4 +594,24 @@ describe("No dark-world token regressions in converted areas", () => {
   it("trips/page.tsx JourneyCard does not use bg-ds-onyx", () => {
     assert.ok(!tripsPage.includes("boutique-folio"), "trips page must not use old boutique-folio class");
   });
+
+  // Guard: text-ds-warm-paper is not a valid Tailwind utility.
+  // The @theme exposes warm paper as --color-ds-paper, so the correct utility is text-ds-paper.
+  it("ItineraryDayColumn does not use invalid text-ds-warm-paper utility", () => {
+    assert.ok(!col.includes("text-ds-warm-paper"), "use text-ds-paper not text-ds-warm-paper (invalid Tailwind utility)");
+  });
+
+  it("TripReadinessCockpit does not use invalid text-ds-warm-paper utility", () => {
+    assert.ok(!cockpit.includes("text-ds-warm-paper"), "use text-ds-paper not text-ds-warm-paper (invalid Tailwind utility)");
+  });
+
+  it("trips/[id]/page.tsx does not use invalid text-ds-warm-paper utility", () => {
+    const tripDetail = readSrc("app/trips/[id]/page.tsx");
+    assert.ok(!tripDetail.includes("text-ds-warm-paper"), "use text-ds-paper not text-ds-warm-paper (invalid Tailwind utility)");
+  });
+
+  it("MobileNav does not use invalid text-ds-warm-paper utility", () => {
+    const mobileNav = readSrc("components/layout/MobileNav.tsx");
+    assert.ok(!mobileNav.includes("text-ds-warm-paper"), "use text-ds-paper not text-ds-warm-paper (invalid Tailwind utility)");
+  });
 });

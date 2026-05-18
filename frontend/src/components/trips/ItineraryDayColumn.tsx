@@ -521,7 +521,7 @@ export function ItineraryDayColumn({
             data-testid="day-chapter-number"
             className={`flex-shrink-0 flex items-center justify-center w-7 h-7 rounded text-[11px] font-bold tracking-tight transition-colors duration-[120ms] ${
               isSelected
-                ? "bg-ds-marine-ink text-ds-warm-paper"
+                ? "bg-ds-marine-ink text-ds-paper"
                 : "bg-ds-hairline text-ds-folio-ink-mist"
             }`}
           >
