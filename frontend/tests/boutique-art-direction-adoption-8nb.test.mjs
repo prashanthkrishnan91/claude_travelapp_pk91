@@ -492,10 +492,12 @@ describe("Phase 8N-B: Additional adoption and cleanup checks", () => {
 // ── 46–50. Saved Ideas boutique adoption ────────────────────────────────────
 
 describe("Phase 8N-B: Saved Ideas boutique adoption (direct, not token-only)", () => {
-  it("46. SavedItemCard applies boutique-folio class directly", () => {
+  it("46. SavedItemCard applies a dark folio card class (8N-F: saved-folio-card replaces boutique-folio)", () => {
+    // boutique-folio was removed from SavedItemCard in Phase 8N-F (true visual correction).
+    // The dark atelier saved-folio-card class is now the canonical saved card surface.
     assert.ok(
-      savedShell.includes("boutique-folio"),
-      "SavedShell must apply boutique-folio to SavedItemCard — token warming alone is not sufficient"
+      savedShell.includes("saved-folio-card"),
+      "SavedShell must apply saved-folio-card to SavedItemCard (dark atelier surface, replaces boutique-folio after 8N-F)"
     );
   });
 

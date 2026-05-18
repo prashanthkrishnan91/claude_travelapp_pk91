@@ -90,12 +90,6 @@ test('8N-E: saved-clipping-desk and saved-shell testid are on the same element',
   assert.ok(outerDiv.includes('saved-clipping-desk'), 'saved-clipping-desk must be on the outer div with saved-shell testid');
 });
 
-test('8N-E: scrapbook-page scoped to a sub-element (header zone) after saved-shell', () => {
-  const shellIdx = savedShell.indexOf('data-testid="saved-shell"');
-  const scrapbookIdx = savedShell.indexOf('scrapbook-page');
-  assert.ok(scrapbookIdx > shellIdx, 'scrapbook-page must appear on a nested element, not the outer wrapper');
-});
-
 // ── 3. CSS primitive: saved-clipping-desk ────────────────────────────────────
 
 test('8N-E: globals.css defines .saved-clipping-desk', () => {
@@ -116,20 +110,11 @@ test('8N-E: .saved-clipping-card defined after .clipping-card in globals.css', (
   assert.ok(savedClippingIdx > clippingIdx, '.saved-clipping-card must be defined after .clipping-card');
 });
 
-// ── 6. SavedItemCard uses saved-clipping-card ─────────────────────────────────
+// ── 6. SavedItemCard uses dark folio card class (8N-F supersedes saved-clipping-card) ─────
 
-test('8N-E: SavedItemCard uses saved-clipping-card class', () => {
-  assert.ok(savedShell.includes('saved-clipping-card'), 'SavedItemCard must use saved-clipping-card class');
-});
-
-// ── 7. SavedItemCard uses both clipping-card (8N-C) and boutique-folio (8N-B) ──
-
-test('8N-E: SavedItemCard uses clipping-card and boutique-folio on article element', () => {
-  const cardIdx = savedShell.indexOf('data-testid="saved-item-card"');
-  // Look 200 chars before the testid for the article opening and its classes
-  const articleSlice = savedShell.slice(Math.max(0, cardIdx - 200), cardIdx + 50);
-  assert.ok(articleSlice.includes('clipping-card'), 'saved-item-card article must use clipping-card for paper tactility (8N-C)');
-  assert.ok(articleSlice.includes('boutique-folio'), 'saved-item-card article must use boutique-folio as required by 8N-B contract');
+test('8N-E/F: SavedItemCard uses a dark folio card class (saved-folio-card after 8N-F)', () => {
+  // saved-clipping-card was removed in Phase 8N-F and replaced with saved-folio-card.
+  assert.ok(savedShell.includes('saved-folio-card'), 'SavedItemCard must use saved-folio-card (dark folio, 8N-F)');
 });
 
 // ── 8. Desktop: lg:grid-cols-2 for two-column card layout ────────────────────
@@ -429,22 +414,15 @@ test('8N-E: .saved-clipping-desk defined after .clipping-card in globals.css', (
   assert.ok(deskIdx > clippingIdx, '.saved-clipping-desk must be defined after .clipping-card in source order');
 });
 
-// ── 28. scrapbook-page still in SavedShell header zone (8N-C preservation) ────
+// ── 28–30: stale cream-class preservation tests removed in Phase 8N-F.
+// scrapbook-page, clipping-card, and boutique-folio are intentionally absent
+// from Saved Ideas after the true visual correction (8N-F). These tests
+// encoded the failed visual design and must not remain as acceptance criteria.
 
-test('8N-E: scrapbook-page still present in SavedShell (8N-C preservation)', () => {
-  assert.ok(savedShell.includes('scrapbook-page'), 'scrapbook-page must still be used in SavedShell header zone');
-});
+// ── editorial-section-rule still present (non-cream, structural) ─────────────
 
-// ── 29. editorial-section-rule still in header (8N-C preservation) ────────────
-
-test('8N-E: editorial-section-rule still in scrapbook header (8N-C preservation)', () => {
+test('8N-E: editorial-section-rule still in SavedShell header', () => {
   assert.ok(savedShell.includes('editorial-section-rule'), 'editorial-section-rule must still be used in SavedShell header');
-});
-
-// ── 30. clipping-card still on SavedItemCard (8N-C preservation) ─────────────
-
-test('8N-E: clipping-card still used on SavedItemCard (8N-C preservation)', () => {
-  assert.ok(savedShell.includes('clipping-card'), 'clipping-card must still be used on saved item cards');
 });
 
 // ── 31. saved-scrapbook-header testid preserved ───────────────────────────────
