@@ -61,10 +61,16 @@ def plan_day(payload: DayPlanRequest, db: DB) -> DayPlanResponse:
         )
 
     sorted_restaurants = sorted(restaurants, key=lambda r: r.ai_score or 0, reverse=True)
-    lunch = sorted_restaurants[0]
+    pool = len(sorted_restaurants)
+    # Offset by day_number so each day gets a distinct lunch/dinner pair.
+    # day 1 → offset 0, day 2 → offset 1, etc., wrapping around the pool.
+    offset = (payload.day_number - 1) % pool
+    lunch = sorted_restaurants[offset]
+    # Search for a different cuisine starting one position after lunch.
+    dinner_candidates = [sorted_restaurants[(offset + i + 1) % pool] for i in range(pool - 1)]
     dinner = next(
-        (r for r in sorted_restaurants[1:] if r.cuisine != lunch.cuisine),
-        sorted_restaurants[1],
+        (r for r in dinner_candidates if r.cuisine != lunch.cuisine),
+        sorted_restaurants[(offset + 1) % pool],
     )
 
     return DayPlanResponse(

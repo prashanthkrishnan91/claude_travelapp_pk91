@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Bookmark,
+  BookmarkCheck,
   ChevronDown,
   ExternalLink,
   Loader2,
@@ -10,7 +12,7 @@ import {
   Send,
   Trash2,
 } from "lucide-react";
-import { callConciergeSearch } from "@/lib/api";
+import { callConciergeSearch, saveItem } from "@/lib/api";
 import type {
   ConciergeSearchResult,
   UnifiedAttractionResult,
@@ -126,6 +128,8 @@ function getLatestCardMessage(msgs: Message[]): Message | null {
 
 // ─── ConciergeResultCard ──────────────────────────────────────────────────────
 
+type SaveState = "idle" | "saving" | "saved" | "error";
+
 function ConciergeResultCard({
   title,
   category,
@@ -136,6 +140,8 @@ function ConciergeResultCard({
   sourceLink,
   isOperational,
   operationalConfidence,
+  onSave,
+  saveState = "idle",
 }: {
   title: string;
   category: string;
@@ -146,6 +152,8 @@ function ConciergeResultCard({
   sourceLink?: string;
   isOperational?: boolean;
   operationalConfidence?: TrustConfidence;
+  onSave?: () => void;
+  saveState?: SaveState;
 }) {
   const [expanded, setExpanded] = useState(false);
   const reasonParts = splitReason(reason);
@@ -270,8 +278,36 @@ function ConciergeResultCard({
           </div>
         )}
 
-        {/* Actions: map link + source link only */}
-        <div className="flex items-center gap-2" style={{ marginTop: "var(--ds-space-3)" }}>
+        {/* Actions: save + map + source */}
+        <div className="flex items-center gap-2 flex-wrap" style={{ marginTop: "var(--ds-space-3)" }}>
+          {onSave && (
+            <button
+              type="button"
+              onClick={saveState === "idle" || saveState === "error" ? onSave : undefined}
+              disabled={saveState === "saving" || saveState === "saved"}
+              aria-label={saveState === "saved" ? `${title} saved` : `Save ${title}`}
+              data-testid="concierge-result-save-btn"
+              className="inline-flex items-center gap-1.5 rounded-lg transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 disabled:opacity-60 disabled:cursor-default"
+              style={{
+                padding: "var(--ds-space-2) var(--ds-space-3)",
+                fontSize: "var(--ds-type-body-s-size)",
+                background: saveState === "saved"
+                  ? "color-mix(in srgb, var(--ds-trust) 15%, transparent)"
+                  : "var(--ds-accent-subtle)",
+                color: saveState === "saved" ? "var(--ds-trust)" : "var(--ds-accent)",
+                border: `1px solid ${saveState === "saved" ? "var(--ds-trust)" : "color-mix(in srgb, var(--ds-accent) 30%, transparent)"}`,
+              }}
+            >
+              {saveState === "saving" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : saveState === "saved" ? (
+                <BookmarkCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              ) : (
+                <Bookmark className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              {saveState === "saved" ? "Saved" : saveState === "saving" ? "Saving…" : "Save"}
+            </button>
+          )}
           {mapLink && (
             <a
               href={mapLink}
@@ -304,7 +340,7 @@ function ConciergeResultCard({
               Source
             </a>
           )}
-          {!mapLink && !sourceLink && (
+          {!onSave && !mapLink && !sourceLink && (
             <span
               className="text-ds-text-tertiary"
               style={{ fontSize: "var(--ds-type-caption-size)" }}
@@ -371,6 +407,8 @@ export function ConciergePage() {
   const [input, setInput] = useState("");
   const [destination, setDestination] = useState("");
   const [destinationError, setDestinationError] = useState(false);
+  // Save state per card, keyed by a stable identifier (providerPlaceId or title)
+  const [cardSaveStates, setCardSaveStates] = useState<Map<string, SaveState>>(new Map());
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -434,6 +472,45 @@ export function ConciergePage() {
   }, [messages]);
 
   const activeChips = refinementChips ?? followUpChips;
+
+  // ── Save a concierge result card to Saved Ideas ─────────────────────────────
+  const handleSaveCard = useCallback(async (
+    cardKey: string,
+    vertical: "restaurant" | "attraction" | "hotel",
+    title: string,
+    place: unknown
+  ) => {
+    setCardSaveStates((prev) => new Map(prev).set(cardKey, "saving"));
+    try {
+      const p = place as Record<string, unknown>;
+      const gv = p.googleVerification as Record<string, unknown> | undefined;
+      const disp = p.display as Record<string, unknown> | undefined;
+      const providerPlaceId = (gv?.providerPlaceId ?? gv?.provider_place_id) as string | undefined;
+      const googleMapsUri = (gv?.googleMapsUri ?? gv?.google_maps_uri) as string | undefined;
+      const rating = (p.rating ?? (gv?.rating)) as number | undefined;
+      const address = (p.address ?? p.neighborhood ?? disp?.address) as string | undefined;
+      const category = (p.category ?? disp?.displayCategory ?? vertical) as string;
+
+      await saveItem({
+        vertical,
+        displayName: title,
+        provider: "google",
+        providerPlaceId,
+        displaySnapshot: {
+          name: title,
+          category,
+          rating,
+          address,
+          google_maps_uri: googleMapsUri,
+        },
+        searchContext: { destination, query: lastQuery ?? "" },
+        provenance: { source: "outside_concierge" },
+      });
+      setCardSaveStates((prev) => new Map(prev).set(cardKey, "saved"));
+    } catch {
+      setCardSaveStates((prev) => new Map(prev).set(cardKey, "error"));
+    }
+  }, [destination, lastQuery]);
 
   const hasResults = messages.some(
     (m) =>
@@ -848,7 +925,7 @@ export function ConciergePage() {
             return (
               <section key={idx} data-testid="concierge-result-section" aria-label="Place recommendations">
                 <div className="space-y-3">
-                  {addablePlaces.map(({ place, sourceLink }) => {
+                  {addablePlaces.map(({ kind, place, sourceLink }) => {
                     const title =
                       (place as { display?: { displayName?: string } }).display
                         ?.displayName ??
@@ -888,9 +965,16 @@ export function ConciergePage() {
                       ).googleVerification?.googleMapsUri ??
                       (place as { mapsLink?: string }).mapsLink;
 
+                    // Stable card key: prefer providerPlaceId, fall back to title
+                    const placeId = (
+                      (place as { googleVerification?: { providerPlaceId?: string } }).googleVerification?.providerPlaceId
+                    );
+                    const cardKey = placeId ?? title;
+                    const isSaveable = isAddableCanonicalCard(place);
+
                     return (
                       <ConciergeResultCard
-                        key={title}
+                        key={cardKey}
                         title={title}
                         category={category}
                         meta={meta}
@@ -900,6 +984,8 @@ export function ConciergePage() {
                         sourceLink={sourceLink}
                         isOperational={isOperational}
                         operationalConfidence={operationalConfidence}
+                        onSave={isSaveable ? () => handleSaveCard(cardKey, kind, title, place) : undefined}
+                        saveState={cardSaveStates.get(cardKey) ?? "idle"}
                       />
                     );
                   })}

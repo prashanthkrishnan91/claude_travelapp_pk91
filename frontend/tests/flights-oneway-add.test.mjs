@@ -133,11 +133,12 @@ test('TripBuilder: handleAddCandidateToItinerary calls addOneWayFlightToDay for 
   );
 });
 
-test('TripBuilder: round-trip add uses addRoundTripFlightToDay (single canonical item)', () => {
+test('TripBuilder: round-trip add uses addRoundTripLegToDay (two leg items)', () => {
+  // New behavior: round-trip is split into outbound + return leg items on separate days.
   assert.match(
     tripBuilder,
-    /addRoundTripFlightToDay\s*\(\s*\n?\s*tripId/,
-    'handleAddRoundTripToItinerary must call addRoundTripFlightToDay(tripId, ...)',
+    /addRoundTripLegToDay/,
+    'handleAddRoundTripToItinerary must call addRoundTripLegToDay to place each leg on its day',
   );
 });
 

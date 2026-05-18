@@ -479,6 +479,76 @@ export async function addRoundTripFlightToDay(
   });
 }
 
+/**
+ * Persist one leg of a canonical round-trip flight as a standalone scheduled
+ * item. The outbound leg carries the full round-trip price; the return leg
+ * carries cashPrice=0 with round_trip_price_included=true in details.
+ * Both items preserve the full canonical offer details for provenance.
+ * is_round_trip is set to false on each leg so ItineraryItemCard renders
+ * each as a one-way flight card (not a combined round-trip card).
+ */
+export async function addRoundTripLegToDay(
+  tripId: string,
+  dayId: string,
+  roundTripItem: ItineraryItem,
+  leg: "outbound" | "return",
+  position: number
+): Promise<ItineraryItem> {
+  const d = (roundTripItem.details ?? {}) as Record<string, unknown>;
+  const outbound = (d.outboundLeg ?? d.outbound_leg ?? d.outbound) as Record<string, unknown> | undefined;
+  const ret = (d.returnLeg ?? d.return_leg ?? d.returnFlight ?? d.return_flight) as Record<string, unknown> | undefined;
+
+  const legData = leg === "outbound" ? outbound : ret;
+  const seg0 = Array.isArray((legData as Record<string, unknown> | undefined)?.segments)
+    ? ((legData as Record<string, unknown>).segments as Record<string, unknown>[])[0]
+    : undefined;
+
+  const airline = ((legData?.airline ?? (seg0 as Record<string, unknown> | undefined)?.airline ?? d.airline) as string | undefined) ?? "";
+  const flightNum = ((legData?.flightNumber ?? (legData as Record<string, unknown> | undefined)?.flight_number ?? (seg0 as Record<string, unknown> | undefined)?.flightNumber ?? (seg0 as Record<string, unknown> | undefined)?.flight_number) as string | undefined) ?? "";
+  const depTime = ((legData as Record<string, unknown> | undefined)?.departureTime ?? (legData as Record<string, unknown> | undefined)?.departure_time) as string | undefined;
+  const arrTime = ((legData as Record<string, unknown> | undefined)?.arrivalTime ?? (legData as Record<string, unknown> | undefined)?.arrival_time) as string | undefined;
+
+  const fullPrice =
+    (d.cashPrice as number | undefined) ??
+    (d.cash_price as number | undefined) ??
+    (d.totalPrice as number | undefined) ??
+    (d.total_price as number | undefined) ??
+    roundTripItem.cashPrice;
+
+  const title = [airline, flightNum].filter(Boolean).join(" ") || (leg === "outbound" ? "Outbound Flight" : "Return Flight");
+
+  const legDetails: Record<string, unknown> = {
+    ...d,
+    airline,
+    flight_number: flightNum,
+    departure_time: depTime,
+    arrival_time: arrTime,
+    price: leg === "outbound" ? fullPrice : 0,
+    // Disable round-trip rendering — each leg is a standalone one-way card.
+    is_round_trip: false,
+    trip_type: "one_way",
+    leg_of_round_trip: leg,
+    round_trip_price_included: leg === "return",
+  };
+
+  const payload = toSnake({
+    tripId,
+    dayId,
+    itemType: "flight",
+    title,
+    startTime: depTime,
+    endTime: arrTime,
+    cashPrice: leg === "outbound" ? fullPrice : 0,
+    pointsPrice: leg === "outbound" ? roundTripItem.pointsPrice : 0,
+    position,
+    details: legDetails,
+  });
+  return apiFetch<ItineraryItem>("/itinerary/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function addOneWayFlightToDay(
   tripId: string,
   dayId: string,

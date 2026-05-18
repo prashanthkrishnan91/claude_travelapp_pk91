@@ -67,7 +67,7 @@ import {
   fetchTripItems,
   ensureTripDays,
   addOneWayFlightToDay,
-  addRoundTripFlightToDay,
+  addRoundTripLegToDay,
   fetchDayPlan,
   addAttractionToDay,
   addRestaurantToDay,
@@ -1561,37 +1561,75 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     }
   }, [days, selectedDayId, tripId, showToast]);
 
-  // ── Add round-trip flight: one scheduled item preserving canonical details ──
+  // ── Add round-trip flight: two leg items on correct departure days ───────────
 
-  // A canonical round-trip Duffel offer is added as ONE scheduled flight item
-  // on the start day. Full canonical details (outbound/return legs, prices,
-  // Google Flights URL, provider provenance) are preserved so the card renders
-  // both legs — no bare "(Outbound)" / "(Return)" placeholder rows.
+  // A canonical round-trip Duffel offer is split into two standalone one-way
+  // flight items: outbound on the outbound departure day, return on the return
+  // departure day. Days are resolved from each leg's departure timestamp;
+  // if no matching day exists we fall back to the first / last day.
+  // Price: outbound carries the full round-trip price; return carries 0.
   const handleAddRoundTripToItinerary = useCallback(async (item: ItineraryItem) => {
     setAddingId(item.id);
     try {
-      const targetDay = days.find((d) => d.id === selectedDayId) ?? days[0];
-      if (!targetDay) {
-        showToast("No day available — days are generated from trip dates");
+      if (days.length === 0) {
+        showToast("No days available — days are generated from trip dates");
         return;
       }
 
-      const newItem = await addRoundTripFlightToDay(
-        tripId, targetDay.id, item, targetDay.items.length
+      const d = (item.details ?? {}) as Record<string, unknown>;
+      const outbound = (d.outboundLeg ?? d.outbound_leg ?? d.outbound) as Record<string, unknown> | undefined;
+      const ret = (d.returnLeg ?? d.return_leg ?? d.returnFlight ?? d.return_flight) as Record<string, unknown> | undefined;
+
+      // Extract ISO date from each leg's departure timestamp
+      const outboundDate = normalizeIsoDate(
+        ((outbound?.departureTime ?? outbound?.departure_time) as string | undefined)?.slice(0, 10)
+      );
+      const returnDate = normalizeIsoDate(
+        ((ret?.departureTime ?? ret?.departure_time) as string | undefined)?.slice(0, 10)
+      );
+
+      // Resolve target days; fall back to first/last day
+      const outboundDay =
+        (outboundDate ? days.find((dy) => normalizeIsoDate(dy.date) === outboundDate) : null) ??
+        days[0];
+      const returnDay =
+        (returnDate ? days.find((dy) => normalizeIsoDate(dy.date) === returnDate) : null) ??
+        days[days.length - 1];
+
+      const outboundItem = await addRoundTripLegToDay(
+        tripId, outboundDay.id, item, "outbound", outboundDay.items.length
+      );
+
+      const returnPosition =
+        outboundDay.id === returnDay.id
+          ? outboundDay.items.length + 1
+          : returnDay.items.length;
+      const returnItem = await addRoundTripLegToDay(
+        tripId, returnDay.id, item, "return", returnPosition
       );
 
       setDays((prev) =>
-        prev.map((day) =>
-          day.id === targetDay.id ? { ...day, items: [...day.items, newItem] } : day
-        )
+        prev.map((day) => {
+          if (day.id === outboundDay.id && day.id === returnDay.id) {
+            return { ...day, items: [...day.items, outboundItem, returnItem] };
+          }
+          if (day.id === outboundDay.id) return { ...day, items: [...day.items, outboundItem] };
+          if (day.id === returnDay.id) return { ...day, items: [...day.items, returnItem] };
+          return day;
+        })
       );
-      showToast(`Round-trip flight added to Day ${targetDay.dayNumber}`);
+
+      const msg =
+        outboundDay.dayNumber === returnDay.dayNumber
+          ? `Round-trip flight added to Day ${outboundDay.dayNumber}`
+          : `Round-trip: outbound Day ${outboundDay.dayNumber}, return Day ${returnDay.dayNumber}`;
+      showToast(msg);
     } catch {
       showToast("Failed to add — please try again");
     } finally {
       setAddingId(null);
     }
-  }, [days, selectedDayId, tripId, showToast]);
+  }, [days, tripId, showToast]);
 
   // ── Remove item from a day ───────────────────────────────────────────────────
 
