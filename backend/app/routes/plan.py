@@ -1,12 +1,11 @@
 """Smart day planning — selects top attractions and restaurants for a trip day.
 
-Internal Attraction Mock Dependency Cleanup v1D
------------------------------------------------
-``POST /plan/day`` previously synthesised attraction rows from the legacy
-``_mock_attractions`` fixture via ``SearchService.search_attractions``.
-The mock-backed attraction surface has been retired (PRs #287–#292), and
-this endpoint now fails closed for attractions: the no-cluster path
-returns an empty ``attractions`` list rather than fabricating cards.
+No-cluster path now uses canonical Google Places attraction search
+(``SearchService.search_attraction_results``) instead of failing closed
+with an empty list.  Attractions rotate by ``day_number`` so consecutive
+days surface different places.  Fails closed to ``attractions=[]`` when
+the provider returns no rows or raises an error — no AI Concierge, no
+Tavily, no mock data.
 
 Restaurants remain canonical (Google Places via
 ``SearchService.search_restaurants``).  When ``payload.places`` carries
@@ -26,7 +25,7 @@ from app.models.plan import (
     PlannedAttraction,
     PlannedRestaurant,
 )
-from app.models.search import RestaurantSearchRequest
+from app.models.search import AttractionSearchRequest, RestaurantSearchRequest
 from app.services import TripsService
 from app.services.search import SearchService
 
@@ -38,12 +37,13 @@ router = APIRouter(prefix="/plan", tags=["plan"])
 @router.post("/day", response_model=DayPlanResponse)
 def plan_day(payload: DayPlanRequest, db: DB) -> DayPlanResponse:
     """Generate a smart day plan: lunch + dinner from canonical restaurants,
-    plus any cluster-supplied attractions.
+    attractions from canonical Google Places search, rotated by day_number.
 
     When ``cluster_id`` and ``places`` are provided the plan is built from
-    those cluster places (canonical seam).  Without cluster places the
-    endpoint fails closed for attractions — there is no canonical
-    attraction provider here and ``_mock_attractions`` was retired.
+    those cluster places (canonical seam).  Without cluster places:
+    - restaurants: Google Places via search_restaurants, offset by day_number
+    - attractions: Google Places via search_attraction_results, rotated by
+      day_number; fails closed to [] if provider returns nothing or errors
     """
     trip = TripsService(db).get_trip(payload.trip_id)
     destination = trip.destination
@@ -73,11 +73,47 @@ def plan_day(payload: DayPlanRequest, db: DB) -> DayPlanResponse:
         sorted_restaurants[(offset + 1) % pool],
     )
 
+    # Canonical Google Places attraction search — fail closed to [] on error/empty.
+    # No AI Concierge, no Tavily, no mock data.
+    planned_attractions: list[PlannedAttraction] = []
+    try:
+        raw_attractions = search.search_attraction_results(
+            AttractionSearchRequest(location=destination)
+        )
+        sorted_attractions = sorted(
+            raw_attractions,
+            key=lambda a: a.ai_score or a.rating or 0,
+            reverse=True,
+        )
+        n = len(sorted_attractions)
+        if n > 0:
+            # Rotate by day_number so Day 1 and Day 2 differ when enough candidates exist.
+            att_offset = ((payload.day_number - 1) * 2) % n
+            attractions_slice = [sorted_attractions[(att_offset + i) % n] for i in range(min(3, n))]
+            planned_attractions = [
+                PlannedAttraction(
+                    id=a.id,
+                    name=a.name,
+                    category=a.category,
+                    description=a.description,
+                    location=a.location or destination,
+                    address=a.address,
+                    rating=a.rating,
+                    ai_score=a.ai_score,
+                    tags=a.tags,
+                    booking_url=a.booking_url or "",
+                )
+                for a in attractions_slice
+            ]
+    except Exception:
+        logger.warning("[plan_day] Canonical attraction search failed; returning attractions=[]")
+        planned_attractions = []
+
     return DayPlanResponse(
         trip_id=payload.trip_id,
         day_number=payload.day_number,
         destination=destination,
-        attractions=[],
+        attractions=planned_attractions,
         lunch=PlannedRestaurant(
             id=lunch.id,
             name=lunch.name,

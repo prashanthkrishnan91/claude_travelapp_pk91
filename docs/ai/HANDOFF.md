@@ -8,7 +8,7 @@ This file is **current operational state**, not a historical log. It is meant to
 
 ## Current product stage
 
-- Roadmap stage: **Stage 3.5 — Core Trip-Flow Regression Rescue (2026-05-18).** Five product behavior defects fixed before resuming global design work: (1) round-trip flight placement → two leg items on correct days via `addRoundTripLegToDay`; (2) outside Concierge save restored via `ConciergeResultCard` Save action; (3) CityAutocomplete clipping fixed via `overflow:visible` on TripBuilderForm; (4) Plan My Day restaurant diversity via `day_number` offset; (5) Optimize copy updated to name hotel pricing as the blocker. 38 new regression tests; 2 stale tests updated. 2216 total tests, 0 failures. No SQL, no env, no provider/mock/backend route changes.
+- Roadmap stage: **Stage 3.5 — Post-PR #429 Defect Fixes (2026-05-18).** Two product-usability defects fixed: (A) CityAutocomplete dropdown now renders above sibling form fields on mobile via `z-[60] isolate` on the open container + `z-[100]` on the suggestions list (prev fix was `overflow:visible` only, insufficient); (B) Plan My Day no-cluster path now calls canonical Google Places attraction search (`SearchService.search_attraction_results / AttractionSearchRequest`), rotates by `day_number`, returns 2-3 attractions per day, fails closed to `[]` on provider error/empty. No AI Concierge, Tavily, mock data, SQL, env, or new package changes. 2264 total tests, 0 failures. 38 new contract tests in `post-merge-fixes-autocomplete-attractions.test.mjs`.
 
 - Previous stage: **Stage 3.5 — Phase 8N-F (2026-05-18).** Saved Ideas True Visual Correction — `SavedShell.tsx`: `scrapbook-page` fully removed from header zone (was failing cream slab); replaced with `saved-folio-header` (dark integrated, brass-rule only `::before`); `SavedItemCard` article changes from `boutique-folio clipping-card saved-clipping-card` (cream card) to `saved-folio-card` (dark carbon `var(--ds-carbon-mist)` surface + brass top accent `::before`); all `text-ds-text-inverse` (dark ink) on card changed to `text-ds-text` (light on dark); button colors migrated from `bg-ds-bone`/`bg-ds-linen` to `bg-ds-accent-subtle`/`bg-ds-carbon`/`border-ds-pen-stroke` dark-integrated variants; planning bridge buttons now dark-folio pill style; `globals.css`: two new composition classes `.saved-folio-header` (position:relative + brass `::before` rule) and `.saved-folio-card` (`bg: var(--ds-carbon-mist)` + pen-stroke border + box-shadow + brass `::before` top accent strip). Stale cream-class tests removed from 8N-B/8N-C/8N-E test files and replaced with dark-folio assertions. **33 new 8N-F contract tests in `saved-ideas-true-visual-correction-8nf.test.mjs`. 2178 total tests, 0 failures.** No backend/SQL/provider/env/Supabase/API/route/package/behavior changes. All 25+ testids preserved. All handlers preserved (deleteSavedItem, addSavedItemToTrip, listSavedItems, fetchTrips, CreateTripFromSavedModal). Previous Phase 8N-E: outer shell `saved-clipping-desk` preserved; compact horizontal planning bridge preserved; `lg:grid-cols-2` desktop grid preserved; `lg:max-w-4xl` width preserved.
 
@@ -142,10 +142,10 @@ Named packs in `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` (Travel section) own the
 - Latency Budget Pack
 - Backend-only Scaffold Pack / No Visible Behavior Change Pack / Test Tier Pack (cross-cutting)
 
-## Type-check / test baseline (confirmed 2026-05-17, Phase 8N-C — merged PR #424)
+## Type-check / test baseline (confirmed 2026-05-18, post-PR #429 fixes)
 
 - **`npm run type-check` (frontend): CLEAN — 0 errors.** Requires `npm install` first (standard; `node_modules` is gitignored). After install: `tsc --noEmit` exits 0 with no diagnostics.
-- **`npm test` (frontend): 2178 tests, 0 failures.** (includes 33 Phase 8N-F contract tests in `saved-ideas-true-visual-correction-8nf.test.mjs`, wired into `npm test` explicit list in `package.json`)
+- **`npm test` (frontend): 2264 tests, 0 failures.** (includes 38 new post-merge contract tests in `post-merge-fixes-autocomplete-attractions.test.mjs` and updated `trip-flow-regression-fixes.test.mjs`, wired into `npm test` explicit list in `package.json`)
 - Any future session reporting "pre-existing TypeScript errors" is seeing an uninstalled `node_modules` environment — run `npm install` in `frontend/` before type-check.
 
 ## Known risks / unresolved issues
