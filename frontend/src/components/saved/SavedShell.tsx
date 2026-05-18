@@ -518,7 +518,7 @@ export function SavedShell() {
 
   return (
     <div
-      className="max-w-2xl lg:max-w-4xl mx-auto saved-clipping-desk atelier-transition py-6 px-4 sm:px-6"
+      className="max-w-2xl lg:max-w-4xl mx-auto saved-clipping-desk folio-cinema-shell atelier-transition py-6 px-4 sm:px-6"
       data-testid="saved-shell"
     >
       {/* Folio header — dark integrated shelf label, no cream slab */}
