@@ -1,0 +1,1549 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Folio — Visual Concept · Stage 3.5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Paper world */
+    --paper:        #F4EEDF;
+    --paper-deep:   #E9DFC7;
+    --bone:         #FAF5E7;
+    --linen:        #EFE6CE;
+    --ink:          #1E1A14;
+    --ink-soft:     #3B342A;
+    --ink-mist:     #6F6553;
+    --ink-ghost:    #9C927C;
+    --hairline:     #CFC4A8;
+    --hairline-soft:#DED3B6;
+
+    /* Cinema world */
+    --velvet-base:  #0E0B07;
+    --velvet:       #16110A;
+    --carbon:       #221A11;
+    --cream:        #EDE2C5;
+    --pearl:        #F2E7CC;
+    --pearl-soft:   #C7B998;
+
+    /* Foil + accents */
+    --brass:        #B6904A;
+    --brass-deep:   #8C6E32;
+    --brass-foil:   #D9B776;
+    --brass-glow:   rgba(197, 148, 77, 0.16);
+
+    --marine:       #1F4256;
+    --marine-deep:  #112C3B;
+    --marine-soft:  #34607A;
+
+    --warm-ambient: rgba(184, 130, 60, 0.10);
+    --vignette:     rgba(0, 0, 0, 0.55);
+
+    --shadow-paper:
+      0 1px 1px rgba(60, 40, 10, 0.04),
+      0 24px 60px -30px rgba(60, 40, 10, 0.22),
+      0 8px 18px -10px rgba(60, 40, 10, 0.12);
+    --shadow-paper-soft:
+      0 1px 1px rgba(60, 40, 10, 0.04),
+      0 8px 20px -12px rgba(60, 40, 10, 0.12);
+    --shadow-cinema:
+      inset 0 1px 0 rgba(255, 248, 235, 0.05),
+      0 30px 80px -20px rgba(0, 0, 0, 0.55),
+      0 10px 24px -10px rgba(0, 0, 0, 0.45);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    background: var(--linen);
+    color: var(--ink);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* Ambient warmth — drifts very slowly */
+  body::after {
+    content: '';
+    position: fixed; inset: -10%;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 60% 50% at 22% 8%,  rgba(217, 183, 118, 0.28), transparent 60%),
+      radial-gradient(ellipse 55% 45% at 88% 96%, rgba(184, 130, 60, 0.14), transparent 60%),
+      radial-gradient(ellipse 40% 35% at 50% 50%, rgba(245, 226, 188, 0.10), transparent 65%);
+    z-index: 0;
+    animation: drift 45s ease-in-out infinite alternate;
+  }
+  @keyframes drift {
+    0%   { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(-1.5%, 1%) scale(1.04); }
+  }
+
+  /* Paper grain across the whole shell, both worlds */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.55;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch' seed='7'/><feColorMatrix values='0 0 0 0 0.10  0 0 0 0 0.08  0 0 0 0 0.05  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    body::after { animation: none; }
+  }
+
+  main {
+    position: relative;
+    z-index: 2;
+    padding: 64px 32px 120px;
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+
+  /* ─────────────────────────── Page header / wordmark ─────────────────────────── */
+  .masthead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--hairline);
+    padding-bottom: 22px;
+    margin-bottom: 64px;
+  }
+  .wordmark {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 400;
+    font-size: 26px;
+    letter-spacing: 0.18em;
+    color: var(--ink);
+    text-transform: uppercase;
+  }
+  .wordmark .dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    background: var(--brass);
+    border-radius: 50%;
+    transform: translateY(-4px);
+    margin: 0 6px;
+  }
+  .masthead-meta {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-mist);
+  }
+
+  /* ─────────────────────────── Section headers ─────────────────────────── */
+  .section-eyebrow {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--brass-deep);
+    margin: 0 0 12px;
+  }
+  .section-title {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-weight: 400;
+    font-size: 40px;
+    line-height: 1.1;
+    margin: 0 0 12px;
+    color: var(--ink);
+  }
+  .section-sub {
+    font-size: 14px;
+    color: var(--ink-mist);
+    max-width: 720px;
+    margin: 0 0 40px;
+    line-height: 1.6;
+  }
+
+  .frame-stack { display: flex; flex-direction: column; gap: 96px; }
+
+  /* ─────────────────────────── Frame A: Desktop Trip Studio ─────────────────────────── */
+  .desk-canvas {
+    background: var(--bone);
+    border-radius: 18px;
+    border: 1px solid var(--hairline);
+    box-shadow: var(--shadow-paper);
+    overflow: hidden;
+    position: relative;
+    aspect-ratio: 16 / 10;
+    min-height: 720px;
+  }
+
+  .desk-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 36px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .desk-topbar .nav {
+    display: flex;
+    gap: 28px;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .desk-topbar .nav a { color: inherit; text-decoration: none; }
+  .desk-topbar .nav a.active { color: var(--ink); position: relative; }
+  .desk-topbar .nav a.active::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -22px;
+    height: 1px; background: var(--brass);
+  }
+  .desk-topbar .right {
+    display: flex; align-items: center; gap: 22px;
+    font-size: 12px; color: var(--ink-mist); letter-spacing: 0.12em;
+  }
+  .desk-topbar .right .cmdk {
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--ink-mist);
+    text-transform: uppercase;
+    background: var(--linen);
+  }
+  .desk-topbar .right .avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--brass-foil), var(--brass-deep));
+    border: 1px solid var(--brass-deep);
+    color: var(--velvet);
+    display: grid; place-items: center;
+    font-family: 'Fraunces', serif;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  /* Issue masthead inside the trip studio */
+  .issue-masthead {
+    padding: 48px 56px 36px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .issue-line {
+    display: flex; align-items: center; gap: 16px;
+    font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase;
+    color: var(--brass-deep);
+    margin-bottom: 14px;
+  }
+  .issue-line .rule {
+    flex: 0 0 60px; height: 1px; background: var(--brass);
+  }
+  .issue-title {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 400;
+    font-style: italic;
+    font-size: 72px;
+    line-height: 0.98;
+    letter-spacing: -0.015em;
+    margin: 0 0 8px;
+    color: var(--ink);
+  }
+  .issue-title .alt { font-style: normal; }
+  /* Mapline primitive */
+  .mapline {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 16px;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .mapline .city { font-weight: 500; color: var(--ink); }
+  .mapline .glyph {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-size: 14px;
+    color: var(--brass);
+    letter-spacing: 0;
+  }
+  .mapline .pin {
+    width: 5px; height: 5px;
+    background: var(--brass);
+    border-radius: 50%;
+  }
+
+  /* Two-column body */
+  .desk-body {
+    display: grid;
+    grid-template-columns: 1.05fr 1.4fr;
+    gap: 56px;
+    padding: 44px 56px 56px;
+  }
+
+  /* Day folio column */
+  .day-folio { position: relative; }
+  .day-numeral {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 300;
+    font-size: 96px;
+    line-height: 1;
+    color: var(--ink);
+    margin: 0 0 4px;
+  }
+  .day-numeral sup {
+    font-size: 18px;
+    font-style: normal;
+    color: var(--brass-deep);
+    letter-spacing: 0.18em;
+    margin-left: 6px;
+    vertical-align: top;
+    top: 0.6em;
+    position: relative;
+  }
+  .day-where {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-style: italic;
+    color: var(--ink-soft);
+    margin: 0 0 4px;
+  }
+  .day-meta {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-mist);
+    margin-bottom: 28px;
+  }
+  .day-rule {
+    height: 1px; background: var(--brass);
+    width: 56px; margin: 24px 0 28px;
+  }
+
+  .timeline { display: flex; flex-direction: column; gap: 28px; }
+  .timeline-item {
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    gap: 16px;
+    align-items: start;
+    padding-bottom: 24px;
+    border-bottom: 1px dashed var(--hairline-soft);
+  }
+  .timeline-item:last-child { border-bottom: none; }
+  .timeline-time {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 16px;
+    color: var(--brass-deep);
+    padding-top: 2px;
+  }
+  .timeline-time small {
+    display: block;
+    font-style: normal;
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-ghost);
+    margin-top: 2px;
+  }
+  .timeline-title {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 19px;
+    color: var(--ink);
+    margin: 0 0 4px;
+  }
+  .timeline-italic {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 14px;
+    color: var(--ink-mist);
+    margin: 0 0 8px;
+    line-height: 1.5;
+  }
+  .timeline-meta {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-ghost);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .timeline-meta .serial { color: var(--brass-deep); }
+
+  /* Cinema column */
+  .cinema-column { display: flex; flex-direction: column; gap: 28px; }
+
+  .cinema-panel {
+    position: relative;
+    border-radius: 12px;
+    background: var(--velvet-base);
+    color: var(--pearl);
+    box-shadow: var(--shadow-cinema);
+    overflow: hidden;
+    aspect-ratio: 4 / 5;
+    isolation: isolate;
+  }
+  /* Mediterranean sunset gradient — generated, no asset */
+  .cinema-panel::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 22%, rgba(232, 169, 92, 0.55), transparent 60%),
+      radial-gradient(ellipse 100% 65% at 50% 70%, rgba(46, 60, 84, 0.65), transparent 70%),
+      linear-gradient(180deg,
+        #2A1A10 0%,
+        #4A2818 18%,
+        #8C4A28 36%,
+        #C97B43 50%,
+        #6E5A6E 66%,
+        #2B3650 82%,
+        #0E1626 100%);
+    z-index: 0;
+  }
+  /* Sea horizon glow */
+  .cinema-panel::after {
+    content: '';
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 70% 8% at 50% 56%, rgba(255, 215, 160, 0.45), transparent 70%),
+      linear-gradient(180deg, transparent 78%, rgba(0,0,0,0.45) 100%),
+      radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%);
+    z-index: 1;
+  }
+
+  .cinema-content {
+    position: relative;
+    z-index: 2;
+    padding: 28px 28px 32px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    justify-content: space-between;
+  }
+  .cinema-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .cinema-eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--brass-foil);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .cinema-eyebrow .rule {
+    width: 24px; height: 1px; background: var(--brass-foil);
+  }
+  .cinema-folio {
+    font-family: 'Fraunces', serif;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--pearl-soft);
+    text-transform: uppercase;
+  }
+  .cinema-quote {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 300;
+    font-size: 28px;
+    line-height: 1.2;
+    color: var(--cream);
+    max-width: 360px;
+    margin: 0;
+  }
+  .cinema-quote::before { content: '“'; color: var(--brass-foil); margin-right: 2px; }
+  .cinema-quote::after  { content: '”'; color: var(--brass-foil); margin-left: 2px; }
+  .cinema-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    border-top: 1px solid rgba(217, 183, 118, 0.25);
+    padding-top: 16px;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--pearl-soft);
+  }
+  .stars {
+    display: inline-flex; gap: 5px;
+  }
+  .stars i {
+    display: inline-block; width: 10px; height: 1px; background: var(--brass-foil);
+  }
+
+  /* Places grid below cinema */
+  .places-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px;
+  }
+  .place-card {
+    background: var(--bone);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    padding: 18px 20px;
+    box-shadow: var(--shadow-paper-soft);
+    position: relative;
+    transition: transform 300ms ease, box-shadow 300ms ease;
+  }
+  .place-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-paper); }
+  .place-serial {
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    color: var(--brass-deep);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .place-name {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 17px;
+    margin: 0 0 4px;
+    color: var(--ink);
+  }
+  .place-italic {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--ink-mist);
+    margin: 0 0 12px;
+    line-height: 1.5;
+  }
+  .place-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-ghost);
+  }
+  .place-foot .marine { color: var(--marine); font-weight: 500; }
+  .place-foot .brass-bar {
+    display: inline-flex; gap: 3px;
+  }
+  .place-foot .brass-bar i {
+    display: inline-block; width: 8px; height: 1.5px; background: var(--brass);
+  }
+
+  /* Concierge dock (floating) */
+  .concierge-dock {
+    position: absolute;
+    right: 32px; bottom: 28px;
+    background: var(--velvet);
+    color: var(--pearl);
+    border: 1px solid rgba(217, 183, 118, 0.28);
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: flex; align-items: center; gap: 14px;
+    box-shadow: var(--shadow-cinema);
+    z-index: 5;
+    min-width: 320px;
+  }
+  .concierge-dock::before {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: 12px;
+    background: radial-gradient(ellipse 70% 60% at 50% 0%, var(--brass-glow), transparent 70%);
+    pointer-events: none;
+  }
+  .concierge-dock .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--brass-foil);
+    box-shadow: 0 0 12px var(--brass-foil);
+    animation: pulse 2.6s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.7; transform: scale(1); }
+    50%      { opacity: 1;   transform: scale(1.15); }
+  }
+  .concierge-dock .text {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--cream);
+    flex: 1;
+  }
+  .concierge-dock .key {
+    font-family: 'Inter', sans-serif;
+    font-style: normal;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--pearl-soft);
+    border: 1px solid rgba(217, 183, 118, 0.3);
+    padding: 4px 8px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
+  /* ─────────────────────────── Frame B + C: Mobile phones ─────────────────────────── */
+  .phones-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 64px;
+    align-items: start;
+    justify-items: center;
+  }
+
+  .phone {
+    width: 392px;
+    height: 820px;
+    background: var(--velvet-base);
+    border-radius: 44px;
+    padding: 12px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.04) inset,
+      0 0 0 1px #2A1F10,
+      0 40px 80px -20px rgba(60, 40, 10, 0.4),
+      0 12px 28px -10px rgba(60, 40, 10, 0.25);
+    position: relative;
+  }
+  .phone-notch {
+    position: absolute;
+    top: 18px; left: 50%; transform: translateX(-50%);
+    width: 110px; height: 28px; background: #000;
+    border-radius: 16px;
+    z-index: 10;
+  }
+  .phone-screen {
+    width: 100%; height: 100%;
+    border-radius: 34px;
+    overflow: hidden;
+    position: relative;
+    background: var(--bone);
+  }
+
+  /* ── Mobile Day Folio ── */
+  .m-paper { background: var(--bone); height: 100%; display: flex; flex-direction: column; }
+  .m-paper-grain {
+    position: absolute; inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.0' numOctaves='2' stitchTiles='stitch' seed='3'/><feColorMatrix values='0 0 0 0 0.08  0 0 0 0 0.06  0 0 0 0 0.03  0 0 0 0.5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    opacity: 0.4;
+    mix-blend-mode: multiply;
+    pointer-events: none;
+  }
+  .m-status {
+    display: flex; justify-content: space-between;
+    padding: 16px 28px 0;
+    font-size: 12px; font-weight: 600;
+    color: var(--ink);
+    height: 44px;
+    align-items: center;
+  }
+  .m-topbar {
+    padding: 8px 24px 18px;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .m-topbar .breadcrumb {
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--ink-mist);
+  }
+  .m-topbar .breadcrumb b {
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .m-topbar .dots {
+    color: var(--ink-mist);
+    font-size: 16px;
+    letter-spacing: 2px;
+  }
+  .m-scroll {
+    flex: 1; overflow-y: auto; position: relative;
+    padding: 20px 24px 100px;
+  }
+  .m-issue {
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--brass-deep);
+    margin: 4px 0 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .m-issue .rule { width: 28px; height: 1px; background: var(--brass); }
+  .m-day-numeral {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 300;
+    font-size: 64px;
+    line-height: 1;
+    margin: 0 0 4px;
+    color: var(--ink);
+  }
+  .m-day-where {
+    font-family: 'Fraunces', serif;
+    font-size: 16px;
+    font-style: italic;
+    color: var(--ink-soft);
+    margin: 0 0 6px;
+  }
+  .m-day-meta {
+    font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--ink-mist); margin-bottom: 14px;
+  }
+  .m-mapline {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--ink-mist); margin-bottom: 18px;
+  }
+  .m-mapline .city { color: var(--ink); font-weight: 500; }
+  .m-mapline .glyph { font-family: 'Fraunces', serif; font-style: italic; color: var(--brass); }
+  .m-mapline .pin { width: 4px; height: 4px; background: var(--brass); border-radius: 50%; }
+  .m-rule {
+    height: 1px; background: var(--brass); width: 40px; margin: 14px 0 22px;
+  }
+
+  .m-timeline { display: flex; flex-direction: column; gap: 18px; }
+  .m-tl-item {
+    display: grid;
+    grid-template-columns: 52px 1fr;
+    gap: 12px;
+    align-items: start;
+    padding-bottom: 16px;
+    border-bottom: 1px dashed var(--hairline-soft);
+  }
+  .m-tl-item:last-of-type { border-bottom: none; }
+  .m-tl-time {
+    font-family: 'Fraunces', serif; font-style: italic;
+    font-size: 14px; color: var(--brass-deep);
+  }
+  .m-tl-time small {
+    display: block; font-style: normal;
+    font-family: 'Inter', sans-serif;
+    font-size: 9px; letter-spacing: 0.22em;
+    text-transform: uppercase; color: var(--ink-ghost);
+    margin-top: 2px;
+  }
+  .m-tl-title {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 16px;
+    margin: 0 0 2px;
+    color: var(--ink);
+  }
+  .m-tl-italic {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 12px;
+    color: var(--ink-mist);
+    margin: 0 0 6px;
+    line-height: 1.45;
+  }
+  .m-tl-meta {
+    font-size: 9px; letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-ghost);
+    display: flex; gap: 8px; align-items: center;
+  }
+  .m-tl-meta .serial { color: var(--brass-deep); }
+
+  /* Inline cinema "plate" in the mobile scroll */
+  .m-plate {
+    position: relative;
+    margin: 24px 0 8px;
+    border-radius: 14px;
+    overflow: hidden;
+    aspect-ratio: 4 / 5;
+    box-shadow: var(--shadow-cinema);
+    background: var(--velvet-base);
+    color: var(--pearl);
+    isolation: isolate;
+  }
+  .m-plate::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 25%, rgba(232, 169, 92, 0.55), transparent 60%),
+      linear-gradient(180deg,
+        #1F140B 0%,
+        #4A2818 22%,
+        #B87042 48%,
+        #6E5A6E 70%,
+        #1F2B40 100%);
+    z-index: 0;
+  }
+  .m-plate::after {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 70% 6% at 50% 56%, rgba(255, 215, 160, 0.45), transparent 70%),
+      radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.55) 100%);
+    z-index: 1;
+  }
+  .m-plate-inner {
+    position: relative; z-index: 2;
+    height: 100%;
+    padding: 22px 22px 24px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .m-plate-eyebrow {
+    font-size: 9px; letter-spacing: 0.32em; text-transform: uppercase;
+    color: var(--brass-foil);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .m-plate-eyebrow .rule { width: 20px; height: 1px; background: var(--brass-foil); }
+  .m-plate-quote {
+    font-family: 'Fraunces', serif; font-style: italic;
+    font-size: 19px; line-height: 1.25;
+    color: var(--cream);
+    max-width: 280px;
+    margin: 0;
+  }
+  .m-plate-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--pearl-soft);
+    border-top: 1px solid rgba(217, 183, 118, 0.22);
+    padding-top: 10px;
+  }
+
+  /* Place card in mobile */
+  .m-place {
+    background: var(--bone);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-top: 18px;
+    box-shadow: var(--shadow-paper-soft);
+  }
+  .m-place .serial { font-size: 9px; letter-spacing: 0.24em; color: var(--brass-deep); text-transform: uppercase; margin-bottom: 6px; }
+  .m-place .name { font-family: 'Fraunces', serif; font-weight: 500; font-size: 15px; margin: 0 0 4px; color: var(--ink); }
+  .m-place .it { font-family: 'Fraunces', serif; font-style: italic; font-size: 12px; color: var(--ink-mist); margin: 0 0 10px; line-height: 1.45; }
+  .m-place .foot { display: flex; justify-content: space-between; align-items: center; font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-ghost); }
+  .m-place .foot .marine { color: var(--marine); font-weight: 500; }
+  .m-place .foot .brass-bar { display: inline-flex; gap: 3px; }
+  .m-place .foot .brass-bar i { display: inline-block; width: 7px; height: 1.5px; background: var(--brass); }
+
+  /* Mobile bottom tab */
+  .m-tabs {
+    position: absolute;
+    left: 12px; right: 12px; bottom: 12px;
+    background: var(--bone);
+    border-radius: 0 0 34px 34px;
+    border-top: 1px solid var(--brass);
+    padding: 10px 18px 22px;
+    display: flex; justify-content: space-between;
+  }
+  .m-tab {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--ink-ghost);
+  }
+  .m-tab .glyph {
+    font-family: 'Fraunces', serif;
+    font-size: 16px;
+    color: var(--ink-mist);
+  }
+  .m-tab.active { color: var(--ink); }
+  .m-tab.active .glyph { color: var(--brass-deep); }
+
+  /* ── Mobile AI Concierge (cinema phone with paper sheet rising) ── */
+  .m-cinema { background: var(--velvet-base); color: var(--pearl); height: 100%; display: flex; flex-direction: column; position: relative; }
+  .m-cinema::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 80% 40% at 50% 0%, rgba(232, 169, 92, 0.18), transparent 65%),
+      radial-gradient(ellipse 60% 40% at 50% 100%, rgba(46, 60, 84, 0.5), transparent 70%),
+      linear-gradient(180deg, #0E0B07 0%, #161108 50%, #1A1410 100%);
+    z-index: 0;
+  }
+  .m-cinema::after {
+    content: '';
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%);
+    z-index: 1;
+  }
+  .m-cinema > * { position: relative; z-index: 2; }
+  .m-cinema-grain {
+    position: absolute; inset: 0; z-index: 3; pointer-events: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch' seed='11'/><feColorMatrix values='0 0 0 0 0.95  0 0 0 0 0.88  0 0 0 0 0.72  0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    mix-blend-mode: screen;
+    opacity: 0.5;
+  }
+  .m-cinema-status {
+    display: flex; justify-content: space-between;
+    padding: 16px 28px 0;
+    font-size: 12px; font-weight: 600;
+    color: var(--pearl);
+    height: 44px; align-items: center;
+  }
+  .m-cinema-top {
+    padding: 8px 24px 18px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .m-cinema-top .breadcrumb {
+    font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--pearl-soft);
+  }
+  .m-cinema-top .breadcrumb b { color: var(--pearl); font-weight: 500; }
+  .m-cinema-top .dots { color: var(--pearl-soft); font-size: 16px; letter-spacing: 2px; }
+
+  .concierge-stage {
+    flex: 1;
+    padding: 20px 24px 12px;
+    display: flex; flex-direction: column; gap: 14px;
+    overflow: hidden;
+  }
+  .concierge-title-block { margin-bottom: 10px; }
+  .concierge-eyebrow {
+    font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--brass-foil);
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+  }
+  .concierge-eyebrow .rule { width: 28px; height: 1px; background: var(--brass-foil); }
+  .concierge-mark {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 22px;
+    font-style: italic;
+    margin: 0;
+    color: var(--pearl);
+  }
+  .concierge-sub {
+    font-size: 11px;
+    color: var(--pearl-soft);
+    margin-top: 4px;
+    letter-spacing: 0.05em;
+  }
+
+  .msg {
+    max-width: 78%;
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 12px 16px;
+    border-radius: 14px;
+  }
+  .msg.from-c {
+    align-self: flex-start;
+    background: rgba(217, 183, 118, 0.08);
+    border: 1px solid rgba(217, 183, 118, 0.22);
+    color: var(--cream);
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 300;
+  }
+  .msg.from-c::before {
+    content: 'CONCIERGE';
+    display: block;
+    font-family: 'Inter', sans-serif;
+    font-style: normal;
+    font-size: 9px;
+    letter-spacing: 0.28em;
+    color: var(--brass-foil);
+    margin-bottom: 6px;
+  }
+  .msg.from-u {
+    align-self: flex-end;
+    background: var(--marine);
+    color: var(--pearl);
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+    border: 1px solid var(--marine-soft);
+  }
+  .typing {
+    align-self: flex-start;
+    display: flex; gap: 6px; padding: 12px 16px;
+    background: rgba(217, 183, 118, 0.06);
+    border: 1px solid rgba(217, 183, 118, 0.18);
+    border-radius: 14px;
+  }
+  .typing span {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--brass-foil);
+    opacity: 0.5;
+    animation: typing 1.4s ease-in-out infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.18s; }
+  .typing span:nth-child(3) { animation-delay: 0.36s; }
+  @keyframes typing {
+    0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+    30%           { opacity: 1;   transform: translateY(-2px); }
+  }
+
+  /* Paper sheet rising from bottom with suggestion cards */
+  .concierge-sheet {
+    position: absolute;
+    left: 12px; right: 12px; bottom: 12px;
+    background: var(--bone);
+    border-radius: 22px 22px 34px 34px;
+    border: 1px solid var(--hairline);
+    border-top: 1px solid var(--brass);
+    padding: 18px 22px 24px;
+    box-shadow: 0 -20px 40px -12px rgba(0,0,0,0.6);
+    z-index: 5;
+  }
+  .concierge-sheet::before {
+    content: '';
+    display: block;
+    width: 44px; height: 3px;
+    background: var(--hairline);
+    border-radius: 2px;
+    margin: -2px auto 14px;
+  }
+  .sheet-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 14px;
+  }
+  .sheet-eyebrow {
+    font-size: 9px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--brass-deep);
+  }
+  .sheet-title {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 16px;
+    color: var(--ink);
+    margin: 0;
+  }
+  .sheet-card {
+    display: grid; grid-template-columns: 1fr auto; gap: 14px;
+    padding: 12px 0;
+    border-top: 1px solid var(--hairline-soft);
+  }
+  .sheet-card:first-of-type { border-top: 1px solid var(--brass); }
+  .sheet-card .name {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--ink);
+    margin: 0 0 2px;
+  }
+  .sheet-card .it {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 11px;
+    color: var(--ink-mist);
+    margin: 0 0 4px;
+    line-height: 1.4;
+  }
+  .sheet-card .meta {
+    font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-ghost);
+  }
+  .sheet-card .meta .serial { color: var(--brass-deep); margin-right: 8px; }
+  .sheet-card .add {
+    align-self: center;
+    font-family: 'Inter', sans-serif;
+    font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--marine);
+    border: 1px solid var(--marine);
+    background: transparent;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  /* Phone caption under each */
+  .phone-caption {
+    text-align: center;
+    margin-top: 22px;
+    max-width: 360px;
+  }
+  .phone-caption .eyebrow {
+    font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--brass-deep);
+    margin-bottom: 6px;
+  }
+  .phone-caption .title {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 22px;
+    margin: 0 0 6px;
+    color: var(--ink);
+  }
+  .phone-caption .sub {
+    font-size: 12px; color: var(--ink-mist); line-height: 1.5;
+  }
+
+  /* Page footer / notes */
+  .notes {
+    margin-top: 80px;
+    padding-top: 36px;
+    border-top: 1px solid var(--hairline);
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 48px;
+  }
+  .notes h4 {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 16px;
+    margin: 0 0 12px;
+    color: var(--ink);
+  }
+  .notes p {
+    font-size: 12px;
+    color: var(--ink-mist);
+    line-height: 1.65;
+    margin: 0;
+  }
+  .colophon {
+    margin-top: 56px;
+    text-align: center;
+    font-size: 10px; letter-spacing: 0.32em; text-transform: uppercase; color: var(--ink-mist);
+  }
+  .colophon .glyph {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    color: var(--brass);
+    font-size: 14px;
+    margin: 0 10px;
+    letter-spacing: 0;
+  }
+
+  /* Responsive — collapse the desktop frame on small screens */
+  @media (max-width: 1100px) {
+    .desk-body { grid-template-columns: 1fr; }
+    .desk-canvas { aspect-ratio: auto; min-height: auto; }
+    .concierge-dock { position: static; margin: 0 24px 24px; }
+    .notes { grid-template-columns: 1fr; gap: 24px; }
+  }
+  @media (max-width: 480px) {
+    main { padding: 32px 16px 80px; }
+    .issue-title { font-size: 44px; }
+    .day-numeral { font-size: 64px; }
+    .phone { transform: scale(0.86); transform-origin: top center; }
+  }
+</style>
+</head>
+<body>
+
+<main>
+
+  <header class="masthead">
+    <div class="wordmark">Atelier<span class="dot"></span>Folio</div>
+    <div class="masthead-meta">Stage 3.5 · Visual Concept · v1</div>
+  </header>
+
+  <!-- Intro -->
+  <section style="margin-bottom: 72px; max-width: 760px;">
+    <p class="section-eyebrow">The Folio · A Direction Study</p>
+    <h1 class="section-title">A travel atelier that lives between<br>warm paper and quiet cinema.</h1>
+    <p class="section-sub">
+      Three concept frames. A desktop planning studio, a mobile day folio, and the AI Concierge stage.
+      The paper world holds the planning. Cinematic dark panels appear only as punctuation —
+      the trip hero, the concierge stage, image plates. One signature accent, marine ink.
+      Gold demoted to foil.
+    </p>
+  </section>
+
+  <div class="frame-stack">
+
+    <!-- ─────────────────────────── FRAME A: DESKTOP TRIP STUDIO ─────────────────────────── -->
+    <section>
+      <p class="section-eyebrow">Frame A · Desktop</p>
+      <h2 class="section-title">The Planning Studio</h2>
+      <p class="section-sub">
+        Two-column editorial spread. Left page: the day folio — the writing.
+        Right page: the framed cinema panel — the seeing. The mapline beneath the issue title is the trip's signature mark and appears wherever this trip is referenced.
+      </p>
+
+      <div class="desk-canvas">
+        <!-- Top bar -->
+        <nav class="desk-topbar">
+          <div class="wordmark" style="font-size: 18px; letter-spacing: 0.18em;">Atelier<span class="dot" style="width:5px;height:5px;transform:translateY(-2px);"></span>Folio</div>
+          <div class="nav">
+            <a class="active" href="#">Trips</a>
+            <a href="#">Library</a>
+            <a href="#">Notes</a>
+            <a href="#">Concierge</a>
+          </div>
+          <div class="right">
+            <div class="cmdk">⌘  K</div>
+            <div class="avatar">E</div>
+          </div>
+        </nav>
+
+        <!-- Issue masthead -->
+        <header class="issue-masthead">
+          <div class="issue-line">
+            <span class="rule"></span>
+            Issue No. 07 · Spring 2026 · Folio AML
+          </div>
+          <h1 class="issue-title">Eight Days on the <span class="alt">Amalfi Coast</span></h1>
+          <div class="mapline">
+            <span class="pin"></span>
+            <span class="city">Naples</span>
+            <span class="glyph">→</span>
+            <span class="city">Positano</span>
+            <span class="glyph">→</span>
+            <span class="city">Ravello</span>
+            <span class="pin"></span>
+            <span style="margin-left:16px; color: var(--ink-mist);">May 22 — May 30, 2026 · 2 travellers</span>
+          </div>
+        </header>
+
+        <!-- Two-column body -->
+        <div class="desk-body">
+
+          <!-- LEFT: Day folio -->
+          <section class="day-folio">
+            <p class="day-numeral">03<sup>day</sup></p>
+            <p class="day-where">In Positano, slowly.</p>
+            <p class="day-meta">Saturday · May 24 · Coastal sun, light wind</p>
+            <div class="day-rule"></div>
+
+            <div class="timeline">
+              <article class="timeline-item">
+                <div class="timeline-time">08:30 <small>Morning</small></div>
+                <div>
+                  <h3 class="timeline-title">Espresso at Bar Bruno</h3>
+                  <p class="timeline-italic">A standing-room ritual the locals have kept since 1962.</p>
+                  <p class="timeline-meta"><span class="serial">AML·03·01</span> · Cafe · 7 min from hotel</p>
+                </div>
+              </article>
+
+              <article class="timeline-item">
+                <div class="timeline-time">10:00 <small>Late morning</small></div>
+                <div>
+                  <h3 class="timeline-title">Path of the Gods, trailhead at Bomerano</h3>
+                  <p class="timeline-italic">Two and a half hours along the cliff edge — sea on your right, lemons on your left.</p>
+                  <p class="timeline-meta"><span class="serial">AML·03·02</span> · Hike · 5.2 mi · driver booked</p>
+                </div>
+              </article>
+
+              <article class="timeline-item">
+                <div class="timeline-time">13:30 <small>Lunch</small></div>
+                <div>
+                  <h3 class="timeline-title">Da Vincenzo — sea bream, lemon, garden tomatoes</h3>
+                  <p class="timeline-italic">Concierge held a corner table by the open kitchen.</p>
+                  <p class="timeline-meta"><span class="serial">AML·03·03</span> · Restaurant · table for 2 · 13:30</p>
+                </div>
+              </article>
+
+              <article class="timeline-item">
+                <div class="timeline-time">17:00 <small>Aperitivo</small></div>
+                <div>
+                  <h3 class="timeline-title">Franco's Bar — the negroni hour</h3>
+                  <p class="timeline-italic">No reservation. Arrive at five, claim the rail seat facing the sea.</p>
+                  <p class="timeline-meta"><span class="serial">AML·03·04</span> · Bar · cliffside</p>
+                </div>
+              </article>
+
+              <article class="timeline-item">
+                <div class="timeline-time">20:30 <small>Dinner</small></div>
+                <div>
+                  <h3 class="timeline-title">La Sponda at Le Sirenuse</h3>
+                  <p class="timeline-italic">The room is lit by four hundred candles. Wear something that catches the light.</p>
+                  <p class="timeline-meta"><span class="serial">AML·03·05</span> · Restaurant · dress: smart · 20:30</p>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <!-- RIGHT: Cinema column -->
+          <aside class="cinema-column">
+
+            <div class="cinema-panel">
+              <div class="cinema-content">
+                <div class="cinema-top">
+                  <div class="cinema-eyebrow"><span class="rule"></span>Today's Plate</div>
+                  <div class="cinema-folio">AML · Plate 03</div>
+                </div>
+                <p class="cinema-quote">The light at sundown turns the village to honey.</p>
+                <div class="cinema-foot">
+                  <span>Positano · Cliffside</span>
+                  <span class="stars" aria-label="quality">
+                    <i></i><i></i><i></i><i></i><i></i>
+                  </span>
+                  <span>Curated by Anna F.</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p class="section-eyebrow" style="margin-bottom: 16px;">Places in Rotation</p>
+              <div class="places-grid">
+
+                <article class="place-card">
+                  <p class="place-serial">AML · Hotel · 01</p>
+                  <h4 class="place-name">Le Sirenuse</h4>
+                  <p class="place-italic">A family-run boutique above the bay, since 1951.</p>
+                  <div class="place-foot">
+                    <span class="marine">Checked in · May 22</span>
+                    <span class="brass-bar"><i></i><i></i><i></i><i></i><i></i></span>
+                  </div>
+                </article>
+
+                <article class="place-card">
+                  <p class="place-serial">AML · Flight · 02</p>
+                  <h4 class="place-name">LHR → NAP · BA 2602</h4>
+                  <p class="place-italic">Wed 22 May · 10:40 → 14:15 · 2h 35m direct.</p>
+                  <div class="place-foot">
+                    <span class="marine">Seats 12A · 12B</span>
+                    <span>Confirmed</span>
+                  </div>
+                </article>
+
+                <article class="place-card">
+                  <p class="place-serial">AML · Drive · 03</p>
+                  <h4 class="place-name">Naples → Positano coastal road</h4>
+                  <p class="place-italic">Marco at 14:45, dark green Mercedes wagon, two stops.</p>
+                  <div class="place-foot">
+                    <span class="marine">Driver booked</span>
+                    <span>1h 45m</span>
+                  </div>
+                </article>
+
+                <article class="place-card">
+                  <p class="place-serial">AML · Note · 04</p>
+                  <h4 class="place-name">Margins from the concierge</h4>
+                  <p class="place-italic">Bring linen, two pairs of shoes you can walk in, one you cannot.</p>
+                  <div class="place-foot">
+                    <span class="marine">Read · 2 min</span>
+                    <span>Edith</span>
+                  </div>
+                </article>
+
+              </div>
+            </div>
+
+          </aside>
+        </div>
+
+        <!-- Floating concierge dock -->
+        <div class="concierge-dock" role="status" aria-live="polite">
+          <span class="dot"></span>
+          <span class="text">I've held the 8 pm at Le Sirenuse — would you like a quieter table?</span>
+          <span class="key">Reply ⏎</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────── FRAME B + C: PHONES ─────────────────────────── -->
+    <section>
+      <p class="section-eyebrow">Frames B + C · Mobile</p>
+      <h2 class="section-title">The Day Folio &amp; the Concierge Correspondence</h2>
+      <p class="section-sub">
+        On phone, paper is the default world. The Day Folio reads like a magazine spread — small caps eyebrows,
+        a serif day numeral, italic captions. A framed cinema plate interrupts the scroll once per day.
+        The AI Concierge lives on a dedicated cinema stage; suggestions slip up from below as a paper sheet.
+      </p>
+
+      <div class="phones-row">
+
+        <!-- PHONE 1: Day folio -->
+        <div>
+          <div class="phone">
+            <div class="phone-notch"></div>
+            <div class="phone-screen">
+              <div class="m-paper">
+                <div class="m-paper-grain"></div>
+                <div class="m-status">
+                  <span>9:41</span>
+                  <span>•••  ⌃ ◐</span>
+                </div>
+                <div class="m-topbar">
+                  <div class="breadcrumb">Amalfi <b>· Day 03</b></div>
+                  <div class="dots">···</div>
+                </div>
+
+                <div class="m-scroll">
+                  <div class="m-issue">
+                    <span class="rule"></span>
+                    Issue No. 07 · Folio AML
+                  </div>
+                  <p class="m-day-numeral">03</p>
+                  <p class="m-day-where">In Positano, slowly.</p>
+                  <p class="m-day-meta">Saturday · May 24</p>
+                  <div class="m-mapline">
+                    <span class="pin"></span>
+                    <span class="city">Naples</span>
+                    <span class="glyph">→</span>
+                    <span class="city">Positano</span>
+                    <span class="glyph">→</span>
+                    <span class="city">Ravello</span>
+                  </div>
+                  <div class="m-rule"></div>
+
+                  <div class="m-timeline">
+                    <article class="m-tl-item">
+                      <div class="m-tl-time">08:30<small>Morning</small></div>
+                      <div>
+                        <h3 class="m-tl-title">Espresso at Bar Bruno</h3>
+                        <p class="m-tl-italic">A standing-room ritual the locals have kept since 1962.</p>
+                        <p class="m-tl-meta"><span class="serial">AML·03·01</span> · Cafe</p>
+                      </div>
+                    </article>
+
+                    <article class="m-tl-item">
+                      <div class="m-tl-time">10:00<small>Late am</small></div>
+                      <div>
+                        <h3 class="m-tl-title">Path of the Gods</h3>
+                        <p class="m-tl-italic">Two and a half hours along the cliff — sea on your right, lemons on your left.</p>
+                        <p class="m-tl-meta"><span class="serial">AML·03·02</span> · Hike · 5.2 mi</p>
+                      </div>
+                    </article>
+                  </div>
+
+                  <!-- Inline cinema plate -->
+                  <div class="m-plate">
+                    <div class="m-plate-inner">
+                      <div class="m-plate-eyebrow"><span class="rule"></span>Plate · Day 03</div>
+                      <p class="m-plate-quote">The light at sundown turns the village to honey.</p>
+                      <div class="m-plate-foot">
+                        <span>Positano</span>
+                        <span>Curated by Anna F.</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="m-timeline" style="margin-top: 24px;">
+                    <article class="m-tl-item">
+                      <div class="m-tl-time">13:30<small>Lunch</small></div>
+                      <div>
+                        <h3 class="m-tl-title">Da Vincenzo</h3>
+                        <p class="m-tl-italic">Concierge held a corner table by the open kitchen.</p>
+                        <p class="m-tl-meta"><span class="serial">AML·03·03</span> · Restaurant</p>
+                      </div>
+                    </article>
+
+                    <article class="m-tl-item">
+                      <div class="m-tl-time">20:30<small>Dinner</small></div>
+                      <div>
+                        <h3 class="m-tl-title">La Sponda at Le Sirenuse</h3>
+                        <p class="m-tl-italic">The room is lit by four hundred candles.</p>
+                        <p class="m-tl-meta"><span class="serial">AML·03·05</span> · Smart dress</p>
+                      </div>
+                    </article>
+                  </div>
+
+                  <article class="m-place">
+                    <p class="serial">AML · Hotel · 01</p>
+                    <h4 class="name">Le Sirenuse</h4>
+                    <p class="it">A family-run boutique above the bay, since 1951.</p>
+                    <div class="foot">
+                      <span class="marine">Checked in · May 22</span>
+                      <span class="brass-bar"><i></i><i></i><i></i><i></i><i></i></span>
+                    </div>
+                  </article>
+                </div>
+
+                <!-- bottom tabs -->
+                <div class="m-tabs">
+                  <div class="m-tab active"><span class="glyph">§</span>Folio</div>
+                  <div class="m-tab"><span class="glyph">◐</span>Map</div>
+                  <div class="m-tab"><span class="glyph">✦</span>Concierge</div>
+                  <div class="m-tab"><span class="glyph">¶</span>Library</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="phone-caption">
+            <p class="eyebrow">Frame B</p>
+            <h3 class="title">The Day Folio</h3>
+            <p class="sub">Paper-world chrome. One framed cinema plate per day, slipped into the scroll like a tipped-in magazine photograph.</p>
+          </div>
+        </div>
+
+        <!-- PHONE 2: Concierge correspondence -->
+        <div>
+          <div class="phone">
+            <div class="phone-notch"></div>
+            <div class="phone-screen">
+              <div class="m-cinema">
+                <div class="m-cinema-grain"></div>
+                <div class="m-cinema-status">
+                  <span>9:41</span>
+                  <span>•••  ⌃ ◐</span>
+                </div>
+                <div class="m-cinema-top">
+                  <div class="breadcrumb">Amalfi <b>· Concierge</b></div>
+                  <div class="dots">···</div>
+                </div>
+
+                <div class="concierge-stage">
+                  <div class="concierge-title-block">
+                    <div class="concierge-eyebrow"><span class="rule"></span>Correspondence · Day 03</div>
+                    <h3 class="concierge-mark">Anna F., your concierge</h3>
+                    <p class="concierge-sub">Replies usually within a minute.</p>
+                  </div>
+
+                  <div class="msg from-u">
+                    I'd love to see Positano without the crowds tomorrow morning. Any ideas?
+                  </div>
+
+                  <div class="msg from-c">
+                    Take the 6:50 ferry to Praiano before the day boats arrive. The light is best from the chapel terrace at Marina di Praia — I've made a note in your folio.
+                  </div>
+
+                  <div class="msg from-u">
+                    Perfect. What about lunch after?
+                  </div>
+
+                  <div class="typing" aria-label="concierge typing">
+                    <span></span><span></span><span></span>
+                  </div>
+                </div>
+
+                <!-- Paper sheet rising with suggestions -->
+                <div class="concierge-sheet">
+                  <div class="sheet-head">
+                    <span class="sheet-eyebrow">Three to consider</span>
+                    <h4 class="sheet-title">…for lunch in Praiano</h4>
+                  </div>
+
+                  <div class="sheet-card">
+                    <div>
+                      <p class="name">Il Pirata</p>
+                      <p class="it">A trattoria carved into the cliff. Best when the swell is low.</p>
+                      <p class="meta"><span class="serial">AML·sug·01</span>Cliffside · 12 min walk</p>
+                    </div>
+                    <button class="add">Add</button>
+                  </div>
+
+                  <div class="sheet-card">
+                    <div>
+                      <p class="name">M'Ama!</p>
+                      <p class="it">Small terrace, slow service, the right kind of slow.</p>
+                      <p class="meta"><span class="serial">AML·sug·02</span>Family-run · 8 min walk</p>
+                    </div>
+                    <button class="add">Add</button>
+                  </div>
+
+                  <div class="sheet-card">
+                    <div>
+                      <p class="name">La Tagliata, Montepertuso</p>
+                      <p class="it">A drive up, and a long lunch with a view down the coast.</p>
+                      <p class="meta"><span class="serial">AML·sug·03</span>By car · 18 min</p>
+                    </div>
+                    <button class="add">Add</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="phone-caption">
+            <p class="eyebrow">Frame C</p>
+            <h3 class="title">The Concierge Correspondence</h3>
+            <p class="sub">Cinema stage. Concierge speaks in italic serif; you reply in marine ink. Suggestions arrive on a paper sheet that slides up — never as inline bubbles.</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Notes -->
+  <section class="notes">
+    <div>
+      <h4>What this concept demonstrates</h4>
+      <p>The paper world is the default chrome, with a single grain layer, ambient warmth, and a brass-foil accent system. Cinema panels are rare and framed — the trip hero, the day plate, the concierge stage. One signature accent (marine ink). Gold demoted to hairlines, dividers, and the wordmark.</p>
+    </div>
+    <div>
+      <h4>What is deliberately absent</h4>
+      <p>No glassmorphism in chrome. No gradient text. No filled gold buttons. No category icons or coloured badges. No exclamation marks. No skeleton loaders — empty states would use a paper-noise sheet with a slow serif "preparing your folio…" fade.</p>
+    </div>
+    <div>
+      <h4>Signature primitives</h4>
+      <p>The <em>issue masthead</em> ("Issue No. 07 · Spring 2026"). The <em>mapline</em> (city · → · city · → · city). The <em>folio serial</em> (AML · 03 · 02). The <em>day numeral</em> as a large italic serif. The <em>italic editorial caption</em> under every object. These five primitives carry the identity.</p>
+    </div>
+  </section>
+
+  <div class="colophon">
+    The Folio<span class="glyph">·</span>Stage 3.5 Visual Concept<span class="glyph">·</span>v1
+  </div>
+
+</main>
+
+</body>
+</html>
