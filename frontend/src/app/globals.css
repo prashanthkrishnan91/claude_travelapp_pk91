@@ -1447,6 +1447,67 @@
     z-index: 1;
   }
 
+  /* ════════════════════════════════════════════════════════════════
+     SAVED IDEAS TRUE VISUAL CORRECTION — Phase 8N-F
+     Replaces the failed cream-slab header and cream clipping cards
+     with a dark integrated folio composition. Cream/paper appears
+     only as small accent details — not as outer surfaces.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* ── Saved folio header — dark atelier shelf label
+     Replaces the failed scrapbook-page cream slab.
+     Dark integrated header with single warm brass top rule.
+     No fill — sits transparently on the atelier background. */
+  .saved-folio-header {
+    position: relative;
+  }
+  .saved-folio-header::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      rgba(197, 148, 77, 0.55) 0%,
+      rgba(197, 148, 77, 0.22) 45%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+
+  /* ── Saved folio card — dark atelier clipping
+     Replaces the failed warm-paper clipping-card cream surface.
+     Deep warm carbon base; brass top accent only; no cream fill. */
+  .saved-folio-card {
+    position: relative;
+    background: var(--ds-carbon-mist);
+    border: 1px solid var(--ds-pen-stroke);
+    border-radius: 0.5rem;
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.28),
+      0 4px 14px rgba(0, 0, 0, 0.18);
+  }
+  .saved-folio-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 1rem;
+    right: 1rem;
+    height: 1.5px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(197, 148, 77, 0.38) 20%,
+      rgba(197, 148, 77, 0.22) 65%,
+      transparent 100%
+    );
+    border-radius: 0 0 1px 1px;
+    pointer-events: none;
+    z-index: 1;
+  }
+
   /* ── Reduced-motion safe: no-op for purely decorative elements */
   @media (prefers-reduced-motion: reduce) {
     .advisor-desk-panel::before,
@@ -1455,5 +1516,6 @@
     .scrapbook-page::before,
     .scrapbook-page::after { opacity: 1; }
     .saved-clipping-card::before { opacity: 1; }
+    .saved-folio-card::before { opacity: 1; }
   }
 }

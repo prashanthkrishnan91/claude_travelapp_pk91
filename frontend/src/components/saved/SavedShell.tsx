@@ -165,7 +165,7 @@ function SavedItemCard({
 
   return (
     <article
-      className="boutique-folio card-lift clipping-card saved-clipping-card p-3"
+      className="saved-folio-card card-lift p-3"
       data-testid="saved-item-card"
     >
       <Card.Identity>
@@ -218,7 +218,7 @@ function SavedItemCard({
 
           {/* Name + subtitle */}
           <h3
-            className="text-sm font-semibold text-ds-text-inverse leading-tight truncate"
+            className="text-sm font-semibold text-ds-text leading-tight truncate"
             data-testid="saved-item-name"
           >
             {name}
@@ -232,7 +232,7 @@ function SavedItemCard({
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               {rating != null && (
                 <span
-                  className="flex items-center gap-0.5 text-xs text-ds-text-inverse font-medium"
+                  className="flex items-center gap-0.5 text-xs text-ds-text font-medium"
                   data-testid="saved-card-rating"
                 >
                   <Star className="w-3 h-3 text-ds-accent fill-current" aria-hidden="true" />
@@ -297,7 +297,7 @@ function SavedItemCard({
                 <button
                   type="button"
                   onClick={() => onCreateTrip(item)}
-                  className="min-h-[44px] flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-ds-bone text-ds-text-inverse hover:bg-ds-linen transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  className="min-h-[44px] flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-ds-accent-subtle text-ds-accent border border-ds-accent/20 hover:opacity-90 transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   data-testid="create-trip-btn"
                 >
                   <Sparkles className="w-3 h-3 text-ds-accent" aria-hidden="true" />
@@ -311,7 +311,7 @@ function SavedItemCard({
                   <button
                     type="button"
                     onClick={() => setAddState("picking")}
-                    className="min-h-[44px] flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border border-ds-hairline text-ds-slate hover:bg-ds-bone hover:text-ds-text-inverse transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent"
+                    className="min-h-[44px] flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border border-ds-pen-stroke text-ds-text-secondary hover:border-ds-accent/40 hover:text-ds-accent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent"
                     data-testid="add-to-trip-btn"
                   >
                     <PlusCircle className="w-3 h-3" aria-hidden="true" />
@@ -331,7 +331,7 @@ function SavedItemCard({
                         No trips yet.{" "}
                         <Link
                           href="/trips/new"
-                          className="text-ds-text-inverse underline hover:opacity-70 transition-opacity"
+                          className="text-ds-text underline hover:opacity-70 transition-opacity"
                         >
                           Create one
                         </Link>
@@ -346,7 +346,7 @@ function SavedItemCard({
                             type="button"
                             key={trip.id}
                             onClick={() => handleAddToTrip(trip)}
-                            className="min-h-[44px] w-full text-left px-3 py-1.5 rounded-lg text-xs text-ds-text-inverse bg-ds-bone hover:bg-ds-linen transition-colors truncate focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                            className="min-h-[44px] w-full text-left px-3 py-1.5 rounded-lg text-xs text-ds-text bg-ds-carbon border border-ds-pen-stroke hover:bg-ds-onyx transition-colors truncate focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                             data-testid="trip-picker-option"
                           >
                             {trip.title} · {trip.destination}
@@ -357,7 +357,7 @@ function SavedItemCard({
                     <button
                       type="button"
                       onClick={() => setAddState("idle")}
-                      className="min-h-[44px] flex items-center text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
+                      className="min-h-[44px] flex items-center text-[10px] text-ds-slate hover:text-ds-text transition-colors"
                     >
                       Cancel
                     </button>
@@ -374,7 +374,7 @@ function SavedItemCard({
                 {addState === "added" && (
                   <div className="space-y-1">
                     <div
-                      className="flex items-center gap-1.5 text-xs text-ds-text-inverse"
+                      className="flex items-center gap-1.5 text-xs text-ds-text"
                       data-testid="add-to-trip-success"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5 text-ds-trust" aria-hidden="true" />
@@ -383,7 +383,7 @@ function SavedItemCard({
                     <button
                       type="button"
                       onClick={() => setAddState("idle")}
-                      className="min-h-[44px] flex items-center text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
+                      className="min-h-[44px] flex items-center text-[10px] text-ds-slate hover:text-ds-text transition-colors"
                     >
                       Add to another trip
                     </button>
@@ -398,7 +398,7 @@ function SavedItemCard({
                     <button
                       type="button"
                       onClick={() => setAddState("idle")}
-                      className="min-h-[44px] flex items-center text-[10px] text-ds-slate hover:text-ds-text-inverse transition-colors"
+                      className="min-h-[44px] flex items-center text-[10px] text-ds-slate hover:text-ds-text transition-colors"
                     >
                       Try again
                     </button>
@@ -521,8 +521,8 @@ export function SavedShell() {
       className="max-w-2xl lg:max-w-4xl mx-auto saved-clipping-desk atelier-transition py-6 px-4 sm:px-6"
       data-testid="saved-shell"
     >
-      {/* Scrapbook header zone — warm paper with brass binding spine, scoped to header only */}
-      <div className="scrapbook-page rounded-xl pl-7 pr-6 pt-6 pb-5 mb-6">
+      {/* Folio header — dark integrated shelf label, no cream slab */}
+      <div className="saved-folio-header pt-4 pb-3 px-1 mb-6">
         <header data-testid="saved-scrapbook-header">
           <div className="flex items-start gap-3">
             <div
@@ -539,7 +539,7 @@ export function SavedShell() {
                 Your Travel Scrapbook
               </p>
               <h1
-                className="text-xl font-bold text-ds-text-inverse leading-tight"
+                className="text-xl font-bold text-ds-text leading-tight"
                 data-testid="saved-scrapbook-heading"
               >
                 Saved Ideas
@@ -580,7 +580,7 @@ export function SavedShell() {
           <button
             type="button"
             onClick={load}
-            className="min-h-[44px] px-4 py-2 rounded-lg bg-ds-bone text-ds-text-inverse text-sm hover:bg-ds-hairline transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            className="min-h-[44px] px-4 py-2 rounded-lg bg-ds-carbon border border-ds-pen-stroke text-ds-text text-sm hover:bg-ds-onyx transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           >
             Try again
           </button>
@@ -607,7 +607,7 @@ export function SavedShell() {
           </div>
           <Link
             href="/explore"
-            className="min-h-[44px] flex items-center gap-2 px-5 py-2.5 rounded-xl bg-ds-bone text-ds-text-inverse text-sm font-medium hover:bg-ds-hairline transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            className="min-h-[44px] flex items-center gap-2 px-5 py-2.5 rounded-xl bg-ds-carbon border border-ds-pen-stroke text-ds-text text-sm font-medium hover:bg-ds-onyx transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
             data-testid="saved-empty-explore-link"
           >
             <Compass className="w-4 h-4" aria-hidden="true" />

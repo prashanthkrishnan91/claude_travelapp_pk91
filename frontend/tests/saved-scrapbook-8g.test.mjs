@@ -730,9 +730,9 @@ test('Add-to-trip error Try again has min-h-[44px] touch target', () => {
 
 test('Saved error state Try again has min-h-[44px] touch target', () => {
   const savedErrIdx = savedShell.indexOf('data-testid="saved-error"');
-  const errSection = savedShell.slice(savedErrIdx, savedErrIdx + 700);
+  const errSection = savedShell.slice(savedErrIdx, savedErrIdx + 800);
   const tryAgainRelIdx = errSection.indexOf('Try again');
-  const tryAgainWindow = errSection.slice(Math.max(0, tryAgainRelIdx - 250), tryAgainRelIdx + 100);
+  const tryAgainWindow = errSection.slice(Math.max(0, tryAgainRelIdx - 400), tryAgainRelIdx + 100);
   assert.ok(tryAgainWindow.includes('min-h-[44px]'), 'saved-error Try again must have min-h-[44px]');
 });
 

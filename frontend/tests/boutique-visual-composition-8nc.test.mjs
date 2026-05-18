@@ -300,17 +300,21 @@ describe("Phase 8N-C: DashboardClient visual composition", () => {
 // ── 25–29. SavedShell visual composition ──────────────────────────────────────
 
 describe("Phase 8N-C: SavedShell visual composition", () => {
-  it("25. SavedShell uses scrapbook-page composition (not flat bg-ds-linen)", () => {
+  it("25. SavedShell uses dark folio header (8N-F: scrapbook-page cream slab replaced)", () => {
+    // scrapbook-page was removed in Phase 8N-F (true visual correction — cream slab gate).
+    // The dark saved-folio-header class is now the canonical header surface.
     assert.ok(
-      savedShell.includes("scrapbook-page"),
-      "SavedShell must use scrapbook-page composition class (not just bg-ds-linen)"
+      savedShell.includes("saved-folio-header"),
+      "SavedShell must use saved-folio-header (dark integrated header, replaces cream scrapbook-page after 8N-F)"
     );
   });
 
-  it("26. SavedShell uses clipping-card on saved item cards", () => {
+  it("26. SavedShell uses dark folio card on saved items (8N-F: clipping-card cream surface replaced)", () => {
+    // clipping-card was removed in Phase 8N-F (true visual correction — cream card gate).
+    // The dark saved-folio-card class is now the canonical card surface.
     assert.ok(
-      savedShell.includes("clipping-card"),
-      "SavedShell SavedItemCard must use clipping-card CSS class"
+      savedShell.includes("saved-folio-card"),
+      "SavedShell SavedItemCard must use saved-folio-card CSS class (dark atelier surface, replaces clipping-card after 8N-F)"
     );
   });
 
