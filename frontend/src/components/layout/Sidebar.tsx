@@ -74,26 +74,26 @@ export function Sidebar() {
   const display = user ? getUserDisplay(user) : null;
 
   return (
-    <aside className="hidden lg:flex lg:flex-col w-64 bg-ds-onyx border-r border-ds-pen-stroke min-h-screen">
+    <aside className="hidden lg:flex lg:flex-col w-64 folio-sidebar min-h-screen">
       {/* Brand */}
-      <div className="flex items-center gap-2.5 px-5 py-5 border-b border-ds-pen-stroke">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-carbon text-ds-accent">
+      <div className="flex items-center gap-2.5 px-5 py-5 border-b border-ds-hairline">
+        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-marine-ink text-ds-paper">
           <Plane className="w-4 h-4" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-ds-text leading-tight">Travel Concierge</p>
-          <p className="text-xs text-ds-text-tertiary">Trip Planner</p>
+          <p className="text-sm font-semibold folio-display-serif text-ds-folio-ink leading-tight">Travel Concierge</p>
+          <p className="text-xs text-ds-folio-ink-mist">Trip Planner</p>
         </div>
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5">
-        <p className="nav-section-label px-3 mb-2">Planning</p>
+        <p className="folio-section-label px-3 mb-2">Planning</p>
         {primaryLinks.map(({ label, href, icon: Icon }) => (
           <Link
             key={href}
             href={href}
-            className={clsx("nav-item", isActive(href) && "nav-item-active")}
+            className={clsx("folio-nav-item", isActive(href) && "folio-nav-item-active")}
           >
             <Icon className="w-4 h-4 shrink-0" />
             {label}
@@ -101,12 +101,12 @@ export function Sidebar() {
         ))}
 
         <div className="pt-4">
-          <p className="nav-section-label px-3 mb-2">Account</p>
+          <p className="folio-section-label px-3 mb-2">Account</p>
           {secondaryLinks.map(({ label, href, icon: Icon }) => (
             <Link
               key={href}
               href={href}
-              className={clsx("nav-item", isActive(href) && "nav-item-active")}
+              className={clsx("folio-nav-item", isActive(href) && "folio-nav-item-active")}
             >
               <Icon className="w-4 h-4 shrink-0" />
               {label}
@@ -116,21 +116,21 @@ export function Sidebar() {
       </nav>
 
       {/* Footer / User */}
-      <div className="px-4 py-4 border-t border-ds-pen-stroke space-y-1">
+      <div className="px-4 py-4 border-t border-ds-hairline space-y-1">
         <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-          <div className="w-8 h-8 rounded-full bg-ds-carbon text-ds-accent flex items-center justify-center text-sm font-semibold shrink-0">
+          <div className="w-8 h-8 rounded-full bg-ds-marine-ink text-ds-paper flex items-center justify-center text-sm font-semibold shrink-0">
             {display?.initial ?? "?"}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-ds-text truncate">{display?.name ?? "…"}</p>
+            <p className="text-sm font-medium text-ds-folio-ink truncate">{display?.name ?? "…"}</p>
             {display?.sub && display.sub !== display.name && (
-              <p className="text-xs text-ds-text-tertiary truncate">{display.sub}</p>
+              <p className="text-xs text-ds-folio-ink-mist truncate">{display.sub}</p>
             )}
           </div>
         </div>
         <button
           onClick={handleSignOut}
-          className="nav-item w-full text-ds-text-tertiary hover:text-ds-warning"
+          className="folio-nav-item w-full text-ds-folio-ink-mist hover:text-ds-warning"
           aria-label="Sign out"
         >
           <LogOut className="w-4 h-4 shrink-0" />

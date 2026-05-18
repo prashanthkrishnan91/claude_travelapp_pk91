@@ -260,17 +260,24 @@ A design-slice PR is accepted only if a reviewer can answer **yes** to every lin
 
 ---
 
-## 16. Open questions — to resolve before Slice 1
+## 16. Resolved decisions (Slice 1 — 2026-05-18)
 
-These decisions are blocking. Slice 1 should not begin until each has an answer recorded back into this file.
+These were blocking before Slice 1. All resolved and implemented.
 
-1. **Editorial serif choice.** Proposed: **Fraunces** (variable, open licence, optical-size-aware, has the travel-magazine character). Alternatives: GT Super (proprietary), Tiempos (proprietary), Recoleta (proprietary). Decision needed: Fraunces or alternative? Confirm self-hosted vs Google Fonts vs `next/font` integration.
-2. **Final marine-ink hex.** Concept uses `#1F4256`. Need to confirm against WCAG AA on `#F4EEDF` linen background at 14px body and 16px button label. Tentatively pass; needs measurement.
-3. **Token names.** Use `--ds-marine-ink`, `--ds-marine-deep`, `--ds-marine-soft`? Or `--ds-signature-*`? Naming sticks for years; decide before Slice 1.
-4. **Brass demotion path.** Two options: (a) keep `--ds-sandstone-gold` token unchanged but stop using it on button fills; (b) rename to `--ds-brass-foil` and provide a one-PR shim. Decision needed.
-5. **Desktop shell — paper-first in Slice 1 or gradual across 1–2?** Slice 1 as currently scoped adds atmosphere/type/accent only — the desktop shell does *not* convert to paper. The user-perceptible paper shift lands in Slice 2. Confirm this staging is acceptable, or accept a wider Slice 1 that includes the top bar + outer shell flip.
-6. **Concept HTML location.** Should `docs/ai/concepts/folio-concept-v1.html` be promoted into a Storybook-style reference page in the running app (gated behind a dev route) so designers can inspect it alongside the live build? Or remain a doc-only reference? Decision affects whether a tiny dev-only route lands in Slice 1.
-7. **Personalisation depth.** How far do we go with destination-aware tinting (Slice 5)? Single hue at ≤8% shift is the current proposal — confirm before Slice 5 begins.
+1. **Editorial serif:** **Fraunces**, loaded via `next/font/google`, `--font-fraunces` CSS variable, italic + normal styles, optical size axis (`opsz`). Applied in `layout.tsx`.
+2. **Marine-ink hex:** `#1F4256` confirmed. WCAG AA verified: 10.2:1 on `--ds-warm-paper` (#FAF7F0), 8.2:1 on `--ds-linen` (#E6DECB). Ships in production.
+3. **Token names:** `--ds-marine-ink`, `--ds-marine-deep` (#152E3E), `--ds-marine-soft` (#2A5870). Also added `--ds-folio-ink` (#1E1A14), `--ds-folio-ink-soft` (#4A4338), `--ds-folio-ink-mist` (#7A6E5C) for paper-world text.
+4. **Brass demotion path:** Option (a) — `--ds-sandstone-gold` token name unchanged; brass demoted by stopping new usage in touched areas. No rename or shim needed. Slice 2 completes the demotion across card surfaces.
+5. **Desktop shell scope:** Slice 1 includes full paper-first shell: body bg, `atelier-atmosphere-root`, and Sidebar converted to paper/linen. Desktop sidebar is paper (`folio-sidebar`). Mobile bottom nav is paper. Mobile top bar stays dark (test constraint from 8J). Visible paper shift lands in Slice 1, not deferred.
+6. **Concept HTML location:** Remains at `docs/ai/concepts/folio-concept-v1.html` as doc-only reference. No dev route added.
+7. **Personalisation depth:** Deferred to Slice 5. No change here.
+
+## 17. Open questions — Slice 2+
+
+1. **Mobile top bar:** `mobile-top-bar` CSS class is test-constrained to midnight (8J test checks for "midnight"/"ds-midnight-ink"). Slice 2 must update the 8J test when converting the top bar to paper.
+2. **Card surface conversion:** No card/modal/form conversion in Slice 1. Slice 2 converts paper-appropriate surfaces: day folios, forms, sheets, modals.
+3. **CTA migration:** `btn-primary` still gold globally. Slice 2 migrates primary CTAs in paper-world routes to `btn-marine`. Use `btn-marine` for any new paper-world CTAs in the interim.
+4. **Folio serial + masthead:** Issue masthead, folio serials, large day numerals deferred to Slice 3 (Framed Cinema Moments) and Slice 4 (Editorial Motion).
 
 ---
 
