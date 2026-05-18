@@ -411,3 +411,84 @@ test('BugB: addRoundTripLegToDay startTime equals leg departure time (Morning/Af
     'endTime in the persisted payload must equal the leg arrival time',
   );
 });
+
+// ─── Bug B: addRoundTripLegToDay — expanded extraction paths ────────────────
+
+test('BugB: addRoundTripLegToDay depTime extraction covers departureDateTime path', () => {
+  const startIdx = apiSrc.indexOf('export async function addRoundTripLegToDay');
+  const endIdx = apiSrc.indexOf('\nexport async function', startIdx + 1);
+  const fnBody = apiSrc.slice(startIdx, endIdx === -1 ? undefined : endIdx);
+  assert.match(
+    fnBody,
+    /departureDateTime|departure_datetime/,
+    'depTime extraction must also try departureDateTime / departure_datetime fields',
+  );
+});
+
+test('BugB: addRoundTripLegToDay depTime extraction covers segment[0] departure fields', () => {
+  const startIdx = apiSrc.indexOf('export async function addRoundTripLegToDay');
+  const endIdx = apiSrc.indexOf('\nexport async function', startIdx + 1);
+  const fnBody = apiSrc.slice(startIdx, endIdx === -1 ? undefined : endIdx);
+  assert.match(
+    fnBody,
+    /seg0\?\.departureTime|seg0\?\.departure_time/,
+    'depTime extraction must fall back to segment[0] departure fields',
+  );
+});
+
+test('BugB: addRoundTripLegToDay arrTime extraction covers arrivalDateTime path', () => {
+  const startIdx = apiSrc.indexOf('export async function addRoundTripLegToDay');
+  const endIdx = apiSrc.indexOf('\nexport async function', startIdx + 1);
+  const fnBody = apiSrc.slice(startIdx, endIdx === -1 ? undefined : endIdx);
+  assert.match(
+    fnBody,
+    /arrivalDateTime|arrival_datetime/,
+    'arrTime extraction must also try arrivalDateTime / arrival_datetime fields',
+  );
+});
+
+test('BugB: addRoundTripLegToDay arrTime extraction uses last segment (segLast) for arrival', () => {
+  const startIdx = apiSrc.indexOf('export async function addRoundTripLegToDay');
+  const endIdx = apiSrc.indexOf('\nexport async function', startIdx + 1);
+  const fnBody = apiSrc.slice(startIdx, endIdx === -1 ? undefined : endIdx);
+  assert.match(
+    fnBody,
+    /segLast/,
+    'arrTime extraction must use last segment (segLast) for multi-segment flights',
+  );
+  assert.match(
+    fnBody,
+    /segLast\?\.arrivalTime|segLast\?\.arrival_time/,
+    'arrTime extraction must read arrival from segLast',
+  );
+});
+
+test('BugB: legDetails includes camelCase departureTime alias', () => {
+  const startIdx = apiSrc.indexOf('legDetails: Record<string, unknown> = {');
+  const legDetailsSrc = apiSrc.slice(startIdx, startIdx + 2500);
+  assert.match(
+    legDetailsSrc,
+    /departureTime:\s*depTime/,
+    'legDetails must include camelCase departureTime alongside snake_case departure_time',
+  );
+});
+
+test('BugB: legDetails includes camelCase arrivalTime alias', () => {
+  const startIdx = apiSrc.indexOf('legDetails: Record<string, unknown> = {');
+  const legDetailsSrc = apiSrc.slice(startIdx, startIdx + 2500);
+  assert.match(
+    legDetailsSrc,
+    /arrivalTime:\s*arrTime/,
+    'legDetails must include camelCase arrivalTime alongside snake_case arrival_time',
+  );
+});
+
+test('BugB: legDetails includes leg_label field', () => {
+  const startIdx = apiSrc.indexOf('legDetails: Record<string, unknown> = {');
+  const legDetailsSrc = apiSrc.slice(startIdx, startIdx + 2500);
+  assert.match(
+    legDetailsSrc,
+    /leg_label/,
+    'legDetails must include leg_label for display (e.g. "Outbound" / "Return")',
+  );
+});
