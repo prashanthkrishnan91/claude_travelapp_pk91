@@ -6,7 +6,7 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Now
 
-- **Stage 3.5 Phase 3 — Card variant breadth across other surfaces.** Apply `Card` primitive + ds-* token polish to remaining surfaces: `FlightCard`, `TripBuilder` card slots, `ItineraryItemCard`, and any other surfaces still using raw div / legacy colors. Contract: `docs/product/DESIGN_IMPLEMENTATION_CONTRACT.md` §25. Run `feature-contract` + `golden-scenarios` before coding (Level 2 requirement). Hard stops: same as Wife-Wow umbrella (no provider/API/SQL/behavior changes).
+- **Stage 3.5 Slice 4 — Paper World Remaining Surfaces.** Convert `TripBuilder` CollapsiblePanel from dark boutique to paper world. Explore + Saved remain dark cinematic (cinema punctuation rule). Optionally: Concierge trip-context panel result cards. Hard stops: no PR #431 logic paths, no provider/API/SQL/behavior changes. Run `feature-contract` + `golden-scenarios` before coding (Level 2 requirement).
 
 ## Next
 
@@ -15,6 +15,8 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 - Optional: Trip-workspace Explore parity (reuse Explore's canonical Flights search and hotel discovery inside `TripBuilder`) — accepted open gap, schedule separately if needed.
 
 ## Completed
+
+- **Stage 3.5 Slice 3 — Paper Planning Objects (2026-05-18, merged PR #436).** `ItineraryItemCard`, `TripBuilderForm`, `OptimizeTripModal`, `DayPlanModal` converted from dark boutique to paper world (`folio-paper-panel/item/header`, `bg-ds-bone/linen`, `border-ds-hairline`, `text-ds-folio-ink*`, `btn-marine`, `btn-folio-ghost`). New `.folio-paper-item`, `.btn-folio-ghost`, `--ds-paper-elevation-1/2` in `globals.css`. 46 new contract tests. **2510 total tests, 0 failures.** No backend/SQL/provider/env/behavior changes.
 
 - **Stage 3.5 Phase 2B — Concierge shared helpers + trip-context polish (2026-05-16, merged PR #399).** `cardHelpers.ts` created (shared `hasClosedSignal`/`canShowGoogleVerifiedBadge`/`pickCardMeta`, 12-field scan including `card.raw`). `AIConciergePanel` uses `Card.Identity`/`Card.Trust`/`Card.Why` named slots, 44px touch targets, full ds-token palette. 953 tests, 950 pass.
 
