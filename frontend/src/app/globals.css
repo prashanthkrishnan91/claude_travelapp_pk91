@@ -186,6 +186,24 @@
   --ds-type-label-size:     var(--ds-type-caption-size);
   --ds-type-label-weight:   500;
   --ds-type-label-tracking: 0.04em;
+
+  /* ── Folio Foundation tokens — Stage 3.5 Slice 1
+     Marine ink: paper-world primary accent. Verified WCAG AA on linen + warm-paper.
+     Folio ink: warm near-black for paper surface text (not cold --ds-ink-paper navy).
+     Editorial font: resolved to Fraunces variable via next/font/google CSS var. */
+
+  /* Marine ink palette */
+  --ds-marine-ink:       #1F4256;
+  --ds-marine-deep:      #152E3E;
+  --ds-marine-soft:      #2A5870;
+
+  /* Paper-world ink text palette */
+  --ds-folio-ink:        #1E1A14;
+  --ds-folio-ink-soft:   #4A4338;
+  --ds-folio-ink-mist:   #7A6E5C;
+
+  /* Editorial serif font — exposed via --font-fraunces (next/font CSS var) */
+  --ds-font-editorial:   var(--font-fraunces), Georgia, 'Times New Roman', serif;
 }
 
 @theme {
@@ -272,6 +290,14 @@
   --color-brand-600: #a88438;
   --color-brand-700: #7d5f20;
 
+  /* ── Folio Foundation — theme wiring for marine ink + folio ink */
+  --color-ds-marine-ink:       var(--ds-marine-ink);
+  --color-ds-marine-deep:      var(--ds-marine-deep);
+  --color-ds-marine-soft:      var(--ds-marine-soft);
+  --color-ds-folio-ink:        var(--ds-folio-ink);
+  --color-ds-folio-ink-soft:   var(--ds-folio-ink-soft);
+  --color-ds-folio-ink-mist:   var(--ds-folio-ink-mist);
+
   /* ── Design token semantic wiring — theme keys read from :root vars */
   /* Surface */
   --color-ds-midnight:         var(--ds-midnight-ink);
@@ -324,7 +350,7 @@
   }
 
   body {
-    background: var(--ds-midnight-ink);
+    background: var(--ds-warm-paper);
     color: var(--ds-text-primary);
     font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
       "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -912,12 +938,12 @@
     border-bottom: 1px solid var(--ds-pen-stroke);
   }
 
-  /* Bottom nav — warm dark midnight, quiet 4-tab boutique */
+  /* Bottom nav — warm paper folio, 4-tab boutique (Folio Slice 1) */
   .mobile-bottom-nav {
-    background: var(--ds-midnight-ink);
-    border-top: 1px solid var(--ds-pen-stroke);
-    /* Subtle warm brass highlight at top edge */
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ds-sandstone-gold) 10%, transparent);
+    background: var(--ds-bone);
+    border-top: 1px solid var(--ds-hairline);
+    /* Subtle warm highlight at top edge */
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
   }
 
   /* Individual tab item — full column, safe-area aware */
@@ -936,11 +962,11 @@
     transition: color var(--ds-duration-fast) var(--ds-easing-standard);
   }
   .mobile-tab-item:focus-visible {
-    outline: 2px solid var(--ds-accent);
+    outline: 2px solid var(--ds-marine-ink);
     outline-offset: -2px;
   }
 
-  /* Active indicator — brass bar at top edge of the active tab */
+  /* Active indicator — marine ink bar at top edge of the active tab */
   .mobile-tab-active-dot {
     position: absolute;
     top: 0;
@@ -949,7 +975,7 @@
     width: 1.25rem;
     height: 2px;
     border-radius: 0 0 2px 2px;
-    background: var(--ds-sandstone-gold);
+    background: var(--ds-marine-ink);
   }
 
   /* Icon container — 44px wide to meet touch target, 28px tall */
@@ -959,21 +985,21 @@
     justify-content: center;
     width: 2.75rem;
     height: 1.75rem;
-    color: var(--ds-mist);
+    color: var(--ds-folio-ink-mist);
     transition: color var(--ds-duration-fast) var(--ds-easing-standard);
   }
-  .mobile-tab-icon-active { color: var(--ds-sandstone-gold); }
+  .mobile-tab-icon-active { color: var(--ds-marine-ink); }
 
   /* Tab label — quiet caption under icon */
   .mobile-tab-label {
     font-size: 0.6rem;
     font-weight: 500;
     letter-spacing: 0.04em;
-    color: var(--ds-mist);
+    color: var(--ds-folio-ink-mist);
     line-height: 1;
     transition: color var(--ds-duration-fast) var(--ds-easing-standard);
   }
-  .mobile-tab-label-active { color: var(--ds-sandstone-gold); }
+  .mobile-tab-label-active { color: var(--ds-marine-ink); }
 
   /* Page content clearance — nav height + device safe-area inset */
   .mobile-nav-spacer {
@@ -1004,13 +1030,13 @@
      and coordinates child pseudo-element layers. */
   .atelier-atmosphere-root {
     position: relative;
-    /* Slightly warmer than pure midnight-ink, giving a dark paper feel */
-    background-color: var(--ds-atelier-base);
-    /* Soft ambient center warmth — like a single warm light source above */
+    /* Folio Slice 1: paper-world shell. Warm linen as the default chrome. */
+    background-color: var(--ds-warm-paper);
+    /* Subtle warm radial from top — desk-lamp atmosphere on paper canvas */
     background-image:
       radial-gradient(
-        ellipse 80% 50% at 50% -10%,
-        var(--ds-atelier-ambient) 0%,
+        ellipse 80% 40% at 50% -5%,
+        rgba(31, 66, 86, 0.04) 0%,
         transparent 70%
       );
   }
@@ -1032,14 +1058,14 @@
     /* Separate edge darkening on all four sides */
     mask-image: radial-gradient(ellipse 95% 95% at 50% 50%, transparent 40%, black 100%);
     -webkit-mask-image: radial-gradient(ellipse 95% 95% at 50% 50%, transparent 40%, black 100%);
-    opacity: 0.6;
+    opacity: 0.22;
     /* Entrance fade — reduced-motion safe (global rule collapses to 0.01ms) */
     animation: atelier-vignette-in var(--ds-duration-slow) var(--ds-easing-decelerate) both;
   }
 
   @keyframes atelier-vignette-in {
     from { opacity: 0; }
-    to   { opacity: 0.6; }
+    to   { opacity: 0.22; }
   }
 
   /* ── Texture layer
@@ -1057,7 +1083,7 @@
     background-size: 180px 180px;
     /* Warm tint blended over the grain for a linen feel */
     mix-blend-mode: soft-light;
-    opacity: 0.045;
+    opacity: 0.065;
   }
 
   /* ── Surface depth — boutique card refinement
@@ -1078,10 +1104,10 @@
   @media (prefers-reduced-motion: reduce) {
     .atelier-vignette-layer {
       animation: none;
-      opacity: 0.5;
+      opacity: 0.15;
     }
     .atelier-texture-layer {
-      opacity: 0.03;
+      opacity: 0.05;
     }
   }
 
@@ -1517,5 +1543,181 @@
     .scrapbook-page::after { opacity: 1; }
     .saved-clipping-card::before { opacity: 1; }
     .saved-folio-card::before { opacity: 1; }
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     FOLIO FOUNDATION — Stage 3.5 Slice 1
+     Paper-world shell, editorial serif, marine ink accent, ambient drift.
+     These classes power the sidebar, nav, display text, cinema panels,
+     and paper-world primary buttons introduced in Slice 1.
+     Slice 2 adopts paper surfaces broadly across cards/forms/modals.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* ── Folio sidebar — warm linen surface for the desktop nav column */
+  .folio-sidebar {
+    background: var(--ds-bone);
+    border-right: 1px solid var(--ds-hairline);
+  }
+
+  /* ── Folio nav items — paper-world navigation (warm ink, marine active) */
+  .folio-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-radius: 0.5rem;
+    padding: 0.625rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ds-folio-ink-soft);
+    transition:
+      background var(--ds-duration-standard) var(--ds-easing-standard),
+      color var(--ds-duration-standard) var(--ds-easing-standard);
+    text-decoration: none;
+  }
+  .folio-nav-item:hover {
+    background: color-mix(in srgb, var(--ds-hairline) 55%, transparent);
+    color: var(--ds-folio-ink);
+  }
+  .folio-nav-item:focus-visible {
+    outline: 2px solid var(--ds-marine-ink);
+    outline-offset: 2px;
+  }
+  .folio-nav-item-active {
+    background: color-mix(in srgb, var(--ds-marine-ink) 9%, transparent);
+    color: var(--ds-marine-ink);
+  }
+  .folio-nav-item-active:hover {
+    background: color-mix(in srgb, var(--ds-marine-ink) 14%, transparent);
+    color: var(--ds-marine-ink);
+  }
+
+  /* ── Folio nav section label — overline in warm ink mist */
+  .folio-section-label {
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    font-weight: var(--ds-type-overline-weight);
+    letter-spacing: var(--ds-type-overline-tracking);
+    text-transform: uppercase;
+    color: var(--ds-folio-ink-mist);
+  }
+
+  /* ── Editorial display serif — Fraunces for display / heading roles */
+  .folio-display-serif {
+    font-family: var(--ds-font-editorial);
+  }
+
+  /* ── Italic editorial caption — short italic serif below object titles */
+  .folio-editorial-caption {
+    font-family: var(--ds-font-editorial);
+    font-style: italic;
+    font-size: var(--ds-type-quote-size);
+    line-height: var(--ds-type-quote-leading);
+    font-weight: 400;
+  }
+
+  /* ── Marine ink primary button — paper-world primary CTA
+     Use in paper-world areas. Not a replacement for btn-primary globally;
+     Slice 2 will migrate existing CTAs surface-by-surface. */
+  .btn-marine {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 0.375rem;
+    background: var(--ds-marine-ink);
+    padding: 0.625rem 1rem;
+    min-height: 2.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--ds-warm-paper);
+    transition:
+      background var(--ds-duration-fast) var(--ds-easing-standard),
+      box-shadow var(--ds-duration-fast) var(--ds-easing-standard);
+    box-shadow: 0 1px 3px rgba(21, 46, 62, 0.28);
+  }
+  .btn-marine:hover {
+    background: var(--ds-marine-soft);
+    box-shadow: 0 2px 8px rgba(21, 46, 62, 0.35);
+  }
+  .btn-marine:active { background: var(--ds-marine-deep); }
+  .btn-marine:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-marine:focus-visible {
+    outline: 2px solid var(--ds-marine-soft);
+    outline-offset: 3px;
+  }
+
+  /* ── Folio cinema panel — warm dark panel for cinematic moments
+     Used for trip hero, concierge stage, and framed image plates.
+     Apply alongside folio-ambient for the slow atmosphere drift. */
+  .folio-cinema-panel {
+    position: relative;
+    background-color: var(--ds-atelier-base);
+    background-image:
+      radial-gradient(
+        ellipse 80% 60% at 50% 30%,
+        rgba(180, 130, 60, 0.10) 0%,
+        transparent 70%
+      );
+    overflow: hidden;
+  }
+
+  /* Inner edge vignette for cinema panels */
+  .folio-cinema-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      ellipse 100% 100% at 50% 50%,
+      transparent 40%,
+      rgba(6, 9, 14, 0.45) 100%
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Ensure cinema panel children render above vignette pseudo-element */
+  .folio-cinema-panel > * { position: relative; z-index: 1; }
+
+  /* ── Folio ambient drift — slow radial warmth drift for cinema panels
+     Apply on .folio-cinema-panel or any cinematic surface.
+     The ::after pseudo-element carries the drifting warm glow.
+     prefers-reduced-motion: drift disabled (global rule collapses animation).
+     Below 600px: drift disabled to preserve mobile render budget. */
+  .folio-ambient {
+    position: relative;
+    overflow: hidden;
+  }
+  .folio-ambient::after {
+    content: "";
+    position: absolute;
+    width: 120%;
+    height: 120%;
+    top: -10%;
+    left: -10%;
+    background: radial-gradient(
+      ellipse 55% 55% at 50% 50%,
+      rgba(180, 130, 60, 0.11) 0%,
+      transparent 60%
+    );
+    pointer-events: none;
+    will-change: transform;
+    animation: folio-ambient-drift 45s ease-in-out infinite;
+    z-index: 0;
+  }
+
+  @keyframes folio-ambient-drift {
+    0%, 100% { transform: translate(0, 0); }
+    33%       { transform: translate(3%, -4%); }
+    67%       { transform: translate(-3%, 3%); }
+  }
+
+  /* Children of folio-ambient render above the drifting glow */
+  .folio-ambient > * { position: relative; z-index: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .folio-ambient::after { animation: none; }
+  }
+
+  @media (max-width: 600px) {
+    .folio-ambient::after { animation: none; }
   }
 }
