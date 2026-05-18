@@ -467,12 +467,12 @@ describe("Folio Foundation — invariant preservation", () => {
     );
   });
 
-  it("48. mobile-top-bar still contains midnight token (8J constraint preserved)", () => {
+  it("48. mobile-top-bar uses paper-world tokens (Slice 2 converted from midnight)", () => {
     const idx = css.indexOf(".mobile-top-bar {");
     const block = css.slice(idx, idx + 200);
     assert.ok(
-      block.includes("midnight") || block.includes("ds-midnight-ink"),
-      ".mobile-top-bar must still use midnight-ink (8J test constraint)"
+      block.includes("bone") || block.includes("warm-paper") || block.includes("hairline") || block.includes("linen"),
+      ".mobile-top-bar must use paper-world tokens (Slice 2 converted from midnight to bone/hairline)"
     );
   });
 

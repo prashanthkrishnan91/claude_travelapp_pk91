@@ -350,17 +350,17 @@ describe("Phase 8N-C: trips/page visual composition", () => {
     );
   });
 
-  it("31. trips/page ContinuePlanningHero has advisor-desk-panel", () => {
+  it("31. trips/page ContinuePlanningHero has folio-paper-panel (Slice 2 paper conversion)", () => {
     assert.ok(
-      tripsPage.includes("advisor-desk-panel"),
-      "trips/page ContinuePlanningHero must use advisor-desk-panel composition"
+      tripsPage.includes("folio-paper-panel"),
+      "trips/page ContinuePlanningHero must use folio-paper-panel (replaced advisor-desk-panel in Slice 2)"
     );
   });
 
-  it("32. trips/page ContinuePlanningHero has concierge-desk-header zone", () => {
+  it("32. trips/page ContinuePlanningHero has folio-paper-header zone (Slice 2 paper conversion)", () => {
     assert.ok(
-      tripsPage.includes("concierge-desk-header"),
-      "trips/page ContinuePlanningHero must have concierge-desk-header interior zone"
+      tripsPage.includes("folio-paper-header"),
+      "trips/page ContinuePlanningHero must have folio-paper-header zone (replaced concierge-desk-header in Slice 2)"
     );
   });
 
@@ -371,17 +371,17 @@ describe("Phase 8N-C: trips/page visual composition", () => {
     );
   });
 
-  it("34. trips/page still has boutique-instrument on ContinuePlanningHero (8N-B)", () => {
+  it("34. trips/page has folio-paper-panel on ContinuePlanningHero (Slice 2 replaces boutique-instrument)", () => {
     assert.ok(
-      tripsPage.includes("boutique-instrument"),
-      "trips/page must still apply boutique-instrument on ContinuePlanningHero (8N-B)"
+      tripsPage.includes("folio-paper-panel"),
+      "trips/page must apply folio-paper-panel on ContinuePlanningHero (Slice 2 paper conversion)"
     );
   });
 
-  it("35. trips/page still has boutique-folio on JourneyCard (8N-B)", () => {
+  it("35. trips/page has folio-paper-card on JourneyCard (Slice 2 replaces boutique-folio)", () => {
     assert.ok(
-      tripsPage.includes("boutique-folio"),
-      "trips/page must still apply boutique-folio on JourneyCard (8N-B)"
+      tripsPage.includes("folio-paper-card"),
+      "trips/page must apply folio-paper-card on JourneyCard (Slice 2 paper conversion)"
     );
   });
 });
@@ -531,10 +531,10 @@ describe("Phase 8N-C: invariants and preservation", () => {
 // ── 51–57. Trip Detail composition adoption ───────────────────────────────────
 
 describe("Phase 8N-C patch: Trip Detail composition adoption", () => {
-  it("51. Trip Detail chapter cover uses advisor-desk-panel composition", () => {
+  it("51. Trip Detail chapter cover uses folio-paper-panel composition (Slice 2 paper conversion)", () => {
     assert.ok(
-      tripDetailPage.includes("advisor-desk-panel"),
-      "trips/[id]/page must use advisor-desk-panel on chapter cover section"
+      tripDetailPage.includes("folio-paper-panel"),
+      "trips/[id]/page must use folio-paper-panel on chapter cover section (replaced advisor-desk-panel in Slice 2)"
     );
   });
 
@@ -573,10 +573,10 @@ describe("Phase 8N-C patch: Trip Detail composition adoption", () => {
     );
   });
 
-  it("57. Trip Detail chapter cover retains boutique-instrument (8N-B preservation)", () => {
+  it("57. Trip Detail chapter cover uses folio-paper-panel (Slice 2 replaces boutique-instrument)", () => {
     assert.ok(
-      tripDetailPage.includes("boutique-instrument"),
-      "trips/[id]/page chapter cover must still include boutique-instrument (8N-B)"
+      tripDetailPage.includes("folio-paper-panel"),
+      "trips/[id]/page chapter cover must use folio-paper-panel (Slice 2 paper conversion replaces boutique-instrument)"
     );
   });
 });

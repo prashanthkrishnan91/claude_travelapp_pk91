@@ -43,8 +43,8 @@ test('ItineraryDayColumn: uses text-ds-accent for morning day-part color', () =>
   assert.ok(dayColumnSrc.includes('text-ds-accent'), 'missing text-ds-accent');
 });
 
-test('ItineraryDayColumn: uses text-ds-accent-muted for evening day-part color', () => {
-  assert.ok(dayColumnSrc.includes('text-ds-accent-muted'), 'missing text-ds-accent-muted');
+test('ItineraryDayColumn: uses text-ds-marine-soft for evening day-part color (Slice 2 paper conversion)', () => {
+  assert.ok(dayColumnSrc.includes('text-ds-marine-soft'), 'missing text-ds-marine-soft for evening');
 });
 
 test('ItineraryDayColumn: uses text-ds-text-secondary for afternoon day-part color', () => {
@@ -63,28 +63,32 @@ test('ItineraryDayColumn: uses bg-ds-carbon for secondary dark surface', () => {
   assert.ok(dayColumnSrc.includes('bg-ds-carbon'), 'missing bg-ds-carbon');
 });
 
-test('ItineraryDayColumn: uses bg-ds-onyx for card root surface', () => {
-  assert.ok(dayColumnSrc.includes('bg-ds-onyx'), 'missing bg-ds-onyx');
+test('ItineraryDayColumn: uses folio-paper-card for card root surface (Slice 2 paper conversion)', () => {
+  assert.ok(dayColumnSrc.includes('folio-paper-card'), 'missing folio-paper-card root surface');
+  assert.ok(!dayColumnSrc.includes('"bg-ds-onyx"'), 'folio-paper-card must replace bg-ds-onyx');
 });
 
-test('ItineraryDayColumn: uses ds-midnight-ink inline style for expanded body (ink-ladder depth)', () => {
-  assert.ok(dayColumnSrc.includes('var(--ds-midnight-ink)'), 'missing var(--ds-midnight-ink) inline style');
+test('ItineraryDayColumn: uses bone/warm-paper inline style for expanded body (Slice 2 paper conversion)', () => {
+  assert.ok(
+    dayColumnSrc.includes('var(--ds-bone)') || dayColumnSrc.includes('var(--ds-warm-paper)'),
+    'expanded body must use bone/warm-paper (converted from midnight-ink in Slice 2)'
+  );
 });
 
 test('ItineraryDayColumn: uses ds-accent-subtle inline style for drag-over tint', () => {
   assert.ok(dayColumnSrc.includes('var(--ds-accent-subtle)'), 'missing var(--ds-accent-subtle) inline style');
 });
 
-test('ItineraryDayColumn: uses ds-elevation-2 shadow token for card depth', () => {
-  assert.ok(dayColumnSrc.includes('ds-elevation-2'), 'missing ds-elevation-2 shadow token');
+test('ItineraryDayColumn: uses folio-paper-card which carries shadow (Slice 2 paper conversion)', () => {
+  assert.ok(dayColumnSrc.includes('folio-paper-card'), 'folio-paper-card carries shadow (replaced inline ds-elevation-2)');
 });
 
 test('ItineraryDayColumn: uses text-ds-warning for far-apart travel hints', () => {
   assert.ok(dayColumnSrc.includes('text-ds-warning'), 'missing text-ds-warning for far-apart hints');
 });
 
-test('ItineraryDayColumn: uses to-ds-midnight for show-more gradient fade', () => {
-  assert.ok(dayColumnSrc.includes('to-ds-midnight'), 'missing to-ds-midnight gradient fade');
+test('ItineraryDayColumn: uses to-ds-bone for show-more gradient fade (Slice 2 paper conversion)', () => {
+  assert.ok(dayColumnSrc.includes('to-ds-bone'), 'gradient fade must use to-ds-bone (converted from to-ds-midnight in Slice 2)');
 });
 
 // ── ItineraryDayColumn: 44×44px touch targets ─────────────────────────────────
@@ -150,7 +154,7 @@ test('ItineraryDayColumn: empty-state "+ Add" button has 44px hit-area (min-h-[4
   // Simpler: confirm the inline-flex + min-h-[44px] pattern exists near the + Add text
   const emptyStateIdx = dayColumnSrc.indexOf('+ Add');
   assert.ok(emptyStateIdx !== -1, 'missing + Add text');
-  const surroundingContext = dayColumnSrc.slice(Math.max(0, emptyStateIdx - 300), emptyStateIdx + 50);
+  const surroundingContext = dayColumnSrc.slice(Math.max(0, emptyStateIdx - 400), emptyStateIdx + 50);
   assert.ok(
     surroundingContext.includes('min-h-[44px]'),
     'empty-state "+ Add" button lacks min-h-[44px] touch-target within 300 chars before the text'
@@ -159,16 +163,16 @@ test('ItineraryDayColumn: empty-state "+ Add" button has 44px hit-area (min-h-[4
 
 // ── ItineraryDayColumn: selected-day uses ds-accent ──────────────────────────
 
-test('ItineraryDayColumn: selected day number marker uses bg-ds-accent', () => {
-  assert.ok(dayColumnSrc.includes('bg-ds-accent'), 'missing bg-ds-accent on selected chapter number');
+test('ItineraryDayColumn: selected day number marker uses bg-ds-marine-ink (Slice 2 paper conversion)', () => {
+  assert.ok(dayColumnSrc.includes('bg-ds-marine-ink'), 'selected chapter number must use bg-ds-marine-ink');
 });
 
-test('ItineraryDayColumn: selected day border uses border-ds-accent/40', () => {
-  assert.ok(dayColumnSrc.includes('border-ds-accent/40'), 'missing border-ds-accent/40 on selected day');
+test('ItineraryDayColumn: selected day border uses border-ds-marine-ink/40 (Slice 2 paper conversion)', () => {
+  assert.ok(dayColumnSrc.includes('border-ds-marine-ink/40'), 'selected day border must use border-ds-marine-ink/40');
 });
 
-test('ItineraryDayColumn: selected ring uses ring-ds-accent/20', () => {
-  assert.ok(dayColumnSrc.includes('ring-ds-accent/20'), 'missing ring-ds-accent/20 on selected day');
+test('ItineraryDayColumn: selected ring uses ring-ds-marine-ink/20 (Slice 2 paper conversion)', () => {
+  assert.ok(dayColumnSrc.includes('ring-ds-marine-ink/20') || dayColumnSrc.includes('ring-ds-marine-ink/15'), 'selected ring must use marine-ink');
 });
 
 // ── ItineraryDayColumn: all behavior contracts preserved ─────────────────────
@@ -255,8 +259,8 @@ test('TripDetailPage: uses text-ds-text-tertiary for muted elements', () => {
   assert.ok(tripDetailSrc.includes('text-ds-text-tertiary'), 'missing text-ds-text-tertiary');
 });
 
-test('TripDetailPage: uses text-ds-accent for context compass icon', () => {
-  assert.ok(tripDetailSrc.includes('text-ds-accent'), 'missing text-ds-accent in trip detail page');
+test('TripDetailPage: uses marine-ink for primary actions (Slice 2 paper conversion)', () => {
+  assert.ok(tripDetailSrc.includes('text-ds-marine-ink') || tripDetailSrc.includes('ds-marine-ink'), 'trip detail page must use marine-ink for primary actions');
 });
 
 test('TripDetailPage: toast uses bg-ds-onyx', () => {

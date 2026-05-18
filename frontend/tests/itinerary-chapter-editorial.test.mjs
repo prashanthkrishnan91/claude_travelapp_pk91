@@ -346,7 +346,9 @@ test('ItineraryDayColumn: onMoveItemToIdeas threading preserved', () => {
   assert.match(dayColSrc, /onMoveItemToIdeas/, 'onMoveItemToIdeas must remain threaded through day column');
 });
 
-test('ItineraryDayColumn: ds-* token classes preserved from Phase 4', () => {
-  assert.match(dayColSrc, /bg-ds-onyx/, 'day column must keep bg-ds-onyx from Phase 4');
-  assert.match(dayColSrc, /border-ds-pen-stroke/, 'day column must keep border-ds-pen-stroke from Phase 4');
+test('ItineraryDayColumn: paper-world surface tokens (Slice 2 converted from Phase 4 dark tokens)', () => {
+  assert.ok(
+    dayColSrc.includes('folio-paper-card') || dayColSrc.includes('ds-bone') || dayColSrc.includes('ds-warm-paper'),
+    'day column must use paper-world surface (folio-paper-card, ds-bone, or ds-warm-paper)'
+  );
 });

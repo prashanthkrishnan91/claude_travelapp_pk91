@@ -25,9 +25,11 @@ const dashboardClient = readFileSync(
 
 // ── trips/page.tsx — ds-* token contract ─────────────────────────────────────
 
-test("trips page uses Card primitive (not bare .card class for trip content)", () => {
-  assert.match(tripsPage, /from "@\/components\/ui\/Card"/);
-  assert.match(tripsPage, /<Card/);
+test("trips page uses folio-paper-card or folio-paper-panel for trip content (Slice 2 paper conversion)", () => {
+  assert.ok(
+    tripsPage.includes("folio-paper-card") || tripsPage.includes("folio-paper-panel"),
+    "trips page must use folio paper primitives for card surfaces"
+  );
 });
 
 test("trips page uses Skeleton for loading state", () => {
@@ -60,10 +62,10 @@ test("trips page has Continue Planning section", () => {
   assert.match(tripsPage, /ContinuePlanningHero/);
 });
 
-test("trips page ContinuePlanningHero uses elevation or boutique surface token", () => {
+test("trips page ContinuePlanningHero uses folio-paper-panel surface (Slice 2 paper conversion)", () => {
   assert.ok(
-    tripsPage.includes("ds-elevation-2") || tripsPage.includes("boutique-instrument"),
-    "ContinuePlanningHero must use ds-elevation-2 or boutique-instrument surface class"
+    tripsPage.includes("folio-paper-panel"),
+    "ContinuePlanningHero must use folio-paper-panel surface class"
   );
 });
 
@@ -100,12 +102,15 @@ test("ContinuePlanningHero edit/delete buttons have 44px touch targets", () => {
   assert.match(heroSection, /min-w-\[44px\]/);
 });
 
-test("ContinuePlanningHero edit button uses ds-text-tertiary token", () => {
+test("ContinuePlanningHero edit button uses folio-ink-mist token (Slice 2 paper conversion)", () => {
   const heroSection = tripsPage.slice(
     tripsPage.indexOf("function ContinuePlanningHero"),
     tripsPage.indexOf("function JourneyCard"),
   );
-  assert.match(heroSection, /text-ds-text-tertiary/);
+  assert.ok(
+    heroSection.includes("text-ds-folio-ink-mist") || heroSection.includes("folio-ink-mist"),
+    "ContinuePlanningHero edit button must use folio-ink-mist (paper-world muted interactive)"
+  );
 });
 
 test("ContinuePlanningHero delete button uses ds-warning token", () => {
@@ -197,9 +202,12 @@ test("trips page TripStatusBadge uses getDisplayTripStatus", () => {
   assert.match(tripsPage, /TripStatusBadge status=\{getDisplayTripStatus\(trip\)\}/);
 });
 
-test("trips page edit modal uses Card primitive and ds-elevation-4", () => {
+test("trips page edit modal uses folio-paper-panel (Slice 2 paper conversion)", () => {
   assert.match(tripsPage, /EditModal/);
-  assert.match(tripsPage, /ds-elevation-4/);
+  assert.ok(
+    tripsPage.includes("folio-paper-panel"),
+    "edit modal must use folio-paper-panel (paper-world card surface)"
+  );
 });
 
 test("trips page delete modal uses ds-warning token (not hardcoded rose colors)", () => {

@@ -259,7 +259,10 @@ test("trips page ContinuePlanningHero uses destination as editorial overline", (
     tripsPage.indexOf("function JourneyCard"),
   );
   assert.match(heroSection, /trip\.destination/);
-  assert.match(heroSection, /tracking-\[0\.1em\]/);
+  assert.ok(
+    /tracking-\[0\.1em\]/.test(heroSection) || heroSection.includes("folio-muted-label") || heroSection.includes("Overline"),
+    "hero section must use Overline tracking (direct class, folio-muted-label, or Overline component)"
+  );
 });
 
 test("trips page has editorial 'Your Travel Shelf' overline in page header", () => {

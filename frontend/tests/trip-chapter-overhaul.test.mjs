@@ -161,16 +161,22 @@ test("page uses text-ds-text for primary text", () => {
   assert.match(tripDetailPage, /text-ds-text(?!-)/);
 });
 
-test("page uses text-ds-text-secondary for secondary copy", () => {
-  assert.match(tripDetailPage, /text-ds-text-secondary/);
+test("page uses folio-ink-soft for secondary copy (Slice 2 paper conversion)", () => {
+  assert.ok(
+    tripDetailPage.includes("folio-ink-soft") || tripDetailPage.includes("text-ds-folio-ink-soft"),
+    "trip detail page must use folio-ink-soft for secondary copy"
+  );
 });
 
 test("page uses text-ds-text-tertiary for metadata", () => {
   assert.match(tripDetailPage, /text-ds-text-tertiary/);
 });
 
-test("page uses bg-ds-accent for primary CTA (concierge button)", () => {
-  assert.match(tripDetailPage, /bg-ds-accent/);
+test("page uses marine-ink for primary CTA (Slice 2 paper conversion)", () => {
+  assert.ok(
+    tripDetailPage.includes("marine-ink") || tripDetailPage.includes("bg-ds-marine-ink"),
+    "trip detail page must use marine-ink for primary CTA buttons"
+  );
 });
 
 test("page uses text-ds-text-inverse on accent button", () => {

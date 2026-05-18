@@ -4,7 +4,7 @@
 
 - **Visual concept source:** [`docs/ai/concepts/folio-concept-v1.html`](../concepts/folio-concept-v1.html) — open in a browser to see the three reference frames (desktop trip studio, mobile day folio, mobile concierge correspondence).
 - **Functional stability:** the autocomplete portal behaviour and round-trip flight leg behaviour fixed in PR #431 are **not in scope** for any design slice. Visual work must not regress them; if a slice touches `CityAutocomplete`, `api.ts:addRoundTripLegToDay`, `TripBuilder.handleAddRoundTripToItinerary`, or `ItineraryItemCard` round-trip detection, treat it as out-of-bounds and stop.
-- **Status:** direction approved at proposal level. Slice 1 has not started. This file is documentation; it contains no code paths to change.
+- **Status:** Slice 1 shipped (folio globals, Fraunces font, Sidebar, mobile nav paper shift). Slice 2 shipped (trips/dashboard cards, trip detail panels, ItineraryDayColumn, mobile top bar, btn-marine CTAs). See Section 16 for resolved decisions.
 
 ---
 
@@ -272,12 +272,20 @@ These were blocking before Slice 1. All resolved and implemented.
 6. **Concept HTML location:** Remains at `docs/ai/concepts/folio-concept-v1.html` as doc-only reference. No dev route added.
 7. **Personalisation depth:** Deferred to Slice 5. No change here.
 
-## 17. Open questions — Slice 2+
+## 17. Resolved decisions (Slice 2 — 2026-05-18)
 
-1. **Mobile top bar:** `mobile-top-bar` CSS class is test-constrained to midnight (8J test checks for "midnight"/"ds-midnight-ink"). Slice 2 must update the 8J test when converting the top bar to paper.
-2. **Card surface conversion:** No card/modal/form conversion in Slice 1. Slice 2 converts paper-appropriate surfaces: day folios, forms, sheets, modals.
-3. **CTA migration:** `btn-primary` still gold globally. Slice 2 migrates primary CTAs in paper-world routes to `btn-marine`. Use `btn-marine` for any new paper-world CTAs in the interim.
-4. **Folio serial + masthead:** Issue masthead, folio serials, large day numerals deferred to Slice 3 (Framed Cinema Moments) and Slice 4 (Editorial Motion).
+These were open questions before Slice 2. All resolved and implemented.
+
+1. **Mobile top bar:** `mobile-top-bar` converted from midnight to paper-world (`bg-ds-bone`, `text-ds-folio-ink`, hairline bottom border). 8J test updated to assert paper tokens instead of midnight.
+2. **Card surface conversion:** `trips/page.tsx` cards (JourneyCard, ContinuePlanningHero, EditModal), `trips/[id]/page.tsx` panels (trip header, chapter cover, workspace switcher), and `ItineraryDayColumn.tsx` all converted to `folio-paper-card` / `folio-paper-panel`. Old boutique/advisor-desk primitive classes removed from these surfaces.
+3. **CTA migration:** Primary CTAs in trips/dashboard routes migrated to `btn-marine`. `ContinuePlanningHero` action buttons, `JourneyCard` edit/delete actions, and trip detail workspace tabs use `btn-marine`. `btn-primary` (gold) retained only on explicit booking/payment flows.
+4. **Paper primitives added to globals.css:** `folio-paper-card`, `folio-paper-panel`, `folio-paper-section`, `folio-paper-header`, `folio-divider`, `folio-muted-label`, `folio-chip`, `folio-input` — all using `--ds-bone`/`--ds-warm-paper`/`--ds-linen` surfaces with `--ds-hairline` borders and `--ds-folio-ink` text.
+
+## 18. Open questions — Slice 3+
+
+1. **Remaining surfaces:** Concierge panel (AIConciergePanel), OptimizeTripModal, DayPlanModal, ItineraryItemCard, ExploreShell cards, TripBuilder CollapsiblePanel all still use dark/boutique tokens. Slice 3 converts these to paper-world where appropriate.
+2. **Folio serial + masthead:** Issue masthead, folio serials, large day numerals deferred to Slice 3 (Framed Cinema Moments) and Slice 4 (Editorial Motion).
+3. **Dark cinematic surfaces:** AI Concierge composer + result cards remain dark-cinema per the dual-world contract. These should NOT be converted to paper.
 
 ---
 

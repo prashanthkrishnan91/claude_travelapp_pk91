@@ -17,10 +17,10 @@ import { suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from 
 type DayPart = "morning" | "afternoon" | "evening" | "unscheduled";
 
 const DAY_PART_META: Record<DayPart, { label: string; timeHint: string; colorClass: string }> = {
-  morning:     { label: "Morning",     timeHint: "12 AM – 12 PM", colorClass: "text-ds-accent" },
-  afternoon:   { label: "Afternoon",   timeHint: "12 PM – 5 PM",  colorClass: "text-ds-text-secondary" },
-  evening:     { label: "Evening",     timeHint: "5 PM – 10 PM",  colorClass: "text-ds-accent-muted" },
-  unscheduled: { label: "Unscheduled", timeHint: "no time set",   colorClass: "text-ds-text-tertiary" },
+  morning:     { label: "Morning",     timeHint: "12 AM – 12 PM", colorClass: "text-ds-marine-ink" },
+  afternoon:   { label: "Afternoon",   timeHint: "12 PM – 5 PM",  colorClass: "text-ds-folio-ink-soft" },
+  evening:     { label: "Evening",     timeHint: "5 PM – 10 PM",  colorClass: "text-ds-marine-soft" },
+  unscheduled: { label: "Unscheduled", timeHint: "no time set",   colorClass: "text-ds-folio-ink-mist" },
 };
 
 function getItemDayPart(item: ItineraryItem): DayPart {
@@ -136,7 +136,7 @@ function renderItemsWithConnectors(
     if (hint.kind === "missing_location") {
       connector = (
         <div key={`hint-${item.id}`} className="flex items-center gap-1.5 px-3 py-1">
-          <div className="w-px h-4 bg-ds-pen-stroke ml-[17px] flex-shrink-0" />
+          <div className="w-px h-4 bg-ds-hairline ml-[17px] flex-shrink-0" />
           <MapPin className="w-3 h-3 text-ds-text-tertiary flex-shrink-0" />
           <span className="text-[10px] text-ds-text-tertiary leading-snug italic">{hint.label}</span>
         </div>
@@ -148,7 +148,7 @@ function renderItemsWithConnectors(
       connector = (
         <div key={`travel-${item.id}`} className="flex flex-col gap-1 px-3 py-1">
           <div className="flex items-center gap-1.5">
-            <div className="w-px h-4 bg-ds-pen-stroke ml-[17px] flex-shrink-0" />
+            <div className="w-px h-4 bg-ds-hairline ml-[17px] flex-shrink-0" />
             {mode === "walk" ? (
               <Footprints className="w-3 h-3 text-ds-text-tertiary flex-shrink-0" />
             ) : (
@@ -167,7 +167,7 @@ function renderItemsWithConnectors(
       const mode = est.walkMinutes <= 20 ? "walk" : "drive";
       connector = (
         <div key={`travel-${item.id}`} className="flex items-center gap-1.5 px-3 py-1">
-          <div className="w-px h-4 bg-ds-pen-stroke ml-[17px] flex-shrink-0" />
+          <div className="w-px h-4 bg-ds-hairline ml-[17px] flex-shrink-0" />
           {mode === "walk" ? (
             <Footprints className="w-3 h-3 text-ds-text-tertiary flex-shrink-0" />
           ) : (
@@ -253,10 +253,10 @@ function TimelineSections({
 // ─── SuggestionsReviewPanel ───────────────────────────────────────────────────
 
 const DAY_PART_COLOR: Record<string, string> = {
-  morning:     "text-ds-accent",
-  afternoon:   "text-ds-text-secondary",
-  evening:     "text-ds-accent-muted",
-  unscheduled: "text-ds-text-tertiary",
+  morning:     "text-ds-marine-ink",
+  afternoon:   "text-ds-folio-ink-soft",
+  evening:     "text-ds-marine-soft",
+  unscheduled: "text-ds-folio-ink-mist",
 };
 
 interface SuggestionsReviewPanelProps {
@@ -276,15 +276,15 @@ function SuggestionsReviewPanel({
 }: SuggestionsReviewPanelProps) {
   const itemMap = new Map(items.map((i) => [i.id, i]));
   return (
-    <div className="rounded-lg border border-ds-pen-stroke bg-ds-carbon p-3 mb-2 space-y-2">
+    <div className="rounded-lg border border-ds-hairline bg-ds-linen p-3 mb-2 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-ds-text flex items-center gap-1.5">
-          <Sparkles className="w-3 h-3 text-ds-accent" />
+        <span className="text-[11px] font-semibold text-ds-folio-ink flex items-center gap-1.5">
+          <Sparkles className="w-3 h-3 text-ds-marine-ink" />
           Suggested timing for {suggestions.length} {suggestions.length === 1 ? "item" : "items"}
         </span>
         <button
           onClick={onDismiss}
-          className="flex items-center justify-center -m-2 min-w-[44px] min-h-[44px] rounded-lg text-ds-text-tertiary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          className="flex items-center justify-center -m-2 min-w-[44px] min-h-[44px] rounded-lg text-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
           aria-label="Dismiss suggestions"
         >
           <X className="w-3.5 h-3.5" />
@@ -298,12 +298,12 @@ function SuggestionsReviewPanel({
           const colorClass = DAY_PART_COLOR[s.dayPart] ?? "text-ds-text-tertiary";
           return (
             <div key={s.itemId} className="flex items-center gap-2 text-[11px]">
-              <span className="truncate flex-1 text-ds-text-secondary">{item.title}</span>
+              <span className="truncate flex-1 text-ds-folio-ink-soft">{item.title}</span>
               <span className={`font-medium ${colorClass} flex-shrink-0`}>
                 {s.dayPart.charAt(0).toUpperCase() + s.dayPart.slice(1)}
               </span>
               {s.timeLabel && (
-                <span className="text-ds-text-tertiary flex-shrink-0">· {s.timeLabel}</span>
+                <span className="text-ds-folio-ink-mist flex-shrink-0">· {s.timeLabel}</span>
               )}
             </div>
           );
@@ -313,8 +313,8 @@ function SuggestionsReviewPanel({
       <button
         onClick={onApply}
         disabled={applying}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-ds-pen-stroke text-ds-accent text-[11px] font-semibold transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
-        style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-ds-hairline text-ds-marine-ink text-[11px] font-semibold transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 min-h-[44px]"
+        style={{ backgroundColor: "color-mix(in srgb, var(--ds-marine-ink) 8%, var(--ds-bone))" }}
       >
         {applying ? (
           <Loader2 className="w-3 h-3 animate-spin" />
@@ -345,9 +345,9 @@ function DayTravelHintBar({ items }: { items: ItineraryItem[] }) {
   }
 
   return (
-    <div className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-ds-carbon border border-ds-pen-stroke mt-1.5">
-      <Info className="w-3 h-3 text-ds-text-tertiary flex-shrink-0 mt-px" />
-      <span className="text-[10px] text-ds-text-tertiary leading-tight">{message} Rough hints only.</span>
+    <div className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-ds-linen border border-ds-hairline mt-1.5">
+      <Info className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0 mt-px" />
+      <span className="text-[10px] text-ds-folio-ink-mist leading-tight">{message} Rough hints only.</span>
     </div>
   );
 }
@@ -486,24 +486,24 @@ export function ItineraryDayColumn({
 
   // Shared icon-button class for compact header actions (44×44px touch target)
   const iconBtnClass =
-    "flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text border border-ds-pen-stroke transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 disabled:opacity-50";
+    "flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg bg-ds-bone hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink border border-ds-hairline transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 disabled:opacity-50";
 
   return (
     <div
       data-testid="day-chapter-frame"
       data-chapter-id="itinerary-day-mobile-chapter"
-      className={`overflow-hidden rounded-lg border bg-ds-onyx transition-all duration-[200ms] shadow-[var(--ds-elevation-2)] ${
+      className={`folio-paper-card transition-all duration-[200ms] ${
         isSelected
-          ? "border-ds-accent/40 ring-1 ring-ds-accent/20 ring-offset-1 ring-offset-ds-midnight"
-          : "border-ds-pen-stroke"
+          ? "border-ds-marine-ink/40 ring-1 ring-ds-marine-ink/20 ring-offset-1 ring-offset-ds-bone"
+          : ""
       }`}
     >
       {/* ── Chapter header ──────────────────────────────────────────── */}
       <div
         data-testid="day-chapter-header"
         data-header-id="itinerary-day-mobile-header"
-        className={`shrink-0 flex items-center justify-between px-3 py-2.5 border-b border-ds-pen-stroke transition-colors duration-[120ms] ${
-          isSelected ? "bg-ds-carbon" : "bg-ds-onyx"
+        className={`shrink-0 flex items-center justify-between px-3 py-2.5 border-b border-ds-hairline transition-colors duration-[120ms] ${
+          isSelected ? "bg-ds-linen" : "folio-paper-header"
         }`}
       >
         {/* Chapter identity — semantic button for select + expand */}
@@ -521,19 +521,19 @@ export function ItineraryDayColumn({
             data-testid="day-chapter-number"
             className={`flex-shrink-0 flex items-center justify-center w-7 h-7 rounded text-[11px] font-bold tracking-tight transition-colors duration-[120ms] ${
               isSelected
-                ? "bg-ds-accent text-ds-text-inverse"
-                : "bg-ds-pen-stroke text-ds-text-tertiary"
+                ? "bg-ds-marine-ink text-ds-paper"
+                : "bg-ds-hairline text-ds-folio-ink-mist"
             }`}
           >
             {String(day.dayNumber).padStart(2, "0")}
           </div>
           {/* Chapter title + date */}
           <div className="min-w-0">
-            <h3 data-testid="day-chapter-title" className="text-base font-semibold text-ds-text tracking-tight leading-snug">
+            <h3 data-testid="day-chapter-title" className="text-base font-semibold text-ds-folio-ink tracking-tight leading-snug">
               Day {day.dayNumber}
             </h3>
             {day.date && (
-              <p data-testid="day-chapter-date" className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary leading-none mt-0.5">
+              <p data-testid="day-chapter-date" className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-folio-ink-mist leading-none mt-0.5">
                 <CalendarDays className="w-2.5 h-2.5 flex-shrink-0" />
                 {formatDate(day.date)}
               </p>
@@ -543,7 +543,7 @@ export function ItineraryDayColumn({
 
         {/* Header actions */}
         <div className="flex items-center gap-1 shrink-0">
-          <span data-testid="day-item-count" className="text-[11px] text-ds-text-tertiary bg-ds-carbon border border-ds-pen-stroke rounded-full px-2 py-0.5 mr-0.5">
+          <span data-testid="day-item-count" className="text-[11px] text-ds-folio-ink-mist bg-ds-linen border border-ds-hairline rounded-full px-2 py-0.5 mr-0.5">
             {day.items.length}
           </span>
 
@@ -555,8 +555,8 @@ export function ItineraryDayColumn({
               }}
               disabled={planDayLoading}
               title="Generate AI day plan"
-              className="hidden lg:flex items-center gap-1 px-2.5 rounded-lg text-ds-accent border border-ds-pen-stroke text-[11px] font-medium transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
-              style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+              className="hidden lg:flex items-center gap-1 px-2.5 rounded-lg text-ds-marine-ink border border-ds-hairline text-[11px] font-medium transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 min-h-[44px]"
+              style={{ backgroundColor: "color-mix(in srgb, var(--ds-marine-ink) 8%, var(--ds-bone))" }}
             >
               {planDayLoading ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -576,7 +576,7 @@ export function ItineraryDayColumn({
               disabled={suggestingTimeline || applyingTimeline}
               title="Suggest timing for items on this day"
               aria-label="Suggest day timing"
-              className="hidden lg:flex items-center gap-1 px-2.5 rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text border border-ds-pen-stroke text-[11px] font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 disabled:opacity-50 min-h-[44px]"
+              className="hidden lg:flex items-center gap-1 px-2.5 rounded-lg bg-ds-bone hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink border border-ds-hairline text-[11px] font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 disabled:opacity-50 min-h-[44px]"
             >
               {suggestingTimeline ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -594,7 +594,7 @@ export function ItineraryDayColumn({
               e.stopPropagation();
               setMobileActionTrayOpen((v) => !v);
             }}
-            className="lg:hidden flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text border border-ds-pen-stroke transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            className="lg:hidden flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg bg-ds-bone hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink border border-ds-hairline transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
             aria-label={`Day ${day.dayNumber} actions`}
             data-testid="itinerary-day-mobile-action-tray"
           >
@@ -628,7 +628,7 @@ export function ItineraryDayColumn({
 
       {/* ── Mobile action tray — secondary day actions (shown when overflow open) ── */}
       {mobileActionTrayOpen && (
-        <div className="lg:hidden border-b border-ds-pen-stroke bg-ds-carbon px-3 py-2.5 flex items-center gap-2 flex-wrap">
+        <div className="lg:hidden border-b border-ds-hairline bg-ds-linen px-3 py-2.5 flex items-center gap-2 flex-wrap">
           {onPlanDay && (
             <button
               type="button"
@@ -638,8 +638,8 @@ export function ItineraryDayColumn({
                 onPlanDay(day.id, day.dayNumber);
               }}
               disabled={planDayLoading}
-              className="flex items-center gap-1.5 px-3 rounded-lg text-ds-accent border border-ds-pen-stroke text-[11px] font-medium transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
-              style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+              className="flex items-center gap-1.5 px-3 rounded-lg text-ds-marine-ink border border-ds-hairline text-[11px] font-medium transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 min-h-[44px]"
+              style={{ backgroundColor: "color-mix(in srgb, var(--ds-marine-ink) 8%, var(--ds-bone))" }}
               aria-label={`Plan Day ${day.dayNumber}`}
             >
               {planDayLoading ? (
@@ -659,7 +659,7 @@ export function ItineraryDayColumn({
                 handleSuggestTimeline();
               }}
               disabled={suggestingTimeline || applyingTimeline}
-              className="flex items-center gap-1.5 px-3 rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text border border-ds-pen-stroke text-[11px] font-medium transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
+              className="flex items-center gap-1.5 px-3 rounded-lg bg-ds-bone hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink border border-ds-hairline text-[11px] font-medium transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 min-h-[44px]"
               aria-label={`Suggest timing for Day ${day.dayNumber}`}
             >
               {suggestingTimeline ? (
@@ -679,14 +679,14 @@ export function ItineraryDayColumn({
           ref={setNodeRef}
           data-testid="itinerary-day-mobile-summary"
           className="px-3 py-2.5 transition-colors duration-[120ms]"
-          style={{ backgroundColor: isOver ? "var(--ds-accent-subtle)" : "var(--ds-midnight-ink)" }}
+          style={{ backgroundColor: isOver ? "color-mix(in srgb, var(--ds-marine-ink) 8%, var(--ds-bone))" : "var(--ds-bone)" }}
         >
           {day.items.length === 0 ? (
-            <p className="text-xs text-ds-text-tertiary italic">No plans yet.</p>
+            <p className="text-xs text-ds-folio-ink-mist italic">No plans yet.</p>
           ) : (
             <div className="space-y-0.5">
-              <p className="text-xs text-ds-text-secondary truncate">{firstItem?.title ?? "Itinerary item"}</p>
-              <p className="text-[11px] text-ds-text-tertiary">
+              <p className="text-xs text-ds-folio-ink-soft truncate">{firstItem?.title ?? "Itinerary item"}</p>
+              <p className="text-[11px] text-ds-folio-ink-mist">
                 {hiddenItemsCount > 0 ? `+${hiddenItemsCount} more · ` : ""}
                 {itemSummary}
               </p>
@@ -699,7 +699,7 @@ export function ItineraryDayColumn({
           ref={setNodeRef}
           data-testid="itinerary-day-mobile-expanded"
           className="p-3 min-h-[68px] h-auto overflow-hidden space-y-2 transition-colors duration-[120ms]"
-          style={{ backgroundColor: isOver ? "var(--ds-accent-subtle)" : "var(--ds-midnight-ink)" }}
+          style={{ backgroundColor: isOver ? "color-mix(in srgb, var(--ds-marine-ink) 8%, var(--ds-bone))" : "var(--ds-warm-paper)" }}
         >
           {timelineSuggestions && (
             <SuggestionsReviewPanel
@@ -715,12 +715,12 @@ export function ItineraryDayColumn({
             <div
               data-testid="itinerary-day-mobile-timeline"
               className={`relative rounded-lg p-1 transition-colors duration-[120ms] ${
-                isSelected ? "ring-1 ring-ds-accent/15 bg-ds-midnight" : ""
+                isSelected ? "ring-1 ring-ds-marine-ink/15 bg-ds-linen/30" : ""
               }`}
             >
               {/* Mobile timeline vertical rail — editorial day-chapter flow */}
               <div
-                className="lg:hidden absolute left-3 top-2 bottom-2 w-px bg-ds-pen-stroke/30"
+                className="lg:hidden absolute left-3 top-2 bottom-2 w-px bg-ds-hairline"
                 aria-hidden="true"
               />
               <TimelineSections
@@ -733,7 +733,7 @@ export function ItineraryDayColumn({
                 onUpdateTimeline={handleTimelineUpdated}
               />
               {!showAllItems && hasHiddenItems && (
-                <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-14 bg-gradient-to-b from-transparent to-ds-midnight" />
+                <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-14 bg-gradient-to-b from-transparent to-ds-bone" />
               )}
             </div>
           </SortableContext>
@@ -746,8 +746,8 @@ export function ItineraryDayColumn({
               data-testid="empty-day-chapter"
               className={`flex-1 flex flex-col items-center justify-center border border-dashed rounded-lg py-5 px-3 gap-1.5 transition-colors duration-[120ms] ${
                 isOver
-                  ? "border-ds-accent/60 text-ds-accent"
-                  : "border-ds-pen-stroke text-ds-text-tertiary"
+                  ? "border-ds-marine-ink/60 text-ds-marine-ink"
+                  : "border-ds-hairline text-ds-folio-ink-mist"
               }`}
               style={isOver ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
             >
@@ -755,10 +755,10 @@ export function ItineraryDayColumn({
                 <p className="text-xs font-medium text-center">Drop here</p>
               ) : (
                 <>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-folio-ink-mist">
                     Day {day.dayNumber}
                   </p>
-                  <p className="text-xs text-center text-ds-text-tertiary">
+                  <p className="text-xs text-center text-ds-folio-ink-mist">
                     Begin this chapter — use{" "}
                     <button
                       onClick={(e) => {
@@ -766,7 +766,7 @@ export function ItineraryDayColumn({
                         onSelect?.(day.id);
                         onAddItem(day.id);
                       }}
-                      className="inline-flex items-center min-h-[44px] min-w-[44px] px-1 text-ds-accent hover:text-ds-text-secondary underline underline-offset-2 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                      className="inline-flex items-center min-h-[44px] min-w-[44px] px-1 text-ds-marine-ink hover:text-ds-folio-ink-soft underline underline-offset-2 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
                     >
                       + Add
                     </button>{" "}
@@ -789,7 +789,7 @@ export function ItineraryDayColumn({
 
           {/* ── Show all / show less ──────────────────────────────────── */}
           {hasHiddenItems && (
-            <div className="mt-2 flex justify-center border-t border-ds-pen-stroke pt-3">
+            <div className="mt-2 flex justify-center border-t border-ds-hairline pt-3">
               <button
                 type="button"
                 onClick={(e) => {

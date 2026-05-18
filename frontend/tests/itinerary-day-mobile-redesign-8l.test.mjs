@@ -118,8 +118,8 @@ describe("Phase 8L: collapsed vs expanded mobile structures", () => {
 
   it("mobile vertical rail inside timeline container (lg:hidden, decorative)", () => {
     assert.ok(
-      dayColSrc.includes("lg:hidden absolute") && dayColSrc.includes("bg-ds-pen-stroke/30"),
-      "mobile vertical rail (lg:hidden absolute ... bg-ds-pen-stroke/30) missing from timeline"
+      dayColSrc.includes("lg:hidden absolute") && (dayColSrc.includes("bg-ds-hairline") || dayColSrc.includes("bg-ds-pen-stroke/30")),
+      "mobile vertical rail (lg:hidden absolute ... bg-ds-hairline) missing from timeline"
     );
   });
 });
@@ -420,12 +420,12 @@ describe("Phase 8L: no raw hex or rgba in new mobile additions", () => {
 // ── 12. Desktop stability: existing ds-token and structure preserved ──────────
 
 describe("Phase 8L: desktop layout stability", () => {
-  it("ItineraryDayColumn still uses bg-ds-onyx surface token", () => {
-    assert.ok(dayColSrc.includes("bg-ds-onyx"), "bg-ds-onyx surface token must be preserved");
+  it("ItineraryDayColumn uses folio-paper-card surface (Slice 2 paper conversion)", () => {
+    assert.ok(dayColSrc.includes("folio-paper-card"), "folio-paper-card must be used for column surface (replaced bg-ds-onyx in Slice 2)");
   });
 
-  it("ItineraryDayColumn still uses shadow-elevation-2 token", () => {
-    assert.ok(dayColSrc.includes("ds-elevation-2"), "ds-elevation-2 elevation token must be preserved");
+  it("ItineraryDayColumn uses folio-paper-card which carries shadow (Slice 2 paper conversion)", () => {
+    assert.ok(dayColSrc.includes("folio-paper-card"), "folio-paper-card carries shadow via CSS class (replaced inline ds-elevation-2 in Slice 2)");
   });
 
   it("ItineraryItemCard still uses bg-ds-onyx card surface", () => {

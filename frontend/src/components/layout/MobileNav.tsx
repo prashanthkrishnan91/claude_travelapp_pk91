@@ -84,17 +84,17 @@ export function MobileNav() {
         data-testid="mobile-top-bar"
       >
         <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-ds-carbon text-ds-accent">
+          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-ds-linen text-ds-marine-ink">
             <Plane className="w-3.5 h-3.5" aria-hidden="true" />
           </div>
-          <span className="text-sm font-semibold text-ds-text tracking-tight">
+          <span className="text-sm font-semibold text-ds-folio-ink tracking-tight">
             Travel Concierge
           </span>
         </div>
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className="p-2 rounded-lg text-ds-text-secondary hover:bg-white/5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          className="p-2 rounded-lg text-ds-folio-ink-soft hover:bg-ds-linen transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
           aria-label="Toggle menu"
           aria-expanded={open}
         >
