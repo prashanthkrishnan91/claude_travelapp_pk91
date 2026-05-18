@@ -30,9 +30,9 @@ interface EditForm {
 const COVER_BTN_BASE =
   "inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-lg text-xs font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
 
-const COVER_PRIMARY = `${COVER_BTN_BASE} bg-ds-accent text-ds-text-inverse hover:opacity-90`;
-const COVER_GHOST = `${COVER_BTN_BASE} border border-ds-pen-stroke text-ds-text-secondary hover:bg-ds-carbon`;
-const COVER_DANGER = `${COVER_BTN_BASE} border border-ds-pen-stroke text-ds-warning hover:bg-ds-carbon`;
+const COVER_PRIMARY = `${COVER_BTN_BASE} bg-ds-marine-ink text-ds-warm-paper hover:bg-ds-marine-soft`;
+const COVER_GHOST = `${COVER_BTN_BASE} border border-ds-hairline text-ds-folio-ink-soft hover:bg-ds-linen`;
+const COVER_DANGER = `${COVER_BTN_BASE} border border-ds-hairline text-ds-warning hover:bg-ds-linen`;
 
 // ── Mobile workspace IA ───────────────────────────────────────────────────────
 
@@ -152,10 +152,10 @@ export default function TripDetailPage() {
             My Journeys
           </Link>
         </div>
-        <div className="mb-8 rounded-2xl border border-ds-pen-stroke bg-ds-onyx boutique-instrument p-6 animate-pulse">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary mb-2">Travel Chapter</p>
-          <div className="h-7 w-48 rounded bg-ds-carbon mb-2" />
-          <div className="h-4 w-32 rounded bg-ds-carbon" />
+        <div className="mb-8 folio-paper-panel p-6 animate-pulse">
+          <p className="folio-muted-label mb-2">Travel Chapter</p>
+          <div className="h-7 w-48 rounded bg-ds-linen mb-2" />
+          <div className="h-4 w-32 rounded bg-ds-linen" />
         </div>
       </>
     );
@@ -188,41 +188,41 @@ export default function TripDetailPage() {
       {/* Edit Modal */}
       {editOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-ds-onyx border border-ds-pen-stroke rounded-2xl shadow-[var(--ds-elevation-4)] p-6 w-full max-w-md">
+          <div className="folio-paper-panel p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-semibold text-ds-text">Edit Trip</h2>
+              <h2 className="text-base font-semibold text-ds-folio-ink">Edit Trip</h2>
               <button
                 type="button"
                 onClick={() => setEditOpen(false)}
                 aria-label="Close edit dialog"
-                className="p-1.5 rounded-lg hover:bg-ds-carbon text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                className="p-1.5 rounded-lg hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-ds-text-secondary mb-1.5">Trip Name</label>
+                <label className="folio-muted-label block mb-1.5">Trip Name</label>
                 <input
-                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text placeholder:text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  className="folio-input"
                   value={editForm.title}
                   onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-ds-text-secondary mb-1.5">Start Date</label>
+                <label className="folio-muted-label block mb-1.5">Start Date</label>
                 <input
                   type="date"
-                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  className="folio-input"
                   value={editForm.startDate}
                   onChange={(e) => setEditForm((f) => ({ ...f, startDate: e.target.value }))}
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-ds-text-secondary mb-1.5">End Date</label>
+                <label className="folio-muted-label block mb-1.5">End Date</label>
                 <input
                   type="date"
-                  className="w-full border border-ds-pen-stroke rounded-lg px-3 py-2 text-sm bg-ds-carbon text-ds-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  className="folio-input"
                   value={editForm.endDate}
                   onChange={(e) => setEditForm((f) => ({ ...f, endDate: e.target.value }))}
                 />
@@ -241,9 +241,9 @@ export default function TripDetailPage() {
       {/* Delete Confirmation */}
       {confirmDelete && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-ds-onyx border border-ds-pen-stroke rounded-2xl shadow-[var(--ds-elevation-4)] p-6 w-full max-w-sm">
-            <h2 className="text-base font-semibold text-ds-text mb-2">Delete Trip</h2>
-            <p className="text-sm text-ds-text-secondary mb-6 leading-relaxed">
+          <div className="folio-paper-panel p-6 w-full max-w-sm">
+            <h2 className="text-base font-semibold text-ds-folio-ink mb-2">Delete Trip</h2>
+            <p className="text-sm text-ds-folio-ink-soft mb-6 leading-relaxed">
               This will permanently delete the trip and all its itinerary items. This cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
@@ -251,7 +251,7 @@ export default function TripDetailPage() {
               <button
                 type="button"
                 onClick={handleDelete}
-                className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] text-sm font-medium bg-ds-warning text-ds-text-inverse rounded-lg hover:opacity-90 transition-opacity duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] text-sm font-medium bg-ds-warning text-ds-text-inverse rounded-lg hover:opacity-90 transition-opacity duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
               >
                 Delete Trip
               </button>
@@ -267,7 +267,7 @@ export default function TripDetailPage() {
         <nav
           data-testid="trip-mobile-workspace-switcher"
           aria-label="Trip workspace"
-          className="lg:hidden flex items-stretch mb-4 rounded-xl border border-ds-pen-stroke bg-ds-onyx atelier-surface-depth overflow-hidden"
+          className="lg:hidden flex items-stretch mb-4 rounded-xl border border-ds-hairline bg-ds-bone overflow-hidden"
         >
           {WORKSPACE_TABS.map((tab) => {
             const isActive = activeMobileWorkspace === tab.id;
@@ -278,16 +278,16 @@ export default function TripDetailPage() {
                 data-testid={tab.testId}
                 aria-pressed={isActive}
                 onClick={() => setActiveMobileWorkspace(tab.id)}
-                className={`flex-1 flex flex-col items-center justify-center min-h-[44px] py-2.5 gap-0.5 relative text-[10px] font-semibold uppercase tracking-[0.1em] transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 ${
+                className={`flex-1 flex flex-col items-center justify-center min-h-[44px] py-2.5 gap-0.5 relative text-[10px] font-semibold uppercase tracking-[0.1em] transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 ${
                   isActive
-                    ? "text-ds-accent"
-                    : "text-ds-text-tertiary hover:text-ds-text-secondary"
+                    ? "text-ds-marine-ink"
+                    : "text-ds-folio-ink-mist hover:text-ds-folio-ink-soft"
                 }`}
               >
                 {tab.label}
                 {isActive && (
                   <span
-                    className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-ds-accent"
+                    className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-ds-marine-ink"
                     aria-hidden="true"
                   />
                 )}
@@ -306,14 +306,14 @@ export default function TripDetailPage() {
       <section
         data-testid="trip-chapter-cover"
         aria-labelledby="chapter-destination-heading"
-        className="mb-6 advisor-desk-panel boutique-instrument"
+        className="mb-6 folio-paper-panel"
       >
         <div className="folio-cover-tab" aria-hidden="true" />
         {/* Back navigation */}
         <div className="px-4 pt-5 sm:px-6">
           <Link
             href="/trips"
-            className="inline-flex items-center gap-1.5 text-xs text-ds-text-tertiary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            className="inline-flex items-center gap-1.5 text-xs text-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
           >
             <ChevronLeft className="w-3.5 h-3.5" aria-hidden="true" />
             My Journeys
@@ -323,33 +323,33 @@ export default function TripDetailPage() {
         {/* Chapter cover body */}
         <div className="px-4 pt-4 pb-6 sm:px-6">
           {/* Overline: chapter classification */}
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary mb-2">
+          <p className="folio-muted-label mb-2">
             Travel Chapter
           </p>
 
           {/* Destination as editorial chapter heading */}
           <h1
             id="chapter-destination-heading"
-            className="text-2xl font-bold tracking-tight text-ds-text leading-tight sm:text-3xl"
+            className="text-2xl font-bold tracking-tight text-ds-folio-ink leading-tight sm:text-3xl"
           >
             {trip?.destination ?? trip?.title ?? "Your Trip"}
           </h1>
 
           {/* Trip title — subtitle if not same as destination */}
           {trip?.title && trip.title !== trip.destination && (
-            <p className="mt-1 text-base text-ds-text-secondary leading-snug">
+            <p className="mt-1 text-base text-ds-folio-ink-soft leading-snug">
               {trip.title}
             </p>
           )}
 
           {/* Destination context / vibe — shown when available */}
           {contextLoading && (
-            <p className="mt-2 text-sm italic text-ds-text-tertiary">
+            <p className="mt-2 text-sm italic text-ds-folio-ink-mist">
               Composing destination context…
             </p>
           )}
           {tripContext && !contextLoading && (
-            <p className="mt-2 text-sm italic text-ds-text-tertiary leading-snug">
+            <p className="mt-2 text-sm italic text-ds-folio-ink-mist leading-snug">
               {tripContext.dateRange
                 ? `${tripContext.vibe} · ${tripContext.dateRange}`
                 : tripContext.vibe}
@@ -359,14 +359,14 @@ export default function TripDetailPage() {
           {/* Dates + duration — caption row */}
           {(trip?.startDate || trip?.endDate) && (
             <div className="mt-3 flex items-center flex-wrap gap-x-4 gap-y-1">
-              <span className="inline-flex items-center gap-1.5 text-xs text-ds-text-tertiary">
-                <CalendarDays className="w-3.5 h-3.5 text-ds-accent" aria-hidden="true" />
+              <span className="inline-flex items-center gap-1.5 text-xs text-ds-folio-ink-mist">
+                <CalendarDays className="w-3.5 h-3.5 text-ds-marine-ink" aria-hidden="true" />
                 {trip.startDate && trip.endDate
                   ? `${trip.startDate} – ${trip.endDate}`
                   : trip.startDate || trip.endDate}
               </span>
               {itineraryDays.length > 0 && (
-                <span className="text-xs text-ds-text-tertiary">
+                <span className="text-xs text-ds-folio-ink-mist">
                   {itineraryDays.length} day{itineraryDays.length !== 1 ? "s" : ""}
                 </span>
               )}

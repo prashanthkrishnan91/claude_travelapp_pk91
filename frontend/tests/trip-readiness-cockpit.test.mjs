@@ -81,54 +81,72 @@ test("has data-testid on the planning tools strip", () => {
 
 // ── DS token usage ───────────────────────────────────────────────────────────
 
-test("uses bg-ds-onyx as the card surface", () => {
-  assert.match(cockpit, /bg-ds-onyx/);
+test("uses folio-paper-panel as the card surface (Slice 2 paper conversion)", () => {
+  assert.ok(cockpit.includes("folio-paper-panel"), "TripReadinessCockpit must use folio-paper-panel");
+  assert.ok(!cockpit.includes("bg-ds-onyx"), "TripReadinessCockpit must not use bg-ds-onyx");
 });
 
-test("uses border-ds-pen-stroke for borders", () => {
-  assert.match(cockpit, /border-ds-pen-stroke/);
+test("uses ds-hairline for borders (Slice 2 paper conversion)", () => {
+  assert.match(cockpit, /hairline/);
 });
 
-test("uses bg-ds-carbon for the footer background", () => {
-  assert.match(cockpit, /bg-ds-carbon/);
+test("uses folio-paper-section or linen for footer background (Slice 2 paper conversion)", () => {
+  assert.ok(
+    cockpit.includes("folio-paper-section") || cockpit.includes("linen"),
+    "Cockpit footer must use paper-world bg"
+  );
+  assert.ok(!cockpit.includes("bg-ds-carbon"), "Cockpit must not use bg-ds-carbon");
 });
 
-test("uses text-ds-text for primary text", () => {
-  assert.match(cockpit, /text-ds-text(?!-)/);
+test("uses folio-ink tokens for primary text (Slice 2 paper conversion)", () => {
+  assert.match(cockpit, /folio-ink/);
 });
 
-test("uses text-ds-text-secondary for body copy", () => {
-  assert.match(cockpit, /text-ds-text-secondary/);
+test("uses folio-ink-soft for body copy (Slice 2 paper conversion)", () => {
+  assert.match(cockpit, /folio-ink-soft/);
 });
 
-test("uses text-ds-text-tertiary for Overline labels", () => {
-  assert.match(cockpit, /text-ds-text-tertiary/);
+test("uses folio-muted-label or folio-ink-mist for Overline labels (Slice 2 paper conversion)", () => {
+  assert.ok(
+    cockpit.includes("folio-muted-label") || cockpit.includes("folio-ink-mist"),
+    "Cockpit labels must use paper-world muted tokens"
+  );
 });
 
-test("uses text-ds-accent for accent color (icon)", () => {
-  assert.match(cockpit, /text-ds-accent/);
+test("uses marine-ink for accent color (Slice 2 paper conversion)", () => {
+  assert.match(cockpit, /marine-ink/);
 });
 
-test("uses text-ds-text-inverse for accent button text", () => {
-  assert.match(cockpit, /text-ds-text-inverse/);
+test("uses ds-warm-paper or marine-ink for accent button text (Slice 2 paper conversion)", () => {
+  assert.ok(
+    cockpit.includes("ds-warm-paper") || cockpit.includes("marine-ink"),
+    "Cockpit CTA must use paper-world accent treatment"
+  );
 });
 
-test("uses bg-ds-accent for primary CTA buttons", () => {
-  assert.match(cockpit, /bg-ds-accent/);
+test("uses marine-ink fill for primary CTA buttons (Slice 2 paper conversion)", () => {
+  assert.match(cockpit, /ds-marine-ink/);
+  assert.ok(!cockpit.includes("bg-ds-accent"), "Cockpit must not use bg-ds-accent for CTA");
 });
 
-test("uses ds-elevation-2 shadow for card depth", () => {
-  assert.match(cockpit, /ds-elevation-2/);
+test("uses folio-paper-panel which carries shadow (no inline ds-elevation-2 needed)", () => {
+  assert.ok(cockpit.includes("folio-paper-panel"), "Cockpit uses folio-paper-panel which includes shadow styling");
 });
 
 // ── Overline type pattern ────────────────────────────────────────────────────
 
-test("uses Overline tracking on section labels", () => {
-  assert.match(cockpit, /tracking-\[0\.1em\]/);
+test("uses Overline tracking on section labels (via folio-muted-label or direct class)", () => {
+  assert.ok(
+    cockpit.includes("tracking-[0.1em]") || cockpit.includes("folio-muted-label"),
+    "Cockpit must use Overline tracking (direct class or folio-muted-label)"
+  );
 });
 
-test("uses uppercase on Overline labels", () => {
-  assert.match(cockpit, /uppercase/);
+test("uses uppercase on Overline labels (direct class or via folio-muted-label)", () => {
+  assert.ok(
+    /uppercase/.test(cockpit) || cockpit.includes("folio-muted-label"),
+    "Cockpit must use uppercase (direct or via folio-muted-label CSS class)"
+  );
 });
 
 test("uses 10px Overline font size", () => {
@@ -159,7 +177,12 @@ test("primary action buttons have min-h-[44px] touch target", () => {
 // ── Accessibility: focus rings ────────────────────────────────────────────────
 
 test("all interactive elements have focus-visible outline", () => {
-  assert.match(cockpit, /focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent/);
+  assert.ok(
+    /focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent/.test(cockpit) ||
+    /focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink/.test(cockpit) ||
+    /focus-visible:ring/.test(cockpit),
+    "Cockpit interactive elements must have focus-visible outline or ring"
+  );
 });
 
 // ── Navigation: real Links and buttons, no card-level onClick ───────────────

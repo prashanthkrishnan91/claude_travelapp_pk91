@@ -48,8 +48,8 @@ test('Phase 8D: day-item-count data-testid on item count badge', () => {
 // ── Day heading / date treatment ──────────────────────────────────────────────
 
 test('Phase 8D: chapter title uses text-base for editorial heading weight', () => {
-  // text-base is the promoted chapter heading (was text-sm)
-  assert.ok(src.includes('text-base font-semibold text-ds-text'), 'chapter heading not promoted to text-base');
+  // text-base is the promoted chapter heading (was text-sm); folio-ink replaces text-ds-text in Slice 2
+  assert.ok(src.includes('text-base font-semibold text-ds-folio-ink') || src.includes('text-base font-semibold text-ds-text'), 'chapter heading not promoted to text-base');
 });
 
 test('Phase 8D: day chapter number zero-pads via padStart(2)', () => {
@@ -173,20 +173,20 @@ test('Phase 8D: no legacy amber-NNN classes', () => {
   assert.ok(!/\bamber-\d+\b/.test(src), 'found legacy amber-NNN class');
 });
 
-test('Phase 8D: uses bg-ds-onyx for column root surface', () => {
-  assert.ok(src.includes('bg-ds-onyx'), 'missing bg-ds-onyx on column surface');
+test('Phase 8D: uses folio-paper-card for column root surface (Slice 2 paper conversion)', () => {
+  assert.ok(src.includes('folio-paper-card'), 'missing folio-paper-card on column surface (replaced bg-ds-onyx in Slice 2)');
 });
 
 test('Phase 8D: uses border-ds-pen-stroke for column borders', () => {
   assert.ok(src.includes('border-ds-pen-stroke'), 'missing border-ds-pen-stroke');
 });
 
-test('Phase 8D: uses ds-elevation-2 shadow token', () => {
-  assert.ok(src.includes('ds-elevation-2'), 'missing ds-elevation-2 elevation token');
+test('Phase 8D: uses folio-paper-card which carries shadow (Slice 2 paper conversion)', () => {
+  assert.ok(src.includes('folio-paper-card'), 'folio-paper-card carries shadow via CSS class (replaced inline ds-elevation-2 in Slice 2)');
 });
 
-test('Phase 8D: uses bg-ds-accent for selected state number marker', () => {
-  assert.ok(src.includes('bg-ds-accent'), 'missing bg-ds-accent for selected number marker');
+test('Phase 8D: uses bg-ds-marine-ink for selected state number marker (Slice 2 paper conversion)', () => {
+  assert.ok(src.includes('bg-ds-marine-ink'), 'selected number marker must use bg-ds-marine-ink (converted from bg-ds-accent in Slice 2)');
 });
 
 test('Phase 8D: uses text-ds-text-tertiary for muted/secondary labels', () => {

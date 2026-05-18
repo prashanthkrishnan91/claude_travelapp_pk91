@@ -54,10 +54,10 @@ function deriveReadiness(trip: Trip, days: ItineraryDay[]): ReadinessData {
 // ── Shared button class ───────────────────────────────────────────────────────
 
 const ACTION_BTN =
-  "inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-lg text-xs font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
+  "inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-lg text-xs font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2";
 
-const PRIMARY_BTN = `${ACTION_BTN} bg-ds-accent text-ds-text-inverse hover:opacity-90`;
-const GHOST_BTN = `${ACTION_BTN} border border-ds-pen-stroke text-ds-text-secondary hover:bg-ds-carbon`;
+const PRIMARY_BTN = `${ACTION_BTN} bg-ds-marine-ink text-ds-warm-paper hover:bg-ds-marine-soft`;
+const GHOST_BTN = `${ACTION_BTN} border border-ds-hairline text-ds-folio-ink-soft hover:bg-ds-linen`;
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -192,16 +192,16 @@ export function TripReadinessCockpit({
     <section
       aria-labelledby="trip-readiness-heading"
       data-testid="trip-readiness-cockpit"
-      className="mb-6 rounded-2xl border border-ds-pen-stroke bg-ds-onyx shadow-[var(--ds-elevation-2)] overflow-hidden"
+      className="mb-6 folio-paper-panel"
     >
       {/* ── Header: advisor note — no score/KPI indicator ──────────────────── */}
-      <div className="px-5 pt-4 pb-3 border-b border-ds-pen-stroke">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary">
+      <div className="px-5 pt-4 pb-3 folio-paper-header">
+        <p className="folio-muted-label">
           Concierge Notes
         </p>
         <h2
           id="trip-readiness-heading"
-          className="mt-0.5 text-sm font-semibold text-ds-text leading-snug"
+          className="mt-0.5 text-sm font-semibold text-ds-folio-ink leading-snug"
         >
           {getHeadline()}
         </h2>
@@ -210,7 +210,7 @@ export function TripReadinessCockpit({
       {/* ── Day coverage: compact pills, no dashboard-grid header ─────────── */}
       {r.totalDays > 0 && (
         <div
-          className="px-5 py-3 border-b border-ds-pen-stroke"
+          className="px-5 py-3 border-b border-ds-hairline"
           data-testid="day-coverage-strip"
         >
           <div className="flex items-center flex-wrap gap-2">
@@ -229,8 +229,8 @@ export function TripReadinessCockpit({
                     className={[
                       "inline-flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-semibold select-none",
                       hasItems
-                        ? "bg-ds-accent text-ds-text-inverse"
-                        : "border border-ds-pen-stroke text-ds-text-tertiary",
+                        ? "bg-ds-marine-ink text-ds-warm-paper"
+                        : "border border-ds-hairline text-ds-folio-ink-mist",
                     ].join(" ")}
                   >
                     {day.dayNumber}
@@ -238,7 +238,7 @@ export function TripReadinessCockpit({
                 );
               })}
             </div>
-            <span className="text-xs text-ds-text-tertiary">
+            <span className="text-xs text-ds-folio-ink-mist">
               {r.activeDayCount === r.totalDays
                 ? "All days covered"
                 : r.activeDayCount === 0
@@ -265,14 +265,14 @@ export function TripReadinessCockpit({
               className={[
                 "flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center",
                 signal.present
-                  ? "text-ds-accent"
-                  : "border border-ds-pen-stroke text-ds-text-tertiary",
+                  ? "text-ds-marine-ink"
+                  : "border border-ds-hairline text-ds-folio-ink-mist",
               ].join(" ")}
               style={signal.present ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
             >
               {signal.icon}
             </span>
-            <p className="text-xs text-ds-text-secondary leading-snug">
+            <p className="text-xs text-ds-folio-ink-soft leading-snug">
               {signal.present ? signal.presentCopy : signal.missingCopy}
             </p>
           </div>
@@ -281,11 +281,11 @@ export function TripReadinessCockpit({
 
       {/* ── Advisor recommendation — advisor prose, flows naturally ─────── */}
       <div
-        className="px-5 pb-4 pt-3 border-t border-ds-pen-stroke bg-ds-carbon"
+        className="px-5 pb-4 pt-3 border-t border-ds-hairline folio-paper-section"
         data-testid="next-action-area"
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm italic text-ds-text-secondary leading-snug max-w-prose">
+          <p className="text-sm italic text-ds-folio-ink-soft leading-snug max-w-prose">
             {nextStepDescription}
           </p>
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
@@ -297,19 +297,19 @@ export function TripReadinessCockpit({
 
       {/* ── Planning tools — subtle, no section label ─────────────────────── */}
       <div
-        className="px-5 py-3 border-t border-ds-pen-stroke flex items-center gap-4 flex-wrap"
+        className="px-5 py-3 border-t border-ds-hairline flex items-center gap-4 flex-wrap"
         data-testid="planning-tools-strip"
       >
         <Link
           href="/explore"
-          className="inline-flex items-center gap-1 text-xs text-ds-text-secondary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded"
+          className="inline-flex items-center gap-1 text-xs text-ds-folio-ink-soft hover:text-ds-marine-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
         >
           <MapPin className="w-3.5 h-3.5 text-ds-accent" aria-hidden="true" />
           Explore
         </Link>
         <Link
           href="/saved"
-          className="inline-flex items-center gap-1 text-xs text-ds-text-secondary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded"
+          className="inline-flex items-center gap-1 text-xs text-ds-folio-ink-soft hover:text-ds-marine-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
         >
           <BookOpen className="w-3.5 h-3.5 text-ds-accent" aria-hidden="true" />
           Saved Ideas
@@ -317,7 +317,7 @@ export function TripReadinessCockpit({
         <button
           onClick={onOpenConcierge}
           aria-label="Open AI Concierge panel"
-          className="inline-flex items-center gap-1 text-xs text-ds-text-secondary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded"
+          className="inline-flex items-center gap-1 text-xs text-ds-folio-ink-soft hover:text-ds-marine-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
         >
           <Sparkles className="w-3.5 h-3.5 text-ds-accent" aria-hidden="true" />
           AI Concierge

@@ -245,24 +245,24 @@ describe("Phase 8N-B: DashboardClient boutique adoption", () => {
 // ── 17–19. trips/page visual adoption ───────────────────────────────────────
 
 describe("Phase 8N-B: My Trips page boutique adoption", () => {
-  it("17. trips/page applies boutique-instrument to ContinuePlanningHero", () => {
+  it("17. trips/page applies folio-paper-panel to ContinuePlanningHero (Slice 2 paper conversion)", () => {
     assert.ok(
-      tripsPage.includes("boutique-instrument"),
-      "trips/page must apply boutique-instrument to ContinuePlanningHero"
+      tripsPage.includes("folio-paper-panel"),
+      "trips/page must apply folio-paper-panel to ContinuePlanningHero (replaced boutique-instrument in Slice 2)"
     );
   });
 
-  it("18. trips/page applies boutique-folio to JourneyCard", () => {
+  it("18. trips/page applies folio-paper-card to JourneyCard (Slice 2 paper conversion)", () => {
     assert.ok(
-      tripsPage.includes("boutique-folio"),
-      "trips/page must apply boutique-folio to JourneyCard editorial surfaces"
+      tripsPage.includes("folio-paper-card"),
+      "trips/page must apply folio-paper-card to JourneyCard (replaced boutique-folio in Slice 2)"
     );
   });
 
-  it("19. trips/page applies atelier-surface-depth to PlanningToolsStrip tiles", () => {
+  it("19. trips/page uses bg-ds-bone for PlanningToolsStrip (Slice 2 paper conversion)", () => {
     assert.ok(
-      tripsPage.includes("atelier-surface-depth"),
-      "trips/page must apply atelier-surface-depth to planning tool tiles"
+      tripsPage.includes("bg-ds-bone"),
+      "trips/page PlanningToolsStrip must use bg-ds-bone (replaced atelier-surface-depth in Slice 2)"
     );
   });
 });
@@ -447,11 +447,11 @@ describe("Phase 8N-B: CSS source-order and inset highlights", () => {
 // ── 41–45. Additional adoption checks ───────────────────────────────────────
 
 describe("Phase 8N-B: Additional adoption and cleanup checks", () => {
-  it("41. trips/page applies boutique-folio to empty-state action cards", () => {
-    const count = (tripsPage.match(/boutique-folio/g) || []).length;
+  it("41. trips/page applies folio-paper-card to empty-state action cards (Slice 2 paper conversion)", () => {
+    const count = (tripsPage.match(/folio-paper-card/g) || []).length;
     assert.ok(
       count >= 2,
-      "trips/page must apply boutique-folio to multiple surfaces (JourneyCard + empty state cards)"
+      "trips/page must apply folio-paper-card to multiple surfaces (JourneyCard + empty state cards)"
     );
   });
 
@@ -474,17 +474,17 @@ describe("Phase 8N-B: Additional adoption and cleanup checks", () => {
     );
   });
 
-  it("44. ContinuePlanningHero uses boutique-instrument, not inline elevation", () => {
+  it("44. ContinuePlanningHero uses folio-paper-panel (Slice 2 paper conversion)", () => {
     assert.ok(
-      tripsPage.includes("boutique-instrument"),
-      "ContinuePlanningHero must use boutique-instrument class in trips/page"
+      tripsPage.includes("folio-paper-panel"),
+      "ContinuePlanningHero must use folio-paper-panel (replaced boutique-instrument in Slice 2)"
     );
   });
 
-  it("45. JourneyCard uses boutique-folio, not inline cold elevation", () => {
+  it("45. JourneyCard uses folio-paper-card (Slice 2 paper conversion)", () => {
     assert.ok(
-      tripsPage.includes("boutique-folio"),
-      "JourneyCard must use boutique-folio class in trips/page"
+      tripsPage.includes("folio-paper-card"),
+      "JourneyCard must use folio-paper-card (replaced boutique-folio in Slice 2)"
     );
   });
 });
@@ -586,26 +586,26 @@ describe("Phase 8N-B: New Trip boutique adoption (direct, not token-only)", () =
 // ── 60–63. Trip Detail workspace boutique adoption ──────────────────────────
 
 describe("Phase 8N-B: Trip Detail workspace boutique adoption (direct, not token-only)", () => {
-  it("60. Trip chapter cover applies boutique-instrument (not shadow-elevation-2)", () => {
+  it("60. Trip chapter cover applies folio-paper-panel (Slice 2 paper conversion)", () => {
     assert.ok(
-      tripDetailPage.includes("boutique-instrument"),
-      "trip-chapter-cover section must apply boutique-instrument as primary editorial focal surface"
+      tripDetailPage.includes("folio-paper-panel"),
+      "trip-chapter-cover section must use folio-paper-panel (replaced boutique-instrument in Slice 2)"
     );
   });
 
-  it("61. Mobile workspace switcher applies atelier-surface-depth", () => {
+  it("61. Mobile workspace switcher uses bg-ds-bone (Slice 2 paper conversion)", () => {
     assert.ok(
-      tripDetailPage.includes("atelier-surface-depth"),
-      "trip-mobile-workspace-switcher must apply atelier-surface-depth"
+      tripDetailPage.includes("bg-ds-bone"),
+      "trip-mobile-workspace-switcher must use bg-ds-bone (replaced atelier-surface-depth in Slice 2)"
     );
   });
 
-  it("62. Trip detail loading skeleton also uses boutique-instrument (not inline shadow)", () => {
+  it("62. Trip detail loading skeleton uses folio-paper-panel (Slice 2 paper conversion)", () => {
     const skeletonIdx = tripDetailPage.indexOf("animate-pulse");
     const skeletonBlock = tripDetailPage.slice(Math.max(0, skeletonIdx - 200), skeletonIdx + 100);
     assert.ok(
-      skeletonBlock.includes("boutique-instrument"),
-      "Trip detail loading skeleton must use boutique-instrument, not inline elevation shadow"
+      skeletonBlock.includes("folio-paper-panel"),
+      "Trip detail loading skeleton must use folio-paper-panel (replaced boutique-instrument in Slice 2)"
     );
   });
 

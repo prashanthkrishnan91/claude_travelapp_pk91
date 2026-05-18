@@ -16,7 +16,6 @@ import {
   Compass,
   ChevronRight,
 } from "lucide-react";
-import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { TripStatusBadge } from "@/components/ui/TripStatusBadge";
 import { fetchTrips, updateTrip, deleteTrip } from "@/lib/api";
@@ -72,7 +71,7 @@ interface EditForm {
 
 function Overline({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary mb-3">
+    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-folio-ink-mist mb-3">
       {children}
     </p>
   );
@@ -126,44 +125,36 @@ function EmptyDashboard() {
 
       {/* Action cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Card
-          as="div"
-          tone="dark"
-          className="p-6 flex flex-col gap-4 hover:border-ds-accent/50 transition-colors duration-200 boutique-folio"
-        >
+        <div className="folio-paper-card p-6 flex flex-col gap-4 transition-shadow duration-200">
           <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-ds-accent-subtle text-ds-accent">
             <PlusCircle className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="text-base font-semibold text-ds-text mb-1">
+            <h3 className="text-base font-semibold text-ds-folio-ink mb-1">
               Plan a Trip
             </h3>
-            <p className="text-sm text-ds-text-tertiary leading-relaxed">
+            <p className="text-sm text-ds-folio-ink-mist leading-relaxed">
               Name your destination, set dates, and let the planning canvas
               help you build a complete itinerary.
             </p>
           </div>
           <div className="mt-auto">
-            <Link href="/trips/new" className="btn-primary inline-flex min-h-[44px] items-center">
+            <Link href="/trips/new" className="btn-marine inline-flex items-center">
               <PlusCircle className="w-4 h-4" />
               New Trip
             </Link>
           </div>
-        </Card>
+        </div>
 
-        <Card
-          as="div"
-          tone="dark"
-          className="p-6 flex flex-col gap-4 hover:border-ds-accent/50 transition-colors duration-200 boutique-folio"
-        >
+        <div className="folio-paper-card p-6 flex flex-col gap-4 transition-shadow duration-200">
           <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-ds-accent-subtle text-ds-accent">
             <Sparkles className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="text-base font-semibold text-ds-text mb-1">
+            <h3 className="text-base font-semibold text-ds-folio-ink mb-1">
               Ask the AI Concierge
             </h3>
-            <p className="text-sm text-ds-text-tertiary leading-relaxed">
+            <p className="text-sm text-ds-folio-ink-mist leading-relaxed">
               Get personalised recommendations for hotels, restaurants, and
               activities — anywhere in the world.
             </p>
@@ -171,12 +162,12 @@ function EmptyDashboard() {
           <div className="mt-auto">
             <Link
               href="/concierge"
-              className="inline-flex items-center gap-2 min-h-[44px] text-sm font-semibold text-ds-accent hover:text-ds-accent-muted transition"
+              className="inline-flex items-center gap-2 min-h-[44px] text-sm font-semibold text-ds-marine-ink hover:text-ds-marine-soft transition"
             >
               Open Concierge <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
-        </Card>
+        </div>
       </div>
 
       {/* Saved ideas nudge */}
@@ -205,23 +196,21 @@ function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroPr
   return (
     <section aria-label="Continue planning your trip">
       <Overline>Continue planning</Overline>
-      <Card
-        as="article"
-        tone="dark"
-        className="hover:border-ds-accent/40 transition-colors duration-200 boutique-instrument advisor-desk-panel"
+      <article
+        className="folio-paper-panel transition-shadow duration-200"
         data-testid="continue-planning-hero"
       >
-        {/* Folio cover tab — visible brass at very top of hero */}
+        {/* Folio cover tab — restrained brass detail at very top */}
         <div className="folio-cover-tab" aria-hidden="true" />
-        {/* Editorial destination / title header */}
-        <div className="p-6 border-b border-ds-pen-stroke concierge-desk-header">
+        {/* Header zone */}
+        <div className="p-6 folio-paper-header">
           <div className="flex items-start justify-between gap-2 mb-4">
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary mb-1.5">
+              <p className="folio-muted-label mb-1.5">
                 {trip.destination}
               </p>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-semibold text-ds-text leading-snug">
+                <h2 className="text-xl font-semibold text-ds-folio-ink leading-snug">
                   {trip.title}
                 </h2>
                 <TripStatusBadge status={getDisplayTripStatus(trip)} />
@@ -230,14 +219,14 @@ function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroPr
             <div className="flex items-center gap-0.5 shrink-0">
               <button
                 onClick={() => onEdit(trip)}
-                className="p-1.5 rounded-lg hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+                className="p-1.5 rounded-lg hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink transition min-h-[44px] min-w-[44px] flex items-center justify-center"
                 aria-label={`Edit ${trip.title}`}
               >
                 <Pencil className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => onDelete(trip.id)}
-                className="p-1.5 rounded-lg hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-warning transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+                className="p-1.5 rounded-lg hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-warning transition min-h-[44px] min-w-[44px] flex items-center justify-center"
                 aria-label={`Delete ${trip.title}`}
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -245,7 +234,7 @@ function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroPr
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-4 text-xs text-ds-text-tertiary">
+          <div className="flex flex-wrap gap-4 text-xs text-ds-folio-ink-mist">
             <span className="flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
               {formatDateRange(trip.startDate, trip.endDate)}
@@ -256,7 +245,7 @@ function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroPr
               {trip.travelers === 1 ? "traveler" : "travelers"}
             </span>
             {trip.budgetCash && (
-              <span className="text-ds-accent font-medium">
+              <span className="text-ds-marine-ink font-medium">
                 {formatBudget(
                   Number(trip.budgetCash),
                   trip.budgetCurrency,
@@ -268,23 +257,23 @@ function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroPr
         </div>
 
         {/* Action footer */}
-        <div className="px-6 py-4 flex flex-wrap gap-2">
+        <div className="px-6 py-4 flex flex-wrap gap-2 bg-ds-warm-paper">
           <Link
             href={`/trips/${trip.id}`}
-            className="btn-primary inline-flex items-center min-h-[44px]"
+            className="btn-marine inline-flex items-center"
           >
             Open Trip
             <ArrowRight className="w-4 h-4 ml-1" />
           </Link>
           <Link
             href="/concierge"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-ds-pen-stroke bg-ds-carbon text-ds-text text-sm font-medium hover:border-ds-accent/40 hover:text-ds-accent transition-all duration-200 min-h-[44px]"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-ds-hairline bg-ds-bone text-ds-folio-ink-soft text-sm font-medium hover:border-ds-marine-ink/40 hover:text-ds-marine-ink transition-all duration-200 min-h-[44px]"
           >
             <Sparkles className="w-4 h-4" aria-hidden="true" />
             AI Concierge
           </Link>
         </div>
-      </Card>
+      </article>
     </section>
   );
 }
@@ -299,13 +288,11 @@ interface JourneyCardProps {
 
 function JourneyCard({ trip, onEdit, onDelete }: JourneyCardProps) {
   return (
-    <Card
-      as="article"
-      tone="dark"
-      className="flex flex-col hover:border-ds-accent/40 transition-colors duration-200 boutique-folio"
+    <article
+      className="folio-paper-card flex flex-col transition-shadow duration-200"
       data-testid="journey-card"
     >
-      {/* Folio cover tab — visible brass accent that makes each card look like a folio cover */}
+      {/* Folio cover tab — restrained brass detail */}
       <div className="folio-cover-tab" aria-hidden="true" />
       {/* Volume cover — destination as hero */}
       <div className="flex-1 p-5 pb-4 flex flex-col gap-3">
@@ -315,14 +302,14 @@ function JourneyCard({ trip, onEdit, onDelete }: JourneyCardProps) {
           <div className="flex items-center gap-0.5 shrink-0">
             <button
               onClick={() => onEdit(trip)}
-              className="p-1.5 rounded-lg hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+              className="p-1.5 rounded-lg hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink transition min-h-[44px] min-w-[44px] flex items-center justify-center"
               aria-label={`Edit ${trip.title}`}
             >
               <Pencil className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => onDelete(trip.id)}
-              className="p-1.5 rounded-lg hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-warning transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+              className="p-1.5 rounded-lg hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-warning transition min-h-[44px] min-w-[44px] flex items-center justify-center"
               aria-label={`Delete ${trip.title}`}
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -332,13 +319,13 @@ function JourneyCard({ trip, onEdit, onDelete }: JourneyCardProps) {
 
         {/* Destination as editorial volume title */}
         <div className="flex-1">
-          <p className="text-lg font-semibold text-ds-text leading-snug tracking-tight">
+          <p className="text-lg font-semibold text-ds-folio-ink leading-snug tracking-tight">
             {trip.destination}
           </p>
-          <h3 className="text-sm text-ds-text-secondary mt-0.5">
+          <h3 className="text-sm text-ds-folio-ink-soft mt-0.5">
             <Link
               href={`/trips/${trip.id}`}
-              className="hover:text-ds-accent transition"
+              className="hover:text-ds-marine-ink transition"
             >
               {trip.title}
             </Link>
@@ -347,8 +334,8 @@ function JourneyCard({ trip, onEdit, onDelete }: JourneyCardProps) {
       </div>
 
       {/* Footer — dates and open action */}
-      <div className="px-5 py-3 border-t border-ds-pen-stroke flex items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-3 text-xs text-ds-text-tertiary">
+      <div className="px-5 py-3 border-t border-ds-hairline flex items-center justify-between gap-2 bg-ds-bone">
+        <div className="flex flex-wrap items-center gap-3 text-xs text-ds-folio-ink-mist">
           <span className="flex items-center gap-1">
             <Calendar className="w-3 h-3" aria-hidden="true" />
             {formatDateRange(trip.startDate, trip.endDate)}
@@ -360,12 +347,12 @@ function JourneyCard({ trip, onEdit, onDelete }: JourneyCardProps) {
         </div>
         <Link
           href={`/trips/${trip.id}`}
-          className="flex items-center gap-1 text-xs font-semibold text-ds-accent hover:text-ds-accent-muted transition min-h-[44px]"
+          className="flex items-center gap-1 text-xs font-semibold text-ds-marine-ink hover:text-ds-marine-soft transition min-h-[44px]"
         >
           Open <ArrowRight className="w-3 h-3" aria-hidden="true" />
         </Link>
       </div>
-    </Card>
+    </article>
   );
 }
 
@@ -406,63 +393,63 @@ function PlanningToolsStrip() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Link
           href="/concierge"
-          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-onyx hover:border-ds-accent/40 transition-all duration-200 atelier-surface-depth"
+          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-hairline bg-ds-bone hover:border-ds-marine-ink/40 transition-all duration-200"
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0">
             <Sparkles className="w-4 h-4" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-ds-text group-hover:text-ds-accent transition">
+            <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-marine-ink transition">
               AI Concierge
             </p>
-            <p className="text-xs text-ds-text-tertiary truncate">
+            <p className="text-xs text-ds-folio-ink-mist truncate">
               Personalised recommendations
             </p>
           </div>
           <ChevronRight
-            className="w-4 h-4 text-ds-text-tertiary shrink-0 ml-auto"
+            className="w-4 h-4 text-ds-folio-ink-mist shrink-0 ml-auto"
             aria-hidden="true"
           />
         </Link>
 
         <Link
           href="/saved"
-          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-onyx hover:border-ds-accent/40 transition-all duration-200 atelier-surface-depth"
+          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-hairline bg-ds-bone hover:border-ds-marine-ink/40 transition-all duration-200"
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0">
             <BookmarkCheck className="w-4 h-4" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-ds-text group-hover:text-ds-accent transition">
+            <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-marine-ink transition">
               Saved Ideas
             </p>
-            <p className="text-xs text-ds-text-tertiary truncate">
+            <p className="text-xs text-ds-folio-ink-mist truncate">
               Your travel scrapbook
             </p>
           </div>
           <ChevronRight
-            className="w-4 h-4 text-ds-text-tertiary shrink-0 ml-auto"
+            className="w-4 h-4 text-ds-folio-ink-mist shrink-0 ml-auto"
             aria-hidden="true"
           />
         </Link>
 
         <Link
           href="/explore"
-          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-pen-stroke bg-ds-onyx hover:border-ds-accent/40 transition-all duration-200 atelier-surface-depth"
+          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-hairline bg-ds-bone hover:border-ds-marine-ink/40 transition-all duration-200"
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0">
             <Compass className="w-4 h-4" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-ds-text group-hover:text-ds-accent transition">
+            <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-marine-ink transition">
               Explore
             </p>
-            <p className="text-xs text-ds-text-tertiary truncate">
+            <p className="text-xs text-ds-folio-ink-mist truncate">
               Hotels, restaurants &amp; more
             </p>
           </div>
           <ChevronRight
-            className="w-4 h-4 text-ds-text-tertiary shrink-0 ml-auto"
+            className="w-4 h-4 text-ds-folio-ink-mist shrink-0 ml-auto"
             aria-hidden="true"
           />
         </Link>
@@ -490,18 +477,15 @@ function EditModal({ trip, form, saving, onChange, onSave, onClose }: EditModalP
       aria-modal="true"
       aria-label={`Edit ${trip.title}`}
     >
-      <Card
-        as="div"
-        tone="dark"
-        className="p-6 w-full max-w-md"
-        style={{ boxShadow: "var(--ds-elevation-4)" }}
+      <div
+        className="folio-paper-panel p-6 w-full max-w-md"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-ds-text">Edit Trip</h2>
+          <h2 className="text-base font-semibold text-ds-folio-ink">Edit Trip</h2>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+            className="p-2 rounded-lg hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink transition min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Close edit dialog"
           >
             <X className="w-4 h-4" />
@@ -509,24 +493,24 @@ function EditModal({ trip, form, saving, onChange, onSave, onClose }: EditModalP
         </div>
         <div className="space-y-4">
           <div>
-            <label className="label" htmlFor="edit-trip-name">
+            <label className="folio-muted-label block mb-1.5" htmlFor="edit-trip-name">
               Trip Name
             </label>
             <input
               id="edit-trip-name"
-              className="input"
+              className="folio-input"
               value={form.title}
               onChange={(e) => onChange({ ...form, title: e.target.value })}
             />
           </div>
           <div>
-            <label className="label" htmlFor="edit-start-date">
+            <label className="folio-muted-label block mb-1.5" htmlFor="edit-start-date">
               Start Date
             </label>
             <input
               id="edit-start-date"
               type="date"
-              className="input"
+              className="folio-input"
               value={form.startDate}
               onChange={(e) =>
                 onChange({ ...form, startDate: e.target.value })
@@ -534,31 +518,34 @@ function EditModal({ trip, form, saving, onChange, onSave, onClose }: EditModalP
             />
           </div>
           <div>
-            <label className="label" htmlFor="edit-end-date">
+            <label className="folio-muted-label block mb-1.5" htmlFor="edit-end-date">
               End Date
             </label>
             <input
               id="edit-end-date"
               type="date"
-              className="input"
+              className="folio-input"
               value={form.endDate}
               onChange={(e) => onChange({ ...form, endDate: e.target.value })}
             />
           </div>
         </div>
         <div className="flex justify-end gap-2 mt-6">
-          <button onClick={onClose} className="btn-ghost">
+          <button
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg border border-ds-hairline text-ds-folio-ink-soft hover:bg-ds-linen transition min-h-[44px] text-sm font-medium"
+          >
             Cancel
           </button>
           <button
             onClick={onSave}
             disabled={saving || !form.title.trim()}
-            className="btn-primary"
+            className="btn-marine"
           >
             {saving ? "Saving…" : "Save Changes"}
           </button>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }
@@ -579,32 +566,32 @@ function DeleteModal({ tripId, onConfirm, onClose }: DeleteModalProps) {
       aria-modal="true"
       aria-label="Confirm delete trip"
     >
-      <Card
-        as="div"
-        tone="dark"
-        className="p-6 w-full max-w-sm"
-        style={{ boxShadow: "var(--ds-elevation-4)" }}
+      <div
+        className="folio-paper-panel p-6 w-full max-w-sm"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-base font-semibold text-ds-text mb-2">
+        <h2 className="text-base font-semibold text-ds-folio-ink mb-2">
           Delete Trip
         </h2>
-        <p className="text-sm text-ds-text-tertiary mb-6 leading-relaxed">
+        <p className="text-sm text-ds-folio-ink-mist mb-6 leading-relaxed">
           This will permanently delete the trip and all its itinerary items.
           This cannot be undone.
         </p>
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="btn-ghost">
+          <button
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg border border-ds-hairline text-ds-folio-ink-soft hover:bg-ds-linen transition min-h-[44px] text-sm font-medium"
+          >
             Cancel
           </button>
           <button
             onClick={() => onConfirm(tripId)}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl bg-ds-warning/15 text-ds-warning border border-ds-warning/30 hover:bg-ds-warning/25 transition min-h-[44px]"
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-ds-warning/15 text-ds-warning border border-ds-warning/30 hover:bg-ds-warning/25 transition min-h-[44px]"
           >
             Delete Trip
           </button>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }
@@ -737,18 +724,18 @@ export default function TripsPage() {
       {/* Page header — editorial shelf heading */}
       <div className="flex items-start justify-between gap-4 mb-8" data-testid="my-trips-page-header">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary mb-1">
+          <p className="folio-muted-label mb-1">
             Your Travel Shelf
           </p>
-          <h1 className="text-2xl font-semibold text-ds-text">My Journeys</h1>
+          <h1 className="text-2xl font-semibold text-ds-folio-ink">My Journeys</h1>
           {hasAny && (
-            <p className="mt-1 text-sm text-ds-text-tertiary">{tripLabel}</p>
+            <p className="mt-1 text-sm text-ds-folio-ink-mist">{tripLabel}</p>
           )}
         </div>
         <div className="shrink-0">
           <Link
             href="/trips/new"
-            className="btn-primary inline-flex items-center min-h-[44px]"
+            className="btn-marine inline-flex items-center"
             data-testid="trips-new-trip-action"
           >
             <PlusCircle className="w-4 h-4" aria-hidden="true" />

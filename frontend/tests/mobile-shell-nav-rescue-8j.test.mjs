@@ -287,7 +287,7 @@ describe("Bottom nav — touch targets are 44px+", () => {
 
 // ── 5. Top bar — boutique surface and brand preserved ────────────────────────
 
-describe("Top shell/header — boutique surface with brand preserved", () => {
+describe("Top shell/header — paper-world chrome with brand preserved (Slice 2 upgrade)", () => {
   const nav = readSrc("components/layout/MobileNav.tsx");
 
   it("mobile-top-bar CSS class is used on the header", () => {
@@ -297,7 +297,7 @@ describe("Top shell/header — boutique surface with brand preserved", () => {
     );
   });
 
-  it("globals.css defines .mobile-top-bar with midnight base", () => {
+  it("globals.css defines .mobile-top-bar with paper-world base (Slice 2: bone/hairline, not midnight)", () => {
     const css = readSrc("app/globals.css");
     assert.ok(
       css.includes(".mobile-top-bar"),
@@ -306,8 +306,8 @@ describe("Top shell/header — boutique surface with brand preserved", () => {
     const topBarIdx = css.indexOf(".mobile-top-bar");
     const topBarBlock = css.slice(topBarIdx, topBarIdx + 200);
     assert.ok(
-      topBarBlock.includes("midnight") || topBarBlock.includes("ds-midnight-ink"),
-      ".mobile-top-bar must use midnight-ink background token"
+      topBarBlock.includes("bone") || topBarBlock.includes("warm-paper") || topBarBlock.includes("hairline") || topBarBlock.includes("linen"),
+      ".mobile-top-bar must use paper-world tokens (bone/warm-paper/hairline) — Slice 2 converted from midnight"
     );
   });
 

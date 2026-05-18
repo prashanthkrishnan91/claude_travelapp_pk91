@@ -930,12 +930,12 @@
     color: var(--ds-text-tertiary);
   }
 
-  /* ── Mobile app shell — Phase 8J Pocket Travel Atelier ─────── */
+  /* ── Mobile app shell — Phase 8J / Slice 2 paper-world chrome ─ */
 
-  /* Top bar — boutique atelier header, midnight base */
+  /* Top bar — paper folio chrome (Slice 2: converted from midnight to bone) */
   .mobile-top-bar {
-    background: var(--ds-midnight-ink);
-    border-bottom: 1px solid var(--ds-pen-stroke);
+    background: var(--ds-bone);
+    border-bottom: 1px solid var(--ds-hairline);
   }
 
   /* Bottom nav — warm paper folio, 4-tab boutique (Folio Slice 1) */
@@ -1719,5 +1719,100 @@
 
   @media (max-width: 600px) {
     .folio-ambient::after { animation: none; }
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     PAPER PLANNING SURFACES — Slice 2 — Core Paper Planning
+     Reusable paper-world primitives for trip cards, day columns,
+     planning panels, and mobile chrome in the paper world.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* folio-paper-card: default paper planning card.
+     Bone fill, hairline border, warm long shadow, 12px radius. */
+  .folio-paper-card {
+    background: var(--ds-bone);
+    border: 1px solid var(--ds-hairline);
+    border-radius: 12px;
+    box-shadow:
+      0 2px 12px color-mix(in srgb, var(--ds-folio-ink) 5%, transparent),
+      0 1px 4px  color-mix(in srgb, var(--ds-folio-ink) 3%, transparent);
+    overflow: hidden;
+  }
+  .folio-paper-card:hover {
+    box-shadow:
+      0 3px 18px color-mix(in srgb, var(--ds-folio-ink) 8%, transparent),
+      0 1px 6px  color-mix(in srgb, var(--ds-folio-ink) 4%, transparent);
+  }
+
+  /* folio-paper-panel: elevated paper surface for heroes and overview panels. */
+  .folio-paper-panel {
+    background: var(--ds-warm-paper);
+    border: 1px solid var(--ds-hairline);
+    border-radius: 14px;
+    box-shadow:
+      0 2px 16px color-mix(in srgb, var(--ds-folio-ink) 6%, transparent),
+      0 1px 4px  color-mix(in srgb, var(--ds-folio-ink) 3%, transparent);
+    overflow: hidden;
+  }
+
+  /* folio-paper-section: recessed zone within a panel (linen tint). */
+  .folio-paper-section {
+    background: var(--ds-linen);
+  }
+
+  /* folio-paper-header: header zone in paper panels — deeper linen. */
+  .folio-paper-header {
+    background: color-mix(in srgb, var(--ds-linen) 70%, var(--ds-bone));
+    border-bottom: 1px solid var(--ds-hairline);
+  }
+
+  /* folio-divider: hairline horizontal rule in paper world. */
+  .folio-divider {
+    height: 1px;
+    background: var(--ds-hairline);
+  }
+
+  /* folio-muted-label: small-caps eyebrow/overline in paper world. */
+  .folio-muted-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ds-folio-ink-mist);
+    line-height: 1;
+  }
+
+  /* folio-chip: hairline pill chip, no fill, folio-ink text. */
+  .folio-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    border: 1px solid var(--ds-hairline);
+    border-radius: 9999px;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--ds-folio-ink-soft);
+    background: transparent;
+  }
+
+  /* folio-input: paper-world form field. Flat bone field, hairline border.
+     On focus: hairline becomes marine ink. */
+  .folio-input {
+    width: 100%;
+    background: var(--ds-bone);
+    border: 1px solid var(--ds-hairline);
+    border-radius: 0.375rem;
+    color: var(--ds-folio-ink);
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    transition: border-color var(--ds-duration-fast) var(--ds-easing-standard);
+  }
+  .folio-input::placeholder { color: var(--ds-folio-ink-mist); }
+  .folio-input:focus-visible {
+    outline: none;
+    border-color: var(--ds-marine-ink);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-marine-ink) 15%, transparent);
   }
 }
