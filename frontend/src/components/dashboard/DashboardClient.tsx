@@ -146,7 +146,7 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
       aria-label="Continue planning"
       data-testid="atelier-continue-planning"
     >
-      <Overline>Continue planning</Overline>
+      <Overline className="text-ds-folio-ink-mist">Continue planning</Overline>
       <article className="folio-home-cinema-card mt-3 p-5">
         <div className="flex items-start gap-4">
           <div
@@ -197,7 +197,7 @@ function JourneyShelfTeaser({ count }: { count: number }) {
       data-testid="journey-shelf-teaser"
     >
       <div className="flex items-center justify-between mb-3">
-        <Overline>Your travel shelf</Overline>
+        <Overline className="text-ds-folio-ink-mist">Your travel shelf</Overline>
         <div className="flex items-center gap-3">
           <Link
             href="/trips/new"
@@ -296,7 +296,7 @@ function AtelierPlanningStrip() {
       data-testid="atelier-planning-strip"
     >
       <div className="editorial-section-rule" aria-hidden="true" />
-      <Overline>Discovery tools</Overline>
+      <Overline className="text-ds-folio-ink-mist">Discovery tools</Overline>
       <div className="grid grid-cols-2 gap-3 mt-3">
         <Link
           href="/explore"
