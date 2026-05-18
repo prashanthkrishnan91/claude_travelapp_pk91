@@ -1604,10 +1604,19 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         outboundDay.id === returnDay.id
           ? outboundDay.items.length + 1
           : returnDay.items.length;
-      const returnItem = await addRoundTripLegToDay(
-        tripId, returnDay.id, item, "return", returnPosition
-      );
 
+      let returnItem: ItineraryItem;
+      try {
+        returnItem = await addRoundTripLegToDay(
+          tripId, returnDay.id, item, "return", returnPosition
+        );
+      } catch (returnErr) {
+        // Outbound succeeded but return failed — best-effort rollback to avoid half-added state
+        try { await deleteItem(outboundItem.id); } catch { /* ignore rollback failure */ }
+        throw returnErr;
+      }
+
+      // Both legs succeeded — update local state together
       setDays((prev) =>
         prev.map((day) => {
           if (day.id === outboundDay.id && day.id === returnDay.id) {
@@ -1625,7 +1634,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
           : `Round-trip: outbound Day ${outboundDay.dayNumber}, return Day ${returnDay.dayNumber}`;
       showToast(msg);
     } catch {
-      showToast("Failed to add — please try again");
+      showToast("Failed to add round-trip flight — please try again");
     } finally {
       setAddingId(null);
     }

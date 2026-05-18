@@ -486,22 +486,30 @@ export function ConciergePage() {
       const gv = p.googleVerification as Record<string, unknown> | undefined;
       const disp = p.display as Record<string, unknown> | undefined;
       const providerPlaceId = (gv?.providerPlaceId ?? gv?.provider_place_id) as string | undefined;
+      if (!providerPlaceId) throw new Error("no providerPlaceId — cannot save without canonical identifier");
       const googleMapsUri = (gv?.googleMapsUri ?? gv?.google_maps_uri) as string | undefined;
-      const rating = (p.rating ?? (gv?.rating)) as number | undefined;
+      const rating = (p.rating ?? gv?.rating) as number | undefined;
       const address = (p.address ?? p.neighborhood ?? disp?.address) as string | undefined;
       const category = (p.category ?? disp?.displayCategory ?? vertical) as string;
+      const cuisine = (p.cuisine ?? disp?.cuisine) as string | undefined;
+      const priceLevel = (p.priceLevel ?? p.price_level ?? disp?.priceLevel ?? disp?.price_level) as string | undefined;
+      const tags = (p.tags ?? disp?.tags) as string[] | undefined;
 
       await saveItem({
         vertical,
         displayName: title,
-        provider: "google",
+        provider: "google_places",
         providerPlaceId,
         displaySnapshot: {
           name: title,
+          destination,
           category,
+          cuisine,
           rating,
+          priceLevel,
           address,
-          google_maps_uri: googleMapsUri,
+          googleMapsUri,
+          tags,
         },
         searchContext: { destination, query: lastQuery ?? "" },
         provenance: { source: "outside_concierge" },

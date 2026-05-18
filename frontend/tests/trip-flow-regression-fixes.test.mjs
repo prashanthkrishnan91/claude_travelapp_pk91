@@ -146,6 +146,24 @@ test('Issue1: toast message distinguishes same-day vs different-day round-trip',
   );
 });
 
+test('Issue1: handleAddRoundTripToItinerary has rollback on return-leg failure', () => {
+  assert.match(
+    tripBuilder,
+    /deleteItem\(outboundItem\.id\)/,
+    'Must attempt deleteItem(outboundItem.id) if return-leg add fails',
+  );
+});
+
+test('Issue1: local state update happens only after both legs succeed', () => {
+  // setDays must appear after returnItem is assigned (not between the two POSTs)
+  const setDaysIdx = tripBuilder.indexOf('// Both legs succeeded');
+  const returnItemIdx = tripBuilder.indexOf('returnItem = await addRoundTripLegToDay');
+  assert.ok(
+    returnItemIdx !== -1 && setDaysIdx > returnItemIdx,
+    'setDays must be called only after both outbound and return items exist',
+  );
+});
+
 test('Issue1: one-way add still uses addOneWayFlightToDay (no regression)', () => {
   assert.match(
     tripBuilder,
@@ -254,6 +272,40 @@ test('Issue2: cardSaveStates uses Map keyed per card', () => {
     concierge,
     /cardSaveStates.*Map|Map.*cardSaveStates/s,
     'Save state must be tracked per card via a Map',
+  );
+});
+
+test('Issue2: handleSaveCard uses google_places provider identity (not google)', () => {
+  assert.match(
+    concierge,
+    /provider:\s*["']google_places["']/,
+    'Saved item provider must be "google_places" to match Explore dedupe key',
+  );
+  assert.ok(
+    !concierge.includes('provider: "google"') && !concierge.includes("provider: 'google'"),
+    'Provider must not be bare "google" — that breaks SavedItemsService dedupe',
+  );
+});
+
+test('Issue2: handleSaveCard guards against missing providerPlaceId', () => {
+  assert.match(
+    concierge,
+    /if\s*\(!providerPlaceId\)/,
+    'Must not call saveItem when providerPlaceId is absent',
+  );
+});
+
+test('Issue2: handleSaveCard displaySnapshot uses googleMapsUri camelCase key', () => {
+  // Validate the snapshot uses camelCase so saveItem/toSnake converts it consistently
+  const saveBlock = concierge.slice(concierge.indexOf('handleSaveCard'));
+  assert.match(
+    saveBlock,
+    /googleMapsUri/,
+    'displaySnapshot must use camelCase googleMapsUri, not hand-written google_maps_uri',
+  );
+  assert.ok(
+    !saveBlock.slice(0, saveBlock.indexOf('outside_concierge') + 20).includes('google_maps_uri:'),
+    'displaySnapshot must not use snake_case google_maps_uri — let saveItem/toSnake handle conversion',
   );
 });
 
