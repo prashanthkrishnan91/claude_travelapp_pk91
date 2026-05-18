@@ -2650,7 +2650,7 @@ function AddNoteModal({
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Reservation at 7pm"
+              placeholder="Place or note title"
               required
               data-testid="add-note-title-input"
               className="w-full rounded-xl bg-ds-carbon border border-ds-pen-stroke text-ds-text placeholder:text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 transition-colors"
@@ -2679,7 +2679,7 @@ function AddNoteModal({
               id="add-note-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Any details worth remembering…"
+              placeholder="Paste Google Maps links or reservation links here — they'll become clickable in the itinerary."
               rows={3}
               data-testid="add-note-description-input"
               className="w-full resize-none rounded-xl bg-ds-carbon border border-ds-pen-stroke text-ds-text placeholder:text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 transition-colors"

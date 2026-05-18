@@ -518,6 +518,14 @@ test('Issue6: AddNoteModal includes helper text about Build/Saved Ideas/AI Conci
   );
 });
 
+test('Issue6: AddNoteModal details placeholder tells users Google Maps links become clickable', () => {
+  assert.match(
+    tripBuilder,
+    /Paste Google Maps links.*clickable|Google Maps links.*itinerary/s,
+    'Details placeholder must tell users to paste Google Maps links and that they become clickable',
+  );
+});
+
 test('Issue6: existing Plan My Day handlePlanDay contract unchanged', () => {
   assert.match(
     tripBuilder,
