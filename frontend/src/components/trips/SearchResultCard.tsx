@@ -62,7 +62,7 @@ export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }
         <button
           {...listeners}
           {...attributes}
-          className="mt-0.5 flex-shrink-0 -m-3.5 p-3.5 flex items-center justify-center cursor-grab active:cursor-grabbing text-ds-text-tertiary hover:text-ds-text-secondary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          className="mt-0.5 flex-shrink-0 -m-3.5 p-3.5 flex items-center justify-center cursor-grab active:cursor-grabbing text-ds-folio-ink-mist hover:text-ds-folio-ink-soft transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           aria-label="Drag to itinerary"
         >
           <GripVertical className="w-4 h-4" />
@@ -81,7 +81,7 @@ export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-1">
             <div className="flex items-center gap-1.5 min-w-0">
-              <h4 className="text-sm font-semibold text-ds-text leading-tight line-clamp-1">
+              <h4 className="text-sm font-semibold text-ds-folio-ink leading-tight line-clamp-1">
                 {result.title}
               </h4>
               {result.rating !== undefined && result.rating >= 4.5 && (
@@ -102,7 +102,7 @@ export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }
                   <span className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
                     isComparing
                       ? "bg-ds-accent text-ds-text-inverse"
-                      : "bg-ds-carbon text-ds-text-tertiary group-hover:text-ds-accent"
+                      : "bg-ds-linen text-ds-folio-ink-mist group-hover:text-ds-accent"
                   }`}>
                     <Scale className="w-3 h-3" />
                   </span>
@@ -117,7 +117,7 @@ export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }
                   aria-label={`Book ${result.title}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <span className="w-6 h-6 rounded-full bg-ds-carbon group-hover:bg-ds-pen-stroke text-ds-text-tertiary group-hover:text-ds-text-secondary flex items-center justify-center transition-colors">
+                  <span className="w-6 h-6 rounded-full bg-ds-linen group-hover:bg-ds-bone text-ds-folio-ink-mist group-hover:text-ds-folio-ink-soft flex items-center justify-center transition-colors">
                     <ExternalLink className="w-3 h-3" />
                   </span>
                 </a>
@@ -135,7 +135,7 @@ export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }
           </div>
 
           {result.description && (
-            <p className="text-xs text-ds-text-tertiary mt-0.5 line-clamp-2">
+            <p className="text-xs text-ds-folio-ink-mist mt-0.5 line-clamp-2">
               {result.description}
             </p>
           )}
@@ -144,13 +144,13 @@ export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }
 
       <Card.Meta className="mt-1.5">
         {result.location && (
-          <span className="flex items-center gap-1 text-xs text-ds-text-tertiary">
+          <span className="flex items-center gap-1 text-xs text-ds-folio-ink-mist">
             <MapPin className="w-3 h-3" />
             {result.location}
           </span>
         )}
         {result.duration && (
-          <span className="flex items-center gap-1 text-xs text-ds-text-tertiary">
+          <span className="flex items-center gap-1 text-xs text-ds-folio-ink-mist">
             <Clock className="w-3 h-3" />
             {result.duration}
           </span>
@@ -181,13 +181,13 @@ export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }
                       ? "text-ds-trust-verified border-ds-trust-verified/30"
                       : areaLabel === "Close to Best Area"
                         ? "text-ds-caution border-ds-caution/30"
-                        : "bg-ds-carbon text-ds-text-tertiary border-ds-pen-stroke"
+                        : "bg-ds-linen text-ds-folio-ink-mist border-ds-hairline"
                   }`}
                 >
                   {areaLabel}
                 </span>
                 {distKm != null && (
-                  <span className="flex items-center gap-0.5 text-xs text-ds-text-tertiary">
+                  <span className="flex items-center gap-0.5 text-xs text-ds-folio-ink-mist">
                     <MapPin className="w-3 h-3" />
                     {distKm < 1
                       ? `${Math.round(distKm * 1000)} m to best area`
@@ -205,7 +205,7 @@ export function SearchResultCard({ result, onAdd, onToggleCompare, isComparing }
           {result.tags.map((tag) => (
             <span
               key={tag}
-              className="px-1.5 py-0.5 text-xs rounded-full bg-ds-carbon text-ds-text-tertiary border border-ds-pen-stroke"
+              className="px-1.5 py-0.5 text-xs rounded-full bg-ds-linen text-ds-folio-ink-mist border border-ds-hairline"
             >
               {tag}
             </span>

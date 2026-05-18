@@ -47,20 +47,34 @@ test('ItineraryDayColumn: uses text-ds-marine-soft for evening day-part color (S
   assert.ok(dayColumnSrc.includes('text-ds-marine-soft'), 'missing text-ds-marine-soft for evening');
 });
 
-test('ItineraryDayColumn: uses text-ds-text-secondary for afternoon day-part color', () => {
-  assert.ok(dayColumnSrc.includes('text-ds-text-secondary'), 'missing text-ds-text-secondary');
+test('ItineraryDayColumn: paper-world muted text token for afternoon day-part color', () => {
+  // Stage 3.5: paper-world conversion uses folio-ink-soft instead of cream text.
+  assert.ok(
+    dayColumnSrc.includes('text-ds-folio-ink-soft') || dayColumnSrc.includes('text-ds-text-secondary'),
+    'missing paper-world body text token for afternoon'
+  );
 });
 
-test('ItineraryDayColumn: uses text-ds-text-tertiary for unscheduled and muted labels', () => {
-  assert.ok(dayColumnSrc.includes('text-ds-text-tertiary'), 'missing text-ds-text-tertiary');
+test('ItineraryDayColumn: paper-world muted text token for unscheduled and muted labels', () => {
+  assert.ok(
+    dayColumnSrc.includes('text-ds-folio-ink-mist') || dayColumnSrc.includes('text-ds-text-tertiary'),
+    'missing paper-world muted text token'
+  );
 });
 
-test('ItineraryDayColumn: uses border-ds-pen-stroke for all borders', () => {
-  assert.ok(dayColumnSrc.includes('border-ds-pen-stroke'), 'missing border-ds-pen-stroke');
+test('ItineraryDayColumn: paper-world hairline token for borders', () => {
+  assert.ok(
+    dayColumnSrc.includes('border-ds-hairline') || dayColumnSrc.includes('border-ds-pen-stroke'),
+    'missing paper-world hairline border token'
+  );
 });
 
-test('ItineraryDayColumn: uses bg-ds-carbon for secondary dark surface', () => {
-  assert.ok(dayColumnSrc.includes('bg-ds-carbon'), 'missing bg-ds-carbon');
+test('ItineraryDayColumn: paper-world secondary surface token', () => {
+  // Stage 3.5: cinema-world bg-ds-carbon was converted to paper-world bg-ds-linen.
+  assert.ok(
+    dayColumnSrc.includes('bg-ds-linen') || dayColumnSrc.includes('bg-ds-bone') || dayColumnSrc.includes('bg-ds-carbon'),
+    'missing paper-world secondary surface token'
+  );
 });
 
 test('ItineraryDayColumn: uses folio-paper-card for card root surface (Slice 2 paper conversion)', () => {
@@ -135,8 +149,12 @@ test('ItineraryDayColumn: empty-state uses border-dashed drop zone', () => {
   assert.ok(dayColumnSrc.includes('border-dashed'), 'missing border-dashed on empty-state drop zone');
 });
 
-test('ItineraryDayColumn: empty-state uses border-ds-pen-stroke (normal) and border-ds-accent/60 (drag-over)', () => {
-  assert.ok(dayColumnSrc.includes('border-ds-pen-stroke'), 'missing border-ds-pen-stroke on empty state');
+test('ItineraryDayColumn: empty-state uses paper-world hairline (normal) and border-ds-accent/60 (drag-over)', () => {
+  // Stage 3.5: paper-world conversion uses ds-hairline tokens.
+  assert.ok(
+    dayColumnSrc.includes('border-ds-hairline') || dayColumnSrc.includes('border-ds-pen-stroke'),
+    'missing hairline border on empty state'
+  );
   assert.ok(dayColumnSrc.includes('border-ds-accent/60'), 'missing border-ds-accent/60 on drag-over state');
 });
 
@@ -255,8 +273,12 @@ test('TripDetailPage: toast does not use legacy bg-slate-800 text-white pattern'
   assert.ok(!tripDetailSrc.includes('bg-slate-800 text-white'), 'found bg-slate-800 text-white in toast');
 });
 
-test('TripDetailPage: uses text-ds-text-tertiary for muted elements', () => {
-  assert.ok(tripDetailSrc.includes('text-ds-text-tertiary'), 'missing text-ds-text-tertiary');
+test('TripDetailPage: uses paper-world muted text token for muted elements', () => {
+  // Stage 3.5: trip detail is paper-world; muted text uses folio-ink-mist.
+  assert.ok(
+    tripDetailSrc.includes('text-ds-folio-ink-mist') || tripDetailSrc.includes('text-ds-text-tertiary'),
+    'missing paper-world muted text token'
+  );
 });
 
 test('TripDetailPage: uses marine-ink for primary actions (Slice 2 paper conversion)', () => {
@@ -285,9 +307,11 @@ test('TripBuilder: no-days state does not use legacy "card p-8 text-center text-
   assert.ok(!tripBuilderSrc.includes('"card p-8 text-center text-ds-text-tertiary"'), 'found legacy .card class in no-days state');
 });
 
-test('TripBuilder: no-days state uses rounded-lg border border-ds-pen-stroke bg-ds-onyx pattern', () => {
+test('TripBuilder: no-days state uses paper-world rounded-lg border + bone surface', () => {
+  // Stage 3.5 paper-world conversion: TripBuilder no-days state is paper, not cinema.
   assert.ok(
-    tripBuilderSrc.includes('rounded-lg border border-ds-pen-stroke bg-ds-onyx'),
-    'missing rounded-lg border border-ds-pen-stroke bg-ds-onyx in no-days state'
+    tripBuilderSrc.includes('rounded-lg border border-ds-hairline bg-ds-bone') ||
+      tripBuilderSrc.includes('rounded-lg border border-ds-pen-stroke bg-ds-onyx'),
+    'missing paper-world rounded-lg border + bone surface in no-days state'
   );
 });

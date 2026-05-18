@@ -110,7 +110,7 @@ function EmptyDashboard() {
     <div className="space-y-8" data-testid="trips-empty-state">
       {/* Editorial hero */}
       <div className="text-center py-12 px-4">
-        <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-ds-accent-subtle border border-ds-pen-stroke text-ds-accent mx-auto mb-6">
+        <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-ds-accent-subtle border border-ds-hairline text-ds-accent mx-auto mb-6">
           <Map className="w-8 h-8" />
         </div>
         <h2 className="text-2xl font-semibold text-ds-folio-ink tracking-tight mb-2">
@@ -171,7 +171,7 @@ function EmptyDashboard() {
       </div>
 
       {/* Saved ideas nudge */}
-      <p className="text-center text-sm text-ds-text-tertiary">
+      <p className="text-center text-sm text-ds-folio-ink-mist">
         Have places in mind?{" "}
         <Link
           href="/saved"

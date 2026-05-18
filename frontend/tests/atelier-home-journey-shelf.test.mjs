@@ -110,7 +110,10 @@ test("DashboardClient does not import RecentTrips (replaced by atelier journey v
 // ── DashboardClient — ds-* token contract ────────────────────────────────────
 
 test("DashboardClient uses ds-* surface tokens (no raw violet/emerald/amber)", () => {
-  assert.match(dashboardClient, /bg-ds-carbon|bg-ds-onyx|border-ds-pen-stroke/);
+  // Stage 3.5 UI architecture: paper-world surfaces use hairline/linen tokens.
+  // Dark-world tokens (bg-ds-carbon/onyx, border-ds-pen-stroke) are reserved for
+  // cinema-world surfaces (Discover, Saved, AI Concierge).
+  assert.match(dashboardClient, /bg-ds-bone|bg-ds-linen|border-ds-hairline|folio-paper-card|folio-home-cinema-card/);
   assert.doesNotMatch(dashboardClient, /violet-\d+|emerald-\d+|amber-\d+/);
 });
 

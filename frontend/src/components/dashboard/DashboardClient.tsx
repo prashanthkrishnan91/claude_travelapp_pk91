@@ -62,7 +62,7 @@ function pickContinuePlanning(trips: Trip[]): Trip | null {
 
 function Overline({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <p className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${className ?? "text-ds-text-tertiary"}`}>
+    <p className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${className ?? "text-ds-folio-ink-mist"}`}>
       {children}
     </p>
   );
@@ -274,7 +274,7 @@ function EmptyAtelierHome() {
         </Link>
         <Link
           href="/concierge"
-          className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-ds-pen-stroke bg-ds-carbon text-ds-text text-sm font-medium hover:border-ds-accent/40 hover:text-ds-accent transition-all min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-ds-hairline bg-ds-linen text-ds-folio-ink-soft text-sm font-medium hover:bg-ds-bone hover:text-ds-folio-ink transition-all min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         >
           <Sparkles className="w-4 h-4" aria-hidden="true" />
           Open Concierge
@@ -370,12 +370,12 @@ export function DashboardClient() {
         aria-label="Loading your atelier"
       >
         <div className="space-y-2">
-          <div className="h-3 w-28 bg-ds-pen-stroke rounded animate-pulse" />
-          <div className="h-7 w-44 bg-ds-pen-stroke rounded animate-pulse" />
-          <div className="h-4 w-36 bg-ds-pen-stroke rounded animate-pulse" />
+          <div className="h-3 w-28 bg-ds-hairline rounded animate-pulse" />
+          <div className="h-7 w-44 bg-ds-hairline rounded animate-pulse" />
+          <div className="h-4 w-36 bg-ds-hairline rounded animate-pulse" />
         </div>
-        <div className="h-36 bg-ds-onyx border border-ds-pen-stroke rounded-lg animate-pulse" />
-        <div className="h-24 bg-ds-onyx border border-ds-pen-stroke rounded-lg animate-pulse" />
+        <div className="h-36 bg-ds-linen border border-ds-hairline rounded-lg animate-pulse" />
+        <div className="h-24 bg-ds-linen border border-ds-hairline rounded-lg animate-pulse" />
       </div>
     );
   }

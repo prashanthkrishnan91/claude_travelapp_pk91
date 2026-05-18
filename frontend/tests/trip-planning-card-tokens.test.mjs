@@ -162,10 +162,18 @@ test('TripIdeasPanel: no legacy color classes', () => {
   assert.ok(!src.includes('text-emerald-'), 'no text-emerald- in TripIdeasPanel');
 });
 
-test('TripIdeasPanel: uses ds-* tokens', () => {
+test('TripIdeasPanel: uses paper-world ds-* tokens', () => {
+  // Stage 3.5 unified UI architecture: TripIdeasPanel renders inside the paper-world
+  // Trip Detail canvas. It uses ds-hairline/ds-bone/ds-linen and folio-ink text tokens.
   assert.ok(tripIdeasPanelSrc.includes('text-ds-accent'), 'TripIdeasPanel uses text-ds-accent');
-  assert.ok(tripIdeasPanelSrc.includes('bg-ds-onyx'), 'TripIdeasPanel uses bg-ds-onyx');
-  assert.ok(tripIdeasPanelSrc.includes('border-ds-pen-stroke'), 'TripIdeasPanel uses border-ds-pen-stroke');
+  assert.ok(
+    tripIdeasPanelSrc.includes('bg-ds-linen') || tripIdeasPanelSrc.includes('bg-ds-bone') || tripIdeasPanelSrc.includes('bg-ds-onyx'),
+    'TripIdeasPanel uses paper-world secondary surface tokens'
+  );
+  assert.ok(
+    tripIdeasPanelSrc.includes('border-ds-hairline') || tripIdeasPanelSrc.includes('border-ds-pen-stroke'),
+    'TripIdeasPanel uses hairline border tokens'
+  );
 });
 
 // ── FlightExploreFlow.tsx ──────────────────────────────────────────────────────

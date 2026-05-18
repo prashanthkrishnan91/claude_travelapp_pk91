@@ -146,7 +146,7 @@ export default function TripDetailPage() {
         <div className="mb-4">
           <Link
             href="/trips"
-            className="inline-flex items-center gap-1.5 text-xs text-ds-text-tertiary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            className="inline-flex items-center gap-1.5 text-xs text-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           >
             <ChevronLeft className="w-3.5 h-3.5" aria-hidden="true" />
             My Journeys

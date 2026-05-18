@@ -1,0 +1,229 @@
+// Canonical Folio / Cinema UI primitives — Stage 3.5 Unified UI Architecture.
+//
+// Paper-world surfaces (Folio*) use warm bone/linen backgrounds with dark
+// folio-ink text. Cinema-world surfaces (Cinema*) use warm dark velvet
+// backgrounds with cream text. Feature files should compose these primitives
+// instead of inventing local Tailwind class stacks — that's how we keep the
+// app visually coherent across surfaces.
+//
+// Routing rule:
+//   Paper world  → Home, My Trips, Trip Build, Trip Itinerary, Trip Ideas,
+//                  New Trip form, planning modals.
+//   Cinema world → Discover (Explore), Saved, AI Concierge.
+//
+// These primitives wrap the canonical CSS classes already defined in
+// globals.css; they do not introduce new visual identity. The point is to
+// give feature files a stable, intentional API.
+
+import clsx from "clsx";
+import type {
+  ButtonHTMLAttributes,
+  HTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+} from "react";
+
+// ─── Folio (paper) primitives ───────────────────────────────────────────────
+
+type DivProps = HTMLAttributes<HTMLDivElement>;
+
+/** Paper-world page wrapper. Use as the outermost surface for paper screens. */
+export function FolioPage({ className, children, ...rest }: DivProps) {
+  return (
+    <div
+      data-folio-world="paper"
+      className={clsx("folio-page space-y-6", className)}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Paper-world panel — warm paper surface, hairline border, soft shadow. */
+export function FolioPanel({ className, children, ...rest }: DivProps) {
+  return (
+    <div
+      data-folio-world="paper"
+      className={clsx("folio-paper-panel", className)}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Paper-world card — bone surface, hairline border, soft warm shadow. */
+export function FolioCard({ className, children, ...rest }: DivProps) {
+  return (
+    <div
+      data-folio-world="paper"
+      className={clsx("folio-paper-card text-ds-folio-ink", className)}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Overline + heading combination for paper-world section headers. */
+export function FolioSectionHeader({
+  overline,
+  title,
+  className,
+  children,
+}: {
+  overline?: ReactNode;
+  title?: ReactNode;
+  className?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <header data-folio-world="paper" className={clsx("space-y-1", className)}>
+      {overline && (
+        <p className="folio-muted-label text-ds-folio-ink-mist">{overline}</p>
+      )}
+      {title && (
+        <h2 className="text-base font-semibold text-ds-folio-ink leading-tight">
+          {title}
+        </h2>
+      )}
+      {children}
+    </header>
+  );
+}
+
+/** Paper-world form field — bone surface, hairline border, dark folio ink text. */
+export function FolioInput({
+  className,
+  ...rest
+}: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      data-folio-world="paper"
+      className={clsx("folio-input", className)}
+      {...rest}
+    />
+  );
+}
+
+/** Paper-world chip — hairline pill with optional active variant. */
+export function FolioChip({
+  active = false,
+  className,
+  children,
+  ...rest
+}: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) {
+  return (
+    <button
+      type="button"
+      data-folio-world="paper"
+      data-active={active ? "true" : undefined}
+      className={clsx(
+        "inline-flex items-center gap-1 min-h-[32px] px-3 rounded-full text-xs font-medium border transition-colors",
+        active
+          ? "bg-ds-accent text-ds-text-inverse border-ds-accent shadow-sm"
+          : "bg-transparent text-ds-folio-ink-soft border-ds-hairline hover:bg-ds-bone hover:text-ds-folio-ink",
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Paper-world primary button — marine ink fill, paper-safe contrast. */
+export function FolioButton({
+  variant = "primary",
+  className,
+  children,
+  ...rest
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "primary" | "secondary" | "ghost";
+}) {
+  const variants: Record<string, string> = {
+    primary:
+      "min-h-[44px] px-4 rounded-xl bg-ds-accent hover:bg-ds-accent-muted text-ds-text-inverse text-sm font-semibold transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2",
+    secondary:
+      "min-h-[44px] px-4 rounded-xl bg-ds-linen hover:bg-ds-bone text-ds-folio-ink-soft hover:text-ds-folio-ink border border-ds-hairline text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2",
+    ghost: "btn-folio-ghost",
+  };
+  return (
+    <button
+      type="button"
+      data-folio-world="paper"
+      className={clsx(variants[variant], className)}
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── Cinema (dark) primitives ───────────────────────────────────────────────
+
+/** Cinema-world page wrapper. Use for Discover, Saved, AI Concierge. */
+export function CinemaPage({ className, children, ...rest }: DivProps) {
+  return (
+    <div
+      data-folio-world="cinema"
+      className={clsx("space-y-6", className)}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Cinema-world panel — warm dark velvet surface, brass hairline. */
+export function CinemaPanel({ className, children, ...rest }: DivProps) {
+  return (
+    <div
+      data-folio-world="cinema"
+      className={clsx("folio-cinema-card text-ds-text", className)}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Cinema-world card — warm dark carbon surface, brass hairline. */
+export function CinemaCard({ className, children, ...rest }: DivProps) {
+  return (
+    <div
+      data-folio-world="cinema"
+      className={clsx("folio-cinema-card text-ds-text", className)}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Cinema-world chip — warm dark pill. Use for filters/prompts on dark surfaces. */
+export function CinemaChip({
+  active = false,
+  className,
+  children,
+  ...rest
+}: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) {
+  return (
+    <button
+      type="button"
+      data-folio-world="cinema"
+      data-active={active ? "true" : undefined}
+      className={clsx(
+        "inline-flex items-center gap-1 min-h-[32px] px-3 rounded-full text-xs font-medium border transition-colors",
+        active
+          ? "bg-ds-accent text-ds-text-inverse border-ds-accent shadow-sm"
+          : "folio-concierge-chip text-ds-text hover:text-ds-text",
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}
