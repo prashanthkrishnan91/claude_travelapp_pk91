@@ -21,6 +21,23 @@ Follow-up needed:
 
 ---
 
+### 2026-05-18 — PR #436: empty trigger commit not pushed before session ended
+
+Repo: claude_travelapp_pk91
+Area: Workflow enforcement / CI trigger discipline
+Severity: Level 1 (minor delay; fixed in resumed session)
+Miss: After updating the PR body to fix the AI PR Readiness Check runtime gate, an empty commit was composed locally (`git commit --allow-empty`) to retrigger CI with the updated body. The session ended (context limit) before the push completed. In the resumed session, `git status` showed "Your branch is ahead of origin by 1 commit" — the push had not happened. The CI "failure" at 13:19 UTC was from a prior trigger, not from the empty commit.
+Impact: CI appeared still failing after the body fix; one session cycle wasted re-diagnosing.
+What caught it: `git status` check at the start of the resumed session showing branch ahead of origin by 1.
+Root cause: Session ended mid-task (pre-push). No verification step that the push was received by origin before concluding CI would retrigger.
+What should catch it next time: After any `git push` (including empty commits), always verify with `git status` that the branch is not ahead of origin (i.e., `git log --oneline -1 origin/<branch>` matches local HEAD). Do not rely on CI starting as proof of push.
+One-off or repeated: One-off (session boundary race).
+Promotion target: MISS_LEDGER only.
+Action taken: Pushed the empty commit at session resume; CI passed on that run.
+Follow-up needed: None.
+
+---
+
 ### 2026-05-17 — PR #420: test file created but not wired into npm test script
 
 Repo: claude_travelapp_pk91
