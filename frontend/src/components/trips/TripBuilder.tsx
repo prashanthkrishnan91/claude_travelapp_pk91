@@ -43,6 +43,7 @@ import {
   Map as MapIcon,
   LayoutList,
   Navigation,
+  FileText,
 } from "lucide-react";
 import { estimateTravel, sumRoute } from "@/lib/travelTime";
 import { addDaysToIsoDate, normalizeIsoDate } from "@/lib/tripDays";
@@ -1286,6 +1287,9 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const [dayPlanLoading,     setDayPlanLoading]     = useState(false);
   const [dayPlanTargetDayId, setDayPlanTargetDayId] = useState<string | null>(null);
 
+  // ── Add Note modal state ─────────────────────────────────────────────────────
+  const [addNoteTargetDayId, setAddNoteTargetDayId] = useState<string | null>(null);
+
   const flightListRef      = useRef<HTMLDivElement>(null);
   const hotelListRef       = useRef<HTMLDivElement>(null);
   const attractionListRef  = useRef<HTMLDivElement>(null);
@@ -1671,20 +1675,31 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
   // ── Add empty note to a day ──────────────────────────────────────────────────
 
-  const handleAddToDay = useCallback(async (dayId: string) => {
+  const handleAddToDay = useCallback((dayId: string) => {
+    if (!days.find((d) => d.id === dayId)) return;
+    setAddNoteTargetDayId(dayId);
+  }, [days]);
+
+  const handleSaveNote = useCallback(async (title: string, description: string) => {
+    const dayId = addNoteTargetDayId;
+    if (!dayId) return;
     const day = days.find((d) => d.id === dayId);
     if (!day) return;
+    setAddNoteTargetDayId(null);
     try {
       const newItem = await createItem(tripId, dayId, {
         itemType: "note" as ItemType,
-        title: "New item",
+        title,
+        ...(description ? { description } : {}),
         position: day.items.length,
       });
       setDays((prev) =>
         prev.map((d) => d.id === dayId ? { ...d, items: [...d.items, newItem] } : d)
       );
-    } catch { /* silently ignore */ }
-  }, [days, tripId]);
+    } catch {
+      showToast("Failed to add note — please try again");
+    }
+  }, [addNoteTargetDayId, days, tripId, showToast]);
 
   // ── Add new day (only when trip has no fixed dates) ──────────────────────────
   const handleAddDay = useCallback(async () => {
@@ -2528,6 +2543,15 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         </DragOverlay>
       </DndContext>
 
+      {/* ── Add Note Modal ───────────────────────────────────────────────────── */}
+      {addNoteTargetDayId && (
+        <AddNoteModal
+          dayNumber={days.find((d) => d.id === addNoteTargetDayId)?.dayNumber ?? 1}
+          onSave={handleSaveNote}
+          onCancel={() => setAddNoteTargetDayId(null)}
+        />
+      )}
+
       {/* ── Compare Modal ──────────────────────────────────────────────────── */}
       {compareOpen && compareResults.length > 0 && (
         <CompareModal results={compareResults} onClose={() => setCompareOpen(false)} />
@@ -2554,5 +2578,158 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         </div>
       )}
     </>
+  );
+}
+
+// ─── AddNoteModal ─────────────────────────────────────────────────────────────
+
+function AddNoteModal({
+  dayNumber,
+  onSave,
+  onCancel,
+}: {
+  dayNumber: number;
+  onSave: (title: string, description: string) => void;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    titleRef.current?.focus();
+  }, []);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const t = title.trim();
+    if (!t) return;
+    onSave(t, description.trim());
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Add note to Day ${dayNumber}`}
+      data-testid="add-note-modal"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div
+        className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl bg-ds-onyx border border-ds-pen-stroke shadow-[var(--ds-elevation-3)]"
+        style={{ padding: "var(--ds-space-6)" }}
+      >
+        <div className="flex items-center gap-2 mb-4">
+          <FileText className="h-4 w-4 text-ds-accent shrink-0" aria-hidden="true" />
+          <h2
+            className="text-ds-text font-semibold"
+            style={{ fontSize: "var(--ds-type-body-l-size)" }}
+          >
+            Add note — Day {dayNumber}
+          </h2>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label
+              htmlFor="add-note-title"
+              className="text-ds-text-tertiary uppercase tracking-[0.1em]"
+              style={{
+                display: "block",
+                fontSize: "var(--ds-type-overline-size)",
+                fontWeight: "var(--ds-type-overline-weight)",
+                marginBottom: "var(--ds-space-1)",
+              }}
+            >
+              Title <span aria-hidden="true">*</span>
+            </label>
+            <input
+              ref={titleRef}
+              id="add-note-title"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Reservation at 7pm"
+              required
+              data-testid="add-note-title-input"
+              className="w-full rounded-xl bg-ds-carbon border border-ds-pen-stroke text-ds-text placeholder:text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 transition-colors"
+              style={{
+                padding: "var(--ds-space-3) var(--ds-space-4)",
+                fontSize: "var(--ds-type-body-size)",
+                minHeight: "44px",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="add-note-description"
+              className="text-ds-text-tertiary uppercase tracking-[0.1em]"
+              style={{
+                display: "block",
+                fontSize: "var(--ds-type-overline-size)",
+                fontWeight: "var(--ds-type-overline-weight)",
+                marginBottom: "var(--ds-space-1)",
+              }}
+            >
+              Details <span className="text-ds-text-tertiary normal-case tracking-normal" style={{ fontSize: "var(--ds-type-caption-size)" }}>(optional)</span>
+            </label>
+            <textarea
+              id="add-note-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Any details worth remembering…"
+              rows={3}
+              data-testid="add-note-description-input"
+              className="w-full resize-none rounded-xl bg-ds-carbon border border-ds-pen-stroke text-ds-text placeholder:text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 transition-colors"
+              style={{
+                padding: "var(--ds-space-3) var(--ds-space-4)",
+                fontSize: "var(--ds-type-body-size)",
+              }}
+            />
+          </div>
+
+          <p
+            className="text-ds-text-tertiary"
+            style={{ fontSize: "var(--ds-type-caption-size)", lineHeight: "var(--ds-type-caption-leading)" }}
+          >
+            To add restaurants, attractions, hotels, or flights, use Build, Saved Ideas, or AI Concierge.
+          </p>
+
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="submit"
+              disabled={!title.trim()}
+              data-testid="add-note-save-btn"
+              className="flex-1 rounded-xl text-ds-text-inverse disabled:opacity-40 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              style={{
+                background: "var(--ds-accent)",
+                padding: "var(--ds-space-3) var(--ds-space-4)",
+                minHeight: "44px",
+                fontSize: "var(--ds-type-body-size)",
+                fontWeight: 500,
+              }}
+            >
+              Save note
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              data-testid="add-note-cancel-btn"
+              className="rounded-xl bg-ds-carbon text-ds-text-secondary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              style={{
+                padding: "var(--ds-space-3) var(--ds-space-4)",
+                minHeight: "44px",
+                fontSize: "var(--ds-type-body-size)",
+                border: "1px solid var(--ds-pen-stroke)",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }

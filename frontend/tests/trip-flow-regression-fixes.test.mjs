@@ -429,3 +429,107 @@ test('Issue5: OptimizeTripModal still guards anyHotelHasRealRate (no mock bypass
     'Hotel rate guard must remain active — no mock bypass',
   );
 });
+
+// ─── Issue 6: Day "+" no longer creates a dead "New item" note ────────────────
+
+test('Issue6: handleAddToDay no longer calls createItem with title "New item"', () => {
+  // The old pattern was: createItem(..., { title: "New item" }) — it must be gone
+  assert.ok(
+    !tripBuilder.includes('"New item"'),
+    'handleAddToDay must not immediately create a "New item" note',
+  );
+});
+
+test('Issue6: handleAddToDay opens Add Note modal via addNoteTargetDayId', () => {
+  assert.match(
+    tripBuilder,
+    /addNoteTargetDayId/,
+    'TripBuilder must track addNoteTargetDayId to open the Add Note modal',
+  );
+  assert.match(
+    tripBuilder,
+    /setAddNoteTargetDayId/,
+    'handleAddToDay must call setAddNoteTargetDayId to open the modal',
+  );
+});
+
+test('Issue6: AddNoteModal renders with data-testid add-note-modal', () => {
+  assert.match(
+    tripBuilder,
+    /add-note-modal/,
+    'AddNoteModal must have data-testid="add-note-modal"',
+  );
+});
+
+test('Issue6: AddNoteModal has title input and description input', () => {
+  assert.match(
+    tripBuilder,
+    /add-note-title-input/,
+    'AddNoteModal must have a title input (data-testid add-note-title-input)',
+  );
+  assert.match(
+    tripBuilder,
+    /add-note-description-input/,
+    'AddNoteModal must have a description/details input',
+  );
+});
+
+test('Issue6: AddNoteModal has Save and Cancel buttons', () => {
+  assert.match(
+    tripBuilder,
+    /add-note-save-btn/,
+    'AddNoteModal must have a Save button (data-testid add-note-save-btn)',
+  );
+  assert.match(
+    tripBuilder,
+    /add-note-cancel-btn/,
+    'AddNoteModal must have a Cancel button (data-testid add-note-cancel-btn)',
+  );
+});
+
+test('Issue6: handleSaveNote creates itemType "note" with user-entered title', () => {
+  assert.match(
+    tripBuilder,
+    /handleSaveNote/,
+    'TripBuilder must define handleSaveNote',
+  );
+  // Save handler passes the title argument through to createItem (not a hardcoded string)
+  assert.match(
+    tripBuilder,
+    /itemType:\s*["']note["']/,
+    'Note creation must use itemType: "note"',
+  );
+});
+
+test('Issue6: Cancel path closes modal without calling createItem', () => {
+  // setAddNoteTargetDayId(null) is the cancel path — createItem must not be called in onCancel
+  assert.match(
+    tripBuilder,
+    /onCancel.*setAddNoteTargetDayId\(null\)|setAddNoteTargetDayId\(null\).*onCancel/s,
+    'Cancel must call setAddNoteTargetDayId(null) without creating an item',
+  );
+});
+
+test('Issue6: AddNoteModal includes helper text about Build/Saved Ideas/AI Concierge', () => {
+  assert.match(
+    tripBuilder,
+    /Build.*Saved Ideas.*AI Concierge|Saved Ideas.*AI Concierge.*Build/s,
+    'Modal must include helper text pointing users to Build, Saved Ideas, or AI Concierge for places',
+  );
+});
+
+test('Issue6: existing Plan My Day handlePlanDay contract unchanged', () => {
+  assert.match(
+    tripBuilder,
+    /handlePlanDay/,
+    'handlePlanDay must still be present (Plan My Day contract intact)',
+  );
+});
+
+test('Issue6: existing drag-drop handlers unchanged', () => {
+  assert.match(
+    tripBuilder,
+    /handleDragEnd|onDragEnd/,
+    'Drag-drop handler must still be present',
+  );
+});
