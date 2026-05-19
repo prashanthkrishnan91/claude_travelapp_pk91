@@ -77,8 +77,15 @@ test('TripBuilder: uses text-ds-text-tertiary', () => {
   assert.ok(src.includes('text-ds-text-tertiary'), 'missing text-ds-text-tertiary');
 });
 
-test('TripBuilder: uses bg-ds-carbon for cockpit UI surfaces', () => {
-  assert.ok(src.includes('bg-ds-carbon'), 'missing bg-ds-carbon');
+test('TripBuilder: uses paper-world surface tokens for cockpit UI', () => {
+  // Stage 3.5 Slice 5: planning-world cockpit surfaces moved off bg-ds-carbon
+  // (dark) onto paper-world bg-ds-bone / bg-ds-linen. Either is acceptable —
+  // both are warm paper surfaces. The dark-world fallback (bg-ds-carbon) is
+  // also tolerated for any floating overlay that remains cinema-styled.
+  assert.ok(
+    src.includes('bg-ds-bone') || src.includes('bg-ds-linen') || src.includes('bg-ds-carbon'),
+    'TripBuilder must use a paper-world surface token (bg-ds-bone / bg-ds-linen) on cockpit UI',
+  );
 });
 
 // ── Overline typography ──────────────────────────────────────────────────────

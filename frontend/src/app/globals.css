@@ -1964,7 +1964,10 @@
 
   /* folio-cinema-collection: curated collection shell for Saved route.
      Uses onyx-velvet (not cinema-deep) so collection-cards sit with
-     clear visible contrast against the shell. */
+     clear visible contrast against the shell. Geometry (rounded frame,
+     brass hairline, atmospheric shadow, mobile edge padding) is shared
+     with folio-cinema-lounge and folio-cinema-desk so all three
+     cinema-world routes read as the same intentional container. */
   .folio-cinema-collection {
     position: relative;
     background-color: var(--ds-onyx-velvet);
@@ -1979,6 +1982,12 @@
         rgba(180, 130, 60, 0.05) 0%,
         transparent 60%
       );
+    border-radius: 1rem;
+    border: 1px solid rgba(197, 148, 77, 0.15);
+    box-shadow:
+      0 4px 8px rgba(0, 0, 0, 0.35),
+      0 16px 48px rgba(0, 0, 0, 0.25),
+      inset 0 1px 0 rgba(235, 222, 198, 0.07);
   }
 
   /* folio-collection-card: individual collection card for Saved items.
@@ -2029,7 +2038,10 @@
   /* folio-cinema-desk: private concierge desk atmosphere.
      Use on the AI Concierge page main wrapper. Warm dark base with
      two-point radial warmth (top + left-side desk lamp glow).
-     Replaces flat editorial-scene folio-cinema-shell stack. */
+     Geometry (rounded frame, brass hairline, atmospheric shadow,
+     mobile edge padding) is shared with folio-cinema-lounge and
+     folio-cinema-collection so all three cinema-world routes read
+     as the same intentional container. */
   .folio-cinema-desk {
     position: relative;
     background-color: var(--ds-cinema-deep);
@@ -2044,6 +2056,16 @@
         rgba(180, 130, 60, 0.07) 0%,
         transparent 55%
       );
+    border-radius: 1rem;
+    border: 1px solid rgba(197, 148, 77, 0.15);
+    padding: 1.5rem;
+    box-shadow:
+      0 4px 8px rgba(0, 0, 0, 0.35),
+      0 16px 48px rgba(0, 0, 0, 0.25),
+      inset 0 1px 0 rgba(235, 222, 198, 0.07);
+  }
+  @media (min-width: 640px) {
+    .folio-cinema-desk { padding: 2rem; }
   }
 
   /* folio-cinema-composer: refined private desk search panel.

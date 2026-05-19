@@ -68,11 +68,12 @@ const paperWorldFiles = [
 ];
 
 // Per-file ceilings. Anything above the ceiling means cream text leaked into a
-// paper-world card. TripBuilder hits its ceiling on purpose: the Compare Bar,
-// the Toast, and the AddNoteModal at the bottom of the file are floating
-// dark overlays where cream text is correct.
+// paper-world card. TripBuilder hits its ceiling on purpose: the Compare Bar
+// and the Toast at the bottom of the file are floating dark overlays where
+// cream text is correct. (Slice 5 converted the AddNoteModal to paper-world,
+// dropping the ceiling from 19 to 8.)
 const paperWorldCreamCeiling = {
-  "src/components/trips/TripBuilder.tsx": 19,
+  "src/components/trips/TripBuilder.tsx": 8,
   "src/components/trips/TripIdeasPanel.tsx": 0,
   "src/components/trips/ItineraryDayColumn.tsx": 0,
   "src/components/trips/ItineraryItemCard.tsx": 0,
@@ -367,4 +368,100 @@ for (const [rel, limits] of Object.entries(rawCeiling)) {
       );
     });
   }
+}
+
+// ── 13. Slice 5: Planning-world AddNoteModal is paper-world, not orphan dark ─
+//
+// The Add Note modal lives inside Trip Itinerary / planning context (paper
+// world). Slice 5 converted it from the dark onyx/carbon stack to a paper
+// surface so it stops reading as a foreign dark slab inside the warm
+// itinerary canvas. These tests guard against regression to dark classes.
+
+test("AddNoteModal panel is tagged as paper-world", () => {
+  const tb = read("src/components/trips/TripBuilder.tsx");
+  const addNoteIdx = tb.indexOf("function AddNoteModal");
+  assert.ok(addNoteIdx > 0, "AddNoteModal not found");
+  const modalSrc = tb.slice(addNoteIdx);
+  assert.match(
+    modalSrc,
+    /data-testid="add-note-modal-panel"[^>]*data-folio-world="paper"|data-folio-world="paper"[^>]*data-testid="add-note-modal-panel"/,
+    "AddNoteModal inner panel must carry data-folio-world=\"paper\"",
+  );
+});
+
+test("AddNoteModal does not use orphan dark surface classes", () => {
+  const tb = read("src/components/trips/TripBuilder.tsx");
+  const addNoteIdx = tb.indexOf("function AddNoteModal");
+  const modalSrc = tb.slice(addNoteIdx);
+  // The modal panel + inputs must not reach back to bg-ds-onyx / bg-ds-carbon /
+  // border-ds-pen-stroke / text-ds-text — those are cinema-world tokens and
+  // would re-introduce the dark planning-modal bug.
+  for (const forbidden of [
+    /\bbg-ds-onyx\b/,
+    /\bbg-ds-carbon\b/,
+    /\bborder-ds-pen-stroke\b/,
+  ]) {
+    assert.doesNotMatch(
+      modalSrc,
+      forbidden,
+      `AddNoteModal must not use ${forbidden} — planning-world modals are paper, not dark`,
+    );
+  }
+});
+
+test("AddNoteModal title and inputs use paper-world tokens", () => {
+  const tb = read("src/components/trips/TripBuilder.tsx");
+  const addNoteIdx = tb.indexOf("function AddNoteModal");
+  const modalSrc = tb.slice(addNoteIdx);
+  assert.match(modalSrc, /text-ds-folio-ink/, "AddNoteModal heading must use folio-ink text");
+  assert.match(modalSrc, /folio-input/, "AddNoteModal inputs must use the canonical folio-input class");
+  assert.match(modalSrc, /<FolioButton/, "AddNoteModal save/cancel must use the canonical FolioButton primitive");
+});
+
+test("AddNoteModal preserves PR #441 contract: testids, save/cancel, focus, validation", () => {
+  const tb = read("src/components/trips/TripBuilder.tsx");
+  const addNoteIdx = tb.indexOf("function AddNoteModal");
+  const modalSrc = tb.slice(addNoteIdx);
+  // Behavior contract — must not be broken by the visual conversion.
+  for (const testid of [
+    'data-testid="add-note-modal"',
+    'data-testid="add-note-title-input"',
+    'data-testid="add-note-description-input"',
+    'data-testid="add-note-save-btn"',
+    'data-testid="add-note-cancel-btn"',
+  ]) {
+    assert.ok(modalSrc.includes(testid), `AddNoteModal must preserve ${testid}`);
+  }
+  assert.match(modalSrc, /titleRef\.current\?\.focus\(\)/, "AddNoteModal must preserve title focus-on-mount");
+  assert.match(modalSrc, /disabled=\{!title\.trim\(\)\}/, "AddNoteModal save must remain disabled until title is non-empty");
+});
+
+// ── 14. Slice 5: Cinema-world page geometry is consistent across routes ─────
+//
+// Explore (lounge), Saved (collection), Concierge (desk) all live in the
+// cinema world. They must share the same intentional container geometry —
+// rounded frame, brass hairline, atmospheric shadow — so the three routes
+// read as one architectural family on mobile. Slice 5 brought collection
+// and desk in line with lounge.
+
+const cssSrc = read("src/app/globals.css");
+
+function classBlock(css, className) {
+  const re = new RegExp(`\\.${className}\\s*\\{([\\s\\S]*?)\\}`);
+  const match = css.match(re);
+  return match ? match[1] : "";
+}
+
+for (const className of [
+  "folio-cinema-lounge",
+  "folio-cinema-collection",
+  "folio-cinema-desk",
+]) {
+  const block = classBlock(cssSrc, className);
+  test(`cinema-world shell .${className} declares unified rounded-frame geometry`, () => {
+    assert.ok(block.length > 0, `globals.css must define .${className}`);
+    assert.match(block, /border-radius:\s*1rem/, `.${className} must use the shared 1rem rounded-frame radius`);
+    assert.match(block, /border:\s*1px solid rgba\(197, 148, 77/, `.${className} must use the shared brass hairline border`);
+    assert.match(block, /box-shadow:[\s\S]*rgba\(0, 0, 0/, `.${className} must use the shared atmospheric shadow`);
+  });
 }
