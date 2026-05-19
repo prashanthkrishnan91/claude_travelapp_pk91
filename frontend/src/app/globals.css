@@ -5429,25 +5429,34 @@
       transform 700ms cubic-bezier(0.16, 1, 0.3, 1),
       box-shadow 700ms cubic-bezier(0.16, 1, 0.3, 1);
   }
+  /* Empty-state primary CTA — brass-edged warm paper pill so it
+     belongs to the Atelier vellum aesthetic. No blue marine-ink
+     button (clashed with the cream/brass page palette). */
   .atelier-empty-folio-cta {
     background:
       linear-gradient(180deg,
-        color-mix(in srgb, var(--ds-marine-ink) 92%, white) 0%,
-        var(--ds-marine-ink) 100%);
-    color: var(--ds-paper);
+        color-mix(in srgb, var(--ds-warm-paper) 96%, white) 0%,
+        color-mix(in srgb, var(--ds-bone) 90%, var(--ds-ember-brass)) 100%);
+    color: var(--ds-folio-ink);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.25),
-      0 0 0 1px color-mix(in srgb, var(--ds-marine-ink) 60%, transparent),
-      0 14px 30px color-mix(in srgb, var(--ds-marine-ink) 38%, transparent);
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      inset 0 -1px 0 color-mix(in srgb, var(--ds-ember-brass) 22%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 56%, transparent),
+      0 14px 30px color-mix(in srgb, var(--ds-folio-ink) 22%, transparent);
   }
   .atelier-empty-folio-cta:hover,
   .atelier-empty-folio-cta:focus-visible {
     transform: translateY(-1px);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.3),
-      0 0 0 1px color-mix(in srgb, var(--ds-marine-ink) 80%, transparent),
-      0 18px 38px color-mix(in srgb, var(--ds-marine-ink) 48%, transparent);
+      inset 0 1px 0 rgba(255, 255, 255, 0.75),
+      inset 0 -1px 0 color-mix(in srgb, var(--ds-ember-brass) 32%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 78%, transparent),
+      0 18px 38px color-mix(in srgb, var(--ds-folio-ink) 28%, transparent);
     outline: none;
+  }
+  .atelier-empty-folio-cta .folio-cta-arrow,
+  .atelier-empty-folio-cta svg {
+    color: var(--ds-ember-brass);
   }
   .atelier-empty-folio-cta:focus-visible {
     outline: 2px solid var(--ds-ember-brass);
@@ -5483,38 +5492,95 @@
     }
   }
 
-  /* ── Concierge portal — lift the brown body ───────────────────
-     Less umber dominance + brass paper highlight at the top so
-     the portal reads as a paper-warm salon, not a brown SaaS box.
-     Text contrast bulletproof via v5 !important rules. */
+  /* ── Concierge portal — warm paper salon (flows with the page) ──
+     User feedback: dark velvet body sticks out from the warm paper
+     atrium. Switched to a vellum/bone palette with a brass lantern
+     glow at top-right + a soft ember halo at bottom-left, so the
+     portal feels like a salon door cut INTO the Alabaster wall, not
+     a foreign dark tile. All text becomes dark folio-ink (readable
+     on light paper) and the CTA becomes brass-edged paper. */
+  .atelier-concierge-artifact.atelier-concierge-portal {
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--ds-paper) 95%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 36%, transparent),
+      0 30px 70px color-mix(in srgb, var(--ds-folio-ink) 22%, transparent);
+  }
   .atelier-concierge-artifact.atelier-concierge-portal .atelier-concierge-scenery {
     background:
-      /* Top vellum lantern wash. */
-      radial-gradient(ellipse 90% 60% at 50% 0%,
+      /* Brass lantern light catching the upper-right corner. */
+      radial-gradient(ellipse 70% 56% at 78% 18%,
         color-mix(in srgb, var(--ds-ember-brass) 32%, transparent),
         transparent 70%),
-      /* Deep marine-ink body with a hint of ember warmth. */
+      /* Soft ember glow rising from the lower-left. */
+      radial-gradient(ellipse 55% 50% at 16% 92%,
+        color-mix(in srgb, var(--ds-sandstone-gold) 26%, transparent),
+        transparent 70%),
+      /* Vellum / bone body — same family as the Atelier atrium. */
       linear-gradient(168deg,
-        color-mix(in srgb, var(--ds-marine-ink) 56%, var(--ds-folio-ink)) 0%,
-        color-mix(in srgb, var(--ds-folio-ink) 90%, var(--ds-marine-ink)) 55%,
-        color-mix(in srgb, var(--ds-folio-ink) 96%, transparent) 100%);
+        color-mix(in srgb, var(--ds-warm-paper) 99%, white) 0%,
+        color-mix(in srgb, var(--ds-bone) 92%, var(--ds-ember-brass)) 50%,
+        color-mix(in srgb, var(--ds-warm-paper) 90%, var(--ds-ember-brass)) 100%);
   }
   .atelier-concierge-artifact.atelier-concierge-portal .atelier-concierge-interior {
     background:
-      radial-gradient(ellipse 60% 45% at 80% 24%,
-        color-mix(in srgb, var(--ds-ember-brass) 60%, transparent),
-        transparent 70%),
-      radial-gradient(ellipse 55% 45% at 18% 86%,
-        color-mix(in srgb, var(--ds-ember-brass) 22%, transparent),
+      radial-gradient(ellipse 55% 45% at 78% 22%,
+        color-mix(in srgb, var(--ds-ember-brass) 32%, transparent),
         transparent 70%);
-    opacity: 0.9;
+    opacity: 0.75;
+  }
+  /* Soft vignette quieted for the paper palette. */
+  .atelier-concierge-artifact.atelier-concierge-portal .atelier-concierge-vignette {
+    box-shadow:
+      inset 0 -100px 90px -60px color-mix(in srgb, var(--ds-ember-brass) 22%, transparent),
+      inset 0 40px 60px -40px color-mix(in srgb, var(--ds-warm-paper) 85%, transparent);
+  }
+  /* Override the v5 cream text rules — on paper, text becomes
+     dark folio-ink (readable on light bg). */
+  .atelier-concierge-portal .atelier-concierge-eyebrow {
+    color: var(--ds-folio-ink-mist) !important;
+    text-shadow: none !important;
+  }
+  .atelier-concierge-portal .atelier-concierge-title {
+    color: var(--ds-folio-ink) !important;
+    text-shadow: none !important;
+  }
+  .atelier-concierge-portal .atelier-concierge-caption {
+    color: var(--ds-folio-ink-soft) !important;
+    text-shadow: none !important;
+  }
+  /* CTA tab — brass-edged paper, consistent with empty-state CTA. */
+  .atelier-concierge-portal .atelier-concierge-tab.btn-marine {
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--ds-warm-paper) 96%, white) 0%,
+        color-mix(in srgb, var(--ds-bone) 90%, var(--ds-ember-brass)) 100%);
+    color: var(--ds-folio-ink);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.7) inset,
+      0 -1px 0 color-mix(in srgb, var(--ds-ember-brass) 22%, transparent) inset,
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 56%, transparent),
+      0 12px 24px color-mix(in srgb, var(--ds-folio-ink) 22%, transparent);
+  }
+  .atelier-concierge-portal .atelier-concierge-tab.btn-marine .folio-cta-arrow,
+  .atelier-concierge-portal .atelier-concierge-tab.btn-marine svg {
+    color: var(--ds-ember-brass);
+  }
+  .atelier-concierge-link:hover .atelier-concierge-tab.btn-marine,
+  .atelier-concierge-link:focus-visible .atelier-concierge-tab.btn-marine {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.75) inset,
+      0 -1px 0 color-mix(in srgb, var(--ds-ember-brass) 32%, transparent) inset,
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 80%, transparent),
+      0 16px 32px color-mix(in srgb, var(--ds-folio-ink) 28%, transparent);
   }
 
   /* ── Dynamic archive spines (real trip data + archetype image) ──
      Each spine inherits its destination world palette via inline
-     --spine-* variables; an image layer paints the destination
-     mood photo in the spine body so the shelf becomes a curated
-     library, not three static colored blocks. */
+     --spine-* variables. The image layer paints the destination
+     mood photo at full opacity so the spine reads as a real folio
+     cover, not a flat color block. The spine-palette gradient sits
+     UNDER the image as a fallback only — when the image loads, it
+     covers the full spine cap-to-base, no underlying color seam. */
   .atelier-archive-spine .atelier-archive-spine-image {
     position: absolute;
     inset: 0;
@@ -5522,18 +5588,35 @@
     background-image: var(--spine-image, none);
     background-size: cover;
     background-position: var(--spine-image-position, center 50%);
-    opacity: 0.78;
-    mix-blend-mode: multiply;
-    filter: saturate(0.86) brightness(0.88) contrast(1.04);
+    background-repeat: no-repeat;
+    opacity: 1;
+    filter: saturate(0.92) brightness(0.86) contrast(1.04);
   }
-  /* Override v3 per-index static palettes with the dynamic palette
-     when --spine-primary is provided. */
+  /* Soft brass-tinted vignette on the spine image — frames the
+     cover and quiets the edges so the cipher band reads cleanly. */
+  .atelier-archive-spine .atelier-archive-spine-image::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--spine-ink, var(--world-ink)) 25%, transparent) 0%,
+        transparent 22%,
+        transparent 78%,
+        color-mix(in srgb, var(--spine-ink, var(--world-ink)) 30%, transparent) 100%),
+      radial-gradient(ellipse 80% 60% at 50% 50%,
+        transparent 0%,
+        color-mix(in srgb, var(--spine-ink, var(--world-ink)) 18%, transparent) 100%);
+    pointer-events: none;
+  }
+  /* Spine fallback palette — only visible if the image fails to
+     load. Toned darker so the brass cap/base read against it. */
   .atelier-archive-open .atelier-archive-spine.atelier-curio-spine {
     background:
       linear-gradient(180deg,
-        color-mix(in srgb, var(--spine-primary, var(--world-primary)) 70%, var(--spine-ink, var(--world-ink))) 0%,
-        color-mix(in srgb, var(--spine-primary, var(--world-primary)) 90%, var(--spine-ink, var(--world-ink))) 60%,
-        color-mix(in srgb, var(--spine-primary, var(--world-primary)) 96%, var(--spine-ink, var(--world-ink))) 100%);
+        color-mix(in srgb, var(--spine-primary, var(--world-primary)) 60%, var(--spine-ink, var(--world-ink))) 0%,
+        color-mix(in srgb, var(--spine-primary, var(--world-primary)) 80%, var(--spine-ink, var(--world-ink))) 60%,
+        color-mix(in srgb, var(--spine-primary, var(--world-primary)) 92%, var(--spine-ink, var(--world-ink))) 100%);
   }
   /* Suppress the v3 per-index translate so all spines align on the
      brass rail evenly. */
@@ -5609,21 +5692,30 @@
 
   /* ── Page rhythm — eliminate the dead linen below the archive ──
      atelier-atmosphere-root has min-h-screen + warm-paper bg, so
-     when the atrium content ends, warm-paper shows below. Make
-     the home-edge-bleed + atelier-atrium fill that space so the
-     atrium gradient covers the entire viewport area without a
-     visible seam. */
+     when the atrium content ends, warm-paper shows below as a
+     visible seam. home-edge-bleed becomes a flex column tall
+     enough to fill the viewport; the atrium grows to fill it so
+     the atrium gradient covers the entire viewport area. */
   .home-edge-bleed {
     display: flex;
     flex-direction: column;
-    min-height: 100%;
+    min-height: 100vh;
+  }
+  @media (max-width: 1023px) {
+    .home-edge-bleed {
+      /* Account for the mobile bottom navigation. */
+      min-height: calc(100vh - 3.5rem);
+    }
   }
   .atelier-atrium.atelier-atrium-neutral {
     flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
   }
-  /* The atrium-content is content-sized; the atrium itself flexes
-     to fill the home-edge-bleed parent — so there's never a visible
-     boundary between atrium and atelier-atmosphere-root. */
+  /* The atrium-content sits at the top of the atrium; the atrium's
+     neutral gradient fills the rest of the viewport so there is
+     never a visible boundary between atrium and atelier-atmosphere-
+     root. */
 
   /* ════════════════════════════════════════════════════════════════
      ATELIER ATRIUM v4 — Floating Physical Editorial (No-Box Mandate)
@@ -5671,46 +5763,62 @@
 
   /* Dossier rail — strong dark glass scrim band that anchors all dossier
      metadata + action so the text plane is guaranteed readable on any
-     destination scenery. Replaces the lighter v3 scrim. */
+     destination scenery. Replaces the lighter v3 scrim. All colors
+     use !important because readability over scenery is an
+     accessibility contract; the rail must never lose to inherited
+     cascades. */
   .atelier-dossier-scrim.atelier-dossier-rail {
     left: 0;
     right: 0;
     bottom: 0;
     border-radius: 0 0 28px 28px;
-    padding: 14px clamp(18px, 2.2vw, 28px);
+    padding: 16px clamp(20px, 2.4vw, 32px) !important;
     background:
       linear-gradient(180deg,
-        transparent 0%,
-        color-mix(in srgb, var(--world-ink) 75%, transparent) 28%,
-        color-mix(in srgb, var(--world-ink) 92%, transparent) 100%);
-    backdrop-filter: blur(8px) saturate(1.05);
-    -webkit-backdrop-filter: blur(8px) saturate(1.05);
+        color-mix(in srgb, var(--world-ink) 72%, transparent) 0%,
+        color-mix(in srgb, var(--world-ink) 92%, transparent) 100%) !important;
+    backdrop-filter: blur(10px) saturate(1.1) !important;
+    -webkit-backdrop-filter: blur(10px) saturate(1.1) !important;
     box-shadow:
-      0 -1px 0 color-mix(in srgb, var(--ds-ember-brass) 32%, transparent),
-      inset 0 1px 0 color-mix(in srgb, var(--ds-paper) 18%, transparent);
-    color: var(--ds-paper);
+      0 -1px 0 color-mix(in srgb, var(--ds-ember-brass) 42%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--ds-paper) 24%, transparent) !important;
+    color: var(--ds-paper) !important;
     flex-wrap: wrap;
     gap: 14px;
   }
   .atelier-dossier-rail .atelier-dossier-scrim-meta {
-    color: var(--ds-paper);
+    color: var(--ds-paper) !important;
     gap: 12px;
   }
   .atelier-dossier-rail .atelier-dossier-scrim-line {
-    color: color-mix(in srgb, var(--ds-paper) 92%, transparent);
-    text-shadow: 0 1px 4px color-mix(in srgb, var(--world-ink) 85%, transparent);
+    color: color-mix(in srgb, var(--ds-paper) 96%, transparent) !important;
+    text-shadow:
+      0 1px 6px color-mix(in srgb, var(--world-ink) 92%, transparent),
+      0 0 1px color-mix(in srgb, var(--world-ink) 75%, transparent) !important;
+    font-weight: 500;
+    font-size: 13px;
+    letter-spacing: 0.04em;
   }
   .atelier-dossier-rail .atelier-dossier-scrim-sep {
-    background: color-mix(in srgb, var(--ds-ember-brass) 55%, transparent);
+    background: color-mix(in srgb, var(--ds-ember-brass) 75%, transparent) !important;
+    width: 1px !important;
+    height: 14px !important;
   }
   .atelier-dossier-rail .atelier-dossier-scrim-action,
   .atelier-dossier-rail .atelier-dossier-scrim-action-label {
-    color: var(--ds-paper);
-    text-shadow: 0 1px 4px color-mix(in srgb, var(--world-ink) 85%, transparent);
+    color: var(--ds-paper) !important;
+    text-shadow:
+      0 1px 6px color-mix(in srgb, var(--world-ink) 92%, transparent),
+      0 0 1px color-mix(in srgb, var(--world-ink) 75%, transparent) !important;
   }
   .atelier-dossier-rail .atelier-dossier-scrim-action {
-    font-weight: 600;
-    letter-spacing: 0.22em;
+    font-weight: 700 !important;
+    letter-spacing: 0.22em !important;
+  }
+  /* Brass-tinted arrow inside the dossier rail. */
+  .atelier-dossier-rail .folio-cta-arrow svg,
+  .atelier-dossier-rail .folio-cta-arrow {
+    color: color-mix(in srgb, var(--ds-ember-brass) 95%, var(--ds-paper)) !important;
   }
 
   /* ── Concierge portal (atmospheric salon threshold, no SaaS box) ───
@@ -5893,40 +6001,12 @@
       0 4px 10px color-mix(in srgb, var(--world-shadow) 80%, transparent),
       0 14px 28px color-mix(in srgb, rgba(0, 0, 0, 1) 22%, transparent);
   }
-  /* Brass shelf rail under the spines — a physical brass-wood plank,
-     not a dead linen rectangle. */
+  /* Brass shelf rail — DELETED. The spine cap + base already give
+     each spine a brass top/bottom edge that reads as a book sitting
+     on a shelf. The wider horizontal rail extended past the spines
+     and looked like a dead linen underline; removed entirely. */
   .atelier-archive-rail {
-    position: absolute;
-    z-index: 1;
-    left: 0;
-    right: 56%;
-    bottom: clamp(2px, 0.4vw, 8px);
-    height: clamp(14px, 1.6vw, 22px);
-    border-radius: 4px;
-    background:
-      linear-gradient(180deg,
-        color-mix(in srgb, var(--ds-ember-brass) 50%, var(--ds-warm-paper)) 0%,
-        color-mix(in srgb, var(--ds-ember-brass) 30%, var(--ds-bone)) 100%);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.55),
-      inset 0 -1px 0 color-mix(in srgb, var(--ds-folio-ink) 28%, transparent),
-      0 8px 14px color-mix(in srgb, rgba(0, 0, 0, 1) 18%, transparent);
-  }
-  .atelier-archive-rail::after {
-    content: "";
-    position: absolute;
-    bottom: -3px;
-    left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg,
-      transparent,
-      color-mix(in srgb, var(--ds-ember-brass) 80%, transparent) 18%,
-      color-mix(in srgb, var(--ds-sandstone-gold) 90%, transparent) 50%,
-      color-mix(in srgb, var(--ds-ember-brass) 80%, transparent) 82%,
-      transparent);
-  }
-  @media (max-width: 860px) {
-    .atelier-archive-rail { right: 0; }
+    display: none !important;
   }
   /* Plate sits beside the cabinet. */
   .atelier-archive-open .atelier-archive-plate {

@@ -201,12 +201,18 @@ function ConciergeEntry() {
 // tactile band.
 
 function ContinuePlanningStrip({ trip }: { trip: Trip }) {
-  const folioCode = getFolioCode(trip);
+  const _folioCode = getFolioCode(trip); // kept for sr-only — folio serial preserved as accessibility metadata
   const dateLine = formatDateRangeShort(trip.startDate, trip.endDate);
   const partyLine = `${trip.travelers} traveler${trip.travelers !== 1 ? "s" : ""}`;
+  // Avoid repeating the destination if it's already in the title
+  // (e.g. "Miami Trip" already says "Miami"); show it only when it
+  // genuinely adds new information.
+  const place = trip.destination?.split(",")[0]?.trim() ?? "";
+  const titleHasPlace = place && trip.title.toLowerCase().includes(place.toLowerCase());
   return (
     <section data-testid="atelier-continue-planning" aria-label="Continue planning" className="folio-paper-card folio-reveal atelier-folio-section !bg-transparent !border-0 !shadow-none !p-0">
       <span className="sr-only text-ds-folio-ink-mist">Continue planning</span>
+      <span className="sr-only folio-serial">Folio {_folioCode}</span>
       <Link
         href={`/trips/${trip.id}`}
         aria-label={`Open ${trip.title} folio`}
@@ -218,23 +224,19 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
           <div className="atelier-dossier-cover atelier-dossier-cover-tall atelier-dossier-cover-flex">
             <span className="atelier-dossier-scenery" aria-hidden="true" />
             <div className="atelier-dossier-overlay" aria-hidden="true" />
-            {/* Quiet engraved folio serial in the top-right corner —
-                non-corporate physical artifact, not a status pill. */}
-            <span className="atelier-dossier-flag atelier-dossier-flag-quiet">
-              {folioCode}
-            </span>
+            {/* No top-right corporate corner artifact. The title speaks
+                for itself and the rail carries the serial + status. */}
             {/* Cover content stack — pushed to the bottom via flex.
-                Title + destination + caption live above the rail. */}
+                Title only (no redundant destination overline / caption). */}
             <div className="atelier-dossier-cover-content atelier-dossier-cover-content-flex">
-              <p className="folio-serial atelier-dossier-place">
-                {trip.destination?.split(",")[0] ?? "Destination"}
-              </p>
               <h3 className="folio-card-title atelier-dossier-title">
                 {trip.title}
               </h3>
-              <p className="folio-caption italic atelier-dossier-caption">
-                {trip.destination || "Destination to be decided."}
-              </p>
+              {!titleHasPlace && place && (
+                <p className="folio-caption italic atelier-dossier-caption">
+                  {trip.destination}
+                </p>
+              )}
             </div>
             {/* Glass-scrim rail — integrated status / dates / travelers /
                 Open Folio action. */}
