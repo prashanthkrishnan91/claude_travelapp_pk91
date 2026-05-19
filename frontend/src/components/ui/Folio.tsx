@@ -259,6 +259,158 @@ export function FolioRouteThread({ className, ...rest }: DivProps) {
   );
 }
 
+// ─── Folio Living Atelier primitives — paper-world editorial surfaces ──────
+// Reusable composition pieces for any paper-world screen that needs an
+// immersive, editorial-magazine feeling (Home, future destination spreads,
+// trip hero pages). Class names live in globals.css under FOLIO LIVING
+// ATELIER — these components are thin React shells over those classes so
+// callers don't reinvent the styling.
+
+/** Living-canvas wrapper. Adds two slow-drifting warm sunlight blobs
+ *  behind in-flow content. Compose with FolioScene for full atmosphere. */
+export function FolioLivingCanvas({ className, children, ...rest }: DivProps) {
+  return (
+    <div
+      data-folio-world="paper"
+      className={clsx("folio-living-canvas", className)}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Editorial hero spread — eyebrow + serif headline + italic subline.
+ *  Pure composition (no surface). Place inside a FolioScene/Canvas. */
+export function FolioAtelierHero({
+  className,
+  children,
+  ...rest
+}: DivProps) {
+  return (
+    <div
+      data-folio-world="paper"
+      className={clsx("folio-atelier-hero", className)}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Atelier invitation panel — concierge entry as a private invitation.
+ *  Layered paper depth, soft brass ring, brass corner glow. */
+export function FolioAtelierInvitation({
+  className,
+  children,
+  ...rest
+}: DivProps) {
+  return (
+    <div
+      data-folio-world="paper"
+      className={clsx("folio-atelier-invitation", className)}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** CTA glide wrapper. Wraps a link/button; its child with class
+ *  `folio-cta-arrow` translates 6px on hover/focus with luxury easing. */
+export function FolioCtaGlide({ className, children, ...rest }: DivProps) {
+  return (
+    <span className={clsx("folio-cta-glide", className)} {...rest}>
+      {children}
+    </span>
+  );
+}
+
+/** Active journey object — tactile dossier card with optional painted
+ *  cover plate and a hover/focus-revealed micro-timeline slot.
+ *  Pass `as` to render as a link or button when needed. */
+export function FolioActiveJourneyObject({
+  className,
+  children,
+  ...rest
+}: DivProps) {
+  return (
+    <div
+      data-folio-world="paper"
+      className={clsx("folio-active-journey-object", className)}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Painted atmospheric cover plate for a journey object.
+ *  Pure CSS — no photo, no fabricated destination imagery. */
+export function FolioJourneyCover({
+  className,
+  children,
+  ...rest
+}: DivProps) {
+  return (
+    <div
+      aria-hidden="true"
+      className={clsx("folio-journey-cover", className)}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Reveal slot inside a FolioActiveJourneyObject — collapsed by default,
+ *  unfurls on hover/focus-within with luxury easing. */
+export function FolioJourneyUnfurl({
+  className,
+  children,
+  ...rest
+}: DivProps) {
+  return (
+    <div className={clsx("folio-journey-unfurl", className)} {...rest}>
+      {children}
+    </div>
+  );
+}
+
+/** Editorial discovery artifact tile — small bespoke artifact, not a SaaS tile. */
+export function FolioArtifactTile({
+  className,
+  children,
+  ...rest
+}: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      data-folio-world="paper"
+      className={clsx("folio-artifact-tile", className)}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Fanned scrapbook shelf preview — two paper edges visible behind the front sheet. */
+export function FolioShelfSpread({
+  className,
+  children,
+  ...rest
+}: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      data-folio-world="paper"
+      className={clsx("folio-shelf-spread", className)}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
 /** Cinema-world chip — warm dark pill. Use for filters/prompts on dark surfaces. */
 export function CinemaChip({
   active = false,
