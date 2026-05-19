@@ -129,8 +129,7 @@ function AtelierGreeting({
             Private Travel Concierge
           </div>
           <h1 className="folio-display atrium-hero-display">
-            {greeting},
-            <br className="atrium-hero-break" aria-hidden="true" />
+            {greeting},{" "}
             <span className="italic text-ds-folio-ink-soft atrium-hero-noun">planner.</span>
           </h1>
           <div className="atrium-hero-foot">
@@ -152,16 +151,24 @@ function ConciergeEntry() {
   return (
     <section aria-label="AI Concierge" data-testid="concierge-entry" className="atelier-folio-section">
       <FolioPanel
-        className="folio-invitation-panel folio-atelier-invitation atelier-concierge-artifact relative h-full !p-0 overflow-hidden"
+        className="folio-invitation-panel folio-atelier-invitation atelier-concierge-artifact atelier-concierge-portal relative h-full !p-0 overflow-hidden !bg-transparent !border-0 !shadow-none"
         data-testid="concierge-advisor-desk"
       >
         <div className="folio-card-accent" aria-hidden="true" />
+        {/* Salon scenery — dim warm lantern interior painted as the
+            atmospheric body of the portal (not a flat pale box). */}
+        <div className="atelier-concierge-scenery" aria-hidden="true" />
         <div className="atelier-concierge-interior" aria-hidden="true" />
-        <div className="relative z-10 flex flex-col h-full p-7 md:p-9 lg:p-10">
+        <div className="atelier-concierge-vignette" aria-hidden="true" />
+        <Link
+          href="/concierge"
+          className="atelier-concierge-link relative z-10 flex flex-col h-full p-7 md:p-9 lg:p-11 min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-ember-brass focus-visible:outline-offset-2"
+          aria-label="Step into the salon"
+        >
           <Overline className="text-ds-folio-ink-mist tracking-[0.28em] sr-only">
             01 · Dedicated System
           </Overline>
-          <p className="folio-serial atelier-concierge-eyebrow text-ds-folio-ink-mist">
+          <p className="folio-serial atelier-concierge-eyebrow">
             The Salon
           </p>
           <h2 className="folio-heading atelier-concierge-title">
@@ -172,19 +179,14 @@ function ConciergeEntry() {
           </p>
 
           <div className="atelier-concierge-foot">
-            <FolioCtaGlide>
-              <Link
-                href="/concierge"
-                className="btn-marine min-h-[44px] inline-flex items-center gap-3 px-6 text-sm tracking-[0.04em]"
-              >
-                <span>Step into the salon</span>
-                <span className="folio-cta-arrow" aria-hidden="true">
-                  <ArrowRight className="w-4 h-4" />
-                </span>
-              </Link>
-            </FolioCtaGlide>
+            <span className="btn-marine atelier-concierge-tab inline-flex items-center gap-3 min-h-[44px] px-6 text-sm tracking-[0.04em]">
+              <span>Step into the salon</span>
+              <span className="folio-cta-arrow" aria-hidden="true">
+                <ArrowRight className="w-4 h-4" />
+              </span>
+            </span>
           </div>
-        </div>
+        </Link>
       </FolioPanel>
     </section>
   );
@@ -215,8 +217,10 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
         >
           <div className="atelier-dossier-cover atelier-dossier-cover-tall">
             <span className="atelier-dossier-scenery" aria-hidden="true" />
-            <span className="atelier-dossier-flag">
-              {folioCode} · {trip.status.toUpperCase()}
+            {/* Folio serial preserved as a tiny engraved corner artifact —
+                no "POR · PLANNED" corporate status badge. */}
+            <span className="atelier-dossier-flag atelier-dossier-flag-quiet">
+              {folioCode}
             </span>
             <div className="atelier-dossier-overlay" aria-hidden="true" />
             <div className="atelier-dossier-cover-content">
@@ -230,7 +234,10 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
                 {trip.destination || "Destination to be decided."}
               </p>
             </div>
-            <div className="atelier-dossier-scrim">
+            {/* Glass-scrim footer rail — dark-to-transparent under-band so all
+                metadata + action sit on a tactile readable plane regardless
+                of the destination scenery's luminance. */}
+            <div className="atelier-dossier-scrim atelier-dossier-rail">
               <div className="atelier-dossier-scrim-meta">
                 <TripStatusBadge status={getDisplayTripStatus(trip)} />
                 <span className="atelier-dossier-scrim-sep" aria-hidden="true" />
@@ -294,11 +301,14 @@ function JourneyShelfTeaser({ count }: { count: number }) {
       </div>
       <Link
         href="/trips"
-        className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded-[28px]"
+        className="atelier-archive-link folio-paper-card atelier-curio-shelf block focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-ember-brass focus-visible:outline-offset-4 !bg-transparent !border-0 !shadow-none !p-0"
         aria-label="Open your travel shelf"
       >
-        <div className="atelier-archive-cabinet folio-paper-card atelier-curio-shelf">
-          <div className="atelier-archive-shelf" aria-hidden="true" />
+        {/* No giant rounded container — the cabinet sits directly on the
+            Atrium. The shelf rail is a physical brass plank beneath the
+            spines; the plate floats to the right; the action arrow lives
+            inside the plate, not as orphan UI. */}
+        <div className="atelier-archive-open">
           <div className="atelier-archive-spines" data-folio-count={Math.min(count, 5)}>
             {Array.from({ length: Math.min(Math.max(count, 3), 5) }).map((_, i) => (
               <span
@@ -326,15 +336,12 @@ function JourneyShelfTeaser({ count }: { count: number }) {
             </p>
             <p className="folio-caption italic atelier-archive-caption">
               Open the cabinet · turn the page.
+              <span className="atelier-archive-arrow-inline" aria-hidden="true">
+                <ArrowRight className="w-4 h-4" />
+              </span>
             </p>
-            <span className="atelier-archive-arrow">
-              <FolioCtaGlide>
-                <span className="folio-cta-arrow" aria-hidden="true">
-                  <ArrowRight className="w-4 h-4" />
-                </span>
-              </FolioCtaGlide>
-            </span>
           </div>
+          <div className="atelier-archive-rail" aria-hidden="true" />
         </div>
       </Link>
     </section>

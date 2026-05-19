@@ -5012,6 +5012,353 @@
   }
 
   /* ════════════════════════════════════════════════════════════════
+     ATELIER ATRIUM v4 — Floating Physical Editorial (No-Box Mandate)
+     Dissolves the SaaS/widget remnants caught in the v3.1 preview:
+       · Concierge stops being a pale SaaS card.
+       · Archive stops being a box-in-box; folios sit on the Atrium.
+       · Active trip rail guarantees readable metadata + action.
+       · POR · PLANNED corporate badge is quieted to a tiny corner
+         engraving (`atelier-dossier-flag-quiet`).
+       · Horizontal overflow + bottom dead space removed.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Eliminate any accidental horizontal scroll bleed from the home shell. */
+  .home-edge-bleed,
+  .atelier-atrium,
+  .atelier-atrium-content {
+    overflow-x: clip;
+  }
+
+  /* Quiet dossier flag — the POR · PLANNED corporate badge is gone; only
+     a tiny brass-engraved folio code stays in the corner as a physical
+     artifact, not a status pill. */
+  .atelier-dossier-flag.atelier-dossier-flag-quiet {
+    background: transparent;
+    color: var(--world-on-scenery, var(--ds-paper));
+    box-shadow: none;
+    clip-path: none;
+    padding: 8px 12px;
+    font-size: 0.625rem;
+    letter-spacing: 0.32em;
+    opacity: 0.78;
+    text-shadow:
+      0 1px 6px var(--world-scenery-scrim, rgba(0, 0, 0, 0.55)),
+      0 0 1px var(--world-scenery-scrim, rgba(0, 0, 0, 0.45));
+  }
+  .atelier-dossier-flag.atelier-dossier-flag-quiet::before {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 1px;
+    background: color-mix(in srgb, var(--ds-ember-brass) 70%, transparent);
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+
+  /* Dossier rail — strong dark glass scrim band that anchors all dossier
+     metadata + action so the text plane is guaranteed readable on any
+     destination scenery. Replaces the lighter v3 scrim. */
+  .atelier-dossier-scrim.atelier-dossier-rail {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 0 0 28px 28px;
+    padding: 14px clamp(18px, 2.2vw, 28px);
+    background:
+      linear-gradient(180deg,
+        transparent 0%,
+        color-mix(in srgb, var(--world-ink) 75%, transparent) 28%,
+        color-mix(in srgb, var(--world-ink) 92%, transparent) 100%);
+    backdrop-filter: blur(8px) saturate(1.05);
+    -webkit-backdrop-filter: blur(8px) saturate(1.05);
+    box-shadow:
+      0 -1px 0 color-mix(in srgb, var(--ds-ember-brass) 32%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--ds-paper) 18%, transparent);
+    color: var(--ds-paper);
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+  .atelier-dossier-rail .atelier-dossier-scrim-meta {
+    color: var(--ds-paper);
+    gap: 12px;
+  }
+  .atelier-dossier-rail .atelier-dossier-scrim-line {
+    color: color-mix(in srgb, var(--ds-paper) 92%, transparent);
+    text-shadow: 0 1px 4px color-mix(in srgb, var(--world-ink) 85%, transparent);
+  }
+  .atelier-dossier-rail .atelier-dossier-scrim-sep {
+    background: color-mix(in srgb, var(--ds-ember-brass) 55%, transparent);
+  }
+  .atelier-dossier-rail .atelier-dossier-scrim-action,
+  .atelier-dossier-rail .atelier-dossier-scrim-action-label {
+    color: var(--ds-paper);
+    text-shadow: 0 1px 4px color-mix(in srgb, var(--world-ink) 85%, transparent);
+  }
+  .atelier-dossier-rail .atelier-dossier-scrim-action {
+    font-weight: 600;
+    letter-spacing: 0.22em;
+  }
+
+  /* ── Concierge portal (atmospheric salon threshold, no SaaS box) ───
+     The pale rounded card is gone. The concierge is now an atmospheric
+     vertical portal that mirrors the room-portal vocabulary: dim warm
+     lantern interior + brass edge + typography-first invitation + a
+     tactile brass action tab (no standard blue rectangle). */
+  .atelier-concierge-artifact.atelier-concierge-portal {
+    position: relative;
+    isolation: isolate;
+    height: 100%;
+    min-height: clamp(360px, 50vh, 540px);
+    border-radius: 28px;
+    overflow: hidden;
+    background: transparent;
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--ds-ember-brass) 22%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 28%, transparent),
+      0 30px 70px color-mix(in srgb, var(--ds-folio-ink) 38%, transparent);
+  }
+  .atelier-concierge-scenery {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background:
+      /* Dim velvet salon body — warm umber to deep ink. */
+      linear-gradient(168deg,
+        color-mix(in srgb, var(--ds-ember-brass) 24%, var(--ds-folio-ink)) 0%,
+        color-mix(in srgb, var(--ds-folio-ink) 86%, var(--ds-ember-brass)) 60%,
+        color-mix(in srgb, var(--ds-folio-ink) 96%, transparent) 100%);
+    opacity: 1;
+    pointer-events: none;
+  }
+  /* Lantern halo behind the type. */
+  .atelier-concierge-artifact.atelier-concierge-portal .atelier-concierge-interior {
+    background:
+      radial-gradient(ellipse 70% 60% at 72% 22%,
+        color-mix(in srgb, var(--ds-ember-brass) 70%, transparent),
+        transparent 65%),
+      radial-gradient(ellipse 60% 50% at 18% 92%,
+        color-mix(in srgb, var(--ds-ember-brass) 32%, transparent),
+        transparent 70%);
+    opacity: 0.85;
+    z-index: 1;
+  }
+  /* Soft inner vignette that frames the room. */
+  .atelier-concierge-vignette {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    box-shadow:
+      inset 0 -120px 100px -60px color-mix(in srgb, var(--ds-folio-ink) 60%, transparent),
+      inset 0 60px 60px -40px color-mix(in srgb, var(--ds-folio-ink) 35%, transparent);
+  }
+  .atelier-concierge-link {
+    text-decoration: none;
+    color: inherit;
+    transition: transform 900ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .atelier-concierge-link:hover,
+  .atelier-concierge-link:focus-visible {
+    transform: translateY(-2px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-concierge-link { transition: none; }
+    .atelier-concierge-link:hover,
+    .atelier-concierge-link:focus-visible { transform: none; }
+  }
+  .atelier-concierge-artifact.atelier-concierge-portal .atelier-concierge-eyebrow {
+    color: color-mix(in srgb, var(--ds-paper) 76%, transparent);
+    letter-spacing: 0.32em;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+    margin-bottom: 14px;
+  }
+  .atelier-concierge-artifact.atelier-concierge-portal .atelier-concierge-title {
+    color: var(--ds-paper);
+    font-size: clamp(1.7rem, 2.2vw, 2.2rem);
+    line-height: 1.04;
+    margin: 0 0 10px;
+    max-width: 18ch;
+    text-shadow:
+      0 2px 16px rgba(0, 0, 0, 0.65),
+      0 1px 3px rgba(0, 0, 0, 0.5);
+  }
+  .atelier-concierge-artifact.atelier-concierge-portal .atelier-concierge-caption {
+    color: color-mix(in srgb, var(--ds-paper) 88%, transparent);
+    font-size: 14px;
+    line-height: 1.5;
+    max-width: 30ch;
+    text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55);
+    margin: 0;
+  }
+  .atelier-concierge-artifact.atelier-concierge-portal .atelier-concierge-foot {
+    margin-top: auto;
+    padding-top: 28px;
+  }
+  /* Tactile brass action tab — replaces the SaaS blue rectangle.
+     Vellum interior + brass edge + warm engraved feel. */
+  .atelier-concierge-portal .atelier-concierge-tab.btn-marine {
+    border-radius: 999px;
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--ds-paper) 96%, var(--ds-ember-brass)) 0%,
+        color-mix(in srgb, var(--ds-bone) 92%, var(--ds-ember-brass)) 100%);
+    color: var(--ds-folio-ink);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.65) inset,
+      0 -1px 0 color-mix(in srgb, var(--ds-ember-brass) 16%, transparent) inset,
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 52%, transparent),
+      0 12px 28px color-mix(in srgb, rgba(0, 0, 0, 1) 38%, transparent);
+    transition:
+      transform 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .atelier-concierge-link:hover .atelier-concierge-tab.btn-marine,
+  .atelier-concierge-link:focus-visible .atelier-concierge-tab.btn-marine {
+    transform: translateY(-1px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.7) inset,
+      0 -1px 0 color-mix(in srgb, var(--ds-ember-brass) 22%, transparent) inset,
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 75%, transparent),
+      0 16px 36px color-mix(in srgb, rgba(0, 0, 0, 1) 50%, transparent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-concierge-portal .atelier-concierge-tab.btn-marine { transition: none; }
+    .atelier-concierge-link:hover .atelier-concierge-tab.btn-marine,
+    .atelier-concierge-link:focus-visible .atelier-concierge-tab.btn-marine {
+      transform: none;
+    }
+  }
+
+  /* ── Archive open layout (no box-in-box) ──────────────────────────
+     The giant rounded white cabinet container is gone. The folios + plate
+     + brass rail sit directly on the Atrium so the archive reads as
+     furniture in the room, not a widget inside a widget. */
+  .atelier-archive-section .atelier-archive-link {
+    border-radius: 18px;
+    transition: transform 900ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .atelier-archive-section .atelier-archive-link:hover,
+  .atelier-archive-section .atelier-archive-link:focus-visible {
+    transform: translateY(-2px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-archive-section .atelier-archive-link { transition: none; }
+    .atelier-archive-section .atelier-archive-link:hover,
+    .atelier-archive-section .atelier-archive-link:focus-visible {
+      transform: none;
+    }
+  }
+  .atelier-archive-open {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+    gap: clamp(28px, 3vw, 56px);
+    padding: clamp(8px, 1vw, 20px) 0 clamp(20px, 2vw, 32px);
+  }
+  @media (max-width: 860px) {
+    .atelier-archive-open {
+      grid-template-columns: 1fr;
+      gap: 18px;
+    }
+  }
+  /* Spines column standing on the brass rail. */
+  .atelier-archive-open .atelier-archive-spines {
+    position: relative;
+    z-index: 2;
+    min-height: clamp(260px, 26vw, 360px);
+    padding-bottom: clamp(16px, 1.6vw, 24px);
+  }
+  /* Spines themselves keep the v3 vertical book treatment but lift off
+     the new brass rail with a stronger drop shadow. */
+  .atelier-archive-open .atelier-archive-spine.atelier-curio-spine {
+    box-shadow:
+      inset 1px 0 0 rgba(255, 255, 255, 0.22),
+      inset -1px 0 0 rgba(0, 0, 0, 0.38),
+      inset 0 1px 0 rgba(255, 255, 255, 0.28),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.42),
+      0 4px 10px color-mix(in srgb, var(--world-shadow) 80%, transparent),
+      0 14px 28px color-mix(in srgb, rgba(0, 0, 0, 1) 22%, transparent);
+  }
+  /* Brass shelf rail under the spines — a physical brass-wood plank,
+     not a dead linen rectangle. */
+  .atelier-archive-rail {
+    position: absolute;
+    z-index: 1;
+    left: 0;
+    right: 56%;
+    bottom: clamp(2px, 0.4vw, 8px);
+    height: clamp(14px, 1.6vw, 22px);
+    border-radius: 4px;
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--ds-ember-brass) 50%, var(--ds-warm-paper)) 0%,
+        color-mix(in srgb, var(--ds-ember-brass) 30%, var(--ds-bone)) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      inset 0 -1px 0 color-mix(in srgb, var(--ds-folio-ink) 28%, transparent),
+      0 8px 14px color-mix(in srgb, rgba(0, 0, 0, 1) 18%, transparent);
+  }
+  .atelier-archive-rail::after {
+    content: "";
+    position: absolute;
+    bottom: -3px;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent,
+      color-mix(in srgb, var(--ds-ember-brass) 80%, transparent) 18%,
+      color-mix(in srgb, var(--ds-sandstone-gold) 90%, transparent) 50%,
+      color-mix(in srgb, var(--ds-ember-brass) 80%, transparent) 82%,
+      transparent);
+  }
+  @media (max-width: 860px) {
+    .atelier-archive-rail { right: 0; }
+  }
+  /* Plate sits beside the cabinet. */
+  .atelier-archive-open .atelier-archive-plate {
+    position: relative;
+    z-index: 3;
+    padding: 0;
+    align-self: end;
+    max-width: 38ch;
+    padding-bottom: clamp(20px, 2vw, 36px);
+  }
+  .atelier-archive-arrow-inline {
+    display: inline-flex;
+    vertical-align: middle;
+    margin-left: 10px;
+    color: var(--ds-ember-brass);
+    transform: translateX(0);
+    transition: transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .atelier-archive-link:hover .atelier-archive-arrow-inline,
+  .atelier-archive-link:focus-visible .atelier-archive-arrow-inline {
+    transform: translateX(6px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-archive-arrow-inline { transition: none; }
+    .atelier-archive-link:hover .atelier-archive-arrow-inline,
+    .atelier-archive-link:focus-visible .atelier-archive-arrow-inline {
+      transform: translateX(0);
+    }
+  }
+  /* Suppress all v3 cabinet container chrome (rounded white box, shelf
+     pseudo-elements, dead bottom rail) — the v4 archive is unboxed. */
+  .atelier-archive-link.folio-paper-card.atelier-curio-shelf,
+  .atelier-archive-link.folio-paper-card.atelier-curio-shelf::before,
+  .atelier-archive-link.folio-paper-card.atelier-curio-shelf::after {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    padding: 0 !important;
+  }
+  .atelier-archive-link.folio-paper-card.atelier-curio-shelf::before,
+  .atelier-archive-link.folio-paper-card.atelier-curio-shelf::after {
+    content: none !important;
+    display: none !important;
+  }
+
+  /* ════════════════════════════════════════════════════════════════
      ATELIER ATRIUM v3 — Atrium Hero + Contrast Engine + Typography
      Portals + Physical Archive + Engraved Tabs
      Addresses Widget-itis from v2 preview: broad editorial greeting,

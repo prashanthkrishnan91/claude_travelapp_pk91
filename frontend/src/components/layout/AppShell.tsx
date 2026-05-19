@@ -71,7 +71,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             Sidebar substring is preserved for the 8J nav-rescue contract. */}
         {isHomePage ? null : <Sidebar />}
         {isHomePage && <AtelierNavArtifact />}
-        <main className="flex-1 overflow-y-auto" data-testid="reduced-motion-safe-atmosphere">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden" data-testid="reduced-motion-safe-atmosphere">
           {isHomePage ? (
             <div
               className="mobile-nav-spacer atelier-transition home-edge-bleed"
