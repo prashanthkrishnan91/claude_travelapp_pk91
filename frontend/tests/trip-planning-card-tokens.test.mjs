@@ -58,11 +58,15 @@ test('TripBuilder: no legacy dark color classes in JSX', () => {
 });
 
 test('TripBuilder: candidate card uses ds-* tokens', () => {
-  assert.ok(tripBuilderSrc.includes('bg-ds-onyx'), 'PREMIUM_CARD_BASE uses bg-ds-onyx');
-  assert.ok(tripBuilderSrc.includes('border-ds-pen-stroke'), 'PREMIUM_CARD_BASE uses border-ds-pen-stroke');
+  // Stage 3.5 Slice 5: candidate card surfaces are paper-world. PREMIUM_CARD_BASE
+  // now uses bg-ds-bone + border-ds-hairline; SECONDARY_CTA uses bg-ds-linen.
+  // PR #441 + Slice 5 fully migrated AddNoteModal off the dark stack, so the
+  // older bg-ds-onyx / bg-ds-carbon assertions no longer reflect the design.
+  assert.ok(tripBuilderSrc.includes('bg-ds-bone'), 'PREMIUM_CARD_BASE uses bg-ds-bone');
+  assert.ok(tripBuilderSrc.includes('border-ds-hairline'), 'PREMIUM_CARD_BASE uses border-ds-hairline');
   assert.ok(tripBuilderSrc.includes('bg-ds-accent'), 'PRIMARY_CTA uses bg-ds-accent');
   assert.ok(tripBuilderSrc.includes('text-ds-text-inverse'), 'PRIMARY_CTA uses text-ds-text-inverse');
-  assert.ok(tripBuilderSrc.includes('bg-ds-carbon'), 'SECONDARY_CTA uses bg-ds-carbon');
+  assert.ok(tripBuilderSrc.includes('bg-ds-linen'), 'SECONDARY_CTA uses bg-ds-linen');
 });
 
 test('TripBuilder: AiScoreBadge uses ds-trust-verified and ds-caution', () => {

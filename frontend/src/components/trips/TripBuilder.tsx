@@ -84,7 +84,7 @@ import { CompareModal } from "./CompareModal";
 import { DayPlanModal } from "./DayPlanModal";
 import { TripMapView } from "./TripMapView";
 import { TripIdeasPanel } from "./TripIdeasPanel";
-import { FolioPanel } from "@/components/ui/Folio";
+import { FolioPanel, FolioButton } from "@/components/ui/Folio";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -2654,13 +2654,15 @@ function AddNoteModal({
       onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
     >
       <div
-        className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl bg-ds-onyx border border-ds-pen-stroke shadow-[var(--ds-elevation-3)]"
+        data-folio-world="paper"
+        data-testid="add-note-modal-panel"
+        className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl bg-ds-paper border border-ds-hairline shadow-[var(--ds-elevation-3)]"
         style={{ padding: "var(--ds-space-6)" }}
       >
         <div className="flex items-center gap-2 mb-4">
           <FileText className="h-4 w-4 text-ds-accent shrink-0" aria-hidden="true" />
           <h2
-            className="text-ds-text font-semibold"
+            className="text-ds-folio-ink font-semibold"
             style={{ fontSize: "var(--ds-type-body-l-size)" }}
           >
             Add note — Day {dayNumber}
@@ -2671,7 +2673,7 @@ function AddNoteModal({
           <div>
             <label
               htmlFor="add-note-title"
-              className="text-ds-text-tertiary uppercase tracking-[0.1em]"
+              className="text-ds-folio-ink-mist uppercase tracking-[0.1em]"
               style={{
                 display: "block",
                 fontSize: "var(--ds-type-overline-size)",
@@ -2690,7 +2692,8 @@ function AddNoteModal({
               placeholder="Place or note title"
               required
               data-testid="add-note-title-input"
-              className="w-full rounded-xl bg-ds-carbon border border-ds-pen-stroke text-ds-text placeholder:text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 transition-colors"
+              data-folio-world="paper"
+              className="folio-input rounded-xl"
               style={{
                 padding: "var(--ds-space-3) var(--ds-space-4)",
                 fontSize: "var(--ds-type-body-size)",
@@ -2702,7 +2705,7 @@ function AddNoteModal({
           <div>
             <label
               htmlFor="add-note-description"
-              className="text-ds-text-tertiary uppercase tracking-[0.1em]"
+              className="text-ds-folio-ink-mist uppercase tracking-[0.1em]"
               style={{
                 display: "block",
                 fontSize: "var(--ds-type-overline-size)",
@@ -2710,7 +2713,7 @@ function AddNoteModal({
                 marginBottom: "var(--ds-space-1)",
               }}
             >
-              Details <span className="text-ds-text-tertiary normal-case tracking-normal" style={{ fontSize: "var(--ds-type-caption-size)" }}>(optional)</span>
+              Details <span className="text-ds-folio-ink-mist normal-case tracking-normal" style={{ fontSize: "var(--ds-type-caption-size)" }}>(optional)</span>
             </label>
             <textarea
               id="add-note-description"
@@ -2719,51 +2722,42 @@ function AddNoteModal({
               placeholder="Paste Google Maps links or reservation links here — they'll become clickable in the itinerary."
               rows={3}
               data-testid="add-note-description-input"
-              className="w-full resize-none rounded-xl bg-ds-carbon border border-ds-pen-stroke text-ds-text placeholder:text-ds-text-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 transition-colors"
+              data-folio-world="paper"
+              className="folio-input resize-none rounded-xl"
               style={{
                 padding: "var(--ds-space-3) var(--ds-space-4)",
                 fontSize: "var(--ds-type-body-size)",
+                minHeight: "auto",
               }}
             />
           </div>
 
           <p
-            className="text-ds-text-tertiary"
+            className="text-ds-folio-ink-mist"
             style={{ fontSize: "var(--ds-type-caption-size)", lineHeight: "var(--ds-type-caption-leading)" }}
           >
             To add restaurants, attractions, hotels, or flights, use Build, Saved Ideas, or AI Concierge.
           </p>
 
           <div className="flex items-center gap-2 pt-1">
-            <button
+            <FolioButton
               type="submit"
+              variant="primary"
               disabled={!title.trim()}
               data-testid="add-note-save-btn"
-              className="flex-1 rounded-xl text-ds-text-inverse disabled:opacity-40 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-              style={{
-                background: "var(--ds-accent)",
-                padding: "var(--ds-space-3) var(--ds-space-4)",
-                minHeight: "44px",
-                fontSize: "var(--ds-type-body-size)",
-                fontWeight: 500,
-              }}
+              className="flex-1 justify-center"
             >
               Save note
-            </button>
-            <button
+            </FolioButton>
+            <FolioButton
               type="button"
+              variant="secondary"
               onClick={onCancel}
               data-testid="add-note-cancel-btn"
-              className="rounded-xl bg-ds-carbon text-ds-text-secondary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-              style={{
-                padding: "var(--ds-space-3) var(--ds-space-4)",
-                minHeight: "44px",
-                fontSize: "var(--ds-type-body-size)",
-                border: "1px solid var(--ds-pen-stroke)",
-              }}
+              className="justify-center"
             >
               Cancel
-            </button>
+            </FolioButton>
           </div>
         </form>
       </div>
