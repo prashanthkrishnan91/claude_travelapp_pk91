@@ -1,28 +1,12 @@
 /**
- * Home Mobile Folio Redesign — Stage 3.5
- * Contract tests verifying the editorial redesign of the Home mobile screen.
+ * Home Mobile Folio Redesign — Architecture Slice
+ * Verifies that the Home screen redesign uses canonical Folio primitives
+ * (not Home-only orphan classes), and that all behavior is preserved.
  *
  * What this covers:
- *  1.  globals.css defines .folio-home-greeting-title (Fraunces italic display).
- *  2.  globals.css defines .folio-home-issue-eyebrow (brass rule + overline).
- *  3.  globals.css defines .folio-home-editorial-caption (Fraunces italic caption).
- *  4.  globals.css defines .folio-home-concierge-serif (Fraunces italic heading).
- *  5.  folio-home-greeting-title uses var(--ds-font-editorial) (Fraunces).
- *  6.  folio-home-concierge-serif uses var(--ds-font-editorial) (Fraunces).
- *  7.  folio-home-issue-eyebrow has ::before brass rule.
- *  8.  folio-home-editorial-caption uses font-style italic.
- *  9.  DashboardClient AtelierGreeting uses folio-home-greeting-title for h1.
- * 10.  DashboardClient AtelierGreeting uses folio-home-issue-eyebrow.
- * 11.  DashboardClient ConciergeEntry h2 uses folio-home-concierge-serif.
- * 12.  DashboardClient ConciergeEntry uses btn-marine (marine ink CTA).
- * 13.  DashboardClient ContinuePlanningStrip uses folio-home-editorial-caption.
- * 14.  DashboardClient JourneyShelfTeaser uses folio-home-editorial-caption.
- * 15.  DashboardClient AtelierPlanningStrip uses folio-home-editorial-caption.
- * 16.  DashboardClient does NOT import MapPin (removed with icon-free ContinuePlanning).
- * 17.  DashboardClient AtelierGreeting h1 class is folio-home-greeting-title (not plain text-2xl).
- * 18.  DashboardClient ConciergeEntry h2 text is "Your private concierge." (editorial voice).
- * 19.  All existing testids preserved (behavior unchanged).
- * 20.  folio-home-greeting-title has font-weight: 300 (light italic, not bold dashboard).
+ *  1-13.  globals.css canonical primitives exist with correct properties.
+ * 14-29.  DashboardClient adopts canonical primitives (no orphan folio-home-* classes).
+ * 30-40.  Behavior preservation (testids, routes, data bindings).
  */
 
 import test, { describe } from "node:test";
@@ -36,223 +20,311 @@ function readSrc(rel) {
 const globalsCss = readSrc("app/globals.css");
 const dashboardClient = readSrc("components/dashboard/DashboardClient.tsx");
 
-// ── 1–8. CSS primitives ──────────────────────────────────────────────────────
+// ── 1–13. Canonical CSS primitives ──────────────────────────────────────────
 
-describe("Home Folio: CSS primitives exist", () => {
-  test("1. globals.css defines .folio-home-greeting-title", () => {
+describe("Home Folio: canonical CSS primitives exist", () => {
+  test("1. globals.css defines .folio-display", () => {
     assert.ok(
-      globalsCss.includes(".folio-home-greeting-title"),
-      "globals.css must define .folio-home-greeting-title for editorial greeting heading"
+      globalsCss.includes(".folio-display"),
+      "globals.css must define .folio-display for the editorial display heading"
     );
   });
 
-  test("2. globals.css defines .folio-home-issue-eyebrow", () => {
-    assert.ok(
-      globalsCss.includes(".folio-home-issue-eyebrow"),
-      "globals.css must define .folio-home-issue-eyebrow for brass masthead opener"
-    );
-  });
-
-  test("3. globals.css defines .folio-home-editorial-caption", () => {
-    assert.ok(
-      globalsCss.includes(".folio-home-editorial-caption"),
-      "globals.css must define .folio-home-editorial-caption for italic serif captions"
-    );
-  });
-
-  test("4. globals.css defines .folio-home-concierge-serif", () => {
-    assert.ok(
-      globalsCss.includes(".folio-home-concierge-serif"),
-      "globals.css must define .folio-home-concierge-serif for concierge entry heading"
-    );
-  });
-
-  test("5. folio-home-greeting-title uses var(--ds-font-editorial)", () => {
-    const idx = globalsCss.indexOf(".folio-home-greeting-title");
-    assert.ok(idx !== -1, ".folio-home-greeting-title block must exist");
+  test("2. folio-display uses var(--ds-font-editorial)", () => {
+    const idx = globalsCss.indexOf(".folio-display {");
+    assert.ok(idx !== -1, ".folio-display block must exist");
     const block = globalsCss.slice(idx, idx + 300);
     assert.ok(
       block.includes("var(--ds-font-editorial)"),
-      "folio-home-greeting-title must use var(--ds-font-editorial) for Fraunces variable serif"
+      "folio-display must use var(--ds-font-editorial) for Fraunces variable serif"
     );
   });
 
-  test("6. folio-home-concierge-serif uses var(--ds-font-editorial)", () => {
-    const idx = globalsCss.indexOf(".folio-home-concierge-serif");
-    assert.ok(idx !== -1, ".folio-home-concierge-serif block must exist");
-    const block = globalsCss.slice(idx, idx + 300);
-    assert.ok(
-      block.includes("var(--ds-font-editorial)"),
-      "folio-home-concierge-serif must use var(--ds-font-editorial) for Fraunces variable serif"
-    );
-  });
-
-  test("7. folio-home-issue-eyebrow has ::before brass rule", () => {
-    assert.ok(
-      globalsCss.includes(".folio-home-issue-eyebrow::before"),
-      "folio-home-issue-eyebrow must have ::before pseudo-element for brass rule"
-    );
-  });
-
-  test("8. folio-home-editorial-caption uses font-style italic", () => {
-    const idx = globalsCss.indexOf(".folio-home-editorial-caption");
-    assert.ok(idx !== -1, ".folio-home-editorial-caption block must exist");
-    const block = globalsCss.slice(idx, idx + 250);
-    assert.ok(
-      block.includes("font-style: italic"),
-      "folio-home-editorial-caption must set font-style: italic for Fraunces italic"
-    );
-  });
-
-  test("20. folio-home-greeting-title has font-weight: 300", () => {
-    const idx = globalsCss.indexOf(".folio-home-greeting-title");
+  test("3. folio-display has font-weight: 300", () => {
+    const idx = globalsCss.indexOf(".folio-display {");
     const block = globalsCss.slice(idx, idx + 300);
     assert.ok(
       block.includes("font-weight: 300"),
-      "folio-home-greeting-title must use font-weight: 300 (light italic, not bold)"
+      "folio-display must use font-weight: 300 (light italic display)"
+    );
+  });
+
+  test("4. folio-display has font-style: italic", () => {
+    const idx = globalsCss.indexOf(".folio-display {");
+    const block = globalsCss.slice(idx, idx + 300);
+    assert.ok(
+      block.includes("font-style: italic"),
+      "folio-display must use font-style: italic"
+    );
+  });
+
+  test("5. globals.css defines .folio-issue-eyebrow", () => {
+    assert.ok(
+      globalsCss.includes(".folio-issue-eyebrow"),
+      "globals.css must define .folio-issue-eyebrow for brass masthead opener"
+    );
+  });
+
+  test("6. folio-issue-eyebrow has ::before brass rule", () => {
+    assert.ok(
+      globalsCss.includes(".folio-issue-eyebrow::before"),
+      "folio-issue-eyebrow must have ::before pseudo-element for brass rule"
+    );
+  });
+
+  test("7. globals.css defines .folio-caption", () => {
+    assert.ok(
+      globalsCss.includes(".folio-caption"),
+      "globals.css must define .folio-caption for 13px italic serif subcopy"
+    );
+  });
+
+  test("8. folio-caption has font-style: italic", () => {
+    const idx = globalsCss.indexOf(".folio-caption {");
+    assert.ok(idx !== -1, ".folio-caption block must exist");
+    const block = globalsCss.slice(idx, idx + 250);
+    assert.ok(
+      block.includes("font-style: italic"),
+      "folio-caption must use font-style: italic"
+    );
+  });
+
+  test("9. globals.css defines .folio-heading", () => {
+    assert.ok(
+      globalsCss.includes(".folio-heading"),
+      "globals.css must define .folio-heading for section-level Fraunces italic headings"
+    );
+  });
+
+  test("10. folio-heading uses var(--ds-font-editorial)", () => {
+    const idx = globalsCss.indexOf(".folio-heading {");
+    assert.ok(idx !== -1, ".folio-heading block must exist");
+    const block = globalsCss.slice(idx, idx + 300);
+    assert.ok(
+      block.includes("var(--ds-font-editorial)"),
+      "folio-heading must use var(--ds-font-editorial)"
+    );
+  });
+
+  test("11. globals.css defines .folio-editorial-sub", () => {
+    assert.ok(
+      globalsCss.includes(".folio-editorial-sub"),
+      "globals.css must define .folio-editorial-sub for editorial subline"
+    );
+  });
+
+  test("12. globals.css defines .folio-serial", () => {
+    assert.ok(
+      globalsCss.includes(".folio-serial"),
+      "globals.css must define .folio-serial for small-caps brass serial stamps"
+    );
+  });
+
+  test("13. globals.css defines .folio-card-title", () => {
+    assert.ok(
+      globalsCss.includes(".folio-card-title"),
+      "globals.css must define .folio-card-title for card-level Fraunces title"
     );
   });
 });
 
-// ── 9–18. DashboardClient component usage ────────────────────────────────────
+// ── 14–29. DashboardClient canonical adoption ─────────────────────────────
 
-describe("Home Folio: DashboardClient editorial adoption", () => {
-  test("9. DashboardClient AtelierGreeting uses folio-home-greeting-title for h1", () => {
-    const greetingStart = dashboardClient.indexOf("function AtelierGreeting");
-    const greetingEnd = dashboardClient.indexOf("function ConciergeEntry");
-    const block = dashboardClient.slice(greetingStart, greetingEnd);
+describe("Home Folio: DashboardClient uses canonical primitives", () => {
+  test("14. AtelierGreeting h1 uses folio-display (not a plain Tailwind size class)", () => {
+    const start = dashboardClient.indexOf("function AtelierGreeting");
+    const end = dashboardClient.indexOf("function ConciergeEntry");
+    const block = dashboardClient.slice(start, end);
     assert.ok(
-      block.includes("folio-home-greeting-title"),
-      "AtelierGreeting h1 must use folio-home-greeting-title class"
+      block.includes("folio-display"),
+      "AtelierGreeting h1 must use folio-display canonical class"
     );
   });
 
-  test("10. DashboardClient AtelierGreeting uses folio-home-issue-eyebrow", () => {
-    const greetingStart = dashboardClient.indexOf("function AtelierGreeting");
-    const greetingEnd = dashboardClient.indexOf("function ConciergeEntry");
-    const block = dashboardClient.slice(greetingStart, greetingEnd);
+  test("15. AtelierGreeting uses folio-issue-eyebrow for brass masthead line", () => {
+    const start = dashboardClient.indexOf("function AtelierGreeting");
+    const end = dashboardClient.indexOf("function ConciergeEntry");
+    const block = dashboardClient.slice(start, end);
     assert.ok(
-      block.includes("folio-home-issue-eyebrow"),
-      "AtelierGreeting must include folio-home-issue-eyebrow for editorial brass masthead line"
+      block.includes("folio-issue-eyebrow"),
+      "AtelierGreeting must include folio-issue-eyebrow for brass masthead"
     );
   });
 
-  test("11. DashboardClient ConciergeEntry h2 uses folio-home-concierge-serif", () => {
+  test("16. AtelierGreeting uses folio-editorial-sub for subline", () => {
+    const start = dashboardClient.indexOf("function AtelierGreeting");
+    const end = dashboardClient.indexOf("function ConciergeEntry");
+    const block = dashboardClient.slice(start, end);
+    assert.ok(
+      block.includes("folio-editorial-sub"),
+      "AtelierGreeting must use folio-editorial-sub for the editorial subline"
+    );
+  });
+
+  test("17. ConciergeEntry h2 uses folio-heading (canonical section heading)", () => {
     const start = dashboardClient.indexOf("function ConciergeEntry");
     const end = dashboardClient.indexOf("function ContinuePlanningStrip");
     const block = dashboardClient.slice(start, end);
     assert.ok(
-      block.includes("folio-home-concierge-serif"),
-      "ConciergeEntry h2 must use folio-home-concierge-serif for Fraunces italic heading"
+      block.includes("folio-heading"),
+      "ConciergeEntry h2 must use folio-heading canonical class"
     );
   });
 
-  test("12. DashboardClient ConciergeEntry uses btn-marine (marine ink CTA)", () => {
+  test("18. ConciergeEntry uses btn-marine (marine ink CTA, not gold fill)", () => {
     const start = dashboardClient.indexOf("function ConciergeEntry");
     const end = dashboardClient.indexOf("function ContinuePlanningStrip");
     const block = dashboardClient.slice(start, end);
     assert.ok(
       block.includes("btn-marine"),
-      "ConciergeEntry CTA must use btn-marine (marine ink, not gold fill per folio direction)"
+      "ConciergeEntry CTA must use btn-marine per folio direction (gold is foil-only)"
     );
   });
 
-  test("13. DashboardClient ContinuePlanningStrip uses folio-home-editorial-caption for destination", () => {
+  test("19. ConciergeEntry uses folio-caption for card subcopy", () => {
+    const start = dashboardClient.indexOf("function ConciergeEntry");
+    const end = dashboardClient.indexOf("function ContinuePlanningStrip");
+    const block = dashboardClient.slice(start, end);
+    assert.ok(
+      block.includes("folio-caption"),
+      "ConciergeEntry subcopy must use folio-caption canonical class"
+    );
+  });
+
+  test("20. ContinuePlanningStrip uses folio-card-title for trip name", () => {
     const start = dashboardClient.indexOf("function ContinuePlanningStrip");
     const end = dashboardClient.indexOf("function JourneyShelfTeaser");
     const block = dashboardClient.slice(start, end);
     assert.ok(
-      block.includes("folio-home-editorial-caption"),
-      "ContinuePlanningStrip must use folio-home-editorial-caption for trip destination line"
+      block.includes("folio-card-title"),
+      "ContinuePlanningStrip trip name must use folio-card-title"
     );
   });
 
-  test("14. DashboardClient JourneyShelfTeaser uses folio-home-editorial-caption for subcopy", () => {
+  test("21. ContinuePlanningStrip uses folio-caption for destination line", () => {
+    const start = dashboardClient.indexOf("function ContinuePlanningStrip");
+    const end = dashboardClient.indexOf("function JourneyShelfTeaser");
+    const block = dashboardClient.slice(start, end);
+    assert.ok(
+      block.includes("folio-caption"),
+      "ContinuePlanningStrip destination must use folio-caption"
+    );
+  });
+
+  test("22. ContinuePlanningStrip uses folio-serial for date/status stamp", () => {
+    const start = dashboardClient.indexOf("function ContinuePlanningStrip");
+    const end = dashboardClient.indexOf("function JourneyShelfTeaser");
+    const block = dashboardClient.slice(start, end);
+    assert.ok(
+      block.includes("folio-serial"),
+      "ContinuePlanningStrip must use folio-serial for date/status metadata"
+    );
+  });
+
+  test("23. JourneyShelfTeaser uses folio-caption for subcopy", () => {
     const start = dashboardClient.indexOf("function JourneyShelfTeaser");
     const end = dashboardClient.indexOf("function EmptyAtelierHome");
     const block = dashboardClient.slice(start, end);
     assert.ok(
-      block.includes("folio-home-editorial-caption"),
-      "JourneyShelfTeaser subcopy must use folio-home-editorial-caption for italic serif treatment"
+      block.includes("folio-caption"),
+      "JourneyShelfTeaser subcopy must use folio-caption"
     );
   });
 
-  test("15. DashboardClient AtelierPlanningStrip uses folio-home-editorial-caption (at least 2)", () => {
+  test("24. JourneyShelfTeaser uses folio-serial for archive stamp", () => {
+    const start = dashboardClient.indexOf("function JourneyShelfTeaser");
+    const end = dashboardClient.indexOf("function EmptyAtelierHome");
+    const block = dashboardClient.slice(start, end);
+    assert.ok(
+      block.includes("folio-serial"),
+      "JourneyShelfTeaser must use folio-serial for the archive entry stamp"
+    );
+  });
+
+  test("25. AtelierPlanningStrip uses folio-caption on both discovery cards (at least 2)", () => {
     const start = dashboardClient.indexOf("function AtelierPlanningStrip");
     const end = dashboardClient.indexOf("// ── Main component");
     const block = dashboardClient.slice(start, end);
-    const count = (block.match(/folio-home-editorial-caption/g) || []).length;
+    const count = (block.match(/folio-caption/g) || []).length;
     assert.ok(
       count >= 2,
-      `AtelierPlanningStrip must use folio-home-editorial-caption on both discovery card subcopy lines, found ${count}`
+      `AtelierPlanningStrip must use folio-caption on both discovery card subcopy lines, found ${count}`
     );
   });
 
-  test("16. DashboardClient does NOT import MapPin (removed with icon-free card)", () => {
+  test("26. AtelierPlanningStrip uses folio-serial on both discovery cards (at least 2)", () => {
+    const start = dashboardClient.indexOf("function AtelierPlanningStrip");
+    const end = dashboardClient.indexOf("// ── Main component");
+    const block = dashboardClient.slice(start, end);
+    const count = (block.match(/folio-serial/g) || []).length;
+    assert.ok(
+      count >= 2,
+      `AtelierPlanningStrip must use folio-serial on both discovery card number serials, found ${count}`
+    );
+  });
+
+  test("27. DashboardClient does NOT import MapPin", () => {
     assert.doesNotMatch(
       dashboardClient,
       /MapPin/,
-      "DashboardClient must not import MapPin — removed when ContinuePlanningStrip simplified to text-only layout"
+      "DashboardClient must not import MapPin — icon-free redesign"
     );
   });
 
-  test("17. DashboardClient AtelierGreeting h1 uses folio-home-greeting-title not text-2xl font-semibold", () => {
-    const greetingStart = dashboardClient.indexOf("function AtelierGreeting");
-    const greetingEnd = dashboardClient.indexOf("function ConciergeEntry");
-    const block = dashboardClient.slice(greetingStart, greetingEnd);
-    const h1HasOldClass = /h1[^>]*text-2xl font-semibold/.test(block);
-    assert.ok(
-      !h1HasOldClass,
-      "AtelierGreeting h1 must not use text-2xl font-semibold — should use folio-home-greeting-title"
-    );
-  });
-
-  test("18. DashboardClient ConciergeEntry h2 text is editorial voice ('Your private concierge.')", () => {
+  test("28. ConciergeEntry h2 has editorial voice text", () => {
     const start = dashboardClient.indexOf("function ConciergeEntry");
     const end = dashboardClient.indexOf("function ContinuePlanningStrip");
     const block = dashboardClient.slice(start, end);
     assert.ok(
       block.includes("Your private concierge."),
-      "ConciergeEntry h2 must use editorial concierge voice instead of generic 'AI Travel Concierge'"
+      "ConciergeEntry h2 must use editorial voice 'Your private concierge.'"
+    );
+  });
+
+  test("29. DashboardClient does NOT use orphan folio-home-* typography classes", () => {
+    assert.doesNotMatch(
+      dashboardClient,
+      /folio-home-greeting-title|folio-home-hero-sub|folio-home-issue-eyebrow|folio-home-editorial-caption|folio-home-serial|folio-home-trip-title|folio-home-concierge-card-accent|folio-home-concierge-serif/,
+      "DashboardClient must use canonical Folio primitives, not orphan folio-home-* typography classes"
     );
   });
 });
 
-// ── 19. Behavior preservation (testids) ──────────────────────────────────────
+// ── 30–40. Behavior preservation ─────────────────────────────────────────
 
 describe("Home Folio: behavior preservation", () => {
-  test("19a. atelier-greeting testid preserved", () => {
+  test("30. atelier-greeting testid preserved", () => {
     assert.match(dashboardClient, /data-testid="atelier-greeting"/);
   });
 
-  test("19b. concierge-entry testid preserved", () => {
+  test("31. concierge-entry testid preserved", () => {
     assert.match(dashboardClient, /data-testid="concierge-entry"/);
   });
 
-  test("19c. concierge-advisor-desk testid preserved", () => {
+  test("32. concierge-advisor-desk testid preserved", () => {
     assert.match(dashboardClient, /data-testid="concierge-advisor-desk"/);
   });
 
-  test("19d. atelier-continue-planning testid preserved", () => {
+  test("33. atelier-continue-planning testid preserved", () => {
     assert.match(dashboardClient, /data-testid="atelier-continue-planning"/);
   });
 
-  test("19e. journey-shelf-teaser testid preserved", () => {
+  test("34. journey-shelf-teaser testid preserved", () => {
     assert.match(dashboardClient, /data-testid="journey-shelf-teaser"/);
   });
 
-  test("19f. atelier-planning-strip testid preserved", () => {
+  test("35. atelier-planning-strip testid preserved", () => {
     assert.match(dashboardClient, /data-testid="atelier-planning-strip"/);
   });
 
-  test("19g. href=/concierge in ConciergeEntry preserved", () => {
+  test("36. href=/concierge in ConciergeEntry preserved", () => {
     const start = dashboardClient.indexOf("function ConciergeEntry");
     const end = dashboardClient.indexOf("function ContinuePlanningStrip");
     const block = dashboardClient.slice(start, end);
     assert.match(block, /href="\/concierge"/);
   });
 
-  test("19h. trip.title and trip.destination in ContinuePlanningStrip preserved", () => {
+  test("37. trip.title and trip.destination in ContinuePlanningStrip preserved", () => {
     const start = dashboardClient.indexOf("function ContinuePlanningStrip");
     const end = dashboardClient.indexOf("function JourneyShelfTeaser");
     const block = dashboardClient.slice(start, end);
@@ -260,7 +332,7 @@ describe("Home Folio: behavior preservation", () => {
     assert.match(block, /trip\.destination/);
   });
 
-  test("19i. folio-paper-card in ContinuePlanningStrip preserved", () => {
+  test("38. folio-paper-card in ContinuePlanningStrip preserved", () => {
     const start = dashboardClient.indexOf("function ContinuePlanningStrip");
     const end = dashboardClient.indexOf("function JourneyShelfTeaser");
     const block = dashboardClient.slice(start, end);
@@ -270,11 +342,11 @@ describe("Home Folio: behavior preservation", () => {
     );
   });
 
-  test("19j. mapline-rule preserved in file", () => {
+  test("39. mapline-rule preserved in AtelierGreeting", () => {
     assert.match(dashboardClient, /mapline-rule/);
   });
 
-  test("19k. editorial-scene preserved on root wrapper", () => {
+  test("40. editorial-scene preserved on root wrapper", () => {
     assert.match(dashboardClient, /editorial-scene/);
   });
 });

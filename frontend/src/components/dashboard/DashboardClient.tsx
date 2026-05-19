@@ -70,11 +70,11 @@ function AtelierGreeting({ tripCount }: { tripCount: number }) {
   const greeting = getTimeGreeting();
   return (
     <header data-testid="atelier-greeting">
-      <div className="folio-home-issue-eyebrow">Private Travel Concierge</div>
-      <h1 className="folio-home-greeting-title mt-2">
+      <div className="folio-issue-eyebrow">Private Travel Concierge</div>
+      <h1 className="folio-display mt-2">
         {greeting}
       </h1>
-      <p className="folio-home-hero-sub mt-1 mb-3">
+      <p className="folio-editorial-sub mt-1 mb-3">
         Your private travel edition.
       </p>
       <p className="text-[11px] tracking-[0.06em] text-ds-folio-ink-mist">
@@ -93,15 +93,15 @@ function ConciergeEntry() {
   return (
     <section aria-label="AI Concierge" data-testid="concierge-entry">
       <FolioPanel data-testid="concierge-advisor-desk">
-        <div className="folio-home-concierge-card-accent" aria-hidden="true" />
+        <div className="folio-card-accent" aria-hidden="true" />
         <div className="px-6 pt-5 pb-4 border-b border-ds-hairline">
           <Overline className="text-ds-folio-ink-mist">Private Travel Concierge</Overline>
-          <h2 className="folio-home-concierge-serif mt-2">
+          <h2 className="folio-heading mt-2">
             Your private concierge.
           </h2>
         </div>
         <div className="px-6 py-6">
-          <p className="folio-home-editorial-caption mb-6">
+          <p className="folio-caption mb-6">
             Restaurants, hotels, and hidden gems — prepared privately for you.
           </p>
           <Link
@@ -131,15 +131,15 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-2">
               <TripStatusBadge status={getDisplayTripStatus(trip)} />
-              <p className="folio-home-serial">{trip.status.toUpperCase()} · FOLIO</p>
+              <p className="folio-serial">{trip.status.toUpperCase()} · FOLIO</p>
             </div>
-            <h3 className="folio-home-trip-title mb-0.5">
+            <h3 className="folio-card-title mb-0.5">
               {trip.title}
             </h3>
-            <p className="folio-home-editorial-caption truncate">
+            <p className="folio-caption truncate">
               {trip.destination}
             </p>
-            <p className="folio-home-serial mt-2">
+            <p className="folio-serial mt-2">
               {formatDateRange(trip.startDate, trip.endDate)}
               {trip.travelers > 1 && ` · ${trip.travelers} travelers`}
             </p>
@@ -187,14 +187,14 @@ function JourneyShelfTeaser({ count }: { count: number }) {
         href="/trips"
         className="folio-paper-card block p-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
       >
-        <p className="folio-home-serial mb-2">
+        <p className="folio-serial mb-2">
           YOUR ARCHIVE · {count} {count !== 1 ? "ENTRIES" : "ENTRY"}
         </p>
         <p className="text-sm font-medium text-ds-folio-ink mb-1">
           {count} trip{count !== 1 ? "s" : ""} in the archive
         </p>
         <div className="flex items-end justify-between">
-          <p className="folio-home-editorial-caption">
+          <p className="folio-caption">
             Browse your full journey collection.
           </p>
           <ArrowRight
@@ -267,11 +267,11 @@ function AtelierPlanningStrip() {
           href="/explore"
           className="folio-paper-card group flex flex-col gap-2 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         >
-          <p className="folio-home-serial">01 · EXPLORE</p>
+          <p className="folio-serial">01 · EXPLORE</p>
           <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-accent transition truncate">
             Explore
           </p>
-          <p className="folio-home-editorial-caption truncate">
+          <p className="folio-caption truncate">
             Hotels, dining &amp; more
           </p>
         </Link>
@@ -279,11 +279,11 @@ function AtelierPlanningStrip() {
           href="/saved"
           className="folio-paper-card group flex flex-col gap-2 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         >
-          <p className="folio-home-serial">02 · SAVED</p>
+          <p className="folio-serial">02 · SAVED</p>
           <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-accent transition truncate">
             Saved Ideas
           </p>
-          <p className="folio-home-editorial-caption truncate">
+          <p className="folio-caption truncate">
             Your travel scrapbook
           </p>
         </Link>
