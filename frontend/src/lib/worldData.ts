@@ -535,10 +535,308 @@ function normalizeDestination(raw: string | null | undefined): string {
     .replace(/\s+/g, " ");
 }
 
+// ─── Archetype fallback worlds ─────────────────────────────────────────────────
+//
+// When a destination is not in the curated `WORLD_LIBRARY`, the resolver maps
+// the destination keyword to a generic travel archetype world so the dossier
+// cover still paints a real photographic mood (city skyline / coast / mountain
+// / desert / forest) rather than a pale gradient. This keeps the World-DNA
+// system working for arbitrary destinations without scattering image URLs
+// through components.
+//
+// Each archetype world ships its own scenicLayers + Unsplash mood URL +
+// contrastTone so the dossier reads correctly per archetype luminance.
+
+const CITY_WORLD: LocationData = {
+  location: "Urban",
+  mood: "City rooftops, night windows, neon avenue",
+  primaryColor: "#1F2A3E",
+  secondaryColor: "#D8A055",
+  tertiaryColor: "#6E7E9A",
+  inkColor: "#0E1422",
+  inkMistColor: "#4A5366",
+  surfaceColor: "#F2EFE6",
+  mistColor: "rgba(110, 126, 154, 0.34)",
+  shadowColor: "rgba(14, 20, 34, 0.22)",
+  backgroundStyle: [
+    "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(216, 160, 85, 0.22), transparent 70%)",
+    "radial-gradient(ellipse 70% 50% at 12% 88%, rgba(31, 42, 62, 0.28), transparent 70%)",
+    "linear-gradient(180deg, #F4F1E8 0%, #E9E5D6 100%)",
+  ].join(", "),
+  typographyTheme: "serif-editorial",
+  archetype: "gallery",
+  visualLayer: {
+    imageUrl:
+      "https://images.unsplash.com/photo-1518173946687-a4c8892bbd9f?auto=format&fit=crop&w=1600&q=80",
+    imageAlt: "City skyline at dusk with warm window light",
+    imagePosition: "center 55%",
+    imageFilter: "saturate(0.86) brightness(0.82) contrast(1.06)",
+    sceneryLayers: [
+      "radial-gradient(ellipse 70% 30% at 50% 18%, rgba(255, 222, 168, 0.4), transparent 70%)",
+      "linear-gradient(180deg, transparent 50%, rgba(216, 160, 85, 0.35) 70%, rgba(31, 42, 62, 0.55) 100%)",
+      "linear-gradient(180deg, #2A3858 0%, #131C30 100%)",
+    ].join(", "),
+    overlay: [
+      "linear-gradient(180deg, rgba(14, 20, 34, 0.34) 0%, transparent 32%, rgba(242, 239, 230, 0.45) 78%, rgba(242, 239, 230, 0.85) 100%)",
+    ].join(", "),
+    mistTint: "rgba(216, 160, 85, 0.35)",
+    contrastTone: "light",
+  },
+};
+
+const COAST_WORLD: LocationData = {
+  location: "Coastal",
+  mood: "Salt, glare, linen, slow heat",
+  primaryColor: "#1F4A66",
+  secondaryColor: "#E0B888",
+  tertiaryColor: "#86B2C8",
+  inkColor: "#102434",
+  inkMistColor: "#476275",
+  surfaceColor: "#F8F5EC",
+  mistColor: "rgba(134, 178, 200, 0.4)",
+  shadowColor: "rgba(16, 36, 52, 0.18)",
+  backgroundStyle: [
+    "radial-gradient(ellipse 90% 50% at 50% 0%, rgba(224, 184, 136, 0.24), transparent 70%)",
+    "radial-gradient(ellipse 70% 50% at 18% 88%, rgba(134, 178, 200, 0.30), transparent 70%)",
+    "linear-gradient(180deg, #F9F5EA 0%, #ECE3D0 100%)",
+  ].join(", "),
+  typographyTheme: "serif-spare",
+  archetype: "gallery",
+  visualLayer: {
+    imageUrl:
+      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1600&q=80",
+    imageAlt: "Quiet coastline with horizon glow",
+    imagePosition: "center 50%",
+    imageFilter: "saturate(0.9) brightness(0.96)",
+    sceneryLayers: [
+      "linear-gradient(180deg, transparent 50%, rgba(248, 245, 236, 0.5) 64%, transparent 78%)",
+      "radial-gradient(ellipse 70% 28% at 50% 64%, rgba(134, 178, 200, 0.35), transparent 70%)",
+      "linear-gradient(180deg, #DDE7EA 0%, #8FB3C4 38%, #466F8A 72%, #1F4A66 100%)",
+    ].join(", "),
+    overlay: [
+      "linear-gradient(180deg, rgba(16, 36, 52, 0.14) 0%, transparent 30%, rgba(248, 245, 236, 0.5) 72%, rgba(248, 245, 236, 0.88) 100%)",
+    ].join(", "),
+    mistTint: "rgba(212, 224, 232, 0.5)",
+    contrastTone: "dark",
+  },
+};
+
+const MOUNTAIN_WORLD: LocationData = {
+  location: "Mountain",
+  mood: "Pine, stone, mist, altitude",
+  primaryColor: "#2D3A40",
+  secondaryColor: "#9B7A4E",
+  tertiaryColor: "#6B7E80",
+  inkColor: "#11161A",
+  inkMistColor: "#4A5560",
+  surfaceColor: "#F1EEE5",
+  mistColor: "rgba(107, 126, 128, 0.45)",
+  shadowColor: "rgba(17, 22, 26, 0.22)",
+  backgroundStyle: [
+    "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(155, 122, 78, 0.20), transparent 70%)",
+    "radial-gradient(ellipse 70% 50% at 88% 88%, rgba(45, 58, 64, 0.22), transparent 70%)",
+    "linear-gradient(178deg, #F2EFE6 0%, #E6E1D4 100%)",
+  ].join(", "),
+  typographyTheme: "serif-editorial",
+  archetype: "observatory",
+  visualLayer: {
+    imageUrl:
+      "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1600&q=80",
+    imageAlt: "Mountain ridge wrapped in alpine mist",
+    imagePosition: "center 45%",
+    imageFilter: "saturate(0.82) brightness(0.9) contrast(1.04)",
+    sceneryLayers: [
+      "linear-gradient(180deg, transparent 45%, rgba(232, 236, 229, 0.55) 60%, rgba(232, 236, 229, 0.3) 76%, transparent 88%)",
+      "radial-gradient(ellipse 75% 28% at 50% 16%, rgba(212, 224, 232, 0.55), transparent 70%)",
+      "linear-gradient(178deg, #C5D0D2 0%, #7E8E94 38%, #404C55 72%, #1F262C 100%)",
+    ].join(", "),
+    overlay: [
+      "linear-gradient(180deg, rgba(17, 22, 26, 0.18) 0%, transparent 32%, rgba(241, 238, 229, 0.5) 72%, rgba(241, 238, 229, 0.9) 100%)",
+    ].join(", "),
+    mistTint: "rgba(186, 198, 200, 0.55)",
+    contrastTone: "light",
+  },
+};
+
+const DESERT_WORLD: LocationData = {
+  location: "Desert",
+  mood: "Heat, mineral dust, brass, dusk",
+  primaryColor: "#A85B2F",
+  secondaryColor: "#E2B370",
+  tertiaryColor: "#6E3725",
+  inkColor: "#3B1A11",
+  inkMistColor: "#7C4A30",
+  surfaceColor: "#F6E7CB",
+  mistColor: "rgba(212, 154, 74, 0.38)",
+  shadowColor: "rgba(59, 26, 17, 0.22)",
+  backgroundStyle: [
+    "radial-gradient(ellipse 80% 55% at 80% 10%, rgba(226, 179, 112, 0.36), transparent 65%)",
+    "radial-gradient(ellipse 70% 50% at 18% 88%, rgba(168, 91, 47, 0.30), transparent 70%)",
+    "linear-gradient(176deg, #F8E9CE 0%, #EBC994 100%)",
+  ].join(", "),
+  typographyTheme: "serif-warm",
+  archetype: "residence",
+  visualLayer: {
+    imageUrl:
+      "https://images.unsplash.com/photo-1473580044384-7ba9967e16a0?auto=format&fit=crop&w=1600&q=80",
+    imageAlt: "Late-day light over desert dunes",
+    imagePosition: "center 55%",
+    imageFilter: "saturate(0.92) brightness(0.95)",
+    sceneryLayers: [
+      "radial-gradient(ellipse 70% 35% at 75% 22%, rgba(255, 200, 138, 0.6), transparent 70%)",
+      "linear-gradient(180deg, transparent 55%, rgba(168, 91, 47, 0.4) 75%, rgba(110, 55, 37, 0.55) 100%)",
+      "linear-gradient(176deg, #F4D29E 0%, #DD9B58 40%, #A85B2F 75%, #5E2A1A 100%)",
+    ].join(", "),
+    overlay: [
+      "linear-gradient(180deg, rgba(59, 26, 17, 0.18) 0%, transparent 36%, rgba(246, 231, 203, 0.55) 72%, rgba(246, 231, 203, 0.9) 100%)",
+    ].join(", "),
+    mistTint: "rgba(232, 168, 90, 0.42)",
+    contrastTone: "light",
+  },
+};
+
+const FOREST_WORLD: LocationData = {
+  location: "Forest",
+  mood: "Cedar, mist, deep green stillness",
+  primaryColor: "#2F4A38",
+  secondaryColor: "#B68A5A",
+  tertiaryColor: "#7B907F",
+  inkColor: "#15201A",
+  inkMistColor: "#4A5C50",
+  surfaceColor: "#F1EEE3",
+  mistColor: "rgba(138, 160, 146, 0.45)",
+  shadowColor: "rgba(21, 32, 26, 0.22)",
+  backgroundStyle: [
+    "radial-gradient(ellipse 80% 50% at 18% 12%, rgba(123, 144, 127, 0.32), transparent 65%)",
+    "radial-gradient(ellipse 70% 40% at 88% 78%, rgba(182, 138, 90, 0.20), transparent 70%)",
+    "linear-gradient(178deg, #F2EFE5 0%, #E6E1D0 100%)",
+  ].join(", "),
+  typographyTheme: "serif-editorial",
+  archetype: "observatory",
+  visualLayer: {
+    imageUrl:
+      "https://images.unsplash.com/photo-1542038784456-1ea8e935640e?auto=format&fit=crop&w=1600&q=80",
+    imageAlt: "Tall forest with morning light filtering through",
+    imagePosition: "center 50%",
+    imageFilter: "saturate(0.84) brightness(0.92)",
+    sceneryLayers: [
+      "linear-gradient(180deg, transparent 42%, rgba(232, 236, 229, 0.5) 56%, rgba(232, 236, 229, 0.3) 72%, transparent 88%)",
+      "radial-gradient(ellipse 90% 50% at 50% 18%, rgba(186, 198, 188, 0.48), transparent 70%)",
+      "linear-gradient(178deg, #BFC9BA 0%, #8FA292 40%, #4B5C4F 78%, #1F2A22 100%)",
+    ].join(", "),
+    overlay: [
+      "linear-gradient(180deg, rgba(21, 32, 26, 0.16) 0%, transparent 36%, rgba(241, 238, 227, 0.55) 72%, rgba(241, 238, 227, 0.88) 100%)",
+    ].join(", "),
+    mistTint: "rgba(186, 198, 188, 0.55)",
+    contrastTone: "light",
+  },
+};
+
+/** Reusable archetype world catalogue — keyword → curated archetype world. */
+const ARCHETYPE_WORLDS: Readonly<Record<string, LocationData>> = Object.freeze({
+  city: CITY_WORLD,
+  coast: COAST_WORLD,
+  mountain: MOUNTAIN_WORLD,
+  desert: DESERT_WORLD,
+  forest: FOREST_WORLD,
+});
+
+/** Keyword → archetype map. A short curated list of city + coast + mountain
+ *  + desert + forest hints so a destination like "Chicago" resolves to the
+ *  CITY archetype and gets a real urban skyline mood image (not a gradient).
+ *  Keep this list compact and ordered; longer phrases win first. */
+const ARCHETYPE_KEYWORDS: ReadonlyArray<readonly [string, keyof typeof ARCHETYPE_WORLDS]> = [
+  // City / urban / metropolitan
+  ["new york", "city"],
+  ["york", "city"],
+  ["chicago", "city"],
+  ["tokyo", "city"],
+  ["london", "city"],
+  ["paris", "city"],
+  ["rome", "city"],
+  ["berlin", "city"],
+  ["barcelona", "city"],
+  ["madrid", "city"],
+  ["seoul", "city"],
+  ["singapore", "city"],
+  ["dubai", "city"],
+  ["hong kong", "city"],
+  ["bangkok", "city"],
+  ["mumbai", "city"],
+  ["delhi", "city"],
+  ["istanbul", "city"],
+  ["los angeles", "city"],
+  ["san francisco", "city"],
+  ["boston", "city"],
+  ["seattle", "city"],
+  ["amsterdam", "city"],
+  ["vienna", "city"],
+  ["prague", "city"],
+  ["sydney", "city"],
+  ["melbourne", "city"],
+  ["mexico city", "city"],
+  ["city", "city"],
+  // Coast / island / beach
+  ["beach", "coast"],
+  ["coast", "coast"],
+  ["seaside", "coast"],
+  ["island", "coast"],
+  ["maui", "coast"],
+  ["hawaii", "coast"],
+  ["bali", "coast"],
+  ["amalfi", "coast"],
+  ["mykonos", "coast"],
+  ["positano", "coast"],
+  ["malibu", "coast"],
+  ["nice", "coast"],
+  ["miami", "coast"],
+  ["cancun", "coast"],
+  ["phuket", "coast"],
+  ["tulum", "coast"],
+  ["maldives", "coast"],
+  // Mountain
+  ["mountain", "mountain"],
+  ["alps", "mountain"],
+  ["aspen", "mountain"],
+  ["zermatt", "mountain"],
+  ["chamonix", "mountain"],
+  ["whistler", "mountain"],
+  ["banff", "mountain"],
+  ["andes", "mountain"],
+  ["denver", "mountain"],
+  ["telluride", "mountain"],
+  ["jackson", "mountain"],
+  // Desert
+  ["desert", "desert"],
+  ["sahara", "desert"],
+  ["sedona", "desert"],
+  ["scottsdale", "desert"],
+  ["palm springs", "desert"],
+  ["santa fe", "desert"],
+  ["tucson", "desert"],
+  // Forest / woodland (catches "forest of dean", etc.)
+  ["forest", "forest"],
+  ["redwood", "forest"],
+];
+
+function pickArchetypeWorld(normalized: string): LocationData | null {
+  for (const [keyword, archetype] of ARCHETYPE_KEYWORDS) {
+    if (normalized.includes(keyword)) {
+      return ARCHETYPE_WORLDS[archetype];
+    }
+  }
+  return null;
+}
+
+export const WORLD_ARCHETYPE_LIBRARY: typeof ARCHETYPE_WORLDS = ARCHETYPE_WORLDS;
+
 /**
- * Resolve a `LocationData` from a free-text destination string. Falls back to
- * the Atelier (house) world when no destination is provided or when the
- * destination is not in the curated library — the foyer is always somewhere.
+ * Resolve a `LocationData` from a free-text destination string. Falls back
+ * through (1) curated WORLD_LIBRARY, (2) substring match in WORLD_LIBRARY,
+ * (3) keyword → archetype world (city / coast / mountain / desert / forest),
+ * and finally (4) the Atelier (house) world. The result always carries a
+ * photographic mood image so the dossier cover never paints a pale gradient
+ * for unknown destinations like Chicago.
  */
 export function pickWorldFromDestination(
   destination: string | null | undefined,
@@ -554,6 +852,9 @@ export function pickWorldFromDestination(
       return WORLD_LIBRARY[key];
     }
   }
+  // Archetype fallback — Chicago → city, Tahiti → coast, Aspen → mountain, etc.
+  const archetypeWorld = pickArchetypeWorld(normalized);
+  if (archetypeWorld) return archetypeWorld;
   return ATELIER_WORLD;
 }
 

@@ -5012,6 +5012,205 @@
   }
 
   /* ════════════════════════════════════════════════════════════════
+     ATELIER ATRIUM v5 — Demolition cleanup
+     Final corrective pass over v4. Fixes:
+       · Nav dock collides with hero eyebrow.
+       · Concierge portal text rendered dark-on-dark.
+       · Dossier title hidden / orphan Planned pill / unreadable rail.
+       · Room portals still feel like pastel wireframe cards.
+       · Archive plate disconnected from spines.
+       · Bottom dead linen void.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Push the atrium content down on desktop so the floating Atelier nav
+     dock no longer collides with the hero eyebrow. The dock sits at top
+     ~28px and is ~50px tall; reserve a clean band above the greeting. */
+  @media (min-width: 1024px) {
+    .atelier-atrium.atelier-atrium-neutral .atelier-atrium-content {
+      padding-top: clamp(96px, 10vh, 132px);
+    }
+  }
+
+  /* Bulletproof Concierge portal text — the atmospheric umber body would
+     otherwise drag .folio-heading / .folio-caption back to dark ink. */
+  .atelier-concierge-portal .atelier-concierge-eyebrow,
+  .atelier-concierge-portal .atelier-concierge-title,
+  .atelier-concierge-portal .atelier-concierge-caption {
+    color: var(--ds-paper) !important;
+  }
+  .atelier-concierge-portal .atelier-concierge-eyebrow {
+    color: color-mix(in srgb, var(--ds-paper) 78%, transparent) !important;
+  }
+  .atelier-concierge-portal .atelier-concierge-caption {
+    color: color-mix(in srgb, var(--ds-paper) 90%, transparent) !important;
+  }
+
+  /* Dossier title position fix — guarantee the title sits inside the
+     cover above the rail with a deep dark plane beneath it. The earlier
+     bottom value pushed the title up into the gradient noise on tall
+     viewports. Pin to a stable bottom offset relative to the rail. */
+  .atelier-dossier-cover.atelier-dossier-cover-tall .atelier-dossier-cover-content {
+    left: clamp(20px, 2.6vw, 36px);
+    right: clamp(20px, 2.6vw, 36px);
+    bottom: clamp(78px, 8.5vw, 110px);
+    padding: clamp(16px, 1.6vw, 24px) clamp(18px, 2vw, 28px);
+    border-radius: 14px;
+    /* Self-contained dark scrim under the title block — no longer
+       relying on the cover ::before alone. Guaranteed dark plane on
+       every world without leaking onto the scenery edges. */
+    background:
+      linear-gradient(180deg,
+        transparent 0%,
+        color-mix(in srgb, var(--world-ink) 55%, transparent) 30%,
+        color-mix(in srgb, var(--world-ink) 78%, transparent) 100%);
+    backdrop-filter: blur(6px) saturate(1.05);
+    -webkit-backdrop-filter: blur(6px) saturate(1.05);
+    max-width: min(560px, 78%);
+  }
+  /* Suppress the v3.1 cover-content ::before scrim — the inline content
+     background above replaces it for a tighter plane. */
+  [data-scenery-tone] .atelier-dossier-cover.atelier-dossier-cover-tall .atelier-dossier-cover-content::before {
+    display: none;
+  }
+
+  /* Neutralise the corporate "Planned" status pill inside the dossier
+     rail. The TripStatusBadge inherits dashboard pill styling; on the
+     scenic rail it must read as a tiny brass dot + label, not a
+     blue/sky pill. */
+  .atelier-dossier-rail .trip-status-badge,
+  .atelier-dossier-rail [class*="status-badge"],
+  .atelier-dossier-rail [data-status-badge] {
+    background: transparent !important;
+    border: 0 !important;
+    padding: 0 !important;
+    color: var(--ds-paper) !important;
+    font-size: 11px !important;
+    letter-spacing: 0.22em !important;
+    text-transform: uppercase !important;
+    font-weight: 600 !important;
+  }
+  /* Dot-styled status indicator inside the rail. */
+  .atelier-dossier-rail .trip-status-badge::before,
+  .atelier-dossier-rail [class*="status-badge"]::before {
+    content: "" !important;
+    display: inline-block !important;
+    width: 6px !important;
+    height: 6px !important;
+    border-radius: 9999px !important;
+    background: var(--ds-ember-brass) !important;
+    margin-right: 10px !important;
+    vertical-align: middle !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-ember-brass) 22%, transparent) !important;
+  }
+
+  /* Room portals — destroy the wireframe pastel-card feeling.
+     Strengthen interior atmosphere, hide the visible jamb/lintel
+     brass frame (it was reading as a card outline), deepen the
+     scenery so the title pops on a real luminous interior. */
+  .atelier-doorway-shelf .world-portal {
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--world-ink) 38%, transparent) 0%,
+        color-mix(in srgb, var(--world-ink) 18%, transparent) 38%,
+        color-mix(in srgb, var(--world-ink) 36%, transparent) 100%);
+  }
+  /* Hide the brass doorframe jambs/lintel — they were creating a
+     visible outline that read as a wireframe card border. */
+  .atelier-doorway-shelf .world-portal-doorframe {
+    display: none;
+  }
+  /* Stronger scenery: less blur, more saturation, taller scale. */
+  .atelier-doorway-shelf .world-portal-scenery {
+    opacity: 1;
+    filter: saturate(1.05) brightness(0.78) contrast(1.06);
+    transform: scale(1.12);
+  }
+  .atelier-doorway-shelf .world-portal:hover .world-portal-scenery,
+  .atelier-doorway-shelf .world-portal:focus-visible .world-portal-scenery {
+    transform: scale(1.18);
+    filter: saturate(1.1) brightness(0.86) contrast(1.06);
+  }
+  /* Stronger title scrim — radial dark wash anchored at the centre of
+     each portal so the typography sits on a luminous plane, not a
+     pastel block. */
+  .atelier-doorway-shelf .world-portal::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background:
+      radial-gradient(ellipse 80% 80% at 50% 56%,
+        color-mix(in srgb, var(--world-ink) 32%, transparent) 0%,
+        color-mix(in srgb, var(--world-ink) 56%, transparent) 60%,
+        color-mix(in srgb, var(--world-ink) 78%, transparent) 100%);
+    pointer-events: none;
+  }
+
+  /* Archive layout fix — pull the plate closer to the spines so the
+     shelf reads as one composed object. Replace the wide grid with a
+     tighter side-by-side layout. */
+  .atelier-archive-open {
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    gap: clamp(24px, 2.4vw, 40px);
+    max-width: min(880px, 100%);
+  }
+  .atelier-archive-open .atelier-archive-spines {
+    min-width: clamp(220px, 24vw, 320px);
+  }
+  .atelier-archive-open .atelier-archive-plate {
+    padding-bottom: clamp(28px, 2.6vw, 44px);
+  }
+  /* The brass rail must span the actual shelf width, not the entire
+     section width. Anchor it to the spines column. */
+  .atelier-archive-open .atelier-archive-rail {
+    right: auto;
+    width: clamp(220px, 24vw, 320px);
+  }
+  @media (max-width: 860px) {
+    .atelier-archive-open .atelier-archive-rail {
+      width: 100%;
+    }
+  }
+
+  /* Bottom dead space — the atrium content already has
+     padding-bottom; nothing else should add height after it. */
+  .atelier-atrium-content {
+    padding-bottom: clamp(28px, 4vh, 56px) !important;
+  }
+  .atelier-atrium {
+    padding-bottom: 0 !important;
+  }
+
+  /* Atelier nav artifact — make the dock not visually compete with
+     the hero eyebrow by reducing its visual weight on desktop where
+     it sits in the same band. */
+  @media (min-width: 1024px) {
+    .atelier-nav-artifact-root {
+      top: clamp(16px, 1.4vw, 22px);
+      left: clamp(16px, 1.4vw, 22px);
+    }
+    .atelier-nav-dock {
+      padding: 8px 14px 8px 10px;
+      backdrop-filter: blur(24px) saturate(1.15);
+      -webkit-backdrop-filter: blur(24px) saturate(1.15);
+    }
+    .atelier-nav-dock-wordmark {
+      font-size: 12px;
+    }
+    .atelier-nav-dock-mark {
+      width: 26px;
+      height: 26px;
+    }
+  }
+
+  /* Atrium hero — kill any inherited padding/background from the
+     greeting glass surface that could compete with the editorial
+     stack now that the dock is repositioned. */
+  .atrium-hero {
+    padding-top: 0;
+  }
+
+  /* ════════════════════════════════════════════════════════════════
      ATELIER ATRIUM v4 — Floating Physical Editorial (No-Box Mandate)
      Dissolves the SaaS/widget remnants caught in the v3.1 preview:
        · Concierge stops being a pale SaaS card.
