@@ -392,14 +392,13 @@ describe("Slice 4B: DashboardClient visual enforcement", () => {
     );
   });
 
-  it("37. AtelierPlanningStrip links use folio-paper-card (paper-world conversion)", () => {
+  it("37. AtelierPlanningStrip uses WorldRoomSwitcher (Stage 3.5 Invisible Interface — doorways, not paper-tile cards)", () => {
     const stripIdx = dashboardClient.indexOf("atelier-planning-strip");
     assert.ok(stripIdx !== -1, "atelier-planning-strip testid must exist");
     const stripCtx = dashboardClient.slice(stripIdx, stripIdx + 1400);
-    const count = (stripCtx.match(/folio-paper-card/g) || []).length;
     assert.ok(
-      count >= 2,
-      `AtelierPlanningStrip must have at least 2 folio-paper-card links (Explore + Saved Ideas), found ${count}`
+      stripCtx.includes("WorldRoomSwitcher"),
+      "AtelierPlanningStrip must mount <WorldRoomSwitcher /> — room portals replaced the old 2× folio-paper-card discovery tiles"
     );
   });
 

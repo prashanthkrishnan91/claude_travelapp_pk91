@@ -205,18 +205,30 @@ test("DashboardClient JourneyShelfTeaser uses real count (tripCount from summary
   assert.match(dashboardClient, /summary\.tripCount/);
 });
 
-// ── DashboardClient — Discovery tools ────────────────────────────────────────
+// ── DashboardClient — Discovery tools / World room switcher ─────────────────
 
 test("DashboardClient has atelier-planning-strip data-testid", () => {
   assert.match(dashboardClient, /data-testid="atelier-planning-strip"/);
 });
 
-test("DashboardClient has Link to /explore in discovery strip", () => {
-  assert.match(dashboardClient, /href="\/explore"/);
+// Routes to /explore and /saved are now owned by ROOM_CATALOGUE in
+// frontend/src/lib/worldData.ts (rendered via WorldRoomSwitcher).
+// Assert the room switcher is mounted, and verify the catalogue links.
+const worldData = readFileSync(
+  new URL("../src/lib/worldData.ts", import.meta.url),
+  "utf8",
+);
+
+test("DashboardClient mounts WorldRoomSwitcher (rooms = doorways, not labeled tiles)", () => {
+  assert.match(dashboardClient, /<WorldRoomSwitcher/);
 });
 
-test("DashboardClient has Link to /saved in discovery strip", () => {
-  assert.match(dashboardClient, /href="\/saved"/);
+test("ROOM_CATALOGUE provides /explore doorway", () => {
+  assert.match(worldData, /href:\s*"\/explore"/);
+});
+
+test("ROOM_CATALOGUE provides /saved doorway", () => {
+  assert.match(worldData, /href:\s*"\/saved"/);
 });
 
 // ── DashboardClient — Loading state accessibility ────────────────────────────

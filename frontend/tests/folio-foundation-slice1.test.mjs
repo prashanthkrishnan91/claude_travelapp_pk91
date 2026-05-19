@@ -272,11 +272,17 @@ describe("Folio Foundation CSS classes in globals.css", () => {
       css.includes("max-width: 600px") || css.includes("max-width:600px"),
       "folio-ambient must be disabled at max-width 600px"
     );
-    const mwIdx = css.lastIndexOf("max-width: 600px");
-    const block = css.slice(mwIdx, mwIdx + 200);
+    // Anchor the search to the folio-ambient class so this stays stable as
+    // other unrelated mobile blocks are added later in the file (e.g. the
+    // world-scenery mobile guards, which intentionally keep slow drift).
+    const ambientIdx = css.indexOf(".folio-ambient");
+    assert.ok(ambientIdx !== -1, ".folio-ambient class must exist in globals.css");
+    const mwIdx = css.indexOf("max-width: 600px", ambientIdx);
+    assert.ok(mwIdx !== -1, ".folio-ambient must have a max-width:600px guard nearby");
+    const block = css.slice(mwIdx, mwIdx + 240);
     assert.ok(
-      block.includes("animation: none"),
-      "max-width 600px media query must set animation: none"
+      block.includes(".folio-ambient") && block.includes("animation: none"),
+      ".folio-ambient max-width:600px guard must set animation: none"
     );
   });
 });

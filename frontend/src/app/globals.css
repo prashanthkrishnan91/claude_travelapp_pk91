@@ -3101,11 +3101,20 @@
     .world-atmosphere-blob-b,
     .world-atmosphere-blob-c { animation: none; }
   }
-  /* Mobile: skip the expensive blur layer for battery/render budget. */
+  /* Mobile: hide the most expensive blob, but keep at least one slow
+     atmospheric drift visible so the destination stays alive on phones.
+     Only prefers-reduced-motion fully halts the air. */
   @media (max-width: 600px) {
     .world-atmosphere-blob-c { display: none; }
-    .world-atmosphere-blob-a,
-    .world-atmosphere-blob-b { animation: none; }
+    /* Heavier blur + slower drift for battery, but still moving. */
+    .world-atmosphere-blob-a {
+      animation-duration: 58s;
+      filter: blur(80px);
+    }
+    .world-atmosphere-blob-b {
+      animation-duration: 64s;
+      filter: blur(80px);
+    }
   }
 
   /* Wayfinder — quiet location overline; not navigation, just orientation. */
@@ -3363,5 +3372,350 @@
   .world-layer-depth-0  { z-index: 0; }
   .world-layer-depth-1  { z-index: 1; }
   .world-layer-depth-2  { z-index: 2; }
+
+  /* ── World Scenery ─────────────────────────────────────────────────
+     Full-bleed environmental layer that sits at the top of the page.
+     Paints the destination's `visualLayer` so the user feels the place
+     (mist, forest, terracotta) before reading a label. Three stacked
+     spans:
+       .world-scenery-painted   — CSS image-like gradient stack
+       .world-scenery-image     — optional photographic background
+       .world-scenery-overlay   — gradient tinted to surface for legibility
+     The painted scenery sits below the image so the destination still
+     feels intact if the photo never loads. */
+  .world-scenery {
+    position: absolute;
+    inset: 0;
+    bottom: auto;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: -1;
+    isolation: isolate;
+  }
+  .world-scenery-tall   { height: 92vh; max-height: 1100px; min-height: 520px; }
+  .world-scenery-medium { height: 64vh; max-height: 720px;  min-height: 360px; }
+  .world-scenery-short  { height: 44vh; max-height: 520px;  min-height: 260px; }
+  @media (max-width: 600px) {
+    .world-scenery-tall   { height: 82vh; max-height: 760px; min-height: 460px; }
+    .world-scenery-medium { height: 60vh; max-height: 540px; min-height: 320px; }
+    .world-scenery-short  { height: 42vh; max-height: 420px; min-height: 240px; }
+  }
+  .world-scenery-painted,
+  .world-scenery-image,
+  .world-scenery-overlay,
+  .world-scenery-edge {
+    position: absolute;
+    inset: 0;
+    display: block;
+  }
+  .world-scenery-painted {
+    background-image: var(--world-scenery);
+    background-size: cover;
+    background-position: center 50%;
+    z-index: 0;
+    animation: world-scenery-breathe 36s cubic-bezier(0.16, 1, 0.3, 1) infinite alternate;
+    transform-origin: 50% 60%;
+    will-change: transform, filter;
+  }
+  .world-scenery-image {
+    background-image: var(--world-scenery-image);
+    background-size: cover;
+    background-position: var(--world-scenery-position);
+    background-repeat: no-repeat;
+    filter: var(--world-scenery-filter);
+    opacity: 0.92;
+    z-index: 1;
+    animation: world-scenery-drift 42s cubic-bezier(0.16, 1, 0.3, 1) infinite alternate;
+    transform-origin: 50% 50%;
+    will-change: transform;
+  }
+  .world-scenery-overlay {
+    background-image: var(--world-scenery-overlay);
+    z-index: 2;
+  }
+  /* Soft inner vignette so scenery feels framed, not pasted on. */
+  .world-scenery-edge {
+    z-index: 3;
+    box-shadow:
+      inset 0 -120px 80px -40px color-mix(in srgb, var(--world-surface) 75%, transparent),
+      inset 0 60px 40px -30px color-mix(in srgb, var(--world-ink) 18%, transparent);
+  }
+  @keyframes world-scenery-drift {
+    0%   { transform: translate3d(0, 0, 0) scale(1.04); }
+    100% { transform: translate3d(-2.4%, 1.6%, 0) scale(1.08); }
+  }
+  @keyframes world-scenery-breathe {
+    0%   { transform: scale(1.02); filter: brightness(1); }
+    100% { transform: scale(1.07); filter: brightness(0.96); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .world-scenery-painted,
+    .world-scenery-image { animation: none; transform: none; }
+  }
+  /* Mobile keeps the drift, just slower + smaller. Brief requires
+     perceivable motion on phones; only reduced-motion fully halts. */
+  @media (max-width: 600px) {
+    .world-scenery-painted {
+      animation-duration: 56s;
+    }
+    .world-scenery-image {
+      animation-duration: 60s;
+    }
+  }
+
+  /* ── World Mist ────────────────────────────────────────────────────
+     Two slow horizontal mist veils drifting across the scenery. Tinted
+     by --world-mist-tint. Lives over the scenery, below content. */
+  .world-mist {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 0;
+  }
+  .world-mist-veil {
+    position: absolute;
+    left: -40%;
+    right: -40%;
+    height: 32%;
+    background:
+      radial-gradient(ellipse 55% 80% at 50% 50%,
+        var(--world-mist-tint, color-mix(in srgb, var(--world-mist) 90%, transparent)),
+        transparent 70%);
+    filter: blur(28px);
+    mix-blend-mode: screen;
+    opacity: 0.85;
+    will-change: transform, opacity;
+  }
+  .world-mist-veil-a {
+    top: 42%;
+    animation: world-mist-drift-a 32s cubic-bezier(0.16, 1, 0.3, 1) infinite alternate;
+  }
+  .world-mist-veil-b {
+    top: 64%;
+    height: 26%;
+    opacity: 0.55;
+    animation: world-mist-drift-b 44s cubic-bezier(0.16, 1, 0.3, 1) infinite alternate-reverse;
+  }
+  @keyframes world-mist-drift-a {
+    0%   { transform: translate3d(-6%, -2%, 0) scale(1.05); opacity: 0.7; }
+    100% { transform: translate3d(6%, 2%, 0)  scale(1.12); opacity: 0.95; }
+  }
+  @keyframes world-mist-drift-b {
+    0%   { transform: translate3d(4%, 0, 0) scale(1.05); opacity: 0.4; }
+    100% { transform: translate3d(-6%, 2%, 0) scale(1.15); opacity: 0.7; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .world-mist-veil-a,
+    .world-mist-veil-b { animation: none; }
+  }
+  /* Mobile keeps at least the primary mist veil moving. */
+  @media (max-width: 600px) {
+    .world-mist-veil-a { animation-duration: 50s; }
+    .world-mist-veil-b { animation-duration: 64s; opacity: 0.4; }
+  }
+
+  /* ── World Glass Surface ───────────────────────────────────────────
+     Translucent floating panel that sits over the scenery. Lets the
+     mist/light read through the edges so panels feel layered on the
+     environment rather than dropped on top. */
+  .world-glass-surface {
+    position: relative;
+    isolation: isolate;
+    border-radius: 28px;
+    padding: 26px 22px;
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--world-surface) 78%, transparent) 0%,
+        color-mix(in srgb, var(--world-surface) 88%, transparent) 100%);
+    backdrop-filter: blur(22px) saturate(1.15);
+    -webkit-backdrop-filter: blur(22px) saturate(1.15);
+    box-shadow:
+      0 26px 70px color-mix(in srgb, var(--world-shadow) 95%, transparent),
+      0 4px 14px  color-mix(in srgb, var(--world-shadow) 55%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      inset 0 -1px 0 color-mix(in srgb, var(--world-accent) 18%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--world-accent) 18%, transparent);
+    transition:
+      transform 900ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 900ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .world-glass-surface::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+      radial-gradient(ellipse 60% 40% at 20% 0%,
+        color-mix(in srgb, var(--world-accent) 22%, transparent),
+        transparent 65%);
+    pointer-events: none;
+    opacity: 0.7;
+    mix-blend-mode: screen;
+    z-index: 0;
+  }
+  .world-glass-surface > * { position: relative; z-index: 1; }
+  .world-glass-smoke {
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--world-ink) 8%, transparent) 0%,
+        color-mix(in srgb, var(--world-surface) 82%, transparent) 100%);
+    color: var(--world-ink);
+  }
+  .world-glass-deep {
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--world-primary) 18%, transparent) 0%,
+        color-mix(in srgb, var(--world-ink) 24%, transparent) 100%);
+    color: var(--world-surface);
+  }
+  .world-glass-deep::before {
+    background:
+      radial-gradient(ellipse 65% 40% at 80% 0%,
+        color-mix(in srgb, var(--world-accent) 28%, transparent),
+        transparent 65%);
+  }
+  @media (max-width: 600px) {
+    .world-glass-surface {
+      backdrop-filter: blur(16px) saturate(1.1);
+      -webkit-backdrop-filter: blur(16px) saturate(1.1);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .world-glass-surface { transition: none; }
+  }
+
+  /* ── World Doorway / Portal — enhanced ────────────────────────────
+     Layered scenery + doorframe so the four room portals read as four
+     different boutique rooms, not labeled tiles. */
+  .world-portal { isolation: isolate; }
+  .world-portal-scenery {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    background-image: var(--world-scenery, var(--world-bg));
+    background-size: cover;
+    background-position: center 50%;
+    opacity: 0.95;
+    transition:
+      transform 1100ms cubic-bezier(0.16, 1, 0.3, 1),
+      filter   900ms cubic-bezier(0.16, 1, 0.3, 1);
+    transform-origin: 50% 60%;
+  }
+  .world-portal-doorframe {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .world-portal-doorframe-jamb {
+    position: absolute;
+    top: 14px;
+    bottom: 14px;
+    width: 2px;
+    background: linear-gradient(180deg,
+      color-mix(in srgb, var(--world-accent) 38%, transparent) 0%,
+      color-mix(in srgb, var(--world-accent) 14%, transparent) 100%);
+    opacity: 0.85;
+  }
+  .world-portal-doorframe-jamb-left  { left: 14px; }
+  .world-portal-doorframe-jamb-right { right: 14px; }
+  .world-portal-doorframe-lintel {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    right: 14px;
+    height: 2px;
+    background: linear-gradient(90deg,
+      color-mix(in srgb, var(--world-accent) 14%, transparent),
+      color-mix(in srgb, var(--world-accent) 38%, transparent) 50%,
+      color-mix(in srgb, var(--world-accent) 14%, transparent));
+    opacity: 0.85;
+  }
+  /* Door-warm light pool — the room glows just inside the threshold. */
+  .world-portal-light {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 60%;
+    z-index: -1;
+    background:
+      radial-gradient(ellipse 70% 80% at 50% 100%,
+        color-mix(in srgb, var(--world-accent) 32%, transparent),
+        transparent 70%);
+    opacity: 0.6;
+    transition:
+      opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      transform 1100ms cubic-bezier(0.16, 1, 0.3, 1);
+    transform: translateY(8px);
+  }
+  /* Portal-specific tonal scrim on top so text stays readable. */
+  .world-portal {
+    /* shadowy doorway depth at the bottom */
+    background:
+      linear-gradient(180deg,
+        transparent 0%,
+        transparent 35%,
+        color-mix(in srgb, var(--world-ink) 12%, transparent) 70%,
+        color-mix(in srgb, var(--world-ink) 28%, transparent) 100%);
+    color: var(--world-surface);
+    min-height: 196px;
+  }
+  .world-portal-eyebrow {
+    color: color-mix(in srgb, var(--world-surface) 88%, transparent);
+    letter-spacing: 0.3em;
+  }
+  .world-portal-label {
+    color: var(--world-surface);
+    text-shadow: 0 1px 14px color-mix(in srgb, var(--world-ink) 55%, transparent);
+  }
+  .world-portal-whisper {
+    color: color-mix(in srgb, var(--world-surface) 88%, transparent);
+  }
+  .world-portal:hover .world-portal-scenery,
+  .world-portal:focus-visible .world-portal-scenery {
+    transform: scale(1.06);
+    filter: brightness(1.06);
+  }
+  .world-portal:hover .world-portal-light,
+  .world-portal:focus-visible .world-portal-light {
+    opacity: 0.95;
+    transform: translateY(0);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .world-portal-scenery,
+    .world-portal-light { transition: none; }
+    .world-portal:hover .world-portal-scenery,
+    .world-portal:focus-visible .world-portal-scenery { transform: none; }
+    .world-portal:hover .world-portal-light,
+    .world-portal:focus-visible .world-portal-light { transform: none; }
+  }
+  /* Portrait portals on mobile — slightly taller so the room reads. */
+  @media (max-width: 600px) {
+    .world-portal {
+      min-height: 216px;
+    }
+  }
+
+  /* ── World Wayfinder — quieted to a secondary anchor ──────────────
+     The wayfinder no longer leads the page. It remains as an editorial
+     signature available to surfaces that want a quiet location anchor;
+     it is not the primary orientation mechanism. */
+  .world-wayfinder-quiet {
+    opacity: 0.55;
+    letter-spacing: 0.22em;
+    font-size: 0.625rem;
+  }
+  .world-wayfinder-quiet .world-wayfinder-dot {
+    width: 4px; height: 4px;
+  }
+
+  /* ── Scenery host helper ──────────────────────────────────────────
+     A relative wrapper that owns the scenery's stacking context so
+     content above floats correctly. Use around any page region that
+     should sit on top of a WorldScenery. */
+  .world-scenery-host {
+    position: relative;
+    isolation: isolate;
+  }
 
 }
