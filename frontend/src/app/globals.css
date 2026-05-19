@@ -2957,4 +2957,411 @@
     .folio-shelf-spread:focus-visible::after  { transform: translate(8px, 10px) rotate(2.4deg); }
   }
 
+  /* ════════════════════════════════════════════════════════════════
+     INVISIBLE INTERFACE — World System
+     Every world-aware surface reads from --world-* CSS variables.
+     The component never hardcodes a destination; the destination
+     ships its DNA as a `locationData` prop, which becomes inline style
+     variables here. Reduced-motion safe.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Defaults — house "Atelier" world. Components fall back to these
+     when no <WorldCanvas> wraps them, so they never appear unstyled.
+     All values reference existing ds-* tokens or color-mix() — no raw hex,
+     no destination-specific colors at this layer. */
+  :where(:root) {
+    --world-primary:    var(--ds-marine-ink);
+    --world-secondary:  var(--ds-ember-brass);
+    --world-tertiary:   var(--ds-sandstone-gold);
+    --world-ink:        var(--ds-folio-ink);
+    --world-ink-mist:   var(--ds-folio-ink-mist);
+    --world-surface:    var(--ds-warm-paper);
+    --world-mist:       color-mix(in srgb, var(--ds-ember-brass) 28%, transparent);
+    --world-shadow:     color-mix(in srgb, var(--ds-folio-ink) 14%, transparent);
+    --world-accent:     var(--ds-ember-brass);
+    --world-bg:
+      radial-gradient(ellipse 70% 40% at 50% 0%,
+        color-mix(in srgb, var(--ds-ember-brass) 16%, transparent),
+        transparent 70%),
+      radial-gradient(ellipse 55% 45% at 12% 88%,
+        color-mix(in srgb, var(--ds-sandstone-gold) 22%, transparent),
+        transparent 70%),
+      radial-gradient(ellipse 50% 40% at 88% 78%,
+        color-mix(in srgb, var(--ds-ember-brass) 16%, transparent),
+        transparent 75%),
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--ds-warm-paper) 96%, white) 0%,
+        color-mix(in srgb, var(--ds-bone) 60%, var(--ds-warm-paper)) 100%);
+    --world-type-display: var(--font-fraunces), Georgia, 'Times New Roman', serif;
+    --world-type-ui:      var(--font-fraunces), Georgia, 'Times New Roman', serif;
+  }
+
+  /* World canvas — the room itself. Sits inside <FolioScene>; provides a
+     painted background that responds to --world-bg, with isolation so the
+     atmosphere layer can sit behind in-flow children at z-index: -1. */
+  .world-canvas {
+    position: relative;
+    isolation: isolate;
+    color: var(--world-ink);
+    background-image: var(--world-bg);
+    background-attachment: local;
+    transition:
+      background-image 1200ms cubic-bezier(0.16, 1, 0.3, 1),
+      color 600ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .world-canvas { transition: none; }
+  }
+
+  /* World atmosphere — three slow-drifting blobs and a mesh wash, all
+     reading from world variables. Painted into the canvas via absolute
+     positioning at z-index: -1. */
+  .world-atmosphere {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: -1;
+  }
+  .world-atmosphere-mesh {
+    position: absolute;
+    inset: -10%;
+    background:
+      radial-gradient(ellipse 55% 35% at 20% 18%,
+        color-mix(in srgb, var(--world-primary) 22%, transparent),
+        transparent 70%),
+      radial-gradient(ellipse 60% 40% at 82% 78%,
+        color-mix(in srgb, var(--world-secondary) 18%, transparent),
+        transparent 70%);
+    filter: blur(60px);
+    opacity: 0.85;
+  }
+  .world-atmosphere-blob {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(110px);
+    mix-blend-mode: multiply;
+    will-change: transform;
+    opacity: 0.55;
+  }
+  .world-atmosphere-blob-a {
+    top: -16%; left: -12%;
+    width: 58vw; height: 58vw;
+    max-width: 760px; max-height: 760px;
+    background: radial-gradient(circle,
+      color-mix(in srgb, var(--world-primary) 60%, transparent),
+      transparent 65%);
+    animation: world-blob-drift-a 38s cubic-bezier(0.16, 1, 0.3, 1) infinite alternate;
+  }
+  .world-atmosphere-blob-b {
+    bottom: -20%; right: -14%;
+    width: 52vw; height: 52vw;
+    max-width: 700px; max-height: 700px;
+    background: radial-gradient(circle,
+      color-mix(in srgb, var(--world-secondary) 55%, transparent),
+      transparent 68%);
+    animation: world-blob-drift-b 46s cubic-bezier(0.16, 1, 0.3, 1) infinite alternate-reverse;
+    opacity: 0.42;
+  }
+  .world-atmosphere-blob-c {
+    top: 40%; left: 32%;
+    width: 42vw; height: 42vw;
+    max-width: 560px; max-height: 560px;
+    background: radial-gradient(circle,
+      color-mix(in srgb, var(--world-tertiary) 40%, transparent),
+      transparent 70%);
+    animation: world-blob-drift-c 32s cubic-bezier(0.16, 1, 0.3, 1) infinite alternate;
+    opacity: 0.32;
+  }
+  .world-atmosphere-grain {
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(rgba(30, 26, 20, 0.045) 1px, transparent 1px),
+      radial-gradient(rgba(255, 248, 235, 0.035) 1px, transparent 1px);
+    background-size: 3px 3px, 5px 5px;
+    background-position: 0 0, 1px 2px;
+    opacity: 0.55;
+    mix-blend-mode: multiply;
+  }
+  @keyframes world-blob-drift-a {
+    0%   { transform: translate3d(0, 0, 0) scale(1); }
+    100% { transform: translate3d(3%, -3%, 0) scale(1.10); }
+  }
+  @keyframes world-blob-drift-b {
+    0%   { transform: translate3d(0, 0, 0) scale(0.96); }
+    100% { transform: translate3d(-3%, 2%, 0) scale(1.06); }
+  }
+  @keyframes world-blob-drift-c {
+    0%   { transform: translate3d(0, 0, 0) scale(0.95); }
+    100% { transform: translate3d(-2%, 3%, 0) scale(1.08); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .world-atmosphere-blob-a,
+    .world-atmosphere-blob-b,
+    .world-atmosphere-blob-c { animation: none; }
+  }
+  /* Mobile: skip the expensive blur layer for battery/render budget. */
+  @media (max-width: 600px) {
+    .world-atmosphere-blob-c { display: none; }
+    .world-atmosphere-blob-a,
+    .world-atmosphere-blob-b { animation: none; }
+  }
+
+  /* Wayfinder — quiet location overline; not navigation, just orientation. */
+  .world-wayfinder {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.6875rem;
+    line-height: 1;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--world-ink-mist) 92%, transparent);
+    font-weight: 600;
+  }
+  .world-wayfinder-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 9999px;
+    background: var(--world-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--world-accent) 18%, transparent);
+    animation: world-wayfinder-pulse 6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  }
+  @keyframes world-wayfinder-pulse {
+    0%, 100% { opacity: 0.85; transform: scale(1); }
+    50%      { opacity: 1;    transform: scale(1.15); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .world-wayfinder-dot { animation: none; }
+  }
+
+  /* World surface — floating object in the world's space. */
+  .world-surface {
+    position: relative;
+    border-radius: 28px;
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--world-surface) 96%, white) 0%,
+        var(--world-surface) 100%);
+    box-shadow:
+      0 24px 60px color-mix(in srgb, var(--world-shadow) 100%, transparent),
+      0 4px 14px  color-mix(in srgb, var(--world-shadow) 60%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.85),
+      0 0 0 1px color-mix(in srgb, var(--world-accent) 14%, transparent);
+    overflow: hidden;
+  }
+  .world-surface-mineral {
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--world-surface) 92%, white) 0%,
+        color-mix(in srgb, var(--world-surface) 88%, var(--world-tertiary)) 100%);
+  }
+  .world-surface-glass {
+    background: color-mix(in srgb, var(--world-surface) 70%, transparent);
+    backdrop-filter: blur(18px) saturate(1.2);
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+    box-shadow:
+      0 18px 48px color-mix(in srgb, var(--world-shadow) 80%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      0 0 0 1px color-mix(in srgb, var(--world-accent) 16%, transparent);
+  }
+
+  /* Room portal — a doorway into another room. Hover/focus opens the door.
+     Each portal carries its OWN --world-* variables (inline style on <a>),
+     so its preview atmosphere differs from the canvas around it. */
+  .world-portal {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: 168px;
+    padding: 22px 22px 18px;
+    border-radius: 24px;
+    overflow: hidden;
+    text-decoration: none;
+    color: var(--world-ink);
+    background:
+      linear-gradient(178deg,
+        color-mix(in srgb, var(--world-surface) 95%, white) 0%,
+        var(--world-surface) 100%);
+    box-shadow:
+      0 18px 44px color-mix(in srgb, var(--world-shadow) 80%, transparent),
+      0 2px 8px   color-mix(in srgb, var(--world-shadow) 40%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.80),
+      0 0 0 1px color-mix(in srgb, var(--world-accent) 12%, transparent);
+    transition:
+      transform 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .world-portal-atmosphere {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-image: var(--world-bg);
+    opacity: 0.78;
+    transition: opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
+                transform 1200ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  /* Soft horizon line — the "doorway sill". */
+  .world-portal-doorline {
+    position: absolute;
+    left: 18px; right: 18px;
+    bottom: 64px;
+    height: 1px;
+    background: linear-gradient(90deg,
+      transparent,
+      color-mix(in srgb, var(--world-accent) 55%, transparent),
+      transparent);
+    opacity: 0.7;
+    transform-origin: left center;
+    transition: transform 800ms cubic-bezier(0.16, 1, 0.3, 1),
+                opacity 600ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .world-portal-threshold {
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 3px;
+    background: linear-gradient(90deg,
+      transparent,
+      color-mix(in srgb, var(--world-accent) 70%, transparent),
+      transparent);
+    transform: scaleX(0.2);
+    transform-origin: center;
+    opacity: 0;
+    transition: transform 700ms cubic-bezier(0.16, 1, 0.3, 1),
+                opacity 500ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .world-portal-body {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .world-portal-eyebrow {
+    font-size: 0.625rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: color-mix(in srgb, var(--world-ink-mist) 90%, transparent);
+  }
+  .world-portal-label {
+    font-family: var(--world-type-display);
+    font-size: 1.625rem;
+    line-height: 1.05;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+    color: var(--world-ink);
+  }
+  .world-portal-whisper {
+    font-family: var(--world-type-display);
+    font-style: italic;
+    font-size: 0.875rem;
+    line-height: 1.3;
+    color: color-mix(in srgb, var(--world-ink-mist) 95%, transparent);
+  }
+  .world-portal:hover,
+  .world-portal:focus-visible {
+    transform: translateY(-3px);
+    box-shadow:
+      0 28px 64px color-mix(in srgb, var(--world-shadow) 100%, transparent),
+      0 6px 16px  color-mix(in srgb, var(--world-shadow) 55%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.85),
+      0 0 0 1px color-mix(in srgb, var(--world-accent) 26%, transparent);
+    outline: none;
+  }
+  .world-portal:hover .world-portal-atmosphere,
+  .world-portal:focus-visible .world-portal-atmosphere {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  .world-portal:hover .world-portal-doorline,
+  .world-portal:focus-visible .world-portal-doorline {
+    transform: scaleX(1.04);
+    opacity: 1;
+  }
+  .world-portal:hover .world-portal-threshold,
+  .world-portal:focus-visible .world-portal-threshold {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  .world-portal[data-active="true"] {
+    box-shadow:
+      0 22px 56px color-mix(in srgb, var(--world-shadow) 100%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.85),
+      0 0 0 1.5px color-mix(in srgb, var(--world-accent) 60%, transparent);
+  }
+  .world-portal:focus-visible {
+    outline: 2px solid var(--world-accent);
+    outline-offset: 3px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .world-portal,
+    .world-portal-atmosphere,
+    .world-portal-doorline,
+    .world-portal-threshold { transition: none; }
+    .world-portal:hover,
+    .world-portal:focus-visible { transform: none; }
+    .world-portal:hover .world-portal-atmosphere,
+    .world-portal:focus-visible .world-portal-atmosphere { transform: none; }
+  }
+
+  /* Room switcher — horizontal row of portals. Asymmetric vertical
+     offsets break out of grid prison on desktop, stack cleanly on mobile. */
+  .world-room-switcher {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  @media (min-width: 760px) {
+    .world-room-switcher {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 20px;
+    }
+    /* Editorial asymmetry — alternating vertical offsets. */
+    .world-room-switcher > :nth-child(1) { transform: translateY(0); }
+    .world-room-switcher > :nth-child(2) { transform: translateY(14px); }
+    .world-room-switcher > :nth-child(3) { transform: translateY(-6px); }
+    .world-room-switcher > :nth-child(4) { transform: translateY(18px); }
+    .world-room-switcher > .world-portal:hover,
+    .world-room-switcher > .world-portal:focus-visible {
+      transform: translateY(-3px);
+    }
+    .world-room-switcher > :nth-child(2):hover,
+    .world-room-switcher > :nth-child(2):focus-visible { transform: translateY(11px); }
+    .world-room-switcher > :nth-child(3):hover,
+    .world-room-switcher > :nth-child(3):focus-visible { transform: translateY(-9px); }
+    .world-room-switcher > :nth-child(4):hover,
+    .world-room-switcher > :nth-child(4):focus-visible { transform: translateY(15px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .world-room-switcher > * { transform: none !important; }
+  }
+
+  /* World hero — composition slot; reads from world ink + display family. */
+  .world-hero {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-block: 8px;
+  }
+  .world-hero-wayfinder {
+    align-self: flex-start;
+  }
+  .world-hero h1,
+  .world-hero .world-hero-display {
+    font-family: var(--world-type-display);
+    color: var(--world-ink);
+  }
+
+  /* World layer — generic depth container; reserved for future slices. */
+  .world-layer { position: relative; }
+  .world-layer-depth--2 { z-index: -2; }
+  .world-layer-depth--1 { z-index: -1; }
+  .world-layer-depth-0  { z-index: 0; }
+  .world-layer-depth-1  { z-index: 1; }
+  .world-layer-depth-2  { z-index: 2; }
+
 }

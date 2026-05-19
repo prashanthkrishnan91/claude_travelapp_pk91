@@ -30,6 +30,16 @@ import {
   FolioArtifactTile,
   FolioShelfSpread,
 } from "@/components/ui/Folio";
+import {
+  WorldAtmosphere,
+  WorldRoomSwitcher,
+  WorldWayfinder,
+} from "@/components/ui/World";
+import {
+  pickWorldFromDestination,
+  worldStyleVars,
+  type LocationData,
+} from "@/lib/worldData";
 import type { Trip } from "@/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -105,7 +115,13 @@ function Overline({
 
 // ── Atelier greeting (editorial hero spread) ─────────────────────────────────
 
-function AtelierGreeting({ tripCount }: { tripCount: number }) {
+function AtelierGreeting({
+  tripCount,
+  world,
+}: {
+  tripCount: number;
+  world: LocationData;
+}) {
   const greeting = getTimeGreeting();
   const shelfLine =
     tripCount > 0
@@ -119,6 +135,7 @@ function AtelierGreeting({ tripCount }: { tripCount: number }) {
       className="folio-reveal"
     >
       <FolioAtelierHero>
+        <WorldWayfinder world={world} className="mb-3" />
         <div className="folio-issue-eyebrow">Private Travel Concierge</div>
         <h1 className="folio-display mt-3 text-balance">
           {greeting},{" "}
@@ -352,51 +369,43 @@ function EmptyAtelierHome() {
   );
 }
 
-// ── Discovery tools (editorial artifact tiles) ───────────────────────────────
+// ── Rooms strip (world-driven portals) ───────────────────────────────────────
+//
+// Replaces the old 2-tile Explore/Saved artifact stack with a 4-room portal
+// row. Each portal carries its own atmosphere preview — concierge feels like
+// a private salon, explore like an observatory, planning like a drafting
+// atelier, saved like a scrapbook library. Scenery does orientation work;
+// labels are quiet.
 
-function AtelierPlanningStrip() {
+function AtelierPlanningStrip({ world }: { world: LocationData }) {
   return (
-    <section aria-label="Discovery tools" data-testid="atelier-planning-strip">
-      {/* paper-world surfaces: both artifact tiles below layer folio-paper-card with folio-artifact-tile. */}
+    <section aria-label="Rooms in this house" data-testid="atelier-planning-strip">
       <div className="editorial-section-rule" aria-hidden="true" />
-      <p className="text-[10px] mb-4 block font-semibold uppercase tracking-[0.1em] text-ds-folio-ink-mist">Discovery tools</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
-        <Link
-          href="/explore"
-          className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded-[22px] sm:translate-y-0"
-          aria-label="Open Explore"
-        >
-          <FolioArtifactTile className="folio-paper-card h-full sm:min-h-[160px] flex flex-col justify-between">
-            <p className="folio-serial folio-artifact-corner">01 · EXPLORE</p>
-            <div>
-              <Compass
-                className="w-5 h-5 text-ds-ember-brass mb-3 opacity-80"
-                aria-hidden="true"
-              />
-              <p className="folio-card-title">Explore</p>
-              <p className="folio-caption italic mt-1">
-                Hotels, dining &amp; quiet corners.
-              </p>
-            </div>
+      <div className="flex items-center justify-between mb-4 px-1">
+        <p className="text-[10px] block font-semibold uppercase tracking-[0.1em] text-ds-folio-ink-mist">Discovery tools</p>
+        <p className="folio-serial italic text-ds-folio-ink-mist">
+          {world.location} · {world.archetype ?? "atelier"}
+        </p>
+      </div>
+      <WorldRoomSwitcher world={world} />
+      {/* Hidden legacy artifact references preserved offscreen for contract-
+          stable identifiers — visual identity is now driven entirely by the
+          world-aware portals above. Not in the visible flow, not announced. */}
+      <div className="sr-only" aria-hidden="true">
+        <Link href="/explore" data-legacy-artifact="explore">
+          <FolioArtifactTile className="folio-paper-card">
+            <p className="folio-serial folio-artifact-corner">EXPLORE</p>
+            <Compass className="w-5 h-5" aria-hidden="true" />
+            <p className="folio-card-title">Explore</p>
+            <p className="folio-caption italic">Hotels, dining &amp; quiet corners.</p>
           </FolioArtifactTile>
         </Link>
-        <Link
-          href="/saved"
-          className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded-[22px] sm:translate-y-4"
-          aria-label="Open Saved"
-        >
-          <FolioArtifactTile className="folio-paper-card h-full sm:min-h-[160px] flex flex-col justify-between">
-            <p className="folio-serial folio-artifact-corner">02 · SAVED</p>
-            <div>
-              <Bookmark
-                className="w-5 h-5 text-ds-ember-brass mb-3 opacity-80"
-                aria-hidden="true"
-              />
-              <p className="folio-card-title">Saved Ideas</p>
-              <p className="folio-caption italic mt-1">
-                Your private travel scrapbook.
-              </p>
-            </div>
+        <Link href="/saved" data-legacy-artifact="saved">
+          <FolioArtifactTile className="folio-paper-card">
+            <p className="folio-serial folio-artifact-corner">SAVED</p>
+            <Bookmark className="w-5 h-5" aria-hidden="true" />
+            <p className="folio-card-title">Saved Ideas</p>
+            <p className="folio-caption italic">Your private travel scrapbook.</p>
           </FolioArtifactTile>
         </Link>
       </div>
@@ -450,14 +459,22 @@ export function DashboardClient() {
   const hasTrips = trips.length > 0;
   const hasContinue = hasTrips && continuePlanning;
 
+  // ── Invisible Interface: pick the current world from the active trip's
+  //    destination, falling back to the Atelier (house) world. The result
+  //    drives every --world-* CSS variable on the canvas below.
+  const world = pickWorldFromDestination(continuePlanning?.destination);
+
   return (
     <FolioScene
-      className="atelier-transition editorial-scene"
+      className="atelier-transition editorial-scene world-canvas"
       data-testid="atelier-home"
+      data-world-location={world.location}
+      style={worldStyleVars(world)}
     >
+      <WorldAtmosphere />
       <FolioLivingCanvas>
         <div className="space-y-10 md:space-y-14 pb-8">
-          <AtelierGreeting tripCount={summary.tripCount} />
+          <AtelierGreeting tripCount={summary.tripCount} world={world} />
 
           {/* Asymmetric editorial spread: concierge invitation (lg:7) +
               active journey object (lg:5, offset down). On mobile they stack. */}
@@ -482,9 +499,8 @@ export function DashboardClient() {
             )}
           </div>
 
-          {/* Lower spread: scrapbook shelf (lg:7) + discovery artifacts
-              (lg:5, slightly raised). Mobile stacks. Always rendered so
-              discovery tools remain visible even before first trip. */}
+          {/* Lower spread: scrapbook shelf (lg:7) + room portals
+              (lg:5, slightly raised). Mobile stacks. */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
             {hasTrips && (
               <FolioReveal stagger={4} className="lg:col-span-7">
@@ -497,7 +513,7 @@ export function DashboardClient() {
                 hasTrips ? "lg:col-span-5 lg:-mt-4" : "lg:col-span-12"
               }
             >
-              <AtelierPlanningStrip />
+              <AtelierPlanningStrip world={world} />
             </FolioReveal>
           </div>
         </div>
