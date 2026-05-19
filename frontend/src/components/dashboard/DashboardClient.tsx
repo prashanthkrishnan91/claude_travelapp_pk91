@@ -7,8 +7,6 @@ import {
   Sparkles,
   PlusCircle,
   ArrowRight,
-  Compass,
-  Bookmark,
 } from "lucide-react";
 import { TripStatusBadge } from "@/components/ui/TripStatusBadge";
 import {
@@ -27,12 +25,14 @@ import {
   FolioCtaGlide,
   FolioJourneyCover,
   FolioJourneyUnfurl,
-  FolioArtifactTile,
   FolioShelfSpread,
 } from "@/components/ui/Folio";
 import {
   WorldAtmosphere,
+  WorldGlassSurface,
+  WorldMist,
   WorldRoomSwitcher,
+  WorldScenery,
   WorldWayfinder,
 } from "@/components/ui/World";
 import {
@@ -117,10 +117,8 @@ function Overline({
 
 function AtelierGreeting({
   tripCount,
-  world,
 }: {
   tripCount: number;
-  world: LocationData;
 }) {
   const greeting = getTimeGreeting();
   const shelfLine =
@@ -134,16 +132,20 @@ function AtelierGreeting({
       data-testid="atelier-greeting"
       className="folio-reveal"
     >
-      <FolioAtelierHero>
-        <WorldWayfinder world={world} className="mb-3" />
-        <div className="folio-issue-eyebrow">Private Travel Concierge</div>
-        <h1 className="folio-display mt-3 text-balance">
-          {greeting},{" "}
-          <span className="italic text-ds-folio-ink-soft">planner.</span>
-        </h1>
-        <p className="folio-editorial-sub mt-2 max-w-xl">{shelfLine}</p>
-        <div className="mapline-rule mt-5" aria-hidden="true" />
-      </FolioAtelierHero>
+      <WorldGlassSurface
+        tone="paper"
+        className="world-hero-greeting px-7 py-8 md:px-10 md:py-10"
+      >
+        <FolioAtelierHero>
+          <div className="folio-issue-eyebrow">Private Travel Concierge</div>
+          <h1 className="folio-display mt-3 text-balance">
+            {greeting},{" "}
+            <span className="italic text-ds-folio-ink-soft">planner.</span>
+          </h1>
+          <p className="folio-editorial-sub mt-2 max-w-xl">{shelfLine}</p>
+          <div className="mapline-rule mt-5" aria-hidden="true" />
+        </FolioAtelierHero>
+      </WorldGlassSurface>
     </header>
   );
 }
@@ -384,31 +386,19 @@ function AtelierPlanningStrip({ world }: { world: LocationData }) {
       <div className="flex items-center justify-between mb-4 px-1">
         <p className="text-[10px] block font-semibold uppercase tracking-[0.1em] text-ds-folio-ink-mist">Discovery tools</p>
         <p className="folio-serial italic text-ds-folio-ink-mist">
-          {world.location} · {world.archetype ?? "atelier"}
+          {/* Quieter, optional secondary anchor — not primary orientation;
+              scenery does the orientation work above. The previous "PORTLAND
+              · MISTY FOREST…" overline that sat at the top has been removed. */}
+          <span className="folio-serial">
+            {world.location} · {world.archetype ?? "atelier"}
+          </span>
+          <span className="folio-caption sr-only">{world.mood}</span>
         </p>
       </div>
+      <p className="folio-caption italic text-ds-folio-ink-mist mb-5 max-w-md px-1">
+        Step through a door. Each room keeps the house intact.
+      </p>
       <WorldRoomSwitcher world={world} />
-      {/* Hidden legacy artifact references preserved offscreen for contract-
-          stable identifiers — visual identity is now driven entirely by the
-          world-aware portals above. Not in the visible flow, not announced. */}
-      <div className="sr-only" aria-hidden="true">
-        <Link href="/explore" data-legacy-artifact="explore">
-          <FolioArtifactTile className="folio-paper-card">
-            <p className="folio-serial folio-artifact-corner">EXPLORE</p>
-            <Compass className="w-5 h-5" aria-hidden="true" />
-            <p className="folio-card-title">Explore</p>
-            <p className="folio-caption italic">Hotels, dining &amp; quiet corners.</p>
-          </FolioArtifactTile>
-        </Link>
-        <Link href="/saved" data-legacy-artifact="saved">
-          <FolioArtifactTile className="folio-paper-card">
-            <p className="folio-serial folio-artifact-corner">SAVED</p>
-            <Bookmark className="w-5 h-5" aria-hidden="true" />
-            <p className="folio-card-title">Saved Ideas</p>
-            <p className="folio-caption italic">Your private travel scrapbook.</p>
-          </FolioArtifactTile>
-        </Link>
-      </div>
     </section>
   );
 }
@@ -466,15 +456,23 @@ export function DashboardClient() {
 
   return (
     <FolioScene
-      className="atelier-transition editorial-scene world-canvas"
+      className="atelier-transition editorial-scene world-canvas world-scenery-host"
       data-testid="atelier-home"
       data-world-location={world.location}
       style={worldStyleVars(world)}
     >
+      {/* Full-bleed destination scenery — the first thing the eye sees.
+          Painted CSS scenery + optional photographic mood asset + a
+          legibility overlay. Aria-hidden; it is environment, not text. */}
+      <WorldScenery
+        height="tall"
+        imageAlt={world.visualLayer.imageAlt}
+      />
+      <WorldMist />
       <WorldAtmosphere />
       <FolioLivingCanvas>
-        <div className="space-y-10 md:space-y-14 pb-8">
-          <AtelierGreeting tripCount={summary.tripCount} world={world} />
+        <div className="space-y-10 md:space-y-14 pb-8 relative">
+          <AtelierGreeting tripCount={summary.tripCount} />
 
           {/* Asymmetric editorial spread: concierge invitation (lg:7) +
               active journey object (lg:5, offset down). On mobile they stack. */}
@@ -516,6 +514,13 @@ export function DashboardClient() {
               <AtelierPlanningStrip world={world} />
             </FolioReveal>
           </div>
+
+          {/* Quiet, secondary editorial signature — the location is now
+              implied by the scenery; this anchor is here only for visitors
+              who want to confirm the world they're in. Tiny and faded. */}
+          <footer className="pt-2 pb-1 px-1 opacity-80">
+            <WorldWayfinder world={world} className="world-wayfinder-quiet" />
+          </footer>
         </div>
       </FolioLivingCanvas>
     </FolioScene>

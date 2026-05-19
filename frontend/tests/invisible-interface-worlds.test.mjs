@@ -57,6 +57,28 @@ describe("World System: locationData shape and curated worlds", () => {
     }
   });
 
+  test("A2b. LocationData declares the visualLayer scenery contract", () => {
+    const idx = worldData.indexOf("export interface LocationData");
+    const block = worldData.slice(idx, worldData.indexOf("}", idx));
+    assert.ok(
+      /\bvisualLayer\b/.test(block),
+      "LocationData must declare `visualLayer` (scenery image + overlay)",
+    );
+    const v = worldData.indexOf("export interface WorldVisualLayer");
+    assert.ok(v !== -1, "WorldVisualLayer interface must be exported");
+    const vblock = worldData.slice(v, worldData.indexOf("}", v));
+    for (const field of [
+      "sceneryLayers",
+      "overlay",
+      "mistTint",
+    ]) {
+      assert.ok(
+        new RegExp(`\\b${field}\\b`).test(vblock),
+        `WorldVisualLayer must declare \`${field}\` field`,
+      );
+    }
+  });
+
   test("A3. Curated WORLD_LIBRARY exists and is exported", () => {
     assert.ok(
       worldData.includes("export const WORLD_LIBRARY"),
@@ -71,6 +93,28 @@ describe("World System: locationData shape and curated worlds", () => {
         `worldData.ts must include the ${city} world`,
       );
     }
+  });
+
+  test("A4b. Every curated world ships a visualLayer with painted scenery", () => {
+    // All five curated worlds + the Atelier fallback must declare a visualLayer.
+    // A simple proxy check: the file must include `visualLayer:` at least 6×.
+    const count = (worldData.match(/visualLayer:\s*\{/g) ?? []).length;
+    assert.ok(
+      count >= 6,
+      `worldData.ts must declare a visualLayer for every curated world (>= 6), got ${count}`,
+    );
+    // Portland in particular must declare its mist + forest scenery.
+    const portlandIdx = worldData.indexOf('location: "Portland"');
+    assert.ok(portlandIdx !== -1);
+    const portlandBlock = worldData.slice(portlandIdx, portlandIdx + 2200);
+    assert.ok(
+      portlandBlock.includes("sceneryLayers"),
+      "Portland world must declare a sceneryLayers stack",
+    );
+    assert.ok(
+      portlandBlock.includes("overlay"),
+      "Portland world must declare an overlay tint",
+    );
   });
 
   test("A5. pickWorldFromDestination is exported and falls back to Atelier", () => {
@@ -99,6 +143,10 @@ describe("World System: locationData shape and curated worlds", () => {
       "--world-shadow",
       "--world-accent",
       "--world-type-display",
+      "--world-scenery",
+      "--world-scenery-overlay",
+      "--world-scenery-image",
+      "--world-mist-tint",
     ]) {
       assert.ok(
         worldData.includes(v),
@@ -180,6 +228,32 @@ describe("World System: React component family", () => {
       assert.ok(
         worldTsx.includes(`export function ${name}`),
         `World.tsx must export ${name}`,
+      );
+    }
+  });
+
+  test("B5b. World.tsx exports the new scenery primitives — WorldScenery, WorldMist, WorldGlassSurface", () => {
+    for (const name of ["WorldScenery", "WorldMist", "WorldGlassSurface"]) {
+      assert.ok(
+        worldTsx.includes(`export function ${name}`),
+        `World.tsx must export ${name}`,
+      );
+    }
+  });
+
+  test("B5c. WorldScenery layers painted scenery + image + overlay (decorative, aria-hidden)", () => {
+    const idx = worldTsx.indexOf("export function WorldScenery");
+    const block = worldTsx.slice(idx, idx + 1000);
+    assert.ok(block.includes('aria-hidden="true"'),
+      "WorldScenery must be decorative (aria-hidden)");
+    for (const slotClass of [
+      "world-scenery-painted",
+      "world-scenery-image",
+      "world-scenery-overlay",
+    ]) {
+      assert.ok(
+        block.includes(slotClass),
+        `WorldScenery must render the ${slotClass} layer`,
       );
     }
   });
@@ -303,6 +377,58 @@ describe("World System: CSS variable + class contract", () => {
     assert.ok(globalsCss.includes(".world-surface-mineral"));
     assert.ok(globalsCss.includes(".world-surface-glass"));
   });
+
+  test("C9. .world-scenery ships painted / image / overlay slots + size variants", () => {
+    assert.ok(globalsCss.includes(".world-scenery {"));
+    assert.ok(globalsCss.includes(".world-scenery-painted"));
+    assert.ok(globalsCss.includes(".world-scenery-image"));
+    assert.ok(globalsCss.includes(".world-scenery-overlay"));
+    assert.ok(globalsCss.includes(".world-scenery-tall"));
+  });
+
+  test("C10. .world-scenery layers animate with luxury easing (drift + breathe)", () => {
+    assert.ok(
+      /@keyframes world-scenery-(?:drift|breathe)/.test(globalsCss),
+      "world-scenery layers must define drift/breathe keyframes",
+    );
+    const re = /\.world-scenery-(?:painted|image)[^{]*\{[\s\S]*?cubic-bezier\(0\.16,\s*1,\s*0\.3,\s*1\)/;
+    assert.ok(
+      re.test(globalsCss),
+      ".world-scenery painted/image must use luxury cubic-bezier(0.16, 1, 0.3, 1)",
+    );
+  });
+
+  test("C11. .world-mist drifts with luxury easing and tinted veils", () => {
+    assert.ok(globalsCss.includes(".world-mist {"));
+    assert.ok(globalsCss.includes(".world-mist-veil-a"));
+    assert.ok(
+      /@keyframes world-mist-drift-a/.test(globalsCss),
+      "world-mist must define a drift keyframes animation",
+    );
+    assert.ok(
+      /\.world-mist-veil-a[^{]*\{[\s\S]*?cubic-bezier\(0\.16,\s*1,\s*0\.3,\s*1\)/.test(globalsCss),
+      "world-mist veils must use luxury cubic-bezier(0.16, 1, 0.3, 1)",
+    );
+  });
+
+  test("C12. .world-glass-surface is translucent (backdrop-filter blur)", () => {
+    assert.ok(globalsCss.includes(".world-glass-surface {"));
+    const idx = globalsCss.indexOf(".world-glass-surface {");
+    const block = globalsCss.slice(idx, idx + 800);
+    assert.ok(
+      /backdrop-filter:\s*blur\(/.test(block),
+      ".world-glass-surface must use backdrop-filter blur (paper-glass)",
+    );
+  });
+
+  test("C13. world-portal carries a doorframe + interior light layer", () => {
+    assert.ok(globalsCss.includes(".world-portal-doorframe"),
+      ".world-portal must include a doorframe layer (jamb/lintel)");
+    assert.ok(globalsCss.includes(".world-portal-light"),
+      ".world-portal must include an interior warm-light layer");
+    assert.ok(globalsCss.includes(".world-portal-scenery"),
+      ".world-portal must include a scenery layer behind the label");
+  });
 });
 
 // ── D. Reduced-motion / mobile guards ───────────────────────────────────────
@@ -350,6 +476,53 @@ describe("World System: reduced-motion and mobile guards", () => {
     }
     assert.ok(found, "world-atmosphere-blob-c must be suppressed on mobile (≤600px)");
   });
+
+  test("D5. mobile keeps at least one atmosphere blob animating (motion-visible on phones)", () => {
+    // The previous build set `animation: none` on both blob-a and blob-b at
+    // ≤600px, which made the screen feel static on phones. The brief
+    // explicitly requires perceivable motion on mobile, so the mobile block
+    // must not set `animation: none` on both primary blobs.
+    const mobileBlocks = [];
+    let cursor = globalsCss.indexOf("@media (max-width: 600px)");
+    while (cursor !== -1) {
+      // grab the whole block
+      const open = globalsCss.indexOf("{", cursor);
+      let depth = 1;
+      let end = open + 1;
+      while (depth > 0 && end < globalsCss.length) {
+        const ch = globalsCss[end];
+        if (ch === "{") depth += 1;
+        else if (ch === "}") depth -= 1;
+        end += 1;
+      }
+      mobileBlocks.push(globalsCss.slice(cursor, end));
+      cursor = globalsCss.indexOf("@media (max-width: 600px)", end);
+    }
+    const blob = mobileBlocks.join("\n");
+    const killedBoth =
+      /world-atmosphere-blob-a[\s\S]*?animation:\s*none[\s\S]*?world-atmosphere-blob-b[\s\S]*?animation:\s*none/.test(blob) ||
+      /world-atmosphere-blob-a,\s*\.world-atmosphere-blob-b\s*\{[^}]*animation:\s*none/.test(blob);
+    assert.ok(
+      !killedBoth,
+      "mobile (≤600px) must not set animation:none on BOTH world-atmosphere-blob-a and -b — keep one drift visible",
+    );
+  });
+
+  test("D6. world-scenery painted/image animation suppressed under prefers-reduced-motion", () => {
+    const re = /@media \(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\.world-scenery-(?:painted|image)[\s\S]*?animation:\s*none/;
+    assert.ok(
+      re.test(globalsCss),
+      "world-scenery must disable scenery drift under prefers-reduced-motion",
+    );
+  });
+
+  test("D7. world-mist veil animation suppressed under prefers-reduced-motion", () => {
+    const re = /@media \(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\.world-mist-veil[\s\S]*?animation:\s*none/;
+    assert.ok(
+      re.test(globalsCss),
+      "world-mist must disable veil drift under prefers-reduced-motion",
+    );
+  });
 });
 
 // ── E. DashboardClient adoption ─────────────────────────────────────────────
@@ -360,10 +533,19 @@ describe("World System: DashboardClient adoption", () => {
     assert.ok(dashboardClient.includes("worldStyleVars"));
   });
 
-  test("E2. DashboardClient imports WorldAtmosphere + WorldRoomSwitcher + WorldWayfinder", () => {
-    assert.ok(dashboardClient.includes("WorldAtmosphere"));
-    assert.ok(dashboardClient.includes("WorldRoomSwitcher"));
-    assert.ok(dashboardClient.includes("WorldWayfinder"));
+  test("E2. DashboardClient imports the world scenery primitives + WorldRoomSwitcher", () => {
+    for (const name of [
+      "WorldAtmosphere",
+      "WorldRoomSwitcher",
+      "WorldScenery",
+      "WorldMist",
+      "WorldGlassSurface",
+    ]) {
+      assert.ok(
+        dashboardClient.includes(name),
+        `DashboardClient must import ${name}`,
+      );
+    }
   });
 
   test("E3. Root <FolioScene> receives world-canvas class + worldStyleVars style", () => {
@@ -372,13 +554,30 @@ describe("World System: DashboardClient adoption", () => {
     assert.match(ret, /style=\{worldStyleVars\(world\)\}/);
   });
 
-  test("E4. AtelierGreeting renders the WorldWayfinder", () => {
+  test("E4. Home renders the WorldScenery layer above content (scenery does orientation)", () => {
+    const ret = dashboardClient.slice(dashboardClient.indexOf("return ("));
+    assert.match(
+      ret,
+      /<WorldScenery[\s\S]*?\/>/,
+      "DashboardClient must mount <WorldScenery /> as the top environmental layer",
+    );
+    // The greeting itself must no longer print the world description line
+    // as a top-of-page WorldWayfinder. Scenery is the orientation now.
     const start = dashboardClient.indexOf("function AtelierGreeting");
     const end   = dashboardClient.indexOf("function ConciergeEntry");
     const block = dashboardClient.slice(start, end);
     assert.ok(
-      block.includes("WorldWayfinder"),
-      "AtelierGreeting must render WorldWayfinder for environmental orientation",
+      !block.includes("WorldWayfinder"),
+      "AtelierGreeting must NOT render WorldWayfinder as the primary top line — scenery does the orientation",
+    );
+  });
+
+  test("E4b. WorldMist drift layer is mounted on the home canvas", () => {
+    const ret = dashboardClient.slice(dashboardClient.indexOf("return ("));
+    assert.match(
+      ret,
+      /<WorldMist\s*\/>/,
+      "DashboardClient must mount <WorldMist /> for perceivable atmosphere drift",
     );
   });
 
@@ -389,6 +588,14 @@ describe("World System: DashboardClient adoption", () => {
     assert.ok(
       block.includes("WorldRoomSwitcher"),
       "AtelierPlanningStrip must render WorldRoomSwitcher (4 room portals)",
+    );
+  });
+
+  test("E5b. No hidden legacy artifact tiles remain (no sr-only legacy duplicate UI)", () => {
+    assert.doesNotMatch(
+      dashboardClient,
+      /data-legacy-artifact|FolioArtifactTile/,
+      "DashboardClient must not preserve legacy artifact tiles via sr-only — update tests instead",
     );
   });
 
@@ -421,6 +628,16 @@ describe("World System: DashboardClient adoption", () => {
         `data-testid="${id}" must remain in DashboardClient`,
       );
     }
+  });
+
+  test("E9. AtelierGreeting floats on the scenery via WorldGlassSurface", () => {
+    const start = dashboardClient.indexOf("function AtelierGreeting");
+    const end   = dashboardClient.indexOf("function ConciergeEntry");
+    const block = dashboardClient.slice(start, end);
+    assert.ok(
+      block.includes("WorldGlassSurface"),
+      "AtelierGreeting must wrap its content in WorldGlassSurface (paper-glass over scenery)",
+    );
   });
 });
 

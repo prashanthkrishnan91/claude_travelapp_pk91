@@ -85,6 +85,96 @@ export function WorldAtmosphere({ className, ...rest }: DivProps) {
   );
 }
 
+// ─── WorldScenery ───────────────────────────────────────────────────────────
+//
+// Full-bleed environment layer. Paints the destination's `visualLayer` —
+// a curated photograph (if any) plus an image-like CSS scenic stack —
+// behind the top of the page so the user *feels* the destination
+// (mist, light, textile) before they read a single label. Decorative only.
+//
+// Tunables (driven by --world-* CSS variables on the surrounding canvas):
+//   --world-scenery          painted CSS scenery (image-like gradient stack)
+//   --world-scenery-image    optional url(...) photograph
+//   --world-scenery-overlay  text-legibility overlay
+//   --world-scenery-position image object-position
+//   --world-scenery-filter   tone applied to the photograph
+//
+// The component layers them as:
+//   [painted scenery]  →  [photograph]  →  [overlay tinted to world]
+// so the painted scenery shows through if the photo never loads.
+
+export function WorldScenery({
+  height = "tall",
+  className,
+  imageAlt,
+  ...rest
+}: DivProps & {
+  /** Height of the scenery stage. */
+  height?: "tall" | "medium" | "short";
+  /** Decorative-only, but the curator may supply an alt for the image. */
+  imageAlt?: string;
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      data-world-scenery="true"
+      data-world-scenery-height={height}
+      data-world-scenery-alt={imageAlt}
+      className={clsx("world-scenery", `world-scenery-${height}`, className)}
+      {...rest}
+    >
+      <span className="world-scenery-painted" />
+      <span className="world-scenery-image" />
+      <span className="world-scenery-overlay" />
+      <span className="world-scenery-edge" />
+    </div>
+  );
+}
+
+// ─── WorldMist ──────────────────────────────────────────────────────────────
+//
+// A slow drifting mist/light/air layer. Lives over the scenery, below
+// content. Performance-safe: transform + opacity only. Stays visible on
+// mobile (one layer) — only `prefers-reduced-motion` disables the drift.
+
+export function WorldMist({ className, ...rest }: DivProps) {
+  return (
+    <div
+      aria-hidden="true"
+      className={clsx("world-mist", className)}
+      {...rest}
+    >
+      <span className="world-mist-veil world-mist-veil-a" />
+      <span className="world-mist-veil world-mist-veil-b" />
+    </div>
+  );
+}
+
+// ─── WorldGlassSurface ──────────────────────────────────────────────────────
+//
+// A floating panel made of paper-glass that lives *over* the scenery. Unlike
+// WorldSurface (which is opaque paper), this one is translucent so the
+// destination's mist/light reads through the panel edge. Use for the hero
+// greeting card, the concierge invitation, and the active journey card.
+
+export function WorldGlassSurface({
+  tone = "paper",
+  className,
+  children,
+  ...rest
+}: DivProps & { tone?: "paper" | "smoke" | "deep" }) {
+  return (
+    <div
+      data-world-glass="true"
+      data-world-glass-tone={tone}
+      className={clsx("world-glass-surface", `world-glass-${tone}`, className)}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
 // ─── WorldWayfinder ─────────────────────────────────────────────────────────
 //
 // Quiet textual locator. Not navigation — labelling. The scenery should already
@@ -160,12 +250,20 @@ export function WorldPortal({
       href={href}
       className={clsx("world-portal", className)}
       data-world-portal="true"
+      data-world-doorway="true"
       data-world-archetype={world.archetype ?? "atelier"}
       style={worldStyleVars(world)}
       {...rest}
     >
+      <span className="world-portal-scenery" aria-hidden="true" />
       <span className="world-portal-atmosphere" aria-hidden="true" />
+      <span className="world-portal-doorframe" aria-hidden="true">
+        <span className="world-portal-doorframe-jamb world-portal-doorframe-jamb-left" />
+        <span className="world-portal-doorframe-jamb world-portal-doorframe-jamb-right" />
+        <span className="world-portal-doorframe-lintel" />
+      </span>
       <span className="world-portal-doorline" aria-hidden="true" />
+      <span className="world-portal-light" aria-hidden="true" />
       <span className="world-portal-body">
         <span className="world-portal-eyebrow">
           {archetypeLine ?? whisper}
@@ -178,6 +276,12 @@ export function WorldPortal({
     </Link>
   );
 }
+
+/**
+ * `WorldDoorway` — semantic alias for `WorldPortal`. Some surfaces benefit
+ * from reading "doorway" at the call-site. Same DOM/behaviour as WorldPortal.
+ */
+export const WorldDoorway = WorldPortal;
 
 // ─── WorldRoomSwitcher ──────────────────────────────────────────────────────
 //
