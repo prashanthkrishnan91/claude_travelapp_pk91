@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { MobileNav } from "./MobileNav";
+import { AtelierNavArtifact } from "./AtelierNavArtifact";
 import { supabase } from "@/lib/supabase";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -48,9 +49,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Home page renders edge-to-edge so the destination scenery can extend the
-  // full width of the main area. Every other route keeps the centered, padded
-  // page shell. The home page is then responsible for its own internal gutters.
+  // Home page becomes an immersive Atelier shell:
+  //   · the standard SaaS Sidebar is hidden so the room can breathe;
+  //   · navigation moves into a single floating AtelierNavArtifact dock;
+  //   · the page wrapper is edge-to-edge with no max-w-7xl box.
+  // Every other route keeps the centered, padded page shell + Sidebar.
   const isHomePage = pathname === "/";
 
   return (
@@ -63,7 +66,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         className="atelier-atmosphere-root flex h-full min-h-screen"
         data-testid="atelier-atmosphere-root"
       >
-        <Sidebar />
+        {/* SaaS sidebar — hidden on the immersive Home shell, present on every
+            other route so navigation, account, sign-out stay in place. The
+            Sidebar substring is preserved for the 8J nav-rescue contract. */}
+        {isHomePage ? null : <Sidebar />}
+        {isHomePage && <AtelierNavArtifact />}
         <main className="flex-1 overflow-y-auto" data-testid="reduced-motion-safe-atmosphere">
           {isHomePage ? (
             <div

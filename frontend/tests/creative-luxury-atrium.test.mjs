@@ -460,3 +460,202 @@ describe("Atrium: behavior preserved", () => {
     );
   });
 });
+
+// ── F. Atrium v2 — silent navigation + contained scenery + integrated metadata
+
+describe("Atrium v2: silent navigation (sidebar hidden on Home)", () => {
+  const navArtifact = readSrc("components/layout/AtelierNavArtifact.tsx");
+
+  test("F1. AppShell hides the SaaS Sidebar on the Home immersive shell", () => {
+    // The Sidebar import + substring stay (Phase 8J contract), but the JSX
+    // render must be gated by the isHomePage branch so it does not display.
+    assert.match(
+      appShell,
+      /isHomePage\s*\?\s*null\s*:\s*<Sidebar/,
+      "AppShell must hide <Sidebar /> when on the home route — `isHomePage ? null : <Sidebar />`",
+    );
+  });
+
+  test("F2. AppShell mounts the AtelierNavArtifact floating dock on Home only", () => {
+    assert.match(
+      appShell,
+      /isHomePage\s*&&\s*<AtelierNavArtifact/,
+      "AppShell must mount <AtelierNavArtifact /> only when isHomePage is true",
+    );
+    assert.match(
+      appShell,
+      /import\s*\{\s*AtelierNavArtifact\s*\}\s*from\s*["'][^"']*AtelierNavArtifact/,
+      "AppShell must import AtelierNavArtifact from its layout module",
+    );
+  });
+
+  test("F3. AtelierNavArtifact exports a dock + drawer, keyboard accessible", () => {
+    assert.match(
+      navArtifact,
+      /export function AtelierNavArtifact/,
+      "AtelierNavArtifact must export a React component",
+    );
+    assert.match(navArtifact, /data-testid="atelier-nav-artifact"/);
+    assert.match(navArtifact, /data-testid="atelier-nav-dock"/);
+    assert.match(navArtifact, /data-testid="atelier-nav-drawer"/);
+    assert.ok(
+      navArtifact.includes("Escape"),
+      "AtelierNavArtifact must close on Escape (keyboard accessibility)",
+    );
+    assert.ok(
+      navArtifact.includes("aria-expanded"),
+      "AtelierNavArtifact dock must expose aria-expanded for accessibility",
+    );
+  });
+
+  test("F4. AtelierNavArtifact carries the full navigation surface (primary + secondary + sign-out)", () => {
+    // Routes must remain reachable from the immersive nav.
+    for (const href of [
+      '"/"',
+      '"/explore"',
+      '"/concierge"',
+      '"/saved"',
+      '"/trips"',
+      '"/trips/new"',
+      '"/cards"',
+      '"/settings"',
+    ]) {
+      assert.ok(
+        navArtifact.includes(`href: ${href}`),
+        `AtelierNavArtifact must keep href ${href} in its nav catalogue`,
+      );
+    }
+    assert.ok(
+      navArtifact.includes("handleSignOut") && navArtifact.includes("Sign out"),
+      "AtelierNavArtifact must expose Sign out via supabase.auth.signOut()",
+    );
+  });
+
+  test("F5. globals.css ships the atelier-nav-artifact-root + dock + drawer classes", () => {
+    for (const cls of [
+      ".atelier-nav-artifact-root",
+      ".atelier-nav-dock",
+      ".atelier-nav-drawer",
+      ".atelier-nav-scrim",
+      ".atelier-nav-drawer-head",
+    ]) {
+      assert.ok(globalsCss.includes(cls), `globals.css must define ${cls}`);
+    }
+    // Drawer entrance animation must respect prefers-reduced-motion.
+    assert.ok(
+      /@media \(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\.atelier-nav-drawer[\s\S]*?animation:\s*none/.test(globalsCss),
+      ".atelier-nav-drawer entrance must be disabled under prefers-reduced-motion",
+    );
+  });
+});
+
+describe("Atrium v2: destination scenery is contained, not page wallpaper", () => {
+  test("F6. DashboardClient does NOT mount page-wide WorldScenery (no destination wallpaper)", () => {
+    const ret = dashboardClient.slice(dashboardClient.indexOf("return ("));
+    assert.doesNotMatch(
+      ret,
+      /<WorldScenery\b/,
+      "DashboardClient must NOT mount a page-wide <WorldScenery /> — destination scenery must live inside the active folio cover and the room portals only",
+    );
+  });
+
+  test("F7. DashboardClient does NOT import WorldScenery any more", () => {
+    assert.doesNotMatch(
+      dashboardClient,
+      /\bWorldScenery\b/,
+      "DashboardClient must no longer import WorldScenery — scenery is contained inside artifacts via --world-scenery* CSS vars",
+    );
+  });
+
+  test("F8. The atrium root uses the neutral Alabaster background, not the destination --world-bg", () => {
+    const ret = dashboardClient.slice(dashboardClient.indexOf("return ("));
+    assert.match(
+      ret,
+      /atelier-atrium-neutral/,
+      "DashboardClient must apply atelier-atrium-neutral on the FolioScene so the page is a quiet Alabaster room",
+    );
+    // CSS must declare the neutral background variant (warm-paper/bone tokens, not destination --world-bg).
+    const idx = globalsCss.indexOf(".atelier-atrium-neutral");
+    const block = globalsCss.slice(idx, idx + 1000);
+    assert.ok(
+      block.includes("--ds-warm-paper") && block.includes("--ds-bone"),
+      ".atelier-atrium-neutral must paint a paper-warm Alabaster base from --ds-warm-paper + --ds-bone",
+    );
+    assert.ok(
+      !block.includes("var(--world-bg)"),
+      ".atelier-atrium-neutral must NOT consume var(--world-bg) — the page is neutral, not a destination wallpaper",
+    );
+  });
+
+  test("F9. Active folio dossier still owns the destination scenery via --world-scenery vars", () => {
+    // The dossier cover is the only allowed home for the destination scenery.
+    const idx = globalsCss.indexOf(".atelier-dossier-scenery");
+    const block = globalsCss.slice(idx, idx + 800);
+    assert.ok(
+      block.includes("var(--world-scenery-image") && block.includes("var(--world-scenery)"),
+      ".atelier-dossier-scenery must consume --world-scenery* CSS vars (contained scenery)",
+    );
+  });
+});
+
+describe("Atrium v2: integrated metadata + cinematic shelf + physical archive", () => {
+  test("F10. Dossier integrates status/dates/travelers in a glass-scrim metadata band", () => {
+    const start = dashboardClient.indexOf("function ContinuePlanningStrip");
+    const end = dashboardClient.indexOf("function JourneyShelfTeaser");
+    const block = dashboardClient.slice(start, end);
+    assert.ok(
+      block.includes("atelier-dossier-scrim"),
+      "Dossier must integrate metadata via the .atelier-dossier-scrim band",
+    );
+    assert.ok(
+      block.includes("TripStatusBadge"),
+      "Dossier scrim must include the trip status badge (no orphan metadata outside)",
+    );
+    // The dossier must own its destination scenery layer.
+    assert.ok(
+      block.includes("atelier-dossier-scenery"),
+      "Dossier must paint destination scenery inside .atelier-dossier-scenery",
+    );
+    // No orphan two-column dates/party grid outside the dossier scrim.
+    assert.ok(
+      !block.includes("grid-cols-2 gap-x-6"),
+      "Dossier must not expose dates/party as a separate two-column grid outside the scrim",
+    );
+  });
+
+  test("F11. Curio shelf is a layered book-edge object (three folio spines)", () => {
+    // CSS contract — spine bands paint a brass title band per spine.
+    assert.match(globalsCss, /\.atelier-curio-spine-band/, ".atelier-curio-spine-band must exist (brass title band on each spine)");
+    // Shelf must paint a brass shelf rail along the bottom (cabinet trim).
+    assert.match(
+      globalsCss,
+      /\.atelier-curio-shelf::after[\s\S]*?--ds-(?:ember-brass|sandstone-gold)/,
+      ".atelier-curio-shelf::after must paint a brass shelf rail",
+    );
+  });
+
+  test("F12. Doorway shelf paints a brass shelf rail above the room portals", () => {
+    assert.match(globalsCss, /\.atelier-doorway-shelf-rail/, "globals.css must define .atelier-doorway-shelf-rail");
+    assert.match(
+      dashboardClient,
+      /atelier-doorway-shelf-rail/,
+      "AtelierPlanningStrip must render the .atelier-doorway-shelf-rail brass rail",
+    );
+  });
+
+  test("F13. Greeting is rendered as a quiet whisper, not a giant dashboard hero", () => {
+    // The whisper modifier must scope the greeting CSS and reduce the display.
+    assert.match(globalsCss, /\.atelier-greeting-display/, "globals.css must define .atelier-greeting-display");
+    const start = dashboardClient.indexOf("function AtelierGreeting");
+    const end = dashboardClient.indexOf("function ConciergeEntry");
+    const block = dashboardClient.slice(start, end);
+    assert.ok(
+      block.includes("atelier-greeting-whisper"),
+      "AtelierGreeting must adopt .atelier-greeting-whisper modifier",
+    );
+    assert.ok(
+      block.includes("atelier-greeting-display"),
+      "AtelierGreeting display must adopt .atelier-greeting-display (quiet scale)",
+    );
+  });
+});

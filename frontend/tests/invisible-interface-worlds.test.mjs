@@ -533,11 +533,13 @@ describe("World System: DashboardClient adoption", () => {
     assert.ok(dashboardClient.includes("worldStyleVars"));
   });
 
-  test("E2. DashboardClient imports the world scenery primitives + WorldRoomSwitcher", () => {
+  test("E2. DashboardClient imports the world atmosphere/mist/glass primitives + WorldRoomSwitcher", () => {
+    // WorldScenery is intentionally NOT imported on Home — the Atelier Atrium
+    // v2 brief forbids page-wide destination wallpaper. Scenery is contained
+    // inside the active folio dossier and the room portals only.
     for (const name of [
       "WorldAtmosphere",
       "WorldRoomSwitcher",
-      "WorldScenery",
       "WorldMist",
       "WorldGlassSurface",
     ]) {
@@ -554,21 +556,21 @@ describe("World System: DashboardClient adoption", () => {
     assert.match(ret, /style=\{worldStyleVars\(world\)\}/);
   });
 
-  test("E4. Home renders the WorldScenery layer above content (scenery does orientation)", () => {
+  test("E4. Home does NOT mount page-wide WorldScenery (Atrium v2 — scenery contained in artifacts)", () => {
     const ret = dashboardClient.slice(dashboardClient.indexOf("return ("));
-    assert.match(
+    assert.doesNotMatch(
       ret,
       /<WorldScenery[\s\S]*?\/>/,
-      "DashboardClient must mount <WorldScenery /> as the top environmental layer",
+      "DashboardClient must NOT mount page-wide <WorldScenery /> — destination scenery must be contained inside the active folio dossier and room portals",
     );
-    // The greeting itself must no longer print the world description line
-    // as a top-of-page WorldWayfinder. Scenery is the orientation now.
+    // The greeting itself must not render the WorldWayfinder as the primary
+    // top line — the artifacts carry orientation.
     const start = dashboardClient.indexOf("function AtelierGreeting");
     const end   = dashboardClient.indexOf("function ConciergeEntry");
     const block = dashboardClient.slice(start, end);
     assert.ok(
       !block.includes("WorldWayfinder"),
-      "AtelierGreeting must NOT render WorldWayfinder as the primary top line — scenery does the orientation",
+      "AtelierGreeting must NOT render WorldWayfinder as the primary top line",
     );
   });
 

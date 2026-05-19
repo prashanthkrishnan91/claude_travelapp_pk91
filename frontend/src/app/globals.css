@@ -4250,4 +4250,761 @@
     opacity: 0.6;
   }
 
+  /* ════════════════════════════════════════════════════════════════
+     ATELIER ATRIUM v2 — Neutral Alabaster room + contained scenery
+     The page background is a quiet premium Alabaster room. Destination
+     scenery is *contained* inside artifacts (the active folio cover
+     and the room portals) — never leaks edge-to-edge of the page.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Neutral atrium — Alabaster room with a quiet paper-warm wash.
+     Overrides the destination --world-bg on the home atrium so the
+     destination scenery only lives inside artifacts. */
+  .atelier-atrium-neutral {
+    background-image:
+      radial-gradient(ellipse 80% 40% at 50% 0%,
+        color-mix(in srgb, var(--ds-ember-brass) 6%, transparent),
+        transparent 70%),
+      radial-gradient(ellipse 60% 50% at 12% 88%,
+        color-mix(in srgb, var(--ds-sandstone-gold) 5%, transparent),
+        transparent 70%),
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--ds-warm-paper) 96%, white) 0%,
+        color-mix(in srgb, var(--ds-bone) 78%, var(--ds-warm-paper)) 100%);
+  }
+
+  /* Editorial gutters — generous, breathable, never trapped. */
+  .atelier-atrium.atelier-atrium-neutral .atelier-atrium-content {
+    padding-inline: clamp(28px, 5vw, 88px);
+    padding-top: clamp(40px, 8vh, 88px);
+    padding-bottom: clamp(48px, 8vh, 112px);
+    gap: clamp(44px, 7vh, 96px);
+    max-width: 1680px;
+    margin-inline: auto;
+  }
+  @media (max-width: 760px) {
+    .atelier-atrium.atelier-atrium-neutral .atelier-atrium-content {
+      padding-inline: clamp(18px, 5vw, 28px);
+      padding-top: 24px;
+      gap: 32px;
+    }
+  }
+
+  /* ── Quiet greeting (whisper, not dashboard hero) ──────────────
+     Required folio-display + folio-issue-eyebrow primitives kept
+     (folio direction contract) but rendered small and intimate so
+     the artifacts below carry the page. */
+  .atelier-greeting-whisper {
+    max-width: 720px;
+    margin-bottom: -4px;
+  }
+  .atelier-greeting-whisper.atelier-hero-greeting.world-glass-surface {
+    padding: clamp(14px, 1.6vw, 22px) clamp(20px, 2.4vw, 32px);
+    border-radius: 22px;
+    backdrop-filter: blur(14px) saturate(1.05);
+    -webkit-backdrop-filter: blur(14px) saturate(1.05);
+  }
+  .atelier-greeting-spread {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 14px 22px;
+  }
+  .atelier-greeting-eyebrow {
+    font-size: 9px;
+    letter-spacing: 0.34em;
+    margin: 0;
+  }
+  .atelier-greeting-eyebrow::before {
+    display: none;
+  }
+  .atelier-greeting-display {
+    font-size: clamp(1.05rem, 1.4vw, 1.35rem);
+    line-height: 1.15;
+    font-style: italic;
+    font-weight: 400;
+    margin: 0;
+    color: var(--ds-folio-ink);
+    letter-spacing: -0.005em;
+  }
+  .atelier-greeting-sub {
+    font-size: 12px;
+    line-height: 1.4;
+    margin: 0;
+    font-style: italic;
+    color: color-mix(in srgb, var(--ds-folio-ink-mist) 90%, transparent);
+  }
+  .atelier-greeting-rule {
+    display: none;
+  }
+
+  /* ── Atrium spread — folio left, salon aside right ────────────── */
+  .atelier-atrium-spread {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  @media (min-width: 1024px) {
+    .atelier-atrium-spread {
+      grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.85fr);
+      gap: clamp(28px, 3vw, 56px);
+      align-items: stretch;
+    }
+  }
+  .atelier-atrium-folio,
+  .atelier-atrium-aside {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .atelier-atrium-aside { min-height: 0; }
+  .atelier-folio-section { display: contents; }
+  .atelier-folio-link { display: block; height: 100%; border-radius: 32px; }
+  .atelier-folio-link.folio-paper-card {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  /* ── Tall dossier (the dominant artifact) ──────────────────────
+     A full-bleed destination folio. Scenery fills the cover, brass
+     flag sits at the top, integrated glass-scrim metadata band
+     anchors the bottom. */
+  .atelier-dossier.atelier-dossier-tall {
+    height: 100%;
+    min-height: clamp(420px, 56vh, 620px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .atelier-dossier-cover.atelier-dossier-cover-tall {
+    flex: 1;
+    height: auto;
+    min-height: clamp(420px, 56vh, 620px);
+    position: relative;
+  }
+  .atelier-dossier-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--world-ink) 38%, transparent) 0%,
+        color-mix(in srgb, var(--world-ink) 6%, transparent) 28%,
+        transparent 55%,
+        color-mix(in srgb, var(--world-ink) 38%, transparent) 82%,
+        color-mix(in srgb, var(--world-ink) 70%, transparent) 100%);
+    pointer-events: none;
+  }
+  .atelier-dossier-cover-content {
+    position: absolute;
+    left: clamp(24px, 3vw, 40px);
+    right: clamp(24px, 3vw, 40px);
+    bottom: clamp(96px, 13vh, 140px);
+    z-index: 2;
+    color: var(--ds-paper);
+    text-shadow: 0 2px 16px color-mix(in srgb, var(--world-ink) 65%, transparent);
+  }
+  .atelier-dossier-place {
+    color: color-mix(in srgb, var(--ds-paper) 80%, transparent);
+    letter-spacing: 0.28em;
+    margin-bottom: 8px;
+  }
+  .atelier-dossier-title {
+    color: var(--ds-paper);
+    font-size: clamp(2rem, 3.4vw, 3rem);
+    line-height: 1.04;
+    letter-spacing: -0.015em;
+    margin: 0 0 6px 0;
+    max-width: 16ch;
+  }
+  .atelier-dossier-caption {
+    color: color-mix(in srgb, var(--ds-paper) 88%, transparent);
+    font-size: clamp(13px, 1.1vw, 15px);
+    margin: 0;
+  }
+  /* Glass-scrim metadata band — status · dates · party · open folio. */
+  .atelier-dossier-scrim {
+    position: absolute;
+    left: clamp(16px, 2vw, 28px);
+    right: clamp(16px, 2vw, 28px);
+    bottom: clamp(16px, 2vw, 24px);
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px clamp(14px, 1.6vw, 20px);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--ds-paper) 88%, transparent);
+    backdrop-filter: blur(18px) saturate(1.1);
+    -webkit-backdrop-filter: blur(18px) saturate(1.1);
+    box-shadow:
+      0 8px 24px color-mix(in srgb, var(--world-shadow) 70%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      0 0 0 1px color-mix(in srgb, var(--world-accent) 22%, transparent);
+    color: var(--ds-folio-ink);
+    flex-wrap: wrap;
+  }
+  .atelier-dossier-scrim-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--ds-folio-ink);
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .atelier-dossier-scrim-sep {
+    display: inline-block;
+    width: 1px;
+    height: 14px;
+    background: color-mix(in srgb, var(--world-accent) 32%, transparent);
+  }
+  .atelier-dossier-scrim-line {
+    font-family: var(--world-type-ui, var(--font-fraunces), Georgia, serif);
+    letter-spacing: 0.06em;
+    color: var(--ds-folio-ink);
+    white-space: nowrap;
+  }
+  .atelier-dossier-scrim-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--ds-folio-ink);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .atelier-dossier-scrim-action-label { color: var(--ds-folio-ink); }
+  .atelier-dossier-scrim-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: var(--ds-marine-ink);
+    color: var(--ds-paper);
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    min-height: 44px;
+    text-decoration: none;
+    transition: transform 700ms cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .atelier-dossier-scrim-cta:hover,
+  .atelier-dossier-scrim-cta:focus-visible {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 22px color-mix(in srgb, var(--world-shadow) 80%, transparent);
+    outline: none;
+  }
+  .atelier-dossier-scrim-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: transparent;
+    color: var(--ds-folio-ink-mist);
+    border: 1px solid color-mix(in srgb, var(--world-accent) 32%, transparent);
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    min-height: 44px;
+    text-decoration: none;
+  }
+  .atelier-dossier-route {
+    position: absolute;
+    left: clamp(16px, 2vw, 28px);
+    right: clamp(16px, 2vw, 28px);
+    bottom: clamp(68px, 8vh, 84px);
+    z-index: 2;
+    opacity: 0.5;
+  }
+  /* Strengthen the dossier scenery so the destination reads cinematic. */
+  .atelier-dossier-tall .atelier-dossier-scenery {
+    transform: scale(1.06);
+    filter: var(--world-scenery-filter, saturate(0.92) brightness(0.94) contrast(1.04));
+    transition: transform 1400ms cubic-bezier(0.16, 1, 0.3, 1),
+                filter 1000ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .atelier-dossier-tall .atelier-dossier-scenery::after { display: none; }
+  a:hover .atelier-dossier-tall .atelier-dossier-scenery,
+  a:focus-visible .atelier-dossier-tall .atelier-dossier-scenery {
+    transform: scale(1.1);
+    filter: var(--world-scenery-filter, saturate(1) brightness(1) contrast(1.04));
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-dossier-tall .atelier-dossier-scenery { transition: none; transform: none; }
+    a:hover .atelier-dossier-tall .atelier-dossier-scenery,
+    a:focus-visible .atelier-dossier-tall .atelier-dossier-scenery { transform: none; }
+  }
+  @media (max-width: 760px) {
+    .atelier-dossier-cover.atelier-dossier-cover-tall {
+      min-height: 460px;
+    }
+    .atelier-dossier-scrim {
+      padding: 8px 12px;
+      gap: 10px;
+    }
+    .atelier-dossier-scrim-meta { gap: 8px; font-size: 11px; }
+    .atelier-dossier-scrim-action-label { display: none; }
+  }
+
+  /* ── Concierge artifact (private salon invitation) ─────────────
+     A small tactile object that sits beside the active folio.
+     Lantern interior glows behind the invitation. */
+  .atelier-concierge-artifact {
+    position: relative;
+    isolation: isolate;
+    height: 100%;
+    min-height: clamp(360px, 50vh, 540px);
+    border-radius: 28px;
+    overflow: hidden;
+    background:
+      linear-gradient(168deg,
+        color-mix(in srgb, var(--ds-warm-paper) 97%, white) 0%,
+        color-mix(in srgb, var(--ds-bone) 92%, var(--ds-ember-brass)) 100%);
+    box-shadow:
+      0 32px 80px color-mix(in srgb, var(--world-shadow) 100%, transparent),
+      0 4px 14px color-mix(in srgb, var(--world-shadow) 55%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 22%, transparent);
+  }
+  .atelier-concierge-interior {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse 70% 60% at 80% 22%,
+        color-mix(in srgb, var(--ds-ember-brass) 32%, transparent),
+        transparent 65%),
+      radial-gradient(ellipse 60% 40% at 12% 86%,
+        color-mix(in srgb, var(--ds-marine-ink) 18%, transparent),
+        transparent 70%);
+    opacity: 0.75;
+    pointer-events: none;
+  }
+  .atelier-concierge-eyebrow {
+    color: var(--ds-folio-ink-mist);
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    font-size: 10px;
+    margin-bottom: 18px;
+  }
+  .atelier-concierge-title {
+    font-size: clamp(1.5rem, 2vw, 1.95rem);
+    line-height: 1.06;
+    color: var(--ds-folio-ink);
+    margin: 0 0 8px 0;
+    max-width: 18ch;
+    letter-spacing: -0.005em;
+  }
+  .atelier-concierge-caption {
+    color: var(--ds-folio-ink-soft);
+    font-size: 14px;
+    line-height: 1.45;
+    max-width: 28ch;
+    margin: 0;
+  }
+  .atelier-concierge-foot {
+    margin-top: auto;
+    padding-top: 24px;
+  }
+
+  /* ── Doorway shelf v2 ──────────────────────────────────────────
+     A real horizontal cinematic shelf — brass rail at the top,
+     four tall doorways below. */
+  .atelier-doorway-shelf .atelier-doorway-shelf-rail {
+    height: 1px;
+    background: linear-gradient(90deg,
+      transparent,
+      color-mix(in srgb, var(--ds-ember-brass) 45%, transparent) 20%,
+      color-mix(in srgb, var(--ds-ember-brass) 60%, transparent) 50%,
+      color-mix(in srgb, var(--ds-ember-brass) 45%, transparent) 80%,
+      transparent);
+    margin-bottom: 18px;
+  }
+  .atelier-doorway-shelf-head {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    gap: 16px;
+  }
+  /* Make portal scenery legible — less blur, more interior clarity. */
+  .atelier-doorway-shelf .world-portal-scenery {
+    filter: saturate(0.96) brightness(0.94);
+    opacity: 0.98;
+  }
+  .atelier-doorway-shelf .world-portal {
+    background:
+      linear-gradient(180deg,
+        transparent 0%,
+        transparent 45%,
+        color-mix(in srgb, var(--world-ink) 22%, transparent) 75%,
+        color-mix(in srgb, var(--world-ink) 56%, transparent) 100%);
+  }
+  .atelier-doorway-shelf .world-portal-doorframe-jamb,
+  .atelier-doorway-shelf .world-portal-doorframe-lintel {
+    opacity: 0.95;
+    background: linear-gradient(180deg,
+      color-mix(in srgb, var(--ds-ember-brass) 60%, transparent) 0%,
+      color-mix(in srgb, var(--ds-ember-brass) 22%, transparent) 100%);
+  }
+  .atelier-doorway-shelf .world-portal-light {
+    background:
+      radial-gradient(ellipse 70% 80% at 50% 100%,
+        color-mix(in srgb, var(--ds-ember-brass) 38%, transparent),
+        transparent 70%);
+    opacity: 0.75;
+  }
+  .atelier-doorway-shelf .world-portal-eyebrow {
+    color: color-mix(in srgb, var(--ds-paper) 80%, transparent);
+    font-size: 9px;
+    letter-spacing: 0.32em;
+  }
+  .atelier-doorway-shelf .world-portal-label {
+    color: var(--ds-paper);
+    font-size: clamp(1.4rem, 1.8vw, 1.8rem);
+    line-height: 1.05;
+    text-shadow: 0 1px 14px color-mix(in srgb, var(--world-ink) 65%, transparent);
+  }
+  .atelier-doorway-shelf .world-portal-whisper {
+    color: color-mix(in srgb, var(--ds-paper) 78%, transparent);
+    font-size: 13px;
+  }
+
+  /* ── Curio shelf v2 (physical book-edge shelf) ─────────────────
+     Replaces the flat colored bars with three folio spines that
+     fan slightly behind a brass-edged plate, with visible top
+     edges and a brass shelf rail along the bottom. */
+  .atelier-curio-shelf {
+    position: relative;
+    isolation: isolate;
+    border-radius: 28px;
+    padding: clamp(28px, 3vw, 44px) clamp(28px, 3vw, 48px);
+    padding-bottom: clamp(64px, 6vw, 92px);
+    overflow: hidden;
+    background:
+      linear-gradient(178deg,
+        color-mix(in srgb, var(--ds-warm-paper) 94%, white) 0%,
+        color-mix(in srgb, var(--ds-bone) 96%, var(--ds-sandstone-gold)) 100%);
+    box-shadow:
+      0 32px 72px color-mix(in srgb, var(--world-shadow) 90%, transparent),
+      0 6px 18px color-mix(in srgb, var(--world-shadow) 50%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.65),
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 22%, transparent);
+    transition: transform 800ms cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 800ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  a:hover .atelier-curio-shelf,
+  a:focus-visible .atelier-curio-shelf {
+    transform: translateY(-2px);
+    box-shadow:
+      0 40px 88px color-mix(in srgb, var(--world-shadow) 100%, transparent),
+      0 10px 24px color-mix(in srgb, var(--world-shadow) 60%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.75),
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 40%, transparent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-curio-shelf { transition: none; }
+    a:hover .atelier-curio-shelf,
+    a:focus-visible .atelier-curio-shelf { transform: none; }
+  }
+  /* Brass shelf rail along the bottom edge — the cabinet trim. */
+  .atelier-curio-shelf::after {
+    content: "";
+    position: absolute;
+    bottom: clamp(20px, 2.4vw, 30px);
+    left: clamp(20px, 2.4vw, 32px);
+    right: clamp(20px, 2.4vw, 32px);
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent,
+      color-mix(in srgb, var(--ds-ember-brass) 55%, transparent) 15%,
+      color-mix(in srgb, var(--ds-sandstone-gold) 70%, transparent) 50%,
+      color-mix(in srgb, var(--ds-ember-brass) 55%, transparent) 85%,
+      transparent);
+    pointer-events: none;
+    z-index: 4;
+  }
+  .atelier-curio-shelf::before {
+    /* Soft warm shadow above the shelf line, suggesting the books cast
+       a shadow onto the shelf surface. */
+    content: "";
+    position: absolute;
+    bottom: clamp(20px, 2.4vw, 30px);
+    left: 0; right: 0;
+    height: clamp(30px, 3vw, 44px);
+    background: linear-gradient(180deg,
+      transparent 0%,
+      color-mix(in srgb, var(--world-shadow) 60%, transparent) 70%,
+      color-mix(in srgb, var(--world-shadow) 100%, transparent) 100%);
+    opacity: 0.4;
+    pointer-events: none;
+    z-index: 1;
+  }
+  /* Three folio spines fanned behind the primary plate, with visible
+     top edges and brass title bands. */
+  .atelier-curio-spines {
+    position: absolute;
+    top: clamp(18px, 2vw, 28px);
+    bottom: clamp(28px, 2.8vw, 38px);
+    left: clamp(34px, 3.4vw, 56px);
+    right: clamp(34px, 3.4vw, 56px);
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.96;
+  }
+  .atelier-curio-spine {
+    position: relative;
+    border-radius: 6px 6px 0 0;
+    box-shadow:
+      inset 0 2px 0 rgba(255, 255, 255, 0.16),
+      inset 0 -2px 0 rgba(0, 0, 0, 0.18),
+      inset 1px 0 0 rgba(255, 255, 255, 0.08),
+      inset -1px 0 0 rgba(0, 0, 0, 0.20),
+      0 3px 10px color-mix(in srgb, var(--world-shadow) 65%, transparent);
+  }
+  .atelier-curio-spine:nth-child(1) {
+    background:
+      repeating-linear-gradient(90deg,
+        transparent 0px, transparent 14px,
+        rgba(0, 0, 0, 0.05) 14px, rgba(0, 0, 0, 0.05) 15px),
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--world-primary) 80%, var(--world-ink)) 0%,
+        color-mix(in srgb, var(--world-primary) 92%, var(--world-ink)) 100%);
+    transform: translateY(10px) rotate(-0.5deg);
+  }
+  .atelier-curio-spine:nth-child(2) {
+    background:
+      repeating-linear-gradient(90deg,
+        transparent 0px, transparent 18px,
+        rgba(0, 0, 0, 0.04) 18px, rgba(0, 0, 0, 0.04) 19px),
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--ds-ember-brass) 70%, var(--world-ink)) 0%,
+        color-mix(in srgb, var(--ds-ember-brass) 92%, var(--world-ink)) 100%);
+    transform: translateY(-2px);
+  }
+  .atelier-curio-spine:nth-child(3) {
+    background:
+      repeating-linear-gradient(90deg,
+        transparent 0px, transparent 16px,
+        rgba(0, 0, 0, 0.05) 16px, rgba(0, 0, 0, 0.05) 17px),
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--world-tertiary) 70%, var(--world-ink)) 0%,
+        color-mix(in srgb, var(--world-tertiary) 90%, var(--world-ink)) 100%);
+    transform: translateY(8px) rotate(0.4deg);
+  }
+  /* Brass title band painted across each spine. */
+  .atelier-curio-spine-band {
+    position: absolute;
+    top: 38%;
+    left: 8%;
+    right: 8%;
+    height: 24%;
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--ds-ember-brass) 55%, transparent) 0%,
+        color-mix(in srgb, var(--ds-ember-brass) 32%, transparent) 100%);
+    border-top: 1px solid color-mix(in srgb, var(--ds-ember-brass) 75%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--ds-ember-brass) 75%, transparent);
+    opacity: 0.85;
+  }
+  /* Front-of-shelf plate floats above the spines. */
+  .atelier-curio-plate {
+    position: relative;
+    z-index: 3;
+    max-width: 56%;
+    padding: clamp(8px, 1.2vw, 16px) 0;
+  }
+  .atelier-curio-title {
+    font-size: clamp(1.4rem, 1.8vw, 1.7rem);
+    line-height: 1.1;
+    margin-bottom: 4px;
+    color: var(--ds-folio-ink);
+  }
+  .atelier-curio-caption {
+    color: var(--ds-folio-ink-mist);
+    margin: 0;
+  }
+  @media (max-width: 760px) {
+    .atelier-curio-plate { max-width: 100%; }
+    .atelier-curio-spines {
+      opacity: 0.5;
+      left: clamp(20px, 3vw, 28px);
+      right: clamp(20px, 3vw, 28px);
+    }
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     ATELIER NAV ARTIFACT — silent floating navigation on Home
+     Replaces the SaaS sidebar on the Home immersive shell. A single
+     brass-edged paper dock in the corner that opens into a private
+     navigation drawer. Keyboard accessible, focus-trapped via Escape.
+     ════════════════════════════════════════════════════════════════ */
+  .atelier-nav-artifact-root {
+    position: fixed;
+    top: clamp(18px, 2vw, 28px);
+    left: clamp(18px, 2vw, 28px);
+    z-index: 50;
+  }
+  .atelier-nav-dock {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px 10px 12px;
+    background:
+      linear-gradient(178deg,
+        color-mix(in srgb, var(--ds-warm-paper) 92%, transparent) 0%,
+        color-mix(in srgb, var(--ds-bone) 96%, transparent) 100%);
+    backdrop-filter: blur(20px) saturate(1.1);
+    -webkit-backdrop-filter: blur(20px) saturate(1.1);
+    border-radius: 14px;
+    border: 0;
+    cursor: pointer;
+    color: var(--ds-folio-ink);
+    box-shadow:
+      0 12px 32px color-mix(in srgb, var(--ds-folio-ink) 18%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 28%, transparent);
+    transition: transform 700ms cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 700ms cubic-bezier(0.16, 1, 0.3, 1);
+    font-family: var(--font-fraunces), Georgia, serif;
+  }
+  .atelier-nav-dock:hover,
+  .atelier-nav-dock:focus-visible {
+    transform: translateY(-1px);
+    box-shadow:
+      0 18px 40px color-mix(in srgb, var(--ds-folio-ink) 22%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.75),
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 50%, transparent);
+    outline: none;
+  }
+  .atelier-nav-dock:focus-visible {
+    outline: 2px solid var(--ds-ember-brass);
+    outline-offset: 3px;
+  }
+  .atelier-nav-dock-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    background: var(--ds-marine-ink);
+    color: var(--ds-paper);
+  }
+  .atelier-nav-dock-wordmark {
+    font-size: 14px;
+    font-weight: 600;
+    font-style: italic;
+    letter-spacing: -0.005em;
+    color: var(--ds-folio-ink);
+  }
+  .atelier-nav-dock-rule {
+    width: 1px;
+    height: 18px;
+    background: color-mix(in srgb, var(--ds-ember-brass) 50%, transparent);
+    margin-left: 4px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-nav-dock { transition: none; }
+    .atelier-nav-dock:hover,
+    .atelier-nav-dock:focus-visible { transform: none; }
+  }
+
+  /* Drawer that opens from the dock. */
+  .atelier-nav-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 49;
+    background: color-mix(in srgb, var(--ds-folio-ink) 20%, transparent);
+    backdrop-filter: blur(2px);
+    border: 0;
+    cursor: pointer;
+  }
+  .atelier-nav-drawer {
+    position: fixed;
+    top: clamp(18px, 2vw, 28px);
+    left: clamp(18px, 2vw, 28px);
+    z-index: 51;
+    width: min(320px, calc(100vw - 36px));
+    max-height: calc(100vh - 56px);
+    overflow-y: auto;
+    background:
+      linear-gradient(178deg,
+        color-mix(in srgb, var(--ds-warm-paper) 98%, transparent) 0%,
+        color-mix(in srgb, var(--ds-bone) 100%, transparent) 100%);
+    backdrop-filter: blur(26px) saturate(1.15);
+    -webkit-backdrop-filter: blur(26px) saturate(1.15);
+    border-radius: 18px;
+    box-shadow:
+      0 30px 80px color-mix(in srgb, var(--ds-folio-ink) 28%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 36%, transparent);
+    padding: 12px;
+    animation: atelier-nav-drawer-in 540ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes atelier-nav-drawer-in {
+    from { opacity: 0; transform: translate3d(-8px, -8px, 0) scale(0.98); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-nav-drawer { animation: none; }
+  }
+  .atelier-nav-drawer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px 14px;
+    border-bottom: 1px solid color-mix(in srgb, var(--ds-ember-brass) 22%, transparent);
+  }
+  .atelier-nav-drawer-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .atelier-nav-drawer-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--ds-marine-ink);
+    color: var(--ds-paper);
+  }
+  .atelier-nav-drawer-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px; height: 32px;
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
+    color: var(--ds-folio-ink-mist);
+    cursor: pointer;
+  }
+  .atelier-nav-drawer-close:hover,
+  .atelier-nav-drawer-close:focus-visible {
+    background: color-mix(in srgb, var(--ds-ember-brass) 14%, transparent);
+    color: var(--ds-folio-ink);
+    outline: none;
+  }
+  .atelier-nav-drawer-body {
+    padding: 14px 0;
+  }
+  .atelier-nav-drawer-foot {
+    padding-top: 14px;
+    border-top: 1px solid color-mix(in srgb, var(--ds-ember-brass) 22%, transparent);
+  }
+
 }
