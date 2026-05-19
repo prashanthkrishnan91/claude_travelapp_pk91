@@ -5,13 +5,8 @@ import Link from "next/link";
 import {
   Map,
   Sparkles,
-  BookmarkCheck,
-  Compass,
   PlusCircle,
   ArrowRight,
-  Calendar,
-  Users,
-  MapPin,
 } from "lucide-react";
 import { TripStatusBadge } from "@/components/ui/TripStatusBadge";
 import {
@@ -75,16 +70,18 @@ function AtelierGreeting({ tripCount }: { tripCount: number }) {
   const greeting = getTimeGreeting();
   return (
     <header data-testid="atelier-greeting">
-      <Overline className="text-ds-folio-ink-mist">Private Travel Concierge</Overline>
-      <h1 className="text-2xl font-semibold text-ds-folio-ink mt-2 mb-1">
+      <div className="folio-issue-eyebrow">Private Travel Concierge</div>
+      <h1 className="folio-display mt-2">
         {greeting}
       </h1>
-      <p className="text-sm text-ds-folio-ink-mist">
+      <p className="folio-editorial-sub mt-1 mb-3">
+        Your private travel edition.
+      </p>
+      <p className="text-[11px] tracking-[0.06em] text-ds-folio-ink-mist">
         {tripCount > 0
           ? `${tripCount} trip${tripCount !== 1 ? "s" : ""} on your shelf.`
-          : "Your private travel atelier. Plan, discover, and refine."}
+          : "Plan, discover, and refine — at your own pace."}
       </p>
-      {/* Editorial mapline — route-motif accent below the greeting */}
       <div className="mapline-rule mt-4" aria-hidden="true" />
     </header>
   );
@@ -96,36 +93,20 @@ function ConciergeEntry() {
   return (
     <section aria-label="AI Concierge" data-testid="concierge-entry">
       <FolioPanel data-testid="concierge-advisor-desk">
+        <div className="folio-card-accent" aria-hidden="true" />
         <div className="px-6 pt-5 pb-4 border-b border-ds-hairline">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex items-center justify-center w-9 h-9 rounded-xl bg-ds-accent-subtle text-ds-accent shrink-0 text-xs font-bold"
-              aria-hidden="true"
-            >
-              AI
-            </div>
-            <div className="flex-1 min-w-0">
-              <Overline>Private Travel Concierge</Overline>
-              <h2 className="text-base font-semibold text-ds-folio-ink mt-0.5 leading-snug">
-                AI Travel Concierge
-              </h2>
-            </div>
-            <div
-              className="flex items-center justify-center w-9 h-9 rounded-xl bg-ds-accent-subtle text-ds-accent shrink-0"
-              aria-hidden="true"
-            >
-              <Sparkles className="w-4 h-4" />
-            </div>
-          </div>
+          <Overline className="text-ds-folio-ink-mist">Private Travel Concierge</Overline>
+          <h2 className="folio-heading mt-2">
+            Your private concierge.
+          </h2>
         </div>
-        <div className="px-6 py-5">
-          <p className="text-sm text-ds-folio-ink-mist leading-relaxed mb-4">
-            Ask for restaurants, hotels, or activities — anywhere. Your
-            private concierge, ready when you are.
+        <div className="px-6 py-6">
+          <p className="folio-caption mb-6">
+            Restaurants, hotels, and hidden gems — prepared privately for you.
           </p>
           <Link
             href="/concierge"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-ds-accent text-ds-text-inverse text-sm font-semibold hover:opacity-90 transition-opacity min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            className="btn-marine min-h-[44px] w-full"
           >
             Open Concierge
             <ArrowRight className="w-4 h-4" aria-hidden="true" />
@@ -146,32 +127,21 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
     >
       <Overline className="text-ds-folio-ink-mist">Continue planning</Overline>
       <article className="folio-paper-card mt-3 p-5">
-        <div className="flex items-start gap-4">
-          <div
-            className="flex items-center justify-center w-10 h-10 rounded-xl bg-ds-accent-subtle text-ds-accent shrink-0"
-            aria-hidden="true"
-          >
-            <MapPin className="w-4 h-4" />
-          </div>
+        <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
-            <TripStatusBadge status={getDisplayTripStatus(trip)} />
-            <h3 className="text-sm font-semibold text-ds-folio-ink mt-1.5 mb-0.5">
+            <div className="flex items-center justify-between mb-2">
+              <TripStatusBadge status={getDisplayTripStatus(trip)} />
+              <p className="folio-serial">{trip.status.toUpperCase()} · FOLIO</p>
+            </div>
+            <h3 className="folio-card-title mb-0.5">
               {trip.title}
             </h3>
-            <p className="text-xs text-ds-folio-ink-mist truncate">
+            <p className="folio-caption truncate">
               {trip.destination}
             </p>
-            <p className="text-xs text-ds-folio-ink-mist mt-1 flex items-center gap-1.5 flex-wrap">
-              <Calendar className="w-3 h-3" aria-hidden="true" />
+            <p className="folio-serial mt-2">
               {formatDateRange(trip.startDate, trip.endDate)}
-              {trip.travelers > 1 && (
-                <>
-                  {" "}
-                  ·{" "}
-                  <Users className="w-3 h-3" aria-hidden="true" />
-                  {trip.travelers} travelers
-                </>
-              )}
+              {trip.travelers > 1 && ` · ${trip.travelers} travelers`}
             </p>
           </div>
           <Link
@@ -215,26 +185,23 @@ function JourneyShelfTeaser({ count }: { count: number }) {
       </div>
       <Link
         href="/trips"
-        className="folio-paper-card flex items-center gap-3 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+        className="folio-paper-card block p-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
       >
-        <div
-          className="flex items-center justify-center w-9 h-9 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0"
-          aria-hidden="true"
-        >
-          <Map className="w-4 h-4" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-ds-folio-ink">
-            {count} trip{count !== 1 ? "s" : ""} planned
+        <p className="folio-serial mb-2">
+          YOUR ARCHIVE · {count} {count !== 1 ? "ENTRIES" : "ENTRY"}
+        </p>
+        <p className="text-sm font-medium text-ds-folio-ink mb-1">
+          {count} trip{count !== 1 ? "s" : ""} in the archive
+        </p>
+        <div className="flex items-end justify-between">
+          <p className="folio-caption">
+            Browse your full journey collection.
           </p>
-          <p className="text-xs text-ds-folio-ink-mist">
-            Browse your full journey shelf
-          </p>
+          <ArrowRight
+            className="w-4 h-4 text-ds-folio-ink-mist shrink-0 ml-3"
+            aria-hidden="true"
+          />
         </div>
-        <ArrowRight
-          className="w-4 h-4 text-ds-folio-ink-mist shrink-0"
-          aria-hidden="true"
-        />
       </Link>
     </section>
   );
@@ -298,41 +265,27 @@ function AtelierPlanningStrip() {
       <div className="grid grid-cols-2 gap-3 mt-3">
         <Link
           href="/explore"
-          className="folio-paper-card group flex items-center gap-3 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          className="folio-paper-card group flex flex-col gap-2 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         >
-          <span
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0"
-            aria-hidden="true"
-          >
-            <Compass className="w-4 h-4" />
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-accent transition truncate">
-              Explore
-            </p>
-            <p className="text-xs text-ds-folio-ink-mist truncate">
-              Hotels, dining &amp; more
-            </p>
-          </div>
+          <p className="folio-serial">01 · EXPLORE</p>
+          <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-accent transition truncate">
+            Explore
+          </p>
+          <p className="folio-caption truncate">
+            Hotels, dining &amp; more
+          </p>
         </Link>
         <Link
           href="/saved"
-          className="folio-paper-card group flex items-center gap-3 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          className="folio-paper-card group flex flex-col gap-2 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         >
-          <span
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0"
-            aria-hidden="true"
-          >
-            <BookmarkCheck className="w-4 h-4" />
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-accent transition truncate">
-              Saved Ideas
-            </p>
-            <p className="text-xs text-ds-folio-ink-mist truncate">
-              Your travel scrapbook
-            </p>
-          </div>
+          <p className="folio-serial">02 · SAVED</p>
+          <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-accent transition truncate">
+            Saved Ideas
+          </p>
+          <p className="folio-caption truncate">
+            Your travel scrapbook
+          </p>
         </Link>
       </div>
     </section>
