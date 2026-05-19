@@ -3718,4 +3718,536 @@
     isolation: isolate;
   }
 
+  /* ════════════════════════════════════════════════════════════════
+     ATELIER ATRIUM — Edge-to-edge cinematic home composition
+     The home page opts out of the AppShell's max-w-7xl box and
+     becomes a true atrium: scenery extends to the viewport edges,
+     content floats over it in a spatial editorial composition.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Edge-bleed root — the home wrapper inside <main>. It takes the
+     full width of <main> (which already sits next to the sidebar), and
+     gives its FolioScene child enough vertical room to feel cinematic.
+     No max-width here; the home page is the canvas. */
+  .home-edge-bleed {
+    position: relative;
+    width: 100%;
+    min-height: 100vh;
+    padding-top: 0;
+  }
+
+  /* The atelier atrium — the home page's outermost surface. Sits on
+     top of the AppShell ambient layer, owns its own deep stacking
+     context, and lets scenery flow corner to corner. */
+  .atelier-atrium {
+    position: relative;
+    isolation: isolate;
+    min-height: 100vh;
+    padding-bottom: clamp(48px, 8vh, 96px);
+  }
+  .atelier-atrium-content {
+    position: relative;
+    z-index: 2;
+    padding-inline: clamp(20px, 4vw, 56px);
+    padding-top: clamp(28px, 6vh, 80px);
+    display: flex;
+    flex-direction: column;
+    gap: clamp(40px, 8vh, 112px);
+  }
+  @media (max-width: 760px) {
+    .atelier-atrium-content {
+      padding-inline: 16px;
+      padding-top: 20px;
+      gap: 36px;
+    }
+  }
+
+  /* Force the scenery to extend the full width of the atrium, even
+     when the AppShell padded container is in use on other routes. */
+  .atelier-atrium > [data-world-scenery="true"] {
+    left: 0;
+    right: 0;
+  }
+
+  /* ── Atrium hero spread ─────────────────────────────────────────
+     Desktop: a two-column cinematic spread — translucent greeting
+     left, an active-trip dossier right, both floating on the world
+     scenery. Mobile: chapter-style stack where the dossier rises
+     beneath the greeting and the scenery flows behind both. */
+  .atelier-atrium-hero {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 28px;
+    align-items: stretch;
+    min-height: clamp(420px, 64vh, 760px);
+  }
+  @media (min-width: 1024px) {
+    .atelier-atrium-hero {
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.9fr);
+      gap: clamp(40px, 4vw, 96px);
+      align-items: center;
+      min-height: clamp(520px, 72vh, 840px);
+    }
+  }
+
+  /* The greeting panel — sizing/padding modifier for WorldGlassSurface.
+     The translucent paper-glass treatment comes from .world-glass-surface;
+     this class only enlarges the panel to cinematic display scale. */
+  .atelier-hero-greeting.world-glass-surface {
+    border-radius: 32px;
+    padding: clamp(28px, 4vw, 56px) clamp(24px, 4vw, 60px);
+    max-width: 640px;
+    overflow: hidden;
+  }
+  /* Quiet brass hairline at the top of the greeting — masthead reference. */
+  .atelier-hero-greeting.world-glass-surface > *:first-child::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: clamp(28px, 4vw, 60px);
+    right: clamp(28px, 4vw, 60px);
+    height: 1px;
+    background: linear-gradient(90deg,
+      transparent,
+      color-mix(in srgb, var(--world-accent) 48%, transparent) 50%,
+      transparent);
+    pointer-events: none;
+  }
+
+  /* ── Atelier dossier — the active trip as a folio object ────────
+     A leather-portfolio feeling object. Carries scenery within itself
+     (clipped, not leaking), a brass plate with the dates, a folio
+     serial, route thread, and an opening seam at the right edge that
+     animates on hover/focus like the cover of a private folio. */
+  .atelier-dossier {
+    position: relative;
+    isolation: isolate;
+    border-radius: 28px;
+    overflow: hidden;
+    background:
+      linear-gradient(168deg,
+        color-mix(in srgb, var(--world-surface) 94%, white) 0%,
+        color-mix(in srgb, var(--world-surface) 86%, var(--world-tertiary)) 100%);
+    box-shadow:
+      0 36px 80px color-mix(in srgb, var(--world-shadow) 100%, transparent),
+      0 8px 22px color-mix(in srgb, var(--world-shadow) 60%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      0 0 0 1px color-mix(in srgb, var(--world-accent) 22%, transparent);
+    transform: translateY(0) rotate(0deg);
+    transition:
+      transform 900ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 900ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .atelier-dossier-cover {
+    position: relative;
+    height: clamp(180px, 24vw, 280px);
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .atelier-dossier-scenery {
+    position: absolute;
+    inset: 0;
+    background-image:
+      var(--world-scenery-image, none),
+      var(--world-scenery);
+    background-size: cover;
+    background-position: var(--world-scenery-position, center 50%);
+    filter: var(--world-scenery-filter, saturate(0.9) brightness(0.95));
+    transform: scale(1.08);
+    transition: transform 1200ms cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform;
+  }
+  .atelier-dossier-scenery::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(178deg,
+        color-mix(in srgb, var(--world-ink) 14%, transparent) 0%,
+        transparent 40%,
+        color-mix(in srgb, var(--world-surface) 75%, transparent) 92%,
+        color-mix(in srgb, var(--world-surface) 95%, transparent) 100%);
+  }
+  /* Brass dossier plate — date band over the scenery */
+  .atelier-dossier-plate {
+    position: absolute;
+    top: 18px; left: 18px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--world-surface) 78%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--world-accent) 50%, transparent),
+      0 4px 12px color-mix(in srgb, var(--world-shadow) 60%, transparent);
+    font-family: var(--world-type-ui);
+    font-size: 0.625rem;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--world-ink);
+    font-weight: 600;
+    z-index: 2;
+  }
+  /* Folio serial flag — a folded paper tab at the cover's right edge */
+  .atelier-dossier-flag {
+    position: absolute;
+    top: 0;
+    right: 28px;
+    padding: 14px 12px 18px;
+    background:
+      linear-gradient(178deg,
+        color-mix(in srgb, var(--world-accent) 70%, var(--world-surface)) 0%,
+        color-mix(in srgb, var(--world-accent) 90%, var(--world-surface)) 100%);
+    color: var(--world-surface);
+    font-family: var(--world-type-ui);
+    font-size: 0.625rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    font-weight: 600;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 84%, 0 100%);
+    box-shadow: 0 6px 14px color-mix(in srgb, var(--world-shadow) 80%, transparent);
+    z-index: 2;
+  }
+  /* Cover seam — vertical brass line at the dossier's right edge, the
+     "binding" of the folio. Glows on hover/focus. */
+  .atelier-dossier::before {
+    content: "";
+    position: absolute;
+    top: 18px;
+    bottom: 18px;
+    right: 14px;
+    width: 1px;
+    background: linear-gradient(180deg,
+      transparent,
+      color-mix(in srgb, var(--world-accent) 60%, transparent) 20%,
+      color-mix(in srgb, var(--world-accent) 60%, transparent) 80%,
+      transparent);
+    z-index: 3;
+    pointer-events: none;
+    opacity: 0.55;
+    transition: opacity 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .atelier-dossier-body {
+    position: relative;
+    padding: clamp(18px, 2vw, 28px) clamp(20px, 2.2vw, 30px) clamp(20px, 2.2vw, 30px);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .atelier-dossier-route {
+    margin-top: 4px;
+    margin-bottom: 6px;
+  }
+  .atelier-dossier-footer {
+    margin-top: 12px;
+    padding-top: 14px;
+    border-top: 1px solid color-mix(in srgb, var(--world-accent) 22%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--world-type-ui);
+    font-size: 0.625rem;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--world-ink-mist) 95%, transparent);
+    font-weight: 600;
+  }
+  a:hover .atelier-dossier,
+  a:focus-visible .atelier-dossier {
+    transform: translateY(-4px);
+    box-shadow:
+      0 44px 100px color-mix(in srgb, var(--world-shadow) 100%, transparent),
+      0 12px 28px color-mix(in srgb, var(--world-shadow) 70%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8),
+      0 0 0 1px color-mix(in srgb, var(--world-accent) 38%, transparent);
+  }
+  a:hover .atelier-dossier::before,
+  a:focus-visible .atelier-dossier::before {
+    opacity: 1;
+  }
+  a:hover .atelier-dossier-scenery,
+  a:focus-visible .atelier-dossier-scenery {
+    transform: scale(1.14);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-dossier,
+    .atelier-dossier-scenery,
+    .atelier-dossier::before { transition: none; }
+    a:hover .atelier-dossier,
+    a:focus-visible .atelier-dossier { transform: none; }
+    a:hover .atelier-dossier-scenery,
+    a:focus-visible .atelier-dossier-scenery { transform: scale(1.04); }
+  }
+
+  /* ── Concierge threshold — the salon doorway ────────────────────
+     A wide, low-rise doorway into the private salon. Reads as the
+     entrance to the most intimate room in the house. Carries deeper
+     velvet scenery on the right edge and the invitation copy on the
+     left, so the user can see the room they would step into. */
+  .atelier-concierge-threshold {
+    position: relative;
+    isolation: isolate;
+    border-radius: 32px;
+    overflow: hidden;
+    min-height: clamp(280px, 36vh, 420px);
+    background:
+      linear-gradient(94deg,
+        color-mix(in srgb, var(--world-surface) 96%, white) 0%,
+        color-mix(in srgb, var(--world-surface) 88%, white) 45%,
+        color-mix(in srgb, var(--world-ink) 18%, transparent) 65%,
+        color-mix(in srgb, var(--world-ink) 60%, transparent) 100%);
+    box-shadow:
+      0 40px 100px color-mix(in srgb, var(--world-shadow) 100%, transparent),
+      0 8px 22px color-mix(in srgb, var(--world-shadow) 60%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      0 0 0 1px color-mix(in srgb, var(--world-accent) 28%, transparent);
+  }
+  /* Salon interior — the room you'd step into, painted right of centre */
+  .atelier-concierge-threshold::before {
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0;
+    right: 0;
+    width: 60%;
+    background:
+      radial-gradient(ellipse 50% 60% at 70% 45%,
+        color-mix(in srgb, var(--world-accent) 55%, transparent),
+        transparent 70%),
+      radial-gradient(ellipse 80% 90% at 80% 100%,
+        color-mix(in srgb, var(--world-ink) 70%, transparent),
+        transparent 70%),
+      linear-gradient(120deg,
+        transparent 0%,
+        color-mix(in srgb, var(--world-ink) 30%, transparent) 30%,
+        color-mix(in srgb, var(--world-ink) 75%, transparent) 100%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  /* Brass door-frame outline on the right half */
+  .atelier-concierge-threshold::after {
+    content: "";
+    position: absolute;
+    top: 20px;
+    bottom: 20px;
+    right: 18%;
+    width: 1px;
+    background: linear-gradient(180deg,
+      transparent,
+      color-mix(in srgb, var(--world-accent) 55%, transparent) 18%,
+      color-mix(in srgb, var(--world-accent) 70%, transparent) 50%,
+      color-mix(in srgb, var(--world-accent) 55%, transparent) 82%,
+      transparent);
+    opacity: 0.7;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .atelier-concierge-threshold > * {
+    position: relative;
+    z-index: 2;
+  }
+  @media (max-width: 760px) {
+    .atelier-concierge-threshold {
+      min-height: 360px;
+    }
+    .atelier-concierge-threshold::before {
+      width: 100%;
+      top: 50%;
+      bottom: 0;
+      background:
+        radial-gradient(ellipse 90% 80% at 50% 60%,
+          color-mix(in srgb, var(--world-accent) 38%, transparent),
+          transparent 65%),
+        linear-gradient(180deg,
+          transparent 0%,
+          color-mix(in srgb, var(--world-ink) 30%, transparent) 30%,
+          color-mix(in srgb, var(--world-ink) 70%, transparent) 100%);
+    }
+    .atelier-concierge-threshold::after {
+      top: auto;
+      right: 28px;
+      left: 28px;
+      bottom: 28%;
+      width: auto;
+      height: 1px;
+      background: linear-gradient(90deg,
+        transparent,
+        color-mix(in srgb, var(--world-accent) 60%, transparent) 50%,
+        transparent);
+    }
+  }
+
+  /* ── Doorway shelf — cinematic 4-room composition ─────────────────
+     Replaces the small labeled tiles with a row of TALL room
+     doorways. Each portal is sized so a reader can feel the room
+     they'd step into; the editorial asymmetry breaks the grid
+     prison. Mobile becomes a stack of full-width chapter doorways. */
+  .atelier-doorway-shelf {
+    position: relative;
+    isolation: isolate;
+  }
+  .atelier-doorway-shelf .world-room-switcher {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  @media (min-width: 600px) {
+    .atelier-doorway-shelf .world-room-switcher {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+  }
+  @media (min-width: 1024px) {
+    .atelier-doorway-shelf .world-room-switcher {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: clamp(18px, 1.6vw, 28px);
+    }
+  }
+  /* Tall, image-led portals inside the doorway shelf */
+  .atelier-doorway-shelf .world-portal {
+    min-height: clamp(340px, 36vw, 460px);
+    padding: clamp(22px, 2vw, 30px);
+    border-radius: 26px;
+  }
+  @media (max-width: 600px) {
+    .atelier-doorway-shelf .world-portal {
+      min-height: clamp(280px, 60vw, 360px);
+    }
+  }
+  /* Push portal scenery deeper inside the doorway shelf — the rooms
+     read as boutique interiors rather than tinted tiles. */
+  .atelier-doorway-shelf .world-portal-scenery {
+    transform: scale(1.06);
+  }
+  .atelier-doorway-shelf .world-portal:hover .world-portal-scenery,
+  .atelier-doorway-shelf .world-portal:focus-visible .world-portal-scenery {
+    transform: scale(1.14);
+    filter: brightness(1.08) saturate(1.04);
+  }
+  /* Bottom plaque on each doorway — a brass nameplate */
+  .atelier-doorway-shelf .world-portal-body {
+    padding: 14px 16px 6px;
+    border-radius: 14px;
+    background:
+      linear-gradient(180deg,
+        transparent 0%,
+        color-mix(in srgb, var(--world-ink) 60%, transparent) 100%);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-doorway-shelf .world-portal-scenery { transform: scale(1); }
+    .atelier-doorway-shelf .world-portal:hover .world-portal-scenery,
+    .atelier-doorway-shelf .world-portal:focus-visible .world-portal-scenery {
+      transform: scale(1.04); filter: none;
+    }
+  }
+
+  /* ── Curio shelf — the travel archive ────────────────────────────
+     A horizontal shelf object that reads as a wood/brass cabinet
+     rather than a SaaS card. Three "book spines" peek behind the
+     primary plate. */
+  .atelier-curio-shelf {
+    position: relative;
+    isolation: isolate;
+    border-radius: 28px;
+    padding: clamp(24px, 3vw, 40px) clamp(24px, 3vw, 44px);
+    overflow: hidden;
+    background:
+      linear-gradient(178deg,
+        color-mix(in srgb, var(--world-surface) 92%, white) 0%,
+        color-mix(in srgb, var(--world-surface) 80%, var(--world-tertiary)) 100%);
+    box-shadow:
+      0 32px 72px color-mix(in srgb, var(--world-shadow) 100%, transparent),
+      0 6px 18px color-mix(in srgb, var(--world-shadow) 55%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.6),
+      0 0 0 1px color-mix(in srgb, var(--world-accent) 22%, transparent);
+  }
+  .atelier-curio-shelf::before {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 32px;
+    background:
+      linear-gradient(180deg,
+        transparent 0%,
+        color-mix(in srgb, var(--world-accent) 18%, transparent) 50%,
+        color-mix(in srgb, var(--world-accent) 30%, transparent) 100%);
+    pointer-events: none;
+  }
+  .atelier-curio-shelf::after {
+    content: "";
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(90deg,
+      transparent,
+      color-mix(in srgb, var(--world-accent) 60%, transparent) 20%,
+      color-mix(in srgb, var(--world-accent) 80%, transparent) 50%,
+      color-mix(in srgb, var(--world-accent) 60%, transparent) 80%,
+      transparent);
+    pointer-events: none;
+  }
+  /* Three book spines stacked behind the primary plate */
+  .atelier-curio-spines {
+    position: absolute;
+    inset: clamp(18px, 2.6vw, 32px) clamp(20px, 2.8vw, 36px) clamp(36px, 3.6vw, 60px);
+    display: flex;
+    align-items: stretch;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.85;
+  }
+  .atelier-curio-spine {
+    flex: 1;
+    margin-right: 6px;
+    border-radius: 6px 6px 0 0;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.18),
+                0 2px 6px color-mix(in srgb, var(--world-shadow) 55%, transparent);
+  }
+  .atelier-curio-spine:nth-child(1) {
+    background: linear-gradient(180deg,
+      color-mix(in srgb, var(--world-primary) 75%, var(--world-ink)) 0%,
+      color-mix(in srgb, var(--world-primary) 90%, var(--world-ink)) 100%);
+    transform: translateY(8px) rotate(-0.6deg);
+  }
+  .atelier-curio-spine:nth-child(2) {
+    background: linear-gradient(180deg,
+      color-mix(in srgb, var(--world-accent) 60%, var(--world-ink)) 0%,
+      color-mix(in srgb, var(--world-accent) 80%, var(--world-ink)) 100%);
+    transform: translateY(-4px);
+  }
+  .atelier-curio-spine:nth-child(3) {
+    background: linear-gradient(180deg,
+      color-mix(in srgb, var(--world-tertiary) 70%, var(--world-ink)) 0%,
+      color-mix(in srgb, var(--world-tertiary) 90%, var(--world-ink)) 100%);
+    transform: translateY(6px) rotate(0.4deg);
+  }
+  .atelier-curio-shelf > .atelier-curio-plate {
+    position: relative;
+    z-index: 1;
+    padding-block: clamp(8px, 1.5vw, 18px);
+  }
+  @media (max-width: 760px) {
+    .atelier-curio-spines { opacity: 0.7; }
+  }
+
+  /* ── Atrium wayfinder — bottom-of-page editorial signature ──────
+     Quiet engraved location anchor. Tactile but small. */
+  .atelier-atrium-signature {
+    position: relative;
+    padding-block: 12px 4px;
+    text-align: left;
+    opacity: 0.7;
+  }
+
+  /* ── Atrium scene fade — soft fade between sections ─────────────
+     Subtle hairline-style separator between atrium chapters. */
+  .atelier-atrium-divider {
+    position: relative;
+    height: 1px;
+    width: clamp(80px, 12vw, 160px);
+    background: linear-gradient(90deg,
+      color-mix(in srgb, var(--world-accent) 50%, transparent),
+      transparent);
+    opacity: 0.6;
+  }
+
 }

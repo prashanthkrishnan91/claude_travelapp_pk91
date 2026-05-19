@@ -23,9 +23,6 @@ import {
   FolioLivingCanvas,
   FolioAtelierHero,
   FolioCtaGlide,
-  FolioJourneyCover,
-  FolioJourneyUnfurl,
-  FolioShelfSpread,
 } from "@/components/ui/Folio";
 import {
   WorldAtmosphere,
@@ -114,6 +111,11 @@ function Overline({
 }
 
 // ── Atelier greeting (editorial hero spread) ─────────────────────────────────
+//
+// The greeting is the first piece of writing on the page. It floats as a
+// translucent paper-glass panel directly on the destination scenery, so
+// the world reads through its edges. No big SaaS dashboard header — it
+// reads like the opening page of a private travel issue.
 
 function AtelierGreeting({
   tripCount,
@@ -134,56 +136,75 @@ function AtelierGreeting({
     >
       <WorldGlassSurface
         tone="paper"
-        className="world-hero-greeting px-7 py-8 md:px-10 md:py-10"
+        className="atelier-hero-greeting world-hero-greeting"
       >
         <FolioAtelierHero>
           <div className="folio-issue-eyebrow">Private Travel Concierge</div>
-          <h1 className="folio-display mt-3 text-balance">
+          <h1 className="folio-display mt-4 text-balance text-[2.6rem] leading-[1.04] md:text-[3.4rem] lg:text-[4.2rem]">
             {greeting},{" "}
             <span className="italic text-ds-folio-ink-soft">planner.</span>
           </h1>
-          <p className="folio-editorial-sub mt-2 max-w-xl">{shelfLine}</p>
-          <div className="mapline-rule mt-5" aria-hidden="true" />
+          <p className="folio-editorial-sub mt-3 max-w-xl text-[1.0625rem] md:text-[1.125rem] leading-relaxed">
+            {shelfLine}
+          </p>
+          <div className="mapline-rule mt-6" aria-hidden="true" />
         </FolioAtelierHero>
       </WorldGlassSurface>
     </header>
   );
 }
 
-// ── Primary concierge instrument (atelier invitation) ────────────────────────
+// ── Concierge threshold (the private salon doorway) ──────────────────────────
+//
+// A full-width, cinematic threshold into the concierge salon. The right
+// half is painted as the salon interior — brass-warm lantern light, deep
+// velvet shadow — so the user can see the room they're about to enter
+// before reading a word.
 
 function ConciergeEntry() {
   return (
     <section aria-label="AI Concierge" data-testid="concierge-entry">
       <FolioPanel
-        className="folio-invitation-panel folio-atelier-invitation relative h-full p-7 md:p-10 lg:p-12"
+        className="folio-invitation-panel folio-atelier-invitation atelier-concierge-threshold relative h-full !p-0 overflow-hidden"
         data-testid="concierge-advisor-desk"
       >
         <div className="folio-card-accent" aria-hidden="true" />
-        <div className="relative z-10 flex flex-col h-full">
-          <Overline className="text-ds-folio-ink-mist tracking-[0.28em]">
-            01 · Dedicated System
-          </Overline>
-          <h2 className="folio-heading mt-4 max-w-md text-balance">
-            Your private concierge.
-          </h2>
-          <p className="folio-caption mt-3 max-w-sm leading-relaxed">
-            Bespoke dining, boutique architecture, and quiet local scenery —
-            curated instantly for your aesthetic.
-          </p>
+        <div className="relative z-10 flex flex-col lg:flex-row items-stretch h-full">
+          <div className="flex-1 flex flex-col justify-center p-7 md:p-10 lg:p-14 lg:max-w-[58%]">
+            <Overline className="text-ds-folio-ink-mist tracking-[0.28em]">
+              01 · Dedicated System
+            </Overline>
+            <h2 className="folio-heading mt-4 max-w-md text-balance text-[2rem] md:text-[2.4rem] lg:text-[2.8rem] leading-[1.08]">
+              Your private concierge.
+            </h2>
+            <p className="folio-caption mt-3 max-w-md text-[1rem] leading-relaxed">
+              Bespoke dining, boutique architecture, and quiet local scenery —
+              curated instantly for your aesthetic.
+            </p>
 
-          <div className="mt-8 md:mt-10">
-            <FolioCtaGlide>
-              <Link
-                href="/concierge"
-                className="btn-marine min-h-[44px] inline-flex items-center gap-3 px-6"
-              >
-                <span>Open Concierge</span>
-                <span className="folio-cta-arrow" aria-hidden="true">
-                  <ArrowRight className="w-4 h-4" />
-                </span>
-              </Link>
-            </FolioCtaGlide>
+            <div className="mt-8">
+              <FolioCtaGlide>
+                <Link
+                  href="/concierge"
+                  className="btn-marine min-h-[44px] inline-flex items-center gap-3 px-7 text-sm tracking-[0.04em]"
+                >
+                  <span>Step into the salon</span>
+                  <span className="folio-cta-arrow" aria-hidden="true">
+                    <ArrowRight className="w-4 h-4" />
+                  </span>
+                </Link>
+              </FolioCtaGlide>
+            </div>
+          </div>
+          {/* Salon interior — visible doorway preview on desktop, peeks
+              through the bottom on mobile (handled by ::before/::after). */}
+          <div
+            aria-hidden="true"
+            className="hidden lg:flex flex-1 items-end justify-end p-12"
+          >
+            <span className="text-[10px] tracking-[0.3em] uppercase font-semibold text-ds-paper/70">
+              the private salon
+            </span>
           </div>
         </div>
       </FolioPanel>
@@ -191,70 +212,68 @@ function ConciergeEntry() {
   );
 }
 
-// ── Continue planning (active journey folio object) ──────────────────────────
+// ── Active journey dossier (folio object, not a card) ────────────────────────
+//
+// The active trip becomes a physical dossier: a tactile portfolio object
+// with the destination scenery clipped INSIDE its cover, a brass date
+// plate, a folded folio-serial flag, and a brass binding seam at the
+// right edge that glows when you hover. No floating orphan labels.
 
 function ContinuePlanningStrip({ trip }: { trip: Trip }) {
   const folioCode = getFolioCode(trip);
   const dateLine = formatDateRangeShort(trip.startDate, trip.endDate);
   const longDateLine = formatDateRange(trip.startDate, trip.endDate);
   return (
-    <section
-      aria-label="Continue planning"
-      data-testid="atelier-continue-planning"
-    >
-      {/* paper-world surface: folio-paper-card layered with folio-journey-entry and folio-active-journey-object on the article below. */}
-      <div className="flex items-center justify-between mb-4 px-1">
-        <Overline className="text-ds-folio-ink-mist">Continue planning</Overline>
-        <p className="folio-serial">
-          {folioCode} · {trip.status.toUpperCase()}
-        </p>
-      </div>
-
+    <section data-testid="atelier-continue-planning" aria-label="Continue planning" className="folio-paper-card folio-reveal !bg-transparent !border-0 !shadow-none !p-0">
+      <p className="folio-serial mb-3 text-ds-folio-ink-mist">Continue planning</p>
       <Link
         href={`/trips/${trip.id}`}
-        className="block min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded-[28px]"
         aria-label={`Open ${trip.title} folio`}
+        className="block min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded-[28px]"
       >
-        <article className="folio-paper-card folio-journey-entry folio-active-journey-object">
-          <FolioJourneyCover>
-            <span className="folio-journey-stamp">{dateLine}</span>
-          </FolioJourneyCover>
+        <article
+          className="folio-paper-card folio-journey-entry folio-active-journey-object atelier-dossier"
+        >
+          <div className="atelier-dossier-cover">
+            <span className="atelier-dossier-scenery" aria-hidden="true" />
+            <span className="atelier-dossier-plate">{dateLine}</span>
+            <span className="atelier-dossier-flag">
+              {folioCode} · {trip.status.toUpperCase()}
+            </span>
+          </div>
 
-          <div className="p-6 md:p-7">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="atelier-dossier-body">
+            <div className="flex items-center gap-2 mb-1">
               <TripStatusBadge status={getDisplayTripStatus(trip)} />
               <span className="text-[10px] tracking-[0.22em] uppercase font-medium text-ds-ember-brass">
                 · {trip.destination?.split(",")[0] ?? "Folio"}
               </span>
             </div>
 
-            <h3 className="folio-card-title text-balance text-[1.6rem] leading-tight">
+            <h3 className="folio-card-title text-balance text-[1.8rem] md:text-[2rem] leading-[1.05]">
               {trip.title}
             </h3>
-            <p className="folio-caption mt-1 italic">
+            <p className="folio-caption italic mt-1">
               {trip.destination || "Destination to be decided."}
             </p>
 
-            <FolioJourneyUnfurl>
-              <div className="border-t border-ds-hairline pt-4 mt-2">
-                <FolioRouteThread className="mb-3" />
-                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-[11px] font-light text-ds-folio-ink-soft">
-                  <div>
-                    <p className="folio-serial">Dates</p>
-                    <p className="mt-0.5">{longDateLine}</p>
-                  </div>
-                  <div>
-                    <p className="folio-serial">Party</p>
-                    <p className="mt-0.5">
-                      {trip.travelers} traveler
-                      {trip.travelers !== 1 ? "s" : ""}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </FolioJourneyUnfurl>
+            <FolioRouteThread className="atelier-dossier-route" />
 
-            <div className="mt-6 flex items-center justify-between text-xs uppercase tracking-[0.18em] font-medium text-ds-folio-ink-mist">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[11px] font-light text-ds-folio-ink-soft mt-1">
+              <div>
+                <p className="folio-serial">Dates</p>
+                <p className="mt-0.5">{longDateLine}</p>
+              </div>
+              <div>
+                <p className="folio-serial">Party</p>
+                <p className="mt-0.5">
+                  {trip.travelers} traveler
+                  {trip.travelers !== 1 ? "s" : ""}
+                </p>
+              </div>
+            </div>
+
+            <div className="atelier-dossier-footer">
               <span>Open folio</span>
               <FolioCtaGlide>
                 <span className="folio-cta-arrow" aria-hidden="true">
@@ -269,12 +288,18 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
   );
 }
 
-// ── Journey shelf teaser (scrapbook spread) ──────────────────────────────────
+// ── Travel shelf (curio cabinet) ─────────────────────────────────────────────
+//
+// A physical shelf, not a SaaS card. Three book spines fan behind the
+// primary plate so the user feels the volume of their archive.
 
 function JourneyShelfTeaser({ count }: { count: number }) {
   return (
-    <section aria-label="Your travel shelf" data-testid="journey-shelf-teaser">
-      {/* paper-world surface: folio-paper-card layered with folio-shelf-spread on the shelf link below. */}
+    <section
+      aria-label="Your travel shelf"
+      data-testid="journey-shelf-teaser"
+      className="folio-paper-card !bg-transparent !border-0 !shadow-none !p-0"
+    >
       <div className="flex items-center justify-between mb-4 px-1">
         <Overline className="text-ds-folio-ink-mist">Your travel shelf</Overline>
         <div className="flex items-center gap-4">
@@ -296,108 +321,134 @@ function JourneyShelfTeaser({ count }: { count: number }) {
       </div>
       <Link
         href="/trips"
-        className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded-[20px]"
+        className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded-[28px]"
         aria-label="Open your travel shelf"
       >
-        <FolioShelfSpread className="folio-paper-card">
-          <p className="folio-serial mb-3">
-            YOUR ARCHIVE · {count} {count !== 1 ? "ENTRIES" : "ENTRY"}
-          </p>
-          <p className="folio-card-title mb-1">
-            {count} journey{count !== 1 ? "s" : ""} in the folio.
-          </p>
-          <div className="flex items-end justify-between mt-2">
-            <p className="folio-caption italic">
-              Open the shelf and turn the page.
+        <div className="atelier-curio-shelf folio-paper-card">
+          {/* Three book spines fan behind the primary plate. */}
+          <span className="atelier-curio-spines" aria-hidden="true">
+            <span className="atelier-curio-spine" />
+            <span className="atelier-curio-spine" />
+            <span className="atelier-curio-spine" />
+          </span>
+          <div className="atelier-curio-plate">
+            <p className="folio-serial mb-3">
+              YOUR ARCHIVE · {count} {count !== 1 ? "ENTRIES" : "ENTRY"}
             </p>
-            <FolioCtaGlide>
-              <span className="folio-cta-arrow" aria-hidden="true">
-                <ArrowRight className="w-4 h-4 text-ds-folio-ink-mist" />
-              </span>
-            </FolioCtaGlide>
+            <p className="folio-card-title text-[1.6rem] md:text-[1.8rem] leading-[1.1] mb-1">
+              {count} journey{count !== 1 ? "s" : ""} on the shelf.
+            </p>
+            <div className="flex items-end justify-between mt-3">
+              <p className="folio-caption italic max-w-md">
+                Open the cabinet and turn the page.
+              </p>
+              <FolioCtaGlide>
+                <span className="folio-cta-arrow" aria-hidden="true">
+                  <ArrowRight className="w-4 h-4 text-ds-folio-ink-mist" />
+                </span>
+              </FolioCtaGlide>
+            </div>
           </div>
-        </FolioShelfSpread>
+        </div>
       </Link>
     </section>
   );
 }
 
 // ── Empty atelier state ──────────────────────────────────────────────────────
+//
+// First-run state. Reads as the empty page of a freshly opened folio —
+// quiet, inviting, not a "no data" empty state.
 
 function EmptyAtelierHome() {
   return (
     <section
       aria-label="Start your first journey"
       data-testid="atelier-empty-state"
-      className="space-y-6"
+      className="atelier-dossier text-ds-folio-ink text-ds-folio-ink-mist h-full flex flex-col"
     >
-      <div className="text-center py-10 px-4">
+      <div className="atelier-dossier-cover" aria-hidden="true">
+        <span className="atelier-dossier-scenery" />
+        <span className="atelier-dossier-flag">
+          TRP · WAITING
+        </span>
+      </div>
+      <div className="atelier-dossier-body flex-1 flex flex-col justify-center">
         <div
-          className="flex items-center justify-center w-16 h-16 rounded-2xl bg-ds-accent-subtle text-ds-accent mx-auto mb-5"
+          className="flex items-center justify-center w-12 h-12 rounded-2xl bg-ds-accent-subtle text-ds-accent mb-4"
           aria-hidden="true"
         >
-          <Map className="w-8 h-8" />
+          <Map className="w-6 h-6" />
         </div>
-        <h2 className="folio-heading mb-2 text-ds-folio-ink">
-          Your travel shelf is empty.
-        </h2>
-        <p className="folio-caption max-w-sm mx-auto italic text-ds-folio-ink-mist">
+        <h3 className="folio-card-title text-ds-folio-ink text-[1.6rem] md:text-[1.8rem] leading-[1.05]">
+          A blank folio, waiting.
+        </h3>
+        <p className="folio-caption italic text-ds-folio-ink-mist mt-1 mb-5 max-w-sm">
           Plan your first journey, or ask the concierge to imagine where to go.
         </p>
-      </div>
-      <div className="flex flex-col sm:flex-row gap-3">
-        <FolioCtaGlide className="flex-1">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <FolioCtaGlide className="flex-1">
+            <Link
+              href="/trips/new"
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-ds-accent text-ds-text-inverse text-sm font-semibold hover:opacity-90 transition-opacity min-h-[48px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              data-testid="home-new-trip-action"
+            >
+              <PlusCircle className="w-4 h-4" aria-hidden="true" />
+              Plan a Journey
+              <span className="folio-cta-arrow" aria-hidden="true">
+                <ArrowRight className="w-4 h-4" />
+              </span>
+            </Link>
+          </FolioCtaGlide>
           <Link
-            href="/trips/new"
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-ds-accent text-ds-text-inverse text-sm font-semibold hover:opacity-90 transition-opacity min-h-[48px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-            data-testid="home-new-trip-action"
+            href="/concierge"
+            className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-ds-hairline bg-ds-linen text-ds-folio-ink-soft text-sm font-medium hover:bg-ds-bone hover:text-ds-folio-ink transition-all min-h-[48px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           >
-            <PlusCircle className="w-4 h-4" aria-hidden="true" />
-            Plan a Journey
-            <span className="folio-cta-arrow" aria-hidden="true">
-              <ArrowRight className="w-4 h-4" />
-            </span>
+            <Sparkles className="w-4 h-4" aria-hidden="true" />
+            Ask Concierge
           </Link>
-        </FolioCtaGlide>
-        <Link
-          href="/concierge"
-          className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-ds-hairline bg-ds-linen text-ds-folio-ink-soft text-sm font-medium hover:bg-ds-bone hover:text-ds-folio-ink transition-all min-h-[48px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-        >
-          <Sparkles className="w-4 h-4" aria-hidden="true" />
-          Open Concierge
-        </Link>
+        </div>
       </div>
     </section>
   );
 }
 
-// ── Rooms strip (world-driven portals) ───────────────────────────────────────
+// ── Rooms in the house (the doorway shelf) ───────────────────────────────────
 //
-// Replaces the old 2-tile Explore/Saved artifact stack with a 4-room portal
-// row. Each portal carries its own atmosphere preview — concierge feels like
-// a private salon, explore like an observatory, planning like a drafting
-// atelier, saved like a scrapbook library. Scenery does orientation work;
-// labels are quiet.
+// Four tall doorways arranged in a cinematic shelf. Each portal owns its
+// own room interior (concierge=salon, explore=observatory, planning=
+// drafting atelier, saved=scrapbook library) so the four read as four
+// distinct boutique rooms. Tiny brass plaques carry the labels; the
+// scenery is the orientation.
 
 function AtelierPlanningStrip({ world }: { world: LocationData }) {
   return (
-    <section aria-label="Rooms in this house" data-testid="atelier-planning-strip">
+    <section
+      aria-label="Rooms in this house"
+      data-testid="atelier-planning-strip"
+      className="atelier-doorway-shelf"
+    >
+      <p className="sr-only text-ds-folio-ink-mist">Discovery tools</p>
       <div className="editorial-section-rule" aria-hidden="true" />
-      <div className="flex items-center justify-between mb-4 px-1">
-        <p className="text-[10px] block font-semibold uppercase tracking-[0.1em] text-ds-folio-ink-mist">Discovery tools</p>
-        <p className="folio-serial italic text-ds-folio-ink-mist">
-          {/* Quieter, optional secondary anchor — not primary orientation;
-              scenery does the orientation work above. The previous "PORTLAND
-              · MISTY FOREST…" overline that sat at the top has been removed. */}
+      <div className="flex items-end justify-between mb-5 px-1 gap-6">
+        <div>
+          <p className="folio-serial text-ds-folio-ink-mist mb-1">
+            CHAPTER · ROOMS IN THIS HOUSE
+          </p>
+          <h2 className="folio-heading text-[1.6rem] md:text-[1.9rem] leading-[1.1] max-w-xl">
+            Four doorways. One private house.
+          </h2>
+          <p className="folio-caption italic text-ds-folio-ink-mist mt-2 max-w-md">
+            Step through any door — each room keeps the house intact.
+          </p>
+        </div>
+        <p className="folio-serial italic text-ds-folio-ink-mist hidden md:block whitespace-nowrap">
           <span className="folio-serial">
             {world.location} · {world.archetype ?? "atelier"}
           </span>
           <span className="folio-caption sr-only">{world.mood}</span>
         </p>
       </div>
-      <p className="folio-caption italic text-ds-folio-ink-mist mb-5 max-w-md px-1">
-        Step through a door. Each room keeps the house intact.
-      </p>
       <WorldRoomSwitcher world={world} />
     </section>
   );
@@ -430,17 +481,23 @@ export function DashboardClient() {
   if (loading) {
     return (
       <div
-        className="space-y-6"
+        className="atelier-atrium-content"
         aria-busy="true"
         aria-label="Loading your atelier"
       >
-        <div className="space-y-2">
+        <div className="space-y-3 mt-6">
           <div className="h-3 w-28 bg-ds-hairline rounded animate-pulse" />
-          <div className="h-7 w-44 bg-ds-hairline rounded animate-pulse" />
-          <div className="h-4 w-36 bg-ds-hairline rounded animate-pulse" />
+          <div className="h-12 w-80 max-w-full bg-ds-hairline rounded animate-pulse" />
+          <div className="h-4 w-60 max-w-full bg-ds-hairline rounded animate-pulse" />
         </div>
-        <div className="h-36 bg-ds-linen border border-ds-hairline rounded-lg animate-pulse" />
-        <div className="h-24 bg-ds-linen border border-ds-hairline rounded-lg animate-pulse" />
+        <div className="h-72 bg-ds-linen border border-ds-hairline rounded-[28px] animate-pulse" />
+        <div className="h-36 bg-ds-linen border border-ds-hairline rounded-[28px] animate-pulse" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="h-72 bg-ds-linen border border-ds-hairline rounded-[26px] animate-pulse" />
+          <div className="h-72 bg-ds-linen border border-ds-hairline rounded-[26px] animate-pulse" />
+          <div className="h-72 bg-ds-linen border border-ds-hairline rounded-[26px] animate-pulse" />
+          <div className="h-72 bg-ds-linen border border-ds-hairline rounded-[26px] animate-pulse" />
+        </div>
       </div>
     );
   }
@@ -449,79 +506,73 @@ export function DashboardClient() {
   const hasTrips = trips.length > 0;
   const hasContinue = hasTrips && continuePlanning;
 
-  // ── Invisible Interface: pick the current world from the active trip's
-  //    destination, falling back to the Atelier (house) world. The result
-  //    drives every --world-* CSS variable on the canvas below.
+  // The active trip's destination drives the entire page world. When there
+  // is no active trip, the Atelier (house) world is the foyer.
   const world = pickWorldFromDestination(continuePlanning?.destination);
 
   return (
     <FolioScene
-      className="atelier-transition editorial-scene world-canvas world-scenery-host"
+      className="atelier-transition editorial-scene world-canvas world-scenery-host atelier-atrium"
       data-testid="atelier-home"
       data-world-location={world.location}
       style={worldStyleVars(world)}
     >
       {/* Full-bleed destination scenery — the first thing the eye sees.
-          Painted CSS scenery + optional photographic mood asset + a
-          legibility overlay. Aria-hidden; it is environment, not text. */}
+          Extends edge-to-edge of the main area because the home page
+          opts out of the AppShell max-w-7xl container. */}
       <WorldScenery
         height="tall"
         imageAlt={world.visualLayer.imageAlt}
       />
       <WorldMist />
       <WorldAtmosphere />
-      <FolioLivingCanvas>
-        <div className="space-y-10 md:space-y-14 pb-8 relative">
+      <FolioLivingCanvas className="atelier-atrium-content">
+        {/* ── Hero spread ────────────────────────────────────────────
+            Greeting at left (translucent paper-glass), active trip
+            dossier at right (folio object). The scenery lives behind
+            them; the user feels the destination before reading. */}
+        <div className="atelier-atrium-hero">
           <AtelierGreeting tripCount={summary.tripCount} />
-
-          {/* Asymmetric editorial spread: concierge invitation (lg:7) +
-              active journey object (lg:5, offset down). On mobile they stack. */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
-            <FolioReveal stagger={2} className="lg:col-span-7">
-              <ConciergeEntry />
+          {hasContinue ? (
+            <FolioReveal stagger={3}>
+              <ContinuePlanningStrip trip={continuePlanning!} />
             </FolioReveal>
-            {hasContinue ? (
-              <FolioReveal
-                stagger={3}
-                className="lg:col-span-5 lg:mt-12"
-              >
-                <ContinuePlanningStrip trip={continuePlanning!} />
-              </FolioReveal>
-            ) : (
-              <FolioReveal
-                stagger={3}
-                className="lg:col-span-5 lg:mt-12"
-              >
-                <EmptyAtelierHome />
-              </FolioReveal>
-            )}
-          </div>
-
-          {/* Lower spread: scrapbook shelf (lg:7) + room portals
-              (lg:5, slightly raised). Mobile stacks. */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
-            {hasTrips && (
-              <FolioReveal stagger={4} className="lg:col-span-7">
-                <JourneyShelfTeaser count={summary.tripCount} />
-              </FolioReveal>
-            )}
-            <FolioReveal
-              stagger={4}
-              className={
-                hasTrips ? "lg:col-span-5 lg:-mt-4" : "lg:col-span-12"
-              }
-            >
-              <AtelierPlanningStrip world={world} />
+          ) : (
+            <FolioReveal stagger={3}>
+              <EmptyAtelierHome />
             </FolioReveal>
-          </div>
-
-          {/* Quiet, secondary editorial signature — the location is now
-              implied by the scenery; this anchor is here only for visitors
-              who want to confirm the world they're in. Tiny and faded. */}
-          <footer className="pt-2 pb-1 px-1 opacity-80">
-            <WorldWayfinder world={world} className="world-wayfinder-quiet" />
-          </footer>
+          )}
         </div>
+
+        {/* ── Concierge threshold ────────────────────────────────────
+            Full-width doorway into the private salon. The right edge
+            paints the room you'd step into. */}
+        <FolioReveal stagger={2}>
+          <ConciergeEntry />
+        </FolioReveal>
+
+        {/* ── Four rooms ──────────────────────────────────────────────
+            The cinematic shelf — four tall doorways into Concierge,
+            Explore, Planning, Saved. Each portal carries its own
+            atmospheric interior. */}
+        <FolioReveal stagger={4}>
+          <AtelierPlanningStrip world={world} />
+        </FolioReveal>
+
+        {/* ── Travel shelf ───────────────────────────────────────────
+            Only when trips exist — a curio cabinet of the archive. */}
+        {hasTrips && (
+          <FolioReveal stagger={4}>
+            <JourneyShelfTeaser count={summary.tripCount} />
+          </FolioReveal>
+        )}
+
+        {/* ── Quiet signature ───────────────────────────────────────
+            Tiny editorial location anchor at the bottom of the page,
+            never the primary orientation. */}
+        <footer className="atelier-atrium-signature">
+          <WorldWayfinder world={world} className="world-wayfinder-quiet" />
+        </footer>
       </FolioLivingCanvas>
     </FolioScene>
   );

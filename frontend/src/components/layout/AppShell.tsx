@@ -48,6 +48,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // Home page renders edge-to-edge so the destination scenery can extend the
+  // full width of the main area. Every other route keeps the centered, padded
+  // page shell. The home page is then responsible for its own internal gutters.
+  const isHomePage = pathname === "/";
+
   return (
     <>
       {/* Phase 8N: fixed atmospheric layers — vignette + CSS grain texture */}
@@ -60,9 +65,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         <Sidebar />
         <main className="flex-1 overflow-y-auto" data-testid="reduced-motion-safe-atmosphere">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 sm:pt-8 mobile-nav-spacer atelier-transition" data-testid="mobile-page-content">
-            {children}
-          </div>
+          {isHomePage ? (
+            <div
+              className="mobile-nav-spacer atelier-transition home-edge-bleed"
+              data-testid="mobile-page-content"
+              data-home-edge-bleed="true"
+            >
+              {children}
+            </div>
+          ) : (
+            <div
+              className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 sm:pt-8 mobile-nav-spacer atelier-transition"
+              data-testid="mobile-page-content"
+            >
+              {children}
+            </div>
+          )}
         </main>
       </div>
     </>
