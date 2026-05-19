@@ -204,6 +204,61 @@ export function CinemaCard({ className, children, ...rest }: DivProps) {
   );
 }
 
+// ─── Folio Scene System — Stage 3.5 Atelier Scene ──────────────────────────
+// Reusable scene, motion, layering, and route primitives for any paper-world
+// screen (Home, Trip Builder, New Trip, Trip Ideas, planning modals, future
+// paper-world surfaces). Not Home-specific.
+
+/** Scene/stage wrapper for paper-world screens.
+ *  Adds multi-point ambient warmth, a slow drifting glow, and isolation
+ *  for correct stacking. Reusable on any paper-world screen. */
+export function FolioScene({ className, children, ...rest }: DivProps) {
+  return (
+    <div
+      data-folio-world="paper"
+      className={clsx("folio-scene", className)}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Entrance animation wrapper — fades up from 6px below on first render.
+ *  stagger: 1–4 offsets the animation start by N × 80ms for sequential
+ *  reveal rhythm. Reduced-motion: renders at full opacity immediately. */
+export function FolioReveal({
+  stagger,
+  className,
+  children,
+  ...rest
+}: DivProps & { stagger?: 1 | 2 | 3 | 4 }) {
+  return (
+    <div
+      className={clsx(
+        "folio-reveal",
+        stagger != null && `folio-reveal-stagger-${stagger}`,
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Decorative horizontal route thread — map/journey motif.
+ *  Always aria-hidden; use between or within sections for editorial rhythm. */
+export function FolioRouteThread({ className, ...rest }: DivProps) {
+  return (
+    <div
+      aria-hidden="true"
+      className={clsx("folio-route-thread", className)}
+      {...rest}
+    />
+  );
+}
+
 /** Cinema-world chip — warm dark pill. Use for filters/prompts on dark surfaces. */
 export function CinemaChip({
   active = false,
