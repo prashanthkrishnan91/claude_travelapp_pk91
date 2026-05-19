@@ -2341,16 +2341,28 @@
      ════════════════════════════════════════════════════════════════ */
 
   /* Fraunces italic display heading for the Home greeting h1.
-     36px at weight 300 gives the large editorial serif presence the
-     folio concept calls for — calm, romantic, not bold-dashboard. */
+     3rem (48px) at weight 300 — large editorial serif hero moment,
+     closer to the folio concept's 64px day-numeral scale anchor. */
   .folio-home-greeting-title {
     font-family: var(--ds-font-editorial);
     font-style: italic;
     font-weight: 300;
-    font-size: 2.25rem;
-    line-height: 1.1;
-    letter-spacing: -0.01em;
+    font-size: 3rem;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
     color: var(--ds-folio-ink);
+  }
+
+  /* Atmospheric Fraunces italic sub-line below the greeting h1.
+     Mirrors the folio concept's "where" line under the day numeral —
+     gives the hero section a second editorial beat before the rule. */
+  .folio-home-hero-sub {
+    font-family: var(--ds-font-editorial);
+    font-style: italic;
+    font-weight: 300;
+    font-size: 1.0625rem;
+    line-height: 1.3;
+    color: var(--ds-folio-ink-soft);
   }
 
   /* Brass issue eyebrow — folio masthead opener with a left brass rule.
@@ -2386,6 +2398,36 @@
     color: var(--ds-folio-ink-mist);
   }
 
+  /* Small-caps brass serial for folio card metadata headers.
+     Mirrors the folio concept's "AML · 03 · 02" serial treatment —
+     appears at the top of trip cards and discovery tiles. */
+  .folio-home-serial {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ds-ember-brass);
+    opacity: 0.9;
+  }
+
+  /* Fraunces weight-500 title for trip cards in the planning strip.
+     The folio concept renders place/trip names in Fraunces 500 at ~17px
+     — heavier than body but lighter than display. */
+  .folio-home-trip-title {
+    font-family: var(--ds-font-editorial);
+    font-weight: 500;
+    font-size: 1.0625rem;
+    line-height: 1.25;
+    color: var(--ds-folio-ink);
+  }
+
+  /* Thin brass top-accent for the ConciergeEntry correspondence card.
+     A 2px brass hairline at the top edge elevates the card above a
+     plain paper panel — matching the folio concept's framed panel look. */
+  .folio-home-concierge-card-accent {
+    height: 2px;
+    background: color-mix(in srgb, var(--ds-ember-brass) 30%, transparent);
+  }
+
   /* Fraunces italic heading for the Concierge entry card.
      The concierge voice is always italic serif per the folio direction —
      this makes "Your private concierge." feel like a correspondence opener
@@ -2394,8 +2436,8 @@
     font-family: var(--ds-font-editorial);
     font-style: italic;
     font-weight: 300;
-    font-size: 1.5rem;
-    line-height: 1.2;
+    font-size: 1.625rem;
+    line-height: 1.15;
     color: var(--ds-folio-ink);
   }
 }
