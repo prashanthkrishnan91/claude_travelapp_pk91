@@ -15,7 +15,12 @@ import {
   type DashboardSummary,
 } from "@/lib/api";
 import { getDisplayTripStatus, getTripStatusGroup } from "@/lib/tripStatus";
-import { FolioPanel } from "@/components/ui/Folio";
+import {
+  FolioPanel,
+  FolioScene,
+  FolioReveal,
+  FolioRouteThread,
+} from "@/components/ui/Folio";
 import type { Trip } from "@/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -69,7 +74,7 @@ function Overline({ children, className }: { children: React.ReactNode; classNam
 function AtelierGreeting({ tripCount }: { tripCount: number }) {
   const greeting = getTimeGreeting();
   return (
-    <header data-testid="atelier-greeting">
+    <header data-testid="atelier-greeting" className="folio-reveal">
       <div className="folio-issue-eyebrow">Private Travel Concierge</div>
       <h1 className="folio-display mt-2">
         {greeting}
@@ -92,7 +97,7 @@ function AtelierGreeting({ tripCount }: { tripCount: number }) {
 function ConciergeEntry() {
   return (
     <section aria-label="AI Concierge" data-testid="concierge-entry">
-      <FolioPanel data-testid="concierge-advisor-desk">
+      <FolioPanel className="folio-invitation-panel" data-testid="concierge-advisor-desk">
         <div className="folio-card-accent" aria-hidden="true" />
         <div className="px-6 pt-5 pb-4 border-b border-ds-hairline">
           <Overline className="text-ds-folio-ink-mist">Private Travel Concierge</Overline>
@@ -126,7 +131,7 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
       data-testid="atelier-continue-planning"
     >
       <Overline className="text-ds-folio-ink-mist">Continue planning</Overline>
-      <article className="folio-paper-card mt-3 p-5">
+      <article className="folio-paper-card folio-journey-entry mt-3 p-5">
         <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-2">
@@ -139,7 +144,8 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
             <p className="folio-caption truncate">
               {trip.destination}
             </p>
-            <p className="folio-serial mt-2">
+            <FolioRouteThread className="my-2" />
+            <p className="folio-serial">
               {formatDateRange(trip.startDate, trip.endDate)}
               {trip.travelers > 1 && ` · ${trip.travelers} travelers`}
             </p>
@@ -338,18 +344,27 @@ export function DashboardClient() {
   const hasTrips = trips.length > 0;
 
   return (
-    <div className="space-y-8 atelier-transition editorial-scene" data-testid="atelier-home">
+    <FolioScene
+      className="space-y-8 atelier-transition editorial-scene"
+      data-testid="atelier-home"
+    >
       <AtelierGreeting tripCount={summary.tripCount} />
-      <ConciergeEntry />
+      <FolioReveal stagger={2}>
+        <ConciergeEntry />
+      </FolioReveal>
       {hasTrips && continuePlanning && (
-        <ContinuePlanningStrip trip={continuePlanning} />
+        <FolioReveal stagger={3}>
+          <ContinuePlanningStrip trip={continuePlanning} />
+        </FolioReveal>
       )}
       {hasTrips ? (
-        <JourneyShelfTeaser count={summary.tripCount} />
+        <FolioReveal stagger={4}>
+          <JourneyShelfTeaser count={summary.tripCount} />
+        </FolioReveal>
       ) : (
         <EmptyAtelierHome />
       )}
       <AtelierPlanningStrip />
-    </div>
+    </FolioScene>
   );
 }

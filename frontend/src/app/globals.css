@@ -1833,6 +1833,7 @@
 
   @media (max-width: 600px) {
     .folio-ambient::after { animation: none; }
+    .folio-scene::before{ animation: none; }
   }
 
   /* ════════════════════════════════════════════════════════════════
@@ -2434,6 +2435,206 @@
     /* Cinema world surfaces explicit cream text by default so cinema
        primitives inside don't need to repeat text-ds-text on every node. */
     color: var(--ds-text-primary);
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     FOLIO SCENE SYSTEM — Stage 3.5 Home Mobile Atelier Scene
+     Reusable scene, motion, layering, and route primitives for any
+     paper-world screen: Home, Trip Builder, New Trip, Trip Ideas,
+     Planning Modals, and future paper-world surfaces.
+     NOT Home-specific. Applied to any screen that needs scene atmosphere.
+     All motion obeys prefers-reduced-motion.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* folio-scene: immersive scene/stage wrapper for paper-world screens.
+     Multi-point warm ambient glow layered over the warm-paper background.
+     isolation: isolate creates a stacking context so the drifting ::before
+     stays behind all in-flow children without leaking outside the scene. */
+  .folio-scene {
+    position: relative;
+    isolation: isolate;
+    background-image:
+      radial-gradient(ellipse 75% 35% at 22% 5%,  rgba(217, 183, 118, 0.18), transparent 65%),
+      radial-gradient(ellipse 50% 22% at 50% 0%,  rgba(197, 148, 77, 0.07),  transparent 100%),
+      radial-gradient(ellipse 45% 40% at 85% 95%, rgba(184, 130, 60, 0.10),  transparent 65%);
+  }
+
+  /* Drifting warm glow — slow atmospheric drift.
+     z-index: -1 keeps it behind all in-flow children within this
+     stacking context (established by isolation: isolate above). */
+  .folio-scene::before {
+    content: '';
+    position: absolute;
+    top: -15%;
+    left: -5%;
+    right: -5%;
+    height: 55%;
+    pointer-events: none;
+    z-index: -1;
+    background: radial-gradient(
+      ellipse 70% 60% at 25% 10%,
+      rgba(217, 183, 118, 0.13) 0%,
+      transparent 60%
+    );
+    animation: folio-scene-drift 52s ease-in-out infinite alternate;
+  }
+
+  @keyframes folio-scene-drift {
+    0%   { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(-1.5%, 0.8%) scale(1.04); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .folio-scene::before { animation: none; }
+  }
+  @media (max-width: 600px) {
+    .folio-scene::before { animation: none; }
+  }
+
+  /* folio-route-thread: horizontal travel route thread — map/journey motif.
+     Renders a dotted-dash line with a start-dot marker. Evokes a route on
+     a travel map. Use aria-hidden="true" — purely decorative. Animated draw
+     on entrance; reduced-motion shows the line statically without animation. */
+  .folio-route-thread {
+    position: relative;
+    height: 16px;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  /* Dashed route line */
+  .folio-route-thread::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    transform: translateY(-50%);
+    transform-origin: left center;
+    background: repeating-linear-gradient(
+      90deg,
+      rgba(197, 148, 77, 0.50) 0px,
+      rgba(197, 148, 77, 0.50) 5px,
+      transparent 5px,
+      transparent 12px
+    );
+    animation: folio-route-draw 1.1s var(--ds-easing-decelerate) 350ms both;
+  }
+
+  /* Start-point dot marker */
+  .folio-route-thread::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: rgba(197, 148, 77, 0.65);
+    box-shadow: 0 0 0 2px rgba(197, 148, 77, 0.14);
+  }
+
+  @keyframes folio-route-draw {
+    from { opacity: 0; transform: translateY(-50%) scaleX(0); }
+    to   { opacity: 1; transform: translateY(-50%) scaleX(1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .folio-route-thread::before { animation: none; }
+  }
+
+  /* folio-invitation-panel: warm invitation enhancement for the Concierge
+     entry and similar "private doorway" moments. Add alongside folio-paper-panel
+     to create an elevated, warmly lit presence — like light visible through
+     a half-open door. Reusable on any screen with an invitation/portal moment. */
+  .folio-invitation-panel {
+    background: linear-gradient(
+      175deg,
+      var(--ds-warm-paper) 0%,
+      color-mix(in srgb, var(--ds-warm-paper) 72%, var(--ds-bone)) 100%
+    );
+    box-shadow:
+      0 6px 32px color-mix(in srgb, var(--ds-folio-ink) 11%, transparent),
+      0 2px 8px  color-mix(in srgb, var(--ds-folio-ink) 5%, transparent),
+      0 0 0 1px  color-mix(in srgb, var(--ds-ember-brass) 14%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  }
+
+  /* folio-journey-entry: active journey object enhancement for trip cards.
+     Add alongside folio-paper-card to give a live trip a visual travel identity:
+     left accent stripe (folio binding mark), enhanced warm shadow, and a
+     top-edge travel rule. Reusable on any trip/journey card surface. */
+  .folio-journey-entry {
+    position: relative;
+    box-shadow:
+      0 4px 22px color-mix(in srgb, var(--ds-folio-ink) 9%, transparent),
+      0 1px 5px  color-mix(in srgb, var(--ds-folio-ink) 4%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.80);
+  }
+
+  /* Left accent stripe — brass-to-marine folio binding mark */
+  .folio-journey-entry::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 1.25rem;
+    bottom: 1.25rem;
+    width: 3px;
+    background: linear-gradient(
+      to bottom,
+      rgba(197, 148, 77, 0.65) 0%,
+      rgba(31, 66, 86, 0.45) 100%
+    );
+    border-radius: 0 2px 2px 0;
+    pointer-events: none;
+  }
+
+  /* Top-edge travel rule — subtle brass hairline at card top */
+  .folio-journey-entry::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 1.5rem;
+    right: 1.5rem;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(197, 148, 77, 0.50) 25%,
+      rgba(197, 148, 77, 0.32) 75%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+
+  /* folio-reveal: entrance animation for scene elements — fades up from 6px.
+     Apply to sections, panels, or content blocks that should entrance-animate
+     on first render. Stagger variants offset by N × 80ms for sequential reveal
+     rhythm. Reduced-motion: animation disabled, element renders immediately. */
+  @keyframes folio-reveal-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .folio-reveal {
+    animation: folio-reveal-in 360ms var(--ds-easing-decelerate) var(--folio-reveal-delay, 0ms) both;
+  }
+
+  .folio-reveal-stagger-1 { --folio-reveal-delay: 60ms; }
+  .folio-reveal-stagger-2 { --folio-reveal-delay: 140ms; }
+  .folio-reveal-stagger-3 { --folio-reveal-delay: 220ms; }
+  .folio-reveal-stagger-4 { --folio-reveal-delay: 300ms; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .folio-reveal { animation: none; }
   }
 
 }
