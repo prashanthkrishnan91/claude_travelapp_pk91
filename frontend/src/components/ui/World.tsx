@@ -55,6 +55,7 @@ export function WorldCanvas({
       data-world-canvas="true"
       data-world-location={locationData.location}
       data-world-archetype={locationData.archetype ?? "atelier"}
+      data-scenery-tone={locationData.visualLayer.contrastTone ?? "dark"}
       className={clsx("world-canvas", className)}
       style={{ ...worldStyleVars(locationData), ...style }}
       {...rest}
@@ -252,6 +253,7 @@ export function WorldPortal({
       data-world-portal="true"
       data-world-doorway="true"
       data-world-archetype={world.archetype ?? "atelier"}
+      data-scenery-tone={world.visualLayer.contrastTone ?? "dark"}
       style={worldStyleVars(world)}
       {...rest}
     >
@@ -265,7 +267,10 @@ export function WorldPortal({
       <span className="world-portal-doorline" aria-hidden="true" />
       <span className="world-portal-light" aria-hidden="true" />
       <span className="world-portal-body">
-        <span className="world-portal-eyebrow">
+        {/* Eyebrow archetype line kept sr-only so the visual surface stays
+            typography-first (label + single descriptor) but the room's
+            archetype is still announced to assistive tech. */}
+        <span className="world-portal-eyebrow sr-only">
           {archetypeLine ?? whisper}
         </span>
         <span className="world-portal-label">{label}</span>

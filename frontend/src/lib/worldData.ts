@@ -83,6 +83,15 @@ export interface WorldVisualLayer {
   overlay: string;
   /** Soft mist tint used by the WorldMist drifting layer. */
   mistTint: string;
+  /**
+   * Luminance-aware contrast hint for text rendered ON the scenery.
+   * `light` = scenery is dark, text should be cream/paper.
+   * `dark`  = scenery is light, text should be charcoal/ink.
+   * Drives the `--world-on-scenery`, `--world-on-scenery-muted`,
+   * and `--world-scenery-scrim` CSS variables consumed by any
+   * scenic-overlay surface (dossier covers, portals, glass scrims).
+   */
+  contrastTone?: "light" | "dark";
 }
 
 // ─── Curated worlds — sensory DNA per destination ──────────────────────────────
@@ -145,6 +154,7 @@ const PORTLAND: LocationData = {
       "radial-gradient(ellipse 90% 55% at 50% 100%, rgba(242, 238, 228, 0.72), transparent 70%)",
     ].join(", "),
     mistTint: "rgba(186, 198, 188, 0.55)",
+    contrastTone: "light",
   },
 };
 
@@ -189,6 +199,7 @@ const SANTORINI: LocationData = {
       "linear-gradient(180deg, rgba(21, 46, 62, 0.12) 0%, transparent 32%, rgba(250, 247, 240, 0.5) 70%, rgba(250, 247, 240, 0.86) 100%)",
     ].join(", "),
     mistTint: "rgba(212, 224, 232, 0.5)",
+    contrastTone: "dark",
   },
 };
 
@@ -235,6 +246,7 @@ const KYOTO: LocationData = {
       "linear-gradient(180deg, rgba(34, 21, 13, 0.18) 0%, transparent 30%, rgba(239, 231, 210, 0.45) 70%, rgba(239, 231, 210, 0.88) 100%)",
     ].join(", "),
     mistTint: "rgba(232, 168, 90, 0.35)",
+    contrastTone: "light",
   },
 };
 
@@ -279,6 +291,7 @@ const MARRAKECH: LocationData = {
       "linear-gradient(180deg, rgba(58, 26, 17, 0.16) 0%, transparent 36%, rgba(245, 229, 203, 0.55) 72%, rgba(245, 229, 203, 0.9) 100%)",
     ].join(", "),
     mistTint: "rgba(232, 168, 90, 0.42)",
+    contrastTone: "light",
   },
 };
 
@@ -324,6 +337,7 @@ const LISBON: LocationData = {
       "linear-gradient(180deg, rgba(23, 47, 61, 0.12) 0%, transparent 32%, rgba(247, 241, 228, 0.55) 70%, rgba(247, 241, 228, 0.88) 100%)",
     ].join(", "),
     mistTint: "rgba(232, 211, 139, 0.4)",
+    contrastTone: "dark",
   },
 };
 
@@ -371,6 +385,7 @@ const ATELIER: LocationData = {
       "linear-gradient(180deg, rgba(30, 26, 20, 0.08) 0%, transparent 32%, rgba(250, 247, 240, 0.58) 70%, rgba(250, 247, 240, 0.92) 100%)",
     ].join(", "),
     mistTint: "rgba(224, 184, 136, 0.4)",
+    contrastTone: "dark",
   },
 };
 
@@ -597,6 +612,23 @@ export function worldStyleVars(world: LocationData): CSSProperties {
       ? "var(--font-fraunces), 'Cormorant Garamond', 'Times New Roman', serif"
       : "var(--font-fraunces), Georgia, 'Times New Roman', serif";
   const visual = world.visualLayer;
+  // Luminance-aware contrast — scenic overlay text always uses
+  // --world-on-scenery / --world-on-scenery-muted / --world-scenery-scrim
+  // so the dossier title, scrim metadata, and portal label can never go
+  // dark-on-dark or light-on-light on any curated world.
+  const tone = visual.contrastTone ?? "dark";
+  const onScenery =
+    tone === "light"
+      ? "rgba(255, 248, 235, 0.96)"
+      : "rgba(24, 22, 18, 0.94)";
+  const onSceneryMuted =
+    tone === "light"
+      ? "rgba(255, 248, 235, 0.78)"
+      : "rgba(24, 22, 18, 0.74)";
+  const sceneryScrim =
+    tone === "light"
+      ? "rgba(12, 14, 12, 0.55)"
+      : "rgba(252, 248, 238, 0.62)";
   return {
     // Primary world tokens — every component reads these.
     ["--world-primary" as string]: world.primaryColor,
@@ -622,6 +654,11 @@ export function worldStyleVars(world: LocationData): CSSProperties {
     ["--world-scenery-filter" as string]:
       visual.imageFilter ?? "saturate(0.9) brightness(0.98)",
     ["--world-mist-tint" as string]: visual.mistTint,
+    // Luminance-aware text + scrim — auto-contrast for any scenic overlay.
+    ["--world-on-scenery" as string]: onScenery,
+    ["--world-on-scenery-muted" as string]: onSceneryMuted,
+    ["--world-scenery-scrim" as string]: sceneryScrim,
+    ["--world-contrast-tone" as string]: tone,
   };
 }
 
@@ -649,28 +686,28 @@ export const ROOM_CATALOGUE: ReadonlyArray<RoomDefinition> = [
   {
     id: "concierge",
     label: "Concierge",
-    whisper: "the private salon",
+    whisper: "Private dining, stays, and local intelligence.",
     href: "/concierge",
     archetype: "salon",
   },
   {
     id: "explore",
     label: "Explore",
-    whisper: "the observatory",
+    whisper: "Landscapes, neighborhoods, and hidden doors.",
     href: "/explore",
     archetype: "observatory",
   },
   {
     id: "planning",
     label: "Planning",
-    whisper: "the drafting atelier",
+    whisper: "Shape the journey.",
     href: "/trips/new",
     archetype: "atelier",
   },
   {
     id: "saved",
     label: "Saved",
-    whisper: "the scrapbook library",
+    whisper: "Your private archive.",
     href: "/saved",
     archetype: "scrapbook",
   },

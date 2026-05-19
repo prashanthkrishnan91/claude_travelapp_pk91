@@ -643,19 +643,250 @@ describe("Atrium v2: integrated metadata + cinematic shelf + physical archive", 
     );
   });
 
-  test("F13. Greeting is rendered as a quiet whisper, not a giant dashboard hero", () => {
-    // The whisper modifier must scope the greeting CSS and reduce the display.
-    assert.match(globalsCss, /\.atelier-greeting-display/, "globals.css must define .atelier-greeting-display");
+  test("F13. Greeting is rendered as a broad atrium hero (atrium-hero / atrium-hero-display)", () => {
+    // v3: the greeting is now a broad editorial welcome, not a widget. The
+    // WorldGlassSurface wrapper remains (folio direction contract) but its
+    // visual treatment is overridden by .atrium-hero-surface so it reads as
+    // an open page, not a floating card.
+    assert.match(globalsCss, /\.atrium-hero-display/, "globals.css must define .atrium-hero-display (broad editorial display)");
+    assert.match(globalsCss, /\.atrium-hero-surface/, "globals.css must define .atrium-hero-surface (overrides WorldGlassSurface card chrome)");
     const start = dashboardClient.indexOf("function AtelierGreeting");
     const end = dashboardClient.indexOf("function ConciergeEntry");
     const block = dashboardClient.slice(start, end);
     assert.ok(
-      block.includes("atelier-greeting-whisper"),
-      "AtelierGreeting must adopt .atelier-greeting-whisper modifier",
+      block.includes("atrium-hero-surface"),
+      "AtelierGreeting WorldGlassSurface must adopt .atrium-hero-surface to break out of widget styling",
     );
     assert.ok(
-      block.includes("atelier-greeting-display"),
-      "AtelierGreeting display must adopt .atelier-greeting-display (quiet scale)",
+      block.includes("atrium-hero-display"),
+      "AtelierGreeting h1 must adopt .atrium-hero-display (broad editorial scale)",
     );
+    // The greeting display reads at editorial cover scale (clamp upper bound
+    // must reach at least 3rem to qualify as a hero, not a widget heading).
+    const idx = globalsCss.indexOf(".atrium-hero-display");
+    const cssBlock = globalsCss.slice(idx, idx + 600);
+    assert.match(
+      cssBlock,
+      /font-size:\s*clamp\([^)]*?(?:4|5|6)(?:\.\d+)?rem\)/,
+      ".atrium-hero-display must clamp font-size to a hero scale (≥3rem upper bound)",
+    );
+  });
+});
+
+// ── G. Atrium v3 — contrast engine + typography portals + physical archive
+
+describe("Atrium v3: dynamic contrast engine", () => {
+  const worldData = readSrc("lib/worldData.ts");
+  const worldTsx = readSrc("components/ui/World.tsx");
+
+  test("G1. LocationData.WorldVisualLayer declares contrastTone", () => {
+    assert.match(
+      worldData,
+      /contrastTone\?:\s*["']light["']\s*\|\s*["']dark["']/,
+      "WorldVisualLayer must declare `contrastTone?: 'light' | 'dark'` for the luminance-aware scenic text contract",
+    );
+  });
+
+  test("G2. Curated worlds declare contrastTone (Portland=light, Santorini=dark, Atelier=dark)", () => {
+    const portlandIdx = worldData.indexOf('location: "Portland"');
+    assert.ok(portlandIdx > -1);
+    const portlandBlock = worldData.slice(portlandIdx, portlandIdx + 2200);
+    assert.match(
+      portlandBlock,
+      /contrastTone:\s*["']light["']/,
+      "Portland (dark forest) must declare contrastTone: 'light' so text becomes cream",
+    );
+    const santoriniIdx = worldData.indexOf('location: "Santorini"');
+    const santoriniBlock = worldData.slice(santoriniIdx, santoriniIdx + 2200);
+    assert.match(
+      santoriniBlock,
+      /contrastTone:\s*["']dark["']/,
+      "Santorini (bright sun + caldera) must declare contrastTone: 'dark' so text becomes ink",
+    );
+    const atelierIdx = worldData.indexOf('location: "Atelier"');
+    const atelierBlock = worldData.slice(atelierIdx, atelierIdx + 2200);
+    assert.match(
+      atelierBlock,
+      /contrastTone:\s*["']dark["']/,
+      "Atelier (warm paper foyer) must declare contrastTone: 'dark'",
+    );
+  });
+
+  test("G3. worldStyleVars emits --world-on-scenery, --world-on-scenery-muted, --world-scenery-scrim", () => {
+    for (const v of [
+      "--world-on-scenery",
+      "--world-on-scenery-muted",
+      "--world-scenery-scrim",
+      "--world-contrast-tone",
+    ]) {
+      assert.ok(
+        worldData.includes(v),
+        `worldStyleVars must publish ${v} for the dynamic contrast engine`,
+      );
+    }
+  });
+
+  test("G4. Dossier scenic text consumes --world-on-scenery (no dark-on-dark)", () => {
+    // The dossier title/place/caption rendered over destination scenery must
+    // read from --world-on-scenery so it adapts per-world.
+    assert.match(
+      globalsCss,
+      /\.atelier-dossier-title[\s\S]*?var\(--world-on-scenery/,
+      ".atelier-dossier-title must consume var(--world-on-scenery) — no hardcoded dark text over scenery",
+    );
+    assert.match(
+      globalsCss,
+      /\.atelier-dossier-caption[\s\S]*?var\(--world-on-scenery-muted/,
+      ".atelier-dossier-caption must consume var(--world-on-scenery-muted)",
+    );
+  });
+
+  test("G5. WorldCanvas + WorldPortal expose data-scenery-tone for per-tone styling", () => {
+    assert.match(worldTsx, /data-scenery-tone=/);
+    // Both root WorldCanvas and inner WorldPortal must emit the attribute.
+    const count = (worldTsx.match(/data-scenery-tone=/g) ?? []).length;
+    assert.ok(count >= 2, `data-scenery-tone must appear on both WorldCanvas and WorldPortal (got ${count})`);
+  });
+
+  test("G6. FolioScene root on DashboardClient carries data-scenery-tone", () => {
+    assert.match(
+      dashboardClient,
+      /data-scenery-tone=\{world\.visualLayer\.contrastTone[\s\S]*?\}/,
+      "DashboardClient FolioScene must expose data-scenery-tone from the active world",
+    );
+  });
+});
+
+describe("Atrium v3: typography-first portals", () => {
+  test("G7. Portal eyebrow is sr-only (typography-first, no eyebrow + label + whisper trio)", () => {
+    const worldTsx = readSrc("components/ui/World.tsx");
+    // The eyebrow remains in the DOM for assistive tech, but the visible
+    // surface is title + descriptor only.
+    assert.match(
+      worldTsx,
+      /world-portal-eyebrow[\s\S]{0,20}sr-only/,
+      ".world-portal-eyebrow must carry sr-only — portals lead with the label, not a redundant eyebrow",
+    );
+  });
+
+  test("G8. globals.css gives portals a typographic glow halo (atmosphere behind type)", () => {
+    // Within the doorway shelf, the portal must paint a soft halo BEHIND
+    // the typography so the surface is not a flat color block.
+    assert.match(
+      globalsCss,
+      /\.atelier-doorway-shelf\s*\.world-portal::before[\s\S]*?radial-gradient/,
+      ".atelier-doorway-shelf .world-portal::before must paint a radial halo behind the typography",
+    );
+  });
+
+  test("G9. Portal label scale is editorial (≥2rem upper bound)", () => {
+    // Find the doorway-shelf-scoped label rule and check the clamp upper bound.
+    const idx = globalsCss.indexOf(".atelier-doorway-shelf .world-portal-label");
+    assert.ok(idx > -1, ".atelier-doorway-shelf .world-portal-label must exist");
+    const block = globalsCss.slice(idx, idx + 600);
+    assert.match(
+      block,
+      /font-size:\s*clamp\([^)]*?(?:2|3)(?:\.\d+)?rem\)/,
+      ".atelier-doorway-shelf .world-portal-label must clamp font-size to an editorial display scale (≥2rem upper bound)",
+    );
+  });
+
+  test("G10. ROOM_CATALOGUE descriptors are full editorial phrases, not redundant 'the foo' labels", () => {
+    const worldData = readSrc("lib/worldData.ts");
+    // The whispers must be real descriptors that don't echo the label.
+    assert.match(
+      worldData,
+      /whisper:\s*["']Private dining, stays, and local intelligence\./,
+      "Concierge whisper must read as an editorial descriptor",
+    );
+    assert.match(
+      worldData,
+      /whisper:\s*["']Shape the journey\./,
+      "Planning whisper must read as an editorial descriptor",
+    );
+    assert.match(
+      worldData,
+      /whisper:\s*["']Your private archive\./,
+      "Saved whisper must read as an editorial descriptor",
+    );
+    // None of the whispers should be the redundant "the foo" pattern.
+    assert.doesNotMatch(
+      worldData,
+      /whisper:\s*["']the (?:private salon|observatory|drafting atelier|scrapbook library)["']/,
+      "ROOM_CATALOGUE whispers must not be redundant 'the foo' echoes of the label",
+    );
+  });
+});
+
+describe("Atrium v3: physical archive + engraved actions", () => {
+  test("G11. Archive section uses .atelier-archive-cabinet + spines + shelf rail", () => {
+    const start = dashboardClient.indexOf("function JourneyShelfTeaser");
+    const end = dashboardClient.indexOf("function EmptyAtelierHome");
+    const block = dashboardClient.slice(start, end);
+    for (const cls of [
+      "atelier-archive-cabinet",
+      "atelier-archive-shelf",
+      "atelier-archive-spines",
+      "atelier-archive-spine",
+      "atelier-archive-spine-cap",
+      "atelier-archive-spine-band",
+      "atelier-archive-spine-base",
+      "atelier-archive-plate",
+    ]) {
+      assert.ok(
+        block.includes(cls),
+        `JourneyShelfTeaser must render .${cls} (physical archive contract)`,
+      );
+    }
+  });
+
+  test("G12. Archive spines render brass-embossed vertical ciphers", () => {
+    // The spine cipher must rotate via writing-mode for the vertical brass
+    // label that runs down each spine.
+    assert.match(
+      globalsCss,
+      /\.atelier-archive-spine-cipher[\s\S]*?writing-mode:\s*vertical-rl/,
+      ".atelier-archive-spine-cipher must use writing-mode: vertical-rl for the embossed brass label",
+    );
+  });
+
+  test("G13. New trip + View all use the engraved-tab pattern (tactile, accessible)", () => {
+    const start = dashboardClient.indexOf("function JourneyShelfTeaser");
+    const end = dashboardClient.indexOf("function EmptyAtelierHome");
+    const block = dashboardClient.slice(start, end);
+    assert.ok(
+      block.includes("atelier-engraved-tab"),
+      "New trip + View all must adopt .atelier-engraved-tab (no longer buried inline links)",
+    );
+    // CSS must define the tab with the brass treatment + min-height 44px.
+    const idx = globalsCss.indexOf(".atelier-engraved-tab {");
+    assert.ok(idx > -1, ".atelier-engraved-tab must be defined in globals.css");
+    const cssBlock = globalsCss.slice(idx, idx + 1600);
+    assert.match(cssBlock, /min-height:\s*44px/, ".atelier-engraved-tab must enforce a 44px touch target");
+    assert.match(cssBlock, /--ds-ember-brass/, ".atelier-engraved-tab must consume brass tokens");
+  });
+
+  test("G14. Engraved-tab respects prefers-reduced-motion", () => {
+    assert.match(
+      globalsCss,
+      /@media \(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\.atelier-engraved-tab[\s\S]*?transition:\s*none/,
+      ".atelier-engraved-tab must disable transitions under prefers-reduced-motion",
+    );
+  });
+});
+
+describe("Atrium v3: silent footer (no Portland · Misty forest narration)", () => {
+  test("G15. WorldWayfinder footer is sr-only — class names remain for the wayfinder-quiet contract", () => {
+    // The visible page must NOT narrate the destination at the bottom.
+    // Class names stay in source so prior contracts pass, but the actual
+    // wayfinder is rendered inside an sr-only footer.
+    assert.match(
+      dashboardClient,
+      /atelier-atrium-signature[\s\S]{0,40}sr-only/,
+      "The atelier-atrium-signature footer must carry sr-only so the Portland · Misty forest line is no longer visible",
+    );
+    // The WorldWayfinder + world-wayfinder-quiet class are still referenced.
+    assert.match(dashboardClient, /world-wayfinder-quiet/);
+    assert.match(dashboardClient, /WorldWayfinder/);
   });
 });

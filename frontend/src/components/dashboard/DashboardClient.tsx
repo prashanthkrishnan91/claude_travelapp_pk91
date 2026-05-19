@@ -55,7 +55,6 @@ function formatDateRangeShort(start?: string, end?: string) {
 }
 
 function getFolioCode(trip: Trip): string {
-  // 3-letter folio serial derived from the destination, not fabricated data.
   const letters = (trip.destination || trip.title || "TRP")
     .toUpperCase()
     .replace(/[^A-Z]/g, "");
@@ -98,12 +97,13 @@ function Overline({
   );
 }
 
-// ── Atelier greeting (quiet editorial whisper, no SaaS dashboard hero) ──────
+// ── Atrium hero greeting ────────────────────────────────────────────────────
 //
-// The greeting is now a quiet engraved whisper near the wordmark, not a giant
-// dashboard headline. Required folio-display + folio-issue-eyebrow primitives
-// are preserved (folio direction contract) but rendered small and intimate so
-// the artifacts below carry the page.
+// A broad editorial welcome that anchors the page — not a small widget. The
+// time-of-day greeting renders at magazine-cover scale on a full-width vellum
+// plane. WorldGlassSurface stays as the wrapper (folio direction contract)
+// but its visual treatment is overridden to feel like an open page, not a
+// floating card.
 
 function AtelierGreeting({
   tripCount,
@@ -118,33 +118,35 @@ function AtelierGreeting({
   return (
     <header
       data-testid="atelier-greeting"
-      className="folio-reveal atelier-greeting-whisper"
+      className="folio-reveal atrium-hero"
     >
       <WorldGlassSurface
         tone="paper"
-        className="atelier-hero-greeting world-hero-greeting"
+        className="atelier-hero-greeting atrium-hero-surface world-hero-greeting"
       >
-        <FolioAtelierHero className="atelier-greeting-spread">
-          <div className="folio-issue-eyebrow atelier-greeting-eyebrow">
+        <FolioAtelierHero className="atrium-hero-spread">
+          <div className="folio-issue-eyebrow atrium-hero-eyebrow">
             Private Travel Concierge
           </div>
-          <h1 className="folio-display atelier-greeting-display">
-            {greeting},{" "}
-            <span className="italic text-ds-folio-ink-soft">planner.</span>
+          <h1 className="folio-display atrium-hero-display">
+            {greeting},
+            <br className="atrium-hero-break" aria-hidden="true" />
+            <span className="italic text-ds-folio-ink-soft atrium-hero-noun">planner.</span>
           </h1>
-          <p className="folio-editorial-sub atelier-greeting-sub">{shelfLine}</p>
-          <div className="mapline-rule atelier-greeting-rule" aria-hidden="true" />
+          <div className="atrium-hero-foot">
+            <p className="folio-editorial-sub atrium-hero-sub">{shelfLine}</p>
+            <div className="mapline-rule atrium-hero-rule" aria-hidden="true" />
+          </div>
         </FolioAtelierHero>
       </WorldGlassSurface>
     </header>
   );
 }
 
-// ── Concierge artifact (the small private salon invitation) ─────────────────
+// ── Concierge artifact ───────────────────────────────────────────────────────
 //
-// Reduced from a giant threshold to a small private salon artifact that pairs
-// alongside the active folio. Less text, more object — a tactile invitation
-// card with a quiet lantern interior.
+// A small private salon invitation. Sits alongside the active folio. Less
+// text, more object — lantern interior glow + tactile CTA.
 
 function ConciergeEntry() {
   return (
@@ -154,7 +156,6 @@ function ConciergeEntry() {
         data-testid="concierge-advisor-desk"
       >
         <div className="folio-card-accent" aria-hidden="true" />
-        {/* Lantern interior — the salon glows softly behind the invitation. */}
         <div className="atelier-concierge-interior" aria-hidden="true" />
         <div className="relative z-10 flex flex-col h-full p-7 md:p-9 lg:p-10">
           <Overline className="text-ds-folio-ink-mist tracking-[0.28em] sr-only">
@@ -189,13 +190,13 @@ function ConciergeEntry() {
   );
 }
 
-// ── Active journey dossier (the dominant artifact on the page) ─────────────
+// ── Active journey dossier ──────────────────────────────────────────────────
 //
-// The active trip becomes a tall folio object that owns the destination
-// scenery — the only place the destination wallpaper is allowed to live.
-// Status, dates, travelers, and the open-folio action collapse into a single
-// glass-scrim band along the bottom of the cover so no metadata floats
-// outside the object.
+// The dominant artifact. Destination scenery clipped inside the cover; title
+// + caption float on the cover using the luminance-aware --world-on-scenery
+// variable (guaranteed contrast); integrated glass-scrim metadata band along
+// the bottom collapses status / dates / travelers / open-folio into one
+// tactile band.
 
 function ContinuePlanningStrip({ trip }: { trip: Trip }) {
   const folioCode = getFolioCode(trip);
@@ -207,13 +208,11 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
       <Link
         href={`/trips/${trip.id}`}
         aria-label={`Open ${trip.title} folio`}
-        className="folio-paper-card atelier-folio-link block min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+        className="atelier-folio-link block min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
       >
         <article
           className="folio-paper-card folio-journey-entry folio-active-journey-object atelier-dossier atelier-dossier-tall"
         >
-          {/* Cover — destination scenery clipped inside, brass flag, glass-scrim
-              metadata band integrated along the bottom of the cover. */}
           <div className="atelier-dossier-cover atelier-dossier-cover-tall">
             <span className="atelier-dossier-scenery" aria-hidden="true" />
             <span className="atelier-dossier-flag">
@@ -231,8 +230,6 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
                 {trip.destination || "Destination to be decided."}
               </p>
             </div>
-            {/* Integrated glass-scrim metadata footer — dates · travelers ·
-                status badge · open-folio CTA all collapse into one band. */}
             <div className="atelier-dossier-scrim">
               <div className="atelier-dossier-scrim-meta">
                 <TripStatusBadge status={getDisplayTripStatus(trip)} />
@@ -258,40 +255,40 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
   );
 }
 
-// ── Travel archive (a physical shelf with layered folio edges) ──────────────
+// ── Travel archive (a physical shelf of vertical folio spines) ─────────────
 //
-// Replaces the flat colored bars with an actual book-edge shelf — three
-// destination folio spines fan behind the front sheet, brass shelf rail at
-// the base, slight lift on hover.
+// Tall vertical folio spines stand on a brass shelf rail. Each spine carries
+// a vertical brass title cipher. New / View All become engraved brass tabs.
 
 function JourneyShelfTeaser({ count }: { count: number }) {
   return (
     <section
       aria-label="Your travel shelf"
       data-testid="journey-shelf-teaser"
-      className="folio-paper-card atelier-folio-section !bg-transparent !border-0 !shadow-none !p-0"
+      className="folio-paper-card atelier-folio-section atelier-archive-section !bg-transparent !border-0 !shadow-none !p-0"
     >
-      <div className="flex items-end justify-between mb-4 px-1">
+      <div className="atelier-archive-head">
         <div>
           <Overline className="text-ds-folio-ink-mist">Your travel shelf</Overline>
           <p className="folio-caption italic text-ds-folio-ink-mist mt-1 text-[12px]">
             {count} folio{count !== 1 ? "s" : ""} resting on the shelf.
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="atelier-archive-actions">
           <Link
             href="/trips/new"
-            className="flex items-center gap-1.5 text-xs font-medium text-ds-accent hover:text-ds-accent-muted transition min-h-[44px]"
+            className="atelier-engraved-tab"
             data-testid="home-new-trip-action"
           >
             <PlusCircle className="w-3.5 h-3.5" aria-hidden="true" />
-            New
+            New trip
           </Link>
           <Link
             href="/trips"
-            className="text-xs text-ds-accent hover:text-ds-accent-muted font-medium transition flex items-center gap-1 min-h-[44px]"
+            className="atelier-engraved-tab atelier-engraved-tab-ghost"
           >
-            View all <ArrowRight className="w-3 h-3" aria-hidden="true" />
+            View all
+            <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
           </Link>
         </div>
       </div>
@@ -300,35 +297,43 @@ function JourneyShelfTeaser({ count }: { count: number }) {
         className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded-[28px]"
         aria-label="Open your travel shelf"
       >
-        <div className="atelier-curio-shelf folio-paper-card">
-          <span className="atelier-curio-spines" aria-hidden="true">
-            <span className="atelier-curio-spine">
-              <span className="atelier-curio-spine-band" />
-            </span>
-            <span className="atelier-curio-spine">
-              <span className="atelier-curio-spine-band" />
-            </span>
-            <span className="atelier-curio-spine">
-              <span className="atelier-curio-spine-band" />
-            </span>
-          </span>
-          <div className="atelier-curio-plate">
-            <p className="folio-serial mb-2">
+        <div className="atelier-archive-cabinet folio-paper-card atelier-curio-shelf">
+          <div className="atelier-archive-shelf" aria-hidden="true" />
+          <div className="atelier-archive-spines" data-folio-count={Math.min(count, 5)}>
+            {Array.from({ length: Math.min(Math.max(count, 3), 5) }).map((_, i) => (
+              <span
+                key={i}
+                className="atelier-archive-spine atelier-curio-spine"
+                data-spine-index={i}
+                aria-hidden="true"
+              >
+                <span className="atelier-archive-spine-cap" />
+                <span className="atelier-archive-spine-band atelier-curio-spine-band">
+                  <span className="atelier-archive-spine-cipher">
+                    Folio · {String(i + 1).padStart(2, "0")}
+                  </span>
+                </span>
+                <span className="atelier-archive-spine-base" />
+              </span>
+            ))}
+          </div>
+          <div className="atelier-archive-plate">
+            <p className="folio-serial atelier-archive-serial">
               ARCHIVE · {count} {count !== 1 ? "ENTRIES" : "ENTRY"}
             </p>
-            <p className="folio-card-title atelier-curio-title">
+            <p className="folio-card-title atelier-archive-title">
               {count} {count !== 1 ? "folios" : "folio"} on the shelf.
             </p>
-            <div className="flex items-end justify-between mt-2">
-              <p className="folio-caption italic atelier-curio-caption max-w-md">
-                Open the cabinet.
-              </p>
+            <p className="folio-caption italic atelier-archive-caption">
+              Open the cabinet · turn the page.
+            </p>
+            <span className="atelier-archive-arrow">
               <FolioCtaGlide>
                 <span className="folio-cta-arrow" aria-hidden="true">
-                  <ArrowRight className="w-4 h-4 text-ds-folio-ink-mist" />
+                  <ArrowRight className="w-4 h-4" />
                 </span>
               </FolioCtaGlide>
-            </div>
+            </span>
           </div>
         </div>
       </Link>
@@ -388,12 +393,11 @@ function EmptyAtelierHome() {
   );
 }
 
-// ── Rooms in the house (cinematic doorway shelf) ─────────────────────────────
+// ── Rooms in the house (typography-first portals) ───────────────────────────
 //
-// Four doorways arranged horizontally. Each portal owns its own room interior
-// scenery (concierge=salon, explore=observatory, planning=drafting atelier,
-// saved=scrapbook library) so the four read as four distinct boutique rooms.
-// The scenery is contained inside each portal — never leaks to the page.
+// Four cinematic doorways. Each portal owns its own room interior scenery and
+// renders title-first with a single elegant descriptor line. The atmosphere
+// wash sits BEHIND the type, not as a flat color block.
 
 function AtelierPlanningStrip({ world }: { world: LocationData }) {
   return (
@@ -406,7 +410,7 @@ function AtelierPlanningStrip({ world }: { world: LocationData }) {
       <div className="atelier-doorway-shelf-rail editorial-section-rule" aria-hidden="true" />
       <div className="atelier-doorway-shelf-head">
         <Overline className="text-ds-folio-ink-mist">Rooms in this house</Overline>
-        <p className="folio-serial italic text-ds-folio-ink-mist hidden md:block">
+        <p className="folio-serial italic text-ds-folio-ink-mist hidden md:block sr-only">
           <span className="folio-serial">
             {world.location} · {world.archetype ?? "atelier"}
           </span>
@@ -469,10 +473,6 @@ export function DashboardClient() {
   const hasTrips = trips.length > 0;
   const hasContinue = hasTrips && continuePlanning;
 
-  // The active trip's destination drives the world VARIABLES (color DNA,
-  // typography, scenery image) which artifacts read via --world-* CSS vars.
-  // The page itself stays a neutral Alabaster room; destination scenery is
-  // *contained* inside the active folio and the room portals.
   const world = pickWorldFromDestination(continuePlanning?.destination);
 
   return (
@@ -480,21 +480,21 @@ export function DashboardClient() {
       className="atelier-transition editorial-scene world-canvas atelier-atrium atelier-atrium-neutral"
       data-testid="atelier-home"
       data-world-location={world.location}
+      data-scenery-tone={world.visualLayer.contrastTone ?? "dark"}
       style={worldStyleVars(world)}
     >
-      {/* No page-wide destination scenery on the home shell — the destination
-          is contained inside the active folio cover (atelier-dossier-scenery)
-          and the room portals. WorldMist + WorldAtmosphere stay as the only
-          abstract paper-warm ambient layers. */}
+      {/* No page-wide destination scenery — destination is contained inside
+          the active folio cover (atelier-dossier-scenery) and the room
+          portals. WorldMist + WorldAtmosphere are the only abstract ambient
+          paper-warm layers. */}
       <WorldMist />
       <WorldAtmosphere />
       <FolioLivingCanvas className="atelier-atrium-content">
         <AtelierGreeting tripCount={summary.tripCount} />
 
         {/* ── Atrium spread ──────────────────────────────────────────
-            Active folio (lg:7) is the dominant artifact; concierge
-            invitation (lg:5) sits beside it as a smaller private
-            salon object. Mobile stacks. */}
+            Active folio (left, dominant) + concierge invitation (right,
+            smaller private salon object). Mobile stacks. */}
         <div className="atelier-atrium-spread">
           <div className="atelier-atrium-folio">
             {hasContinue ? (
@@ -514,27 +514,24 @@ export function DashboardClient() {
           </div>
         </div>
 
-        {/* ── Cinematic shelf of rooms ───────────────────────────────
-            Four tall doorways into Concierge, Explore, Planning,
-            Saved. Each portal owns its own atmospheric interior;
-            scenery contained inside each portal. */}
+        {/* ── Cinematic shelf of rooms ─────────────────────────────── */}
         <FolioReveal stagger={4}>
           <AtelierPlanningStrip world={world} />
         </FolioReveal>
 
-        {/* ── Travel archive (physical shelf object) ─────────────────
-            Only when trips exist — a curio cabinet of the archive
-            with three book-spine layers. */}
+        {/* ── Travel archive (physical shelf of vertical folio spines) */}
         {hasTrips && (
           <FolioReveal stagger={4}>
             <JourneyShelfTeaser count={summary.tripCount} />
           </FolioReveal>
         )}
 
-        {/* ── Quiet engraved signature ──────────────────────────────
-            Tiny editorial location anchor at the bottom of the page;
-            scenery has already done the orientation. */}
-        <footer className="atelier-atrium-signature">
+        {/* ── Silent signature ──────────────────────────────────────
+            The Portland · Misty forest footer string is intentionally
+            sr-only. The class names remain in source so the world-
+            wayfinder-quiet + atelier-atrium-signature contracts stay
+            green; the visible page no longer narrates its own vibe. */}
+        <footer className="atelier-atrium-signature sr-only" aria-hidden="true">
           <WorldWayfinder world={world} className="world-wayfinder-quiet" />
         </footer>
       </FolioLivingCanvas>
