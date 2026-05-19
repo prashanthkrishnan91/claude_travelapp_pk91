@@ -11,7 +11,6 @@ import {
   ArrowRight,
   Calendar,
   Users,
-  MapPin,
 } from "lucide-react";
 import { TripStatusBadge } from "@/components/ui/TripStatusBadge";
 import {
@@ -75,8 +74,8 @@ function AtelierGreeting({ tripCount }: { tripCount: number }) {
   const greeting = getTimeGreeting();
   return (
     <header data-testid="atelier-greeting">
-      <Overline className="text-ds-folio-ink-mist">Private Travel Concierge</Overline>
-      <h1 className="text-2xl font-semibold text-ds-folio-ink mt-2 mb-1">
+      <div className="folio-home-issue-eyebrow">Private Travel Concierge</div>
+      <h1 className="folio-home-greeting-title mt-2 mb-2">
         {greeting}
       </h1>
       <p className="text-sm text-ds-folio-ink-mist">
@@ -84,7 +83,6 @@ function AtelierGreeting({ tripCount }: { tripCount: number }) {
           ? `${tripCount} trip${tripCount !== 1 ? "s" : ""} on your shelf.`
           : "Your private travel atelier. Plan, discover, and refine."}
       </p>
-      {/* Editorial mapline — route-motif accent below the greeting */}
       <div className="mapline-rule mt-4" aria-hidden="true" />
     </header>
   );
@@ -96,36 +94,19 @@ function ConciergeEntry() {
   return (
     <section aria-label="AI Concierge" data-testid="concierge-entry">
       <FolioPanel data-testid="concierge-advisor-desk">
-        <div className="px-6 pt-5 pb-4 border-b border-ds-hairline">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex items-center justify-center w-9 h-9 rounded-xl bg-ds-accent-subtle text-ds-accent shrink-0 text-xs font-bold"
-              aria-hidden="true"
-            >
-              AI
-            </div>
-            <div className="flex-1 min-w-0">
-              <Overline>Private Travel Concierge</Overline>
-              <h2 className="text-base font-semibold text-ds-folio-ink mt-0.5 leading-snug">
-                AI Travel Concierge
-              </h2>
-            </div>
-            <div
-              className="flex items-center justify-center w-9 h-9 rounded-xl bg-ds-accent-subtle text-ds-accent shrink-0"
-              aria-hidden="true"
-            >
-              <Sparkles className="w-4 h-4" />
-            </div>
-          </div>
+        <div className="px-6 pt-6 pb-4 border-b border-ds-hairline">
+          <Overline className="text-ds-folio-ink-mist">Private Travel Concierge</Overline>
+          <h2 className="folio-home-concierge-serif mt-2">
+            Your private concierge.
+          </h2>
         </div>
         <div className="px-6 py-5">
-          <p className="text-sm text-ds-folio-ink-mist leading-relaxed mb-4">
-            Ask for restaurants, hotels, or activities — anywhere. Your
-            private concierge, ready when you are.
+          <p className="folio-home-editorial-caption mb-5">
+            Ask for restaurants, hotels, or activities — anywhere, anytime.
           </p>
           <Link
             href="/concierge"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-ds-accent text-ds-text-inverse text-sm font-semibold hover:opacity-90 transition-opacity min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            className="btn-marine min-h-[44px]"
           >
             Open Concierge
             <ArrowRight className="w-4 h-4" aria-hidden="true" />
@@ -146,19 +127,13 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
     >
       <Overline className="text-ds-folio-ink-mist">Continue planning</Overline>
       <article className="folio-paper-card mt-3 p-5">
-        <div className="flex items-start gap-4">
-          <div
-            className="flex items-center justify-center w-10 h-10 rounded-xl bg-ds-accent-subtle text-ds-accent shrink-0"
-            aria-hidden="true"
-          >
-            <MapPin className="w-4 h-4" />
-          </div>
+        <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
             <TripStatusBadge status={getDisplayTripStatus(trip)} />
             <h3 className="text-sm font-semibold text-ds-folio-ink mt-1.5 mb-0.5">
               {trip.title}
             </h3>
-            <p className="text-xs text-ds-folio-ink-mist truncate">
+            <p className="folio-home-editorial-caption truncate">
               {trip.destination}
             </p>
             <p className="text-xs text-ds-folio-ink-mist mt-1 flex items-center gap-1.5 flex-wrap">
@@ -227,7 +202,7 @@ function JourneyShelfTeaser({ count }: { count: number }) {
           <p className="text-sm font-medium text-ds-folio-ink">
             {count} trip{count !== 1 ? "s" : ""} planned
           </p>
-          <p className="text-xs text-ds-folio-ink-mist">
+          <p className="folio-home-editorial-caption">
             Browse your full journey shelf
           </p>
         </div>
@@ -310,7 +285,7 @@ function AtelierPlanningStrip() {
             <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-accent transition truncate">
               Explore
             </p>
-            <p className="text-xs text-ds-folio-ink-mist truncate">
+            <p className="folio-home-editorial-caption truncate">
               Hotels, dining &amp; more
             </p>
           </div>
@@ -329,7 +304,7 @@ function AtelierPlanningStrip() {
             <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-accent transition truncate">
               Saved Ideas
             </p>
-            <p className="text-xs text-ds-folio-ink-mist truncate">
+            <p className="folio-home-editorial-caption truncate">
               Your travel scrapbook
             </p>
           </div>

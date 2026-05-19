@@ -2333,4 +2333,69 @@
        primitives inside don't need to repeat text-ds-text on every node. */
     color: var(--ds-text-primary);
   }
+
+  /* ════════════════════════════════════════════════════════════════
+     HOME MOBILE EDITORIAL REDESIGN — Stage 3.5 Home Folio
+     Scoped to Home screen only. No other surfaces touched.
+     Closes the gap between current plain Home and folio-concept-v1.html.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Fraunces italic display heading for the Home greeting h1.
+     36px at weight 300 gives the large editorial serif presence the
+     folio concept calls for — calm, romantic, not bold-dashboard. */
+  .folio-home-greeting-title {
+    font-family: var(--ds-font-editorial);
+    font-style: italic;
+    font-weight: 300;
+    font-size: 2.25rem;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    color: var(--ds-folio-ink);
+  }
+
+  /* Brass issue eyebrow — folio masthead opener with a left brass rule.
+     Replaces the plain overline above the greeting with an editorial
+     "issue line" from the folio concept (brass rule + small caps text). */
+  .folio-home-issue-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--ds-ember-brass);
+  }
+  .folio-home-issue-eyebrow::before {
+    content: '';
+    display: block;
+    width: 24px;
+    height: 1px;
+    background: var(--ds-ember-brass);
+    opacity: 0.7;
+    flex-shrink: 0;
+  }
+
+  /* Fraunces italic caption for destination lines and card subtext.
+     The folio concept uses italic serif for every editorial caption
+     under a place name, trip title, or section description. */
+  .folio-home-editorial-caption {
+    font-family: var(--ds-font-editorial);
+    font-style: italic;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: var(--ds-folio-ink-mist);
+  }
+
+  /* Fraunces italic heading for the Concierge entry card.
+     The concierge voice is always italic serif per the folio direction —
+     this makes "Your private concierge." feel like a correspondence opener
+     rather than a generic SaaS feature label. */
+  .folio-home-concierge-serif {
+    font-family: var(--ds-font-editorial);
+    font-style: italic;
+    font-weight: 300;
+    font-size: 1.5rem;
+    line-height: 1.2;
+    color: var(--ds-folio-ink);
+  }
 }
