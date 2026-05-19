@@ -168,8 +168,10 @@ test("page uses folio-ink-soft for secondary copy (Slice 2 paper conversion)", (
   );
 });
 
-test("page uses text-ds-text-tertiary for metadata", () => {
-  assert.match(tripDetailPage, /text-ds-text-tertiary/);
+test("page uses paper-world muted text token for metadata", () => {
+  // Stage 3.5 UI architecture: trip detail page renders on paper canvas;
+  // muted text uses folio-ink-mist instead of cream text-ds-text-tertiary.
+  assert.match(tripDetailPage, /text-ds-folio-ink-mist/);
 });
 
 test("page uses marine-ink for primary CTA (Slice 2 paper conversion)", () => {

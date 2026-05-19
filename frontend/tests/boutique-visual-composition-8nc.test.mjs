@@ -240,10 +240,10 @@ describe("Phase 8N-C: globals.css composition primitives", () => {
 // ── 17–24. DashboardClient visual composition ─────────────────────────────────
 
 describe("Phase 8N-C: DashboardClient visual composition", () => {
-  it("17. DashboardClient ConciergeEntry uses folio-paper-panel (paper-world conversion)", () => {
+  it("17. DashboardClient ConciergeEntry uses folio-paper-panel or FolioPanel primitive (paper-world conversion)", () => {
     assert.ok(
-      dashboardClient.includes("folio-paper-panel"),
-      "DashboardClient ConciergeEntry must use folio-paper-panel (paper-world conversion — no orphan dark on linen)"
+      dashboardClient.includes("folio-paper-panel") || dashboardClient.includes("<FolioPanel"),
+      "DashboardClient ConciergeEntry must use folio-paper-panel or FolioPanel primitive (paper-world conversion — no orphan dark on linen)"
     );
   });
 

@@ -420,12 +420,18 @@ describe("Phase 8L: no raw hex or rgba in new mobile additions", () => {
 // ── 12. Desktop stability: existing ds-token and structure preserved ──────────
 
 describe("Phase 8L: desktop layout stability", () => {
-  it("ItineraryDayColumn uses folio-paper-card surface (Slice 2 paper conversion)", () => {
-    assert.ok(dayColSrc.includes("folio-paper-card"), "folio-paper-card must be used for column surface (replaced bg-ds-onyx in Slice 2)");
+  it("ItineraryDayColumn uses folio-paper-card or FolioCard primitive surface (Slice 2 paper conversion + Unified UI Architecture)", () => {
+    assert.ok(
+      dayColSrc.includes("folio-paper-card") || dayColSrc.includes("<FolioCard"),
+      "folio-paper-card / FolioCard primitive must be used for column surface"
+    );
   });
 
-  it("ItineraryDayColumn uses folio-paper-card which carries shadow (Slice 2 paper conversion)", () => {
-    assert.ok(dayColSrc.includes("folio-paper-card"), "folio-paper-card carries shadow via CSS class (replaced inline ds-elevation-2 in Slice 2)");
+  it("ItineraryDayColumn uses folio-paper-card or FolioCard primitive which carries shadow (Slice 2 paper conversion + Unified UI Architecture)", () => {
+    assert.ok(
+      dayColSrc.includes("folio-paper-card") || dayColSrc.includes("<FolioCard"),
+      "folio-paper-card / FolioCard primitive carries shadow via CSS class"
+    );
   });
 
   it("ItineraryItemCard uses folio-paper-item card surface (Slice 3 paper conversion)", () => {

@@ -8,6 +8,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Info, Loader2, MapPin, MoreHorizontal, Plus, Sparkles, X } from "lucide-react";
 import { ItineraryDay, ItineraryItem } from "@/types";
+import { FolioCard } from "@/components/ui/Folio";
 import { ItineraryItemCard } from "./ItineraryItemCard";
 import { computeAdjacentHints, summarizeHints } from "@/lib/travelHints";
 import { suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from "@/lib/api";
@@ -137,8 +138,8 @@ function renderItemsWithConnectors(
       connector = (
         <div key={`hint-${item.id}`} className="flex items-center gap-1.5 px-3 py-1">
           <div className="w-px h-4 bg-ds-hairline ml-[17px] flex-shrink-0" />
-          <MapPin className="w-3 h-3 text-ds-text-tertiary flex-shrink-0" />
-          <span className="text-[10px] text-ds-text-tertiary leading-snug italic">{hint.label}</span>
+          <MapPin className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
+          <span className="text-[10px] text-ds-folio-ink-mist leading-snug italic">{hint.label}</span>
         </div>
       );
     } else if (hint.kind === "far_apart") {
@@ -150,12 +151,12 @@ function renderItemsWithConnectors(
           <div className="flex items-center gap-1.5">
             <div className="w-px h-4 bg-ds-hairline ml-[17px] flex-shrink-0" />
             {mode === "walk" ? (
-              <Footprints className="w-3 h-3 text-ds-text-tertiary flex-shrink-0" />
+              <Footprints className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
             ) : (
-              <Car className="w-3 h-3 text-ds-text-tertiary flex-shrink-0" />
+              <Car className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
             )}
-            <span className="text-[10px] text-ds-text-tertiary leading-snug">{timeLabel}</span>
-            <span className="text-[10px] text-ds-text-tertiary/60 leading-snug">· {est.distanceKm} km</span>
+            <span className="text-[10px] text-ds-folio-ink-mist leading-snug">{timeLabel}</span>
+            <span className="text-[10px] text-ds-folio-ink-mist/60 leading-snug">· {est.distanceKm} km</span>
           </div>
           <div className="flex items-center gap-1 pl-[29px] pr-1">
             <span className="text-[10px] text-ds-warning/70 leading-snug">{hint.label}</span>
@@ -169,12 +170,12 @@ function renderItemsWithConnectors(
         <div key={`travel-${item.id}`} className="flex items-center gap-1.5 px-3 py-1">
           <div className="w-px h-4 bg-ds-hairline ml-[17px] flex-shrink-0" />
           {mode === "walk" ? (
-            <Footprints className="w-3 h-3 text-ds-text-tertiary flex-shrink-0" />
+            <Footprints className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
           ) : (
-            <Car className="w-3 h-3 text-ds-text-tertiary flex-shrink-0" />
+            <Car className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
           )}
-          <span className="text-[10px] text-ds-text-tertiary leading-snug">{hint.label}</span>
-          <span className="text-[10px] text-ds-text-tertiary/60 leading-snug">· {est.distanceKm} km</span>
+          <span className="text-[10px] text-ds-folio-ink-mist leading-snug">{hint.label}</span>
+          <span className="text-[10px] text-ds-folio-ink-mist/60 leading-snug">· {est.distanceKm} km</span>
         </div>
       );
     }
@@ -204,8 +205,8 @@ function TimelineSections({
     return (
       <div className="space-y-2" data-testid="day-part-section">
         <div className="flex items-center gap-1.5 px-1 pt-1 pb-0.5">
-          <Clock className="w-3 h-3 text-ds-text-tertiary flex-shrink-0" />
-          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary" data-testid="day-part-label">
+          <Clock className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-folio-ink-mist" data-testid="day-part-label">
             Unscheduled · {items.length} {items.length === 1 ? "item" : "items"}
           </span>
         </div>
@@ -227,7 +228,7 @@ function TimelineSections({
         return (
           <div
             key={part}
-            className={`space-y-1.5 ${idx > 0 ? "mt-3 pt-2.5 border-t border-ds-pen-stroke/30" : ""}`}
+            className={`space-y-1.5 ${idx > 0 ? "mt-3 pt-2.5 border-t border-ds-hairline/30" : ""}`}
             data-testid="day-part-section"
           >
             <div className="flex items-center gap-1.5 px-1 pt-0.5">
@@ -238,7 +239,7 @@ function TimelineSections({
               >
                 {meta.label}
               </span>
-              <span className="text-[10px] text-ds-text-tertiary italic">{meta.timeHint}</span>
+              <span className="text-[10px] text-ds-folio-ink-mist italic">{meta.timeHint}</span>
             </div>
             <div className="space-y-2">
               {renderItemsWithConnectors(sectionItems, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet, onUpdateTimeline)}
@@ -295,7 +296,7 @@ function SuggestionsReviewPanel({
         {suggestions.map((s) => {
           const item = itemMap.get(s.itemId);
           if (!item) return null;
-          const colorClass = DAY_PART_COLOR[s.dayPart] ?? "text-ds-text-tertiary";
+          const colorClass = DAY_PART_COLOR[s.dayPart] ?? "text-ds-folio-ink-mist";
           return (
             <div key={s.itemId} className="flex items-center gap-2 text-[11px]">
               <span className="truncate flex-1 text-ds-folio-ink-soft">{item.title}</span>
@@ -489,10 +490,10 @@ export function ItineraryDayColumn({
     "flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg bg-ds-bone hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink border border-ds-hairline transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 disabled:opacity-50";
 
   return (
-    <div
+    <FolioCard
       data-testid="day-chapter-frame"
       data-chapter-id="itinerary-day-mobile-chapter"
-      className={`folio-paper-card transition-all duration-[200ms] ${
+      className={`transition-all duration-[200ms] ${
         isSelected
           ? "border-ds-marine-ink/40 ring-1 ring-ds-marine-ink/20 ring-offset-1 ring-offset-ds-bone"
           : ""
@@ -799,7 +800,7 @@ export function ItineraryDayColumn({
                     [day.dayNumber]: !showAllItems,
                   }));
                 }}
-                className="rounded-full border border-ds-pen-stroke bg-ds-carbon px-4 text-sm font-medium text-ds-text-secondary hover:bg-ds-pen-stroke transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
+                className="rounded-full border border-ds-hairline bg-ds-linen px-4 text-sm font-medium text-ds-folio-ink-soft hover:bg-ds-bone transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
               >
                 {showAllItems ? "Show less ↑" : `Show all ${day.items.length} items ↓`}
               </button>
@@ -807,6 +808,6 @@ export function ItineraryDayColumn({
           )}
         </div>
       )}
-    </div>
+    </FolioCard>
   );
 }

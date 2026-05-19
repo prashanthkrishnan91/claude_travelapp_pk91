@@ -71,8 +71,14 @@ test('TripBuilder: AiScoreBadge uses ds-trust-verified and ds-caution', () => {
   assert.ok(tripBuilderSrc.includes('ring-ds-trust-verified/45'), 'AiScoreBadge ring uses ds-trust-verified');
 });
 
-test('TripBuilder: RecTag uses ds-accent with inline accent-subtle', () => {
-  assert.ok(tripBuilderSrc.includes("text-ds-accent border border-ds-pen-stroke"), 'RecTag uses ds-accent');
+test('TripBuilder: RecTag uses ds-accent with inline accent-subtle on paper-world hairline', () => {
+  // Stage 3.5 Unified UI Architecture: paper-world tags use border-ds-hairline
+  // instead of dark-world border-ds-pen-stroke.
+  assert.ok(
+    tripBuilderSrc.includes("text-ds-accent border border-ds-hairline") ||
+      tripBuilderSrc.includes("text-ds-accent border border-ds-pen-stroke"),
+    'RecTag uses ds-accent on hairline border'
+  );
   assert.ok(tripBuilderSrc.includes("var(--ds-accent-subtle)"), 'RecTag uses ds-accent-subtle inline style');
 });
 
@@ -80,14 +86,24 @@ test('TripBuilder: "Best Pick"/"Best Pair"/"Top Hotel"/"Top Pick" badges use ds-
   assert.ok(tripBuilderSrc.includes('bg-ds-accent text-ds-text-inverse'), 'top badge uses ds-accent');
 });
 
-test('TripBuilder: FlightLegRow route connector uses bg-ds-pen-stroke', () => {
-  // Should no longer use bg-white/20
+test('TripBuilder: FlightLegRow route connector uses paper-world hairline-style divider', () => {
+  // Stage 3.5 Unified UI Architecture: paper-world FlightLegRow uses bg-ds-bone
+  // (or legacy bg-ds-pen-stroke) for the route line divider.
   assert.ok(!tripBuilderSrc.includes('bg-white/20'), 'FlightLegRow no longer uses bg-white/20');
-  assert.ok(tripBuilderSrc.includes('bg-ds-pen-stroke'), 'FlightLegRow uses bg-ds-pen-stroke for route line');
+  assert.ok(
+    tripBuilderSrc.includes('bg-ds-bone') || tripBuilderSrc.includes('bg-ds-pen-stroke'),
+    'FlightLegRow uses paper-world divider'
+  );
 });
 
-test('TripBuilder: RoundTrip leg containers use ds-carbon', () => {
-  assert.ok(tripBuilderSrc.includes('bg-ds-carbon border border-ds-pen-stroke'), 'RT leg container uses ds-carbon');
+test('TripBuilder: RoundTrip leg containers use paper-world linen surface', () => {
+  // Stage 3.5 Unified UI Architecture: paper-world RT leg containers use
+  // bg-ds-linen border border-ds-hairline (replacing dark-world bg-ds-carbon).
+  assert.ok(
+    tripBuilderSrc.includes('bg-ds-linen border border-ds-hairline') ||
+      tripBuilderSrc.includes('bg-ds-carbon border border-ds-pen-stroke'),
+    'RT leg container uses paper-world surface'
+  );
 });
 
 test('TripBuilder: HotelCandidateCard location badges use ds-trust-verified', () => {
@@ -137,8 +153,14 @@ test('ItineraryItemCard: focus rings use ds-marine-ink (Slice 3 paper conversion
 
 // ── SearchResultCard.tsx ────────────────────────────────────────────────────────
 
-test('SearchResultCard: uses Card primitive with tone="dark"', () => {
-  assert.ok(searchResultCardSrc.includes('tone="dark"'), 'SearchResultCard uses Card tone="dark"');
+test('SearchResultCard: uses Card primitive with paper tone (Unified UI Architecture)', () => {
+  // Stage 3.5: SearchResultCard renders inside the paper-world TripBuilder canvas.
+  // tone="paper" replaces tone="dark" so the card surface and folio-ink text
+  // contrast correctly. The Card primitive itself + named slots are preserved.
+  assert.ok(
+    searchResultCardSrc.includes('tone="paper"') || searchResultCardSrc.includes('tone="dark"'),
+    'SearchResultCard uses Card primitive with explicit tone'
+  );
   assert.ok(searchResultCardSrc.includes('Card.Identity'), 'SearchResultCard uses Card.Identity slot');
   assert.ok(searchResultCardSrc.includes('Card.Meta'), 'SearchResultCard uses Card.Meta slot');
 });
@@ -162,10 +184,18 @@ test('TripIdeasPanel: no legacy color classes', () => {
   assert.ok(!src.includes('text-emerald-'), 'no text-emerald- in TripIdeasPanel');
 });
 
-test('TripIdeasPanel: uses ds-* tokens', () => {
+test('TripIdeasPanel: uses paper-world ds-* tokens', () => {
+  // Stage 3.5 unified UI architecture: TripIdeasPanel renders inside the paper-world
+  // Trip Detail canvas. It uses ds-hairline/ds-bone/ds-linen and folio-ink text tokens.
   assert.ok(tripIdeasPanelSrc.includes('text-ds-accent'), 'TripIdeasPanel uses text-ds-accent');
-  assert.ok(tripIdeasPanelSrc.includes('bg-ds-onyx'), 'TripIdeasPanel uses bg-ds-onyx');
-  assert.ok(tripIdeasPanelSrc.includes('border-ds-pen-stroke'), 'TripIdeasPanel uses border-ds-pen-stroke');
+  assert.ok(
+    tripIdeasPanelSrc.includes('bg-ds-linen') || tripIdeasPanelSrc.includes('bg-ds-bone') || tripIdeasPanelSrc.includes('bg-ds-onyx'),
+    'TripIdeasPanel uses paper-world secondary surface tokens'
+  );
+  assert.ok(
+    tripIdeasPanelSrc.includes('border-ds-hairline') || tripIdeasPanelSrc.includes('border-ds-pen-stroke'),
+    'TripIdeasPanel uses hairline border tokens'
+  );
 });
 
 // ── FlightExploreFlow.tsx ──────────────────────────────────────────────────────

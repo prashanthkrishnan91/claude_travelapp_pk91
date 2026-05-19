@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Bookmark, ChevronDown, Loader2, Plane, Hotel, Sparkles, UtensilsCrossed, Search, X } from "lucide-react";
 import { fetchTripIdeas, assignIdeaToDay, deleteItem, updateIdeaMeta } from "@/lib/api";
 import type { ItemType, ItineraryDay, ItineraryItem } from "@/types";
+import { FolioButton, FolioCard, FolioPanel } from "@/components/ui/Folio";
 
 // Default visible items per vertical before "Show more" — keeps the panel
 // usable when a user accumulates many saved ideas. See Level 3 Trip Data
@@ -49,7 +50,7 @@ interface Props {
 const STATUS_OPTIONS = [
   { value: "must_do", label: "Must-do", activeClass: "text-ds-trust-verified ring-ds-trust-verified/40" },
   { value: "maybe",   label: "Maybe",   activeClass: "text-ds-caution ring-ds-caution/40" },
-  { value: "skipped", label: "Skip",    activeClass: "text-ds-text-tertiary ring-ds-pen-stroke/40" },
+  { value: "skipped", label: "Skip",    activeClass: "text-ds-folio-ink-soft ring-ds-folio-ink-soft/40 bg-ds-bone" },
 ] as const;
 
 type IdeaStatus = "must_do" | "maybe" | "skipped";
@@ -200,7 +201,7 @@ function IdeaCard({
   }
 
   return (
-    <div className="folio-paper-item p-3">
+    <FolioCard className="folio-paper-item p-3" data-testid="trip-idea-card">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-ds-folio-ink">{item.title}</p>
@@ -238,7 +239,7 @@ function IdeaCard({
               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 transition ${
                 status === opt.value
                   ? opt.activeClass
-                  : "text-ds-text-tertiary ring-ds-pen-stroke/40 group-hover:text-ds-text-secondary group-hover:ring-ds-pen-stroke"
+                  : "text-ds-folio-ink-soft ring-ds-hairline group-hover:text-ds-folio-ink group-hover:ring-ds-folio-ink-mist"
               }`}
               style={status === opt.value && opt.value !== "skipped"
                 ? { backgroundColor: "var(--ds-accent-subtle)" }
@@ -251,7 +252,7 @@ function IdeaCard({
         <button
           type="button"
           onClick={() => setNoteOpen((v) => !v)}
-          className="ml-auto min-h-[44px] min-w-[44px] flex items-center justify-center px-1 text-[10px] text-ds-text-tertiary hover:text-ds-text-secondary transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          className="ml-auto min-h-[44px] min-w-[44px] flex items-center justify-center px-1 text-[10px] text-ds-folio-ink-mist hover:text-ds-folio-ink transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         >
           {note ? "note ✎" : "+ note"}
         </button>
@@ -293,7 +294,7 @@ function IdeaCard({
           </button>
         </div>
       )}
-    </div>
+    </FolioCard>
   );
 }
 
@@ -386,7 +387,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
   }
 
   return (
-    <div className="folio-paper-panel">
+    <FolioPanel data-testid="trip-ideas-panel-root">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -508,22 +509,22 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                           ))}
                         </div>
                         {overflow > 0 && (
-                          <button
-                            type="button"
+                          <FolioButton
+                            variant="secondary"
                             onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.key]: true }))}
-                            className="mt-1.5 w-full min-h-[44px] flex items-center justify-center rounded-lg border border-ds-pen-stroke bg-ds-onyx text-[10px] font-medium text-ds-text-secondary hover:bg-ds-carbon transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                            className="mt-1.5 w-full justify-center text-[10px]"
                           >
                             Show {overflow} more
-                          </button>
+                          </FolioButton>
                         )}
                         {expanded && group.items.length > DEFAULT_VISIBLE_PER_VERTICAL && (
-                          <button
-                            type="button"
+                          <FolioButton
+                            variant="secondary"
                             onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.key]: false }))}
-                            className="mt-1.5 w-full min-h-[44px] flex items-center justify-center rounded-lg border border-ds-pen-stroke bg-ds-onyx text-[10px] font-medium text-ds-text-secondary hover:bg-ds-carbon transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                            className="mt-1.5 w-full justify-center text-[10px]"
                           >
                             Show less
-                          </button>
+                          </FolioButton>
                         )}
                       </div>
                     );
@@ -534,6 +535,6 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
           )}
         </div>
       )}
-    </div>
+    </FolioPanel>
   );
 }

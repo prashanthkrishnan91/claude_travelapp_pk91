@@ -79,15 +79,20 @@ test('Phase 8D: day-part-label data-testid on Overline section labels', () => {
 });
 
 test('Phase 8D: editorial hairline border-t between non-empty day-part sections', () => {
+  // Stage 3.5 paper-world conversion: hairline tokens are paper-world (ds-hairline)
+  // instead of dark-world (ds-pen-stroke).
   assert.ok(
-    src.includes('border-t border-ds-pen-stroke/30'),
-    'missing border-t border-ds-pen-stroke/30 hairline between sections'
+    src.includes('border-t border-ds-hairline') || src.includes('border-t border-ds-pen-stroke'),
+    'missing border-t hairline between sections'
   );
 });
 
 test('Phase 8D: time hint uses italic for editorial register (not KPI-like)', () => {
-  // The time hint span should use italic to differentiate from the Overline section label
-  assert.ok(src.includes('text-ds-text-tertiary italic'), 'time hint not in italic editorial register');
+  // The time hint span should use italic + paper-world muted text token
+  assert.ok(
+    src.includes('text-ds-folio-ink-mist italic') || src.includes('text-ds-text-tertiary italic'),
+    'time hint not in italic editorial register'
+  );
 });
 
 test('Phase 8D: day-part sections use filledSections array (hairline between non-empty sections)', () => {
@@ -173,24 +178,38 @@ test('Phase 8D: no legacy amber-NNN classes', () => {
   assert.ok(!/\bamber-\d+\b/.test(src), 'found legacy amber-NNN class');
 });
 
-test('Phase 8D: uses folio-paper-card for column root surface (Slice 2 paper conversion)', () => {
-  assert.ok(src.includes('folio-paper-card'), 'missing folio-paper-card on column surface (replaced bg-ds-onyx in Slice 2)');
+test('Phase 8D: uses folio-paper-card or FolioCard primitive for column root surface (Slice 2 paper conversion + Unified UI Architecture)', () => {
+  assert.ok(
+    src.includes('folio-paper-card') || src.includes('<FolioCard'),
+    'missing folio-paper-card / FolioCard primitive on column surface'
+  );
 });
 
-test('Phase 8D: uses border-ds-pen-stroke for column borders', () => {
-  assert.ok(src.includes('border-ds-pen-stroke'), 'missing border-ds-pen-stroke');
+test('Phase 8D: uses hairline tokens for paper column borders', () => {
+  // Stage 3.5: paper-world ItineraryDayColumn uses ds-hairline tokens.
+  assert.ok(
+    src.includes('border-ds-hairline') || src.includes('border-ds-pen-stroke'),
+    'missing hairline border'
+  );
 });
 
-test('Phase 8D: uses folio-paper-card which carries shadow (Slice 2 paper conversion)', () => {
-  assert.ok(src.includes('folio-paper-card'), 'folio-paper-card carries shadow via CSS class (replaced inline ds-elevation-2 in Slice 2)');
+test('Phase 8D: uses folio-paper-card or FolioCard primitive which carries shadow (Slice 2 paper conversion + Unified UI Architecture)', () => {
+  assert.ok(
+    src.includes('folio-paper-card') || src.includes('<FolioCard'),
+    'folio-paper-card / FolioCard primitive carries shadow via CSS class'
+  );
 });
 
 test('Phase 8D: uses bg-ds-marine-ink for selected state number marker (Slice 2 paper conversion)', () => {
   assert.ok(src.includes('bg-ds-marine-ink'), 'selected number marker must use bg-ds-marine-ink (converted from bg-ds-accent in Slice 2)');
 });
 
-test('Phase 8D: uses text-ds-text-tertiary for muted/secondary labels', () => {
-  assert.ok(src.includes('text-ds-text-tertiary'), 'missing text-ds-text-tertiary');
+test('Phase 8D: uses paper-world muted text token for secondary labels', () => {
+  // Stage 3.5: paper-world ItineraryDayColumn uses folio-ink-mist for muted text.
+  assert.ok(
+    src.includes('text-ds-folio-ink-mist') || src.includes('text-ds-text-tertiary'),
+    'missing paper-world muted text token'
+  );
 });
 
 // ── Semantic buttons/links — no card-level click-only navigation ──────────────

@@ -42,9 +42,11 @@ test("trips page loading state has aria-busy for accessibility", () => {
 });
 
 test("trips page uses ds-* surface tokens (not raw dark-/cream- colors for structure)", () => {
-  assert.match(tripsPage, /bg-ds-carbon|bg-ds-onyx|border-ds-pen-stroke/);
-  assert.match(tripsPage, /text-ds-text/);
-  assert.match(tripsPage, /text-ds-text-tertiary/);
+  // Stage 3.5 paper-world: my-trips is a paper surface, uses linen/bone/hairline
+  // and folio-ink text. Dark dark-world tokens are reserved for cinema surfaces.
+  assert.match(tripsPage, /bg-ds-linen|bg-ds-bone|border-ds-hairline|folio-paper-card|folio-paper-panel/);
+  assert.match(tripsPage, /text-ds-folio-ink/);
+  assert.match(tripsPage, /text-ds-folio-ink-mist/);
 });
 
 test("trips page uses ds-accent tokens for icon backgrounds", () => {
@@ -292,8 +294,10 @@ test("QuickActions uses ds-text tokens", () => {
 // ── DashboardClient.tsx — ds-* token contract ────────────────────────────────
 
 test("DashboardClient header uses ds-text tokens", () => {
-  assert.match(dashboardClient, /text-ds-text/);
-  assert.match(dashboardClient, /text-ds-text-tertiary/);
+  // Stage 3.5 paper-world: Home dashboard greeting and overlines render on paper
+  // canvas, so they use folio-ink instead of cream `text-ds-text` (which is dark-mode only).
+  assert.match(dashboardClient, /text-ds-folio-ink/);
+  assert.match(dashboardClient, /text-ds-folio-ink-mist/);
 });
 
 test("DashboardClient primary trip stat uses ds-accent-subtle and ds-accent", () => {

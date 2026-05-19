@@ -296,7 +296,58 @@ These were open questions before Slice 2. All resolved and implemented.
 5. **Brass hairline border:** All cinema enforcement primitives use `var(--ds-brass-field-border)` (a warm amber at ~8% opacity) as a hairline border, not a full brass fill. This is the correct token for subtle cinema panel framing.
 6. **`reduced-motion` guards:** All cinema enforcement primitives that include `transition` or `transform` are wrapped in `@media (prefers-reduced-motion: reduce)` overrides.
 
-## 20. Open questions — Slice 5
+## 20. Unified Folio/Cinema UI Architecture (Stage 3.5 — 2026-05-18)
+
+The Folio direction is now backed by **canonical React primitives** that own
+the paper-vs-cinema decision instead of relying on feature files to compose
+the right class stacks. This is the durable rule going forward — new screens
+should compose `Folio*` / `Cinema*` primitives, not hand-roll Tailwind class
+soup.
+
+### Canonical primitive layer
+
+Located in `frontend/src/components/ui/Folio.tsx`:
+
+- **Paper world** (Home, My Trips, Trip Build, Trip Itinerary, Trip Ideas, New Trip):
+  `FolioPage`, `FolioPanel`, `FolioCard`, `FolioSectionHeader`, `FolioInput`,
+  `FolioChip`, `FolioButton`.
+- **Cinema world** (Discover, Saved, AI Concierge): `CinemaPage`, `CinemaPanel`,
+  `CinemaCard`, `CinemaChip`.
+
+Each primitive tags its surface with `data-folio-world="paper"` or
+`data-folio-world="cinema"` so DOM inspection and tests can verify world
+assignment without re-reading CSS.
+
+### Hard rules — world boundary
+
+1. **Paper-world surfaces** must use `text-ds-folio-ink` / `-soft` / `-mist` for
+   text hierarchy. **Never** use `text-ds-text` / `-secondary` / `-tertiary`
+   (cream tokens) on a paper background — that's how text becomes invisible.
+   Exception: `text-ds-text-inverse` on brass-gold buttons is correct (dark text
+   on a brass fill).
+2. **Paper-world cards** use `bg-ds-bone` / `bg-ds-linen` / `folio-paper-card` /
+   `folio-paper-panel`. **No** `bg-ds-onyx` or `bg-ds-carbon` inside a paper
+   card — that's an orphan dark surface.
+3. **Cinema-world surfaces** must wrap in `folio-cinema-lounge` (Discover) /
+   `folio-cinema-collection` (Saved) / `folio-cinema-desk` (Concierge) and
+   compose cards via `folio-cinema-card` / `folio-cinema-tile` / `folio-collection-card`.
+4. **Floating dark overlays** (toast, compare bar, focused modal) are allowed
+   to be dark on a paper page — they're deliberate UI separation, not paper/cinema
+   confusion. Mark them as overlays in the component, not as orphan cards.
+
+### Why the canonical layer exists
+
+Three prior Stage 3.5 slices (Slice 1 → 4B + Visual Rescue) added the CSS
+vocabulary but feature files kept hand-rolling local class stacks. The result:
+- `text-ds-text` (cream) on `bg-ds-bone` (paper) → invisible "Round-Trip"
+  header in the Best Pair flight card.
+- `bg-ds-carbon` "Add to" pill on the paper itinerary chrome → orphan dark.
+- Sort/Status chips on paper rendered as near-invisible dark-on-paper pills.
+
+The primitives + the `tests/unified-folio-cinema-architecture.test.mjs`
+guardrail prevent regressions to those failure modes.
+
+## 21. Open questions — Slice 5
 
 1. **Folio serial + masthead:** Issue masthead, folio serials, large day numerals (currently deferred). Slice 5 is the natural home.
 2. **TripBuilder CollapsiblePanel:** Still uses `bg-ds-carbon`/`bg-ds-onyx` — visual correctness for the paper world day-folio view. Candidate for Slice 5 or a standalone Slice 4C.

@@ -70,10 +70,13 @@ test("DashboardClient ConciergeEntry open link has 44px touch target", () => {
   assert.match(section, /min-h-\[44px\]/);
 });
 
-test("DashboardClient has elevated Concierge section (folio-paper-panel or boutique-instrument or ds-elevation-2 token)", () => {
+test("DashboardClient has elevated Concierge section (folio-paper-panel or boutique-instrument or ds-elevation-2 token, or FolioPanel primitive)", () => {
   assert.ok(
-    dashboardClient.includes("folio-paper-panel") || dashboardClient.includes("boutique-instrument") || dashboardClient.includes("ds-elevation-2"),
-    "DashboardClient must elevate the Concierge section via folio-paper-panel, boutique-instrument, or ds-elevation-2"
+    dashboardClient.includes("folio-paper-panel") ||
+      dashboardClient.includes("boutique-instrument") ||
+      dashboardClient.includes("ds-elevation-2") ||
+      dashboardClient.includes("<FolioPanel"),
+    "DashboardClient must elevate the Concierge section via folio-paper-panel, boutique-instrument, ds-elevation-2, or the FolioPanel primitive"
   );
 });
 
@@ -110,7 +113,10 @@ test("DashboardClient does not import RecentTrips (replaced by atelier journey v
 // ── DashboardClient — ds-* token contract ────────────────────────────────────
 
 test("DashboardClient uses ds-* surface tokens (no raw violet/emerald/amber)", () => {
-  assert.match(dashboardClient, /bg-ds-carbon|bg-ds-onyx|border-ds-pen-stroke/);
+  // Stage 3.5 UI architecture: paper-world surfaces use hairline/linen tokens.
+  // Dark-world tokens (bg-ds-carbon/onyx, border-ds-pen-stroke) are reserved for
+  // cinema-world surfaces (Discover, Saved, AI Concierge).
+  assert.match(dashboardClient, /bg-ds-bone|bg-ds-linen|border-ds-hairline|folio-paper-card|folio-home-cinema-card/);
   assert.doesNotMatch(dashboardClient, /violet-\d+|emerald-\d+|amber-\d+/);
 });
 
