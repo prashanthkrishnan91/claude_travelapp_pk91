@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-20 (Atelier Room System v1 patch-1 — PR #451 open, branch claude/review-travel-app-docs-afJmb)
+Last updated: 2026-05-20 (Atelier Room System v1 patch-1 — PR #451 open, branch claude/review-travel-app-docs-afJmb; PR body updated: visible adoption scope confirmed)
 
 ## Purpose
 
