@@ -5180,10 +5180,18 @@
     }
   }
 
-  /* Bottom dead space — the atrium content already has
-     padding-bottom; nothing else should add height after it. */
+  /* Bottom dead space — the atrium content provides its own editorial
+     padding-bottom. On mobile the inner pad also clears the fixed
+     bottom navigation bar, so the outer home-edge-bleed wrapper needs
+     no extra clearance of its own. */
   .atelier-atrium-content {
     padding-bottom: clamp(28px, 4vh, 56px) !important;
+  }
+  @media (max-width: 1023px) {
+    .atelier-atrium-content {
+      /* Include mobile nav clearance: at least 3.5rem (= nav bar) + safe area. */
+      padding-bottom: max(3.5rem, calc(3rem + env(safe-area-inset-bottom, 0px))) !important;
+    }
   }
   .atelier-atrium {
     padding-bottom: 0 !important;
@@ -5720,10 +5728,25 @@
     display: flex;
     flex-direction: column;
   }
-  /* The atrium-content sits at the top of the atrium; the atrium's
-     neutral gradient fills the rest of the viewport so there is
-     never a visible boundary between atrium and atelier-atmosphere-
-     root. */
+  /* Dead-space root-cause fix (post-atrium-merge):
+     flex: 1 1 auto caused atelier-atrium to grow to home-edge-bleed's
+     min-height (100vh) even when content was shorter. The neutral bg
+     then showed as a blank void below the last section. Since
+     atelier-atmosphere-root's warm-paper BG matches atelier-atrium-
+     neutral's paper gradient at 100%, no seam appears when the atrium
+     is content-sized. The outer mobile-nav-spacer pad (88px on mobile)
+     was also doubling the bottom space already provided by
+     atelier-atrium-content's own pb; neutralising it here removes the
+     redundant gap. */
+  .atelier-atrium.atelier-atrium-neutral {
+    flex: none;   /* size to content — do not grow to fill home-edge-bleed */
+  }
+  /* home-edge-bleed outer padding: desktop needs none (atelier-atrium-
+     content handles editorial pb); mobile nav clearance is now inside
+     atelier-atrium-content (see !important rule above). */
+  .home-edge-bleed {
+    padding-bottom: 0;
+  }
 
   /* ════════════════════════════════════════════════════════════════
      ATELIER ATRIUM v4 — Floating Physical Editorial (No-Box Mandate)

@@ -948,6 +948,60 @@ describe("Atrium v3: silent footer (no Portland · Misty forest narration)", () 
   });
 });
 
+describe("Atrium I: no excessive bottom dead space on Home", () => {
+  // Guards against the flex: 1 1 auto / min-height: 100vh combination that
+  // caused atelier-atrium-neutral to grow beyond its content, leaving a blank
+  // neutral-background void below the Travel Archive section (PR #448 residual).
+
+  test("I1. atelier-atrium-neutral sets flex: none (not flex: 1) as its final rule", () => {
+    // The override must appear AFTER the flex: 1 1 auto rule so CSS source-
+    // order gives it priority within the same @layer specificity.
+    const lastFlex1Pos = globalsCss.lastIndexOf("flex: 1 1 auto");
+    const lastFlexNonePos = globalsCss.lastIndexOf("flex: none");
+    assert.ok(lastFlex1Pos !== -1, "atelier-atrium-neutral flex: 1 1 auto rule must still exist (v4 intent preserved)");
+    assert.ok(lastFlexNonePos !== -1, "a flex: none override must exist to prevent atrium expanding beyond content");
+    assert.ok(
+      lastFlexNonePos > lastFlex1Pos,
+      "flex: none must appear AFTER flex: 1 1 auto in globals.css so it wins the cascade",
+    );
+  });
+
+  test("I2. home-edge-bleed padding-bottom is overridden to 0 (desktop) to remove mobile-nav-spacer redundancy", () => {
+    // The mobile-nav-spacer class adds 88px on mobile — redundant once
+    // atelier-atrium-content provides its own nav clearance.  The home-edge-
+    // bleed rule must neutralise it via a later same-specificity rule.
+    const allMatches = [...globalsCss.matchAll(/\.home-edge-bleed\s*\{([^}]*)\}/g)];
+    const hasZeroPb = allMatches.some(m => /padding-bottom:\s*0\b/.test(m[1]));
+    assert.ok(hasZeroPb, ".home-edge-bleed must declare padding-bottom: 0 to neutralise the outer mobile-nav-spacer gap");
+  });
+
+  test("I3. atelier-atrium-content includes mobile nav clearance on mobile breakpoint", () => {
+    // The inner content container now owns mobile nav clearance so the outer
+    // home-edge-bleed wrapper can be zero-padded.
+    assert.match(
+      globalsCss,
+      /max-width:\s*1023px[\s\S]*?\.atelier-atrium-content[\s\S]*?padding-bottom:\s*max\(3\.5rem/,
+      "A @media (max-width: 1023px) block must set atelier-atrium-content padding-bottom to max(3.5rem,...) for mobile nav clearance",
+    );
+  });
+
+  test("I4. atelier-atrium padding-bottom is forced to 0 (no extra outer space below content)", () => {
+    assert.match(
+      globalsCss,
+      /\.atelier-atrium\s*\{\s*padding-bottom:\s*0\s*!important/,
+      ".atelier-atrium must have padding-bottom: 0 !important to prevent double-counting with atelier-atrium-content",
+    );
+  });
+
+  test("I5. atelier-atrium-content has editorial pb on desktop (clamp, no oversized mob pad)", () => {
+    assert.match(
+      globalsCss,
+      /\.atelier-atrium-content\s*\{\s*padding-bottom:\s*clamp\(28px/,
+      ".atelier-atrium-content must use clamp(28px,...) editorial padding-bottom on desktop",
+    );
+  });
+});
+
 describe("Atrium v9: guaranteed-readable text + reusable brand mark", () => {
   const navArtifact = readSrc("components/layout/AtelierNavArtifact.tsx");
   const sidebar = readSrc("components/layout/Sidebar.tsx");
