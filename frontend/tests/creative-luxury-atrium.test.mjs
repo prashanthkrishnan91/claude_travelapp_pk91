@@ -948,6 +948,144 @@ describe("Atrium v3: silent footer (no Portland · Misty forest narration)", () 
   });
 });
 
+describe("Atrium I: no excessive bottom dead space on Home", () => {
+  // Guards against the flex: 1 1 auto / min-height: 100vh combination that
+  // caused atelier-atrium-neutral to grow beyond its content, leaving a blank
+  // neutral-background void below the Travel Archive section (PR #448 residual).
+
+  test("I1. atelier-atrium-neutral sets flex: none (not flex: 1) as its final rule", () => {
+    // The override must appear AFTER the flex: 1 1 auto rule so CSS source-
+    // order gives it priority within the same @layer specificity.
+    const lastFlex1Pos = globalsCss.lastIndexOf("flex: 1 1 auto");
+    const lastFlexNonePos = globalsCss.lastIndexOf("flex: none");
+    assert.ok(lastFlex1Pos !== -1, "atelier-atrium-neutral flex: 1 1 auto rule must still exist (v4 intent preserved)");
+    assert.ok(lastFlexNonePos !== -1, "a flex: none override must exist to prevent atrium expanding beyond content");
+    assert.ok(
+      lastFlexNonePos > lastFlex1Pos,
+      "flex: none must appear AFTER flex: 1 1 auto in globals.css so it wins the cascade",
+    );
+  });
+
+  test("I2. home-edge-bleed padding-bottom is overridden to 0 (desktop) to remove mobile-nav-spacer redundancy", () => {
+    // The mobile-nav-spacer class adds 88px on mobile — redundant once
+    // atelier-atrium-content provides its own nav clearance.  The home-edge-
+    // bleed rule must neutralise it via a later same-specificity rule.
+    const allMatches = [...globalsCss.matchAll(/\.home-edge-bleed\s*\{([^}]*)\}/g)];
+    const hasZeroPb = allMatches.some(m => /padding-bottom:\s*0\b/.test(m[1]));
+    assert.ok(hasZeroPb, ".home-edge-bleed must declare padding-bottom: 0 to neutralise the outer mobile-nav-spacer gap");
+  });
+
+  test("I3. atelier-atrium-content includes mobile nav clearance on mobile breakpoint", () => {
+    // The inner content container now owns mobile nav clearance so the outer
+    // home-edge-bleed wrapper can be zero-padded.
+    assert.match(
+      globalsCss,
+      /max-width:\s*1023px[\s\S]*?\.atelier-atrium-content[\s\S]*?padding-bottom:\s*max\(3\.5rem/,
+      "A @media (max-width: 1023px) block must set atelier-atrium-content padding-bottom to max(3.5rem,...) for mobile nav clearance",
+    );
+  });
+
+  test("I4. atelier-atrium padding-bottom is forced to 0 (no extra outer space below content)", () => {
+    assert.match(
+      globalsCss,
+      /\.atelier-atrium\s*\{\s*padding-bottom:\s*0\s*!important/,
+      ".atelier-atrium must have padding-bottom: 0 !important to prevent double-counting with atelier-atrium-content",
+    );
+  });
+
+  test("I5. atelier-atrium-content has editorial pb on desktop (clamp, no oversized mob pad)", () => {
+    assert.match(
+      globalsCss,
+      /\.atelier-atrium-content\s*\{\s*padding-bottom:\s*clamp\(28px/,
+      ".atelier-atrium-content must use clamp(28px,...) editorial padding-bottom on desktop",
+    );
+  });
+
+  test("I6. home-edge-bleed final min-height rule is 0 — overrides both the 100vh desktop and mobile calc rules", () => {
+    // The v6 CSS added min-height: 100vh (and calc(100vh-3.5rem) on mobile) to
+    // home-edge-bleed. After setting flex:none on the atrium, the flex container
+    // retains that min-height floor, leaving dead space below the content.
+    // The override at the end of the same @layer block must set min-height: 0.
+    const allMatches = [...globalsCss.matchAll(/\.home-edge-bleed\s*\{([^}]*)\}/g)];
+    const lastMatch = allMatches[allMatches.length - 1];
+    assert.ok(lastMatch != null, ".home-edge-bleed must appear in globals.css");
+    // Walk backward: the final instance that declares min-height must be 0.
+    const minHeightBlocks = allMatches.filter(m => /min-height/.test(m[1]));
+    assert.ok(minHeightBlocks.length > 0, "At least one .home-edge-bleed block must declare min-height");
+    const last = minHeightBlocks[minHeightBlocks.length - 1];
+    assert.match(
+      last[1],
+      /min-height:\s*0\b/,
+      "The last .home-edge-bleed block declaring min-height must set it to 0 (content-sized floor)"
+    );
+  });
+
+  test("I7. archive section wrappers have no min-height: 100vh/dvh/svh", () => {
+    // Archive wrappers must never claim a full-screen height on their own.
+    const archiveBlock = (() => {
+      const start = globalsCss.indexOf(".atelier-archive-section");
+      const end = globalsCss.indexOf(".atelier-engraved-tab");
+      return start !== -1 && end !== -1 ? globalsCss.slice(start, end) : globalsCss;
+    })();
+    assert.doesNotMatch(
+      archiveBlock,
+      /\.atelier-archive[\w-]*\s*\{[^}]*min-height:\s*100(?:vh|dvh|svh)/,
+      "Archive wrapper classes must not set min-height: 100vh/dvh/svh — archive must be content-height"
+    );
+  });
+
+  test("I8. atelier-atrium-signature sr-only footer has no layout height (no padding/margin reserving space)", () => {
+    // The sr-only class collapses the element; the signature footer must not add
+    // its own padding/margin that re-introduces dead space.
+    const start = globalsCss.indexOf(".atelier-atrium-signature");
+    if (start === -1) return; // class may live solely via sr-only Tailwind
+    const block = globalsCss.slice(start, start + 400);
+    assert.doesNotMatch(
+      block,
+      /padding(?:-top|-bottom)?:\s*(?:[1-9]\d*(?:px|rem|vh|dvh))/,
+      ".atelier-atrium-signature must not reserve layout space with padding (it is sr-only)"
+    );
+  });
+
+  test("I9. home-edge-bleed retains overflow-x-clip (no horizontal overflow bleed)", () => {
+    // The overflow-x: clip on home-edge-bleed keeps horizontal containment;
+    // it must survive the min-height fix.
+    assert.match(
+      globalsCss,
+      /\.home-edge-bleed[\s\S]*?overflow-x:\s*clip/,
+      ".home-edge-bleed must retain overflow-x: clip for horizontal containment"
+    );
+  });
+
+  test("I10. atelier-atrium-content has overflow:clip (not just overflow-x) to contain decorative blob scroll overflow", () => {
+    // Root cause of the mobile blank-space bug (PR #449):
+    //   folio-living-canvas::after is position:absolute with bottom:-22%,
+    //   which extends 22% of the canvas height BELOW the content area.
+    //   Without overflow-y containment, this blob propagates into main's
+    //   overflow-y:auto scroll container, creating a large blank scrollable
+    //   region after the final archive section. DevTools identifies `main`
+    //   as the element in the blank area because no DOM box covers that region.
+    //   overflow:clip (not overflow:hidden) is used because it does not create
+    //   a new block formatting context — sticky positioning and margin collapsing
+    //   inside atelier-atrium-content are unaffected.
+    const matches = [...globalsCss.matchAll(/\.atelier-atrium-content\s*\{([^}]*)\}/g)];
+    const hasOverflowClip = matches.some(m =>
+      /overflow\s*:\s*clip\b/.test(m[1]) ||
+      (/overflow-x\s*:\s*clip\b/.test(m[1]) && /overflow-y\s*:\s*clip\b/.test(m[1]))
+    );
+    assert.ok(
+      hasOverflowClip,
+      "atelier-atrium-content must have overflow:clip (or overflow-x:clip + overflow-y:clip) to contain the decorative blob and prevent blank scroll area in main"
+    );
+    // Confirm NOT overflow:hidden (would create BFC side-effects)
+    const hasOverflowHidden = matches.some(m => /overflow\s*:\s*hidden\b/.test(m[1]));
+    assert.ok(
+      !hasOverflowHidden,
+      "atelier-atrium-content must NOT use overflow:hidden — use overflow:clip to avoid BFC side-effects"
+    );
+  });
+});
+
 describe("Atrium v9: guaranteed-readable text + reusable brand mark", () => {
   const navArtifact = readSrc("components/layout/AtelierNavArtifact.tsx");
   const sidebar = readSrc("components/layout/Sidebar.tsx");
