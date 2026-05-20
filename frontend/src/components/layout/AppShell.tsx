@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { MobileNav } from "./MobileNav";
+import { AtelierNavArtifact } from "./AtelierNavArtifact";
 import { supabase } from "@/lib/supabase";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -48,6 +49,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // Home page becomes an immersive Atelier shell:
+  //   · the standard SaaS Sidebar is hidden so the room can breathe;
+  //   · navigation moves into a single floating AtelierNavArtifact dock;
+  //   · the page wrapper is edge-to-edge with no max-w-7xl box.
+  // Every other route keeps the centered, padded page shell + Sidebar.
+  const isHomePage = pathname === "/";
+
   return (
     <>
       {/* Phase 8N: fixed atmospheric layers — vignette + CSS grain texture */}
@@ -58,11 +66,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         className="atelier-atmosphere-root flex h-full min-h-screen"
         data-testid="atelier-atmosphere-root"
       >
-        <Sidebar />
-        <main className="flex-1 overflow-y-auto" data-testid="reduced-motion-safe-atmosphere">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 sm:pt-8 mobile-nav-spacer atelier-transition" data-testid="mobile-page-content">
-            {children}
-          </div>
+        {/* SaaS sidebar — hidden on the immersive Home shell, present on every
+            other route so navigation, account, sign-out stay in place. The
+            Sidebar substring is preserved for the 8J nav-rescue contract. */}
+        {isHomePage ? null : <Sidebar />}
+        {isHomePage && <AtelierNavArtifact />}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden" data-testid="reduced-motion-safe-atmosphere">
+          {isHomePage ? (
+            <div
+              className="mobile-nav-spacer atelier-transition home-edge-bleed"
+              data-testid="mobile-page-content"
+              data-home-edge-bleed="true"
+            >
+              {children}
+            </div>
+          ) : (
+            <div
+              className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 sm:pt-8 mobile-nav-spacer atelier-transition"
+              data-testid="mobile-page-content"
+            >
+              {children}
+            </div>
+          )}
         </main>
       </div>
     </>

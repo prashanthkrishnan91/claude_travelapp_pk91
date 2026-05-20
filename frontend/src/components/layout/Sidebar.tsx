@@ -9,7 +9,6 @@ import {
   PlusCircle,
   CreditCard,
   Settings,
-  Plane,
   LogOut,
   Compass,
   Bookmark,
@@ -17,6 +16,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { supabase } from "@/lib/supabase";
+import { BrandMark } from "./BrandMark";
 import type { User } from "@supabase/supabase-js";
 
 interface NavLink {
@@ -77,9 +77,7 @@ export function Sidebar() {
     <aside className="hidden lg:flex lg:flex-col w-64 folio-sidebar min-h-screen">
       {/* Brand */}
       <div className="flex items-center gap-2.5 px-5 py-5 border-b border-ds-hairline">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-marine-ink text-ds-paper">
-          <Plane className="w-4 h-4" />
-        </div>
+        <BrandMark />
         <div>
           <p className="text-sm font-semibold folio-display-serif text-ds-folio-ink leading-tight">Travel Concierge</p>
           <p className="text-xs text-ds-folio-ink-mist">Trip Planner</p>
