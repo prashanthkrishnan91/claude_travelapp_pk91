@@ -4408,16 +4408,16 @@
     right: clamp(24px, 3vw, 40px);
     bottom: clamp(96px, 13vh, 140px);
     z-index: 2;
-    color: var(--ds-paper);
+    color: var(--ds-warm-paper);
     text-shadow: 0 2px 16px color-mix(in srgb, var(--world-ink) 65%, transparent);
   }
   .atelier-dossier-place {
-    color: color-mix(in srgb, var(--ds-paper) 80%, transparent);
+    color: color-mix(in srgb, var(--ds-warm-paper) 80%, transparent);
     letter-spacing: 0.28em;
     margin-bottom: 8px;
   }
   .atelier-dossier-title {
-    color: var(--ds-paper);
+    color: var(--ds-warm-paper);
     font-size: clamp(2rem, 3.4vw, 3rem);
     line-height: 1.04;
     letter-spacing: -0.015em;
@@ -4425,7 +4425,7 @@
     max-width: 16ch;
   }
   .atelier-dossier-caption {
-    color: color-mix(in srgb, var(--ds-paper) 88%, transparent);
+    color: color-mix(in srgb, var(--ds-warm-paper) 88%, transparent);
     font-size: clamp(13px, 1.1vw, 15px);
     margin: 0;
   }
@@ -4442,7 +4442,7 @@
     gap: 16px;
     padding: 10px clamp(14px, 1.6vw, 20px);
     border-radius: 14px;
-    background: color-mix(in srgb, var(--ds-paper) 88%, transparent);
+    background: color-mix(in srgb, var(--ds-warm-paper) 88%, transparent);
     backdrop-filter: blur(18px) saturate(1.1);
     -webkit-backdrop-filter: blur(18px) saturate(1.1);
     box-shadow:
@@ -4491,7 +4491,7 @@
     gap: 10px;
     padding: 10px 16px;
     background: var(--ds-marine-ink);
-    color: var(--ds-paper);
+    color: var(--ds-warm-paper);
     border-radius: 10px;
     font-size: 13px;
     font-weight: 600;
@@ -4668,18 +4668,18 @@
     opacity: 0.75;
   }
   .atelier-doorway-shelf .world-portal-eyebrow {
-    color: color-mix(in srgb, var(--ds-paper) 80%, transparent);
+    color: color-mix(in srgb, var(--ds-warm-paper) 80%, transparent);
     font-size: 9px;
     letter-spacing: 0.32em;
   }
   .atelier-doorway-shelf .world-portal-label {
-    color: var(--ds-paper);
+    color: var(--ds-warm-paper);
     font-size: clamp(2.6rem, 3.4vw, 3.8rem);
     line-height: 0.98;
     text-shadow: 0 1px 14px color-mix(in srgb, var(--world-ink) 65%, transparent);
   }
   .atelier-doorway-shelf .world-portal-whisper {
-    color: color-mix(in srgb, var(--ds-paper) 82%, transparent);
+    color: color-mix(in srgb, var(--ds-warm-paper) 82%, transparent);
     font-size: clamp(12px, 0.95vw, 14px);
   }
 
@@ -4905,15 +4905,15 @@
     width: 30px; height: 30px;
     border-radius: 8px;
     background: var(--ds-marine-ink);
-    color: var(--ds-paper);
+    color: var(--ds-warm-paper);
   }
   /* Force the airplane glyph to a cream/paper stroke on the dark
      marine-ink chip — matches the Sidebar brand mark. Without this,
      a global svg rule could leave it a dark outline. */
   .atelier-nav-dock-mark svg,
   .atelier-nav-drawer-mark svg {
-    color: var(--ds-paper) !important;
-    stroke: var(--ds-paper) !important;
+    color: var(--ds-warm-paper) !important;
+    stroke: var(--ds-warm-paper) !important;
   }
   .atelier-nav-dock-wordmark {
     font-size: 14px;
@@ -4992,7 +4992,7 @@
     width: 32px; height: 32px;
     border-radius: 8px;
     background: var(--ds-marine-ink);
-    color: var(--ds-paper);
+    color: var(--ds-warm-paper);
   }
   .atelier-nav-drawer-close {
     display: inline-flex;
@@ -5044,13 +5044,13 @@
   .atelier-concierge-portal .atelier-concierge-eyebrow,
   .atelier-concierge-portal .atelier-concierge-title,
   .atelier-concierge-portal .atelier-concierge-caption {
-    color: var(--ds-paper) !important;
+    color: var(--ds-warm-paper) !important;
   }
   .atelier-concierge-portal .atelier-concierge-eyebrow {
-    color: color-mix(in srgb, var(--ds-paper) 78%, transparent) !important;
+    color: color-mix(in srgb, var(--ds-warm-paper) 78%, transparent) !important;
   }
   .atelier-concierge-portal .atelier-concierge-caption {
-    color: color-mix(in srgb, var(--ds-paper) 90%, transparent) !important;
+    color: color-mix(in srgb, var(--ds-warm-paper) 90%, transparent) !important;
   }
 
   /* Dossier title position fix — guarantee the title sits inside the
@@ -5091,7 +5091,7 @@
     background: transparent !important;
     border: 0 !important;
     padding: 0 !important;
-    color: var(--ds-paper) !important;
+    color: var(--ds-warm-paper) !important;
     font-size: 11px !important;
     letter-spacing: 0.22em !important;
     text-transform: uppercase !important;
@@ -5268,7 +5268,7 @@
     -webkit-backdrop-filter: blur(8px) saturate(1.06);
     box-shadow:
       0 14px 32px color-mix(in srgb, rgba(0, 0, 0, 1) 32%, transparent),
-      inset 0 1px 0 color-mix(in srgb, var(--ds-paper) 24%, transparent);
+      inset 0 1px 0 color-mix(in srgb, var(--ds-warm-paper) 24%, transparent);
     z-index: 3;
   }
   /* Hide the v5 ::before scrim on the flex variant — the content
@@ -5325,7 +5325,7 @@
     box-shadow:
       0 36px 80px color-mix(in srgb, var(--ds-folio-ink) 22%, transparent),
       0 8px 22px color-mix(in srgb, var(--ds-folio-ink) 14%, transparent),
-      inset 0 1px 0 color-mix(in srgb, var(--ds-paper) 78%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--ds-warm-paper) 78%, transparent),
       0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 26%, transparent);
   }
   .atelier-empty-folio-cover {
@@ -5509,7 +5509,7 @@
      on light paper) and the CTA becomes brass-edged paper. */
   .atelier-concierge-artifact.atelier-concierge-portal {
     box-shadow:
-      inset 0 1px 0 color-mix(in srgb, var(--ds-paper) 95%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--ds-warm-paper) 95%, transparent),
       0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 36%, transparent),
       0 30px 70px color-mix(in srgb, var(--ds-folio-ink) 22%, transparent);
   }
@@ -5748,7 +5748,7 @@
      artifact, not a status pill. */
   .atelier-dossier-flag.atelier-dossier-flag-quiet {
     background: transparent;
-    color: var(--world-on-scenery, var(--ds-paper));
+    color: var(--world-on-scenery, var(--ds-warm-paper));
     box-shadow: none;
     clip-path: none;
     padding: 8px 12px;
@@ -5789,17 +5789,17 @@
     -webkit-backdrop-filter: blur(10px) saturate(1.1) !important;
     box-shadow:
       0 -1px 0 color-mix(in srgb, var(--ds-ember-brass) 42%, transparent),
-      inset 0 1px 0 color-mix(in srgb, var(--ds-paper) 24%, transparent) !important;
-    color: var(--ds-paper) !important;
+      inset 0 1px 0 color-mix(in srgb, var(--ds-warm-paper) 24%, transparent) !important;
+    color: var(--ds-warm-paper) !important;
     flex-wrap: wrap;
     gap: 14px;
   }
   .atelier-dossier-rail .atelier-dossier-scrim-meta {
-    color: var(--ds-paper) !important;
+    color: var(--ds-warm-paper) !important;
     gap: 12px;
   }
   .atelier-dossier-rail .atelier-dossier-scrim-line {
-    color: color-mix(in srgb, var(--ds-paper) 96%, transparent) !important;
+    color: color-mix(in srgb, var(--ds-warm-paper) 96%, transparent) !important;
     text-shadow:
       0 1px 6px color-mix(in srgb, var(--world-ink) 92%, transparent),
       0 0 1px color-mix(in srgb, var(--world-ink) 75%, transparent) !important;
@@ -5814,7 +5814,7 @@
   }
   .atelier-dossier-rail .atelier-dossier-scrim-action,
   .atelier-dossier-rail .atelier-dossier-scrim-action-label {
-    color: var(--ds-paper) !important;
+    color: var(--ds-warm-paper) !important;
     text-shadow:
       0 1px 6px color-mix(in srgb, var(--world-ink) 92%, transparent),
       0 0 1px color-mix(in srgb, var(--world-ink) 75%, transparent) !important;
@@ -5826,7 +5826,7 @@
   /* Brass-tinted arrow inside the dossier rail. */
   .atelier-dossier-rail .folio-cta-arrow svg,
   .atelier-dossier-rail .folio-cta-arrow {
-    color: color-mix(in srgb, var(--ds-ember-brass) 95%, var(--ds-paper)) !important;
+    color: color-mix(in srgb, var(--ds-ember-brass) 95%, var(--ds-warm-paper)) !important;
   }
 
   /* ── Concierge portal (atmospheric salon threshold, no SaaS box) ───
@@ -5897,13 +5897,13 @@
     .atelier-concierge-link:focus-visible { transform: none; }
   }
   .atelier-concierge-artifact.atelier-concierge-portal .atelier-concierge-eyebrow {
-    color: color-mix(in srgb, var(--ds-paper) 76%, transparent);
+    color: color-mix(in srgb, var(--ds-warm-paper) 76%, transparent);
     letter-spacing: 0.32em;
     text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
     margin-bottom: 14px;
   }
   .atelier-concierge-artifact.atelier-concierge-portal .atelier-concierge-title {
-    color: var(--ds-paper);
+    color: var(--ds-warm-paper);
     font-size: clamp(1.7rem, 2.2vw, 2.2rem);
     line-height: 1.04;
     margin: 0 0 10px;
@@ -5913,7 +5913,7 @@
       0 1px 3px rgba(0, 0, 0, 0.5);
   }
   .atelier-concierge-artifact.atelier-concierge-portal .atelier-concierge-caption {
-    color: color-mix(in srgb, var(--ds-paper) 88%, transparent);
+    color: color-mix(in srgb, var(--ds-warm-paper) 88%, transparent);
     font-size: 14px;
     line-height: 1.5;
     max-width: 30ch;
@@ -5930,7 +5930,7 @@
     border-radius: 999px;
     background:
       linear-gradient(180deg,
-        color-mix(in srgb, var(--ds-paper) 96%, var(--ds-ember-brass)) 0%,
+        color-mix(in srgb, var(--ds-warm-paper) 96%, var(--ds-ember-brass)) 0%,
         color-mix(in srgb, var(--ds-bone) 92%, var(--ds-ember-brass)) 100%);
     color: var(--ds-folio-ink);
     box-shadow:
@@ -6173,7 +6173,7 @@
      elsewhere must lose to this rule. */
   .atelier-dossier-cover-content .atelier-dossier-title,
   [data-scenery-tone] .atelier-dossier-title {
-    color: var(--world-on-scenery, var(--ds-paper)) !important;
+    color: var(--world-on-scenery, var(--ds-warm-paper)) !important;
     text-shadow:
       0 2px 22px var(--world-scenery-scrim, rgba(0, 0, 0, 0.6)),
       0 1px 4px var(--world-scenery-scrim, rgba(0, 0, 0, 0.5)),
@@ -6181,13 +6181,13 @@
   }
   .atelier-dossier-cover-content .atelier-dossier-place,
   [data-scenery-tone] .atelier-dossier-place {
-    color: var(--world-on-scenery-muted, var(--ds-paper)) !important;
+    color: var(--world-on-scenery-muted, var(--ds-warm-paper)) !important;
     letter-spacing: 0.32em;
     text-shadow: 0 1px 10px var(--world-scenery-scrim, rgba(0, 0, 0, 0.55));
   }
   .atelier-dossier-cover-content .atelier-dossier-caption,
   [data-scenery-tone] .atelier-dossier-caption {
-    color: var(--world-on-scenery-muted, var(--ds-paper)) !important;
+    color: var(--world-on-scenery-muted, var(--ds-warm-paper)) !important;
     text-shadow: 0 1px 12px var(--world-scenery-scrim, rgba(0, 0, 0, 0.5));
   }
   /* Stronger title scrim — a strong gradient wash under the title
@@ -6247,8 +6247,8 @@
     z-index: 0;
     background:
       radial-gradient(ellipse 70% 80% at 50% 50%,
-        color-mix(in srgb, var(--ds-paper) 38%, transparent) 0%,
-        color-mix(in srgb, var(--ds-paper) 18%, transparent) 35%,
+        color-mix(in srgb, var(--ds-warm-paper) 38%, transparent) 0%,
+        color-mix(in srgb, var(--ds-warm-paper) 18%, transparent) 35%,
         transparent 72%);
     filter: blur(36px);
     pointer-events: none;
@@ -6285,18 +6285,18 @@
     line-height: 0.98;
     letter-spacing: -0.022em;
     font-weight: 500;
-    color: var(--ds-paper);
+    color: var(--ds-warm-paper);
     text-shadow:
       0 2px 22px color-mix(in srgb, var(--world-ink) 90%, transparent),
       0 1px 4px color-mix(in srgb, var(--world-ink) 75%, transparent),
-      0 0 60px color-mix(in srgb, var(--ds-paper) 18%, transparent);
+      0 0 60px color-mix(in srgb, var(--ds-warm-paper) 18%, transparent);
   }
   .atelier-doorway-shelf .world-portal-whisper {
     font-family: var(--world-type-display);
     font-style: italic;
     font-size: clamp(12px, 0.95vw, 14px);
     line-height: 1.4;
-    color: color-mix(in srgb, var(--ds-paper) 86%, transparent);
+    color: color-mix(in srgb, var(--ds-warm-paper) 86%, transparent);
     text-shadow: 0 1px 10px color-mix(in srgb, var(--world-ink) 80%, transparent);
     margin: 10px auto 0;
     max-width: 22ch;
@@ -6766,7 +6766,7 @@
     line-height: 1.08;
     letter-spacing: -0.01em;
     text-align: center;
-    color: var(--ds-paper);
+    color: var(--ds-warm-paper);
     padding: 0 14px clamp(16px, 1.6vw, 24px);
     text-shadow:
       0 2px 16px color-mix(in srgb, var(--spine-ink, var(--world-ink)) 90%, transparent),
@@ -6836,7 +6836,7 @@
     backdrop-filter: blur(10px) saturate(1.08) !important;
     -webkit-backdrop-filter: blur(10px) saturate(1.08) !important;
     box-shadow:
-      inset 0 1px 0 color-mix(in srgb, var(--ds-paper) 22%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--ds-warm-paper) 22%, transparent),
       0 14px 32px color-mix(in srgb, rgba(0, 0, 0, 1) 34%, transparent) !important;
   }
   /* Cream text, unconditionally — wins over [data-scenery-tone] rules
@@ -6845,11 +6845,11 @@
   .atelier-dossier-cover-flex .atelier-dossier-cover-content-flex .atelier-dossier-caption,
   .atelier-dossier-cover-flex .atelier-dossier-cover-content-flex .atelier-dossier-meta-line,
   .atelier-dossier-cover-flex .atelier-dossier-cover-content-flex .atelier-dossier-meta-action {
-    color: var(--ds-paper) !important;
+    color: var(--ds-warm-paper) !important;
     text-shadow: 0 1px 8px color-mix(in srgb, rgba(0, 0, 0, 1) 45%, transparent) !important;
   }
   .atelier-dossier-cover-flex .atelier-dossier-cover-content-flex .atelier-dossier-caption {
-    color: color-mix(in srgb, var(--ds-paper) 84%, transparent) !important;
+    color: color-mix(in srgb, var(--ds-warm-paper) 84%, transparent) !important;
   }
   /* Consolidated metadata row inside the panel. */
   .atelier-dossier-meta {
@@ -6864,7 +6864,7 @@
     font-size: 13px;
     font-weight: 500;
     letter-spacing: 0.04em;
-    color: var(--ds-paper);
+    color: var(--ds-warm-paper);
     white-space: nowrap;
   }
   .atelier-dossier-meta-dot {
@@ -6882,11 +6882,11 @@
     font-weight: 700;
     letter-spacing: 0.2em;
     text-transform: uppercase;
-    color: var(--ds-paper);
+    color: var(--ds-warm-paper);
   }
   .atelier-dossier-meta-action .folio-cta-arrow svg,
   .atelier-dossier-meta-action .folio-cta-arrow {
-    color: color-mix(in srgb, var(--ds-ember-brass) 92%, var(--ds-paper));
+    color: color-mix(in srgb, var(--ds-ember-brass) 92%, var(--ds-warm-paper));
   }
   /* The route thread inside the panel — quiet brass divider. */
   .atelier-dossier-cover-content-flex .atelier-dossier-route {
@@ -6910,7 +6910,7 @@
         color-mix(in srgb, var(--spine-ink, var(--world-ink)) 94%, transparent) 100%) !important;
   }
   .atelier-archive-folio-title {
-    color: var(--ds-paper) !important;
+    color: var(--ds-warm-paper) !important;
     font-weight: 600;
     text-shadow:
       0 2px 14px color-mix(in srgb, rgba(0, 0, 0, 1) 70%, transparent),

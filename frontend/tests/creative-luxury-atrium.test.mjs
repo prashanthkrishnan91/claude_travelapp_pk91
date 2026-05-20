@@ -977,7 +977,7 @@ describe("Atrium v9: guaranteed-readable text + reusable brand mark", () => {
     // engine via higher specificity + !important.
     assert.match(
       globalsCss,
-      /\.atelier-dossier-cover-flex \.atelier-dossier-cover-content-flex \.atelier-dossier-title[\s\S]*?color:\s*var\(--ds-paper\)\s*!important/,
+      /\.atelier-dossier-cover-flex \.atelier-dossier-cover-content-flex \.atelier-dossier-title[\s\S]*?color:\s*var\(--ds-warm-paper\)\s*!important/,
       "Dossier title must be forced cream on the dark panel",
     );
     assert.match(
@@ -997,7 +997,7 @@ describe("Atrium v9: guaranteed-readable text + reusable brand mark", () => {
     );
     assert.match(
       globalsCss,
-      /\.atelier-archive-folio-title[\s\S]*?color:\s*var\(--ds-paper\)\s*!important/,
+      /\.atelier-archive-folio-title[\s\S]*?color:\s*var\(--ds-warm-paper\)\s*!important/,
       ".atelier-archive-folio-title must be forced cream",
     );
   });
