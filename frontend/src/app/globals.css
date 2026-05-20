@@ -5741,11 +5741,13 @@
   .atelier-atrium.atelier-atrium-neutral {
     flex: none;   /* size to content — do not grow to fill home-edge-bleed */
   }
-  /* home-edge-bleed outer padding: desktop needs none (atelier-atrium-
-     content handles editorial pb); mobile nav clearance is now inside
-     atelier-atrium-content (see !important rule above). */
+  /* home-edge-bleed: with atelier-atrium-neutral at flex:none, the flex
+     container must also drop its forced min-height or the dead floor below
+     the content-sized atrium remains. min-height:0 (no media-query wrapper)
+     lands after lines 5718/5721 in source order and wins for all viewports. */
   .home-edge-bleed {
     padding-bottom: 0;
+    min-height: 0;
   }
 
   /* ════════════════════════════════════════════════════════════════

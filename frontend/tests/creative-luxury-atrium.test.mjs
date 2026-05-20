@@ -1000,6 +1000,62 @@ describe("Atrium I: no excessive bottom dead space on Home", () => {
       ".atelier-atrium-content must use clamp(28px,...) editorial padding-bottom on desktop",
     );
   });
+
+  test("I6. home-edge-bleed final min-height rule is 0 — overrides both the 100vh desktop and mobile calc rules", () => {
+    // The v6 CSS added min-height: 100vh (and calc(100vh-3.5rem) on mobile) to
+    // home-edge-bleed. After setting flex:none on the atrium, the flex container
+    // retains that min-height floor, leaving dead space below the content.
+    // The override at the end of the same @layer block must set min-height: 0.
+    const allMatches = [...globalsCss.matchAll(/\.home-edge-bleed\s*\{([^}]*)\}/g)];
+    const lastMatch = allMatches[allMatches.length - 1];
+    assert.ok(lastMatch != null, ".home-edge-bleed must appear in globals.css");
+    // Walk backward: the final instance that declares min-height must be 0.
+    const minHeightBlocks = allMatches.filter(m => /min-height/.test(m[1]));
+    assert.ok(minHeightBlocks.length > 0, "At least one .home-edge-bleed block must declare min-height");
+    const last = minHeightBlocks[minHeightBlocks.length - 1];
+    assert.match(
+      last[1],
+      /min-height:\s*0\b/,
+      "The last .home-edge-bleed block declaring min-height must set it to 0 (content-sized floor)"
+    );
+  });
+
+  test("I7. archive section wrappers have no min-height: 100vh/dvh/svh", () => {
+    // Archive wrappers must never claim a full-screen height on their own.
+    const archiveBlock = (() => {
+      const start = globalsCss.indexOf(".atelier-archive-section");
+      const end = globalsCss.indexOf(".atelier-engraved-tab");
+      return start !== -1 && end !== -1 ? globalsCss.slice(start, end) : globalsCss;
+    })();
+    assert.doesNotMatch(
+      archiveBlock,
+      /\.atelier-archive[\w-]*\s*\{[^}]*min-height:\s*100(?:vh|dvh|svh)/,
+      "Archive wrapper classes must not set min-height: 100vh/dvh/svh — archive must be content-height"
+    );
+  });
+
+  test("I8. atelier-atrium-signature sr-only footer has no layout height (no padding/margin reserving space)", () => {
+    // The sr-only class collapses the element; the signature footer must not add
+    // its own padding/margin that re-introduces dead space.
+    const start = globalsCss.indexOf(".atelier-atrium-signature");
+    if (start === -1) return; // class may live solely via sr-only Tailwind
+    const block = globalsCss.slice(start, start + 400);
+    assert.doesNotMatch(
+      block,
+      /padding(?:-top|-bottom)?:\s*(?:[1-9]\d*(?:px|rem|vh|dvh))/,
+      ".atelier-atrium-signature must not reserve layout space with padding (it is sr-only)"
+    );
+  });
+
+  test("I9. home-edge-bleed retains overflow-x-clip (no horizontal overflow bleed)", () => {
+    // The overflow-x: clip on home-edge-bleed keeps horizontal containment;
+    // it must survive the min-height fix.
+    assert.match(
+      globalsCss,
+      /\.home-edge-bleed[\s\S]*?overflow-x:\s*clip/,
+      ".home-edge-bleed must retain overflow-x: clip for horizontal containment"
+    );
+  });
 });
 
 describe("Atrium v9: guaranteed-readable text + reusable brand mark", () => {
