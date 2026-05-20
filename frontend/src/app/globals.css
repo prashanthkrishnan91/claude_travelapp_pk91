@@ -5763,9 +5763,19 @@
 
   /* Eliminate any accidental horizontal scroll bleed from the home shell. */
   .home-edge-bleed,
-  .atelier-atrium,
-  .atelier-atrium-content {
+  .atelier-atrium {
     overflow-x: clip;
+  }
+  /* atelier-atrium-content clips BOTH axes.
+     The folio-living-canvas::after decorative blob is position:absolute with
+     bottom:-22%, which extends 22% of the canvas height BELOW the content
+     area. Without overflow-y:clip here, that overflow propagates through
+     atelier-atrium → home-edge-bleed into main (overflow-y:auto), creating
+     a large blank scrollable region after the final section. overflow:clip
+     (unlike overflow:hidden) does not create a new block formatting context,
+     so sticky positioning and margin collapsing are unaffected. */
+  .atelier-atrium-content {
+    overflow: clip;
   }
 
   /* Quiet dossier flag — the POR · PLANNED corporate badge is gone; only

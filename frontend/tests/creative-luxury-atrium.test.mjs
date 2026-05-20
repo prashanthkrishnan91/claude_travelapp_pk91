@@ -1056,6 +1056,34 @@ describe("Atrium I: no excessive bottom dead space on Home", () => {
       ".home-edge-bleed must retain overflow-x: clip for horizontal containment"
     );
   });
+
+  test("I10. atelier-atrium-content has overflow:clip (not just overflow-x) to contain decorative blob scroll overflow", () => {
+    // Root cause of the mobile blank-space bug (PR #449):
+    //   folio-living-canvas::after is position:absolute with bottom:-22%,
+    //   which extends 22% of the canvas height BELOW the content area.
+    //   Without overflow-y containment, this blob propagates into main's
+    //   overflow-y:auto scroll container, creating a large blank scrollable
+    //   region after the final archive section. DevTools identifies `main`
+    //   as the element in the blank area because no DOM box covers that region.
+    //   overflow:clip (not overflow:hidden) is used because it does not create
+    //   a new block formatting context — sticky positioning and margin collapsing
+    //   inside atelier-atrium-content are unaffected.
+    const matches = [...globalsCss.matchAll(/\.atelier-atrium-content\s*\{([^}]*)\}/g)];
+    const hasOverflowClip = matches.some(m =>
+      /overflow\s*:\s*clip\b/.test(m[1]) ||
+      (/overflow-x\s*:\s*clip\b/.test(m[1]) && /overflow-y\s*:\s*clip\b/.test(m[1]))
+    );
+    assert.ok(
+      hasOverflowClip,
+      "atelier-atrium-content must have overflow:clip (or overflow-x:clip + overflow-y:clip) to contain the decorative blob and prevent blank scroll area in main"
+    );
+    // Confirm NOT overflow:hidden (would create BFC side-effects)
+    const hasOverflowHidden = matches.some(m => /overflow\s*:\s*hidden\b/.test(m[1]));
+    assert.ok(
+      !hasOverflowHidden,
+      "atelier-atrium-content must NOT use overflow:hidden — use overflow:clip to avoid BFC side-effects"
+    );
+  });
 });
 
 describe("Atrium v9: guaranteed-readable text + reusable brand mark", () => {
