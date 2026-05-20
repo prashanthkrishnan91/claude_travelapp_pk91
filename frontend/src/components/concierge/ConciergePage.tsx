@@ -1,6 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { WorldAtmosphere } from "@/components/ui/World";
+import {
+  applyRoom,
+  pickWorldFromDestination,
+  worldStyleVars,
+} from "@/lib/worldData";
 import {
   AlertTriangle,
   Bookmark,
@@ -412,6 +418,14 @@ export function ConciergePage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Salon world — applies the `salon` archetype tint on top of the
+  // destination world. Drives WorldAtmosphere ambient coloring and
+  // world-DNA CSS vars on the room shell when a destination is set.
+  const salonWorld = useMemo(
+    () => applyRoom(pickWorldFromDestination(destination || null), "salon"),
+    [destination],
+  );
+
   // Persist transcript whenever messages change
   useEffect(() => {
     saveTranscript(messages);
@@ -743,11 +757,22 @@ export function ConciergePage() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div data-testid="concierge-page" className="flex flex-col atelier-transition folio-cinema-desk" style={{ minHeight: "calc(100svh - 10rem)" }}>
+    <div
+      data-testid="concierge-page"
+      className="flex flex-col atelier-transition folio-cinema-desk atelier-salon-room"
+      data-world-location={salonWorld.location}
+      data-scenery-tone={salonWorld.visualLayer.contrastTone ?? "dark"}
+      style={{ minHeight: "calc(100svh - 10rem)", ...worldStyleVars(salonWorld) }}
+    >
+      {/* Salon ambient layer — destination-aware when a city is typed.
+          WorldAtmosphere sits at z-index:-1 within the atelier-salon-room
+          stacking context, behind all in-flow content. */}
+      <WorldAtmosphere />
+
       {/* ── Concierge desk instrument header ─────────────────────────────── */}
       <header
         data-testid="concierge-instrument-header"
-        className="text-center pb-5 sm:pb-8"
+        className="atelier-salon-room-header text-center pb-5 sm:pb-8"
       >
         <p
           className="text-ds-accent uppercase tracking-[0.1em]"
@@ -826,7 +851,7 @@ export function ConciergePage() {
                     setInput(prompt);
                     inputRef.current?.focus();
                   }}
-                  className="rounded-lg folio-concierge-chip text-ds-text hover:text-ds-accent transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
+                  className="rounded-lg folio-concierge-chip atelier-salon-starter-chip focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
                   style={{
                     padding: "var(--ds-space-2) var(--ds-space-4)",
                     fontSize: "var(--ds-type-body-s-size)",

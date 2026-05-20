@@ -6970,4 +6970,65 @@
   }
   .atelier-archive-folio-title { position: relative; z-index: 2; }
 
+  /* ════════════════════════════════════════════════════════════════
+     ATELIER ROOM SYSTEM — Private Salon (AI Concierge)
+     The AI Concierge is the first "Private Salon" room in the Atelier
+     house. It extends the shared Atelier ambient model (world-DNA vars,
+     WorldAtmosphere) with salon-specific surface treatments.
+     Applied alongside folio-cinema-desk — not a replacement.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Room shell — establishes the stacking context so WorldAtmosphere
+     (z-index:-1) sits below all in-flow room content. folio-cinema-desk
+     supplies position:relative + the warm dark surface; this class adds
+     isolation so the ambient layers are contained within the room
+     boundary, not floating at the document stacking root. */
+  .atelier-salon-room {
+    isolation: isolate;
+  }
+
+  /* Salon header — the editorial threshold above the search canvas.
+     A narrow brass separator line marks the entry into the research
+     space, echoing the brass hairlines used on Home's atrium sections.
+     z-index:1 keeps the header above the z-index:-1 ambient layer. */
+  .atelier-salon-room-header {
+    position: relative;
+    z-index: 1;
+  }
+  .atelier-salon-room-header::before {
+    content: "";
+    display: block;
+    width: clamp(32px, 10%, 64px);
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--ds-ember-brass) 48%, transparent) 50%,
+      transparent
+    );
+    margin: 0 auto var(--ds-space-4) auto;
+  }
+
+  /* Salon starter chips — warm brass-inflected prompt buttons shown
+     in the empty/initial state. Layered alongside folio-concierge-chip
+     to add the atelier surface treatment without breaking the existing
+     chip contract. */
+  .atelier-salon-starter-chip {
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 30%, transparent);
+    background: color-mix(in srgb, var(--ds-accent-subtle) 55%, transparent);
+    color: var(--ds-text-secondary);
+    transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+  }
+  .atelier-salon-starter-chip:hover,
+  .atelier-salon-starter-chip:focus-visible {
+    border-color: color-mix(in srgb, var(--ds-ember-brass) 55%, transparent);
+    background: color-mix(in srgb, var(--ds-accent-subtle) 85%, transparent);
+    color: var(--ds-accent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-salon-starter-chip {
+      transition: none;
+    }
+  }
+
 }
