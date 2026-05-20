@@ -369,6 +369,8 @@ const EDITORIAL_PROMPTS = [
   "Design-forward boutique hotels",
   "A romantic dinner",
   "Hidden neighbourhood gems",
+  "Best neighbourhood to stay",
+  "Local breakfast worth the walk",
 ] as const;
 
 // ─── localStorage transcript persistence ──────────────────────────────────────
@@ -759,10 +761,10 @@ export function ConciergePage() {
   return (
     <div
       data-testid="concierge-page"
-      className="flex flex-col atelier-transition folio-cinema-desk atelier-salon-room"
+      className="flex flex-col min-h-screen atelier-transition folio-cinema-desk atelier-salon-room"
       data-world-location={salonWorld.location}
       data-scenery-tone={salonWorld.visualLayer.contrastTone ?? "dark"}
-      style={{ minHeight: "calc(100svh - 10rem)", ...worldStyleVars(salonWorld) }}
+      style={worldStyleVars(salonWorld)}
     >
       {/* Salon ambient layer — destination-aware when a city is typed.
           WorldAtmosphere sits at z-index:-1 within the atelier-salon-room
@@ -772,7 +774,7 @@ export function ConciergePage() {
       {/* ── Concierge desk instrument header ─────────────────────────────── */}
       <header
         data-testid="concierge-instrument-header"
-        className="atelier-salon-room-header text-center pb-5 sm:pb-8"
+        className="atelier-salon-room-header atelier-salon-header-landing pb-5 sm:pb-8 text-center"
       >
         <p
           className="text-ds-accent uppercase tracking-[0.1em]"
@@ -797,19 +799,32 @@ export function ConciergePage() {
           {lastQuery ? `"${lastQuery}"` : "What can I find for you?"}
         </h1>
         {!lastQuery && (
-          <p
-            className="text-ds-text-secondary mx-auto"
-            style={{
-              fontSize: "var(--ds-type-body-size)",
-              lineHeight: "var(--ds-type-body-leading)",
-              maxWidth: "38ch",
-              marginTop: "var(--ds-space-3)",
-            }}
-          >
-            Describe a mood, a neighbourhood, or an occasion.
-            <br />
-            I surface verified places worth your time.
-          </p>
+          <>
+            <p
+              className="text-ds-text-secondary mx-auto"
+              style={{
+                fontSize: "var(--ds-type-body-size)",
+                lineHeight: "var(--ds-type-body-leading)",
+                maxWidth: "38ch",
+                marginTop: "var(--ds-space-3)",
+              }}
+            >
+              Describe a mood, a neighbourhood, or an occasion.
+              <br />
+              I surface verified places worth your time.
+            </p>
+            <p
+              className="text-ds-text-tertiary mx-auto"
+              style={{
+                fontSize: "var(--ds-type-body-s-size)",
+                lineHeight: "var(--ds-type-body-s-leading)",
+                maxWidth: "44ch",
+                marginTop: "var(--ds-space-2)",
+              }}
+            >
+              Restaurants, hotels, and local gems — Michelin to hidden.
+            </p>
+          </>
         )}
       </header>
 
@@ -834,7 +849,7 @@ export function ConciergePage() {
             <p className="text-ds-text-tertiary text-center uppercase tracking-[0.1em]" style={{ fontSize: "var(--ds-type-overline-size)", lineHeight: "var(--ds-type-overline-leading)", fontWeight: "var(--ds-type-overline-weight)", marginBottom: "var(--ds-space-5)" }}>
               Starting points — tell me where to search:
             </p>
-            <div className="flex flex-wrap gap-2 justify-center" style={{ maxWidth: "32rem" }}>
+            <div className="atelier-salon-chip-grid">
               {EDITORIAL_PROMPTS.map((prompt) => (
                 <button
                   key={prompt}
@@ -845,9 +860,10 @@ export function ConciergePage() {
                   }}
                   className="rounded-lg folio-concierge-chip atelier-salon-starter-chip focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
                   style={{
-                    padding: "var(--ds-space-2) var(--ds-space-4)",
+                    padding: "var(--ds-space-3) var(--ds-space-4)",
                     fontSize: "var(--ds-type-body-s-size)",
                     lineHeight: "var(--ds-type-body-s-leading)",
+                    textAlign: "center",
                   }}
                   data-testid="concierge-prompt-chip"
                 >

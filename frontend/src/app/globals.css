@@ -7086,4 +7086,47 @@
     border-left-color: color-mix(in srgb, var(--ds-ember-brass) 38%, transparent);
   }
 
+  /* Salon room in full-height mode — when folio-cinema-desk carries
+     the salon room shell, remove the card chrome (radius, border,
+     shadow, padding) so the dark surface reads as an immersive room,
+     not a floating recommendation box. The warm dark background from
+     folio-cinema-desk stays; only the structural boxing is stripped. */
+  .atelier-salon-room.folio-cinema-desk {
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  /* Salon header landing zone — adds top breathing room so the
+     header floats with cinematic space when folio-cinema-desk's
+     card padding is stripped in the salon context. Only controls
+     padding-top; responsive pb-* Tailwind classes own padding-bottom. */
+  .atelier-salon-room-header.atelier-salon-header-landing {
+    padding-top: clamp(40px, 9vh, 88px);
+  }
+
+  /* Salon chip grid — 2-column starter prompt grid for desktop.
+     Creates a dense editorial invitation surface in the empty state.
+     Collapses to a single column on narrow viewports. */
+  .atelier-salon-chip-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--ds-space-2);
+    width: 100%;
+    max-width: 34rem;
+  }
+  @media (max-width: 500px) {
+    .atelier-salon-chip-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Salon chip — stretches to fill the grid cell so both columns
+     read as intentional panel pairs, not arbitrary widths. */
+  .atelier-salon-chip-grid .atelier-salon-starter-chip {
+    width: 100%;
+    justify-content: center;
+  }
+
 }

@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-20 (Atelier Room System v1 patch-1 — PR #451 open, branch claude/review-travel-app-docs-afJmb; PR body updated: visible adoption scope confirmed)
+Last updated: 2026-05-20 (Atelier Room System v1 patch-2 — PR #451 open, branch claude/review-travel-app-docs-afJmb)
 
 ## Purpose
 
@@ -18,32 +18,36 @@ This file is **current operational state**, not a historical log. It must stay c
 **Atelier Room System v1 — AI Concierge Private Salon**
 
 Changes on branch:
-- **`globals.css` — ATELIER ROOM SYSTEM section** (7 new CSS primitives):
-  - `.atelier-salon-room` — `isolation: isolate` (stacking context for WorldAtmosphere z-index:-1)
+- **`globals.css` — ATELIER ROOM SYSTEM section** (12 CSS primitives total: 7 original + 5 patch-2):
+  - `.atelier-salon-room` — `isolation: isolate`
   - `.atelier-salon-room-header` + `::before` — brass entry separator
-  - `.atelier-salon-starter-chip` — brass-inflected prompt chip treatment with reduced-motion guard
-  - `.atelier-salon-invitation` + `::before` — empty-state threshold with wider brass separator
-  - `.atelier-salon-composer-surface` + `::before` — desk boundary brass hairline with reduced-motion guard
-  - `.atelier-salon-user-turn` — brass-tinted left-border for transcript query annotations
+  - `.atelier-salon-starter-chip` + hover + reduced-motion — brass prompt chip treatment
+  - `.atelier-salon-invitation` + `::before` — empty-state invitation threshold
+  - `.atelier-salon-composer-surface` + `::before` + reduced-motion — brass desk hairline
+  - `.atelier-salon-user-turn` — brass-tinted transcript annotation
+  - `.atelier-salon-room.folio-cinema-desk` *(patch-2)* — strips card chrome (radius/border/shadow/padding) so the surface reads as a room, not a floating box
+  - `.atelier-salon-header-landing` *(patch-2)* — cinematic top padding when card padding is stripped
+  - `.atelier-salon-chip-grid` *(patch-2)* — 2-column desktop prompt chip grid (1-column on mobile ≤500px)
+  - `.atelier-salon-chip-grid .atelier-salon-starter-chip` *(patch-2)* — full-width chip in grid cells
 
-- **`ConciergePage.tsx`** — salon room adoption:
+- **`ConciergePage.tsx`** — salon room adoption + patch-2 upgrade:
   - Imports: `WorldAtmosphere`, `applyRoom`, `pickWorldFromDestination`, `worldStyleVars`
   - `salonWorld = applyRoom(pickWorldFromDestination(destination), "salon")` via useMemo
-  - Outer div: `atelier-salon-room` class + `worldStyleVars(salonWorld)` style + `data-world-location` attribute
-  - `<WorldAtmosphere />` as first child (destination-aware ambient blob coloring)
-  - Header: `atelier-salon-room-header` class + brass separator
-  - Empty state: `atelier-salon-invitation` class + overline typography on chip label
-  - Result canvas: `px-4 sm:px-6` mobile breathing room
-  - Prompt chips: `atelier-salon-starter-chip` added alongside `folio-concierge-chip`
-  - User turn markers: `atelier-salon-user-turn` (brass left border)
-  - Composer: `atelier-salon-composer-surface` (brass desk threshold line)
+  - Outer div: `min-h-screen folio-cinema-desk atelier-salon-room` + `worldStyleVars(salonWorld)` style
+  - `<WorldAtmosphere />` — destination-aware ambient blob coloring (z-index:-1)
+  - Header: `atelier-salon-room-header atelier-salon-header-landing pb-5 sm:pb-8` — cinematic landing space
+  - Header copy: three-line editorial hierarchy (overline → display h1 → body subtitle → capability hint)
+  - Empty state: `atelier-salon-invitation` + `atelier-salon-chip-grid` (2×3 grid of 6 prompts)
+  - EDITORIAL_PROMPTS expanded to 6 (added "Best neighbourhood to stay", "Local breakfast worth the walk")
+  - Prompt chips: `folio-concierge-chip atelier-salon-starter-chip` — both contracts preserved
+  - User turn markers: `atelier-salon-user-turn`, composer: `atelier-salon-composer-surface`
 
-- **`tests/atelier-salon-room-v1.test.mjs`** — 42 contract tests (32 original + 10 Section D patch-1)
+- **`tests/atelier-salon-room-v1.test.mjs`** — 48 contract tests (32 + 10 Section D + 6 Section E patch-2)
 - **`frontend/package.json`** — test wired into npm test
 
 All existing testids, folio-cinema-desk, folio-cinema-composer, folio-concierge-chip, Starting points copy, callConciergeSearch, all behavior (search, save, maps, refinement, transcript) preserved. Home not regressed.
 
-**Test count:** 2977 total, 0 failures.  
+**Test count:** 2983 total, 0 failures.  
 **No backend / SQL / provider / env / Supabase / API / route / data-contract changes.**
 
 ### Next step after PR #451 merges

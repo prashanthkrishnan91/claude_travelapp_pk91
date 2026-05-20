@@ -362,3 +362,57 @@ describe("Atelier Room System: salon strengthening (patch-1 primitives)", () => 
     );
   });
 });
+
+// ── Section E: Salon room full-surface upgrade (patch-2 primitives) ───────────
+
+describe("Atelier Room System: salon full-surface upgrade (patch-2)", () => {
+  test("E1. atelier-salon-room.folio-cinema-desk combination rule strips card chrome", () => {
+    const idx = globalsCss.indexOf(".atelier-salon-room.folio-cinema-desk");
+    assert.ok(
+      idx !== -1,
+      "globals.css must define .atelier-salon-room.folio-cinema-desk combination rule",
+    );
+    const block = globalsCss.slice(idx, idx + 200);
+    assert.ok(
+      block.includes("border-radius: 0") && block.includes("border: none"),
+      ".atelier-salon-room.folio-cinema-desk must set border-radius:0 and border:none",
+    );
+  });
+
+  test("E2. atelier-salon-chip-grid defined in globals.css", () => {
+    assert.ok(
+      globalsCss.includes(".atelier-salon-chip-grid"),
+      "globals.css must define .atelier-salon-chip-grid — 2-column starter chip grid",
+    );
+  });
+
+  test("E3. atelier-salon-chip-grid uses grid layout", () => {
+    const idx = globalsCss.indexOf(".atelier-salon-chip-grid");
+    const block = globalsCss.slice(idx, idx + 200);
+    assert.ok(
+      block.includes("grid-template-columns"),
+      ".atelier-salon-chip-grid must use grid-template-columns for 2-column layout",
+    );
+  });
+
+  test("E4. ConciergePage chip container uses atelier-salon-chip-grid", () => {
+    assert.ok(
+      conciergePage.includes("atelier-salon-chip-grid"),
+      "ConciergePage chip container must use atelier-salon-chip-grid for 2-column desktop layout",
+    );
+  });
+
+  test("E5. atelier-salon-header-landing defined in globals.css", () => {
+    assert.ok(
+      globalsCss.includes("atelier-salon-header-landing"),
+      "globals.css must define atelier-salon-header-landing — salon cinematic vertical spacing",
+    );
+  });
+
+  test("E6. ConciergePage header uses atelier-salon-header-landing", () => {
+    assert.ok(
+      conciergePage.includes("atelier-salon-header-landing"),
+      "ConciergePage header must use atelier-salon-header-landing for immersive vertical space",
+    );
+  });
+});
