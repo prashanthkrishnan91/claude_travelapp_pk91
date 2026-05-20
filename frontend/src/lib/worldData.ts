@@ -539,13 +539,116 @@ function normalizeDestination(raw: string | null | undefined): string {
 //
 // When a destination is not in the curated `WORLD_LIBRARY`, the resolver maps
 // the destination keyword to a generic travel archetype world so the dossier
-// cover still paints a real photographic mood (city skyline / coast / mountain
-// / desert / forest) rather than a pale gradient. This keeps the World-DNA
-// system working for arbitrary destinations without scattering image URLs
-// through components.
+// cover + shelf spine still paint a recognizable archetype mood rather than a
+// pale gradient. This keeps the World-DNA system working for arbitrary
+// destinations without scattering image URLs through components.
 //
-// Each archetype world ships its own scenicLayers + Unsplash mood URL +
-// contrastTone so the dossier reads correctly per archetype luminance.
+// Imagery strategy:
+//   · Where a photographic Unsplash mood URL is *verified* to depict the
+//     archetype (coast = the tropical beach used by Miami; forest = the misty
+//     forest used by Portland), we reuse that exact verified URL.
+//   · For archetypes whose photographic content could not be verified in this
+//     environment (city / mountain / desert), we ship a self-contained
+//     SVG-data-URI scene so the content is GUARANTEED correct (a city skyline
+//     is always a city skyline) with zero network dependency. SVG scales
+//     cleanly to any cover size.
+
+/** Wrap a raw SVG string into a CSS-ready data-URI image URL value
+ *  (the raw `data:` URL — worldStyleVars adds the `url("…")` wrapper). */
+function svgScene(svg: string): string {
+  return `data:image/svg+xml,${encodeURIComponent(svg.replace(/\s+/g, " ").trim())}`;
+}
+
+// Verified photographic mood URLs (confirmed correct in preview screenshots).
+const VERIFIED_COAST_PHOTO =
+  "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1600&q=80";
+const VERIFIED_FOREST_PHOTO =
+  "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1600&q=80";
+
+// City skyline — dusk sky + layered building silhouettes + warm window
+// lights. Guaranteed to read as a city.
+const CITY_SCENE = svgScene(`
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 900' preserveAspectRatio='xMidYMid slice'>
+  <defs>
+    <linearGradient id='sky' x1='0' y1='0' x2='0' y2='1'>
+      <stop offset='0' stop-color='#1b2742'/>
+      <stop offset='0.5' stop-color='#3a4a6e'/>
+      <stop offset='0.82' stop-color='#c98a4e'/>
+      <stop offset='1' stop-color='#e6ad5e'/>
+    </linearGradient>
+  </defs>
+  <rect width='1600' height='900' fill='url(#sky)'/>
+  <circle cx='1180' cy='250' r='90' fill='#ffe6b0' opacity='0.55'/>
+  <g fill='#16243f' opacity='0.92'>
+    <rect x='0' y='470' width='150' height='430'/>
+    <rect x='150' y='560' width='110' height='340'/>
+    <rect x='260' y='400' width='130' height='500'/>
+    <rect x='390' y='520' width='95' height='380'/>
+    <rect x='485' y='340' width='150' height='560'/>
+    <rect x='635' y='480' width='120' height='420'/>
+    <rect x='755' y='300' width='140' height='600'/>
+    <rect x='895' y='520' width='110' height='380'/>
+    <rect x='1005' y='420' width='135' height='480'/>
+    <rect x='1140' y='540' width='100' height='360'/>
+    <rect x='1240' y='360' width='150' height='540'/>
+    <rect x='1390' y='500' width='120' height='400'/>
+    <rect x='1510' y='580' width='90' height='320'/>
+  </g>
+  <g fill='#0b1426' opacity='0.95'>
+    <rect x='0' y='640' width='200' height='260'/>
+    <rect x='320' y='670' width='240' height='230'/>
+    <rect x='720' y='650' width='260' height='250'/>
+    <rect x='1120' y='680' width='280' height='220'/>
+  </g>
+  <g fill='#ffd28a' opacity='0.85'>
+    <rect x='40' y='510' width='14' height='18'/><rect x='80' y='540' width='14' height='18'/><rect x='40' y='580' width='14' height='18'/>
+    <rect x='300' y='440' width='14' height='18'/><rect x='340' y='480' width='14' height='18'/><rect x='300' y='520' width='14' height='18'/>
+    <rect x='520' y='380' width='14' height='18'/><rect x='560' y='420' width='14' height='18'/><rect x='520' y='460' width='14' height='18'/><rect x='560' y='500' width='14' height='18'/>
+    <rect x='790' y='340' width='14' height='18'/><rect x='830' y='380' width='14' height='18'/><rect x='790' y='420' width='14' height='18'/><rect x='830' y='460' width='14' height='18'/>
+    <rect x='1040' y='460' width='14' height='18'/><rect x='1080' y='500' width='14' height='18'/>
+    <rect x='1280' y='400' width='14' height='18'/><rect x='1320' y='440' width='14' height='18'/><rect x='1280' y='480' width='14' height='18'/>
+  </g>
+</svg>`);
+
+// Mountain range — layered peaks + snow line + alpine haze.
+const MOUNTAIN_SCENE = svgScene(`
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 900' preserveAspectRatio='xMidYMid slice'>
+  <defs>
+    <linearGradient id='msky' x1='0' y1='0' x2='0' y2='1'>
+      <stop offset='0' stop-color='#cdd8da'/>
+      <stop offset='0.5' stop-color='#9fb0b4'/>
+      <stop offset='1' stop-color='#6f8084'/>
+    </linearGradient>
+  </defs>
+  <rect width='1600' height='900' fill='url(#msky)'/>
+  <circle cx='400' cy='220' r='80' fill='#fdf6e6' opacity='0.5'/>
+  <polygon points='0,640 280,360 520,640' fill='#7d8e93' opacity='0.85'/>
+  <polygon points='360,660 720,300 1040,660' fill='#5c6d72' opacity='0.9'/>
+  <polygon points='900,660 1240,340 1600,660' fill='#6b7c80' opacity='0.88'/>
+  <polygon points='620,700 980,420 1320,700' fill='#3f4d52'/>
+  <polygon points='720,300 760,360 700,360' fill='#f3f6f5'/>
+  <polygon points='980,420 1030,500 930,500' fill='#eef2f1'/>
+  <polygon points='280,360 320,430 240,430' fill='#eef2f1'/>
+  <rect x='0' y='655' width='1600' height='245' fill='#2a3539'/>
+  <rect x='0' y='600' width='1600' height='90' fill='#384449' opacity='0.6'/>
+</svg>`);
+
+// Desert dunes — dusk sun + layered dune ridges + mineral haze.
+const DESERT_SCENE = svgScene(`
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 900' preserveAspectRatio='xMidYMid slice'>
+  <defs>
+    <linearGradient id='dsky' x1='0' y1='0' x2='0' y2='1'>
+      <stop offset='0' stop-color='#f4d8a0'/>
+      <stop offset='0.5' stop-color='#e9b873'/>
+      <stop offset='1' stop-color='#d99a55'/>
+    </linearGradient>
+  </defs>
+  <rect width='1600' height='900' fill='url(#dsky)'/>
+  <circle cx='1080' cy='280' r='120' fill='#fff0d0' opacity='0.7'/>
+  <path d='M0,560 C400,500 700,600 1000,540 C1300,490 1500,560 1600,540 L1600,900 L0,900 Z' fill='#c97f44' opacity='0.9'/>
+  <path d='M0,660 C350,600 650,700 980,640 C1280,590 1500,660 1600,650 L1600,900 L0,900 Z' fill='#a85b2f'/>
+  <path d='M0,760 C300,720 700,800 1050,750 C1350,710 1500,760 1600,755 L1600,900 L0,900 Z' fill='#7c3f25'/>
+</svg>`);
 
 const CITY_WORLD: LocationData = {
   location: "Urban",
@@ -566,11 +669,10 @@ const CITY_WORLD: LocationData = {
   typographyTheme: "serif-editorial",
   archetype: "gallery",
   visualLayer: {
-    imageUrl:
-      "https://images.unsplash.com/photo-1518173946687-a4c8892bbd9f?auto=format&fit=crop&w=1600&q=80",
+    imageUrl: CITY_SCENE,
     imageAlt: "City skyline at dusk with warm window light",
-    imagePosition: "center 55%",
-    imageFilter: "saturate(0.86) brightness(0.82) contrast(1.06)",
+    imagePosition: "center 60%",
+    imageFilter: "saturate(1) brightness(0.96) contrast(1.02)",
     sceneryLayers: [
       "radial-gradient(ellipse 70% 30% at 50% 18%, rgba(255, 222, 168, 0.4), transparent 70%)",
       "linear-gradient(180deg, transparent 50%, rgba(216, 160, 85, 0.35) 70%, rgba(31, 42, 62, 0.55) 100%)",
@@ -603,8 +705,7 @@ const COAST_WORLD: LocationData = {
   typographyTheme: "serif-spare",
   archetype: "gallery",
   visualLayer: {
-    imageUrl:
-      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1600&q=80",
+    imageUrl: VERIFIED_COAST_PHOTO,
     imageAlt: "Quiet coastline with horizon glow",
     imagePosition: "center 50%",
     imageFilter: "saturate(0.9) brightness(0.96)",
@@ -640,11 +741,10 @@ const MOUNTAIN_WORLD: LocationData = {
   typographyTheme: "serif-editorial",
   archetype: "observatory",
   visualLayer: {
-    imageUrl:
-      "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1600&q=80",
+    imageUrl: MOUNTAIN_SCENE,
     imageAlt: "Mountain ridge wrapped in alpine mist",
-    imagePosition: "center 45%",
-    imageFilter: "saturate(0.82) brightness(0.9) contrast(1.04)",
+    imagePosition: "center 50%",
+    imageFilter: "saturate(0.92) brightness(0.98) contrast(1.02)",
     sceneryLayers: [
       "linear-gradient(180deg, transparent 45%, rgba(232, 236, 229, 0.55) 60%, rgba(232, 236, 229, 0.3) 76%, transparent 88%)",
       "radial-gradient(ellipse 75% 28% at 50% 16%, rgba(212, 224, 232, 0.55), transparent 70%)",
@@ -677,11 +777,10 @@ const DESERT_WORLD: LocationData = {
   typographyTheme: "serif-warm",
   archetype: "residence",
   visualLayer: {
-    imageUrl:
-      "https://images.unsplash.com/photo-1473580044384-7ba9967e16a0?auto=format&fit=crop&w=1600&q=80",
+    imageUrl: DESERT_SCENE,
     imageAlt: "Late-day light over desert dunes",
     imagePosition: "center 55%",
-    imageFilter: "saturate(0.92) brightness(0.95)",
+    imageFilter: "saturate(0.98) brightness(1) contrast(1.02)",
     sceneryLayers: [
       "radial-gradient(ellipse 70% 35% at 75% 22%, rgba(255, 200, 138, 0.6), transparent 70%)",
       "linear-gradient(180deg, transparent 55%, rgba(168, 91, 47, 0.4) 75%, rgba(110, 55, 37, 0.55) 100%)",
@@ -714,8 +813,7 @@ const FOREST_WORLD: LocationData = {
   typographyTheme: "serif-editorial",
   archetype: "observatory",
   visualLayer: {
-    imageUrl:
-      "https://images.unsplash.com/photo-1542038784456-1ea8e935640e?auto=format&fit=crop&w=1600&q=80",
+    imageUrl: VERIFIED_FOREST_PHOTO,
     imageAlt: "Tall forest with morning light filtering through",
     imagePosition: "center 50%",
     imageFilter: "saturate(0.84) brightness(0.92)",

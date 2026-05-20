@@ -105,8 +105,8 @@ export function AtelierNavArtifact() {
         aria-expanded={open}
         data-testid="atelier-nav-dock"
       >
-        <span className="atelier-nav-dock-mark" aria-hidden="true">
-          <Plane className="w-4 h-4" />
+        <span className="atelier-nav-dock-mark text-ds-paper" aria-hidden="true">
+          <Plane className="w-4 h-4" stroke="currentColor" />
         </span>
         <span className="atelier-nav-dock-wordmark">The Atelier</span>
         <span className="atelier-nav-dock-rule" aria-hidden="true" />

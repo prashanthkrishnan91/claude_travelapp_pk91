@@ -8,13 +8,12 @@ import {
   PlusCircle,
   ArrowRight,
 } from "lucide-react";
-import { TripStatusBadge } from "@/components/ui/TripStatusBadge";
 import {
   fetchDashboardSummary,
   fetchTrips,
   type DashboardSummary,
 } from "@/lib/api";
-import { getDisplayTripStatus, getTripStatusGroup } from "@/lib/tripStatus";
+import { getTripStatusGroup } from "@/lib/tripStatus";
 import {
   FolioPanel,
   FolioScene,
@@ -238,12 +237,11 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
                 </p>
               )}
             </div>
-            {/* Glass-scrim rail — integrated status / dates / travelers /
-                Open Folio action. */}
+            {/* Glass-scrim rail — dates · travelers · Open Folio action.
+                No status pill (the "Planned" corporate badge was removed
+                per direction; status is not surfaced on the cover). */}
             <div className="atelier-dossier-scrim atelier-dossier-rail">
               <div className="atelier-dossier-scrim-meta">
-                <TripStatusBadge status={getDisplayTripStatus(trip)} />
-                <span className="atelier-dossier-scrim-sep" aria-hidden="true" />
                 <span className="atelier-dossier-scrim-line">{dateLine}</span>
                 <span className="atelier-dossier-scrim-sep" aria-hidden="true" />
                 <span className="atelier-dossier-scrim-line">{partyLine}</span>
@@ -279,9 +277,7 @@ function JourneyShelfTeaser({ trips }: { trips: Trip[] }) {
   // sanity) — no static padding.
   const spines = trips.slice(0, Math.min(count, 8)).map((trip) => {
     const world = pickWorldFromDestination(trip.destination);
-    const cipher = getFolioCode(trip);
-    const short = trip.title.length > 18 ? `${trip.title.slice(0, 16)}…` : trip.title;
-    return { trip, world, cipher, short };
+    return { trip, world };
   });
   return (
     <section
@@ -321,14 +317,14 @@ function JourneyShelfTeaser({ trips }: { trips: Trip[] }) {
       >
         <div className="atelier-archive-open" data-folio-count={count}>
           <div className="atelier-archive-spines" data-folio-count={count}>
-            {spines.map(({ trip, world, cipher, short }, i) => (
+            {spines.map(({ trip, world }, i) => (
               <span
                 key={trip.id}
-                className="atelier-archive-spine atelier-curio-spine"
+                className="atelier-archive-folio"
                 data-spine-index={i}
                 aria-hidden="true"
                 style={{
-                  // Each spine inherits its destination world palette.
+                  // Each folio inherits its destination world palette + image.
                   ["--spine-primary" as string]: world.primaryColor,
                   ["--spine-ink" as string]: world.inkColor,
                   ["--spine-image" as string]: world.visualLayer.imageUrl
@@ -338,17 +334,9 @@ function JourneyShelfTeaser({ trips }: { trips: Trip[] }) {
                     world.visualLayer.imagePosition ?? "center 50%",
                 }}
               >
-                <span className="atelier-archive-spine-image" />
-                <span className="atelier-archive-spine-cap" />
-                <span className="atelier-archive-spine-band atelier-curio-spine-band">
-                  <span className="atelier-archive-spine-cipher">
-                    {short.toUpperCase()}
-                  </span>
-                  <span className="atelier-archive-spine-cipher-meta">
-                    {cipher}
-                  </span>
-                </span>
-                <span className="atelier-archive-spine-base" />
+                <span className="atelier-archive-folio-image" />
+                <span className="atelier-archive-folio-scrim" />
+                <span className="atelier-archive-folio-title">{trip.title}</span>
               </span>
             ))}
           </div>
@@ -366,7 +354,6 @@ function JourneyShelfTeaser({ trips }: { trips: Trip[] }) {
               </span>
             </p>
           </div>
-          <div className="atelier-archive-rail" aria-hidden="true" />
         </div>
       </Link>
     </section>
@@ -556,7 +543,7 @@ export function DashboardClient() {
         )}
 
         {/* ── Silent signature ──────────────────────────────────────
-            The Portland · Misty forest footer string is intentionally
+            The destination wayfinder footer string is intentionally
             sr-only. The class names remain in source so the world-
             wayfinder-quiet + atelier-atrium-signature contracts stay
             green; the visible page no longer narrates its own vibe. */}

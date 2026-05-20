@@ -102,11 +102,18 @@ describe("Atrium: DashboardClient composition", () => {
     );
   });
 
-  test("B3. The hero spread is wrapped in .atelier-atrium-hero", () => {
+  test("B3. The atrium composes a broad hero + a folio/concierge spread", () => {
+    // v3+ : the greeting is a broad .atrium-hero; the active folio +
+    // concierge sit in a .atelier-atrium-spread row below it.
     assert.match(
       dashboardClient,
-      /className=["'][^"']*atelier-atrium-hero/,
-      "Hero spread must use atelier-atrium-hero to compose greeting + dossier",
+      /className=["'][^"']*atrium-hero/,
+      "Greeting must use the broad .atrium-hero welcome",
+    );
+    assert.match(
+      dashboardClient,
+      /className=["'][^"']*atelier-atrium-spread/,
+      "Active folio + concierge must sit in the .atelier-atrium-spread row",
     );
   });
 
@@ -137,23 +144,33 @@ describe("Atrium: DashboardClient composition", () => {
       block.includes("atelier-dossier-scenery"),
       "ContinuePlanningStrip must carry a dossier scenery layer (decorative)",
     );
+    // Flex-stacked cover content (title) + glass-scrim rail. No corporate
+    // corner flag and no orphan brass plate (both removed per direction).
     assert.ok(
-      block.includes("atelier-dossier-plate"),
-      "ContinuePlanningStrip must carry a brass date plate (integrated, not orphan)",
+      block.includes("atelier-dossier-cover-content-flex"),
+      "ContinuePlanningStrip must carry the flex-stacked cover content",
     );
     assert.ok(
-      block.includes("atelier-dossier-flag"),
-      "ContinuePlanningStrip must carry a folded folio-serial flag",
+      block.includes("atelier-dossier-rail"),
+      "ContinuePlanningStrip must carry the glass-scrim metadata rail",
+    );
+    assert.ok(
+      !block.includes("atelier-dossier-flag"),
+      "ContinuePlanningStrip must NOT carry the corporate corner flag (removed)",
     );
   });
 
-  test("B6. ConciergeEntry uses the concierge threshold (full-width salon doorway)", () => {
+  test("B6. ConciergeEntry is an atmospheric salon portal (warm paper, not a SaaS box)", () => {
     const start = dashboardClient.indexOf("function ConciergeEntry");
-    const end = dashboardClient.indexOf("function JourneyShelfTeaser");
+    const end = dashboardClient.indexOf("function ContinuePlanningStrip");
     const block = dashboardClient.slice(start, end);
     assert.ok(
-      block.includes("atelier-concierge-threshold"),
-      "ConciergeEntry must compose atelier-concierge-threshold for the salon doorway",
+      block.includes("atelier-concierge-portal"),
+      "ConciergeEntry must compose .atelier-concierge-portal (atmospheric salon, not a pale box)",
+    );
+    assert.ok(
+      block.includes("atelier-concierge-scenery"),
+      "ConciergeEntry must paint a salon scenery layer",
     );
   });
 
@@ -173,28 +190,37 @@ describe("Atrium: DashboardClient composition", () => {
     );
   });
 
-  test("B8. JourneyShelfTeaser becomes a curio shelf with three book spines", () => {
+  test("B8. JourneyShelfTeaser is a physical shelf of dynamic folio cards", () => {
     const start = dashboardClient.indexOf("function JourneyShelfTeaser");
     const end = dashboardClient.indexOf("function EmptyAtelierHome");
     const block = dashboardClient.slice(start, end);
     assert.ok(
-      block.includes("atelier-curio-shelf"),
-      "JourneyShelfTeaser must carry atelier-curio-shelf — a physical shelf object",
+      block.includes("atelier-archive-spines"),
+      "JourneyShelfTeaser must carry the .atelier-archive-spines shelf container",
     );
-    const spines = (block.match(/atelier-curio-spine\b/g) ?? []).length;
     assert.ok(
-      spines >= 3,
-      `JourneyShelfTeaser must render at least 3 book-spine layers (got ${spines})`,
+      block.includes("atelier-archive-folio") && block.includes("atelier-archive-folio-title"),
+      "JourneyShelfTeaser must render folio cards with horizontal titles",
+    );
+    // Folios are generated from the real trips array (dynamic, not static).
+    assert.ok(
+      block.includes("spines.map") && block.includes("trip.title"),
+      "Archive folios must be generated from the real trips array",
     );
   });
 
-  test("B9. EmptyAtelierHome reads as a blank dossier (same dossier object, no SaaS empty state)", () => {
+  test("B9. EmptyAtelierHome reads as an atmospheric blank folio (no SaaS empty state)", () => {
     const start = dashboardClient.indexOf("function EmptyAtelierHome");
     const end = dashboardClient.indexOf("// ── Rooms in the house");
     const block = dashboardClient.slice(start, end);
     assert.ok(
-      block.includes("atelier-dossier"),
-      "EmptyAtelierHome must compose the dossier object so first-run still reads as a folio",
+      block.includes("atelier-empty-folio"),
+      "EmptyAtelierHome must compose the .atelier-empty-folio object",
+    );
+    // No corporate "TRP · WAITING" status flag in the empty state.
+    assert.ok(
+      !block.includes("WAITING"),
+      "EmptyAtelierHome must NOT show a corporate 'WAITING' status flag",
     );
   });
 
@@ -599,17 +625,24 @@ describe("Atrium v2: destination scenery is contained, not page wallpaper", () =
 });
 
 describe("Atrium v2: integrated metadata + cinematic shelf + physical archive", () => {
-  test("F10. Dossier integrates status/dates/travelers in a glass-scrim metadata band", () => {
+  test("F10. Dossier integrates dates/travelers/Open Folio in a glass-scrim rail (no status pill)", () => {
     const start = dashboardClient.indexOf("function ContinuePlanningStrip");
     const end = dashboardClient.indexOf("function JourneyShelfTeaser");
     const block = dashboardClient.slice(start, end);
     assert.ok(
-      block.includes("atelier-dossier-scrim"),
-      "Dossier must integrate metadata via the .atelier-dossier-scrim band",
+      block.includes("atelier-dossier-rail"),
+      "Dossier must integrate metadata via the .atelier-dossier-rail glass-scrim band",
     );
+    // The corporate "Planned" status pill must NOT be rendered on the
+    // cover (regression guard — it was explicitly removed).
     assert.ok(
-      block.includes("TripStatusBadge"),
-      "Dossier scrim must include the trip status badge (no orphan metadata outside)",
+      !block.includes("TripStatusBadge"),
+      "Dossier rail must NOT render TripStatusBadge — the status pill was removed per direction",
+    );
+    // Dates + travelers + Open Folio action must all live in the rail.
+    assert.ok(
+      block.includes("dateLine") && block.includes("partyLine") && block.includes("Open folio"),
+      "Dossier rail must surface dates + travelers + Open folio action",
     );
     // The dossier must own its destination scenery layer.
     assert.ok(
@@ -623,14 +656,21 @@ describe("Atrium v2: integrated metadata + cinematic shelf + physical archive", 
     );
   });
 
-  test("F11. Curio shelf is a layered book-edge object (three folio spines)", () => {
-    // CSS contract — spine bands paint a brass title band per spine.
-    assert.match(globalsCss, /\.atelier-curio-spine-band/, ".atelier-curio-spine-band must exist (brass title band on each spine)");
-    // Shelf must paint a brass shelf rail along the bottom (cabinet trim).
-    assert.match(
-      globalsCss,
-      /\.atelier-curio-shelf::after[\s\S]*?--ds-(?:ember-brass|sandstone-gold)/,
-      ".atelier-curio-shelf::after must paint a brass shelf rail",
+  test("F11. Archive shelf renders portrait folio cards (image + scrim + centered title)", () => {
+    // v8: the vertical book-spine metaphor (cropped vertical ciphers +
+    // brass rail underline) was replaced with portrait folio CARDS that
+    // mirror the room portals — world image behind a centered title.
+    assert.match(globalsCss, /\.atelier-archive-folio\b/, ".atelier-archive-folio card must exist");
+    assert.match(globalsCss, /\.atelier-archive-folio-image/, ".atelier-archive-folio-image (world image layer) must exist");
+    assert.match(globalsCss, /\.atelier-archive-folio-scrim/, ".atelier-archive-folio-scrim (contrast scrim) must exist");
+    assert.match(globalsCss, /\.atelier-archive-folio-title/, ".atelier-archive-folio-title (centered horizontal title) must exist");
+    // The title must NOT use vertical writing-mode (no cropping).
+    const idx = globalsCss.indexOf(".atelier-archive-folio-title");
+    const block = globalsCss.slice(idx, idx + 600);
+    assert.doesNotMatch(
+      block,
+      /writing-mode:\s*vertical/,
+      ".atelier-archive-folio-title must render horizontally (no vertical writing-mode cropping)",
     );
   });
 
@@ -819,34 +859,51 @@ describe("Atrium v3: typography-first portals", () => {
 });
 
 describe("Atrium v3: physical archive + engraved actions", () => {
-  test("G11. Archive section uses .atelier-archive-cabinet + spines + shelf rail", () => {
+  test("G11. Archive section renders dynamic folio cards from real trips", () => {
     const start = dashboardClient.indexOf("function JourneyShelfTeaser");
     const end = dashboardClient.indexOf("function EmptyAtelierHome");
     const block = dashboardClient.slice(start, end);
     for (const cls of [
-      "atelier-archive-cabinet",
-      "atelier-archive-shelf",
       "atelier-archive-spines",
-      "atelier-archive-spine",
-      "atelier-archive-spine-cap",
-      "atelier-archive-spine-band",
-      "atelier-archive-spine-base",
+      "atelier-archive-folio",
+      "atelier-archive-folio-image",
+      "atelier-archive-folio-scrim",
+      "atelier-archive-folio-title",
       "atelier-archive-plate",
     ]) {
       assert.ok(
         block.includes(cls),
-        `JourneyShelfTeaser must render .${cls} (physical archive contract)`,
+        `JourneyShelfTeaser must render .${cls} (folio-card archive contract)`,
       );
     }
+    // Folio cards are driven by the real trips array (dynamic count + title).
+    assert.ok(
+      block.includes("trips.slice") && block.includes("trip.title"),
+      "Archive folios must be generated from the real trips array (dynamic content)",
+    );
+    // Each folio inherits its destination world via pickWorldFromDestination.
+    assert.ok(
+      block.includes("pickWorldFromDestination(trip.destination)"),
+      "Each folio must resolve its destination world for the cover image + palette",
+    );
   });
 
-  test("G12. Archive spines render brass-embossed vertical ciphers", () => {
-    // The spine cipher must rotate via writing-mode for the vertical brass
-    // label that runs down each spine.
+  test("G12. Archive folio title is horizontal + image-backed (no vertical cropping, no dead rail)", () => {
+    // The trip title sits front-and-center over the world image.
+    assert.match(globalsCss, /\.atelier-archive-folio-title/, ".atelier-archive-folio-title must exist");
+    // The dead brass rail under the spines must be removed.
     assert.match(
       globalsCss,
-      /\.atelier-archive-spine-cipher[\s\S]*?writing-mode:\s*vertical-rl/,
-      ".atelier-archive-spine-cipher must use writing-mode: vertical-rl for the embossed brass label",
+      /\.atelier-archive-rail\s*\{[^}]*display:\s*none/,
+      ".atelier-archive-rail must be removed (display: none) — the dead linen underline is gone",
+    );
+    // The folio image layer reads the destination world image var.
+    const idx = globalsCss.indexOf(".atelier-archive-folio-image");
+    const block = globalsCss.slice(idx, idx + 400);
+    assert.match(
+      block,
+      /var\(--spine-image/,
+      ".atelier-archive-folio-image must paint the destination world image via --spine-image",
     );
   });
 

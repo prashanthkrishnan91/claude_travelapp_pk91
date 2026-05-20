@@ -4674,13 +4674,13 @@
   }
   .atelier-doorway-shelf .world-portal-label {
     color: var(--ds-paper);
-    font-size: clamp(1.4rem, 1.8vw, 1.8rem);
-    line-height: 1.05;
+    font-size: clamp(2.6rem, 3.4vw, 3.8rem);
+    line-height: 0.98;
     text-shadow: 0 1px 14px color-mix(in srgb, var(--world-ink) 65%, transparent);
   }
   .atelier-doorway-shelf .world-portal-whisper {
-    color: color-mix(in srgb, var(--ds-paper) 78%, transparent);
-    font-size: 13px;
+    color: color-mix(in srgb, var(--ds-paper) 82%, transparent);
+    font-size: clamp(12px, 0.95vw, 14px);
   }
 
   /* ── Curio shelf v2 (physical book-edge shelf) ─────────────────
@@ -4906,6 +4906,14 @@
     border-radius: 8px;
     background: var(--ds-marine-ink);
     color: var(--ds-paper);
+  }
+  /* Force the airplane glyph to a cream/paper stroke on the dark
+     marine-ink chip — matches the Sidebar brand mark. Without this,
+     a global svg rule could leave it a dark outline. */
+  .atelier-nav-dock-mark svg,
+  .atelier-nav-drawer-mark svg {
+    color: var(--ds-paper) !important;
+    stroke: var(--ds-paper) !important;
   }
   .atelier-nav-dock-wordmark {
     font-size: 14px;
@@ -6655,6 +6663,134 @@
   .atelier-archive-cabinet.atelier-curio-shelf::before,
   .atelier-archive-cabinet.atelier-curio-shelf::after {
     display: none;
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     ATELIER ATRIUM v8 — Folio shelf cards (horizontal titles)
+     User feedback: the vertical book-spine cipher cropped the trip
+     title and the wider brass rail read as a dead linen underline.
+     The shelf folios are now portrait CARDS — like the room portals —
+     with the destination world image behind a centered horizontal
+     trip title. No vertical text, no brass rail, no cropping.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Spines container becomes a wrapping row of fixed-width folio cards
+     so any number of trips lays out cleanly (1 → many). */
+  .atelier-archive-open .atelier-archive-spines {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: clamp(12px, 1.2vw, 18px);
+    align-content: flex-start;
+    grid-template-columns: none !important;
+    min-height: 0;
+    min-width: 0;
+    padding-bottom: 0;
+  }
+
+  /* Each folio — a portrait destination card with the world image
+     behind a centered serif title (mirrors the room-portal feel). */
+  .atelier-archive-folio {
+    position: relative;
+    isolation: isolate;
+    flex: 0 0 clamp(132px, 13vw, 176px);
+    min-height: clamp(220px, 22vw, 300px);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    border-radius: 16px;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--spine-primary, var(--world-primary)) 70%, var(--spine-ink, var(--world-ink))) 0%,
+        color-mix(in srgb, var(--spine-primary, var(--world-primary)) 92%, var(--spine-ink, var(--world-ink))) 100%);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.12) inset,
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 28%, transparent),
+      0 14px 30px color-mix(in srgb, rgba(0, 0, 0, 1) 22%, transparent),
+      0 4px 10px color-mix(in srgb, rgba(0, 0, 0, 1) 18%, transparent);
+    transition:
+      transform 900ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 900ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  /* World image fills the whole folio cover (no cap/base seams). */
+  .atelier-archive-folio-image {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background-image: var(--spine-image, none);
+    background-size: cover;
+    background-position: var(--spine-image-position, center 50%);
+    background-repeat: no-repeat;
+    filter: saturate(0.96) brightness(0.9) contrast(1.03);
+    transform: scale(1.05);
+    transition: transform 1200ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  /* Dark scrim — guarantees the title reads on any image. */
+  .atelier-archive-folio-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--spine-ink, var(--world-ink)) 28%, transparent) 0%,
+        transparent 26%,
+        transparent 42%,
+        color-mix(in srgb, var(--spine-ink, var(--world-ink)) 55%, transparent) 74%,
+        color-mix(in srgb, var(--spine-ink, var(--world-ink)) 86%, transparent) 100%);
+    pointer-events: none;
+  }
+  /* Centered serif title — same family / weight as the room portals. */
+  .atelier-archive-folio-title {
+    position: relative;
+    z-index: 2;
+    font-family: var(--world-type-display, var(--font-fraunces), Georgia, serif);
+    font-weight: 500;
+    font-size: clamp(1.05rem, 1.2vw, 1.35rem);
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+    text-align: center;
+    color: var(--ds-paper);
+    padding: 0 14px clamp(16px, 1.6vw, 24px);
+    text-shadow:
+      0 2px 16px color-mix(in srgb, var(--spine-ink, var(--world-ink)) 90%, transparent),
+      0 1px 3px color-mix(in srgb, var(--spine-ink, var(--world-ink)) 75%, transparent);
+    text-wrap: balance;
+  }
+  a:hover .atelier-archive-folio,
+  a:focus-visible .atelier-archive-folio {
+    transform: translateY(-4px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.16) inset,
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 46%, transparent),
+      0 22px 44px color-mix(in srgb, rgba(0, 0, 0, 1) 30%, transparent),
+      0 8px 16px color-mix(in srgb, rgba(0, 0, 0, 1) 22%, transparent);
+  }
+  a:hover .atelier-archive-folio .atelier-archive-folio-image,
+  a:focus-visible .atelier-archive-folio .atelier-archive-folio-image {
+    transform: scale(1.12);
+  }
+  /* Stagger the lift so the row breathes like a fanned set of folios. */
+  a:hover .atelier-archive-folio[data-spine-index="1"],
+  a:focus-visible .atelier-archive-folio[data-spine-index="1"] { transform: translateY(-9px); }
+  a:hover .atelier-archive-folio[data-spine-index="3"],
+  a:focus-visible .atelier-archive-folio[data-spine-index="3"] { transform: translateY(-9px); }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-archive-folio,
+    .atelier-archive-folio-image { transition: none; }
+    a:hover .atelier-archive-folio,
+    a:focus-visible .atelier-archive-folio,
+    a:hover .atelier-archive-folio[data-spine-index="1"],
+    a:focus-visible .atelier-archive-folio[data-spine-index="1"],
+    a:hover .atelier-archive-folio[data-spine-index="3"],
+    a:focus-visible .atelier-archive-folio[data-spine-index="3"] { transform: none; }
+    a:hover .atelier-archive-folio .atelier-archive-folio-image,
+    a:focus-visible .atelier-archive-folio .atelier-archive-folio-image { transform: scale(1.05); }
+  }
+  @media (max-width: 600px) {
+    .atelier-archive-folio {
+      flex: 0 0 calc(50% - 8px);
+      min-height: clamp(180px, 44vw, 240px);
+    }
   }
 
 }
