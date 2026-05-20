@@ -761,7 +761,7 @@ export function ConciergePage() {
   return (
     <div
       data-testid="concierge-page"
-      className="flex flex-col min-h-screen atelier-transition folio-cinema-desk atelier-salon-room"
+      className="flex flex-col atelier-transition atelier-salon-page atelier-salon-room"
       data-world-location={salonWorld.location}
       data-scenery-tone={salonWorld.visualLayer.contrastTone ?? "dark"}
       style={worldStyleVars(salonWorld)}
@@ -787,13 +787,13 @@ export function ConciergePage() {
           Private Travel Concierge
         </p>
         <h1
-          className="text-ds-text"
           style={{
             fontSize: "var(--ds-type-display-s-size)",
             lineHeight: "var(--ds-type-display-s-leading)",
             fontWeight: "var(--ds-type-display-s-weight)",
             letterSpacing: "var(--ds-type-display-s-tracking)",
             marginTop: "var(--ds-space-2)",
+            color: "var(--world-ink)",
           }}
         >
           {lastQuery ? `"${lastQuery}"` : "What can I find for you?"}
@@ -801,12 +801,13 @@ export function ConciergePage() {
         {!lastQuery && (
           <>
             <p
-              className="text-ds-text-secondary mx-auto"
+              className="mx-auto"
               style={{
                 fontSize: "var(--ds-type-body-size)",
                 lineHeight: "var(--ds-type-body-leading)",
                 maxWidth: "38ch",
                 marginTop: "var(--ds-space-3)",
+                color: "var(--world-ink-mist)",
               }}
             >
               Describe a mood, a neighbourhood, or an occasion.
@@ -814,12 +815,13 @@ export function ConciergePage() {
               I surface verified places worth your time.
             </p>
             <p
-              className="text-ds-text-tertiary mx-auto"
+              className="mx-auto"
               style={{
                 fontSize: "var(--ds-type-body-s-size)",
                 lineHeight: "var(--ds-type-body-s-leading)",
                 maxWidth: "44ch",
                 marginTop: "var(--ds-space-2)",
+                color: "var(--world-ink-mist)",
               }}
             >
               Restaurants, hotels, and local gems — Michelin to hidden.
@@ -846,7 +848,7 @@ export function ConciergePage() {
             data-testid="concierge-empty-state"
             className="flex flex-col items-center atelier-salon-invitation"
           >
-            <p className="text-ds-text-tertiary text-center uppercase tracking-[0.1em]" style={{ fontSize: "var(--ds-type-overline-size)", lineHeight: "var(--ds-type-overline-leading)", fontWeight: "var(--ds-type-overline-weight)", marginBottom: "var(--ds-space-5)" }}>
+            <p className="text-center uppercase tracking-[0.1em]" style={{ fontSize: "var(--ds-type-overline-size)", lineHeight: "var(--ds-type-overline-leading)", fontWeight: "var(--ds-type-overline-weight)", marginBottom: "var(--ds-space-5)", color: "var(--world-ink-mist)" }}>
               Starting points — tell me where to search:
             </p>
             <div className="atelier-salon-chip-grid">
@@ -886,14 +888,14 @@ export function ConciergePage() {
                   key={idx}
                   data-testid="concierge-user-query"
                   className="border-l-2 pl-3 my-2 atelier-salon-user-turn"
-                  style={{ borderColor: "var(--ds-pen-stroke)" }}
                 >
                   <p
-                    className="text-ds-text-tertiary italic"
+                    className="italic"
                     style={{
                       fontSize: "var(--ds-type-body-s-size)",
                       lineHeight: "var(--ds-type-body-s-leading)",
                       wordBreak: "break-word",
+                      color: "var(--world-ink-mist)",
                     }}
                   >
                     {msg.text}
@@ -912,11 +914,11 @@ export function ConciergePage() {
               return (
                 <p
                   key={idx}
-                  className="text-ds-text-tertiary"
                   style={{
                     fontSize: "var(--ds-type-body-s-size)",
                     lineHeight: "var(--ds-type-body-s-leading)",
                     paddingTop: "var(--ds-space-2)",
+                    color: "var(--world-ink-mist)",
                   }}
                 >
                   {msg.text}
@@ -1144,12 +1146,12 @@ export function ConciergePage() {
               className="h-4 w-4 animate-spin text-ds-accent shrink-0"
               aria-hidden="true"
             />
-            <p style={{ fontSize: "var(--ds-type-body-s-size)" }}>
-              <span className="text-ds-text">Searching</span>
-              <span className="text-ds-text-tertiary mx-2">·</span>
-              <span className="text-ds-text-tertiary">Verifying</span>
-              <span className="text-ds-text-tertiary mx-2">·</span>
-              <span className="text-ds-text-tertiary">Composing</span>
+            <p style={{ fontSize: "var(--ds-type-body-s-size)", color: "var(--world-ink-mist)" }}>
+              <span style={{ color: "var(--world-ink)" }}>Searching</span>
+              <span className="mx-2">·</span>
+              <span>Verifying</span>
+              <span className="mx-2">·</span>
+              <span>Composing</span>
             </p>
           </div>
         )}
@@ -1209,7 +1211,7 @@ export function ConciergePage() {
       {/* ── Concierge search instrument ───────────────────────────────────── */}
       <div
         data-testid="concierge-instrument-composer"
-        className="sticky z-10 concierge-sticky-bottom folio-cinema-composer atelier-salon-composer-surface"
+        className="sticky z-10 concierge-sticky-bottom folio-cinema-desk folio-cinema-composer atelier-salon-composer-surface"
         style={{
           marginTop: "var(--ds-space-8)",
         }}

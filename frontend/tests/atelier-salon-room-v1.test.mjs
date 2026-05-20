@@ -21,6 +21,10 @@ const globalsCss = readFileSync(
   join(root, "src/app/globals.css"),
   "utf8",
 );
+const appShell = readFileSync(
+  join(root, "src/components/layout/AppShell.tsx"),
+  "utf8",
+);
 
 // ── Section A: CSS primitives defined in globals.css ────────────────────────
 
@@ -413,6 +417,71 @@ describe("Atelier Room System: salon full-surface upgrade (patch-2)", () => {
     assert.ok(
       conciergePage.includes("atelier-salon-header-landing"),
       "ConciergePage header must use atelier-salon-header-landing for immersive vertical space",
+    );
+  });
+});
+
+// ── Section F: Salon route shell integration (AppShell + CSS) ───────────────
+
+describe("Atelier Room System: salon route shell integration (patch-3)", () => {
+  test("F1. AppShell defines isSalonRoute for /concierge path", () => {
+    assert.ok(
+      appShell.includes('pathname === "/concierge"'),
+      "AppShell must define isSalonRoute checking pathname === '/concierge'",
+    );
+  });
+
+  test("F2. AppShell sets data-atelier-shell='salon' for salon route", () => {
+    assert.ok(
+      appShell.includes('data-atelier-shell') && appShell.includes('"salon"'),
+      "AppShell must set data-atelier-shell='salon' on the atmosphere root for salon route",
+    );
+  });
+
+  test("F3. AppShell renders AtelierNavArtifact for salon route", () => {
+    assert.ok(
+      appShell.includes("isSalonRoute && <AtelierNavArtifact"),
+      "AppShell must render AtelierNavArtifact for the salon route (floating nav)",
+    );
+  });
+
+  test("F4. AppShell uses home-edge-bleed for salon route (immersive wrapper)", () => {
+    assert.ok(
+      appShell.includes("isSalonRoute") && appShell.includes("home-edge-bleed"),
+      "AppShell must wrap salon route children in home-edge-bleed for edge-to-edge layout",
+    );
+  });
+
+  test("F5. globals.css hides .folio-sidebar on salon route via data-atelier-shell", () => {
+    assert.ok(
+      globalsCss.includes('[data-atelier-shell="salon"] .folio-sidebar'),
+      "globals.css must hide .folio-sidebar when data-atelier-shell='salon' is set",
+    );
+  });
+
+  test("F6. globals.css defines atelier-salon-page with world-surface background", () => {
+    const idx = globalsCss.indexOf(".atelier-salon-page");
+    assert.ok(idx !== -1, "globals.css must define .atelier-salon-page");
+    const block = globalsCss.slice(idx, idx + 200);
+    assert.ok(
+      block.includes("--world-surface"),
+      ".atelier-salon-page must use --world-surface for light paper room background",
+    );
+  });
+
+  test("F7. globals.css atelier-salon-page uses warm-paper fallback", () => {
+    const idx = globalsCss.indexOf(".atelier-salon-page");
+    const block = globalsCss.slice(idx, idx + 200);
+    assert.ok(
+      block.includes("--ds-warm-paper"),
+      ".atelier-salon-page must fall back to --ds-warm-paper when --world-surface is unset",
+    );
+  });
+
+  test("F8. ConciergePage outer div uses atelier-salon-page (light paper room shell)", () => {
+    assert.ok(
+      conciergePage.includes("atelier-salon-page"),
+      "ConciergePage outer div must use atelier-salon-page for the light paper room shell",
     );
   });
 });

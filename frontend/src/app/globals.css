@@ -7086,6 +7086,23 @@
     border-left-color: color-mix(in srgb, var(--ds-ember-brass) 38%, transparent);
   }
 
+  /* Salon route — hide the SaaS sidebar in the immersive Atelier shell.
+     AppShell sets data-atelier-shell="salon" on the atmosphere root when
+     isSalonRoute is true. !important beats lg:flex from @layer utilities. */
+  .atelier-atmosphere-root[data-atelier-shell="salon"] .folio-sidebar {
+    display: none !important;
+  }
+
+  /* Salon page room — warm paper surface with destination-aware background.
+     Uses --world-surface (a warm linen tone injected by worldStyleVars) as
+     the room backdrop. Dark cinema surfaces (result cards, sticky composer)
+     float on this light room as contained instrument objects. */
+  .atelier-salon-page {
+    position: relative;
+    background: var(--world-surface, var(--ds-warm-paper));
+    min-height: 100svh;
+  }
+
   /* Salon room in full-height mode — when folio-cinema-desk carries
      the salon room shell, remove the card chrome (radius, border,
      shadow, padding) so the dark surface reads as an immersive room,
@@ -7095,6 +7112,13 @@
     border-radius: 0;
     border: none;
     box-shadow: none;
+    padding: 0;
+  }
+
+  /* When folio-cinema-desk and folio-cinema-composer are co-classed on the
+     sticky instrument, composer styling takes visual precedence. Reset the
+     card padding so folio-cinema-composer children own their own spacing. */
+  .folio-cinema-composer.folio-cinema-desk {
     padding: 0;
   }
 

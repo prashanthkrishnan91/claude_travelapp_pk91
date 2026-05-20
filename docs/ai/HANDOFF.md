@@ -18,36 +18,43 @@ This file is **current operational state**, not a historical log. It must stay c
 **Atelier Room System v1 — AI Concierge Private Salon**
 
 Changes on branch:
-- **`globals.css` — ATELIER ROOM SYSTEM section** (12 CSS primitives total: 7 original + 5 patch-2):
+- **`AppShell.tsx`** *(patch-3)* — Concierge added to immersive shell:
+  - `isSalonRoute = pathname === "/concierge"` — new route check
+  - `data-atelier-shell="salon"` on `atelier-atmosphere-root` — CSS sidebar suppression hook
+  - Second `{isSalonRoute && <AtelierNavArtifact />}` — floating nav for salon route
+  - `home-edge-bleed` wrapper extended to `isHomePage || isSalonRoute` — edge-to-edge for both
+  - F1/F2 test regex patterns (`isHomePage ? null : <Sidebar`, `isHomePage && <AtelierNavArtifact`) preserved unchanged
+
+- **`globals.css` — ATELIER ROOM SYSTEM section** (15 CSS primitives total):
   - `.atelier-salon-room` — `isolation: isolate`
   - `.atelier-salon-room-header` + `::before` — brass entry separator
   - `.atelier-salon-starter-chip` + hover + reduced-motion — brass prompt chip treatment
   - `.atelier-salon-invitation` + `::before` — empty-state invitation threshold
   - `.atelier-salon-composer-surface` + `::before` + reduced-motion — brass desk hairline
   - `.atelier-salon-user-turn` — brass-tinted transcript annotation
-  - `.atelier-salon-room.folio-cinema-desk` *(patch-2)* — strips card chrome (radius/border/shadow/padding) so the surface reads as a room, not a floating box
-  - `.atelier-salon-header-landing` *(patch-2)* — cinematic top padding when card padding is stripped
-  - `.atelier-salon-chip-grid` *(patch-2)* — 2-column desktop prompt chip grid (1-column on mobile ≤500px)
-  - `.atelier-salon-chip-grid .atelier-salon-starter-chip` *(patch-2)* — full-width chip in grid cells
+  - `.atelier-salon-room.folio-cinema-desk` — strips card chrome for room-not-box reading
+  - `.atelier-salon-header-landing` — cinematic top padding
+  - `.atelier-salon-chip-grid` — 2-column desktop chip grid
+  - `.atelier-salon-chip-grid .atelier-salon-starter-chip` — full-width grid cell chips
+  - `.atelier-atmosphere-root[data-atelier-shell="salon"] .folio-sidebar { display:none !important }` *(patch-3)* — hides SaaS sidebar; `!important` beats `lg:flex` from @layer utilities
+  - `.atelier-salon-page { background: var(--world-surface, --ds-warm-paper); min-height:100svh }` *(patch-3)* — light paper room shell; `--world-surface` is always a warm linen tone from worldData
+  - `.folio-cinema-composer.folio-cinema-desk { padding:0 }` *(patch-3)* — prevents padding conflict when co-classed on sticky composer
 
-- **`ConciergePage.tsx`** — salon room adoption + patch-2 upgrade:
-  - Imports: `WorldAtmosphere`, `applyRoom`, `pickWorldFromDestination`, `worldStyleVars`
-  - `salonWorld = applyRoom(pickWorldFromDestination(destination), "salon")` via useMemo
-  - Outer div: `min-h-screen folio-cinema-desk atelier-salon-room` + `worldStyleVars(salonWorld)` style
-  - `<WorldAtmosphere />` — destination-aware ambient blob coloring (z-index:-1)
-  - Header: `atelier-salon-room-header atelier-salon-header-landing pb-5 sm:pb-8` — cinematic landing space
-  - Header copy: three-line editorial hierarchy (overline → display h1 → body subtitle → capability hint)
-  - Empty state: `atelier-salon-invitation` + `atelier-salon-chip-grid` (2×3 grid of 6 prompts)
-  - EDITORIAL_PROMPTS expanded to 6 (added "Best neighbourhood to stay", "Local breakfast worth the walk")
-  - Prompt chips: `folio-concierge-chip atelier-salon-starter-chip` — both contracts preserved
-  - User turn markers: `atelier-salon-user-turn`, composer: `atelier-salon-composer-surface`
+- **`ConciergePage.tsx`** *(patch-3 architecture correction)*:
+  - Outer div: `folio-cinema-desk` removed → `atelier-salon-page` added (light paper room, not dark box)
+  - `data-scenery-tone` preserved; `worldStyleVars(salonWorld)` injects `--world-ink`, `--world-ink-mist`, `--world-surface`
+  - Sticky composer: `folio-cinema-desk` added alongside `folio-cinema-composer` (dark instrument floats on light room; test B2 preserved)
+  - Header h1 + subtitles: `text-ds-text*` classes removed; `color: var(--world-ink)` / `color: var(--world-ink-mist)` inline styles — dark ink readable on light paper
+  - User turn: inline `borderColor` removed (let `atelier-salon-user-turn` brass handle it); text uses `var(--world-ink-mist)`
+  - Loading state spans: world-ink / world-ink-mist inline styles
+  - Result cards (`ConciergeResultCard` with `Card tone="dark"`) keep their own dark surface — `text-ds-text*` tokens inside cards remain correct
 
-- **`tests/atelier-salon-room-v1.test.mjs`** — 48 contract tests (32 + 10 Section D + 6 Section E patch-2)
+- **`tests/atelier-salon-room-v1.test.mjs`** — 56 contract tests (48 prior + 8 new Section F for patch-3 shell integration)
 - **`frontend/package.json`** — test wired into npm test
 
 All existing testids, folio-cinema-desk, folio-cinema-composer, folio-concierge-chip, Starting points copy, callConciergeSearch, all behavior (search, save, maps, refinement, transcript) preserved. Home not regressed.
 
-**Test count:** 2983 total, 0 failures.  
+**Test count:** 2991 total, 0 failures.  
 **No backend / SQL / provider / env / Supabase / API / route / data-contract changes.**
 
 ### Next step after PR #451 merges
