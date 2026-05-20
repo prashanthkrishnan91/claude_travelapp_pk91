@@ -276,3 +276,89 @@ describe("Atelier Room System: preservation of existing contracts", () => {
     );
   });
 });
+
+// ── Section D: Patch-1 salon strengthening contracts ─────────────────────────
+
+describe("Atelier Room System: salon strengthening (patch-1 primitives)", () => {
+  test("D1. atelier-salon-invitation defined in globals.css", () => {
+    assert.ok(
+      globalsCss.includes(".atelier-salon-invitation"),
+      "globals.css must define .atelier-salon-invitation — premium empty-state threshold",
+    );
+  });
+
+  test("D2. atelier-salon-invitation has ::before brass rule", () => {
+    const idx = globalsCss.indexOf(".atelier-salon-invitation::before");
+    assert.ok(
+      idx !== -1,
+      ".atelier-salon-invitation::before must be defined — brass invitation separator",
+    );
+    const block = globalsCss.slice(idx, idx + 300);
+    assert.ok(
+      block.includes("var(--ds-ember-brass)"),
+      ".atelier-salon-invitation::before must use --ds-ember-brass",
+    );
+  });
+
+  test("D3. atelier-salon-composer-surface defined in globals.css", () => {
+    assert.ok(
+      globalsCss.includes(".atelier-salon-composer-surface"),
+      "globals.css must define .atelier-salon-composer-surface — desk threshold hairline",
+    );
+  });
+
+  test("D4. atelier-salon-composer-surface has ::before brass hairline", () => {
+    const idx = globalsCss.indexOf(".atelier-salon-composer-surface::before");
+    assert.ok(
+      idx !== -1,
+      ".atelier-salon-composer-surface::before must be defined — brass desk surface hairline",
+    );
+  });
+
+  test("D5. atelier-salon-user-turn defined in globals.css", () => {
+    assert.ok(
+      globalsCss.includes(".atelier-salon-user-turn"),
+      "globals.css must define .atelier-salon-user-turn — brass-tinted query annotation",
+    );
+  });
+
+  test("D6. atelier-salon-user-turn uses ember-brass", () => {
+    const idx = globalsCss.indexOf(".atelier-salon-user-turn");
+    const block = globalsCss.slice(idx, idx + 120);
+    assert.ok(
+      block.includes("var(--ds-ember-brass)"),
+      ".atelier-salon-user-turn must use --ds-ember-brass for the border tint",
+    );
+  });
+
+  test("D7. ConciergePage empty-state uses atelier-salon-invitation", () => {
+    assert.ok(
+      conciergePage.includes("atelier-salon-invitation"),
+      "ConciergePage empty-state must use atelier-salon-invitation class",
+    );
+  });
+
+  test("D8. ConciergePage composer uses atelier-salon-composer-surface", () => {
+    assert.ok(
+      conciergePage.includes("atelier-salon-composer-surface"),
+      "ConciergePage composer must use atelier-salon-composer-surface class",
+    );
+  });
+
+  test("D9. ConciergePage user-turn uses atelier-salon-user-turn", () => {
+    assert.ok(
+      conciergePage.includes("atelier-salon-user-turn"),
+      "ConciergePage user-turn marker must use atelier-salon-user-turn class",
+    );
+  });
+
+  test("D10. composer-surface reduced-motion guard present", () => {
+    const cssAfterComposer = globalsCss.slice(
+      globalsCss.indexOf(".atelier-salon-composer-surface"),
+    );
+    assert.ok(
+      cssAfterComposer.includes("prefers-reduced-motion: reduce"),
+      ".atelier-salon-composer-surface must have a reduced-motion guard",
+    );
+  });
+});

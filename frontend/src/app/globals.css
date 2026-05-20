@@ -7031,4 +7031,59 @@
     }
   }
 
+  /* Salon invitation — the initial/empty state threshold. Frames
+     the prompt chip collection as a curated salon opening rather
+     than a generic suggestion list. The ::before draws a wider soft
+     brass rule above the chip cluster as a visual invitation. */
+  .atelier-salon-invitation {
+    padding-top: var(--ds-space-10);
+    padding-bottom: var(--ds-space-6);
+  }
+  .atelier-salon-invitation::before {
+    content: "";
+    display: block;
+    width: clamp(48px, 18%, 96px);
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--ds-ember-brass) 40%, transparent) 50%,
+      transparent
+    );
+    margin: 0 auto var(--ds-space-6) auto;
+  }
+
+  /* Salon composer surface — additive brass threshold on the sticky
+     search dock. Marks the boundary between the results canvas and
+     the instrument surface without adding layout weight. */
+  .atelier-salon-composer-surface {
+    position: relative;
+  }
+  .atelier-salon-composer-surface::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: var(--ds-space-4);
+    right: var(--ds-space-4);
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--ds-ember-brass) 28%, transparent) 25%,
+      color-mix(in srgb, var(--ds-ember-brass) 28%, transparent) 75%,
+      transparent
+    );
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-salon-composer-surface::before { display: none; }
+  }
+
+  /* Salon user-turn annotation — the brass-tinted left border on
+     user query markers in the transcript. More intentional than a
+     plain gray rule; uses ember-brass to tie the annotations to the
+     room palette. */
+  .atelier-salon-user-turn {
+    border-left-color: color-mix(in srgb, var(--ds-ember-brass) 38%, transparent);
+  }
+
 }

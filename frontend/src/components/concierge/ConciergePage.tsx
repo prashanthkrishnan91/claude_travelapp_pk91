@@ -822,27 +822,19 @@ export function ConciergePage() {
         aria-label="Concierge results"
         aria-live="polite"
         aria-atomic="false"
-        className="flex-1 mx-auto w-full"
+        className="flex-1 mx-auto w-full px-4 sm:px-6"
         style={{ maxWidth: "42rem" }}
       >
         {/* Empty / initial state */}
         {!loading && !hasResults && messages.length === 0 && (
           <div
             data-testid="concierge-empty-state"
-            className="flex flex-col items-center"
-            style={{ paddingTop: "var(--ds-space-6)" }}
+            className="flex flex-col items-center atelier-salon-invitation"
           >
-            <p
-              className="text-ds-text-tertiary text-center"
-              style={{
-                fontSize: "var(--ds-type-body-s-size)",
-                lineHeight: "var(--ds-type-body-s-leading)",
-                marginBottom: "var(--ds-space-5)",
-              }}
-            >
+            <p className="text-ds-text-tertiary text-center uppercase tracking-[0.1em]" style={{ fontSize: "var(--ds-type-overline-size)", lineHeight: "var(--ds-type-overline-leading)", fontWeight: "var(--ds-type-overline-weight)", marginBottom: "var(--ds-space-5)" }}>
               Starting points — tell me where to search:
             </p>
-            <div className="flex flex-wrap gap-2 justify-center">
+            <div className="flex flex-wrap gap-2 justify-center" style={{ maxWidth: "32rem" }}>
               {EDITORIAL_PROMPTS.map((prompt) => (
                 <button
                   key={prompt}
@@ -877,7 +869,7 @@ export function ConciergePage() {
                 <div
                   key={idx}
                   data-testid="concierge-user-query"
-                  className="border-l-2 pl-3 my-2"
+                  className="border-l-2 pl-3 my-2 atelier-salon-user-turn"
                   style={{ borderColor: "var(--ds-pen-stroke)" }}
                 >
                   <p
@@ -1201,7 +1193,7 @@ export function ConciergePage() {
       {/* ── Concierge search instrument ───────────────────────────────────── */}
       <div
         data-testid="concierge-instrument-composer"
-        className="sticky z-10 concierge-sticky-bottom folio-cinema-composer"
+        className="sticky z-10 concierge-sticky-bottom folio-cinema-composer atelier-salon-composer-surface"
         style={{
           marginTop: "var(--ds-space-8)",
         }}
