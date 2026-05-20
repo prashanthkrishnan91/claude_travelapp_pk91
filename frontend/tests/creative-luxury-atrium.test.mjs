@@ -947,3 +947,77 @@ describe("Atrium v3: silent footer (no Portland · Misty forest narration)", () 
     assert.match(dashboardClient, /WorldWayfinder/);
   });
 });
+
+describe("Atrium v9: guaranteed-readable text + reusable brand mark", () => {
+  const navArtifact = readSrc("components/layout/AtelierNavArtifact.tsx");
+  const sidebar = readSrc("components/layout/Sidebar.tsx");
+  const brandMark = readSrc("components/layout/BrandMark.tsx");
+
+  test("H1. Dossier title + dates + travelers + Open Folio share ONE dark panel", () => {
+    const start = dashboardClient.indexOf("function ContinuePlanningStrip");
+    const end = dashboardClient.indexOf("function JourneyShelfTeaser");
+    const block = dashboardClient.slice(start, end);
+    // All metadata is consolidated into the cover-content panel — there is
+    // no separate fragile rail div anymore.
+    assert.ok(
+      block.includes("atelier-dossier-cover-content-flex") &&
+        block.includes("atelier-dossier-meta") &&
+        block.includes("atelier-dossier-meta-action"),
+      "Dossier title + meta row must live in the cover-content panel",
+    );
+    assert.ok(
+      block.includes("dateLine") && block.includes("partyLine") && block.includes("Open folio"),
+      "Dossier panel must surface dates + travelers + Open Folio",
+    );
+  });
+
+  test("H2. Dossier panel forces cream text on its dark plate (no dark-on-dark / contrast-tone trap)", () => {
+    // The panel is always dark (world-ink gradient), so its text must be
+    // unconditionally cream — overriding the [data-scenery-tone] contrast
+    // engine via higher specificity + !important.
+    assert.match(
+      globalsCss,
+      /\.atelier-dossier-cover-flex \.atelier-dossier-cover-content-flex \.atelier-dossier-title[\s\S]*?color:\s*var\(--ds-paper\)\s*!important/,
+      "Dossier title must be forced cream on the dark panel",
+    );
+    assert.match(
+      globalsCss,
+      /\.atelier-dossier-cover-content\.atelier-dossier-cover-content-flex[\s\S]*?background:[\s\S]*?var\(--world-ink\)[\s\S]*?!important/,
+      "Dossier panel must paint a guaranteed-dark world-ink plate",
+    );
+  });
+
+  test("H3. Shelf folio title sits on a strong dark plate + cream type (readable on any image)", () => {
+    // The folio carries a dedicated dark base band (::after) so the title
+    // is readable even where the image is bright (city amber horizon, beach).
+    assert.match(
+      globalsCss,
+      /\.atelier-archive-folio::after[\s\S]*?var\(--spine-ink/,
+      ".atelier-archive-folio::after must paint a dark base plate behind the title",
+    );
+    assert.match(
+      globalsCss,
+      /\.atelier-archive-folio-title[\s\S]*?color:\s*var\(--ds-paper\)\s*!important/,
+      ".atelier-archive-folio-title must be forced cream",
+    );
+  });
+
+  test("H4. Brand mark is a reusable component used by Sidebar AND the Home nav dock", () => {
+    assert.match(brandMark, /export function BrandMark/, "BrandMark must be a reusable exported component");
+    assert.match(brandMark, /bg-ds-marine-ink/, "BrandMark chip must be marine-ink");
+    assert.match(brandMark, /text-ds-paper/, "BrandMark airplane must be cream/paper (white outline)");
+    assert.ok(
+      sidebar.includes("<BrandMark") && sidebar.includes('from "./BrandMark"'),
+      "Sidebar must use the shared BrandMark",
+    );
+    assert.ok(
+      navArtifact.includes("<BrandMark") && navArtifact.includes('from "./BrandMark"'),
+      "AtelierNavArtifact (home dock + drawer) must use the shared BrandMark",
+    );
+    // The home dock must no longer hand-roll a Plane glyph that could go dark.
+    assert.ok(
+      !navArtifact.includes("<Plane"),
+      "AtelierNavArtifact must not hand-roll a Plane icon — it uses the shared BrandMark",
+    );
+  });
+});

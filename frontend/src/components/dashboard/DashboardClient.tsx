@@ -223,11 +223,12 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
           <div className="atelier-dossier-cover atelier-dossier-cover-tall atelier-dossier-cover-flex">
             <span className="atelier-dossier-scenery" aria-hidden="true" />
             <div className="atelier-dossier-overlay" aria-hidden="true" />
-            {/* No top-right corporate corner artifact. The title speaks
-                for itself and the rail carries the serial + status. */}
-            {/* Cover content stack — pushed to the bottom via flex.
-                Title only (no redundant destination overline / caption). */}
-            <div className="atelier-dossier-cover-content atelier-dossier-cover-content-flex">
+            {/* No top-right corporate corner artifact, no separate rail.
+                Title + dates + travelers + Open Folio all sit on ONE dark
+                paper-glass panel (atelier-dossier-cover-content-flex) so
+                every line is guaranteed cream-on-dark — no dark-on-dark
+                regardless of the destination scenery luminance. */}
+            <div className="atelier-dossier-cover-content atelier-dossier-cover-content-flex atelier-dossier-rail">
               <h3 className="folio-card-title atelier-dossier-title">
                 {trip.title}
               </h3>
@@ -236,26 +237,21 @@ function ContinuePlanningStrip({ trip }: { trip: Trip }) {
                   {trip.destination}
                 </p>
               )}
-            </div>
-            {/* Glass-scrim rail — dates · travelers · Open Folio action.
-                No status pill (the "Planned" corporate badge was removed
-                per direction; status is not surfaced on the cover). */}
-            <div className="atelier-dossier-scrim atelier-dossier-rail">
-              <div className="atelier-dossier-scrim-meta">
-                <span className="atelier-dossier-scrim-line">{dateLine}</span>
-                <span className="atelier-dossier-scrim-sep" aria-hidden="true" />
-                <span className="atelier-dossier-scrim-line">{partyLine}</span>
+              <FolioRouteThread className="atelier-dossier-route" />
+              <div className="atelier-dossier-meta">
+                <span className="atelier-dossier-meta-line">{dateLine}</span>
+                <span className="atelier-dossier-meta-dot" aria-hidden="true" />
+                <span className="atelier-dossier-meta-line">{partyLine}</span>
+                <span className="atelier-dossier-meta-action">
+                  Open folio
+                  <FolioCtaGlide>
+                    <span className="folio-cta-arrow" aria-hidden="true">
+                      <ArrowRight className="w-4 h-4" />
+                    </span>
+                  </FolioCtaGlide>
+                </span>
               </div>
-              <span className="atelier-dossier-scrim-action">
-                <span className="atelier-dossier-scrim-action-label">Open folio</span>
-                <FolioCtaGlide>
-                  <span className="folio-cta-arrow" aria-hidden="true">
-                    <ArrowRight className="w-4 h-4" />
-                  </span>
-                </FolioCtaGlide>
-              </span>
             </div>
-            <FolioRouteThread className="atelier-dossier-route" />
           </div>
         </article>
       </Link>

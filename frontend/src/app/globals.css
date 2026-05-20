@@ -6674,16 +6674,33 @@
      trip title. No vertical text, no brass rail, no cropping.
      ════════════════════════════════════════════════════════════════ */
 
-  /* Spines container becomes a wrapping row of fixed-width folio cards
-     so any number of trips lays out cleanly (1 → many). */
+  /* Archive composition — folios sit SIDE BY SIDE in a row, with the
+     plate beside them. Tight max-width so the shelf reads as one
+     composed object and never trails into dead space. (Overrides the
+     earlier 2-column grid that forced the folios to wrap vertically.) */
+  .atelier-archive-open {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: clamp(24px, 3vw, 48px);
+    grid-template-columns: none !important;
+    max-width: min(980px, 100%);
+  }
+  /* Spines container is a horizontal row of fixed-width folio cards. */
   .atelier-archive-open .atelier-archive-spines {
     display: flex !important;
     flex-wrap: wrap;
     gap: clamp(12px, 1.2vw, 18px);
-    align-content: flex-start;
+    align-content: center;
     grid-template-columns: none !important;
+    flex: 0 1 auto;
     min-height: 0;
     min-width: 0;
+    padding-bottom: 0;
+  }
+  .atelier-archive-open .atelier-archive-plate {
+    flex: 1 1 240px;
+    align-self: center;
     padding-bottom: 0;
   }
 
@@ -6792,5 +6809,130 @@
       min-height: clamp(180px, 44vw, 240px);
     }
   }
+
+  /* ════════════════════════════════════════════════════════════════
+     ATELIER ATRIUM v9 — Guaranteed-readable text (no dark-on-dark)
+     User-verified failures from the v8 preview:
+       · Dossier metadata (dates/travelers/Open Folio) invisible — the
+         separate rail's gradient + flex positioning was fragile.
+       · Shelf folio titles wash out where the image is bright (the
+         SVG city's amber horizon, the beach foam).
+     Fix: text that sits over imagery ALWAYS gets a guaranteed-dark
+     plate behind it + cream type. The plate is the contrast layer, so
+     the type is unconditionally cream — never contrast-tone-dependent
+     (which could go dark-on-dark on a dark plate).
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Dossier panel — title + caption + meta all live on ONE dark
+     paper-glass panel. Make the panel reliably dark + force every line
+     to cream, overriding the contrast engine (the panel, not the raw
+     scenery, is the readability surface here). */
+  .atelier-dossier-cover-flex .atelier-dossier-cover-content.atelier-dossier-cover-content-flex {
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--world-ink) 30%, transparent) 0%,
+        color-mix(in srgb, var(--world-ink) 72%, transparent) 42%,
+        color-mix(in srgb, var(--world-ink) 90%, transparent) 100%) !important;
+    backdrop-filter: blur(10px) saturate(1.08) !important;
+    -webkit-backdrop-filter: blur(10px) saturate(1.08) !important;
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--ds-paper) 22%, transparent),
+      0 14px 32px color-mix(in srgb, rgba(0, 0, 0, 1) 34%, transparent) !important;
+  }
+  /* Cream text, unconditionally — wins over [data-scenery-tone] rules
+     via higher specificity (cover-flex + cover-content-flex + el). */
+  .atelier-dossier-cover-flex .atelier-dossier-cover-content-flex .atelier-dossier-title,
+  .atelier-dossier-cover-flex .atelier-dossier-cover-content-flex .atelier-dossier-caption,
+  .atelier-dossier-cover-flex .atelier-dossier-cover-content-flex .atelier-dossier-meta-line,
+  .atelier-dossier-cover-flex .atelier-dossier-cover-content-flex .atelier-dossier-meta-action {
+    color: var(--ds-paper) !important;
+    text-shadow: 0 1px 8px color-mix(in srgb, rgba(0, 0, 0, 1) 45%, transparent) !important;
+  }
+  .atelier-dossier-cover-flex .atelier-dossier-cover-content-flex .atelier-dossier-caption {
+    color: color-mix(in srgb, var(--ds-paper) 84%, transparent) !important;
+  }
+  /* Consolidated metadata row inside the panel. */
+  .atelier-dossier-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: clamp(8px, 1vw, 12px);
+  }
+  .atelier-dossier-meta-line {
+    font-family: var(--world-type-ui, var(--font-fraunces), Georgia, serif);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--ds-paper);
+    white-space: nowrap;
+  }
+  .atelier-dossier-meta-dot {
+    width: 4px; height: 4px;
+    border-radius: 9999px;
+    background: var(--ds-ember-brass);
+    flex-shrink: 0;
+  }
+  .atelier-dossier-meta-action {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ds-paper);
+  }
+  .atelier-dossier-meta-action .folio-cta-arrow svg,
+  .atelier-dossier-meta-action .folio-cta-arrow {
+    color: color-mix(in srgb, var(--ds-ember-brass) 92%, var(--ds-paper));
+  }
+  /* The route thread inside the panel — quiet brass divider. */
+  .atelier-dossier-cover-content-flex .atelier-dossier-route {
+    position: relative;
+    left: auto; right: auto; bottom: auto;
+    margin-top: clamp(8px, 1vw, 12px);
+    opacity: 0.55;
+  }
+
+  /* ── Shelf folio titles — strong dark caption plate ──────────────
+     The folio image can be bright at the bottom (city amber horizon,
+     beach foam). A soft scrim isn't enough. Give the title a strong
+     near-opaque dark plate so cream type is readable on ANY image. */
+  .atelier-archive-folio-scrim {
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--spine-ink, var(--world-ink)) 30%, transparent) 0%,
+        transparent 30%,
+        transparent 46%,
+        color-mix(in srgb, var(--spine-ink, var(--world-ink)) 72%, transparent) 70%,
+        color-mix(in srgb, var(--spine-ink, var(--world-ink)) 94%, transparent) 100%) !important;
+  }
+  .atelier-archive-folio-title {
+    color: var(--ds-paper) !important;
+    font-weight: 600;
+    text-shadow:
+      0 2px 14px color-mix(in srgb, rgba(0, 0, 0, 1) 70%, transparent),
+      0 1px 3px color-mix(in srgb, rgba(0, 0, 0, 1) 60%, transparent),
+      0 0 1px color-mix(in srgb, rgba(0, 0, 0, 1) 50%, transparent) !important;
+  }
+  /* A dedicated dark base band behind the title — independent of the
+     scrim gradient — so even a fully-light image keeps the title
+     readable. Painted as a pseudo-element on the folio. */
+  .atelier-archive-folio::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 46%;
+    z-index: 1;
+    background:
+      linear-gradient(180deg,
+        transparent 0%,
+        color-mix(in srgb, var(--spine-ink, var(--world-ink)) 55%, transparent) 55%,
+        color-mix(in srgb, var(--spine-ink, var(--world-ink)) 90%, transparent) 100%);
+    pointer-events: none;
+  }
+  .atelier-archive-folio-title { position: relative; z-index: 2; }
 
 }

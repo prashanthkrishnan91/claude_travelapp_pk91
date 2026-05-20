@@ -9,7 +9,6 @@ import {
   PlusCircle,
   CreditCard,
   Settings,
-  Plane,
   LogOut,
   Compass,
   Bookmark,
@@ -18,6 +17,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { supabase } from "@/lib/supabase";
+import { BrandMark } from "./BrandMark";
 import type { User } from "@supabase/supabase-js";
 
 // ════════════════════════════════════════════════════════════════
@@ -105,9 +105,7 @@ export function AtelierNavArtifact() {
         aria-expanded={open}
         data-testid="atelier-nav-dock"
       >
-        <span className="atelier-nav-dock-mark text-ds-paper" aria-hidden="true">
-          <Plane className="w-4 h-4" stroke="currentColor" />
-        </span>
+        <BrandMark />
         <span className="atelier-nav-dock-wordmark">The Atelier</span>
         <span className="atelier-nav-dock-rule" aria-hidden="true" />
       </button>
@@ -128,9 +126,7 @@ export function AtelierNavArtifact() {
           >
             <header className="atelier-nav-drawer-head">
               <div className="atelier-nav-drawer-brand">
-                <span className="atelier-nav-drawer-mark" aria-hidden="true">
-                  <Plane className="w-4 h-4" />
-                </span>
+                <BrandMark />
                 <div className="leading-tight">
                   <p className="text-sm font-semibold folio-display-serif text-ds-folio-ink">
                     Travel Concierge
