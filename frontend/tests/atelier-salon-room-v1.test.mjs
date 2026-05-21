@@ -586,3 +586,114 @@ describe("Atelier Room System: two-column workbench + briefing rail (patch-5)", 
     );
   });
 });
+
+// ── Section I: Salon portal scene composition (concept v1 adoption) ──────────
+
+describe("Atelier Room System: salon portal scene (concept v1)", () => {
+  test("I1. globals.css defines .atelier-salon-portal centerpiece", () => {
+    assert.ok(
+      globalsCss.includes(".atelier-salon-portal"),
+      "globals.css must define .atelier-salon-portal — the cinematic centerpiece",
+    );
+  });
+
+  test("I2. portal scene paints from --world-scenery (real world DNA, no fake mood)", () => {
+    const idx = globalsCss.indexOf(".atelier-salon-portal-scene");
+    assert.ok(idx !== -1, ".atelier-salon-portal-scene must be defined");
+    const block = globalsCss.slice(idx, idx + 320);
+    assert.ok(
+      block.includes("var(--world-scenery)"),
+      ".atelier-salon-portal-scene must read var(--world-scenery) so the portal tunes via the world pipeline, not hardcoded scenes",
+    );
+  });
+
+  test("I3. portal has layered depth (haze, bloom, grain, vignette)", () => {
+    for (const layer of [
+      ".atelier-salon-portal-haze",
+      ".atelier-salon-portal-bloom",
+      ".atelier-salon-portal-grain",
+      ".atelier-salon-portal-vignette",
+    ]) {
+      assert.ok(globalsCss.includes(layer), `globals.css must define ${layer} — portal depth layer`);
+    }
+  });
+
+  test("I4. tuned-mode rule collapses the portal after search", () => {
+    assert.ok(
+      globalsCss.includes('[data-salon-mode="tuned"] .atelier-salon-portal'),
+      "globals.css must define a [data-salon-mode='tuned'] rule that collapses the portal to a banner",
+    );
+  });
+
+  test("I5. open-mode rule keeps the result canvas non-scrolling pre-search", () => {
+    assert.ok(
+      globalsCss.includes('[data-salon-mode="open"] .atelier-salon-panel-body'),
+      "globals.css must define a [data-salon-mode='open'] rule so the canvas does not scroll before search",
+    );
+  });
+
+  test("I6. ConciergePage renders the portal and drives data-salon-mode", () => {
+    assert.ok(
+      conciergePage.includes("atelier-salon-portal") &&
+        conciergePage.includes("data-salon-mode={salonMode}"),
+      "ConciergePage must render atelier-salon-portal and set data-salon-mode={salonMode}",
+    );
+  });
+
+  test("I7. header + invitations live inside the portal copy (scene composition)", () => {
+    const copyIdx = conciergePage.indexOf("atelier-salon-portal-copy");
+    const canvasIdx = conciergePage.indexOf('data-testid="concierge-results-canvas"');
+    const headerIdx = conciergePage.indexOf('data-testid="concierge-instrument-header"');
+    const emptyIdx = conciergePage.indexOf('data-testid="concierge-empty-state"');
+    assert.ok(copyIdx !== -1, "ConciergePage must use atelier-salon-portal-copy");
+    assert.ok(
+      headerIdx > copyIdx && headerIdx < canvasIdx,
+      "concierge-instrument-header must sit inside the portal copy, before the results canvas",
+    );
+    assert.ok(
+      emptyIdx > copyIdx && emptyIdx < canvasIdx,
+      "concierge-empty-state (invitations) must sit inside the portal copy, before the results canvas",
+    );
+  });
+
+  test("I8. portal copy uses light cinema text, never dark --world-ink", () => {
+    const idx = globalsCss.indexOf(".atelier-salon-portal-title");
+    assert.ok(idx !== -1, ".atelier-salon-portal-title must be defined");
+    const block = globalsCss.slice(idx, idx + 320);
+    assert.ok(
+      block.includes("var(--ds-pearl-cream)") || block.includes("var(--ds-cream)"),
+      "portal title must use a light cinema token (pearl-cream/cream) so it never goes dark-on-dark",
+    );
+    assert.ok(
+      !block.includes("var(--world-ink)"),
+      "portal title must NOT use --world-ink (dark) — that is the dark-on-dark failure",
+    );
+  });
+
+  test("I9. portal animations have a reduced-motion guard", () => {
+    const idx = globalsCss.indexOf("SALON PORTAL");
+    const block = globalsCss.slice(idx);
+    assert.ok(
+      block.includes("prefers-reduced-motion: reduce") &&
+        block.includes("salonPortalDrift"),
+      "portal drift/bloom must be defined and disabled under prefers-reduced-motion",
+    );
+  });
+
+  test("I10. no fake prototype data or hardcoded mood logic in production source", () => {
+    for (const banned of [
+      "pickScene",
+      "SCENES",
+      'data-scene="',
+      "Nanzen-ji",
+      "Pontocho",
+      "Da Adolfo",
+      "Amalfi Coast",
+    ]) {
+      assert.ok(
+        !conciergePage.includes(banned),
+        `ConciergePage must not contain prototype-only token '${banned}' (no fake places / mood regex)`,
+      );
+    }
+  });
+});

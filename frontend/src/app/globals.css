@@ -7252,4 +7252,255 @@
     margin-top: auto;
   }
 
+  /* Dossier rail as a tactile paper artifact (not a dry help card): a warm
+     bone card with a soft shadow, balanced against the cinematic stage. */
+  @media (min-width: 900px) {
+    .atelier-salon-briefing-rail {
+      background: var(--ds-bone);
+      box-shadow: 0 2px 18px color-mix(in srgb, var(--ds-midnight-ink) 7%, transparent);
+      max-height: calc(100svh - var(--ds-space-10));
+      overflow-y: auto;
+    }
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     SALON PORTAL — cinematic scene composition (concept v1 adoption)
+     The /concierge stage is a private travel salon: a layered portal
+     window is the emotional centerpiece, the concierge desk is fused to
+     the stage base, invitations live inside the scene, and verified
+     results reveal in place after search. Copy is always light over a
+     guaranteed dark scrim, so it can never go dark-on-dark regardless of
+     which destination the scene has tuned toward.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Stage panel — the salon room reads as a warm cinematic room, not a flat
+     slab: a deep base with two-point lamp warmth and a brass hairline frame.
+     Inherits the height bound + overflow:hidden from .atelier-salon-main-panel
+     so the desk pins to the base and only the result canvas scrolls. */
+  .atelier-salon-stage-panel {
+    background-color: var(--ds-cinema-deep);
+    background-image:
+      radial-gradient(
+        ellipse 90% 42% at 50% -8%,
+        color-mix(in srgb, var(--ds-ember-brass) 16%, transparent) 0%,
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse 52% 30% at 12% 36%,
+        color-mix(in srgb, var(--ds-ember-brass) 8%, transparent) 0%,
+        transparent 55%
+      );
+    border-color: color-mix(in srgb, var(--ds-ember-brass) 22%, transparent);
+  }
+
+  /* The portal frame — a deep window into travel. */
+  .atelier-salon-portal {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    display: flex;
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: auto;
+    min-height: clamp(300px, 42vh, 460px);
+    margin: var(--ds-space-4);
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 26%, transparent);
+    box-shadow:
+      0 24px 60px -28px rgba(0, 0, 0, 0.7),
+      inset 0 1px 0 rgba(245, 235, 221, 0.06);
+    transition:
+      min-height 320ms var(--ds-easing-standard),
+      flex-basis 320ms var(--ds-easing-standard);
+  }
+
+  /* Tuned (post-search) — portal collapses to a banner; results take over. */
+  .atelier-salon-stage-panel[data-salon-mode="tuned"] .atelier-salon-portal {
+    flex: 0 0 auto;
+    min-height: 0;
+    height: clamp(132px, 18vh, 200px);
+  }
+
+  /* Open (pre-search) — the result canvas contributes no height and never
+     scrolls, so the portal owns the stage above the fold. */
+  .atelier-salon-stage-panel[data-salon-mode="open"] .atelier-salon-panel-body {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  /* Depth layers — scene tunes by destination; the rest guarantee mood + legibility. */
+  .atelier-salon-portal-scene {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background-image: var(--world-scenery);
+    background-size: cover;
+    background-position: center 42%;
+    transform: scale(1.06);
+    transition: background-image 900ms ease;
+    animation: salonPortalDrift 42s ease-in-out infinite alternate;
+  }
+  .atelier-salon-portal-haze {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 72% 20% at 50% 46%, rgba(255, 224, 178, 0.28), transparent 70%),
+      radial-gradient(ellipse 100% 40% at 50% 0%, rgba(255, 230, 190, 0.12), transparent 65%);
+    mix-blend-mode: screen;
+  }
+  .atelier-salon-portal-bloom {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 40%;
+    height: 22%;
+    z-index: 2;
+    pointer-events: none;
+    background: radial-gradient(ellipse 60% 100% at 50% 50%, rgba(255, 232, 190, 0.40), transparent 72%);
+    filter: blur(8px);
+    animation: salonPortalBloom 9s ease-in-out infinite alternate;
+  }
+  .atelier-salon-portal-grain {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    opacity: 0.5;
+    mix-blend-mode: screen;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch' seed='4'/><feColorMatrix values='0 0 0 0 0.98  0 0 0 0 0.92  0 0 0 0 0.78  0 0 0 0.07 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+  }
+  .atelier-salon-portal-vignette {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at center, transparent 42%, rgba(0, 0, 0, 0.52) 100%),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.46) 0%, rgba(0, 0, 0, 0.12) 30%, transparent 50%, rgba(0, 0, 0, 0.72) 100%);
+  }
+
+  /* Portal copy — header + invitations sit above the depth layers. */
+  .atelier-salon-portal-copy {
+    position: relative;
+    z-index: 5;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: var(--ds-space-4);
+    padding: clamp(20px, 3vw, 40px);
+  }
+  .atelier-salon-stage-panel[data-salon-mode="tuned"] .atelier-salon-portal-copy {
+    justify-content: flex-end;
+    padding: clamp(16px, 2.4vw, 28px);
+  }
+
+  @keyframes salonPortalDrift {
+    0%   { transform: scale(1.06) translate(0, 0); }
+    100% { transform: scale(1.11) translate(-1.5%, -1%); }
+  }
+  @keyframes salonPortalBloom {
+    0%   { opacity: 0.6; }
+    100% { opacity: 1; }
+  }
+
+  /* Portal header — left-aligned editorial copy, always light on the scrim.
+     The base room-header centered brass rule is hidden here; the portal frame
+     already marks the threshold. */
+  .atelier-salon-portal-header {
+    text-align: left;
+  }
+  .atelier-salon-portal-header.atelier-salon-room-header::before {
+    display: none;
+  }
+  .atelier-salon-portal-eyebrow {
+    color: var(--ds-sandstone-gold);
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    font-weight: var(--ds-type-overline-weight);
+  }
+  .atelier-salon-portal-title {
+    font-family: var(--world-type-display, var(--font-fraunces, Georgia, "Times New Roman", serif));
+    font-style: italic;
+    font-weight: 400;
+    font-size: clamp(1.75rem, 3.4vw, 2.75rem);
+    line-height: 1.06;
+    letter-spacing: -0.015em;
+    color: var(--ds-pearl-cream);
+    text-shadow: 0 2px 28px rgba(0, 0, 0, 0.5);
+    margin-top: var(--ds-space-2);
+    max-width: 18ch;
+  }
+  .atelier-salon-stage-panel[data-salon-mode="tuned"] .atelier-salon-portal-title {
+    font-size: clamp(1.375rem, 2.4vw, 1.875rem);
+    max-width: 28ch;
+  }
+  .atelier-salon-portal-sub {
+    color: var(--ds-cream);
+    font-size: var(--ds-type-body-size);
+    line-height: var(--ds-type-body-leading);
+    max-width: 46ch;
+    margin-top: var(--ds-space-3);
+    text-shadow: 0 1px 14px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Portal invitations — entry points inside the scene, light on dark. */
+  .atelier-salon-portal-invitation {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  .atelier-salon-portal-invitation::before {
+    display: none;
+  }
+  .atelier-salon-portal-invitation-label {
+    color: var(--ds-cream);
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    font-weight: var(--ds-type-overline-weight);
+    margin-bottom: var(--ds-space-3);
+    text-shadow: 0 1px 12px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Starter chips on the dark portal — override the light-paper base so they
+     read as warm brass invitations, not invisible dark-on-dark pills. */
+  .atelier-salon-portal .atelier-salon-starter-chip {
+    background: color-mix(in srgb, var(--ds-ember-brass) 12%, transparent);
+    border-color: color-mix(in srgb, var(--ds-ember-brass) 32%, transparent);
+    color: var(--ds-cream);
+    backdrop-filter: blur(3px);
+  }
+  .atelier-salon-portal .atelier-salon-starter-chip:hover,
+  .atelier-salon-portal .atelier-salon-starter-chip:focus-visible {
+    background: color-mix(in srgb, var(--ds-ember-brass) 22%, transparent);
+    border-color: color-mix(in srgb, var(--ds-ember-brass) 50%, transparent);
+    color: var(--ds-pearl-cream);
+  }
+
+  /* The concierge desk — fused to the stage base. The composer's brass top
+     hairline is the join to the portal/canvas above; no detached form block. */
+  .atelier-salon-desk {
+    margin-top: 0;
+  }
+
+  /* Mobile — portal-first and compact; the scene leads, the desk is thumb-reachable. */
+  @media (max-width: 899px) {
+    .atelier-salon-portal {
+      min-height: clamp(280px, 46vh, 400px);
+      margin: var(--ds-space-3);
+    }
+    .atelier-salon-stage-panel[data-salon-mode="tuned"] .atelier-salon-portal {
+      height: clamp(120px, 22vh, 168px);
+    }
+  }
+
+  /* Reduced motion — no portal drift, no bloom breathe, no mode transition. */
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-salon-portal-scene { animation: none; transform: none; }
+    .atelier-salon-portal-bloom { animation: none; }
+    .atelier-salon-portal { transition: none; }
+  }
+
 }
