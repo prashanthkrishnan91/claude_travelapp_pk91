@@ -277,10 +277,10 @@ describe("Phase 8N-B: ExploreShell boutique adoption", () => {
     );
   });
 
-  it("21. ExploreShell uses folio-cinema-tile for VerticalCard (Slice 4B replaced atelier-surface-depth)", () => {
+  it("21. ExploreShell uses obs-vert-card for VerticalCard (Observatory v1 replaced folio-cinema-tile)", () => {
     assert.ok(
-      exploreShell.includes("folio-cinema-tile"),
-      "ExploreShell must use folio-cinema-tile for VerticalCard tiles (Slice 4B replaced atelier-surface-depth)"
+      exploreShell.includes("obs-vert-card"),
+      "ExploreShell must use obs-vert-card for VerticalCard tiles (Observatory v1 replaced folio-cinema-tile)"
     );
   });
 });

@@ -7093,6 +7093,12 @@
     display: none !important;
   }
 
+  /* Explore (Observatory) route — same immersive treatment as the salon:
+     hide the SaaS sidebar so the Observatory room owns the full page. */
+  .atelier-atmosphere-root[data-atelier-shell="explore"] .folio-sidebar {
+    display: none !important;
+  }
+
   /* Salon page room — warm paper surface with destination-aware background.
      Uses --world-surface (a warm linen tone injected by worldStyleVars) as
      the room backdrop. Dark cinema surfaces (result cards, sticky composer)
@@ -7916,7 +7922,458 @@
     }
   }
 
+  /* ════════════════════════════════════════════════════════════════
+     EXPLORE OBSERVATORY — outside-trip /explore premium reskin
+     A viewing deck in the Atelier world. Shares the salon's materials
+     (velvet, brass hairlines, Fraunces italic, layered depth) but a
+     distinct WIDE MERIDIAN silhouette — different room, same house.
+     All animation already obeys the global prefers-reduced-motion rule
+     (top of file); explicit overrides at the foot of this section also
+     disable hover transforms. No raw hex — tokens / color-mix only.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* ── The meridian band — wide horizon viewing slit (landing hero) ── */
+  .obs-meridian {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 24%, transparent);
+    box-shadow:
+      0 24px 60px -28px rgba(0, 0, 0, 0.7),
+      inset 0 1px 0 rgba(245, 235, 221, 0.06);
+    min-height: clamp(176px, 24vh, 232px);
+  }
+  .obs-meridian--banner {
+    min-height: clamp(116px, 16vh, 160px);
+  }
+  .obs-meridian-scene {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse 94% 60% at 50% 20%, rgba(234, 188, 122, 0.50), transparent 62%),
+      radial-gradient(ellipse 130% 80% at 50% 100%, rgba(30, 40, 70, 0.66), transparent 74%),
+      linear-gradient(
+        180deg,
+        rgb(36, 23, 38) 0%,
+        rgb(62, 36, 51) 16%,
+        rgb(122, 74, 82) 36%,
+        rgb(201, 140, 94) 54%,
+        rgb(142, 124, 132) 68%,
+        rgb(56, 64, 106) 84%,
+        rgb(14, 21, 38) 100%
+      );
+    transform: scale(1.06);
+    animation: obsMeridianDrift 44s ease-in-out infinite alternate;
+  }
+  .obs-meridian-bloom {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 44%;
+    height: 26%;
+    z-index: 2;
+    pointer-events: none;
+    background: radial-gradient(ellipse 64% 130% at 50% 50%, rgba(255, 224, 170, 0.55), transparent 70%);
+    filter: blur(9px);
+    animation: obsMeridianBloom 9s ease-in-out infinite alternate;
+  }
+  .obs-meridian-grain {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    opacity: 0.5;
+    mix-blend-mode: screen;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch' seed='4'/><feColorMatrix values='0 0 0 0 0.98  0 0 0 0 0.92  0 0 0 0 0.78  0 0 0 0.07 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+  }
+  .obs-meridian-horizon {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 58%;
+    height: 1px;
+    z-index: 4;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--ds-sandstone-gold) 55%, transparent) 30%,
+      color-mix(in srgb, var(--ds-sandstone-gold) 55%, transparent) 70%,
+      transparent
+    );
+  }
+  .obs-meridian-vignette {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at center, transparent 48%, rgba(0, 0, 0, 0.48) 100%),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.30) 0%, transparent 34%, transparent 56%, rgba(0, 0, 0, 0.64) 100%);
+  }
+  .obs-meridian-copy {
+    position: relative;
+    z-index: 5;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: var(--ds-space-3);
+    padding: clamp(18px, 2.6vw, 30px);
+  }
+  .obs-meridian-eyebrow {
+    color: var(--ds-sandstone-gold);
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    font-weight: var(--ds-type-overline-weight);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ds-space-2);
+  }
+  .obs-meridian-eyebrow::before {
+    content: "";
+    width: 24px;
+    height: 1px;
+    background: var(--ds-sandstone-gold);
+    flex-shrink: 0;
+  }
+  .obs-meridian-title {
+    font-family: var(--world-type-display, var(--font-fraunces, Georgia, "Times New Roman", serif));
+    font-style: italic;
+    font-weight: 400;
+    font-size: clamp(1.75rem, 3.4vw, 2.75rem);
+    line-height: 1.06;
+    letter-spacing: -0.015em;
+    color: var(--ds-pearl-cream);
+    text-shadow: 0 2px 28px rgba(0, 0, 0, 0.5);
+    margin: 0;
+    max-width: 22ch;
+  }
+  .obs-meridian--banner .obs-meridian-title {
+    font-size: clamp(1.375rem, 2.4vw, 1.875rem);
+    max-width: 30ch;
+  }
+  .obs-meridian-foot {
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ds-cream);
+  }
+  @keyframes obsMeridianDrift {
+    0%   { transform: scale(1.06) translate(0, 0); }
+    100% { transform: scale(1.11) translate(-1.4%, -0.8%); }
+  }
+  @keyframes obsMeridianBloom {
+    0%   { opacity: 0.6; }
+    100% { opacity: 1; }
+  }
+
+  /* ── Vertical entry cards (landing — choose a vertical first) ── */
+  .obs-vert-card {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ds-space-3);
+    min-height: 148px;
+    padding: var(--ds-space-5);
+    text-align: left;
+    width: 100%;
+    background: linear-gradient(160deg, rgba(40, 33, 24, 1) 0%, rgba(30, 24, 18, 1) 100%);
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 26%, transparent);
+    border-radius: 12px;
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.42),
+      0 6px 20px rgba(0, 0, 0, 0.30),
+      inset 0 1px 0 rgba(235, 222, 198, 0.08);
+    transition:
+      border-color var(--ds-duration-standard) var(--ds-easing-standard),
+      box-shadow var(--ds-duration-standard) var(--ds-easing-standard),
+      transform var(--ds-duration-fast) var(--ds-easing-standard);
+  }
+  .obs-vert-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(197, 148, 77, 0.50) 25%,
+      rgba(224, 184, 136, 0.38) 60%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+  .obs-vert-card:hover {
+    border-color: color-mix(in srgb, var(--ds-ember-brass) 42%, transparent);
+    box-shadow:
+      0 2px 12px rgba(0, 0, 0, 0.48),
+      0 10px 28px rgba(0, 0, 0, 0.34),
+      inset 0 1px 0 rgba(235, 222, 198, 0.10);
+    transform: translateY(-2px);
+  }
+  .obs-vert-glyph {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 30%, transparent);
+    color: var(--ds-sandstone-gold);
+    flex-shrink: 0;
+  }
+  .obs-vert-over {
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    font-weight: var(--ds-type-overline-weight);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ds-mist);
+    margin: 0 0 var(--ds-space-1);
+  }
+  .obs-vert-name {
+    font-family: var(--font-fraunces, Georgia, "Times New Roman", serif);
+    font-weight: 500;
+    font-size: 1.1875rem;
+    line-height: 1.1;
+    color: var(--ds-pearl-cream);
+    margin: 0;
+  }
+  .obs-vert-desc {
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: var(--ds-mist);
+    margin: var(--ds-space-1) 0 0;
+  }
+  .obs-vert-go {
+    margin-top: auto;
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ds-sandstone-gold);
+  }
+
+  /* ── Editorial index head (restyles the existing results-header line) ── */
+  .obs-index-head {
+    font-family: var(--font-fraunces, Georgia, "Times New Roman", serif);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 1.125rem;
+    line-height: 1.3;
+    color: var(--ds-cream);
+    margin: 0;
+    padding-bottom: var(--ds-space-3);
+    border-bottom: 1px solid color-mix(in srgb, var(--ds-ember-brass) 16%, transparent);
+  }
+
+  /* ── Premium place card: full-bleed typeset plate + framed body ──
+     Honest fallback: production result types carry NO photo field, so the
+     plate is a token-built editorial gradient (never a stock/real photo). */
+  .obs-card,
+  .obs-card-frame {
+    position: relative;
+    border-radius: 12px;
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.42),
+      0 8px 24px rgba(0, 0, 0, 0.30),
+      inset 0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 22%, transparent);
+    transition:
+      box-shadow var(--ds-duration-standard) var(--ds-easing-standard),
+      transform var(--ds-duration-fast) var(--ds-easing-standard);
+  }
+  .obs-card {
+    overflow: hidden;
+    padding: 0;
+  }
+  .obs-card:hover,
+  .obs-card-frame:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.48),
+      0 12px 30px rgba(0, 0, 0, 0.34),
+      inset 0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 34%, transparent);
+  }
+  .obs-card-plate {
+    position: relative;
+    height: 96px;
+    overflow: hidden;
+  }
+  .obs-card-plate::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: scale(1.05);
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 18%, rgba(232, 186, 120, 0.45), transparent 60%),
+      linear-gradient(160deg, rgb(58, 37, 48), rgb(122, 74, 74) 45%, rgb(43, 58, 88) 100%);
+  }
+  .obs-card-plate--b::before {
+    background:
+      radial-gradient(ellipse 80% 60% at 60% 10%, rgba(150, 200, 170, 0.36), transparent 60%),
+      linear-gradient(160deg, rgb(32, 48, 42), rgb(74, 100, 80) 50%, rgb(32, 48, 58) 100%);
+  }
+  .obs-card-plate--c::before {
+    background:
+      radial-gradient(ellipse 80% 60% at 40% 20%, rgba(230, 180, 150, 0.40), transparent 60%),
+      linear-gradient(160deg, rgb(58, 42, 38), rgb(138, 90, 68) 50%, rgb(67, 70, 79) 100%);
+  }
+  .obs-card-plate--d::before {
+    background:
+      radial-gradient(ellipse 80% 60% at 55% 16%, rgba(170, 190, 230, 0.36), transparent 60%),
+      linear-gradient(160deg, rgb(31, 39, 64), rgb(58, 74, 114) 50%, rgb(32, 36, 58) 100%);
+  }
+  .obs-card-plate::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.5) 100%);
+  }
+  .obs-card-serial {
+    position: absolute;
+    top: 10px;
+    left: 13px;
+    z-index: 2;
+    font-size: var(--ds-type-overline-size);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ds-sandstone-gold);
+  }
+  .obs-card-plate-cat {
+    position: absolute;
+    bottom: 10px;
+    left: 13px;
+    right: 13px;
+    z-index: 2;
+    font-size: var(--ds-type-overline-size);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ds-cream);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .obs-card-body {
+    padding: var(--ds-space-5);
+  }
+  .obs-card-name {
+    font-family: var(--font-fraunces, Georgia, "Times New Roman", serif);
+    font-weight: 500;
+    font-size: 1.0625rem;
+    line-height: 1.2;
+    color: var(--ds-pearl-cream);
+    margin: 0;
+  }
+
+  /* ── Observatory: light outer field + floating dark room ──
+     /explore is an immersive outside-trip Atelier room (AppShell suppresses
+     the sidebar + adds the floating nav + edge-bleed wrapper). To match the
+     Concierge Salon's composition — a lighter atelier field with a dark room
+     floating within it — .obs-field paints the warm outer canvas and the
+     .obs-room (co-classed folio-cinema-lounge) is the floating dark artifact
+     with clear separation (margin + brass-edged rounded box + shadow). */
+  .obs-field {
+    position: relative;
+    min-height: 100svh;
+    padding: clamp(16px, 3.5vw, 56px) clamp(14px, 3.5vw, 56px) clamp(40px, 6vh, 88px);
+    background-color: var(--ds-warm-paper);
+    background-image:
+      radial-gradient(ellipse 78% 42% at 50% -6%, rgba(197, 148, 77, 0.10), transparent 64%),
+      radial-gradient(ellipse 60% 36% at 88% 4%, rgba(184, 130, 60, 0.07), transparent 62%),
+      radial-gradient(ellipse 70% 40% at 50% 106%, rgba(120, 96, 60, 0.06), transparent 70%);
+  }
+  /* The floating dark room — keep the folio-cinema-lounge cinematic box
+     (warm-dark fill, brass hairline, depth shadow, rounded corners) and give
+     it a generous, readable max width + roomy internal padding so it reads as
+     a composed artifact, not a small widget. */
+  .obs-room {
+    position: relative;
+    z-index: 1;
+    max-width: 78rem;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(18px, 2.6vh, 32px);
+  }
+  .obs-room.folio-cinema-lounge {
+    padding: clamp(20px, 2.8vw, 44px);
+  }
+
+  /* Landing hero — the meridian is a transportive mood surface inside the
+     room, not a utility header. Keeps the wide-meridian silhouette. */
+  .obs-meridian--hero {
+    min-height: clamp(280px, 42vh, 420px);
+  }
+  .obs-meridian--hero .obs-meridian-title {
+    font-size: clamp(2.125rem, 4.6vw, 3.5rem);
+    max-width: 18ch;
+  }
+  .obs-meridian--hero .obs-meridian-copy {
+    padding: clamp(24px, 3.4vw, 48px);
+  }
+
+  /* Curated browse deck — entry plates, not generic product tiles. Taller,
+     more editorial, with a brass deck eyebrow above. */
+  .obs-deck-label {
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    font-weight: var(--ds-type-overline-weight);
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--ds-sandstone-gold);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ds-space-2);
+    margin: var(--ds-space-2) 0 0;
+  }
+  .obs-deck-label::before {
+    content: "";
+    width: 26px;
+    height: 1px;
+    background: var(--ds-sandstone-gold);
+    flex-shrink: 0;
+  }
+  .obs-deck {
+    gap: clamp(12px, 1.6vw, 18px);
+  }
+  /* On a true page-owning deck the plates breathe taller. */
+  .obs-room .obs-vert-card {
+    min-height: clamp(168px, 22vh, 208px);
+    padding: clamp(18px, 1.6vw, 24px);
+    gap: var(--ds-space-4);
+  }
+  .obs-room .obs-vert-name {
+    font-size: 1.375rem;
+  }
+  @media (max-width: 640px) {
+    .obs-room .obs-vert-card {
+      min-height: 132px;
+      padding: var(--ds-space-4);
+    }
+    .obs-room .obs-vert-name {
+      font-size: 1.125rem;
+    }
+    .obs-meridian--hero {
+      min-height: clamp(240px, 38vh, 320px);
+    }
+  }
+
+  /* Reduced-motion: Observatory overrides live alongside the salon's so the
+     final reduced-motion block disables every new room's motion. */
   @media (prefers-reduced-motion: reduce) {
+    .obs-meridian-scene,
+    .obs-meridian-bloom { animation: none; }
+    .obs-vert-card:hover,
+    .obs-card:hover,
+    .obs-card-frame:hover { transform: none; }
     .atelier-salon-result-reveal { animation: none; }
     .atelier-salon-portal-photo { transition: none; }
     .atelier-salon-folio-toast { transition: opacity 320ms ease; }

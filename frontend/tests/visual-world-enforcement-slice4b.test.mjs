@@ -228,10 +228,10 @@ describe("Slice 4B: ExploreShell visual enforcement", () => {
     );
   });
 
-  it("17. ExploreShell VerticalCard uses folio-cinema-tile", () => {
+  it("17. ExploreShell VerticalCard uses obs-vert-card", () => {
     assert.ok(
-      exploreShell.includes("folio-cinema-tile"),
-      "ExploreShell VerticalCard must use folio-cinema-tile (single intentional composition)"
+      exploreShell.includes("obs-vert-card"),
+      "ExploreShell VerticalCard must use obs-vert-card (Observatory v1 single intentional composition)"
     );
   });
 

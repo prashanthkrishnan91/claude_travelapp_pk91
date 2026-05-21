@@ -144,7 +144,7 @@ function FlightCard({ offer }: { offer: FlightItineraryOffer }) {
     <Card
       tone="dark"
       as="article"
-      className="p-4 space-y-3"
+      className="obs-card-frame p-4 space-y-3"
       data-testid="flight-card"
     >
       {/* Header row: airline + price */}
