@@ -262,7 +262,9 @@ describe("Explore Observatory: mobile first-load fit", () => {
     assert.ok(mq.includes("@media (max-width: 640px)"), "mobile-fit media query present");
     const block = mq.slice(0, mq.indexOf("Reduced-motion: Observatory"));
     assert.ok(/\.obs-field\s*\{[^}]*min-height:\s*auto/.test(block), "obs-field sizes to content on mobile (no forced 100svh)");
-    assert.ok(block.includes(".obs-meridian--hero") && /min-height:\s*clamp\(132px/.test(block), "hero compacted on mobile");
+    assert.ok(block.includes(".obs-meridian--hero") && /min-height:\s*clamp\(156px/.test(block), "hero compact-but-breathing on mobile");
+    assert.ok(/\.obs-meridian--hero\s+\.obs-meridian-horizon\s*\{\s*top:\s*78%/.test(block), "horizon line dropped below the subtitle (collision fix)");
+    assert.ok(/\.obs-meridian--hero\s+\.obs-meridian-copy\s*\{[^}]*justify-content:\s*flex-start/.test(block), "hero copy clusters at the top so the lower band stays clear");
     assert.ok(/\.obs-vert-cue\s*\{\s*display:\s*block/.test(block), "mobile shows the short cue");
     assert.ok(/\.obs-vert-desc\s*\{\s*display:\s*none/.test(block), "mobile hides the long description");
     assert.ok(/\.obs-vert-go\s*\{\s*display:\s*none/.test(block), "mobile hides the Browse cue line to save height");

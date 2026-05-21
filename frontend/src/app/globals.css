@@ -8379,24 +8379,36 @@
       gap: var(--ds-space-3);
     }
 
-    /* Compact hero — keep the cinematic mood + readable display type. */
+    /* Compact-but-breathing hero — a touch taller than the first fit pass,
+       still well within the 390×844 no-scroll budget. Copy clusters at the
+       top (eyebrow · title · subtitle) so the lower band stays clear. */
     .obs-meridian--hero {
-      min-height: clamp(132px, 19vh, 168px);
+      min-height: clamp(156px, 22vh, 190px);
     }
     .obs-meridian--hero .obs-meridian-copy {
+      justify-content: flex-start;
       padding: var(--ds-space-4);
       gap: var(--ds-space-2);
     }
     .obs-meridian--hero .obs-meridian-title {
       font-size: 1.75rem;
     }
+    /* Drop the brass horizon into the empty lower band so it never crosses
+       or competes with the subtitle (the collision fix). Mood preserved. */
+    .obs-meridian--hero .obs-meridian-horizon {
+      top: 78%;
+    }
+    .obs-meridian--hero .obs-meridian-foot {
+      margin-top: var(--ds-space-1);
+    }
 
-    /* Pull the deck up under the hero — neutralise stacked margins. */
+    /* Pull the deck up under the hero — neutralise stacked margins, keep a
+       little breathing room above the deck label. */
     .obs-room .editorial-section-rule {
       margin-bottom: 0;
     }
     .obs-deck-label {
-      margin: 0;
+      margin: var(--ds-space-1) 0 0;
     }
     .obs-deck {
       gap: var(--ds-space-2);
