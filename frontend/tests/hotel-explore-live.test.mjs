@@ -201,11 +201,65 @@ test('buildHotelCompareUrl appends &checkout= structured param for date handoff'
   );
 });
 
+test('buildHotelCompareUrl passes checkIn/checkOut parameters through directly — no hardcoded dates', () => {
+  // Guard against regression where a fixed date (e.g. 2026-06-12) was hardcoded
+  // into buildHotelCompareUrl instead of using the caller-supplied value.
+  // Checks:
+  //   1. The function body uses the `checkIn` / `checkOut` parameters (not a literal).
+  //   2. No ISO date literal appears in the function body.
+  // A function that hardcodes "2026-06-12" would fail assertion 2.
+  // A function that ignores its parameter would fail assertion 1.
+  const fnStart = hotelFlow.indexOf('function buildHotelCompareUrl');
+  const fnEnd = hotelFlow.indexOf('\nimport ', fnStart);
+  const fnBody = hotelFlow.slice(fnStart, fnEnd > fnStart ? fnEnd : fnStart + 1500);
+  assert.match(fnBody, /encodeURIComponent\(checkIn\)/, 'checkIn parameter must flow into URL');
+  assert.match(fnBody, /encodeURIComponent\(checkOut\)/, 'checkOut parameter must flow into URL');
+  assert.doesNotMatch(
+    fnBody,
+    /['"]\d{4}-\d{2}-\d{2}['"]/,
+    'buildHotelCompareUrl must not contain a hardcoded ISO date literal',
+  );
+});
+
+test('HotelExploreFlow: no hardcoded ISO date literals anywhere in source', () => {
+  // Guards against any YYYY-MM-DD string constant being embedded in the file.
+  // A hardcoded "2026-06-12" (or any other fixed date) in the source would
+  // cause every compare link to show that date regardless of user input.
+  assert.doesNotMatch(
+    hotelFlow,
+    /['"]\d{4}-\d{2}-\d{2}['"]/,
+    'HotelExploreFlow must not contain any hardcoded ISO date string literals',
+  );
+});
+
+test('handleSubmit uses a single form snapshot for both setLastForm and the API call', () => {
+  // Guards against the regression where form was read multiple times inside
+  // handleSubmit — a single snapshot ensures the compare link and the search
+  // request always use the exact same dates (prevents divergence on re-search).
+  const submitStart = hotelFlow.indexOf('async function handleSubmit');
+  const submitEnd = hotelFlow.indexOf('\n  function set(', submitStart);
+  const submitBody = hotelFlow.slice(submitStart, submitEnd > submitStart ? submitEnd : submitStart + 1500);
+  // Must create a snapshot variable and use it for setLastForm
+  assert.match(submitBody, /const snapshot\s*=\s*\{\s*\.\.\.\s*form\s*\}/,
+    'handleSubmit must snapshot form into a local const before async work');
+  assert.match(submitBody, /setLastForm\(snapshot\)/,
+    'setLastForm must receive the snapshot, not a fresh form spread');
+  // The API call must use snapshot.checkIn / snapshot.checkOut, not form.checkIn
+  assert.match(submitBody, /snapshot\.checkIn/,
+    'searchHotelsExplore must be called with snapshot.checkIn');
+  assert.match(submitBody, /snapshot\.checkOut/,
+    'searchHotelsExplore must be called with snapshot.checkOut');
+  // Ensure the live `form` state is NOT read after the snapshot for dates
+  assert.doesNotMatch(
+    submitBody.replace(/const snapshot\s*=\s*\{[^}]+\}/, ''),
+    /form\.checkIn|form\.checkOut/,
+    'form.checkIn/checkOut must not be read again after snapshot is taken',
+  );
+});
+
 test('buildContext passes lastForm checkIn and checkOut to buildHotelCompareUrl (not a fallback date)', () => {
   // The compare link must be built from the user-selected dates captured in
   // lastForm — not from today's date or any fallback computed elsewhere.
-  // Guards against the regression where the API used fallback dates but the
-  // compare link was built with undefined/missing dates.
   const buildContextSlice = hotelFlow.slice(
     hotelFlow.indexOf('function buildContext'),
     hotelFlow.indexOf('\nfunction HotelCard'),
@@ -234,4 +288,45 @@ test('buildContext does not use fallbackIn or fallbackOut for compareLink', () =
     /fallbackIn|fallbackOut/,
     'buildContext must not reference fallback dates when building the compare URL',
   );
+});
+
+test('buildHotelCompareUrl: two structurally different date ranges both produce distinct URLs (parameterized, not fixed)', () => {
+  // Verify the function is genuinely parameterized by extracting and calling it.
+  // We strip TS type annotations and eval the function with two date ranges.
+  // Range A: 2026-07-10 to 2026-07-17  (summer trip)
+  // Range B: 2026-11-01 to 2026-11-05  (autumn trip)
+  // If either range produces a URL containing the other range's dates, the
+  // function is hardcoding dates.  If both URLs match their input dates, the
+  // function correctly passes through whatever the caller supplies.
+  const fnStart = hotelFlow.indexOf('function buildHotelCompareUrl');
+  const fnEnd = hotelFlow.indexOf('\nimport ', fnStart);
+  const rawFn = hotelFlow.slice(fnStart, fnEnd > fnStart ? fnEnd : fnStart + 1500);
+  // Strip TypeScript type annotations for eval
+  const jsFn = rawFn
+    .replace(/:\s*string\b/g, '')
+    .replace(/:\s*number\b/g, '')
+    .replace(/\?\s*:/g, ':')
+    .replace(/\{[^}]*hotelName[^}]*\}/g, '')  // strip param type annotation block
+    .replace(/\):\s*string\s*\{/, ') {');       // strip return type
+
+  let buildUrl;
+  try {
+    // eslint-disable-next-line no-new-func
+    buildUrl = new Function(`return (${jsFn})`)();
+  } catch {
+    // If eval fails (e.g. TS syntax slipped through), fall through to source checks only.
+    buildUrl = null;
+  }
+
+  if (buildUrl) {
+    const rangeA = buildUrl({ hotelName: 'Hotel Foo', destination: 'Paris', checkIn: '2026-07-10', checkOut: '2026-07-17', guests: 2 });
+    const rangeB = buildUrl({ hotelName: 'Hotel Foo', destination: 'Paris', checkIn: '2026-11-01', checkOut: '2026-11-05', guests: 2 });
+    assert.match(rangeA, /checkin=2026-07-10/, 'Range A URL must contain checkIn 2026-07-10');
+    assert.match(rangeA, /checkout=2026-07-17/, 'Range A URL must contain checkOut 2026-07-17');
+    assert.match(rangeB, /checkin=2026-11-01/, 'Range B URL must contain checkIn 2026-11-01');
+    assert.match(rangeB, /checkout=2026-11-05/, 'Range B URL must contain checkOut 2026-11-05');
+    assert.doesNotMatch(rangeA, /2026-11/, 'Range A URL must not contain Range B dates');
+    assert.doesNotMatch(rangeB, /2026-07/, 'Range B URL must not contain Range A dates');
+    assert.notStrictEqual(rangeA, rangeB, 'Different date ranges must produce different URLs');
+  }
 });

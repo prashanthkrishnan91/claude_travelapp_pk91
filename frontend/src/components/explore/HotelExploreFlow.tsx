@@ -89,22 +89,25 @@ export function HotelExploreFlow() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const dest = form.destination.trim();
+    // Single snapshot of form state — used for both lastForm and the API call
+    // so the compare link and the search request always use the same dates.
+    const snapshot = { ...form };
+    const dest = snapshot.destination.trim();
     if (!dest) return;
 
     setLoading(true);
     setError(null);
     setSearched(true);
-    setLastForm({ ...form });
+    setLastForm(snapshot);
     setResults(null);
 
     try {
       // Canonical vertical search: Google-Places-backed /search/hotels.
       const res = await searchHotelsExplore(
         dest,
-        form.checkIn || undefined,
-        form.checkOut || undefined,
-        form.guests,
+        snapshot.checkIn || undefined,
+        snapshot.checkOut || undefined,
+        snapshot.guests,
       );
       setResults(res);
       if (res.length === 0) {
