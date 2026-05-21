@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Observatory — Explore · Concept v1.1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Paper world */
+    --paper:        #F4EEDF;
+    --paper-deep:   #E9DFC7;
+    --bone:         #FAF5E7;
+    --linen:        #EFE6CE;
+    --ink:          #1E1A14;
+    --ink-soft:     #3B342A;
+    --ink-mist:     #6F6553;
+    --ink-ghost:    #9C927C;
+    --hairline:     #CFC4A8;
+    --hairline-soft:#DED3B6;
+
+    /* Cinema world */
+    --velvet-base:  #0E0B07;
+    --velvet:       #16110A;
+    --carbon:       #221A11;
+    --cream:        #EDE2C5;
+    --pearl:        #F2E7CC;
+    --pearl-soft:   #C7B998;
+
+    /* Foil + accents */
+    --brass:        #B6904A;
+    --brass-deep:   #8C6E32;
+    --brass-foil:   #D9B776;
+    --brass-glow:   rgba(197, 148, 77, 0.16);
+
+    --marine:       #1F4256;
+    --marine-deep:  #112C3B;
+    --marine-soft:  #34607A;
+    --sage:         #88A899;
+
+    --shadow-cinema:
+      inset 0 1px 0 rgba(255, 248, 235, 0.05),
+      0 30px 80px -20px rgba(0, 0, 0, 0.55),
+      0 10px 24px -10px rgba(0, 0, 0, 0.45);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    background: var(--linen);
+    color: var(--ink);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  body::after {
+    content: '';
+    position: fixed; inset: -10%;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 60% 50% at 22% 8%,  rgba(217, 183, 118, 0.26), transparent 60%),
+      radial-gradient(ellipse 55% 45% at 88% 96%, rgba(184, 130, 60, 0.13), transparent 60%),
+      radial-gradient(ellipse 40% 35% at 50% 50%, rgba(245, 226, 188, 0.09), transparent 65%);
+    z-index: 0;
+    animation: drift 48s ease-in-out infinite alternate;
+  }
+  @keyframes drift {
+    0%   { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(-1.5%, 1%) scale(1.04); }
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.5;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch' seed='7'/><feColorMatrix values='0 0 0 0 0.10  0 0 0 0 0.08  0 0 0 0 0.05  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  @media (prefers-reduced-motion: reduce) { body::after { animation: none; } }
+
+  main { position: relative; z-index: 2; padding: 64px 32px 120px; max-width: 1440px; margin: 0 auto; }
+
+  /* ─────────── doc masthead ─────────── */
+  .masthead { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px solid var(--hairline); padding-bottom: 22px; margin-bottom: 28px; }
+  .wordmark { font-family: 'Fraunces', Georgia, serif; font-weight: 400; font-size: 26px; letter-spacing: 0.18em; color: var(--ink); text-transform: uppercase; }
+  .wordmark .dot { display: inline-block; width: 6px; height: 6px; background: var(--brass); border-radius: 50%; transform: translateY(-4px); margin: 0 6px; }
+  .masthead-meta { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-mist); }
+
+  .proto-banner { display: flex; align-items: center; gap: 12px; background: rgba(31, 66, 86, 0.06); border: 1px solid rgba(31, 66, 86, 0.22); border-radius: 10px; padding: 12px 18px; margin-bottom: 24px; font-size: 12px; color: var(--marine); line-height: 1.5; }
+  .proto-banner b { letter-spacing: 0.16em; text-transform: uppercase; font-size: 10px; }
+
+  .arch-banner { background: rgba(140, 110, 50, 0.07); border: 1px solid rgba(140, 110, 50, 0.26); border-radius: 10px; padding: 14px 18px; margin-bottom: 52px; font-size: 12px; color: var(--ink-soft); line-height: 1.6; }
+  .arch-banner b { letter-spacing: 0.14em; text-transform: uppercase; font-size: 10px; color: var(--brass-deep); display: block; margin-bottom: 6px; }
+  .arch-banner code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--marine); }
+
+  .section-eyebrow { font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--brass-deep); margin: 0 0 12px; }
+  .section-title { font-family: 'Fraunces', Georgia, serif; font-style: italic; font-weight: 400; font-size: 40px; line-height: 1.1; margin: 0 0 12px; color: var(--ink); }
+  .section-sub { font-size: 14px; color: var(--ink-mist); max-width: 800px; margin: 0 0 36px; line-height: 1.6; }
+  .frame-stack { display: flex; flex-direction: column; gap: 92px; }
+
+  /* ════════════ EXISTING APP SHELL (representative — not a new nav) ════════════ */
+  .shell-note { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-ghost); margin: 0 0 8px; }
+  .atelier-nav { display: flex; align-items: center; justify-content: space-between; padding: 16px 30px; border-bottom: 1px solid rgba(217, 183, 118, 0.16); position: relative; z-index: 9; }
+  .atelier-nav .brand { font-family: 'Fraunces', serif; font-size: 17px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--pearl); }
+  .atelier-nav .brand .dot { display:inline-block; width:5px; height:5px; background: var(--brass-foil); border-radius:50%; transform: translateY(-2px); margin: 0 5px; box-shadow: 0 0 10px var(--brass-foil); }
+  .atelier-nav .nav-words { display: flex; gap: 26px; font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--pearl-soft); }
+  .atelier-nav .nav-words a { color: inherit; text-decoration: none; position: relative; }
+  .atelier-nav .nav-words a.active { color: var(--pearl); }
+  .atelier-nav .nav-words a.active::after { content:''; position:absolute; left:0; right:0; bottom:-20px; height:1px; background: var(--brass-foil); }
+  .atelier-nav .right { display:flex; align-items:center; gap:18px; }
+  .atelier-nav .cmdk { border: 1px solid rgba(217, 183, 118, 0.28); border-radius: 6px; padding: 5px 10px; font-size: 10px; letter-spacing: 0.18em; color: var(--pearl-soft); text-transform: uppercase; }
+  .atelier-nav .avatar { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, var(--brass-foil), var(--brass-deep)); border: 1px solid var(--brass-deep); color: var(--velvet); display: grid; place-items: center; font-family: 'Fraunces', serif; font-size: 13px; font-weight: 500; }
+
+  /* ════════════ THE OBSERVATORY CANVAS ════════════ */
+  .obs-canvas { background: var(--velvet-base); border-radius: 18px; border: 1px solid rgba(217, 183, 118, 0.20); box-shadow: var(--shadow-cinema); overflow: hidden; position: relative; isolation: isolate; }
+  .obs-canvas .room-grain { position: absolute; inset: 0; z-index: 6; pointer-events: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.92' numOctaves='2' stitchTiles='stitch' seed='11'/><feColorMatrix values='0 0 0 0 0.95  0 0 0 0 0.88  0 0 0 0 0.72  0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); mix-blend-mode: screen; opacity: 0.5; }
+  .obs-deck { position: relative; z-index: 2; padding: 30px 36px 34px; }
+
+  /* ── MERIDIAN BAND ── */
+  .meridian { position: relative; border-radius: 14px; overflow: hidden; height: 208px; isolation: isolate; border: 1px solid rgba(217, 183, 118, 0.22); box-shadow: 0 24px 60px -28px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,248,235,0.06); }
+  .meridian .scene { position: absolute; inset: 0; z-index: 0; transform: scale(1.06); background: radial-gradient(ellipse 90% 60% at 50% 22%, rgba(232, 186, 120, 0.50), transparent 64%), radial-gradient(ellipse 130% 80% at 50% 100%, rgba(40, 52, 78, 0.66), transparent 74%), linear-gradient(180deg, #241726 0%, #3E2433 18%, #7A4A52 38%, #C98C5E 56%, #8E7C84 70%, #3B4666 86%, #11192E 100%); transition: background 1100ms ease, transform 18s ease-in-out; animation: portalDrift 40s ease-in-out infinite alternate; }
+  @keyframes portalDrift { 0% { transform: scale(1.06) translate(0, 0); } 100% { transform: scale(1.11) translate(-1.4%, -0.8%); } }
+  .meridian .bloom { position: absolute; left: 0; right: 0; top: 46%; height: 26%; z-index: 2; pointer-events: none; background: radial-gradient(ellipse 60% 100% at 50% 50%, rgba(255, 232, 190, 0.52), transparent 72%); filter: blur(8px); animation: bloomBreathe 9s ease-in-out infinite alternate; }
+  @keyframes bloomBreathe { 0% { opacity: 0.65; } 100% { opacity: 1; } }
+  .meridian .grain { position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: 0.5; mix-blend-mode: screen; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch' seed='4'/><feColorMatrix values='0 0 0 0 0.98  0 0 0 0 0.92  0 0 0 0 0.78  0 0 0 0.07 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>"); }
+  .meridian .horizon { position: absolute; left: 0; right: 0; top: 58%; height: 1px; z-index: 4; pointer-events: none; background: linear-gradient(90deg, transparent, rgba(217,183,118,0.55) 30%, rgba(217,183,118,0.55) 70%, transparent); }
+  .meridian .vignette { position: absolute; inset: 0; z-index: 4; pointer-events: none; background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.46) 100%), linear-gradient(180deg, rgba(0,0,0,0.12) 0%, transparent 34%, transparent 56%, rgba(0,0,0,0.60) 100%); }
+  .meridian-copy { position: relative; z-index: 5; height: 100%; padding: 22px 28px; display: flex; flex-direction: column; justify-content: space-between; }
+  .meridian-mark { display: inline-flex; align-items: center; gap: 10px; font-size: 10px; letter-spacing: 0.30em; text-transform: uppercase; color: var(--brass-foil); }
+  .meridian-mark .rule { width: 24px; height: 1px; background: var(--brass-foil); }
+  .meridian-headline { font-family: 'Fraunces', serif; font-style: italic; font-weight: 300; font-size: 32px; line-height: 1.1; color: var(--pearl); margin: 0; max-width: 22ch; text-shadow: 0 2px 28px rgba(0,0,0,0.4); }
+  .meridian-foot { display: flex; align-items: center; justify-content: space-between; font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--pearl-soft); }
+  .meridian-foot .where { color: var(--cream); }
+
+  /* ── VERTICAL ENTRY CARDS (landing — choose a vertical first) ── */
+  .vert-label { font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--brass-foil); margin: 24px 2px 12px; }
+  .vert-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .vert-card { text-align: left; cursor: pointer; position: relative; background: rgba(217, 183, 118, 0.05); border: 1px solid rgba(217, 183, 118, 0.18); border-radius: 13px; padding: 18px 18px 16px; transition: background 300ms ease, border-color 300ms ease, transform 300ms ease; display: flex; flex-direction: column; gap: 12px; min-height: 152px; }
+  .vert-card:hover { background: rgba(217, 183, 118, 0.10); border-color: rgba(217, 183, 118, 0.34); transform: translateY(-2px); }
+  .vert-card:focus-visible { outline: 2px solid var(--brass-foil); outline-offset: 2px; }
+  .vert-card .glyph { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; border: 1px solid rgba(217,183,118,0.30); color: var(--brass-foil); }
+  .vert-card .glyph svg { width: 19px; height: 19px; }
+  .vert-card .v-over { font-size: 9px; letter-spacing: 0.20em; text-transform: uppercase; color: var(--pearl-soft); margin: 0 0 3px; }
+  .vert-card .v-name { font-family: 'Fraunces', serif; font-weight: 500; font-size: 19px; color: var(--pearl); margin: 0 0 5px; }
+  .vert-card .v-desc { font-size: 12px; color: var(--pearl-soft); line-height: 1.45; margin: 0; }
+  .vert-card .v-go { margin-top: auto; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--brass-foil); display: inline-flex; align-items: center; gap: 6px; }
+
+  /* ── BREADCRUMB (inside a vertical flow) ── */
+  .obs-crumb { display: flex; align-items: center; gap: 10px; margin: 22px 0 0; font-size: 11px; }
+  .obs-crumb button { background: transparent; border: none; cursor: pointer; color: var(--pearl-soft); font-size: 11px; letter-spacing: 0.06em; display: inline-flex; align-items: center; gap: 6px; padding: 6px 2px; }
+  .obs-crumb button:hover { color: var(--pearl); }
+  .obs-crumb .sep { color: rgba(217,183,118,0.4); }
+  .obs-crumb .cur { font-family: 'Fraunces', serif; font-style: italic; font-size: 15px; color: var(--pearl); }
+
+  /* ── PER-VERTICAL SEARCH INSTRUMENT (each vertical's own destination/search flow) ── */
+  .instrument { margin-top: 14px; border-radius: 12px; background: linear-gradient(180deg, rgba(28,22,14,0.92), rgba(14,11,7,0.96)); border: 1px solid rgba(217, 183, 118, 0.30); box-shadow: inset 0 1px 0 rgba(255,248,235,0.06), 0 16px 40px -20px rgba(0,0,0,0.7); padding: 16px 18px; position: relative; }
+  .instrument::before { content: ''; position: absolute; left: 18px; right: 18px; top: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--brass-foil), transparent); opacity: 0.55; }
+  .instrument-row { display: flex; align-items: stretch; gap: 14px; flex-wrap: wrap; }
+  .ins-field { flex: 1 1 180px; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .ins-label { font-size: 9px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--brass-foil); }
+  .ins-input-row { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .ins-input-row svg { width: 15px; height: 15px; color: var(--pearl-soft); flex-shrink: 0; }
+  .ins-input { background: transparent; border: none; outline: none; color: var(--pearl); font-family: 'Inter', sans-serif; font-size: 15px; padding: 2px 0; width: 100%; min-width: 0; }
+  .ins-input::placeholder { color: rgba(199, 185, 152, 0.55); }
+  .ins-divider { width: 1px; background: rgba(217, 183, 118, 0.20); align-self: stretch; }
+  .ins-go { align-self: flex-end; flex-shrink: 0; height: 44px; padding: 0 22px; border-radius: 10px; background: linear-gradient(140deg, var(--brass-foil), var(--brass-deep)); border: 1px solid var(--brass-deep); color: var(--velvet); cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 600; transition: transform 280ms ease, box-shadow 280ms ease; }
+  .ins-go:hover { transform: translateY(-1px); box-shadow: 0 8px 20px -8px rgba(217,183,118,0.6); }
+  .ins-go:focus-visible { outline: 2px solid var(--brass-foil); outline-offset: 2px; }
+
+  /* ── EDITORIAL INDEX ── */
+  .index { margin-top: 24px; }
+  .index-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid rgba(217,183,118,0.16); }
+  .index-count { font-family: 'Fraunces', serif; font-style: italic; font-size: 22px; color: var(--pearl); margin: 0; }
+  .index-count .n { font-style: normal; color: var(--brass-foil); }
+  .index-sort { display: flex; align-items: center; gap: 8px; }
+  .sort-chip { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--pearl-soft); background: transparent; border: 1px solid rgba(217,183,118,0.24); border-radius: 6px; padding: 7px 11px; cursor: pointer; transition: color 240ms ease, border-color 240ms ease, background 240ms ease; }
+  .sort-chip:hover { color: var(--pearl); }
+  .sort-chip.active { color: var(--velvet); background: linear-gradient(140deg, var(--brass-foil), var(--brass-deep)); border-color: var(--brass-deep); }
+  .index-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+  /* Editorial place card */
+  .place-card { position: relative; border-radius: 12px; overflow: hidden; background: var(--velvet); border: 1px solid rgba(217, 183, 118, 0.18); box-shadow: var(--shadow-cinema); display: flex; flex-direction: column; transition: transform 300ms ease, box-shadow 300ms ease; }
+  .place-card:hover { transform: translateY(-2px); }
+  .pc-plate { position: relative; height: 132px; overflow: hidden; }
+  .pc-plate .px { position: absolute; inset: 0; transform: scale(1.05); background: radial-gradient(ellipse 80% 60% at 50% 18%, rgba(232,186,120,0.5), transparent 60%), linear-gradient(160deg, #3a2530, #7a4a4a 45%, #2b3a58 100%); }
+  .pc-plate .px.alt2 { background: radial-gradient(ellipse 80% 60% at 60% 10%, rgba(150,200,170,0.4), transparent 60%), linear-gradient(160deg, #20302a, #4a6450 50%, #20303a 100%); }
+  .pc-plate .px.alt3 { background: radial-gradient(ellipse 80% 60% at 40% 20%, rgba(230,180,150,0.45), transparent 60%), linear-gradient(160deg, #3a2a26, #8a5a44 50%, #43464f 100%); }
+  .pc-plate .px.alt4 { background: radial-gradient(ellipse 80% 60% at 55% 16%, rgba(170,190,230,0.4), transparent 60%), linear-gradient(160deg, #1f2740, #3a4a72 50%, #20243a 100%); }
+  .pc-plate.has-photo .px { background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.4) 100%), radial-gradient(ellipse 90% 70% at 40% 30%, rgba(244,210,150,0.5), transparent 60%), linear-gradient(150deg, #2a3a4a, #6a5a44 50%, #2a2620 100%); }
+  .pc-plate::after { content:''; position:absolute; inset:0; background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.5) 100%); }
+  .pc-plate .serial { position: absolute; top: 11px; left: 13px; z-index: 2; font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--brass-foil); }
+  .pc-plate .plate-note { position: absolute; bottom: 10px; left: 13px; z-index: 2; font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--pearl-soft); background: rgba(14,11,7,0.42); border: 1px solid rgba(217,183,118,0.2); border-radius: 4px; padding: 3px 6px; }
+  .pc-plate.has-photo .plate-note { color: var(--cream); }
+  .pc-body { padding: 15px 17px 16px; display: flex; flex-direction: column; flex: 1; }
+  .pc-name { font-family: 'Fraunces', serif; font-weight: 500; font-size: 17px; color: var(--pearl); margin: 0 0 3px; line-height: 1.2; }
+  .pc-cat { font-size: 12px; color: var(--pearl-soft); margin: 0 0 12px; }
+  .pc-trust { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--pearl-soft); margin-bottom: 11px; }
+  .pc-trust .verified { color: var(--sage); display: inline-flex; align-items: center; gap: 5px; }
+  .pc-trust .verified::before { content:''; width:6px; height:6px; border-radius:50%; background: var(--sage); }
+  .pc-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; font-size: 12px; color: var(--pearl-soft); }
+  .pc-meta .rating { color: var(--brass-foil); font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
+  .pc-meta .price { color: var(--cream); font-weight: 500; }
+  .pc-meta .tag { font-size: 10px; border: 1px solid rgba(217,183,118,0.24); border-radius: 4px; padding: 2px 7px; color: var(--pearl-soft); }
+  .pc-actions { margin-top: auto; display: flex; align-items: center; gap: 9px; }
+  .btn-save { flex: 1; cursor: pointer; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--brass-foil); background: transparent; border: 1px solid rgba(217, 183, 118, 0.4); border-radius: 6px; padding: 10px 12px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; transition: background 240ms ease, color 240ms ease, border-color 240ms ease; }
+  .btn-save:hover { background: rgba(217,183,118,0.12); }
+  .btn-save:focus-visible { outline: 2px solid var(--brass-foil); outline-offset: 2px; }
+  .btn-save.saved { color: var(--velvet); background: linear-gradient(140deg, var(--brass-foil), var(--brass-deep)); border-color: var(--brass-deep); }
+  .btn-ghost { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--pearl-soft); background: transparent; border: 1px solid rgba(217,183,118,0.24); border-radius: 6px; padding: 10px 12px; cursor: pointer; text-decoration: none; transition: color 240ms ease, border-color 240ms ease; }
+  .btn-ghost:hover { color: var(--pearl); border-color: rgba(217,183,118,0.4); }
+
+  .folio-toast { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); z-index: 20; opacity: 0; pointer-events: none; background: var(--velvet); color: var(--cream); border: 1px solid rgba(217,183,118,0.4); border-radius: 10px; padding: 12px 20px; box-shadow: var(--shadow-cinema); font-family: 'Fraunces', serif; font-style: italic; font-size: 14px; display: flex; align-items: center; gap: 10px; transition: opacity 320ms ease, transform 320ms ease; }
+  .folio-toast::before { content:''; width:7px; height:7px; border-radius:50%; background: var(--brass-foil); box-shadow: 0 0 10px var(--brass-foil); }
+  .folio-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ════════════ MOBILE PHONES ════════════ */
+  .phones-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(372px, 1fr)); gap: 56px; align-items: start; justify-items: center; }
+  .phone { width: 384px; height: 812px; background: var(--velvet-base); border-radius: 44px; padding: 12px; box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 0 0 1px #2A1F10, 0 40px 80px -20px rgba(60, 40, 10, 0.4), 0 12px 28px -10px rgba(60, 40, 10, 0.25); position: relative; }
+  .phone-notch { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); width: 110px; height: 28px; background: #000; border-radius: 16px; z-index: 30; }
+  .phone-screen { width: 100%; height: 100%; border-radius: 34px; overflow: hidden; position: relative; background: var(--velvet-base); }
+
+  .m-obs { height: 100%; display: flex; flex-direction: column; position: relative; background: var(--velvet-base); color: var(--pearl); isolation: isolate; }
+  .m-obs .room-grain { position: absolute; inset: 0; z-index: 8; pointer-events: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch' seed='9'/><feColorMatrix values='0 0 0 0 0.95  0 0 0 0 0.88  0 0 0 0 0.72  0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); mix-blend-mode: screen; opacity: 0.45; }
+  .m-status { display: flex; justify-content: space-between; padding: 16px 28px 0; font-size: 12px; font-weight: 600; color: var(--pearl); height: 44px; align-items: center; position: relative; z-index: 9; }
+  /* existing app header (representative) */
+  .m-header { padding: 6px 22px 14px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(217,183,118,0.14); position: relative; z-index: 9; }
+  .m-header .brand { font-family:'Fraunces',serif; font-size:14px; letter-spacing:0.14em; text-transform:uppercase; color: var(--pearl); }
+  .m-header .brand .dot { display:inline-block; width:4px; height:4px; background: var(--brass-foil); border-radius:50%; transform:translateY(-2px); margin:0 4px; }
+  .m-header .dots { color: var(--pearl-soft); font-size: 15px; letter-spacing: 2px; }
+
+  .m-scroll { flex: 1; overflow: hidden; position: relative; z-index: 9; display: flex; flex-direction: column; padding: 16px 18px 0; }
+  .m-scroll.scrolls { overflow-y: auto; padding-bottom: 16px; }
+
+  /* mobile meridian */
+  .m-meridian { position: relative; border-radius: 14px; overflow: hidden; isolation: isolate; border: 1px solid rgba(217,183,118,0.22); box-shadow: 0 18px 40px -22px rgba(0,0,0,0.7); flex-shrink: 0; }
+  .m-meridian.tall { height: 150px; }
+  .m-meridian.banner { height: 104px; }
+  .m-meridian .scene { position: absolute; inset: 0; z-index: 0; transform: scale(1.08); background: radial-gradient(ellipse 90% 55% at 50% 20%, rgba(232,186,120,0.5), transparent 62%), radial-gradient(ellipse 130% 80% at 50% 100%, rgba(40,52,78,0.66), transparent 74%), linear-gradient(180deg, #241726 0%, #3E2433 18%, #7A4A52 38%, #C98C5E 56%, #8E7C84 70%, #3B4666 86%, #11192E 100%); animation: portalDrift 40s ease-in-out infinite alternate; }
+  .m-meridian .bloom { position:absolute; left:0; right:0; top:46%; height:24%; z-index:2; background: radial-gradient(ellipse 60% 100% at 50% 50%, rgba(255,232,190,0.5), transparent 72%); filter: blur(7px); animation: bloomBreathe 9s ease-in-out infinite alternate; }
+  .m-meridian .horizon { position:absolute; left:0; right:0; top:60%; height:1px; z-index:4; background: linear-gradient(90deg, transparent, rgba(217,183,118,0.55) 30%, rgba(217,183,118,0.55) 70%, transparent); }
+  .m-meridian .vignette { position:absolute; inset:0; z-index:4; background: radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,0.5) 100%), linear-gradient(180deg, rgba(0,0,0,0.12) 0%, transparent 38%, rgba(0,0,0,0.62) 100%); }
+  .m-meridian-copy { position: relative; z-index: 5; height: 100%; padding: 16px 18px; display: flex; flex-direction: column; justify-content: space-between; }
+  .m-meridian-mark { font-size: 9px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--brass-foil); display:flex; align-items:center; gap:8px; }
+  .m-meridian-mark .rule { width: 16px; height: 1px; background: var(--brass-foil); }
+  .m-meridian-headline { font-family:'Fraunces',serif; font-style: italic; font-weight: 300; font-size: 21px; line-height: 1.14; color: var(--pearl); margin: 0; max-width: 18ch; text-shadow: 0 2px 22px rgba(0,0,0,0.4); }
+  .m-meridian-where { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cream); }
+
+  /* mobile vertical entry — 2×2 grid, no clipping, comfortable targets */
+  .m-vert-label { font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--brass-foil); margin: 16px 2px 10px; }
+  .m-vert-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .m-vert-card { text-align: left; cursor: pointer; background: rgba(217,183,118,0.05); border: 1px solid rgba(217,183,118,0.18); border-radius: 12px; padding: 14px 13px; min-height: 110px; display: flex; flex-direction: column; gap: 9px; }
+  .m-vert-card.active { background: rgba(217,183,118,0.14); border-color: rgba(217,183,118,0.5); }
+  .m-vert-card .glyph { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; border: 1px solid rgba(217,183,118,0.3); color: var(--brass-foil); }
+  .m-vert-card .glyph svg { width: 17px; height: 17px; }
+  .m-vert-card .v-name { font-family:'Fraunces',serif; font-weight: 500; font-size: 17px; color: var(--pearl); margin: 0; line-height: 1.1; }
+  .m-vert-card .v-over { font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--pearl-soft); margin: 0; }
+
+  /* mobile per-vertical search instrument */
+  .m-instrument { position: relative; z-index: 10; margin: 16px 0 0; border-radius: 12px; background: linear-gradient(180deg, rgba(28,22,14,0.95), rgba(14,11,7,0.97)); border: 1px solid rgba(217,183,118,0.3); box-shadow: inset 0 1px 0 rgba(255,248,235,0.06), 0 -10px 30px -16px rgba(0,0,0,0.7); padding: 13px 14px 16px; flex-shrink: 0; }
+  .m-ins-field { display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid rgba(217,183,118,0.16); padding-bottom: 8px; }
+  .m-ins-field + .m-ins-field { margin-top: 10px; }
+  .m-ins-label { font-size: 8px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--brass-foil); }
+  .m-ins-input-row { display: flex; align-items: center; gap: 8px; }
+  .m-ins-input-row svg { width: 14px; height: 14px; color: var(--pearl-soft); flex-shrink: 0; }
+  .m-ins-input { background: transparent; border: none; outline: none; color: var(--pearl); font-size: 14px; padding: 2px 0; width: 100%; min-width: 0; }
+  .m-ins-input::placeholder { color: rgba(199,185,152,0.55); }
+  .m-ins-go { margin-top: 12px; width: 100%; cursor: pointer; background: linear-gradient(140deg, var(--brass-foil), var(--brass-deep)); border: 1px solid var(--brass-deep); border-radius: 8px; color: var(--velvet); padding: 12px; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; }
+
+  /* mobile breadcrumb */
+  .m-crumb { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--pearl-soft); margin: 2px 0 12px; flex-shrink: 0; }
+  .m-crumb .back { display: inline-flex; align-items: center; gap: 5px; color: var(--pearl-soft); }
+  .m-crumb .sep { color: rgba(217,183,118,0.4); }
+  .m-crumb .cur { font-family:'Fraunces',serif; font-style: italic; font-size: 14px; color: var(--pearl); }
+
+  /* mobile index / cards */
+  .m-index-head { display: flex; align-items: baseline; justify-content: space-between; margin: 14px 0 14px; }
+  .m-index-count { font-family:'Fraunces',serif; font-style:italic; font-size:18px; color: var(--pearl); margin: 0; }
+  .m-index-count .n { font-style: normal; color: var(--brass-foil); }
+  .m-sort { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--pearl-soft); border: 1px solid rgba(217,183,118,0.24); border-radius: 5px; padding: 6px 9px; }
+  .m-place-card { border-radius: 12px; overflow: hidden; background: var(--velvet); border: 1px solid rgba(217,183,118,0.18); box-shadow: var(--shadow-cinema); margin-bottom: 14px; }
+  .m-pc-plate { position: relative; height: 116px; }
+  .m-pc-plate .px { position:absolute; inset:0; background: radial-gradient(ellipse 80% 60% at 50% 20%, rgba(232,186,120,0.5), transparent 60%), linear-gradient(160deg, #3a2530, #7a4a4a 45%, #2b3a58 100%); }
+  .m-pc-plate .px.alt2 { background: radial-gradient(ellipse 80% 60% at 60% 10%, rgba(150,200,170,0.4), transparent 60%), linear-gradient(160deg, #20302a, #4a6450 50%, #20303a 100%); }
+  .m-pc-plate .px.has-photo { background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.4) 100%), radial-gradient(ellipse 90% 70% at 40% 30%, rgba(244,210,150,0.5), transparent 60%), linear-gradient(150deg, #2a3a4a, #6a5a44 50%, #2a2620 100%); }
+  .m-pc-plate::after { content:''; position:absolute; inset:0; background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.5) 100%); }
+  .m-pc-plate .serial { position:absolute; top:9px; left:11px; font-size:8px; letter-spacing:0.2em; text-transform:uppercase; color: var(--brass-foil); }
+  .m-pc-plate .plate-note { position:absolute; bottom:9px; left:11px; font-size:7px; letter-spacing:0.12em; text-transform:uppercase; color: var(--pearl-soft); background: rgba(14,11,7,0.42); border:1px solid rgba(217,183,118,0.2); border-radius: 4px; padding: 2px 5px; }
+  .m-pc-body { padding: 13px 15px 15px; }
+  .m-pc-name { font-family:'Fraunces',serif; font-weight:500; font-size:16px; color: var(--pearl); margin: 0 0 2px; }
+  .m-pc-cat { font-size: 11px; color: var(--pearl-soft); margin: 0 0 10px; }
+  .m-pc-trust { font-size:8px; letter-spacing:0.14em; text-transform:uppercase; color: var(--pearl-soft); margin-bottom: 10px; display: flex; gap: 8px; align-items: center; }
+  .m-pc-trust .verified { color: var(--sage); display:inline-flex; align-items:center; gap:4px; }
+  .m-pc-trust .verified::before { content:''; width:5px; height:5px; border-radius:50%; background: var(--sage); }
+  .m-pc-meta { display:flex; gap:9px; align-items:center; font-size:11px; color: var(--pearl-soft); margin-bottom: 12px; flex-wrap: wrap; }
+  .m-pc-meta .rating { color: var(--brass-foil); font-weight:500; }
+  .m-pc-meta .price { color: var(--cream); font-weight: 500; }
+  .m-pc-actions { display:flex; gap: 8px; }
+  .m-btn-save { flex: 1; cursor:pointer; font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--brass-foil); background: transparent; border: 1px solid rgba(217,183,118,0.4); border-radius: 6px; padding: 11px 8px; }
+  .m-btn-save.saved { color: var(--velvet); background: linear-gradient(140deg, var(--brass-foil), var(--brass-deep)); border-color: var(--brass-deep); }
+  .m-btn-ghost { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--pearl-soft); background: transparent; border: 1px solid rgba(217,183,118,0.24); border-radius: 6px; padding: 11px 13px; }
+
+  /* existing mobile bottom nav (representative — production keeps this) */
+  .m-bottomnav { position: relative; z-index: 11; display: flex; justify-content: space-around; align-items: center; padding: 10px 8px 14px; border-top: 1px solid rgba(217,183,118,0.16); background: rgba(14,11,7,0.7); flex-shrink: 0; }
+  .m-bottomnav .item { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--pearl-soft); min-width: 56px; }
+  .m-bottomnav .item.active { color: var(--brass-foil); }
+  .m-bottomnav .item svg { width: 18px; height: 18px; }
+  .m-bottomnav .item.active .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--brass-foil); }
+
+  .m-folio-toast { position: absolute; left: 16px; right: 16px; bottom: 78px; z-index: 30; background: var(--velvet); color: var(--cream); border: 1px solid rgba(217,183,118,0.4); border-radius: 12px; padding: 13px 18px; box-shadow: var(--shadow-cinema); font-family:'Fraunces',serif; font-style: italic; font-size: 14px; display: flex; align-items: center; gap: 10px; }
+  .m-folio-toast::before { content:''; width:7px; height:7px; border-radius:50%; background: var(--brass-foil); box-shadow: 0 0 10px var(--brass-foil); }
+
+  .phone-caption { text-align: center; margin-top: 22px; max-width: 340px; }
+  .phone-caption .eyebrow { font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--brass-deep); margin-bottom: 6px; }
+  .phone-caption .title { font-family:'Fraunces',serif; font-style: italic; font-size: 22px; margin: 0 0 6px; color: var(--ink); }
+  .phone-caption .sub { font-size: 12px; color: var(--ink-mist); line-height: 1.5; }
+
+  .notes { margin-top: 80px; padding-top: 36px; border-top: 1px solid var(--hairline); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 48px; }
+  .notes h4 { font-family:'Fraunces',serif; font-style: italic; font-size: 16px; margin: 0 0 12px; color: var(--ink); }
+  .notes p { font-size: 12px; color: var(--ink-mist); line-height: 1.65; margin: 0 0 12px; }
+  .notes code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--marine); }
+  .colophon { margin-top: 56px; text-align: center; font-size: 10px; letter-spacing: 0.32em; text-transform: uppercase; color: var(--ink-mist); }
+  .colophon .glyph { font-family:'Fraunces',serif; font-style: italic; color: var(--brass); font-size: 14px; margin: 0 10px; letter-spacing: 0; }
+
+  .reset-line { margin-top: 16px; font-size: 11px; color: var(--ink-mist); }
+  .reset-line button { background: transparent; border: 1px solid var(--hairline); border-radius: 5px; padding: 6px 12px; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-soft); cursor: pointer; margin-left: 8px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .meridian .scene, .m-meridian .scene { animation: none; }
+    .meridian .bloom, .m-meridian .bloom { animation: none; }
+    .folio-toast { transition: opacity 120ms ease; }
+    .ins-go:hover, .place-card:hover, .vert-card:hover { transform: none; }
+  }
+
+  @media (max-width: 1100px) {
+    .vert-grid { grid-template-columns: repeat(2, 1fr); }
+    .index-grid { grid-template-columns: 1fr 1fr; }
+    .notes { grid-template-columns: 1fr; gap: 24px; }
+  }
+  @media (max-width: 700px) {
+    main { padding: 32px 16px 80px; }
+    .index-grid { grid-template-columns: 1fr; }
+    .phone { transform: scale(0.86); transform-origin: top center; }
+  }
+</style>
+</head>
+<body>
+
+<main>
+
+  <header class="masthead">
+    <div class="wordmark">Atelier<span class="dot"></span>Observatory</div>
+    <div class="masthead-meta">Explore · Concept v1.1</div>
+  </header>
+
+  <div class="proto-banner">
+    <b>Prototype</b>
+    <span>Demonstration content only. Place names, ratings, prices and tags are representative samples to visualise layout — they are <strong>not</strong> live data and imply no production availability. Production renders only verified Google&nbsp;Places results from the existing per-vertical Explore search; cards show a real source photo when one exists, and the honest typeset plate when one does not.</span>
+  </div>
+
+  <div class="arch-banner">
+    <b>How v1.1 maps to production</b>
+    Explore stays <strong>vertical-first</strong>, exactly as it ships today. The Observatory is a premium reskin of the existing <code>ExploreShell</code> landing room and its four flows — it does <strong>not</strong> introduce a unified cross-vertical destination controller. Flow: landing room → tap one vertical (<code>setActive(vertical)</code>) → that vertical's own destination/search instrument (<code>RestaurantExploreFlow</code> / <code>HotelExploreFlow</code> / <code>AttractionExploreFlow</code> / <code>FlightExploreFlow</code>) → verified results → Save/Map/Source via the existing <code>ResultActionSheet</code> (add-to-trip stays in Saved). The top header and mobile bottom nav shown here are <strong>representative of the current app shell</strong> (<code>AppShell</code> + <code>AtelierNavArtifact</code>); the production work fits inside that shell rather than replacing it.
+  </div>
+
+  <section style="margin-bottom: 56px; max-width: 800px;">
+    <p class="section-eyebrow">The Observatory · A Direction Study</p>
+    <h1 class="section-title">The browsing room next to the salon —<br>choose what you're looking for, then where.</h1>
+    <p class="section-sub">
+      Explore is the room beside the Concierge. It keeps the product's real shape: you pick <em>what</em> you want
+      to browse first — Restaurants, Hotels, Attractions, or Flights — and each opens its own destination search.
+      The Observatory dresses that flow in the Salon's materials: a wide <em>meridian band</em> sets the mood, the
+      four verticals read as clear entry cards, and results arrive as verified editorial cards you can keep in your
+      folio. Same house as the Salon, a calmer and more practical room.
+    </p>
+  </section>
+
+  <div class="frame-stack">
+
+    <!-- ════════════ FRAME A · DESKTOP (interactive: landing → vertical flow → results) ════════════ -->
+    <section>
+      <p class="section-eyebrow">Frame A · Desktop · Interactive</p>
+      <h2 class="section-title">The Observatory</h2>
+      <p class="section-sub">
+        The landing room shows the mood meridian and the four verticals as entry cards. Choose one and its own
+        destination search opens beneath a breadcrumb; search to reveal a verified index you can sort, save, map,
+        and open at source. This frame is live — tap a vertical, type a place, press search.
+      </p>
+      <p class="shell-note">↓ Header below is representative of the existing app shell — not a new navigation.</p>
+
+      <div class="obs-canvas" id="obsCanvas">
+        <div class="room-grain"></div>
+
+        <nav class="atelier-nav">
+          <div class="brand">Atelier<span class="dot"></span>Concierge</div>
+          <div class="nav-words">
+            <a href="#">Home</a>
+            <a class="active" href="#">Explore</a>
+            <a href="#">Saved</a>
+            <a href="#">Concierge</a>
+          </div>
+          <div class="right">
+            <div class="cmdk">⌘ K</div>
+            <div class="avatar">E</div>
+          </div>
+        </nav>
+
+        <div class="obs-deck">
+
+          <!-- MERIDIAN BAND -->
+          <div class="meridian" id="meridian">
+            <div class="scene" id="merScene"></div>
+            <div class="bloom"></div>
+            <div class="grain"></div>
+            <div class="horizon"></div>
+            <div class="vignette"></div>
+            <div class="meridian-copy">
+              <span class="meridian-mark"><span class="rule"></span><span id="merMark">Explore · Curated discovery</span></span>
+              <h2 class="meridian-headline" id="merHeadline">What are you looking for? Choose a way in.</h2>
+              <div class="meridian-foot">
+                <span class="where" id="merWhere">Verified places · no trip required</span>
+                <span id="merCtx">Restaurants · Hotels · Attractions · Flights</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- LANDING: vertical entry cards -->
+          <div id="landingView">
+            <p class="vert-label">Choose what to browse</p>
+            <div class="vert-grid" id="vertGrid">
+              <button class="vert-card" data-v="restaurants" data-name="Restaurants">
+                <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 3v7a2 2 0 0 0 2 2h0v9M6 3v6M9 3v6M17 3c-1.5 1-2 3-2 6s.5 4 2 5v7"/></svg></span>
+                <div><p class="v-over">Dining</p><p class="v-name">Restaurants</p><p class="v-desc">Top-rated, verified tables anywhere in the world.</p></div>
+                <span class="v-go">Browse →</span>
+              </button>
+              <button class="vert-card" data-v="hotels" data-name="Hotels">
+                <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 21V7l9-4 9 4v14M3 21h18M9 21v-5h6v5M7 10h.01M12 10h.01M17 10h.01"/></svg></span>
+                <div><p class="v-over">Stays</p><p class="v-name">Hotels</p><p class="v-desc">Google-verified hotels at your destination.</p></div>
+                <span class="v-go">Browse →</span>
+              </button>
+              <button class="vert-card" data-v="attractions" data-name="Attractions">
+                <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
+                <div><p class="v-over">Experiences</p><p class="v-name">Attractions</p><p class="v-desc">Must-see sights and local experiences.</p></div>
+                <span class="v-go">Browse →</span>
+              </button>
+              <button class="vert-card" data-v="flights" data-name="Flights">
+                <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 16l20-5-9 9-2-4-4-1zM22 11L11 13"/></svg></span>
+                <div><p class="v-over">Search</p><p class="v-name">Flights</p><p class="v-desc">Live routes with a Google Flights link-out.</p></div>
+                <span class="v-go">Search →</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- VERTICAL FLOW: breadcrumb + that vertical's own search + results -->
+          <div id="flowView" style="display:none;">
+            <div class="obs-crumb">
+              <button id="crumbBack" type="button">← Explore</button>
+              <span class="sep">/</span>
+              <span class="cur" id="crumbCur">Restaurants</span>
+            </div>
+
+            <form class="instrument" id="instrument" onsubmit="return false;">
+              <div class="instrument-row" id="instrumentRow"><!-- fields injected per vertical --></div>
+            </form>
+
+            <div class="index" id="index" style="display:none;">
+              <div class="index-head">
+                <p class="index-count"><span class="n" id="idxN">8</span> <span id="idxNoun">tables</span> in <span id="idxWhere">Lisbon</span></p>
+                <div class="index-sort">
+                  <button class="sort-chip active">Relevance</button>
+                  <button class="sort-chip">Top rated</button>
+                  <button class="sort-chip">Nearby</button>
+                </div>
+              </div>
+              <div class="index-grid" id="indexGrid"><!-- cards injected --></div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="folio-toast" id="folioToast">kept in your folio</div>
+      </div>
+
+      <p class="reset-line">
+        The frame above is live.
+        <button id="resetBtn" type="button">Reset to landing</button>
+      </p>
+    </section>
+
+    <!-- ════════════ FRAMES B–D · MOBILE ════════════ -->
+    <section>
+      <p class="section-eyebrow">Frames B · C · D · Mobile</p>
+      <h2 class="section-title">The Observatory, in the hand</h2>
+      <p class="section-sub">
+        On phone the landing room fits one screen — a short mood meridian and the four verticals as a clean 2×2 of
+        clearly-labelled cards (no clipping, comfortable targets). Tapping a vertical opens its destination search;
+        results scroll beneath a collapsed banner; keeping a place slips it into your folio. The header and bottom
+        nav are the existing app shell.
+      </p>
+
+      <div class="phones-row">
+
+        <!-- PHONE B · landing (one screen) -->
+        <div>
+          <div class="phone">
+            <div class="phone-notch"></div>
+            <div class="phone-screen">
+              <div class="m-obs">
+                <div class="room-grain"></div>
+                <div class="m-status"><span>9:41</span><span>•••  ⌃ ◐</span></div>
+                <div class="m-header">
+                  <div class="brand">Atelier<span class="dot"></span>Explore</div>
+                  <div class="dots">···</div>
+                </div>
+                <div class="m-scroll">
+                  <div class="m-meridian tall">
+                    <div class="scene"></div>
+                    <div class="bloom"></div>
+                    <div class="horizon"></div>
+                    <div class="vignette"></div>
+                    <div class="m-meridian-copy">
+                      <span class="m-meridian-mark"><span class="rule"></span>Explore</span>
+                      <h2 class="m-meridian-headline">What are you looking for?</h2>
+                      <span class="m-meridian-where">Verified places · no trip required</span>
+                    </div>
+                  </div>
+
+                  <p class="m-vert-label">Choose what to browse</p>
+                  <div class="m-vert-grid">
+                    <button class="m-vert-card">
+                      <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 3v7a2 2 0 0 0 2 2h0v9M6 3v6M9 3v6M17 3c-1.5 1-2 3-2 6s.5 4 2 5v7"/></svg></span>
+                      <div><p class="v-over">Dining</p><p class="v-name">Restaurants</p></div>
+                    </button>
+                    <button class="m-vert-card">
+                      <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 21V7l9-4 9 4v14M3 21h18M9 21v-5h6v5"/></svg></span>
+                      <div><p class="v-over">Stays</p><p class="v-name">Hotels</p></div>
+                    </button>
+                    <button class="m-vert-card">
+                      <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
+                      <div><p class="v-over">Experiences</p><p class="v-name">Attractions</p></div>
+                    </button>
+                    <button class="m-vert-card">
+                      <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 16l20-5-9 9-2-4-4-1z"/></svg></span>
+                      <div><p class="v-over">Search</p><p class="v-name">Flights</p></div>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="m-bottomnav">
+                  <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11l9-7 9 7M5 10v10h14V10"/></svg>Home</div>
+                  <div class="item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>Explore<span class="dot"></span></div>
+                  <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h12v18l-6-4-6 4z"/></svg>Saved</div>
+                  <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>Concierge</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="phone-caption">
+            <p class="eyebrow">Frame B</p>
+            <h3 class="title">Mobile · Landing</h3>
+            <p class="sub">One screen: mood meridian + four clearly-named verticals in a 2×2 grid. No clipped labels, ≥44px targets, existing bottom nav intact.</p>
+          </div>
+        </div>
+
+        <!-- PHONE C · vertical flow + results -->
+        <div>
+          <div class="phone">
+            <div class="phone-notch"></div>
+            <div class="phone-screen">
+              <div class="m-obs">
+                <div class="room-grain"></div>
+                <div class="m-status"><span>9:41</span><span>•••  ⌃ ◐</span></div>
+                <div class="m-header">
+                  <div class="brand">Atelier<span class="dot"></span>Explore</div>
+                  <div class="dots">···</div>
+                </div>
+                <div class="m-scroll scrolls">
+                  <div class="m-crumb">
+                    <span class="back">← Explore</span><span class="sep">/</span><span class="cur">Restaurants</span>
+                  </div>
+
+                  <div class="m-meridian banner">
+                    <div class="scene" style="background:
+                      radial-gradient(ellipse 90% 50% at 50% 20%, rgba(220,160,100,0.5), transparent 60%),
+                      radial-gradient(ellipse 130% 80% at 50% 100%, rgba(40,46,66,0.7), transparent 74%),
+                      linear-gradient(180deg, #221826 0%, #4a2e3a 24%, #b07a4e 52%, #6a5a64 74%, #222838 100%);"></div>
+                    <div class="bloom"></div>
+                    <div class="horizon"></div>
+                    <div class="vignette"></div>
+                    <div class="m-meridian-copy">
+                      <span class="m-meridian-mark"><span class="rule"></span>Restaurants · Lisbon</span>
+                      <span class="m-meridian-where">8 verified tables found</span>
+                    </div>
+                  </div>
+
+                  <div class="m-instrument" style="margin-top:14px;">
+                    <div class="m-ins-field">
+                      <span class="m-ins-label">Destination — city or area</span>
+                      <span class="m-ins-input-row">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                        <input class="m-ins-input" type="text" value="Lisbon" readonly>
+                      </span>
+                    </div>
+                    <button class="m-ins-go" type="button">Search restaurants</button>
+                  </div>
+
+                  <div class="m-index-head">
+                    <p class="m-index-count"><span class="n">8</span> tables in Lisbon</p>
+                    <span class="m-sort">Top rated ▾</span>
+                  </div>
+
+                  <article class="m-place-card">
+                    <div class="m-pc-plate"><div class="px has-photo"></div><span class="serial">No. 01</span><span class="plate-note">Source photo</span></div>
+                    <div class="m-pc-body">
+                      <h4 class="m-pc-name">Sample · Taberna do Mercado</h4>
+                      <p class="m-pc-cat">Portuguese · Alfama</p>
+                      <p class="m-pc-trust"><span class="verified">Verified place</span><span>1 source</span></p>
+                      <div class="m-pc-meta"><span class="rating">★ 4.6</span><span>(1,284)</span><span class="price">$$</span></div>
+                      <div class="m-pc-actions">
+                        <button class="m-btn-save" type="button">Save to folio</button>
+                        <a class="m-btn-ghost" href="#">Map</a>
+                        <a class="m-btn-ghost" href="#">Source</a>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article class="m-place-card">
+                    <div class="m-pc-plate"><div class="px alt2"></div><span class="serial">No. 02</span><span class="plate-note">Typeset · no photo</span></div>
+                    <div class="m-pc-body">
+                      <h4 class="m-pc-name">Sample · A Cevicheria</h4>
+                      <p class="m-pc-cat">Seafood · Príncipe Real</p>
+                      <p class="m-pc-trust"><span class="verified">Verified place</span><span>1 source</span></p>
+                      <div class="m-pc-meta"><span class="rating">★ 4.5</span><span>(2,011)</span><span class="price">$$$</span></div>
+                      <div class="m-pc-actions">
+                        <button class="m-btn-save" type="button">Save to folio</button>
+                        <a class="m-btn-ghost" href="#">Map</a>
+                        <a class="m-btn-ghost" href="#">Source</a>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+
+                <div class="m-bottomnav">
+                  <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11l9-7 9 7M5 10v10h14V10"/></svg>Home</div>
+                  <div class="item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>Explore<span class="dot"></span></div>
+                  <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h12v18l-6-4-6 4z"/></svg>Saved</div>
+                  <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>Concierge</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="phone-caption">
+            <p class="eyebrow">Frame C</p>
+            <h3 class="title">Mobile · Restaurants flow + results</h3>
+            <p class="sub">Active vertical and destination are explicit (breadcrumb + tuned banner). Verified cards carry Save · Map · Source; one real photo, one honest typeset plate.</p>
+          </div>
+        </div>
+
+        <!-- PHONE D · folio feedback -->
+        <div>
+          <div class="phone">
+            <div class="phone-notch"></div>
+            <div class="phone-screen">
+              <div class="m-obs">
+                <div class="room-grain"></div>
+                <div class="m-status"><span>9:41</span><span>•••  ⌃ ◐</span></div>
+                <div class="m-header">
+                  <div class="brand">Atelier<span class="dot"></span>Explore</div>
+                  <div class="dots">···</div>
+                </div>
+                <div class="m-scroll scrolls">
+                  <div class="m-crumb">
+                    <span class="back">← Explore</span><span class="sep">/</span><span class="cur">Restaurants</span>
+                  </div>
+
+                  <div class="m-meridian banner">
+                    <div class="scene" style="background:
+                      radial-gradient(ellipse 90% 50% at 50% 20%, rgba(220,160,100,0.5), transparent 60%),
+                      radial-gradient(ellipse 130% 80% at 50% 100%, rgba(40,46,66,0.7), transparent 74%),
+                      linear-gradient(180deg, #221826 0%, #4a2e3a 24%, #b07a4e 52%, #6a5a64 74%, #222838 100%);"></div>
+                    <div class="bloom"></div>
+                    <div class="horizon"></div>
+                    <div class="vignette"></div>
+                    <div class="m-meridian-copy">
+                      <span class="m-meridian-mark"><span class="rule"></span>Restaurants · Lisbon</span>
+                      <span class="m-meridian-where">8 verified tables found</span>
+                    </div>
+                  </div>
+
+                  <div class="m-index-head" style="margin-top:16px;">
+                    <p class="m-index-count"><span class="n">8</span> tables in Lisbon</p>
+                    <span class="m-sort">Top rated ▾</span>
+                  </div>
+
+                  <article class="m-place-card">
+                    <div class="m-pc-plate"><div class="px has-photo"></div><span class="serial">No. 01</span><span class="plate-note">Source photo</span></div>
+                    <div class="m-pc-body">
+                      <h4 class="m-pc-name">Sample · Taberna do Mercado</h4>
+                      <p class="m-pc-cat">Portuguese · Alfama</p>
+                      <p class="m-pc-trust"><span class="verified">Verified place</span><span>1 source</span></p>
+                      <div class="m-pc-meta"><span class="rating">★ 4.6</span><span>(1,284)</span><span class="price">$$</span></div>
+                      <div class="m-pc-actions">
+                        <button class="m-btn-save saved" type="button">Saved</button>
+                        <a class="m-btn-ghost" href="#">Map</a>
+                        <a class="m-btn-ghost" href="#">Source</a>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article class="m-place-card">
+                    <div class="m-pc-plate"><div class="px alt2"></div><span class="serial">No. 02</span><span class="plate-note">Typeset · no photo</span></div>
+                    <div class="m-pc-body">
+                      <h4 class="m-pc-name">Sample · A Cevicheria</h4>
+                      <p class="m-pc-cat">Seafood · Príncipe Real</p>
+                      <p class="m-pc-trust"><span class="verified">Verified place</span><span>1 source</span></p>
+                      <div class="m-pc-meta"><span class="rating">★ 4.5</span><span>(2,011)</span><span class="price">$$$</span></div>
+                      <div class="m-pc-actions">
+                        <button class="m-btn-save" type="button">Save to folio</button>
+                        <a class="m-btn-ghost" href="#">Map</a>
+                        <a class="m-btn-ghost" href="#">Source</a>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+
+                <div class="m-folio-toast">kept in your folio</div>
+
+                <div class="m-bottomnav">
+                  <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11l9-7 9 7M5 10v10h14V10"/></svg>Home</div>
+                  <div class="item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>Explore<span class="dot"></span></div>
+                  <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h12v18l-6-4-6 4z"/></svg>Saved</div>
+                  <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>Concierge</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="phone-caption">
+            <p class="eyebrow">Frame D</p>
+            <h3 class="title">Mobile · Folio feedback</h3>
+            <p class="sub">Saving fills the brass key and slips the place into the folio with one quiet line — the Salon's "kept in your folio" moment. Add-to-trip stays in Saved, never minted here.</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </div>
+
+  <div class="notes">
+    <div>
+      <h4>Vertical-first, exactly like production</h4>
+      <p>v1.1 corrects v1: there is <strong>no</strong> universal cross-vertical destination input. The landing room mirrors <code>ExploreShell</code>'s four <code>VerticalCard</code>s; tapping one calls the equivalent of <code>setActive(vertical)</code> and opens that vertical's own flow.</p>
+      <p>Each flow keeps its real inputs: Restaurants/Attractions take a destination; Hotels add dates/guests; Flights take origin + destination + dates. The desktop frame renders the correct fields per vertical.</p>
+    </div>
+    <div>
+      <h4>Existing shell, existing actions</h4>
+      <p>The header and mobile bottom nav are the <strong>current</strong> app shell (<code>AppShell</code> + <code>AtelierNavArtifact</code> + bottom nav) shown for context — production reskins inside them, no new navigation.</p>
+      <p>Result cards use the existing <code>ResultActionSheet</code> behaviour: <strong>Save</strong> writes to the folio; <strong>Map</strong> is the <code>googleMapsUri</code> link-out; <strong>Source</strong> reflects the <code>TrustStrip</code>. Add-to-trip is reached from Saved, never invented in Explore.</p>
+    </div>
+    <div>
+      <h4>Mobile-first &amp; honest</h4>
+      <p>Landing fits one screen — short meridian + a 2×2 of named verticals (no clipped labels, ≥44px targets). Flow view collapses the banner and scrolls a scannable index; the active vertical + destination stay explicit via breadcrumb and banner.</p>
+      <p>Trust reads "Verified place · 1 source" only when the backend confirms it. Cards are photo-forward when a real source photo exists, with an honest typeset plate otherwise. No fabricated photos, ratings, awards, distances, or "open now" claims. Ambient drift + bloom are <code>prefers-reduced-motion</code> gated.</p>
+    </div>
+  </div>
+
+  <div class="colophon">Atelier <span class="glyph">·</span> Observatory <span class="glyph">·</span> Explore Concept v1.1 <span class="glyph">·</span> prototype, not production</div>
+
+</main>
+
+<script>
+  (function () {
+    var canvas = document.getElementById('obsCanvas');
+    var landingView = document.getElementById('landingView');
+    var flowView = document.getElementById('flowView');
+    var vertGrid = document.getElementById('vertGrid');
+    var instrument = document.getElementById('instrument');
+    var instrumentRow = document.getElementById('instrumentRow');
+    var index = document.getElementById('index');
+    var indexGrid = document.getElementById('indexGrid');
+    var crumbCur = document.getElementById('crumbCur');
+    var crumbBack = document.getElementById('crumbBack');
+    var merMark = document.getElementById('merMark');
+    var merHeadline = document.getElementById('merHeadline');
+    var merWhere = document.getElementById('merWhere');
+    var merCtx = document.getElementById('merCtx');
+    var merScene = document.getElementById('merScene');
+    var idxN = document.getElementById('idxN');
+    var idxNoun = document.getElementById('idxNoun');
+    var idxWhere = document.getElementById('idxWhere');
+    var toast = document.getElementById('folioToast');
+    var resetBtn = document.getElementById('resetBtn');
+
+    var pinSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>';
+
+    // Per-vertical config: own fields (matching production flow shape), scene mood, demo index.
+    var VERTS = {
+      restaurants: {
+        name: 'Restaurants', noun: 'tables', cta: 'Search restaurants',
+        scene: 'radial-gradient(ellipse 90% 60% at 50% 22%, rgba(232,186,120,0.5), transparent 64%), radial-gradient(ellipse 130% 80% at 50% 100%, rgba(40,52,78,0.66), transparent 74%), linear-gradient(180deg, #241726 0%, #3E2433 18%, #7A4A52 38%, #C98C5E 56%, #8E7C84 70%, #3B4666 86%, #11192E 100%)',
+        fields: [{ label: 'Destination — city or area', ph: 'Lisbon, Tokyo, Mexico City…', val: 'Lisbon' }],
+        cards: [
+          { serial: 'No. 01', cls: 'has-photo', note: 'Source photo', name: 'Sample · Taberna do Mercado', cat: 'Portuguese · Alfama', rating: '4.6', reviews: '1,284', price: '$$' },
+          { serial: 'No. 02', cls: 'alt2', note: 'Typeset · no photo', name: 'Sample · A Cevicheria', cat: 'Seafood · Príncipe Real', rating: '4.5', reviews: '2,011', price: '$$$' },
+          { serial: 'No. 03', cls: 'alt3', note: 'Typeset · no photo', name: 'Sample · O Velho Eurico', cat: 'Tasca · Mouraria', rating: '4.7', reviews: '946', price: '$$' }
+        ]
+      },
+      hotels: {
+        name: 'Hotels', noun: 'stays', cta: 'Search hotels',
+        scene: 'radial-gradient(ellipse 90% 60% at 50% 22%, rgba(170,200,230,0.45), transparent 64%), radial-gradient(ellipse 130% 80% at 50% 100%, rgba(30,40,66,0.7), transparent 74%), linear-gradient(180deg, #1c1f30 0%, #2c3a52 24%, #6a7a92 52%, #4a5670 74%, #161c2e 100%)',
+        fields: [
+          { label: 'Destination', ph: 'City or area', val: 'Lisbon' },
+          { label: 'Dates', ph: 'Check-in → check-out', val: '' },
+          { label: 'Guests', ph: '2 guests · 1 room', val: '' }
+        ],
+        cards: [
+          { serial: 'No. 01', cls: 'has-photo', note: 'Source photo', name: 'Sample · Memmo Alfama', cat: 'Boutique hotel · Alfama', rating: '4.6', reviews: '3,120', price: '$$$' },
+          { serial: 'No. 02', cls: 'alt4', note: 'Typeset · no photo', name: 'Sample · The Lumiares', cat: 'Aparthotel · Bairro Alto', rating: '4.5', reviews: '1,870', price: '$$$' },
+          { serial: 'No. 03', cls: 'alt2', note: 'Typeset · no photo', name: 'Sample · Santiago de Alfama', cat: 'Heritage hotel · Alfama', rating: '4.7', reviews: '1,402', price: '$$$$' }
+        ]
+      },
+      attractions: {
+        name: 'Attractions', noun: 'experiences', cta: 'Search attractions',
+        scene: 'radial-gradient(ellipse 90% 60% at 50% 22%, rgba(150,200,170,0.42), transparent 64%), radial-gradient(ellipse 130% 80% at 50% 100%, rgba(30,46,40,0.7), transparent 74%), linear-gradient(180deg, #19241e 0%, #2e463a 26%, #6a8a6a 54%, #4a6450 74%, #161e1a 100%)',
+        fields: [{ label: 'Destination — city or area', ph: 'Lisbon, Rome, Kyoto…', val: 'Lisbon' }],
+        cards: [
+          { serial: 'No. 01', cls: 'alt4', note: 'Typeset · no photo', name: 'Sample · Mosteiro dos Jerónimos', cat: 'Monastery · Belém', rating: '4.7', reviews: '88,402', price: null },
+          { serial: 'No. 02', cls: 'has-photo', note: 'Source photo', name: 'Sample · Miradouro da Senhora', cat: 'Viewpoint · Graça', rating: '4.6', reviews: '12,330', price: null },
+          { serial: 'No. 03', cls: 'alt3', note: 'Typeset · no photo', name: 'Sample · Castelo de São Jorge', cat: 'Castle · Castelo', rating: '4.5', reviews: '64,118', price: null }
+        ]
+      },
+      flights: {
+        name: 'Flights', noun: 'routes', cta: 'Search flights',
+        scene: 'radial-gradient(ellipse 90% 60% at 50% 22%, rgba(244,210,150,0.5), transparent 64%), radial-gradient(ellipse 130% 80% at 50% 100%, rgba(40,40,60,0.7), transparent 74%), linear-gradient(180deg, #201826 0%, #3a2e44 24%, #b08a5e 54%, #6a6470 74%, #1a1c2e 100%)',
+        fields: [
+          { label: 'From', ph: 'Origin city or airport', val: 'Lisbon (LIS)' },
+          { label: 'To', ph: 'Destination', val: 'New York (JFK)' },
+          { label: 'Dates', ph: 'Depart → return', val: '' }
+        ],
+        cards: [
+          { serial: 'No. 01', cls: 'alt4', note: 'Link-out · Google Flights', name: 'Sample · LIS → JFK', cat: 'Nonstop · 8h 05m', rating: null, reviews: null, price: 'from $640', link: 'Open in Google Flights' },
+          { serial: 'No. 02', cls: 'alt2', note: 'Link-out · Google Flights', name: 'Sample · LIS → LHR', cat: '1 stop · 5h 40m', rating: null, reviews: null, price: 'from $190', link: 'Open in Google Flights' }
+        ]
+      }
+    };
+
+    function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]; }); }
+
+    function renderInstrument(v) {
+      var cfg = VERTS[v];
+      var fields = cfg.fields.map(function (f, i) {
+        var icon = i === 0 ? pinSvg : '';
+        return '' +
+          (i > 0 ? '<span class="ins-divider"></span>' : '') +
+          '<label class="ins-field">' +
+            '<span class="ins-label">' + esc(f.label) + '</span>' +
+            '<span class="ins-input-row">' + icon +
+              '<input class="ins-input" type="text" placeholder="' + esc(f.ph) + '" value="' + esc(f.val) + '">' +
+            '</span>' +
+          '</label>';
+      }).join('');
+      instrumentRow.innerHTML = fields +
+        '<button class="ins-go" type="submit" id="insGo">' + esc(cfg.cta) + ' →</button>';
+      document.getElementById('insGo').addEventListener('click', function (e) { e.preventDefault(); doSearch(v); });
+    }
+
+    function renderCards(v) {
+      var cfg = VERTS[v];
+      indexGrid.innerHTML = cfg.cards.map(function (c) {
+        var meta = '';
+        if (c.rating) meta += '<span class="rating">★ ' + esc(c.rating) + '</span>';
+        if (c.reviews) meta += '<span>(' + esc(c.reviews) + ')</span>';
+        if (c.price) meta += '<span class="price">' + esc(c.price) + '</span>';
+        var linkLabel = c.link ? c.link : 'Map';
+        return '' +
+          '<article class="place-card">' +
+            '<div class="pc-plate"><div class="px ' + esc(c.cls) + '"></div>' +
+              '<span class="serial">' + esc(c.serial) + '</span>' +
+              '<span class="plate-note">' + esc(c.note) + '</span></div>' +
+            '<div class="pc-body">' +
+              '<h3 class="pc-name">' + esc(c.name) + '</h3>' +
+              '<p class="pc-cat">' + esc(c.cat) + '</p>' +
+              '<p class="pc-trust"><span class="verified">Verified place</span><span>1 source</span></p>' +
+              '<div class="pc-meta">' + meta + '</div>' +
+              '<div class="pc-actions">' +
+                '<button class="btn-save" type="button">Save to folio</button>' +
+                '<a class="btn-ghost" href="#">' + esc(linkLabel) + '</a>' +
+                (c.link ? '' : '<a class="btn-ghost" href="#">Source</a>') +
+              '</div>' +
+            '</div>' +
+          '</article>';
+      }).join('');
+
+      Array.prototype.forEach.call(indexGrid.querySelectorAll('.btn-save'), function (btn) {
+        btn.addEventListener('click', function () {
+          if (btn.classList.contains('saved')) return;
+          btn.classList.add('saved'); btn.textContent = 'Saved'; showToast();
+        });
+      });
+    }
+
+    var toastTimer = null;
+    function showToast() {
+      toast.classList.add('show');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2200);
+    }
+
+    function openVertical(v, name) {
+      var cfg = VERTS[v];
+      landingView.style.display = 'none';
+      flowView.style.display = 'block';
+      crumbCur.textContent = name;
+      merScene.style.background = cfg.scene;
+      merMark.textContent = name + ' · choose a destination';
+      merHeadline.textContent = 'Browsing ' + name.toLowerCase() + ' — where shall I look?';
+      merWhere.textContent = 'Verified places · no trip required';
+      merCtx.textContent = name;
+      index.style.display = 'none';
+      canvas.classList.remove('searched');
+      renderInstrument(v);
+    }
+
+    function doSearch(v) {
+      var cfg = VERTS[v];
+      var firstInput = instrumentRow.querySelector('.ins-input');
+      var where = (firstInput && firstInput.value.trim()) || 'Lisbon';
+      merMark.textContent = cfg.name + ' · ' + where;
+      merHeadline.textContent = cfg.name === 'Flights'
+        ? 'Live routes out of ' + where + ', linked out for booking.'
+        : 'What ' + where + ' is really showing, in ' + cfg.name.toLowerCase() + '.';
+      merWhere.textContent = 'Verified · sample index';
+      idxN.textContent = String(cfg.cards.length);
+      idxNoun.textContent = cfg.noun;
+      idxWhere.textContent = where;
+      renderCards(v);
+      index.style.display = 'block';
+      canvas.classList.add('searched');
+    }
+
+    Array.prototype.forEach.call(vertGrid.querySelectorAll('.vert-card'), function (card) {
+      card.addEventListener('click', function () {
+        openVertical(card.getAttribute('data-v'), card.getAttribute('data-name'));
+      });
+    });
+
+    function toLanding() {
+      flowView.style.display = 'none';
+      landingView.style.display = 'block';
+      index.style.display = 'none';
+      canvas.classList.remove('searched');
+      merScene.style.background = '';
+      merMark.textContent = 'Explore · Curated discovery';
+      merHeadline.textContent = 'What are you looking for? Choose a way in.';
+      merWhere.textContent = 'Verified places · no trip required';
+      merCtx.textContent = 'Restaurants · Hotels · Attractions · Flights';
+    }
+
+    crumbBack.addEventListener('click', toLanding);
+    resetBtn.addEventListener('click', toLanding);
+  })();
+</script>
+
+</body>
+</html>
