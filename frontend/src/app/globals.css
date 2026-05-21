@@ -7252,4 +7252,255 @@
     margin-top: auto;
   }
 
+  /* ── Salon Portal Window ── */
+  .atelier-salon-portal {
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    isolation: isolate;
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 22%, transparent);
+    box-shadow:
+      0 28px 70px -28px color-mix(in srgb, var(--ds-midnight-ink) 70%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--ds-pearl-cream) 6%, transparent);
+    flex-shrink: 0;
+    height: 200px;
+  }
+  @media (min-width: 640px) {
+    .atelier-salon-portal { height: 260px; }
+  }
+  @media (min-width: 900px) {
+    .atelier-salon-portal { height: 300px; }
+  }
+
+  .atelier-salon-portal-scene {
+    position: absolute; inset: 0; z-index: 0;
+    background: var(--world-scenery, var(--ds-midnight-ink));
+    transform: scale(1.06);
+    transition: background 1100ms ease;
+    animation: salonPortalDrift 36s ease-in-out infinite alternate;
+  }
+  @keyframes salonPortalDrift {
+    0%   { transform: scale(1.06) translate(0, 0); }
+    100% { transform: scale(1.12) translate(-1.6%, -1%); }
+  }
+
+  .atelier-salon-portal-bloom {
+    position: absolute; left: 0; right: 0;
+    top: 40%; height: 24%; z-index: 1; pointer-events: none;
+    background: radial-gradient(
+      ellipse 60% 100% at 50% 50%,
+      color-mix(in srgb, var(--world-secondary, var(--ds-ember-brass)) 30%, transparent),
+      transparent 72%
+    );
+    filter: blur(8px);
+    animation: salonBloomBreathe 9s ease-in-out infinite alternate;
+  }
+  @keyframes salonBloomBreathe {
+    0%   { opacity: 0.65; }
+    100% { opacity: 1; }
+  }
+
+  .atelier-salon-portal-vignette {
+    position: absolute; inset: 0; z-index: 2; pointer-events: none;
+    background:
+      radial-gradient(
+        ellipse at center,
+        transparent 48%,
+        color-mix(in srgb, var(--ds-midnight-ink) 50%, transparent) 100%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--ds-midnight-ink) 10%, transparent) 0%,
+        transparent 24%,
+        transparent 52%,
+        color-mix(in srgb, var(--ds-midnight-ink) 62%, transparent) 100%
+      );
+  }
+
+  .atelier-salon-portal-grain {
+    position: absolute; inset: 0; z-index: 3; pointer-events: none;
+    opacity: 0.07; mix-blend-mode: screen;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 0.98 0 0 0 0 0.92 0 0 0 0 0.78 0 0 0 0.07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  }
+
+  .atelier-salon-portal-copy {
+    position: absolute; inset: 0; z-index: 4;
+    padding: var(--ds-space-6) var(--ds-space-6);
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+
+  .atelier-salon-portal-mark {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-size: var(--ds-type-overline-size);
+    letter-spacing: 0.30em; text-transform: uppercase;
+    color: color-mix(in srgb, var(--ds-ember-brass) 90%, transparent);
+    line-height: var(--ds-type-overline-leading);
+  }
+  .atelier-salon-portal-mark .portal-rule {
+    display: inline-block; width: 22px; height: 1px;
+    background: color-mix(in srgb, var(--ds-ember-brass) 70%, transparent);
+    flex-shrink: 0;
+  }
+
+  .atelier-salon-portal-headline {
+    font-family: var(--font-fraunces), Georgia, 'Times New Roman', serif;
+    font-style: italic; font-weight: 300;
+    font-size: clamp(22px, 4vw, 36px);
+    line-height: 1.08;
+    color: var(--world-on-scenery, var(--ds-pearl-cream));
+    max-width: 18ch;
+    text-shadow: 0 2px 30px color-mix(in srgb, var(--ds-midnight-ink) 40%, transparent);
+    margin: 0;
+    transition: opacity 600ms ease;
+  }
+
+  .atelier-salon-portal-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: var(--ds-type-caption-size);
+    letter-spacing: 0.24em; text-transform: uppercase;
+    color: var(--world-on-scenery-muted, var(--ds-mist));
+    line-height: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-salon-portal-scene { animation: none; transform: scale(1.02); }
+    .atelier-salon-portal-bloom { animation: none; }
+    .atelier-salon-portal-headline { transition: none; }
+  }
+
+  /* ── Salon Invitation Cards ── */
+  .atelier-salon-invitation-card {
+    text-align: left; cursor: pointer;
+    background: color-mix(in srgb, var(--ds-ember-brass) 5%, var(--ds-bone));
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 18%, transparent);
+    border-radius: 10px;
+    padding: var(--ds-space-3) var(--ds-space-4);
+    width: 100%;
+    transition: background 300ms ease, border-color 300ms ease, transform 300ms ease;
+  }
+  .atelier-salon-invitation-card:hover,
+  .atelier-salon-invitation-card:focus-visible {
+    background: color-mix(in srgb, var(--ds-ember-brass) 10%, var(--ds-bone));
+    border-color: color-mix(in srgb, var(--ds-ember-brass) 34%, transparent);
+    transform: translateY(-1px);
+  }
+
+  .atelier-salon-invitation-lead {
+    font-family: var(--font-fraunces), Georgia, 'Times New Roman', serif;
+    font-style: italic; font-weight: 400;
+    font-size: var(--ds-type-body-l-size);
+    line-height: 1.25;
+    color: var(--world-ink, var(--ds-ink-paper));
+    margin: 0 0 var(--ds-space-1);
+    display: block;
+  }
+
+  .atelier-salon-invitation-hint {
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--world-ink-mist, var(--ds-folio-ink-mist));
+    display: block;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-salon-invitation-card { transition: background 120ms ease, border-color 120ms ease; }
+    .atelier-salon-invitation-card:hover,
+    .atelier-salon-invitation-card:focus-visible { transform: none; }
+  }
+
+  /* ── Results editorial header ── */
+  .atelier-salon-results-header {
+    margin-bottom: var(--ds-space-5);
+    padding-bottom: var(--ds-space-4);
+    border-bottom: 1px solid color-mix(in srgb, var(--ds-ember-brass) 14%, transparent);
+    animation: salonRevealUp 400ms ease both;
+  }
+  @keyframes salonRevealUp {
+    0%   { opacity: 0; transform: translateY(8px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-salon-results-header { animation: none; }
+  }
+
+  .atelier-salon-results-count {
+    font-family: var(--font-fraunces), Georgia, 'Times New Roman', serif;
+    font-style: italic; font-weight: 400;
+    font-size: var(--ds-type-display-s-size);
+    line-height: var(--ds-type-display-s-leading);
+    color: var(--world-ink, var(--ds-ink-paper));
+    margin: 0 0 var(--ds-space-1);
+  }
+
+  .atelier-salon-results-why {
+    font-size: var(--ds-type-body-s-size);
+    line-height: var(--ds-type-body-s-leading);
+    color: var(--world-ink-mist, var(--ds-folio-ink-mist));
+    margin: 0;
+  }
+
+  /* ── Dossier briefing rail upgrades ── */
+  .atelier-salon-briefing-title {
+    font-family: var(--font-fraunces), Georgia, 'Times New Roman', serif;
+    font-style: italic; font-weight: 400;
+    font-size: var(--ds-type-display-s-size);
+    line-height: var(--ds-type-display-s-leading);
+    color: var(--world-ink, var(--ds-ink-paper));
+    margin: 0 0 var(--ds-space-2);
+  }
+
+  .atelier-salon-briefing-sub {
+    font-size: var(--ds-type-body-s-size);
+    line-height: var(--ds-type-body-s-leading);
+    color: var(--world-ink-mist, var(--ds-folio-ink-mist));
+    margin: 0;
+  }
+
+  .atelier-salon-briefing-no {
+    font-family: var(--font-fraunces), Georgia, serif;
+    font-style: italic; font-weight: 400;
+    font-size: var(--ds-type-body-s-size);
+    line-height: 1.4;
+    color: color-mix(in srgb, var(--ds-ember-brass) 75%, transparent);
+    flex-shrink: 0;
+    min-width: 1.2em;
+  }
+
+  .atelier-salon-briefing-item-name {
+    font-size: var(--ds-type-body-s-size);
+    line-height: var(--ds-type-body-s-leading);
+    font-weight: 500;
+    color: var(--world-ink, var(--ds-ink-paper));
+    display: block;
+  }
+
+  .atelier-salon-briefing-item-desc {
+    font-size: var(--ds-type-caption-size);
+    line-height: var(--ds-type-caption-leading);
+    color: var(--world-ink-mist, var(--ds-folio-ink-mist));
+    margin-top: var(--ds-space-1);
+    margin-bottom: 0;
+  }
+
+  .atelier-salon-briefing-rule {
+    width: 40px; height: 1px;
+    background: color-mix(in srgb, var(--ds-ember-brass) 50%, transparent);
+    flex-shrink: 0;
+  }
+
+  .atelier-salon-briefing-badge {
+    font-size: var(--ds-type-caption-size);
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--world-ink-mist, var(--ds-folio-ink-mist));
+    border: 1px solid color-mix(in srgb, var(--ds-hairline) 80%, transparent);
+    border-radius: 4px;
+    padding: var(--ds-space-1) var(--ds-space-2);
+    display: inline-block;
+  }
+  .atelier-salon-briefing-badge.verified {
+    color: var(--ds-marine-ink, var(--ds-folio-ink));
+    border-color: color-mix(in srgb, var(--ds-marine-ink, var(--ds-marine-deep)) 35%, transparent);
+  }
+
 }

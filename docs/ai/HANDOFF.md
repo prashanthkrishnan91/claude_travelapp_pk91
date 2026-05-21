@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-21 (Atelier Room System v1 MERGED — PR #451)
+Last updated: 2026-05-21 (Salon Concept v1 — portal, invitations, dossier rail — PR in progress)
 
 ## Purpose
 
@@ -8,7 +8,9 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3.5 — Atelier Room System v1 complete (PR #451 merged). Next: Room System adoption on Explore or Saved.**
+**Stage 3.5 — Salon Concept v1 implementation (post Stage 3 exit). Concierge portal window, invitation cards with lead+hint, dossier briefing rail, and results editorial header shipped in one capability slice.**
+
+_Stage 3 exit: Atelier Room System v1 (PR #451) is the Stage 3 exit — two-column workbench, contained panel scroll, brass briefing rail. Stage 3.5 adds cinematic salon surface details._
 
 ### Home baseline (merged)
 - **PR #448** — Atelier Atrium: edge-to-edge cinematic home, world DNA system, AppShell route-aware wrapper, DashboardClient full atrium composition, WorldScenery/Mist/Atmosphere/Glass primitives, silent navigation (AtelierNavArtifact), contained scenery, physical archive shelf.
@@ -78,6 +80,17 @@ All existing testids, folio-cinema-desk, folio-cinema-composer, folio-concierge-
 **Test count (earlier patches):** 2991 total, 0 failures.  
 **No backend / SQL / provider / env / Supabase / API / route / data-contract changes (any patch).**
 
+### Salon Concept v1 (current PR, in progress)
+
+**AI Concierge Salon visual upgrade — pure CSS/TSX, no backend changes.**
+
+Changes in this PR:
+- **`globals.css`** — new CSS primitives: `.atelier-salon-portal` (cinematic portal window, 5 layers: scene/bloom/vignette/grain/copy), `.atelier-salon-invitation-card` + lead/hint spans, `.atelier-salon-results-header` + count/why, `.atelier-salon-briefing-title/sub/no/item-name/item-desc/rule/badge` (dossier rail upgrade). All use `color-mix()` — no raw rgba().
+- **`ConciergePage.tsx`** — `SALON_INVITATIONS` constant (6 invitations with lead+hint+query), `DOSSIER_ITEMS` constant (3 roman-numeral items). Empty state upgraded with portal window + invitation cards. Result sections get editorial header. Briefing rail upgraded to dossier design. All existing testids preserved.
+- **`tests/salon-concept-v1.test.mjs`** — 27 new Section I tests (portal CSS, invitation CSS, results header CSS, dossier CSS, ConciergePage wiring).
+- **Test count: 3030 total, 0 failures.**
+- **No backend / SQL / provider / env / Supabase / API / route / data-contract changes.**
+
 ### Next step
 Apply Atelier Room System to Explore (Observatory room) or Saved (Gallery room) — next visible adoption slice using the same room shell primitives.
 
@@ -96,6 +109,7 @@ Apply Atelier Room System to Explore (Observatory room) or Saved (Gallery room) 
 
 ## Recent meaningful PRs
 
+- 2026-05-21 — **PR in progress** — Salon Concept v1: portal window, invitation cards with lead+hint, dossier briefing rail, results editorial header. 3030 tests, 0 failures.
 - 2026-05-21 — **PR #451 MERGED** — Atelier Room System v1 + Private Salon (Concierge). Two-column desktop workbench (main panel + briefing rail), contained panel scroll, patch-5 CSS grid. 3003 tests, 0 failures.
 - 2026-05-20 — **PR #449 MERGED** — Home dead-space fix (overflow: clip + min-height: 0 + flex: none).
 - 2026-05-20 — **PR #448 MERGED** — Atelier Atrium full cinematic home (world DNA, AppShell escape hatch, silent nav, contained scenery, physical archive).

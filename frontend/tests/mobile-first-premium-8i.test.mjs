@@ -439,30 +439,30 @@ test('HotelExploreFlow hotel-compare-cta preserves href and target="_blank"', ()
     'hotel-compare-cta must preserve target="_blank"');
 });
 
-// ConciergePage starter prompt chips
+// ConciergePage starter prompt chips (updated for Salon Concept v1: SALON_INVITATIONS.map)
 test('ConciergePage starter prompt chips have min-h-[44px] touch target', () => {
-  // Search from the JSX map call (not the const definition which is far above)
-  const mapIdx = conciergePage.indexOf('EDITORIAL_PROMPTS.map');
+  // Search from the JSX map call (SALON_INVITATIONS.map after Salon Concept v1 upgrade)
+  const mapIdx = conciergePage.indexOf('SALON_INVITATIONS.map');
   const emptyState = conciergePage.slice(mapIdx, mapIdx + 600);
   assert.ok(emptyState.includes('min-h-[44px]'),
     'Starter prompt chips must have min-h-[44px] touch target');
 });
 
 test('ConciergePage starter prompt chips remain type="button"', () => {
-  const emptyState = conciergePage.slice(
-    conciergePage.indexOf('concierge-empty-state'),
-    conciergePage.indexOf('concierge-empty-state') + 800
-  );
+  // Search within a wide window of the empty-state block to include the portal + chips
+  const startIdx = conciergePage.indexOf('concierge-empty-state');
+  const emptyState = conciergePage.slice(startIdx, startIdx + 3000);
   assert.ok(emptyState.includes('type="button"'),
     'Starter prompt chips must remain type="button"');
 });
 
 test('ConciergePage starter prompt chips only populate input, do not auto-submit', () => {
+  // After Salon Concept v1, chips use SALON_INVITATIONS.map and setInput(query)
   const chipOnClick = conciergePage.slice(
-    conciergePage.indexOf('EDITORIAL_PROMPTS.map'),
-    conciergePage.indexOf('EDITORIAL_PROMPTS.map') + 400
+    conciergePage.indexOf('SALON_INVITATIONS.map'),
+    conciergePage.indexOf('SALON_INVITATIONS.map') + 400
   );
-  assert.ok(chipOnClick.includes('setInput(prompt)'),
+  assert.ok(chipOnClick.includes('setInput(query)'),
     'Chip onClick must call setInput to populate input');
   assert.ok(chipOnClick.includes("inputRef.current?.focus()"),
     'Chip onClick must focus the input');
@@ -472,8 +472,8 @@ test('ConciergePage starter prompt chips only populate input, do not auto-submit
 
 test('ConciergePage starter prompt chips do not set hardcoded destination', () => {
   const chipOnClick = conciergePage.slice(
-    conciergePage.indexOf('EDITORIAL_PROMPTS.map'),
-    conciergePage.indexOf('EDITORIAL_PROMPTS.map') + 400
+    conciergePage.indexOf('SALON_INVITATIONS.map'),
+    conciergePage.indexOf('SALON_INVITATIONS.map') + 400
   );
   assert.ok(!chipOnClick.includes('setDestination('),
     'Chip onClick must not call setDestination — chips only populate query input, not destination');
