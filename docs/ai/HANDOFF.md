@@ -117,7 +117,7 @@ All existing testids, folio-cinema-desk, folio-cinema-composer, folio-concierge-
 
 Two Level 2 user-visible regressions fixed after PR #460 merged:
 
-1. **Hotel compare-link dates:** `buildHotelCompareUrl` already appended `&checkin=`/`&checkout=` correctly; `buildContext` already used `lastForm?.checkIn` for the compare URL (not the fallback dates used for the API call). 4 new regression tests added to `hotel-explore-live.test.mjs` — now 31/31; wired into `npm test`.
+1. **Hotel compare-link dates (Google Travel surface):** `buildHotelCompareUrl` now uses the **`/travel/search?q=...&ts=...`** Google Travel hotel-search surface (the working surface), not the prior `/travel/hotels?checkin=...` form which did not reliably honor dates. The selected check-in/check-out are carried in the deterministic **`ts` protobuf param**, built by `buildGoogleTravelDatesParam` and **verified byte-for-byte against a real Google Travel URL** (2026-07-31 → 2026-08-05). The `ts` payload is purely date-derived (check-in, check-out, nights, occupancy=1 room, USD); opaque session params (`qs`/`ved`/`ap`) are intentionally NOT fabricated. Guest count is surfaced in the human-readable `q` text only (honest limitation — `ts` occupancy is a fixed 1-room block). `handleSubmit` takes a single `const snapshot = {...form}` so the compare link and search request always use the same dates. `hotel-explore-live.test.mjs`: 36 tests incl. byte-for-byte `ts` reproduction, two dynamic date ranges, named Hyatt/Chicago regression.
 
 2. **Flight per-offer prices:** Duffel adapter already maps each offer's `total_amount` independently. The `_search_booking_link` is shared (same Google Flights query URL) but prices are per-offer. Fixed two pre-existing source-code test failures in `flights-ignav-live.test.mjs`:  
    - Test 10: changed dynamic `data-testid` expression to always use `"flight-book-link"` (with `data-link-type` for redirect distinction).  
@@ -125,7 +125,7 @@ Two Level 2 user-visible regressions fixed after PR #460 merged:
    6 new regression tests added — now 32/32; wired into `npm test`.  
    Backend: 2 new tests in `test_duffel_flights_v1.py` proving distinct per-offer prices and that uncertified provider returns UNAVAILABLE.
 
-**3134 frontend tests, 0 failures.** No backend suite run (no pytest in this environment).
+**3139 frontend tests, 0 failures.** No backend suite run (no pytest in this environment); tsc/next build not run locally (node_modules absent) — CI `certify` validates.
 
 ### Next step
 Regression fixes are the current branch. After PR merges, next visible-adoption slice: apply Room System treatment to Saved (Gallery room) using shared cinema-world primitives.

@@ -138,9 +138,13 @@ test('Hotel compare CTA is an external link (target=_blank, rel=noopener)', () =
   assert.match(hotelFlow, /rel="noopener noreferrer"/);
 });
 
-test('buildHotelCompareUrl utility targets Google Hotels search URL', () => {
+test('buildHotelCompareUrl utility targets Google Travel hotel search URL', () => {
+  // Uses the /travel/search surface (Google Travel hotel search) — the working
+  // Google Travel destination, not a generic Google Search or an OTA.
   assert.match(hotelFlow, /function buildHotelCompareUrl/);
-  assert.match(hotelFlow, /google\.com\/travel\/hotels/);
+  assert.match(hotelFlow, /google\.com\/travel\/search/);
+  assert.doesNotMatch(hotelFlow, /google\.com\/search\b/);
+  assert.doesNotMatch(hotelFlow, /google\.com\/maps/);
   assert.doesNotMatch(hotelFlow, /expedia\.com/i);
   assert.doesNotMatch(hotelFlow, /booking\.com/i);
   assert.doesNotMatch(hotelFlow, /trivago\.com/i);
@@ -150,9 +154,13 @@ test('buildHotelCompareUrl uses encodeURIComponent for deterministic encoding', 
   assert.match(hotelFlow, /encodeURIComponent/);
 });
 
-test('buildHotelCompareUrl uses adults= param (not guests=) for structured Google Hotels handoff', () => {
-  assert.match(hotelFlow, /adults=\$\{guests\}/);
-  assert.doesNotMatch(hotelFlow, /guests=\$\{guests\}/);
+test('buildHotelCompareUrl carries dates via the deterministic ts= Google Travel param', () => {
+  // Dates are handed to Google Travel through the `ts` protobuf param, built by
+  // buildGoogleTravelDatesParam from the selected check-in/check-out.
+  assert.match(hotelFlow, /buildGoogleTravelDatesParam/,
+    'buildHotelCompareUrl must build the ts= date param from selected dates');
+  assert.match(hotelFlow, /&ts=\$\{ts\}/,
+    'buildHotelCompareUrl must append the ts= date param to the URL');
 });
 
 test('buildHotelCompareUrl q fallback includes dates and guest count context', () => {
@@ -182,23 +190,36 @@ test('Hotel compare CTA renders with Search icon (not a booking icon)', () => {
 
 // ── 8. Regression: selected check-in/check-out dates carried in compare URL ─
 
-test('buildHotelCompareUrl appends &checkin= structured param for date handoff', () => {
-  // Google Hotels reads checkin/checkout as structured date params, not just
-  // the q= display text.  Both must be present to correctly scope the search.
-  // Guards against regression where dates were dropped from the compare URL.
-  assert.match(
-    hotelFlow,
-    /&checkin=\$\{encodeURIComponent\(checkIn\)\}/,
-    'buildHotelCompareUrl must add &checkin=encodeURIComponent(checkIn) to the URL',
+test('buildGoogleTravelDatesParam reproduces the verified reference ts= byte-for-byte', () => {
+  // The ts= protobuf is a deterministic, date-only payload (check-in, check-out,
+  // nights, occupancy=1 room, currency USD).  It contains NO hotel-specific or
+  // session-specific data.  This test proves our builder reproduces a real,
+  // verified Google Travel ts= param (observed for 2026-07-31 → 2026-08-05)
+  // byte-for-byte — i.e. the dates are encoded correctly and deterministically.
+  const blockStart = hotelFlow.indexOf('const MONTHS');
+  const blockEnd = hotelFlow.indexOf('import { searchHotelsExplore }');
+  let block = hotelFlow.slice(blockStart, blockEnd);
+  block = block
+    .replace(/as \[number, number, number\]/g, '')
+    .replace(/\}: \{[^}]*\}\)/s, '})')
+    .replace(/\bcheckIn\?/g, 'checkIn')
+    .replace(/\bcheckOut\?/g, 'checkOut')
+    .replace(/\bguests\?/g, 'guests')
+    .replace(/: number\[\]/g, '')
+    .replace(/: string \| undefined/g, '')
+    .replace(/: string\b/g, '')
+    .replace(/: number\b/g, '')
+    .replace(/\)\s*\{/g, ') {');
+  const buildTs = new Function(block + '\nreturn buildGoogleTravelDatesParam;')();
+  const refTs = 'CAEaIAoCGgASGhIUCgcI6g8QBxgfEgcI6g8QCBgFGAUyAggBKgkKBToDVVNEGgA';
+  assert.strictEqual(
+    buildTs('2026-07-31', '2026-08-05'),
+    refTs,
+    'ts= for 2026-07-31 → 2026-08-05 must match the verified reference byte-for-byte',
   );
-});
-
-test('buildHotelCompareUrl appends &checkout= structured param for date handoff', () => {
-  assert.match(
-    hotelFlow,
-    /&checkout=\$\{encodeURIComponent\(checkOut\)\}/,
-    'buildHotelCompareUrl must add &checkout=encodeURIComponent(checkOut) to the URL',
-  );
+  // Missing/invalid dates → no ts (clean q-only search)
+  assert.strictEqual(buildTs(undefined, '2026-08-05'), undefined);
+  assert.strictEqual(buildTs('2026-08-05', '2026-08-05'), undefined, 'zero-night range yields no ts');
 });
 
 test('buildHotelCompareUrl passes checkIn/checkOut parameters through directly — no hardcoded dates', () => {
@@ -212,8 +233,10 @@ test('buildHotelCompareUrl passes checkIn/checkOut parameters through directly �
   const fnStart = hotelFlow.indexOf('function buildHotelCompareUrl');
   const fnEnd = hotelFlow.indexOf('\nimport ', fnStart);
   const fnBody = hotelFlow.slice(fnStart, fnEnd > fnStart ? fnEnd : fnStart + 1500);
-  assert.match(fnBody, /encodeURIComponent\(checkIn\)/, 'checkIn parameter must flow into URL');
-  assert.match(fnBody, /encodeURIComponent\(checkOut\)/, 'checkOut parameter must flow into URL');
+  // checkIn/checkOut must flow into the date param builder and the q display text
+  assert.match(fnBody, /buildGoogleTravelDatesParam\(checkIn,\s*checkOut\)/, 'checkIn/checkOut must flow into ts= builder');
+  assert.match(fnBody, /formatIsoDateForDisplay\(checkIn\)/, 'checkIn must flow into q display text');
+  assert.match(fnBody, /formatIsoDateForDisplay\(checkOut\)/, 'checkOut must flow into q display text');
   assert.doesNotMatch(
     fnBody,
     /['"]\d{4}-\d{2}-\d{2}['"]/,
@@ -290,81 +313,80 @@ test('buildContext does not use fallbackIn or fallbackOut for compareLink', () =
   );
 });
 
-test('buildHotelCompareUrl: two structurally different date ranges both produce distinct URLs (parameterized, not fixed)', () => {
-  // Verify the function is genuinely parameterized by extracting and calling it.
-  // We strip TS type annotations and eval the function with two date ranges.
-  // Range A: 2026-07-10 to 2026-07-17  (summer trip)
-  // Range B: 2026-11-01 to 2026-11-05  (autumn trip)
-  // If either range produces a URL containing the other range's dates, the
-  // function is hardcoding dates.  If both URLs match their input dates, the
-  // function correctly passes through whatever the caller supplies.
-  const fnStart = hotelFlow.indexOf('function buildHotelCompareUrl');
-  const fnEnd = hotelFlow.indexOf('\nimport ', fnStart);
-  const rawFn = hotelFlow.slice(fnStart, fnEnd > fnStart ? fnEnd : fnStart + 1500);
-  // Strip TypeScript type annotations for eval
-  const jsFn = rawFn
-    .replace(/:\s*string\b/g, '')
-    .replace(/:\s*number\b/g, '')
-    .replace(/\?\s*:/g, ':')
-    .replace(/\{[^}]*hotelName[^}]*\}/g, '')  // strip param type annotation block
-    .replace(/\):\s*string\s*\{/, ') {');       // strip return type
-
-  let buildUrl;
+// Shared extractor: pull the date/URL builder block (helpers + buildHotelCompareUrl)
+// out of the source and eval it so tests can call the real rendered-href path.
+function extractCompareUrlBuilder() {
+  const blockStart = hotelFlow.indexOf('const MONTHS');
+  const blockEnd = hotelFlow.indexOf('import { searchHotelsExplore }');
+  let block = hotelFlow.slice(blockStart, blockEnd);
+  block = block
+    .replace(/as \[number, number, number\]/g, '')
+    .replace(/\}: \{[^}]*\}\)/s, '})')
+    .replace(/\bcheckIn\?/g, 'checkIn')
+    .replace(/\bcheckOut\?/g, 'checkOut')
+    .replace(/\bguests\?/g, 'guests')
+    .replace(/: number\[\]/g, '')
+    .replace(/: string \| undefined/g, '')
+    .replace(/: string\b/g, '')
+    .replace(/: number\b/g, '')
+    .replace(/\)\s*\{/g, ') {');
   try {
     // eslint-disable-next-line no-new-func
-    buildUrl = new Function(`return (${jsFn})`)();
+    return new Function(block + '\nreturn buildHotelCompareUrl;')();
   } catch {
-    // If eval fails (e.g. TS syntax slipped through), fall through to source checks only.
-    buildUrl = null;
+    return null;
   }
+}
 
+test('buildHotelCompareUrl: two structurally different date ranges both produce distinct date-aware URLs', () => {
+  // Verify the function is genuinely parameterized by extracting and calling it.
+  // Range A: 2026-07-10 to 2026-07-17  (summer trip)
+  // Range B: 2026-11-01 to 2026-11-05  (autumn trip)
+  // Dates are carried in the ts= protobuf and echoed in the q= display text.
+  // If either range produces a URL containing the other range's dates, the
+  // function is hardcoding dates.
+  const buildUrl = extractCompareUrlBuilder();
   if (buildUrl) {
     const rangeA = buildUrl({ hotelName: 'Hotel Foo', destination: 'Paris', checkIn: '2026-07-10', checkOut: '2026-07-17', guests: 2 });
     const rangeB = buildUrl({ hotelName: 'Hotel Foo', destination: 'Paris', checkIn: '2026-11-01', checkOut: '2026-11-05', guests: 2 });
-    assert.match(rangeA, /checkin=2026-07-10/, 'Range A URL must contain checkIn 2026-07-10');
-    assert.match(rangeA, /checkout=2026-07-17/, 'Range A URL must contain checkOut 2026-07-17');
-    assert.match(rangeB, /checkin=2026-11-01/, 'Range B URL must contain checkIn 2026-11-01');
-    assert.match(rangeB, /checkout=2026-11-05/, 'Range B URL must contain checkOut 2026-11-05');
-    assert.doesNotMatch(rangeA, /2026-11/, 'Range A URL must not contain Range B dates');
-    assert.doesNotMatch(rangeB, /2026-07/, 'Range B URL must not contain Range A dates');
+    // Both must be Google Travel hotel search URLs with a ts= date param
+    assert.match(rangeA, /google\.com\/travel\/search/, 'Range A must use /travel/search');
+    assert.match(rangeB, /google\.com\/travel\/search/, 'Range B must use /travel/search');
+    assert.match(rangeA, /[&?]ts=/, 'Range A must carry a ts= date param');
+    assert.match(rangeB, /[&?]ts=/, 'Range B must carry a ts= date param');
+    // Human-readable q text must reflect each range's own dates
+    assert.match(rangeA, /July%2010%202026/, 'Range A q must show July 10 2026');
+    assert.match(rangeB, /November%201%202026/, 'Range B q must show November 1 2026');
+    assert.doesNotMatch(rangeA, /November/, 'Range A must not contain Range B month');
+    assert.doesNotMatch(rangeB, /July/, 'Range B must not contain Range A month');
+    // The ts= protobuf must differ between ranges (dates are encoded distinctly)
+    const tsA = new URL(rangeA).searchParams.get('ts');
+    const tsB = new URL(rangeB).searchParams.get('ts');
+    assert.notStrictEqual(tsA, tsB, 'Different date ranges must produce different ts= params');
     assert.notStrictEqual(rangeA, rangeB, 'Different date ranges must produce different URLs');
   }
 });
 
 // ── 9. Named regression: Hyatt Regency Chicago, Jul 31–Aug 5 2026, 2 guests ─
 //
-// Reference: a Google Travel hotel search for this scenario was observed
-// at https://www.google.com/travel/search with a protobuf-encoded `ts` param.
-// Investigation showed:
-//   - `q` param: safely constructable (hotel name)
-//   - `ts` param: protobuf (dates encoded) — format is undocumented, can change
-//   - `qs`, `ved`, `ap` params: opaque/session-generated — NOT constructable
-// Decision: use /travel/hotels?q=...&checkin=YYYY-MM-DD&checkout=YYYY-MM-DD&adults=N
-// which IS the documented stable Google Hotels deep-link format, not a generic
-// Google Search link. The opaque params from /travel/search are NOT replicated.
+// Reference: a real Google Travel hotel search for this scenario was observed
+// at https://www.google.com/travel/search?q=hyatt%20regency%20chicago&...&ts=...
+// Investigation (decoding the reference URL) showed:
+//   - `q`  param: safely constructable (hotel name + destination)
+//   - `ts` param: protobuf, PURELY date-derived (check-in, check-out, nights,
+//                 occupancy=1 room, currency USD) — NO hotel/session data.
+//                 Reproduced byte-for-byte by buildGoogleTravelDatesParam.
+//   - `qs`, `ved`, `ap` params: opaque/session-generated (place search ids,
+//                 click tracking, place anchor) — NOT constructable, omitted.
+// Decision: use /travel/search?q=...&ts=<dates> — the working Google Travel
+// hotel-search surface — with the deterministic date-only ts= param.
 
 test('buildHotelCompareUrl: Hyatt Regency Chicago Jul 31–Aug 5 2026 regression', () => {
   // Concrete regression case:
   //   hotel: Hyatt Regency Chicago, destination: Chicago
   //   check-in: 2026-07-31, check-out: 2026-08-05, guests: 2
-  // The compare link MUST carry these exact dates — not Jun 12–14 or any other stale value.
-  const fnStart = hotelFlow.indexOf('function buildHotelCompareUrl');
-  const fnEnd = hotelFlow.indexOf('\nimport ', fnStart);
-  const rawFn = hotelFlow.slice(fnStart, fnEnd > fnStart ? fnEnd : fnStart + 1500);
-  const jsFn = rawFn
-    .replace(/:\s*string\b/g, '')
-    .replace(/:\s*number\b/g, '')
-    .replace(/\?\s*:/g, ':')
-    .replace(/\):\s*string\s*\{/, ') {');
-
-  let buildUrl;
-  try {
-    // eslint-disable-next-line no-new-func
-    buildUrl = new Function(`return (${jsFn})`)();
-  } catch {
-    buildUrl = null;
-  }
-
+  // The compare link MUST carry these exact dates — not Jun 12–14 or any stale value.
+  const buildUrl = extractCompareUrlBuilder();
   if (buildUrl) {
     const result = buildUrl({
       hotelName: 'Hyatt Regency Chicago',
@@ -374,40 +396,51 @@ test('buildHotelCompareUrl: Hyatt Regency Chicago Jul 31–Aug 5 2026 regression
       guests: 2,
     });
 
-    // Must carry the submitted dates
-    assert.match(result, /checkin=2026-07-31/, 'compare URL must carry check-in 2026-07-31');
-    assert.match(result, /checkout=2026-08-05/, 'compare URL must carry check-out 2026-08-05');
+    // Must use the Google Travel hotel-search surface, not generic search/maps
+    assert.match(result, /google\.com\/travel\/search/, 'must use /travel/search surface');
+    assert.doesNotMatch(result, /google\.com\/search\b/, 'must not use generic Google Search URL');
+    assert.doesNotMatch(result, /google\.com\/maps/, 'must not fall back to a Maps link');
 
-    // Must NOT contain the stale Jun 12–14 dates (the reported regression)
+    // Must carry the submitted dates in the ts= param — and it must equal the
+    // verified reference ts= for this exact scenario (byte-for-byte).
+    const ts = new URL(result).searchParams.get('ts');
+    assert.strictEqual(
+      ts,
+      'CAEaIAoCGgASGhIUCgcI6g8QBxgfEgcI6g8QCBgFGAUyAggBKgkKBToDVVNEGgA',
+      'ts= must match the verified reference for 2026-07-31 → 2026-08-05',
+    );
+
+    // q text must echo the submitted dates and NOT the stale Jun 12–14 range
+    assert.match(result, /July%2031%202026/, 'q must show July 31 2026');
+    assert.match(result, /August%205%202026/, 'q must show August 5 2026');
+    assert.doesNotMatch(result, /June/, 'compare URL must not contain stale June dates');
     assert.doesNotMatch(result, /2026-06-1[24]/, 'compare URL must not contain stale Jun 12–14 dates');
 
-    // Must use Google Travel Hotels deep-link, not generic Google Search
-    assert.match(result, /google\.com\/travel\/hotels/, 'must use /travel/hotels deep-link, not generic /search');
-    assert.doesNotMatch(result, /google\.com\/search\b/, 'must not use generic Google Search URL');
-
-    // Must NOT embed opaque protobuf ts= or qs= params (those are session-generated)
-    assert.doesNotMatch(result, /[&?]ts=/, 'must not embed opaque ts= protobuf param');
+    // Must NOT embed the opaque session params (qs/ved/ap)
     assert.doesNotMatch(result, /[&?]qs=/, 'must not embed opaque qs= session param');
+    assert.doesNotMatch(result, /[&?]ved=/, 'must not embed opaque ved= tracking param');
+    assert.doesNotMatch(result, /[&?]ap=/, 'must not embed opaque ap= place-anchor param');
 
-    // Guest count must be present
-    assert.match(result, /adults=2/, 'compare URL must carry guest count adults=2');
-
-    // Hotel name and destination must be in the q param
+    // Hotel name, destination, and guest context in the q param
     assert.match(result, /[Hh]yatt/, 'hotel name must appear in q param');
     assert.match(result, /[Cc]hicago/, 'destination must appear in q param');
+    assert.match(result, /2%20guests/, 'guest count must appear in q text');
   }
 });
 
-test('buildHotelCompareUrl uses /travel/hotels deep-link format, not generic Google Search', () => {
-  // Guards against regression to a generic google.com/search?q= URL.
-  // The /travel/hotels endpoint with checkin/checkout params is the stable
-  // documented Google Hotels deep-link API.  The /travel/search?ts= format
-  // uses opaque protobuf-encoded params that are not publicly documented
-  // and should NOT be constructed programmatically.
+test('buildHotelCompareUrl uses /travel/search hotel surface, not generic Google Search or Maps', () => {
+  // Guards against regression to a generic google.com/search?q= or maps link.
+  // /travel/search?q=...&ts=<dates> is the working Google Travel hotel surface;
+  // the ts= param is a deterministic, date-only payload (verified byte-for-byte
+  // against a real Google Travel URL), NOT an opaque session param.
   const fnStart = hotelFlow.indexOf('function buildHotelCompareUrl');
   const fnEnd = hotelFlow.indexOf('\nimport ', fnStart);
   const fnBody = hotelFlow.slice(fnStart, fnEnd > fnStart ? fnEnd : fnStart + 1500);
-  assert.match(fnBody, /travel\/hotels/, 'must use /travel/hotels endpoint');
+  assert.match(fnBody, /travel\/search/, 'must use /travel/search surface');
   assert.doesNotMatch(fnBody, /google\.com\/search/, 'must not use generic /search endpoint');
-  assert.doesNotMatch(fnBody, /[&?]ts=/, 'must not embed opaque ts= protobuf param');
+  assert.doesNotMatch(fnBody, /google\.com\/maps/, 'must not use a Maps link');
+  // The opaque session params must never be fabricated
+  assert.doesNotMatch(fnBody, /[&?]qs=/, 'must not embed opaque qs= param');
+  assert.doesNotMatch(fnBody, /[&?]ved=/, 'must not embed opaque ved= param');
+  assert.doesNotMatch(fnBody, /[&?]ap=/, 'must not embed opaque ap= param');
 });
