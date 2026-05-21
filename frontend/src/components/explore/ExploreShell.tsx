@@ -72,13 +72,22 @@ const VERTICAL_MOODS: Record<ExploreVertical, string> = {
  */
 function ObsMeridian({
   banner = false,
+  hero = false,
   children,
 }: {
   banner?: boolean;
+  hero?: boolean;
   children: React.ReactNode;
 }) {
+  const cls = [
+    "obs-meridian",
+    banner ? "obs-meridian--banner" : "",
+    hero ? "obs-meridian--hero" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <div className={banner ? "obs-meridian obs-meridian--banner" : "obs-meridian"}>
+    <div className={cls}>
       <div className="obs-meridian-scene" aria-hidden="true" />
       <div className="obs-meridian-bloom" aria-hidden="true" />
       <div className="obs-meridian-grain" aria-hidden="true" />
@@ -94,7 +103,8 @@ export function ExploreShell() {
 
   if (active) {
     return (
-      <div className="space-y-6 folio-cinema-lounge" data-testid="explore-vertical-flow">
+      <div className="obs-page folio-cinema-lounge" data-testid="explore-vertical-flow">
+        <div className="obs-room space-y-6">
         {/* Editorial breadcrumb */}
         <div className="flex items-center gap-3" data-testid="explore-lounge-breadcrumb">
           <button
@@ -143,33 +153,37 @@ export function ExploreShell() {
           {active === "flights" && <FlightExploreFlow />}
           </div>
         </section>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 folio-cinema-lounge" data-testid="explore-home">
-      {/* Observatory meridian hero */}
-      <ObsMeridian>
-        <header data-testid="explore-lounge-header">
-          <p className="obs-meridian-eyebrow">Curated Discovery</p>
-          <h1 className="obs-meridian-title">Discover</h1>
-        </header>
-        <p className="obs-meridian-foot">
-          Flights, hotels, restaurants, and attractions — verified, no trip required.
-        </p>
-      </ObsMeridian>
-      <div className="editorial-section-rule" aria-hidden="true" />
+    <div className="obs-page folio-cinema-lounge" data-testid="explore-home">
+      <div className="obs-room">
+        {/* Observatory meridian hero — page-filling mood surface */}
+        <ObsMeridian hero>
+          <header data-testid="explore-lounge-header">
+            <p className="obs-meridian-eyebrow">Curated Discovery</p>
+            <h1 className="obs-meridian-title">Discover</h1>
+          </header>
+          <p className="obs-meridian-foot">
+            Flights, hotels, restaurants, and attractions — verified, no trip required.
+          </p>
+        </ObsMeridian>
+        <div className="editorial-section-rule" aria-hidden="true" />
 
-      {/* Vertical entry cards — choose what to browse first.
-          2×2 on mobile, 4-up on desktop; clearly named, no clipping. */}
-      <div
-        className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4"
-        data-testid="explore-vertical-grid"
-      >
-        {VERTICALS.map((v) => (
-          <VerticalCard key={v.id} meta={v} onSelect={() => setActive(v.id)} />
-        ))}
+        {/* Curated browse deck — choose what to browse first.
+            2×2 on mobile, 4-up on desktop; clearly named, no clipping. */}
+        <p className="obs-deck-label">Choose what to browse</p>
+        <div
+          className="obs-deck grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+          data-testid="explore-vertical-grid"
+        >
+          {VERTICALS.map((v) => (
+            <VerticalCard key={v.id} meta={v} onSelect={() => setActive(v.id)} />
+          ))}
+        </div>
       </div>
     </div>
   );

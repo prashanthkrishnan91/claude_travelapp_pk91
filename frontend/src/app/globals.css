@@ -7093,6 +7093,12 @@
     display: none !important;
   }
 
+  /* Explore (Observatory) route — same immersive treatment as the salon:
+     hide the SaaS sidebar so the Observatory room owns the full page. */
+  .atelier-atmosphere-root[data-atelier-shell="explore"] .folio-sidebar {
+    display: none !important;
+  }
+
   /* Salon page room — warm paper surface with destination-aware background.
      Uses --world-surface (a warm linen tone injected by worldStyleVars) as
      the room backdrop. Dark cinema surfaces (result cards, sticky composer)
@@ -8265,6 +8271,94 @@
     line-height: 1.2;
     color: var(--ds-pearl-cream);
     margin: 0;
+  }
+
+  /* ── Full-page Observatory room ──
+     /explore is an immersive outside-trip Atelier room (AppShell suppresses
+     the sidebar + adds the floating nav + edge-bleed wrapper). Co-classed with
+     folio-cinema-lounge, .obs-page strips the contained-card chrome and lets
+     the cinematic mood fill the whole page (no centered beige box). The
+     readable content lives in a centered .obs-room column. */
+  .obs-page.folio-cinema-lounge {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+    min-height: 100svh;
+    background-color: var(--ds-cinema-deep);
+    background-image:
+      radial-gradient(ellipse 70% 38% at 50% -4%, rgba(184, 130, 60, 0.16), transparent 66%),
+      radial-gradient(ellipse 90% 50% at 50% 108%, rgba(56, 64, 106, 0.18), transparent 70%),
+      radial-gradient(ellipse 40% 30% at 88% 12%, rgba(197, 148, 77, 0.07), transparent 60%);
+  }
+  .obs-room {
+    position: relative;
+    z-index: 1;
+    max-width: 76rem;
+    margin: 0 auto;
+    padding: clamp(28px, 6vh, 72px) clamp(20px, 4vw, 56px) clamp(48px, 8vh, 104px);
+    display: flex;
+    flex-direction: column;
+    gap: clamp(20px, 3vh, 36px);
+  }
+
+  /* Landing hero — the meridian becomes a transportive, page-filling mood
+     surface, not a utility header. Keeps the wide-meridian silhouette. */
+  .obs-meridian--hero {
+    min-height: clamp(300px, 46vh, 460px);
+  }
+  .obs-meridian--hero .obs-meridian-title {
+    font-size: clamp(2.25rem, 5vw, 3.75rem);
+    max-width: 18ch;
+  }
+  .obs-meridian--hero .obs-meridian-copy {
+    padding: clamp(24px, 3.4vw, 48px);
+  }
+
+  /* Curated browse deck — entry plates, not generic product tiles. Taller,
+     more editorial, with a brass deck eyebrow above. */
+  .obs-deck-label {
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    font-weight: var(--ds-type-overline-weight);
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--ds-sandstone-gold);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ds-space-2);
+    margin: var(--ds-space-2) 0 0;
+  }
+  .obs-deck-label::before {
+    content: "";
+    width: 26px;
+    height: 1px;
+    background: var(--ds-sandstone-gold);
+    flex-shrink: 0;
+  }
+  .obs-deck {
+    gap: clamp(12px, 1.6vw, 18px);
+  }
+  /* On a true page-owning deck the plates breathe taller. */
+  .obs-room .obs-vert-card {
+    min-height: clamp(168px, 22vh, 208px);
+    padding: clamp(18px, 1.6vw, 24px);
+    gap: var(--ds-space-4);
+  }
+  .obs-room .obs-vert-name {
+    font-size: 1.375rem;
+  }
+  @media (max-width: 640px) {
+    .obs-room .obs-vert-card {
+      min-height: 132px;
+      padding: var(--ds-space-4);
+    }
+    .obs-room .obs-vert-name {
+      font-size: 1.125rem;
+    }
+    .obs-meridian--hero {
+      min-height: clamp(240px, 38vh, 320px);
+    }
   }
 
   /* Reduced-motion: Observatory overrides live alongside the salon's so the

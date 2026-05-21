@@ -63,6 +63,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // while the isHomePage pattern stays intact for the Phase 8J contract tests.
   const isSalonRoute = pathname === "/concierge";
 
+  // Explore (Observatory) is the sibling outside-trip Atelier room to the
+  // Salon. It shares the same immersive shell: SaaS sidebar CSS-suppressed
+  // via data-atelier-shell="explore", floating AtelierNavArtifact nav, and the
+  // edge-to-edge home-edge-bleed wrapper — so /explore reads as a full mood
+  // room, not a centered card on the legacy padded shell. The isHomePage
+  // ternary and the max-w-7xl branch are left intact for the 8J/atrium tests.
+  const isExploreRoute = pathname === "/explore";
+
+  const isImmersiveRoom = isHomePage || isSalonRoute || isExploreRoute;
+
   return (
     <>
       {/* Phase 8N: fixed atmospheric layers — vignette + CSS grain texture */}
@@ -72,17 +82,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div
         className="atelier-atmosphere-root flex h-full min-h-screen"
         data-testid="atelier-atmosphere-root"
-        data-atelier-shell={isSalonRoute ? "salon" : undefined}
+        data-atelier-shell={isSalonRoute ? "salon" : isExploreRoute ? "explore" : undefined}
       >
         {/* SaaS sidebar — hidden on the immersive Home shell, present on every
             other route so navigation, account, sign-out stay in place. The
             Sidebar substring is preserved for the 8J nav-rescue contract.
-            On the salon route the sidebar is CSS-suppressed via data-atelier-shell. */}
+            On the salon + explore routes the sidebar is CSS-suppressed via
+            data-atelier-shell. */}
         {isHomePage ? null : <Sidebar />}
         {isHomePage && <AtelierNavArtifact />}
         {isSalonRoute && <AtelierNavArtifact />}
+        {isExploreRoute && <AtelierNavArtifact />}
         <main className="flex-1 overflow-y-auto overflow-x-hidden" data-testid="reduced-motion-safe-atmosphere">
-          {isHomePage || isSalonRoute ? (
+          {isImmersiveRoom ? (
             <div
               className="mobile-nav-spacer atelier-transition home-edge-bleed"
               data-testid="mobile-page-content"

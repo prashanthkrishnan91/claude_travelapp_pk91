@@ -19,6 +19,7 @@ const read = (p) => readFileSync(join(root, p), "utf8");
 
 const globalsCss = read("src/app/globals.css");
 const shell = read("src/components/explore/ExploreShell.tsx");
+const appShell = read("src/components/layout/AppShell.tsx");
 const observatoryCard = read("src/components/explore/ObservatoryCard.tsx");
 const restaurant = read("src/components/explore/RestaurantExploreFlow.tsx");
 const attraction = read("src/components/explore/AttractionExploreFlow.tsx");
@@ -187,6 +188,43 @@ describe("Explore Observatory: flights preserved", () => {
     assert.ok(flight.includes("liveCachedStatus"), "live/cached status preserved");
     assert.ok(flight.includes("flight-card"), "flight card testid preserved");
     assert.ok(flight.includes("obs-card-frame"), "flight card wears the Observatory frame");
+  });
+});
+
+// ── Section F: immersive outside-trip shell + full-page room ────────────────
+
+describe("Explore Observatory: immersive shell integration", () => {
+  test("F1. AppShell defines isExploreRoute for /explore", () => {
+    assert.ok(appShell.includes('pathname === "/explore"'), "AppShell detects the /explore route");
+  });
+
+  test("F2. AppShell sets data-atelier-shell='explore' (sidebar suppressed via CSS)", () => {
+    assert.ok(appShell.includes('"explore"') && appShell.includes("data-atelier-shell"), "explore shell hook set");
+    assert.ok(
+      globalsCss.includes('[data-atelier-shell="explore"] .folio-sidebar'),
+      "globals.css hides .folio-sidebar on the explore route",
+    );
+  });
+
+  test("F3. AppShell renders the floating AtelierNavArtifact for explore", () => {
+    assert.ok(appShell.includes("isExploreRoute && <AtelierNavArtifact"), "floating nav rendered for explore");
+  });
+
+  test("F4. explore uses the edge-bleed immersive wrapper (not the max-w-7xl box)", () => {
+    assert.ok(appShell.includes("isExploreRoute"), "explore participates in the immersive branch");
+    assert.ok(appShell.includes("home-edge-bleed"), "edge-bleed wrapper preserved");
+    // Legacy padded shell + home sidebar ternary must stay intact.
+    assert.ok(appShell.includes("isHomePage ? null : <Sidebar />"), "home sidebar ternary preserved (8J)");
+    assert.ok(appShell.includes("max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"), "non-immersive routes keep max-w-7xl");
+  });
+
+  test("F5. ExploreShell is a full-page room (obs-page) keeping folio-cinema-lounge", () => {
+    assert.ok(shell.includes("obs-page"), "ExploreShell uses the obs-page full-page room");
+    assert.ok(shell.includes("obs-room"), "content sits in the centered obs-room column");
+    assert.ok(shell.includes("folio-cinema-lounge"), "cinema-world lounge class retained");
+    assert.ok(globalsCss.includes(".obs-page.folio-cinema-lounge"), "obs-page strips the card chrome into a room");
+    assert.ok(globalsCss.includes(".obs-meridian--hero"), "landing hero meridian defined");
+    assert.ok(shell.includes("<ObsMeridian hero>"), "landing renders the hero meridian");
   });
 });
 
