@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-21 (Atelier Room System v1 patch-5 — PR #451 open, branch claude/review-travel-app-docs-afJmb)
+Last updated: 2026-05-21 (Atelier Room System v1 MERGED — PR #451)
 
 ## Purpose
 
@@ -8,13 +8,13 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3 exit complete. Active: Stage 3.5 — Atelier Room System v1 + Private Salon (PR #451, open)**
+**Stage 3.5 — Atelier Room System v1 complete (PR #451 merged). Next: Room System adoption on Explore or Saved.**
 
 ### Home baseline (merged)
 - **PR #448** — Atelier Atrium: edge-to-edge cinematic home, world DNA system, AppShell route-aware wrapper, DashboardClient full atrium composition, WorldScenery/Mist/Atmosphere/Glass primitives, silent navigation (AtelierNavArtifact), contained scenery, physical archive shelf.
 - **PR #449** — Bottom dead-space fix (Level 1): `overflow: clip` on `.atelier-atrium-content`, `min-height: 0` on `.home-edge-bleed`, `flex: none` on `.atelier-atrium-neutral`. Home is clean and non-scrollable past content.
 
-### PR #451 open (this branch)
+### PR #451 merged
 **Atelier Room System v1 — AI Concierge Private Salon**
 
 Changes on branch:
@@ -78,7 +78,7 @@ All existing testids, folio-cinema-desk, folio-cinema-composer, folio-concierge-
 **Test count (earlier patches):** 2991 total, 0 failures.  
 **No backend / SQL / provider / env / Supabase / API / route / data-contract changes (any patch).**
 
-### Next step after PR #451 merges
+### Next step
 Apply Atelier Room System to Explore (Observatory room) or Saved (Gallery room) — next visible adoption slice using the same room shell primitives.
 
 ## Current architecture / runtime state
@@ -96,7 +96,7 @@ Apply Atelier Room System to Explore (Observatory room) or Saved (Gallery room) 
 
 ## Recent meaningful PRs
 
-- 2026-05-20 — **PR #451 OPEN** — Atelier Room System v1 + Private Salon (Concierge). See above.
+- 2026-05-21 — **PR #451 MERGED** — Atelier Room System v1 + Private Salon (Concierge). Two-column desktop workbench (main panel + briefing rail), contained panel scroll, patch-5 CSS grid. 3003 tests, 0 failures.
 - 2026-05-20 — **PR #449 MERGED** — Home dead-space fix (overflow: clip + min-height: 0 + flex: none).
 - 2026-05-20 — **PR #448 MERGED** — Atelier Atrium full cinematic home (world DNA, AppShell escape hatch, silent nav, contained scenery, physical archive).
 - 2026-05-18 — **PR #441 MERGED** — Unified Folio/Cinema UI Architecture. `Folio.tsx` canonical primitives (FolioPage/Panel/Card/SectionHeader/Input/Chip/Button + Cinema variants). Real adoption in DashboardClient, TripIdeasPanel, ItineraryDayColumn, TripBuilder, trips/page.tsx, SearchResultCard. 2692 tests, 0 failures.
