@@ -597,13 +597,15 @@ describe("Atelier Room System: salon portal scene (concept v1)", () => {
     );
   });
 
-  test("I2. portal scene paints from --world-scenery (real world DNA, no fake mood)", () => {
-    const idx = globalsCss.indexOf(".atelier-salon-portal-scene");
-    assert.ok(idx !== -1, ".atelier-salon-portal-scene must be defined");
-    const block = globalsCss.slice(idx, idx + 320);
+  test("I2. portal tunes from --world-scenery (real world DNA, no fake mood logic)", () => {
+    const sceneIdx = globalsCss.indexOf(".atelier-salon-portal-scene");
+    assert.ok(sceneIdx !== -1, ".atelier-salon-portal-scene must be defined");
+    const tintIdx = globalsCss.indexOf(".atelier-salon-portal-tint");
+    assert.ok(tintIdx !== -1, ".atelier-salon-portal-tint must be defined (destination tuning layer)");
+    const tintBlock = globalsCss.slice(tintIdx, tintIdx + 320);
     assert.ok(
-      block.includes("var(--world-scenery)"),
-      ".atelier-salon-portal-scene must read var(--world-scenery) so the portal tunes via the world pipeline, not hardcoded scenes",
+      tintBlock.includes("var(--world-scenery)"),
+      "the portal tint must read var(--world-scenery) so the scene tunes via the world pipeline, not hardcoded per-destination scenes",
     );
   });
 
