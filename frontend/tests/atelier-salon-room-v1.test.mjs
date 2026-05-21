@@ -586,3 +586,162 @@ describe("Atelier Room System: two-column workbench + briefing rail (patch-5)", 
     );
   });
 });
+
+// ── Section I: Portal composition (salon rebuild §11 contract tests) ───────────
+
+describe("Atelier Room System: portal composition (salon rebuild)", () => {
+  test("I1. globals.css defines .atelier-salon-portal", () => {
+    assert.ok(
+      globalsCss.includes(".atelier-salon-portal"),
+      "globals.css must define .atelier-salon-portal — the cinematic portal frame",
+    );
+  });
+
+  test("I2. globals.css defines .atelier-salon-portal-copy", () => {
+    assert.ok(
+      globalsCss.includes(".atelier-salon-portal-copy"),
+      "globals.css must define .atelier-salon-portal-copy — readable content above depth layers",
+    );
+  });
+
+  test("I3. globals.css defines the four portal depth-layer classes", () => {
+    assert.ok(
+      globalsCss.includes(".atelier-salon-portal-haze") &&
+      globalsCss.includes(".atelier-salon-portal-bloom") &&
+      globalsCss.includes(".atelier-salon-portal-grain") &&
+      globalsCss.includes(".atelier-salon-portal-vignette"),
+      "globals.css must define all four portal depth layers: haze, bloom, grain, vignette",
+    );
+  });
+
+  test("I4. globals.css has [data-portal-state] open rule for .atelier-salon-portal", () => {
+    assert.ok(
+      globalsCss.includes('data-portal-state="open"') &&
+      globalsCss.includes(".atelier-salon-portal"),
+      "globals.css must have [data-portal-state=\"open\"] rule controlling portal flex/height",
+    );
+  });
+
+  test("I5. globals.css has [data-portal-state] tuned rule for .atelier-salon-portal", () => {
+    assert.ok(
+      globalsCss.includes('data-portal-state="tuned"') &&
+      globalsCss.includes(".atelier-salon-portal"),
+      "globals.css must have [data-portal-state=\"tuned\"] rule collapsing portal to banner",
+    );
+  });
+
+  test("I6. ConciergePage renders atelier-salon-portal", () => {
+    assert.ok(
+      conciergePage.includes("atelier-salon-portal"),
+      "ConciergePage must render the atelier-salon-portal section",
+    );
+  });
+
+  test("I7. ConciergePage sets data-portal-state on the portal", () => {
+    assert.ok(
+      conciergePage.includes("data-portal-state"),
+      "ConciergePage must set data-portal-state to drive portal open/tuned state",
+    );
+  });
+
+  test("I8. ConciergePage uses portalMode derived from existing state (open/tuned)", () => {
+    assert.ok(
+      conciergePage.includes("portalMode") &&
+      (conciergePage.includes('"open"') || conciergePage.includes("'open'")),
+      "ConciergePage must derive portalMode from existing state (not new state)",
+    );
+  });
+
+  test("I9. concierge-instrument-header is inside atelier-salon-portal (portal appears before canvas in source)", () => {
+    const portalIdx = conciergePage.indexOf("atelier-salon-portal");
+    const canvasIdx = conciergePage.indexOf('data-testid="concierge-results-canvas"');
+    const headerIdx = conciergePage.indexOf('data-testid="concierge-instrument-header"');
+    assert.ok(
+      portalIdx !== -1 && headerIdx !== -1 && canvasIdx !== -1,
+      "all three sections must be present",
+    );
+    assert.ok(
+      headerIdx > portalIdx && headerIdx < canvasIdx,
+      "concierge-instrument-header must appear after the portal section start and before the canvas",
+    );
+  });
+
+  test("I10. concierge-empty-state is NOT inside concierge-results-canvas", () => {
+    const canvasIdx = conciergePage.indexOf('data-testid="concierge-results-canvas"');
+    const emptyStateIdx = conciergePage.indexOf('data-testid="concierge-empty-state"');
+    assert.ok(
+      emptyStateIdx !== -1 && canvasIdx !== -1,
+      "both concierge-empty-state and concierge-results-canvas must be present",
+    );
+    // empty-state must appear BEFORE the canvas (it lives in the portal copy)
+    assert.ok(
+      emptyStateIdx < canvasIdx,
+      "concierge-empty-state must appear before concierge-results-canvas — it lives in the portal, not the canvas",
+    );
+  });
+
+  test("I11. ConciergePage imports WorldScenery for portal scene layer", () => {
+    assert.ok(
+      conciergePage.includes("WorldScenery"),
+      "ConciergePage must import and render WorldScenery for the portal scene layer",
+    );
+  });
+
+  test("I12. No fake data strings from prototype (no pickScene, no hardcoded demo places)", () => {
+    // "data-scene=" checks for data-scene="value" (prototype demo attribute) without
+    // matching production's data-scenery-tone which shares the prefix.
+    const forbidden = ["pickScene", "Nanzen-ji", "Da Adolfo", "Pontocho", 'data-scene="', "SCENES =", "RESULTS ="];
+    for (const s of forbidden) {
+      assert.ok(
+        !conciergePage.includes(s),
+        `ConciergePage must not contain prototype demo string: "${s}"`,
+      );
+    }
+  });
+
+  test("I13. Portal bloom animation has prefers-reduced-motion guard", () => {
+    const bloomIdx = globalsCss.indexOf("atelier-portal-bloom");
+    assert.ok(bloomIdx !== -1, "atelier-portal-bloom keyframe must be defined");
+    const cssAfterBloom = globalsCss.slice(bloomIdx);
+    assert.ok(
+      cssAfterBloom.includes("prefers-reduced-motion: reduce"),
+      "atelier-portal-bloom animation must have a @media (prefers-reduced-motion: reduce) guard",
+    );
+  });
+
+  test("I14. Canvas (atelier-salon-panel-body) pre-search: open state sets flex:0 to contribute 0 height", () => {
+    assert.ok(
+      globalsCss.includes('data-portal-state="open"] .atelier-salon-panel-body'),
+      "globals.css must have open-state rule overriding canvas flex to prevent pre-search scroll",
+    );
+  });
+
+  test("I15. Chip onClick populates input only — no setDestination or auto-submit", () => {
+    // Find the chip onClick handler in the source
+    const chipSection = conciergePage.slice(
+      conciergePage.indexOf("EDITORIAL_PROMPTS.map"),
+      conciergePage.indexOf("EDITORIAL_PROMPTS.map") + 600,
+    );
+    assert.ok(
+      !chipSection.includes("setDestination") && !chipSection.includes("sendQuery") && !chipSection.includes("handleUserInput"),
+      "Chip onClick must only call setInput + focus — no setDestination, sendQuery, or handleUserInput",
+    );
+  });
+
+  test("I16. atelier-salon-portal-headline class defined in globals.css", () => {
+    assert.ok(
+      globalsCss.includes(".atelier-salon-portal-headline"),
+      "globals.css must define .atelier-salon-portal-headline — light text on dark portal",
+    );
+  });
+
+  test("I17. atelier-salon-portal-headline uses --ds-pearl-cream for light-on-dark contrast", () => {
+    const idx = globalsCss.indexOf(".atelier-salon-portal-headline");
+    assert.ok(idx !== -1, ".atelier-salon-portal-headline must be defined");
+    const block = globalsCss.slice(idx, idx + 200);
+    assert.ok(
+      block.includes("--ds-pearl-cream"),
+      ".atelier-salon-portal-headline must use --ds-pearl-cream — never world-ink (dark) on dark portal",
+    );
+  });
+});

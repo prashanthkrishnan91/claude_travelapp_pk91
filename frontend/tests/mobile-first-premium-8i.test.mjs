@@ -449,9 +449,11 @@ test('ConciergePage starter prompt chips have min-h-[44px] touch target', () => 
 });
 
 test('ConciergePage starter prompt chips remain type="button"', () => {
+  // Window extended to 1400 chars: the invitations block is now nested inside
+  // the portal copy (salon rebuild), so there is more JSX before the buttons.
   const emptyState = conciergePage.slice(
     conciergePage.indexOf('concierge-empty-state'),
-    conciergePage.indexOf('concierge-empty-state') + 800
+    conciergePage.indexOf('concierge-empty-state') + 1400
   );
   assert.ok(emptyState.includes('type="button"'),
     'Starter prompt chips must remain type="button"');

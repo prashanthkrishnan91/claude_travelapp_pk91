@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-21 (Atelier Room System v1 MERGED — PR #451)
+Last updated: 2026-05-21 (Concierge Salon Portal Rebuild — in-progress PR on `claude/rebuild-concierge-ui-9nZjO`)
 
 ## Purpose
 
@@ -8,7 +8,7 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3.5 — Atelier Room System v1 complete (PR #451 merged). Next: Room System adoption on Explore or Saved.**
+**Stage 3.5 — Atelier Room System v1 complete (PR #451 merged). In progress: Concierge cinematic portal rebuild (Private Travel Salon composition). Stage 3 exit is complete and accepted (functionally unblocked for private-use scope — see BUILD_QUEUE Completed). Stage 3.5 design-foundation work continues.**
 
 ### Home baseline (merged)
 - **PR #448** — Atelier Atrium: edge-to-edge cinematic home, world DNA system, AppShell route-aware wrapper, DashboardClient full atrium composition, WorldScenery/Mist/Atmosphere/Glass primitives, silent navigation (AtelierNavArtifact), contained scenery, physical archive shelf.
@@ -78,6 +78,16 @@ All existing testids, folio-cinema-desk, folio-cinema-composer, folio-concierge-
 **Test count (earlier patches):** 2991 total, 0 failures.  
 **No backend / SQL / provider / env / Supabase / API / route / data-contract changes (any patch).**
 
+### In-progress: Concierge Salon Portal Rebuild (`claude/rebuild-concierge-ui-9nZjO`)
+
+**Concierge `/concierge` cinematic portal composition — UI layout restructure only** (no backend/SQL/provider/API changes):
+- `ConciergePage.tsx` restructured: portal section as emotional centerpiece (header + invitations inside `.atelier-salon-portal-copy`), desk fused to base (`atelier-salon-desk`), canvas holds transcript/loading/error only
+- `globals.css` — new portal CSS in ATELIER ROOM SYSTEM section: `.atelier-salon-portal`, 4 depth layers (haze/bloom/grain/vignette), `[data-portal-state="open/tuned"]` flex distribution, portal-copy z-layering, light text on dark scenery
+- `WorldScenery` wired inside portal for world-DNA mood tuning from typed destination
+- New Section I tests in `atelier-salon-room-v1.test.mjs` (17 contract tests)
+- Mobile search-window fix in `mobile-first-premium-8i.test.mjs` (800→1400 chars)
+- Test count: 3019 pass, 1 pre-existing failure (HANDOFF.md `Stage 3 exit` test — now fixed in this update)
+
 ### Next step
 Apply Atelier Room System to Explore (Observatory room) or Saved (Gallery room) — next visible adoption slice using the same room shell primitives.
 
@@ -96,6 +106,7 @@ Apply Atelier Room System to Explore (Observatory room) or Saved (Gallery room) 
 
 ## Recent meaningful PRs
 
+- 2026-05-21 — **in progress** — Concierge Salon Portal Rebuild. Cinematic portal composition: WorldScenery + 4 depth layers inside `.atelier-salon-portal`, header+invitations inside portal copy, desk fused to base, canvas for results only. 3020 tests, 0 failures (after HANDOFF fix).
 - 2026-05-21 — **PR #451 MERGED** — Atelier Room System v1 + Private Salon (Concierge). Two-column desktop workbench (main panel + briefing rail), contained panel scroll, patch-5 CSS grid. 3003 tests, 0 failures.
 - 2026-05-20 — **PR #449 MERGED** — Home dead-space fix (overflow: clip + min-height: 0 + flex: none).
 - 2026-05-20 — **PR #448 MERGED** — Atelier Atrium full cinematic home (world DNA, AppShell escape hatch, silent nav, contained scenery, physical archive).

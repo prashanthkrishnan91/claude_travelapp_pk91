@@ -7252,4 +7252,217 @@
     margin-top: auto;
   }
 
+  /* ── Stage panel — portal-based layout variant ──────────────────────────── */
+
+  /* Stage room — semantic outer variant; isolation already from atelier-salon-room */
+  .atelier-salon-stage-room {
+    /* Position and isolation provided by atelier-salon-room */
+  }
+
+  /* Stage panel — the main panel that hosts portal + canvas + desk as a flex
+     column with portal-state-driven height distribution. Inherits the overflow:
+     hidden and height-bounded behaviour of atelier-salon-main-panel. */
+  .atelier-salon-stage-panel {
+    /* Flex column already set by atelier-salon-main-panel */
+  }
+
+  /* Portal flex distribution — driven by data-portal-state on the stage panel.
+     "open" (pre-search): portal grows to fill; canvas contributes 0 height.
+     "tuned" (post-search): portal collapses to a banner; canvas becomes scroller. */
+  .atelier-salon-stage-panel[data-portal-state="open"] .atelier-salon-portal {
+    flex: 1 1 auto;
+    min-height: clamp(320px, 42vh, 460px);
+    height: auto;
+  }
+  .atelier-salon-stage-panel[data-portal-state="open"] .atelier-salon-panel-body {
+    flex: 0 0 auto;
+    overflow-y: hidden;
+    padding: 0;
+  }
+  .atelier-salon-stage-panel[data-portal-state="tuned"] .atelier-salon-portal {
+    flex: 0 0 auto;
+    height: clamp(132px, 18vh, 200px);
+    min-height: 0;
+  }
+  .atelier-salon-stage-panel[data-portal-state="tuned"] .atelier-salon-panel-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
+  }
+  @media (max-width: 899px) {
+    .atelier-salon-stage-panel[data-portal-state="open"] .atelier-salon-portal {
+      min-height: clamp(300px, 52vh, 420px);
+    }
+    .atelier-salon-stage-panel[data-portal-state="tuned"] .atelier-salon-portal {
+      height: clamp(120px, 22vh, 168px);
+    }
+  }
+
+  /* Portal — cinematic destination window: the emotional centrepiece.
+     Hosts the WorldScenery scene, four depth layers, and the portal copy
+     (all readable content) above them. Transitions between open and tuned
+     states on height/flex, gated by reduced-motion. */
+  .atelier-salon-portal {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    transition:
+      height 360ms cubic-bezier(0.4, 0, 0.2, 1),
+      min-height 360ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-salon-portal {
+      transition: none;
+    }
+  }
+
+  /* WorldScenery inside the portal — override its default tall/fixed height
+     so it fills the portal frame completely as the portal grows and shrinks. */
+  .atelier-salon-portal .world-scenery {
+    height: 100%;
+    max-height: none;
+    min-height: 0;
+    bottom: 0;
+    z-index: -1;
+  }
+
+  /* Portal depth layers — absolute, inset:0, pointer-events:none, ascending z */
+  .atelier-salon-portal-haze,
+  .atelier-salon-portal-bloom,
+  .atelier-salon-portal-grain,
+  .atelier-salon-portal-vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    display: block;
+  }
+
+  /* Haze — soft atmospheric depth at the top of the portal */
+  .atelier-salon-portal-haze {
+    background: radial-gradient(
+      ellipse 100% 55% at 50% 0%,
+      color-mix(in srgb, var(--world-primary, var(--ds-midnight-ink)) 22%, transparent),
+      transparent 70%
+    );
+    z-index: 1;
+  }
+
+  /* Bloom — warm lantern-light bloom; animates gently to suggest life */
+  .atelier-salon-portal-bloom {
+    background: radial-gradient(
+      ellipse 55% 36% at 72% 28%,
+      color-mix(in srgb, var(--ds-ember-brass) 26%, transparent),
+      transparent 70%
+    );
+    z-index: 2;
+    animation: atelier-portal-bloom 9s ease-in-out infinite alternate;
+  }
+  @keyframes atelier-portal-bloom {
+    0%   { opacity: 0.65; }
+    100% { opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-salon-portal-bloom {
+      animation: none;
+      opacity: 0.85;
+    }
+  }
+
+  /* Grain — fine film-like texture over the portal */
+  .atelier-salon-portal-grain {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E");
+    background-size: 180px 180px;
+    opacity: 0.38;
+    z-index: 3;
+  }
+
+  /* Vignette — legibility gradient: darker at top and bottom edges */
+  .atelier-salon-portal-vignette {
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--ds-midnight-ink) 14%, transparent) 0%,
+      transparent 28%,
+      transparent 52%,
+      color-mix(in srgb, var(--ds-midnight-ink) 38%, transparent) 80%,
+      color-mix(in srgb, var(--ds-midnight-ink) 58%, transparent) 100%
+    );
+    z-index: 4;
+  }
+
+  /* Portal copy — all readable content above the depth layers (z-index: 5).
+     Flex column: header at top, invitations at bottom when portal is open. */
+  .atelier-salon-portal-copy {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    flex: 1;
+    padding: clamp(20px, 4vh, 40px) clamp(16px, 4vw, 36px);
+  }
+
+  /* Portal header — suppress the brass separator (portal frame is the threshold);
+     suppress the header-landing padding-top (portal copy padding handles it). */
+  .atelier-salon-portal .atelier-salon-room-header::before {
+    display: none;
+  }
+  .atelier-salon-portal .atelier-salon-room-header.atelier-salon-header-landing {
+    padding-top: 0;
+  }
+
+  /* Portal headline — always light on the dark salon scenery.
+     Text-shadow guarantees AA legibility over any scenic background. */
+  .atelier-salon-portal-headline {
+    color: var(--ds-pearl-cream);
+    text-shadow:
+      0 2px 16px color-mix(in srgb, var(--ds-midnight-ink) 50%, transparent),
+      0 1px 4px color-mix(in srgb, var(--ds-midnight-ink) 35%, transparent);
+  }
+
+  /* Portal sub-line — slightly quieter pearl below the h1 */
+  .atelier-salon-portal-subline {
+    color: color-mix(in srgb, var(--ds-pearl-cream) 82%, transparent);
+    text-shadow: 0 1px 8px color-mix(in srgb, var(--ds-midnight-ink) 45%, transparent);
+  }
+
+  /* Portal invitation — adapts for the dark scenic portal background.
+     Suppress the ::before brass rule (portal frame serves as the threshold). */
+  .atelier-salon-portal .atelier-salon-invitation {
+    padding-top: var(--ds-space-4);
+    padding-bottom: 0;
+  }
+  .atelier-salon-portal .atelier-salon-invitation::before {
+    display: none;
+  }
+
+  /* Portal starter chips — glass/translucent treatment on dark portal scenery.
+     Overrides the light-paper chip style; text is pearl-cream for legibility. */
+  .atelier-salon-portal .atelier-salon-starter-chip {
+    background: color-mix(in srgb, var(--ds-bone) 14%, transparent);
+    color: var(--ds-pearl-cream);
+    border-color: color-mix(in srgb, var(--ds-ember-brass) 50%, transparent);
+  }
+  .atelier-salon-portal .atelier-salon-starter-chip:hover,
+  .atelier-salon-portal .atelier-salon-starter-chip:focus-visible {
+    background: color-mix(in srgb, var(--ds-bone) 24%, transparent);
+    color: var(--ds-warm-paper);
+    border-color: color-mix(in srgb, var(--ds-ember-brass) 72%, transparent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-salon-portal .atelier-salon-starter-chip {
+      transition: none;
+    }
+  }
+
+  /* Desk — fused to stage base; inherits folio-cinema-composer dark treatment.
+     flex: none ensures it neither grows nor shrinks — pinned at the panel base.
+     This rule must remain after any flex: 1 1 auto rules in this file so that
+     the cascade order is preserved for tests guarding the atelier flex budget. */
+  .atelier-salon-desk {
+    flex: none;
+  }
+
 }
