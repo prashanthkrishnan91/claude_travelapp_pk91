@@ -520,3 +520,69 @@ describe("Atelier Room System: salon workbench layout (patch-4)", () => {
     );
   });
 });
+
+// ── Section H: Two-column workbench + briefing rail (patch-5) ────────────────
+
+describe("Atelier Room System: two-column workbench + briefing rail (patch-5)", () => {
+  test("H1. globals.css defines atelier-salon-main-panel for contained panel layout", () => {
+    assert.ok(
+      globalsCss.includes(".atelier-salon-main-panel"),
+      "globals.css must define .atelier-salon-main-panel — the folio panel containing header, results, composer",
+    );
+  });
+
+  test("H2. atelier-salon-main-panel has overflow: hidden to contain internal scroll", () => {
+    const idx = globalsCss.indexOf(".atelier-salon-main-panel");
+    assert.ok(idx !== -1, ".atelier-salon-main-panel must be defined");
+    const block = globalsCss.slice(idx, idx + 300);
+    assert.ok(
+      block.includes("overflow: hidden"),
+      ".atelier-salon-main-panel must set overflow: hidden so results scroll inside the panel",
+    );
+  });
+
+  test("H3. globals.css defines atelier-salon-panel-body for scrollable results area", () => {
+    assert.ok(
+      globalsCss.includes(".atelier-salon-panel-body"),
+      "globals.css must define .atelier-salon-panel-body — the scrollable results region inside the panel",
+    );
+  });
+
+  test("H4. atelier-salon-panel-body has flex:1 and overflow-y:auto for internal scroll", () => {
+    const idx = globalsCss.indexOf(".atelier-salon-panel-body");
+    assert.ok(idx !== -1, ".atelier-salon-panel-body must be defined");
+    const block = globalsCss.slice(idx, idx + 200);
+    assert.ok(
+      block.includes("flex: 1") && block.includes("overflow-y: auto"),
+      ".atelier-salon-panel-body must set flex:1 and overflow-y:auto",
+    );
+  });
+
+  test("H5. globals.css defines atelier-salon-briefing-rail for capability sidebar", () => {
+    assert.ok(
+      globalsCss.includes(".atelier-salon-briefing-rail"),
+      "globals.css must define .atelier-salon-briefing-rail — static capability sidebar",
+    );
+  });
+
+  test("H6. ConciergePage uses atelier-salon-main-panel to wrap panel content", () => {
+    assert.ok(
+      conciergePage.includes("atelier-salon-main-panel"),
+      "ConciergePage must use atelier-salon-main-panel to create the contained workbench panel",
+    );
+  });
+
+  test("H7. ConciergePage uses atelier-salon-panel-body on the results canvas", () => {
+    assert.ok(
+      conciergePage.includes("atelier-salon-panel-body"),
+      "ConciergePage must use atelier-salon-panel-body on the results canvas for internal scroll",
+    );
+  });
+
+  test("H8. ConciergePage renders atelier-salon-briefing-rail with static capability content", () => {
+    assert.ok(
+      conciergePage.includes("atelier-salon-briefing-rail"),
+      "ConciergePage must render atelier-salon-briefing-rail with static capability affordances",
+    );
+  });
+});

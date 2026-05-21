@@ -7130,13 +7130,25 @@
     padding-top: clamp(24px, 5vh, 56px);
   }
 
-  /* Salon workbench column — centered reading column that constrains
-     all salon content (header, results, sticky composer) so the dark
-     composer surface does not span the full viewport as a terminal
-     dock. The sticky composer inherits this max-width. */
+  /* Salon workbench — two-column grid on desktop (main panel + briefing rail),
+     single-column flex stack on mobile. The workbench owns the outer padding
+     so the panel and rail sit in a consistent channel regardless of screen size. */
   .atelier-salon-workbench {
     width: 100%;
-    max-width: 44rem;
+    max-width: 72rem;
+    padding: var(--ds-space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--ds-space-4);
+  }
+  @media (min-width: 900px) {
+    .atelier-salon-workbench {
+      display: grid;
+      grid-template-columns: 1fr 17rem;
+      gap: var(--ds-space-5);
+      padding: var(--ds-space-5);
+      align-items: start;
+    }
   }
 
   /* Salon chip grid — 2-column starter prompt grid for desktop.
@@ -7160,6 +7172,84 @@
   .atelier-salon-chip-grid .atelier-salon-starter-chip {
     width: 100%;
     justify-content: center;
+  }
+
+  /* Main concierge panel — warm paper folio surface containing the header,
+     results body, and composer as one cohesive instrument. On desktop the
+     panel has a fixed height so results scroll inside the panel, not the page.
+     Border + shadow delineate the panel from the ambient page background. */
+  .atelier-salon-main-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+    border-radius: 16px;
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 16%, transparent);
+    box-shadow: 0 2px 20px color-mix(in srgb, var(--ds-midnight-ink) 6%, transparent);
+  }
+  @media (min-width: 900px) {
+    .atelier-salon-main-panel {
+      height: calc(100svh - var(--ds-space-10));
+    }
+  }
+
+  /* Panel header — prevents the header from flex-shrinking in the panel column.
+     Used alongside atelier-salon-room-header and atelier-salon-header-landing. */
+  .atelier-salon-panel-header {
+    flex-shrink: 0;
+  }
+
+  /* Panel body — fills remaining panel height and scrolls internally.
+     The only scrollable region in the desktop concierge room; the header
+     and composer remain pinned above and below via the flex column. */
+  .atelier-salon-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    padding: var(--ds-space-4) var(--ds-space-5);
+  }
+
+  /* Briefing rail — static capability sidebar on desktop. Hidden on mobile.
+     Declares what the concierge can do without using live data or fake counts.
+     Sticky so it stays in view as the panel body scrolls. */
+  .atelier-salon-briefing-rail {
+    display: none;
+  }
+  @media (min-width: 900px) {
+    .atelier-salon-briefing-rail {
+      display: flex;
+      flex-direction: column;
+      gap: var(--ds-space-4);
+      position: sticky;
+      top: var(--ds-space-5);
+      border-radius: 12px;
+      border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 14%, transparent);
+      padding: var(--ds-space-5);
+    }
+  }
+
+  /* Briefing rail header — "How I can help" label above the capability list */
+  .atelier-salon-briefing-header {
+    padding-bottom: var(--ds-space-3);
+    border-bottom: 1px solid color-mix(in srgb, var(--ds-ember-brass) 20%, transparent);
+  }
+
+  /* Briefing item — individual capability row in the briefing rail */
+  .atelier-salon-briefing-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ds-space-2);
+    padding: var(--ds-space-1) 0;
+  }
+
+  /* Briefing footer — verified capability markers at the base of the rail */
+  .atelier-salon-briefing-footer {
+    padding-top: var(--ds-space-3);
+    border-top: 1px solid color-mix(in srgb, var(--ds-ember-brass) 14%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: var(--ds-space-2);
+    margin-top: auto;
   }
 
 }

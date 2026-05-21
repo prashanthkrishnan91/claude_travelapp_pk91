@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-21 (Atelier Room System v1 patch-4 — PR #451 open, branch claude/review-travel-app-docs-afJmb)
+Last updated: 2026-05-21 (Atelier Room System v1 patch-5 — PR #451 open, branch claude/review-travel-app-docs-afJmb)
 
 ## Purpose
 
@@ -18,20 +18,26 @@ This file is **current operational state**, not a historical log. It must stay c
 **Atelier Room System v1 — AI Concierge Private Salon**
 
 Changes on branch:
-- **`globals.css` — patch-4 additions**:
-  - `.atelier-salon-workbench { width:100%; max-width:44rem }` — centered reading column; sticky composer inherits this width so it does not span full viewport
-  - `.atelier-salon-starter-chip` updated: `background: var(--ds-bone)`, `color: var(--world-ink, --ds-midnight-ink)`, border `var(--ds-ember-brass) 35%` — readable dark ink on light paper
-  - `.atelier-salon-header-landing` padding reduced: `clamp(24px, 5vh, 56px)` (was 40px-88px)
-  - `.atelier-salon-invitation` padding-top reduced: `var(--ds-space-6)` (was var(--ds-space-10))
+- **`globals.css` — patch-5 two-column workbench**:
+  - `.atelier-salon-workbench` updated: `max-width: 72rem`, `flex-col` mobile / CSS grid `1fr 17rem` desktop ≥900px with `align-items: start`
+  - `.atelier-salon-main-panel` — flex column, `overflow: hidden`, `border-radius: 16px`, brass border, soft shadow; `height: calc(100svh - var(--ds-space-10))` on desktop so results scroll inside panel
+  - `.atelier-salon-panel-header` — `flex-shrink: 0` so header doesn't compress in flex panel
+  - `.atelier-salon-panel-body` — `flex: 1; overflow-y: auto; min-height: 0; padding: var(--ds-space-4) var(--ds-space-5)` — the only scrollable region in desktop concierge
+  - `.atelier-salon-briefing-rail` — hidden on mobile; sticky `top: ds-space-5` sidebar on desktop; brass border, `flex flex-col gap-4`
+  - `.atelier-salon-briefing-header` / `.atelier-salon-briefing-item` / `.atelier-salon-briefing-footer` — briefing rail anatomy primitives
 
-- **`ConciergePage.tsx` — patch-4 workbench layout**:
-  - Workbench wrapper div (`atelier-salon-workbench mx-auto flex flex-col flex-1`) wraps all page content; sticky composer inherits 44rem width from workbench, not viewport
-  - `folio-cinema-desk` moved from sticky composer to `ConciergeResultCard`'s Card className (dark result cards = cinema objects on light room; test B2 preserved)
-  - `<main>` no longer has `mx-auto` + `max-width:42rem` style — workbench handles centering
-  - `mapline-rule` no longer has `max-width:42rem` style
-  - Header gains `px-4 sm:px-6` for mobile breathing room
+- **`ConciergePage.tsx` — patch-5 layout restructure**:
+  - Workbench wrapper: `atelier-salon-workbench mx-auto` (CSS owns grid/flex, Tailwind owns centering)
+  - All panel content wrapped in `atelier-salon-main-panel` div (header + mapline + main + composer)
+  - Header: adds `atelier-salon-panel-header` class (keeps `atelier-salon-header-landing` for test E6)
+  - `<main>` class: `atelier-salon-panel-body` — internal scroll on desktop panel
+  - Composer: keeps `sticky z-10 concierge-sticky-bottom folio-cinema-composer atelier-salon-composer-surface` (preserves 8M tests); removes `marginTop: var(--ds-space-8)` (flex handles spacing)
+  - Static `<aside className="atelier-salon-briefing-rail">` added with 6 capability items + 3 footer badges (no fake data, no fake counts)
 
-- **`tests/atelier-salon-room-v1.test.mjs`** — 4 new Section G tests (60 total): workbench defined, ConciergePage uses it, chip uses world-ink, folio-cinema-desk on result cards
+- **`tests/atelier-salon-room-v1.test.mjs`** — 8 new Section H tests (68 total): main-panel defined + overflow:hidden, panel-body flex:1+overflow-y:auto, briefing-rail defined, ConciergePage uses all three
+
+- **Test count:** 3003 total, 0 failures.  
+- **No backend / SQL / provider / env / Supabase / API / route / data-contract changes.**
 
 - **`AppShell.tsx`** *(patch-3)* — Concierge added to immersive shell:
   - `isSalonRoute = pathname === "/concierge"` — new route check
@@ -69,8 +75,8 @@ Changes on branch:
 
 All existing testids, folio-cinema-desk, folio-cinema-composer, folio-concierge-chip, Starting points copy, callConciergeSearch, all behavior (search, save, maps, refinement, transcript) preserved. Home not regressed.
 
-**Test count:** 2991 total, 0 failures.  
-**No backend / SQL / provider / env / Supabase / API / route / data-contract changes.**
+**Test count (earlier patches):** 2991 total, 0 failures.  
+**No backend / SQL / provider / env / Supabase / API / route / data-contract changes (any patch).**
 
 ### Next step after PR #451 merges
 Apply Atelier Room System to Explore (Observatory room) or Saved (Gallery room) — next visible adoption slice using the same room shell primitives.

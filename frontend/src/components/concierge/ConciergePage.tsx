@@ -771,14 +771,17 @@ export function ConciergePage() {
           stacking context, behind all in-flow content. */}
       <WorldAtmosphere />
 
-      {/* Workbench column — centers salon content at a comfortable reading
-          width so the sticky composer does not span the full viewport. */}
-      <div className="atelier-salon-workbench mx-auto flex flex-col flex-1">
+      {/* Workbench — two-column grid on desktop (main panel + briefing rail).
+          CSS owns the grid / flex layout; Tailwind mx-auto centers the column. */}
+      <div className="atelier-salon-workbench mx-auto">
+
+      {/* ── Main concierge panel ─────────────────────────────────────────── */}
+      <div className="atelier-salon-main-panel">
 
       {/* ── Concierge desk instrument header ─────────────────────────────── */}
       <header
         data-testid="concierge-instrument-header"
-        className="atelier-salon-room-header atelier-salon-header-landing pb-5 sm:pb-8 text-center px-4 sm:px-6"
+        className="atelier-salon-room-header atelier-salon-header-landing atelier-salon-panel-header pb-5 sm:pb-8 text-center px-4 sm:px-6"
       >
         <p
           className="text-ds-accent uppercase tracking-[0.1em]"
@@ -837,13 +840,13 @@ export function ConciergePage() {
       {/* Editorial mapline — visual rhythm between header and results canvas */}
       <div className="mapline-rule mx-auto" aria-hidden="true" />
 
-      {/* ── Result canvas ─────────────────────────────────────────────────── */}
+      {/* ── Result canvas — scrollable panel body ─────────────────────────── */}
       <main
         data-testid="concierge-results-canvas"
         aria-label="Concierge results"
         aria-live="polite"
         aria-atomic="false"
-        className="flex-1 w-full px-4 sm:px-6"
+        className="atelier-salon-panel-body"
       >
         {/* Empty / initial state */}
         {!loading && !hasResults && messages.length === 0 && (
@@ -1211,13 +1214,10 @@ export function ConciergePage() {
         <div ref={bottomRef} style={{ height: "var(--ds-space-1)" }} />
       </main>
 
-      {/* ── Concierge search instrument ───────────────────────────────────── */}
+      {/* ── Concierge search instrument — pinned at panel base ───────────── */}
       <div
         data-testid="concierge-instrument-composer"
         className="sticky z-10 concierge-sticky-bottom folio-cinema-composer atelier-salon-composer-surface"
-        style={{
-          marginTop: "var(--ds-space-8)",
-        }}
       >
         {/* Refinement / follow-up chips */}
         {activeChips && messages.length > 0 && !loading && (
@@ -1393,6 +1393,79 @@ export function ConciergePage() {
           </button>
         </div>
       </div>
+
+      </div> {/* end atelier-salon-main-panel */}
+
+      {/* ── Atelier briefing rail — static capability affordances ──────────
+          Desktop only (hidden on mobile via CSS). No live data, no counts.
+          Declares concierge capabilities as warm editorial copy. */}
+      <aside className="atelier-salon-briefing-rail" aria-label="Concierge capabilities">
+        <div className="atelier-salon-briefing-header">
+          <p
+            className="uppercase tracking-[0.1em]"
+            style={{
+              fontSize: "var(--ds-type-overline-size)",
+              fontWeight: "var(--ds-type-overline-weight)",
+              lineHeight: "var(--ds-type-overline-leading)",
+              color: "var(--world-ink-mist)",
+            }}
+          >
+            How I can help
+          </p>
+        </div>
+        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          {[
+            "Find verified places",
+            "Compare neighbourhoods",
+            "Shape a date night",
+            "Turn ideas into saved cards",
+            "Refine a trip itinerary",
+            "Discover hidden gems",
+          ].map((item) => (
+            <li key={item} className="atelier-salon-briefing-item">
+              <span
+                aria-hidden="true"
+                style={{
+                  color: "var(--ds-ember-brass)",
+                  fontSize: "var(--ds-type-body-s-size)",
+                  lineHeight: "1",
+                  marginTop: "3px",
+                  flexShrink: 0,
+                }}
+              >
+                ›
+              </span>
+              <span
+                style={{
+                  fontSize: "var(--ds-type-body-s-size)",
+                  lineHeight: "var(--ds-type-body-s-leading)",
+                  color: "var(--world-ink)",
+                }}
+              >
+                {item}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <div className="atelier-salon-briefing-footer">
+          {[
+            "Verified Google-backed cards",
+            "Save or add to trip",
+            "Maps-ready places",
+          ].map((badge) => (
+            <p
+              key={badge}
+              style={{
+                fontSize: "var(--ds-type-caption-size)",
+                lineHeight: "var(--ds-type-caption-leading)",
+                color: "var(--world-ink-mist)",
+              }}
+            >
+              {badge}
+            </p>
+          ))}
+        </div>
+      </aside>
 
       </div> {/* end atelier-salon-workbench */}
     </div>
