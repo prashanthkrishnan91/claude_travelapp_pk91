@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-21 (Atelier Room System v1 MERGED — PR #451)
+Last updated: 2026-05-21 (Concierge Immersion Layer v1 — open PR on `claude/review-project-docs-XTTKH`)
 
 ## Purpose
 
@@ -8,7 +8,7 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3.5 — Atelier Room System v1 complete (PR #451 merged). Next: Room System adoption on Explore or Saved.**
+**Stage 3.5 — Atelier Room System v1 complete (PR #451 merged). Concierge Immersion Layer v1 in review (current PR). Next: Room System adoption on Explore or Saved.**
 
 ### Home baseline (merged)
 - **PR #448** — Atelier Atrium: edge-to-edge cinematic home, world DNA system, AppShell route-aware wrapper, DashboardClient full atrium composition, WorldScenery/Mist/Atmosphere/Glass primitives, silent navigation (AtelierNavArtifact), contained scenery, physical archive shelf.
@@ -78,8 +78,34 @@ All existing testids, folio-cinema-desk, folio-cinema-composer, folio-concierge-
 **Test count (earlier patches):** 2991 total, 0 failures.  
 **No backend / SQL / provider / env / Supabase / API / route / data-contract changes (any patch).**
 
+### Current PR (open — Concierge Immersion Layer v1)
+**Branch: `claude/review-project-docs-XTTKH`**
+
+Changes:
+- **`globals.css` — CONCIERGE IMMERSION LAYER v1 section** (new CSS block appended to ATELIER ROOM SYSTEM section):
+  - `.atelier-salon-portal-wrapper` — max-width centering wrapper above workbench
+  - `.atelier-salon-portal-frame` — brass-hairline framed cinematic panel (Framed Cinema Panel contract); entrance animation (`atelier-portal-enter`)
+  - `.atelier-salon-portal-hero` — scenic stage (180px mobile / 240px tablet / 288px desktop)
+  - `.atelier-salon-portal-painted/image/overlay/veil` — four world-var-driven scenic layers; veil fades portal into warm paper room
+  - `.atelier-salon-portal-editorial` + `.atelier-salon-portal-mood` — Fraunces italic mood line at portrait foot
+  - `[data-destination-tuned="true"] .atelier-salon-portal-frame` — destination-aware brass glow state
+  - `.atelier-salon-loading-dot` + `@keyframes atelier-salon-dot-pulse` — brass pulse dots for loading state
+  - `.atelier-salon-result-label` — editorial overline before card groups
+  - All new animations gated by `prefers-reduced-motion: reduce`
+
+- **`ConciergePage.tsx`**:
+  - `data-destination-tuned` attribute on outer div (drives destination-aware CSS state)
+  - Salon Portal Hero JSX above workbench: 4-layer scenic panel + editorial mood line from `salonWorld.mood`; `aria-hidden="true"` (decorative)
+  - Loading state: brass dot trio + "Curating a shortlist · Reviewing verified places · Preparing your dossier"
+  - Result section: editorial count label before card grids ("N places — shortlisted")
+  - Briefing rail: "What I curate" header + editorial capability copy
+
+- **`tests/concierge-immersion-v1.test.mjs`** — 38 new tests (Sections I–N)
+- **Test count:** 3041 total, 1 failure (pre-existing HANDOFF stage3-exit test)
+- **No backend / SQL / provider / env / Supabase / API / route / data-contract changes.**
+
 ### Next step
-Apply Atelier Room System to Explore (Observatory room) or Saved (Gallery room) — next visible adoption slice using the same room shell primitives.
+Merge Concierge Immersion Layer v1. Then apply Atelier Room System to Explore (Observatory room) or Saved (Gallery room).
 
 ## Current architecture / runtime state
 

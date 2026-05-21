@@ -7252,4 +7252,170 @@
     margin-top: auto;
   }
 
+  /* ════ CONCIERGE IMMERSION LAYER v1 ════════════════════════════════════════
+     Adds the salon portal hero, ambient entrance motion, destination-tuned
+     transformation, editorial result labels, and enriched loading states to
+     the outside-trip Concierge room. Builds on and extends the atelier-salon
+     primitives above — no override, no replacement.
+     ════════════════════════════════════════════════════════════════════════ */
+
+  /* Portal wrapper — matches workbench max-width/padding for visual alignment */
+  .atelier-salon-portal-wrapper {
+    width: 100%;
+    max-width: 72rem;
+    margin: 0 auto;
+    padding: var(--ds-space-4) var(--ds-space-4) 0;
+  }
+
+  /* Portal frame — the Framed Cinema Panel from the Atelier design contract:
+     a velvet panel placed inside the paper room, with a brass hairline frame
+     and paper margin, acting as the page's visual centerpiece / scenic portal.
+     aria-hidden on the parent: fully decorative, no interactive content. */
+  .atelier-salon-portal-frame {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 22%, transparent);
+    box-shadow:
+      0 2px 24px color-mix(in srgb, var(--ds-midnight-ink) 8%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 6%, transparent);
+    animation: atelier-portal-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Destination-tuned state — portal frame brightens its brass presence
+     when the user has typed a destination, signalling the room is tuned in. */
+  [data-destination-tuned="true"] .atelier-salon-portal-frame {
+    border-color: color-mix(in srgb, var(--ds-ember-brass) 40%, transparent);
+    box-shadow:
+      0 4px 32px color-mix(in srgb, var(--ds-midnight-ink) 12%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 14%, transparent);
+    transition: border-color 0.7s ease, box-shadow 0.7s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    [data-destination-tuned="true"] .atelier-salon-portal-frame {
+      transition: none;
+    }
+  }
+
+  /* Portal hero — the scenic panel inner stage. Height scales with viewport. */
+  .atelier-salon-portal-hero {
+    position: relative;
+    height: 180px;
+    overflow: hidden;
+  }
+  @media (min-width: 640px) {
+    .atelier-salon-portal-hero { height: 240px; }
+  }
+  @media (min-width: 900px) {
+    .atelier-salon-portal-hero { height: 288px; }
+  }
+
+  /* Scenic layer stack — all four layers share the same absolute fill.
+     Driven entirely by --world-* CSS vars injected on the page shell. */
+  .atelier-salon-portal-painted,
+  .atelier-salon-portal-image,
+  .atelier-salon-portal-overlay,
+  .atelier-salon-portal-veil {
+    position: absolute;
+    inset: 0;
+  }
+
+  /* Painted scenery — CSS gradient stack from the active world's DNA */
+  .atelier-salon-portal-painted {
+    background-image: var(--world-scenery, none);
+    background-size: cover;
+    background-position: center 50%;
+  }
+
+  /* Photographic scenery — world image with world-specific position / filter */
+  .atelier-salon-portal-image {
+    background-image: var(--world-scenery-image, none);
+    background-size: cover;
+    background-position: var(--world-scenery-position, center 50%);
+    filter: var(--world-scenery-filter, none);
+  }
+
+  /* Scenic overlay tinted to world palette for text legibility */
+  .atelier-salon-portal-overlay {
+    background-image: var(--world-scenery-overlay, none);
+  }
+
+  /* Bottom veil — fades scenic panel into the warm paper room below,
+     using the world surface color for a seamless, camera-like merge. */
+  .atelier-salon-portal-veil {
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      transparent 48%,
+      color-mix(in srgb, var(--world-surface, var(--ds-warm-paper)) 60%, transparent) 76%,
+      var(--world-surface, var(--ds-warm-paper)) 100%
+    );
+  }
+
+  /* Editorial overlay — italic serif mood line at the foot of the portal.
+     Reads the world's mood string from the React component. aria-hidden on
+     the parent means this is purely decorative / atmospheric. */
+  .atelier-salon-portal-editorial {
+    position: absolute;
+    bottom: var(--ds-space-5);
+    left: var(--ds-space-6);
+    right: var(--ds-space-6);
+  }
+
+  /* Italic serif mood line — Fraunces italic, world-aware contrast color */
+  .atelier-salon-portal-mood {
+    font-family: var(--font-fraunces, Georgia, serif);
+    font-style: italic;
+    font-size: clamp(14px, 1.8vw, 17px);
+    line-height: 1.5;
+    color: var(--world-on-scenery, var(--ds-pearl-cream));
+    display: block;
+    opacity: 0.92;
+    text-shadow: 0 1px 10px color-mix(in srgb, var(--ds-midnight-ink) 35%, transparent);
+  }
+
+  /* Portal entrance animation — fade + gentle rise, luxury easing */
+  @keyframes atelier-portal-enter {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Reduced-motion: disable entrance animation entirely */
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-salon-portal-frame {
+      animation: none;
+    }
+  }
+
+  /* Loading pulse dots — three brass-tinted dots for the concierge
+     loading state. Offset animation creates a sequential "breathing" feel. */
+  @keyframes atelier-salon-dot-pulse {
+    0%, 100% { opacity: 0.25; }
+    50%       { opacity: 0.9; }
+  }
+  .atelier-salon-loading-dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--ds-ember-brass);
+    animation: atelier-salon-dot-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  .atelier-salon-loading-dot:nth-child(2) { animation-delay: 0.22s; }
+  .atelier-salon-loading-dot:nth-child(3) { animation-delay: 0.44s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-salon-loading-dot {
+      animation: none;
+      opacity: 0.55;
+    }
+  }
+
+  /* Result label — quiet editorial overline above each result group.
+     Presents the shortlist count and destination as a concierge annotation. */
+  .atelier-salon-result-label {
+    padding-bottom: var(--ds-space-3);
+    margin-bottom: var(--ds-space-1);
+  }
+
 }

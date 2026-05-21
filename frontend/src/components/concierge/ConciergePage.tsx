@@ -761,6 +761,7 @@ export function ConciergePage() {
   return (
     <div
       data-testid="concierge-page"
+      data-destination-tuned={destination ? "true" : undefined}
       className="flex flex-col atelier-transition atelier-salon-page atelier-salon-room"
       data-world-location={salonWorld.location}
       data-scenery-tone={salonWorld.visualLayer.contrastTone ?? "dark"}
@@ -770,6 +771,25 @@ export function ConciergePage() {
           WorldAtmosphere sits at z-index:-1 within the atelier-salon-room
           stacking context, behind all in-flow content. */}
       <WorldAtmosphere />
+
+      {/* Salon Portal Hero — framed cinematic scenic window into the destination.
+          Reads --world-scenery, --world-scenery-image, --world-scenery-overlay
+          from the outer page div's worldStyleVars injection. The portal visually
+          "tunes in" to the destination world as the user types a city. Purely
+          decorative — no interactive content, aria-hidden on wrapper. */}
+      <div className="atelier-salon-portal-wrapper" aria-hidden="true">
+        <div className="atelier-salon-portal-frame">
+          <div className="atelier-salon-portal-hero">
+            <span className="atelier-salon-portal-painted" />
+            <span className="atelier-salon-portal-image" />
+            <span className="atelier-salon-portal-overlay" />
+            <span className="atelier-salon-portal-veil" />
+            <div className="atelier-salon-portal-editorial">
+              <span className="atelier-salon-portal-mood">{salonWorld.mood}</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Workbench — two-column grid on desktop (main panel + briefing rail).
           CSS owns the grid / flex layout; Tailwind mx-auto centers the column. */}
@@ -973,6 +993,16 @@ export function ConciergePage() {
 
             return (
               <section key={idx} data-testid="concierge-result-section" aria-label="Place recommendations">
+                {/* Editorial result label — quiet concierge annotation above card group */}
+                <div className="atelier-salon-result-label">
+                  <p
+                    className="uppercase tracking-[0.1em] text-ds-text-tertiary"
+                    style={{ fontSize: "var(--ds-type-overline-size)" }}
+                  >
+                    {addablePlaces.length === 1 ? "1 place" : `${addablePlaces.length} places`}
+                    {destination ? ` — ${destination}` : ""} — shortlisted
+                  </p>
+                </div>
                 <div className="space-y-3">
                   {addablePlaces.map(({ kind, place, sourceLink }) => {
                     const title =
@@ -1139,25 +1169,26 @@ export function ConciergePage() {
           })}
         </div>
 
-        {/* Loading state — honest staged text, no fake progress */}
+        {/* Loading state — concierge tone, honest stages, brass pulse dots */}
         {loading && (
           <div
             data-testid="concierge-loading-state"
-            className="flex items-center gap-3"
+            className="flex flex-col gap-3"
             style={{ marginTop: "var(--ds-space-6)" }}
             role="status"
             aria-live="polite"
           >
-            <Loader2
-              className="h-4 w-4 animate-spin text-ds-accent shrink-0"
-              aria-hidden="true"
-            />
+            <div className="flex gap-1.5 items-center">
+              <span className="atelier-salon-loading-dot" aria-hidden="true" />
+              <span className="atelier-salon-loading-dot" aria-hidden="true" />
+              <span className="atelier-salon-loading-dot" aria-hidden="true" />
+            </div>
             <p style={{ fontSize: "var(--ds-type-body-s-size)", color: "var(--world-ink-mist)" }}>
-              <span style={{ color: "var(--world-ink)" }}>Searching</span>
+              <span style={{ color: "var(--world-ink)" }}>Curating a shortlist</span>
               <span className="mx-2">·</span>
-              <span>Verifying</span>
+              <span>Reviewing verified places</span>
               <span className="mx-2">·</span>
-              <span>Composing</span>
+              <span>Preparing your dossier</span>
             </p>
           </div>
         )}
@@ -1410,17 +1441,17 @@ export function ConciergePage() {
               color: "var(--world-ink-mist)",
             }}
           >
-            How I can help
+            What I curate
           </p>
         </div>
         <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
           {[
-            "Find verified places",
-            "Compare neighbourhoods",
-            "Shape a date night",
-            "Turn ideas into saved cards",
-            "Refine a trip itinerary",
-            "Discover hidden gems",
+            "Verified places worth your time",
+            "Neighbourhood comparisons",
+            "An evening shaped around a mood",
+            "Saved cards for a future trip",
+            "Refinements on any result set",
+            "Hidden gems alongside the obvious",
           ].map((item) => (
             <li key={item} className="atelier-salon-briefing-item">
               <span
@@ -1449,9 +1480,9 @@ export function ConciergePage() {
         </ul>
         <div className="atelier-salon-briefing-footer">
           {[
-            "Verified Google-backed cards",
-            "Save or add to trip",
-            "Maps-ready places",
+            "Google-verified places only",
+            "Save to ideas or add to trip",
+            "Maps link on every card",
           ].map((badge) => (
             <p
               key={badge}
