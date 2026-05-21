@@ -1,0 +1,1256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Salon — Outside-Trip Concierge · Concept v1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Paper world */
+    --paper:        #F4EEDF;
+    --paper-deep:   #E9DFC7;
+    --bone:         #FAF5E7;
+    --linen:        #EFE6CE;
+    --ink:          #1E1A14;
+    --ink-soft:     #3B342A;
+    --ink-mist:     #6F6553;
+    --ink-ghost:    #9C927C;
+    --hairline:     #CFC4A8;
+    --hairline-soft:#DED3B6;
+
+    /* Cinema world */
+    --velvet-base:  #0E0B07;
+    --velvet:       #16110A;
+    --carbon:       #221A11;
+    --cream:        #EDE2C5;
+    --pearl:        #F2E7CC;
+    --pearl-soft:   #C7B998;
+
+    /* Foil + accents */
+    --brass:        #B6904A;
+    --brass-deep:   #8C6E32;
+    --brass-foil:   #D9B776;
+    --brass-glow:   rgba(197, 148, 77, 0.16);
+
+    --marine:       #1F4256;
+    --marine-deep:  #112C3B;
+    --marine-soft:  #34607A;
+
+    --warm-ambient: rgba(184, 130, 60, 0.10);
+    --vignette:     rgba(0, 0, 0, 0.55);
+
+    --shadow-paper:
+      0 1px 1px rgba(60, 40, 10, 0.04),
+      0 24px 60px -30px rgba(60, 40, 10, 0.22),
+      0 8px 18px -10px rgba(60, 40, 10, 0.12);
+    --shadow-paper-soft:
+      0 1px 1px rgba(60, 40, 10, 0.04),
+      0 8px 20px -12px rgba(60, 40, 10, 0.12);
+    --shadow-cinema:
+      inset 0 1px 0 rgba(255, 248, 235, 0.05),
+      0 30px 80px -20px rgba(0, 0, 0, 0.55),
+      0 10px 24px -10px rgba(0, 0, 0, 0.45);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    background: var(--linen);
+    color: var(--ink);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* Ambient warmth — drifts very slowly across the whole document */
+  body::after {
+    content: '';
+    position: fixed; inset: -10%;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 60% 50% at 22% 8%,  rgba(217, 183, 118, 0.26), transparent 60%),
+      radial-gradient(ellipse 55% 45% at 88% 96%, rgba(184, 130, 60, 0.13), transparent 60%),
+      radial-gradient(ellipse 40% 35% at 50% 50%, rgba(245, 226, 188, 0.09), transparent 65%);
+    z-index: 0;
+    animation: drift 48s ease-in-out infinite alternate;
+  }
+  @keyframes drift {
+    0%   { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(-1.5%, 1%) scale(1.04); }
+  }
+
+  /* Paper grain across the whole shell */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.5;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch' seed='7'/><feColorMatrix values='0 0 0 0 0.10  0 0 0 0 0.08  0 0 0 0 0.05  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    body::after { animation: none; }
+  }
+
+  main {
+    position: relative;
+    z-index: 2;
+    padding: 64px 32px 120px;
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+
+  /* ─────────── doc masthead ─────────── */
+  .masthead {
+    display: flex; align-items: baseline; justify-content: space-between;
+    border-bottom: 1px solid var(--hairline);
+    padding-bottom: 22px; margin-bottom: 56px;
+  }
+  .wordmark {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 400; font-size: 26px; letter-spacing: 0.18em;
+    color: var(--ink); text-transform: uppercase;
+  }
+  .wordmark .dot {
+    display: inline-block; width: 6px; height: 6px;
+    background: var(--brass); border-radius: 50%;
+    transform: translateY(-4px); margin: 0 6px;
+  }
+  .masthead-meta {
+    font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-mist);
+  }
+
+  .section-eyebrow {
+    font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase;
+    color: var(--brass-deep); margin: 0 0 12px;
+  }
+  .section-title {
+    font-family: 'Fraunces', Georgia, serif; font-style: italic; font-weight: 400;
+    font-size: 40px; line-height: 1.1; margin: 0 0 12px; color: var(--ink);
+  }
+  .section-sub {
+    font-size: 14px; color: var(--ink-mist); max-width: 760px; margin: 0 0 36px; line-height: 1.6;
+  }
+  .frame-stack { display: flex; flex-direction: column; gap: 92px; }
+
+  /* ════════════════════════════════════════════════════════════
+     FLOATING ATELIER NAV (the anchor across the world)
+     ════════════════════════════════════════════════════════════ */
+  .atelier-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 30px;
+    border-bottom: 1px solid rgba(217, 183, 118, 0.16);
+  }
+  .atelier-nav .brand {
+    font-family: 'Fraunces', serif; font-size: 17px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--pearl);
+  }
+  .atelier-nav .brand .dot {
+    display:inline-block; width:5px; height:5px; background: var(--brass-foil);
+    border-radius:50%; transform: translateY(-2px); margin: 0 5px;
+    box-shadow: 0 0 10px var(--brass-foil);
+  }
+  .atelier-nav .nav-words {
+    display: flex; gap: 26px; font-size: 11px; letter-spacing: 0.22em;
+    text-transform: uppercase; color: var(--pearl-soft);
+  }
+  .atelier-nav .nav-words a { color: inherit; text-decoration: none; position: relative; }
+  .atelier-nav .nav-words a.active { color: var(--pearl); }
+  .atelier-nav .nav-words a.active::after {
+    content:''; position:absolute; left:0; right:0; bottom:-20px; height:1px; background: var(--brass-foil);
+  }
+  .atelier-nav .right { display:flex; align-items:center; gap:18px; }
+  .atelier-nav .cmdk {
+    border: 1px solid rgba(217, 183, 118, 0.28); border-radius: 6px;
+    padding: 5px 10px; font-size: 10px; letter-spacing: 0.18em;
+    color: var(--pearl-soft); text-transform: uppercase;
+  }
+  .atelier-nav .avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--brass-foil), var(--brass-deep));
+    border: 1px solid var(--brass-deep); color: var(--velvet);
+    display: grid; place-items: center; font-family: 'Fraunces', serif;
+    font-size: 13px; font-weight: 500;
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     THE SALON ROOM — desktop canvas
+     A cinema room inside the Atelier world. Paper margins frame a
+     deep portal; the concierge desk is fused into the portal base.
+     ════════════════════════════════════════════════════════════ */
+  .salon-canvas {
+    background: var(--velvet-base);
+    border-radius: 18px;
+    border: 1px solid rgba(217, 183, 118, 0.20);
+    box-shadow: var(--shadow-cinema);
+    overflow: hidden; position: relative; isolation: isolate;
+  }
+  /* faint grain over the whole room */
+  .salon-canvas .room-grain {
+    position: absolute; inset: 0; z-index: 6; pointer-events: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.92' numOctaves='2' stitchTiles='stitch' seed='11'/><feColorMatrix values='0 0 0 0 0.95  0 0 0 0 0.88  0 0 0 0 0.72  0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    mix-blend-mode: screen; opacity: 0.5;
+  }
+
+  .salon-body {
+    position: relative; z-index: 2;
+    display: grid;
+    grid-template-columns: 1fr 19rem;
+    gap: 0;
+    align-items: stretch;
+  }
+
+  /* ─────────── THE STAGE (left): portal + desk ─────────── */
+  .salon-stage {
+    position: relative;
+    padding: 40px 44px 36px;
+    display: flex; flex-direction: column;
+    min-height: 660px;
+  }
+
+  .stage-eyebrow {
+    font-size: 10px; letter-spacing: 0.32em; text-transform: uppercase;
+    color: var(--brass-foil); display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
+  }
+  .stage-eyebrow .rule { width: 26px; height: 1px; background: var(--brass-foil); }
+
+  /* ── THE SALON PORTAL — a window into travel ── */
+  .portal {
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    flex: 1;
+    min-height: 420px;
+    isolation: isolate;
+    border: 1px solid rgba(217, 183, 118, 0.22);
+    box-shadow: 0 28px 70px -28px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,248,235,0.06);
+    transition: filter 900ms ease;
+  }
+
+  /* DEPTH LAYER 1 — the far scene (mood gradient, swaps per destination) */
+  .portal .scene {
+    position: absolute; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse 90% 55% at 50% 16%, rgba(232, 186, 120, 0.55), transparent 62%),
+      radial-gradient(ellipse 120% 70% at 50% 82%, rgba(40, 52, 78, 0.62), transparent 72%),
+      linear-gradient(180deg,
+        #241726 0%, #3E2433 16%, #7A4A52 34%,
+        #C98C5E 50%, #8E7C84 64%, #3B4666 82%, #11192E 100%);
+    transform: scale(1.06);
+    transition: background 1100ms ease, transform 18s ease-in-out;
+    animation: portalDrift 36s ease-in-out infinite alternate;
+  }
+  @keyframes portalDrift {
+    0%   { transform: scale(1.06) translate(0, 0); }
+    100% { transform: scale(1.12) translate(-1.6%, -1%); }
+  }
+
+  /* DEPTH LAYER 2 — soft haze / atmospheric layer that blurs the far scene */
+  .portal .haze {
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background:
+      radial-gradient(ellipse 70% 18% at 50% 50%, rgba(255, 224, 178, 0.40), transparent 70%),
+      radial-gradient(ellipse 100% 40% at 50% 0%, rgba(255, 230, 190, 0.14), transparent 65%);
+    backdrop-filter: blur(2px);
+    mix-blend-mode: screen;
+  }
+
+  /* DEPTH LAYER 3 — light bloom rising from horizon */
+  .portal .bloom {
+    position: absolute; left: 0; right: 0; top: 42%; height: 22%; z-index: 2;
+    pointer-events: none;
+    background: radial-gradient(ellipse 60% 100% at 50% 50%, rgba(255, 232, 190, 0.55), transparent 72%);
+    filter: blur(8px);
+    animation: bloomBreathe 9s ease-in-out infinite alternate;
+  }
+  @keyframes bloomBreathe {
+    0%   { opacity: 0.65; }
+    100% { opacity: 1; }
+  }
+
+  /* DEPTH LAYER 4 — fine grain inside the portal */
+  .portal .grain {
+    position: absolute; inset: 0; z-index: 3; pointer-events: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch' seed='4'/><feColorMatrix values='0 0 0 0 0.98  0 0 0 0 0.92  0 0 0 0 0.78  0 0 0 0.07 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+    mix-blend-mode: screen; opacity: 0.55;
+  }
+
+  /* DEPTH LAYER 5 — vignette + bottom shading so text reads */
+  .portal .vignette {
+    position: absolute; inset: 0; z-index: 4; pointer-events: none;
+    background:
+      radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,0.50) 100%),
+      linear-gradient(180deg, rgba(0,0,0,0.10) 0%, transparent 24%, transparent 52%, rgba(0,0,0,0.62) 100%);
+  }
+
+  /* Portal copy — possibility before search; tunes after */
+  .portal-copy {
+    position: relative; z-index: 5;
+    height: 100%;
+    padding: 30px 34px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .portal-mark {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-size: 10px; letter-spacing: 0.30em; text-transform: uppercase;
+    color: var(--brass-foil);
+  }
+  .portal-mark .rule { width: 22px; height: 1px; background: var(--brass-foil); }
+  .portal-headline {
+    font-family: 'Fraunces', serif; font-style: italic; font-weight: 300;
+    font-size: 42px; line-height: 1.08; color: var(--pearl);
+    margin: 0; max-width: 16ch;
+    text-shadow: 0 2px 30px rgba(0,0,0,0.4);
+    transition: opacity 600ms ease, transform 600ms ease;
+  }
+  .portal-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--pearl-soft);
+  }
+  .portal-foot .where { color: var(--cream); }
+
+  /* ── THE CONCIERGE DESK — fused into the base of the portal ── */
+  .desk {
+    position: relative; z-index: 7;
+    margin-top: 20px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(28,22,14,0.92), rgba(14,11,7,0.96));
+    border: 1px solid rgba(217, 183, 118, 0.30);
+    box-shadow: inset 0 1px 0 rgba(255,248,235,0.06), 0 18px 44px -20px rgba(0,0,0,0.7);
+    padding: 16px 18px;
+  }
+  .desk::before {
+    content: ''; position: absolute; left: 18px; right: 18px; top: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--brass-foil), transparent); opacity: 0.6;
+  }
+  .desk-row { display: flex; align-items: stretch; gap: 14px; }
+  .desk-field { flex: 0 0 30%; display: flex; flex-direction: column; gap: 5px; }
+  .desk-field.query { flex: 1; }
+  .desk-label {
+    font-size: 9px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--brass-foil);
+  }
+  .desk-input {
+    background: transparent; border: none; outline: none;
+    color: var(--pearl); font-family: 'Inter', sans-serif; font-size: 15px;
+    padding: 4px 0; width: 100%;
+  }
+  .desk-input::placeholder { color: rgba(199, 185, 152, 0.55); }
+  .desk-divider { width: 1px; background: rgba(217, 183, 118, 0.22); align-self: stretch; }
+  .desk-send {
+    align-self: center; flex-shrink: 0;
+    width: 46px; height: 46px; border-radius: 10px;
+    background: linear-gradient(140deg, var(--brass-foil), var(--brass-deep));
+    border: 1px solid var(--brass-deep);
+    color: var(--velvet); cursor: pointer;
+    display: grid; place-items: center;
+    font-family: 'Fraunces', serif; font-size: 20px; font-style: italic;
+    transition: transform 280ms ease, box-shadow 280ms ease;
+  }
+  .desk-send:hover { transform: translateY(-1px); box-shadow: 0 8px 20px -8px rgba(217,183,118,0.6); }
+  .desk-send:focus-visible { outline: 2px solid var(--brass-foil); outline-offset: 2px; }
+
+  /* ── PROMPT STARTERS — invitations, not chips ── */
+  .invitations {
+    margin-top: 18px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  }
+  .invitation {
+    text-align: left; cursor: pointer;
+    background: rgba(217, 183, 118, 0.05);
+    border: 1px solid rgba(217, 183, 118, 0.18);
+    border-radius: 10px;
+    padding: 13px 16px;
+    transition: background 300ms ease, border-color 300ms ease, transform 300ms ease;
+  }
+  .invitation:hover {
+    background: rgba(217, 183, 118, 0.10);
+    border-color: rgba(217, 183, 118, 0.34);
+    transform: translateY(-1px);
+  }
+  .invitation:focus-visible { outline: 2px solid var(--brass-foil); outline-offset: 2px; }
+  .invitation .lead {
+    font-family: 'Fraunces', serif; font-style: italic; font-size: 16px;
+    color: var(--cream); margin: 0 0 3px; line-height: 1.25;
+  }
+  .invitation .hint {
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--pearl-soft);
+  }
+
+  /* ─────────── THE DOSSIER (right rail) ─────────── */
+  .dossier {
+    position: relative;
+    background: var(--bone);
+    border-left: 1px solid var(--hairline);
+    padding: 34px 28px;
+    display: flex; flex-direction: column; gap: 0;
+  }
+  .dossier::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 1px;
+    background: linear-gradient(180deg, transparent, var(--brass), transparent); opacity: 0.5;
+  }
+  .dossier-eyebrow {
+    font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase;
+    color: var(--brass-deep); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .dossier-eyebrow .rule { width: 22px; height: 1px; background: var(--brass); }
+  .dossier-title {
+    font-family: 'Fraunces', serif; font-style: italic; font-size: 23px;
+    color: var(--ink); margin: 0 0 6px; line-height: 1.15;
+  }
+  .dossier-sub {
+    font-size: 12px; color: var(--ink-mist); line-height: 1.55; margin: 0 0 22px;
+  }
+  .dossier-rule { height: 1px; background: var(--brass); width: 40px; margin: 0 0 22px; }
+  .dossier-item { padding: 14px 0; border-top: 1px dashed var(--hairline-soft); }
+  .dossier-item:first-of-type { border-top: none; padding-top: 0; }
+  .dossier-item .di-no {
+    font-family: 'Fraunces', serif; font-style: italic; font-size: 13px;
+    color: var(--brass-deep); margin-bottom: 3px;
+  }
+  .dossier-item .di-name {
+    font-family: 'Fraunces', serif; font-weight: 500; font-size: 15px;
+    color: var(--ink); margin: 0 0 3px;
+  }
+  .dossier-item .di-desc {
+    font-size: 12px; color: var(--ink-mist); line-height: 1.5; margin: 0;
+  }
+  .dossier-foot {
+    margin-top: auto; padding-top: 20px; border-top: 1px solid var(--hairline);
+    display: flex; flex-wrap: wrap; gap: 7px;
+  }
+  .dossier-badge {
+    font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--ink-mist);
+    border: 1px solid var(--hairline); border-radius: 4px; padding: 5px 9px;
+  }
+  .dossier-badge.verified { color: var(--marine); border-color: var(--marine); }
+
+  /* ════════════════════════════════════════════════════════════
+     RESULTS REVEAL — desktop. A curated dossier of editorial cards
+     that takes over the stage after a search.
+     ════════════════════════════════════════════════════════════ */
+  .results {
+    position: relative; z-index: 5;
+    margin-top: 22px;
+    display: none;
+  }
+  .salon-canvas.searched .results { display: block; animation: revealUp 600ms ease both; }
+  @keyframes revealUp {
+    0%   { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .results-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .results-count {
+    font-family: 'Fraunces', serif; font-style: italic; font-size: 22px; color: var(--pearl); margin: 0;
+  }
+  .results-why {
+    font-size: 12px; color: var(--pearl-soft); max-width: 30ch; line-height: 1.5;
+    text-align: right;
+  }
+  .results-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+  }
+
+  /* Editorial result card — velvet, with its own mood plate */
+  .ed-card {
+    position: relative; border-radius: 12px; overflow: hidden;
+    background: var(--velvet);
+    border: 1px solid rgba(217, 183, 118, 0.18);
+    box-shadow: var(--shadow-cinema);
+    display: flex; flex-direction: column;
+    transition: transform 300ms ease, box-shadow 300ms ease;
+  }
+  .ed-card:hover { transform: translateY(-2px); }
+  .ed-plate {
+    position: relative; height: 116px; overflow: hidden;
+  }
+  .ed-plate .px {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 20%, rgba(232,186,120,0.5), transparent 60%),
+      linear-gradient(160deg, #3a2530, #7a4a4a 45%, #2b3a58 100%);
+    transform: scale(1.05);
+  }
+  .ed-plate .px.alt2 { background: radial-gradient(ellipse 80% 60% at 60% 10%, rgba(150,200,170,0.4), transparent 60%), linear-gradient(160deg, #20302a, #4a6450 50%, #20303a 100%); }
+  .ed-plate .px.alt3 { background: radial-gradient(ellipse 80% 60% at 40% 20%, rgba(230,180,150,0.45), transparent 60%), linear-gradient(160deg, #3a2a26, #8a5a44 50%, #43464f 100%); }
+  .ed-plate::after {
+    content:''; position:absolute; inset:0;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.5) 100%);
+  }
+  .ed-plate .serial {
+    position: absolute; top: 11px; left: 13px; z-index: 2;
+    font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--brass-foil);
+  }
+  .ed-card .body { padding: 15px 17px 16px; display: flex; flex-direction: column; gap: 0; flex: 1; }
+  .ed-card .name {
+    font-family: 'Fraunces', serif; font-weight: 500; font-size: 17px; color: var(--pearl); margin: 0 0 3px;
+  }
+  .ed-card .it {
+    font-family: 'Fraunces', serif; font-style: italic; font-size: 13px;
+    color: var(--cream); line-height: 1.45; margin: 0 0 12px;
+  }
+  .ed-trust {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--pearl-soft); margin-bottom: 14px;
+  }
+  .ed-trust .verified { color: var(--brass-foil); display: inline-flex; align-items: center; gap: 5px; }
+  .ed-trust .verified::before { content:''; width:5px; height:5px; border-radius:50%; background: var(--brass-foil); }
+  .ed-card .actions { margin-top: auto; display: flex; align-items: center; gap: 10px; }
+  .btn-add {
+    flex: 1; cursor: pointer;
+    font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--brass-foil); background: transparent;
+    border: 1px solid rgba(217, 183, 118, 0.4); border-radius: 6px;
+    padding: 10px 12px;
+    transition: background 240ms ease, color 240ms ease, border-color 240ms ease;
+  }
+  .btn-add:hover { background: rgba(217,183,118,0.12); }
+  .btn-add:focus-visible { outline: 2px solid var(--brass-foil); outline-offset: 2px; }
+  .btn-add.saved {
+    color: var(--velvet); background: linear-gradient(140deg, var(--brass-foil), var(--brass-deep));
+    border-color: var(--brass-deep);
+  }
+  .btn-link {
+    font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--pearl-soft); background: transparent; border: none; cursor: pointer;
+    text-decoration: none;
+  }
+  .btn-link:hover { color: var(--pearl); }
+
+  /* Folio confirmation toast for save microinteraction */
+  .folio-toast {
+    position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+    z-index: 20; opacity: 0; pointer-events: none;
+    background: var(--velvet); color: var(--cream);
+    border: 1px solid rgba(217,183,118,0.4); border-radius: 10px;
+    padding: 12px 20px; box-shadow: var(--shadow-cinema);
+    font-family: 'Fraunces', serif; font-style: italic; font-size: 14px;
+    display: flex; align-items: center; gap: 10px;
+    transition: opacity 320ms ease, transform 320ms ease;
+  }
+  .folio-toast::before { content:''; width:7px; height:7px; border-radius:50%; background: var(--brass-foil); box-shadow: 0 0 10px var(--brass-foil); }
+  .folio-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ════════════════════════════════════════════════════════════
+     MOBILE PHONES
+     ════════════════════════════════════════════════════════════ */
+  .phones-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 56px; align-items: start; justify-items: center;
+  }
+  .phone {
+    width: 392px; height: 820px;
+    background: var(--velvet-base); border-radius: 44px; padding: 12px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.04) inset, 0 0 0 1px #2A1F10,
+      0 40px 80px -20px rgba(60, 40, 10, 0.4), 0 12px 28px -10px rgba(60, 40, 10, 0.25);
+    position: relative;
+  }
+  .phone-notch {
+    position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+    width: 110px; height: 28px; background: #000; border-radius: 16px; z-index: 30;
+  }
+  .phone-screen {
+    width: 100%; height: 100%; border-radius: 34px; overflow: hidden; position: relative;
+    background: var(--velvet-base);
+  }
+
+  /* Mobile salon (cinema chrome — the only fullscreen-cinema surface) */
+  .m-salon {
+    height: 100%; display: flex; flex-direction: column; position: relative;
+    background: var(--velvet-base); color: var(--pearl); isolation: isolate;
+  }
+  .m-salon .room-grain {
+    position: absolute; inset: 0; z-index: 8; pointer-events: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch' seed='9'/><feColorMatrix values='0 0 0 0 0.95  0 0 0 0 0.88  0 0 0 0 0.72  0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    mix-blend-mode: screen; opacity: 0.45;
+  }
+  .m-status {
+    display: flex; justify-content: space-between; padding: 16px 28px 0;
+    font-size: 12px; font-weight: 600; color: var(--pearl); height: 44px; align-items: center;
+    position: relative; z-index: 9;
+  }
+  .m-nav {
+    padding: 6px 22px 14px; display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid rgba(217,183,118,0.14); position: relative; z-index: 9;
+  }
+  .m-nav .brand { font-family:'Fraunces',serif; font-size:14px; letter-spacing:0.14em; text-transform:uppercase; color: var(--pearl); }
+  .m-nav .brand .dot { display:inline-block; width:4px; height:4px; background: var(--brass-foil); border-radius:50%; transform:translateY(-2px); margin:0 4px; }
+  .m-nav .dots { color: var(--pearl-soft); font-size: 15px; letter-spacing: 2px; }
+
+  .m-salon-scroll { flex: 1; overflow: hidden; position: relative; z-index: 9; display: flex; flex-direction: column; padding: 18px 20px 0; }
+
+  /* Mobile portal */
+  .m-portal {
+    position: relative; border-radius: 14px; overflow: hidden;
+    flex: 1; min-height: 0; isolation: isolate;
+    border: 1px solid rgba(217,183,118,0.22);
+    box-shadow: 0 24px 50px -24px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,248,235,0.05);
+  }
+  .m-portal .scene {
+    position: absolute; inset: 0; z-index: 0; transform: scale(1.08);
+    background:
+      radial-gradient(ellipse 90% 50% at 50% 16%, rgba(232,186,120,0.55), transparent 62%),
+      radial-gradient(ellipse 120% 70% at 50% 84%, rgba(40,52,78,0.62), transparent 72%),
+      linear-gradient(180deg, #241726 0%, #3E2433 16%, #7A4A52 34%, #C98C5E 50%, #8E7C84 64%, #3B4666 82%, #11192E 100%);
+    transition: background 1100ms ease;
+    animation: portalDrift 36s ease-in-out infinite alternate;
+  }
+  .m-portal .bloom {
+    position: absolute; left:0; right:0; top: 40%; height: 22%; z-index: 2; pointer-events: none;
+    background: radial-gradient(ellipse 60% 100% at 50% 50%, rgba(255,232,190,0.55), transparent 72%);
+    filter: blur(7px); animation: bloomBreathe 9s ease-in-out infinite alternate;
+  }
+  .m-portal .grain {
+    position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: 0.5; mix-blend-mode: screen;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch' seed='4'/><feColorMatrix values='0 0 0 0 0.98  0 0 0 0 0.92  0 0 0 0 0.78  0 0 0 0.07 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+  }
+  .m-portal .vignette {
+    position: absolute; inset: 0; z-index: 4; pointer-events: none;
+    background:
+      radial-gradient(ellipse at center, transparent 46%, rgba(0,0,0,0.52) 100%),
+      linear-gradient(180deg, rgba(0,0,0,0.10) 0%, transparent 30%, rgba(0,0,0,0.66) 100%);
+  }
+  .m-portal-copy {
+    position: relative; z-index: 5; height: 100%; padding: 20px 22px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .m-portal-mark {
+    font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--brass-foil);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .m-portal-mark .rule { width: 18px; height: 1px; background: var(--brass-foil); }
+  .m-portal-headline {
+    font-family:'Fraunces',serif; font-style: italic; font-weight: 300; font-size: 27px;
+    line-height: 1.12; color: var(--pearl); margin: 0; max-width: 13ch;
+    text-shadow: 0 2px 24px rgba(0,0,0,0.4);
+  }
+  .m-portal-where {
+    font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--cream);
+  }
+
+  /* Mobile invitations */
+  .m-invitations { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 0; }
+  .m-invitation {
+    text-align: left; cursor: pointer;
+    background: rgba(217,183,118,0.05); border: 1px solid rgba(217,183,118,0.18);
+    border-radius: 10px; padding: 11px 14px;
+  }
+  .m-invitation .lead { font-family:'Fraunces',serif; font-style:italic; font-size:14px; color: var(--cream); margin: 0 0 2px; }
+  .m-invitation .hint { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--pearl-soft); }
+
+  /* Mobile desk (sticky bottom) */
+  .m-desk {
+    position: relative; z-index: 10; margin: 14px 0 0;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(28,22,14,0.95), rgba(14,11,7,0.97));
+    border: 1px solid rgba(217,183,118,0.3);
+    box-shadow: inset 0 1px 0 rgba(255,248,235,0.06), 0 -10px 30px -16px rgba(0,0,0,0.7);
+    padding: 12px 14px 18px;
+  }
+  .m-desk-stack { display: flex; flex-direction: column; gap: 8px; }
+  .m-desk-field { display: flex; flex-direction: column; gap: 3px; border-bottom: 1px solid rgba(217,183,118,0.16); padding-bottom: 7px; }
+  .m-desk-label { font-size: 8px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--brass-foil); }
+  .m-desk-input { background: transparent; border: none; outline: none; color: var(--pearl); font-size: 14px; padding: 2px 0; width: 100%; }
+  .m-desk-input::placeholder { color: rgba(199,185,152,0.55); }
+  .m-desk-send {
+    margin-top: 4px; width: 100%; cursor: pointer;
+    background: linear-gradient(140deg, var(--brass-foil), var(--brass-deep));
+    border: 1px solid var(--brass-deep); border-radius: 8px;
+    color: var(--velvet); padding: 11px;
+    font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 600;
+  }
+
+  /* Mobile results (post-search) */
+  .m-results-head { margin-bottom: 14px; }
+  .m-results-count { font-family:'Fraunces',serif; font-style:italic; font-size:20px; color: var(--pearl); margin: 0 0 4px; }
+  .m-results-why { font-size: 11px; color: var(--pearl-soft); line-height: 1.45; margin: 0; }
+  .m-ed-card {
+    border-radius: 12px; overflow: hidden; background: var(--velvet);
+    border: 1px solid rgba(217,183,118,0.18); box-shadow: var(--shadow-cinema); margin-bottom: 14px;
+  }
+  .m-ed-plate { position: relative; height: 92px; }
+  .m-ed-plate .px { position:absolute; inset:0; background: radial-gradient(ellipse 80% 60% at 50% 20%, rgba(232,186,120,0.5), transparent 60%), linear-gradient(160deg, #3a2530, #7a4a4a 45%, #2b3a58 100%); }
+  .m-ed-plate .px.alt2 { background: radial-gradient(ellipse 80% 60% at 60% 10%, rgba(150,200,170,0.4), transparent 60%), linear-gradient(160deg, #20302a, #4a6450 50%, #20303a 100%); }
+  .m-ed-plate::after { content:''; position:absolute; inset:0; background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.5) 100%); }
+  .m-ed-plate .serial { position:absolute; top:9px; left:11px; font-size:8px; letter-spacing:0.2em; text-transform:uppercase; color: var(--brass-foil); }
+  .m-ed-card .body { padding: 13px 15px 15px; }
+  .m-ed-card .name { font-family:'Fraunces',serif; font-weight:500; font-size:16px; color: var(--pearl); margin: 0 0 2px; }
+  .m-ed-card .it { font-family:'Fraunces',serif; font-style:italic; font-size:12px; color: var(--cream); line-height:1.4; margin: 0 0 10px; }
+  .m-ed-trust { font-size:8px; letter-spacing:0.16em; text-transform:uppercase; color: var(--pearl-soft); margin-bottom: 12px; display: flex; gap: 8px; }
+  .m-ed-trust .verified { color: var(--brass-foil); }
+  .m-ed-card .actions { display:flex; gap: 8px; }
+  .m-btn-add { flex: 1; cursor:pointer; font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--brass-foil); background: transparent; border: 1px solid rgba(217,183,118,0.4); border-radius: 6px; padding: 9px; }
+  .m-btn-add.saved { color: var(--velvet); background: linear-gradient(140deg, var(--brass-foil), var(--brass-deep)); border-color: var(--brass-deep); }
+
+  .phone-caption { text-align: center; margin-top: 22px; max-width: 360px; }
+  .phone-caption .eyebrow { font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--brass-deep); margin-bottom: 6px; }
+  .phone-caption .title { font-family:'Fraunces',serif; font-style: italic; font-size: 22px; margin: 0 0 6px; color: var(--ink); }
+  .phone-caption .sub { font-size: 12px; color: var(--ink-mist); line-height: 1.5; }
+
+  /* doc notes */
+  .notes {
+    margin-top: 80px; padding-top: 36px; border-top: 1px solid var(--hairline);
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 48px;
+  }
+  .notes h4 { font-family:'Fraunces',serif; font-style: italic; font-size: 16px; margin: 0 0 12px; color: var(--ink); }
+  .notes p { font-size: 12px; color: var(--ink-mist); line-height: 1.65; margin: 0; }
+  .colophon { margin-top: 56px; text-align: center; font-size: 10px; letter-spacing: 0.32em; text-transform: uppercase; color: var(--ink-mist); }
+  .colophon .glyph { font-family:'Fraunces',serif; font-style: italic; color: var(--brass); font-size: 14px; margin: 0 10px; letter-spacing: 0; }
+
+  /* reset toggle */
+  .reset-line { margin-top: 16px; font-size: 11px; color: var(--ink-mist); }
+  .reset-line button {
+    background: transparent; border: 1px solid var(--hairline); border-radius: 5px;
+    padding: 6px 12px; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--ink-soft); cursor: pointer; margin-left: 8px;
+  }
+
+  /* reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .portal .scene, .m-portal .scene { animation: none; }
+    .portal .bloom, .m-portal .bloom { animation: none; }
+    .salon-canvas.searched .results { animation: none; }
+    .folio-toast { transition: opacity 120ms ease; }
+    .desk-send:hover, .ed-card:hover, .invitation:hover, .place-card:hover { transform: none; }
+  }
+
+  /* responsive doc */
+  @media (max-width: 1100px) {
+    .salon-body { grid-template-columns: 1fr; }
+    .dossier { border-left: none; border-top: 1px solid var(--hairline); }
+    .results-grid { grid-template-columns: 1fr 1fr; }
+    .notes { grid-template-columns: 1fr; gap: 24px; }
+  }
+  @media (max-width: 700px) {
+    main { padding: 32px 16px 80px; }
+    .results-grid { grid-template-columns: 1fr; }
+    .invitations { grid-template-columns: 1fr; }
+    .phone { transform: scale(0.86); transform-origin: top center; }
+  }
+</style>
+</head>
+<body>
+
+<main>
+
+  <header class="masthead">
+    <div class="wordmark">Atelier<span class="dot"></span>Salon</div>
+    <div class="masthead-meta">Outside-Trip Concierge · Concept v1</div>
+  </header>
+
+  <section style="margin-bottom: 64px; max-width: 780px;">
+    <p class="section-eyebrow">The Private Travel Salon · A Direction Study</p>
+    <h1 class="section-title">A concierge room that opens onto<br>the place you are dreaming of.</h1>
+    <p class="section-sub">
+      The outside-trip concierge is not a chat box on paper. It is a salon — a cinematic room inside the
+      Atelier world whose centrepiece is a <em>portal</em>: a deep window that suggests possibility before you
+      ask, and tunes toward your destination or mood after you do. The concierge desk is fused into the base of
+      the portal. To its right, a dossier explains what the concierge can do. After a search, a curated shortlist
+      reveals as editorial cards you can save to your folio. Try the desk below — type a destination and a mood,
+      or choose an invitation.
+    </p>
+  </section>
+
+  <div class="frame-stack">
+
+    <!-- ════════════ FRAME A · DESKTOP (live, pre → post) ════════════ -->
+    <section>
+      <p class="section-eyebrow">Frame A · Desktop · Interactive</p>
+      <h2 class="section-title">The Salon</h2>
+      <p class="section-sub">
+        Pre-search, the portal holds an open dawn — possibility, not a destination. The desk waits. Choose an
+        invitation or type below, and the room transforms: the portal tunes toward your search, a shortlist
+        reveals beneath it, and the dossier yields to the briefing. Save a place and it slips into your folio.
+      </p>
+
+      <div class="salon-canvas" id="salonCanvas">
+        <div class="room-grain"></div>
+
+        <!-- floating atelier nav -->
+        <nav class="atelier-nav">
+          <div class="brand">Atelier<span class="dot"></span>Salon</div>
+          <div class="nav-words">
+            <a href="#">Home</a>
+            <a href="#">Explore</a>
+            <a href="#">Saved</a>
+            <a class="active" href="#">Concierge</a>
+          </div>
+          <div class="right">
+            <div class="cmdk">⌘ K</div>
+            <div class="avatar">E</div>
+          </div>
+        </nav>
+
+        <div class="salon-body">
+
+          <!-- STAGE -->
+          <div class="salon-stage">
+            <div class="stage-eyebrow"><span class="rule"></span><span id="stageEyebrow">The Concierge · At your service</span></div>
+
+            <!-- PORTAL -->
+            <div class="portal" id="portal">
+              <div class="scene"></div>
+              <div class="haze"></div>
+              <div class="bloom"></div>
+              <div class="grain"></div>
+              <div class="vignette"></div>
+              <div class="portal-copy">
+                <span class="portal-mark"><span class="rule"></span><span id="portalMark">Where to next</span></span>
+                <h2 class="portal-headline" id="portalHeadline">Tell me the feeling you're chasing, and I'll find the place.</h2>
+                <div class="portal-foot">
+                  <span class="where" id="portalWhere">A window, not a wishlist</span>
+                  <span id="portalSeason">Open · any season</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- DESK -->
+            <form class="desk" id="desk" onsubmit="return false;">
+              <div class="desk-row">
+                <label class="desk-field">
+                  <span class="desk-label">Destination or region</span>
+                  <input class="desk-input" id="inputDest" type="text" placeholder="Anywhere — or somewhere in mind" autocomplete="off">
+                </label>
+                <span class="desk-divider"></span>
+                <label class="desk-field query">
+                  <span class="desk-label">What are you looking for</span>
+                  <input class="desk-input" id="inputQuery" type="text" placeholder="a quiet coast, late dinners, a city that rewards walking…" autocomplete="off">
+                </label>
+                <button class="desk-send" id="deskSend" type="submit" aria-label="Ask the concierge">→</button>
+              </div>
+            </form>
+
+            <!-- INVITATIONS (pre-search) -->
+            <div class="invitations" id="invitations">
+              <button class="invitation" data-dest="Kyoto" data-mood="where the season is turning" data-scene="kyoto" data-season="Autumn · maples">
+                <p class="lead">Where the season is turning</p>
+                <p class="hint">Mood · slow + atmospheric</p>
+              </button>
+              <button class="invitation" data-dest="Amalfi Coast" data-mood="long lunches above the sea" data-scene="amalfi" data-season="Late spring · coast">
+                <p class="lead">Long lunches above the sea</p>
+                <p class="hint">Mood · coastal + unhurried</p>
+              </button>
+              <button class="invitation" data-dest="Lisbon" data-mood="a city that rewards walking" data-scene="city" data-season="Any season · streets">
+                <p class="lead">A city that rewards walking</p>
+                <p class="hint">Exploratory · neighbourhoods</p>
+              </button>
+              <button class="invitation" data-dest="Hokkaido" data-mood="somewhere the nights are cold and clear" data-scene="alpine" data-season="Winter · clear nights">
+                <p class="lead">Cold, clear nights</p>
+                <p class="hint">Mood · remote + restorative</p>
+              </button>
+            </div>
+
+            <!-- RESULTS (post-search) -->
+            <div class="results" id="results">
+              <div class="results-head">
+                <p class="results-count" id="resultsCount">Three places that fit the mood.</p>
+                <p class="results-why" id="resultsWhy">Each is a verified place. Save one to your folio, or open it to read further.</p>
+              </div>
+              <div class="results-grid" id="resultsGrid"><!-- cards injected --></div>
+            </div>
+          </div>
+
+          <!-- DOSSIER -->
+          <aside class="dossier">
+            <div class="dossier-eyebrow"><span class="rule"></span>The Briefing</div>
+            <h3 class="dossier-title">What your concierge attends to</h3>
+            <p class="dossier-sub">A curated brief — not a help menu. The salon researches, verifies, and composes; you decide what to keep.</p>
+            <div class="dossier-rule"></div>
+
+            <div class="dossier-item">
+              <p class="di-no">i.</p>
+              <p class="di-name">Reads the mood, not just the map</p>
+              <p class="di-desc">Describe a feeling — a quiet coast, late dinners — and the salon translates it into real places.</p>
+            </div>
+            <div class="dossier-item">
+              <p class="di-no">ii.</p>
+              <p class="di-name">Surfaces verified places only</p>
+              <p class="di-desc">Every suggestion is a confirmed, operating place — never an invented or unconfirmed listing.</p>
+            </div>
+            <div class="dossier-item">
+              <p class="di-no">iii.</p>
+              <p class="di-name">Keeps what you choose</p>
+              <p class="di-desc">Save a place to your folio, or carry it into a trip when one is open. Nothing is added without you.</p>
+            </div>
+
+            <div class="dossier-foot">
+              <span class="dossier-badge verified">Verified places</span>
+              <span class="dossier-badge">No bookings made for you</span>
+              <span class="dossier-badge">Yours to keep</span>
+            </div>
+          </aside>
+
+        </div>
+
+        <!-- save-to-folio confirmation -->
+        <div class="folio-toast" id="folioToast">kept in your folio</div>
+      </div>
+
+      <p class="reset-line">
+        The frame above is live.
+        <button id="resetBtn" type="button">Reset to pre-search</button>
+      </p>
+    </section>
+
+    <!-- ════════════ FRAMES B + C · MOBILE ════════════ -->
+    <section>
+      <p class="section-eyebrow">Frames B + C · Mobile</p>
+      <h2 class="section-title">The Salon, in the hand</h2>
+      <p class="section-sub">
+        On phone the salon is the only full-screen cinema surface. The portal fills the frame; the desk sits at
+        the base where the thumb falls. Pre-search shows possibility and three invitations; post-search reveals
+        a curated shortlist that scrolls beneath the tuned portal.
+      </p>
+
+      <div class="phones-row">
+
+        <!-- PHONE 1 · pre-search -->
+        <div>
+          <div class="phone">
+            <div class="phone-notch"></div>
+            <div class="phone-screen">
+              <div class="m-salon">
+                <div class="room-grain"></div>
+                <div class="m-status"><span>9:41</span><span>•••  ⌃ ◐</span></div>
+                <div class="m-nav">
+                  <div class="brand">Atelier<span class="dot"></span>Salon</div>
+                  <div class="dots">···</div>
+                </div>
+                <div class="m-salon-scroll">
+                  <div class="m-portal">
+                    <div class="scene"></div>
+                    <div class="bloom"></div>
+                    <div class="grain"></div>
+                    <div class="vignette"></div>
+                    <div class="m-portal-copy">
+                      <span class="m-portal-mark"><span class="rule"></span>Where to next</span>
+                      <h2 class="m-portal-headline">Tell me the feeling you're chasing.</h2>
+                      <span class="m-portal-where">A window, not a wishlist</span>
+                    </div>
+                  </div>
+
+                  <div class="m-invitations">
+                    <button class="m-invitation">
+                      <p class="lead">Where the season is turning</p>
+                      <p class="hint">Mood · slow + atmospheric</p>
+                    </button>
+                    <button class="m-invitation">
+                      <p class="lead">Long lunches above the sea</p>
+                      <p class="hint">Mood · coastal + unhurried</p>
+                    </button>
+                  </div>
+
+                  <div class="m-desk">
+                    <div class="m-desk-stack">
+                      <div class="m-desk-field">
+                        <span class="m-desk-label">Destination or region</span>
+                        <input class="m-desk-input" type="text" placeholder="Anywhere — or somewhere in mind">
+                      </div>
+                      <div class="m-desk-field">
+                        <span class="m-desk-label">What are you looking for</span>
+                        <input class="m-desk-input" type="text" placeholder="a quiet coast, late dinners…">
+                      </div>
+                      <button class="m-desk-send" type="button">Ask the concierge</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="phone-caption">
+            <p class="eyebrow">Frame B</p>
+            <h3 class="title">Mobile · Pre-search</h3>
+            <p class="sub">The portal holds an open dawn. Two invitations and a thumb-reachable desk — no empty chat dock, no help box.</p>
+          </div>
+        </div>
+
+        <!-- PHONE 2 · post-search -->
+        <div>
+          <div class="phone">
+            <div class="phone-notch"></div>
+            <div class="phone-screen">
+              <div class="m-salon">
+                <div class="room-grain"></div>
+                <div class="m-status"><span>9:41</span><span>•••  ⌃ ◐</span></div>
+                <div class="m-nav">
+                  <div class="brand">Atelier<span class="dot"></span>Salon</div>
+                  <div class="dots">···</div>
+                </div>
+                <div class="m-salon-scroll" style="overflow-y: auto; padding-bottom: 24px;">
+                  <!-- tuned portal, shorter -->
+                  <div class="m-portal" id="mPortalKyoto" style="flex: none; height: 200px; margin-bottom: 18px;">
+                    <div class="scene" style="background:
+                      radial-gradient(ellipse 90% 50% at 50% 18%, rgba(220,140,90,0.5), transparent 60%),
+                      radial-gradient(ellipse 120% 70% at 50% 86%, rgba(46,40,52,0.7), transparent 72%),
+                      linear-gradient(180deg, #2a1a1e 0%, #5a2e2a 22%, #b06a3e 46%, #7a5650 66%, #2e2838 100%);"></div>
+                    <div class="bloom"></div>
+                    <div class="grain"></div>
+                    <div class="vignette"></div>
+                    <div class="m-portal-copy">
+                      <span class="m-portal-mark"><span class="rule"></span>Kyoto · where the season is turning</span>
+                      <h2 class="m-portal-headline" style="font-size:22px;">Three places where autumn arrives quietly.</h2>
+                      <span class="m-portal-where">Autumn · maples</span>
+                    </div>
+                  </div>
+
+                  <div class="m-results-head">
+                    <p class="m-results-count">Three places that fit the mood.</p>
+                    <p class="m-results-why">Each is a verified place. Save one to your folio, or open it to read further.</p>
+                  </div>
+
+                  <article class="m-ed-card">
+                    <div class="m-ed-plate"><div class="px"></div><span class="serial">Salon · 01</span></div>
+                    <div class="body">
+                      <h4 class="name">Nanzen-ji, Northern Higashiyama</h4>
+                      <p class="it">A temple complex that empties by late afternoon, when the maples go to copper.</p>
+                      <p class="m-ed-trust"><span class="verified">● Verified place</span><span>Temple · garden</span></p>
+                      <div class="actions">
+                        <button class="m-btn-add" type="button">Save to folio</button>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article class="m-ed-card">
+                    <div class="m-ed-plate"><div class="px alt2"></div><span class="serial">Salon · 02</span></div>
+                    <div class="body">
+                      <h4 class="name">Pontocho Alley, after dark</h4>
+                      <p class="it">A lantern-lit lane along the river — slip in early, before the dinner crowd.</p>
+                      <p class="m-ed-trust"><span class="verified">● Verified place</span><span>Dining lane</span></p>
+                      <div class="actions">
+                        <button class="m-btn-add" type="button">Save to folio</button>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="phone-caption">
+            <p class="eyebrow">Frame C</p>
+            <h3 class="title">Mobile · Post-search</h3>
+            <p class="sub">The portal tunes to Kyoto and shrinks to a tuned banner; a curated shortlist scrolls beneath it. Save slides each place into the folio.</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </div>
+
+  <!-- notes -->
+  <section class="notes">
+    <div>
+      <h4>What this concept demonstrates</h4>
+      <p>The outside-trip concierge as a transportive salon. A layered portal (scene, haze, bloom, grain, vignette) carries the user into a mood before they ask and tunes toward their search after. The desk is an instrument fused to the portal, not a generic form. Results reveal as editorial, verified cards.</p>
+    </div>
+    <div>
+      <h4>What is deliberately absent</h4>
+      <p>No blank paper page. No giant dark rectangle. No generic chat dock or help card. No placeholder gradient banner with design-note captions. No fake counts or saved totals. No SaaS dashboard chrome, and no black-cave overcorrection — warmth and paper still anchor the room.</p>
+    </div>
+    <div>
+      <h4>Product truth preserved</h4>
+      <p>The salon surfaces verified places and helps the user save or add them — it never books on their behalf and never invents listings. Motion is atmospheric and respects reduced-motion. This is a concept prototype only; no production app code is touched.</p>
+    </div>
+  </section>
+
+  <div class="colophon">
+    The Salon<span class="glyph">·</span>Outside-Trip Concierge Concept<span class="glyph">·</span>v1
+  </div>
+
+</main>
+
+<script>
+  (function () {
+    var canvas   = document.getElementById('salonCanvas');
+    var portal   = document.getElementById('portal');
+    var scene    = portal.querySelector('.scene');
+    var headline = document.getElementById('portalHeadline');
+    var portalMark = document.getElementById('portalMark');
+    var portalWhere = document.getElementById('portalWhere');
+    var portalSeason = document.getElementById('portalSeason');
+    var stageEyebrow = document.getElementById('stageEyebrow');
+    var inputDest = document.getElementById('inputDest');
+    var inputQuery = document.getElementById('inputQuery');
+    var deskSend = document.getElementById('deskSend');
+    var desk = document.getElementById('desk');
+    var grid = document.getElementById('resultsGrid');
+    var countEl = document.getElementById('resultsCount');
+    var whyEl = document.getElementById('resultsWhy');
+    var toast = document.getElementById('folioToast');
+    var resetBtn = document.getElementById('resetBtn');
+
+    // Mood scenes — pure CSS, no assets. Each tunes the portal toward a feeling.
+    var SCENES = {
+      kyoto: 'radial-gradient(ellipse 90% 55% at 50% 16%, rgba(220,140,90,0.55), transparent 62%), radial-gradient(ellipse 120% 70% at 50% 84%, rgba(46,40,52,0.68), transparent 72%), linear-gradient(180deg, #2a1a1e 0%, #5a2e2a 20%, #b06a3e 46%, #7a5650 66%, #2e2838 100%)',
+      amalfi: 'radial-gradient(ellipse 90% 55% at 50% 18%, rgba(255,210,150,0.55), transparent 62%), radial-gradient(ellipse 120% 70% at 50% 82%, rgba(28,60,90,0.7), transparent 72%), linear-gradient(180deg, #3a2412 0%, #7a4a26 20%, #d49258 46%, #6f8296 66%, #16304a 100%)',
+      city: 'radial-gradient(ellipse 90% 55% at 50% 20%, rgba(230,180,120,0.45), transparent 62%), radial-gradient(ellipse 120% 70% at 50% 84%, rgba(40,46,66,0.7), transparent 72%), linear-gradient(180deg, #2a2026 0%, #5a4248 22%, #b08868 48%, #6a6878 66%, #20243a 100%)',
+      alpine: 'radial-gradient(ellipse 90% 55% at 50% 16%, rgba(180,200,230,0.4), transparent 62%), radial-gradient(ellipse 120% 70% at 50% 84%, rgba(20,30,52,0.78), transparent 72%), linear-gradient(180deg, #161e30 0%, #2c3a54 24%, #6a7e9a 48%, #45506a 68%, #0e1626 100%)'
+    };
+
+    // Verified-place shortlists, keyed by scene. No fake counts, no bookings.
+    var RESULTS = {
+      kyoto: {
+        headline: 'Three places where autumn arrives quietly.',
+        season: 'Autumn · maples',
+        cards: [
+          { serial: 'Salon · 01', name: 'Nanzen-ji, Northern Higashiyama', it: 'A temple complex that empties by late afternoon, when the maples go to copper.', tag: 'Temple · garden' },
+          { serial: 'Salon · 02', name: 'Pontocho Alley, after dark', it: 'A lantern-lit lane along the river — slip in early, before the dinner crowd.', tag: 'Dining lane', plate: 'alt2' },
+          { serial: 'Salon · 03', name: 'Kurama-dera, the mountain path', it: 'A cable car up, then a wooded climb between the two halls.', tag: 'Mountain temple', plate: 'alt3' }
+        ]
+      },
+      amalfi: {
+        headline: 'Three tables that earn a long lunch.',
+        season: 'Late spring · coast',
+        cards: [
+          { serial: 'Salon · 01', name: 'Da Adolfo, Laurito beach', it: 'Reached by the restaurant’s own boat from Positano; lunch runs until the light softens.', tag: 'Beach trattoria' },
+          { serial: 'Salon · 02', name: 'La Tagliata, Montepertuso', it: 'A drive up the hill, and a long set lunch with the coast falling away below.', tag: 'Hill kitchen', plate: 'alt3' },
+          { serial: 'Salon · 03', name: 'Il San Pietro terrace, Positano', it: 'A cliffside room where the sea is the only thing competing with the plate.', tag: 'Terrace dining', plate: 'alt2' }
+        ]
+      },
+      city: {
+        headline: 'Three walks that show the city slowly.',
+        season: 'Any season · streets',
+        cards: [
+          { serial: 'Salon · 01', name: 'Alfama, from the cathedral down', it: 'Lose the map; the lanes fall toward the river on their own.', tag: 'Old quarter' },
+          { serial: 'Salon · 02', name: 'Príncipe Real to Bairro Alto', it: 'Antique squares, a botanical garden, and the long way to dinner.', tag: 'Neighbourhood', plate: 'alt2' },
+          { serial: 'Salon · 03', name: 'Time Out Market, late afternoon', it: 'Arrive between services, when the counters are calm and the cooks will talk.', tag: 'Market hall', plate: 'alt3' }
+        ]
+      },
+      alpine: {
+        headline: 'Three places for cold, clear nights.',
+        season: 'Winter · clear nights',
+        cards: [
+          { serial: 'Salon · 01', name: 'Lake Akan, eastern Hokkaido', it: 'A frozen caldera lake; the sky opens once the resort lights dim.', tag: 'Lake · onsen' },
+          { serial: 'Salon · 02', name: 'Daisetsuzan, Sounkyo gorge', it: 'Ice falls lit after dark, and a quiet ryokan to return to.', tag: 'Mountain park', plate: 'alt2' },
+          { serial: 'Salon · 03', name: 'Furano, the open plateau', it: 'Far enough from town that the cold buys you the whole sky.', tag: 'Plateau', plate: 'alt3' }
+        ]
+      }
+    };
+
+    function pickScene(dest, query) {
+      var s = (dest + ' ' + query).toLowerCase();
+      if (/kyoto|japan|autumn|maple|temple|season/.test(s)) return 'kyoto';
+      if (/amalfi|positano|coast|sea|italy|lunch/.test(s)) return 'amalfi';
+      if (/lisbon|city|walk|street|porto|paris|neighbou?rhood/.test(s)) return 'city';
+      if (/hokkaido|alpine|cold|snow|winter|mountain|clear/.test(s)) return 'alpine';
+      return 'city';
+    }
+
+    function buildCards(sceneKey) {
+      var data = RESULTS[sceneKey] || RESULTS.city;
+      grid.innerHTML = '';
+      data.cards.forEach(function (c) {
+        var card = document.createElement('article');
+        card.className = 'ed-card';
+        card.innerHTML =
+          '<div class="ed-plate"><div class="px ' + (c.plate || '') + '"></div><span class="serial">' + c.serial + '</span></div>' +
+          '<div class="body">' +
+            '<h4 class="name">' + c.name + '</h4>' +
+            '<p class="it">' + c.it + '</p>' +
+            '<p class="ed-trust"><span class="verified">Verified place</span><span>' + c.tag + '</span></p>' +
+            '<div class="actions">' +
+              '<button class="btn-add" type="button">Save to folio</button>' +
+              '<button class="btn-link" type="button">Read further</button>' +
+            '</div>' +
+          '</div>';
+        grid.appendChild(card);
+      });
+      bindSaves();
+    }
+
+    function bindSaves() {
+      grid.querySelectorAll('.btn-add').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          if (btn.classList.contains('saved')) return;
+          btn.classList.add('saved');
+          btn.textContent = 'In your folio';
+          showToast();
+        });
+      });
+    }
+
+    var toastTimer;
+    function showToast() {
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 1800);
+    }
+
+    function runSearch(dest, query, forcedScene, forcedSeason) {
+      var sceneKey = forcedScene && SCENES[forcedScene] ? forcedScene : pickScene(dest, query);
+      var data = RESULTS[sceneKey] || RESULTS.city;
+
+      // tune the portal
+      scene.style.background = SCENES[sceneKey];
+      stageEyebrow.textContent = (dest ? dest : 'Your search') + ' · composed for you';
+      portalMark.textContent = (dest ? dest : 'For you') + (query ? ' · ' + query : '');
+      headline.textContent = data.headline;
+      portalWhere.textContent = dest || 'A place to begin';
+      portalSeason.textContent = forcedSeason || data.season;
+
+      countEl.textContent = data.cards.length === 3 ? 'Three places that fit the mood.' : (data.cards.length + ' places that fit the mood.');
+      whyEl.textContent = 'Each is a verified place. Save one to your folio, or open it to read further.';
+
+      buildCards(sceneKey);
+      canvas.classList.add('searched');
+    }
+
+    deskSend.addEventListener('click', function () {
+      runSearch(inputDest.value.trim(), inputQuery.value.trim());
+    });
+    desk.addEventListener('submit', function () {
+      runSearch(inputDest.value.trim(), inputQuery.value.trim());
+    });
+
+    document.querySelectorAll('#invitations .invitation').forEach(function (inv) {
+      inv.addEventListener('click', function () {
+        var dest = inv.getAttribute('data-dest');
+        var mood = inv.getAttribute('data-mood');
+        var sc   = inv.getAttribute('data-scene');
+        var se   = inv.getAttribute('data-season');
+        inputDest.value = dest;
+        inputQuery.value = mood;
+        runSearch(dest, mood, sc, se);
+      });
+    });
+
+    resetBtn.addEventListener('click', function () {
+      canvas.classList.remove('searched');
+      inputDest.value = '';
+      inputQuery.value = '';
+      scene.style.background = '';
+      stageEyebrow.textContent = 'The Concierge · At your service';
+      portalMark.textContent = 'Where to next';
+      headline.textContent = "Tell me the feeling you're chasing, and I'll find the place.";
+      portalWhere.textContent = 'A window, not a wishlist';
+      portalSeason.textContent = 'Open · any season';
+      window.scrollTo({ top: canvas.getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' });
+    });
+
+    // mobile post-search phone: wire the visible save buttons
+    document.querySelectorAll('.m-btn-add').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.classList.contains('saved')) return;
+        btn.classList.add('saved');
+        btn.textContent = 'In your folio';
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>
