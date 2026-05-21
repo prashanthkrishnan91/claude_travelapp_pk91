@@ -548,13 +548,13 @@ describe("Atelier Room System: two-column workbench + briefing rail (patch-5)", 
     );
   });
 
-  test("H4. atelier-salon-panel-body has flex:1 and overflow-y:auto for internal scroll", () => {
+  test("H4. atelier-salon-panel-body has flex:1 for result area growth", () => {
     const idx = globalsCss.indexOf(".atelier-salon-panel-body");
     assert.ok(idx !== -1, ".atelier-salon-panel-body must be defined");
     const block = globalsCss.slice(idx, idx + 200);
     assert.ok(
-      block.includes("flex: 1") && block.includes("overflow-y: auto"),
-      ".atelier-salon-panel-body must set flex:1 and overflow-y:auto",
+      block.includes("flex: 1"),
+      ".atelier-salon-panel-body must set flex:1 for result area growth (no internal scroll — page scrolls naturally)",
     );
   });
 

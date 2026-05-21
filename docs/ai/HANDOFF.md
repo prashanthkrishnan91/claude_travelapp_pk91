@@ -80,14 +80,34 @@ All existing testids, folio-cinema-desk, folio-cinema-composer, folio-concierge-
 **Test count (earlier patches):** 2991 total, 0 failures.  
 **No backend / SQL / provider / env / Supabase / API / route / data-contract changes (any patch).**
 
-### Salon Concept v1 (current PR, in progress)
+### Salon Concept v1 + Structural Replacement (current PR, in progress)
 
-**AI Concierge Salon visual upgrade — pure CSS/TSX, no backend changes.**
+**AI Concierge Salon spatial redesign — pure CSS/TSX, no backend changes.**
 
-Changes in this PR:
-- **`globals.css`** — new CSS primitives: `.atelier-salon-portal` (cinematic portal window, 5 layers: scene/bloom/vignette/grain/copy), `.atelier-salon-invitation-card` + lead/hint spans, `.atelier-salon-results-header` + count/why, `.atelier-salon-briefing-title/sub/no/item-name/item-desc/rule/badge` (dossier rail upgrade). All use `color-mix()` — no raw rgba().
-- **`ConciergePage.tsx`** — `SALON_INVITATIONS` constant (6 invitations with lead+hint+query), `DOSSIER_ITEMS` constant (3 roman-numeral items). Empty state upgraded with portal window + invitation cards. Result sections get editorial header. Briefing rail upgraded to dossier design. All existing testids preserved.
-- **`tests/salon-concept-v1.test.mjs`** — 27 new Section I tests (portal CSS, invitation CSS, results header CSS, dossier CSS, ConciergePage wiring).
+Changes in this PR (two phases):
+
+**Phase 1 — CSS primitives + ingredient wiring:**
+- **`globals.css`** — `.atelier-salon-portal` (5 layers), `.atelier-salon-invitation-card` + lead/hint, `.atelier-salon-results-header`, dossier briefing rail CSS. All `color-mix()`.
+- **`ConciergePage.tsx`** — `SALON_INVITATIONS`, `DOSSIER_ITEMS`, portal in empty state, editorial results header, dossier briefing rail.
+
+**Phase 2 — Structural spatial replacement (rejected prototype ingredients → prototype spine):**
+- **`globals.css`** structural changes:
+  - `.atelier-salon-workbench` → centering-only shell (grid removed)
+  - `.atelier-salon-main-panel` → dark cinema canvas (`background: var(--ds-midnight-ink)`, `overflow: hidden`, `border-radius: 18px`, 2-column `grid-template-columns: 1fr 19rem` on ≥900px)
+  - New `.atelier-salon-stage` → left flex-column (portal `flex:1` → desk `margin-top:20px` in flow → panel-body below)
+  - `.atelier-salon-portal` → `flex: 1; min-height: 420px` (grows to fill stage, not fixed height)
+  - `.atelier-salon-panel-body` → `flex: 1` only; removed `overflow-y: auto` (no internal scroll — page scrolls naturally)
+  - `.atelier-salon-briefing-rail` → paper dossier column inside canvas (`background: var(--ds-warm-paper)`, `border-left` hairline, no sticky)
+  - Invitation cards → dark cinema context (`transparent` base, light `--ds-text` typography)
+  - Results count/why → `var(--ds-text)` / `var(--ds-text-secondary)` for dark surface
+- **`ConciergePage.tsx`** structural changes:
+  - Header collapsed to small brass eyebrow (testids/classes preserved; `pb-5 sm:pb-8` retained for test contracts)
+  - Portal moved outside `concierge-empty-state`; renders when `!hasResults` at stage top
+  - Composer/desk: removed `sticky z-10`, added `marginTop: "var(--ds-space-4)", borderRadius: "12px"` — in-flow below portal
+  - Results canvas (`<main>`) now a natural-flow flex:1 area below desk, not an internally scrolling panel
+  - Transcript text: `world-ink/world-ink-mist` → `ds-text/ds-text-secondary` for dark stage readability
+  - Dossier `<aside>` now inside `.atelier-salon-main-panel` as the right grid column
+- **`tests/atelier-salon-room-v1.test.mjs`** — H4 updated: removed `overflow-y: auto` requirement (no internal scroll by design)
 - **Test count: 3030 total, 0 failures.**
 - **No backend / SQL / provider / env / Supabase / API / route / data-contract changes.**
 

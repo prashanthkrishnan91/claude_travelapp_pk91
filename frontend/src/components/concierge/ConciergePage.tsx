@@ -784,724 +784,656 @@ export function ConciergePage() {
       data-scenery-tone={salonWorld.visualLayer.contrastTone ?? "dark"}
       style={worldStyleVars(salonWorld)}
     >
-      {/* Salon ambient layer — destination-aware when a city is typed.
-          WorldAtmosphere sits at z-index:-1 within the atelier-salon-room
-          stacking context, behind all in-flow content. */}
+      {/* Ambient layer — destination-aware coloring behind all content */}
       <WorldAtmosphere />
 
-      {/* Workbench — two-column grid on desktop (main panel + briefing rail).
-          CSS owns the grid / flex layout; Tailwind mx-auto centers the column. */}
+      {/* Centering shell — max-width + padding only; grid lives inside the canvas */}
       <div className="atelier-salon-workbench mx-auto">
 
-      {/* ── Main concierge panel ─────────────────────────────────────────── */}
-      <div className="atelier-salon-main-panel">
+        {/* Dark cinema canvas — contains the two-column grid (stage | dossier) */}
+        <div className="atelier-salon-main-panel">
 
-      {/* ── Concierge desk instrument header ─────────────────────────────── */}
-      <header
-        data-testid="concierge-instrument-header"
-        className="atelier-salon-room-header atelier-salon-header-landing atelier-salon-panel-header pb-5 sm:pb-8 text-center px-4 sm:px-6"
-      >
-        <p
-          className="text-ds-accent uppercase tracking-[0.1em]"
-          style={{
-            fontSize: "var(--ds-type-overline-size)",
-            lineHeight: "var(--ds-type-overline-leading)",
-            fontWeight: "var(--ds-type-overline-weight)",
-          }}
-        >
-          Private Travel Concierge
-        </p>
-        <h1
-          style={{
-            fontSize: "var(--ds-type-display-s-size)",
-            lineHeight: "var(--ds-type-display-s-leading)",
-            fontWeight: "var(--ds-type-display-s-weight)",
-            letterSpacing: "var(--ds-type-display-s-tracking)",
-            marginTop: "var(--ds-space-2)",
-            color: "var(--world-ink)",
-          }}
-        >
-          {lastQuery ? `"${lastQuery}"` : "What can I find for you?"}
-        </h1>
-        {!lastQuery && (
-          <>
-            <p
-              className="mx-auto"
-              style={{
-                fontSize: "var(--ds-type-body-size)",
-                lineHeight: "var(--ds-type-body-leading)",
-                maxWidth: "38ch",
-                marginTop: "var(--ds-space-3)",
-                color: "var(--world-ink-mist)",
-              }}
-            >
-              Describe a mood, a neighbourhood, or an occasion.
-              <br />
-              I surface verified places worth your time.
-            </p>
-            <p
-              className="mx-auto"
-              style={{
-                fontSize: "var(--ds-type-body-s-size)",
-                lineHeight: "var(--ds-type-body-s-leading)",
-                maxWidth: "44ch",
-                marginTop: "var(--ds-space-2)",
-                color: "var(--world-ink-mist)",
-              }}
-            >
-              Restaurants, hotels, and local gems — Michelin to hidden.
-            </p>
-          </>
-        )}
-      </header>
+          {/* ── LEFT: Cinema stage — portal → desk → results in flex column ── */}
+          <div className="atelier-salon-stage">
 
-      {/* Editorial mapline — visual rhythm between header and results canvas */}
-      <div className="mapline-rule mx-auto" aria-hidden="true" />
-
-      {/* ── Result canvas — scrollable panel body ─────────────────────────── */}
-      <main
-        data-testid="concierge-results-canvas"
-        aria-label="Concierge results"
-        aria-live="polite"
-        aria-atomic="false"
-        className="atelier-salon-panel-body"
-      >
-        {/* Empty / initial state */}
-        {!loading && !hasResults && messages.length === 0 && (
-          <div
-            data-testid="concierge-empty-state"
-            className="flex flex-col atelier-salon-invitation"
-          >
-            {/* Salon Portal Window — cinematic destination centrepiece */}
-            <div
-              data-testid="concierge-portal"
-              className="atelier-salon-portal"
-              style={{ marginBottom: "var(--ds-space-5)" }}
+            {/* Stage eyebrow — small brass label, not a top-heavy centered header */}
+            <header
+              data-testid="concierge-instrument-header"
+              className="atelier-salon-room-header atelier-salon-header-landing atelier-salon-panel-header pb-5 sm:pb-8"
             >
-              <div className="atelier-salon-portal-scene" aria-hidden="true" />
-              <div className="atelier-salon-portal-bloom" aria-hidden="true" />
-              <div className="atelier-salon-portal-vignette" aria-hidden="true" />
-              <div className="atelier-salon-portal-grain" aria-hidden="true" />
-              <div className="atelier-salon-portal-copy">
-                <span className="atelier-salon-portal-mark">
-                  <span className="portal-rule" aria-hidden="true" />
-                  {destination ? destination : "Where to next"}
-                </span>
-                <p className="atelier-salon-portal-headline">
-                  {destination
-                    ? `Tell me what you are looking for in ${destination}.`
-                    : "Tell me the feeling you’re chasing."}
-                </p>
-                <div className="atelier-salon-portal-foot">
-                  <span>{destination ? destination : "Any destination"}</span>
-                  <span>Any season</span>
+              <p
+                style={{
+                  fontSize: "var(--ds-type-overline-size)",
+                  letterSpacing: "0.32em",
+                  lineHeight: "var(--ds-type-overline-leading)",
+                  fontWeight: "var(--ds-type-overline-weight)",
+                  textTransform: "uppercase",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  color: "color-mix(in srgb, var(--ds-ember-brass) 90%, transparent)",
+                }}
+              >
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: "22px",
+                    height: "1px",
+                    background: "color-mix(in srgb, var(--ds-ember-brass) 60%, transparent)",
+                    flexShrink: 0,
+                  }}
+                  aria-hidden="true"
+                />
+                Private Travel Concierge
+              </p>
+              {/* Tagline — first-person, honest capability statement */}
+              <p
+                style={{
+                  fontSize: "var(--ds-type-caption-size)",
+                  lineHeight: 1.4,
+                  marginTop: "var(--ds-space-1)",
+                  color: "color-mix(in srgb, var(--ds-ember-brass) 55%, transparent)",
+                }}
+              >
+                I surface verified places worth your time.
+              </p>
+              {/* mapline-rule — editorial rhythm below the eyebrow */}
+              <div className="mapline-rule" aria-hidden="true" style={{ marginTop: "var(--ds-space-2)" }} />
+            </header>
+
+            {/* Portal — emotional centrepiece, grows (flex:1) to fill stage above the desk.
+                Visible when no results exist; page grows naturally with results below desk. */}
+            {!hasResults && (
+              <div
+                data-testid="concierge-portal"
+                className="atelier-salon-portal"
+              >
+                <div className="atelier-salon-portal-scene" aria-hidden="true" />
+                <div className="atelier-salon-portal-bloom" aria-hidden="true" />
+                <div className="atelier-salon-portal-vignette" aria-hidden="true" />
+                <div className="atelier-salon-portal-grain" aria-hidden="true" />
+                <div className="atelier-salon-portal-copy">
+                  <span className="atelier-salon-portal-mark">
+                    <span className="portal-rule" aria-hidden="true" />
+                    {destination ? destination : "Where to next"}
+                  </span>
+                  <p className="atelier-salon-portal-headline">
+                    {destination
+                      ? `Tell me what you are looking for in ${destination}.`
+                      : "Tell me the feeling you’re chasing."}
+                  </p>
+                  <div className="atelier-salon-portal-foot">
+                    <span>{destination ? destination : "Any destination"}</span>
+                    <span>Any season</span>
+                  </div>
                 </div>
               </div>
-            </div>
-            {/* Invitations — upgraded starter chips with lead + hint */}
-            <p
-              className="text-center uppercase tracking-[0.1em]"
+            )}
+
+            {/* Desk — fused below the portal in flow. Not sticky, not overlaying portal.
+                Dark instrument surface with brass hairline above. */}
+            <div
+              data-testid="concierge-instrument-composer"
+              className="folio-cinema-composer atelier-salon-composer-surface concierge-sticky-bottom"
               style={{
-                fontSize: "var(--ds-type-overline-size)",
-                lineHeight: "var(--ds-type-overline-leading)",
-                fontWeight: "var(--ds-type-overline-weight)",
-                marginBottom: "var(--ds-space-5)",
-                color: "var(--world-ink-mist)",
+                marginTop: "var(--ds-space-4)",
+                borderRadius: "12px",
               }}
             >
-              Starting points — tell me where to search:
-            </p>
-            <div className="atelier-salon-chip-grid">
-              {SALON_INVITATIONS.map(({ lead, hint, query }) => (
-                <button
-                  key={query}
-                  type="button"
-                  onClick={() => {
-                    setInput(query);
-                    inputRef.current?.focus();
-                  }}
-                  className="rounded-lg folio-concierge-chip atelier-salon-starter-chip atelier-salon-invitation-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
-                  data-testid="concierge-prompt-chip"
-                >
-                  <span className="atelier-salon-invitation-lead">{lead}</span>
-                  <span className="atelier-salon-invitation-hint">{hint}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Messages — transcript: user turns + assistant card groups in order */}
-        <div className="space-y-4">
-          {messages.map((msg, idx) => {
-            // User turn: quiet query marker — not a chat bubble. The search query
-            // appears as a left-border annotation, keeping transcript usable without
-            // dominating the concierge result cards.
-            if (msg.role === "user") {
-              return (
+              {/* Refinement / follow-up chips — visible once transcript has messages */}
+              {activeChips && messages.length > 0 && !loading && (
                 <div
-                  key={idx}
-                  data-testid="concierge-user-query"
-                  className="border-l-2 pl-3 my-2 atelier-salon-user-turn"
+                  className="flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  style={{ padding: "var(--ds-space-3) var(--ds-space-4) 0 var(--ds-space-4)" }}
                 >
-                  <p
-                    className="italic"
+                  {activeChips.map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => handleUserInput(chip)}
+                      className="shrink-0 rounded-lg bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                      style={{
+                        padding: "var(--ds-space-2) var(--ds-space-3)",
+                        fontSize: "var(--ds-type-body-s-size)",
+                        border: "1px solid var(--ds-pen-stroke)",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Destination field */}
+              <div
+                data-testid="concierge-destination-field"
+                style={{ padding: "var(--ds-space-3) var(--ds-space-4) 0 var(--ds-space-4)" }}
+              >
+                <label
+                  htmlFor="concierge-destination"
+                  className="text-ds-text-tertiary uppercase tracking-[0.1em]"
+                  style={{
+                    display: "block",
+                    fontSize: "var(--ds-type-overline-size)",
+                    fontWeight: "var(--ds-type-overline-weight)",
+                    lineHeight: "var(--ds-type-overline-leading)",
+                    marginBottom: "var(--ds-space-1)",
+                  }}
+                >
+                  Where
+                </label>
+                <div
+                  className="flex items-center gap-2 rounded-xl bg-ds-carbon transition-colors duration-[120ms] folio-mapline-field"
+                  style={{
+                    border: destinationError
+                      ? "1px solid var(--ds-warning)"
+                      : "1px solid var(--ds-brass-field-border)",
+                    padding: "var(--ds-space-2) var(--ds-space-4)",
+                    minHeight: "44px",
+                  }}
+                >
+                  <MapPin className="h-3.5 w-3.5 shrink-0 text-ds-accent" aria-hidden="true" />
+                  <input
+                    id="concierge-destination"
+                    type="text"
+                    value={destination}
+                    onChange={(e) => {
+                      setDestination(e.target.value);
+                      if (destinationError && e.target.value.trim()) setDestinationError(false);
+                    }}
+                    placeholder="Tokyo, Paris, Barcelona…"
+                    disabled={loading}
+                    className="flex-1 bg-transparent text-ds-text placeholder:text-ds-text-tertiary focus-visible:outline-none disabled:opacity-50"
                     style={{
-                      fontSize: "var(--ds-type-body-s-size)",
-                      lineHeight: "var(--ds-type-body-s-leading)",
-                      wordBreak: "break-word",
-                      color: "var(--world-ink-mist)",
+                      fontSize: "var(--ds-type-body-size)",
+                      lineHeight: "var(--ds-type-body-leading)",
+                    }}
+                  />
+                </div>
+                {destinationError && (
+                  <p
+                    className="text-ds-text-secondary"
+                    style={{
+                      fontSize: "var(--ds-type-caption-size)",
+                      lineHeight: "var(--ds-type-caption-leading)",
+                      marginTop: "var(--ds-space-2)",
                     }}
                   >
-                    {msg.text}
+                    Add a destination so the concierge knows where to search.
                   </p>
-                </div>
-              );
-            }
+                )}
+              </div>
 
-            // Refinement text-only note (no cards)
-            if (
-              msg.isRefinement &&
-              !(msg.restaurants?.length) &&
-              !(msg.attractions?.length) &&
-              !(msg.hotels?.length)
-            ) {
-              return (
-                <p
-                  key={idx}
+              {/* Query input row */}
+              <div
+                className="flex items-end gap-3"
+                style={{ padding: "var(--ds-space-3) var(--ds-space-4) var(--ds-space-4)" }}
+              >
+                {messages.length > 0 && !loading && (
+                  <button
+                    type="button"
+                    onClick={clearTranscript}
+                    aria-label="Clear search history"
+                    title="Clear search history"
+                    data-testid="concierge-clear-chat"
+                    className="shrink-0 rounded-xl bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                    style={{
+                      padding: "var(--ds-space-3)",
+                      minWidth: "44px",
+                      minHeight: "44px",
+                      border: "1px solid var(--ds-pen-stroke)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                )}
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    e.target.style.height = "auto";
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void handleUserInput(input.trim());
+                    }
+                  }}
+                  placeholder="What can I find for you?"
+                  disabled={loading}
+                  rows={1}
+                  aria-label="Concierge query"
+                  data-testid="concierge-query-input"
+                  className="flex-1 resize-none rounded-xl bg-ds-carbon text-ds-text placeholder:text-ds-text-tertiary border border-ds-pen-stroke hover:border-ds-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 disabled:opacity-50 transition-colors duration-[120ms]"
                   style={{
-                    fontSize: "var(--ds-type-body-s-size)",
-                    lineHeight: "var(--ds-type-body-s-leading)",
-                    paddingTop: "var(--ds-space-2)",
-                    color: "var(--world-ink-mist)",
+                    padding: "var(--ds-space-3) var(--ds-space-4)",
+                    fontSize: "var(--ds-type-body-size)",
+                    lineHeight: "var(--ds-type-body-leading)",
+                    minHeight: "44px",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleUserInput(input.trim())}
+                  disabled={loading || !input.trim()}
+                  aria-label="Submit query"
+                  data-testid="concierge-submit-button"
+                  className="shrink-0 rounded-xl text-ds-text-inverse disabled:opacity-40 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 hover:brightness-110"
+                  style={{
+                    background: "var(--ds-accent)",
+                    padding: "var(--ds-space-3)",
+                    minWidth: "44px",
+                    minHeight: "44px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
                 >
-                  {msg.text}
-                </p>
-              );
-            }
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Send className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+            </div>
 
-            // Card result message
-            const addablePlaces = [
-              ...(msg.restaurants ?? [])
-                .filter(isRenderableVerifiedPlace)
-                .map((place) => ({
-                  kind: "restaurant" as const,
-                  place,
-                  sourceLink:
-                    (place as { bookingLink?: string }).bookingLink ??
-                    (place as { sourceUrl?: string }).sourceUrl,
-                })),
-              ...(msg.attractions ?? [])
-                .filter(isRenderableVerifiedPlace)
-                .map((place) => ({
-                  kind: "attraction" as const,
-                  place,
-                  sourceLink: (place as { sourceUrl?: string }).sourceUrl,
-                })),
-              ...(msg.hotels ?? [])
-                .filter(isRenderableVerifiedPlace)
-                .map((place) => ({
-                  kind: "hotel" as const,
-                  place,
-                  sourceLink:
-                    (place as { bookingUrl?: string }).bookingUrl ??
-                    (place as { sourceUrl?: string }).sourceUrl,
-                })),
-            ];
-
-            if (addablePlaces.length === 0) return null;
-
-            const allTitles = addablePlaces.map(
-              ({ place }) =>
-                (place as { display?: { displayName?: string } }).display
-                  ?.displayName ??
-                (place as { name?: string }).name ??
-                "",
-            );
-
-            return (
-              <section key={idx} data-testid="concierge-result-section" aria-label="Place recommendations">
-                {/* Editorial results header — count + honest framing, no fake data */}
-                <div className="atelier-salon-results-header">
-                  <p className="atelier-salon-results-count">
-                    {addablePlaces.length === 1
-                      ? "One place that fits the mood."
-                      : addablePlaces.length === 2
-                      ? "Two places that fit the mood."
-                      : addablePlaces.length === 3
-                      ? "Three places that fit the mood."
-                      : `${addablePlaces.length} places that fit the mood.`}
+            {/* Results canvas — below desk, grows naturally; page scrolls, no internal scroll */}
+            <main
+              data-testid="concierge-results-canvas"
+              aria-label="Concierge results"
+              aria-live="polite"
+              aria-atomic="false"
+              className="atelier-salon-panel-body"
+            >
+              {/* Empty state — invitation chips below desk when no results yet */}
+              {!loading && !hasResults && messages.length === 0 && (
+                <div
+                  data-testid="concierge-empty-state"
+                  className="flex flex-col atelier-salon-invitation"
+                >
+                  <p
+                    className="uppercase tracking-[0.1em]"
+                    style={{
+                      fontSize: "var(--ds-type-overline-size)",
+                      lineHeight: "var(--ds-type-overline-leading)",
+                      fontWeight: "var(--ds-type-overline-weight)",
+                      marginBottom: "var(--ds-space-3)",
+                      color: "var(--ds-text-tertiary)",
+                    }}
+                  >
+                    Starting points — tell me where to search:
                   </p>
-                  <p className="atelier-salon-results-why">
-                    Each is a verified place. Save to your folio, or open it on Maps.
-                  </p>
+                  <div className="atelier-salon-chip-grid">
+                    {SALON_INVITATIONS.map(({ lead, hint, query }) => (
+                      <button
+                        key={query}
+                        type="button"
+                        onClick={() => {
+                          setInput(query);
+                          inputRef.current?.focus();
+                        }}
+                        className="rounded-lg folio-concierge-chip atelier-salon-starter-chip atelier-salon-invitation-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
+                        data-testid="concierge-prompt-chip"
+                      >
+                        <span className="atelier-salon-invitation-lead">{lead}</span>
+                        <span className="atelier-salon-invitation-hint">{hint}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="space-y-3">
-                  {addablePlaces.map(({ kind, place, sourceLink }) => {
-                    const title =
+              )}
+
+              {/* Transcript — user turns + assistant result cards in chronological order */}
+              <div className="space-y-4">
+                {messages.map((msg, idx) => {
+                  if (msg.role === "user") {
+                    return (
+                      <div
+                        key={idx}
+                        data-testid="concierge-user-query"
+                        className="border-l-2 pl-3 my-2 atelier-salon-user-turn"
+                      >
+                        <p
+                          className="italic"
+                          style={{
+                            fontSize: "var(--ds-type-body-s-size)",
+                            lineHeight: "var(--ds-type-body-s-leading)",
+                            wordBreak: "break-word",
+                            color: "var(--ds-text-secondary)",
+                          }}
+                        >
+                          {msg.text}
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  if (
+                    msg.isRefinement &&
+                    !(msg.restaurants?.length) &&
+                    !(msg.attractions?.length) &&
+                    !(msg.hotels?.length)
+                  ) {
+                    return (
+                      <p
+                        key={idx}
+                        style={{
+                          fontSize: "var(--ds-type-body-s-size)",
+                          lineHeight: "var(--ds-type-body-s-leading)",
+                          paddingTop: "var(--ds-space-2)",
+                          color: "var(--ds-text-secondary)",
+                        }}
+                      >
+                        {msg.text}
+                      </p>
+                    );
+                  }
+
+                  const addablePlaces = [
+                    ...(msg.restaurants ?? [])
+                      .filter(isRenderableVerifiedPlace)
+                      .map((place) => ({
+                        kind: "restaurant" as const,
+                        place,
+                        sourceLink:
+                          (place as { bookingLink?: string }).bookingLink ??
+                          (place as { sourceUrl?: string }).sourceUrl,
+                      })),
+                    ...(msg.attractions ?? [])
+                      .filter(isRenderableVerifiedPlace)
+                      .map((place) => ({
+                        kind: "attraction" as const,
+                        place,
+                        sourceLink: (place as { sourceUrl?: string }).sourceUrl,
+                      })),
+                    ...(msg.hotels ?? [])
+                      .filter(isRenderableVerifiedPlace)
+                      .map((place) => ({
+                        kind: "hotel" as const,
+                        place,
+                        sourceLink:
+                          (place as { bookingUrl?: string }).bookingUrl ??
+                          (place as { sourceUrl?: string }).sourceUrl,
+                      })),
+                  ];
+
+                  if (addablePlaces.length === 0) return null;
+
+                  const allTitles = addablePlaces.map(
+                    ({ place }) =>
                       (place as { display?: { displayName?: string } }).display
                         ?.displayName ??
                       (place as { name?: string }).name ??
-                      "";
-                    const category = pickCardCategory(place);
-                    const baseReason = pickCardReason(place);
-                    const reason = sanitizeWhyPick(baseReason, title, allTitles);
-                    const conciergeNote = (
-                      place as {
-                        supportingDetails?: { conciergeNote?: string };
-                      }
-                    ).supportingDetails?.conciergeNote;
-                    const extraDetail = conciergeNote ? [conciergeNote] : [];
-                    const isClosed = hasClosedSignal(
-                      place as ClosedSignalSource,
-                    );
-                    const isOperational =
-                      !isClosed &&
-                      canShowGoogleVerifiedBadge(
-                        place as OperationalBadgeCard,
-                      );
-                    const rawConfidence = (
-                      place as { googleVerification?: { confidence?: string } }
-                    ).googleVerification?.confidence?.toLowerCase();
-                    const operationalConfidence =
-                      isOperational &&
-                      (rawConfidence === "high" || rawConfidence === "medium")
-                        ? (rawConfidence as TrustConfidence)
-                        : undefined;
-                    const meta = pickCardMeta(place as DisplayCard);
-                    const mapLink =
-                      (
-                        place as {
-                          googleVerification?: { googleMapsUri?: string };
-                        }
-                      ).googleVerification?.googleMapsUri ??
-                      (place as { mapsLink?: string }).mapsLink;
+                      "",
+                  );
 
-                    // Stable card key: prefer providerPlaceId, fall back to title
-                    const placeId = (
-                      (place as { googleVerification?: { providerPlaceId?: string } }).googleVerification?.providerPlaceId
-                    );
-                    const cardKey = placeId ?? title;
-                    const isSaveable = isAddableCanonicalCard(place);
-
-                    return (
-                      <ConciergeResultCard
-                        key={cardKey}
-                        title={title}
-                        category={category}
-                        meta={meta}
-                        reason={reason}
-                        extraDetail={extraDetail}
-                        mapLink={mapLink}
-                        sourceLink={sourceLink}
-                        isOperational={isOperational}
-                        operationalConfidence={operationalConfidence}
-                        onSave={isSaveable ? () => handleSaveCard(cardKey, kind, title, place) : undefined}
-                        saveState={cardSaveStates.get(cardKey) ?? "idle"}
-                      />
-                    );
-                  })}
-                </div>
-
-                {/* Collapsed sources — only when verified cards + research sources coexist */}
-                {shouldShowCollapsedSources(msg) && (
-                  <details
-                    className="rounded-lg"
-                    style={{
-                      border: "1px solid var(--ds-pen-stroke)",
-                      background: "var(--ds-onyx-velvet)",
-                      marginTop: "var(--ds-space-3)",
-                    }}
-                  >
-                    <summary
-                      className="cursor-pointer text-ds-text-tertiary uppercase tracking-[0.1em]"
-                      style={{
-                        padding: "var(--ds-space-3) var(--ds-space-4)",
-                        fontSize: "var(--ds-type-overline-size)",
-                        fontWeight: "var(--ds-type-overline-weight)",
-                      }}
-                    >
-                      Sources (
-                      {msg.researchSources?.filter(
-                        (s) => s.type === "research_source",
-                      ).length ?? 0}
-                      )
-                    </summary>
-                    <ul
-                      style={{
-                        padding:
-                          "0 var(--ds-space-4) var(--ds-space-3) var(--ds-space-4)",
-                      }}
-                      className="space-y-1"
-                    >
-                      {msg.researchSources
-                        ?.filter((s) => s.type === "research_source")
-                        .map((s) => (
-                          <li key={`${s.title}-${s.sourceUrl ?? "source"}`}>
-                            {s.sourceUrl ? (
-                              <a
-                                href={s.sourceUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-ds-accent hover:text-ds-text transition-colors duration-[120ms] truncate block focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-                                style={{
-                                  fontSize: "var(--ds-type-caption-size)",
-                                  lineHeight: "var(--ds-type-caption-leading)",
-                                }}
-                              >
-                                {s.title}
-                              </a>
-                            ) : (
-                              <span
-                                className="text-ds-text-tertiary"
-                                style={{
-                                  fontSize: "var(--ds-type-caption-size)",
-                                }}
-                              >
-                                {s.title}
-                              </span>
-                            )}
-                          </li>
-                        ))}
-                    </ul>
-                  </details>
-                )}
-
-                {/* Warnings */}
-                {(msg.warnings?.length ?? 0) > 0 && (
-                  <div
-                    className="space-y-2"
-                    style={{ marginTop: "var(--ds-space-3)" }}
-                  >
-                    {msg.warnings?.map((warning, i) => (
-                      <div
-                        key={i}
-                        className="flex items-start gap-2 rounded-lg"
-                        style={{
-                          border: "1px solid var(--ds-caution-amber)",
-                          background: "color-mix(in srgb, var(--ds-caution) 10%, transparent)",
-                          padding: "var(--ds-space-3) var(--ds-space-4)",
-                        }}
-                      >
-                        <AlertTriangle
-                          className="h-3.5 w-3.5 shrink-0 text-ds-caution mt-0.5"
-                          aria-hidden="true"
-                        />
-                        <p
-                          className="text-ds-text-secondary"
-                          style={{ fontSize: "var(--ds-type-body-s-size)" }}
-                        >
-                          {warning}
+                  return (
+                    <section key={idx} data-testid="concierge-result-section" aria-label="Place recommendations">
+                      <div className="atelier-salon-results-header">
+                        <p className="atelier-salon-results-count">
+                          {addablePlaces.length === 1
+                            ? "One place that fits the mood."
+                            : addablePlaces.length === 2
+                            ? "Two places that fit the mood."
+                            : addablePlaces.length === 3
+                            ? "Three places that fit the mood."
+                            : `${addablePlaces.length} places that fit the mood.`}
+                        </p>
+                        <p className="atelier-salon-results-why">
+                          Each is a verified place. Save to your folio, or open it on Maps.
                         </p>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-            );
-          })}
-        </div>
+                      <div className="space-y-3">
+                        {addablePlaces.map(({ kind, place, sourceLink }) => {
+                          const title =
+                            (place as { display?: { displayName?: string } }).display
+                              ?.displayName ??
+                            (place as { name?: string }).name ??
+                            "";
+                          const category = pickCardCategory(place);
+                          const baseReason = pickCardReason(place);
+                          const reason = sanitizeWhyPick(baseReason, title, allTitles);
+                          const conciergeNote = (
+                            place as { supportingDetails?: { conciergeNote?: string } }
+                          ).supportingDetails?.conciergeNote;
+                          const extraDetail = conciergeNote ? [conciergeNote] : [];
+                          const isClosed = hasClosedSignal(place as ClosedSignalSource);
+                          const isOperational =
+                            !isClosed && canShowGoogleVerifiedBadge(place as OperationalBadgeCard);
+                          const rawConfidence = (
+                            place as { googleVerification?: { confidence?: string } }
+                          ).googleVerification?.confidence?.toLowerCase();
+                          const operationalConfidence =
+                            isOperational &&
+                            (rawConfidence === "high" || rawConfidence === "medium")
+                              ? (rawConfidence as TrustConfidence)
+                              : undefined;
+                          const meta = pickCardMeta(place as DisplayCard);
+                          const mapLink =
+                            (place as { googleVerification?: { googleMapsUri?: string } })
+                              .googleVerification?.googleMapsUri ??
+                            (place as { mapsLink?: string }).mapsLink;
+                          const placeId = (
+                            place as { googleVerification?: { providerPlaceId?: string } }
+                          ).googleVerification?.providerPlaceId;
+                          const cardKey = placeId ?? title;
+                          const isSaveable = isAddableCanonicalCard(place);
 
-        {/* Loading state — honest staged text, no fake progress */}
-        {loading && (
-          <div
-            data-testid="concierge-loading-state"
-            className="flex items-center gap-3"
-            style={{ marginTop: "var(--ds-space-6)" }}
-            role="status"
-            aria-live="polite"
-          >
-            <Loader2
-              className="h-4 w-4 animate-spin text-ds-accent shrink-0"
-              aria-hidden="true"
-            />
-            <p style={{ fontSize: "var(--ds-type-body-s-size)", color: "var(--world-ink-mist)" }}>
-              <span style={{ color: "var(--world-ink)" }}>Searching</span>
-              <span className="mx-2">·</span>
-              <span>Verifying</span>
-              <span className="mx-2">·</span>
-              <span>Composing</span>
-            </p>
-          </div>
-        )}
+                          return (
+                            <ConciergeResultCard
+                              key={cardKey}
+                              title={title}
+                              category={category}
+                              meta={meta}
+                              reason={reason}
+                              extraDetail={extraDetail}
+                              mapLink={mapLink}
+                              sourceLink={sourceLink}
+                              isOperational={isOperational}
+                              operationalConfidence={operationalConfidence}
+                              onSave={isSaveable ? () => handleSaveCard(cardKey, kind, title, place) : undefined}
+                              saveState={cardSaveStates.get(cardKey) ?? "idle"}
+                            />
+                          );
+                        })}
+                      </div>
 
-        {/* Error state — named constraint + retry */}
-        {error && !loading && (
-          <div
-            data-testid="concierge-error-state"
-            className="flex items-start gap-3 rounded-lg"
-            style={{
-              border: "1px solid var(--ds-warning)",
-              background: "color-mix(in srgb, var(--ds-warning) 10%, transparent)",
-              padding: "var(--ds-space-4)",
-              marginTop: "var(--ds-space-5)",
-            }}
-            role="alert"
-          >
-            <AlertTriangle
-              className="h-4 w-4 shrink-0 text-ds-warning"
-              style={{ marginTop: "2px" }}
-              aria-hidden="true"
-            />
-            <div>
-              <p
-                className="text-ds-warning"
-                style={{
-                  fontSize: "var(--ds-type-body-s-size)",
-                  lineHeight: "var(--ds-type-body-s-leading)",
-                }}
-              >
-                {error}
-              </p>
-              {lastQuery && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError(null);
-                    sendQuery(lastQuery);
-                  }}
-                  className="text-ds-accent hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-                  style={{
-                    fontSize: "var(--ds-type-body-s-size)",
-                    marginTop: "var(--ds-space-2)",
-                    display: "block",
-                  }}
-                >
-                  Try again
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+                      {shouldShowCollapsedSources(msg) && (
+                        <details
+                          className="rounded-lg"
+                          style={{
+                            border: "1px solid var(--ds-pen-stroke)",
+                            background: "var(--ds-onyx-velvet)",
+                            marginTop: "var(--ds-space-3)",
+                          }}
+                        >
+                          <summary
+                            className="cursor-pointer text-ds-text-tertiary uppercase tracking-[0.1em]"
+                            style={{
+                              padding: "var(--ds-space-3) var(--ds-space-4)",
+                              fontSize: "var(--ds-type-overline-size)",
+                              fontWeight: "var(--ds-type-overline-weight)",
+                            }}
+                          >
+                            Sources (
+                            {msg.researchSources?.filter((s) => s.type === "research_source").length ?? 0}
+                            )
+                          </summary>
+                          <ul
+                            style={{ padding: "0 var(--ds-space-4) var(--ds-space-3) var(--ds-space-4)" }}
+                            className="space-y-1"
+                          >
+                            {msg.researchSources
+                              ?.filter((s) => s.type === "research_source")
+                              .map((s) => (
+                                <li key={`${s.title}-${s.sourceUrl ?? "source"}`}>
+                                  {s.sourceUrl ? (
+                                    <a
+                                      href={s.sourceUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-ds-accent hover:text-ds-text transition-colors duration-[120ms] truncate block focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                                      style={{
+                                        fontSize: "var(--ds-type-caption-size)",
+                                        lineHeight: "var(--ds-type-caption-leading)",
+                                      }}
+                                    >
+                                      {s.title}
+                                    </a>
+                                  ) : (
+                                    <span
+                                      className="text-ds-text-tertiary"
+                                      style={{ fontSize: "var(--ds-type-caption-size)" }}
+                                    >
+                                      {s.title}
+                                    </span>
+                                  )}
+                                </li>
+                              ))}
+                          </ul>
+                        </details>
+                      )}
 
-        <div ref={bottomRef} style={{ height: "var(--ds-space-1)" }} />
-      </main>
-
-      {/* ── Concierge search instrument — pinned at panel base ───────────── */}
-      <div
-        data-testid="concierge-instrument-composer"
-        className="sticky z-10 concierge-sticky-bottom folio-cinema-composer atelier-salon-composer-surface"
-      >
-        {/* Refinement / follow-up chips */}
-        {activeChips && messages.length > 0 && !loading && (
-          <div
-            className="flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-            style={{
-              padding:
-                "var(--ds-space-3) var(--ds-space-4) 0 var(--ds-space-4)",
-            }}
-          >
-            {activeChips.map((chip) => (
-              <button
-                key={chip}
-                type="button"
-                onClick={() => handleUserInput(chip)}
-                className="shrink-0 rounded-lg bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-                style={{
-                  padding: "var(--ds-space-2) var(--ds-space-3)",
-                  fontSize: "var(--ds-type-body-s-size)",
-                  border: "1px solid var(--ds-pen-stroke)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {chip}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Destination field — visible label for instrument clarity */}
-        <div
-          data-testid="concierge-destination-field"
-          style={{
-            padding: "var(--ds-space-3) var(--ds-space-4) 0 var(--ds-space-4)",
-          }}
-        >
-          <label
-            htmlFor="concierge-destination"
-            className="text-ds-text-tertiary uppercase tracking-[0.1em]"
-            style={{
-              display: "block",
-              fontSize: "var(--ds-type-overline-size)",
-              fontWeight: "var(--ds-type-overline-weight)",
-              lineHeight: "var(--ds-type-overline-leading)",
-              marginBottom: "var(--ds-space-1)",
-            }}
-          >
-            Where
-          </label>
-          <div
-            className="flex items-center gap-2 rounded-xl bg-ds-carbon transition-colors duration-[120ms] folio-mapline-field"
-            style={{
-              border: destinationError
-                ? "1px solid var(--ds-warning)"
-                : "1px solid var(--ds-brass-field-border)",
-              padding: "var(--ds-space-2) var(--ds-space-4)",
-              minHeight: "44px",
-            }}
-          >
-            <MapPin
-              className="h-3.5 w-3.5 shrink-0 text-ds-accent"
-              aria-hidden="true"
-            />
-            <input
-              id="concierge-destination"
-              type="text"
-              value={destination}
-              onChange={(e) => {
-                setDestination(e.target.value);
-                if (destinationError && e.target.value.trim()) setDestinationError(false);
-              }}
-              placeholder="Tokyo, Paris, Barcelona…"
-              disabled={loading}
-              className="flex-1 bg-transparent text-ds-text placeholder:text-ds-text-tertiary focus-visible:outline-none disabled:opacity-50"
-              style={{
-                fontSize: "var(--ds-type-body-size)",
-                lineHeight: "var(--ds-type-body-leading)",
-              }}
-            />
-          </div>
-          {destinationError && (
-            <p
-              className="text-ds-text-secondary"
-              style={{
-                fontSize: "var(--ds-type-caption-size)",
-                lineHeight: "var(--ds-type-caption-leading)",
-                marginTop: "var(--ds-space-2)",
-              }}
-            >
-              Add a destination so the concierge knows where to search.
-            </p>
-          )}
-        </div>
-
-        {/* Input row — instrument search entry */}
-        <div
-          className="flex items-end gap-3"
-          style={{
-            padding: "var(--ds-space-3) var(--ds-space-4) var(--ds-space-4)",
-          }}
-        >
-          {/* Clear-chat — only shown when transcript has messages */}
-          {messages.length > 0 && !loading && (
-            <button
-              type="button"
-              onClick={clearTranscript}
-              aria-label="Clear search history"
-              title="Clear search history"
-              data-testid="concierge-clear-chat"
-              className="shrink-0 rounded-xl bg-ds-carbon text-ds-text-tertiary hover:bg-ds-pen-stroke hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-              style={{
-                padding: "var(--ds-space-3)",
-                minWidth: "44px",
-                minHeight: "44px",
-                border: "1px solid var(--ds-pen-stroke)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-            </button>
-          )}
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              e.target.style.height = "auto";
-              e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void handleUserInput(input.trim());
-              }
-            }}
-            placeholder="What can I find for you?"
-            disabled={loading}
-            rows={1}
-            aria-label="Concierge query"
-            data-testid="concierge-query-input"
-            className="flex-1 resize-none rounded-xl bg-ds-carbon text-ds-text placeholder:text-ds-text-tertiary border border-ds-pen-stroke hover:border-ds-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-1 disabled:opacity-50 transition-colors duration-[120ms]"
-            style={{
-              padding: "var(--ds-space-3) var(--ds-space-4)",
-              fontSize: "var(--ds-type-body-size)",
-              lineHeight: "var(--ds-type-body-leading)",
-              minHeight: "44px",
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => void handleUserInput(input.trim())}
-            disabled={loading || !input.trim()}
-            aria-label="Submit query"
-            data-testid="concierge-submit-button"
-            className="shrink-0 rounded-xl text-ds-text-inverse disabled:opacity-40 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 hover:brightness-110"
-            style={{
-              background: "var(--ds-accent)",
-              padding: "var(--ds-space-3)",
-              minWidth: "44px",
-              minHeight: "44px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <Send className="h-4 w-4" aria-hidden="true" />
-            )}
-          </button>
-        </div>
-      </div>
-
-      </div> {/* end atelier-salon-main-panel */}
-
-      {/* ── Atelier briefing rail — dossier design, static capability affordances ──
-          Desktop only (hidden on mobile via CSS). No live data, no counts.
-          Truthful static capability framing only. */}
-      <aside className="atelier-salon-briefing-rail" aria-label="Concierge capabilities">
-        <div className="atelier-salon-briefing-header">
-          <p
-            className="uppercase tracking-[0.1em]"
-            style={{
-              fontSize: "var(--ds-type-overline-size)",
-              fontWeight: "var(--ds-type-overline-weight)",
-              lineHeight: "var(--ds-type-overline-leading)",
-              color: "var(--world-ink-mist)",
-            }}
-          >
-            The Briefing
-          </p>
-        </div>
-        <div>
-          <p className="atelier-salon-briefing-title">What your concierge attends to</p>
-          <p className="atelier-salon-briefing-sub">
-            A curated brief — the salon researches, verifies, and composes; you decide what to keep.
-          </p>
-        </div>
-        <div className="atelier-salon-briefing-rule" aria-hidden="true" />
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {DOSSIER_ITEMS.map(({ no, name, desc }) => (
-            <li key={no} className="atelier-salon-briefing-item">
-              <span className="atelier-salon-briefing-no" aria-hidden="true">{no}</span>
-              <div>
-                <span className="atelier-salon-briefing-item-name">{name}</span>
-                <p className="atelier-salon-briefing-item-desc">{desc}</p>
+                      {(msg.warnings?.length ?? 0) > 0 && (
+                        <div className="space-y-2" style={{ marginTop: "var(--ds-space-3)" }}>
+                          {msg.warnings?.map((warning, i) => (
+                            <div
+                              key={i}
+                              className="flex items-start gap-2 rounded-lg"
+                              style={{
+                                border: "1px solid var(--ds-caution-amber)",
+                                background: "color-mix(in srgb, var(--ds-caution) 10%, transparent)",
+                                padding: "var(--ds-space-3) var(--ds-space-4)",
+                              }}
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-ds-caution mt-0.5" aria-hidden="true" />
+                              <p className="text-ds-text-secondary" style={{ fontSize: "var(--ds-type-body-s-size)" }}>
+                                {warning}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}
               </div>
-            </li>
-          ))}
-        </ul>
-        <div className="atelier-salon-briefing-footer">
-          <span className="atelier-salon-briefing-badge verified">Verified places</span>
-          <span className="atelier-salon-briefing-badge">No bookings made for you</span>
-          <span className="atelier-salon-briefing-badge">Yours to keep</span>
-        </div>
-      </aside>
 
+              {/* Loading state */}
+              {loading && (
+                <div
+                  data-testid="concierge-loading-state"
+                  className="flex items-center gap-3"
+                  style={{ marginTop: "var(--ds-space-6)" }}
+                  role="status"
+                  aria-live="polite"
+                >
+                  <Loader2 className="h-4 w-4 animate-spin text-ds-accent shrink-0" aria-hidden="true" />
+                  <p style={{ fontSize: "var(--ds-type-body-s-size)", color: "var(--ds-text-secondary)" }}>
+                    <span style={{ color: "var(--ds-text)" }}>Searching</span>
+                    <span className="mx-2">·</span>
+                    <span>Verifying</span>
+                    <span className="mx-2">·</span>
+                    <span>Composing</span>
+                  </p>
+                </div>
+              )}
+
+              {/* Error state */}
+              {error && !loading && (
+                <div
+                  data-testid="concierge-error-state"
+                  className="flex items-start gap-3 rounded-lg"
+                  style={{
+                    border: "1px solid var(--ds-warning)",
+                    background: "color-mix(in srgb, var(--ds-warning) 10%, transparent)",
+                    padding: "var(--ds-space-4)",
+                    marginTop: "var(--ds-space-5)",
+                  }}
+                  role="alert"
+                >
+                  <AlertTriangle
+                    className="h-4 w-4 shrink-0 text-ds-warning"
+                    style={{ marginTop: "2px" }}
+                    aria-hidden="true"
+                  />
+                  <div>
+                    <p
+                      className="text-ds-warning"
+                      style={{
+                        fontSize: "var(--ds-type-body-s-size)",
+                        lineHeight: "var(--ds-type-body-s-leading)",
+                      }}
+                    >
+                      {error}
+                    </p>
+                    {lastQuery && (
+                      <button
+                        type="button"
+                        onClick={() => { setError(null); sendQuery(lastQuery); }}
+                        className="text-ds-accent hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                        style={{ fontSize: "var(--ds-type-body-s-size)", marginTop: "var(--ds-space-2)", display: "block" }}
+                      >
+                        Try again
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div ref={bottomRef} style={{ height: "var(--ds-space-4)" }} />
+            </main>
+
+          </div> {/* end atelier-salon-stage */}
+
+          {/* ── RIGHT: Paper dossier — static capability briefing, light world ── */}
+          <aside className="atelier-salon-briefing-rail" aria-label="Concierge capabilities">
+            <div className="atelier-salon-briefing-header">
+              <p
+                className="uppercase tracking-[0.1em]"
+                style={{
+                  fontSize: "var(--ds-type-overline-size)",
+                  fontWeight: "var(--ds-type-overline-weight)",
+                  lineHeight: "var(--ds-type-overline-leading)",
+                  color: "var(--world-ink-mist)",
+                }}
+              >
+                The Briefing
+              </p>
+            </div>
+            <div>
+              <p className="atelier-salon-briefing-title">What your concierge attends to</p>
+              <p className="atelier-salon-briefing-sub">
+                A curated brief — the salon researches, verifies, and composes; you decide what to keep.
+              </p>
+            </div>
+            <div className="atelier-salon-briefing-rule" aria-hidden="true" />
+            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {DOSSIER_ITEMS.map(({ no, name, desc }) => (
+                <li key={no} className="atelier-salon-briefing-item">
+                  <span className="atelier-salon-briefing-no" aria-hidden="true">{no}</span>
+                  <div>
+                    <span className="atelier-salon-briefing-item-name">{name}</span>
+                    <p className="atelier-salon-briefing-item-desc">{desc}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="atelier-salon-briefing-footer">
+              <span className="atelier-salon-briefing-badge verified">Verified places</span>
+              <span className="atelier-salon-briefing-badge">No bookings made for you</span>
+              <span className="atelier-salon-briefing-badge">Yours to keep</span>
+            </div>
+          </aside>
+
+        </div> {/* end atelier-salon-main-panel */}
       </div> {/* end atelier-salon-workbench */}
     </div>
   );
