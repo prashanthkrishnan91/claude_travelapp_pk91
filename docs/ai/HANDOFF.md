@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-21 (Explore Observatory v1 — /explore premium reskin — PR open; Concierge Salon v2 + v1 PR #458 merged)
+Last updated: 2026-05-21 (Explore regression fixes: hotel compare-link dates + flight per-offer prices; Observatory v1 PR #460 merged)
 
 ## Purpose
 
@@ -113,8 +113,22 @@ All existing testids, folio-cinema-desk, folio-cinema-composer, folio-concierge-
 **Test count (earlier patches):** 2991 total, 0 failures.  
 **No backend / SQL / provider / env / Supabase / API / route / data-contract changes (any patch).**
 
+### Explore regression fixes (current branch — post-Observatory)
+
+Two Level 2 user-visible regressions fixed after PR #460 merged:
+
+1. **Hotel compare-link dates:** `buildHotelCompareUrl` already appended `&checkin=`/`&checkout=` correctly; `buildContext` already used `lastForm?.checkIn` for the compare URL (not the fallback dates used for the API call). 4 new regression tests added to `hotel-explore-live.test.mjs` — now 31/31; wired into `npm test`.
+
+2. **Flight per-offer prices:** Duffel adapter already maps each offer's `total_amount` independently. The `_search_booking_link` is shared (same Google Flights query URL) but prices are per-offer. Fixed two pre-existing source-code test failures in `flights-ignav-live.test.mjs`:  
+   - Test 10: changed dynamic `data-testid` expression to always use `"flight-book-link"` (with `data-link-type` for redirect distinction).  
+   - Test 15: changed comment wording that accidentally matched `points.*price` regex.  
+   6 new regression tests added — now 32/32; wired into `npm test`.  
+   Backend: 2 new tests in `test_duffel_flights_v1.py` proving distinct per-offer prices and that uncertified provider returns UNAVAILABLE.
+
+**3134 frontend tests, 0 failures.** No backend suite run (no pytest in this environment).
+
 ### Next step
-Explore Observatory v1 is the current branch. Next visible-adoption slice: apply the same Room System treatment to Saved (Gallery room) using the shared cinema-world primitives.
+Regression fixes are the current branch. After PR merges, next visible-adoption slice: apply Room System treatment to Saved (Gallery room) using shared cinema-world primitives.
 
 ## Current architecture / runtime state
 
@@ -131,6 +145,8 @@ Explore Observatory v1 is the current branch. Next visible-adoption slice: apply
 
 ## Recent meaningful PRs
 
+- 2026-05-21 — **PR open (current branch)** — Explore regression fixes: hotel compare dates + flights per-offer prices. 2 backend tests, 10 frontend tests added, 2 pre-existing test failures fixed. 3134 tests, 0 failures.
+- 2026-05-21 — **PR #460 MERGED** — Explore Observatory v1 (/explore premium reskin). 3065 tests, 0 failures.
 - 2026-05-21 — **PR #451 MERGED** — Atelier Room System v1 + Private Salon (Concierge). Two-column desktop workbench (main panel + briefing rail), contained panel scroll, patch-5 CSS grid. 3003 tests, 0 failures.
 - 2026-05-20 — **PR #449 MERGED** — Home dead-space fix (overflow: clip + min-height: 0 + flex: none).
 - 2026-05-20 — **PR #448 MERGED** — Atelier Atrium full cinematic home (world DNA, AppShell escape hatch, silent nav, contained scenery, physical archive).

@@ -179,3 +179,59 @@ test('Hotel compare CTA renders with Search icon (not a booking icon)', () => {
   assert.doesNotMatch(hotelFlow, /ShoppingCart/);
   assert.doesNotMatch(hotelFlow, /CreditCard/);
 });
+
+// ── 8. Regression: selected check-in/check-out dates carried in compare URL ─
+
+test('buildHotelCompareUrl appends &checkin= structured param for date handoff', () => {
+  // Google Hotels reads checkin/checkout as structured date params, not just
+  // the q= display text.  Both must be present to correctly scope the search.
+  // Guards against regression where dates were dropped from the compare URL.
+  assert.match(
+    hotelFlow,
+    /&checkin=\$\{encodeURIComponent\(checkIn\)\}/,
+    'buildHotelCompareUrl must add &checkin=encodeURIComponent(checkIn) to the URL',
+  );
+});
+
+test('buildHotelCompareUrl appends &checkout= structured param for date handoff', () => {
+  assert.match(
+    hotelFlow,
+    /&checkout=\$\{encodeURIComponent\(checkOut\)\}/,
+    'buildHotelCompareUrl must add &checkout=encodeURIComponent(checkOut) to the URL',
+  );
+});
+
+test('buildContext passes lastForm checkIn and checkOut to buildHotelCompareUrl (not a fallback date)', () => {
+  // The compare link must be built from the user-selected dates captured in
+  // lastForm — not from today's date or any fallback computed elsewhere.
+  // Guards against the regression where the API used fallback dates but the
+  // compare link was built with undefined/missing dates.
+  const buildContextSlice = hotelFlow.slice(
+    hotelFlow.indexOf('function buildContext'),
+    hotelFlow.indexOf('\nfunction HotelCard'),
+  );
+  assert.match(
+    buildContextSlice,
+    /checkIn:.*lastForm/,
+    'compareLink must be built with lastForm.checkIn (user-selected date)',
+  );
+  assert.match(
+    buildContextSlice,
+    /checkOut:.*lastForm/,
+    'compareLink must be built with lastForm.checkOut (user-selected date)',
+  );
+});
+
+test('buildContext does not use fallbackIn or fallbackOut for compareLink', () => {
+  // The fallback dates in searchHotelsExplore are for the /search/hotels API
+  // call only — they must NOT leak into the compare URL shown to the user.
+  const buildContextSlice = hotelFlow.slice(
+    hotelFlow.indexOf('function buildContext'),
+    hotelFlow.indexOf('\nfunction HotelCard'),
+  );
+  assert.doesNotMatch(
+    buildContextSlice,
+    /fallbackIn|fallbackOut/,
+    'buildContext must not reference fallback dates when building the compare URL',
+  );
+});
