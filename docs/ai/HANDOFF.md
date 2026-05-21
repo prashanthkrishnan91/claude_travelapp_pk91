@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-21 (Atelier Room System v1 MERGED — PR #451)
+Last updated: 2026-05-21 (Concierge Salon cinematic scene — implementation PR open)
 
 ## Purpose
 
@@ -8,7 +8,22 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3.5 — Atelier Room System v1 complete (PR #451 merged). Next: Room System adoption on Explore or Saved.**
+**Stage 3.5 — Concierge Salon cinematic scene implemented.** Stage 3 exit completed earlier (2026-05-14); current focus is Stage 3.5 design adoption. The outside-trip Concierge (`/concierge`) is now a Private Travel Salon: a portal centerpiece, fused concierge desk, in-scene invitations, tactile dossier rail, and a post-search results reveal. Next: apply the same Room System treatment to Explore (Observatory) or Saved (Gallery).
+
+### Concierge Salon cinematic scene (current branch)
+
+**`ConciergePage.tsx` + `globals.css` — the /concierge scene is a direct production port of the approved concept** (`docs/ai/concepts/concierge-salon-concept-v1.html`, blueprint `docs/ai/design/CONCIERGE_SALON_PRODUCTION_BLUEPRINT.md`):
+- `.atelier-salon-workbench` is the **integrated salon canvas** — one dark, rounded, brass-edged object (`var(--ds-cinema-deep)` + lamp warmth) holding a desktop two-column grid: the dark stage (left, `.atelier-salon-main-panel`/`.atelier-salon-stage-panel`, transparent) and the paper dossier (`.atelier-salon-briefing-rail`) **attached on the right via `border-left`, no gap**. Desktop height is bounded to `calc(100svh - space-8)` with `overflow:hidden` so only the reveal canvas scrolls. Mobile collapses to the stage alone (dossier hidden).
+- `.atelier-salon-portal` is the emotional centerpiece — layered `scene → tint → haze → bloom → grain → vignette` spans. The scene is the salon's signature **dusk composition** (violet/rose upper · warm peach-gold bloom band · deep navy/ink lower, in `rgb()` not hex), and a faint `.atelier-salon-portal-tint` layer paints `var(--world-scenery)` (overridden per typed destination via `pickWorldFromDestination`) so the window **tunes toward the place** through the real world-DNA pipeline — no hardcoded mood logic, no fake destinations.
+- Dossier is an editorial "Briefing" object (serif italic title, roman-numeral items, tactile bottom badges) on bone paper, attached to the canvas via `border-left`. Invitations are two-line cards (italic Fraunces lead + small-caps intent hint via `PROMPT_HINTS`, click still only populates the query input).
+- Scene hierarchy matches the concept via flex `order`: **portal (order 0) → fused desk (`.atelier-salon-desk`, order 2, directly under the portal) → reveal canvas (`.atelier-salon-panel-body`, order 3)**. The header lives inside `.atelier-salon-portal-copy`; invitations live in the reveal canvas beneath the desk. All stage copy uses light cinema tokens (`--ds-pearl-cream`/`--ds-cream`) over a guaranteed dark scrim, so it can never go dark-on-dark regardless of the tuned scene.
+- `data-salon-mode` ("open" pre-search → portal grows, reveal canvas collapsed and non-scrolling; "tuned" post-search → portal collapses to a banner, reveal canvas becomes the only scroller). The composer is the fused desk (no longer a sticky-bottom app form); it stays put on desktop because it sits outside the internal scroller, and flows under the portal on mobile.
+- Transcript/loading/header text flipped from dark `--world-ink` to light cinema tokens (the readability fix the prior attempts missed). Dossier rail given a tactile `--ds-bone` surface.
+- Mobile: portal-first, compact, thumb-reachable desk; portal/banner heights clamped for short phones. All portal motion (drift, bloom, open↔tuned transition) is `prefers-reduced-motion` guarded.
+- Tests: `tests/atelier-salon-room-v1.test.mjs` Section I (10 new) covers portal structure, world-DNA scene source, depth layers, open/tuned mode rules, in-scene header/invitations, light-on-dark copy, reduced-motion, and a no-fake-prototype-data guard. **3013 tests, 0 failures; `tsc --noEmit` clean; `next lint` clean.**
+- **No backend / API / provider / SQL / auth / trip-data / AppShell changes.** All concierge behavior (search, refinement, transcript persistence, destination field, invitation-click populates input only, verified cards, save, off-trip add message, maps/source links, follow-up/refinement chips) and every existing testid/class preserved.
+
+### Prior: Atelier Room System v1 (PR #451 merged)
 
 ### Home baseline (merged)
 - **PR #448** — Atelier Atrium: edge-to-edge cinematic home, world DNA system, AppShell route-aware wrapper, DashboardClient full atrium composition, WorldScenery/Mist/Atmosphere/Glass primitives, silent navigation (AtelierNavArtifact), contained scenery, physical archive shelf.

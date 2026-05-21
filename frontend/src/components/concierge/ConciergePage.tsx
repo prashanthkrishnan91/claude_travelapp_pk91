@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { WorldAtmosphere } from "@/components/ui/World";
 import {
   applyRoom,
@@ -373,6 +374,17 @@ const EDITORIAL_PROMPTS = [
   "Local breakfast worth the walk",
 ] as const;
 
+// Small-caps intent hints shown beneath each invitation lead. These describe the
+// prompt's mood/intent (UI labelling) — not destinations, places, or any data.
+const PROMPT_HINTS: Record<string, string> = {
+  "Cocktail bars with a view": "Evening · Views",
+  "Design-forward boutique hotels": "Stay · Design",
+  "A romantic dinner": "Dinner · Romantic",
+  "Hidden neighbourhood gems": "Explore · Local",
+  "Best neighbourhood to stay": "Stay · Area",
+  "Local breakfast worth the walk": "Morning · Local",
+};
+
 // ─── localStorage transcript persistence ──────────────────────────────────────
 
 const TRANSCRIPT_KEY = "concierge_outside_trip_transcript_v1";
@@ -427,6 +439,18 @@ export function ConciergePage() {
     () => applyRoom(pickWorldFromDestination(destination || null), "salon"),
     [destination],
   );
+
+  // Portal scene world — the raw destination world (not the salon-room
+  // override), so the portal window tunes toward where she's actually going.
+  // Real world-DNA only; an empty destination resolves to the warm atelier
+  // "possibility" scene. No hardcoded mood logic, no faked destinations.
+  const destWorld = useMemo(
+    () => pickWorldFromDestination(destination || null),
+    [destination],
+  );
+  const portalSceneStyle = {
+    ["--world-scenery" as string]: destWorld.visualLayer.sceneryLayers,
+  } as CSSProperties;
 
   // Persist transcript whenever messages change
   useEffect(() => {
@@ -543,6 +567,12 @@ export function ConciergePage() {
         (m.attractions?.length ?? 0) > 0 ||
         (m.hotels?.length ?? 0) > 0),
   );
+
+  // Salon stage mode: "open" before any search (portal fills the stage, the
+  // result canvas is collapsed so nothing scrolls); "tuned" once the user has
+  // engaged (portal collapses to a banner, the curated results take the stage).
+  const salonMode: "open" | "tuned" =
+    messages.length > 0 || loading || lastQuery ? "tuned" : "open";
 
   function getCardsWithKind(msg: Message) {
     return [
@@ -775,72 +805,54 @@ export function ConciergePage() {
           CSS owns the grid / flex layout; Tailwind mx-auto centers the column. */}
       <div className="atelier-salon-workbench mx-auto">
 
-      {/* ── Main concierge panel ─────────────────────────────────────────── */}
-      <div className="atelier-salon-main-panel">
-
-      {/* ── Concierge desk instrument header ─────────────────────────────── */}
-      <header
-        data-testid="concierge-instrument-header"
-        className="atelier-salon-room-header atelier-salon-header-landing atelier-salon-panel-header pb-5 sm:pb-8 text-center px-4 sm:px-6"
+      {/* ── Main concierge panel = the salon stage ───────────────────────
+          A single cinematic flex column: the portal centerpiece grows to
+          fill the stage before search; the result canvas takes over after.
+          data-salon-mode drives the open↔tuned layout (see globals.css). */}
+      <div
+        className="atelier-salon-main-panel atelier-salon-stage-panel"
+        data-salon-mode={salonMode}
       >
-        <p
-          className="text-ds-accent uppercase tracking-[0.1em]"
-          style={{
-            fontSize: "var(--ds-type-overline-size)",
-            lineHeight: "var(--ds-type-overline-leading)",
-            fontWeight: "var(--ds-type-overline-weight)",
-          }}
-        >
-          Private Travel Concierge
-        </p>
-        <h1
-          style={{
-            fontSize: "var(--ds-type-display-s-size)",
-            lineHeight: "var(--ds-type-display-s-leading)",
-            fontWeight: "var(--ds-type-display-s-weight)",
-            letterSpacing: "var(--ds-type-display-s-tracking)",
-            marginTop: "var(--ds-space-2)",
-            color: "var(--world-ink)",
-          }}
-        >
-          {lastQuery ? `"${lastQuery}"` : "What can I find for you?"}
-        </h1>
-        {!lastQuery && (
-          <>
-            <p
-              className="mx-auto"
-              style={{
-                fontSize: "var(--ds-type-body-size)",
-                lineHeight: "var(--ds-type-body-leading)",
-                maxWidth: "38ch",
-                marginTop: "var(--ds-space-3)",
-                color: "var(--world-ink-mist)",
-              }}
-            >
-              Describe a mood, a neighbourhood, or an occasion.
-              <br />
-              I surface verified places worth your time.
-            </p>
-            <p
-              className="mx-auto"
-              style={{
-                fontSize: "var(--ds-type-body-s-size)",
-                lineHeight: "var(--ds-type-body-s-leading)",
-                maxWidth: "44ch",
-                marginTop: "var(--ds-space-2)",
-                color: "var(--world-ink-mist)",
-              }}
-            >
-              Restaurants, hotels, and local gems — Michelin to hidden.
-            </p>
-          </>
-        )}
-      </header>
 
-      {/* Editorial mapline — visual rhythm between header and results canvas */}
-      <div className="mapline-rule mx-auto" aria-hidden="true" />
+      {/* ── The salon portal — emotional centerpiece. A layered window that
+          tunes toward the typed destination via the world-DNA pipeline.
+          Depth: scene → haze → bloom → grain → vignette → copy. The copy
+          (header + invitations) lives inside the scene, on a guaranteed
+          dark scrim so it always reads light. ─────────────────────────── */}
+      <section className="atelier-salon-portal" data-portal-state={salonMode}>
+        <span className="atelier-salon-portal-scene" aria-hidden="true" />
+        <span className="atelier-salon-portal-tint" aria-hidden="true" style={portalSceneStyle} />
+        <span className="atelier-salon-portal-haze" aria-hidden="true" />
+        <span className="atelier-salon-portal-bloom" aria-hidden="true" />
+        <span className="atelier-salon-portal-grain" aria-hidden="true" />
+        <span className="atelier-salon-portal-vignette" aria-hidden="true" />
 
-      {/* ── Result canvas — scrollable panel body ─────────────────────────── */}
+        <div className="atelier-salon-portal-copy">
+          {/* ── Concierge instrument header — inside the scene ── */}
+          <header
+            data-testid="concierge-instrument-header"
+            className="atelier-salon-room-header atelier-salon-header-landing atelier-salon-panel-header atelier-salon-portal-header pb-5 sm:pb-8"
+          >
+            <p className="atelier-salon-portal-eyebrow uppercase tracking-[0.1em]">
+              Private Travel Concierge
+            </p>
+            <h1 className="atelier-salon-portal-title">
+              {lastQuery ? `"${lastQuery}"` : "Where shall we go?"}
+            </h1>
+            {salonMode === "open" && (
+              <p className="atelier-salon-portal-sub">
+                Tell me the feeling you&apos;re chasing — a quiet coast, late dinners,
+                a city that rewards walking. I surface verified places worth your time.
+              </p>
+            )}
+            {/* Editorial mapline — brass rhythm hairline under the header */}
+            <div className="mapline-rule" aria-hidden="true" />
+          </header>
+        </div>
+      </section>
+
+      {/* ── Result canvas — the curated reveal. Empty (and non-scrolling)
+          before search; the only scroll region once results arrive. ──── */}
       <main
         data-testid="concierge-results-canvas"
         aria-label="Concierge results"
@@ -848,13 +860,13 @@ export function ConciergePage() {
         aria-atomic="false"
         className="atelier-salon-panel-body"
       >
-        {/* Empty / initial state */}
-        {!loading && !hasResults && messages.length === 0 && (
+        {/* ── Invitations — entry points inside the stage, beneath the desk ── */}
+        {salonMode === "open" && !loading && !hasResults && messages.length === 0 && (
           <div
             data-testid="concierge-empty-state"
-            className="flex flex-col items-center atelier-salon-invitation"
+            className="atelier-salon-invitation atelier-salon-stage-invitation"
           >
-            <p className="text-center uppercase tracking-[0.1em]" style={{ fontSize: "var(--ds-type-overline-size)", lineHeight: "var(--ds-type-overline-leading)", fontWeight: "var(--ds-type-overline-weight)", marginBottom: "var(--ds-space-5)", color: "var(--world-ink-mist)" }}>
+            <p className="atelier-salon-invitation-label uppercase tracking-[0.1em]">
               Starting points — tell me where to search:
             </p>
             <div className="atelier-salon-chip-grid">
@@ -866,16 +878,17 @@ export function ConciergePage() {
                     setInput(prompt);
                     inputRef.current?.focus();
                   }}
-                  className="rounded-lg folio-concierge-chip atelier-salon-starter-chip focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
+                  className="rounded-lg folio-concierge-chip atelier-salon-starter-chip atelier-salon-invitation-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
                   style={{
-                    padding: "var(--ds-space-3) var(--ds-space-4)",
-                    fontSize: "var(--ds-type-body-s-size)",
-                    lineHeight: "var(--ds-type-body-s-leading)",
-                    textAlign: "center",
+                    padding: "var(--ds-space-4)",
+                    textAlign: "left",
                   }}
                   data-testid="concierge-prompt-chip"
                 >
-                  {prompt}
+                  <span className="atelier-salon-invitation-lead">{prompt}</span>
+                  <span className="atelier-salon-invitation-hint uppercase tracking-[0.16em]">
+                    {PROMPT_HINTS[prompt]}
+                  </span>
                 </button>
               ))}
             </div>
@@ -901,7 +914,7 @@ export function ConciergePage() {
                       fontSize: "var(--ds-type-body-s-size)",
                       lineHeight: "var(--ds-type-body-s-leading)",
                       wordBreak: "break-word",
-                      color: "var(--world-ink-mist)",
+                      color: "var(--ds-text-secondary)",
                     }}
                   >
                     {msg.text}
@@ -924,7 +937,7 @@ export function ConciergePage() {
                     fontSize: "var(--ds-type-body-s-size)",
                     lineHeight: "var(--ds-type-body-s-leading)",
                     paddingTop: "var(--ds-space-2)",
-                    color: "var(--world-ink-mist)",
+                    color: "var(--ds-text-secondary)",
                   }}
                 >
                   {msg.text}
@@ -1152,8 +1165,8 @@ export function ConciergePage() {
               className="h-4 w-4 animate-spin text-ds-accent shrink-0"
               aria-hidden="true"
             />
-            <p style={{ fontSize: "var(--ds-type-body-s-size)", color: "var(--world-ink-mist)" }}>
-              <span style={{ color: "var(--world-ink)" }}>Searching</span>
+            <p style={{ fontSize: "var(--ds-type-body-s-size)", color: "var(--ds-text-tertiary)" }}>
+              <span style={{ color: "var(--ds-text)" }}>Searching</span>
               <span className="mx-2">·</span>
               <span>Verifying</span>
               <span className="mx-2">·</span>
@@ -1217,7 +1230,7 @@ export function ConciergePage() {
       {/* ── Concierge search instrument — pinned at panel base ───────────── */}
       <div
         data-testid="concierge-instrument-composer"
-        className="sticky z-10 concierge-sticky-bottom folio-cinema-composer atelier-salon-composer-surface"
+        className="concierge-sticky-bottom folio-cinema-composer atelier-salon-composer-surface atelier-salon-desk"
       >
         {/* Refinement / follow-up chips */}
         {activeChips && messages.length > 0 && !loading && (
@@ -1396,74 +1409,54 @@ export function ConciergePage() {
 
       </div> {/* end atelier-salon-main-panel */}
 
-      {/* ── Atelier briefing rail — static capability affordances ──────────
-          Desktop only (hidden on mobile via CSS). No live data, no counts.
-          Declares concierge capabilities as warm editorial copy. */}
-      <aside className="atelier-salon-briefing-rail" aria-label="Concierge capabilities">
+      {/* ── The dossier — paper briefing attached to the salon canvas.
+          An editorial "Briefing" object (serif heading, numbered items,
+          tactile badges), not a help card. Static, truthful content only —
+          no live data, no counts. */}
+      <aside className="atelier-salon-briefing-rail" aria-label="What your concierge attends to">
         <div className="atelier-salon-briefing-header">
-          <p
-            className="uppercase tracking-[0.1em]"
-            style={{
-              fontSize: "var(--ds-type-overline-size)",
-              fontWeight: "var(--ds-type-overline-weight)",
-              lineHeight: "var(--ds-type-overline-leading)",
-              color: "var(--world-ink-mist)",
-            }}
-          >
-            How I can help
+          <p className="atelier-salon-dossier-eyebrow uppercase tracking-[0.1em]">
+            <span className="atelier-salon-dossier-eyebrow-rule" aria-hidden="true" />
+            The Briefing
           </p>
+          <h2 className="atelier-salon-dossier-title">What your concierge attends to</h2>
+          <p className="atelier-salon-dossier-sub">
+            A curated brief — not a help menu. The salon researches, verifies, and
+            composes; you decide what to keep.
+          </p>
+          <span className="atelier-salon-dossier-divider" aria-hidden="true" />
         </div>
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+        <ol className="atelier-salon-dossier-list">
           {[
-            "Find verified places",
-            "Compare neighbourhoods",
-            "Shape a date night",
-            "Turn ideas into saved cards",
-            "Refine a trip itinerary",
-            "Discover hidden gems",
+            {
+              no: "i.",
+              name: "Reads the mood, not just the map",
+              desc: "Describe a feeling — a quiet coast, late dinners — and the salon translates it into real places.",
+            },
+            {
+              no: "ii.",
+              name: "Surfaces verified places only",
+              desc: "Every suggestion is a confirmed, operating place — never an invented or unconfirmed listing.",
+            },
+            {
+              no: "iii.",
+              name: "Keeps what you choose",
+              desc: "Save a place to your folio, or carry it into a trip when one is open. Nothing is added without you.",
+            },
           ].map((item) => (
-            <li key={item} className="atelier-salon-briefing-item">
-              <span
-                aria-hidden="true"
-                style={{
-                  color: "var(--ds-ember-brass)",
-                  fontSize: "var(--ds-type-body-s-size)",
-                  lineHeight: "1",
-                  marginTop: "3px",
-                  flexShrink: 0,
-                }}
-              >
-                ›
-              </span>
-              <span
-                style={{
-                  fontSize: "var(--ds-type-body-s-size)",
-                  lineHeight: "var(--ds-type-body-s-leading)",
-                  color: "var(--world-ink)",
-                }}
-              >
-                {item}
-              </span>
+            <li key={item.no} className="atelier-salon-dossier-item">
+              <p className="atelier-salon-dossier-no">{item.no}</p>
+              <p className="atelier-salon-dossier-name">{item.name}</p>
+              <p className="atelier-salon-dossier-desc">{item.desc}</p>
             </li>
           ))}
-        </ul>
+        </ol>
         <div className="atelier-salon-briefing-footer">
-          {[
-            "Verified Google-backed cards",
-            "Save or add to trip",
-            "Maps-ready places",
-          ].map((badge) => (
-            <p
-              key={badge}
-              style={{
-                fontSize: "var(--ds-type-caption-size)",
-                lineHeight: "var(--ds-type-caption-leading)",
-                color: "var(--world-ink-mist)",
-              }}
-            >
-              {badge}
-            </p>
-          ))}
+          <span className="atelier-salon-dossier-badge atelier-salon-dossier-badge-verified">
+            Verified places
+          </span>
+          <span className="atelier-salon-dossier-badge">No bookings made for you</span>
+          <span className="atelier-salon-dossier-badge">Yours to keep</span>
         </div>
       </aside>
 

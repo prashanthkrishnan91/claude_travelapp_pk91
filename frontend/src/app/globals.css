@@ -7130,24 +7130,39 @@
     padding-top: clamp(24px, 5vh, 56px);
   }
 
-  /* Salon workbench — two-column grid on desktop (main panel + briefing rail),
-     single-column flex stack on mobile. The workbench owns the outer padding
-     so the panel and rail sit in a consistent channel regardless of screen size. */
+  /* Salon canvas (workbench) — ONE integrated salon room object, matching the
+     concept silhouette: a dark cinematic stage on the left and the paper dossier
+     attached on the right (border-left, no gap), framed as a single rounded
+     brass-edged canvas. Mobile collapses to the stage alone (dossier hidden).
+     This is the salon canvas, not an app panel sitting in empty page. */
   .atelier-salon-workbench {
     width: 100%;
-    max-width: 72rem;
-    padding: var(--ds-space-4);
+    max-width: 94rem;
+    margin: var(--ds-space-3) auto;
     display: flex;
     flex-direction: column;
-    gap: var(--ds-space-4);
+    gap: 0;
+    background-color: var(--ds-cinema-deep);
+    background-image:
+      radial-gradient(ellipse 70% 36% at 32% -6%, color-mix(in srgb, var(--ds-ember-brass) 15%, transparent) 0%, transparent 60%),
+      radial-gradient(ellipse 44% 30% at 8% 32%, color-mix(in srgb, var(--ds-ember-brass) 8%, transparent) 0%, transparent 55%);
+    border-radius: 18px;
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 24%, transparent);
+    box-shadow:
+      0 30px 80px -28px rgba(0, 0, 0, 0.55),
+      0 10px 28px -14px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(245, 235, 221, 0.05);
+    overflow: hidden;
+    isolation: isolate;
   }
   @media (min-width: 900px) {
     .atelier-salon-workbench {
       display: grid;
-      grid-template-columns: 1fr 17rem;
-      gap: var(--ds-space-5);
-      padding: var(--ds-space-5);
-      align-items: start;
+      grid-template-columns: 1fr clamp(17rem, 24vw, 21rem);
+      gap: 0;
+      align-items: stretch;
+      height: calc(100svh - var(--ds-space-6));
+      margin: var(--ds-space-3) auto;
     }
   }
 
@@ -7174,22 +7189,19 @@
     justify-content: center;
   }
 
-  /* Main concierge panel — warm paper folio surface containing the header,
-     results body, and composer as one cohesive instrument. On desktop the
-     panel has a fixed height so results scroll inside the panel, not the page.
-     Border + shadow delineate the panel from the ambient page background. */
+  /* Main concierge panel = the salon stage (left column of the canvas). It is
+     no longer a framed app card — the canvas owns the frame. It is a transparent
+     flex column that fills its grid cell so the dossier attaches flush beside it. */
   .atelier-salon-main-panel {
     display: flex;
     flex-direction: column;
     overflow: hidden;
     min-height: 0;
-    border-radius: 16px;
-    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 16%, transparent);
-    box-shadow: 0 2px 20px color-mix(in srgb, var(--ds-midnight-ink) 6%, transparent);
+    background: transparent;
   }
   @media (min-width: 900px) {
     .atelier-salon-main-panel {
-      height: calc(100svh - var(--ds-space-10));
+      height: 100%;
     }
   }
 
@@ -7206,12 +7218,13 @@
     flex: 1;
     overflow-y: auto;
     min-height: 0;
+    order: 3;
     padding: var(--ds-space-4) var(--ds-space-5);
   }
 
-  /* Briefing rail — static capability sidebar on desktop. Hidden on mobile.
-     Declares what the concierge can do without using live data or fake counts.
-     Sticky so it stays in view as the panel body scrolls. */
+  /* Dossier rail — the paper briefing attached to the right of the salon canvas
+     (border-left, no gap, full canvas height). Part of the composed object, not
+     a floating sidebar. Hidden on mobile. No live data, no fake counts. */
   .atelier-salon-briefing-rail {
     display: none;
   }
@@ -7220,11 +7233,11 @@
       display: flex;
       flex-direction: column;
       gap: var(--ds-space-4);
-      position: sticky;
-      top: var(--ds-space-5);
-      border-radius: 12px;
-      border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 14%, transparent);
-      padding: var(--ds-space-5);
+      height: 100%;
+      overflow-y: auto;
+      background: var(--ds-bone);
+      border-left: 1px solid color-mix(in srgb, var(--ds-ember-brass) 24%, transparent);
+      padding: var(--ds-space-6) var(--ds-space-5);
     }
   }
 
@@ -7242,14 +7255,409 @@
     padding: var(--ds-space-1) 0;
   }
 
-  /* Briefing footer — verified capability markers at the base of the rail */
+  /* Briefing footer — tactile badges at the base of the dossier */
   .atelier-salon-briefing-footer {
-    padding-top: var(--ds-space-3);
-    border-top: 1px solid color-mix(in srgb, var(--ds-ember-brass) 14%, transparent);
+    padding-top: var(--ds-space-4);
+    border-top: 1px solid color-mix(in srgb, var(--ds-ember-brass) 20%, transparent);
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: var(--ds-space-2);
     margin-top: auto;
+  }
+
+  /* ── Dossier editorial style — "The Briefing" object, paper on the canvas ── */
+  .atelier-salon-dossier-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: var(--ds-space-2);
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    font-weight: var(--ds-type-overline-weight);
+    color: var(--ds-ember-brass);
+    margin-bottom: var(--ds-space-2);
+  }
+  .atelier-salon-dossier-eyebrow-rule {
+    width: 24px;
+    height: 1px;
+    background: var(--ds-ember-brass);
+    flex-shrink: 0;
+  }
+  .atelier-salon-dossier-title {
+    font-family: var(--world-type-display, var(--font-fraunces, Georgia, "Times New Roman", serif));
+    font-style: italic;
+    font-weight: 400;
+    font-size: var(--ds-type-display-s-size);
+    line-height: var(--ds-type-display-s-leading);
+    color: var(--world-ink, var(--ds-folio-ink));
+    margin: 0 0 var(--ds-space-2) 0;
+  }
+  .atelier-salon-dossier-sub {
+    font-size: var(--ds-type-body-s-size);
+    line-height: var(--ds-type-body-s-leading);
+    color: var(--world-ink-mist, var(--ds-folio-ink-mist));
+    margin: 0;
+  }
+  .atelier-salon-dossier-divider {
+    display: block;
+    width: 40px;
+    height: 1px;
+    background: var(--ds-ember-brass);
+    margin: var(--ds-space-4) 0 var(--ds-space-2) 0;
+  }
+  .atelier-salon-dossier-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .atelier-salon-dossier-item {
+    padding: var(--ds-space-4) 0;
+    border-top: 1px dashed color-mix(in srgb, var(--ds-ember-brass) 28%, transparent);
+  }
+  .atelier-salon-dossier-item:first-child {
+    border-top: none;
+  }
+  .atelier-salon-dossier-no {
+    font-family: var(--world-type-display, var(--font-fraunces, Georgia, serif));
+    font-style: italic;
+    font-size: var(--ds-type-body-size);
+    color: var(--ds-ember-brass);
+    margin: 0 0 var(--ds-space-1) 0;
+  }
+  .atelier-salon-dossier-name {
+    font-family: var(--world-type-display, var(--font-fraunces, Georgia, serif));
+    font-weight: 500;
+    font-size: var(--ds-type-body-size);
+    line-height: var(--ds-type-body-leading);
+    color: var(--world-ink, var(--ds-folio-ink));
+    margin: 0 0 var(--ds-space-1) 0;
+  }
+  .atelier-salon-dossier-desc {
+    font-size: var(--ds-type-body-s-size);
+    line-height: var(--ds-type-body-s-leading);
+    color: var(--world-ink-mist, var(--ds-folio-ink-mist));
+    margin: 0;
+  }
+  .atelier-salon-dossier-badge {
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    font-weight: var(--ds-type-overline-weight);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--world-ink-mist, var(--ds-folio-ink-mist));
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 30%, transparent);
+    border-radius: 4px;
+    padding: var(--ds-space-2) var(--ds-space-3);
+  }
+  .atelier-salon-dossier-badge-verified {
+    color: var(--ds-marine-ink);
+    border-color: color-mix(in srgb, var(--ds-marine-ink) 55%, transparent);
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     SALON PORTAL — cinematic scene composition (concept v1 adoption)
+     The /concierge stage is a private travel salon: a layered portal
+     window is the emotional centerpiece, the concierge desk is fused to
+     the stage base, invitations live inside the scene, and verified
+     results reveal in place after search. Copy is always light over a
+     guaranteed dark scrim, so it can never go dark-on-dark regardless of
+     which destination the scene has tuned toward.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Stage panel — the left column of the salon canvas. Transparent (the canvas
+     paints the warm cinema ground); the stage just owns interior padding so the
+     portal, desk, and reveal sit in a consistent channel. flex column: portal
+     (order 0, grows) → desk (order 2) → reveal canvas (order 3). */
+  .atelier-salon-stage-panel {
+    background: transparent;
+    padding: clamp(20px, 2.6vw, 40px);
+    gap: 0;
+  }
+
+  /* The portal frame — a deep window into travel, fused to the desk below it. */
+  .atelier-salon-portal {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    display: flex;
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: auto;
+    order: 0;
+    min-height: clamp(280px, 40vh, 440px);
+    margin: 0;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 26%, transparent);
+    box-shadow:
+      0 24px 60px -28px rgba(0, 0, 0, 0.7),
+      inset 0 1px 0 rgba(245, 235, 221, 0.06);
+    transition:
+      min-height 320ms var(--ds-easing-standard),
+      flex-basis 320ms var(--ds-easing-standard);
+  }
+
+  /* Tuned (post-search) — portal collapses to a banner; results take over. */
+  .atelier-salon-stage-panel[data-salon-mode="tuned"] .atelier-salon-portal {
+    flex: 0 0 auto;
+    min-height: 0;
+    height: clamp(132px, 18vh, 200px);
+  }
+
+  /* Open (pre-search) — the result canvas contributes no height and never
+     scrolls, so the portal owns the stage above the fold. */
+  .atelier-salon-stage-panel[data-salon-mode="open"] .atelier-salon-panel-body {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  /* Depth layers. The scene is the salon's signature dusk composition — a
+     cinematic horizon (violet/rose upper · warm peach-gold bloom band · deep
+     navy/ink lower), not a flat wash. The destination tunes it via a faint
+     world-DNA tint layer above; the dusk stays dramatic and readable. */
+  .atelier-salon-portal-scene {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse 94% 56% at 50% 14%, rgba(234, 188, 122, 0.55), transparent 60%),
+      radial-gradient(ellipse 120% 74% at 50% 86%, rgba(30, 40, 70, 0.68), transparent 72%),
+      linear-gradient(
+        180deg,
+        rgb(36, 23, 38) 0%,
+        rgb(62, 36, 51) 15%,
+        rgb(122, 74, 82) 33%,
+        rgb(201, 140, 94) 50%,
+        rgb(142, 124, 132) 63%,
+        rgb(56, 64, 106) 81%,
+        rgb(14, 21, 38) 100%
+      );
+    transform: scale(1.06);
+    animation: salonPortalDrift 42s ease-in-out infinite alternate;
+  }
+  /* Destination wash — a faint, real world-DNA tint over the dusk base so the
+     window shifts toward the typed destination without going muddy. */
+  .atelier-salon-portal-tint {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background-image: var(--world-scenery);
+    background-size: cover;
+    background-position: center 45%;
+    opacity: 0.18;
+    mix-blend-mode: soft-light;
+    transition: background-image 900ms ease;
+  }
+  .atelier-salon-portal-haze {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 72% 20% at 50% 46%, rgba(255, 224, 178, 0.28), transparent 70%),
+      radial-gradient(ellipse 100% 40% at 50% 0%, rgba(255, 230, 190, 0.12), transparent 65%);
+    mix-blend-mode: screen;
+  }
+  .atelier-salon-portal-bloom {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 38%;
+    height: 26%;
+    z-index: 2;
+    pointer-events: none;
+    background: radial-gradient(ellipse 68% 130% at 50% 50%, rgba(255, 224, 170, 0.60), transparent 68%);
+    filter: blur(9px);
+    animation: salonPortalBloom 9s ease-in-out infinite alternate;
+  }
+  .atelier-salon-portal-grain {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    opacity: 0.5;
+    mix-blend-mode: screen;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch' seed='4'/><feColorMatrix values='0 0 0 0 0.98  0 0 0 0 0.92  0 0 0 0 0.78  0 0 0 0.07 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+  }
+  .atelier-salon-portal-vignette {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at center, transparent 42%, rgba(0, 0, 0, 0.52) 100%),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.46) 0%, rgba(0, 0, 0, 0.12) 30%, transparent 50%, rgba(0, 0, 0, 0.72) 100%);
+  }
+
+  /* Portal copy — header + invitations sit above the depth layers. */
+  .atelier-salon-portal-copy {
+    position: relative;
+    z-index: 5;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: var(--ds-space-4);
+    padding: clamp(20px, 3vw, 40px);
+  }
+  .atelier-salon-stage-panel[data-salon-mode="tuned"] .atelier-salon-portal-copy {
+    justify-content: flex-end;
+    padding: clamp(16px, 2.4vw, 28px);
+  }
+
+  @keyframes salonPortalDrift {
+    0%   { transform: scale(1.06) translate(0, 0); }
+    100% { transform: scale(1.11) translate(-1.5%, -1%); }
+  }
+  @keyframes salonPortalBloom {
+    0%   { opacity: 0.6; }
+    100% { opacity: 1; }
+  }
+
+  /* Portal header — left-aligned editorial copy, always light on the scrim.
+     The base room-header centered brass rule is hidden here; the portal frame
+     already marks the threshold. */
+  .atelier-salon-portal-header {
+    text-align: left;
+  }
+  .atelier-salon-portal-header.atelier-salon-room-header::before {
+    display: none;
+  }
+  .atelier-salon-portal-eyebrow {
+    color: var(--ds-sandstone-gold);
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    font-weight: var(--ds-type-overline-weight);
+  }
+  .atelier-salon-portal-title {
+    font-family: var(--world-type-display, var(--font-fraunces, Georgia, "Times New Roman", serif));
+    font-style: italic;
+    font-weight: 400;
+    font-size: clamp(1.75rem, 3.4vw, 2.75rem);
+    line-height: 1.06;
+    letter-spacing: -0.015em;
+    color: var(--ds-pearl-cream);
+    text-shadow: 0 2px 28px rgba(0, 0, 0, 0.5);
+    margin-top: var(--ds-space-2);
+    max-width: 18ch;
+  }
+  .atelier-salon-stage-panel[data-salon-mode="tuned"] .atelier-salon-portal-title {
+    font-size: clamp(1.375rem, 2.4vw, 1.875rem);
+    max-width: 28ch;
+  }
+  .atelier-salon-portal-sub {
+    color: var(--ds-cream);
+    font-size: var(--ds-type-body-size);
+    line-height: var(--ds-type-body-leading);
+    max-width: 46ch;
+    margin-top: var(--ds-space-3);
+    text-shadow: 0 1px 14px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Stage invitations — entry points inside the dark stage, beneath the desk.
+     Light editorial label; the base brass ::before rule is removed (the desk
+     above already separates them). */
+  .atelier-salon-stage-invitation {
+    padding-top: var(--ds-space-2);
+    padding-bottom: var(--ds-space-2);
+  }
+  .atelier-salon-stage-invitation::before {
+    display: none;
+  }
+  .atelier-salon-invitation-label {
+    color: var(--ds-cream);
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    font-weight: var(--ds-type-overline-weight);
+    margin-bottom: var(--ds-space-3);
+  }
+
+  /* Invitation cards on the dark stage — tactile editorial objects, not plain
+     pills: a warm translucent salon surface, italic serif lead + small-caps
+     intent hint, left-aligned. Override the light-paper chip base. */
+  .atelier-salon-stage-panel .atelier-salon-starter-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: var(--ds-space-1);
+    text-align: left;
+    background:
+      linear-gradient(160deg,
+        color-mix(in srgb, var(--ds-ember-brass) 9%, transparent) 0%,
+        color-mix(in srgb, var(--ds-cinema-deep) 30%, transparent) 100%);
+    border-color: color-mix(in srgb, var(--ds-ember-brass) 30%, transparent);
+    box-shadow: inset 0 1px 0 rgba(245, 235, 221, 0.05);
+    transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+  }
+  .atelier-salon-stage-panel .atelier-salon-starter-chip:hover,
+  .atelier-salon-stage-panel .atelier-salon-starter-chip:focus-visible {
+    border-color: color-mix(in srgb, var(--ds-ember-brass) 52%, transparent);
+    background:
+      linear-gradient(160deg,
+        color-mix(in srgb, var(--ds-ember-brass) 16%, transparent) 0%,
+        color-mix(in srgb, var(--ds-cinema-deep) 24%, transparent) 100%);
+    transform: translateY(-1px);
+  }
+  .atelier-salon-invitation-lead {
+    font-family: var(--world-type-display, var(--font-fraunces, Georgia, "Times New Roman", serif));
+    font-style: italic;
+    font-weight: 400;
+    font-size: var(--ds-type-body-l-size);
+    line-height: 1.2;
+    color: var(--ds-pearl-cream);
+  }
+  .atelier-salon-invitation-hint {
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    font-weight: var(--ds-type-overline-weight);
+    color: var(--ds-sandstone-gold);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-salon-stage-panel .atelier-salon-starter-chip {
+      transition: none;
+    }
+    .atelier-salon-stage-panel .atelier-salon-starter-chip:hover,
+    .atelier-salon-stage-panel .atelier-salon-starter-chip:focus-visible {
+      transform: none;
+    }
+  }
+
+  /* The concierge desk — fused directly under the portal (order 2, between the
+     portal and the reveal canvas), a self-contained brass-edged instrument. Its
+     folio-cinema-composer brass top hairline reads as the join to the portal. */
+  .atelier-salon-desk {
+    order: 2;
+    flex: 0 0 auto;
+    margin-top: var(--ds-space-4);
+    border-radius: 12px;
+  }
+  .atelier-salon-stage-panel[data-salon-mode="tuned"] .atelier-salon-desk {
+    margin-top: var(--ds-space-3);
+  }
+
+  /* Mobile — portal-first and compact; the scene leads, then the fused desk,
+     then invitations/results, matching the concept's mobile flow. */
+  @media (max-width: 899px) {
+    .atelier-salon-stage-panel {
+      padding: var(--ds-space-4);
+    }
+    .atelier-salon-portal {
+      min-height: clamp(260px, 44vh, 380px);
+      margin: 0;
+    }
+    .atelier-salon-stage-panel[data-salon-mode="tuned"] .atelier-salon-portal {
+      height: clamp(120px, 22vh, 168px);
+    }
+  }
+
+  /* Reduced motion — no portal drift, no bloom breathe, no mode transition. */
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-salon-portal-scene { animation: none; transform: none; }
+    .atelier-salon-portal-bloom { animation: none; }
+    .atelier-salon-portal { transition: none; }
   }
 
 }
