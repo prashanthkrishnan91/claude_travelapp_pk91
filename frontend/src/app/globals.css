@@ -7130,24 +7130,39 @@
     padding-top: clamp(24px, 5vh, 56px);
   }
 
-  /* Salon workbench — two-column grid on desktop (main panel + briefing rail),
-     single-column flex stack on mobile. The workbench owns the outer padding
-     so the panel and rail sit in a consistent channel regardless of screen size. */
+  /* Salon canvas (workbench) — ONE integrated salon room object, matching the
+     concept silhouette: a dark cinematic stage on the left and the paper dossier
+     attached on the right (border-left, no gap), framed as a single rounded
+     brass-edged canvas. Mobile collapses to the stage alone (dossier hidden).
+     This is the salon canvas, not an app panel sitting in empty page. */
   .atelier-salon-workbench {
     width: 100%;
-    max-width: 72rem;
-    padding: var(--ds-space-4);
+    max-width: 88rem;
+    margin: var(--ds-space-4) auto;
     display: flex;
     flex-direction: column;
-    gap: var(--ds-space-4);
+    gap: 0;
+    background-color: var(--ds-cinema-deep);
+    background-image:
+      radial-gradient(ellipse 70% 36% at 32% -6%, color-mix(in srgb, var(--ds-ember-brass) 15%, transparent) 0%, transparent 60%),
+      radial-gradient(ellipse 44% 30% at 8% 32%, color-mix(in srgb, var(--ds-ember-brass) 8%, transparent) 0%, transparent 55%);
+    border-radius: 18px;
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 24%, transparent);
+    box-shadow:
+      0 30px 80px -28px rgba(0, 0, 0, 0.55),
+      0 10px 28px -14px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(245, 235, 221, 0.05);
+    overflow: hidden;
+    isolation: isolate;
   }
   @media (min-width: 900px) {
     .atelier-salon-workbench {
       display: grid;
-      grid-template-columns: 1fr 17rem;
-      gap: var(--ds-space-5);
-      padding: var(--ds-space-5);
-      align-items: start;
+      grid-template-columns: 1fr clamp(16rem, 23vw, 20rem);
+      gap: 0;
+      align-items: stretch;
+      height: calc(100svh - var(--ds-space-8));
+      margin: var(--ds-space-4) auto;
     }
   }
 
@@ -7174,22 +7189,19 @@
     justify-content: center;
   }
 
-  /* Main concierge panel — warm paper folio surface containing the header,
-     results body, and composer as one cohesive instrument. On desktop the
-     panel has a fixed height so results scroll inside the panel, not the page.
-     Border + shadow delineate the panel from the ambient page background. */
+  /* Main concierge panel = the salon stage (left column of the canvas). It is
+     no longer a framed app card — the canvas owns the frame. It is a transparent
+     flex column that fills its grid cell so the dossier attaches flush beside it. */
   .atelier-salon-main-panel {
     display: flex;
     flex-direction: column;
     overflow: hidden;
     min-height: 0;
-    border-radius: 16px;
-    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 16%, transparent);
-    box-shadow: 0 2px 20px color-mix(in srgb, var(--ds-midnight-ink) 6%, transparent);
+    background: transparent;
   }
   @media (min-width: 900px) {
     .atelier-salon-main-panel {
-      height: calc(100svh - var(--ds-space-10));
+      height: 100%;
     }
   }
 
@@ -7206,12 +7218,13 @@
     flex: 1;
     overflow-y: auto;
     min-height: 0;
+    order: 3;
     padding: var(--ds-space-4) var(--ds-space-5);
   }
 
-  /* Briefing rail — static capability sidebar on desktop. Hidden on mobile.
-     Declares what the concierge can do without using live data or fake counts.
-     Sticky so it stays in view as the panel body scrolls. */
+  /* Dossier rail — the paper briefing attached to the right of the salon canvas
+     (border-left, no gap, full canvas height). Part of the composed object, not
+     a floating sidebar. Hidden on mobile. No live data, no fake counts. */
   .atelier-salon-briefing-rail {
     display: none;
   }
@@ -7220,11 +7233,11 @@
       display: flex;
       flex-direction: column;
       gap: var(--ds-space-4);
-      position: sticky;
-      top: var(--ds-space-5);
-      border-radius: 12px;
-      border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 14%, transparent);
-      padding: var(--ds-space-5);
+      height: 100%;
+      overflow-y: auto;
+      background: var(--ds-bone);
+      border-left: 1px solid color-mix(in srgb, var(--ds-ember-brass) 24%, transparent);
+      padding: var(--ds-space-6) var(--ds-space-5);
     }
   }
 
@@ -7252,17 +7265,6 @@
     margin-top: auto;
   }
 
-  /* Dossier rail as a tactile paper artifact (not a dry help card): a warm
-     bone card with a soft shadow, balanced against the cinematic stage. */
-  @media (min-width: 900px) {
-    .atelier-salon-briefing-rail {
-      background: var(--ds-bone);
-      box-shadow: 0 2px 18px color-mix(in srgb, var(--ds-midnight-ink) 7%, transparent);
-      max-height: calc(100svh - var(--ds-space-10));
-      overflow-y: auto;
-    }
-  }
-
   /* ════════════════════════════════════════════════════════════════
      SALON PORTAL — cinematic scene composition (concept v1 adoption)
      The /concierge stage is a private travel salon: a layered portal
@@ -7273,27 +7275,17 @@
      which destination the scene has tuned toward.
      ════════════════════════════════════════════════════════════════ */
 
-  /* Stage panel — the salon room reads as a warm cinematic room, not a flat
-     slab: a deep base with two-point lamp warmth and a brass hairline frame.
-     Inherits the height bound + overflow:hidden from .atelier-salon-main-panel
-     so the desk pins to the base and only the result canvas scrolls. */
+  /* Stage panel — the left column of the salon canvas. Transparent (the canvas
+     paints the warm cinema ground); the stage just owns interior padding so the
+     portal, desk, and reveal sit in a consistent channel. flex column: portal
+     (order 0, grows) → desk (order 2) → reveal canvas (order 3). */
   .atelier-salon-stage-panel {
-    background-color: var(--ds-cinema-deep);
-    background-image:
-      radial-gradient(
-        ellipse 90% 42% at 50% -8%,
-        color-mix(in srgb, var(--ds-ember-brass) 16%, transparent) 0%,
-        transparent 60%
-      ),
-      radial-gradient(
-        ellipse 52% 30% at 12% 36%,
-        color-mix(in srgb, var(--ds-ember-brass) 8%, transparent) 0%,
-        transparent 55%
-      );
-    border-color: color-mix(in srgb, var(--ds-ember-brass) 22%, transparent);
+    background: transparent;
+    padding: clamp(20px, 2.6vw, 40px);
+    gap: 0;
   }
 
-  /* The portal frame — a deep window into travel. */
+  /* The portal frame — a deep window into travel, fused to the desk below it. */
   .atelier-salon-portal {
     position: relative;
     isolation: isolate;
@@ -7302,8 +7294,9 @@
     flex-grow: 1;
     flex-shrink: 1;
     flex-basis: auto;
-    min-height: clamp(300px, 42vh, 460px);
-    margin: var(--ds-space-4);
+    order: 0;
+    min-height: clamp(280px, 40vh, 440px);
+    margin: 0;
     border-radius: 14px;
     border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 26%, transparent);
     box-shadow:
@@ -7447,49 +7440,60 @@
     text-shadow: 0 1px 14px rgba(0, 0, 0, 0.45);
   }
 
-  /* Portal invitations — entry points inside the scene, light on dark. */
-  .atelier-salon-portal-invitation {
-    padding-top: 0;
-    padding-bottom: 0;
+  /* Stage invitations — entry points inside the dark stage, beneath the desk.
+     Light editorial label; the base brass ::before rule is removed (the desk
+     above already separates them). */
+  .atelier-salon-stage-invitation {
+    padding-top: var(--ds-space-2);
+    padding-bottom: var(--ds-space-2);
   }
-  .atelier-salon-portal-invitation::before {
+  .atelier-salon-stage-invitation::before {
     display: none;
   }
-  .atelier-salon-portal-invitation-label {
+  .atelier-salon-invitation-label {
     color: var(--ds-cream);
     font-size: var(--ds-type-overline-size);
     line-height: var(--ds-type-overline-leading);
     font-weight: var(--ds-type-overline-weight);
     margin-bottom: var(--ds-space-3);
-    text-shadow: 0 1px 12px rgba(0, 0, 0, 0.4);
   }
 
-  /* Starter chips on the dark portal — override the light-paper base so they
+  /* Starter chips on the dark stage — override the light-paper base so they
      read as warm brass invitations, not invisible dark-on-dark pills. */
-  .atelier-salon-portal .atelier-salon-starter-chip {
+  .atelier-salon-stage-panel .atelier-salon-starter-chip {
     background: color-mix(in srgb, var(--ds-ember-brass) 12%, transparent);
     border-color: color-mix(in srgb, var(--ds-ember-brass) 32%, transparent);
     color: var(--ds-cream);
-    backdrop-filter: blur(3px);
   }
-  .atelier-salon-portal .atelier-salon-starter-chip:hover,
-  .atelier-salon-portal .atelier-salon-starter-chip:focus-visible {
+  .atelier-salon-stage-panel .atelier-salon-starter-chip:hover,
+  .atelier-salon-stage-panel .atelier-salon-starter-chip:focus-visible {
     background: color-mix(in srgb, var(--ds-ember-brass) 22%, transparent);
     border-color: color-mix(in srgb, var(--ds-ember-brass) 50%, transparent);
     color: var(--ds-pearl-cream);
   }
 
-  /* The concierge desk — fused to the stage base. The composer's brass top
-     hairline is the join to the portal/canvas above; no detached form block. */
+  /* The concierge desk — fused directly under the portal (order 2, between the
+     portal and the reveal canvas), a self-contained brass-edged instrument. Its
+     folio-cinema-composer brass top hairline reads as the join to the portal. */
   .atelier-salon-desk {
-    margin-top: 0;
+    order: 2;
+    flex: 0 0 auto;
+    margin-top: var(--ds-space-4);
+    border-radius: 12px;
+  }
+  .atelier-salon-stage-panel[data-salon-mode="tuned"] .atelier-salon-desk {
+    margin-top: var(--ds-space-3);
   }
 
-  /* Mobile — portal-first and compact; the scene leads, the desk is thumb-reachable. */
+  /* Mobile — portal-first and compact; the scene leads, then the fused desk,
+     then invitations/results, matching the concept's mobile flow. */
   @media (max-width: 899px) {
+    .atelier-salon-stage-panel {
+      padding: var(--ds-space-4);
+    }
     .atelier-salon-portal {
-      min-height: clamp(280px, 46vh, 400px);
-      margin: var(--ds-space-3);
+      min-height: clamp(260px, 44vh, 380px);
+      margin: 0;
     }
     .atelier-salon-stage-panel[data-salon-mode="tuned"] .atelier-salon-portal {
       height: clamp(120px, 22vh, 168px);

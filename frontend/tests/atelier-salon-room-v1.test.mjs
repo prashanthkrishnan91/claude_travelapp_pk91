@@ -640,20 +640,47 @@ describe("Atelier Room System: salon portal scene (concept v1)", () => {
     );
   });
 
-  test("I7. header + invitations live inside the portal copy (scene composition)", () => {
+  test("I7. scene hierarchy: header in portal copy; invitations in the reveal canvas; desk fused", () => {
     const copyIdx = conciergePage.indexOf("atelier-salon-portal-copy");
     const canvasIdx = conciergePage.indexOf('data-testid="concierge-results-canvas"');
     const headerIdx = conciergePage.indexOf('data-testid="concierge-instrument-header"');
     const emptyIdx = conciergePage.indexOf('data-testid="concierge-empty-state"');
+    const deskIdx = conciergePage.indexOf("atelier-salon-desk");
     assert.ok(copyIdx !== -1, "ConciergePage must use atelier-salon-portal-copy");
     assert.ok(
       headerIdx > copyIdx && headerIdx < canvasIdx,
       "concierge-instrument-header must sit inside the portal copy, before the results canvas",
     );
     assert.ok(
-      emptyIdx > copyIdx && emptyIdx < canvasIdx,
-      "concierge-empty-state (invitations) must sit inside the portal copy, before the results canvas",
+      emptyIdx > canvasIdx,
+      "concierge-empty-state (invitations) must sit inside the reveal canvas, beneath the fused desk",
     );
+    assert.ok(deskIdx !== -1, "composer must carry atelier-salon-desk (fused desk)");
+  });
+
+  test("I11. workbench is the integrated salon canvas with an attached dossier column", () => {
+    const idx = globalsCss.indexOf(".atelier-salon-workbench");
+    assert.ok(idx !== -1, ".atelier-salon-workbench must be defined");
+    const block = globalsCss.slice(idx, idx + 1600);
+    assert.ok(
+      block.includes("grid-template-columns") && block.includes("var(--ds-cinema-deep)"),
+      "the workbench must be one dark integrated canvas with a two-column grid (stage + dossier)",
+    );
+    const railIdx = globalsCss.indexOf(".atelier-salon-briefing-rail");
+    const railBlock = globalsCss.slice(railIdx, railIdx + 600);
+    assert.ok(
+      railBlock.includes("border-left"),
+      "the dossier rail must attach to the canvas via border-left (no floating gap)",
+    );
+  });
+
+  test("I12. desk fused under portal via flex order (portal → desk → reveal canvas)", () => {
+    const deskIdx = globalsCss.indexOf(".atelier-salon-desk");
+    const deskBlock = globalsCss.slice(deskIdx, deskIdx + 200);
+    assert.ok(deskBlock.includes("order: 2"), ".atelier-salon-desk must use order: 2 (between portal and reveal)");
+    const bodyIdx = globalsCss.indexOf(".atelier-salon-panel-body");
+    const bodyBlock = globalsCss.slice(bodyIdx, bodyIdx + 220);
+    assert.ok(bodyBlock.includes("order: 3"), ".atelier-salon-panel-body must use order: 3 (reveal sits below the desk)");
   });
 
   test("I8. portal copy uses light cinema text, never dark --world-ink", () => {

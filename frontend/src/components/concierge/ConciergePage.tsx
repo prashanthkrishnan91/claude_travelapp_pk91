@@ -836,40 +836,6 @@ export function ConciergePage() {
             {/* Editorial mapline — brass rhythm hairline under the header */}
             <div className="mapline-rule" aria-hidden="true" />
           </header>
-
-          {/* ── Invitations — beautiful entry points, inside the scene ── */}
-          {salonMode === "open" && !loading && !hasResults && messages.length === 0 && (
-            <div
-              data-testid="concierge-empty-state"
-              className="atelier-salon-invitation atelier-salon-portal-invitation"
-            >
-              <p className="atelier-salon-portal-invitation-label uppercase tracking-[0.1em]">
-                Starting points — tell me where to search:
-              </p>
-              <div className="atelier-salon-chip-grid">
-                {EDITORIAL_PROMPTS.map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    onClick={() => {
-                      setInput(prompt);
-                      inputRef.current?.focus();
-                    }}
-                    className="rounded-lg folio-concierge-chip atelier-salon-starter-chip focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
-                    style={{
-                      padding: "var(--ds-space-3) var(--ds-space-4)",
-                      fontSize: "var(--ds-type-body-s-size)",
-                      lineHeight: "var(--ds-type-body-s-leading)",
-                      textAlign: "left",
-                    }}
-                    data-testid="concierge-prompt-chip"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </section>
 
@@ -882,6 +848,39 @@ export function ConciergePage() {
         aria-atomic="false"
         className="atelier-salon-panel-body"
       >
+        {/* ── Invitations — entry points inside the stage, beneath the desk ── */}
+        {salonMode === "open" && !loading && !hasResults && messages.length === 0 && (
+          <div
+            data-testid="concierge-empty-state"
+            className="atelier-salon-invitation atelier-salon-stage-invitation"
+          >
+            <p className="atelier-salon-invitation-label uppercase tracking-[0.1em]">
+              Starting points — tell me where to search:
+            </p>
+            <div className="atelier-salon-chip-grid">
+              {EDITORIAL_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => {
+                    setInput(prompt);
+                    inputRef.current?.focus();
+                  }}
+                  className="rounded-lg folio-concierge-chip atelier-salon-starter-chip focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[44px]"
+                  style={{
+                    padding: "var(--ds-space-3) var(--ds-space-4)",
+                    fontSize: "var(--ds-type-body-s-size)",
+                    lineHeight: "var(--ds-type-body-s-leading)",
+                    textAlign: "left",
+                  }}
+                  data-testid="concierge-prompt-chip"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Messages — transcript: user turns + assistant card groups in order */}
         <div className="space-y-4">
@@ -1218,7 +1217,7 @@ export function ConciergePage() {
       {/* ── Concierge search instrument — pinned at panel base ───────────── */}
       <div
         data-testid="concierge-instrument-composer"
-        className="sticky z-10 concierge-sticky-bottom folio-cinema-composer atelier-salon-composer-surface atelier-salon-desk"
+        className="concierge-sticky-bottom folio-cinema-composer atelier-salon-composer-surface atelier-salon-desk"
       >
         {/* Refinement / follow-up chips */}
         {activeChips && messages.length > 0 && !loading && (
