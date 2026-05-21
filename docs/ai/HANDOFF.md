@@ -18,6 +18,7 @@ Evolves the merged PR #458 static salon into a discovery loop **without changing
 - **Editorial cards:** `ConciergeResultCard` gains a decorative `.atelier-salon-card-plate` (3 gradient variants) + serial overline ("No. 01"). **Not a place photo** — the result types carry no image field anywhere; the plate is an honest editorial slip (matches the prototype's `.ed-plate`), making cards photo-forward/scannable on mobile without fabricating imagery.
 - **Save-to-folio moment:** a `.atelier-salon-folio-toast` ("Slipped into your folio") fires on save success (`folioToast` state + auto-dismiss timer w/ unmount cleanup), behavior-safe atop the existing `saveItem` flow.
 - **Mobile:** plate/reveal/toast tuned for phone (full-width centered toast, shorter plate). Tests: Section J (8 new). **3023 tests, 0 failures; tsc/lint/next build clean.** All testids + behavior preserved.
+- **patch-1 (preview polish):** textarea shows a scrollbar only past the 120px cap (clean default single-line); scoped slim brass scrollbar on `.atelier-salon-panel-body` (no global restyle); mobile (`≤620px`) pre-search prompts become a horizontal swipe tray (`.atelier-salon-chip-grid` flex + scroll-snap, hidden scrollbar) instead of a tall vertical pile.
 
 ### Concierge Salon cinematic scene (PR #458, merged)
 

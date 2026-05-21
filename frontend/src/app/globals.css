@@ -7804,6 +7804,29 @@
     color: var(--ds-sandstone-gold);
   }
 
+  /* Premium results scrollbar — slim, brass-tinted, native to the dark salon.
+     Scoped to the reveal canvas only; does not touch the global scrollbar. */
+  .atelier-salon-panel-body {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--ds-ember-brass) 36%, transparent) transparent;
+  }
+  .atelier-salon-panel-body::-webkit-scrollbar {
+    width: 8px;
+  }
+  .atelier-salon-panel-body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .atelier-salon-panel-body::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--ds-ember-brass) 30%, transparent);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  .atelier-salon-panel-body::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--ds-ember-brass) 52%, transparent);
+    background-clip: padding-box;
+  }
+
   /* Mobile — keep v2 elements intentional, not stacked desktop. */
   @media (max-width: 899px) {
     .atelier-salon-card-plate {
@@ -7820,6 +7843,35 @@
     }
     .atelier-salon-folio-toast[data-visible="true"] {
       transform: translateY(0);
+    }
+  }
+
+  /* Mobile pre-search prompts — a horizontal swipe tray instead of a tall
+     vertical pile, so the destination field + composer stay within quick reach.
+     The chips keep their two-line editorial content but become fixed-width
+     cards the user can flick through. Scrollbar hidden; scroll-snap for feel. */
+  @media (max-width: 620px) {
+    .atelier-salon-chip-grid {
+      display: flex;
+      grid-template-columns: none;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      max-width: none;
+      gap: var(--ds-space-2);
+      padding-bottom: var(--ds-space-1);
+      scroll-snap-type: x proximity;
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .atelier-salon-chip-grid::-webkit-scrollbar {
+      display: none;
+    }
+    .atelier-salon-chip-grid .atelier-salon-starter-chip {
+      width: auto;
+      flex: 0 0 auto;
+      min-width: 12rem;
+      justify-content: flex-start;
+      scroll-snap-align: start;
     }
   }
 

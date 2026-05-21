@@ -1422,7 +1422,11 @@ export function ConciergePage() {
             onChange={(e) => {
               setInput(e.target.value);
               e.target.style.height = "auto";
-              e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+              const next = Math.min(e.target.scrollHeight, 120);
+              e.target.style.height = `${next}px`;
+              // Only show a scrollbar once the content actually exceeds the
+              // 120px cap; otherwise keep the default single-line state clean.
+              e.target.style.overflowY = e.target.scrollHeight > 120 ? "auto" : "hidden";
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -1441,6 +1445,7 @@ export function ConciergePage() {
               fontSize: "var(--ds-type-body-size)",
               lineHeight: "var(--ds-type-body-leading)",
               minHeight: "44px",
+              overflowY: "hidden",
             }}
           />
           <button
