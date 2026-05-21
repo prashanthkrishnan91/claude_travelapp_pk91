@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-21 (Concierge Salon cinematic scene — implementation PR open)
+Last updated: 2026-05-21 (Concierge Salon v2 — mobile-first discovery loop — PR open; v1 PR #458 merged)
 
 ## Purpose
 
@@ -8,9 +8,18 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3.5 — Concierge Salon cinematic scene implemented.** Stage 3 exit completed earlier (2026-05-14); current focus is Stage 3.5 design adoption. The outside-trip Concierge (`/concierge`) is now a Private Travel Salon: a portal centerpiece, fused concierge desk, in-scene invitations, tactile dossier rail, and a post-search results reveal. Next: apply the same Room System treatment to Explore (Observatory) or Saved (Gallery).
+**Stage 3.5 — Concierge Salon cinematic scene (PR #458 MERGED) + v2 discovery loop (current branch).** Stage 3 exit completed earlier (2026-05-14); current focus is Stage 3.5 design adoption. The outside-trip Concierge (`/concierge`) is a Private Travel Salon: a portal centerpiece, fused concierge desk, in-scene invitations, tactile dossier rail, and a post-search results reveal. Next: apply the same Room System treatment to Explore (Observatory) or Saved (Gallery).
 
-### Concierge Salon cinematic scene (current branch)
+### Concierge Salon v2 — mobile-first discovery loop (current branch)
+
+Evolves the merged PR #458 static salon into a discovery loop **without changing its silhouette** (integrated dark canvas · cinematic portal · attached dossier · fused desk · editorial invitations · floating nav). All changes in `ConciergePage.tsx` + `globals.css`; no backend/API/provider/SQL/AppShell.
+- **Destination-aware portal:** new `.atelier-salon-portal-photo` layer paints the typed destination's **real** world-DNA mood image (`visualLayer.imageUrl` from `pickWorldFromDestination` — Unsplash for curated worlds, inline SVG scene for city/coast/mountain/desert, `none` → dusk-floor fallback for the Atelier house world) via `--world-portal-image`. `data-portal-destination` house/tuned hook; reduced-motion guarded. No fake destination facts.
+- **Curated reveal:** each result section gets `.atelier-salon-reveal-head` (Fraunces italic **real**-count line "N places in {destination}" + small-caps note) and a `salonResultReveal` entrance (reduced-motion guarded).
+- **Editorial cards:** `ConciergeResultCard` gains a decorative `.atelier-salon-card-plate` (3 gradient variants) + serial overline ("No. 01"). **Not a place photo** — the result types carry no image field anywhere; the plate is an honest editorial slip (matches the prototype's `.ed-plate`), making cards photo-forward/scannable on mobile without fabricating imagery.
+- **Save-to-folio moment:** a `.atelier-salon-folio-toast` ("Slipped into your folio") fires on save success (`folioToast` state + auto-dismiss timer w/ unmount cleanup), behavior-safe atop the existing `saveItem` flow.
+- **Mobile:** plate/reveal/toast tuned for phone (full-width centered toast, shorter plate). Tests: Section J (8 new). **3023 tests, 0 failures; tsc/lint/next build clean.** All testids + behavior preserved.
+
+### Concierge Salon cinematic scene (PR #458, merged)
 
 **`ConciergePage.tsx` + `globals.css` — the /concierge scene is a direct production port of the approved concept** (`docs/ai/concepts/concierge-salon-concept-v1.html`, blueprint `docs/ai/design/CONCIERGE_SALON_PRODUCTION_BLUEPRINT.md`):
 - `.atelier-salon-workbench` is the **integrated salon canvas** — one dark, rounded, brass-edged object (`var(--ds-cinema-deep)` + lamp warmth) holding a desktop two-column grid: the dark stage (left, `.atelier-salon-main-panel`/`.atelier-salon-stage-panel`, transparent) and the paper dossier (`.atelier-salon-briefing-rail`) **attached on the right via `border-left`, no gap**. Desktop height is bounded to `calc(100svh - space-8)` with `overflow:hidden` so only the reveal canvas scrolls. Mobile collapses to the stage alone (dossier hidden).

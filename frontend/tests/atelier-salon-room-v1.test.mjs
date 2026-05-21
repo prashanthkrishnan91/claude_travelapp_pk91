@@ -726,3 +726,115 @@ describe("Atelier Room System: salon portal scene (concept v1)", () => {
     }
   });
 });
+
+// ── Section J: Salon v2 — destination-aware portal, reveal, cards, save ──────
+
+describe("Atelier Room System: salon v2 discovery loop", () => {
+  test("J1. portal renders a destination photo layer fed by real world DNA", () => {
+    assert.ok(
+      conciergePage.includes("atelier-salon-portal-photo"),
+      "ConciergePage must render the .atelier-salon-portal-photo layer",
+    );
+    assert.ok(
+      conciergePage.includes("--world-portal-image") &&
+        conciergePage.includes("destWorld.visualLayer.imageUrl"),
+      "the portal photo must be driven by destWorld.visualLayer.imageUrl via --world-portal-image",
+    );
+  });
+
+  test("J2. portal photo layer is defined in globals.css and reads --world-portal-image", () => {
+    const idx = globalsCss.indexOf(".atelier-salon-portal-photo");
+    assert.ok(idx !== -1, ".atelier-salon-portal-photo must be defined");
+    const block = globalsCss.slice(idx, idx + 360);
+    assert.ok(
+      block.includes("var(--world-portal-image"),
+      "the portal photo layer must paint var(--world-portal-image)",
+    );
+  });
+
+  test("J3. portal has a graceful house fallback when there is no destination", () => {
+    assert.ok(
+      conciergePage.includes('data-portal-destination'),
+      "ConciergePage must mark the portal house/tuned via data-portal-destination",
+    );
+    assert.ok(
+      globalsCss.includes('[data-portal-destination="house"] .atelier-salon-portal-photo'),
+      "globals.css must fade the photo to the dusk floor when no destination is set",
+    );
+  });
+
+  test("J4. result section gets a curated reveal head with real count + destination", () => {
+    assert.ok(
+      conciergePage.includes("atelier-salon-reveal-count") &&
+        conciergePage.includes("placeCount"),
+      "the reveal head must show the real placeCount (no fabricated totals)",
+    );
+    assert.ok(
+      globalsCss.includes(".atelier-salon-reveal-head") &&
+        globalsCss.includes(".atelier-salon-reveal-count"),
+      "globals.css must define the reveal head styles",
+    );
+  });
+
+  test("J5. result section has a curated entrance with reduced-motion guard", () => {
+    assert.ok(
+      conciergePage.includes("atelier-salon-result-reveal"),
+      "result section must use atelier-salon-result-reveal",
+    );
+    assert.ok(
+      globalsCss.includes("salonResultReveal"),
+      "globals.css must define the salonResultReveal keyframes",
+    );
+    const rmIdx = globalsCss.lastIndexOf("prefers-reduced-motion: reduce");
+    const rmBlock = globalsCss.slice(rmIdx);
+    assert.ok(
+      rmBlock.includes(".atelier-salon-result-reveal { animation: none"),
+      "the reveal animation must be disabled under prefers-reduced-motion",
+    );
+  });
+
+  test("J6. cards get an editorial mood plate + serial (not a fake photo)", () => {
+    assert.ok(
+      conciergePage.includes("atelier-salon-card-plate") &&
+        conciergePage.includes("atelier-salon-card-serial"),
+      "ConciergeResultCard must render a plate + serial",
+    );
+    assert.ok(
+      globalsCss.includes(".atelier-salon-card-plate"),
+      "globals.css must define the card plate",
+    );
+    // The plate must remain decorative — never reference real place imagery.
+    assert.ok(
+      !conciergePage.includes("photoUri") && !conciergePage.includes("place.photo"),
+      "card plate must not pull any place photo (no place imagery exists)",
+    );
+  });
+
+  test("J7. save success shows a folio confirmation toast, behavior-safe", () => {
+    assert.ok(
+      conciergePage.includes("concierge-folio-toast") &&
+        conciergePage.includes("setFolioToast"),
+      "ConciergePage must surface a folio toast driven by setFolioToast on save",
+    );
+    assert.ok(
+      conciergePage.includes('data-testid="concierge-result-save-btn"'),
+      "the existing save button contract must be preserved",
+    );
+    assert.ok(
+      globalsCss.includes(".atelier-salon-folio-toast"),
+      "globals.css must define the folio toast",
+    );
+  });
+
+  test("J8. salon v2 keeps the no-raw-rgba and backend-contract rules", () => {
+    assert.ok(
+      !conciergePage.includes("rgba("),
+      "ConciergePage must not introduce raw rgba() (B14)",
+    );
+    assert.ok(
+      conciergePage.includes("callConciergeSearch") &&
+        conciergePage.includes("saveItem"),
+      "backend contracts (search + save) must be unchanged",
+    );
+  });
+});

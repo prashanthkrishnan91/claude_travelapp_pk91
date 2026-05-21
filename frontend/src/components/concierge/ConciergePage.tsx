@@ -149,6 +149,8 @@ function ConciergeResultCard({
   operationalConfidence,
   onSave,
   saveState = "idle",
+  serial,
+  plateVariant = 0,
 }: {
   title: string;
   category: string;
@@ -161,6 +163,8 @@ function ConciergeResultCard({
   operationalConfidence?: TrustConfidence;
   onSave?: () => void;
   saveState?: SaveState;
+  serial?: string;
+  plateVariant?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const reasonParts = splitReason(reason);
@@ -175,6 +179,16 @@ function ConciergeResultCard({
     >
       {/* Folio cover tab — makes each result card feel like a recommendation slip */}
       <div className="folio-cover-tab" aria-hidden="true" />
+      {/* Editorial mood plate — a decorative salon "filing slip" header. NOT a
+          photo of the place (no place imagery exists); the serial + warm gradient
+          signal a curated clipping, keeping each card scannable on mobile. */}
+      <div
+        className="atelier-salon-card-plate"
+        data-plate-variant={plateVariant % 3}
+        aria-hidden="true"
+      >
+        {serial && <span className="atelier-salon-card-serial">{serial}</span>}
+      </div>
       {/* Card content — all interior content in a padded container */}
       <div style={{ padding: "var(--ds-space-5)" }}>
         {/* Identity */}
@@ -429,8 +443,17 @@ export function ConciergePage() {
   const [destinationError, setDestinationError] = useState(false);
   // Save state per card, keyed by a stable identifier (providerPlaceId or title)
   const [cardSaveStates, setCardSaveStates] = useState<Map<string, SaveState>>(new Map());
+  // Transient "slipped into your folio" confirmation after a successful save.
+  const [folioToast, setFolioToast] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const folioToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (folioToastTimer.current) clearTimeout(folioToastTimer.current);
+    };
+  }, []);
 
   // Salon world — applies the `salon` archetype tint on top of the
   // destination world. Drives WorldAtmosphere ambient coloring and
@@ -448,8 +471,17 @@ export function ConciergePage() {
     () => pickWorldFromDestination(destination || null),
     [destination],
   );
+  // Portal scene vars — the destination's real world-DNA scenery plus its mood
+  // image (a curated Unsplash photo or self-contained SVG scene, never a place
+  // claim). An empty destination resolves to the Atelier house world, whose
+  // imageUrl is undefined → "none", so the portal falls back to the dusk floor.
   const portalSceneStyle = {
     ["--world-scenery" as string]: destWorld.visualLayer.sceneryLayers,
+    ["--world-portal-image" as string]: destWorld.visualLayer.imageUrl
+      ? `url("${destWorld.visualLayer.imageUrl}")`
+      : "none",
+    ["--world-portal-position" as string]:
+      destWorld.visualLayer.imagePosition ?? "center 45%",
   } as CSSProperties;
 
   // Persist transcript whenever messages change
@@ -555,6 +587,9 @@ export function ConciergePage() {
         provenance: { source: "outside_concierge" },
       });
       setCardSaveStates((prev) => new Map(prev).set(cardKey, "saved"));
+      setFolioToast(title);
+      if (folioToastTimer.current) clearTimeout(folioToastTimer.current);
+      folioToastTimer.current = setTimeout(() => setFolioToast(null), 2600);
     } catch {
       setCardSaveStates((prev) => new Map(prev).set(cardKey, "error"));
     }
@@ -819,9 +854,15 @@ export function ConciergePage() {
           Depth: scene → haze → bloom → grain → vignette → copy. The copy
           (header + invitations) lives inside the scene, on a guaranteed
           dark scrim so it always reads light. ─────────────────────────── */}
-      <section className="atelier-salon-portal" data-portal-state={salonMode}>
+      <section
+        className="atelier-salon-portal"
+        data-portal-state={salonMode}
+        data-portal-destination={destination.trim() ? "tuned" : "house"}
+        style={portalSceneStyle}
+      >
         <span className="atelier-salon-portal-scene" aria-hidden="true" />
-        <span className="atelier-salon-portal-tint" aria-hidden="true" style={portalSceneStyle} />
+        <span className="atelier-salon-portal-photo" aria-hidden="true" />
+        <span className="atelier-salon-portal-tint" aria-hidden="true" />
         <span className="atelier-salon-portal-haze" aria-hidden="true" />
         <span className="atelier-salon-portal-bloom" aria-hidden="true" />
         <span className="atelier-salon-portal-grain" aria-hidden="true" />
@@ -984,10 +1025,29 @@ export function ConciergePage() {
                 "",
             );
 
+            const placeCount = addablePlaces.length;
+
             return (
-              <section key={idx} data-testid="concierge-result-section" aria-label="Place recommendations">
+              <section
+                key={idx}
+                data-testid="concierge-result-section"
+                aria-label="Place recommendations"
+                className="atelier-salon-result-reveal"
+              >
+                {/* Reveal head — frames the shortlist as a curated dossier, not a
+                    dump. Counts are the real number of verified cards below;
+                    destination is the user's real input. No fabricated claims. */}
+                <div className="atelier-salon-reveal-head">
+                  <p className="atelier-salon-reveal-count">
+                    {placeCount} {placeCount === 1 ? "place" : "places"}
+                    {destination.trim() ? ` in ${destination.trim()}` : ""}
+                  </p>
+                  <p className="atelier-salon-reveal-note">
+                    Verified &amp; addable — composed for your search
+                  </p>
+                </div>
                 <div className="space-y-3">
-                  {addablePlaces.map(({ kind, place, sourceLink }) => {
+                  {addablePlaces.map(({ kind, place, sourceLink }, cardIdx) => {
                     const title =
                       (place as { display?: { displayName?: string } }).display
                         ?.displayName ??
@@ -1048,6 +1108,8 @@ export function ConciergePage() {
                         operationalConfidence={operationalConfidence}
                         onSave={isSaveable ? () => handleSaveCard(cardKey, kind, title, place) : undefined}
                         saveState={cardSaveStates.get(cardKey) ?? "idle"}
+                        serial={`No. ${String(cardIdx + 1).padStart(2, "0")}`}
+                        plateVariant={cardIdx}
                       />
                     );
                   })}
@@ -1459,6 +1521,23 @@ export function ConciergePage() {
           <span className="atelier-salon-dossier-badge">Yours to keep</span>
         </div>
       </aside>
+
+      {/* Folio confirmation — a private clipping slipping into the travel folio.
+          Purely visual; the save itself already completed via handleSaveCard. */}
+      <div
+        className="atelier-salon-folio-toast"
+        data-visible={folioToast ? "true" : "false"}
+        role="status"
+        aria-live="polite"
+        data-testid="concierge-folio-toast"
+      >
+        {folioToast && (
+          <span className="atelier-salon-folio-toast-text">
+            <BookmarkCheck className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            Slipped into your folio
+          </span>
+        )}
+      </div>
 
       </div> {/* end atelier-salon-workbench */}
     </div>
