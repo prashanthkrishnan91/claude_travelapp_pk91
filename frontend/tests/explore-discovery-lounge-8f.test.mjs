@@ -110,15 +110,15 @@ test('VerticalCard has focus-visible outline with ds-accent ring', () => {
   assert.match(exploreShell, /focus-visible:outline-ds-accent/);
 });
 
-test('VerticalCard uses folio-cinema-tile for discovery-tray hover (Slice 4B)', () => {
+test('VerticalCard uses obs-vert-card for discovery-tray hover (Observatory v1)', () => {
   assert.ok(
-    exploreShell.includes("folio-cinema-tile"),
-    "ExploreShell VerticalCard must use folio-cinema-tile which provides hover lift (Slice 4B replaced card-lift)"
+    exploreShell.includes("obs-vert-card"),
+    "ExploreShell VerticalCard must use obs-vert-card which provides hover lift (Observatory v1 replaced folio-cinema-tile)"
   );
 });
 
-test('VerticalCard icon uses var(--ds-accent-subtle) background (no legacy colors)', () => {
-  assert.match(exploreShell, /var\(--ds-accent-subtle\)/);
+test('VerticalCard glyph uses obs-vert-glyph (brass-edged, tokenized)', () => {
+  assert.match(exploreShell, /obs-vert-glyph/);
 });
 
 test('VerticalCard icon uses text-ds-accent (uniform sandstone-gold)', () => {
@@ -135,7 +135,8 @@ test('VerticalCard Overline label uses text-ds-text-tertiary', () => {
 
 test('Instrument header Overline uses tracking-[0.1em] (Design Bible §4.3 exact)', () => {
   const overlineCount = (exploreShell.match(/tracking-\[0\.1em\]/g) || []).length;
-  assert.ok(overlineCount >= 2, 'Expected at least 2 tracking-[0.1em] usages (card + section header)');
+  assert.ok(overlineCount >= 1, 'Instrument header overline keeps tracking-[0.1em]');
+  assert.ok(exploreShell.includes('obs-vert-over'), 'Observatory vertical cards use obs-vert-over overline');
 });
 
 test('ExploreShell back button uses text-ds-text-tertiary (not legacy cream color)', () => {
@@ -417,12 +418,12 @@ test('ExploreShell vertical cards not wrapped with <a> tag click-only navigation
 
 // ── H. Mobile-Safe Layout ────────────────────────────────────────────────────
 
-test('ExploreShell vertical grid has grid-cols-1 sm:grid-cols-2 (responsive)', () => {
-  assert.match(exploreShell, /grid-cols-1 sm:grid-cols-2/);
+test('ExploreShell vertical grid is 2-up mobile, 4-up desktop (Observatory v1)', () => {
+  assert.match(exploreShell, /grid-cols-2 sm:grid-cols-2 lg:grid-cols-4/);
 });
 
-test('ExploreShell vertical card layout is flex with items-start (mobile-safe)', () => {
-  assert.match(exploreShell, /flex items-start gap-4/);
+test('ExploreShell vertical card uses obs-vert-card column layout (mobile-safe)', () => {
+  assert.match(exploreShell, /obs-vert-card/);
 });
 
 test('ExploreShell instrument section uses CSS var padding (mobile-responsive)', () => {
@@ -441,16 +442,16 @@ test('RestaurantExploreFlow search form has flex gap-3 layout', () => {
 
 // ── I. Result Count Overline Typography ──────────────────────────────────────
 
-test('RestaurantExploreFlow result count uses tracking-[0.1em] (Design Bible Overline)', () => {
-  assert.match(restaurantFlow, /tracking-\[0\.1em\]/);
+test('RestaurantExploreFlow result count uses obs-index-head (Observatory editorial head)', () => {
+  assert.match(restaurantFlow, /obs-index-head/);
 });
 
-test('HotelExploreFlow result count uses tracking-[0.1em]', () => {
-  assert.match(hotelFlow, /tracking-\[0\.1em\]/);
+test('HotelExploreFlow result count uses obs-index-head', () => {
+  assert.match(hotelFlow, /obs-index-head/);
 });
 
-test('AttractionExploreFlow result count uses tracking-[0.1em]', () => {
-  assert.match(attractionFlow, /tracking-\[0\.1em\]/);
+test('AttractionExploreFlow result count uses obs-index-head', () => {
+  assert.match(attractionFlow, /obs-index-head/);
 });
 
 test('RestaurantExploreFlow result count has explore-results-header testid', () => {

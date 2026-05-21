@@ -56,6 +56,39 @@ const VERTICAL_OVERLINES: Record<ExploreVertical, string> = {
   attractions: "Experiences",
 };
 
+// Vertical mood lines for the banner. Identity/mood only — never the typed
+// destination (destination state stays inside each flow; no lifted controller).
+const VERTICAL_MOODS: Record<ExploreVertical, string> = {
+  flights: "Live routes · Google Flights link-out",
+  hotels: "Google-verified stays · no rates shown",
+  restaurants: "Top-rated, verified tables",
+  attractions: "Must-see sights and local experiences",
+};
+
+/**
+ * The Observatory meridian band — a wide horizon viewing slit. Shared,
+ * purely presentational; reused as the landing hero and (compact variant)
+ * as the per-vertical mood banner.
+ */
+function ObsMeridian({
+  banner = false,
+  children,
+}: {
+  banner?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={banner ? "obs-meridian obs-meridian--banner" : "obs-meridian"}>
+      <div className="obs-meridian-scene" aria-hidden="true" />
+      <div className="obs-meridian-bloom" aria-hidden="true" />
+      <div className="obs-meridian-grain" aria-hidden="true" />
+      <div className="obs-meridian-horizon" aria-hidden="true" />
+      <div className="obs-meridian-vignette" aria-hidden="true" />
+      <div className="obs-meridian-copy">{children}</div>
+    </div>
+  );
+}
+
 export function ExploreShell() {
   const [active, setActive] = useState<ExploreVertical | null>(null);
 
@@ -79,7 +112,16 @@ export function ExploreShell() {
           </h2>
         </div>
 
-        {/* Search instrument section */}
+        {/* Vertical mood banner — identity/mood only, no destination */}
+        <ObsMeridian banner>
+          <header>
+            <p className="obs-meridian-eyebrow">{VERTICAL_OVERLINES[active]}</p>
+            <h2 className="obs-meridian-title">{VERTICAL_TITLES[active]}</h2>
+          </header>
+          <p className="obs-meridian-foot">{VERTICAL_MOODS[active]}</p>
+        </ObsMeridian>
+
+        {/* Search instrument section — the vertical's own production flow */}
         <section
           className="folio-cinema-card rounded-xl overflow-hidden"
           data-testid={`${active}-flow`}
@@ -107,21 +149,22 @@ export function ExploreShell() {
 
   return (
     <div className="space-y-8 folio-cinema-lounge" data-testid="explore-home">
-      {/* Editorial lounge header */}
-      <header data-testid="explore-lounge-header">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-accent mb-1">
-          Curated Discovery
-        </p>
-        <h1 className="text-2xl font-bold text-ds-text">Discover</h1>
-        <p className="text-sm text-ds-text-tertiary mt-1 leading-snug">
+      {/* Observatory meridian hero */}
+      <ObsMeridian>
+        <header data-testid="explore-lounge-header">
+          <p className="obs-meridian-eyebrow">Curated Discovery</p>
+          <h1 className="obs-meridian-title">Discover</h1>
+        </header>
+        <p className="obs-meridian-foot">
           Flights, hotels, restaurants, and attractions — verified, no trip required.
         </p>
-      </header>
+      </ObsMeridian>
       <div className="editorial-section-rule" aria-hidden="true" />
 
-      {/* Discovery trays */}
+      {/* Vertical entry cards — choose what to browse first.
+          2×2 on mobile, 4-up on desktop; clearly named, no clipping. */}
       <div
-        className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+        className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4"
         data-testid="explore-vertical-grid"
       >
         {VERTICALS.map((v) => (
@@ -144,28 +187,21 @@ function VerticalCard({
     <button
       type="button"
       onClick={onSelect}
-      className="folio-cinema-tile p-5 text-left flex items-start gap-4 w-full min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+      className="obs-vert-card min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
       aria-label={`Explore ${meta.label}`}
       data-testid={`vertical-card-${meta.id}`}
     >
-      <div
-        className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-ds-accent"
-        style={{ backgroundColor: "var(--ds-accent-subtle)" }}
-        aria-hidden="true"
-      >
-        <Icon className="w-5 h-5" />
+      <span className="obs-vert-glyph" aria-hidden="true">
+        <Icon className="w-[18px] h-[18px]" />
+      </span>
+      <div className="min-w-0">
+        <p className="obs-vert-over">{VERTICAL_OVERLINES[meta.id]}</p>
+        <h3 className="obs-vert-name">{meta.label}</h3>
+        <p className="obs-vert-desc">{meta.description}</p>
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary mb-0.5">
-          {VERTICAL_OVERLINES[meta.id]}
-        </p>
-        <h3 className="text-sm font-semibold text-ds-text leading-tight">
-          {meta.label}
-        </h3>
-        <p className="text-xs text-ds-text-tertiary mt-1 leading-snug">
-          {meta.description}
-        </p>
-      </div>
+      <span className="obs-vert-go" aria-hidden="true">
+        {meta.id === "flights" ? "Search" : "Browse"} &rarr;
+      </span>
     </button>
   );
 }

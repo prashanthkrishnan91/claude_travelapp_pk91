@@ -615,10 +615,10 @@ describe("Phase 8N-C patch: ExploreShell composition adoption", () => {
     );
   });
 
-  it("62. ExploreShell VerticalCard uses folio-cinema-tile (Slice 4B replaced boutique-folio)", () => {
+  it("62. ExploreShell VerticalCard uses obs-vert-card (Observatory v1 replaced folio-cinema-tile)", () => {
     assert.ok(
-      exploreShell.includes("folio-cinema-tile"),
-      "ExploreShell VerticalCard button must include folio-cinema-tile class (Slice 4B replaced boutique-folio)"
+      exploreShell.includes("obs-vert-card"),
+      "ExploreShell VerticalCard button must include obs-vert-card class (Observatory v1 replaced folio-cinema-tile)"
     );
   });
 

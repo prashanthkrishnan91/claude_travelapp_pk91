@@ -12,11 +12,12 @@
  */
 
 import { useState } from "react";
-import { Search, MapPin, Tag, Star, ExternalLink, Landmark, Loader2, AlertCircle } from "lucide-react";
+import { Search, MapPin, Tag, Star, ExternalLink, Loader2, AlertCircle } from "lucide-react";
 import { searchAttractionsExplore } from "@/lib/api";
 import type { ExploreAttractionResult } from "@/lib/api";
 import type { ExploreResultContext } from "./types";
 import { ResultActionSheet } from "./ResultActionSheet";
+import { ObservatoryPlate } from "./ObservatoryCard";
 import { Card } from "@/components/ui/Card";
 import { TrustStrip } from "@/components/ui/TrustStrip";
 
@@ -159,11 +160,11 @@ export function AttractionExploreFlow() {
       {/* Results */}
       {!loading && results && results.length > 0 && (
         <div className="space-y-3" data-testid="attraction-results">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary px-1" data-testid="explore-results-header">
+          <p className="obs-index-head" data-testid="explore-results-header">
             {results.length} attraction{results.length !== 1 ? "s" : ""} in {lastDestination}
           </p>
           {results.map((a, i) => (
-            <AttractionCard key={a.id + i} attraction={a} context={buildContext(a)} />
+            <AttractionCard key={a.id + i} attraction={a} context={buildContext(a)} index={i} />
           ))}
         </div>
       )}
@@ -181,77 +182,73 @@ export function AttractionExploreFlow() {
 function AttractionCard({
   attraction: a,
   context,
+  index,
 }: {
   attraction: ExploreAttractionResult;
   context: ExploreResultContext;
+  index: number;
 }) {
   return (
-    <Card tone="dark" as="article" className="card-lift" style={{ padding: "var(--ds-space-5)" }}>
-      <Card.Identity>
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-ds-accent"
-          style={{ backgroundColor: "var(--ds-accent-subtle)" }}
-          aria-hidden="true"
-        >
-          <Landmark className="w-5 h-5" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-ds-text leading-tight truncate">
-                {a.name}
-              </h3>
-              <p className="text-xs text-ds-text-tertiary mt-0.5 truncate">
-                {a.category}{a.address ? ` · ${a.address}` : ""}
-              </p>
+    <Card tone="dark" as="article" className="obs-card">
+      <ObservatoryPlate index={index} category={a.category} />
+      <div className="obs-card-body">
+        <Card.Identity>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="obs-card-name truncate">{a.name}</h3>
+                <p className="text-xs text-ds-text-tertiary mt-0.5 truncate">
+                  {a.category}{a.address ? ` · ${a.address}` : ""}
+                </p>
+              </div>
+              {a.googleMapsUri && (
+                <a
+                  href={a.googleMapsUri}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text-secondary transition-colors shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  aria-label={`View ${a.name} on Google Maps`}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              )}
             </div>
-            {a.googleMapsUri && (
-              <a
-                href={a.googleMapsUri}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text-secondary transition-colors shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-                aria-label={`View ${a.name} on Google Maps`}
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            )}
           </div>
-        </div>
-      </Card.Identity>
+        </Card.Identity>
 
-      {a.googlePlaceId && (
-        <Card.Trust className="mt-2">
-          <TrustStrip sourceCount={1} />
-        </Card.Trust>
-      )}
-
-      <Card.Meta className="mt-2">
-        {a.rating != null && (
-          <span className="flex items-center gap-0.5 text-xs text-ds-accent font-medium">
-            <Star className="w-3 h-3 fill-current" />
-            {a.rating.toFixed(1)}
-            {a.reviewCount != null && (
-              <span className="text-ds-text-tertiary font-normal ml-0.5">
-                ({a.reviewCount.toLocaleString()})
-              </span>
-            )}
-          </span>
+        {a.googlePlaceId && (
+          <Card.Trust className="mt-2">
+            <TrustStrip sourceCount={1} />
+          </Card.Trust>
         )}
-        {a.tags && a.tags.length > 0 &&
-          a.tags.slice(0, 3).map((tag) => (
-            <span
-              key={tag}
-              className="px-1.5 py-0.5 text-[10px] rounded-sm border border-ds-pen-stroke text-ds-text-tertiary"
-            >
-              {tag}
-            </span>
-          ))}
-      </Card.Meta>
 
-      <Card.Actions className="mt-3">
-        <ResultActionSheet context={context} />
-      </Card.Actions>
+        <Card.Meta className="mt-2">
+          {a.rating != null && (
+            <span className="flex items-center gap-0.5 text-xs text-ds-accent font-medium">
+              <Star className="w-3 h-3 fill-current" />
+              {a.rating.toFixed(1)}
+              {a.reviewCount != null && (
+                <span className="text-ds-text-tertiary font-normal ml-0.5">
+                  ({a.reviewCount.toLocaleString()})
+                </span>
+              )}
+            </span>
+          )}
+          {a.tags && a.tags.length > 0 &&
+            a.tags.slice(0, 3).map((tag) => (
+              <span
+                key={tag}
+                className="px-1.5 py-0.5 text-[10px] rounded-sm border border-ds-pen-stroke text-ds-text-tertiary"
+              >
+                {tag}
+              </span>
+            ))}
+        </Card.Meta>
+
+        <Card.Actions className="mt-3">
+          <ResultActionSheet context={context} />
+        </Card.Actions>
+      </div>
     </Card>
   );
 }

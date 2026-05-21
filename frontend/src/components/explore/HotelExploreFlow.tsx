@@ -15,7 +15,7 @@
  */
 
 import { useState } from "react";
-import { MapPin, Calendar, Users, Building2, Hotel, Star, ExternalLink, Search, Loader2, AlertCircle } from "lucide-react";
+import { MapPin, Calendar, Users, Hotel, Star, ExternalLink, Search, Loader2, AlertCircle } from "lucide-react";
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 // Parse YYYY-MM-DD by splitting to avoid timezone shifts from new Date(isoDate)
@@ -63,6 +63,7 @@ import { searchHotelsExplore } from "@/lib/api";
 import type { ExploreHotelResult } from "@/lib/api";
 import type { ExploreResultContext } from "./types";
 import { ResultActionSheet } from "./ResultActionSheet";
+import { ObservatoryPlate } from "./ObservatoryCard";
 import { Card } from "@/components/ui/Card";
 import { TrustStrip } from "@/components/ui/TrustStrip";
 
@@ -263,11 +264,11 @@ export function HotelExploreFlow() {
       {/* Results */}
       {!loading && results && results.length > 0 && (
         <div className="space-y-3" data-testid="hotel-results">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-text-tertiary px-1" data-testid="explore-results-header">
+          <p className="obs-index-head" data-testid="explore-results-header">
             {results.length} hotel{results.length !== 1 ? "s" : ""} in {lastForm?.destination}
           </p>
           {results.map((h, i) => (
-            <HotelCard key={h.id + i} hotel={h} context={buildContext(h)} />
+            <HotelCard key={h.id + i} hotel={h} context={buildContext(h)} index={i} />
           ))}
         </div>
       )}
@@ -285,83 +286,79 @@ export function HotelExploreFlow() {
 function HotelCard({
   hotel: h,
   context,
+  index,
 }: {
   hotel: ExploreHotelResult;
   context: ExploreResultContext;
+  index: number;
 }) {
   // compareLink is stored by buildContext in originalPayload — external search link-out only.
   const compareLink = (context.originalPayload as Record<string, unknown>).compareLink as string | undefined;
 
   return (
-    <Card tone="dark" as="article" className="card-lift" style={{ padding: "var(--ds-space-5)" }}>
-      <Card.Identity>
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-ds-accent"
-          style={{ backgroundColor: "var(--ds-accent-subtle)" }}
-          aria-hidden="true"
-        >
-          <Building2 className="w-5 h-5" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-ds-text leading-tight truncate">
-                {h.name}
-              </h3>
-              <p className="text-xs text-ds-text-tertiary mt-0.5 truncate">
-                {h.address || "Hotel"}
-              </p>
+    <Card tone="dark" as="article" className="obs-card">
+      <ObservatoryPlate index={index} category="Hotel" />
+      <div className="obs-card-body">
+        <Card.Identity>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="obs-card-name truncate">{h.name}</h3>
+                <p className="text-xs text-ds-text-tertiary mt-0.5 truncate">
+                  {h.address || "Hotel"}
+                </p>
+              </div>
+              {h.googleMapsUri && (
+                <a
+                  href={h.googleMapsUri}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text-secondary transition-colors shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  aria-label={`View ${h.name} on Google Maps`}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              )}
             </div>
-            {h.googleMapsUri && (
-              <a
-                href={h.googleMapsUri}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg bg-ds-carbon hover:bg-ds-pen-stroke text-ds-text-tertiary hover:text-ds-text-secondary transition-colors shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-                aria-label={`View ${h.name} on Google Maps`}
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            )}
           </div>
-        </div>
-      </Card.Identity>
+        </Card.Identity>
 
-      {h.googlePlaceId && (
-        <Card.Trust className="mt-2">
-          <TrustStrip sourceCount={1} />
-        </Card.Trust>
-      )}
-
-      <Card.Meta className="mt-2">
-        {h.rating != null && (
-          <span className="flex items-center gap-0.5 text-xs text-ds-accent font-medium">
-            <Star className="w-3 h-3 fill-current" />
-            {h.rating.toFixed(1)}
-          </span>
+        {h.googlePlaceId && (
+          <Card.Trust className="mt-2">
+            <TrustStrip sourceCount={1} />
+          </Card.Trust>
         )}
-      </Card.Meta>
 
-      {compareLink && (
-        <div className="mt-2">
-          <a
-            href={compareLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-[44px] rounded-lg text-ds-accent text-xs transition-colors hover:text-ds-accent-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-            style={{ backgroundColor: "var(--ds-accent-subtle)" }}
-            aria-label={`Compare prices for ${h.name}`}
-            data-testid="hotel-compare-cta"
-          >
-            <Search className="w-3 h-3" />
-            Compare prices
-          </a>
-        </div>
-      )}
+        <Card.Meta className="mt-2">
+          {h.rating != null && (
+            <span className="flex items-center gap-0.5 text-xs text-ds-accent font-medium">
+              <Star className="w-3 h-3 fill-current" />
+              {h.rating.toFixed(1)}
+            </span>
+          )}
+        </Card.Meta>
 
-      <Card.Actions className="mt-3">
-        <ResultActionSheet context={context} />
-      </Card.Actions>
+        {compareLink && (
+          <div className="mt-2">
+            <a
+              href={compareLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-[44px] rounded-lg text-ds-accent text-xs transition-colors hover:text-ds-accent-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+              style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+              aria-label={`Compare prices for ${h.name}`}
+              data-testid="hotel-compare-cta"
+            >
+              <Search className="w-3 h-3" />
+              Compare prices
+            </a>
+          </div>
+        )}
+
+        <Card.Actions className="mt-3">
+          <ResultActionSheet context={context} />
+        </Card.Actions>
+      </div>
     </Card>
   );
 }

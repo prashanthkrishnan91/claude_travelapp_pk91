@@ -250,10 +250,10 @@ describe("Visual Rescue: Home overline paper legibility", () => {
 // ── 19–22. Unchanged surface contracts ───────────────────────────────────────
 
 describe("Visual Rescue: Surface class contracts preserved", () => {
-  it("19. ExploreShell VerticalCard still uses folio-cinema-tile", () => {
+  it("19. ExploreShell VerticalCard uses obs-vert-card (Observatory v1)", () => {
     assert.ok(
-      exploreShell.includes("folio-cinema-tile"),
-      "ExploreShell VerticalCard must still use folio-cinema-tile"
+      exploreShell.includes("obs-vert-card"),
+      "ExploreShell VerticalCard must use obs-vert-card (Observatory v1 replaced folio-cinema-tile)"
     );
   });
 

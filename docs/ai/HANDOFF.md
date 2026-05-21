@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-21 (Concierge Salon v2 — mobile-first discovery loop — PR open; v1 PR #458 merged)
+Last updated: 2026-05-21 (Explore Observatory v1 — /explore premium reskin — PR open; Concierge Salon v2 + v1 PR #458 merged)
 
 ## Purpose
 
@@ -8,7 +8,15 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3.5 — Concierge Salon cinematic scene (PR #458 MERGED) + v2 discovery loop (current branch).** Stage 3 exit completed earlier (2026-05-14); current focus is Stage 3.5 design adoption. The outside-trip Concierge (`/concierge`) is a Private Travel Salon: a portal centerpiece, fused concierge desk, in-scene invitations, tactile dossier rail, and a post-search results reveal. Next: apply the same Room System treatment to Explore (Observatory) or Saved (Gallery).
+**Stage 3.5 — design adoption across cinema-world rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the Private Travel Salon (portal + fused desk + dossier + reveal). The outside-trip Explore (`/explore`) is now the **Observatory** (current branch). Next visible-adoption candidate: Saved (Gallery room).
+
+### Explore Observatory v1 — /explore premium reskin (current branch)
+
+Reskins the existing **vertical-first** Explore into the Atelier "Observatory" — same materials as the Salon (velvet canvas, brass hairlines, Fraunces italic, layered depth, "kept in your folio" save) but a distinct **wide meridian** silhouette. **No** universal cross-vertical search controller, **no** app-shell/nav change, **no** backend/API/provider/type/SQL change. Approved sources: `docs/ai/concepts/explore-observatory-concept-v1.1.html` + `docs/ai/design/EXPLORE_OBSERVATORY_PRODUCTION_BLUEPRINT.md`.
+- **`ExploreShell.tsx`:** landing renders the `ObsMeridian` band (depth layers: scene/bloom/grain/horizon/vignette) as hero, then the four verticals as `.obs-vert-card` entry cards — **2×2 mobile / 4-up desktop**, clearly named, unclipped, ≥44px. Selecting one still drives local `setActive(vertical)` (no lifted destination state). Active view keeps the breadcrumb + `explore-instrument-header`, adds a compact `.obs-meridian--banner` showing **vertical identity/mood only** (never the typed destination). All testids preserved (`explore-home`, `explore-lounge-header`, `explore-vertical-grid`, `vertical-card-{id}`, `explore-vertical-flow`, `explore-lounge-breadcrumb`, `explore-instrument-header`).
+- **Per-vertical flows:** Restaurants/Attractions/Hotels result cards wear the shared `.obs-card` frame + full-bleed `ObservatoryPlate` (token-built **typeset** editorial header — production result types carry **no photo field**, so no images; honest fallback only) + `.obs-card-body`; results header restyled to `.obs-index-head`. Save/Map/Source preserved exactly (`ResultActionSheet`, `googleMapsUri`, `TrustStrip`). **Hotels stay discovery-only — no prices/rates/availability; `hotel-compare-cta` preserved.** Flights keep the bespoke card (legs, `formatTime` no-UTC, live `offer.price`, `liveCachedStatus`, `CityAutocomplete`, booking-link logic, and all empty/unavailable/error states) and only gain the `.obs-card-frame` border.
+- **`globals.css`:** new **EXPLORE OBSERVATORY** section (tokens/`color-mix` only, no raw hex); all new motion reduced-motion-guarded (merged into the final reduced-motion block).
+- **Tests:** new `tests/explore-observatory.test.mjs` (42 assertions: CSS primitives, vertical-first shell, no-prototype-strings, hotels-no-price, flights-preserved). Historical Explore assertions that legitimately moved (`folio-cinema-tile`→`obs-vert-card`, grid, result-header styling) updated in place. **3065 tests, 0 failures; tsc/lint/next build clean.** Interactive browser preview not run (no headless browser in this environment) — validated via tests + production build + static review.
 
 ### Concierge Salon v2 — mobile-first discovery loop (current branch)
 
@@ -105,7 +113,7 @@ All existing testids, folio-cinema-desk, folio-cinema-composer, folio-concierge-
 **No backend / SQL / provider / env / Supabase / API / route / data-contract changes (any patch).**
 
 ### Next step
-Apply Atelier Room System to Explore (Observatory room) or Saved (Gallery room) — next visible adoption slice using the same room shell primitives.
+Explore Observatory v1 is the current branch. Next visible-adoption slice: apply the same Room System treatment to Saved (Gallery room) using the shared cinema-world primitives.
 
 ## Current architecture / runtime state
 
