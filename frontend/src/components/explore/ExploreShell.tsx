@@ -12,6 +12,8 @@ interface VerticalMeta {
   id: ExploreVertical;
   label: string;
   description: string;
+  /** Short mobile-only cue (full description stays on desktop). */
+  cue: string;
   icon: React.ElementType;
 }
 
@@ -20,24 +22,28 @@ const VERTICALS: VerticalMeta[] = [
     id: "flights",
     label: "Flights",
     description: "Search live flights by route and dates with a Google Flights link-out",
+    cue: "Live routes",
     icon: Plane,
   },
   {
     id: "hotels",
     label: "Hotels",
     description: "Discover Google-verified hotels at any destination",
+    cue: "Verified stays",
     icon: Hotel,
   },
   {
     id: "restaurants",
     label: "Restaurants",
     description: "Discover top-rated restaurants anywhere in the world",
+    cue: "Dining ideas",
     icon: Utensils,
   },
   {
     id: "attractions",
     label: "Attractions",
     description: "Explore must-see sights and local experiences",
+    cue: "Places to see",
     icon: MapPin,
   },
 ];
@@ -212,6 +218,7 @@ function VerticalCard({
         <p className="obs-vert-over">{VERTICAL_OVERLINES[meta.id]}</p>
         <h3 className="obs-vert-name">{meta.label}</h3>
         <p className="obs-vert-desc">{meta.description}</p>
+        <p className="obs-vert-cue">{meta.cue}</p>
       </div>
       <span className="obs-vert-go" aria-hidden="true">
         {meta.id === "flights" ? "Search" : "Browse"} &rarr;

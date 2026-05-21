@@ -236,6 +236,41 @@ describe("Explore Observatory: immersive shell integration", () => {
   });
 });
 
+// ── Section G: mobile first-load fit (≤640px) ───────────────────────────────
+
+describe("Explore Observatory: mobile first-load fit", () => {
+  test("G1. each vertical has a short mobile cue; cards render obs-vert-cue", () => {
+    for (const [id, cue] of [
+      ["flights", "Live routes"],
+      ["hotels", "Verified stays"],
+      ["restaurants", "Dining ideas"],
+      ["attractions", "Places to see"],
+    ]) {
+      assert.ok(shell.includes(`cue: "${cue}"`), `${id} has the short mobile cue "${cue}"`);
+    }
+    assert.ok(shell.includes("obs-vert-cue"), "cards render the mobile cue element");
+  });
+
+  test("G2. desktop keeps full descriptions; cue is hidden by default", () => {
+    assert.ok(shell.includes("obs-vert-desc"), "full description still rendered (desktop)");
+    const cueBlock = globalsCss.slice(globalsCss.indexOf(".obs-vert-cue {"), globalsCss.indexOf(".obs-vert-cue {") + 120);
+    assert.ok(cueBlock.includes("display: none"), "cue hidden by default (desktop unchanged)");
+  });
+
+  test("G3. mobile media block compacts the landing without forced full-height", () => {
+    const mq = globalsCss.slice(globalsCss.indexOf("Mobile first-load fit"));
+    assert.ok(mq.includes("@media (max-width: 640px)"), "mobile-fit media query present");
+    const block = mq.slice(0, mq.indexOf("Reduced-motion: Observatory"));
+    assert.ok(/\.obs-field\s*\{[^}]*min-height:\s*auto/.test(block), "obs-field sizes to content on mobile (no forced 100svh)");
+    assert.ok(block.includes(".obs-meridian--hero") && /min-height:\s*clamp\(156px/.test(block), "hero compact-but-breathing on mobile");
+    assert.ok(/\.obs-meridian--hero\s+\.obs-meridian-horizon\s*\{\s*top:\s*78%/.test(block), "horizon line dropped below the subtitle (collision fix)");
+    assert.ok(/\.obs-meridian--hero\s+\.obs-meridian-copy\s*\{[^}]*justify-content:\s*flex-start/.test(block), "hero copy clusters at the top so the lower band stays clear");
+    assert.ok(/\.obs-vert-cue\s*\{\s*display:\s*block/.test(block), "mobile shows the short cue");
+    assert.ok(/\.obs-vert-desc\s*\{\s*display:\s*none/.test(block), "mobile hides the long description");
+    assert.ok(/\.obs-vert-go\s*\{\s*display:\s*none/.test(block), "mobile hides the Browse cue line to save height");
+  });
+});
+
 // ── Section E: no prototype/demo strings leaked into production ──────────────
 
 describe("Explore Observatory: no prototype/demo data", () => {
