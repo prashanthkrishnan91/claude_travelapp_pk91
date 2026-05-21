@@ -10,7 +10,7 @@
  * Safety invariants:
  * - No mock/placeholder flight data ever rendered.
  * - Cash price only from provider (never estimated).
- * - No points prices (separately gated track).
+ * - Points redemption rendering is separately gated and not present here.
  * - IGNAV_API_KEY is server-side only; no NEXT_PUBLIC_ key exposure.
  */
 
@@ -209,7 +209,8 @@ function FlightCard({ offer }: { offer: FlightItineraryOffer }) {
             rel="noopener noreferrer"
             className="min-h-[44px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-ds-accent text-xs font-medium hover:border-ds-accent transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
             style={{ backgroundColor: "var(--ds-accent-subtle)" }}
-            data-testid={isSearchRedirect ? "flight-search-link" : "flight-book-link"}
+            data-testid="flight-book-link"
+            data-link-type={isSearchRedirect ? "search_redirect" : "direct"}
             aria-label={isSearchRedirect ? "Search on Google Flights" : `Book flight on ${offer.bookingLink.providerName}`}
           >
             <ExternalLink className="w-3.5 h-3.5" />

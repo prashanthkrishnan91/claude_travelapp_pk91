@@ -711,6 +711,45 @@ class TestMultiOfferResponse:
         assert len(result.rows) == 1
         assert result.rows[0].price.total_amount == 189.50
 
+    def test_multiple_offers_carry_distinct_prices(self):
+        """Each Duffel offer's total_amount is mapped independently; prices must be
+        distinct when the provider returns distinct offers.  Guards against any
+        future regression where offers share a single price object or a fallback."""
+        p, http = _build()
+        offers = [
+            _offer_one_way(offer_id="off1", amount="189.50"),
+            _offer_one_way(offer_id="off2", amount="229.00"),
+            _offer_one_way(offer_id="off3", amount="310.00"),
+        ]
+        http.enqueue(_duffel_response(offers))
+        result = p.search_flights(_one_way_req())
+        assert result.status is FlightSourceStatus.OK
+        assert len(result.rows) == 3
+        prices = [r.price.total_amount for r in result.rows]
+        assert prices[0] == 189.50, f"offer[0] price: expected 189.50, got {prices[0]}"
+        assert prices[1] == 229.00, f"offer[1] price: expected 229.00, got {prices[1]}"
+        assert prices[2] == 310.00, f"offer[2] price: expected 310.00, got {prices[2]}"
+        assert len(set(prices)) == 3, "all three offers must carry distinct prices"
+
+    def test_uncertified_provider_returns_unavailable_not_offers(self):
+        """When Duffel is not schedule-trust-certified, the result must be UNAVAILABLE
+        with zero offers — never offers with repeated/fallback prices.
+        Guards against the regression where fake/stub prices were shown for all results
+        instead of the honest unavailable state."""
+        p, http = _build(certified=False)
+        offers = [
+            _offer_one_way(offer_id="off1", amount="189.50"),
+            _offer_one_way(offer_id="off2", amount="229.00"),
+        ]
+        http.enqueue(_duffel_response(offers))
+        result = p.search_flights(_one_way_req())
+        assert result.status is FlightSourceStatus.UNAVAILABLE, (
+            "uncertified provider must return UNAVAILABLE, not offer rows"
+        )
+        assert len(result.rows) == 0, (
+            "uncertified provider must return zero offers — no prices should surface"
+        )
+
 
 # ── 13. Route/date validation ─────────────────────────────────────────────────
 

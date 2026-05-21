@@ -10,8 +10,10 @@
  * search route and spends no paid research credits.
  *
  * Discovery-only lodging cards: Google Places verified hotels, no rates,
- * no prices, no availability.  Compare prices CTA (v1): deterministic Google
- * Hotels search link-out only — no in-app rates, no OTA booking.
+ * no prices, no availability.  "Check prices on Google" CTA: deterministic
+ * Google Hotels search link-out only — no in-app rates, no OTA booking.
+ * Note: Google Places hotel results may not always resolve to Google Travel
+ * hotel inventory — the CTA opens a search, not a guaranteed inventory match.
  */
 
 import { useState } from "react";
@@ -29,34 +31,110 @@ function formatIsoDateForDisplay(iso: string): string | undefined {
   return `${MONTHS[month - 1]} ${day} ${year}`;
 }
 
+// --- Google Travel `ts` date param (deterministic protobuf, base64url) -------
+// Google Travel's hotel search surface (/travel/search) carries the selected
+// check-in / check-out via the `ts` query param — a protobuf payload.  This
+// builder reproduces that payload byte-for-byte from the two dates (verified
+// against a real Google Travel URL).  The `ts` payload is purely date-derived
+// (check-in, check-out, nights, occupancy=1 room, currency USD); it contains
+// NO hotel-specific or session-specific data.  We intentionally do NOT attempt
+// to reconstruct Google's opaque `qs` / `ved` / `ap` params (place search ids
+// and click tracking) — those are session-generated and not safely buildable.
+function gtVarint(n: number): number[] {
+  const out: number[] = [];
+  while (n > 0x7f) { out.push((n & 0x7f) | 0x80); n = Math.floor(n / 128); }
+  out.push(n);
+  return out;
+}
+function gtTag(field: number, wire: number): number[] { return gtVarint((field << 3) | wire); }
+function gtLenDelim(field: number, bytes: number[]): number[] {
+  return [...gtTag(field, 2), ...gtVarint(bytes.length), ...bytes];
+}
+function gtVarField(field: number, val: number): number[] { return [...gtTag(field, 0), ...gtVarint(val)]; }
+function gtDateBlock(y: number, m: number, d: number): number[] {
+  return [...gtVarField(1, y), ...gtVarField(2, m), ...gtVarField(3, d)];
+}
+function gtDaysBetween(checkIn: string, checkOut: string): number {
+  const [y1, m1, d1] = checkIn.split('-').map(Number);
+  const [y2, m2, d2] = checkOut.split('-').map(Number);
+  const a = Date.UTC(y1, m1 - 1, d1);
+  const b = Date.UTC(y2, m2 - 1, d2);
+  return Math.round((b - a) / 86_400_000);
+}
+function bytesToBase64Url(bytes: number[]): string {
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  // btoa is available in browsers and in modern Node (global) — this is a
+  // "use client" component, so it always runs where btoa exists.
+  const b64 = btoa(bin);
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
 /**
- * Build a deterministic Google Hotels comparison search URL.
+ * Build the Google Travel `ts` param from selected check-in / check-out dates.
+ * Returns undefined if either date is missing or the range is non-positive.
+ */
+function buildGoogleTravelDatesParam(checkIn?: string, checkOut?: string): string | undefined {
+  if (!checkIn || !checkOut) return undefined;
+  const ci = checkIn.split('-').map(Number);
+  const co = checkOut.split('-').map(Number);
+  if (ci.length !== 3 || co.length !== 3 || ci.some(isNaN) || co.some(isNaN)) return undefined;
+  const nights = gtDaysBetween(checkIn, checkOut);
+  if (nights <= 0) return undefined;
+  const datesBlock = [
+    ...gtLenDelim(1, gtDateBlock(ci[0], ci[1], ci[2])),
+    ...gtLenDelim(2, gtDateBlock(co[0], co[1], co[2])),
+    ...gtVarField(3, nights),
+  ];
+  const f2 = [...gtLenDelim(2, datesBlock), ...gtLenDelim(6, gtVarField(1, 1))];
+  const emptyNested = gtLenDelim(1, gtLenDelim(3, []));
+  const block = [...emptyNested, ...gtLenDelim(2, f2)];
+  const currency = [
+    ...gtLenDelim(1, [...gtTag(7, 2), ...gtVarint(3), 0x55, 0x53, 0x44]), // "USD"
+    ...gtLenDelim(3, []),
+  ];
+  const top = [...gtVarField(1, 1), ...gtLenDelim(3, block), ...gtLenDelim(5, currency)];
+  return bytesToBase64Url(top);
+}
+
+/**
+ * Build a date-aware Google Travel hotel search link-out.
+ *
+ * Uses the /travel/search surface (the working Google Travel hotel search),
+ * with the selected dates carried in the deterministic `ts` protobuf param.
  * External search link-out only — no price, rate, or availability data.
+ *
+ * Guest count: Google's `ts` payload encodes rooms/occupancy as a fixed
+ * "1 room" block; the per-guest count is not safely encodable in a
+ * deterministic way, so guest count is surfaced in the human-readable `q`
+ * text only (honest limitation — see PR notes).
  */
 function buildHotelCompareUrl({
   hotelName,
   destination,
+  address,
   checkIn,
   checkOut,
   guests,
 }: {
   hotelName: string;
   destination: string;
+  address?: string;
   checkIn?: string;
   checkOut?: string;
   guests?: number;
 }): string {
   const qParts = [hotelName, destination];
+  // Address in q improves Google Travel hotel resolution for less-known properties.
+  if (address) qParts.push(address);
   const checkInDisplay = checkIn ? formatIsoDateForDisplay(checkIn) : undefined;
   const checkOutDisplay = checkOut ? formatIsoDateForDisplay(checkOut) : undefined;
   if (checkInDisplay) qParts.push(checkInDisplay);
   if (checkOutDisplay) qParts.push(`to ${checkOutDisplay}`);
   if (guests && guests > 0) qParts.push(`${guests} guest${guests !== 1 ? 's' : ''}`);
   const q = encodeURIComponent(qParts.join(' '));
-  let url = `https://www.google.com/travel/hotels?q=${q}`;
-  if (checkIn) url += `&checkin=${encodeURIComponent(checkIn)}`;
-  if (checkOut) url += `&checkout=${encodeURIComponent(checkOut)}`;
-  if (guests && guests > 0) url += `&adults=${guests}`;
+  let url = `https://www.google.com/travel/search?q=${q}`;
+  const ts = buildGoogleTravelDatesParam(checkIn, checkOut);
+  if (ts) url += `&ts=${ts}`;
   return url;
 }
 import { searchHotelsExplore } from "@/lib/api";
@@ -89,22 +167,25 @@ export function HotelExploreFlow() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const dest = form.destination.trim();
+    // Single snapshot of form state — used for both lastForm and the API call
+    // so the compare link and the search request always use the same dates.
+    const snapshot = { ...form };
+    const dest = snapshot.destination.trim();
     if (!dest) return;
 
     setLoading(true);
     setError(null);
     setSearched(true);
-    setLastForm({ ...form });
+    setLastForm(snapshot);
     setResults(null);
 
     try {
       // Canonical vertical search: Google-Places-backed /search/hotels.
       const res = await searchHotelsExplore(
         dest,
-        form.checkIn || undefined,
-        form.checkOut || undefined,
-        form.guests,
+        snapshot.checkIn || undefined,
+        snapshot.checkOut || undefined,
+        snapshot.guests,
       );
       setResults(res);
       if (res.length === 0) {
@@ -128,6 +209,7 @@ export function HotelExploreFlow() {
     const compareLink = buildHotelCompareUrl({
       hotelName: h.name,
       destination: dest,
+      address: h.address || undefined,
       checkIn: lastForm?.checkIn || undefined,
       checkOut: lastForm?.checkOut || undefined,
       guests: lastForm?.guests,
@@ -346,11 +428,11 @@ function HotelCard({
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-[44px] rounded-lg text-ds-accent text-xs transition-colors hover:text-ds-accent-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               style={{ backgroundColor: "var(--ds-accent-subtle)" }}
-              aria-label={`Compare prices for ${h.name}`}
+              aria-label={`Check prices on Google for ${h.name}`}
               data-testid="hotel-compare-cta"
             >
               <Search className="w-3 h-3" />
-              Compare prices
+              Check prices on Google
             </a>
           </div>
         )}

@@ -316,6 +316,97 @@ test('types.ts: FlightItineraryOffer has kind discriminant', () => {
   );
 });
 
+// ---------------------------------------------------------------------------
+// Regression: distinct price per offer (guards same-price-for-all regression)
+// ---------------------------------------------------------------------------
+
+test('FlightCard price comes from offer.price.totalAmount — per-offer field, not a shared variable', () => {
+  // Guard against the regression where all flight cards showed the same price.
+  // Price must be read from the individual offer's price.totalAmount, not from
+  // a shared/constant variable outside the map loop.
+  assert.match(
+    flightFlow,
+    /offer\.price\.totalAmount/,
+    'FlightCard must read price from offer.price.totalAmount (per-offer provider field)',
+  );
+  assert.match(
+    flightFlow,
+    /offer\.price\.currency/,
+    'FlightCard must read currency from offer.price.currency (per-offer provider field)',
+  );
+});
+
+test('FlightCard does not deduplicate or collapse offers by price before rendering', () => {
+  // No Set(), filter(), or reduce() on prices/offers before rendering.
+  // All offers from the provider must render as individual cards.
+  const resultsSection = flightFlow.slice(
+    flightFlow.indexOf('flight-results-list'),
+    flightFlow.indexOf('flight-empty-state'),
+  );
+  assert.doesNotMatch(
+    resultsSection,
+    /new Set\(.*price|\.filter.*price|\.reduce.*price/,
+    'FlightExploreFlow must not deduplicate offers by price before rendering',
+  );
+});
+
+test('UnavailableState does not contain a flight-price element (no fake price on failure)', () => {
+  // Guards against the regression where a fallback/repeated price was shown in
+  // the unavailable state instead of the honest "Flight search unavailable" copy.
+  const unavailStart = flightFlow.indexOf('function UnavailableState');
+  const unavailEnd = flightFlow.indexOf('\nfunction ', unavailStart + 1);
+  const unavailBody = flightFlow.slice(unavailStart, unavailEnd);
+  assert.doesNotMatch(
+    unavailBody,
+    /flight-price|formatPrice|totalAmount/,
+    'UnavailableState must never render a price element',
+  );
+});
+
+test('EmptyState does not contain a flight-price element (no fake price when no results)', () => {
+  const emptyStart = flightFlow.indexOf('function EmptyState');
+  const emptyEnd = flightFlow.indexOf('\nfunction ', emptyStart + 1);
+  const emptyBody = flightFlow.slice(emptyStart, emptyEnd);
+  assert.doesNotMatch(
+    emptyBody,
+    /flight-price|formatPrice|totalAmount/,
+    'EmptyState must never render a price element',
+  );
+});
+
+test('FlightExploreFlow handles unavailable and error status with UnavailableState (no fake prices)', () => {
+  // Guards against the regression where unavailable/error status fell through
+  // to render flight cards (with potentially repeated prices) instead of the
+  // honest fail-closed state.
+  // The check may be written as a combined condition or adjacent conditions —
+  // verify both statuses are covered and UnavailableState is rendered.
+  assert.match(
+    flightFlow,
+    /response\.status === "unavailable"/,
+    'FlightExploreFlow must check response.status === "unavailable"',
+  );
+  assert.match(
+    flightFlow,
+    /response\.status === "error"/,
+    'FlightExploreFlow must check response.status === "error"',
+  );
+  assert.match(
+    flightFlow,
+    /UnavailableState/,
+    'UnavailableState component must be rendered for unavailable/error',
+  );
+});
+
+test('FlightExploreFlow only renders FlightCard when status is ok and offers exist', () => {
+  // The ok branch must also guard offers.length > 0 so an empty ok response
+  // does not render any price elements.
+  assert.match(
+    flightFlow,
+    /status === "ok" && response\.offers\.length > 0|status === "ok".*offers\.length/,
+    'FlightCard rendering must be gated on status===ok AND offers.length > 0',
+  );
+});
+
 test('types.ts: FlightItineraryOffer has NO points fields', () => {
   const offerSection = exploreTypes.slice(
     exploreTypes.indexOf('FlightItineraryOffer'),

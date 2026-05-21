@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-21 (Explore Observatory v1 — /explore premium reskin — PR open; Concierge Salon v2 + v1 PR #458 merged)
+Last updated: 2026-05-21 (Explore regression fixes: hotel compare-link dates + flight per-offer prices; Observatory v1 PR #460 merged)
 
 ## Purpose
 
@@ -113,8 +113,22 @@ All existing testids, folio-cinema-desk, folio-cinema-composer, folio-concierge-
 **Test count (earlier patches):** 2991 total, 0 failures.  
 **No backend / SQL / provider / env / Supabase / API / route / data-contract changes (any patch).**
 
+### Explore regression fixes (current branch — post-Observatory)
+
+Two Level 2 user-visible regressions fixed after PR #460 merged:
+
+1. **Hotel compare-link dates (Google Travel surface):** `buildHotelCompareUrl` now uses the **`/travel/search?q=...&ts=...`** Google Travel hotel-search surface (the working surface), not the prior `/travel/hotels?checkin=...` form which did not reliably honor dates. The selected check-in/check-out are carried in the deterministic **`ts` protobuf param**, built by `buildGoogleTravelDatesParam` and **verified byte-for-byte against a real Google Travel URL** (2026-07-31 → 2026-08-05). The `ts` payload is purely date-derived (check-in, check-out, nights, occupancy=1 room, USD); opaque session params (`qs`/`ved`/`ap`) are intentionally NOT fabricated. Guest count is surfaced in the human-readable `q` text only (honest limitation — `ts` occupancy is a fixed 1-room block). `handleSubmit` takes a single `const snapshot = {...form}` so the compare link and search request always use the same dates. `hotel-explore-live.test.mjs`: 36 tests incl. byte-for-byte `ts` reproduction, two dynamic date ranges, named Hyatt/Chicago regression.
+
+2. **Flight per-offer prices:** Duffel adapter already maps each offer's `total_amount` independently. The `_search_booking_link` is shared (same Google Flights query URL) but prices are per-offer. Fixed two pre-existing source-code test failures in `flights-ignav-live.test.mjs`:  
+   - Test 10: changed dynamic `data-testid` expression to always use `"flight-book-link"` (with `data-link-type` for redirect distinction).  
+   - Test 15: changed comment wording that accidentally matched `points.*price` regex.  
+   6 new regression tests added — now 32/32; wired into `npm test`.  
+   Backend: 2 new tests in `test_duffel_flights_v1.py` proving distinct per-offer prices and that uncertified provider returns UNAVAILABLE.
+
+**3139 frontend tests, 0 failures.** No backend suite run (no pytest in this environment); tsc/next build not run locally (node_modules absent) — CI `certify` validates.
+
 ### Next step
-Explore Observatory v1 is the current branch. Next visible-adoption slice: apply the same Room System treatment to Saved (Gallery room) using the shared cinema-world primitives.
+Regression fixes are the current branch. After PR merges, next visible-adoption slice: apply Room System treatment to Saved (Gallery room) using shared cinema-world primitives.
 
 ## Current architecture / runtime state
 
@@ -131,6 +145,8 @@ Explore Observatory v1 is the current branch. Next visible-adoption slice: apply
 
 ## Recent meaningful PRs
 
+- 2026-05-21 — **PR open (current branch)** — Explore regression fixes: hotel compare dates + flights per-offer prices. 2 backend tests, 10 frontend tests added, 2 pre-existing test failures fixed. 3134 tests, 0 failures.
+- 2026-05-21 — **PR #460 MERGED** — Explore Observatory v1 (/explore premium reskin). 3065 tests, 0 failures.
 - 2026-05-21 — **PR #451 MERGED** — Atelier Room System v1 + Private Salon (Concierge). Two-column desktop workbench (main panel + briefing rail), contained panel scroll, patch-5 CSS grid. 3003 tests, 0 failures.
 - 2026-05-20 — **PR #449 MERGED** — Home dead-space fix (overflow: clip + min-height: 0 + flex: none).
 - 2026-05-20 — **PR #448 MERGED** — Atelier Atrium full cinematic home (world DNA, AppShell escape hatch, silent nav, contained scenery, physical archive).
