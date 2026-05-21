@@ -56,6 +56,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Every other route keeps the centered, padded page shell + Sidebar.
   const isHomePage = pathname === "/";
 
+  // Private Salon (Concierge) is the first Atelier room behind Home.
+  // It shares the immersive shell: no SaaS sidebar, floating Atelier nav,
+  // edge-to-edge home-edge-bleed wrapper. The .folio-sidebar is suppressed
+  // by CSS (.atelier-atmosphere-root[data-atelier-shell="salon"] .folio-sidebar)
+  // while the isHomePage pattern stays intact for the Phase 8J contract tests.
+  const isSalonRoute = pathname === "/concierge";
+
   return (
     <>
       {/* Phase 8N: fixed atmospheric layers — vignette + CSS grain texture */}
@@ -65,14 +72,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div
         className="atelier-atmosphere-root flex h-full min-h-screen"
         data-testid="atelier-atmosphere-root"
+        data-atelier-shell={isSalonRoute ? "salon" : undefined}
       >
         {/* SaaS sidebar — hidden on the immersive Home shell, present on every
             other route so navigation, account, sign-out stay in place. The
-            Sidebar substring is preserved for the 8J nav-rescue contract. */}
+            Sidebar substring is preserved for the 8J nav-rescue contract.
+            On the salon route the sidebar is CSS-suppressed via data-atelier-shell. */}
         {isHomePage ? null : <Sidebar />}
         {isHomePage && <AtelierNavArtifact />}
+        {isSalonRoute && <AtelierNavArtifact />}
         <main className="flex-1 overflow-y-auto overflow-x-hidden" data-testid="reduced-motion-safe-atmosphere">
-          {isHomePage ? (
+          {isHomePage || isSalonRoute ? (
             <div
               className="mobile-nav-spacer atelier-transition home-edge-bleed"
               data-testid="mobile-page-content"

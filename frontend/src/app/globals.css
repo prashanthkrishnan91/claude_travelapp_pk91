@@ -6970,4 +6970,286 @@
   }
   .atelier-archive-folio-title { position: relative; z-index: 2; }
 
+  /* ════════════════════════════════════════════════════════════════
+     ATELIER ROOM SYSTEM — Private Salon (AI Concierge)
+     The AI Concierge is the first "Private Salon" room in the Atelier
+     house. It extends the shared Atelier ambient model (world-DNA vars,
+     WorldAtmosphere) with salon-specific surface treatments.
+     Applied alongside folio-cinema-desk — not a replacement.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Room shell — establishes the stacking context so WorldAtmosphere
+     (z-index:-1) sits below all in-flow room content. folio-cinema-desk
+     supplies position:relative + the warm dark surface; this class adds
+     isolation so the ambient layers are contained within the room
+     boundary, not floating at the document stacking root. */
+  .atelier-salon-room {
+    isolation: isolate;
+  }
+
+  /* Salon header — the editorial threshold above the search canvas.
+     A narrow brass separator line marks the entry into the research
+     space, echoing the brass hairlines used on Home's atrium sections.
+     z-index:1 keeps the header above the z-index:-1 ambient layer. */
+  .atelier-salon-room-header {
+    position: relative;
+    z-index: 1;
+  }
+  .atelier-salon-room-header::before {
+    content: "";
+    display: block;
+    width: clamp(32px, 10%, 64px);
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--ds-ember-brass) 48%, transparent) 50%,
+      transparent
+    );
+    margin: 0 auto var(--ds-space-4) auto;
+  }
+
+  /* Salon starter chips — warm brass-inflected prompt buttons shown
+     in the empty/initial state. Layered alongside folio-concierge-chip
+     to add the atelier surface treatment without breaking the existing
+     chip contract. */
+  .atelier-salon-starter-chip {
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 35%, transparent);
+    background: var(--ds-bone);
+    color: var(--world-ink, var(--ds-midnight-ink));
+    transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+  }
+  .atelier-salon-starter-chip:hover,
+  .atelier-salon-starter-chip:focus-visible {
+    border-color: color-mix(in srgb, var(--ds-ember-brass) 65%, transparent);
+    background: var(--ds-linen);
+    color: var(--world-ink, var(--ds-midnight-ink));
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-salon-starter-chip {
+      transition: none;
+    }
+  }
+
+  /* Salon invitation — the initial/empty state threshold. Frames
+     the prompt chip collection as a curated salon opening rather
+     than a generic suggestion list. The ::before draws a wider soft
+     brass rule above the chip cluster as a visual invitation. */
+  .atelier-salon-invitation {
+    padding-top: var(--ds-space-6);
+    padding-bottom: var(--ds-space-6);
+  }
+  .atelier-salon-invitation::before {
+    content: "";
+    display: block;
+    width: clamp(48px, 18%, 96px);
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--ds-ember-brass) 40%, transparent) 50%,
+      transparent
+    );
+    margin: 0 auto var(--ds-space-6) auto;
+  }
+
+  /* Salon composer surface — additive brass threshold on the sticky
+     search dock. Marks the boundary between the results canvas and
+     the instrument surface without adding layout weight. */
+  .atelier-salon-composer-surface {
+    position: relative;
+  }
+  .atelier-salon-composer-surface::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: var(--ds-space-4);
+    right: var(--ds-space-4);
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--ds-ember-brass) 28%, transparent) 25%,
+      color-mix(in srgb, var(--ds-ember-brass) 28%, transparent) 75%,
+      transparent
+    );
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-salon-composer-surface::before { display: none; }
+  }
+
+  /* Salon user-turn annotation — the brass-tinted left border on
+     user query markers in the transcript. More intentional than a
+     plain gray rule; uses ember-brass to tie the annotations to the
+     room palette. */
+  .atelier-salon-user-turn {
+    border-left-color: color-mix(in srgb, var(--ds-ember-brass) 38%, transparent);
+  }
+
+  /* Salon route — hide the SaaS sidebar in the immersive Atelier shell.
+     AppShell sets data-atelier-shell="salon" on the atmosphere root when
+     isSalonRoute is true. !important beats lg:flex from @layer utilities. */
+  .atelier-atmosphere-root[data-atelier-shell="salon"] .folio-sidebar {
+    display: none !important;
+  }
+
+  /* Salon page room — warm paper surface with destination-aware background.
+     Uses --world-surface (a warm linen tone injected by worldStyleVars) as
+     the room backdrop. Dark cinema surfaces (result cards, sticky composer)
+     float on this light room as contained instrument objects. */
+  .atelier-salon-page {
+    position: relative;
+    background: var(--world-surface, var(--ds-warm-paper));
+    min-height: 100svh;
+  }
+
+  /* Salon room in full-height mode — when folio-cinema-desk carries
+     the salon room shell, remove the card chrome (radius, border,
+     shadow, padding) so the dark surface reads as an immersive room,
+     not a floating recommendation box. The warm dark background from
+     folio-cinema-desk stays; only the structural boxing is stripped. */
+  .atelier-salon-room.folio-cinema-desk {
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  /* When folio-cinema-desk and folio-cinema-composer are co-classed on the
+     sticky instrument, composer styling takes visual precedence. Reset the
+     card padding so folio-cinema-composer children own their own spacing. */
+  .folio-cinema-composer.folio-cinema-desk {
+    padding: 0;
+  }
+
+  /* Salon header landing zone — adds top breathing room so the
+     header floats with cinematic space when folio-cinema-desk's
+     card padding is stripped in the salon context. Only controls
+     padding-top; responsive pb-* Tailwind classes own padding-bottom. */
+  .atelier-salon-room-header.atelier-salon-header-landing {
+    padding-top: clamp(24px, 5vh, 56px);
+  }
+
+  /* Salon workbench — two-column grid on desktop (main panel + briefing rail),
+     single-column flex stack on mobile. The workbench owns the outer padding
+     so the panel and rail sit in a consistent channel regardless of screen size. */
+  .atelier-salon-workbench {
+    width: 100%;
+    max-width: 72rem;
+    padding: var(--ds-space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--ds-space-4);
+  }
+  @media (min-width: 900px) {
+    .atelier-salon-workbench {
+      display: grid;
+      grid-template-columns: 1fr 17rem;
+      gap: var(--ds-space-5);
+      padding: var(--ds-space-5);
+      align-items: start;
+    }
+  }
+
+  /* Salon chip grid — 2-column starter prompt grid for desktop.
+     Creates a dense editorial invitation surface in the empty state.
+     Collapses to a single column on narrow viewports. */
+  .atelier-salon-chip-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--ds-space-2);
+    width: 100%;
+    max-width: 34rem;
+  }
+  @media (max-width: 500px) {
+    .atelier-salon-chip-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Salon chip — stretches to fill the grid cell so both columns
+     read as intentional panel pairs, not arbitrary widths. */
+  .atelier-salon-chip-grid .atelier-salon-starter-chip {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Main concierge panel — warm paper folio surface containing the header,
+     results body, and composer as one cohesive instrument. On desktop the
+     panel has a fixed height so results scroll inside the panel, not the page.
+     Border + shadow delineate the panel from the ambient page background. */
+  .atelier-salon-main-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+    border-radius: 16px;
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 16%, transparent);
+    box-shadow: 0 2px 20px color-mix(in srgb, var(--ds-midnight-ink) 6%, transparent);
+  }
+  @media (min-width: 900px) {
+    .atelier-salon-main-panel {
+      height: calc(100svh - var(--ds-space-10));
+    }
+  }
+
+  /* Panel header — prevents the header from flex-shrinking in the panel column.
+     Used alongside atelier-salon-room-header and atelier-salon-header-landing. */
+  .atelier-salon-panel-header {
+    flex-shrink: 0;
+  }
+
+  /* Panel body — fills remaining panel height and scrolls internally.
+     The only scrollable region in the desktop concierge room; the header
+     and composer remain pinned above and below via the flex column. */
+  .atelier-salon-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    padding: var(--ds-space-4) var(--ds-space-5);
+  }
+
+  /* Briefing rail — static capability sidebar on desktop. Hidden on mobile.
+     Declares what the concierge can do without using live data or fake counts.
+     Sticky so it stays in view as the panel body scrolls. */
+  .atelier-salon-briefing-rail {
+    display: none;
+  }
+  @media (min-width: 900px) {
+    .atelier-salon-briefing-rail {
+      display: flex;
+      flex-direction: column;
+      gap: var(--ds-space-4);
+      position: sticky;
+      top: var(--ds-space-5);
+      border-radius: 12px;
+      border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 14%, transparent);
+      padding: var(--ds-space-5);
+    }
+  }
+
+  /* Briefing rail header — "How I can help" label above the capability list */
+  .atelier-salon-briefing-header {
+    padding-bottom: var(--ds-space-3);
+    border-bottom: 1px solid color-mix(in srgb, var(--ds-ember-brass) 20%, transparent);
+  }
+
+  /* Briefing item — individual capability row in the briefing rail */
+  .atelier-salon-briefing-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ds-space-2);
+    padding: var(--ds-space-1) 0;
+  }
+
+  /* Briefing footer — verified capability markers at the base of the rail */
+  .atelier-salon-briefing-footer {
+    padding-top: var(--ds-space-3);
+    border-top: 1px solid color-mix(in srgb, var(--ds-ember-brass) 14%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: var(--ds-space-2);
+    margin-top: auto;
+  }
+
 }
