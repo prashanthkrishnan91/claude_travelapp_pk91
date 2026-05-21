@@ -252,7 +252,7 @@ test('FlightExploreFlow uses ResultActionSheet for save action', () => {
 
 test('HotelExploreFlow preserves Google Hotels compare CTA (hotel-compare-cta)', () => {
   assert.match(hotelFlow, /data-testid="hotel-compare-cta"/);
-  assert.match(hotelFlow, /Compare prices/);
+  assert.match(hotelFlow, /Check prices on Google/);
 });
 
 test('RestaurantExploreFlow preserves Google Maps link (googleMapsUri)', () => {

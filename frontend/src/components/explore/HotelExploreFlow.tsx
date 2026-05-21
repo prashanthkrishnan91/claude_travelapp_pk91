@@ -10,8 +10,10 @@
  * search route and spends no paid research credits.
  *
  * Discovery-only lodging cards: Google Places verified hotels, no rates,
- * no prices, no availability.  Compare prices CTA (v1): deterministic Google
- * Hotels search link-out only — no in-app rates, no OTA booking.
+ * no prices, no availability.  "Check prices on Google" CTA: deterministic
+ * Google Hotels search link-out only — no in-app rates, no OTA booking.
+ * Note: Google Places hotel results may not always resolve to Google Travel
+ * hotel inventory — the CTA opens a search, not a guaranteed inventory match.
  */
 
 import { useState } from "react";
@@ -109,17 +111,21 @@ function buildGoogleTravelDatesParam(checkIn?: string, checkOut?: string): strin
 function buildHotelCompareUrl({
   hotelName,
   destination,
+  address,
   checkIn,
   checkOut,
   guests,
 }: {
   hotelName: string;
   destination: string;
+  address?: string;
   checkIn?: string;
   checkOut?: string;
   guests?: number;
 }): string {
   const qParts = [hotelName, destination];
+  // Address in q improves Google Travel hotel resolution for less-known properties.
+  if (address) qParts.push(address);
   const checkInDisplay = checkIn ? formatIsoDateForDisplay(checkIn) : undefined;
   const checkOutDisplay = checkOut ? formatIsoDateForDisplay(checkOut) : undefined;
   if (checkInDisplay) qParts.push(checkInDisplay);
@@ -203,6 +209,7 @@ export function HotelExploreFlow() {
     const compareLink = buildHotelCompareUrl({
       hotelName: h.name,
       destination: dest,
+      address: h.address || undefined,
       checkIn: lastForm?.checkIn || undefined,
       checkOut: lastForm?.checkOut || undefined,
       guests: lastForm?.guests,
@@ -421,11 +428,11 @@ function HotelCard({
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-[44px] rounded-lg text-ds-accent text-xs transition-colors hover:text-ds-accent-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
               style={{ backgroundColor: "var(--ds-accent-subtle)" }}
-              aria-label={`Compare prices for ${h.name}`}
+              aria-label={`Check prices on Google for ${h.name}`}
               data-testid="hotel-compare-cta"
             >
               <Search className="w-3 h-3" />
-              Compare prices
+              Check prices on Google
             </a>
           </div>
         )}

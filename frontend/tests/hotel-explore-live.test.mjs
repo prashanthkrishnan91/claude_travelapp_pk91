@@ -10,7 +10,7 @@
  * 3. Discovery-only contract: no price, rate, booking, or availability fields.
  * 4. No Tavily / live-research / concierge-note rendering.
  * 5. HotelCard renders name, rating, address, maps link, ResultActionSheet.
- * 6. Compare prices CTA preserved (PR #367 Google Hotels link-out).
+ * 6. "Check prices on Google" CTA preserved (PR #367/#461 Google Hotels link-out).
  * 7. Google Places place id flows through as providerIdentity.
  */
 
@@ -128,9 +128,13 @@ test('HotelExploreFlow renders hotel-results testid on result list', () => {
 
 // ── 7. Compare prices CTA preserved (PR #367) ──────────────────────────────
 
-test('HotelCard renders a Compare prices CTA (labeled link-out)', () => {
-  assert.match(hotelFlow, /Compare prices/);
+test('HotelCard renders a "Check prices on Google" CTA (honest link-out)', () => {
+  // Copy changed from "Compare prices" to "Check prices on Google" to be honest
+  // about Google Places → Google Travel resolution: the CTA opens a search,
+  // not a guaranteed hotel inventory match.
+  assert.match(hotelFlow, /Check prices on Google/);
   assert.match(hotelFlow, /data-testid="hotel-compare-cta"/);
+  assert.doesNotMatch(hotelFlow, /Compare prices/);
 });
 
 test('Hotel compare CTA is an external link (target=_blank, rel=noopener)', () => {
@@ -202,6 +206,7 @@ test('buildGoogleTravelDatesParam reproduces the verified reference ts= byte-for
   block = block
     .replace(/as \[number, number, number\]/g, '')
     .replace(/\}: \{[^}]*\}\)/s, '})')
+    .replace(/\baddress\?/g, 'address')
     .replace(/\bcheckIn\?/g, 'checkIn')
     .replace(/\bcheckOut\?/g, 'checkOut')
     .replace(/\bguests\?/g, 'guests')
@@ -322,6 +327,7 @@ function extractCompareUrlBuilder() {
   block = block
     .replace(/as \[number, number, number\]/g, '')
     .replace(/\}: \{[^}]*\}\)/s, '})')
+    .replace(/\baddress\?/g, 'address')
     .replace(/\bcheckIn\?/g, 'checkIn')
     .replace(/\bcheckOut\?/g, 'checkOut')
     .replace(/\bguests\?/g, 'guests')
@@ -426,6 +432,67 @@ test('buildHotelCompareUrl: Hyatt Regency Chicago Jul 31–Aug 5 2026 regression
     assert.match(result, /[Cc]hicago/, 'destination must appear in q param');
     assert.match(result, /2%20guests/, 'guest count must appear in q text');
   }
+});
+
+// ── 10. Address-in-query and honest-limitation contract ────────────────────
+
+test('buildHotelCompareUrl: address flows into q when provided', () => {
+  // Google Places returns an address for most hotels.  Including it in the q
+  // param helps Google Travel resolve less-known properties by street address,
+  // improving match rate over hotel-name-only queries.
+  const buildUrl = extractCompareUrlBuilder();
+  if (buildUrl) {
+    const withAddress = buildUrl({
+      hotelName: 'The Grand Hostel',
+      destination: 'Lisbon',
+      address: '45 Rua Augusta',
+      checkIn: '2026-09-10',
+      checkOut: '2026-09-14',
+      guests: 1,
+    });
+    const withoutAddress = buildUrl({
+      hotelName: 'The Grand Hostel',
+      destination: 'Lisbon',
+      checkIn: '2026-09-10',
+      checkOut: '2026-09-14',
+      guests: 1,
+    });
+    // Address must appear in q when provided
+    assert.match(withAddress, /Rua%20Augusta/, 'address must appear in q param when provided');
+    // Without address the query is shorter (hotel + destination only)
+    assert.doesNotMatch(withoutAddress, /Rua%20Augusta/, 'address must not appear in q when omitted');
+    // Both must still carry the deterministic ts= date param
+    assert.match(withAddress, /[&?]ts=/, 'address variant must still carry ts= date param');
+    assert.match(withoutAddress, /[&?]ts=/, 'no-address variant must still carry ts= date param');
+    // Both must use /travel/search surface
+    assert.match(withAddress, /google\.com\/travel\/search/);
+    assert.match(withoutAddress, /google\.com\/travel\/search/);
+  }
+});
+
+test('buildHotelCompareUrl: buildContext passes h.address to compare URL builder', () => {
+  // Verify buildContext wires the hotel address through to buildHotelCompareUrl.
+  const buildContextSlice = hotelFlow.slice(
+    hotelFlow.indexOf('function buildContext'),
+    hotelFlow.indexOf('\nfunction HotelCard'),
+  );
+  assert.match(
+    buildContextSlice,
+    /address:\s*h\.address/,
+    'buildContext must pass h.address to buildHotelCompareUrl',
+  );
+});
+
+test('HotelExploreFlow: CTA is honest about Google Travel resolution — no guarantee claim', () => {
+  // Google Places hotel results may not always resolve to Google Travel hotel
+  // inventory.  The file header and CTA must not assert guaranteed resolution.
+  // "Check prices on Google" is intentionally weaker than "Compare prices" to
+  // acknowledge this limitation.
+  assert.doesNotMatch(hotelFlow, /guaranteed.*result/i, 'must not claim guaranteed results');
+  assert.doesNotMatch(hotelFlow, /guaranteed.*resolv/i, 'must not claim hotels are guaranteed to resolve');
+  // The file comment must document the limitation (not assert it away)
+  assert.match(hotelFlow, /may not always resolve/,
+    'file must document Google Places → Google Travel resolution limitation');
 });
 
 test('buildHotelCompareUrl uses /travel/search hotel surface, not generic Google Search or Maps', () => {
