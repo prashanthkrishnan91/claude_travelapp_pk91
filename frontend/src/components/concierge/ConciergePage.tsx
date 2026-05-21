@@ -536,14 +536,6 @@ export function ConciergePage() {
     }
   }, [destination, lastQuery]);
 
-  const hasResults = messages.some(
-    (m) =>
-      m.role === "assistant" &&
-      ((m.restaurants?.length ?? 0) > 0 ||
-        (m.attractions?.length ?? 0) > 0 ||
-        (m.hotels?.length ?? 0) > 0),
-  );
-
   function getCardsWithKind(msg: Message) {
     return [
       ...(msg.restaurants ?? [])
