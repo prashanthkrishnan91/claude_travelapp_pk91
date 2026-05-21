@@ -364,15 +364,6 @@ function ConciergeResultCard({
 // Chips populate the query input only; they never auto-set destination or
 // auto-submit. The concierge must not pretend to know the user's city.
 
-const EDITORIAL_PROMPTS = [
-  "Cocktail bars with a view",
-  "Design-forward boutique hotels",
-  "A romantic dinner",
-  "Hidden neighbourhood gems",
-  "Best neighbourhood to stay",
-  "Local breakfast worth the walk",
-] as const;
-
 const SALON_INVITATIONS = [
   { lead: "Cocktail bars with a view", hint: "Mood · elevated + social", query: "Cocktail bars with a view" },
   { lead: "Design-forward boutique hotels", hint: "Stays · considered + distinctive", query: "Design-forward boutique hotels" },
