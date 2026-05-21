@@ -485,3 +485,38 @@ describe("Atelier Room System: salon route shell integration (patch-3)", () => {
     );
   });
 });
+
+// ── Section G: Salon workbench layout (patch-4 constrained column) ───────────
+
+describe("Atelier Room System: salon workbench layout (patch-4)", () => {
+  test("G1. globals.css defines atelier-salon-workbench centered column", () => {
+    assert.ok(
+      globalsCss.includes(".atelier-salon-workbench"),
+      "globals.css must define .atelier-salon-workbench — centered reading column",
+    );
+  });
+
+  test("G2. ConciergePage uses atelier-salon-workbench to constrain content width", () => {
+    assert.ok(
+      conciergePage.includes("atelier-salon-workbench"),
+      "ConciergePage must use atelier-salon-workbench to prevent full-viewport composer",
+    );
+  });
+
+  test("G3. atelier-salon-starter-chip uses world-ink for dark-on-light contrast", () => {
+    const idx = globalsCss.indexOf(".atelier-salon-starter-chip");
+    const block = globalsCss.slice(idx, idx + 600);
+    assert.ok(
+      block.includes("world-ink"),
+      ".atelier-salon-starter-chip must use --world-ink for readable dark text on light paper",
+    );
+  });
+
+  test("G4. folio-cinema-desk applied to result cards (dark objects on light salon room)", () => {
+    assert.ok(
+      conciergePage.includes("folio-cinema-desk folio-cinema-result-card") ||
+      conciergePage.includes("folio-cinema-result-card"),
+      "Result cards must use folio-cinema-desk treatment — dark cinema objects on the light salon room",
+    );
+  });
+});

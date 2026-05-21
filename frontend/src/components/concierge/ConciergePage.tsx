@@ -169,7 +169,7 @@ function ConciergeResultCard({
     <Card
       tone="dark"
       as="article"
-      className="boutique-folio folio-cinema-result-card card-lift flex flex-col"
+      className="boutique-folio folio-cinema-desk folio-cinema-result-card card-lift flex flex-col"
       style={{ padding: "0", overflow: "hidden" }}
     >
       {/* Folio cover tab — makes each result card feel like a recommendation slip */}
@@ -771,10 +771,14 @@ export function ConciergePage() {
           stacking context, behind all in-flow content. */}
       <WorldAtmosphere />
 
+      {/* Workbench column — centers salon content at a comfortable reading
+          width so the sticky composer does not span the full viewport. */}
+      <div className="atelier-salon-workbench mx-auto flex flex-col flex-1">
+
       {/* ── Concierge desk instrument header ─────────────────────────────── */}
       <header
         data-testid="concierge-instrument-header"
-        className="atelier-salon-room-header atelier-salon-header-landing pb-5 sm:pb-8 text-center"
+        className="atelier-salon-room-header atelier-salon-header-landing pb-5 sm:pb-8 text-center px-4 sm:px-6"
       >
         <p
           className="text-ds-accent uppercase tracking-[0.1em]"
@@ -831,7 +835,7 @@ export function ConciergePage() {
       </header>
 
       {/* Editorial mapline — visual rhythm between header and results canvas */}
-      <div className="mapline-rule mx-auto" style={{ maxWidth: "42rem" }} aria-hidden="true" />
+      <div className="mapline-rule mx-auto" aria-hidden="true" />
 
       {/* ── Result canvas ─────────────────────────────────────────────────── */}
       <main
@@ -839,8 +843,7 @@ export function ConciergePage() {
         aria-label="Concierge results"
         aria-live="polite"
         aria-atomic="false"
-        className="flex-1 mx-auto w-full px-4 sm:px-6"
-        style={{ maxWidth: "42rem" }}
+        className="flex-1 w-full px-4 sm:px-6"
       >
         {/* Empty / initial state */}
         {!loading && !hasResults && messages.length === 0 && (
@@ -1211,7 +1214,7 @@ export function ConciergePage() {
       {/* ── Concierge search instrument ───────────────────────────────────── */}
       <div
         data-testid="concierge-instrument-composer"
-        className="sticky z-10 concierge-sticky-bottom folio-cinema-desk folio-cinema-composer atelier-salon-composer-surface"
+        className="sticky z-10 concierge-sticky-bottom folio-cinema-composer atelier-salon-composer-surface"
         style={{
           marginTop: "var(--ds-space-8)",
         }}
@@ -1390,6 +1393,8 @@ export function ConciergePage() {
           </button>
         </div>
       </div>
+
+      </div> {/* end atelier-salon-workbench */}
     </div>
   );
 }

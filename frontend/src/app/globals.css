@@ -7014,16 +7014,16 @@
      to add the atelier surface treatment without breaking the existing
      chip contract. */
   .atelier-salon-starter-chip {
-    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 30%, transparent);
-    background: color-mix(in srgb, var(--ds-accent-subtle) 55%, transparent);
-    color: var(--ds-text-secondary);
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 35%, transparent);
+    background: var(--ds-bone);
+    color: var(--world-ink, var(--ds-midnight-ink));
     transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
   }
   .atelier-salon-starter-chip:hover,
   .atelier-salon-starter-chip:focus-visible {
-    border-color: color-mix(in srgb, var(--ds-ember-brass) 55%, transparent);
-    background: color-mix(in srgb, var(--ds-accent-subtle) 85%, transparent);
-    color: var(--ds-accent);
+    border-color: color-mix(in srgb, var(--ds-ember-brass) 65%, transparent);
+    background: var(--ds-linen);
+    color: var(--world-ink, var(--ds-midnight-ink));
   }
   @media (prefers-reduced-motion: reduce) {
     .atelier-salon-starter-chip {
@@ -7036,7 +7036,7 @@
      than a generic suggestion list. The ::before draws a wider soft
      brass rule above the chip cluster as a visual invitation. */
   .atelier-salon-invitation {
-    padding-top: var(--ds-space-10);
+    padding-top: var(--ds-space-6);
     padding-bottom: var(--ds-space-6);
   }
   .atelier-salon-invitation::before {
@@ -7127,7 +7127,16 @@
      card padding is stripped in the salon context. Only controls
      padding-top; responsive pb-* Tailwind classes own padding-bottom. */
   .atelier-salon-room-header.atelier-salon-header-landing {
-    padding-top: clamp(40px, 9vh, 88px);
+    padding-top: clamp(24px, 5vh, 56px);
+  }
+
+  /* Salon workbench column — centered reading column that constrains
+     all salon content (header, results, sticky composer) so the dark
+     composer surface does not span the full viewport as a terminal
+     dock. The sticky composer inherits this max-width. */
+  .atelier-salon-workbench {
+    width: 100%;
+    max-width: 44rem;
   }
 
   /* Salon chip grid — 2-column starter prompt grid for desktop.

@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-20 (Atelier Room System v1 patch-2 — PR #451 open, branch claude/review-travel-app-docs-afJmb)
+Last updated: 2026-05-21 (Atelier Room System v1 patch-4 — PR #451 open, branch claude/review-travel-app-docs-afJmb)
 
 ## Purpose
 
@@ -18,6 +18,21 @@ This file is **current operational state**, not a historical log. It must stay c
 **Atelier Room System v1 — AI Concierge Private Salon**
 
 Changes on branch:
+- **`globals.css` — patch-4 additions**:
+  - `.atelier-salon-workbench { width:100%; max-width:44rem }` — centered reading column; sticky composer inherits this width so it does not span full viewport
+  - `.atelier-salon-starter-chip` updated: `background: var(--ds-bone)`, `color: var(--world-ink, --ds-midnight-ink)`, border `var(--ds-ember-brass) 35%` — readable dark ink on light paper
+  - `.atelier-salon-header-landing` padding reduced: `clamp(24px, 5vh, 56px)` (was 40px-88px)
+  - `.atelier-salon-invitation` padding-top reduced: `var(--ds-space-6)` (was var(--ds-space-10))
+
+- **`ConciergePage.tsx` — patch-4 workbench layout**:
+  - Workbench wrapper div (`atelier-salon-workbench mx-auto flex flex-col flex-1`) wraps all page content; sticky composer inherits 44rem width from workbench, not viewport
+  - `folio-cinema-desk` moved from sticky composer to `ConciergeResultCard`'s Card className (dark result cards = cinema objects on light room; test B2 preserved)
+  - `<main>` no longer has `mx-auto` + `max-width:42rem` style — workbench handles centering
+  - `mapline-rule` no longer has `max-width:42rem` style
+  - Header gains `px-4 sm:px-6` for mobile breathing room
+
+- **`tests/atelier-salon-room-v1.test.mjs`** — 4 new Section G tests (60 total): workbench defined, ConciergePage uses it, chip uses world-ink, folio-cinema-desk on result cards
+
 - **`AppShell.tsx`** *(patch-3)* — Concierge added to immersive shell:
   - `isSalonRoute = pathname === "/concierge"` — new route check
   - `data-atelier-shell="salon"` on `atelier-atmosphere-root` — CSS sidebar suppression hook
