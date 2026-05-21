@@ -330,3 +330,84 @@ test('buildHotelCompareUrl: two structurally different date ranges both produce 
     assert.notStrictEqual(rangeA, rangeB, 'Different date ranges must produce different URLs');
   }
 });
+
+// ── 9. Named regression: Hyatt Regency Chicago, Jul 31–Aug 5 2026, 2 guests ─
+//
+// Reference: a Google Travel hotel search for this scenario was observed
+// at https://www.google.com/travel/search with a protobuf-encoded `ts` param.
+// Investigation showed:
+//   - `q` param: safely constructable (hotel name)
+//   - `ts` param: protobuf (dates encoded) — format is undocumented, can change
+//   - `qs`, `ved`, `ap` params: opaque/session-generated — NOT constructable
+// Decision: use /travel/hotels?q=...&checkin=YYYY-MM-DD&checkout=YYYY-MM-DD&adults=N
+// which IS the documented stable Google Hotels deep-link format, not a generic
+// Google Search link. The opaque params from /travel/search are NOT replicated.
+
+test('buildHotelCompareUrl: Hyatt Regency Chicago Jul 31–Aug 5 2026 regression', () => {
+  // Concrete regression case:
+  //   hotel: Hyatt Regency Chicago, destination: Chicago
+  //   check-in: 2026-07-31, check-out: 2026-08-05, guests: 2
+  // The compare link MUST carry these exact dates — not Jun 12–14 or any other stale value.
+  const fnStart = hotelFlow.indexOf('function buildHotelCompareUrl');
+  const fnEnd = hotelFlow.indexOf('\nimport ', fnStart);
+  const rawFn = hotelFlow.slice(fnStart, fnEnd > fnStart ? fnEnd : fnStart + 1500);
+  const jsFn = rawFn
+    .replace(/:\s*string\b/g, '')
+    .replace(/:\s*number\b/g, '')
+    .replace(/\?\s*:/g, ':')
+    .replace(/\):\s*string\s*\{/, ') {');
+
+  let buildUrl;
+  try {
+    // eslint-disable-next-line no-new-func
+    buildUrl = new Function(`return (${jsFn})`)();
+  } catch {
+    buildUrl = null;
+  }
+
+  if (buildUrl) {
+    const result = buildUrl({
+      hotelName: 'Hyatt Regency Chicago',
+      destination: 'Chicago',
+      checkIn: '2026-07-31',
+      checkOut: '2026-08-05',
+      guests: 2,
+    });
+
+    // Must carry the submitted dates
+    assert.match(result, /checkin=2026-07-31/, 'compare URL must carry check-in 2026-07-31');
+    assert.match(result, /checkout=2026-08-05/, 'compare URL must carry check-out 2026-08-05');
+
+    // Must NOT contain the stale Jun 12–14 dates (the reported regression)
+    assert.doesNotMatch(result, /2026-06-1[24]/, 'compare URL must not contain stale Jun 12–14 dates');
+
+    // Must use Google Travel Hotels deep-link, not generic Google Search
+    assert.match(result, /google\.com\/travel\/hotels/, 'must use /travel/hotels deep-link, not generic /search');
+    assert.doesNotMatch(result, /google\.com\/search\b/, 'must not use generic Google Search URL');
+
+    // Must NOT embed opaque protobuf ts= or qs= params (those are session-generated)
+    assert.doesNotMatch(result, /[&?]ts=/, 'must not embed opaque ts= protobuf param');
+    assert.doesNotMatch(result, /[&?]qs=/, 'must not embed opaque qs= session param');
+
+    // Guest count must be present
+    assert.match(result, /adults=2/, 'compare URL must carry guest count adults=2');
+
+    // Hotel name and destination must be in the q param
+    assert.match(result, /[Hh]yatt/, 'hotel name must appear in q param');
+    assert.match(result, /[Cc]hicago/, 'destination must appear in q param');
+  }
+});
+
+test('buildHotelCompareUrl uses /travel/hotels deep-link format, not generic Google Search', () => {
+  // Guards against regression to a generic google.com/search?q= URL.
+  // The /travel/hotels endpoint with checkin/checkout params is the stable
+  // documented Google Hotels deep-link API.  The /travel/search?ts= format
+  // uses opaque protobuf-encoded params that are not publicly documented
+  // and should NOT be constructed programmatically.
+  const fnStart = hotelFlow.indexOf('function buildHotelCompareUrl');
+  const fnEnd = hotelFlow.indexOf('\nimport ', fnStart);
+  const fnBody = hotelFlow.slice(fnStart, fnEnd > fnStart ? fnEnd : fnStart + 1500);
+  assert.match(fnBody, /travel\/hotels/, 'must use /travel/hotels endpoint');
+  assert.doesNotMatch(fnBody, /google\.com\/search/, 'must not use generic /search endpoint');
+  assert.doesNotMatch(fnBody, /[&?]ts=/, 'must not embed opaque ts= protobuf param');
+});
