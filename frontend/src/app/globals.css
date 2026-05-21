@@ -7875,6 +7875,47 @@
     }
   }
 
+  /* Mobile pre-search one-screen fit — reclaim vertical space so the starting-
+     points carousel is visible on page load without scrolling. Phone-only
+     (<=620px); desktop (>=900px) and the after-search "tuned" state are
+     untouched. The dominant contributor was the 44vh hero floor; this also
+     trims the dark-canvas margin, stage padding, hero copy spacing, and the
+     desk -> carousel gap. Spacing stays comfortable, not crushed. */
+  @media (max-width: 620px) {
+    .atelier-salon-workbench {
+      margin: var(--ds-space-2) auto;
+    }
+    .atelier-salon-stage-panel {
+      padding: var(--ds-space-3);
+    }
+    /* Shorter hero pre-search so the desk + carousel clear the fold. The
+       min-height is a floor only; the hero copy still drives natural height. */
+    .atelier-salon-stage-panel[data-salon-mode="open"] .atelier-salon-portal {
+      min-height: clamp(148px, 21vh, 196px);
+    }
+    .atelier-salon-stage-panel[data-salon-mode="open"] .atelier-salon-portal-copy {
+      padding: var(--ds-space-3) var(--ds-space-4);
+      gap: var(--ds-space-2);
+    }
+    .atelier-salon-stage-panel[data-salon-mode="open"] .atelier-salon-portal-sub {
+      margin-top: var(--ds-space-2);
+    }
+    /* Tighten the fused desk and the gap down into the invitations. */
+    .atelier-salon-desk {
+      margin-top: var(--ds-space-3);
+    }
+    .atelier-salon-stage-panel[data-salon-mode="open"] .atelier-salon-panel-body {
+      padding: var(--ds-space-3) var(--ds-space-3) 0;
+    }
+    .atelier-salon-stage-invitation {
+      padding-top: var(--ds-space-1);
+      padding-bottom: 0;
+    }
+    .atelier-salon-invitation-label {
+      margin-bottom: var(--ds-space-2);
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .atelier-salon-result-reveal { animation: none; }
     .atelier-salon-portal-photo { transition: none; }

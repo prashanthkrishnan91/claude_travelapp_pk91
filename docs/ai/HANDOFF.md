@@ -19,6 +19,7 @@ Evolves the merged PR #458 static salon into a discovery loop **without changing
 - **Save-to-folio moment:** a `.atelier-salon-folio-toast` ("Slipped into your folio") fires on save success (`folioToast` state + auto-dismiss timer w/ unmount cleanup), behavior-safe atop the existing `saveItem` flow.
 - **Mobile:** plate/reveal/toast tuned for phone (full-width centered toast, shorter plate). Tests: Section J (8 new). **3023 tests, 0 failures; tsc/lint/next build clean.** All testids + behavior preserved.
 - **patch-1 (preview polish):** textarea shows a scrollbar only past the 120px cap (clean default single-line); scoped slim brass scrollbar on `.atelier-salon-panel-body` (no global restyle); mobile (`≤620px`) pre-search prompts become a horizontal swipe tray (`.atelier-salon-chip-grid` flex + scroll-snap, hidden scrollbar) instead of a tall vertical pile.
+- **patch-2 (mobile one-screen fit):** phone (`≤620px`) pre-search state now fits the viewport without scroll — open-mode portal floor cut to `clamp(148px,21vh,196px)`, plus trimmed workbench margin/stage padding/hero copy spacing/desk→carousel gap. Desktop (`≥900px`) and the after-search tuned state are untouched; carousel + all six prompts preserved.
 
 ### Concierge Salon cinematic scene (PR #458, merged)
 
