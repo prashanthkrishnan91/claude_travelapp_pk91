@@ -7660,4 +7660,266 @@
     .atelier-salon-portal { transition: none; }
   }
 
+  /* ════════════════════════════════════════════════════════════════
+     SALON v2 — destination-aware portal · curated reveal · editorial
+     cards · folio save moment. Evolves the merged static salon into a
+     mobile-first discovery loop without changing its silhouette.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Destination photo layer — paints the typed destination's real world-DNA
+     mood image (Unsplash photo for curated worlds; self-contained SVG scene for
+     city/coast/mountain/desert; "none" for the Atelier house fallback) over the
+     dusk floor so the window tunes toward where she's going. Sits above the
+     dusk scene, below the haze; the vignette keeps the copy readable. */
+  .atelier-salon-portal-photo {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background-image: var(--world-portal-image, none);
+    background-size: cover;
+    background-position: var(--world-portal-position, center 45%);
+    opacity: 0.42;
+    filter: saturate(0.92) brightness(0.96);
+    transition: opacity 900ms ease;
+  }
+  /* House fallback (no destination) — let the dusk floor own the scene. */
+  .atelier-salon-portal[data-portal-destination="house"] .atelier-salon-portal-photo {
+    opacity: 0;
+  }
+  /* Tuned banner — quiet the photo so result copy stays legible. */
+  .atelier-salon-stage-panel[data-salon-mode="tuned"] .atelier-salon-portal-photo {
+    opacity: 0.3;
+  }
+
+  /* Curated reveal head — frames a result set as a private shortlist. The
+     Fraunces italic count + small note echo the prototype's results-head. */
+  .atelier-salon-reveal-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--ds-space-2);
+    margin-bottom: var(--ds-space-4);
+  }
+  .atelier-salon-reveal-count {
+    font-family: var(--world-type-display, var(--font-fraunces, Georgia, "Times New Roman", serif));
+    font-style: italic;
+    font-weight: 400;
+    font-size: var(--ds-type-display-s-size);
+    line-height: 1.1;
+    color: var(--ds-pearl-cream);
+    margin: 0;
+  }
+  .atelier-salon-reveal-note {
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    font-weight: var(--ds-type-overline-weight);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ds-sandstone-gold);
+    margin: 0;
+  }
+
+  /* Curated entrance — the shortlist rises in like a placed dossier. */
+  .atelier-salon-result-reveal {
+    animation: salonResultReveal 520ms var(--ds-easing-standard) both;
+  }
+  @keyframes salonResultReveal {
+    0%   { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Editorial card plate — a decorative "filing slip" header on each result
+     card. This is NOT a photo of the place (no place imagery exists); the warm
+     gradient + serial number read as a curated clipping and make each card more
+     visual and scannable on mobile. Variants give the stack gentle rhythm. */
+  .atelier-salon-card-plate {
+    position: relative;
+    height: 92px;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 18%, color-mix(in srgb, var(--ds-sandstone-gold) 42%, transparent), transparent 60%),
+      linear-gradient(158deg, rgb(58, 37, 48) 0%, rgb(122, 74, 74) 46%, rgb(43, 58, 88) 100%);
+  }
+  .atelier-salon-card-plate[data-plate-variant="1"] {
+    background:
+      radial-gradient(ellipse 80% 60% at 58% 12%, color-mix(in srgb, var(--ds-sandstone-gold) 30%, transparent), transparent 60%),
+      linear-gradient(158deg, rgb(32, 48, 42) 0%, rgb(74, 100, 80) 50%, rgb(32, 48, 58) 100%);
+  }
+  .atelier-salon-card-plate[data-plate-variant="2"] {
+    background:
+      radial-gradient(ellipse 80% 60% at 42% 18%, color-mix(in srgb, var(--ds-sandstone-gold) 38%, transparent), transparent 60%),
+      linear-gradient(158deg, rgb(58, 42, 38) 0%, rgb(138, 90, 68) 50%, rgb(67, 70, 79) 100%);
+  }
+  .atelier-salon-card-plate::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 48%, rgba(0, 0, 0, 0.46) 100%);
+  }
+  .atelier-salon-card-serial {
+    position: absolute;
+    top: var(--ds-space-3);
+    left: var(--ds-space-4);
+    z-index: 1;
+    font-size: var(--ds-type-overline-size);
+    font-weight: var(--ds-type-overline-weight);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ds-sandstone-gold);
+  }
+
+  /* Folio save moment — a private clipping slipping into the travel folio.
+     Fixed, centered above the desk; fades + lifts in, auto-dismisses. */
+  .atelier-salon-folio-toast {
+    position: fixed;
+    left: 50%;
+    bottom: clamp(88px, 16vh, 132px);
+    transform: translateX(-50%) translateY(14px);
+    z-index: 60;
+    opacity: 0;
+    pointer-events: none;
+    background: var(--ds-cinema-deep);
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 46%, transparent);
+    border-radius: 12px;
+    box-shadow: 0 18px 44px -20px rgba(0, 0, 0, 0.7);
+    padding: var(--ds-space-3) var(--ds-space-5);
+    transition: opacity 320ms ease, transform 320ms ease;
+  }
+  .atelier-salon-folio-toast[data-visible="true"] {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  .atelier-salon-folio-toast-text {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ds-space-2);
+    font-family: var(--world-type-display, var(--font-fraunces, Georgia, "Times New Roman", serif));
+    font-style: italic;
+    font-size: var(--ds-type-body-size);
+    color: var(--ds-pearl-cream);
+  }
+  .atelier-salon-folio-toast-text svg {
+    color: var(--ds-sandstone-gold);
+  }
+
+  /* Premium results scrollbar — slim, brass-tinted, native to the dark salon.
+     Scoped to the reveal canvas only; does not touch the global scrollbar. */
+  .atelier-salon-panel-body {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--ds-ember-brass) 36%, transparent) transparent;
+  }
+  .atelier-salon-panel-body::-webkit-scrollbar {
+    width: 8px;
+  }
+  .atelier-salon-panel-body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .atelier-salon-panel-body::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--ds-ember-brass) 30%, transparent);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  .atelier-salon-panel-body::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--ds-ember-brass) 52%, transparent);
+    background-clip: padding-box;
+  }
+
+  /* Mobile — keep v2 elements intentional, not stacked desktop. */
+  @media (max-width: 899px) {
+    .atelier-salon-card-plate {
+      height: 76px;
+    }
+    .atelier-salon-reveal-head {
+      margin-bottom: var(--ds-space-3);
+    }
+    .atelier-salon-folio-toast {
+      left: var(--ds-space-4);
+      right: var(--ds-space-4);
+      transform: translateY(14px);
+      text-align: center;
+    }
+    .atelier-salon-folio-toast[data-visible="true"] {
+      transform: translateY(0);
+    }
+  }
+
+  /* Mobile pre-search prompts — a horizontal swipe tray instead of a tall
+     vertical pile, so the destination field + composer stay within quick reach.
+     The chips keep their two-line editorial content but become fixed-width
+     cards the user can flick through. Scrollbar hidden; scroll-snap for feel. */
+  @media (max-width: 620px) {
+    .atelier-salon-chip-grid {
+      display: flex;
+      grid-template-columns: none;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      max-width: none;
+      gap: var(--ds-space-2);
+      padding-bottom: var(--ds-space-1);
+      scroll-snap-type: x proximity;
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .atelier-salon-chip-grid::-webkit-scrollbar {
+      display: none;
+    }
+    .atelier-salon-chip-grid .atelier-salon-starter-chip {
+      width: auto;
+      flex: 0 0 auto;
+      min-width: 12rem;
+      justify-content: flex-start;
+      scroll-snap-align: start;
+    }
+  }
+
+  /* Mobile pre-search one-screen fit — reclaim vertical space so the starting-
+     points carousel is visible on page load without scrolling. Phone-only
+     (<=620px); desktop (>=900px) and the after-search "tuned" state are
+     untouched. The dominant contributor was the 44vh hero floor; this also
+     trims the dark-canvas margin, stage padding, hero copy spacing, and the
+     desk -> carousel gap. Spacing stays comfortable, not crushed. */
+  @media (max-width: 620px) {
+    .atelier-salon-workbench {
+      margin: var(--ds-space-2) auto;
+    }
+    .atelier-salon-stage-panel {
+      padding: var(--ds-space-3);
+    }
+    /* Shorter hero pre-search so the desk + carousel clear the fold. The
+       min-height is a floor only; the hero copy still drives natural height. */
+    .atelier-salon-stage-panel[data-salon-mode="open"] .atelier-salon-portal {
+      min-height: clamp(148px, 21vh, 196px);
+    }
+    .atelier-salon-stage-panel[data-salon-mode="open"] .atelier-salon-portal-copy {
+      padding: var(--ds-space-3) var(--ds-space-4);
+      gap: var(--ds-space-2);
+    }
+    .atelier-salon-stage-panel[data-salon-mode="open"] .atelier-salon-portal-sub {
+      margin-top: var(--ds-space-2);
+    }
+    /* Tighten the fused desk and the gap down into the invitations. */
+    .atelier-salon-desk {
+      margin-top: var(--ds-space-3);
+    }
+    .atelier-salon-stage-panel[data-salon-mode="open"] .atelier-salon-panel-body {
+      padding: var(--ds-space-3) var(--ds-space-3) 0;
+    }
+    .atelier-salon-stage-invitation {
+      padding-top: var(--ds-space-1);
+      padding-bottom: 0;
+    }
+    .atelier-salon-invitation-label {
+      margin-bottom: var(--ds-space-2);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-salon-result-reveal { animation: none; }
+    .atelier-salon-portal-photo { transition: none; }
+    .atelier-salon-folio-toast { transition: opacity 320ms ease; }
+  }
+
 }
