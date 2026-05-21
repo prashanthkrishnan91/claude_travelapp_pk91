@@ -103,8 +103,8 @@ export function ExploreShell() {
 
   if (active) {
     return (
-      <div className="obs-page folio-cinema-lounge" data-testid="explore-vertical-flow">
-        <div className="obs-room space-y-6">
+      <div className="obs-field">
+        <div className="obs-room folio-cinema-lounge" data-testid="explore-vertical-flow">
         {/* Editorial breadcrumb */}
         <div className="flex items-center gap-3" data-testid="explore-lounge-breadcrumb">
           <button
@@ -159,16 +159,16 @@ export function ExploreShell() {
   }
 
   return (
-    <div className="obs-page folio-cinema-lounge" data-testid="explore-home">
-      <div className="obs-room">
-        {/* Observatory meridian hero — page-filling mood surface */}
+    <div className="obs-field">
+      <div className="obs-room folio-cinema-lounge" data-testid="explore-home">
+        {/* Observatory meridian hero — transportive mood surface */}
         <ObsMeridian hero>
           <header data-testid="explore-lounge-header">
             <p className="obs-meridian-eyebrow">Curated Discovery</p>
             <h1 className="obs-meridian-title">Discover</h1>
           </header>
           <p className="obs-meridian-foot">
-            Flights, hotels, restaurants, and attractions — verified, no trip required.
+            Browse flights, hotels, restaurants, and attractions.
           </p>
         </ObsMeridian>
         <div className="editorial-section-rule" aria-hidden="true" />

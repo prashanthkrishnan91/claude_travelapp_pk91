@@ -58,8 +58,9 @@ test('ExploreShell retains explore-home testid for backward compatibility', () =
   assert.match(exploreShell, /data-testid="explore-home"/);
 });
 
-test('ExploreShell has "no trip required" copy for discovery-lounge framing', () => {
-  assert.match(exploreShell, /no trip required/i);
+test('ExploreShell hero uses plain user-facing browse copy (no internal trip-state language)', () => {
+  assert.match(exploreShell, /Browse flights, hotels, restaurants, and attractions/i);
+  assert.doesNotMatch(exploreShell, /no trip required/i);
 });
 
 test('ExploreShell active state has explore-lounge-breadcrumb testid', () => {

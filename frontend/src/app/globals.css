@@ -8273,42 +8273,47 @@
     margin: 0;
   }
 
-  /* ── Full-page Observatory room ──
+  /* ── Observatory: light outer field + floating dark room ──
      /explore is an immersive outside-trip Atelier room (AppShell suppresses
-     the sidebar + adds the floating nav + edge-bleed wrapper). Co-classed with
-     folio-cinema-lounge, .obs-page strips the contained-card chrome and lets
-     the cinematic mood fill the whole page (no centered beige box). The
-     readable content lives in a centered .obs-room column. */
-  .obs-page.folio-cinema-lounge {
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
-    padding: 0;
+     the sidebar + adds the floating nav + edge-bleed wrapper). To match the
+     Concierge Salon's composition — a lighter atelier field with a dark room
+     floating within it — .obs-field paints the warm outer canvas and the
+     .obs-room (co-classed folio-cinema-lounge) is the floating dark artifact
+     with clear separation (margin + brass-edged rounded box + shadow). */
+  .obs-field {
+    position: relative;
     min-height: 100svh;
-    background-color: var(--ds-cinema-deep);
+    padding: clamp(16px, 3.5vw, 56px) clamp(14px, 3.5vw, 56px) clamp(40px, 6vh, 88px);
+    background-color: var(--ds-warm-paper);
     background-image:
-      radial-gradient(ellipse 70% 38% at 50% -4%, rgba(184, 130, 60, 0.16), transparent 66%),
-      radial-gradient(ellipse 90% 50% at 50% 108%, rgba(56, 64, 106, 0.18), transparent 70%),
-      radial-gradient(ellipse 40% 30% at 88% 12%, rgba(197, 148, 77, 0.07), transparent 60%);
+      radial-gradient(ellipse 78% 42% at 50% -6%, rgba(197, 148, 77, 0.10), transparent 64%),
+      radial-gradient(ellipse 60% 36% at 88% 4%, rgba(184, 130, 60, 0.07), transparent 62%),
+      radial-gradient(ellipse 70% 40% at 50% 106%, rgba(120, 96, 60, 0.06), transparent 70%);
   }
+  /* The floating dark room — keep the folio-cinema-lounge cinematic box
+     (warm-dark fill, brass hairline, depth shadow, rounded corners) and give
+     it a generous, readable max width + roomy internal padding so it reads as
+     a composed artifact, not a small widget. */
   .obs-room {
     position: relative;
     z-index: 1;
-    max-width: 76rem;
+    max-width: 78rem;
     margin: 0 auto;
-    padding: clamp(28px, 6vh, 72px) clamp(20px, 4vw, 56px) clamp(48px, 8vh, 104px);
     display: flex;
     flex-direction: column;
-    gap: clamp(20px, 3vh, 36px);
+    gap: clamp(18px, 2.6vh, 32px);
+  }
+  .obs-room.folio-cinema-lounge {
+    padding: clamp(20px, 2.8vw, 44px);
   }
 
-  /* Landing hero — the meridian becomes a transportive, page-filling mood
-     surface, not a utility header. Keeps the wide-meridian silhouette. */
+  /* Landing hero — the meridian is a transportive mood surface inside the
+     room, not a utility header. Keeps the wide-meridian silhouette. */
   .obs-meridian--hero {
-    min-height: clamp(300px, 46vh, 460px);
+    min-height: clamp(280px, 42vh, 420px);
   }
   .obs-meridian--hero .obs-meridian-title {
-    font-size: clamp(2.25rem, 5vw, 3.75rem);
+    font-size: clamp(2.125rem, 4.6vw, 3.5rem);
     max-width: 18ch;
   }
   .obs-meridian--hero .obs-meridian-copy {

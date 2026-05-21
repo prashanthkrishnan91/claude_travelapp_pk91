@@ -218,13 +218,21 @@ describe("Explore Observatory: immersive shell integration", () => {
     assert.ok(appShell.includes("max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"), "non-immersive routes keep max-w-7xl");
   });
 
-  test("F5. ExploreShell is a full-page room (obs-page) keeping folio-cinema-lounge", () => {
-    assert.ok(shell.includes("obs-page"), "ExploreShell uses the obs-page full-page room");
-    assert.ok(shell.includes("obs-room"), "content sits in the centered obs-room column");
-    assert.ok(shell.includes("folio-cinema-lounge"), "cinema-world lounge class retained");
-    assert.ok(globalsCss.includes(".obs-page.folio-cinema-lounge"), "obs-page strips the card chrome into a room");
+  test("F5. ExploreShell is a light field with a floating dark room (Concierge-family composition)", () => {
+    assert.ok(shell.includes("obs-field"), "ExploreShell uses the light outer obs-field");
+    assert.ok(shell.includes('className="obs-room folio-cinema-lounge"'), "the floating dark room is obs-room + folio-cinema-lounge");
+    assert.ok(globalsCss.includes(".obs-field"), "globals.css defines the light outer field");
+    assert.ok(globalsCss.includes(".obs-room.folio-cinema-lounge"), "globals.css gives the floating room roomy padding");
+    // The field must be light (warm paper), not a full-bleed black page.
+    const fieldBlock = globalsCss.slice(globalsCss.indexOf(".obs-field {"), globalsCss.indexOf(".obs-room {"));
+    assert.ok(fieldBlock.includes("--ds-warm-paper"), "the outer field is a light atelier canvas, not black");
     assert.ok(globalsCss.includes(".obs-meridian--hero"), "landing hero meridian defined");
     assert.ok(shell.includes("<ObsMeridian hero>"), "landing renders the hero meridian");
+  });
+
+  test("F6. hero copy is plain user-facing (no internal trip-state language)", () => {
+    assert.ok(shell.includes("Browse flights, hotels, restaurants, and attractions"), "plain browse copy present");
+    assert.ok(!shell.includes("no trip required"), "internal 'no trip required' framing removed");
   });
 });
 

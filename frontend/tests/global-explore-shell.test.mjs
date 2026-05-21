@@ -118,8 +118,9 @@ test('ExploreShell does not reference tripId or TripBuilder', () => {
   assert.doesNotMatch(exploreShell, /TripBuilder/);
 });
 
-test('ExploreShell heading says Explore with no-trip message', () => {
-  assert.match(exploreShell, /no trip required/i);
+test('ExploreShell hero uses plain browse copy (no internal trip-state language)', () => {
+  assert.match(exploreShell, /Browse flights, hotels, restaurants, and attractions/i);
+  assert.doesNotMatch(exploreShell, /no trip required/i);
 });
 
 // ── 3. ExploreResultContext types ──────────────────────────────────────────
