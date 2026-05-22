@@ -8458,7 +8458,10 @@
     .folio-cat-chip,
     .folio-group-seg-btn,
     .folio-btn-primary,
-    .folio-btn-ghost { transition: none; }
+    .folio-btn-ghost,
+    .folio-note-add-link,
+    .folio-note-edit-link,
+    .folio-note-textarea { transition: none; }
   }
 
   /* ════════════════════════════════════════════════════════════════════
@@ -9095,6 +9098,110 @@
     text-transform: uppercase;
     color: var(--ds-folio-ink-mist);
     font-weight: 600;
+  }
+
+  /* ── Note editor — inline, lightweight, mobile-safe ── */
+  .folio-note-view {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ds-space-1);
+    margin-top: var(--ds-space-2);
+  }
+  .folio-note-label {
+    font-size: 0.5625rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--ds-folio-ink-mist);
+    margin: 0;
+  }
+  .folio-note-text {
+    font-size: 0.75rem;
+    color: var(--ds-folio-ink);
+    line-height: 1.5;
+    margin: 0;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    max-width: 100%;
+  }
+  .folio-note-add-link,
+  .folio-note-edit-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ds-space-1);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--ds-ember-brass);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: none;
+    transition: opacity 180ms ease;
+    min-height: 24px;
+  }
+  .folio-note-add-link:hover,
+  .folio-note-edit-link:hover { opacity: 0.72; }
+  .folio-note-add-link:focus-visible,
+  .folio-note-edit-link:focus-visible { outline: 2px solid var(--ds-sandstone-gold); outline-offset: 2px; border-radius: 3px; }
+
+  .folio-note-editor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ds-space-2);
+    margin-top: var(--ds-space-2);
+    padding: var(--ds-space-3);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--ds-bone) 70%, white);
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 30%, var(--ds-hairline));
+  }
+  .folio-note-textarea {
+    width: 100%;
+    resize: none;
+    border-radius: 8px;
+    border: 1px solid var(--ds-hairline);
+    background: var(--ds-warm-paper);
+    color: var(--ds-folio-ink);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    padding: var(--ds-space-2) var(--ds-space-3);
+    font-family: inherit;
+    transition: border-color 180ms ease;
+    min-height: 64px;
+    max-height: 120px;
+    overflow-y: auto;
+    box-sizing: border-box;
+  }
+  .folio-note-textarea:focus { outline: none; border-color: var(--ds-ember-brass); }
+  .folio-note-textarea:disabled { opacity: 0.55; }
+  .folio-note-textarea::placeholder { color: var(--ds-folio-ink-mist); }
+  .folio-note-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--ds-space-2);
+    flex-wrap: wrap;
+  }
+  .folio-note-save-btn {
+    min-height: 36px;
+    padding: var(--ds-space-1) var(--ds-space-4);
+    font-size: 0.8125rem;
+  }
+  .folio-note-error {
+    font-size: 0.6875rem;
+    color: var(--ds-whisper-coral);
+    margin: 0;
+  }
+
+  /* "Your note" row in compare sheet — slightly more prominent than other rows */
+  .folio-compare-your-note .folio-compare-row-k {
+    color: color-mix(in srgb, var(--ds-ember-brass) 80%, var(--ds-folio-ink-mist));
+  }
+  .folio-compare-your-note {
+    color: var(--ds-folio-ink);
+    background: color-mix(in srgb, var(--ds-sandstone-gold) 7%, transparent);
+    border-radius: 6px;
+    padding: var(--ds-space-1) var(--ds-space-2);
+    margin: 0 calc(-1 * var(--ds-space-2));
   }
 
   /* ── Desktop: two-leaf folio (rail + canvas) with a gilt binding spine ── */

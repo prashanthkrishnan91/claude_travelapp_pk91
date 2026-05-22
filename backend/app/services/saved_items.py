@@ -12,7 +12,7 @@ from fastapi import HTTPException, status
 from supabase import Client
 
 from app.core.supabase_retry import supabase_execute as _supabase_execute
-from app.models.saved_items import VALID_VERTICALS, SavedItem, SavedItemCreate
+from app.models.saved_items import VALID_VERTICALS, SavedItem, SavedItemCreate, SavedItemNoteUpdate
 
 SAVED_ITEMS_TABLE = "saved_items"
 logger = logging.getLogger(__name__)
@@ -103,6 +103,26 @@ class SavedItemsService:
             query = query.eq("vertical", vertical)
         result = _supabase_execute(lambda: query.execute(), context="saved_items.list")
         return [SavedItem(**row) for row in result.data]
+
+    def update_note(self, item_id: UUID, payload: SavedItemNoteUpdate, user_id: UUID) -> SavedItem:
+        """Update only the note field of a saved item owned by the current user.
+
+        Trims the note; an empty/whitespace note is stored as NULL.
+        404 if the item does not exist or is not owned by this user.
+        """
+        self._ensure_owned(item_id, user_id)
+        result = _supabase_execute(
+            lambda: (
+                self.db.table(SAVED_ITEMS_TABLE)
+                .update({"note": payload.note})
+                .eq("id", str(item_id))
+                .eq("user_id", str(user_id))
+                .select("*")
+                .execute()
+            ),
+            context="saved_items.update_note",
+        )
+        return SavedItem(**result.data[0])
 
     def delete(self, item_id: UUID, user_id: UUID) -> None:
         """Soft-delete: set status='deleted'. 404 if not found or not owned."""

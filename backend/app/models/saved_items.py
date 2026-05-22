@@ -42,6 +42,21 @@ class SavedItem(BaseModel):
     display_snapshot: Dict[str, Any] = Field(default_factory=dict)
     search_context: Dict[str, Any] = Field(default_factory=dict)
     provenance: Dict[str, Any] = Field(default_factory=dict)
+    note: Optional[str] = None
     status: SavedItemStatus = "active"
     created_at: str
     updated_at: str
+
+
+class SavedItemNoteUpdate(BaseModel):
+    """Payload for PATCH /saved-items/{id}/note. Only updates the note field."""
+
+    note: Optional[str] = None
+
+    @field_validator("note")
+    @classmethod
+    def trim_note(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        trimmed = v.strip()
+        return trimmed if trimmed else None
