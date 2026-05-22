@@ -17,7 +17,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.models.saved_items import SavedItemCreate
+from app.models.saved_items import SavedItemCreate, SavedItemNoteUpdate
 from app.services.saved_items import SavedItemsService
 
 
@@ -400,3 +400,88 @@ def test_flight_search_context_has_passengers_not_guests():
 def test_display_name_blank_rejected():
     with pytest.raises(Exception):
         SavedItemCreate(vertical="restaurant", display_name="   ")
+
+
+# ---------------------------------------------------------------------------
+# Saved Notes v1 — update_note tests
+# ---------------------------------------------------------------------------
+
+def test_update_note_sets_note():
+    db = _DB()
+    svc = SavedItemsService(db)
+    user = uuid4()
+    item = svc.create(_place_payload(), user)
+    updated = svc.update_note(item.id, SavedItemNoteUpdate(note="great rooftop"), user)
+    assert updated.note == "great rooftop"
+    assert updated.id == item.id
+
+
+def test_update_note_trims_whitespace():
+    db = _DB()
+    svc = SavedItemsService(db)
+    user = uuid4()
+    item = svc.create(_place_payload(), user)
+    updated = svc.update_note(item.id, SavedItemNoteUpdate(note="  near hotel  "), user)
+    assert updated.note == "near hotel"
+
+
+def test_update_note_clear_with_empty_string():
+    db = _DB()
+    svc = SavedItemsService(db)
+    user = uuid4()
+    item = svc.create(_place_payload(), user)
+    svc.update_note(item.id, SavedItemNoteUpdate(note="first note"), user)
+    cleared = svc.update_note(item.id, SavedItemNoteUpdate(note=""), user)
+    assert cleared.note is None
+
+
+def test_update_note_clear_with_none():
+    db = _DB()
+    svc = SavedItemsService(db)
+    user = uuid4()
+    item = svc.create(_place_payload(), user)
+    svc.update_note(item.id, SavedItemNoteUpdate(note="anniversary dinner"), user)
+    cleared = svc.update_note(item.id, SavedItemNoteUpdate(note=None), user)
+    assert cleared.note is None
+
+
+def test_update_note_unauthorized_raises_404():
+    db = _DB()
+    svc = SavedItemsService(db)
+    owner = uuid4()
+    intruder = uuid4()
+    item = svc.create(_place_payload(), owner)
+    import fastapi
+    with pytest.raises((fastapi.HTTPException, Exception)):
+        svc.update_note(item.id, SavedItemNoteUpdate(note="intruder note"), intruder)
+
+
+def test_update_note_not_found_raises_404():
+    db = _DB()
+    svc = SavedItemsService(db)
+    user = uuid4()
+    import fastapi
+    with pytest.raises((fastapi.HTTPException, Exception)):
+        svc.update_note(uuid4(), SavedItemNoteUpdate(note="ghost note"), user)
+
+
+def test_update_note_returns_updated_saved_item_shape():
+    """update_note returns a full SavedItem (not just the note field)."""
+    db = _DB()
+    svc = SavedItemsService(db)
+    user = uuid4()
+    item = svc.create(_place_payload(), user)
+    updated = svc.update_note(item.id, SavedItemNoteUpdate(note="bar with a view"), user)
+    assert updated.vertical == item.vertical
+    assert updated.display_name == item.display_name
+    assert updated.status == "active"
+    assert updated.note == "bar with a view"
+
+
+def test_note_field_present_on_newly_created_item():
+    """Existing rows work with note=None — no schema error."""
+    db = _DB()
+    svc = SavedItemsService(db)
+    user = uuid4()
+    item = svc.create(_place_payload(), user)
+    assert item.note is None

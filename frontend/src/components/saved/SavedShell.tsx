@@ -23,7 +23,7 @@ import {
   GitCompare,
   X,
 } from "lucide-react";
-import { listSavedItems, deleteSavedItem, fetchTrips, addSavedItemToTrip } from "@/lib/api";
+import { listSavedItems, deleteSavedItem, fetchTrips, addSavedItemToTrip, updateSavedItemNote } from "@/lib/api";
 import type { SavedItem, SavedItemVertical, Trip } from "@/types";
 import { CreateTripFromSavedModal } from "./CreateTripFromSavedModal";
 
@@ -119,6 +119,124 @@ function formatSavedDate(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+// ── Note editor (inline, mobile-safe) ────────────────────────────────────────
+
+type NoteState = "view" | "editing" | "saving" | "error";
+
+function NoteEditor({
+  itemId,
+  initialNote,
+  onSaved,
+}: {
+  itemId: string;
+  initialNote: string | null | undefined;
+  onSaved: (itemId: string, note: string | null) => void;
+}) {
+  const note = initialNote ?? null;
+  const [state, setState] = useState<NoteState>("view");
+  const [draft, setDraft] = useState(note ?? "");
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  async function handleSave() {
+    setState("saving");
+    setSaveError(null);
+    const trimmed = draft.trim();
+    try {
+      await updateSavedItemNote(itemId, trimmed || null);
+      onSaved(itemId, trimmed || null);
+      setState("view");
+    } catch {
+      setSaveError("Could not save note. Please try again.");
+      setState("error");
+    }
+  }
+
+  function handleCancel() {
+    setDraft(note ?? "");
+    setSaveError(null);
+    setState("view");
+  }
+
+  function handleEdit() {
+    setDraft(note ?? "");
+    setState("editing");
+  }
+
+  if (state === "view") {
+    return (
+      <div className="folio-note-view" data-testid="note-view">
+        {note ? (
+          <>
+            <p className="folio-note-label">Your note</p>
+            <p className="folio-note-text" data-testid="note-text">{note}</p>
+            <button
+              type="button"
+              onClick={handleEdit}
+              className="folio-note-edit-link"
+              data-testid="note-edit-btn"
+            >
+              Edit note
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={handleEdit}
+            className="folio-note-add-link"
+            data-testid="note-add-btn"
+          >
+            + Add note
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="folio-note-editor" data-testid="note-editor">
+      <p className="folio-note-label">Your note</p>
+      <textarea
+        className="folio-note-textarea"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder="e.g. great rooftop, near hotel, anniversary dinner"
+        rows={2}
+        maxLength={500}
+        aria-label="Your note for this saved place"
+        data-testid="note-textarea"
+        disabled={state === "saving"}
+        autoFocus
+      />
+      {saveError && (
+        <p className="folio-note-error" data-testid="note-save-error">{saveError}</p>
+      )}
+      <div className="folio-note-actions">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={state === "saving"}
+          className="folio-btn-primary folio-note-save-btn min-h-[44px]"
+          data-testid="note-save-btn"
+        >
+          {state === "saving" ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+          ) : null}
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={handleCancel}
+          disabled={state === "saving"}
+          className="folio-btn-ghost min-h-[44px]"
+          data-testid="note-cancel-btn"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // ── Add-to-Trip state ─────────────────────────────────────────────────────────
@@ -287,6 +405,7 @@ function PlaceDossierCard({
   onTogglePick,
   onRemove,
   onCreateTrip,
+  onNoteUpdate,
 }: {
   item: SavedItem;
   trips: Trip[];
@@ -295,6 +414,7 @@ function PlaceDossierCard({
   onTogglePick: (id: string) => void;
   onRemove: (id: string) => void;
   onCreateTrip: (item: SavedItem) => void;
+  onNoteUpdate: (id: string, note: string | null) => void;
 }) {
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
@@ -434,6 +554,12 @@ function PlaceDossierCard({
 
           <p className="folio-saved-date">Saved {savedDate}</p>
 
+          <NoteEditor
+            itemId={item.id}
+            initialNote={item.note}
+            onSaved={onNoteUpdate}
+          />
+
           <PlanningBridge
             item={item}
             trips={trips}
@@ -503,10 +629,12 @@ function FlightCard({
   item,
   onRemove,
   onCreateTrip,
+  onNoteUpdate,
 }: {
   item: SavedItem;
   onRemove: (id: string) => void;
   onCreateTrip: (item: SavedItem) => void;
+  onNoteUpdate: (id: string, note: string | null) => void;
 }) {
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
@@ -580,6 +708,12 @@ function FlightCard({
 
           <p className="folio-saved-date">Saved {savedDate}</p>
 
+          <NoteEditor
+            itemId={item.id}
+            initialNote={item.note}
+            onSaved={onNoteUpdate}
+          />
+
           {/* Flights are not addable to an existing trip and have no map; their
               real planning path is Create Trip. No Compare for flights. */}
           <div className="folio-dossier-actions" data-testid="saved-planning-bridge">
@@ -634,6 +768,7 @@ function SavedItemCard(props: {
   onTogglePick: (id: string) => void;
   onRemove: (id: string) => void;
   onCreateTrip: (item: SavedItem) => void;
+  onNoteUpdate: (id: string, note: string | null) => void;
 }) {
   // Flights are not addable to an existing trip (no leg-splitting from Saved),
   // so they use the dedicated boarding-pass card whose only planning path is
@@ -641,7 +776,12 @@ function SavedItemCard(props: {
   const canAddToTrip = props.item.vertical !== "flight";
   if (!canAddToTrip) {
     return (
-      <FlightCard item={props.item} onRemove={props.onRemove} onCreateTrip={props.onCreateTrip} />
+      <FlightCard
+        item={props.item}
+        onRemove={props.onRemove}
+        onCreateTrip={props.onCreateTrip}
+        onNoteUpdate={props.onNoteUpdate}
+      />
     );
   }
   return <PlaceDossierCard {...props} />;
@@ -751,6 +891,7 @@ function CompareSheet({
             const rating = snapNum(it, "rating");
             const source = sourceLabel(it);
             const savedQuery = whyItMattered(it);
+            const userNote = it.note ?? null;
             return (
               <div key={it.id} className="folio-compare-col" data-testid="compare-col">
                 <div className="folio-compare-col-plate" aria-hidden="true">
@@ -765,9 +906,17 @@ function CompareSheet({
                       {where}
                     </div>
                   )}
-                  {/* Two honest saved datapoints: provenance source, and the
-                      saved search query. Each shown only when present; never an
-                      invented note. */}
+                  {/* "Your note" is the user's own persisted note — shown prominently
+                      when present, omitted when absent. Never conflated with the saved
+                      search query ("Saved context"). */}
+                  {userNote && (
+                    <div className="folio-compare-row folio-compare-your-note" data-testid="compare-your-note">
+                      <span className="folio-compare-row-k">Your note</span>
+                      {userNote}
+                    </div>
+                  )}
+                  {/* Source and Saved context are distinct from the user note. Each
+                      shown only when present; never invented. */}
                   {source && (
                     <div className="folio-compare-row" data-testid="compare-source">
                       <span className="folio-compare-row-k">Source</span>
@@ -812,6 +961,7 @@ function GroupSection({
   onTogglePick,
   onRemove,
   onCreateTrip,
+  onNoteUpdate,
 }: {
   label: string | null;
   testKey: string;
@@ -822,6 +972,7 @@ function GroupSection({
   onTogglePick: (id: string) => void;
   onRemove: (id: string) => void;
   onCreateTrip: (item: SavedItem) => void;
+  onNoteUpdate: (id: string, note: string | null) => void;
 }) {
   if (items.length === 0) return null;
   return (
@@ -849,6 +1000,7 @@ function GroupSection({
             onTogglePick={onTogglePick}
             onRemove={onRemove}
             onCreateTrip={onCreateTrip}
+            onNoteUpdate={onNoteUpdate}
           />
         ))}
       </div>
@@ -951,6 +1103,12 @@ export function SavedShell() {
 
   const handleCreateTrip = useCallback((item: SavedItem) => {
     setCreateTripFor(item);
+  }, []);
+
+  const handleNoteUpdate = useCallback((id: string, note: string | null) => {
+    setItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, note: note ?? undefined } : i))
+    );
   }, []);
 
   const compareFull = compareIds.size >= COMPARE_MAX;
@@ -1151,6 +1309,7 @@ export function SavedShell() {
                     onTogglePick={handleTogglePick}
                     onRemove={handleRemove}
                     onCreateTrip={handleCreateTrip}
+                    onNoteUpdate={handleNoteUpdate}
                   />
                 ))}
               </div>

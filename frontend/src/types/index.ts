@@ -415,6 +415,8 @@ export interface SavedItem {
   displaySnapshot: Record<string, unknown>;
   searchContext: Record<string, unknown>;
   provenance: Record<string, unknown>;
+  /** Persisted user note ("great rooftop", "near hotel", etc.). Null when unset. */
+  note?: string | null;
   status: SavedItemStatus;
   createdAt: string;
   updatedAt: string;

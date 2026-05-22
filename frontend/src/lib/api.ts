@@ -2518,6 +2518,20 @@ export async function deleteSavedItem(itemId: string): Promise<void> {
   await apiFetch<void>(`/saved-items/${itemId}`, { method: "DELETE" });
 }
 
+/**
+ * Update only the note field of a saved item. Pass null or empty string to clear.
+ * Returns the updated SavedItem.
+ */
+export async function updateSavedItemNote(
+  itemId: string,
+  note: string | null
+): Promise<SavedItem> {
+  return apiFetch<SavedItem>(`/saved-items/${itemId}/note`, {
+    method: "PATCH",
+    body: JSON.stringify({ note }),
+  });
+}
+
 // ─── Saved → Trip Conversion (Stage 3 v2) ────────────────────────────────────
 
 const SAVED_VERTICAL_TO_ITEM_TYPE: Record<string, string> = {

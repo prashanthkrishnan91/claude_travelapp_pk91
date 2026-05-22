@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-22 (Saved Private Folio v1 — /saved reskinned to the light paper-folio room; current branch)
+Last updated: 2026-05-22 (Saved Notes v1 — persisted user notes for saved items; current branch)
 
 ## Purpose
 
@@ -9,6 +9,23 @@ This file is **current operational state**, not a historical log. It must stay c
 ## Current product stage
 
 **Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Next visible-adoption candidate: trip detail / Journey Desk.
+
+### Saved Notes v1 — persisted user notes for saved items (current branch)
+
+Adds a persisted user note to every saved item. Users can add, edit, and clear notes inline in the Saved Folio. Notes are stored in the database and shown in the compare sheet separately from "Saved context" (the search query).
+
+- **Migration:** `backend/db/migrations/007_saved_items_note.sql` — adds nullable `note text` column to `saved_items` with `ADD COLUMN IF NOT EXISTS` (safe re-run, non-destructive).
+- **Backend model:** `SavedItemNoteUpdate` (Pydantic) with `trim_note` field_validator — strips whitespace, null on empty. `SavedItem` model gains `note: Optional[str] = None`.
+- **Backend service:** `SavedItemsService.update_note(item_id, payload, user_id)` — calls `_ensure_owned` for ownership check, then updates only the `note` column, returns full `SavedItem`.
+- **Backend route:** `PATCH /saved-items/{item_id}/note` — `response_model=SavedItem`; uses `SavedItemNoteUpdate` payload.
+- **Frontend type:** `SavedItem.note?: string | null` added to `frontend/src/types/index.ts`.
+- **Frontend API:** `updateSavedItemNote(itemId, note)` exported from `api.ts` — PATCHes `/saved-items/${itemId}/note` with JSON body.
+- **SavedShell.tsx — NoteEditor:** inline component with four states (view/editing/saving/error). View state: "Your note" label + text + "Edit note" button when note exists; "+ Add note" link when absent. Edit state: textarea (500 char max, autoFocus), save/cancel buttons. On save: calls `updateSavedItemNote`, calls `onSaved` callback, handles clear (empty → null). All testids: `note-view`, `note-text`, `note-edit-btn`, `note-add-btn`, `note-editor`, `note-textarea`, `note-save-btn`, `note-cancel-btn`, `note-save-error`.
+- **SavedShell.tsx — card integration:** `NoteEditor` rendered in `PlaceDossierCard` and `FlightCard`. `onNoteUpdate` callback propagated `NoteEditor → PlaceDossierCard/FlightCard → SavedItemCard → GroupSection → SavedShell`. `handleNoteUpdate` in `SavedShell` calls `setItems` to update in-memory state without reload.
+- **Compare sheet:** "Your note" row (`compare-your-note` testid, conditional `userNote && (`) derived from `it.note`. Rendered *before* the existing "Saved context" row (`compare-note` testid, from `savedQuery`). Two independent rows, separate testids, separate data sources. No conflation.
+- **CSS:** 9 note primitives in `globals.css` — `.folio-note-view`, `.folio-note-label`, `.folio-note-text`, `.folio-note-add-link`, `.folio-note-edit-link`, `.folio-note-editor`, `.folio-note-textarea`, `.folio-note-actions`, `.folio-note-save-btn`, `.folio-note-error`, `.folio-compare-your-note` — all using `var(--ds-*)` tokens, no raw hex. Reduced-motion block covers folio-note entries.
+- **Out of scope:** no note capture during save flows, no collaboration, no AI summarization, no Trip/Journey Desk changes, no fake notes.
+- **Tests:** 8 new backend tests (update_note success/trim/clear/unauthorized/not-found/shape, note field on new item). 55 new frontend tests (sections A–I: type, API helper, migration, backend model/service/route, NoteEditor UI, compare separation, regression guard, CSS primitives, no fake data). **3166+ frontend tests, 0 failures; 27 backend tests, 0 failures.**
 
 ### Saved Private Folio v1 — /saved light paper-folio reskin (current branch)
 
@@ -143,7 +160,7 @@ Two Level 2 user-visible regressions fixed after PR #460 merged:
 **3139 frontend tests, 0 failures.** No backend suite run (no pytest in this environment); tsc/next build not run locally (node_modules absent) — CI `certify` validates.
 
 ### Next step
-Saved Private Folio v1 is the current branch. After PR merges, next visible-adoption slice: trip detail / Journey Desk (the "final itinerary desk" in the room mental model), or polish passes on the three outside-trip rooms.
+Saved Notes v1 is the current branch (PR open). After PR merges: consider editable note capture during save flows, or move to the next visible-adoption slice — trip detail / Journey Desk (the "final itinerary desk" in the room mental model).
 
 ## Current architecture / runtime state
 

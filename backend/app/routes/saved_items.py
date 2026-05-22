@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 
 from app.core.deps import DB, CurrentUserID
-from app.models.saved_items import SavedItem, SavedItemCreate, SavedItemVertical
+from app.models.saved_items import SavedItem, SavedItemCreate, SavedItemNoteUpdate, SavedItemVertical
 from app.services.saved_items import SavedItemsService
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,22 @@ def list_saved_items(
     """List active saved items for the current user, optionally filtered by vertical."""
     svc = SavedItemsService(db)
     return svc.list_active(user_id, vertical=vertical)
+
+
+@router.patch("/{item_id}/note", response_model=SavedItem)
+def update_saved_item_note(
+    item_id: UUID,
+    payload: SavedItemNoteUpdate,
+    db: DB,
+    user_id: CurrentUserID,
+) -> SavedItem:
+    """Update only the note field of a saved item owned by the current user.
+
+    Accepts { note: string | null }. An empty or whitespace note clears to null.
+    Returns the updated saved item. 404 if not found or not owned by this user.
+    """
+    svc = SavedItemsService(db)
+    return svc.update_note(item_id, payload, user_id)
 
 
 @router.delete("/{item_id}", status_code=204)
