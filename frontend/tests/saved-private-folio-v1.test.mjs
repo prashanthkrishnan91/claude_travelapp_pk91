@@ -154,6 +154,47 @@ test("AppShell makes /saved an immersive paper room", () => {
 
 // ── No backend / provider / new deps drift ───────────────────────────────────
 
+// ── Canonical view pipeline (no stale filter/group remnants) ─────────────────
+
+test("visible collection is derived fresh from the full saved-items array", () => {
+  // A single pure pipeline: filter the FULL array, then group. Never reads a
+  // previously filtered/grouped result.
+  assert.match(savedShell, /function buildVisibleGroups\(\s*all: SavedItem\[\]/);
+  assert.match(savedShell, /const filtered = activeCat === "all" \? all : all\.filter/);
+  // component derives via the pipeline, recomputed on every input change
+  assert.match(savedShell, /buildVisibleGroups\(items, activeCat, groupMode\)/);
+  assert.match(savedShell, /\[items, activeCat, groupMode\]/);
+  // no intermediate `filtered`/`groups` state memo feeding the next transform
+  assert.ok(!savedShell.includes("[filtered, groupMode]"), "groups must not derive from a filtered memo");
+});
+
+test("group sections are keyed by full input identity (no reconciliation remnants)", () => {
+  assert.ok(
+    savedShell.includes("`${activeCat}:${groupMode}:${g.key}`"),
+    "GroupSection key must encode activeCat + groupMode + group key",
+  );
+});
+
+// ── Card anatomy: full-height left spine, no Card.Identity flex clip ──────────
+
+test("dossier card owns its plate|body grid (no Card.Identity flex wrapper)", () => {
+  assert.ok(!savedShell.includes("Card.Identity"), "must not wrap cards in Card.Identity flex row");
+  assert.ok(!savedShell.includes('from "@/components/ui/Card"'), "Card import removed");
+  // the card itself is the grid; the plate is a full-height rail
+  assert.match(globals, /\.folio-dossier-card\s*\{[\s\S]*display:\s*grid;[\s\S]*grid-template-columns:\s*96px 1fr/);
+  assert.match(globals, /\.folio-dossier-plate\s*\{[\s\S]*min-height:\s*100%/);
+});
+
+// ── Warm gilt/amber CTA palette (no blue/marine on this surface) ─────────────
+
+test("primary CTA uses the warm gilt/amber folio palette, not marine/blue", () => {
+  assert.match(globals, /\.folio-btn-primary\s*\{[\s\S]*var\(--ds-sandstone-gold\)[\s\S]*var\(--ds-ember-brass\)/);
+  // the entire Saved folio section is free of marine/blue accents
+  const secStart = globals.indexOf("SAVED PRIVATE FOLIO");
+  const section = globals.slice(secStart);
+  assert.ok(!section.includes("--ds-marine"), "no marine/blue tokens in the Saved folio section");
+});
+
 test("SavedShell adds no backend, provider, or search imports", () => {
   for (const bad of ["callConciergeSearch", "searchRestaurants", "TripBuilder", "provider_registry"]) {
     assert.ok(!savedShell.includes(bad), `must not import ${bad}`);

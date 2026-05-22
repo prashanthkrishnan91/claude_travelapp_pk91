@@ -27,7 +27,6 @@ import {
 import { listSavedItems, deleteSavedItem, fetchTrips, addSavedItemToTrip } from "@/lib/api";
 import type { SavedItem, SavedItemVertical, Trip } from "@/types";
 import { CreateTripFromSavedModal } from "./CreateTripFromSavedModal";
-import { Card } from "@/components/ui/Card";
 
 // ── Vertical config ───────────────────────────────────────────────────────────
 
@@ -376,7 +375,7 @@ function PlaceDossierCard({
       data-testid="saved-item-card"
       data-picked={picked ? "true" : "false"}
     >
-      <Card.Identity>
+      <>
         {/* Typeset plate — no fabricated photo. Carries the category glyph and,
             when known, a vertical source spine tab. */}
         <div className="folio-dossier-plate" aria-hidden="true">
@@ -519,7 +518,7 @@ function PlaceDossierCard({
             </p>
           )}
         </div>
-      </Card.Identity>
+      </>
     </article>
   );
 }
@@ -575,7 +574,7 @@ function FlightCard({
       data-testid="saved-item-card"
       data-flight-card="true"
     >
-      <Card.Identity>
+      <>
         {/* Full-width route band — codes never crop, wrap, or fight a source rail */}
         <div className="folio-flight-band" data-testid="flight-route-band">
           <span className="folio-flight-ap">{origin ?? "—"}</span>
@@ -646,7 +645,7 @@ function FlightCard({
             </p>
           )}
         </div>
-      </Card.Identity>
+      </>
     </article>
   );
 }
@@ -866,6 +865,56 @@ function GroupSection({
   );
 }
 
+// ── Canonical view pipeline ───────────────────────────────────────────────────
+
+type VisibleGroup = { label: string | null; key: string; items: SavedItem[] };
+
+/**
+ * visibleGroups = applyGrouping(applyFilter(allSavedItems, activeFilter), activeGroup)
+ *
+ * The visible collection is ALWAYS derived fresh from the full saved-items
+ * array — filter first, then group. It never reads from a previously filtered
+ * or grouped result, so switching filter/group can never leave stale remnants
+ * and no refresh is ever required to reset state.
+ */
+function buildVisibleGroups(
+  all: SavedItem[],
+  activeCat: "all" | SavedItemVertical,
+  groupMode: GroupMode,
+): VisibleGroup[] {
+  const filtered = activeCat === "all" ? all : all.filter((i) => i.vertical === activeCat);
+
+  if (groupMode === "category") {
+    return VERTICAL_CONFIG.map((cfg) => ({
+      label: cfg.label,
+      key: cfg.key as string,
+      items: filtered.filter((i) => i.vertical === cfg.key),
+    })).filter((g) => g.items.length > 0);
+  }
+
+  if (groupMode === "city") {
+    const byCity = new Map<string, SavedItem[]>();
+    for (const it of filtered) {
+      const city = cityOf(it);
+      if (!byCity.has(city)) byCity.set(city, []);
+      byCity.get(city)!.push(it);
+    }
+    return Array.from(byCity.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([city, list]) => ({
+        label: city,
+        key: city.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        items: list,
+      }));
+  }
+
+  // recent — newest first, single ungrouped section
+  const sorted = [...filtered].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+  return [{ label: null, key: "recent", items: sorted }];
+}
+
 // ── SavedShell ─────────────────────────────────────────────────────────────────
 
 export function SavedShell() {
@@ -942,41 +991,12 @@ export function SavedShell() {
     return c;
   }, [items]);
 
-  const filtered = useMemo(
-    () => (activeCat === "all" ? items : items.filter((i) => i.vertical === activeCat)),
-    [items, activeCat],
+  // Canonical: derive the visible groups fresh from the full `items` array on
+  // every filter/group change (filter → group). No intermediate state is reused.
+  const visibleGroups = useMemo(
+    () => buildVisibleGroups(items, activeCat, groupMode),
+    [items, activeCat, groupMode],
   );
-
-  // Build groups for the active grouping mode.
-  const groups = useMemo(() => {
-    if (groupMode === "category") {
-      return VERTICAL_CONFIG.map((cfg) => ({
-        label: cfg.label,
-        testKey: cfg.key as string,
-        items: filtered.filter((i) => i.vertical === cfg.key),
-      })).filter((g) => g.items.length > 0);
-    }
-    if (groupMode === "city") {
-      const byCity = new Map<string, SavedItem[]>();
-      for (const it of filtered) {
-        const city = cityOf(it);
-        if (!byCity.has(city)) byCity.set(city, []);
-        byCity.get(city)!.push(it);
-      }
-      return Array.from(byCity.entries())
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([city, list]) => ({
-          label: city,
-          testKey: city.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-          items: list,
-        }));
-    }
-    // recent — newest first, no group headers
-    const sorted = [...filtered].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
-    return [{ label: null as string | null, testKey: "recent", items: sorted }];
-  }, [filtered, groupMode]);
 
   const compareItems = useMemo(
     () => items.filter((i) => compareIds.has(i.id)),
@@ -1128,11 +1148,11 @@ export function SavedShell() {
 
             {!loading && !error && hasAny && (
               <div className="folio-collection">
-                {groups.map((g) => (
+                {visibleGroups.map((g) => (
                   <GroupSection
-                    key={g.testKey}
+                    key={`${activeCat}:${groupMode}:${g.key}`}
                     label={g.label}
-                    testKey={g.testKey}
+                    testKey={g.key}
                     items={g.items}
                     trips={trips}
                     compareIds={compareIds}
