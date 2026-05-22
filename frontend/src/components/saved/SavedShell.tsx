@@ -177,8 +177,6 @@ function PlanningBridge({
   const [addedToTripName, setAddedToTripName] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
 
-  const name = snapStr(item, "name") ?? item.displayName;
-
   async function handleAddToTrip(trip: Trip) {
     setAddState("adding");
     setAddError(null);
