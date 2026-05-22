@@ -496,15 +496,15 @@ describe("Phase 8N-B: Saved Ideas boutique adoption (direct, not token-only)", (
   it("46. SavedItemCard applies folio-collection-card (Slice 4B: replaced saved-folio-card)", () => {
     // saved-folio-card was replaced in Slice 4B by folio-collection-card (single intentional composition).
     assert.ok(
-      savedShell.includes("folio-collection-card"),
-      "SavedShell must apply folio-collection-card to SavedItemCard (Slice 4B replaced saved-folio-card)"
+      savedShell.includes("folio-dossier-card"),
+      "SavedShell must apply folio-dossier-card to place cards (Private Folio v1)"
     );
   });
 
   it("47. SavedShell applies atelier-transition to outer wrapper", () => {
     assert.ok(
-      savedShell.includes("atelier-transition"),
-      "SavedShell outer wrapper must apply atelier-transition for page entrance"
+      savedShell.includes("folio-private-desk"),
+      "SavedShell outer wrapper is the folio-private-desk immersive surface (entrance via AppShell atelier-transition)"
     );
   });
 

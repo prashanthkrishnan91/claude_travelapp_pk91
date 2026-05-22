@@ -269,8 +269,8 @@ describe("Slice 4B: ExploreShell visual enforcement", () => {
 describe("Slice 4B: SavedShell visual enforcement", () => {
   it("22. SavedShell outer wrapper uses folio-cinema-collection", () => {
     assert.ok(
-      savedShell.includes("folio-cinema-collection"),
-      "SavedShell outer wrapper must use folio-cinema-collection (curated collection shell)"
+      savedShell.includes("folio-private-desk"),
+      "SavedShell outer wrapper must use folio-private-desk (Private Folio v1, paper world)"
     );
   });
 
@@ -283,8 +283,8 @@ describe("Slice 4B: SavedShell visual enforcement", () => {
 
   it("24. SavedShell item card uses folio-collection-card", () => {
     assert.ok(
-      savedShell.includes("folio-collection-card"),
-      "SavedShell SavedItemCard must use folio-collection-card (single intentional card composition)"
+      savedShell.includes("folio-dossier-card"),
+      "SavedShell place cards must use folio-dossier-card (Private Folio v1)"
     );
   });
 

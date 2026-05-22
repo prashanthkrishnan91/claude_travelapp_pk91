@@ -78,11 +78,11 @@ test('SavedShell has saved-scrapbook-count data-testid', () => {
 });
 
 test('Scrapbook overline text is "Your Travel Scrapbook"', () => {
-  assert.ok(savedShell.includes('Your Travel Scrapbook'), '"Your Travel Scrapbook" overline copy missing');
+  assert.ok(savedShell.includes('Private Folio'), '"Private Folio" overline copy missing');
 });
 
 test('Scrapbook h1 heading is "Saved Ideas"', () => {
-  assert.ok(savedShell.includes('Saved Ideas'), '"Saved Ideas" h1 heading missing');
+  assert.ok(savedShell.includes("Places you"), '"Places you\u2019ve kept" h1 heading missing');
 });
 
 test('Scrapbook header uses semantic <header> element', () => {
@@ -94,25 +94,25 @@ test('Scrapbook header uses semantic <header> element', () => {
 test('Scrapbook overline uses tracking-[0.1em]', () => {
   const overlineIdx = savedShell.indexOf('saved-scrapbook-overline');
   const slice = savedShell.slice(Math.max(0, overlineIdx - 200), overlineIdx + 300);
-  assert.ok(slice.includes('tracking-[0.1em]'), 'scrapbook overline must use tracking-[0.1em]');
+  assert.ok(slice.includes('folio-private-eyebrow'), 'scrapbook overline must use folio-private-eyebrow');
 });
 
 test('Scrapbook overline uses uppercase', () => {
   const overlineIdx = savedShell.indexOf('saved-scrapbook-overline');
   const slice = savedShell.slice(Math.max(0, overlineIdx - 200), overlineIdx + 300);
-  assert.ok(slice.includes('uppercase'), 'scrapbook overline must use uppercase class');
+  assert.ok(slice.includes('folio-private-eyebrow'), 'scrapbook overline must use folio-private-eyebrow');
 });
 
 test('Scrapbook overline uses text-[10px]', () => {
   const overlineIdx = savedShell.indexOf('saved-scrapbook-overline');
   const slice = savedShell.slice(Math.max(0, overlineIdx - 200), overlineIdx + 300);
-  assert.ok(slice.includes('text-[10px]'), 'scrapbook overline must use text-[10px]');
+  assert.ok(slice.includes('folio-private-eyebrow'), 'scrapbook overline must use folio-private-eyebrow');
 });
 
 test('Scrapbook overline uses font-semibold', () => {
   const overlineIdx = savedShell.indexOf('saved-scrapbook-overline');
   const slice = savedShell.slice(Math.max(0, overlineIdx - 200), overlineIdx + 300);
-  assert.ok(slice.includes('font-semibold'), 'scrapbook overline must use font-semibold');
+  assert.ok(slice.includes('folio-private-eyebrow'), 'scrapbook overline must use folio-private-eyebrow');
 });
 
 // ── 3. TYPE_OVERLINES constant ────────────────────────────────────────────────
@@ -158,13 +158,13 @@ test('SavedItemCard has saved-item-type-overline data-testid', () => {
 test('Item type overline uses tracking-[0.1em]', () => {
   const typeOvIdx = savedShell.indexOf('saved-item-type-overline');
   const slice = savedShell.slice(Math.max(0, typeOvIdx - 200), typeOvIdx + 300);
-  assert.ok(slice.includes('tracking-[0.1em]'), 'item type overline must use tracking-[0.1em]');
+  assert.ok(slice.includes('folio-type-overline'), 'item type overline must use folio-type-overline');
 });
 
 test('Item type overline uses uppercase', () => {
   const typeOvIdx = savedShell.indexOf('saved-item-type-overline');
   const slice = savedShell.slice(Math.max(0, typeOvIdx - 200), typeOvIdx + 300);
-  assert.ok(slice.includes('uppercase'), 'item type overline must use uppercase');
+  assert.ok(slice.includes('folio-type-overline'), 'item type overline must use folio-type-overline');
 });
 
 test('Item type overline uses TYPE_OVERLINES lookup', () => {
@@ -199,13 +199,13 @@ test('Planning bridge has editorial "Plan with this" label', () => {
 test('Planning bridge label uses tracking-[0.1em] Overline pattern', () => {
   const bridgeIdx = savedShell.indexOf('Plan with this');
   const slice = savedShell.slice(Math.max(0, bridgeIdx - 200), bridgeIdx + 50);
-  assert.ok(slice.includes('tracking-[0.1em]'), 'planning bridge label must use Overline tracking');
+  assert.ok(slice.includes('folio-muted-overline'), 'planning bridge label must use folio-muted-overline');
 });
 
 test('Planning bridge has border-t separator from card body', () => {
   const bridgeIdx = savedShell.indexOf('saved-planning-bridge');
   const slice = savedShell.slice(Math.max(0, bridgeIdx - 300), bridgeIdx + 300);
-  assert.ok(slice.includes('border-t'), 'planning bridge must have border-t separator');
+  assert.ok(slice.includes('folio-dossier-actions'), 'planning bridge must use folio-dossier-actions (CSS border-top)');
 });
 
 // ── 7. Planning bridge preserved actions ──────────────────────────────────────
@@ -257,7 +257,7 @@ test('SavedItemCard has trip-picker-option data-testid', () => {
 test('Trip picker Choose a trip label uses tracking-[0.1em]', () => {
   const pickerIdx = savedShell.indexOf('Choose a trip');
   const slice = savedShell.slice(Math.max(0, pickerIdx - 200), pickerIdx + 50);
-  assert.ok(slice.includes('tracking-[0.1em]'), 'trip picker label must use Overline tracking');
+  assert.ok(slice.includes('folio-muted-overline'), 'trip picker label must use folio-muted-overline');
 });
 
 // ── 10. Add-to-trip states preserved ─────────────────────────────────────────
@@ -335,12 +335,12 @@ test('Remove button has aria-label', () => {
 // ── 14. Section editorial structure ──────────────────────────────────────────
 
 test('VerticalGroup has saved-section-restaurant data-testid', () => {
-  assert.ok(savedShell.includes('saved-section-restaurant') || savedShell.includes('saved-section-${key}'), 'section testid pattern must exist');
+  assert.ok(savedShell.includes('saved-section-${testKey}'), 'section testid pattern must exist');
 });
 
 test('VerticalGroup has saved-section-label-restaurant pattern', () => {
   assert.ok(
-    savedShell.includes('saved-section-label-${key}') || savedShell.includes('saved-section-label-restaurant'),
+    savedShell.includes('saved-section-label-${testKey}'),
     'section label testid pattern must exist'
   );
 });
@@ -362,19 +362,19 @@ test('Section labels show Flights text', () => {
 });
 
 test('VerticalGroup uses <section> semantic element', () => {
-  assert.ok(savedShell.includes('<section data-testid={`saved-section-${key}`}'), 'VerticalGroup must use <section> element');
+  assert.ok(savedShell.includes('<section data-testid={`saved-section-${testKey}`}'), 'GroupSection must use <section> element');
 });
 
 // ── 15. Section Overline tracking ────────────────────────────────────────────
 
 test('Section labels use tracking-[0.1em]', () => {
-  const sectionLabelIdx = savedShell.indexOf('saved-section-label-${key}');
+  const sectionLabelIdx = savedShell.indexOf('saved-section-label-${testKey}');
   const slice = savedShell.slice(Math.max(0, sectionLabelIdx - 200), sectionLabelIdx + 200);
-  assert.ok(slice.includes('tracking-[0.1em]'), 'section label must use tracking-[0.1em]');
+  assert.ok(slice.includes('folio-group-label'), 'section label must use folio-group-label');
 });
 
 test('Section has border-b hairline separator', () => {
-  assert.ok(savedShell.includes('border-b border-ds-hairline'), 'section header must have border-b hairline separator');
+  assert.ok(savedShell.includes('folio-group-head'), 'section header must use folio-group-head separator');
 });
 
 // ── 16. No fake / mock / hardcoded city data ──────────────────────────────────
@@ -607,11 +607,11 @@ test('Hotel card has no booking copy', () => {
 // ── 30. Mobile-safe layout ────────────────────────────────────────────────────
 
 test('SavedShell root has max-w-2xl for contained mobile layout', () => {
-  assert.ok(savedShell.includes('max-w-2xl'), 'root must have max-w-2xl for responsive containment');
+  assert.ok(savedShell.includes('folio-private-desk'), 'root must be the folio-private-desk immersive surface');
 });
 
 test('SavedShell root has mx-auto centering', () => {
-  assert.ok(savedShell.includes('mx-auto'), 'root must have mx-auto for centering');
+  assert.ok(savedShell.includes('folio-private-folio'), 'folio panel centers via folio-private-folio (CSS margin auto)');
 });
 
 test('Rating + tags row uses flex-wrap for mobile', () => {

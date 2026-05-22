@@ -70,7 +70,7 @@ const pkgJson = read('package.json');
 // ── 1. Outer root uses saved-clipping-desk ────────────────────────────────────
 
 test('8N-E: SavedShell outer root uses folio-cinema-collection class (Slice 4B replaced saved-clipping-desk)', () => {
-  assert.ok(savedShell.includes('folio-cinema-collection'), 'outer shell must use folio-cinema-collection class (Slice 4B replaced saved-clipping-desk)');
+  assert.ok(savedShell.includes('folio-private-desk'), 'outer shell must use folio-private-desk (Private Folio v1, paper world)');
 });
 
 // ── 2. scrapbook-page scoped to header zone, not full outer wrapper ────────────
@@ -87,7 +87,7 @@ test('8N-E: scrapbook-page is NOT on the same element as saved-shell testid', ()
 test('8N-E: folio-cinema-collection and saved-shell testid are on the same element (Slice 4B)', () => {
   const shellIdx = savedShell.indexOf('data-testid="saved-shell"');
   const outerDiv = savedShell.slice(Math.max(0, shellIdx - 400), shellIdx + 50);
-  assert.ok(outerDiv.includes('folio-cinema-collection'), 'folio-cinema-collection must be on the outer div with saved-shell testid (Slice 4B)');
+  assert.ok(outerDiv.includes('folio-private-desk') && outerDiv.includes('data-folio-world="paper"'), 'folio-private-desk + paper world must be on the saved-shell root');
 });
 
 // ── 3. CSS primitive: saved-clipping-desk ────────────────────────────────────
@@ -114,21 +114,21 @@ test('8N-E: .saved-clipping-card defined after .clipping-card in globals.css', (
 
 test('8N-E/F: SavedItemCard uses folio-collection-card (Slice 4B replaced saved-folio-card)', () => {
   // saved-folio-card was replaced in Slice 4B by folio-collection-card.
-  assert.ok(savedShell.includes('folio-collection-card'), 'SavedItemCard must use folio-collection-card (Slice 4B replaced saved-folio-card)');
+  assert.ok(savedShell.includes('folio-dossier-card'), 'place cards must use folio-dossier-card (Private Folio v1)');
 });
 
 // ── 8. Desktop: lg:grid-cols-2 for two-column card layout ────────────────────
 
 test('8N-E: VerticalGroup uses lg:grid-cols-2 for two-column desktop layout', () => {
-  assert.ok(savedShell.includes('lg:grid-cols-2'), 'card list must use lg:grid-cols-2 for editorial desk layout on desktop');
+  assert.ok(savedShell.includes('folio-card-grid'), 'card list must use folio-card-grid (two-column desktop via CSS)');
 });
 
 // ── 9. Desktop: lg:max-w-4xl for wider shell ──────────────────────────────────
 
 test('8N-E: SavedShell uses lg:max-w-4xl for wider desktop editorial desk', () => {
   assert.ok(
-    savedShell.includes('lg:max-w-4xl') || savedShell.includes('lg:max-w-5xl'),
-    'SavedShell must use lg:max-w-4xl or lg:max-w-5xl for desktop width improvement'
+    savedShell.includes('folio-private-folio'),
+    'folio panel (folio-private-folio) bounds + centers the desktop width'
   );
 });
 
@@ -139,8 +139,8 @@ test('8N-E: planning bridge uses flex horizontal row for compact idle actions', 
   assert.ok(bridgeIdx >= 0, 'saved-planning-bridge testid must exist');
   const bridgeSlice = savedShell.slice(bridgeIdx, bridgeIdx + 600);
   assert.ok(
-    bridgeSlice.includes('flex') && bridgeSlice.includes('items-center'),
-    'planning bridge must use flex items-center for compact horizontal action layout'
+    bridgeSlice.includes('folio-action-row'),
+    'planning bridge must use folio-action-row for the compact action layout'
   );
 });
 
@@ -172,34 +172,18 @@ test('8N-E: create-trip-section and add-to-trip-section are compact (not separat
 
 test('8N-E: VerticalGroup section header includes vertical icon from config', () => {
   // SectionIcon should be used in the section header div (near saved-section-label)
-  const labelIdx = savedShell.indexOf('saved-section-label-${key}');
-  assert.ok(labelIdx >= 0, 'saved-section-label template must exist');
-  const sectionSlice = savedShell.slice(Math.max(0, labelIdx - 500), labelIdx + 200);
-  assert.ok(
-    sectionSlice.includes('SectionIcon') || sectionSlice.includes('<Icon'),
-    'VerticalGroup section header must use the vertical icon (SectionIcon or Icon)'
-  );
+  // Category identity icons now live on the rail filter chips, not group headers.
+  assert.ok(savedShell.includes('folio-cat-chip'), 'rail must render category filter chips');
+  assert.ok(savedShell.includes('<Icon'), 'category chips must render the vertical icon from config');
 });
 
 // ── 14. Section count: dark-background-compatible text ───────────────────────
 
 test('8N-E: section item count uses dark-background-compatible text color', () => {
-  const labelIdx = savedShell.indexOf('saved-section-label-${key}');
-  // The count is near the section label
-  const sectionSlice = savedShell.slice(labelIdx, labelIdx + 400);
-  const countIdx = sectionSlice.indexOf('items.length}');
-  assert.ok(countIdx >= 0, 'items.length must appear in section header');
-  const countCtx = sectionSlice.slice(Math.max(0, countIdx - 200), countIdx + 100);
-  // Must NOT use text-ds-text-inverse (dark ink) or text-ds-slate (dark gray) on dark background
-  assert.ok(
-    !countCtx.includes('text-ds-text-inverse') && !countCtx.includes('text-ds-ink'),
-    'section count must not use dark ink text on dark background'
-  );
-  assert.ok(
-    countCtx.includes('text-ds-text-secondary') || countCtx.includes('text-ds-text') ||
-    countCtx.includes('text-ds-accent') || countCtx.includes('text-ds-text-tertiary'),
-    'section count must use a light-on-dark compatible text color'
-  );
+  const labelIdx = savedShell.indexOf('saved-section-label-${testKey}');
+  const sectionSlice = savedShell.slice(Math.max(0,labelIdx), labelIdx + 400);
+  assert.ok(savedShell.includes('folio-group-count'), 'group count must use folio-group-count (paper ink-mist)');
+  assert.ok(!savedShell.includes('text-ds-text-inverse'), 'paper world must not use text-ds-text-inverse');
 });
 
 // ── 15. Loading state: dark-background-compatible text ───────────────────────
@@ -208,13 +192,12 @@ test('8N-E: loading state uses dark-background-compatible text', () => {
   const loadingIdx = savedShell.indexOf('data-testid="saved-loading"');
   const loadingSlice = savedShell.slice(loadingIdx, loadingIdx + 300);
   assert.ok(
-    loadingSlice.includes('text-ds-text-secondary') || loadingSlice.includes('text-ds-text-tertiary') ||
-    loadingSlice.includes('text-ds-text') || loadingSlice.includes('text-ds-accent'),
-    'loading state must use text visible on dark background'
+    loadingSlice.includes('text-ds-folio-ink'),
+    'loading state must use paper ink text'
   );
   assert.ok(
-    !loadingSlice.includes('text-ds-text-inverse'),
-    'loading state must not use text-ds-text-inverse (dark ink) on dark background'
+    !loadingSlice.includes('text-ds-text-secondary'),
+    'paper loading state must not use cream secondary text'
   );
 });
 
@@ -229,8 +212,8 @@ test('8N-E: empty state heading does not use text-ds-text-inverse on dark backgr
     'empty state heading must not use text-ds-text-inverse (dark ink) on dark background'
   );
   assert.ok(
-    emptySlice.includes('text-ds-text') || emptySlice.includes('text-ds-accent'),
-    'empty state heading must use a light-on-dark compatible text color'
+    emptySlice.includes('text-ds-folio-ink'),
+    'empty state heading must use paper ink text'
   );
 });
 
@@ -240,9 +223,8 @@ test('8N-E: empty state sub-text uses dark-background-compatible color', () => {
   const emptyIdx = savedShell.indexOf('data-testid="saved-empty"');
   const emptySlice = savedShell.slice(emptyIdx, emptyIdx + 600);
   assert.ok(
-    emptySlice.includes('text-ds-text-secondary') || emptySlice.includes('text-ds-text-tertiary') ||
-    emptySlice.includes('text-ds-text'),
-    'empty state sub-text must use a light-on-dark compatible color'
+    emptySlice.includes('text-ds-folio-ink-soft') || emptySlice.includes('text-ds-folio-ink'),
+    'empty state sub-text must use paper ink text'
   );
 });
 
@@ -302,16 +284,15 @@ test('8N-E: all key testids preserved in SavedShell', () => {
 
 test('8N-E: section testid pattern preserved (saved-section-${key})', () => {
   assert.ok(
-    savedShell.includes('data-testid={`saved-section-${key}`}'),
-    'saved-section-${key} template testid must be preserved'
+    savedShell.includes('data-testid={`saved-section-${testKey}`}'),
+    'saved-section-${testKey} template testid must be preserved'
   );
 });
 
 test('8N-E: section label testid pattern preserved (saved-section-label-${key})', () => {
   assert.ok(
-    savedShell.includes('data-testid={`saved-section-label-${key}`}') ||
-    savedShell.includes("saved-section-label-${key}"),
-    'saved-section-label-${key} template testid must be preserved'
+    savedShell.includes('data-testid={`saved-section-label-${testKey}`}'),
+    'saved-section-label-${testKey} template testid must be preserved'
   );
 });
 
@@ -420,7 +401,7 @@ test('8N-E: .saved-clipping-desk defined after .clipping-card in globals.css', (
 // ── editorial-section-rule still present (non-cream, structural) ─────────────
 
 test('8N-E: editorial-section-rule still in SavedShell header', () => {
-  assert.ok(savedShell.includes('editorial-section-rule'), 'editorial-section-rule must still be used in SavedShell header');
+  assert.ok(savedShell.includes('folio-private-meridian'), 'folio-private-meridian (gilt signature) must be present in SavedShell');
 });
 
 // ── 31. saved-scrapbook-header testid preserved ───────────────────────────────

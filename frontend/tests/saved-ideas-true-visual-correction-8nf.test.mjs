@@ -84,8 +84,8 @@ test('8N-F: SavedItemCard article does NOT use boutique-folio', () => {
 
 test('8N-F: SavedShell uses folio-collection-card class for item cards (Slice 4B replaced saved-folio-card)', () => {
   assert.ok(
-    savedShell.includes('folio-collection-card'),
-    'SavedShell must use folio-collection-card class for the dark atelier card surface (Slice 4B)'
+    savedShell.includes('folio-dossier-card'),
+    'SavedShell must use folio-dossier-card for place cards (Private Folio v1)'
   );
 });
 
@@ -94,8 +94,8 @@ test('8N-F: folio-collection-card is on the saved-item-card article element (Sli
   assert.ok(cardIdx >= 0, 'saved-item-card testid must exist');
   const articleSlice = savedShell.slice(Math.max(0, cardIdx - 250), cardIdx + 50);
   assert.ok(
-    articleSlice.includes('folio-collection-card'),
-    'folio-collection-card must be on the article element with saved-item-card testid (Slice 4B)'
+    articleSlice.includes('folio-dossier-card') || articleSlice.includes('folio-flight-card'),
+    'folio-dossier-card / folio-flight-card must be on the saved-item-card article'
   );
 });
 
@@ -174,14 +174,14 @@ test('8N-F: .saved-folio-header::before defines warm brass top rule', () => {
 
 test('8N-F: SavedShell outer root uses folio-cinema-collection (Slice 4B replaced saved-clipping-desk)', () => {
   assert.ok(
-    savedShell.includes('folio-cinema-collection'),
-    'folio-cinema-collection must be on the outer shell (Slice 4B replaced saved-clipping-desk)'
+    savedShell.includes('folio-private-desk'),
+    'folio-private-desk must be the outer shell (Private Folio v1, paper world)'
   );
   const shellIdx = savedShell.indexOf('data-testid="saved-shell"');
   const outerSlice = savedShell.slice(Math.max(0, shellIdx - 400), shellIdx + 50);
   assert.ok(
-    outerSlice.includes('folio-cinema-collection'),
-    'folio-cinema-collection must be on the same element as saved-shell testid (Slice 4B)'
+    outerSlice.includes('folio-private-desk'),
+    'folio-private-desk must be on the same element as saved-shell testid'
   );
 });
 
@@ -225,8 +225,8 @@ test('8N-F: all behavior testids preserved', () => {
 
 test('8N-F: section testid template preserved (saved-section-${key})', () => {
   assert.ok(
-    savedShell.includes('data-testid={`saved-section-${key}`}'),
-    'saved-section-${key} template testid must be preserved'
+    savedShell.includes('data-testid={`saved-section-${testKey}`}'),
+    'saved-section-${testKey} template testid must be preserved'
   );
 });
 
@@ -237,8 +237,8 @@ test('8N-F: planning bridge uses compact flex horizontal row', () => {
   assert.ok(bridgeIdx >= 0, 'saved-planning-bridge must exist');
   const bridgeSlice = savedShell.slice(bridgeIdx, bridgeIdx + 600);
   assert.ok(
-    bridgeSlice.includes('flex') && bridgeSlice.includes('items-center'),
-    'planning bridge must use flex items-center for compact horizontal layout'
+    bridgeSlice.includes('folio-action-row'),
+    'planning bridge must use folio-action-row for compact horizontal layout'
   );
 });
 
@@ -401,15 +401,16 @@ test('8N-F: SavedShell has no dark-100 legacy class', () => {
 
 test('8N-F: saved-folio-header class used in SavedShell (header zone)', () => {
   assert.ok(
-    savedShell.includes('saved-folio-header'),
-    'saved-folio-header must be used in SavedShell for the dark integrated header zone'
+    savedShell.includes('folio-private-head'),
+    'folio-private-head must be used in SavedShell for the folio header zone'
   );
 });
 
-test('8N-F: saved-folio-header appears before saved-scrapbook-header (wraps the header)', () => {
-  const folioIdx = savedShell.indexOf('saved-folio-header');
+test('8N-F: folio-private-head is the class on the saved-scrapbook-header element', () => {
   const headerIdx = savedShell.indexOf('data-testid="saved-scrapbook-header"');
-  assert.ok(folioIdx >= 0 && headerIdx > folioIdx, 'saved-folio-header div must wrap the saved-scrapbook-header element');
+  assert.ok(headerIdx >= 0, 'saved-scrapbook-header must exist');
+  const headerSlice = savedShell.slice(headerIdx, headerIdx + 120);
+  assert.ok(headerSlice.includes('folio-private-head'), 'folio-private-head must be the header zone class');
 });
 
 // ── No hotel per-night pricing (discovery-only preserved) ────────────────────
