@@ -19,7 +19,6 @@ import {
   PlusCircle,
   CheckCircle2,
   Sparkles,
-  Plus,
   Check,
   GitCompare,
   X,
@@ -125,39 +124,6 @@ function formatSavedDate(iso: string): string {
 // ── Add-to-Trip state ─────────────────────────────────────────────────────────
 
 type AddState = "idle" | "picking" | "adding" | "added" | "error";
-
-// ── Compare pick control ────────────────────────────────────────────────────
-
-function ComparePick({
-  picked,
-  disabled,
-  onToggle,
-  name,
-}: {
-  picked: boolean;
-  disabled: boolean;
-  onToggle: () => void;
-  name: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={disabled && !picked}
-      aria-pressed={picked}
-      aria-label={picked ? `Remove ${name} from compare` : `Add ${name} to compare`}
-      className="folio-pick"
-      data-testid="compare-pick"
-      data-picked={picked ? "true" : "false"}
-    >
-      {picked ? (
-        <Check className="w-3.5 h-3.5" aria-hidden="true" />
-      ) : (
-        <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-      )}
-    </button>
-  );
-}
 
 // ── Planning bridge (Add to Trip / Create Trip state machine) ─────────────────
 
@@ -376,17 +342,18 @@ function PlaceDossierCard({
       data-picked={picked ? "true" : "false"}
     >
       <>
-        {/* Typeset plate — no fabricated photo. Carries the category glyph and,
-            when known, a vertical source spine tab. */}
+        {/* Typeset plate — no fabricated photo. Carries the category glyph, a
+            vertical source spine tab, and (when selected) an in-compare flag.
+            The only compare *control* is the bottom action-row icon. */}
         <div className="folio-dossier-plate" aria-hidden="true">
           {source && <span className="folio-source-tab">{source}</span>}
           <Icon className="folio-plate-glyph" />
-          <ComparePick
-            picked={picked}
-            disabled={compareFull}
-            name={name}
-            onToggle={() => onTogglePick(item.id)}
-          />
+          {picked && (
+            <span className="folio-compare-flag">
+              <Check className="w-3 h-3" aria-hidden="true" />
+              In compare
+            </span>
+          )}
         </div>
 
         <div className="folio-dossier-body">
@@ -491,10 +458,15 @@ function PlaceDossierCard({
               disabled={compareFull && !picked}
               aria-pressed={picked}
               aria-label={picked ? `Remove ${name} from compare` : `Compare ${name}`}
-              className="folio-icon-btn"
+              className="folio-icon-btn folio-compare-toggle min-w-[44px] min-h-[44px]"
+              data-picked={picked ? "true" : "false"}
               data-testid="compare-icon-btn"
             >
-              <GitCompare className="w-4 h-4" aria-hidden="true" />
+              {picked ? (
+                <Check className="w-4 h-4" aria-hidden="true" />
+              ) : (
+                <GitCompare className="w-4 h-4" aria-hidden="true" />
+              )}
             </button>
             <button
               type="button"
@@ -775,6 +747,7 @@ function CompareSheet({
             const name = snapStr(it, "name") ?? it.displayName;
             const where = snapStr(it, "address") ?? snapStr(it, "destination") ?? ctxStr(it, "destination");
             const rating = snapNum(it, "rating");
+            const why = whyItMattered(it);
             return (
               <div key={it.id} className="folio-compare-col" data-testid="compare-col">
                 <div className="folio-compare-col-plate" aria-hidden="true">
@@ -787,6 +760,15 @@ function CompareSheet({
                     <div className="folio-compare-row">
                       <span className="folio-compare-row-k">Where</span>
                       {where}
+                    </div>
+                  )}
+                  {/* Saved note/context — the real reason this place was kept, so
+                      two places can be compared by saved context. Omitted when
+                      absent (never fabricated). */}
+                  {why && (
+                    <div className="folio-compare-row" data-testid="compare-note">
+                      <span className="folio-compare-row-k">Why it mattered</span>
+                      {why}
                     </div>
                   )}
                   {rating != null && (

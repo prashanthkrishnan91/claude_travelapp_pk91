@@ -8454,7 +8454,7 @@
     .atelier-salon-folio-toast { transition: opacity 320ms ease; }
     /* Saved Private Folio — drop hover transitions (durations also zeroed globally) */
     .folio-dossier-card,
-    .folio-pick,
+    .folio-compare-toggle,
     .folio-cat-chip,
     .folio-group-seg-btn,
     .folio-btn-primary,
@@ -8816,32 +8816,33 @@
     margin: 0;
   }
 
-  /* Pick / compare select control (place cards only) */
-  .folio-pick {
+  /* In-compare flag — a non-interactive selected-state badge on the plate.
+     There is no second compare control; the only toggle is the bottom action
+     icon (.folio-compare-toggle). */
+  .folio-compare-flag {
     position: absolute;
-    top: 6px; right: 6px;
-    width: 27px; height: 27px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    background: color-mix(in srgb, var(--ds-warm-paper) 80%, transparent);
-    border: 1.5px solid var(--ds-hairline);
-    color: var(--ds-folio-ink-mist);
-    cursor: pointer;
-    transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+    top: 6px; left: 50%;
+    transform: translateX(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    white-space: nowrap;
+    font-size: 0.5rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--ds-ink-paper);
+    background: var(--ds-sandstone-gold);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--ds-folio-ink) 30%, transparent);
   }
-  .folio-pick::after {
-    content: "";
-    position: absolute;
-    inset: -9px; /* expands hit area to ≥44px without inflating the visual */
-  }
-  .folio-pick[data-picked="true"] {
+  /* Bottom compare toggle — the single compare control. Filled gilt when on. */
+  .folio-compare-toggle[data-picked="true"] {
     background: var(--ds-ember-brass);
     border-color: var(--ds-ember-brass);
     color: var(--ds-ink-paper);
   }
-  .folio-pick:disabled { opacity: 0.4; cursor: not-allowed; }
-  .folio-pick:focus-visible { outline: 2px solid var(--ds-sandstone-gold); outline-offset: 2px; }
 
   /* Action bridge + buttons */
   .folio-dossier-actions {

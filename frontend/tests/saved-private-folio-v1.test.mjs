@@ -45,7 +45,8 @@ test("globals.css defines the folio primitives with design tokens (no raw hex)",
     ".folio-flight-band",
     ".folio-compare-tray",
     ".folio-compare-sheet",
-    ".folio-pick",
+    ".folio-compare-toggle",
+    ".folio-compare-flag",
   ]) {
     assert.ok(globals.includes(cls), `globals.css must define ${cls}`);
   }
@@ -104,6 +105,31 @@ test("compare sheet shows only saved facts — no invented price/score", () => {
   const sheet = savedShell.slice(sheetStart, sheetEnd);
   assert.ok(sheet.includes("Where") && sheet.includes("Saved"), "shows where + saved date");
   assert.ok(!/priceLevel|\bscore\b|Best value|recommended/i.test(sheet), "no invented ranking fields");
+});
+
+test("compare sheet surfaces the saved note (why it mattered) for context", () => {
+  const sheetStart = savedShell.indexOf("function CompareSheet");
+  const sheetEnd = savedShell.indexOf("function GroupSection");
+  const sheet = savedShell.slice(sheetStart, sheetEnd);
+  assert.ok(sheet.includes("whyItMattered(it)"), "compare column derives the note from the real saved context");
+  assert.ok(sheet.includes('data-testid="compare-note"'), "compare note row is present (rendered when a note exists)");
+});
+
+// ── Single compare control (no duplicate top-left + control) ─────────────────
+
+test("there is exactly one compare control — the bottom action-row toggle", () => {
+  // the old top-left circular pick control is gone
+  assert.ok(!savedShell.includes("ComparePick"), "ComparePick component removed");
+  assert.ok(!savedShell.includes('data-testid="compare-pick"'), "no compare-pick control");
+  assert.ok(!savedShell.includes('className="folio-pick"'), "no folio-pick control");
+  assert.ok(!globals.includes(".folio-pick "), "folio-pick CSS removed");
+  // the bottom action-row toggle is the single control, with a clear picked state
+  assert.ok(savedShell.includes('data-testid="compare-icon-btn"'), "bottom compare toggle present");
+  assert.match(savedShell, /folio-compare-toggle[\s\S]*data-picked=/);
+  assert.match(globals, /\.folio-compare-toggle\[data-picked="true"\]/);
+  // selected/in-compare state is shown on the card without a second control
+  assert.ok(savedShell.includes("folio-compare-flag"), "in-compare flag shown when picked");
+  assert.match(globals, /\.folio-compare-flag\s*\{/);
 });
 
 // ── Dedicated flight card ─────────────────────────────────────────────────────
