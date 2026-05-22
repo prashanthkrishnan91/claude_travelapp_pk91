@@ -195,3 +195,33 @@ test('SavedShell still has saved-empty state with /explore link', () => {
 test('SavedShell still has saved-error state', () => {
   assert.ok(savedShell.includes('saved-error'), 'error state must still exist');
 });
+
+// ── 15. Note carryover — addSavedItemToTrip ──────────────────────────────────
+
+test('addSavedItemToTrip copies item.note into details.userNote', () => {
+  const fnStart = apiTs.indexOf('export async function addSavedItemToTrip');
+  const fnBody  = apiTs.slice(fnStart, fnStart + 2500);
+  assert.ok(
+    fnBody.includes('details.userNote = item.note'),
+    'addSavedItemToTrip must copy item.note to details.userNote'
+  );
+});
+
+test('addSavedItemToTrip guards userNote copy — only when note is non-empty string', () => {
+  const fnStart = apiTs.indexOf('export async function addSavedItemToTrip');
+  const fnBody  = apiTs.slice(fnStart, fnStart + 2500);
+  assert.match(
+    fnBody,
+    /typeof item\.note === "string" && item\.note/,
+    'must guard note copy so null/undefined items are unaffected'
+  );
+});
+
+test('addSavedItemToTrip does not invent a userNote when item.note is absent', () => {
+  const fnStart = apiTs.indexOf('export async function addSavedItemToTrip');
+  const fnBody  = apiTs.slice(fnStart, fnStart + 2500);
+  assert.ok(
+    !fnBody.includes('userNote: "') && !fnBody.includes("userNote: '"),
+    'userNote must never be a string literal (no fabricated notes)'
+  );
+});
