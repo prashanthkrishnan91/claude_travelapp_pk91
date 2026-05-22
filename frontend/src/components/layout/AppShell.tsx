@@ -71,7 +71,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // ternary and the max-w-7xl branch are left intact for the 8J/atrium tests.
   const isExploreRoute = pathname === "/explore";
 
-  const isImmersiveRoom = isHomePage || isSalonRoute || isExploreRoute;
+  // Saved (Private Folio) is the third outside-trip Atelier room. Unlike the
+  // dark Salon/Observatory it is the PAPER world (light folio on a warm desk),
+  // but it shares the immersive shell: SaaS sidebar CSS-suppressed via
+  // data-atelier-shell="saved", floating AtelierNavArtifact nav, and the
+  // edge-to-edge home-edge-bleed wrapper. The isHomePage ternary + max-w-7xl
+  // branch stay intact for the 8J/atrium contracts.
+  const isSavedRoute = pathname === "/saved";
+
+  const isImmersiveRoom = isHomePage || isSalonRoute || isExploreRoute || isSavedRoute;
 
   return (
     <>
@@ -82,7 +90,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div
         className="atelier-atmosphere-root flex h-full min-h-screen"
         data-testid="atelier-atmosphere-root"
-        data-atelier-shell={isSalonRoute ? "salon" : isExploreRoute ? "explore" : undefined}
+        data-atelier-shell={isSalonRoute ? "salon" : isExploreRoute ? "explore" : isSavedRoute ? "saved" : undefined}
       >
         {/* SaaS sidebar — hidden on the immersive Home shell, present on every
             other route so navigation, account, sign-out stay in place. The
@@ -93,6 +101,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {isHomePage && <AtelierNavArtifact />}
         {isSalonRoute && <AtelierNavArtifact />}
         {isExploreRoute && <AtelierNavArtifact />}
+        {isSavedRoute && <AtelierNavArtifact />}
         <main className="flex-1 overflow-y-auto overflow-x-hidden" data-testid="reduced-motion-safe-atmosphere">
           {isImmersiveRoom ? (
             <div

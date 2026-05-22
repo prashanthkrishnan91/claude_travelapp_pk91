@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-21 (Explore regression fixes: hotel compare-link dates + flight per-offer prices; Observatory v1 PR #460 merged)
+Last updated: 2026-05-22 (Saved Private Folio v1 — /saved reskinned to the light paper-folio room; current branch)
 
 ## Purpose
 
@@ -8,7 +8,21 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3.5 — design adoption across cinema-world rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the Private Travel Salon (portal + fused desk + dossier + reveal). The outside-trip Explore (`/explore`) is now the **Observatory** (current branch). Next visible-adoption candidate: Saved (Gallery room).
+**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Next visible-adoption candidate: trip detail / Journey Desk.
+
+### Saved Private Folio v1 — /saved light paper-folio reskin (current branch)
+
+Reskins `/saved` from the prior dark "cinema scrapbook" into the **Private Folio**: a light folio resting on a warm desk. This is the deliberate paper-world counterpart to the dark Salon/Observatory (Design Implementation Contract §26: Saved Ideas = paper/scrapbook tone) — same Atelier family (immersive shell, floating `AtelierNavArtifact`, gilt-foil signature) but a distinct light material so Saved reads as the collection table, not another dark room. **No backend / API / provider / type / SQL change.**
+- **Shell:** `AppShell` adds `isSavedRoute` to the immersive set — `data-atelier-shell="saved"` CSS-suppresses the SaaS sidebar, renders the floating nav, and uses the `home-edge-bleed` wrapper (mirrors salon/explore; 8J/atrium regex patterns intact).
+- **`SavedShell.tsx`:** rewritten as `folio-private-desk` (warm linen desk) holding a `folio-private-folio` (paper panel, gilt `folio-private-meridian`). Desktop is a two-leaf grid (rail = header + category chips/counts + Recent/City/Category group control, with **Day disabled** — no real saved-day data; canvas = `folio-card-grid` 2-col). Primary CTAs are **marine-ink** (paper-world primary); gold/brass stays foil-only.
+- **Place dossier card (`folio-dossier-card`):** typeset plate (no fabricated photo) + vertical source spine tab; body = type overline, serif name, location, **why-it-mattered** (the real `searchContext.query`, omitted when absent), real provider rating/price/tags, hotel discovery context, Saved date; **Add to Trip** (marine primary) + Create Trip + Map + Compare + Remove. Source label derives from real `provenance.source` (`outside_concierge`→From Concierge, `explore_shell`→From Explore; omitted otherwise).
+- **Dedicated flight card (`folio-flight-card`):** boarding-pass layout — full-width route band from real `searchContext.origin/destination` (codes `white-space:nowrap`, never crop/wrap into a source rail), inline source chip; **no Compare, no Map** (flights stay non-addable-to-existing-trip; Create Trip + Remove only).
+- **Compare:** client-side only, **place verticals only, max 4**. `folio-compare-tray` (light shelf, clears the floating nav + safe-area, open gated until ≥2) opens `folio-compare-sheet` showing only saved facts (Where / Type / Rating-if-real / Saved) — no invented price/score/ranking.
+- **Preserved behavior + testids:** `listSavedItems`/`deleteSavedItem`/`fetchTrips`/`addSavedItemToTrip`, the add-to-trip state machine (picking/adding/added/error), CreateTripFromSavedModal, hotel discovery context, and every locked testid.
+- **patch-1 (review fixes):** (1) filter/group state hardened — visible collection is one pure `buildVisibleGroups(items, activeCat, groupMode)` derivation from the full array (filter→group), sections keyed by `${activeCat}:${groupMode}:${key}` so switching never leaves remnants (no refresh needed); (2) primary CTAs + selection/focus accents moved off marine to the warm **gilt/amber** folio palette (sandstone-gold→ember-brass, ink-paper text) — the Saved surface carries no blue (per PK direction); richer desk/paper depth (leather table contrast, layered warm shadows, inner highlight); (3) **card spine fixed** — dropped the `Card.Identity` flex wrapper (Tailwind `flex` in the utilities layer was overriding the grid, collapsing the plate to a clipped corner); the dossier card itself is now the `96px 1fr` grid with a full-height left rail; flight card is a flex column. Evidence: `docs/ai/design/evidence/saved-folio-v1/`.
+- **patch-2 (compare UX + notes):** removed the duplicate top-of-plate compare control (`ComparePick`/`.folio-pick` deleted) — the **single** compare toggle is now the bottom action-row icon (`.folio-compare-toggle`, filled gilt + check when selected); selected cards show a non-interactive "In compare" gilt flag (`.folio-compare-flag`) + the amber ring. The **compare sheet now shows each item's saved note** ("Why it mattered" = real `searchContext.query`) so two places compare by saved context. **Editable user notes are NOT yet supported** — `saved_items` has no note/description column and there is no update/PATCH endpoint or `updateSavedItem` API; this patch does not fake persistence or add a migration. Next slice: add a `note` column + PATCH `/saved-items/{id}` + `updateSavedItem` to make "Your note" editable.
+- **patch-3 (honest data label):** renamed the misleading "Why it mattered" label to **"Saved context"** on the card and compare sheet (the value is the saved search query, not a user note). The compare sheet now shows two honest, independent datapoints, each only when present: **Source** (From Concierge / From Explore, from `provenance.source`) and **Saved context** (the `searchContext.query`). Explore saves with no query show Source only — no invented note. Card source stays on the spine tab; card "Saved context" shows the query when present. No schema/API change; editable notes still deferred.
+- **Architecture:** Saved reclassified cinema→paper. `unified-folio-cinema-architecture` + 6 prior visual-identity test files updated in place ("assertions that legitimately moved"); behavior assertions retained. New `tests/saved-private-folio-v1.test.mjs` (14) locks source labels, why-from-query, compare cap/place-only, flight variant, Day-disabled, immersive shell, no-drift. **3159 frontend tests, 0 failures.** node_modules absent locally → tsc/next build/lint via CI `certify`; no headless browser for the live app (approved prototype screenshots are the design-intent reference).
 
 ### Explore Observatory v1 — /explore premium reskin (current branch)
 
@@ -129,7 +143,7 @@ Two Level 2 user-visible regressions fixed after PR #460 merged:
 **3139 frontend tests, 0 failures.** No backend suite run (no pytest in this environment); tsc/next build not run locally (node_modules absent) — CI `certify` validates.
 
 ### Next step
-Regression fixes are the current branch. After PR merges, next visible-adoption slice: apply Room System treatment to Saved (Gallery room) using shared cinema-world primitives.
+Saved Private Folio v1 is the current branch. After PR merges, next visible-adoption slice: trip detail / Journey Desk (the "final itinerary desk" in the room mental model), or polish passes on the three outside-trip rooms.
 
 ## Current architecture / runtime state
 

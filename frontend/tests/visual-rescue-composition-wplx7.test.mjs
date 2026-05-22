@@ -259,15 +259,15 @@ describe("Visual Rescue: Surface class contracts preserved", () => {
 
   it("20. SavedShell item card still uses folio-collection-card", () => {
     assert.ok(
-      savedShell.includes("folio-collection-card"),
-      "SavedShell item card must still use folio-collection-card"
+      savedShell.includes("folio-dossier-card"),
+      "SavedShell place card must use folio-dossier-card (Private Folio v1)"
     );
   });
 
   it("21. SavedShell outer wrapper still uses folio-cinema-collection", () => {
     assert.ok(
-      savedShell.includes("folio-cinema-collection"),
-      "SavedShell outer wrapper must still use folio-cinema-collection"
+      savedShell.includes("folio-private-desk"),
+      "SavedShell outer wrapper must use folio-private-desk (Private Folio v1)"
     );
   });
 

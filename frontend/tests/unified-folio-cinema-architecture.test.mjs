@@ -161,8 +161,12 @@ test("ExploreShell (cinema world) uses folio-cinema-lounge canonical wrapper", (
   assert.match(exploreShell, /folio-cinema-lounge/);
 });
 
-test("SavedShell (cinema world) uses folio-cinema-collection canonical wrapper", () => {
-  assert.match(savedShell, /folio-cinema-collection/);
+// Saved was reclassified from cinema to the PAPER world (Private Folio v1):
+// per Design Implementation Contract §26 (Saved Ideas = paper/scrapbook tone),
+// Saved is a light folio resting on a warm desk, not another dark room.
+test("SavedShell (paper world) uses folio-private-desk + data-folio-world=paper", () => {
+  assert.match(savedShell, /folio-private-desk/);
+  assert.match(savedShell, /data-folio-world="paper"/);
 });
 
 test("ConciergePage (cinema world) uses folio-cinema-desk canonical wrapper", () => {
@@ -177,7 +181,8 @@ test("cinema-world files do not adopt paper-world surface primitives", () => {
   // folio-paper-panel / folio-paper-card on the OUTER cinema canvas.
   // (Search result cards inside Explore intentionally remain dark via the
   // Card primitive `tone="dark"`.)
-  for (const src of [exploreShell, savedShell, conciergePage]) {
+  // SavedShell is paper-world now and is intentionally excluded here.
+  for (const src of [exploreShell, conciergePage]) {
     assert.doesNotMatch(
       src,
       /folio-paper-panel\b/,

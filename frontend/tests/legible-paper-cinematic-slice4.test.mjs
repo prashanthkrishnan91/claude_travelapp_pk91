@@ -400,8 +400,8 @@ describe("Slice 4: ExploreShell cinema conversion", () => {
 describe("Slice 4: SavedShell cinema conversion", () => {
   it("37. SavedShell outer wrapper uses folio-cinema-collection (Slice 4B)", () => {
     assert.ok(
-      savedShell.includes("folio-cinema-collection"),
-      "SavedShell outer wrapper must use folio-cinema-collection (Slice 4B replaced folio-cinema-shell)"
+      savedShell.includes("folio-private-desk"),
+      "SavedShell outer wrapper must use folio-private-desk (Private Folio v1, paper world)"
     );
   });
 
@@ -414,15 +414,15 @@ describe("Slice 4: SavedShell cinema conversion", () => {
 
   it("39. SavedShell still uses saved-folio-header (8N-F preservation)", () => {
     assert.ok(
-      savedShell.includes("saved-folio-header"),
-      "SavedShell must retain saved-folio-header for dark integrated header (8N-F contract)"
+      savedShell.includes("folio-private-head"),
+      "SavedShell must use folio-private-head for the paper folio header (Private Folio v1)"
     );
   });
 
   it("40. SavedShell uses folio-collection-card (Slice 4B replaced saved-folio-card)", () => {
     assert.ok(
-      savedShell.includes("folio-collection-card"),
-      "SavedShell must use folio-collection-card for item cards (Slice 4B replaced saved-folio-card)"
+      savedShell.includes("folio-dossier-card"),
+      "SavedShell must use folio-dossier-card for place cards (Private Folio v1)"
     );
   });
 

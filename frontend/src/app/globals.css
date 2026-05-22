@@ -7099,6 +7099,12 @@
     display: none !important;
   }
 
+  /* Saved (Private Folio) route — immersive paper room; hide the SaaS sidebar
+     so the folio desk owns the full page (floating Atelier nav takes over). */
+  .atelier-atmosphere-root[data-atelier-shell="saved"] .folio-sidebar {
+    display: none !important;
+  }
+
   /* Salon page room — warm paper surface with destination-aware background.
      Uses --world-surface (a warm linen tone injected by worldStyleVars) as
      the room backdrop. Dark cinema surfaces (result cards, sticky composer)
@@ -8446,6 +8452,680 @@
     .atelier-salon-result-reveal { animation: none; }
     .atelier-salon-portal-photo { transition: none; }
     .atelier-salon-folio-toast { transition: opacity 320ms ease; }
+    /* Saved Private Folio — drop hover transitions (durations also zeroed globally) */
+    .folio-dossier-card,
+    .folio-compare-toggle,
+    .folio-cat-chip,
+    .folio-group-seg-btn,
+    .folio-btn-primary,
+    .folio-btn-ghost { transition: none; }
+  }
+
+  /* ════════════════════════════════════════════════════════════════════
+     SAVED PRIVATE FOLIO — /saved light paper-folio surface
+     The discovery rooms (Concierge Salon, Explore Observatory) are dark
+     cinema rooms. Saved is intentionally the PAPER world per the Design
+     Implementation Contract §26 (Saved Ideas = paper/scrapbook tone): a
+     light folio resting on a warm desk. Same Atelier family (immersive
+     shell, floating nav, gilt foil signature) — distinct light material.
+     Primary CTAs use the warm gilt/amber folio palette (sandstone-gold →
+     ember-brass with ink-paper text); selection + focus accents are gilt too.
+     This is the approved Saved-surface palette (PK direction): the folio is a
+     warm collector's table, so no cool marine/blue accents on this surface.
+     ════════════════════════════════════════════════════════════════════ */
+
+  /* Outer desk — a warm leather/linen table the folio rests on. Deeper and
+     warmer than the paper, with layered ambient + a faint weave so the folio
+     reads as a lifted object on a tactile surface (collector's table). */
+  .folio-private-desk {
+    position: relative;
+    min-height: 100svh;
+    padding: clamp(16px, 3.5vw, 56px) clamp(14px, 3.5vw, 56px) clamp(96px, 14vh, 120px);
+    background-color: color-mix(in srgb, var(--ds-linen) 78%, var(--ds-ember-brass));
+    background-image:
+      radial-gradient(ellipse 86% 48% at 50% -8%, rgba(197, 148, 77, 0.22), transparent 60%),
+      radial-gradient(ellipse 70% 44% at 92% 104%, rgba(120, 84, 44, 0.16), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 6% 96%, rgba(120, 84, 44, 0.12), transparent 62%),
+      repeating-linear-gradient(26deg, rgba(80, 54, 26, 0.05) 0 1px, transparent 1px 6px);
+  }
+
+  /* The light paper folio — warm bone paper, hairline, layered warm shadow +
+     inner highlight so it lifts off the desk; a faint deckle ring inside. */
+  .folio-private-folio {
+    position: relative;
+    max-width: 78rem;
+    margin: 0 auto;
+    background:
+      radial-gradient(120% 80% at 18% 0%, color-mix(in srgb, var(--ds-warm-paper) 92%, white), transparent 60%),
+      radial-gradient(120% 90% at 100% 100%, color-mix(in srgb, var(--ds-linen) 60%, var(--ds-bone)), transparent 55%),
+      var(--ds-warm-paper);
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 26%, var(--ds-hairline));
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow:
+      0 28px 64px -22px color-mix(in srgb, var(--ds-folio-ink) 38%, transparent),
+      0 8px 20px -10px color-mix(in srgb, var(--ds-folio-ink) 18%, transparent),
+      inset 0 1px 0 color-mix(in srgb, white 60%, transparent);
+  }
+  /* Soft warm inner lining (deckled-paper edge), no harsh vignette. */
+  .folio-private-folio::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: 20px;
+    box-shadow: inset 0 0 40px 2px color-mix(in srgb, var(--ds-ember-brass) 14%, transparent);
+  }
+  /* Gilt meridian — the family signature, kept to a thin foil line. */
+  .folio-private-meridian {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--ds-sandstone-gold) 28%,
+      var(--ds-ember-brass) 55%,
+      var(--ds-sandstone-gold) 78%,
+      transparent
+    );
+    opacity: 0.9;
+  }
+
+  .folio-private-grid {
+    display: flex;
+    flex-direction: column;
+  }
+  .folio-private-rail {
+    padding: clamp(20px, 3vw, 30px) clamp(18px, 3vw, 26px) 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ds-space-5);
+  }
+  .folio-private-head { display: flex; flex-direction: column; gap: var(--ds-space-1); }
+  .folio-private-eyebrow {
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ds-sandstone-gold);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ds-space-2);
+  }
+  .folio-private-eyebrow::before {
+    content: "";
+    width: 24px; height: 1px;
+    background: var(--ds-sandstone-gold);
+  }
+  .folio-private-title {
+    font-family: var(--ds-font-editorial);
+    font-style: italic;
+    font-weight: 600;
+    font-size: clamp(1.6rem, 3vw, 2rem);
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    color: var(--ds-folio-ink);
+  }
+  .folio-private-sub { font-size: 0.8125rem; color: var(--ds-folio-ink-mist); }
+
+  .folio-rail-block { display: flex; flex-direction: column; gap: var(--ds-space-2); }
+  .folio-rail-label { margin: 0; }
+  .folio-muted-overline {
+    font-size: var(--ds-type-overline-size);
+    line-height: var(--ds-type-overline-leading);
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ds-folio-ink-mist);
+    margin: 0 0 var(--ds-space-1);
+  }
+
+  /* Category filter chips (with real counts) */
+  .folio-cat-chips { display: flex; gap: var(--ds-space-2); flex-wrap: wrap; }
+  .folio-cat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ds-space-2);
+    min-height: 36px;
+    padding: var(--ds-space-2) var(--ds-space-3);
+    border-radius: 999px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--ds-folio-ink-soft);
+    background: var(--ds-bone);
+    border: 1px solid var(--ds-hairline);
+    cursor: pointer;
+    transition: border-color 200ms ease, background 200ms ease, color 200ms ease;
+  }
+  .folio-cat-chip:hover { border-color: color-mix(in srgb, var(--ds-ember-brass) 45%, var(--ds-hairline)); }
+  .folio-cat-chip[data-active="true"] {
+    color: color-mix(in srgb, var(--ds-ember-brass) 70%, var(--ds-folio-ink));
+    border-color: var(--ds-ember-brass);
+    background: color-mix(in srgb, var(--ds-sandstone-gold) 18%, var(--ds-warm-paper));
+  }
+  .folio-cat-count {
+    font-size: 0.6875rem;
+    color: var(--ds-folio-ink-mist);
+    background: color-mix(in srgb, var(--ds-folio-ink) 8%, transparent);
+    border-radius: 5px;
+    padding: 0 5px;
+  }
+  .folio-cat-chip[data-active="true"] .folio-cat-count {
+    color: var(--ds-ink-paper);
+    background: var(--ds-sandstone-gold);
+  }
+  .folio-cat-chip:focus-visible {
+    outline: 2px solid var(--ds-sandstone-gold);
+    outline-offset: 2px;
+  }
+
+  /* Group segmented control (Day disabled — no real saved-day data) */
+  .folio-group-seg {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 11px;
+    background: color-mix(in srgb, var(--ds-folio-ink) 6%, transparent);
+    border: 1px solid var(--ds-hairline);
+  }
+  .folio-group-seg-btn {
+    min-height: 36px;
+    border: 0;
+    background: transparent;
+    color: var(--ds-folio-ink-mist);
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: var(--ds-space-2) var(--ds-space-3);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 200ms ease, color 200ms ease;
+  }
+  .folio-group-seg-btn[data-on="true"] {
+    background: var(--ds-warm-paper);
+    color: var(--ds-folio-ink);
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--ds-folio-ink) 12%, transparent);
+  }
+  .folio-group-seg-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .folio-group-seg-btn:focus-visible {
+    outline: 2px solid var(--ds-sandstone-gold);
+    outline-offset: 2px;
+  }
+
+  /* Canvas + collection */
+  .folio-private-canvas { padding: clamp(14px, 3vw, 26px); }
+  .folio-collection { display: flex; flex-direction: column; gap: var(--ds-space-5); }
+  .folio-group-head {
+    display: flex;
+    align-items: center;
+    gap: var(--ds-space-3);
+    margin: var(--ds-space-2) 0 var(--ds-space-1);
+  }
+  .folio-group-label {
+    font-size: var(--ds-type-overline-size);
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ds-sandstone-gold);
+    margin: 0;
+  }
+  .folio-group-line { flex: 1; height: 1px; background: var(--ds-hairline); }
+  .folio-group-count { font-size: 0.6875rem; color: var(--ds-folio-ink-mist); }
+  .folio-card-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--ds-space-4);
+  }
+
+  /* Dossier card (place) — a tactile paper card. The CARD ITSELF is the
+     plate|body grid (no Card.Identity flex wrapper), so the left visual rail
+     reaches the card edges full-height instead of collapsing to a corner. */
+  .folio-dossier-card {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    align-items: stretch;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ds-bone) 96%, white), var(--ds-bone));
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 22%, var(--ds-hairline));
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow:
+      0 10px 22px -12px color-mix(in srgb, var(--ds-folio-ink) 26%, transparent),
+      0 2px 6px -3px color-mix(in srgb, var(--ds-folio-ink) 16%, transparent),
+      inset 0 1px 0 color-mix(in srgb, white 55%, transparent);
+    transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+  }
+  .folio-dossier-card:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      0 16px 30px -14px color-mix(in srgb, var(--ds-folio-ink) 32%, transparent),
+      0 3px 8px -3px color-mix(in srgb, var(--ds-folio-ink) 18%, transparent),
+      inset 0 1px 0 color-mix(in srgb, white 55%, transparent);
+  }
+  .folio-dossier-card[data-picked="true"] {
+    border-color: var(--ds-ember-brass);
+    box-shadow:
+      0 0 0 1.5px var(--ds-ember-brass),
+      0 16px 30px -14px color-mix(in srgb, var(--ds-folio-ink) 30%, transparent);
+  }
+  /* Left visual rail — full-height tactile spine, warm gilt-tinted. */
+  .folio-dossier-plate {
+    position: relative;
+    min-height: 100%;
+    background:
+      linear-gradient(150deg,
+        color-mix(in srgb, var(--ds-ember-brass) 16%, var(--ds-bone)),
+        color-mix(in srgb, var(--ds-linen) 70%, var(--ds-ember-brass)) 60%,
+        color-mix(in srgb, var(--ds-ember-brass) 24%, var(--ds-linen)));
+    border-right: 1px solid color-mix(in srgb, var(--ds-ember-brass) 30%, var(--ds-hairline));
+    box-shadow: inset -1px 0 0 color-mix(in srgb, white 30%, transparent);
+    display: grid;
+    place-items: center;
+  }
+  .folio-plate-glyph {
+    width: 30px; height: 30px;
+    color: color-mix(in srgb, var(--ds-ember-brass) 80%, var(--ds-folio-ink));
+    opacity: 0.92;
+  }
+  .folio-source-tab {
+    position: absolute;
+    left: 5px; bottom: 8px;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 0.5rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--ds-ember-brass);
+    padding-left: 4px;
+    border-left: 2px solid var(--ds-sandstone-gold);
+  }
+  .folio-dossier-body {
+    padding: var(--ds-space-3) var(--ds-space-4) var(--ds-space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--ds-space-2);
+    min-width: 0;
+  }
+  .folio-type-overline {
+    font-size: var(--ds-type-overline-size);
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ds-ember-brass);
+    margin: 0;
+  }
+  .folio-dossier-name {
+    font-family: var(--ds-font-editorial);
+    font-weight: 600;
+    font-size: 1.125rem;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    color: var(--ds-folio-ink);
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .folio-dossier-where {
+    display: flex;
+    align-items: center;
+    gap: var(--ds-space-2);
+    font-size: 0.78rem;
+    color: var(--ds-folio-ink-mist);
+    margin: 0;
+  }
+  .folio-dossier-why {
+    font-family: var(--ds-font-editorial);
+    font-style: italic;
+    font-size: 0.85rem;
+    line-height: 1.35;
+    color: var(--ds-folio-ink-soft);
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .folio-why-label {
+    display: block;
+    font-family: var(--ds-font-ui, var(--font-fraunces));
+    font-style: normal;
+    font-size: var(--ds-type-overline-size);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--ds-folio-ink-mist);
+    margin-bottom: 1px;
+  }
+  .folio-tag-chip {
+    padding: 1px 7px;
+    font-size: 0.625rem;
+    border-radius: 999px;
+    border: 1px solid var(--ds-hairline);
+    color: var(--ds-folio-ink-mist);
+  }
+  .folio-saved-date {
+    font-size: 0.6875rem;
+    color: var(--ds-folio-ink-mist);
+    margin: 0;
+  }
+
+  /* In-compare flag — a non-interactive selected-state badge on the plate.
+     There is no second compare control; the only toggle is the bottom action
+     icon (.folio-compare-toggle). */
+  .folio-compare-flag {
+    position: absolute;
+    top: 6px; left: 50%;
+    transform: translateX(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    white-space: nowrap;
+    font-size: 0.5rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--ds-ink-paper);
+    background: var(--ds-sandstone-gold);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--ds-folio-ink) 30%, transparent);
+  }
+  /* Bottom compare toggle — the single compare control. Filled gilt when on. */
+  .folio-compare-toggle[data-picked="true"] {
+    background: var(--ds-ember-brass);
+    border-color: var(--ds-ember-brass);
+    color: var(--ds-ink-paper);
+  }
+
+  /* Action bridge + buttons */
+  .folio-dossier-actions {
+    margin-top: var(--ds-space-1);
+    padding-top: var(--ds-space-2);
+    border-top: 1px solid color-mix(in srgb, var(--ds-hairline) 70%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: var(--ds-space-2);
+  }
+  .folio-action-row { display: flex; align-items: center; gap: var(--ds-space-2); flex-wrap: wrap; }
+  .folio-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--ds-space-2);
+    min-height: 44px;
+    padding: var(--ds-space-2) var(--ds-space-4);
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--ds-ink-paper);
+    background: linear-gradient(135deg, var(--ds-sandstone-gold) 0%, var(--ds-ember-brass) 58%, color-mix(in srgb, var(--ds-ember-brass) 76%, black) 100%);
+    border: 1px solid transparent;
+    box-shadow:
+      0 4px 14px -4px color-mix(in srgb, var(--ds-ember-brass) 55%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    transition: filter 180ms ease, box-shadow 180ms ease;
+  }
+  .folio-btn-primary:hover { filter: brightness(1.04); }
+  .folio-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+  .folio-btn-primary:focus-visible { outline: 2px solid var(--ds-sandstone-gold); outline-offset: 2px; }
+  .folio-btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--ds-space-2);
+    min-height: 44px;
+    padding: var(--ds-space-2) var(--ds-space-4);
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--ds-folio-ink);
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 45%, var(--ds-hairline));
+    cursor: pointer;
+    transition: border-color 200ms ease, background 200ms ease;
+  }
+  .folio-btn-ghost:hover { background: color-mix(in srgb, var(--ds-ember-brass) 9%, transparent); border-color: var(--ds-ember-brass); }
+  .folio-btn-ghost:focus-visible { outline: 2px solid var(--ds-sandstone-gold); outline-offset: 2px; }
+
+  .folio-icon-row { display: flex; align-items: center; gap: var(--ds-space-2); }
+  .folio-icon-btn {
+    display: grid;
+    place-items: center;
+    min-width: 44px; min-height: 44px;
+    border-radius: 8px;
+    color: var(--ds-folio-ink-mist);
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: color 200ms ease, border-color 200ms ease;
+  }
+  .folio-icon-btn:hover { color: var(--ds-folio-ink); border-color: var(--ds-hairline); }
+  .folio-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .folio-icon-danger:hover { color: var(--ds-whisper-coral); border-color: color-mix(in srgb, var(--ds-whisper-coral) 40%, transparent); }
+  .folio-icon-btn:focus-visible { outline: 2px solid var(--ds-sandstone-gold); outline-offset: 2px; }
+
+  /* ── Dedicated flight card — boarding-pass, full-width route band ── */
+  .folio-flight-card {
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ds-bone) 96%, white), var(--ds-bone));
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 22%, var(--ds-hairline));
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow:
+      0 10px 22px -12px color-mix(in srgb, var(--ds-folio-ink) 26%, transparent),
+      0 2px 6px -3px color-mix(in srgb, var(--ds-folio-ink) 16%, transparent),
+      inset 0 1px 0 color-mix(in srgb, white 55%, transparent);
+    transition: box-shadow 200ms ease, transform 200ms ease;
+  }
+  .folio-flight-card:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      0 16px 30px -14px color-mix(in srgb, var(--ds-folio-ink) 32%, transparent),
+      0 3px 8px -3px color-mix(in srgb, var(--ds-folio-ink) 18%, transparent),
+      inset 0 1px 0 color-mix(in srgb, white 55%, transparent);
+  }
+  /* Deep warm espresso band — a distinct ticket header, never blue. */
+  .folio-flight-band {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--ds-space-3);
+    flex-wrap: wrap;
+    padding: var(--ds-space-4) var(--ds-space-4);
+    background:
+      linear-gradient(135deg,
+        color-mix(in srgb, var(--ds-folio-ink) 86%, var(--ds-ember-brass)),
+        color-mix(in srgb, var(--ds-folio-ink) 66%, var(--ds-ember-brass)) 75%);
+    box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--ds-sandstone-gold) 30%, transparent);
+  }
+  .folio-flight-ap {
+    font-family: var(--ds-font-editorial);
+    font-style: italic;
+    font-weight: 600;
+    font-size: clamp(1.05rem, 3.4vw, 1.4rem);
+    color: var(--ds-pearl-cream);
+    white-space: nowrap; /* a route code never wraps mid-token */
+    max-width: 46%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .folio-flight-path {
+    display: inline-grid;
+    place-items: center;
+    color: var(--ds-sandstone-gold);
+    flex-shrink: 0;
+  }
+  .folio-source-chip {
+    font-size: 0.5625rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--ds-ember-brass);
+    border: 1px solid color-mix(in srgb, var(--ds-sandstone-gold) 50%, transparent);
+    border-radius: 6px;
+    padding: 1px 6px;
+  }
+
+  /* ── Compare tray (light shelf, clears the floating nav) ── */
+  .folio-compare-tray {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 88px);
+    z-index: 60;
+    width: min(560px, calc(100% - 28px));
+    display: flex;
+    align-items: center;
+    gap: var(--ds-space-3);
+    padding: var(--ds-space-2) var(--ds-space-2) var(--ds-space-2) var(--ds-space-4);
+    border-radius: 16px;
+    background: var(--ds-warm-paper);
+    border: 1px solid var(--ds-hairline);
+    box-shadow: 0 18px 40px color-mix(in srgb, var(--ds-folio-ink) 28%, transparent);
+  }
+  .folio-compare-label {
+    font-size: var(--ds-type-overline-size);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: color-mix(in srgb, var(--ds-ember-brass) 75%, var(--ds-folio-ink));
+    white-space: nowrap;
+  }
+  .folio-compare-thumbs { display: flex; gap: var(--ds-space-2); flex: 1; overflow: hidden; }
+  .folio-compare-thumb {
+    position: relative;
+    width: 36px; height: 36px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    color: var(--ds-sandstone-gold);
+    background: var(--ds-bone);
+    border: 1px solid var(--ds-hairline);
+    flex-shrink: 0;
+  }
+  .folio-compare-thumb-empty {
+    background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--ds-folio-ink) 8%, transparent) 0 6px, transparent 6px 12px);
+    border-style: dashed;
+  }
+  .folio-compare-thumb-x {
+    position: absolute;
+    top: -6px; right: -6px;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--ds-warm-paper);
+    border: 1px solid var(--ds-hairline);
+    color: var(--ds-folio-ink-soft);
+    cursor: pointer;
+  }
+  .folio-compare-open { min-height: 38px; padding: var(--ds-space-2) var(--ds-space-4); }
+
+  .folio-compare-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: color-mix(in srgb, var(--ds-folio-ink) 55%, transparent);
+    backdrop-filter: blur(3px);
+  }
+  .folio-compare-sheet {
+    width: min(880px, 100%);
+    max-height: 90vh;
+    overflow-y: auto;
+    background: var(--ds-warm-paper);
+    border: 1px solid var(--ds-hairline);
+    border-radius: 16px 16px 0 0;
+    padding: var(--ds-space-5) var(--ds-space-4) var(--ds-space-6);
+    box-shadow: 0 -20px 60px color-mix(in srgb, var(--ds-folio-ink) 30%, transparent);
+  }
+  .folio-compare-sheet-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--ds-space-3);
+  }
+  .folio-compare-grid {
+    display: grid;
+    gap: var(--ds-space-3);
+    grid-template-columns: repeat(var(--cols, 3), 1fr);
+    margin-top: var(--ds-space-3);
+  }
+  .folio-compare-col {
+    background: var(--ds-bone);
+    border: 1px solid var(--ds-hairline);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .folio-compare-col-plate {
+    height: 64px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(155deg, color-mix(in srgb, var(--ds-linen) 70%, var(--ds-bone)), var(--ds-linen));
+    border-bottom: 1px solid var(--ds-hairline);
+  }
+  .folio-compare-col-body {
+    padding: var(--ds-space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--ds-space-2);
+  }
+  .folio-compare-row {
+    font-size: 0.75rem;
+    color: var(--ds-folio-ink-soft);
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .folio-compare-row-k {
+    font-size: 0.5625rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ds-folio-ink-mist);
+    font-weight: 600;
+  }
+
+  /* ── Desktop: two-leaf folio (rail + canvas) with a gilt binding spine ── */
+  @media (min-width: 1024px) {
+    .folio-private-folio { border-radius: 28px; }
+    .folio-private-grid {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      align-items: start;
+      position: relative;
+    }
+    .folio-private-rail {
+      border-right: 1px solid var(--ds-hairline);
+      padding: clamp(28px, 2.6vw, 36px) clamp(22px, 2vw, 28px) clamp(28px, 2.6vw, 36px);
+      min-height: 100%;
+      position: relative;
+    }
+    /* gilt binding spine on the seam */
+    .folio-private-grid::before {
+      content: "";
+      position: absolute;
+      left: 300px; top: 0; bottom: 0;
+      width: 2px;
+      background: linear-gradient(180deg, transparent, var(--ds-sandstone-gold), transparent);
+      opacity: 0.35;
+      pointer-events: none;
+    }
+    .folio-private-title { font-size: 1.875rem; }
+    .folio-private-canvas { padding: clamp(26px, 2.4vw, 34px); }
+    .folio-card-grid { grid-template-columns: 1fr 1fr; gap: var(--ds-space-5); }
+    .folio-compare-tray { bottom: 28px; }
   }
 
 }

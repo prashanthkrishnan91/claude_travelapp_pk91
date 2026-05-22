@@ -304,23 +304,23 @@ describe("Phase 8N-C: SavedShell visual composition", () => {
     // scrapbook-page was removed in Phase 8N-F (true visual correction — cream slab gate).
     // The dark saved-folio-header class is now the canonical header surface.
     assert.ok(
-      savedShell.includes("saved-folio-header"),
-      "SavedShell must use saved-folio-header (dark integrated header, replaces cream scrapbook-page after 8N-F)"
+      savedShell.includes("folio-private-head"),
+      "SavedShell must use folio-private-head (paper folio header zone, Private Folio v1)"
     );
   });
 
   it("26. SavedShell uses folio-collection-card on saved items (Slice 4B: replaced saved-folio-card)", () => {
     // saved-folio-card was replaced in Slice 4B by folio-collection-card (single intentional composition).
     assert.ok(
-      savedShell.includes("folio-collection-card"),
-      "SavedShell SavedItemCard must use folio-collection-card CSS class (Slice 4B replaced saved-folio-card)"
+      savedShell.includes("folio-dossier-card"),
+      "SavedShell place cards must use folio-dossier-card (Private Folio v1)"
     );
   });
 
   it("27. SavedShell has editorial-section-rule in scrapbook header", () => {
     assert.ok(
-      savedShell.includes("editorial-section-rule"),
-      "SavedShell scrapbook header must include editorial-section-rule divider"
+      savedShell.includes("folio-private-meridian"),
+      "SavedShell must include folio-private-meridian (gilt signature)"
     );
   });
 
