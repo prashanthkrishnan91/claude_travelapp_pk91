@@ -2593,6 +2593,8 @@ export async function addSavedItemToTrip(
     if (typeof ctx["guests"] === "number") details.guests = ctx["guests"];
   }
 
+  if (typeof item.note === "string" && item.note) details.userNote = item.note;
+
   const payload: Record<string, unknown> = {
     trip_id: tripId,
     item_type: itemType,
@@ -2642,6 +2644,7 @@ async function seedSavedFlightAsItineraryItem(
   if (typeof ctx["returnDate"] === "string" && ctx["returnDate"]) details.returnDate = ctx["returnDate"];
   if (typeof ctx["passengers"] === "number") details.passengers = ctx["passengers"];
   if (typeof ctx["cabinClass"] === "string" && ctx["cabinClass"]) details.cabinClass = ctx["cabinClass"];
+  if (typeof item.note === "string" && item.note) details.userNote = item.note;
 
   const payload: Record<string, unknown> = {
     trip_id: tripId,

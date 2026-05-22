@@ -551,3 +551,46 @@ test("airports forwarded to createTripFromSavedItem only when resolved selection
     "originAirports guarded by airports.length"
   );
 });
+
+// ── 19. Note carryover — flight seed and create-trip paths ───────────────────
+
+test("seedSavedFlightAsItineraryItem copies item.note into details.userNote", () => {
+  const fnStart = apiTs.indexOf("async function seedSavedFlightAsItineraryItem");
+  const fnBody = apiTs.slice(fnStart, fnStart + 2500);
+  assert.ok(
+    fnBody.includes("details.userNote = item.note"),
+    "flight seed must copy item.note to details.userNote"
+  );
+});
+
+test("seedSavedFlightAsItineraryItem guards userNote copy — only when note is non-empty string", () => {
+  const fnStart = apiTs.indexOf("async function seedSavedFlightAsItineraryItem");
+  const fnBody = apiTs.slice(fnStart, fnStart + 2500);
+  assert.match(
+    fnBody,
+    /typeof item\.note === "string" && item\.note/,
+    "flight seed must guard note copy so null/undefined items are unaffected"
+  );
+});
+
+test("flight seed does not invent a userNote when item.note is absent", () => {
+  const fnStart = apiTs.indexOf("async function seedSavedFlightAsItineraryItem");
+  const fnBody = apiTs.slice(fnStart, fnStart + 2500);
+  assert.ok(
+    !fnBody.includes('userNote: "') && !fnBody.includes("userNote: '"),
+    "userNote must never be a string literal (no fabricated notes)"
+  );
+});
+
+test("createTripFromSavedItem carries note via the seed helpers (no direct note logic)", () => {
+  // createTripFromSavedItem delegates entirely to addSavedItemToTrip /
+  // seedSavedFlightAsItineraryItem — it must NOT have its own note-copy logic,
+  // since that would duplicate it and risk divergence.
+  const fnStart = apiTs.indexOf("export async function createTripFromSavedItem");
+  const fnBody = apiTs.slice(fnStart, fnStart + 1500);
+  // The function itself must not reference details.userNote directly.
+  assert.ok(
+    !fnBody.includes("details.userNote"),
+    "createTripFromSavedItem must not contain its own userNote logic (delegated to seed helpers)"
+  );
+});
