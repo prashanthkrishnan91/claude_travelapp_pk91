@@ -98,9 +98,9 @@ function sourceLabel(item: SavedItem): string | null {
   return null;
 }
 
-// "Why it mattered" is the real search query the user typed when the item was
+// "Saved context" is the real search query the user typed when the item was
 // saved (concierge rows carry searchContext.query). Never fabricated; omitted
-// when no query was recorded.
+// when no query was recorded. Surfaced under the "Saved context" label.
 function whyItMattered(item: SavedItem): string | null {
   return ctxStr(item, "query");
 }
@@ -377,10 +377,12 @@ function PlaceDossierCard({
             </p>
           )}
 
-          {/* Why it mattered — the real saved search query; omitted when absent */}
+          {/* Saved context — the real saved search query; omitted when absent.
+              (Source — From Concierge / From Explore — is shown on the plate's
+              spine tab.) Never an invented note. */}
           {why && (
             <p className="folio-dossier-why" data-testid="saved-item-why">
-              <span className="folio-why-label">Why it mattered</span>
+              <span className="folio-why-label">Saved context</span>
               {why}
             </p>
           )}
@@ -747,7 +749,8 @@ function CompareSheet({
             const name = snapStr(it, "name") ?? it.displayName;
             const where = snapStr(it, "address") ?? snapStr(it, "destination") ?? ctxStr(it, "destination");
             const rating = snapNum(it, "rating");
-            const why = whyItMattered(it);
+            const source = sourceLabel(it);
+            const savedQuery = whyItMattered(it);
             return (
               <div key={it.id} className="folio-compare-col" data-testid="compare-col">
                 <div className="folio-compare-col-plate" aria-hidden="true">
@@ -762,13 +765,19 @@ function CompareSheet({
                       {where}
                     </div>
                   )}
-                  {/* Saved note/context — the real reason this place was kept, so
-                      two places can be compared by saved context. Omitted when
-                      absent (never fabricated). */}
-                  {why && (
+                  {/* Two honest saved datapoints: provenance source, and the
+                      saved search query. Each shown only when present; never an
+                      invented note. */}
+                  {source && (
+                    <div className="folio-compare-row" data-testid="compare-source">
+                      <span className="folio-compare-row-k">Source</span>
+                      {source}
+                    </div>
+                  )}
+                  {savedQuery && (
                     <div className="folio-compare-row" data-testid="compare-note">
-                      <span className="folio-compare-row-k">Why it mattered</span>
-                      {why}
+                      <span className="folio-compare-row-k">Saved context</span>
+                      {savedQuery}
                     </div>
                   )}
                   {rating != null && (

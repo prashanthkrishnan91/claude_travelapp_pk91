@@ -67,13 +67,23 @@ test("source labels derive from real provenance, nothing fabricated", () => {
   assert.match(savedShell, /function sourceLabel[\s\S]*return null;/);
 });
 
-// ── "Why it mattered" is the real saved query, omitted when absent ───────────
+// ── "Saved context" is the real saved query, omitted when absent ─────────────
 
-test("why-it-mattered uses the real searchContext.query, never invented", () => {
+test("saved context uses the real searchContext.query, never invented", () => {
   assert.match(savedShell, /function whyItMattered[\s\S]*ctxStr\(item, "query"\)/);
   assert.ok(savedShell.includes('data-testid="saved-item-why"'));
   // rendered only when present
   assert.match(savedShell, /\{why && \(/);
+});
+
+test('honest labelling: "Saved context", not the misleading "Why it mattered"', () => {
+  assert.ok(!savedShell.includes("Why it mattered"), 'no "Why it mattered" label remains');
+  assert.ok(savedShell.includes(">Saved context</span>"), 'card uses the "Saved context" label');
+  // compare sheet surfaces both honest datapoints, each only when present
+  assert.ok(savedShell.includes('data-testid="compare-source"'), "compare shows provenance source row");
+  assert.match(savedShell, /const source = sourceLabel\(it\);/);
+  assert.match(savedShell, /\{source && \(/);
+  assert.match(savedShell, /\{savedQuery && \(/);
 });
 
 // ── Compare: places only, capped at 4 ────────────────────────────────────────
