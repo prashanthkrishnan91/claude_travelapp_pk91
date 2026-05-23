@@ -26,6 +26,10 @@ const css = readFileSync(
   new URL("../src/app/globals.css", import.meta.url),
   "utf8",
 );
+const ideasPanel = readFileSync(
+  new URL("../src/components/trips/TripIdeasPanel.tsx", import.meta.url),
+  "utf8",
+);
 
 // ── Tray shell ────────────────────────────────────────────────────────────────
 
@@ -35,9 +39,17 @@ test("tray has a stable testid and is a modal dialog", () => {
   assert.match(tray, /aria-modal="true"/);
 });
 
-test("tray header communicates purpose (place one in / from your Private Folio)", () => {
+test("tray header communicates purpose — placement, not a duplicate Ideas page", () => {
   assert.match(tray, /Place one in\./);
-  assert.match(tray, /From your Private Folio\./);
+  assert.match(tray, /Place saved ideas into your plan/);
+  assert.match(tray, /from your Private Folio/i);
+});
+
+test("each card offers a quiet fallback to the legacy Ideas workspace", () => {
+  assert.match(tray, /data-testid="ideas-tray-manage-link"/);
+  assert.match(tray, /Edit note in Ideas/);
+  assert.match(tray, /Manage in Ideas/);
+  assert.match(tray, /onManage/);
 });
 
 test("tray shows the real candidate count from the ideas array", () => {
@@ -98,6 +110,14 @@ test("private note is italic serif (distinct from concierge reason)", () => {
   assert.match(tray, /jd-note-private[\s\S]{0,80}font-serif italic/);
 });
 
+test("tray reads the SAME note key as the legacy Ideas tab and the carryover", () => {
+  // The legacy TripIdeasPanel reads userNote ?? user_note; the Saved -> Trip
+  // Ideas carryover writes details.userNote. The tray must read the same shape
+  // so any note visible on the old tab is visible in the tray.
+  assert.match(ideasPanel, /d\.userNote \?\? d\.user_note/);
+  assert.match(tray, /x\.userNote \?\? x\.user_note/);
+});
+
 test("concierge reason is a distinct muted helper, shown only when real and not equal to the user note", () => {
   assert.match(tray, /data-testid="ideas-tray-note-concierge"/);
   assert.match(tray, /reason && reason !== note/);
@@ -148,6 +168,10 @@ test("tray actions are wired to real durable writes only", () => {
   assert.match(page, /onAssign=\{handleIdeaAssign\}/);
   assert.match(page, /onUpdateMeta=\{handleIdeaMeta\}/);
   assert.match(page, /onRemove=\{handleIdeaRemove\}/);
+});
+
+test("the manage fallback opens the legacy Ideas workspace (no new route)", () => {
+  assert.match(page, /onManage=\{\(\) => \{[\s\S]{0,120}setIdeasTrayOpen\(false\)[\s\S]{0,120}setActiveMobileWorkspace\("ideas"\)/);
 });
 
 test("v1A surfaces are not regressed (cover, Brief, Dayboard still present)", () => {

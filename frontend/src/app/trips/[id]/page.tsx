@@ -569,6 +569,10 @@ export default function TripDetailPage() {
         onAssign={handleIdeaAssign}
         onUpdateMeta={handleIdeaMeta}
         onRemove={handleIdeaRemove}
+        onManage={() => {
+          setIdeasTrayOpen(false);
+          setActiveMobileWorkspace("ideas");
+        }}
       />
 
       {/* ── AI Concierge Panel ─────────────────────────────────────────────── */}

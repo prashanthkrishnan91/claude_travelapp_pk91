@@ -76,6 +76,8 @@ export interface IdeasTrayProps {
     patch: { ideaStatus?: string; userNote?: string },
   ) => Promise<void>;
   onRemove: (itemId: string) => Promise<void>;
+  /** Open the legacy Ideas workspace for fuller management / note editing. */
+  onManage: () => void;
 }
 
 // ── Tray ────────────────────────────────────────────────────────────────────
@@ -86,7 +88,7 @@ export interface IdeasTrayProps {
 // columns, so v1B docks a drawer instead). Every action maps to a real durable
 // write; placement is day-level only (no fabricated slot like "· Dinner").
 
-export function IdeasTray({ open, onClose, days, ideas, onAssign, onUpdateMeta, onRemove }: IdeasTrayProps) {
+export function IdeasTray({ open, onClose, days, ideas, onAssign, onUpdateMeta, onRemove, onManage }: IdeasTrayProps) {
   const [filter, setFilter] = useState<string>("all");
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -145,7 +147,7 @@ export function IdeasTray({ open, onClose, days, ideas, onAssign, onUpdateMeta, 
           <div className="min-w-0">
             <h2 className="font-serif text-xl font-semibold text-ds-folio-ink leading-tight">Place one in.</h2>
             <p className="mt-0.5 text-xs italic text-ds-folio-ink-mist">
-              From your Private Folio.
+              Place saved ideas into your plan — from your Private Folio.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -202,6 +204,7 @@ export function IdeasTray({ open, onClose, days, ideas, onAssign, onUpdateMeta, 
                 onAssign={(dayId) => run(item.id, () => onAssign(item.id, dayId))}
                 onKeepMaybe={() => run(item.id, () => onUpdateMeta(item.id, d(item), { ideaStatus: "maybe" }))}
                 onRemove={() => run(item.id, () => onRemove(item.id))}
+                onManage={onManage}
               />
             ))
           )}
@@ -220,6 +223,7 @@ function IdeasTrayCard({
   onAssign,
   onKeepMaybe,
   onRemove,
+  onManage,
 }: {
   item: ItineraryItem;
   days: ItineraryDay[];
@@ -227,6 +231,7 @@ function IdeasTrayCard({
   onAssign: (dayId: string) => void;
   onKeepMaybe: () => void;
   onRemove: () => void;
+  onManage: () => void;
 }) {
   const [pickDay, setPickDay] = useState(false);
   const kind = KIND_META[item.itemType] ?? { label: "Idea", Icon: Sparkles };
@@ -352,6 +357,15 @@ function IdeasTrayCard({
             Keep as Maybe
           </button>
         )}
+        {/* Quiet fallback to the fuller legacy Ideas workspace (note editing etc.) */}
+        <button
+          type="button"
+          onClick={onManage}
+          data-testid="ideas-tray-manage-link"
+          className={SECONDARY_LINK}
+        >
+          {note ? "Edit note in Ideas" : "Manage in Ideas"}
+        </button>
         <button type="button" onClick={onRemove} disabled={busy} className={`${SECONDARY_LINK} ml-auto`}>
           Remove
         </button>
