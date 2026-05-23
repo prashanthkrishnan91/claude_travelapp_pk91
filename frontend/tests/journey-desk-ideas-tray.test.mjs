@@ -157,8 +157,11 @@ test("the v1A Brief 'Review ideas' opens the tray (not a legacy tab)", () => {
   assert.match(page, /const \[ideasTrayOpen, setIdeasTrayOpen\] = useState\(false\)/);
 });
 
-test("a discoverable Ideas Tray launcher exists in the Journey Desk area", () => {
-  assert.match(page, /data-testid="journey-desk-ideas-launcher"/);
+test("the Journey Desk overview has exactly one tray entry point (Brief 'Review ideas', no duplicate launcher pill)", () => {
+  // Brief "Review ideas" is the single primary launcher (tied to "N still to decide").
+  assert.match(page, /onReview=\{\(\) => setIdeasTrayOpen\(true\)\}/);
+  // The separate "Ideas tray N" launcher pill was removed — no duplicate CTA.
+  assert.doesNotMatch(page, /journey-desk-ideas-launcher/);
 });
 
 test("tray actions are wired to real durable writes only", () => {

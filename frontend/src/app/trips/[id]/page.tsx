@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Bookmark,
   CalendarDays,
   ChevronLeft,
   Pencil,
@@ -489,24 +488,6 @@ export default function TripDetailPage() {
           ideas={tripIdeas}
           onReview={() => setIdeasTrayOpen(true)}
         />
-      )}
-
-      {/* ── Ideas Tray launcher — quiet, discoverable from the planning area ── */}
-      {tripIdeas.length > 0 && (
-        <div className="mb-4 sm:mb-6 -mt-1 flex">
-          <button
-            type="button"
-            data-testid="journey-desk-ideas-launcher"
-            onClick={() => setIdeasTrayOpen(true)}
-            className="inline-flex items-center gap-2 min-h-[44px] rounded-full border border-ds-accent/30 px-4 text-xs font-medium text-ds-folio-ink-soft hover:text-ds-folio-ink hover:border-ds-accent transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
-          >
-            <Bookmark className="w-3.5 h-3.5 text-ds-accent" aria-hidden="true" />
-            Ideas tray
-            <span className="rounded-full bg-ds-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-ds-accent">
-              {tripIdeas.length}
-            </span>
-          </button>
-        </div>
       )}
 
       {/* ── Dayboard — collapsed day cards (the 10-second read) ────────────── */}
