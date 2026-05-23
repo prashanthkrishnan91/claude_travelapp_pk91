@@ -581,6 +581,16 @@ export default function TripDetailPage() {
         open={mapOpen}
         onClose={() => setMapOpen(false)}
         days={itineraryDays}
+        ideas={tripIdeas}
+        selectedDayId={selectedDayId}
+        onSelectDay={(dayId) => setSelectedDayId(dayId)}
+        onAssign={handleIdeaAssign}
+        onUpdateMeta={handleIdeaMeta}
+        onRemove={handleIdeaRemove}
+        onManage={() => {
+          setMapOpen(false);
+          setActiveMobileWorkspace("ideas");
+        }}
       />
 
       {/* ── Ideas Tray — placement-first (mobile sheet · desktop right drawer) ── */}

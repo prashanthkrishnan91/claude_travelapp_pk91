@@ -9499,6 +9499,83 @@
     color: var(--ds-marine-ink);
     text-decoration: underline;
   }
+  /* Real saved note inside an idea pin popup (read-only). */
+  .jd-trip-pin-popup-note {
+    margin-top: 3px;
+    font-family: var(--font-serif, serif);
+    font-style: italic;
+    font-size: 11px;
+    color: var(--ds-folio-ink);
+  }
+
+  /* ── Visual Itinerary Map v1A — Ideas Lens candidate marker ─────────────────
+     Unplaced ideas read as the same brass family as placed pins but are visibly
+     a *candidate*, not a placed stop: a hollow warm-paper disc with a brass rim
+     and a small brass center, vs the solid marine numbered planned stamp. */
+  .jd-idea-pin {
+    display: block;
+    width: 20px;
+    height: 20px;
+    border-radius: 9999px;
+    background: radial-gradient(circle at 50% 50%,
+      var(--ds-warm-paper) 0%,
+      var(--ds-warm-paper) 32%,
+      color-mix(in srgb, var(--ds-ember-brass) 30%, var(--ds-warm-paper)) 40%,
+      var(--ds-warm-paper) 46%);
+    border: 2px solid color-mix(in srgb, var(--ds-ember-brass) 90%, #fff);
+    box-shadow: 0 2px 5px rgba(31, 41, 55, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.3);
+  }
+  .jd-trip-pin-wrap--selected .jd-idea-pin {
+    box-shadow: 0 3px 9px rgba(31, 41, 55, 0.42),
+      0 0 0 3px color-mix(in srgb, var(--ds-ember-brass) 50%, transparent);
+    transform: scale(1.14);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .jd-trip-pin-wrap--selected .jd-idea-pin { transform: none; }
+  }
+
+  /* ── Lens switcher — restrained Trip / Day / Ideas segmented control ────────── */
+  .jd-lens-switch {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .jd-lens-tab {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 6px 10px;
+    border-radius: 9px;
+    border: 1px solid var(--ds-hairline);
+    background: color-mix(in srgb, var(--ds-warm-paper) 92%, transparent);
+    color: var(--ds-folio-ink-soft);
+    font-size: 12px;
+    font-weight: 600;
+    transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+  }
+  .jd-lens-tab:hover { color: var(--ds-folio-ink); }
+  .jd-lens-tab:focus-visible {
+    outline: 2px solid var(--ds-marine-ink);
+    outline-offset: 2px;
+  }
+  .jd-lens-tab--active {
+    color: var(--ds-marine-ink);
+    border-color: var(--ds-marine-ink);
+    background: color-mix(in srgb, var(--ds-marine-ink) 6%, var(--ds-warm-paper));
+  }
+  .jd-lens-tab-count {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--ds-folio-ink-mist);
+    opacity: 0.8;
+  }
+  .jd-lens-tab--active .jd-lens-tab-count { color: var(--ds-marine-ink); }
+  @media (prefers-reduced-motion: reduce) {
+    .jd-lens-tab { transition: none; }
+  }
 
   /* ── Map System v1B — shared Explore/Build map polish ──────────────────────
      The discovery map (TripMapView) now wears the same Atelier language as the

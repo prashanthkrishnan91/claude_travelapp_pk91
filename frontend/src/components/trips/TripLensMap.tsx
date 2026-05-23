@@ -23,6 +23,10 @@ export interface TripLensPin {
   time: string | null;
   order: number;
   mapsUrl: string;
+  /** "planned" = placed numbered stamp; "idea" = unplaced candidate marker. */
+  variant?: "planned" | "idea";
+  /** Real saved note, shown read-only in the idea popup when present. */
+  note?: string | null;
 }
 
 function escapeHtml(value: string): string {
@@ -35,14 +39,20 @@ function escapeHtml(value: string): string {
 }
 
 function popupHtml(pin: TripLensPin): string {
-  const meta = [`Day ${pin.dayNumber}`, pin.time ? pin.time : null, pin.kind]
+  const isIdea = pin.variant === "idea";
+  const meta = (isIdea ? [pin.kind] : [`Day ${pin.dayNumber}`, pin.time ? pin.time : null, pin.kind])
     .filter(Boolean)
     .map((part) => escapeHtml(String(part)))
     .join(" · ");
+  const note =
+    isIdea && pin.note && pin.note.trim()
+      ? `<span class="jd-trip-pin-popup-note">${escapeHtml(pin.note.trim())}</span>`
+      : "";
   return (
     `<div class="jd-trip-pin-popup">` +
     `<span class="jd-trip-pin-popup-title">${escapeHtml(pin.title)}</span>` +
     `<span class="jd-trip-pin-popup-meta">${meta}</span>` +
+    note +
     `<a class="jd-trip-pin-popup-link" href="${escapeHtml(pin.mapsUrl)}" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>` +
     `</div>`
   );
@@ -124,8 +134,14 @@ export function TripLensMap({ pins, selectedId, onSelect }: TripLensMapProps) {
 
       const latlngs: [number, number][] = [];
       pins.forEach((pin) => {
+        // Unplaced ideas get a distinct hollow candidate marker (same brass
+        // family, no placed-order numeral); placed items keep the numbered stamp.
+        const inner =
+          pin.variant === "idea"
+            ? `<span class="jd-idea-pin" aria-hidden="true"></span>`
+            : `<span class="jd-trip-pin">${escapeHtml(String(pin.order))}</span>`;
         const icon = L.divIcon({
-          html: `<span class="jd-trip-pin">${escapeHtml(String(pin.order))}</span>`,
+          html: inner,
           className: "jd-trip-pin-wrap",
           iconSize: [26, 26],
           iconAnchor: [13, 13],
