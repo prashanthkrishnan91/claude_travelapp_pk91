@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Loader2, Plus, Star, X, MapPin, Layers } from "lucide-react";
 import type { Map as LeafletMap, Marker as LeafletMarker, Circle as LeafletCircle } from "leaflet";
 import type { AttractionSearchResult, BestAreaRecommendation, RestaurantSearchResult } from "@/types";
+import { getMapProvider } from "@/lib/mapProvider";
 
 type PopupItem =
   | { type: "attraction"; item: AttractionSearchResult }
@@ -138,9 +139,10 @@ export function TripMapView({
         attributionControl: true,
       }).setView(center, 13);
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 19,
+      const tiles = getMapProvider();
+      L.tileLayer(tiles.tileUrl, {
+        attribution: tiles.attribution,
+        maxZoom: tiles.maxZoom,
       }).addTo(map);
 
       mapInstanceRef.current = map;
@@ -340,7 +342,7 @@ export function TripMapView({
       {/* Map element */}
       <div
         ref={mapContainerRef}
-        className="flex-1 rounded-xl overflow-hidden border border-slate-200"
+        className="atlas-map-surface flex-1 rounded-xl overflow-hidden border border-slate-200"
         style={{ minHeight: 380 }}
       />
 

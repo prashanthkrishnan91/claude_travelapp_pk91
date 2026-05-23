@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Map as LeafletMap, Marker as LeafletMarker } from "leaflet";
+import { getMapProvider } from "@/lib/mapProvider";
 
 // Journey Desk v2C — real Trip Lens pin map.
 //
@@ -84,9 +85,10 @@ export function TripLensMap({ pins, selectedId, onSelect }: TripLensMapProps) {
         attributionControl: true,
         scrollWheelZoom: false,
       });
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 19,
+      const tiles = getMapProvider();
+      L.tileLayer(tiles.tileUrl, {
+        attribution: tiles.attribution,
+        maxZoom: tiles.maxZoom,
       }).addTo(map);
       mapRef.current = map;
       // Drawer animates in; recompute size on the next frame so tiles render.

@@ -39,7 +39,11 @@ class TestRegistryCompleteness:
 
     # duffel_flights is now LINK_OUT + production_allowed=True (Flights v1 active provider).
     # ignav_flights is now DISABLED (schedule trust not certified).
-    APPROVED = {"google_places", "anthropic", "tavily", "yelp", "openweather", "duffel_flights"}
+    # maptiler_maps is MAP_TILE + production_allowed=True (visual basemap only).
+    APPROVED = {
+        "google_places", "anthropic", "tavily", "yelp", "openweather",
+        "duffel_flights", "maptiler_maps",
+    }
     DISABLED_OR_QUARANTINED = {
         "ignav_flights",
         "duffel_stays",
@@ -252,6 +256,64 @@ class TestDisabledBookingProviderBehavior:
             assert not can_create_addable_cards(pid), (
                 f"{pid!r} must not be able to create addable cards"
             )
+
+
+class TestMapTileProvider:
+    """MapTiler is a visual map tile (basemap) provider ONLY.
+
+    Map System v1: map provider choice is centrally registered for cost/
+    governance. MapTiler must NOT be a place/search/geocode/enrichment provider
+    or a card authority — it only supplies basemap tiles to the frontend.
+    """
+
+    def test_maptiler_present(self):
+        assert "maptiler_maps" in PROVIDER_REGISTRY
+
+    def test_maptiler_display_name(self):
+        assert get_provider("maptiler_maps").display_name == "MapTiler"
+
+    def test_maptiler_role_is_map_tile(self):
+        assert get_provider("maptiler_maps").role == ProviderRole.MAP_TILE
+
+    def test_maptiler_is_production_allowed(self):
+        assert is_production_allowed("maptiler_maps")
+
+    def test_maptiler_is_active(self):
+        # MAP_TILE is an active role (not disabled/quarantined/pending/evaluation).
+        assert is_provider_active("maptiler_maps")
+
+    def test_maptiler_requires_public_browser_key(self):
+        # Browser-public key only — never a server secret.
+        assert get_provider("maptiler_maps").required_env_vars == ("NEXT_PUBLIC_MAPTILER_KEY",)
+
+    def test_maptiler_cannot_create_addable_cards(self):
+        assert not can_create_addable_cards("maptiler_maps")
+
+    def test_maptiler_not_in_addable_card_providers(self):
+        assert "maptiler_maps" not in ADDABLE_CARD_PROVIDERS
+        # Google Places remains the only addable-card authority.
+        assert ADDABLE_CARD_PROVIDERS == frozenset({"google_places"})
+
+    def test_maptiler_is_not_enrichment(self):
+        # Not an enrichment/corroboration provider — it is a visual tile provider.
+        entry = get_provider("maptiler_maps")
+        assert entry.can_enrich_only is False
+
+    def test_maptiler_supported_verticals_are_map_surfaces_only(self):
+        assert get_provider("maptiler_maps").supported_verticals == ("map", "trip", "explore")
+
+    def test_maptiler_is_not_a_place_search_or_geocode_authority(self):
+        # No place/restaurant/hotel/attraction vertical, and not canonical.
+        entry = get_provider("maptiler_maps")
+        assert entry.role != ProviderRole.CANONICAL
+        for vertical in ("place", "restaurant", "hotel", "attraction", "flight"):
+            assert vertical not in entry.supported_verticals
+
+    def test_maptiler_documents_public_key_and_domain_restriction(self):
+        notes = get_provider("maptiler_maps").cost_notes
+        assert "NEXT_PUBLIC_MAPTILER_KEY" in notes
+        assert "domains" in notes.lower()
+        assert "non-commercial" in notes.lower()
 
 
 # ---------------------------------------------------------------------------

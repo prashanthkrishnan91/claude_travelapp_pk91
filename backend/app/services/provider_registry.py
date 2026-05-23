@@ -16,6 +16,8 @@ Approved provider stack (production_allowed=True):
   - tavily         : optional research context only
   - yelp           : optional enrichment/corroboration only
   - openweather    : optional trip/weather ambience only
+  - maptiler_maps  : visual map tile (basemap) provider only; NOT a place/search/
+                     geocode/enrichment provider and cannot mint addable cards
 
 Active flight provider (production_allowed=True, search-only):
   - duffel_flights : live cash flight search via Duffel offer requests;
@@ -43,6 +45,7 @@ from typing import FrozenSet, Optional, Tuple
 
 class ProviderRole(str, Enum):
     CANONICAL = "canonical"        # place identity + card minting (Google Places only)
+    MAP_TILE = "map_tile"          # visual basemap tiles only; no place/search/geocode authority
     REASONING = "reasoning"        # LLM copy / notes; cannot mint cards (Anthropic)
     RESEARCH = "research"          # optional search context (Tavily)
     ENRICHMENT = "enrichment"      # optional corroboration, no card minting (Yelp)
@@ -123,6 +126,24 @@ PROVIDER_REGISTRY: dict[str, ProviderEntry] = {
         can_enrich_only=True,
         supported_verticals=(),
         cost_notes="Trip/weather ambience context only.",
+    ),
+    "maptiler_maps": ProviderEntry(
+        provider_id="maptiler_maps",
+        display_name="MapTiler",
+        role=ProviderRole.MAP_TILE,
+        required_env_vars=("NEXT_PUBLIC_MAPTILER_KEY",),
+        production_allowed=True,
+        can_create_addable_cards=False,
+        can_enrich_only=False,
+        supported_verticals=("map", "trip", "explore"),
+        cost_notes=(
+            "Visual map tile (raster basemap) provider ONLY. Personal/non-commercial "
+            "free plan. Browser-public key NEXT_PUBLIC_MAPTILER_KEY — never a server "
+            "secret. Monitor monthly sessions/requests and restrict allowed domains in "
+            "the MapTiler dashboard. NOT a place provider, geocoder, search provider, or "
+            "card authority: cannot mint addable place cards or enrich place data. "
+            "OpenStreetMap public tiles remain the fallback when the key is absent."
+        ),
     ),
     # ── Disabled / quarantined providers ─────────────────────────────────────
     # These entries fail closed: no API calls, no mock data, no user-visible

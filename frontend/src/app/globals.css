@@ -9502,28 +9502,38 @@
 
 }
 
-/* ── Journey Desk v2C — Leaflet skin (UNLAYERED on purpose) ───────────────────
+/* ── Map System v1 — shared Leaflet atlas skin (UNLAYERED on purpose) ─────────
    Leaflet's CDN stylesheet is injected unlayered at runtime, and unlayered
    declarations beat @layer ones regardless of specificity. To restyle Leaflet's
-   OWN classes (controls, attribution, popup, container bg) we must also be
-   unlayered and win on specificity. Every selector is scoped under .jd-trip-map
-   so the discovery TripMapView is untouched. Attribution is restyled, NOT hidden. */
+   OWN classes (controls, attribution, container bg) we must also be unlayered
+   and win on specificity. These selectors are now SHARED between the Journey
+   Desk Trip Lens map (.jd-trip-map) and the Explore/Build discovery map
+   (.atlas-map-surface) so both surfaces read as the same warm muted atlas:
+   muted/warm tiles, paper-styled zoom controls, quiet attribution (NEVER
+   hidden). Discovery data semantics (markers, heatmap, best-area circle) are
+   untouched — those live on the marker/overlay panes, not the tile pane.
+   In each group .jd-trip-map is listed last (its journey-desk pin popup skin
+   below stays scoped to .jd-trip-map only). */
 
+.atlas-map-surface.leaflet-container,
 .jd-trip-map.leaflet-container {
   background: var(--ds-linen);
 }
 /* Muted, slightly warm tiles so the chart sits in the paper world — kept
    legible (gentle saturation/contrast only; labels stay readable). */
+.atlas-map-surface .leaflet-tile-pane,
 .jd-trip-map .leaflet-tile-pane {
   filter: saturate(0.78) brightness(1.02) contrast(0.94) sepia(0.1);
 }
 /* Paper-styled zoom controls — rounded, hairline, marine hover. */
+.atlas-map-surface .leaflet-control-zoom,
 .jd-trip-map .leaflet-control-zoom {
   border: none;
   border-radius: 10px;
   overflow: hidden;
   box-shadow: var(--ds-paper-elevation-1);
 }
+.atlas-map-surface .leaflet-control-zoom a,
 .jd-trip-map .leaflet-control-zoom a {
   width: 30px;
   height: 30px;
@@ -9534,22 +9544,27 @@
   font-weight: 600;
   transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
 }
+.atlas-map-surface .leaflet-control-zoom a + a,
 .jd-trip-map .leaflet-control-zoom a + a { border-top: none; }
+.atlas-map-surface .leaflet-control-zoom a:hover,
 .jd-trip-map .leaflet-control-zoom a:hover {
   background: var(--ds-marine-ink);
   color: var(--ds-pearl-cream, #fff);
   border-color: var(--ds-marine-ink);
 }
+.atlas-map-surface .leaflet-control-zoom a:focus-visible,
 .jd-trip-map .leaflet-control-zoom a:focus-visible {
   outline: 2px solid var(--ds-accent);
   outline-offset: 1px;
 }
 /* Attribution kept visible — quiet paper tone, never hidden. */
+.atlas-map-surface .leaflet-control-attribution,
 .jd-trip-map .leaflet-control-attribution {
   background: color-mix(in srgb, var(--ds-warm-paper) 88%, transparent);
   color: var(--ds-folio-ink-mist);
   font-size: 9px;
 }
+.atlas-map-surface .leaflet-control-attribution a,
 .jd-trip-map .leaflet-control-attribution a { color: var(--ds-marine-ink); }
 /* Paper popup. */
 .jd-trip-map .leaflet-popup.jd-trip-pin-popup-shell .leaflet-popup-content-wrapper {
@@ -9563,5 +9578,6 @@
   box-shadow: -1px 1px 1px color-mix(in srgb, var(--ds-ember-brass) 20%, transparent);
 }
 @media (prefers-reduced-motion: reduce) {
+  .atlas-map-surface .leaflet-control-zoom a,
   .jd-trip-map .leaflet-control-zoom a { transition: none; }
 }
