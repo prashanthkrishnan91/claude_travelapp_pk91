@@ -9235,4 +9235,76 @@
     .folio-compare-tray { bottom: 28px; }
   }
 
+  /* ─────────────────────────────────────────────────────────────────────
+     JOURNEY DESK V1 — final planning workspace (trip detail)
+     Source: docs/ai/design/JOURNEY_DESK_V1_BLUEPRINT.md + approved v2 prototype.
+     v1A: one dark cinematic cover hero · calm paper Brief · collapsed Dayboard.
+     Warm paper stays the default world; the cover is the single cinematic
+     punctuation. Brass is accent-only; the decision dot is never an alert.
+  ───────────────────────────────────────────────────────────────────── */
+
+  /* The one dark cinematic cover hero. Warm-dark (umber) base, brass hairline,
+     ambient warmth + corner vignette — never pure black, never a SaaS header. */
+  .journey-desk-cover {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background-color: var(--ds-cinema-deep);
+    background-image:
+      radial-gradient(ellipse 75% 55% at 18% -10%, rgba(224, 184, 136, 0.14) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 60% at 100% 115%, rgba(31, 66, 86, 0.20) 0%, transparent 60%);
+    border-radius: 1rem;
+    border: 1px solid rgba(197, 148, 77, 0.16);
+    box-shadow:
+      0 4px 10px rgba(0, 0, 0, 0.34),
+      0 18px 50px rgba(0, 0, 0, 0.24),
+      inset 0 1px 0 rgba(235, 222, 198, 0.06);
+  }
+  .journey-desk-cover::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(ellipse 120% 90% at 50% 35%, transparent 55%, rgba(0, 0, 0, 0.42) 100%);
+  }
+
+  /* Calm Brief — warm paper panel under the cover. Answers, in one glance:
+     where · what is fixed · what still needs choosing. */
+  .journey-desk-brief {
+    background: var(--ds-warm-paper);
+    border: 1px solid var(--ds-hairline);
+    border-radius: 14px;
+    box-shadow: var(--ds-paper-elevation-1);
+  }
+  .jd-brief-row + .jd-brief-row {
+    border-top: 1px solid color-mix(in srgb, var(--ds-hairline) 70%, transparent);
+  }
+
+  /* Dayboard — collapsed day cards (the 10-second read). */
+  .jd-day-card {
+    background: var(--ds-bone);
+    border: 1px solid var(--ds-hairline);
+    border-radius: 12px;
+    box-shadow: var(--ds-paper-elevation-1);
+    transition: box-shadow 200ms ease, transform 200ms ease;
+  }
+  .jd-day-card:hover {
+    box-shadow: var(--ds-paper-elevation-2);
+    transform: translateY(-1px);
+  }
+  /* brass still-deciding dot — calm accent, never a red/alert pattern */
+  .jd-decide-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: var(--ds-ember-brass);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-ember-brass) 18%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .jd-day-card { transition: none; }
+    .jd-day-card:hover { transform: none; }
+  }
+
 }

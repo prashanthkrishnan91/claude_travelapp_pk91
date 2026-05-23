@@ -243,17 +243,20 @@ describe("Trips page — paper card surfaces", () => {
 describe("Trip detail page — paper planning panels", () => {
   const page = readSrc("app/trips/[id]/page.tsx");
 
-  it("TripChapterCover uses folio-paper-panel (not advisor-desk-panel)", () => {
+  // Journey Desk v1A: the trip cover is now the single dark cinematic hero
+  // (journey-desk-cover), the one allowed cinema punctuation on the otherwise
+  // warm-paper desk. Paper panels remain for the Brief, modals and the cockpit.
+  it("TripChapterCover uses the journey-desk cinematic cover (not advisor-desk-panel)", () => {
     const idx = page.indexOf("trip-chapter-cover");
     const block = page.slice(idx - 100, idx + 500);
-    assert.ok(block.includes("folio-paper-panel"), "TripChapterCover must use folio-paper-panel");
+    assert.ok(block.includes("journey-desk-cover"), "TripChapterCover must use the journey-desk cinematic cover");
     assert.ok(!block.includes("advisor-desk-panel"), "TripChapterCover must not use dark advisor-desk-panel");
   });
 
-  it("TripChapterCover destination heading uses folio-ink text", () => {
+  it("TripChapterCover destination heading uses a legible light text token on the dark cover", () => {
     const idx = page.indexOf("chapter-destination-heading");
     const block = page.slice(idx - 100, idx + 600);
-    assert.ok(block.includes("folio-ink"), "TripChapterCover heading must use folio-ink text");
+    assert.ok(block.includes("text-ds-text"), "TripChapterCover heading must use a legible light text token on the cinematic cover");
   });
 
   it("TripChapterCover primary action (AI Concierge) uses marine-ink fill", () => {
