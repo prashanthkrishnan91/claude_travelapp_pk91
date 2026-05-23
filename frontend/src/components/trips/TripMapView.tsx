@@ -194,16 +194,19 @@ export function TripMapView({
         heatLayerRef.current = null;
       }
 
-      const makeIcon = (color: string) =>
+      // Shared premium marker family (matches the Journey Desk pin language):
+      // a warm paper-ringed disc — marine for attractions, brass/ember for
+      // restaurants. Placement (lat/lng) is unchanged; only the visual changes.
+      const makeIcon = (variant: "attraction" | "restaurant") =>
         L.divIcon({
-          html: `<span style="display:block;width:14px;height:14px;border-radius:50%;background:${color};border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)"></span>`,
-          className: "",
-          iconSize: [14, 14],
-          iconAnchor: [7, 7],
+          html: `<span class="atlas-map-marker-dot atlas-map-marker-dot--${variant}"></span>`,
+          className: "atlas-map-marker",
+          iconSize: [22, 22],
+          iconAnchor: [11, 11],
         });
 
-      const blueIcon = makeIcon("#2563eb");
-      const orangeIcon = makeIcon("#ea580c");
+      const attractionIcon = makeIcon("attraction");
+      const restaurantIcon = makeIcon("restaurant");
       const heatPoints: [number, number, number][] = [];
 
       attractions.forEach((a, i) => {
@@ -211,7 +214,7 @@ export function TripMapView({
         const lat = (a as AttractionSearchResult & { lat?: number }).lat ?? center[0] + dLat;
         const lng = (a as AttractionSearchResult & { lng?: number }).lng ?? center[1] + dLng;
         heatPoints.push([lat, lng, computeWeight(a)]);
-        const marker = L.marker([lat, lng], { icon: blueIcon });
+        const marker = L.marker([lat, lng], { icon: attractionIcon });
         marker.on("click", () => {
           onMarkerClick?.(a.id);
           setPopup({ type: "attraction", item: a });
@@ -225,7 +228,7 @@ export function TripMapView({
         const lat = (r as RestaurantSearchResult & { lat?: number }).lat ?? center[0] + dLat;
         const lng = (r as RestaurantSearchResult & { lng?: number }).lng ?? center[1] + dLng;
         heatPoints.push([lat, lng, computeWeight(r)]);
-        const marker = L.marker([lat, lng], { icon: orangeIcon });
+        const marker = L.marker([lat, lng], { icon: restaurantIcon });
         marker.on("click", () => {
           onMarkerClick?.(r.id);
           setPopup({ type: "restaurant", item: r });
@@ -262,8 +265,13 @@ export function TripMapView({
     applyMode(mapMode);
   }, [mapMode, applyMode]);
 
-  // Pan to active marker when it changes
+  // Pan to active marker when it changes, and reflect it with the shared
+  // active-marker ring (brass lift) — visual only; placement is unchanged.
   useEffect(() => {
+    markersRef.current.forEach((m, id) => {
+      const el = m.getElement();
+      if (el) el.classList.toggle("atlas-map-marker--active", id === activeMarkerId);
+    });
     if (!activeMarkerId || !mapInstanceRef.current) return;
     const marker = markersRef.current.get(activeMarkerId);
     if (marker) mapInstanceRef.current.panTo(marker.getLatLng(), { animate: true });
@@ -317,9 +325,9 @@ export function TripMapView({
     <div className="relative flex flex-col gap-2" style={{ height: "100%" }}>
       {/* Loading overlay while geocoding */}
       {geocoding && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-slate-50/90">
-          <Loader2 className="w-5 h-5 animate-spin text-sky-500" />
-          <span className="ml-2 text-sm text-slate-400">Locating {destination}…</span>
+        <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-ds-paper/90">
+          <Loader2 className="w-5 h-5 animate-spin text-ds-marine-ink" />
+          <span className="ml-2 text-sm text-ds-folio-ink-mist">Locating {destination}…</span>
         </div>
       )}
 
@@ -342,45 +350,39 @@ export function TripMapView({
       {/* Map element */}
       <div
         ref={mapContainerRef}
-        className="atlas-map-surface flex-1 rounded-xl overflow-hidden border border-slate-200"
+        className="atlas-map-surface flex-1 rounded-xl overflow-hidden border border-ds-hairline"
         style={{ minHeight: 380 }}
       />
 
-      {/* Marker popup card */}
+      {/* Marker popup card — warm paper Atelier popup (matches Journey Desk) */}
       {popup && (
-        <div className="absolute bottom-14 left-1 right-1 z-[900] bg-white rounded-xl shadow-xl border border-slate-200 p-3">
+        <div className="atlas-map-popup absolute bottom-14 left-1 right-1 z-[900] p-3">
           <button
             onClick={() => setPopup(null)}
-            className="absolute top-2 right-2 p-0.5 rounded text-slate-400 hover:text-slate-600 transition-colors"
+            aria-label="Close"
+            className="absolute top-2 right-2 p-0.5 rounded text-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors"
           >
             <X className="w-3.5 h-3.5" />
           </button>
-          <p className="text-sm font-bold text-slate-900 pr-5 leading-tight">{popup.item.name}</p>
-          <p className="text-xs text-slate-400 mt-0.5 leading-none">
+          <p className="font-serif text-sm font-semibold text-ds-folio-ink pr-5 leading-tight">{popup.item.name}</p>
+          <p className="text-xs text-ds-folio-ink-mist mt-0.5 leading-none">
             {popup.type === "attraction"
               ? (popup.item as AttractionSearchResult).category
               : (popup.item as RestaurantSearchResult).cuisine}
           </p>
           {popup.item.rating != null && (
             <div className="flex items-center gap-1 mt-1.5">
-              <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-              <span className="text-xs font-semibold text-amber-600">{popup.item.rating.toFixed(1)}</span>
+              <Star className="w-3 h-3 text-ds-accent fill-ds-accent" />
+              <span className="text-xs font-semibold text-ds-folio-ink">{popup.item.rating.toFixed(1)}</span>
               {popup.item.numReviews != null && (
-                <span className="text-xs text-slate-400">({popup.item.numReviews.toLocaleString()})</span>
+                <span className="text-xs text-ds-folio-ink-mist">({popup.item.numReviews.toLocaleString()})</span>
               )}
             </div>
           )}
           {popup.item.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
               {popup.item.tags.slice(0, 4).map((t) => (
-                <span
-                  key={t}
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                    popup.type === "attraction"
-                      ? "bg-blue-100 text-blue-700"
-                      : "bg-orange-100 text-orange-700"
-                  }`}
-                >
+                <span key={t} className="atlas-map-popup-chip">
                   {t}
                 </span>
               ))}
@@ -389,7 +391,7 @@ export function TripMapView({
           <button
             onClick={handleAddFromPopup}
             disabled={addingId !== null}
-            className="mt-2.5 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold disabled:opacity-50 transition-colors"
+            className="mt-2.5 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-ds-marine-ink hover:bg-ds-marine-soft text-ds-paper text-xs font-semibold disabled:opacity-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
           >
             {addingId !== null
               ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -400,23 +402,23 @@ export function TripMapView({
       )}
 
       {/* Legend + Pins/Heatmap toggle */}
-      <div className="flex items-center gap-4 px-3 py-2 bg-white rounded-lg border border-slate-100 shadow-sm text-xs text-slate-500">
+      <div className="flex items-center gap-4 px-3 py-2 bg-ds-paper rounded-lg border border-ds-hairline shadow-sm text-xs text-ds-folio-ink-mist">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-600 flex-shrink-0" />
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-ds-marine-ink flex-shrink-0" />
           {attractions.length} Attractions
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-orange-600 flex-shrink-0" />
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-ds-accent flex-shrink-0" />
           {restaurants.length} Restaurants
         </span>
 
-        <div className="ml-auto flex rounded-lg overflow-hidden border border-slate-200">
+        <div className="ml-auto flex rounded-lg overflow-hidden border border-ds-hairline">
           <button
             onClick={() => setMapMode("pins")}
             className={`flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium transition-colors ${
               mapMode === "pins"
-                ? "bg-sky-600 text-white"
-                : "bg-white text-slate-500 hover:bg-slate-50"
+                ? "bg-ds-marine-ink text-ds-paper"
+                : "bg-ds-paper text-ds-folio-ink-mist hover:bg-ds-linen"
             }`}
           >
             <MapPin className="w-3 h-3" />
@@ -424,10 +426,10 @@ export function TripMapView({
           </button>
           <button
             onClick={() => setMapMode("heatmap")}
-            className={`flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium transition-colors border-l border-slate-200 ${
+            className={`flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium transition-colors border-l border-ds-hairline ${
               mapMode === "heatmap"
-                ? "bg-orange-500 text-white"
-                : "bg-white text-slate-500 hover:bg-slate-50"
+                ? "bg-ds-accent text-ds-folio-ink"
+                : "bg-ds-paper text-ds-folio-ink-mist hover:bg-ds-linen"
             }`}
           >
             <Layers className="w-3 h-3" />
