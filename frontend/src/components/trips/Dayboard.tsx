@@ -10,6 +10,8 @@ export interface DayboardProps {
   selectedDayId?: string | null;
   /** Select the day to open its expanded panel in the Journey Desk area. */
   onSelectDay: (day: ItineraryDay) => void;
+  /** Opens the Trip Map fold-out (quiet, single entry point). */
+  onOpenMap?: () => void;
 }
 
 // Timezone-safe display ("Thu, Nov 12") — mirrors ItineraryDayColumn.formatDate
@@ -35,7 +37,7 @@ function formatDayDate(dateStr?: string): string {
 // still being decided. Tapping a day opens it in the itinerary workspace.
 // No weather, no fabricated counts (blueprint §5 / §8).
 
-export function Dayboard({ days, selectedDayId, onSelectDay }: DayboardProps) {
+export function Dayboard({ days, selectedDayId, onSelectDay, onOpenMap }: DayboardProps) {
   if (days.length === 0) return null;
 
   const activeDays = days.filter((d) => (d.items ?? []).length > 0).length;
@@ -46,10 +48,22 @@ export function Dayboard({ days, selectedDayId, onSelectDay }: DayboardProps) {
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ds-accent">
           Dayboard
         </p>
-        <span className="text-xs text-ds-folio-ink-mist">
-          {activeDays === days.length
-            ? "All days planned"
-            : `${activeDays} of ${days.length} days planned`}
+        <span className="inline-flex items-baseline gap-3">
+          <span className="text-xs text-ds-folio-ink-mist">
+            {activeDays === days.length
+              ? "All days planned"
+              : `${activeDays} of ${days.length} days planned`}
+          </span>
+          {onOpenMap && (
+            <button
+              type="button"
+              data-testid="journey-desk-trip-map-link"
+              onClick={onOpenMap}
+              className="text-xs font-medium text-ds-folio-ink-soft hover:text-ds-marine-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
+            >
+              Trip map
+            </button>
+          )}
         </span>
       </div>
 

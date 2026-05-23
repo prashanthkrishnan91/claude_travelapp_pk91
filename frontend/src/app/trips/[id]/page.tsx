@@ -18,6 +18,7 @@ import { TripBrief } from "@/components/trips/TripBrief";
 import { Dayboard } from "@/components/trips/Dayboard";
 import { ExpandedDayPanel } from "@/components/trips/ExpandedDayPanel";
 import { IdeasTray } from "@/components/trips/IdeasTray";
+import { MapFoldOut } from "@/components/trips/MapFoldOut";
 import { TripReadinessCockpit } from "@/components/trips/TripReadinessCockpit";
 import { OptimizeTripModal } from "@/components/trips/OptimizeTripModal";
 import { AIConciergePanel } from "@/components/trips/AIConciergePanel";
@@ -87,6 +88,7 @@ export default function TripDetailPage() {
   const [ideasTrayOpen, setIdeasTrayOpen] = useState(false);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [cockpitOpen,   setCockpitOpen]   = useState(false);
+  const [mapOpen,       setMapOpen]       = useState(false);
   const [tripBuilderKey, setTripBuilderKey] = useState(0);
   const [tripIdeasKey,  setTripIdeasKey]  = useState(0);
   const [activeMobileWorkspace, setActiveMobileWorkspace] = useState<MobileWorkspace>("brief");
@@ -499,6 +501,7 @@ export default function TripDetailPage() {
         days={itineraryDays}
         selectedDayId={selectedDayId}
         onSelectDay={(day) => setSelectedDayId(day.id)}
+        onOpenMap={() => setMapOpen(true)}
       />
 
       {/* ── Expanded Day — the selected day's planning workspace ────────────── */}
@@ -572,6 +575,13 @@ export default function TripDetailPage() {
         </div>
 
       </div>{/* end trip-mobile-workspace */}
+
+      {/* ── Map Fold-Out — Trip Lens (mobile sheet · desktop right drawer) ───── */}
+      <MapFoldOut
+        open={mapOpen}
+        onClose={() => setMapOpen(false)}
+        days={itineraryDays}
+      />
 
       {/* ── Ideas Tray — placement-first (mobile sheet · desktop right drawer) ── */}
       <IdeasTray
