@@ -183,7 +183,13 @@ export function MapFoldOut({ open, onClose, days }: MapFoldOutProps) {
             list stays reachable on mobile; a panel, never the whole drawer). */}
         {hasPins ? (
           <div className="flex-shrink-0 px-5 pt-3" data-testid="journey-desk-trip-map">
-            <TripLensMap pins={pins} selectedId={selectedPinId} onSelect={setSelectedPinId} />
+            <div className="jd-atlas-frame">
+              <span className="jd-atlas-caption" aria-hidden="true">
+                <MapPin className="w-3 h-3" />
+                Trip lens
+              </span>
+              <TripLensMap pins={pins} selectedId={selectedPinId} onSelect={setSelectedPinId} />
+            </div>
           </div>
         ) : null}
 

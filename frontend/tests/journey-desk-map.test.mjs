@@ -25,6 +25,10 @@ const lensMap = readFileSync(
   new URL("../src/components/trips/TripLensMap.tsx", import.meta.url),
   "utf8",
 );
+const css = readFileSync(
+  new URL("../src/app/globals.css", import.meta.url),
+  "utf8",
+);
 const dayboard = readFileSync(
   new URL("../src/components/trips/Dayboard.tsx", import.meta.url),
   "utf8",
@@ -146,6 +150,43 @@ test("link rows still open a real Maps URL in a new tab", () => {
 
 test("honest footer explains pins come from saved coordinates only", () => {
   assert.match(map, /saved coordinates/);
+});
+
+// ── Premium "folded atlas" surface (visual patch — real pins unchanged) ──────
+
+test("the map sits inside a warm atlas frame with a Trip-lens caption", () => {
+  assert.match(map, /jd-atlas-frame/);
+  assert.match(map, /jd-atlas-caption/);
+  assert.match(css, /\.jd-atlas-frame\s*\{/);
+  assert.match(css, /\.jd-atlas-caption\s*\{/);
+});
+
+test("OSM tiles get a scoped muted/warm filter (legibility kept, not raw default)", () => {
+  assert.match(css, /\.jd-trip-map \.leaflet-tile-pane\s*\{[\s\S]*?filter:/);
+  assert.match(css, /saturate\(0\.78\)/);
+});
+
+test("Leaflet zoom controls are restyled to paper with a marine hover", () => {
+  assert.match(css, /\.jd-trip-map \.leaflet-control-zoom a\s*\{/);
+  assert.match(css, /\.jd-trip-map \.leaflet-control-zoom a:hover\s*\{[\s\S]*?--ds-marine-ink/);
+});
+
+test("attribution is restyled but NOT hidden", () => {
+  assert.match(css, /\.jd-trip-map \.leaflet-control-attribution\s*\{/);
+  // Never suppress attribution.
+  assert.doesNotMatch(css, /\.leaflet-control-attribution[\s\S]{0,80}display:\s*none/);
+});
+
+test("pins are brass-rimmed marine stamps with a selected state (reduced-motion safe)", () => {
+  assert.match(css, /\.jd-trip-pin\s*\{[\s\S]*?--ds-marine-ink/);
+  assert.match(css, /\.jd-trip-pin\s*\{[\s\S]*?--ds-ember-brass/);
+  assert.match(css, /\.jd-trip-pin-wrap--selected/);
+  assert.match(css, /prefers-reduced-motion: reduce[\s\S]*?\.jd-trip-pin-wrap--selected \.jd-trip-pin \{ transform: none/);
+});
+
+test("TripLensMap toggles the selected stamp class via the public marker element", () => {
+  assert.match(lensMap, /marker\.getElement\(\)/);
+  assert.match(lensMap, /classList\.toggle\("jd-trip-pin-wrap--selected"/);
 });
 
 // ── Single quiet entry point ──────────────────────────────────────────────────

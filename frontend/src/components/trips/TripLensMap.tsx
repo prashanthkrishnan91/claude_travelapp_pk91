@@ -150,12 +150,18 @@ export function TripLensMap({ pins, selectedId, onSelect }: TripLensMapProps) {
     };
   }, [ready, pins, onSelect]);
 
-  // Open the popup for the externally selected pin.
+  // Reflect the externally selected pin: brass-ring the chosen stamp, open its popup.
   useEffect(() => {
-    if (!ready || !selectedId) return;
-    const marker = markersRef.current.get(selectedId);
-    if (marker) marker.openPopup();
-  }, [ready, selectedId]);
+    if (!ready) return;
+    markersRef.current.forEach((marker, id) => {
+      const el = marker.getElement();
+      if (el) el.classList.toggle("jd-trip-pin-wrap--selected", id === selectedId);
+    });
+    if (selectedId) {
+      const marker = markersRef.current.get(selectedId);
+      if (marker) marker.openPopup();
+    }
+  }, [ready, selectedId, pins]);
 
   return (
     <div

@@ -9378,22 +9378,73 @@
   }
 
   /* ── Journey Desk v2C — real Trip Lens pin map ─────────────────────────────
-     Restrained, premium pins plotted ONLY from validated real coordinates. */
-  .jd-trip-map {
-    height: 38vh;
-    max-height: 320px;
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid var(--ds-hairline);
+     A premium "folded atlas" surface: warm paper frame around a muted OSM tile
+     layer, paper-styled Leaflet controls, and brass-rimmed marine stamps. Pins
+     are plotted ONLY from validated real coordinates (no fabrication). All
+     Leaflet overrides are SCOPED under .jd-trip-map so the discovery TripMapView
+     is untouched. Attribution is restyled, never hidden. */
+
+  /* Atlas frame — the map reads as a folded chart resting on the desk, not a
+     screenshot pasted into the drawer. */
+  .jd-atlas-frame {
+    position: relative;
+    padding: 6px;
+    border-radius: 14px;
+    background:
+      linear-gradient(160deg,
+        color-mix(in srgb, var(--ds-warm-paper) 96%, var(--ds-ember-brass) 4%) 0%,
+        var(--ds-warm-paper) 60%);
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 30%, var(--ds-hairline));
     box-shadow: var(--ds-paper-elevation-1);
+  }
+  /* Soft inner shadow over the map edge — the "fold" depth. */
+  .jd-atlas-frame::after {
+    content: "";
+    position: absolute;
+    inset: 6px;
+    border-radius: 10px;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ds-ember-brass) 18%, transparent),
+      inset 0 2px 10px rgba(31, 41, 55, 0.12);
+    z-index: 450;
+  }
+  /* Quiet lens badge, top-right so it never collides with the top-left zoom. */
+  .jd-atlas-caption {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--ds-warm-paper) 90%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 35%, var(--ds-hairline));
+    color: var(--ds-folio-ink);
+    font-size: 10px;
+    font-weight: 600;
+    box-shadow: var(--ds-paper-elevation-1);
+    pointer-events: none;
+  }
+  .jd-atlas-caption svg { color: var(--ds-accent); }
+
+  .jd-trip-map {
+    height: 36vh;
+    max-height: 300px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--ds-linen);
   }
   @media (min-width: 1024px) {
     .jd-trip-map {
-      height: 280px;
-      max-height: 280px;
+      height: 260px;
+      max-height: 260px;
     }
   }
-  /* Numbered marker — brass-edged marine disc, reflects placed order only */
+
+  /* Numbered stamp — brass-rimmed marine disc, soft paper shadow; the number
+     reflects existing placed order only (never route optimization). */
   .jd-trip-pin {
     display: flex;
     align-items: center;
@@ -9401,15 +9452,30 @@
     width: 26px;
     height: 26px;
     border-radius: 9999px;
-    background: var(--ds-marine-ink);
+    background: radial-gradient(circle at 35% 30%,
+      color-mix(in srgb, var(--ds-marine-ink) 86%, #fff) 0%,
+      var(--ds-marine-ink) 72%);
     color: var(--ds-pearl-cream, #fff);
-    border: 2px solid color-mix(in srgb, var(--ds-ember-brass) 80%, #fff);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.32);
+    border: 2px solid color-mix(in srgb, var(--ds-ember-brass) 85%, #fff);
+    box-shadow: 0 2px 5px rgba(31, 41, 55, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.25);
     font-family: var(--font-serif, serif);
     font-size: 12px;
     font-weight: 600;
     line-height: 1;
   }
+  .jd-trip-pin-wrap { transition: transform 140ms ease; }
+  /* Selected/open stamp — brass ring + gentle lift. */
+  .jd-trip-pin-wrap--selected { z-index: 1000 !important; }
+  .jd-trip-pin-wrap--selected .jd-trip-pin {
+    box-shadow: 0 3px 9px rgba(31, 41, 55, 0.42),
+      0 0 0 3px color-mix(in srgb, var(--ds-ember-brass) 45%, transparent);
+    transform: scale(1.12);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .jd-trip-pin-wrap { transition: none; }
+    .jd-trip-pin-wrap--selected .jd-trip-pin { transform: none; }
+  }
+
   .jd-trip-pin-popup {
     display: flex;
     flex-direction: column;
@@ -9434,4 +9500,68 @@
     text-decoration: underline;
   }
 
+}
+
+/* ── Journey Desk v2C — Leaflet skin (UNLAYERED on purpose) ───────────────────
+   Leaflet's CDN stylesheet is injected unlayered at runtime, and unlayered
+   declarations beat @layer ones regardless of specificity. To restyle Leaflet's
+   OWN classes (controls, attribution, popup, container bg) we must also be
+   unlayered and win on specificity. Every selector is scoped under .jd-trip-map
+   so the discovery TripMapView is untouched. Attribution is restyled, NOT hidden. */
+
+.jd-trip-map.leaflet-container {
+  background: var(--ds-linen);
+}
+/* Muted, slightly warm tiles so the chart sits in the paper world — kept
+   legible (gentle saturation/contrast only; labels stay readable). */
+.jd-trip-map .leaflet-tile-pane {
+  filter: saturate(0.78) brightness(1.02) contrast(0.94) sepia(0.1);
+}
+/* Paper-styled zoom controls — rounded, hairline, marine hover. */
+.jd-trip-map .leaflet-control-zoom {
+  border: none;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: var(--ds-paper-elevation-1);
+}
+.jd-trip-map .leaflet-control-zoom a {
+  width: 30px;
+  height: 30px;
+  line-height: 30px;
+  background: var(--ds-warm-paper);
+  color: var(--ds-folio-ink);
+  border: 1px solid var(--ds-hairline);
+  font-weight: 600;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.jd-trip-map .leaflet-control-zoom a + a { border-top: none; }
+.jd-trip-map .leaflet-control-zoom a:hover {
+  background: var(--ds-marine-ink);
+  color: var(--ds-pearl-cream, #fff);
+  border-color: var(--ds-marine-ink);
+}
+.jd-trip-map .leaflet-control-zoom a:focus-visible {
+  outline: 2px solid var(--ds-accent);
+  outline-offset: 1px;
+}
+/* Attribution kept visible — quiet paper tone, never hidden. */
+.jd-trip-map .leaflet-control-attribution {
+  background: color-mix(in srgb, var(--ds-warm-paper) 88%, transparent);
+  color: var(--ds-folio-ink-mist);
+  font-size: 9px;
+}
+.jd-trip-map .leaflet-control-attribution a { color: var(--ds-marine-ink); }
+/* Paper popup. */
+.jd-trip-map .leaflet-popup.jd-trip-pin-popup-shell .leaflet-popup-content-wrapper {
+  background: var(--ds-warm-paper);
+  border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 28%, var(--ds-hairline));
+  border-radius: 10px;
+  box-shadow: var(--ds-paper-elevation-2);
+}
+.jd-trip-map .leaflet-popup.jd-trip-pin-popup-shell .leaflet-popup-tip {
+  background: var(--ds-warm-paper);
+  box-shadow: -1px 1px 1px color-mix(in srgb, var(--ds-ember-brass) 20%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .jd-trip-map .leaflet-control-zoom a { transition: none; }
 }
