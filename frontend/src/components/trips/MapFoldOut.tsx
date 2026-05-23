@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { MapPin, ExternalLink, X } from "lucide-react";
 import type { ItineraryDay, ItineraryItem } from "@/types";
+import { extractItineraryCoordinates } from "@/lib/itineraryCoordinates";
 
 // ── Honest map-readiness ──────────────────────────────────────────────────────
 //
@@ -25,11 +26,10 @@ function mapsUrlOf(item: ItineraryItem): string | null {
     (x.google_maps_uri as string | undefined) ??
     (x.source_url as string | undefined);
   if (typeof link === "string" && /^https?:\/\//.test(link)) return link;
-  const lat = x.lat;
-  const lng = x.lng;
-  if (typeof lat === "number" && typeof lng === "number" && Number.isFinite(lat) && Number.isFinite(lng)) {
-    return `https://www.google.com/maps?q=${lat},${lng}`;
-  }
+  // Validate persisted coordinates on read (single gate for every write path):
+  // rejects out-of-range / null-island values before building a real q-link.
+  const coords = extractItineraryCoordinates(x);
+  if (coords) return `https://www.google.com/maps?q=${coords.lat},${coords.lng}`;
   return null;
 }
 

@@ -39,6 +39,7 @@ import {
   missingDayNumbers,
   normalizeIsoDate,
 } from "./tripDays";
+import { extractItineraryCoordinates } from "./itineraryCoordinates";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -2581,6 +2582,15 @@ export async function addSavedItemToTrip(
   if (typeof snap["rating"] === "number") details.rating = snap["rating"];
   if (Array.isArray(snap["tags"]) && (snap["tags"] as unknown[]).length) details.tags = snap["tags"];
   if (typeof snap["googleMapsUri"] === "string" && snap["googleMapsUri"]) details.googleMapsUri = snap["googleMapsUri"];
+
+  // Persist real coordinates from the saved snapshot when present (v2B). Never
+  // geocoded or fabricated — extractItineraryCoordinates returns null otherwise.
+  const savedCoords = extractItineraryCoordinates(snap);
+  if (savedCoords) {
+    details.lat = savedCoords.lat;
+    details.lng = savedCoords.lng;
+    details.coordinateSource = "saved_item";
+  }
 
   if (item.vertical === "restaurant") {
     if (typeof snap["cuisine"] === "string" && snap["cuisine"]) details.cuisine = snap["cuisine"];
