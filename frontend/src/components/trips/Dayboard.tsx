@@ -6,7 +6,9 @@ import type { ItineraryDay } from "@/types";
 
 export interface DayboardProps {
   days: ItineraryDay[];
-  /** Open the day in the itinerary workspace. */
+  /** Currently selected/expanded day (highlights its card). */
+  selectedDayId?: string | null;
+  /** Select the day to open its expanded panel in the Journey Desk area. */
   onSelectDay: (day: ItineraryDay) => void;
 }
 
@@ -33,7 +35,7 @@ function formatDayDate(dateStr?: string): string {
 // still being decided. Tapping a day opens it in the itinerary workspace.
 // No weather, no fabricated counts (blueprint §5 / §8).
 
-export function Dayboard({ days, onSelectDay }: DayboardProps) {
+export function Dayboard({ days, selectedDayId, onSelectDay }: DayboardProps) {
   if (days.length === 0) return null;
 
   const activeDays = days.filter((d) => (d.items ?? []).length > 0).length;
@@ -57,16 +59,20 @@ export function Dayboard({ days, onSelectDay }: DayboardProps) {
           const stillDeciding = itemCount === 0;
           const whereLine = day.title || day.summary || "";
           const dateLabel = formatDayDate(day.date);
+          const isSelected = !!selectedDayId && day.id === selectedDayId;
           return (
             <li key={day.id}>
               <button
                 type="button"
                 data-testid="journey-desk-day-card"
                 onClick={() => onSelectDay(day)}
+                aria-current={isSelected ? "true" : undefined}
                 aria-label={`Day ${day.dayNumber}${dateLabel ? `, ${dateLabel}` : ""}: ${
                   stillDeciding ? "still deciding" : `${itemCount} placed`
                 }`}
-                className="jd-day-card w-full flex items-center gap-3.5 px-3.5 py-2.5 min-h-[52px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+                className={`jd-day-card w-full flex items-center gap-3.5 px-3.5 py-2.5 min-h-[52px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 ${
+                  isSelected ? "ring-1 ring-ds-marine-ink/40 border-ds-marine-ink/40" : ""
+                }`}
               >
                 {/* Day numeral — the editorial anchor */}
                 <span
