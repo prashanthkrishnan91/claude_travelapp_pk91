@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
+  Bookmark,
   CalendarDays,
   ChevronLeft,
   Pencil,
@@ -15,10 +16,21 @@ import {
 import { TripBuilder } from "@/components/trips/TripBuilder";
 import { TripBrief } from "@/components/trips/TripBrief";
 import { Dayboard } from "@/components/trips/Dayboard";
+import { IdeasTray } from "@/components/trips/IdeasTray";
 import { TripReadinessCockpit } from "@/components/trips/TripReadinessCockpit";
 import { OptimizeTripModal } from "@/components/trips/OptimizeTripModal";
 import { AIConciergePanel } from "@/components/trips/AIConciergePanel";
-import { fetchTrip, ensureTripDays, fetchTripContext, fetchTripIdeas, updateTrip, deleteTrip } from "@/lib/api";
+import {
+  fetchTrip,
+  ensureTripDays,
+  fetchTripContext,
+  fetchTripIdeas,
+  assignIdeaToDay,
+  updateIdeaMeta,
+  deleteItem,
+  updateTrip,
+  deleteTrip,
+} from "@/lib/api";
 import type { Trip, TripContext, ItineraryDay, ItineraryItem } from "@/types";
 
 interface EditForm {
@@ -71,6 +83,7 @@ export default function TripDetailPage() {
   const [toast,         setToast]         = useState<string | null>(null);
   const [optimizeOpen,  setOptimizeOpen]  = useState(false);
   const [conciergeOpen, setConciergeOpen] = useState(false);
+  const [ideasTrayOpen, setIdeasTrayOpen] = useState(false);
   const [tripBuilderKey, setTripBuilderKey] = useState(0);
   const [tripIdeasKey,  setTripIdeasKey]  = useState(0);
   const [activeMobileWorkspace, setActiveMobileWorkspace] = useState<MobileWorkspace>("brief");
@@ -102,6 +115,34 @@ export default function TripDetailPage() {
 
   function refreshIdeas() {
     fetchTripIdeas(id).then(setTripIdeas);
+  }
+
+  // ── Ideas Tray placement writes (durable, day-level) ──────────────────────
+  async function handleIdeaAssign(itemId: string, dayId: string) {
+    await assignIdeaToDay(itemId, dayId);
+    const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
+      ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;
+    const endDate = (trip as (Trip & { end_date?: string }) | null)?.endDate
+      ?? (trip as (Trip & { end_date?: string }) | null)?.end_date;
+    const days = await ensureTripDays(id, startDate, endDate);
+    setItineraryDays(days);
+    setTripBuilderKey((k) => k + 1);
+    refreshIdeas();
+    showToast("Placed in your itinerary");
+  }
+
+  async function handleIdeaMeta(
+    itemId: string,
+    currentDetails: Record<string, unknown>,
+    patch: { ideaStatus?: string; userNote?: string },
+  ) {
+    await updateIdeaMeta(itemId, currentDetails, patch);
+    refreshIdeas();
+  }
+
+  async function handleIdeaRemove(itemId: string) {
+    await deleteItem(itemId);
+    refreshIdeas();
   }
 
   function showToast(msg: string) {
@@ -446,8 +487,26 @@ export default function TripDetailPage() {
           trip={trip}
           days={itineraryDays}
           ideas={tripIdeas}
-          onReview={() => setActiveMobileWorkspace("ideas")}
+          onReview={() => setIdeasTrayOpen(true)}
         />
+      )}
+
+      {/* ── Ideas Tray launcher — quiet, discoverable from the planning area ── */}
+      {tripIdeas.length > 0 && (
+        <div className="mb-4 sm:mb-6 -mt-1 flex">
+          <button
+            type="button"
+            data-testid="journey-desk-ideas-launcher"
+            onClick={() => setIdeasTrayOpen(true)}
+            className="inline-flex items-center gap-2 min-h-[44px] rounded-full border border-ds-accent/30 px-4 text-xs font-medium text-ds-folio-ink-soft hover:text-ds-folio-ink hover:border-ds-accent transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+          >
+            <Bookmark className="w-3.5 h-3.5 text-ds-accent" aria-hidden="true" />
+            Ideas tray
+            <span className="rounded-full bg-ds-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-ds-accent">
+              {tripIdeas.length}
+            </span>
+          </button>
+        </div>
       )}
 
       {/* ── Dayboard — collapsed day cards (the 10-second read) ────────────── */}
@@ -500,6 +559,17 @@ export default function TripDetailPage() {
         </div>
 
       </div>{/* end trip-mobile-workspace */}
+
+      {/* ── Ideas Tray — placement-first (mobile sheet · desktop right drawer) ── */}
+      <IdeasTray
+        open={ideasTrayOpen}
+        onClose={() => setIdeasTrayOpen(false)}
+        days={itineraryDays}
+        ideas={tripIdeas}
+        onAssign={handleIdeaAssign}
+        onUpdateMeta={handleIdeaMeta}
+        onRemove={handleIdeaRemove}
+      />
 
       {/* ── AI Concierge Panel ─────────────────────────────────────────────── */}
       <AIConciergePanel
