@@ -65,9 +65,10 @@ test("map-ready URL comes from a real link or real coordinates only", () => {
   assert.match(map, /x\.maps_link as string/);
   assert.match(map, /x\.googleMapsUri as string/);
   assert.match(map, /x\.source_url as string/);
-  // real coords -> a real Google Maps q-link (never a fabricated position)
-  assert.match(map, /typeof lat === "number" && typeof lng === "number"/);
-  assert.match(map, /https:\/\/www\.google\.com\/maps\?q=\$\{lat\},\$\{lng\}/);
+  // real coords -> a real Google Maps q-link, validated via the v2B normalizer
+  // (out-of-range / null-island rejected); never a fabricated position.
+  assert.match(map, /extractItineraryCoordinates\(x\)/);
+  assert.match(map, /https:\/\/www\.google\.com\/maps\?q=\$\{coords\.lat\},\$\{coords\.lng\}/);
 });
 
 test("items without a real map link are omitted (no placeholders)", () => {
