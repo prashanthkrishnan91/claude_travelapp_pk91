@@ -57,8 +57,8 @@ test("Brief receives real trip, days and ideas (no fabricated props)", () => {
   assert.match(page, /<TripBrief[\s\S]{0,160}days=\{itineraryDays\}[\s\S]{0,80}ideas=\{tripIdeas\}/);
 });
 
-test("Brief review action opens the Ideas workspace (placement surface)", () => {
-  assert.match(page, /onReview=\{\(\) => setActiveMobileWorkspace\("ideas"\)\}/);
+test("Brief review action opens the Ideas Tray (placement surface)", () => {
+  assert.match(page, /onReview=\{\(\) => setIdeasTrayOpen\(true\)\}/);
 });
 
 test("Dayboard selecting a day opens the itinerary workspace", () => {
