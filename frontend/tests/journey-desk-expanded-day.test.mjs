@@ -83,12 +83,16 @@ test("placed-item time is shown only from real startTime/timeLabel", () => {
 
 // ── Decision strip ─────────────────────────────────────────────────────────────
 
-test("decision strip renders with a calm brass dot and honest summary", () => {
+test("decision strip renders with a calm brass dot and honest, trip-level summary", () => {
   assert.match(panel, /data-testid="jd-decision-strip"/);
   assert.match(panel, /jd-decide-dot/);
-  assert.match(panel, /Nothing planned yet for this day/);
-  assert.match(panel, /Still deciding: \$\{ideasCount\}/);
-  assert.match(panel, /No open decisions for this day/);
+  assert.match(panel, /Nothing placed in this day yet/);
+  // Idea count is trip-level (the whole tray) — copy says so, not a day filter.
+  assert.match(panel, /trip idea\$\{ideasCount === 1 \? "" : "s"\} still in the tray/);
+  assert.match(panel, /No open decisions/);
+  // Must NOT imply day-specific filtering of unplaced ideas.
+  assert.doesNotMatch(panel, /Still deciding: \$\{ideasCount\}/);
+  assert.doesNotMatch(panel, /ideas? not placed/);
 });
 
 test("decision strip is calm paper, never a red/alert banner", () => {

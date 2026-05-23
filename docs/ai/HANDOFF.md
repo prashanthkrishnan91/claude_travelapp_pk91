@@ -8,9 +8,21 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is now adopting the **Journey Desk** (final planning workspace) — v1A merged (PR #467: cinematic cover + Brief + Dayboard); v1B merged (PR #468: Ideas Tray + Notes); **v1C (Expanded Day + Decision Strip) is the current branch**; v1D sequenced.
+**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** (final planning workspace) — v1A merged (PR #467: cinematic cover + Brief + Dayboard); v1B merged (PR #468: Ideas Tray + Notes); v1C merged (PR #469: Expanded Day + Decision Strip); **v1D (consolidation + polish) is the current branch**. Map Fold-Out is **v2**.
 
-### Journey Desk v1C — Expanded Day + Decision Strip (current branch)
+### Journey Desk v1D — workspace consolidation + polish (current branch)
+
+Closeout pass making Trip Detail read as one coherent Journey Desk v1. **Frontend-only; no backend / API / provider / SQL / type change. No destructive behavior change — legacy tabs preserved.**
+- **Cockpit demoted:** `TripReadinessCockpit` moved below the Journey Desk flow into a **quiet collapsed disclosure** (`trip-readiness-toggle`, `cockpitOpen` default false) so the Brief is the single primary at-a-glance and the cockpit no longer competes above the fold. Cockpit props/order (cover < cockpit < builder) and the `editorial-section-rule` divider preserved → all trip-chapter-overhaul/readiness tests stay green.
+- **Decision-strip honesty:** reworded to be explicit that the idea count is **trip-level**, not a day filter — "N trip idea(s) still in the tray" / "Nothing placed in this day yet" / "No open decisions" (dropped "Still deciding: N ideas not placed"). `showAddFromIdeas` now gates on `ideasCount > 0` (no dead-end action with an empty tray).
+- **Legacy fallback clarity:** the Expanded Day gains a quiet **"Edit in Itinerary"** link (`jd-day-edit-in-itinerary` → `setActiveMobileWorkspace("itinerary")`); the Ideas Tray keeps its **"Manage in Ideas"** link. Journey Desk = quick planning; deeper edit/reorder/note-management lives in the legacy tabs (Build/Itinerary/Ideas all retained).
+- **Desktop adaptation (safe, no rewrite):** the Journey Desk overview (cover→Expanded Day→readiness) is given a centered editorial **`lg:max-w-4xl lg:mx-auto`** so it reads as a central workspace; the legacy TripBuilder tools stay below. No three-zone route/app-shell rewrite, no four-column dashboard, no permanent map (a full desktop three-zone remains future work).
+- **Mobile rhythm:** the collapsed cockpit + section-rule `mb-6→mb-4` tighten the first-scroll; cover/Brief/Dayboard/Expanded Day read as one editorial surface.
+- **No duplicate launchers** (the v1B "Ideas tray N" pill stays removed; Brief "Review ideas" is the single entry).
+- **Tests:** new `tests/journey-desk-v1d.test.mjs` (cockpit demotion + order, trip-level decision copy, Edit-in-Itinerary fallback, single launcher, legacy fallback present, desktop max-width). Updated the v1C decision-strip copy assertions. **Not run locally (node_modules absent); validated via CI `certify` + Vercel preview.**
+- **Out of scope:** **Map Fold-Out / lenses / numbered pins (v2)**; full desktop three-zone; fold/remove the legacy Ideas tab; day-part classifier consolidation. No AI organize, route optimization, drag/drop, providers, or SQL.
+
+### Journey Desk v1C — Expanded Day + Decision Strip (merged, PR #469)
 
 Makes a selected Dayboard day a real planning workspace. **Frontend-only; no backend / API / provider / SQL / type change.** Read-only except for the existing v1B tray placement flow.
 - **Dayboard selection:** tapping a Dayboard card now sets `selectedDayId` (and highlights the card via `aria-current` + a marine ring) and renders an **Expanded Day panel** inline in the Journey Desk overview (below the Dayboard) — no longer just switching to the legacy Itinerary tab. The legacy TripBuilder tabs remain as fallback.
@@ -199,7 +211,7 @@ Two Level 2 user-visible regressions fixed after PR #460 merged:
 **3139 frontend tests, 0 failures.** No backend suite run (no pytest in this environment); tsc/next build not run locally (node_modules absent) — CI `certify` validates.
 
 ### Next step
-Journey Desk **v1C** (Expanded Day + Decision Strip) is the current branch. Next: **v1D** desktop three-zone adaptation (context · Dayboard/expanded-day · Ideas rail), then fold/remove the standalone legacy Ideas tab once parity is reached. **Map Fold-Out is v2.** Placement stays day-level (`assignIdeaToDay`); the expanded-day grouping reads the durable `details.dayPart`/time but invents no finer slots.
+Journey Desk **v1D** (consolidation + polish) is the current branch — this completes **Journey Desk v1** (v1A–v1D). Next is **Map Fold-Out (v2)**: the trip/day/idea lens drawer with numbered pins, behind the existing map entry-point seam (blueprint §4) — not started. Deferred polish that can ride v2 or a small follow-up: full desktop three-zone (context · workspace · Ideas rail), fold/remove the standalone legacy Ideas tab once parity holds, and consolidating the day-part classifier (currently mirrored in `lib/dayParts.ts` and `ItineraryDayColumn`). Placement stays day-level (`assignIdeaToDay`); no slot-level persistence.
 
 ## Current architecture / runtime state
 

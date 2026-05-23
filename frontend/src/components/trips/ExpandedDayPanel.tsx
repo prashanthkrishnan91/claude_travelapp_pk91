@@ -68,10 +68,12 @@ function formatDayDate(dateStr?: string): string {
 
 export interface ExpandedDayPanelProps {
   day: ItineraryDay;
-  /** Count of unplaced Trip Ideas (for the decision strip). */
+  /** Count of unplaced Trip Ideas (trip-level, for the decision strip). */
   ideasCount: number;
   /** Opens the v1B Ideas Tray (day-level placement). */
   onAddFromIdeas: () => void;
+  /** Quiet fallback to the legacy Itinerary tab for fuller editing/reordering. */
+  onEditInItinerary?: () => void;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -82,18 +84,21 @@ export interface ExpandedDayPanelProps {
 // decision strip summarizes open decisions honestly and opens the Ideas Tray.
 // Read-only except for that existing tray placement flow.
 
-export function ExpandedDayPanel({ day, ideasCount, onAddFromIdeas }: ExpandedDayPanelProps) {
+export function ExpandedDayPanel({ day, ideasCount, onAddFromIdeas, onEditInItinerary }: ExpandedDayPanelProps) {
   const groups = groupJourneyDeskDay(day.items ?? []);
   const hasItems = (day.items ?? []).length > 0;
   const whereLine = day.title || day.summary || "";
   const dateLabel = formatDayDate(day.date);
 
-  // Honest decision-strip summary
+  // Honest decision-strip summary. The idea count is TRIP-level (the whole tray),
+  // not day-specific — the copy says so plainly rather than implying a day filter.
+  const ideaPhrase = `${ideasCount} trip idea${ideasCount === 1 ? "" : "s"} still in the tray`;
   let decision: string;
-  if (!hasItems) decision = "Nothing planned yet for this day";
-  else if (ideasCount > 0) decision = `Still deciding: ${ideasCount} idea${ideasCount === 1 ? "" : "s"} not placed`;
-  else decision = "No open decisions for this day";
-  const showAddFromIdeas = !hasItems || ideasCount > 0;
+  if (!hasItems && ideasCount > 0) decision = `Nothing placed in this day yet · ${ideaPhrase}`;
+  else if (!hasItems) decision = "Nothing placed in this day yet";
+  else if (ideasCount > 0) decision = ideaPhrase;
+  else decision = "No open decisions";
+  const showAddFromIdeas = ideasCount > 0;
 
   return (
     <section
@@ -103,9 +108,21 @@ export function ExpandedDayPanel({ day, ideasCount, onAddFromIdeas }: ExpandedDa
     >
       {/* Header */}
       <div className="px-5 pt-4 pb-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ds-accent">
-          Day {day.dayNumber}
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ds-accent">
+            Day {day.dayNumber}
+          </p>
+          {onEditInItinerary && (
+            <button
+              type="button"
+              data-testid="jd-day-edit-in-itinerary"
+              onClick={onEditInItinerary}
+              className="flex-shrink-0 text-xs font-medium text-ds-folio-ink-soft hover:text-ds-marine-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
+            >
+              Edit in Itinerary
+            </button>
+          )}
+        </div>
         <h2 className="mt-0.5 font-serif text-xl font-semibold text-ds-folio-ink leading-tight">
           {dateLabel || `Day ${day.dayNumber}`}
         </h2>
