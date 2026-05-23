@@ -9377,4 +9377,61 @@
     border-radius: 10px;
   }
 
+  /* ── Journey Desk v2C — real Trip Lens pin map ─────────────────────────────
+     Restrained, premium pins plotted ONLY from validated real coordinates. */
+  .jd-trip-map {
+    height: 38vh;
+    max-height: 320px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--ds-hairline);
+    box-shadow: var(--ds-paper-elevation-1);
+  }
+  @media (min-width: 1024px) {
+    .jd-trip-map {
+      height: 280px;
+      max-height: 280px;
+    }
+  }
+  /* Numbered marker — brass-edged marine disc, reflects placed order only */
+  .jd-trip-pin {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 9999px;
+    background: var(--ds-marine-ink);
+    color: var(--ds-pearl-cream, #fff);
+    border: 2px solid color-mix(in srgb, var(--ds-ember-brass) 80%, #fff);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.32);
+    font-family: var(--font-serif, serif);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+  }
+  .jd-trip-pin-popup {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 140px;
+  }
+  .jd-trip-pin-popup-title {
+    font-family: var(--font-serif, serif);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ds-folio-ink);
+  }
+  .jd-trip-pin-popup-meta {
+    font-size: 11px;
+    color: var(--ds-folio-ink-mist);
+  }
+  .jd-trip-pin-popup-link {
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ds-marine-ink);
+    text-decoration: underline;
+  }
+
 }
