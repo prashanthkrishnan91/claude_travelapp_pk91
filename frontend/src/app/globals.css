@@ -9500,6 +9500,62 @@
     text-decoration: underline;
   }
 
+  /* ── Map System v1B — shared Explore/Build map polish ──────────────────────
+     The discovery map (TripMapView) now wears the same Atelier language as the
+     Journey Desk Trip Lens: a warm paper popup, a restrained marine/brass
+     marker family, and a reduced-motion-guarded active state. These are MY
+     classes (not Leaflet-own), so they live layered alongside .jd-trip-pin. */
+
+  /* Warm paper popup card (the React popup over the discovery map). */
+  .atlas-map-popup {
+    background: var(--ds-warm-paper);
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 28%, var(--ds-hairline));
+    border-radius: 12px;
+    box-shadow: var(--ds-paper-elevation-2);
+  }
+  .atlas-map-popup-chip {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 7px;
+    border-radius: 9999px;
+    background: var(--ds-linen);
+    color: var(--ds-folio-ink-mist);
+    border: 1px solid var(--ds-hairline);
+  }
+
+  /* Marker family — brass-rimmed discs; marine = attraction, ember = restaurant.
+     Mirrors the .jd-trip-pin stamp without the placed-order numeral. */
+  .atlas-map-marker { transition: transform 140ms ease; }
+  .atlas-map-marker-dot {
+    display: block;
+    width: 18px;
+    height: 18px;
+    border-radius: 9999px;
+    border: 2px solid color-mix(in srgb, var(--ds-ember-brass) 85%, #fff);
+    box-shadow: 0 2px 5px rgba(31, 41, 55, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.25);
+  }
+  .atlas-map-marker-dot--attraction {
+    background: radial-gradient(circle at 35% 30%,
+      color-mix(in srgb, var(--ds-marine-ink) 86%, #fff) 0%,
+      var(--ds-marine-ink) 72%);
+  }
+  .atlas-map-marker-dot--restaurant {
+    background: radial-gradient(circle at 35% 30%,
+      color-mix(in srgb, var(--ds-ember-brass) 90%, #fff) 0%,
+      var(--ds-ember-brass) 72%);
+  }
+  /* Active/selected marker — brass ring + gentle lift (reduced-motion safe). */
+  .atlas-map-marker--active { z-index: 1000 !important; }
+  .atlas-map-marker--active .atlas-map-marker-dot {
+    box-shadow: 0 3px 9px rgba(31, 41, 55, 0.42),
+      0 0 0 3px color-mix(in srgb, var(--ds-ember-brass) 45%, transparent);
+    transform: scale(1.12);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atlas-map-marker { transition: none; }
+    .atlas-map-marker--active .atlas-map-marker-dot { transform: none; }
+  }
+
 }
 
 /* ── Map System v1 — shared Leaflet atlas skin (UNLAYERED on purpose) ─────────
