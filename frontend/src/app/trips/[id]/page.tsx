@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   CalendarDays,
+  ChevronDown,
   ChevronLeft,
   Pencil,
   Sparkles,
@@ -85,6 +86,7 @@ export default function TripDetailPage() {
   const [conciergeOpen, setConciergeOpen] = useState(false);
   const [ideasTrayOpen, setIdeasTrayOpen] = useState(false);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
+  const [cockpitOpen,   setCockpitOpen]   = useState(false);
   const [tripBuilderKey, setTripBuilderKey] = useState(0);
   const [tripIdeasKey,  setTripIdeasKey]  = useState(0);
   const [activeMobileWorkspace, setActiveMobileWorkspace] = useState<MobileWorkspace>("brief");
@@ -355,7 +357,7 @@ export default function TripDetailPage() {
         {/* Brief panel — trip chapter cover + readiness (mobile: brief only; desktop: always) */}
         <div
           data-testid="trip-mobile-panel-brief"
-          className={activeMobileWorkspace !== "brief" ? "hidden lg:block" : ""}
+          className={`${activeMobileWorkspace !== "brief" ? "hidden lg:block" : ""} lg:max-w-4xl lg:mx-auto`}
         >
 
       {/* ── Trip Chapter Cover ─────────────────────────────────────────────── */}
@@ -505,20 +507,38 @@ export default function TripDetailPage() {
           day={itineraryDays.find((d) => d.id === selectedDayId)!}
           ideasCount={tripIdeas.length}
           onAddFromIdeas={() => setIdeasTrayOpen(true)}
+          onEditInItinerary={() => setActiveMobileWorkspace("itinerary")}
         />
       )}
 
-      <div className="editorial-section-rule mb-6" aria-hidden="true" />
+      <div className="editorial-section-rule mb-4" aria-hidden="true" />
 
-      {/* ── Advisor Briefing (TripReadinessCockpit) ────────────────────────── */}
+      {/* ── Trip readiness — demoted below Journey Desk to a quiet, collapsed
+            secondary disclosure (the Brief above is the primary at-a-glance). ── */}
       {trip && (
-        <TripReadinessCockpit
-          trip={trip}
-          itineraryDays={itineraryDays}
-          onOpenConcierge={() => setConciergeOpen(true)}
-          onOpenOptimize={() => setOptimizeOpen(true)}
-          onOpenEdit={openEdit}
-        />
+        <div data-testid="trip-readiness-section" className="mb-2">
+          <button
+            type="button"
+            onClick={() => setCockpitOpen((v) => !v)}
+            aria-expanded={cockpitOpen}
+            data-testid="trip-readiness-toggle"
+            className="flex w-full items-center justify-between gap-2 min-h-[44px] px-1 text-left text-xs font-semibold uppercase tracking-[0.12em] text-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
+          >
+            <span>Trip readiness · concierge notes</span>
+            <ChevronDown className={`w-4 h-4 transition-transform duration-[120ms] ${cockpitOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+          </button>
+          {cockpitOpen && (
+            <div className="mt-2">
+              <TripReadinessCockpit
+                trip={trip}
+                itineraryDays={itineraryDays}
+                onOpenConcierge={() => setConciergeOpen(true)}
+                onOpenOptimize={() => setOptimizeOpen(true)}
+                onOpenEdit={openEdit}
+              />
+            </div>
+          )}
+        </div>
       )}
 
         </div>{/* end trip-mobile-panel-brief */}
