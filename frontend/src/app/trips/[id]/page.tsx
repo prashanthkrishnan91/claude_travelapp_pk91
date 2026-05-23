@@ -28,6 +28,7 @@ import {
   fetchTripContext,
   fetchTripIdeas,
   assignIdeaToDay,
+  moveIdeaToTripIdeas,
   updateIdeaMeta,
   deleteItem,
   updateTrip,
@@ -145,9 +146,30 @@ export default function TripDetailPage() {
     refreshIdeas();
   }
 
-  async function handleIdeaRemove(itemId: string) {
-    await deleteItem(itemId);
+  async function refreshDaysAndIdeas() {
+    const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
+      ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;
+    const endDate = (trip as (Trip & { end_date?: string }) | null)?.endDate
+      ?? (trip as (Trip & { end_date?: string }) | null)?.end_date;
+    const days = await ensureTripDays(id, startDate, endDate);
+    setItineraryDays(days);
+    setTripBuilderKey((k) => k + 1);
     refreshIdeas();
+  }
+
+  async function handleIdeaRemove(itemId: string) {
+    // Durable delete; refresh days too so a placed item removed from the map
+    // also drops out of the Dayboard/Expanded Day/Trip lens counts.
+    await deleteItem(itemId);
+    await refreshDaysAndIdeas();
+  }
+
+  // Durable unplace (moveIdeaToTripIdeas → day_id:null): the placed item returns
+  // to Trip Ideas with all details preserved. NOT a delete.
+  async function handleItemUnplace(itemId: string) {
+    await moveIdeaToTripIdeas(itemId);
+    await refreshDaysAndIdeas();
+    showToast("Moved back to your Ideas");
   }
 
   function showToast(msg: string) {
@@ -587,6 +609,7 @@ export default function TripDetailPage() {
         onAssign={handleIdeaAssign}
         onUpdateMeta={handleIdeaMeta}
         onRemove={handleIdeaRemove}
+        onUnplace={handleItemUnplace}
         onManage={() => {
           setMapOpen(false);
           setActiveMobileWorkspace("ideas");
