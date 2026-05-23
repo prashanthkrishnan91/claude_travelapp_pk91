@@ -59,18 +59,22 @@ test("fold-out closes on Escape and close control", () => {
 
 test("header reads 'Where the trip lives' with honest Mapped + Map-links counts", () => {
   assert.match(map, /Where the trip lives/);
-  // Real coordinate pins vs real links without coordinates — separate counts.
+  // Real coordinate pins vs real links without coordinates — separate counts,
+  // scoped to the active lens.
   assert.match(map, /data-testid="map-mapped-count"/);
-  assert.match(map, /\{pins\.length\} mapped/);
+  assert.match(map, /\{activePins\.length\} mapped/);
   assert.match(map, /data-testid="map-links-count"/);
-  assert.match(map, /\{linkRows\.length\} map link\{linkRows\.length === 1 \? "" : "s"\}/);
+  assert.match(map, /\{activeLinks\.length\} map link\{activeLinks\.length === 1 \? "" : "s"\}/);
 });
 
-// ── Trip Lens only (Day / Idea lenses deferred) ───────────────────────────────
+// ── Visual Itinerary Map v1A — Trip / Day / Ideas lenses ──────────────────────
 
-test("only the Trip lens ships — no Day or Idea lens", () => {
-  assert.match(map, /Trip lens/);
-  assert.doesNotMatch(map, /Day lens|Idea lens|Day Lens|Idea Lens/);
+test("all three lenses ship — Trip, Day, Ideas", () => {
+  assert.match(map, /type Lens = "trip" \| "day" \| "ideas";/);
+  assert.match(map, /data-testid={`map-lens-\$\{tab\.key\}`}/);
+  assert.match(map, /key: "trip", label: "Trip"/);
+  assert.match(map, /key: "day", label: "Day"/);
+  assert.match(map, /key: "ideas", label: "Ideas"/);
 });
 
 // ── Real pin eligibility — validated coordinates only ─────────────────────────
@@ -79,7 +83,7 @@ test("pin eligibility uses ONLY extractItineraryCoordinates (no inference)", () 
   assert.match(map, /import \{ extractItineraryCoordinates \} from "@\/lib\/itineraryCoordinates"/);
   // A pin is built only when the normalizer returns coordinates.
   assert.match(map, /const coords = extractItineraryCoordinates\(det\(item\)\);/);
-  assert.match(map, /if \(coords\) \{[\s\S]*?pinList\.push/);
+  assert.match(map, /if \(coords\) \{[\s\S]*?pins\.push/);
 });
 
 test("a real pin carries the placed-order number, day, time, kind and a real Maps URL", () => {
@@ -100,15 +104,15 @@ test("map-ready link rows come from a real explicit link or real coordinates (v2
 });
 
 test("coordinate-less items go to the link list; items with neither are omitted", () => {
-  assert.match(map, /if \(mapsUrl\) links\.push/);
+  assert.match(map, /if \(mapsUrl\) linkRows\.push/);
   assert.match(map, /return null;/);
 });
 
 // ── Zero coordinates → no plotted map ─────────────────────────────────────────
 
 test("the pin map renders only when validated coordinates exist", () => {
-  assert.match(map, /const hasPins = pins\.length > 0;/);
-  assert.match(map, /\{hasPins \?[\s\S]*?<TripLensMap pins=\{pins\}/);
+  assert.match(map, /const hasPins = activePins\.length > 0;/);
+  assert.match(map, /\{hasPins \?[\s\S]*?<TripLensMap pins=\{activePins\}/);
 });
 
 test("zero-coordinate, zero-link trips show the honest empty state, never a fake map", () => {
