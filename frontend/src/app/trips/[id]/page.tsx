@@ -15,6 +15,7 @@ import {
 import { TripBuilder } from "@/components/trips/TripBuilder";
 import { TripBrief } from "@/components/trips/TripBrief";
 import { Dayboard } from "@/components/trips/Dayboard";
+import { ExpandedDayPanel } from "@/components/trips/ExpandedDayPanel";
 import { IdeasTray } from "@/components/trips/IdeasTray";
 import { TripReadinessCockpit } from "@/components/trips/TripReadinessCockpit";
 import { OptimizeTripModal } from "@/components/trips/OptimizeTripModal";
@@ -83,6 +84,7 @@ export default function TripDetailPage() {
   const [optimizeOpen,  setOptimizeOpen]  = useState(false);
   const [conciergeOpen, setConciergeOpen] = useState(false);
   const [ideasTrayOpen, setIdeasTrayOpen] = useState(false);
+  const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [tripBuilderKey, setTripBuilderKey] = useState(0);
   const [tripIdeasKey,  setTripIdeasKey]  = useState(0);
   const [activeMobileWorkspace, setActiveMobileWorkspace] = useState<MobileWorkspace>("brief");
@@ -493,8 +495,18 @@ export default function TripDetailPage() {
       {/* ── Dayboard — collapsed day cards (the 10-second read) ────────────── */}
       <Dayboard
         days={itineraryDays}
-        onSelectDay={() => setActiveMobileWorkspace("itinerary")}
+        selectedDayId={selectedDayId}
+        onSelectDay={(day) => setSelectedDayId(day.id)}
       />
+
+      {/* ── Expanded Day — the selected day's planning workspace ────────────── */}
+      {selectedDayId && itineraryDays.some((d) => d.id === selectedDayId) && (
+        <ExpandedDayPanel
+          day={itineraryDays.find((d) => d.id === selectedDayId)!}
+          ideasCount={tripIdeas.length}
+          onAddFromIdeas={() => setIdeasTrayOpen(true)}
+        />
+      )}
 
       <div className="editorial-section-rule mb-6" aria-hidden="true" />
 

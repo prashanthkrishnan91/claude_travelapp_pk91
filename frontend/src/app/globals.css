@@ -9355,4 +9355,26 @@
     .jd-tray-enter { animation: none; }
   }
 
+  /* ── Journey Desk v1C — Expanded Day + Decision Strip ──────────────────────
+     A calm paper workspace for the selected Dayboard day. Brass-dot decision
+     strip, never an alert. Read-only except for the existing tray placement. */
+  .journey-desk-day {
+    background: var(--ds-warm-paper);
+    border: 1px solid var(--ds-hairline);
+    border-radius: 14px;
+    box-shadow: var(--ds-paper-elevation-1);
+  }
+  /* Decision strip — calm paper, faint brass tint; never red/urgency */
+  .jd-decision-strip {
+    background: color-mix(in srgb, var(--ds-ember-brass) 6%, var(--ds-bone));
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 22%, var(--ds-hairline));
+    border-radius: 10px;
+  }
+  /* Placed-item card inside the expanded day */
+  .jd-day-item {
+    background: var(--ds-bone);
+    border: 1px solid var(--ds-hairline);
+    border-radius: 10px;
+  }
+
 }

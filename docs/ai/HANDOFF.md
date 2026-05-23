@@ -8,9 +8,21 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is now adopting the **Journey Desk** (final planning workspace) — v1A merged (PR #467: cinematic cover + Brief + Dayboard); **v1B (Ideas Tray + Notes) is the current branch**; v1C–v1D sequenced.
+**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is now adopting the **Journey Desk** (final planning workspace) — v1A merged (PR #467: cinematic cover + Brief + Dayboard); v1B merged (PR #468: Ideas Tray + Notes); **v1C (Expanded Day + Decision Strip) is the current branch**; v1D sequenced.
 
-### Journey Desk v1B — Ideas Tray + Notes (current branch)
+### Journey Desk v1C — Expanded Day + Decision Strip (current branch)
+
+Makes a selected Dayboard day a real planning workspace. **Frontend-only; no backend / API / provider / SQL / type change.** Read-only except for the existing v1B tray placement flow.
+- **Dayboard selection:** tapping a Dayboard card now sets `selectedDayId` (and highlights the card via `aria-current` + a marine ring) and renders an **Expanded Day panel** inline in the Journey Desk overview (below the Dayboard) — no longer just switching to the legacy Itinerary tab. The legacy TripBuilder tabs remain as fallback.
+- **Expanded Day** (`ExpandedDayPanel.tsx`, testid `journey-desk-expanded-day`): warm-paper panel with a serif header (Day N · full date · real where-line from `title`/`summary`; weather omitted — no real data). Groups placed items into **Morning / Afternoon / Evening / Logistics** (+ an honest **Anytime** bucket for untimed non-logistics items). Only non-empty sections render (silent empties).
+- **Grouping (honest, shared):** new `lib/dayParts.ts` `groupJourneyDeskDay` — **Logistics** = `flight`/`hotel`/`transit`; everything else uses `getItemDayPart` (real `details.dayPart` → `timeLabel` keyword → `startTime`/flight hour), with `unscheduled` → Anytime. This **mirrors** `ItineraryDayColumn`'s durable classifier (duplicated, not imported, because itinerary-timeline tests pin that source); never fabricates a time.
+- **Decision strip** (`jd-decision-strip`): calm paper strip with one brass `.jd-decide-dot`, an italic/muted honest summary ("Nothing planned yet for this day" · "Still deciding: N ideas not placed" · "No open decisions for this day"), and a quiet **"Add from Ideas Tray"** that opens the v1B tray. **Never red/alert.** Day-specific tray filtering is not faked — the tray opens day-level (documented as a later enhancement).
+- **Placed-item cards** (read-only, `jd-day-item`): real clock time when present, serif title, **private-marginalia user note** (same `details.userNote ?? user_note` key as the tray/legacy tab/carryover), a distinct concierge reason, a small rating/location meta line, and contextual **Map** / **Google Flights** links only where the data is real. No drag/remove/edit (those stay in the legacy tab).
+- **Refresh:** assigning an idea from the tray refreshes days + ideas (existing handlers); the Expanded Day re-derives from `itineraryDays` by id, so its sections and the decision-strip count update.
+- **Tests:** new `tests/journey-desk-expanded-day.test.mjs` (grouping signals + Logistics/Anytime, no fake slots, panel header, decision strip calm + tray open, note hierarchy parity, contextual links, page wiring). One v1A Dayboard assertion updated (selection now opens the panel). **Not run locally (node_modules absent); validated via CI `certify` + Vercel preview.**
+- **Out of scope (sequenced):** v1D desktop three-zone; then fold/remove the standalone Ideas tab. **Map Fold-Out / lenses / numbered pins remain v2.** No AI organize, route optimization, drag/drop, or slot-level placement.
+
+### Journey Desk v1B — Ideas Tray + Notes (merged, PR #468)
 
 Turns Trip Ideas into the placement-first **Ideas Tray** from the approved v2 prototype. **Frontend-only; no backend / API / provider / SQL / type change.** Reuses the existing data load (`fetchTripIdeas`) and durable writes only.
 - **Tray shell** (`IdeasTray.tsx`, testid `journey-desk-ideas-tray`): mobile **bottom sheet** ↔ desktop **right-docked drawer** (the responsive adaptation of the prototype's right rail — a permanent rail would fight TripBuilder's existing columns, so v1B docks a drawer; documented in the PR). Header: "Place one in." · "From your Private Folio." · real candidate count. Filter chips **All / Hotels / Flights / Dining / Places** with counts derived from real `itemType`. `role="dialog"`, Esc + scrim close.
@@ -187,7 +199,7 @@ Two Level 2 user-visible regressions fixed after PR #460 merged:
 **3139 frontend tests, 0 failures.** No backend suite run (no pytest in this environment); tsc/next build not run locally (node_modules absent) — CI `certify` validates.
 
 ### Next step
-Journey Desk **v1B** (Ideas Tray + Notes) is the current branch. Next slices, in order: **v1C** expanded day (Morning/Afternoon/Evening/Logistics presentation grouping) + brass-dot decision strip; **v1D** desktop three-zone adaptation. **Map Fold-Out is v2.** Placement note: durable writes are `assignIdeaToDay` (day-level) and `updateItemTimeline` (`details.dayPart`); there is **no** slot-level ("Dinner") persistence — v1C may use the durable `dayPart` for the time-of-day grouping but must not invent finer slots.
+Journey Desk **v1C** (Expanded Day + Decision Strip) is the current branch. Next: **v1D** desktop three-zone adaptation (context · Dayboard/expanded-day · Ideas rail), then fold/remove the standalone legacy Ideas tab once parity is reached. **Map Fold-Out is v2.** Placement stays day-level (`assignIdeaToDay`); the expanded-day grouping reads the durable `details.dayPart`/time but invents no finer slots.
 
 ## Current architecture / runtime state
 

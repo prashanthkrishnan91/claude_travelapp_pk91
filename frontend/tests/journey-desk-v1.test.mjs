@@ -61,8 +61,8 @@ test("Brief review action opens the Ideas Tray (placement surface)", () => {
   assert.match(page, /onReview=\{\(\) => setIdeasTrayOpen\(true\)\}/);
 });
 
-test("Dayboard selecting a day opens the itinerary workspace", () => {
-  assert.match(page, /<Dayboard[\s\S]{0,160}onSelectDay=\{\(\) => setActiveMobileWorkspace\("itinerary"\)\}/);
+test("Dayboard selecting a day selects it for the expanded day panel", () => {
+  assert.match(page, /<Dayboard[\s\S]{0,200}onSelectDay=\{\(day\) => setSelectedDayId\(day\.id\)\}/);
 });
 
 test("ideas state refreshes when an idea is assigned or saved", () => {
