@@ -51,7 +51,7 @@ export function Dayboard({ days, onSelectDay }: DayboardProps) {
         </span>
       </div>
 
-      <ul className="flex flex-col gap-2.5">
+      <ul className="flex flex-col gap-2">
         {days.map((day) => {
           const itemCount = (day.items ?? []).length;
           const stillDeciding = itemCount === 0;
@@ -66,12 +66,12 @@ export function Dayboard({ days, onSelectDay }: DayboardProps) {
                 aria-label={`Day ${day.dayNumber}${dateLabel ? `, ${dateLabel}` : ""}: ${
                   stillDeciding ? "still deciding" : `${itemCount} placed`
                 }`}
-                className="jd-day-card w-full flex items-center gap-4 px-4 py-3.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+                className="jd-day-card w-full flex items-center gap-3.5 px-3.5 py-2.5 min-h-[52px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
               >
                 {/* Day numeral — the editorial anchor */}
                 <span
                   aria-hidden="true"
-                  className="flex-shrink-0 font-serif italic text-3xl leading-none text-ds-folio-ink/90 w-9 text-center"
+                  className="flex-shrink-0 font-serif italic text-2xl sm:text-3xl leading-none text-ds-folio-ink/90 w-8 sm:w-9 text-center"
                 >
                   {day.dayNumber}
                 </span>

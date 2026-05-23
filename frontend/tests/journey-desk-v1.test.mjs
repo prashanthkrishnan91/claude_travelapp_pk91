@@ -107,9 +107,23 @@ test("Brief detects flight / hotel anchors by itemType", () => {
   assert.match(brief, /i\.itemType === "hotel"/);
 });
 
-test("Brief shows fixed and pending lines only when they exist (omit, never placeholder)", () => {
-  assert.match(brief, /fixed &&/);
-  assert.match(brief, /pending &&/);
+test("Brief shows a pending line for each missing essential anchor (flight + stay)", () => {
+  assert.match(brief, /if \(!hasFlight\) pendingLines\.push/);
+  assert.match(brief, /if \(!hasHotel\) pendingLines\.push/);
+});
+
+test("Brief shows fixed lines only for anchors that really exist (omit, never placeholder)", () => {
+  assert.match(brief, /if \(hasFlight\) fixedLines\.push/);
+  assert.match(brief, /if \(hasHotel\) fixedLines\.push/);
+});
+
+test("empty-trip Brief is honest and does not contradict the readiness notes", () => {
+  // No fabricated "nothing to decide" when essentials are clearly missing.
+  assert.doesNotMatch(brief, /Nothing to decide yet/);
+  // Instead it nudges to real discovery surfaces.
+  assert.match(brief, /No saved ideas yet/);
+  assert.match(brief, /href="\/explore"/);
+  assert.match(brief, /href="\/saved"/);
 });
 
 test("Brief shows real placed progress", () => {

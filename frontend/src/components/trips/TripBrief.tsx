@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Plane, Hotel, Check, ArrowRight } from "lucide-react";
 import type { Trip, ItineraryDay, ItineraryItem } from "@/types";
 
@@ -32,25 +33,23 @@ export function TripBrief({ days, ideas, onReview }: TripBriefProps) {
   const hasFlight = !!firstFlight;
   const hasHotel = !!firstHotel;
 
-  // Fixed line — the strongest anchor already placed. Shown only when present.
-  const fixed = hasFlight
-    ? { label: "Flights", value: firstFlight!.title }
-    : hasHotel
-      ? { label: "Stay", value: firstHotel!.title }
-      : null;
+  // Fixed lines — anchors already placed. Shown only for what really exists.
+  const fixedLines: { label: string; value: string }[] = [];
+  if (hasFlight) fixedLines.push({ label: "Flights", value: firstFlight!.title });
+  if (hasHotel) fixedLines.push({ label: "Stay", value: firstHotel!.title });
 
-  // Pending line — the first missing anchor. One line only; omitted when both set.
-  const pending = !hasFlight
-    ? { label: "Flights", Icon: Plane }
-    : !hasHotel
-      ? { label: "Stay", Icon: Hotel }
-      : null;
+  // Pending lines — the essential anchors still missing. Honest, never faked:
+  // a missing flight and a missing stay each get their own "still to choose"
+  // line so the Brief never contradicts the readiness notes below it.
+  const pendingLines: { label: string; Icon: typeof Plane }[] = [];
+  if (!hasFlight) pendingLines.push({ label: "Flights", Icon: Plane });
+  if (!hasHotel) pendingLines.push({ label: "Stay", Icon: Hotel });
 
   return (
     <section
       data-testid="journey-desk-brief"
       aria-label="Trip brief"
-      className="mb-6 journey-desk-brief"
+      className="mb-4 sm:mb-6 journey-desk-brief"
     >
       {/* Header — overline + real placed progress */}
       <div className="flex items-baseline justify-between gap-3 px-5 pt-4 pb-2">
@@ -64,28 +63,33 @@ export function TripBrief({ days, ideas, onReview }: TripBriefProps) {
         )}
       </div>
 
-      <div className="px-5 pb-4">
-        {/* Fixed — what is already set */}
-        {fixed && (
-          <div data-testid="jd-brief-fixed" className="jd-brief-row flex items-center gap-2.5 py-2.5">
+      <div className="px-5 pb-3.5">
+        {/* Fixed — anchors already set */}
+        {fixedLines.map((line) => (
+          <div
+            key={line.label}
+            data-testid="jd-brief-fixed"
+            className="jd-brief-row flex items-center gap-2.5 py-2"
+          >
             <Check className="w-3.5 h-3.5 flex-shrink-0 text-ds-trust" aria-hidden="true" />
             <span className="text-sm text-ds-folio-ink">
-              <span className="font-semibold">{fixed.label}</span>
-              <span className="text-ds-folio-ink-soft"> · {fixed.value}</span>
+              <span className="font-semibold">{line.label}</span>
+              <span className="text-ds-folio-ink-soft"> · {line.value}</span>
             </span>
           </div>
-        )}
+        ))}
 
-        {/* Pending — the next anchor still to choose */}
-        {pending && (
+        {/* Pending — essential anchors still to choose (one line each) */}
+        {pendingLines.map((line) => (
           <div
+            key={line.label}
             data-testid="jd-brief-pending"
-            className="jd-brief-row flex items-center justify-between gap-3 py-2.5"
+            className="jd-brief-row flex items-center justify-between gap-3 py-2"
           >
             <span className="inline-flex items-center gap-2.5 text-sm text-ds-folio-ink">
-              <pending.Icon className="w-3.5 h-3.5 flex-shrink-0 text-ds-folio-ink-mist" aria-hidden="true" />
+              <line.Icon className="w-3.5 h-3.5 flex-shrink-0 text-ds-folio-ink-mist" aria-hidden="true" />
               <span>
-                <span className="font-semibold">{pending.label}</span>
+                <span className="font-semibold">{line.label}</span>
                 <span className="text-ds-folio-ink-soft"> · still to choose</span>
               </span>
             </span>
@@ -97,12 +101,12 @@ export function TripBrief({ days, ideas, onReview }: TripBriefProps) {
               Choose
             </button>
           </div>
-        )}
+        ))}
 
-        {/* Summary — what still needs deciding (real Trip Ideas count) */}
+        {/* Decide — real Trip Ideas count, or an honest "no ideas yet" nudge */}
         <div
           data-testid="jd-brief-decide"
-          className="jd-brief-row flex items-center justify-between gap-3 py-2.5"
+          className="jd-brief-row flex items-center justify-between gap-3 py-2"
         >
           {ideasCount > 0 ? (
             <>
@@ -123,8 +127,24 @@ export function TripBrief({ days, ideas, onReview }: TripBriefProps) {
               </button>
             </>
           ) : (
-            <span className="text-sm italic text-ds-folio-ink-mist">
-              {placedCount > 0 ? "Everything saved is placed" : "Nothing to decide yet"}
+            <span className="inline-flex items-center flex-wrap gap-x-1.5 gap-y-0.5 text-sm text-ds-folio-ink-soft">
+              <span className="italic text-ds-folio-ink-mist">No saved ideas yet —</span>
+              <span>
+                start from{" "}
+                <Link
+                  href="/explore"
+                  className="font-medium text-ds-folio-ink-soft hover:text-ds-marine-ink underline decoration-ds-hairline underline-offset-2 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
+                >
+                  Explore
+                </Link>{" "}
+                or{" "}
+                <Link
+                  href="/saved"
+                  className="font-medium text-ds-folio-ink-soft hover:text-ds-marine-ink underline decoration-ds-hairline underline-offset-2 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
+                >
+                  Saved
+                </Link>
+              </span>
             </span>
           )}
         </div>

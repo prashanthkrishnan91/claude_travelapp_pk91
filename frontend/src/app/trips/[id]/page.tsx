@@ -32,11 +32,15 @@ interface EditForm {
 const COVER_BTN_BASE =
   "inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-lg text-xs font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
 
-// On the dark cinematic cover: marine primary, brass-hairline ghosts with
-// cream text so controls stay legible on the warm-dark surface.
+// Quiet icon-only buttons for the secondary cover actions — the hero is a trip
+// folio, not an admin panel, so Optimize/Edit/Delete recede to a calm overflow
+// row and Delete only warms to its warning tone on hover.
+const COVER_ICON_BASE =
+  "inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
+
 const COVER_PRIMARY = `${COVER_BTN_BASE} bg-ds-marine-ink text-ds-paper hover:bg-ds-marine-soft`;
-const COVER_GHOST = `${COVER_BTN_BASE} border border-ds-accent/30 text-ds-text-secondary hover:text-ds-text hover:border-ds-accent`;
-const COVER_DANGER = `${COVER_BTN_BASE} border border-ds-accent/30 text-ds-warning hover:border-ds-warning`;
+const COVER_GHOST = `${COVER_ICON_BASE} text-ds-text-tertiary hover:text-ds-text`;
+const COVER_DANGER = `${COVER_ICON_BASE} text-ds-text-tertiary hover:text-ds-warning`;
 
 // ── Mobile workspace IA ───────────────────────────────────────────────────────
 
@@ -316,11 +320,11 @@ export default function TripDetailPage() {
       <section
         data-testid="trip-chapter-cover"
         aria-labelledby="chapter-destination-heading"
-        className="mb-6 journey-desk-cover"
+        className="mb-4 sm:mb-6 journey-desk-cover"
       >
         <div className="folio-cover-tab" aria-hidden="true" />
         {/* Back navigation */}
-        <div className="px-4 pt-5 sm:px-6">
+        <div className="px-4 pt-3 sm:px-6 sm:pt-5">
           <Link
             href="/trips"
             className="inline-flex items-center gap-1.5 text-xs text-ds-text-secondary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
@@ -331,7 +335,7 @@ export default function TripDetailPage() {
         </div>
 
         {/* Chapter cover body */}
-        <div className="px-4 pt-4 pb-6 sm:px-6">
+        <div className="px-4 pt-3 pb-4 sm:px-6 sm:pt-4 sm:pb-6">
           {/* Overline: chapter classification */}
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ds-accent mb-2">
             Travel Chapter
@@ -368,7 +372,7 @@ export default function TripDetailPage() {
 
           {/* Dates + duration — caption row */}
           {(trip?.startDate || trip?.endDate) && (
-            <div className="mt-3 flex items-center flex-wrap gap-x-4 gap-y-1">
+            <div className="mt-2.5 sm:mt-3 flex items-center flex-wrap gap-x-4 gap-y-1">
               <span className="inline-flex items-center gap-1.5 text-xs text-ds-text-secondary">
                 <CalendarDays className="w-3.5 h-3.5 text-ds-accent" aria-hidden="true" />
                 {trip.startDate && trip.endDate
@@ -383,9 +387,10 @@ export default function TripDetailPage() {
             </div>
           )}
 
-          {/* Action cluster — semantic buttons, not a toolbar */}
+          {/* Action cluster — one folio primary (Concierge); the rest recede to
+              a quiet icon row so the hero never reads as an admin toolbar. */}
           <div
-            className="mt-5 flex items-center flex-wrap gap-2"
+            className="mt-3 sm:mt-5 flex items-center gap-1.5"
             data-testid="chapter-actions"
           >
             <button
@@ -397,32 +402,39 @@ export default function TripDetailPage() {
               <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
               AI Concierge
             </button>
+            <span className="mx-0.5 h-5 w-px bg-ds-accent/20" aria-hidden="true" />
             <button
               type="button"
               onClick={() => setOptimizeOpen(true)}
               data-testid="chapter-action-optimize"
+              aria-label="Optimize trip"
+              title="Optimize"
               className={COVER_GHOST}
             >
-              <Zap className="w-3.5 h-3.5" aria-hidden="true" />
-              Optimize
+              <Zap className="w-4 h-4" aria-hidden="true" />
+              <span className="sr-only">Optimize</span>
             </button>
             <button
               type="button"
               onClick={openEdit}
               data-testid="chapter-action-edit"
+              aria-label="Edit Trip"
+              title="Edit Trip"
               className={COVER_GHOST}
             >
-              <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
-              Edit Trip
+              <Pencil className="w-4 h-4" aria-hidden="true" />
+              <span className="sr-only">Edit Trip</span>
             </button>
             <button
               type="button"
               onClick={() => setConfirmDelete(true)}
               data-testid="chapter-action-delete"
+              aria-label="Delete trip"
+              title="Delete"
               className={COVER_DANGER}
             >
-              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-              Delete
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
+              <span className="sr-only">Delete</span>
             </button>
           </div>
         </div>
