@@ -13,11 +13,13 @@ import {
   Zap,
 } from "lucide-react";
 import { TripBuilder } from "@/components/trips/TripBuilder";
+import { TripBrief } from "@/components/trips/TripBrief";
+import { Dayboard } from "@/components/trips/Dayboard";
 import { TripReadinessCockpit } from "@/components/trips/TripReadinessCockpit";
 import { OptimizeTripModal } from "@/components/trips/OptimizeTripModal";
 import { AIConciergePanel } from "@/components/trips/AIConciergePanel";
-import { fetchTrip, ensureTripDays, fetchTripContext, updateTrip, deleteTrip } from "@/lib/api";
-import type { Trip, TripContext, ItineraryDay } from "@/types";
+import { fetchTrip, ensureTripDays, fetchTripContext, fetchTripIdeas, updateTrip, deleteTrip } from "@/lib/api";
+import type { Trip, TripContext, ItineraryDay, ItineraryItem } from "@/types";
 
 interface EditForm {
   title: string;
@@ -30,9 +32,15 @@ interface EditForm {
 const COVER_BTN_BASE =
   "inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-lg text-xs font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
 
+// Quiet icon-only buttons for the secondary cover actions — the hero is a trip
+// folio, not an admin panel, so Optimize/Edit/Delete recede to a calm overflow
+// row and Delete only warms to its warning tone on hover.
+const COVER_ICON_BASE =
+  "inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2";
+
 const COVER_PRIMARY = `${COVER_BTN_BASE} bg-ds-marine-ink text-ds-paper hover:bg-ds-marine-soft`;
-const COVER_GHOST = `${COVER_BTN_BASE} border border-ds-hairline text-ds-folio-ink-soft hover:bg-ds-linen`;
-const COVER_DANGER = `${COVER_BTN_BASE} border border-ds-hairline text-ds-warning hover:bg-ds-linen`;
+const COVER_GHOST = `${COVER_ICON_BASE} text-ds-text-tertiary hover:text-ds-text`;
+const COVER_DANGER = `${COVER_ICON_BASE} text-ds-text-tertiary hover:text-ds-warning`;
 
 // ── Mobile workspace IA ───────────────────────────────────────────────────────
 
@@ -52,6 +60,7 @@ export default function TripDetailPage() {
 
   const [trip,          setTrip]          = useState<Trip | null>(null);
   const [itineraryDays, setItineraryDays] = useState<ItineraryDay[]>([]);
+  const [tripIdeas,     setTripIdeas]     = useState<ItineraryItem[]>([]);
   const [tripContext,   setTripContext]   = useState<TripContext | null>(null);
   const [contextLoading, setContextLoading] = useState(false);
   const [loading,       setLoading]       = useState(true);
@@ -80,6 +89,7 @@ export default function TripDetailPage() {
       setLoading(false);
 
       if (tripData) {
+        fetchTripIdeas(id).then(setTripIdeas);
         setContextLoading(true);
         fetchTripContext(id).then((ctx) => {
           setTripContext(ctx);
@@ -89,6 +99,10 @@ export default function TripDetailPage() {
     }
     load();
   }, [id]);
+
+  function refreshIdeas() {
+    fetchTripIdeas(id).then(setTripIdeas);
+  }
 
   function showToast(msg: string) {
     setToast(msg);
@@ -306,14 +320,14 @@ export default function TripDetailPage() {
       <section
         data-testid="trip-chapter-cover"
         aria-labelledby="chapter-destination-heading"
-        className="mb-6 folio-paper-panel"
+        className="mb-4 sm:mb-6 journey-desk-cover"
       >
         <div className="folio-cover-tab" aria-hidden="true" />
         {/* Back navigation */}
-        <div className="px-4 pt-5 sm:px-6">
+        <div className="px-4 pt-3 sm:px-6 sm:pt-5">
           <Link
             href="/trips"
-            className="inline-flex items-center gap-1.5 text-xs text-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+            className="inline-flex items-center gap-1.5 text-xs text-ds-text-secondary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
           >
             <ChevronLeft className="w-3.5 h-3.5" aria-hidden="true" />
             My Journeys
@@ -321,35 +335,35 @@ export default function TripDetailPage() {
         </div>
 
         {/* Chapter cover body */}
-        <div className="px-4 pt-4 pb-6 sm:px-6">
+        <div className="px-4 pt-3 pb-4 sm:px-6 sm:pt-4 sm:pb-6">
           {/* Overline: chapter classification */}
-          <p className="folio-muted-label mb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ds-accent mb-2">
             Travel Chapter
           </p>
 
           {/* Destination as editorial chapter heading */}
           <h1
             id="chapter-destination-heading"
-            className="text-2xl font-bold tracking-tight text-ds-folio-ink leading-tight sm:text-3xl"
+            className="text-2xl font-bold tracking-tight text-ds-text leading-tight sm:text-3xl"
           >
             {trip?.destination ?? trip?.title ?? "Your Trip"}
           </h1>
 
           {/* Trip title — subtitle if not same as destination */}
           {trip?.title && trip.title !== trip.destination && (
-            <p className="mt-1 text-base text-ds-folio-ink-soft leading-snug">
+            <p className="mt-1 text-base text-ds-text-secondary leading-snug">
               {trip.title}
             </p>
           )}
 
           {/* Destination context / vibe — shown when available */}
           {contextLoading && (
-            <p className="mt-2 text-sm italic text-ds-folio-ink-mist">
+            <p className="mt-2 text-sm italic text-ds-text-tertiary">
               Composing destination context…
             </p>
           )}
           {tripContext && !contextLoading && (
-            <p className="mt-2 text-sm italic text-ds-folio-ink-mist leading-snug">
+            <p className="mt-2 text-sm italic text-ds-text-secondary leading-snug">
               {tripContext.dateRange
                 ? `${tripContext.vibe} · ${tripContext.dateRange}`
                 : tripContext.vibe}
@@ -358,24 +372,25 @@ export default function TripDetailPage() {
 
           {/* Dates + duration — caption row */}
           {(trip?.startDate || trip?.endDate) && (
-            <div className="mt-3 flex items-center flex-wrap gap-x-4 gap-y-1">
-              <span className="inline-flex items-center gap-1.5 text-xs text-ds-folio-ink-mist">
-                <CalendarDays className="w-3.5 h-3.5 text-ds-marine-ink" aria-hidden="true" />
+            <div className="mt-2.5 sm:mt-3 flex items-center flex-wrap gap-x-4 gap-y-1">
+              <span className="inline-flex items-center gap-1.5 text-xs text-ds-text-secondary">
+                <CalendarDays className="w-3.5 h-3.5 text-ds-accent" aria-hidden="true" />
                 {trip.startDate && trip.endDate
                   ? `${trip.startDate} – ${trip.endDate}`
                   : trip.startDate || trip.endDate}
               </span>
               {itineraryDays.length > 0 && (
-                <span className="text-xs text-ds-folio-ink-mist">
+                <span className="text-xs text-ds-text-secondary">
                   {itineraryDays.length} day{itineraryDays.length !== 1 ? "s" : ""}
                 </span>
               )}
             </div>
           )}
 
-          {/* Action cluster — semantic buttons, not a toolbar */}
+          {/* Action cluster — one folio primary (Concierge); the rest recede to
+              a quiet icon row so the hero never reads as an admin toolbar. */}
           <div
-            className="mt-5 flex items-center flex-wrap gap-2"
+            className="mt-3 sm:mt-5 flex items-center gap-1.5"
             data-testid="chapter-actions"
           >
             <button
@@ -387,36 +402,59 @@ export default function TripDetailPage() {
               <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
               AI Concierge
             </button>
+            <span className="mx-0.5 h-5 w-px bg-ds-accent/20" aria-hidden="true" />
             <button
               type="button"
               onClick={() => setOptimizeOpen(true)}
               data-testid="chapter-action-optimize"
+              aria-label="Optimize trip"
+              title="Optimize"
               className={COVER_GHOST}
             >
-              <Zap className="w-3.5 h-3.5" aria-hidden="true" />
-              Optimize
+              <Zap className="w-4 h-4" aria-hidden="true" />
+              <span className="sr-only">Optimize</span>
             </button>
             <button
               type="button"
               onClick={openEdit}
               data-testid="chapter-action-edit"
+              aria-label="Edit Trip"
+              title="Edit Trip"
               className={COVER_GHOST}
             >
-              <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
-              Edit Trip
+              <Pencil className="w-4 h-4" aria-hidden="true" />
+              <span className="sr-only">Edit Trip</span>
             </button>
             <button
               type="button"
               onClick={() => setConfirmDelete(true)}
               data-testid="chapter-action-delete"
+              aria-label="Delete trip"
+              title="Delete"
               className={COVER_DANGER}
             >
-              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-              Delete
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
+              <span className="sr-only">Delete</span>
             </button>
           </div>
         </div>
       </section>
+
+      {/* ── The Brief — where · what is fixed · what still needs choosing ──── */}
+      {trip && (
+        <TripBrief
+          trip={trip}
+          days={itineraryDays}
+          ideas={tripIdeas}
+          onReview={() => setActiveMobileWorkspace("ideas")}
+        />
+      )}
+
+      {/* ── Dayboard — collapsed day cards (the 10-second read) ────────────── */}
+      <Dayboard
+        days={itineraryDays}
+        onSelectDay={() => setActiveMobileWorkspace("itinerary")}
+      />
 
       <div className="editorial-section-rule mb-6" aria-hidden="true" />
 
@@ -454,6 +492,7 @@ export default function TripDetailPage() {
               ensureTripDays(id, startDate, endDate).then((days) => {
                 setItineraryDays(days);
                 setTripBuilderKey((k) => k + 1);
+                refreshIdeas();
                 showToast("Added to itinerary!");
               });
             }}
@@ -480,7 +519,10 @@ export default function TripDetailPage() {
             showToast("Added to your itinerary!");
           });
         }}
-        onIdeaSaved={() => setTripIdeasKey((k) => k + 1)}
+        onIdeaSaved={() => {
+          setTripIdeasKey((k) => k + 1);
+          refreshIdeas();
+        }}
       />
     </>
   );
