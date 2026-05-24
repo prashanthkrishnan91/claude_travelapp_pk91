@@ -43,7 +43,7 @@ test("planned cards build from the same validated coordinate gate as pins", () =
 
 // ── Actions gated to durable writes only ──────────────────────────────────────
 
-test("Move to Day… uses the durable day-level write (assignIdeaToDay via onMoveToDay=onAssign)", () => {
+test("Move uses the durable day-level write (assignIdeaToDay via onMoveToDay=onAssign)", () => {
   assert.match(map, /data-testid="map-planned-move"/);
   assert.match(map, /onMoveToDay\(item\.id, d\.id\)/);
   // Move only renders when there is somewhere else to move to.
@@ -52,18 +52,50 @@ test("Move to Day… uses the durable day-level write (assignIdeaToDay via onMov
   assert.match(map, /\{canMove && !pickDay &&/);
 });
 
-test("Move to Day… never fabricates a slot/dayPart label", () => {
+test("Move never fabricates a slot/dayPart label", () => {
   assert.match(map, /Move to which day/);
   assert.doesNotMatch(map, /Dinner|Breakfast|Lunch|Morning|Afternoon|Evening/);
 });
 
-test("Remove from day = durable unplace back to Ideas (moveIdeaToTripIdeas), not a delete", () => {
+// ── Premium hybrid action pattern: Map + Move chips · More kebab ──────────────
+
+test("planned card shows at most Map + Move chips and a kebab More button (not 4 text links)", () => {
+  // Labeled icon chips for the two primary affordances.
+  assert.match(map, /<MapIcon className="w-3\.5 h-3\.5"[\s\S]*?Map\s*<\/a>/);
+  assert.match(map, /<CalendarDays className="w-3\.5 h-3\.5"[\s\S]*?Move\s*<\/button>/);
+  // Icon-only kebab opens the overflow menu (aria-labelled for a11y).
+  assert.match(map, /data-testid="map-planned-more"/);
+  assert.match(map, /aria-haspopup="menu"/);
+  assert.match(map, /<MoreHorizontal className="w-4 h-4"/);
+  assert.match(map, /aria-label="More actions"/);
+});
+
+test("destructive + unplace actions live in the overflow menu, never side by side in the row", () => {
+  assert.match(map, /data-testid="map-planned-more-menu"/);
+  // The unplace + remove controls are inside the menu, not the always-visible row.
+  assert.match(map, /role="menu"[\s\S]*?data-testid="map-planned-unplace"/);
+  assert.match(map, /role="menu"[\s\S]*?data-testid="map-planned-remove"/);
+});
+
+test("Back to Ideas = durable unplace (moveIdeaToTripIdeas), explicit text (place-like only), not a delete", () => {
   assert.match(map, /data-testid="map-planned-unplace"/);
   assert.match(map, /onUnplace\(item\.id\)/);
-  assert.match(map, /Remove from day/);
-  // It is wired to the day_id:null PATCH, which preserves details.
+  // Renamed: never "remove" wording for the non-destructive unplace.
+  assert.match(map, /Back to Ideas/);
+  assert.doesNotMatch(map, /Remove from day/);
+  // Place-like items get Back to Ideas; anchors get Manage in Itinerary instead.
+  assert.match(map, /const isAnchor = item\.itemType !== "meal" && item\.itemType !== "activity";/);
+  assert.match(map, /\{isAnchor \?[\s\S]*?map-planned-manage-itinerary[\s\S]*?map-planned-unplace/);
+  // Wired to the day_id:null PATCH, which preserves details.
   assert.match(page, /async function handleItemUnplace\(itemId: string\) \{\s*await moveIdeaToTripIdeas\(itemId\);/);
   assert.match(api, /export async function moveIdeaToTripIdeas\(itemId: string\)[\s\S]*?body: JSON\.stringify\(\{ day_id: null \}\)/);
+});
+
+test("flight/hotel/logistics anchors offer Manage in Itinerary (text), wired to the legacy tab", () => {
+  assert.match(map, /data-testid="map-planned-manage-itinerary"/);
+  assert.match(map, /Manage in Itinerary/);
+  assert.match(map, /onManageItinerary\(\)/);
+  assert.match(page, /onManageItinerary=\{\(\) => \{[\s\S]*?setActiveMobileWorkspace\("itinerary"\)/);
 });
 
 // ── Destructive remove requires confirmation ──────────────────────────────────

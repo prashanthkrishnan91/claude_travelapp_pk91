@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MapPin, ExternalLink, X, Sparkles, Star, Loader2 } from "lucide-react";
+import { MapPin, Map as MapIcon, CalendarDays, MoreHorizontal, ExternalLink, X, Sparkles, Star, Loader2 } from "lucide-react";
 import type { ItineraryDay, ItineraryItem } from "@/types";
 import { extractItineraryCoordinates } from "@/lib/itineraryCoordinates";
 import { TripLensMap, type TripLensPin } from "@/components/trips/TripLensMap";
@@ -19,9 +19,10 @@ import { TripLensMap, type TripLensPin } from "@/components/trips/TripLensMap";
 //   Day Lens   — the selected day's placed map-ready items only.
 //   Ideas Lens — unplaced Trip Ideas with real coordinates (distinct markers).
 //
-// v1B adds safe planned-item actions backed ONLY by durable existing writes:
-//   Move to Day…   → onAssign (PATCH day_id; details preserved)
-//   Remove from day → onUnplace (PATCH day_id:null → back to Trip Ideas; preserved)
+// v1B adds safe planned-item actions backed ONLY by durable existing writes,
+// behind a premium hybrid row (Map + Move chips · More kebab overflow):
+//   Move            → onAssign (PATCH day_id; details preserved)
+//   Back to Ideas   → onUnplace (PATCH day_id:null → back to Trip Ideas; preserved)
 //   Remove from trip → onRemove (DELETE; two-step confirm guard)
 // Destructive deletes (trip + idea) are protected by an inline confirm. There is
 // no durable pin-visibility preference contract, so no such toggle UI is rendered
@@ -157,10 +158,12 @@ export interface MapFoldOutProps {
   ) => Promise<void>;
   /** Durable delete (deleteItem) — used for "Remove from trip" / "Remove idea". */
   onRemove: (itemId: string) => Promise<void>;
-  /** Durable unplace (moveIdeaToTripIdeas → day_id:null) — "Remove from day". */
+  /** Durable unplace (moveIdeaToTripIdeas → day_id:null) — "Back to Ideas". */
   onUnplace: (itemId: string) => Promise<void>;
   /** Open the legacy Ideas workspace for fuller management. */
   onManage: () => void;
+  /** Open the legacy Itinerary workspace (for flight/hotel/logistics anchors). */
+  onManageItinerary: () => void;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -177,6 +180,7 @@ export function MapFoldOut({
   onRemove,
   onUnplace,
   onManage,
+  onManageItinerary,
 }: MapFoldOutProps) {
   const [lens, setLens] = useState<Lens>("trip");
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
@@ -392,6 +396,7 @@ export function MapFoldOut({
               onMoveToDay={onAssign}
               onUnplace={onUnplace}
               onRemove={onRemove}
+              onManageItinerary={onManageItinerary}
               onAddFromIdeas={() => {
                 setLens("ideas");
                 setSelectedPinId(null);
@@ -426,6 +431,7 @@ function PlannedLensBody({
   onMoveToDay,
   onUnplace,
   onRemove,
+  onManageItinerary,
   onAddFromIdeas,
 }: {
   hasPins: boolean;
@@ -439,6 +445,7 @@ function PlannedLensBody({
   onMoveToDay: (itemId: string, dayId: string) => Promise<void>;
   onUnplace: (itemId: string) => Promise<void>;
   onRemove: (itemId: string) => Promise<void>;
+  onManageItinerary: () => void;
   onAddFromIdeas: () => void;
 }) {
   const hasLinks = linkRows.length > 0;
@@ -480,6 +487,7 @@ function PlannedLensBody({
               onMoveToDay={onMoveToDay}
               onUnplace={onUnplace}
               onRemove={onRemove}
+              onManageItinerary={onManageItinerary}
             />
           ))}
         </>
@@ -532,6 +540,7 @@ function PlannedItemCard({
   onMoveToDay,
   onUnplace,
   onRemove,
+  onManageItinerary,
 }: {
   card: PlacedCard;
   days: ItineraryDay[];
@@ -540,12 +549,17 @@ function PlannedItemCard({
   onMoveToDay: (itemId: string, dayId: string) => Promise<void>;
   onUnplace: (itemId: string) => Promise<void>;
   onRemove: (itemId: string) => Promise<void>;
+  onManageItinerary: () => void;
 }) {
   const { item, dayNumber, mapsUrl } = card;
   const ref = useRef<HTMLElement>(null);
   const [busy, setBusy] = useState(false);
   const [pickDay, setPickDay] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  // Restaurants/places carry a meaningful "Back to Ideas" (durable unplace);
+  // flight/hotel/logistics anchors instead point to the fuller Itinerary editor.
+  const isAnchor = item.itemType !== "meal" && item.itemType !== "activity";
 
   // Lightweight selection sync: when this card becomes the selected pin, bring it
   // into view (no heavy animation — instant nearest scroll).
@@ -564,6 +578,12 @@ function PlannedItemCard({
 
   const LINK =
     "text-xs font-medium text-ds-folio-ink-soft hover:text-ds-marine-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded";
+  // Premium labeled chip (icon + short label) — thumb-friendly tap target.
+  const ACTION_CHIP =
+    "inline-flex items-center gap-1.5 min-h-[40px] px-2.5 rounded-md text-xs font-medium text-ds-folio-ink-soft hover:text-ds-marine-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2";
+  // Overflow-menu row — explicit text labels (never icon-only for consequence).
+  const MENU_ITEM =
+    "w-full flex items-center min-h-[40px] px-2.5 rounded-md text-left text-sm font-medium text-ds-folio-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 disabled:opacity-50";
 
   async function run(fn: () => Promise<void>) {
     setBusy(true);
@@ -649,55 +669,115 @@ function PlannedItemCard({
         </div>
       ) : null}
 
-      {/* Actions — quiet, contextual to real durable behavior only */}
-      <div className="mt-2.5 flex items-center flex-wrap gap-x-4 gap-y-1" onClick={(e) => e.stopPropagation()}>
+      {/* Premium hybrid action row: Map + Move (icon + short label) · More (kebab) */}
+      <div className="mt-2.5 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
         {mapsUrl && (
-          <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className={LINK}>
+          <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className={ACTION_CHIP}>
+            <MapIcon className="w-3.5 h-3.5" aria-hidden="true" />
             Map
           </a>
         )}
         {canMove && !pickDay && (
-          <button type="button" data-testid="map-planned-move" onClick={() => setPickDay(true)} disabled={busy} className={LINK}>
-            Move to Day…
+          <button type="button" data-testid="map-planned-move" onClick={() => setPickDay(true)} disabled={busy} className={ACTION_CHIP}>
+            <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
+            Move
           </button>
         )}
-        {/* Remove from day = unplace back to Ideas (durable, NON-destructive). */}
-        <button
-          type="button"
-          data-testid="map-planned-unplace"
-          onClick={() => run(() => onUnplace(item.id))}
-          disabled={busy}
-          className={LINK}
-          title="Move this back to your Ideas tray (keeps all its details)"
-        >
-          Remove from day
-        </button>
-        {/* Remove from trip = permanent delete, two-step confirm guard. */}
-        {confirmRemove ? (
-          <span className="ml-auto inline-flex items-center gap-3" data-testid="map-planned-remove-confirm">
-            <button
-              type="button"
-              onClick={() => run(() => onRemove(item.id))}
-              disabled={busy}
-              className="text-xs font-semibold text-ds-warning hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-warning focus-visible:outline-offset-2 rounded"
-            >
-              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm remove from trip"}
-            </button>
-            <button type="button" onClick={() => setConfirmRemove(false)} disabled={busy} className={LINK}>
-              Cancel
-            </button>
-          </span>
-        ) : (
+
+        <div className="relative ml-auto">
           <button
             type="button"
-            data-testid="map-planned-remove"
-            onClick={() => setConfirmRemove(true)}
+            data-testid="map-planned-more"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label="More actions"
+            onClick={() => {
+              setMenuOpen((v) => !v);
+              setConfirmRemove(false);
+            }}
             disabled={busy}
-            className={`${LINK} ml-auto`}
+            className="inline-flex items-center justify-center min-h-[40px] min-w-[40px] rounded-md text-ds-folio-ink-soft hover:text-ds-folio-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 disabled:opacity-50"
           >
-            Remove from trip
+            <MoreHorizontal className="w-4 h-4" aria-hidden="true" />
           </button>
-        )}
+
+          {menuOpen ? (
+            <>
+              {/* Lightweight tap-away to close (no portal/animation). */}
+              <button
+                type="button"
+                aria-hidden="true"
+                tabIndex={-1}
+                onClick={() => setMenuOpen(false)}
+                className="fixed inset-0 z-10 cursor-default"
+              />
+              <div
+                role="menu"
+                data-testid="map-planned-more-menu"
+                className="absolute right-0 top-full z-20 mt-1 min-w-[190px] rounded-lg border border-ds-hairline bg-ds-paper p-1 shadow-[var(--ds-paper-elevation-2)]"
+              >
+                {confirmRemove ? (
+                  <div className="p-2" data-testid="map-planned-remove-confirm">
+                    <p className="px-1 pb-2 text-xs text-ds-folio-ink-soft leading-snug">
+                      Remove this from the trip permanently?
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => run(() => onRemove(item.id))}
+                      disabled={busy}
+                      className="w-full inline-flex items-center justify-center gap-1.5 min-h-[40px] rounded-md text-sm font-semibold text-ds-warning ring-1 ring-ds-warning/40 hover:bg-ds-warning/10 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-warning focus-visible:outline-offset-2 disabled:opacity-50"
+                    >
+                      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm remove from trip"}
+                    </button>
+                    <button type="button" onClick={() => setConfirmRemove(false)} disabled={busy} className={`${MENU_ITEM} mt-1 justify-center`}>
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {isAnchor ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-testid="map-planned-manage-itinerary"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onManageItinerary();
+                        }}
+                        className={MENU_ITEM}
+                      >
+                        Manage in Itinerary
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-testid="map-planned-unplace"
+                        onClick={() => run(() => onUnplace(item.id)).then(() => setMenuOpen(false))}
+                        disabled={busy}
+                        className={MENU_ITEM}
+                        title="Move this back to your Ideas tray (keeps all its details)"
+                      >
+                        Back to Ideas
+                      </button>
+                    )}
+                    {/* Remove from trip = permanent delete, explicit text + two-step confirm. */}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid="map-planned-remove"
+                      onClick={() => setConfirmRemove(true)}
+                      disabled={busy}
+                      className={`${MENU_ITEM} text-ds-warning`}
+                    >
+                      Remove from trip…
+                    </button>
+                  </>
+                )}
+              </div>
+            </>
+          ) : null}
+        </div>
       </div>
     </article>
   );

@@ -614,6 +614,10 @@ export default function TripDetailPage() {
           setMapOpen(false);
           setActiveMobileWorkspace("ideas");
         }}
+        onManageItinerary={() => {
+          setMapOpen(false);
+          setActiveMobileWorkspace("itinerary");
+        }}
       />
 
       {/* ── Ideas Tray — placement-first (mobile sheet · desktop right drawer) ── */}
