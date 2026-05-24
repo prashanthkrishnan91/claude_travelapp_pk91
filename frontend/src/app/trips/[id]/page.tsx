@@ -63,9 +63,10 @@ const COVER_DANGER = `${COVER_ICON_BASE} text-ds-text-tertiary hover:text-ds-war
 
 type MobileWorkspace = "brief" | "build" | "itinerary" | "ideas";
 
+// Build is intentionally omitted from mobile nav — it is the internal
+// implementation surface reached via the Add-to-Day handoff from Itinerary.
 const WORKSPACE_TABS: { id: MobileWorkspace; label: string; testId: string }[] = [
   { id: "brief",     label: "Brief",     testId: "trip-mobile-tab-brief"     },
-  { id: "build",     label: "Build",     testId: "trip-mobile-tab-build"     },
   { id: "itinerary", label: "Itinerary", testId: "trip-mobile-tab-itinerary" },
   { id: "ideas",     label: "Ideas",     testId: "trip-mobile-tab-ideas"     },
 ];
@@ -551,14 +552,12 @@ export default function TripDetailPage() {
             selectedDayId={selectedDayId}
             onSelectDay={(day) => setSelectedDayId(day.id)}
             onOpenMap={() => setMapOpen(true)}
-            onAddToDay={handleOpenAddToDay}
             inlineDayPanel={expandedDay ? (
               <ExpandedDayPanel
                 day={expandedDay}
                 ideasCount={tripIdeas.length}
                 onAddFromIdeas={() => setIdeasTrayOpen(true)}
                 onEditInItinerary={() => setActiveMobileWorkspace("itinerary")}
-                onAddToDay={() => handleOpenAddToDay(expandedDay)}
               />
             ) : null}
           />
@@ -616,7 +615,7 @@ export default function TripDetailPage() {
                   type="button"
                   data-testid="jd-build-return-btn"
                   onClick={() => {
-                    setActiveMobileWorkspace("brief");
+                    setActiveMobileWorkspace("itinerary");
                     setBuildFocusDayId(null);
                     setBuildFocusVertical(null);
                   }}
@@ -641,6 +640,7 @@ export default function TripDetailPage() {
             mobileWorkspace={activeMobileWorkspace === "brief" ? null : activeMobileWorkspace}
             focusDayId={buildFocusDayId}
             focusVertical={buildFocusVertical}
+            onAddToDay={handleOpenAddToDay}
             onIdeaAssigned={() => {
               const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
                 ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;

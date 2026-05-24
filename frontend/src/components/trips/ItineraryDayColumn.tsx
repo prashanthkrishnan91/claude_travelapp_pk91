@@ -369,6 +369,8 @@ interface ItineraryDayColumnProps {
   onPlanDay?: (dayId: string, dayNumber: number) => void;
   planDayLoading?: boolean;
   onUpdateTimeline?: (updatedItem: ItineraryItem) => void;
+  /** Opens the Add-to-Day vertical picker for this day. */
+  onAddToDay?: (day: ItineraryDay) => void;
 }
 
 function formatDate(dateStr: string): string {
@@ -399,6 +401,7 @@ export function ItineraryDayColumn({
   onPlanDay,
   planDayLoading,
   onUpdateTimeline,
+  onAddToDay,
 }: ItineraryDayColumnProps) {
   const [expandedItemDays, setExpandedItemDays] = useState<Record<number, boolean>>({});
   // Local overrides for optimistic timeline updates — item moves to correct section immediately
@@ -669,6 +672,22 @@ export function ItineraryDayColumn({
                 <Clock className="w-3 h-3" />
               )}
               Suggest Timing
+            </button>
+          )}
+          {onAddToDay && (
+            <button
+              type="button"
+              data-testid="itinerary-add-to-day-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMobileActionTrayOpen(false);
+                onAddToDay(day);
+              }}
+              className="flex items-center gap-1.5 px-3 rounded-lg text-ds-marine-ink border border-ds-marine-ink/30 text-[11px] font-medium transition-colors duration-[120ms] hover:border-ds-marine-ink/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 min-h-[44px]"
+              aria-label={`Add to Day ${day.dayNumber}`}
+            >
+              <Plus className="w-3 h-3" />
+              Add to this day
             </button>
           )}
         </div>

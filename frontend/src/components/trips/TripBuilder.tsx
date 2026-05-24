@@ -1249,11 +1249,13 @@ interface TripBuilderProps {
   /** Open and scroll to the matching CandidatePanel when arriving from the Add-to-Day drawer.
    *  "flight" | "hotel" | "restaurant" | "attraction" — maps to the four existing panels. */
   focusVertical?: string | null;
+  /** Opens the Add-to-Day vertical picker for the given day (wired from Itinerary workspace). */
+  onAddToDay?: (day: ItineraryDay) => void;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned, mobileWorkspace, focusDayId, focusVertical }: TripBuilderProps) {
+export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned, mobileWorkspace, focusDayId, focusVertical, onAddToDay }: TripBuilderProps) {
   const [days,           setDays]          = useState<ItineraryDay[]>(
     [...initialDays].sort((a, b) => a.dayNumber - b.dayNumber)
   );
@@ -2550,6 +2552,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                     compareSet={compareSet}
                     onPlanDay={handlePlanDay}
                     planDayLoading={dayPlanLoading && dayPlanTargetDayId === day.id}
+                    onAddToDay={onAddToDay}
                   />
                 ))}
               </SortableContext>

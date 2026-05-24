@@ -2,12 +2,11 @@
  * Journey Desk mobile IA closeout — day-scoped Add-to-Day flow + inline
  * selected-day expansion.
  *
- * Two wife-tested mobile planning breaks fixed:
- *  1. Selecting a day now expands its detail INLINE under that day card —
- *     Day 10 detail no longer requires scrolling past the full day list.
- *  2. A "+" button on each Dayboard card + "Add to this day" in the expanded
- *     panel open an Add-to-Day drawer that routes to the existing Build panel
- *     with the target day pre-selected and an obvious return affordance.
+ * Corrected IA (post-review):
+ *  1. Brief / Dayboard is read-only — no add controls.
+ *  2. Add-to-Day (four verticals) lives in the Itinerary workspace.
+ *  3. Selecting a day in Brief still expands its detail INLINE under that card.
+ *  4. Build is retained as the internal search surface but hidden from mobile nav.
  *
  * Source-scan contract tests (no DOM/browser).
  */
@@ -22,6 +21,7 @@ const dayboard = readFileSync(new URL("src/components/trips/Dayboard.tsx", root)
 const panel = readFileSync(new URL("src/components/trips/ExpandedDayPanel.tsx", root), "utf8");
 const drawer = readFileSync(new URL("src/components/trips/AddToDayDrawer.tsx", root), "utf8");
 const builder = readFileSync(new URL("src/components/trips/TripBuilder.tsx", root), "utf8");
+const itineraryColumn = readFileSync(new URL("src/components/trips/ItineraryDayColumn.tsx", root), "utf8");
 const css = readFileSync(new URL("src/app/globals.css", root), "utf8");
 
 // ── 1. AddToDayDrawer exists as a new file ──────────────────────────────────
@@ -59,29 +59,35 @@ test("selected-day expanded panel no longer renders as a standalone block after 
   assert.doesNotMatch(page, /day=\{itineraryDays\.find\(\(d\) => d\.id === selectedDayId\)!\}/);
 });
 
-// ── 3. Add-to-Day entry points ───────────────────────────────────────────────
+// ── 3. Brief is read-only — no Add-to-Day controls ──────────────────────────
 
-test("Dayboard accepts onAddToDay prop", () => {
+test("Brief Dayboard does not receive onAddToDay from page (Brief is read-only)", () => {
+  // The <Dayboard> call in page.tsx must not pass onAddToDay — that prop belongs
+  // in Itinerary, not Brief. The Dayboard component still supports the prop
+  // (defensive), but page must not wire it up in the Brief section.
+  // Strategy: check that onAddToDay= does not appear near the <Dayboard JSX.
+  const dayboardJsxIdx = page.indexOf("<Dayboard");
+  assert.ok(dayboardJsxIdx !== -1, "<Dayboard must exist in page");
+  const dayboardJsxEnd = page.indexOf("/>", dayboardJsxIdx);
+  const dayboardJsx = page.slice(dayboardJsxIdx, dayboardJsxEnd + 2);
+  assert.doesNotMatch(dayboardJsx, /onAddToDay=/);
+});
+
+test("Brief inline ExpandedDayPanel does not receive onAddToDay (Brief is read-only)", () => {
+  // The ExpandedDayPanel in the Brief inlineDayPanel prop must not pass onAddToDay.
+  const panelJsxIdx = page.indexOf("<ExpandedDayPanel");
+  assert.ok(panelJsxIdx !== -1, "<ExpandedDayPanel must exist in page");
+  const panelJsxEnd = page.indexOf("/>", panelJsxIdx);
+  const panelJsx = page.slice(panelJsxIdx, panelJsxEnd + 2);
+  assert.doesNotMatch(panelJsx, /onAddToDay=/);
+});
+
+test("Dayboard component still supports onAddToDay prop (capability kept, just not wired in Brief)", () => {
   assert.match(dayboard, /onAddToDay\?: \(day: ItineraryDay\) => void/);
 });
 
-test("Dayboard renders a '+' add button with stable testid jd-day-add-btn", () => {
-  assert.match(dayboard, /data-testid="jd-day-add-btn"/);
-  assert.match(dayboard, /onAddToDay\(day\)/);
-});
-
-test("Dayboard '+' button has accessible aria-label for the day number", () => {
-  assert.match(dayboard, /aria-label=\{`Add to Day \$\{day\.dayNumber\}`\}/);
-});
-
-test("ExpandedDayPanel accepts onAddToDay prop", () => {
+test("ExpandedDayPanel component still supports onAddToDay prop (capability kept)", () => {
   assert.match(panel, /onAddToDay\?: \(\) => void/);
-});
-
-test("ExpandedDayPanel renders 'Add to this day' button with stable testid jd-add-to-day-btn", () => {
-  assert.match(panel, /data-testid="jd-add-to-day-btn"/);
-  assert.match(panel, /Add to this day/);
-  assert.match(panel, /onClick=\{onAddToDay\}/);
 });
 
 // ── 4. AddToDayDrawer — 4 verticals, paper-world sheet ──────────────────────
@@ -171,8 +177,8 @@ test("handleAddToDaySelectVertical routes to Build workspace with target day loc
 test("page shows 'Back to Day N' return banner in Build workspace when coming from Add-to-Day", () => {
   assert.match(page, /data-testid="jd-build-return-banner"/);
   assert.match(page, /data-testid="jd-build-return-btn"/);
-  // Routes back to brief and clears the focus
-  assert.match(page, /setActiveMobileWorkspace\("brief"\)[\s\S]{0,60}setBuildFocusDayId\(null\)/);
+  // Routes back to Itinerary (not Brief) and clears the focus
+  assert.match(page, /setActiveMobileWorkspace\("itinerary"\)[\s\S]{0,60}setBuildFocusDayId\(null\)/);
 });
 
 test("return banner is mobile-only (lg:hidden)", () => {
@@ -193,16 +199,46 @@ test("AddToDayDrawer does not create new provider or search endpoints", () => {
   assert.doesNotMatch(drawer, /fetch\(|api\.|searchHotels|searchAttractions|searchRestaurants/i);
 });
 
-// ── 8. Legacy fallback tabs remain reachable ─────────────────────────────────
+// ── 8. Mobile nav and Build surface ──────────────────────────────────────────
 
-test("Build, Itinerary, and Ideas tabs remain accessible (no tab removed)", () => {
-  assert.match(page, /trip-mobile-tab-build/);
+test("Mobile workspace nav does not expose Build as a visible tab", () => {
+  // Build is hidden from mobile nav; it is the internal search surface used by
+  // the Add-to-Day handoff. WORKSPACE_TABS must not include the build tab testid.
+  assert.doesNotMatch(page, /trip-mobile-tab-build/);
+});
+
+test("Itinerary and Ideas tabs remain in mobile nav", () => {
   assert.match(page, /trip-mobile-tab-itinerary/);
   assert.match(page, /trip-mobile-tab-ideas/);
+});
+
+test("Build panel is still present in TripBuilder as internal surface (not deleted)", () => {
+  assert.match(builder, /trip-mobile-panel-build/);
   assert.match(page, /<TripBuilder/);
 });
 
-// ── 9. CSS primitives for the new flow ──────────────────────────────────────
+// ── 9. Itinerary workspace owns Add-to-Day entry ─────────────────────────────
+
+test("ItineraryDayColumn accepts onAddToDay prop", () => {
+  assert.match(itineraryColumn, /onAddToDay\?: \(day: ItineraryDay\) => void/);
+});
+
+test("ItineraryDayColumn renders 'Add to this day' button with stable testid itinerary-add-to-day-btn", () => {
+  assert.match(itineraryColumn, /data-testid="itinerary-add-to-day-btn"/);
+  assert.match(itineraryColumn, /Add to this day/);
+  assert.match(itineraryColumn, /onAddToDay\(day\)/);
+});
+
+test("TripBuilder passes onAddToDay to ItineraryDayColumn", () => {
+  assert.match(builder, /onAddToDay\?: \(day: ItineraryDay\) => void/);
+  assert.match(builder, /onAddToDay={onAddToDay}/);
+});
+
+test("page passes onAddToDay={handleOpenAddToDay} to TripBuilder", () => {
+  assert.match(page, /onAddToDay=\{handleOpenAddToDay\}/);
+});
+
+// ── 10. CSS primitives for the new flow ──────────────────────────────────────
 
 test("jd-day-add-btn CSS class is defined in globals.css", () => {
   assert.match(css, /\.jd-day-add-btn \{/);
