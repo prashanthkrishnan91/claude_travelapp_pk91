@@ -165,6 +165,20 @@ export default function TripDetailPage() {
     refreshIdeas();
   }
 
+  // Refreshes parent itinerary + ideas after a TripBuilder add — does NOT bump
+  // tripBuilderKey so TripBuilder state (search results, selected vertical, etc.)
+  // is preserved while Brief/Dayboard/ExpandedDayPanel pick up the new item.
+  function refreshParentItinerary() {
+    const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
+      ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;
+    const endDate = (trip as (Trip & { end_date?: string }) | null)?.endDate
+      ?? (trip as (Trip & { end_date?: string }) | null)?.end_date;
+    ensureTripDays(id, startDate, endDate).then((days) => {
+      setItineraryDays(days);
+      refreshIdeas();
+    });
+  }
+
   async function handleIdeaRemove(itemId: string) {
     // Durable delete; refresh days too so a placed item removed from the map
     // also drops out of the Dayboard/Expanded Day/Trip lens counts.
@@ -641,6 +655,7 @@ export default function TripDetailPage() {
             focusDayId={buildFocusDayId}
             focusVertical={buildFocusVertical}
             onAddToDay={handleOpenAddToDay}
+            onItineraryChanged={refreshParentItinerary}
             onIdeaAssigned={() => {
               const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
                 ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;

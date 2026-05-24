@@ -322,9 +322,88 @@ test("TripBuilder vertical-focus useEffect switches to list view for attraction/
   assert.match(effectSlice, /setViewMode\("list"\)/);
 });
 
-// ── 11. Desktop coherence — no double-render of day detail ──────────────────
+// ── 11. Parent itinerary refresh after Add-to-Day add ────────────────────────
+
+test("TripBuilder exposes onItineraryChanged callback prop", () => {
+  assert.match(builder, /onItineraryChanged\?: \(\) => void/);
+});
+
+test("TripBuilder calls onItineraryChanged after successful candidate (flight/hotel) add", () => {
+  // The call must appear inside the try block, after showToast, before the catch block.
+  // Strategy: find the candidate handler and check it contains onItineraryChanged?.()
+  // with the catch block present afterward (meaning it's in the success path only).
+  const handlerStart = builder.indexOf("handleAddCandidateToItinerary = useCallback");
+  const handlerEnd = builder.indexOf("}, [days, selectedDayId, tripId, showToast, onItineraryChanged])", handlerStart);
+  const handlerSlice = builder.slice(handlerStart, handlerEnd);
+  assert.match(handlerSlice, /onItineraryChanged\?\.\(\)/);
+  // Must be in the success path (before catch)
+  const catchIdx = handlerSlice.indexOf("} catch {");
+  const callIdx = handlerSlice.indexOf("onItineraryChanged?.()");
+  assert.ok(callIdx < catchIdx, "onItineraryChanged must fire before catch block");
+});
+
+test("TripBuilder calls onItineraryChanged after successful attraction add", () => {
+  const handlerStart = builder.indexOf("handleAddAttractionToItinerary = useCallback");
+  const handlerEnd = builder.indexOf("}, [days, selectedDayId, tripId, showToast, onItineraryChanged])", handlerStart);
+  const slice = builder.slice(handlerStart, handlerEnd);
+  assert.match(slice, /onItineraryChanged\?\.\(\)/);
+  const catchIdx = slice.indexOf("} catch {");
+  const callIdx = slice.indexOf("onItineraryChanged?.()");
+  assert.ok(callIdx < catchIdx, "onItineraryChanged must fire before catch block");
+});
+
+test("TripBuilder calls onItineraryChanged after successful restaurant add", () => {
+  const handlerStart = builder.indexOf("handleAddRestaurantToItinerary = useCallback");
+  const handlerEnd = builder.indexOf("}, [days, selectedDayId, tripId, showToast, onItineraryChanged])", handlerStart);
+  const slice = builder.slice(handlerStart, handlerEnd);
+  assert.match(slice, /onItineraryChanged\?\.\(\)/);
+  const catchIdx = slice.indexOf("} catch {");
+  const callIdx = slice.indexOf("onItineraryChanged?.()");
+  assert.ok(callIdx < catchIdx, "onItineraryChanged must fire before catch block");
+});
+
+test("TripBuilder calls onItineraryChanged after successful round-trip flight add", () => {
+  const handlerStart = builder.indexOf("handleAddRoundTripToItinerary = useCallback");
+  const handlerEnd = builder.indexOf("}, [days, tripId, showToast, extractLegDepartureDate, resolveItineraryDayByDate, onItineraryChanged])", handlerStart);
+  const slice = builder.slice(handlerStart, handlerEnd);
+  assert.match(slice, /onItineraryChanged\?\.\(\)/);
+  // The success-path callback appears after showToast(msg) and before the outer catch
+  // (which matches "Failed to add round-trip"). The outer catch is the LAST catch block.
+  const outerCatchIdx = slice.lastIndexOf("} catch {");
+  const callIdx = slice.lastIndexOf("onItineraryChanged?.()");
+  assert.ok(callIdx < outerCatchIdx, "onItineraryChanged must fire before outer catch block");
+});
+
+test("TripBuilder does not call onItineraryChanged inside the outer (failure) catch blocks", () => {
+  // Outer catch blocks all follow the pattern: } catch {\n      showToast("Failed
+  // Check that none of those blocks contain onItineraryChanged?.().
+  const outerCatchRe = /\} catch \{\s*\n\s*showToast\("Failed[^}]+\}/g;
+  let m;
+  let found = 0;
+  while ((m = outerCatchRe.exec(builder)) !== null) {
+    found++;
+    assert.doesNotMatch(m[0], /onItineraryChanged\?\.\(\)/, "onItineraryChanged must not fire in failure catch");
+  }
+  assert.ok(found > 0, "should have found at least one outer catch block to verify");
+});
+
+test("page.tsx has refreshParentItinerary that calls setItineraryDays without setTripBuilderKey", () => {
+  assert.match(page, /function refreshParentItinerary/);
+  const fnStart = page.indexOf("function refreshParentItinerary");
+  const fnEnd = page.indexOf("\n  }", fnStart) + 4;
+  const fnSlice = page.slice(fnStart, fnEnd);
+  assert.match(fnSlice, /setItineraryDays/);
+  assert.doesNotMatch(fnSlice, /setTripBuilderKey/);
+});
+
+test("page passes onItineraryChanged={refreshParentItinerary} to TripBuilder", () => {
+  assert.match(page, /onItineraryChanged=\{refreshParentItinerary\}/);
+});
+
+// ── 12. Desktop coherence — no double-render of day detail ──────────────────
 
 test("Desktop coherence: ExpandedDayPanel appears only once in page source (via inlineDayPanel)", () => {
+  // Count occurrences of <ExpandedDayPanel in page.tsx — should be exactly 1
   // Count occurrences of <ExpandedDayPanel in page.tsx — should be exactly 1
   // (inside the inlineDayPanel prop, not also as a standalone after-list block).
   const occurrences = (page.match(/<ExpandedDayPanel/g) ?? []).length;

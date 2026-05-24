@@ -1251,11 +1251,14 @@ interface TripBuilderProps {
   focusVertical?: string | null;
   /** Opens the Add-to-Day vertical picker for the given day (wired from Itinerary workspace). */
   onAddToDay?: (day: ItineraryDay) => void;
+  /** Called after any successful persisted add so the parent (page.tsx) can refresh
+   *  its own itineraryDays / tripIdeas state. NOT fired on failed adds. */
+  onItineraryChanged?: () => void;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned, mobileWorkspace, focusDayId, focusVertical, onAddToDay }: TripBuilderProps) {
+export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned, mobileWorkspace, focusDayId, focusVertical, onAddToDay, onItineraryChanged }: TripBuilderProps) {
   const [days,           setDays]          = useState<ItineraryDay[]>(
     [...initialDays].sort((a, b) => a.dayNumber - b.dayNumber)
   );
@@ -1547,12 +1550,13 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         )
       );
       showToast(`${item.itemType === "flight" ? "Flight" : "Hotel"} added to Day ${targetDay.dayNumber}`);
+      onItineraryChanged?.();
     } catch {
       showToast("Failed to add — please try again");
     } finally {
       setAddingId(null);
     }
-  }, [days, selectedDayId, tripId, showToast]);
+  }, [days, selectedDayId, tripId, showToast, onItineraryChanged]);
 
   // ── Add attraction to selected itinerary day ─────────────────────────────────
 
@@ -1574,12 +1578,13 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         )
       );
       showToast(`${attraction.name.split(" —")[0]} added to Day ${targetDay.dayNumber}`);
+      onItineraryChanged?.();
     } catch {
       showToast("Failed to add — please try again");
     } finally {
       setAddingId(null);
     }
-  }, [days, selectedDayId, tripId, showToast]);
+  }, [days, selectedDayId, tripId, showToast, onItineraryChanged]);
 
   // ── Add restaurant to selected itinerary day ────────────────────────────────
 
@@ -1601,12 +1606,13 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         )
       );
       showToast(`${restaurant.name} added to Day ${targetDay.dayNumber}`);
+      onItineraryChanged?.();
     } catch {
       showToast("Failed to add — please try again");
     } finally {
       setAddingId(null);
     }
-  }, [days, selectedDayId, tripId, showToast]);
+  }, [days, selectedDayId, tripId, showToast, onItineraryChanged]);
 
   // ── Add round-trip flight: two leg items on actual departure days ────────────
 
@@ -1717,12 +1723,13 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
           ? `Round-trip flight added to Day ${outboundDay.dayNumber}`
           : `Round-trip: outbound Day ${outboundDay.dayNumber}, return Day ${returnDay.dayNumber}`;
       showToast(msg);
+      onItineraryChanged?.();
     } catch {
       showToast("Failed to add round-trip flight — please try again");
     } finally {
       setAddingId(null);
     }
-  }, [days, tripId, showToast, extractLegDepartureDate, resolveItineraryDayByDate]);
+  }, [days, tripId, showToast, extractLegDepartureDate, resolveItineraryDayByDate, onItineraryChanged]);
 
   // ── Remove item from a day ───────────────────────────────────────────────────
 
@@ -1842,8 +1849,9 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       setDays((prev) =>
         prev.map((d) => d.id === targetDay.id ? { ...d, items: [...d.items, newItem] } : d)
       );
+      onItineraryChanged?.();
     } catch { /* silently ignore */ }
-  }, [days, selectedDayId, tripId]);
+  }, [days, selectedDayId, tripId, onItineraryChanged]);
 
   // ── Compare ──────────────────────────────────────────────────────────────────
 
