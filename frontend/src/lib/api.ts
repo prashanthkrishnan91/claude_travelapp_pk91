@@ -2455,6 +2455,45 @@ export async function moveIdeaToTripIdeas(itemId: string): Promise<ItineraryItem
   });
 }
 
+/**
+ * Non-destructive "Back to Ideas": unschedule a placed item (day_id → null) AND
+ * ensure it qualifies for the Trip Ideas list. The backend `/ideas` endpoint
+ * (`list_unscheduled_items`) only returns unscheduled items whose
+ * `details.source_kind` is a curated kind (`concierge_idea` / `saved_item`) — so
+ * a placed item added directly from Explore (no curated source_kind) would be
+ * orphaned: unscheduled but invisible in Trip Ideas. We therefore stamp
+ * `source_kind: "concierge_idea"` when it is not already curated, while
+ * preserving ALL other details (note, coordinates, rating, maps URL, reason…).
+ *
+ * Routed through `updateItem` so the details blob is re-snaked on write (the
+ * read side camelCases nested `details` keys; every itinerary write must snake
+ * them back — the same path `updateIdeaMeta` relies on). day_id:null + details
+ * go in one PATCH. This is NEVER a delete.
+ */
+export async function unplaceItemToIdeas(
+  itemId: string,
+  currentDetails: Record<string, unknown>
+): Promise<ItineraryItem> {
+  // Read tolerates either casing (camelCased on read, snake when freshly written).
+  const sourceKind = String(
+    currentDetails.sourceKind ?? currentDetails.source_kind ?? ""
+  ).toLowerCase();
+  const alreadyCurated =
+    sourceKind === "concierge_idea" ||
+    sourceKind === "saved_item" ||
+    Boolean(currentDetails.createdFromSavedItem ?? currentDetails.created_from_saved_item);
+  // Preserve every detail; only ensure a curated source_kind. Routed through
+  // updateItem so the (read-side camelCased) details blob is re-snaked on write;
+  // that toSnake pass also folds any stale `sourceKind` into `source_kind`
+  // (literal added last → wins), so the backend `/ideas` filter sees it.
+  const details = alreadyCurated
+    ? currentDetails
+    : { ...currentDetails, source_kind: "concierge_idea" };
+  // day_id:null clears the day; cast through unknown because ItineraryItem.dayId
+  // is typed string|undefined (the API genuinely accepts null to unschedule).
+  return updateItem(itemId, { dayId: null, details } as unknown as Partial<ItineraryItem>);
+}
+
 export async function addConciergeItemToTrip(
   tripId: string,
   suggestion: ConciergeSuggestion

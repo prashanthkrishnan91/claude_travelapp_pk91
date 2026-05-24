@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { MapPin, ExternalLink, X, Sparkles, Star, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { MapPin, Map as MapIcon, CalendarDays, MoreHorizontal, ExternalLink, X, Sparkles, Star, Loader2 } from "lucide-react";
 import type { ItineraryDay, ItineraryItem } from "@/types";
 import { extractItineraryCoordinates } from "@/lib/itineraryCoordinates";
 import { TripLensMap, type TripLensPin } from "@/components/trips/TripLensMap";
 
-// ── Honest map-readiness (v2C) + Visual Itinerary Map v1A lenses ───────────────
+// ── Honest map-readiness (v2C) + Visual Itinerary Map v1A/v1B ──────────────────
 //
 // v2B established a strict coordinate contract: `extractItineraryCoordinates`
 // reads only real lat/lng already present in an item's `details` (Google
@@ -17,11 +17,16 @@ import { TripLensMap, type TripLensPin } from "@/components/trips/TripLensMap";
 //
 //   Trip Lens  — all placed map-ready items.
 //   Day Lens   — the selected day's placed map-ready items only.
-//   Ideas Lens — unplaced Trip Ideas with real coordinates (distinct markers);
-//                add-to-day uses the existing durable day-level assignment.
+//   Ideas Lens — unplaced Trip Ideas with real coordinates (distinct markers).
 //
-// Items with no real coordinates but a real Maps URL stay in an honest link-only
-// list. Items with neither are omitted (no placeholders, no fabricated pins).
+// v1B adds safe planned-item actions backed ONLY by durable existing writes,
+// behind a premium hybrid row (Map + Move chips · More kebab overflow):
+//   Move            → onAssign (PATCH day_id; details preserved)
+//   Back to Ideas   → onUnplace (PATCH day_id:null → back to Trip Ideas; preserved)
+//   Remove from trip → onRemove (DELETE; two-step confirm guard)
+// Destructive deletes (trip + idea) are protected by an inline confirm. There is
+// no durable pin-visibility preference contract, so no such toggle UI is rendered
+// (deferred to v1C until a real preference/status field exists).
 
 type Details = Record<string, unknown>;
 const det = (item: ItineraryItem): Details => (item.details ?? {}) as Details;
@@ -86,10 +91,21 @@ interface LinkRow {
   dayNumber: number;
   mapsUrl: string;
 }
+interface PlacedCard {
+  item: ItineraryItem;
+  dayNumber: number;
+  mapsUrl: string;
+}
 
-// Build placed pins + link rows for a set of days (Trip = all, Day = one).
-function buildPlaced(days: ItineraryDay[]): { pins: TripLensPin[]; linkRows: LinkRow[] } {
+// Build placed pins + planned cards + link rows for a set of days (Trip = all,
+// Day = one). Pins and cards share the same validated-coordinate gate.
+function buildPlaced(days: ItineraryDay[]): {
+  pins: TripLensPin[];
+  cards: PlacedCard[];
+  linkRows: LinkRow[];
+} {
   const pins: TripLensPin[] = [];
+  const cards: PlacedCard[] = [];
   const linkRows: LinkRow[] = [];
   let order = 0;
   for (const day of days) {
@@ -97,6 +113,7 @@ function buildPlaced(days: ItineraryDay[]): { pins: TripLensPin[]; linkRows: Lin
       const coords = extractItineraryCoordinates(det(item));
       if (coords) {
         order += 1;
+        const mapsUrl = mapsUrlOf(item) ?? `https://www.google.com/maps?q=${coords.lat},${coords.lng}`;
         pins.push({
           id: item.id,
           lat: coords.lat,
@@ -107,15 +124,16 @@ function buildPlaced(days: ItineraryDay[]): { pins: TripLensPin[]; linkRows: Lin
           time: timeLabelOf(item),
           order,
           variant: "planned",
-          mapsUrl: mapsUrlOf(item) ?? `https://www.google.com/maps?q=${coords.lat},${coords.lng}`,
+          mapsUrl,
         });
+        cards.push({ item, dayNumber: day.dayNumber, mapsUrl });
       } else {
         const mapsUrl = mapsUrlOf(item);
         if (mapsUrl) linkRows.push({ item, dayNumber: day.dayNumber, mapsUrl });
       }
     }
   }
-  return { pins, linkRows };
+  return { pins, cards, linkRows };
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -130,7 +148,7 @@ export interface MapFoldOutProps {
   selectedDayId?: string | null;
   /** Sync the selected day back to the page (keeps Dayboard/Expanded Day coherent). */
   onSelectDay?: (dayId: string) => void;
-  /** Durable day-level assignment (assignIdeaToDay) — refreshes days + ideas. */
+  /** Durable day-level assignment (assignIdeaToDay) — also powers Move to Day. */
   onAssign: (itemId: string, dayId: string) => Promise<void>;
   /** Durable status write (updateIdeaMeta) — used for "Keep as Maybe". */
   onUpdateMeta: (
@@ -138,10 +156,15 @@ export interface MapFoldOutProps {
     currentDetails: Record<string, unknown>,
     patch: { ideaStatus?: string; userNote?: string },
   ) => Promise<void>;
-  /** Durable delete (deleteItem) — used for "Remove". */
+  /** Durable delete (deleteItem) — used for "Remove from trip" / "Remove idea". */
   onRemove: (itemId: string) => Promise<void>;
+  /** Durable unplace (unplaceItemToIdeas → day_id:null + curated source_kind, all
+   *  details preserved) — powers "Back to Ideas". Never a delete. */
+  onUnplace: (itemId: string, currentDetails: Record<string, unknown>) => Promise<void>;
   /** Open the legacy Ideas workspace for fuller management. */
   onManage: () => void;
+  /** Open the legacy Itinerary workspace (for flight/hotel/logistics anchors). */
+  onManageItinerary: () => void;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -156,7 +179,9 @@ export function MapFoldOut({
   onAssign,
   onUpdateMeta,
   onRemove,
+  onUnplace,
   onManage,
+  onManageItinerary,
 }: MapFoldOutProps) {
   const [lens, setLens] = useState<Lens>("trip");
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
@@ -220,6 +245,7 @@ export function MapFoldOut({
   if (!open) return null;
 
   const activePins = lens === "trip" ? trip.pins : lens === "day" ? day.pins : ideaPins;
+  const activeCards = lens === "trip" ? trip.cards : lens === "day" ? day.cards : [];
   const activeLinks = lens === "trip" ? trip.linkRows : lens === "day" ? day.linkRows : [];
   const hasPins = activePins.length > 0;
 
@@ -352,16 +378,26 @@ export function MapFoldOut({
               ideaLinkItems={ideaLinkItems}
               days={days}
               selectedPinId={selectedPinId}
+              onSelect={setSelectedPinId}
               onAssign={assignFromIdeas}
               onKeepMaybe={(item) => onUpdateMeta(item.id, det(item), { ideaStatus: "maybe" })}
               onRemove={onRemove}
               onManage={onManage}
             />
           ) : (
-            <PlacedLensBody
+            <PlannedLensBody
               hasPins={hasPins}
+              cards={activeCards}
               linkRows={activeLinks}
               isDay={lens === "day"}
+              days={days}
+              ideasExist={ideas.length > 0}
+              selectedPinId={selectedPinId}
+              onSelect={setSelectedPinId}
+              onMoveToDay={onAssign}
+              onUnplace={onUnplace}
+              onRemove={onRemove}
+              onManageItinerary={onManageItinerary}
               onAddFromIdeas={() => {
                 setLens("ideas");
                 setSelectedPinId(null);
@@ -382,20 +418,39 @@ export function MapFoldOut({
   );
 }
 
-// ── Placed lens body (Trip / Day) — honest link rows + empty states ────────────
+// ── Planned lens body (Trip / Day) — planned cards + honest link rows ──────────
 
-function PlacedLensBody({
+function PlannedLensBody({
   hasPins,
+  cards,
   linkRows,
   isDay,
+  days,
+  ideasExist,
+  selectedPinId,
+  onSelect,
+  onMoveToDay,
+  onUnplace,
+  onRemove,
+  onManageItinerary,
   onAddFromIdeas,
 }: {
   hasPins: boolean;
+  cards: PlacedCard[];
   linkRows: LinkRow[];
   isDay: boolean;
+  days: ItineraryDay[];
+  ideasExist: boolean;
+  selectedPinId: string | null;
+  onSelect: (id: string) => void;
+  onMoveToDay: (itemId: string, dayId: string) => Promise<void>;
+  onUnplace: (itemId: string, currentDetails: Record<string, unknown>) => Promise<void>;
+  onRemove: (itemId: string) => Promise<void>;
+  onManageItinerary: () => void;
   onAddFromIdeas: () => void;
 }) {
   const hasLinks = linkRows.length > 0;
+  const hasCards = cards.length > 0;
   return (
     <>
       {!hasPins && !hasLinks ? (
@@ -403,9 +458,9 @@ function PlacedLensBody({
           <p className="text-sm text-ds-folio-ink-mist">
             {isDay
               ? "No map-ready places planned for this day yet."
-              : "No real coordinates saved yet. Map links are available for saved places that include Google Maps URLs."}
+              : "No real coordinates saved yet. Map links are available for saved places that include Google Maps URLs."}
           </p>
-          {isDay ? (
+          {isDay && ideasExist ? (
             <button
               type="button"
               data-testid="map-add-from-ideas"
@@ -418,9 +473,30 @@ function PlacedLensBody({
         </div>
       ) : null}
 
+      {hasCards ? (
+        <>
+          <p className="px-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-ds-folio-ink-mist">
+            On the map
+          </p>
+          {cards.map((card) => (
+            <PlannedItemCard
+              key={card.item.id}
+              card={card}
+              days={days}
+              selected={selectedPinId === card.item.id}
+              onSelect={onSelect}
+              onMoveToDay={onMoveToDay}
+              onUnplace={onUnplace}
+              onRemove={onRemove}
+              onManageItinerary={onManageItinerary}
+            />
+          ))}
+        </>
+      ) : null}
+
       {hasLinks ? (
         <>
-          <p className="px-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-ds-folio-ink-mist">Map links</p>
+          <p className="px-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-ds-folio-ink-mist">Map links</p>
           {linkRows.map(({ item, dayNumber, mapsUrl }) => {
             const time = timeLabelOf(item);
             const kind = kindOf(item);
@@ -455,7 +531,260 @@ function PlacedLensBody({
   );
 }
 
-// ── Ideas lens body — durable Add to Day / Keep as Maybe / Remove ──────────────
+// ── Planned item card — useful real fields + safe durable actions ──────────────
+
+function PlannedItemCard({
+  card,
+  days,
+  selected,
+  onSelect,
+  onMoveToDay,
+  onUnplace,
+  onRemove,
+  onManageItinerary,
+}: {
+  card: PlacedCard;
+  days: ItineraryDay[];
+  selected: boolean;
+  onSelect: (id: string) => void;
+  onMoveToDay: (itemId: string, dayId: string) => Promise<void>;
+  onUnplace: (itemId: string, currentDetails: Record<string, unknown>) => Promise<void>;
+  onRemove: (itemId: string) => Promise<void>;
+  onManageItinerary: () => void;
+}) {
+  const { item, dayNumber, mapsUrl } = card;
+  const ref = useRef<HTMLElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [pickDay, setPickDay] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  // Restaurants/places carry a meaningful "Back to Ideas" (durable unplace);
+  // flight/hotel/logistics anchors instead point to the fuller Itinerary editor.
+  const isAnchor = item.itemType !== "meal" && item.itemType !== "activity";
+
+  // Lightweight selection sync: when this card becomes the selected pin, bring it
+  // into view (no heavy animation — instant nearest scroll).
+  useEffect(() => {
+    if (selected && ref.current) ref.current.scrollIntoView({ block: "nearest" });
+  }, [selected]);
+
+  const note = userNoteOf(item);
+  const reason = reasonOf(item);
+  const rating = ratingOf(item);
+  const time = timeLabelOf(item);
+  const location = item.location && item.location !== item.title ? item.location : "";
+  // Day-level move only when there is somewhere else to move to.
+  const otherDays = days.filter((d) => d.id !== item.dayId);
+  const canMove = otherDays.length > 0;
+
+  const LINK =
+    "text-xs font-medium text-ds-folio-ink-soft hover:text-ds-marine-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded";
+  // Premium labeled chip (icon + short label) — thumb-friendly tap target.
+  const ACTION_CHIP =
+    "inline-flex items-center gap-1.5 min-h-[40px] px-2.5 rounded-md text-xs font-medium text-ds-folio-ink-soft hover:text-ds-marine-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2";
+  // Overflow-menu row — explicit text labels (never icon-only for consequence).
+  const MENU_ITEM =
+    "w-full flex items-center min-h-[40px] px-2.5 rounded-md text-left text-sm font-medium text-ds-folio-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 disabled:opacity-50";
+
+  async function run(fn: () => Promise<void>) {
+    setBusy(true);
+    try {
+      await fn();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <article
+      ref={ref}
+      data-testid="map-planned-card"
+      data-kind={item.itemType}
+      onClick={() => onSelect(item.id)}
+      className={`jd-tray-card p-3.5 cursor-pointer ${selected ? "ring-2 ring-ds-marine-ink/50" : ""}`}
+    >
+      <div className="flex items-baseline gap-2.5">
+        {time && (
+          <span className="flex-shrink-0 font-serif italic text-sm text-ds-folio-ink-mist tabular-nums">{time}</span>
+        )}
+        <h3 className="font-serif text-base font-semibold text-ds-folio-ink leading-snug">{item.title}</h3>
+      </div>
+      <p className="mt-0.5 text-[11px] text-ds-folio-ink-mist">
+        Day {dayNumber} · {kindOf(item)}
+      </p>
+
+      {(rating || location) && (
+        <p className="mt-0.5 inline-flex items-center gap-2 text-xs text-ds-folio-ink-mist">
+          {rating && (
+            <span className="inline-flex items-center gap-0.5">
+              <Star className="w-3 h-3 text-ds-accent" aria-hidden="true" />
+              {rating}
+            </span>
+          )}
+          {location && <span className="truncate">{location}</span>}
+        </p>
+      )}
+
+      {note && (
+        <p
+          data-testid="map-planned-note-private"
+          className="jd-note-private mt-2 font-serif italic text-sm text-ds-folio-ink line-clamp-1"
+        >
+          {note}
+        </p>
+      )}
+      {reason && reason !== note && (
+        <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-ds-folio-ink-mist line-clamp-1">
+          <Sparkles className="w-3 h-3 flex-shrink-0 text-ds-accent" aria-hidden="true" />
+          {reason}
+        </p>
+      )}
+
+      {/* Move to Day… — durable day-level move (assignIdeaToDay), no slot label */}
+      {pickDay ? (
+        <div
+          data-testid="map-planned-day-picker"
+          className="mt-3 rounded-lg border border-ds-hairline p-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-ds-folio-ink-mist">
+            Move to which day
+          </p>
+          <div className="flex flex-col gap-1">
+            {otherDays.map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                disabled={busy}
+                onClick={() => run(() => onMoveToDay(item.id, d.id)).then(() => setPickDay(false))}
+                className="flex items-center justify-between gap-2 min-h-[44px] rounded-md px-2.5 text-left text-sm text-ds-folio-ink ring-1 ring-ds-marine-ink/30 hover:ring-ds-marine-ink hover:text-ds-marine-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 disabled:opacity-50"
+              >
+                <span className="font-medium">Day {d.dayNumber}</span>
+                {d.date && <span className="text-xs text-ds-folio-ink-mist">{d.date}</span>}
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={() => setPickDay(false)} className={`${LINK} mt-1.5 px-1`}>
+            Cancel
+          </button>
+        </div>
+      ) : null}
+
+      {/* Premium hybrid action row: Map + Move (icon + short label) · More (kebab) */}
+      <div className="mt-2.5 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        {mapsUrl && (
+          <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className={ACTION_CHIP}>
+            <MapIcon className="w-3.5 h-3.5" aria-hidden="true" />
+            Map
+          </a>
+        )}
+        {canMove && !pickDay && (
+          <button type="button" data-testid="map-planned-move" onClick={() => setPickDay(true)} disabled={busy} className={ACTION_CHIP}>
+            <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
+            Move
+          </button>
+        )}
+
+        <div className="relative ml-auto">
+          <button
+            type="button"
+            data-testid="map-planned-more"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label="More actions"
+            onClick={() => {
+              setMenuOpen((v) => !v);
+              setConfirmRemove(false);
+            }}
+            disabled={busy}
+            className="inline-flex items-center justify-center min-h-[40px] min-w-[40px] rounded-md text-ds-folio-ink-soft hover:text-ds-folio-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 disabled:opacity-50"
+          >
+            <MoreHorizontal className="w-4 h-4" aria-hidden="true" />
+          </button>
+
+          {menuOpen ? (
+            <>
+              {/* Lightweight tap-away to close (no portal/animation). */}
+              <button
+                type="button"
+                aria-hidden="true"
+                tabIndex={-1}
+                onClick={() => setMenuOpen(false)}
+                className="fixed inset-0 z-10 cursor-default"
+              />
+              <div
+                role="menu"
+                data-testid="map-planned-more-menu"
+                className="absolute right-0 top-full z-20 mt-1 min-w-[190px] rounded-lg border border-ds-hairline bg-ds-paper p-1 shadow-[var(--ds-paper-elevation-2)]"
+              >
+                {confirmRemove ? (
+                  <div className="p-2" data-testid="map-planned-remove-confirm">
+                    <p className="px-1 pb-2 text-xs text-ds-folio-ink-soft leading-snug">
+                      Remove this from the trip permanently?
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => run(() => onRemove(item.id))}
+                      disabled={busy}
+                      className="w-full inline-flex items-center justify-center gap-1.5 min-h-[40px] rounded-md text-sm font-semibold text-ds-warning ring-1 ring-ds-warning/40 hover:bg-ds-warning/10 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-warning focus-visible:outline-offset-2 disabled:opacity-50"
+                    >
+                      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm remove from trip"}
+                    </button>
+                    <button type="button" onClick={() => setConfirmRemove(false)} disabled={busy} className={`${MENU_ITEM} mt-1 justify-center`}>
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {isAnchor ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-testid="map-planned-manage-itinerary"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onManageItinerary();
+                        }}
+                        className={MENU_ITEM}
+                      >
+                        Manage in Itinerary
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-testid="map-planned-unplace"
+                        onClick={() => run(() => onUnplace(item.id, item.details ?? {})).then(() => setMenuOpen(false))}
+                        disabled={busy}
+                        className={MENU_ITEM}
+                        title="Move this back to your Ideas tray (keeps all its details)"
+                      >
+                        Back to Ideas
+                      </button>
+                    )}
+                    {/* Remove from trip = permanent delete, explicit text + two-step confirm. */}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid="map-planned-remove"
+                      onClick={() => setConfirmRemove(true)}
+                      disabled={busy}
+                      className={`${MENU_ITEM} text-ds-warning`}
+                    >
+                      Remove from trip…
+                    </button>
+                  </>
+                )}
+              </div>
+            </>
+          ) : null}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+// ── Ideas lens body — durable Add to Day / Keep as Maybe / Remove (guarded) ────
 
 function IdeasLensBody({
   ideas,
@@ -463,6 +792,7 @@ function IdeasLensBody({
   ideaLinkItems,
   days,
   selectedPinId,
+  onSelect,
   onAssign,
   onKeepMaybe,
   onRemove,
@@ -473,12 +803,17 @@ function IdeasLensBody({
   ideaLinkItems: ItineraryItem[];
   days: ItineraryDay[];
   selectedPinId: string | null;
+  onSelect: (id: string) => void;
   onAssign: (itemId: string, dayId: string) => Promise<void>;
   onKeepMaybe: (item: ItineraryItem) => Promise<void>;
   onRemove: (itemId: string) => Promise<void>;
   onManage: () => void;
 }) {
   const mapped = ideas.filter((i) => ideaPinIds.includes(i.id));
+  // The picked pin gets a prominent focal card directly under the map; the rest
+  // stay in the quieter list. With nothing selected, the full list shows.
+  const selectedIdea = mapped.find((i) => i.id === selectedPinId) ?? null;
+  const rest = selectedIdea ? mapped.filter((i) => i.id !== selectedIdea.id) : mapped;
 
   if (ideas.length === 0) {
     return (
@@ -488,37 +823,42 @@ function IdeasLensBody({
     );
   }
 
+  const cardProps = { days, onSelect, onAssign, onKeepMaybe, onRemove, onManage };
+
   return (
     <>
-      {mapped.length > 0 ? (
-        <>
+      {selectedIdea ? (
+        <div data-testid="map-idea-selected-card">
           <p className="px-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-ds-folio-ink-mist">
-            On the map
+            Selected
           </p>
-          {mapped.map((item) => (
-            <IdeaLensCard
-              key={item.id}
-              item={item}
-              days={days}
-              selected={selectedPinId === item.id}
-              onAssign={onAssign}
-              onKeepMaybe={onKeepMaybe}
-              onRemove={onRemove}
-              onManage={onManage}
-            />
-          ))}
-        </>
-      ) : (
+          <IdeaLensCard key={selectedIdea.id} item={selectedIdea} selected prominent {...cardProps} />
+        </div>
+      ) : null}
+
+      {mapped.length === 0 ? (
         <p className="py-4 text-center text-sm text-ds-folio-ink-mist" data-testid="map-ideas-no-pins">
           No saved ideas have map coordinates yet.
         </p>
-      )}
+      ) : rest.length > 0 ? (
+        <>
+          <p className="px-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-ds-folio-ink-mist">
+            {selectedIdea ? "More on the map" : "On the map"}
+          </p>
+          {rest.map((item) => (
+            <IdeaLensCard key={item.id} item={item} selected={false} {...cardProps} />
+          ))}
+        </>
+      ) : null}
 
       {/* Needs-location: real ideas without coordinates but with a real Maps URL. */}
       {ideaLinkItems.length > 0 ? (
         <>
           <p className="px-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-ds-folio-ink-mist">
             Needs location
+          </p>
+          <p className="px-1 pb-1 text-[11px] italic text-ds-folio-ink-mist" data-testid="map-needs-location-note">
+            These saved ideas can open in Google Maps but don&apos;t have coordinates to plot yet.
           </p>
           {ideaLinkItems.map((item) => {
             const url = mapsUrlOf(item)!;
@@ -551,6 +891,8 @@ function IdeaLensCard({
   item,
   days,
   selected,
+  prominent,
+  onSelect,
   onAssign,
   onKeepMaybe,
   onRemove,
@@ -559,13 +901,23 @@ function IdeaLensCard({
   item: ItineraryItem;
   days: ItineraryDay[];
   selected: boolean;
+  prominent?: boolean;
+  onSelect: (id: string) => void;
   onAssign: (itemId: string, dayId: string) => Promise<void>;
   onKeepMaybe: (item: ItineraryItem) => Promise<void>;
   onRemove: (itemId: string) => Promise<void>;
   onManage: () => void;
 }) {
+  const ref = useRef<HTMLElement>(null);
   const [pickDay, setPickDay] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
+  useEffect(() => {
+    if (selected && ref.current) ref.current.scrollIntoView({ block: "nearest" });
+  }, [selected]);
+
   const note = userNoteOf(item);
   const reason = reasonOf(item);
   const rating = ratingOf(item);
@@ -575,6 +927,10 @@ function IdeaLensCard({
 
   const SECONDARY_LINK =
     "text-xs font-medium text-ds-folio-ink-soft hover:text-ds-marine-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded";
+  const ACTION_CHIP =
+    "inline-flex items-center gap-1.5 min-h-[40px] px-2.5 rounded-md text-xs font-medium text-ds-folio-ink-soft hover:text-ds-marine-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2";
+  const MENU_ITEM =
+    "w-full flex items-center min-h-[40px] px-2.5 rounded-md text-left text-sm font-medium text-ds-folio-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 disabled:opacity-50";
 
   async function run(fn: () => Promise<void>) {
     setBusy(true);
@@ -587,9 +943,11 @@ function IdeaLensCard({
 
   return (
     <article
+      ref={ref}
       data-testid="map-idea-card"
       data-kind={item.itemType}
-      className={`jd-tray-card p-3.5 ${selected ? "ring-2 ring-ds-marine-ink/50" : ""}`}
+      onClick={() => onSelect(item.id)}
+      className={`jd-tray-card p-3.5 cursor-pointer ${selected ? "ring-2 ring-ds-marine-ink/50" : ""} ${prominent ? "shadow-[var(--ds-paper-elevation-2)]" : ""}`}
     >
       <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-ds-folio-ink-mist">
         <MapPin className="w-3 h-3 text-ds-accent" aria-hidden="true" />
@@ -626,7 +984,7 @@ function IdeaLensCard({
       )}
 
       {/* Primary action — durable, day-level only (no fabricated slot) */}
-      <div className="mt-3">
+      <div className="mt-3" onClick={(e) => e.stopPropagation()}>
         {dayAssignable ? (
           pickDay ? (
             <div data-testid="map-idea-day-picker" className="rounded-lg border border-ds-hairline p-2">
@@ -675,29 +1033,96 @@ function IdeaLensCard({
         )}
       </div>
 
-      {/* Secondary actions — quiet, contextual to real durable behavior only */}
-      <div className="mt-2.5 flex items-center flex-wrap gap-x-4 gap-y-1">
+      {/* Secondary row — one quiet Map link + a More kebab. Keep as Maybe,
+          Manage in Ideas, and the destructive Remove idea live inside More. */}
+      <div className="mt-2.5 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
         {mapsUrl && (
-          <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className={SECONDARY_LINK}>
+          <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className={ACTION_CHIP}>
+            <MapIcon className="w-3.5 h-3.5" aria-hidden="true" />
             Map
           </a>
         )}
-        {dayAssignable && (
-          <button type="button" onClick={() => run(() => onKeepMaybe(item))} disabled={busy} className={SECONDARY_LINK}>
-            Keep as Maybe
+
+        <div className="relative ml-auto">
+          <button
+            type="button"
+            data-testid="map-idea-more"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label="More actions"
+            onClick={() => {
+              setMenuOpen((v) => !v);
+              setConfirmRemove(false);
+            }}
+            disabled={busy}
+            className="inline-flex items-center justify-center min-h-[40px] min-w-[40px] rounded-md text-ds-folio-ink-soft hover:text-ds-folio-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 disabled:opacity-50"
+          >
+            <MoreHorizontal className="w-4 h-4" aria-hidden="true" />
           </button>
-        )}
-        <button type="button" onClick={onManage} className={SECONDARY_LINK}>
-          {note ? "Edit note in Ideas" : "Manage in Ideas"}
-        </button>
-        <button
-          type="button"
-          onClick={() => run(() => onRemove(item.id))}
-          disabled={busy}
-          className={`${SECONDARY_LINK} ml-auto`}
-        >
-          Remove
-        </button>
+
+          {menuOpen ? (
+            <>
+              <button
+                type="button"
+                aria-hidden="true"
+                tabIndex={-1}
+                onClick={() => setMenuOpen(false)}
+                className="fixed inset-0 z-10 cursor-default"
+              />
+              <div
+                role="menu"
+                data-testid="map-idea-more-menu"
+                className="absolute right-0 top-full z-20 mt-1 min-w-[190px] rounded-lg border border-ds-hairline bg-ds-paper p-1 shadow-[var(--ds-paper-elevation-2)]"
+              >
+                {confirmRemove ? (
+                  <div className="p-2" data-testid="map-idea-remove-confirm">
+                    <p className="px-1 pb-2 text-xs text-ds-folio-ink-soft leading-snug">Remove idea from this trip?</p>
+                    <button
+                      type="button"
+                      onClick={() => run(() => onRemove(item.id))}
+                      disabled={busy}
+                      className="w-full inline-flex items-center justify-center gap-1.5 min-h-[40px] rounded-md text-sm font-semibold text-ds-warning ring-1 ring-ds-warning/40 hover:bg-ds-warning/10 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-warning focus-visible:outline-offset-2 disabled:opacity-50"
+                    >
+                      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm remove idea"}
+                    </button>
+                    <button type="button" onClick={() => setConfirmRemove(false)} disabled={busy} className={`${MENU_ITEM} mt-1 justify-center`}>
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {dayAssignable ? (
+                      <button type="button" role="menuitem" onClick={() => run(() => onKeepMaybe(item)).then(() => setMenuOpen(false))} disabled={busy} className={MENU_ITEM}>
+                        Keep as Maybe
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onManage();
+                      }}
+                      className={MENU_ITEM}
+                    >
+                      {note ? "Edit note in Ideas" : "Manage in Ideas"}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid="map-idea-remove"
+                      onClick={() => setConfirmRemove(true)}
+                      disabled={busy}
+                      className={`${MENU_ITEM} text-ds-warning`}
+                    >
+                      Remove idea…
+                    </button>
+                  </>
+                )}
+              </div>
+            </>
+          ) : null}
+        </div>
       </div>
     </article>
   );
