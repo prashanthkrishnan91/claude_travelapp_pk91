@@ -18,7 +18,6 @@ import { TripBrief } from "@/components/trips/TripBrief";
 import { Dayboard } from "@/components/trips/Dayboard";
 import { ExpandedDayPanel } from "@/components/trips/ExpandedDayPanel";
 import { AddToDayDrawer } from "@/components/trips/AddToDayDrawer";
-import type { AddToDayVertical } from "@/components/trips/AddToDayDrawer";
 import { IdeasTray } from "@/components/trips/IdeasTray";
 import { MapFoldOut } from "@/components/trips/MapFoldOut";
 import { TripReadinessCockpit } from "@/components/trips/TripReadinessCockpit";
@@ -191,9 +190,7 @@ export default function TripDetailPage() {
     setAddToDayOpen(true);
   }
 
-  function handleAddToDaySelectVertical(_vertical: AddToDayVertical) {
-    // The vertical is available for future Build-tab scroll-focus; for v1 we
-    // pre-select the day in TripBuilder and route to the Build workspace.
+  function handleAddToDaySelectVertical() {
     setAddToDayOpen(false);
     setBuildFocusDayId(addToDayDayId);
     setActiveMobileWorkspace("build");

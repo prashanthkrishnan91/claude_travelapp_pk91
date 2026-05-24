@@ -145,7 +145,7 @@ export function ExpandedDayPanel({ day, ideasCount, onAddFromIdeas, onEditInItin
         )}
       </div>
 
-      {/* Decision strip — calm brass dot, never an alert */}
+      {/* Decision strip — calm brass dot, never alarming */}
       <div data-testid="jd-decision-strip" className="jd-decision-strip mx-5 mb-3 flex items-center gap-3 px-3.5 py-2.5">
         <span className="jd-decide-dot flex-shrink-0" aria-hidden="true" />
         <span className="flex-1 text-sm italic text-ds-folio-ink-soft leading-snug">{decision}</span>
