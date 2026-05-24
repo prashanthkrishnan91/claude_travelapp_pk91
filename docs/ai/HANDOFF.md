@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-23 (Visual Itinerary Map v1B — safe map management + planned pin actions; current branch)
+Last updated: 2026-05-24 (Journey Desk mobile IA closeout PR 1 — inline day expansion + Add-to-Day drawer; current branch)
 
 ## Purpose
 
@@ -8,9 +8,20 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day). **Visual Itinerary Map v1B (safe map management + planned pin actions) is the current branch.**
+**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). **Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) is the current branch.**
 
-### Visual Itinerary Map v1B — safe map management + planned pin actions (current branch)
+### Journey Desk mobile IA closeout PR 1 — inline day expansion + Add-to-Day drawer (current branch)
+
+Fixes two mobile planning breaks: Day N detail was rendered after the entire day list (unusable for longer trips), and there was no way to add items to a specific day without switching to Build. **Frontend-only; no SQL, backend, provider/search changes, no fake data, no MapTiler/round-trip/CityAutocomplete/ROOM_CATALOGUE changes.**
+- **Inline day expansion:** `Dayboard` now accepts `inlineDayPanel: ReactNode` + `onAddToDay?: (day) => void`. The `<ExpandedDayPanel>` is passed as `inlineDayPanel` (computed via `expandedDay = selectedDayId ? itineraryDays.find(...)`) and renders inside the `<ul>` directly under the selected day's `<li>` — Day 10 detail appears immediately without scrolling past all other cards.
+- **Add-to-Day drawer** (`AddToDayDrawer.tsx`, new): mobile bottom sheet / desktop right drawer (reuses `.journey-desk-tray` shell from IdeasTray). 4 verticals: Flight / Stay / Dining / Things to do (`add-to-day-flight|hotel|dining|attraction` testids via VERTICALS array). Selecting a vertical closes the drawer, sets `buildFocusDayId`, and switches to the Build workspace. No fake state, no fake pins, no fabricated placement.
+- **Two entry points:** Dayboard "+" button (`jd-day-add-btn`) per day card, and "Add to this day" button (`jd-add-to-day-btn`) in the ExpandedDayPanel header.
+- **Build handoff:** `buildFocusDayId` state → `TripBuilder.focusDayId` prop → `useEffect` syncs the day selector without remounting (preserves candidate flight/hotel search state). A mobile-only "Adding to Day N · ← Done" return banner (`jd-build-return-banner`) closes the drawer and returns to the Brief.
+- **CSS:** new `jd-day-add-btn` + `jd-vertical-target` primitives in `globals.css` (ds tokens, `prefers-reduced-motion` guarded), under the "Journey Desk mobile IA closeout" section.
+- **Tests:** new `tests/journey-desk-mobile-ia-closeout.test.mjs` (35 assertions: inline expansion, Add-to-Day entry points, drawer 4 verticals, Build handoff, return affordance, no fabricated data, legacy tabs present, CSS primitives, desktop coherence — 1 `<ExpandedDayPanel` in page). Updated `tests/journey-desk-expanded-day.test.mjs` to the new `expandedDay` variable + `inlineDayPanel` prop patterns. **3325 tests, 3315 pass, 10 PRE-EXISTING failures (verified via git stash baseline — none introduced).**
+- **Readiness gate:** PASS WITH WARNINGS (scope justified: coherent capability slice — 17 files, 2876 lines, advisory only). tsc/next build via CI `certify`.
+
+### Visual Itinerary Map v1B — safe map management + planned pin actions (merged, PR #477)
 
 Makes the Journey Desk map feel safe and useful as a planning surface: planned pins gain useful real-field cards with **safe actions backed only by durable existing writes**, destructive deletes are protected, and empty/needs-location states are clearer. **Frontend-only; no SQL/schema, no new providers/endpoints, no geocoding, no fabricated coordinates/slots/state.** Builds on v1A.
 - **Durable-write audit (decisive):** placed-item writes available are `assignIdeaToDay` (PATCH `day_id`; details preserved — also serves **Move**), the unplace PATCH (`day_id:null`), and `deleteItem` (DELETE; permanent). **No durable pin-visibility/`hidden` preference field exists**, so **no hide/show UI ships** (deferred to v1C).
@@ -282,7 +293,7 @@ Two Level 2 user-visible regressions fixed after PR #460 merged:
 **3139 frontend tests, 0 failures.** No backend suite run (no pytest in this environment); tsc/next build not run locally (node_modules absent) — CI `certify` validates.
 
 ### Next step
-**Map System v1B** (shared marker + popup visual polish) is the current branch. Next candidates: **Visual Itinerary Map v1** (Day Lens / Ideas Lens / add-remove-hide pins / map-based planning controls — the deferred map-editing slice) and **v2D — Day Lens / Idea Lens**, but only after the real Trip Lens pin map proves stable in use (validate every coord through `extractItineraryCoordinates`; **never** fabricate positions — the discovery `TripMapView` `goldenSpread`/Nominatim fallback is exactly what to avoid). When adding a map provider, register it in `provider_registry.py` (role `MAP_TILE`) and resolve it through `lib/mapProvider.ts` — never hardcode tile URLs in components. Other deferred polish: full desktop three-zone, fold/remove the standalone legacy Ideas tab once parity holds, consolidate the day-part classifier (mirrored in `lib/dayParts.ts` + `ItineraryDayColumn`). Placement stays day-level (`assignIdeaToDay`); no slot-level persistence.
+**Journey Desk mobile IA closeout PR 1** (inline day expansion + Add-to-Day drawer) is the current branch. After merge: PR 2 closeout (polish, keyboard/focus, potentially Add-to-Day vertical search integration in Build). Deferred: full desktop three-zone, fold/remove the standalone legacy Ideas tab once parity holds, consolidate the day-part classifier (mirrored in `lib/dayParts.ts` + `ItineraryDayColumn`). Visual Itinerary Map v1C (pin-visibility hide/show) waits for a durable preference/status contract. Placement stays day-level (`assignIdeaToDay`); no slot-level persistence.
 
 ## Current architecture / runtime state
 
@@ -299,6 +310,8 @@ Two Level 2 user-visible regressions fixed after PR #460 merged:
 
 ## Recent meaningful PRs
 
+- 2026-05-24 — **PR open (current branch)** — Journey Desk mobile IA closeout PR 1: inline day expansion + Add-to-Day drawer. 35 new tests. 3315 pass, 10 PRE-EXISTING failures.
+- 2026-05-23 — **PR #477 MERGED** — Visual Itinerary Map v1B: safe map management + planned pin actions (hybrid Map/Move/More row, Back to Ideas unplace, destructive safety, selection sync). 106 targeted tests green.
 - 2026-05-21 — **PR open (current branch)** — Explore regression fixes: hotel compare dates + flights per-offer prices. 2 backend tests, 10 frontend tests added, 2 pre-existing test failures fixed. 3134 tests, 0 failures.
 - 2026-05-21 — **PR #460 MERGED** — Explore Observatory v1 (/explore premium reskin). 3065 tests, 0 failures.
 - 2026-05-21 — **PR #451 MERGED** — Atelier Room System v1 + Private Salon (Concierge). Two-column desktop workbench (main panel + briefing rail), contained panel scroll, patch-5 CSS grid. 3003 tests, 0 failures.

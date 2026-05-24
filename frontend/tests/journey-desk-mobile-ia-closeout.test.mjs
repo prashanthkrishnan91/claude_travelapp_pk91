@@ -1,0 +1,232 @@
+/**
+ * Journey Desk mobile IA closeout — day-scoped Add-to-Day flow + inline
+ * selected-day expansion.
+ *
+ * Two wife-tested mobile planning breaks fixed:
+ *  1. Selecting a day now expands its detail INLINE under that day card —
+ *     Day 10 detail no longer requires scrolling past the full day list.
+ *  2. A "+" button on each Dayboard card + "Add to this day" in the expanded
+ *     panel open an Add-to-Day drawer that routes to the existing Build panel
+ *     with the target day pre-selected and an obvious return affordance.
+ *
+ * Source-scan contract tests (no DOM/browser).
+ */
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync, existsSync } from "node:fs";
+
+const root = new URL("../", import.meta.url);
+
+const page = readFileSync(new URL("src/app/trips/[id]/page.tsx", root), "utf8");
+const dayboard = readFileSync(new URL("src/components/trips/Dayboard.tsx", root), "utf8");
+const panel = readFileSync(new URL("src/components/trips/ExpandedDayPanel.tsx", root), "utf8");
+const drawer = readFileSync(new URL("src/components/trips/AddToDayDrawer.tsx", root), "utf8");
+const builder = readFileSync(new URL("src/components/trips/TripBuilder.tsx", root), "utf8");
+const css = readFileSync(new URL("src/app/globals.css", root), "utf8");
+
+// ── 1. AddToDayDrawer exists as a new file ──────────────────────────────────
+
+test("AddToDayDrawer file exists", () => {
+  assert.ok(existsSync(new URL("src/components/trips/AddToDayDrawer.tsx", root)));
+});
+
+// ── 2. Inline day expansion (selected day panel appears under that card) ─────
+
+test("Dayboard accepts inlineDayPanel ReactNode prop", () => {
+  assert.match(dayboard, /inlineDayPanel\?: ReactNode/);
+});
+
+test("Dayboard renders inlineDayPanel inline under the selected day — not after the full list", () => {
+  // The inline panel must be rendered inside the per-day <li> when isSelected is true.
+  assert.match(dayboard, /isSelected && inlineDayPanel/);
+});
+
+test("page passes ExpandedDayPanel as inlineDayPanel prop to Dayboard (inline under day card)", () => {
+  assert.match(page, /inlineDayPanel=\{expandedDay \?/);
+  assert.match(page, /<ExpandedDayPanel/);
+});
+
+test("page computes expandedDay via itineraryDays.find for the selected day", () => {
+  assert.match(page, /expandedDay = selectedDayId \? itineraryDays\.find\(\(d\) => d\.id === selectedDayId\)/);
+});
+
+test("selected-day expanded panel no longer renders as a standalone block after the Dayboard list", () => {
+  // The old pattern had ExpandedDayPanel AFTER the Dayboard in page source.
+  // Now it is passed as inlineDayPanel; there must be no top-level standalone
+  // ExpandedDayPanel block gated on selectedDayId outside of Dayboard.
+  // Verify: the old `itineraryDays.find((d) => d.id === selectedDayId)!` with a
+  // non-null assertion does not exist (it's now the expandedDay variable).
+  assert.doesNotMatch(page, /day=\{itineraryDays\.find\(\(d\) => d\.id === selectedDayId\)!\}/);
+});
+
+// ── 3. Add-to-Day entry points ───────────────────────────────────────────────
+
+test("Dayboard accepts onAddToDay prop", () => {
+  assert.match(dayboard, /onAddToDay\?: \(day: ItineraryDay\) => void/);
+});
+
+test("Dayboard renders a '+' add button with stable testid jd-day-add-btn", () => {
+  assert.match(dayboard, /data-testid="jd-day-add-btn"/);
+  assert.match(dayboard, /onAddToDay\(day\)/);
+});
+
+test("Dayboard '+' button has accessible aria-label for the day number", () => {
+  assert.match(dayboard, /aria-label=\{`Add to Day \$\{day\.dayNumber\}`\}/);
+});
+
+test("ExpandedDayPanel accepts onAddToDay prop", () => {
+  assert.match(panel, /onAddToDay\?: \(\) => void/);
+});
+
+test("ExpandedDayPanel renders 'Add to this day' button with stable testid jd-add-to-day-btn", () => {
+  assert.match(panel, /data-testid="jd-add-to-day-btn"/);
+  assert.match(panel, /Add to this day/);
+  assert.match(panel, /onClick=\{onAddToDay\}/);
+});
+
+// ── 4. AddToDayDrawer — 4 verticals, paper-world sheet ──────────────────────
+
+test("AddToDayDrawer has a stable testid", () => {
+  assert.match(drawer, /data-testid="add-to-day-drawer"/);
+});
+
+test("AddToDayDrawer offers Flight vertical with testid add-to-day-flight", () => {
+  // testIds are in the VERTICALS array; buttons render data-testid={testId}
+  assert.match(drawer, /testId: "add-to-day-flight"/);
+  assert.match(drawer, /vertical: "flight"/);
+  assert.match(drawer, /label: "Flight"/);
+});
+
+test("AddToDayDrawer offers Stay (hotel) vertical with testid add-to-day-hotel", () => {
+  assert.match(drawer, /testId: "add-to-day-hotel"/);
+  assert.match(drawer, /vertical: "hotel"/);
+  assert.match(drawer, /label: "Stay"/);
+});
+
+test("AddToDayDrawer offers Dining (restaurant) vertical with testid add-to-day-dining", () => {
+  assert.match(drawer, /testId: "add-to-day-dining"/);
+  assert.match(drawer, /vertical: "restaurant"/);
+  assert.match(drawer, /label: "Dining"/);
+});
+
+test("AddToDayDrawer offers Things to do (attraction) vertical with testid add-to-day-attraction", () => {
+  assert.match(drawer, /testId: "add-to-day-attraction"/);
+  assert.match(drawer, /vertical: "attraction"/);
+  assert.match(drawer, /label: "Things to do"/);
+});
+
+test("AddToDayDrawer uses the shared journey-desk-tray CSS shell (paper, consistent with IdeasTray)", () => {
+  assert.match(drawer, /journey-desk-tray/);
+  assert.match(drawer, /jd-tray-enter/);
+});
+
+test("AddToDayDrawer calls onSelectVertical with the chosen vertical key", () => {
+  assert.match(drawer, /onSelectVertical\(vertical\)/);
+});
+
+test("AddToDayDrawer supports Esc to close", () => {
+  assert.match(drawer, /key === "Escape"/);
+  assert.match(drawer, /onClose\(\)/);
+});
+
+test("AddToDayDrawer shows the target day number in the header", () => {
+  assert.match(drawer, /Day \$\{day\.dayNumber\}/);
+});
+
+// ── 5. Build handoff — target day pre-selected in TripBuilder ────────────────
+
+test("TripBuilder accepts focusDayId prop", () => {
+  assert.match(builder, /focusDayId\?: string \| null/);
+});
+
+test("TripBuilder syncs selectedDayId to focusDayId via useEffect (no remount needed)", () => {
+  assert.match(builder, /focusDayId && days\.some\(\(d\) => d\.id === focusDayId\)/);
+  assert.match(builder, /setSelectedDayId\(focusDayId\)/);
+});
+
+test("page passes focusDayId={buildFocusDayId} to TripBuilder", () => {
+  assert.match(page, /focusDayId=\{buildFocusDayId\}/);
+});
+
+test("page stores addToDayOpen and addToDayDayId state for the drawer", () => {
+  assert.match(page, /const \[addToDayOpen,\s*setAddToDayOpen\]/);
+  assert.match(page, /const \[addToDayDayId,\s*setAddToDayDayId\]/);
+  assert.match(page, /const \[buildFocusDayId,\s*setBuildFocusDayId\]/);
+});
+
+test("handleOpenAddToDay sets the target day ID and opens the drawer", () => {
+  assert.match(page, /function handleOpenAddToDay\(day: ItineraryDay\)/);
+  assert.match(page, /setAddToDayDayId\(day\.id\)/);
+  assert.match(page, /setAddToDayOpen\(true\)/);
+});
+
+test("handleAddToDaySelectVertical routes to Build workspace with target day locked", () => {
+  assert.match(page, /function handleAddToDaySelectVertical/);
+  assert.match(page, /setBuildFocusDayId\(addToDayDayId\)/);
+  assert.match(page, /setActiveMobileWorkspace\("build"\)/);
+});
+
+// ── 6. Return affordance — "Back to Day N" ───────────────────────────────────
+
+test("page shows 'Back to Day N' return banner in Build workspace when coming from Add-to-Day", () => {
+  assert.match(page, /data-testid="jd-build-return-banner"/);
+  assert.match(page, /data-testid="jd-build-return-btn"/);
+  // Routes back to brief and clears the focus
+  assert.match(page, /setActiveMobileWorkspace\("brief"\)[\s\S]{0,60}setBuildFocusDayId\(null\)/);
+});
+
+test("return banner is mobile-only (lg:hidden)", () => {
+  // The return banner must not appear on desktop where both panels are visible.
+  const bannerIdx = page.indexOf('data-testid="jd-build-return-banner"');
+  assert.ok(bannerIdx !== -1, "banner must exist");
+  const surrounding = page.slice(Math.max(0, bannerIdx - 200), bannerIdx + 200);
+  assert.match(surrounding, /lg:hidden/);
+});
+
+// ── 7. No fabricated data ────────────────────────────────────────────────────
+
+test("AddToDayDrawer contains no fake coordinates, pins, or place data", () => {
+  assert.doesNotMatch(drawer, /lat|lng|goldenSpread|Nominatim|geocode/i);
+});
+
+test("AddToDayDrawer does not create new provider or search endpoints", () => {
+  assert.doesNotMatch(drawer, /fetch\(|api\.|searchHotels|searchAttractions|searchRestaurants/i);
+});
+
+// ── 8. Legacy fallback tabs remain reachable ─────────────────────────────────
+
+test("Build, Itinerary, and Ideas tabs remain accessible (no tab removed)", () => {
+  assert.match(page, /trip-mobile-tab-build/);
+  assert.match(page, /trip-mobile-tab-itinerary/);
+  assert.match(page, /trip-mobile-tab-ideas/);
+  assert.match(page, /<TripBuilder/);
+});
+
+// ── 9. CSS primitives for the new flow ──────────────────────────────────────
+
+test("jd-day-add-btn CSS class is defined in globals.css", () => {
+  assert.match(css, /\.jd-day-add-btn \{/);
+});
+
+test("jd-vertical-target CSS class is defined in globals.css", () => {
+  assert.match(css, /\.jd-vertical-target \{/);
+});
+
+test("jd-day-add-btn and jd-vertical-target have reduced-motion guards", () => {
+  // Both classes must appear inside a prefers-reduced-motion block in the full CSS source.
+  // Find the IA closeout section and verify both classes are guarded there.
+  const section = css.slice(css.indexOf("Journey Desk mobile IA closeout"), css.indexOf("Journey Desk v2C"));
+  assert.ok(section.length > 0, "IA closeout CSS section must exist");
+  assert.match(section, /prefers-reduced-motion: reduce/);
+  assert.match(section, /jd-day-add-btn/);
+  assert.match(section, /jd-vertical-target/);
+});
+
+// ── 10. Desktop coherence — no double-render of day detail ──────────────────
+
+test("Desktop coherence: ExpandedDayPanel appears only once in page source (via inlineDayPanel)", () => {
+  // Count occurrences of <ExpandedDayPanel in page.tsx — should be exactly 1
+  // (inside the inlineDayPanel prop, not also as a standalone after-list block).
+  const occurrences = (page.match(/<ExpandedDayPanel/g) ?? []).length;
+  assert.strictEqual(occurrences, 1, `Expected 1 <ExpandedDayPanel in page, found ${occurrences}`);
+});

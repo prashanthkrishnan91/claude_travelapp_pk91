@@ -135,7 +135,11 @@ test("page selects a Dayboard day and renders the expanded panel for it", () => 
   assert.match(page, /const \[selectedDayId, setSelectedDayId\] = useState<string \| null>\(null\)/);
   assert.match(page, /onSelectDay=\{\(day\) => setSelectedDayId\(day\.id\)\}/);
   assert.match(page, /<ExpandedDayPanel/);
-  assert.match(page, /day=\{itineraryDays\.find\(\(d\) => d\.id === selectedDayId\)!\}/);
+  // The expanded panel is now passed inline via Dayboard's inlineDayPanel prop
+  // (renders directly under the selected day card, not after the full list).
+  // The day is derived from expandedDay = itineraryDays.find(...)
+  assert.match(page, /expandedDay = selectedDayId \? itineraryDays\.find\(\(d\) => d\.id === selectedDayId\)/);
+  assert.match(page, /inlineDayPanel=\{expandedDay \?/);
 });
 
 test("expanded day decision strip opens the v1B Ideas Tray (assignments refresh via existing state)", () => {

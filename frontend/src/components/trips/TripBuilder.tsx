@@ -1243,11 +1243,14 @@ interface TripBuilderProps {
   /** Mobile workspace IA — controls which panel is visible on mobile.
    *  null (or omitted) = show all panels (desktop behaviour). */
   mobileWorkspace?: "build" | "itinerary" | "ideas" | null;
+  /** Pre-select a day when arriving from the Add-to-Day flow (Journey Desk handoff).
+   *  Updates the day selector without resetting any other Build state. */
+  focusDayId?: string | null;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned, mobileWorkspace }: TripBuilderProps) {
+export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned, mobileWorkspace, focusDayId }: TripBuilderProps) {
   const [days,           setDays]          = useState<ItineraryDay[]>(
     [...initialDays].sort((a, b) => a.dayNumber - b.dayNumber)
   );
@@ -1457,6 +1460,13 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       return days[0]?.id ?? null;
     });
   }, [days]);
+
+  // Add-to-Day handoff: sync the Build day selector to the Journey Desk choice.
+  useEffect(() => {
+    if (focusDayId && days.some((d) => d.id === focusDayId)) {
+      setSelectedDayId(focusDayId);
+    }
+  }, [focusDayId, days]);
 
   useEffect(() => {
     setExpandedDayNumber((prev) => {
