@@ -74,6 +74,8 @@ export interface ExpandedDayPanelProps {
   onAddFromIdeas: () => void;
   /** Quiet fallback to the legacy Itinerary tab for fuller editing/reordering. */
   onEditInItinerary?: () => void;
+  /** Opens the Add-to-Day vertical picker for this day (day-scoped add flow). */
+  onAddToDay?: () => void;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -84,7 +86,7 @@ export interface ExpandedDayPanelProps {
 // decision strip summarizes open decisions honestly and opens the Ideas Tray.
 // Read-only except for that existing tray placement flow.
 
-export function ExpandedDayPanel({ day, ideasCount, onAddFromIdeas, onEditInItinerary }: ExpandedDayPanelProps) {
+export function ExpandedDayPanel({ day, ideasCount, onAddFromIdeas, onEditInItinerary, onAddToDay }: ExpandedDayPanelProps) {
   const groups = groupJourneyDeskDay(day.items ?? []);
   const hasItems = (day.items ?? []).length > 0;
   const whereLine = day.title || day.summary || "";
@@ -112,16 +114,28 @@ export function ExpandedDayPanel({ day, ideasCount, onAddFromIdeas, onEditInItin
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ds-accent">
             Day {day.dayNumber}
           </p>
-          {onEditInItinerary && (
-            <button
-              type="button"
-              data-testid="jd-day-edit-in-itinerary"
-              onClick={onEditInItinerary}
-              className="flex-shrink-0 text-xs font-medium text-ds-folio-ink-soft hover:text-ds-marine-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
-            >
-              Edit in Itinerary
-            </button>
-          )}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {onAddToDay && (
+              <button
+                type="button"
+                data-testid="jd-add-to-day-btn"
+                onClick={onAddToDay}
+                className="text-xs font-medium text-ds-marine-ink hover:text-ds-marine-soft border border-ds-marine-ink/30 hover:border-ds-marine-ink/60 rounded px-2 py-0.5 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+              >
+                + Add to this day
+              </button>
+            )}
+            {onEditInItinerary && (
+              <button
+                type="button"
+                data-testid="jd-day-edit-in-itinerary"
+                onClick={onEditInItinerary}
+                className="flex-shrink-0 text-xs font-medium text-ds-folio-ink-soft hover:text-ds-marine-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
+              >
+                Edit in Itinerary
+              </button>
+            )}
+          </div>
         </div>
         <h2 className="mt-0.5 font-serif text-xl font-semibold text-ds-folio-ink leading-tight">
           {dateLabel || `Day ${day.dayNumber}`}
@@ -131,7 +145,7 @@ export function ExpandedDayPanel({ day, ideasCount, onAddFromIdeas, onEditInItin
         )}
       </div>
 
-      {/* Decision strip — calm brass dot, never an alert */}
+      {/* Decision strip — calm brass dot, never alarming */}
       <div data-testid="jd-decision-strip" className="jd-decision-strip mx-5 mb-3 flex items-center gap-3 px-3.5 py-2.5">
         <span className="jd-decide-dot flex-shrink-0" aria-hidden="true" />
         <span className="flex-1 text-sm italic text-ds-folio-ink-soft leading-snug">{decision}</span>

@@ -17,6 +17,8 @@ import { TripBuilder } from "@/components/trips/TripBuilder";
 import { TripBrief } from "@/components/trips/TripBrief";
 import { Dayboard } from "@/components/trips/Dayboard";
 import { ExpandedDayPanel } from "@/components/trips/ExpandedDayPanel";
+import { AddToDayDrawer } from "@/components/trips/AddToDayDrawer";
+import type { AddToDayVertical } from "@/components/trips/AddToDayDrawer";
 import { IdeasTray } from "@/components/trips/IdeasTray";
 import { MapFoldOut } from "@/components/trips/MapFoldOut";
 import { TripReadinessCockpit } from "@/components/trips/TripReadinessCockpit";
@@ -61,9 +63,10 @@ const COVER_DANGER = `${COVER_ICON_BASE} text-ds-text-tertiary hover:text-ds-war
 
 type MobileWorkspace = "brief" | "build" | "itinerary" | "ideas";
 
+// Build is intentionally omitted from mobile nav — it is the internal
+// implementation surface reached via the Add-to-Day handoff from Itinerary.
 const WORKSPACE_TABS: { id: MobileWorkspace; label: string; testId: string }[] = [
   { id: "brief",     label: "Brief",     testId: "trip-mobile-tab-brief"     },
-  { id: "build",     label: "Build",     testId: "trip-mobile-tab-build"     },
   { id: "itinerary", label: "Itinerary", testId: "trip-mobile-tab-itinerary" },
   { id: "ideas",     label: "Ideas",     testId: "trip-mobile-tab-ideas"     },
 ];
@@ -93,6 +96,11 @@ export default function TripDetailPage() {
   const [tripBuilderKey, setTripBuilderKey] = useState(0);
   const [tripIdeasKey,  setTripIdeasKey]  = useState(0);
   const [activeMobileWorkspace, setActiveMobileWorkspace] = useState<MobileWorkspace>("brief");
+  // Add-to-Day flow: drawer state + which day + which Build vertical to focus
+  const [addToDayOpen,       setAddToDayOpen]       = useState(false);
+  const [addToDayDayId,      setAddToDayDayId]      = useState<string | null>(null);
+  const [buildFocusDayId,    setBuildFocusDayId]    = useState<string | null>(null);
+  const [buildFocusVertical, setBuildFocusVertical] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -157,6 +165,20 @@ export default function TripDetailPage() {
     refreshIdeas();
   }
 
+  // Refreshes parent itinerary + ideas after a TripBuilder add — does NOT bump
+  // tripBuilderKey so TripBuilder state (search results, selected vertical, etc.)
+  // is preserved while Brief/Dayboard/ExpandedDayPanel pick up the new item.
+  function refreshParentItinerary() {
+    const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
+      ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;
+    const endDate = (trip as (Trip & { end_date?: string }) | null)?.endDate
+      ?? (trip as (Trip & { end_date?: string }) | null)?.end_date;
+    ensureTripDays(id, startDate, endDate).then((days) => {
+      setItineraryDays(days);
+      refreshIdeas();
+    });
+  }
+
   async function handleIdeaRemove(itemId: string) {
     // Durable delete; refresh days too so a placed item removed from the map
     // also drops out of the Dayboard/Expanded Day/Trip lens counts.
@@ -176,6 +198,20 @@ export default function TripDetailPage() {
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
+  }
+
+  // ── Add-to-Day flow — day-scoped vertical picker → Build handoff ──────────
+  function handleOpenAddToDay(day: ItineraryDay) {
+    setSelectedDayId(day.id);
+    setAddToDayDayId(day.id);
+    setAddToDayOpen(true);
+  }
+
+  function handleAddToDaySelectVertical(vertical: AddToDayVertical) {
+    setAddToDayOpen(false);
+    setBuildFocusDayId(addToDayDayId);
+    setBuildFocusVertical(vertical);
+    setActiveMobileWorkspace("build");
   }
 
   function openEdit() {
@@ -520,22 +556,27 @@ export default function TripDetailPage() {
       )}
 
       {/* ── Dayboard — collapsed day cards (the 10-second read) ────────────── */}
-      <Dayboard
-        days={itineraryDays}
-        selectedDayId={selectedDayId}
-        onSelectDay={(day) => setSelectedDayId(day.id)}
-        onOpenMap={() => setMapOpen(true)}
-      />
-
-      {/* ── Expanded Day — the selected day's planning workspace ────────────── */}
-      {selectedDayId && itineraryDays.some((d) => d.id === selectedDayId) && (
-        <ExpandedDayPanel
-          day={itineraryDays.find((d) => d.id === selectedDayId)!}
-          ideasCount={tripIdeas.length}
-          onAddFromIdeas={() => setIdeasTrayOpen(true)}
-          onEditInItinerary={() => setActiveMobileWorkspace("itinerary")}
-        />
-      )}
+      {/* Expanded day panel renders INLINE under the selected day card so Day 10
+          detail is immediately visible without scrolling past the full list. */}
+      {(() => {
+        const expandedDay = selectedDayId ? itineraryDays.find((d) => d.id === selectedDayId) : null;
+        return (
+          <Dayboard
+            days={itineraryDays}
+            selectedDayId={selectedDayId}
+            onSelectDay={(day) => setSelectedDayId(day.id)}
+            onOpenMap={() => setMapOpen(true)}
+            inlineDayPanel={expandedDay ? (
+              <ExpandedDayPanel
+                day={expandedDay}
+                ideasCount={tripIdeas.length}
+                onAddFromIdeas={() => setIdeasTrayOpen(true)}
+                onEditInItinerary={() => setActiveMobileWorkspace("itinerary")}
+              />
+            ) : null}
+          />
+        );
+      })()}
 
       <div className="editorial-section-rule mb-4" aria-hidden="true" />
 
@@ -571,6 +612,35 @@ export default function TripDetailPage() {
 
         {/* Build / Itinerary / Ideas workspaces — hidden on mobile when brief is active */}
         <div className={activeMobileWorkspace === "brief" ? "hidden lg:block" : ""}>
+
+          {/* "Back to Day N" return affordance — shown on mobile when arriving from
+              the Add-to-Day drawer so the user always has a clear path back. */}
+          {activeMobileWorkspace === "build" && buildFocusDayId && (() => {
+            const focusedDay = itineraryDays.find((d) => d.id === buildFocusDayId);
+            return focusedDay ? (
+              <div
+                data-testid="jd-build-return-banner"
+                className="lg:hidden mb-3 flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border border-ds-marine-ink/20 bg-ds-bone"
+              >
+                <span className="text-xs text-ds-folio-ink-soft italic">
+                  Adding to <span className="font-semibold not-italic text-ds-marine-ink">Day {focusedDay.dayNumber}</span>
+                </span>
+                <button
+                  type="button"
+                  data-testid="jd-build-return-btn"
+                  onClick={() => {
+                    setActiveMobileWorkspace("itinerary");
+                    setBuildFocusDayId(null);
+                    setBuildFocusVertical(null);
+                  }}
+                  className="text-xs font-medium text-ds-marine-ink hover:text-ds-marine-soft transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
+                >
+                  ← Done · Back to Day {focusedDay.dayNumber}
+                </button>
+              </div>
+            ) : null;
+          })()}
+
           {/* ── Planning Canvas (TripBuilder) ──────────────────────────────── */}
           <TripBuilder
             key={tripBuilderKey}
@@ -582,6 +652,10 @@ export default function TripDetailPage() {
             initialResults={[]}
             ideasRefreshKey={tripIdeasKey}
             mobileWorkspace={activeMobileWorkspace === "brief" ? null : activeMobileWorkspace}
+            focusDayId={buildFocusDayId}
+            focusVertical={buildFocusVertical}
+            onAddToDay={handleOpenAddToDay}
+            onItineraryChanged={refreshParentItinerary}
             onIdeaAssigned={() => {
               const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
                 ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;
@@ -619,6 +693,14 @@ export default function TripDetailPage() {
           setMapOpen(false);
           setActiveMobileWorkspace("itinerary");
         }}
+      />
+
+      {/* ── Add-to-Day Drawer — day-scoped vertical picker ──────────────────── */}
+      <AddToDayDrawer
+        open={addToDayOpen}
+        onClose={() => setAddToDayOpen(false)}
+        day={addToDayDayId ? itineraryDays.find((d) => d.id === addToDayDayId) ?? null : null}
+        onSelectVertical={handleAddToDaySelectVertical}
       />
 
       {/* ── Ideas Tray — placement-first (mobile sheet · desktop right drawer) ── */}

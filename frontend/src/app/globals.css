@@ -9377,6 +9377,45 @@
     border-radius: 10px;
   }
 
+  /* ── Journey Desk mobile IA closeout — day-scoped Add-to-Day flow ───────────
+     "+" button beside each day card; vertical target tiles in the drawer.
+     Inline expanded day is handled by the existing .journey-desk-day shell. */
+
+  /* Quiet "+" add button beside the day card — paper world, brass-tinged border */
+  .jd-day-add-btn {
+    background: var(--ds-bone);
+    border: 1px solid var(--ds-hairline);
+    border-radius: 12px;
+    color: var(--ds-folio-ink-mist);
+    box-shadow: var(--ds-paper-elevation-1);
+    transition: color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+  }
+  .jd-day-add-btn:hover {
+    color: var(--ds-marine-ink);
+    border-color: color-mix(in srgb, var(--ds-marine-ink) 40%, var(--ds-hairline));
+    box-shadow: var(--ds-paper-elevation-2);
+  }
+
+  /* Vertical target button in the Add-to-Day drawer — large, mobile-safe */
+  .jd-vertical-target {
+    background: var(--ds-bone);
+    border: 1px solid var(--ds-hairline);
+    border-radius: 12px;
+    box-shadow: var(--ds-paper-elevation-1);
+    transition: box-shadow 120ms ease, border-color 120ms ease;
+  }
+  .jd-vertical-target:hover {
+    box-shadow: var(--ds-paper-elevation-2);
+    border-color: color-mix(in srgb, var(--ds-marine-ink) 30%, var(--ds-hairline));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .jd-day-add-btn { transition: none; }
+    .jd-day-add-btn:hover { box-shadow: var(--ds-paper-elevation-1); }
+    .jd-vertical-target { transition: none; }
+    .jd-vertical-target:hover { box-shadow: var(--ds-paper-elevation-1); }
+  }
+
   /* ── Journey Desk v2C — real Trip Lens pin map ─────────────────────────────
      A premium "folded atlas" surface: warm paper frame around a muted OSM tile
      layer, paper-styled Leaflet controls, and brass-rimmed marine stamps. Pins

@@ -1,5 +1,7 @@
 "use client";
 
+import { Plus } from "lucide-react";
+import type { ReactNode } from "react";
 import type { ItineraryDay } from "@/types";
 
 // ── Props ────────────────────────────────────────────────────────────────────
@@ -12,6 +14,10 @@ export interface DayboardProps {
   onSelectDay: (day: ItineraryDay) => void;
   /** Opens the Trip Map fold-out (quiet, single entry point). */
   onOpenMap?: () => void;
+  /** Opens the Add-to-Day drawer for a specific day. */
+  onAddToDay?: (day: ItineraryDay) => void;
+  /** Rendered inline beneath the selected day's card (the expanded day panel). */
+  inlineDayPanel?: ReactNode;
 }
 
 // Timezone-safe display ("Thu, Nov 12") — mirrors ItineraryDayColumn.formatDate
@@ -37,7 +43,7 @@ function formatDayDate(dateStr?: string): string {
 // still being decided. Tapping a day opens it in the itinerary workspace.
 // No weather, no fabricated counts (blueprint §5 / §8).
 
-export function Dayboard({ days, selectedDayId, onSelectDay, onOpenMap }: DayboardProps) {
+export function Dayboard({ days, selectedDayId, onSelectDay, onOpenMap, onAddToDay, inlineDayPanel }: DayboardProps) {
   if (days.length === 0) return null;
 
   const activeDays = days.filter((d) => (d.items ?? []).length > 0).length;
@@ -76,51 +82,72 @@ export function Dayboard({ days, selectedDayId, onSelectDay, onOpenMap }: Dayboa
           const isSelected = !!selectedDayId && day.id === selectedDayId;
           return (
             <li key={day.id}>
-              <button
-                type="button"
-                data-testid="journey-desk-day-card"
-                onClick={() => onSelectDay(day)}
-                aria-current={isSelected ? "true" : undefined}
-                aria-label={`Day ${day.dayNumber}${dateLabel ? `, ${dateLabel}` : ""}: ${
-                  stillDeciding ? "still deciding" : `${itemCount} placed`
-                }`}
-                className={`jd-day-card w-full flex items-center gap-3.5 px-3.5 py-2.5 min-h-[52px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 ${
-                  isSelected ? "ring-1 ring-ds-marine-ink/40 border-ds-marine-ink/40" : ""
-                }`}
-              >
-                {/* Day numeral — the editorial anchor */}
-                <span
-                  aria-hidden="true"
-                  className="flex-shrink-0 font-serif italic text-2xl sm:text-3xl leading-none text-ds-folio-ink/90 w-8 sm:w-9 text-center"
+              {/* Card row: day card + optional "+" add button side-by-side */}
+              <div className="flex items-stretch gap-2">
+                <button
+                  type="button"
+                  data-testid="journey-desk-day-card"
+                  onClick={() => onSelectDay(day)}
+                  aria-current={isSelected ? "true" : undefined}
+                  aria-label={`Day ${day.dayNumber}${dateLabel ? `, ${dateLabel}` : ""}: ${
+                    stillDeciding ? "still deciding" : `${itemCount} placed`
+                  }`}
+                  className={`jd-day-card flex-1 flex items-center gap-3.5 px-3.5 py-2.5 min-h-[52px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 ${
+                    isSelected ? "ring-1 ring-ds-marine-ink/40 border-ds-marine-ink/40" : ""
+                  }`}
                 >
-                  {day.dayNumber}
-                </span>
+                  {/* Day numeral — the editorial anchor */}
+                  <span
+                    aria-hidden="true"
+                    className="flex-shrink-0 font-serif italic text-2xl sm:text-3xl leading-none text-ds-folio-ink/90 w-8 sm:w-9 text-center"
+                  >
+                    {day.dayNumber}
+                  </span>
 
-                <span className="flex-1 min-w-0">
-                  {dateLabel && (
-                    <span className="block text-sm font-semibold text-ds-folio-ink leading-tight">
-                      {dateLabel}
-                    </span>
-                  )}
-                  {whereLine && (
-                    <span className="block mt-0.5 text-xs italic text-ds-folio-ink-mist truncate">
-                      {whereLine}
-                    </span>
-                  )}
-                </span>
+                  <span className="flex-1 min-w-0">
+                    {dateLabel && (
+                      <span className="block text-sm font-semibold text-ds-folio-ink leading-tight">
+                        {dateLabel}
+                      </span>
+                    )}
+                    {whereLine && (
+                      <span className="block mt-0.5 text-xs italic text-ds-folio-ink-mist truncate">
+                        {whereLine}
+                      </span>
+                    )}
+                  </span>
 
-                {/* Placement read — calm brass dot when still deciding */}
-                <span className="flex-shrink-0 inline-flex items-center gap-2 text-xs text-ds-folio-ink-mist">
-                  {stillDeciding ? (
-                    <>
-                      <span className="jd-decide-dot" aria-hidden="true" />
-                      <span className="italic">Still deciding</span>
-                    </>
-                  ) : (
-                    <span>{itemCount} placed</span>
-                  )}
-                </span>
-              </button>
+                  {/* Placement read — calm brass dot when still deciding */}
+                  <span className="flex-shrink-0 inline-flex items-center gap-2 text-xs text-ds-folio-ink-mist">
+                    {stillDeciding ? (
+                      <>
+                        <span className="jd-decide-dot" aria-hidden="true" />
+                        <span className="italic">Still deciding</span>
+                      </>
+                    ) : (
+                      <span>{itemCount} placed</span>
+                    )}
+                  </span>
+                </button>
+
+                {/* Add-to-Day "+" — opens the vertical picker for this exact day */}
+                {onAddToDay && (
+                  <button
+                    type="button"
+                    data-testid="jd-day-add-btn"
+                    onClick={() => onAddToDay(day)}
+                    aria-label={`Add to Day ${day.dayNumber}`}
+                    title={`Add to Day ${day.dayNumber}`}
+                    className="jd-day-add-btn flex-shrink-0 flex items-center justify-center min-h-[52px] min-w-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+                  >
+                    <Plus className="w-4 h-4" aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+
+              {/* Inline expanded panel — renders directly under the selected day,
+                  not after the full list, so Day 10 detail is immediately visible. */}
+              {isSelected && inlineDayPanel}
             </li>
           );
         })}

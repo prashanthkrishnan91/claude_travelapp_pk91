@@ -1243,11 +1243,22 @@ interface TripBuilderProps {
   /** Mobile workspace IA — controls which panel is visible on mobile.
    *  null (or omitted) = show all panels (desktop behaviour). */
   mobileWorkspace?: "build" | "itinerary" | "ideas" | null;
+  /** Pre-select a day when arriving from the Add-to-Day flow (Journey Desk handoff).
+   *  Updates the day selector without resetting any other Build state. */
+  focusDayId?: string | null;
+  /** Open and scroll to the matching CandidatePanel when arriving from the Add-to-Day drawer.
+   *  "flight" | "hotel" | "restaurant" | "attraction" — maps to the four existing panels. */
+  focusVertical?: string | null;
+  /** Opens the Add-to-Day vertical picker for the given day (wired from Itinerary workspace). */
+  onAddToDay?: (day: ItineraryDay) => void;
+  /** Called after any successful persisted add so the parent (page.tsx) can refresh
+   *  its own itineraryDays / tripIdeas state. NOT fired on failed adds. */
+  onItineraryChanged?: () => void;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned, mobileWorkspace }: TripBuilderProps) {
+export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned, mobileWorkspace, focusDayId, focusVertical, onAddToDay, onItineraryChanged }: TripBuilderProps) {
   const [days,           setDays]          = useState<ItineraryDay[]>(
     [...initialDays].sort((a, b) => a.dayNumber - b.dayNumber)
   );
@@ -1295,6 +1306,11 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const attractionListRef  = useRef<HTMLDivElement>(null);
   const restaurantListRef  = useRef<HTMLDivElement>(null);
   const prevViewModeRef    = useRef<"list" | "map">("list");
+  // Panel-level refs for scroll-into-view on Add-to-Day vertical handoff.
+  const flightPanelRef     = useRef<HTMLDivElement>(null);
+  const hotelPanelRef      = useRef<HTMLDivElement>(null);
+  const attractionPanelRef = useRef<HTMLDivElement>(null);
+  const restaurantPanelRef = useRef<HTMLDivElement>(null);
 
   // ── Compare state ────────────────────────────────────────────────────────────
   const [compareSet,     setCompareSet]     = useState<Set<string>>(new Set());
@@ -1458,6 +1474,36 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     });
   }, [days]);
 
+  // Add-to-Day handoff: sync the Build day selector to the Journey Desk choice.
+  useEffect(() => {
+    if (focusDayId && days.some((d) => d.id === focusDayId)) {
+      setSelectedDayId(focusDayId);
+    }
+  }, [focusDayId, days]);
+
+  // Add-to-Day vertical handoff: open the matching CandidatePanel and scroll it into view.
+  // For attraction/restaurant, also ensure list view is active (panels live in list-only branch).
+  useEffect(() => {
+    if (!focusVertical) return;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    if (focusVertical === "flight") {
+      setFlightPanelOpen(true);
+      t = setTimeout(() => flightPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 0);
+    } else if (focusVertical === "hotel") {
+      setHotelPanelOpen(true);
+      t = setTimeout(() => hotelPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 0);
+    } else if (focusVertical === "attraction") {
+      setViewMode("list");
+      setAttractionPanelOpen(true);
+      t = setTimeout(() => attractionPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 0);
+    } else if (focusVertical === "restaurant") {
+      setViewMode("list");
+      setRestaurantPanelOpen(true);
+      t = setTimeout(() => restaurantPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 0);
+    }
+    return () => { if (t !== null) clearTimeout(t); };
+  }, [focusVertical]);
+
   useEffect(() => {
     setExpandedDayNumber((prev) => {
       if (prev != null && days.some((day) => day.dayNumber === prev)) return prev;
@@ -1504,12 +1550,13 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         )
       );
       showToast(`${item.itemType === "flight" ? "Flight" : "Hotel"} added to Day ${targetDay.dayNumber}`);
+      onItineraryChanged?.();
     } catch {
       showToast("Failed to add — please try again");
     } finally {
       setAddingId(null);
     }
-  }, [days, selectedDayId, tripId, showToast]);
+  }, [days, selectedDayId, tripId, showToast, onItineraryChanged]);
 
   // ── Add attraction to selected itinerary day ─────────────────────────────────
 
@@ -1531,12 +1578,13 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         )
       );
       showToast(`${attraction.name.split(" —")[0]} added to Day ${targetDay.dayNumber}`);
+      onItineraryChanged?.();
     } catch {
       showToast("Failed to add — please try again");
     } finally {
       setAddingId(null);
     }
-  }, [days, selectedDayId, tripId, showToast]);
+  }, [days, selectedDayId, tripId, showToast, onItineraryChanged]);
 
   // ── Add restaurant to selected itinerary day ────────────────────────────────
 
@@ -1558,12 +1606,13 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         )
       );
       showToast(`${restaurant.name} added to Day ${targetDay.dayNumber}`);
+      onItineraryChanged?.();
     } catch {
       showToast("Failed to add — please try again");
     } finally {
       setAddingId(null);
     }
-  }, [days, selectedDayId, tripId, showToast]);
+  }, [days, selectedDayId, tripId, showToast, onItineraryChanged]);
 
   // ── Add round-trip flight: two leg items on actual departure days ────────────
 
@@ -1674,12 +1723,13 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
           ? `Round-trip flight added to Day ${outboundDay.dayNumber}`
           : `Round-trip: outbound Day ${outboundDay.dayNumber}, return Day ${returnDay.dayNumber}`;
       showToast(msg);
+      onItineraryChanged?.();
     } catch {
       showToast("Failed to add round-trip flight — please try again");
     } finally {
       setAddingId(null);
     }
-  }, [days, tripId, showToast, extractLegDepartureDate, resolveItineraryDayByDate]);
+  }, [days, tripId, showToast, extractLegDepartureDate, resolveItineraryDayByDate, onItineraryChanged]);
 
   // ── Remove item from a day ───────────────────────────────────────────────────
 
@@ -1799,8 +1849,9 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       setDays((prev) =>
         prev.map((d) => d.id === targetDay.id ? { ...d, items: [...d.items, newItem] } : d)
       );
+      onItineraryChanged?.();
     } catch { /* silently ignore */ }
-  }, [days, selectedDayId, tripId]);
+  }, [days, selectedDayId, tripId, onItineraryChanged]);
 
   // ── Compare ──────────────────────────────────────────────────────────────────
 
@@ -2051,6 +2102,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
             <SummaryBar topFlight={topFlight} topHotel={topHotel} />
 
             {/* Flights section */}
+            <div ref={flightPanelRef}>
             <CandidatePanel
               title="Flights"
               icon={<Plane className="w-3.5 h-3.5 text-ds-accent" />}
@@ -2137,8 +2189,10 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                 return nodes;
               })()}
             </CandidatePanel>
+            </div>
 
             {/* Hotels section */}
+            <div ref={hotelPanelRef}>
             <CandidatePanel
               title="Hotels"
               icon={<Hotel className="w-3.5 h-3.5 text-ds-accent" />}
@@ -2179,6 +2233,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                 ));
               })()}
             </CandidatePanel>
+            </div>
 
             {/* ── Explore: List / Map / Group toggle ────────────────────── */}
             <div className="flex items-center justify-between px-1 pt-1">
@@ -2229,6 +2284,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
               /* ── List view ─────────────────────────────────────────────── */
               <>
                 {/* Attractions section */}
+                <div ref={attractionPanelRef}>
                 <CandidatePanel
                   title="Attractions"
                   icon={<Sparkles className="w-3.5 h-3.5 text-ds-accent" />}
@@ -2304,8 +2360,10 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                     })()
                   )}
                 </CandidatePanel>
+                </div>
 
                 {/* Restaurants section */}
+                <div ref={restaurantPanelRef}>
                 <CandidatePanel
                   title="Restaurants"
                   icon={<UtensilsCrossed className="w-3.5 h-3.5 text-ds-accent" />}
@@ -2391,6 +2449,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                     })()
                   )}
                 </CandidatePanel>
+                </div>
               </>
             )}
 
@@ -2501,6 +2560,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                     compareSet={compareSet}
                     onPlanDay={handlePlanDay}
                     planDayLoading={dayPlanLoading && dayPlanTargetDayId === day.id}
+                    onAddToDay={onAddToDay}
                   />
                 ))}
               </SortableContext>
