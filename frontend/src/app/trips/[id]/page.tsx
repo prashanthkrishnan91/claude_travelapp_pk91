@@ -28,7 +28,7 @@ import {
   fetchTripContext,
   fetchTripIdeas,
   assignIdeaToDay,
-  moveIdeaToTripIdeas,
+  unplaceItemToIdeas,
   updateIdeaMeta,
   deleteItem,
   updateTrip,
@@ -164,10 +164,11 @@ export default function TripDetailPage() {
     await refreshDaysAndIdeas();
   }
 
-  // Durable unplace (moveIdeaToTripIdeas → day_id:null): the placed item returns
-  // to Trip Ideas with all details preserved. NOT a delete.
-  async function handleItemUnplace(itemId: string) {
-    await moveIdeaToTripIdeas(itemId);
+  // Durable unplace (unplaceItemToIdeas → PATCH day_id:null + curated source_kind):
+  // the placed item leaves the day and reappears in Trip Ideas with all details
+  // (note/coordinates/rating/maps URL) preserved. NOT a delete.
+  async function handleItemUnplace(itemId: string, currentDetails: Record<string, unknown>) {
+    await unplaceItemToIdeas(itemId, currentDetails);
     await refreshDaysAndIdeas();
     showToast("Moved back to your Ideas");
   }

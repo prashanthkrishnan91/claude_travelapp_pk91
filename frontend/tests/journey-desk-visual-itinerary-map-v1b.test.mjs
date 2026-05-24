@@ -6,7 +6,7 @@
  *   - planned pins/list rows get useful, real-field cards with SAFE actions
  *   - actions are gated to durable existing writes ONLY:
  *       Move to Day…    → assignIdeaToDay (PATCH day_id; details preserved)
- *       Remove from day → moveIdeaToTripIdeas (PATCH day_id:null; NON-destructive)
+ *       Back to Ideas   → unplaceItemToIdeas (PATCH day_id:null + curated source_kind; NON-destructive)
  *       Remove from trip → deleteItem (DELETE; two-step confirm guard)
  *   - destructive deletes (trip item + idea) require an inline confirm
  *   - NO hide/show UI (no durable preference/status contract exists)
@@ -77,18 +77,66 @@ test("destructive + unplace actions live in the overflow menu, never side by sid
   assert.match(map, /role="menu"[\s\S]*?data-testid="map-planned-remove"/);
 });
 
-test("Back to Ideas = durable unplace (moveIdeaToTripIdeas), explicit text (place-like only), not a delete", () => {
+test("Back to Ideas = durable unplace (unplaceItemToIdeas), explicit text (place-like only), not a delete", () => {
   assert.match(map, /data-testid="map-planned-unplace"/);
-  assert.match(map, /onUnplace\(item\.id\)/);
+  // Passes the item's details so the durable helper can preserve them.
+  assert.match(map, /onUnplace\(item\.id, item\.details \?\? \{\}\)/);
   // Renamed: never "remove" wording for the non-destructive unplace.
   assert.match(map, /Back to Ideas/);
   assert.doesNotMatch(map, /Remove from day/);
   // Place-like items get Back to Ideas; anchors get Manage in Itinerary instead.
   assert.match(map, /const isAnchor = item\.itemType !== "meal" && item\.itemType !== "activity";/);
   assert.match(map, /\{isAnchor \?[\s\S]*?map-planned-manage-itinerary[\s\S]*?map-planned-unplace/);
-  // Wired to the day_id:null PATCH, which preserves details.
-  assert.match(page, /async function handleItemUnplace\(itemId: string\) \{\s*await moveIdeaToTripIdeas\(itemId\);/);
-  assert.match(api, /export async function moveIdeaToTripIdeas\(itemId: string\)[\s\S]*?body: JSON\.stringify\(\{ day_id: null \}\)/);
+  // Wired to the durable non-delete helper.
+  assert.match(page, /async function handleItemUnplace\(itemId: string, currentDetails: Record<string, unknown>\) \{\s*await unplaceItemToIdeas\(itemId, currentDetails\);/);
+});
+
+// ── Blocker fix: Back to Ideas is non-destructive AND reappears in Trip Ideas ──
+
+test("unplaceItemToIdeas unschedules (day_id:null) via updateItem and never deletes", () => {
+  assert.match(api, /export async function unplaceItemToIdeas\(/);
+  const helper = api.slice(api.indexOf("export async function unplaceItemToIdeas"));
+  const helperBody = helper.slice(0, helper.indexOf("\nexport "));
+  // Routed through updateItem (which re-snakes the details blob on write).
+  assert.match(helperBody, /return updateItem\(itemId, \{ dayId: null, details \} as Partial<ItineraryItem>\)/);
+  // Never a delete.
+  assert.doesNotMatch(helperBody, /\bDELETE\b|deleteItem/);
+});
+
+test("unplace stamps a curated source_kind so the orphaned Explore item reappears in Trip Ideas", () => {
+  const helper = api.slice(api.indexOf("export async function unplaceItemToIdeas"));
+  const helperBody = helper.slice(0, helper.indexOf("\nexport "));
+  // Root cause: list_unscheduled_items only returns concierge_idea/saved_item.
+  // Read tolerates either casing (details camelCased on read).
+  assert.match(helperBody, /currentDetails\.sourceKind \?\? currentDetails\.source_kind/);
+  assert.match(helperBody, /sourceKind === "concierge_idea"[\s\S]*?sourceKind === "saved_item"/);
+  // Preserve all details; set the single curated key only when not already curated.
+  assert.match(helperBody, /const details: Record<string, unknown> = \{ \.\.\.currentDetails \};/);
+  assert.match(helperBody, /if \(!alreadyCurated\) \{[\s\S]*?details\.source_kind = "concierge_idea";/);
+});
+
+test("unplace preserves all other details (spreads currentDetails; only source_kind is touched)", () => {
+  const helper = api.slice(api.indexOf("export async function unplaceItemToIdeas"));
+  const helperBody = helper.slice(0, helper.indexOf("\nexport "));
+  // Nothing is stripped except the source_kind variants we re-set.
+  assert.match(helperBody, /\{ \.\.\.currentDetails \}/);
+  const deletes = helperBody.match(/delete details\.\w+/g) || [];
+  assert.deepEqual(new Set(deletes), new Set(["delete details.sourceKind", "delete details.source_kind"]));
+});
+
+test("Back to Ideas does NOT call deleteItem anywhere in its path (map → page → helper)", () => {
+  // The unplace control and handler must not reference deleteItem.
+  assert.doesNotMatch(map, /onUnplace[\s\S]{0,40}deleteItem/);
+  const unplaceHandler = page.slice(page.indexOf("async function handleItemUnplace"));
+  const handlerBody = unplaceHandler.slice(0, unplaceHandler.indexOf("\n  }\n") + 4);
+  assert.doesNotMatch(handlerBody, /deleteItem/);
+});
+
+test("only Remove-from-trip / Remove-idea call deleteItem (via onRemove → handleIdeaRemove)", () => {
+  // deleteItem is reached ONLY through handleIdeaRemove (the onRemove prop),
+  // never through the unplace handler.
+  assert.match(page, /async function handleIdeaRemove\(itemId: string\) \{[\s\S]*?await deleteItem\(itemId\);/);
+  assert.match(page, /async function handleItemUnplace[\s\S]*?unplaceItemToIdeas/);
 });
 
 test("flight/hotel/logistics anchors offer Manage in Itinerary (text), wired to the legacy tab", () => {
@@ -178,14 +226,14 @@ test("no geocode / Nominatim / goldenSpread / fake-coordinate strings in the map
 
 // ── Page wiring — new durable unplace handler + refresh ───────────────────────
 
-test("page wires onUnplace to the durable moveIdeaToTripIdeas handler", () => {
-  assert.match(page, /import \{[\s\S]*?moveIdeaToTripIdeas,[\s\S]*?\} from/);
+test("page wires onUnplace to the durable unplaceItemToIdeas handler", () => {
+  assert.match(page, /import \{[\s\S]*?unplaceItemToIdeas,[\s\S]*?\} from/);
   assert.match(page, /<MapFoldOut[\s\S]*?onUnplace=\{handleItemUnplace\}/);
 });
 
 test("unplace + delete both refresh days and ideas so all counts stay coherent", () => {
   assert.match(page, /async function refreshDaysAndIdeas\(\) \{[\s\S]*?setItineraryDays\(days\);[\s\S]*?refreshIdeas\(\);/);
-  assert.match(page, /async function handleItemUnplace\(itemId: string\) \{[\s\S]*?await refreshDaysAndIdeas\(\);/);
+  assert.match(page, /async function handleItemUnplace\(itemId: string, currentDetails: Record<string, unknown>\) \{[\s\S]*?await refreshDaysAndIdeas\(\);/);
   assert.match(page, /async function handleIdeaRemove\(itemId: string\) \{[\s\S]*?await deleteItem\(itemId\);[\s\S]*?await refreshDaysAndIdeas\(\);/);
 });
 

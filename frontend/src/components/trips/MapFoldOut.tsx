@@ -158,8 +158,9 @@ export interface MapFoldOutProps {
   ) => Promise<void>;
   /** Durable delete (deleteItem) — used for "Remove from trip" / "Remove idea". */
   onRemove: (itemId: string) => Promise<void>;
-  /** Durable unplace (moveIdeaToTripIdeas → day_id:null) — "Back to Ideas". */
-  onUnplace: (itemId: string) => Promise<void>;
+  /** Durable unplace (unplaceItemToIdeas → day_id:null + curated source_kind, all
+   *  details preserved) — powers "Back to Ideas". Never a delete. */
+  onUnplace: (itemId: string, currentDetails: Record<string, unknown>) => Promise<void>;
   /** Open the legacy Ideas workspace for fuller management. */
   onManage: () => void;
   /** Open the legacy Itinerary workspace (for flight/hotel/logistics anchors). */
@@ -443,7 +444,7 @@ function PlannedLensBody({
   selectedPinId: string | null;
   onSelect: (id: string) => void;
   onMoveToDay: (itemId: string, dayId: string) => Promise<void>;
-  onUnplace: (itemId: string) => Promise<void>;
+  onUnplace: (itemId: string, currentDetails: Record<string, unknown>) => Promise<void>;
   onRemove: (itemId: string) => Promise<void>;
   onManageItinerary: () => void;
   onAddFromIdeas: () => void;
@@ -547,7 +548,7 @@ function PlannedItemCard({
   selected: boolean;
   onSelect: (id: string) => void;
   onMoveToDay: (itemId: string, dayId: string) => Promise<void>;
-  onUnplace: (itemId: string) => Promise<void>;
+  onUnplace: (itemId: string, currentDetails: Record<string, unknown>) => Promise<void>;
   onRemove: (itemId: string) => Promise<void>;
   onManageItinerary: () => void;
 }) {
@@ -753,7 +754,7 @@ function PlannedItemCard({
                         type="button"
                         role="menuitem"
                         data-testid="map-planned-unplace"
-                        onClick={() => run(() => onUnplace(item.id)).then(() => setMenuOpen(false))}
+                        onClick={() => run(() => onUnplace(item.id, item.details ?? {})).then(() => setMenuOpen(false))}
                         disabled={busy}
                         className={MENU_ITEM}
                         title="Move this back to your Ideas tray (keeps all its details)"
