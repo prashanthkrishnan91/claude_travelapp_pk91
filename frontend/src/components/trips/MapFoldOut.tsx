@@ -810,6 +810,10 @@ function IdeasLensBody({
   onManage: () => void;
 }) {
   const mapped = ideas.filter((i) => ideaPinIds.includes(i.id));
+  // The picked pin gets a prominent focal card directly under the map; the rest
+  // stay in the quieter list. With nothing selected, the full list shows.
+  const selectedIdea = mapped.find((i) => i.id === selectedPinId) ?? null;
+  const rest = selectedIdea ? mapped.filter((i) => i.id !== selectedIdea.id) : mapped;
 
   if (ideas.length === 0) {
     return (
@@ -819,32 +823,33 @@ function IdeasLensBody({
     );
   }
 
+  const cardProps = { days, onSelect, onAssign, onKeepMaybe, onRemove, onManage };
+
   return (
     <>
-      {mapped.length > 0 ? (
-        <>
+      {selectedIdea ? (
+        <div data-testid="map-idea-selected-card">
           <p className="px-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-ds-folio-ink-mist">
-            On the map
+            Selected
           </p>
-          {mapped.map((item) => (
-            <IdeaLensCard
-              key={item.id}
-              item={item}
-              days={days}
-              selected={selectedPinId === item.id}
-              onSelect={onSelect}
-              onAssign={onAssign}
-              onKeepMaybe={onKeepMaybe}
-              onRemove={onRemove}
-              onManage={onManage}
-            />
-          ))}
-        </>
-      ) : (
+          <IdeaLensCard key={selectedIdea.id} item={selectedIdea} selected prominent {...cardProps} />
+        </div>
+      ) : null}
+
+      {mapped.length === 0 ? (
         <p className="py-4 text-center text-sm text-ds-folio-ink-mist" data-testid="map-ideas-no-pins">
           No saved ideas have map coordinates yet.
         </p>
-      )}
+      ) : rest.length > 0 ? (
+        <>
+          <p className="px-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-ds-folio-ink-mist">
+            {selectedIdea ? "More on the map" : "On the map"}
+          </p>
+          {rest.map((item) => (
+            <IdeaLensCard key={item.id} item={item} selected={false} {...cardProps} />
+          ))}
+        </>
+      ) : null}
 
       {/* Needs-location: real ideas without coordinates but with a real Maps URL. */}
       {ideaLinkItems.length > 0 ? (
@@ -886,6 +891,7 @@ function IdeaLensCard({
   item,
   days,
   selected,
+  prominent,
   onSelect,
   onAssign,
   onKeepMaybe,
@@ -895,6 +901,7 @@ function IdeaLensCard({
   item: ItineraryItem;
   days: ItineraryDay[];
   selected: boolean;
+  prominent?: boolean;
   onSelect: (id: string) => void;
   onAssign: (itemId: string, dayId: string) => Promise<void>;
   onKeepMaybe: (item: ItineraryItem) => Promise<void>;
@@ -904,6 +911,7 @@ function IdeaLensCard({
   const ref = useRef<HTMLElement>(null);
   const [pickDay, setPickDay] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
 
   useEffect(() => {
@@ -919,6 +927,10 @@ function IdeaLensCard({
 
   const SECONDARY_LINK =
     "text-xs font-medium text-ds-folio-ink-soft hover:text-ds-marine-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded";
+  const ACTION_CHIP =
+    "inline-flex items-center gap-1.5 min-h-[40px] px-2.5 rounded-md text-xs font-medium text-ds-folio-ink-soft hover:text-ds-marine-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2";
+  const MENU_ITEM =
+    "w-full flex items-center min-h-[40px] px-2.5 rounded-md text-left text-sm font-medium text-ds-folio-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 disabled:opacity-50";
 
   async function run(fn: () => Promise<void>) {
     setBusy(true);
@@ -935,7 +947,7 @@ function IdeaLensCard({
       data-testid="map-idea-card"
       data-kind={item.itemType}
       onClick={() => onSelect(item.id)}
-      className={`jd-tray-card p-3.5 cursor-pointer ${selected ? "ring-2 ring-ds-marine-ink/50" : ""}`}
+      className={`jd-tray-card p-3.5 cursor-pointer ${selected ? "ring-2 ring-ds-marine-ink/50" : ""} ${prominent ? "shadow-[var(--ds-paper-elevation-2)]" : ""}`}
     >
       <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-ds-folio-ink-mist">
         <MapPin className="w-3 h-3 text-ds-accent" aria-hidden="true" />
@@ -1021,47 +1033,96 @@ function IdeaLensCard({
         )}
       </div>
 
-      {/* Secondary actions — quiet, contextual to real durable behavior only */}
-      <div className="mt-2.5 flex items-center flex-wrap gap-x-4 gap-y-1" onClick={(e) => e.stopPropagation()}>
+      {/* Secondary row — one quiet Map link + a More kebab. Keep as Maybe,
+          Manage in Ideas, and the destructive Remove idea live inside More. */}
+      <div className="mt-2.5 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
         {mapsUrl && (
-          <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className={SECONDARY_LINK}>
+          <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className={ACTION_CHIP}>
+            <MapIcon className="w-3.5 h-3.5" aria-hidden="true" />
             Map
           </a>
         )}
-        {dayAssignable && (
-          <button type="button" onClick={() => run(() => onKeepMaybe(item))} disabled={busy} className={SECONDARY_LINK}>
-            Keep as Maybe
-          </button>
-        )}
-        <button type="button" onClick={onManage} className={SECONDARY_LINK}>
-          {note ? "Edit note in Ideas" : "Manage in Ideas"}
-        </button>
-        {/* Remove idea = permanent delete, two-step confirm guard. */}
-        {confirmRemove ? (
-          <span className="ml-auto inline-flex items-center gap-3" data-testid="map-idea-remove-confirm">
-            <button
-              type="button"
-              onClick={() => run(() => onRemove(item.id))}
-              disabled={busy}
-              className="text-xs font-semibold text-ds-warning hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-warning focus-visible:outline-offset-2 rounded"
-            >
-              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm remove idea"}
-            </button>
-            <button type="button" onClick={() => setConfirmRemove(false)} disabled={busy} className={SECONDARY_LINK}>
-              Cancel
-            </button>
-          </span>
-        ) : (
+
+        <div className="relative ml-auto">
           <button
             type="button"
-            data-testid="map-idea-remove"
-            onClick={() => setConfirmRemove(true)}
+            data-testid="map-idea-more"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label="More actions"
+            onClick={() => {
+              setMenuOpen((v) => !v);
+              setConfirmRemove(false);
+            }}
             disabled={busy}
-            className={`${SECONDARY_LINK} ml-auto`}
+            className="inline-flex items-center justify-center min-h-[40px] min-w-[40px] rounded-md text-ds-folio-ink-soft hover:text-ds-folio-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 disabled:opacity-50"
           >
-            Remove idea
+            <MoreHorizontal className="w-4 h-4" aria-hidden="true" />
           </button>
-        )}
+
+          {menuOpen ? (
+            <>
+              <button
+                type="button"
+                aria-hidden="true"
+                tabIndex={-1}
+                onClick={() => setMenuOpen(false)}
+                className="fixed inset-0 z-10 cursor-default"
+              />
+              <div
+                role="menu"
+                data-testid="map-idea-more-menu"
+                className="absolute right-0 top-full z-20 mt-1 min-w-[190px] rounded-lg border border-ds-hairline bg-ds-paper p-1 shadow-[var(--ds-paper-elevation-2)]"
+              >
+                {confirmRemove ? (
+                  <div className="p-2" data-testid="map-idea-remove-confirm">
+                    <p className="px-1 pb-2 text-xs text-ds-folio-ink-soft leading-snug">Remove idea from this trip?</p>
+                    <button
+                      type="button"
+                      onClick={() => run(() => onRemove(item.id))}
+                      disabled={busy}
+                      className="w-full inline-flex items-center justify-center gap-1.5 min-h-[40px] rounded-md text-sm font-semibold text-ds-warning ring-1 ring-ds-warning/40 hover:bg-ds-warning/10 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-warning focus-visible:outline-offset-2 disabled:opacity-50"
+                    >
+                      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm remove idea"}
+                    </button>
+                    <button type="button" onClick={() => setConfirmRemove(false)} disabled={busy} className={`${MENU_ITEM} mt-1 justify-center`}>
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {dayAssignable ? (
+                      <button type="button" role="menuitem" onClick={() => run(() => onKeepMaybe(item)).then(() => setMenuOpen(false))} disabled={busy} className={MENU_ITEM}>
+                        Keep as Maybe
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onManage();
+                      }}
+                      className={MENU_ITEM}
+                    >
+                      {note ? "Edit note in Ideas" : "Manage in Ideas"}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid="map-idea-remove"
+                      onClick={() => setConfirmRemove(true)}
+                      disabled={busy}
+                      className={`${MENU_ITEM} text-ds-warning`}
+                    >
+                      Remove idea…
+                    </button>
+                  </>
+                )}
+              </div>
+            </>
+          ) : null}
+        </div>
       </div>
     </article>
   );

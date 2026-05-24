@@ -169,6 +169,42 @@ test("destructive confirm uses the restrained warning tone, not a bright red ale
   assert.doesNotMatch(map, /bg-red-|text-red-|#ff0000|bg-rose-/i);
 });
 
+// ── Ideas Lens polish — premium placement tray (selected focal card + More) ───
+
+test("Ideas Lens shows a prominent selected idea focal card directly under the map", () => {
+  assert.match(map, /const selectedIdea = mapped\.find\(\(i\) => i\.id === selectedPinId\) \?\? null;/);
+  assert.match(map, /const rest = selectedIdea \? mapped\.filter\(\(i\) => i\.id !== selectedIdea\.id\) : mapped;/);
+  assert.match(map, /data-testid="map-idea-selected-card"/);
+  assert.match(map, /<IdeaLensCard key=\{selectedIdea\.id\} item=\{selectedIdea\} selected prominent/);
+  // No selection → the normal "On the map" list still renders.
+  assert.match(map, /\{selectedIdea \? "More on the map" : "On the map"\}/);
+});
+
+test("each idea card has one primary Add to Day CTA + only Map and More in the secondary row", () => {
+  // Primary marine CTA.
+  assert.match(map, /data-testid="map-idea-add-to-day"[\s\S]*?bg-ds-marine-ink/);
+  // Secondary row holds a Map chip and a More kebab — nothing else inline.
+  assert.match(map, /<MapIcon className="w-3\.5 h-3\.5"[\s\S]*?Map\s*<\/a>/);
+  assert.match(map, /data-testid="map-idea-more"[\s\S]*?aria-haspopup="menu"/);
+});
+
+test("Keep as Maybe, Manage in Ideas, and Remove idea live inside the More overflow menu", () => {
+  assert.match(map, /data-testid="map-idea-more-menu"/);
+  // All three secondary actions are inside the menu block (after the menu testid).
+  const menu = map.slice(map.indexOf('data-testid="map-idea-more-menu"'));
+  assert.match(menu, /Keep as Maybe/);
+  assert.match(menu, /Manage in Ideas|Edit note in Ideas/);
+  assert.match(menu, /data-testid="map-idea-remove"/);
+});
+
+test("Remove idea is NOT an always-visible sibling link (only reachable via More + confirm)", () => {
+  // The remove control sits inside role="menu"; it is not a top-level card link.
+  assert.match(map, /role="menu"[\s\S]*?data-testid="map-idea-remove"/);
+  assert.match(map, /Remove idea from this trip\?/);
+  // First tap arms confirm; only confirm deletes.
+  assert.match(map, /data-testid="map-idea-remove"[\s\S]*?onClick=\{\(\) => setConfirmRemove\(true\)\}/);
+});
+
 // ── No hide/show UI (no durable preference contract) ──────────────────────────
 
 test("no hide/show map-pin UI ships (no durable preference/status contract exists)", () => {
