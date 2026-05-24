@@ -2482,14 +2482,16 @@ export async function unplaceItemToIdeas(
     sourceKind === "concierge_idea" ||
     sourceKind === "saved_item" ||
     Boolean(currentDetails.createdFromSavedItem ?? currentDetails.created_from_saved_item);
-  const details: Record<string, unknown> = { ...currentDetails };
-  if (!alreadyCurated) {
-    // Drop any non-curated variant, then set the single curated key.
-    delete details.sourceKind;
-    delete details.source_kind;
-    details.source_kind = "concierge_idea";
-  }
-  return updateItem(itemId, { dayId: null, details } as Partial<ItineraryItem>);
+  // Preserve every detail; only ensure a curated source_kind. Routed through
+  // updateItem so the (read-side camelCased) details blob is re-snaked on write;
+  // that toSnake pass also folds any stale `sourceKind` into `source_kind`
+  // (literal added last → wins), so the backend `/ideas` filter sees it.
+  const details = alreadyCurated
+    ? currentDetails
+    : { ...currentDetails, source_kind: "concierge_idea" };
+  // day_id:null clears the day; cast through unknown because ItineraryItem.dayId
+  // is typed string|undefined (the API genuinely accepts null to unschedule).
+  return updateItem(itemId, { dayId: null, details } as unknown as Partial<ItineraryItem>);
 }
 
 export async function addConciergeItemToTrip(

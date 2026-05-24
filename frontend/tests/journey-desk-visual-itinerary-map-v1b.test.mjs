@@ -98,7 +98,7 @@ test("unplaceItemToIdeas unschedules (day_id:null) via updateItem and never dele
   const helper = api.slice(api.indexOf("export async function unplaceItemToIdeas"));
   const helperBody = helper.slice(0, helper.indexOf("\nexport "));
   // Routed through updateItem (which re-snakes the details blob on write).
-  assert.match(helperBody, /return updateItem\(itemId, \{ dayId: null, details \} as Partial<ItineraryItem>\)/);
+  assert.match(helperBody, /return updateItem\(itemId, \{ dayId: null, details \} as unknown as Partial<ItineraryItem>\)/);
   // Never a delete.
   assert.doesNotMatch(helperBody, /\bDELETE\b|deleteItem/);
 });
@@ -111,17 +111,15 @@ test("unplace stamps a curated source_kind so the orphaned Explore item reappear
   assert.match(helperBody, /currentDetails\.sourceKind \?\? currentDetails\.source_kind/);
   assert.match(helperBody, /sourceKind === "concierge_idea"[\s\S]*?sourceKind === "saved_item"/);
   // Preserve all details; set the single curated key only when not already curated.
-  assert.match(helperBody, /const details: Record<string, unknown> = \{ \.\.\.currentDetails \};/);
-  assert.match(helperBody, /if \(!alreadyCurated\) \{[\s\S]*?details\.source_kind = "concierge_idea";/);
+  assert.match(helperBody, /alreadyCurated\s*\?\s*currentDetails\s*:\s*\{ \.\.\.currentDetails, source_kind: "concierge_idea" \}/);
 });
 
-test("unplace preserves all other details (spreads currentDetails; only source_kind is touched)", () => {
+test("unplace preserves all other details (spreads currentDetails; only source_kind added)", () => {
   const helper = api.slice(api.indexOf("export async function unplaceItemToIdeas"));
   const helperBody = helper.slice(0, helper.indexOf("\nexport "));
-  // Nothing is stripped except the source_kind variants we re-set.
-  assert.match(helperBody, /\{ \.\.\.currentDetails \}/);
-  const deletes = helperBody.match(/delete details\.\w+/g) || [];
-  assert.deepEqual(new Set(deletes), new Set(["delete details.sourceKind", "delete details.source_kind"]));
+  // Spreads the full details blob; never strips fields.
+  assert.match(helperBody, /\{ \.\.\.currentDetails, source_kind: "concierge_idea" \}/);
+  assert.doesNotMatch(helperBody, /delete /);
 });
 
 test("Back to Ideas does NOT call deleteItem anywhere in its path (map → page → helper)", () => {
