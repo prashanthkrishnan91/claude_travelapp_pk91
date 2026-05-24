@@ -1246,11 +1246,14 @@ interface TripBuilderProps {
   /** Pre-select a day when arriving from the Add-to-Day flow (Journey Desk handoff).
    *  Updates the day selector without resetting any other Build state. */
   focusDayId?: string | null;
+  /** Open and scroll to the matching CandidatePanel when arriving from the Add-to-Day drawer.
+   *  "flight" | "hotel" | "restaurant" | "attraction" — maps to the four existing panels. */
+  focusVertical?: string | null;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned, mobileWorkspace, focusDayId }: TripBuilderProps) {
+export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned, mobileWorkspace, focusDayId, focusVertical }: TripBuilderProps) {
   const [days,           setDays]          = useState<ItineraryDay[]>(
     [...initialDays].sort((a, b) => a.dayNumber - b.dayNumber)
   );
@@ -1298,6 +1301,11 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const attractionListRef  = useRef<HTMLDivElement>(null);
   const restaurantListRef  = useRef<HTMLDivElement>(null);
   const prevViewModeRef    = useRef<"list" | "map">("list");
+  // Panel-level refs for scroll-into-view on Add-to-Day vertical handoff.
+  const flightPanelRef     = useRef<HTMLDivElement>(null);
+  const hotelPanelRef      = useRef<HTMLDivElement>(null);
+  const attractionPanelRef = useRef<HTMLDivElement>(null);
+  const restaurantPanelRef = useRef<HTMLDivElement>(null);
 
   // ── Compare state ────────────────────────────────────────────────────────────
   const [compareSet,     setCompareSet]     = useState<Set<string>>(new Set());
@@ -1467,6 +1475,29 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       setSelectedDayId(focusDayId);
     }
   }, [focusDayId, days]);
+
+  // Add-to-Day vertical handoff: open the matching CandidatePanel and scroll it into view.
+  // For attraction/restaurant, also ensure list view is active (panels live in list-only branch).
+  useEffect(() => {
+    if (!focusVertical) return;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    if (focusVertical === "flight") {
+      setFlightPanelOpen(true);
+      t = setTimeout(() => flightPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 0);
+    } else if (focusVertical === "hotel") {
+      setHotelPanelOpen(true);
+      t = setTimeout(() => hotelPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 0);
+    } else if (focusVertical === "attraction") {
+      setViewMode("list");
+      setAttractionPanelOpen(true);
+      t = setTimeout(() => attractionPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 0);
+    } else if (focusVertical === "restaurant") {
+      setViewMode("list");
+      setRestaurantPanelOpen(true);
+      t = setTimeout(() => restaurantPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 0);
+    }
+    return () => { if (t !== null) clearTimeout(t); };
+  }, [focusVertical]);
 
   useEffect(() => {
     setExpandedDayNumber((prev) => {
@@ -2061,6 +2092,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
             <SummaryBar topFlight={topFlight} topHotel={topHotel} />
 
             {/* Flights section */}
+            <div ref={flightPanelRef}>
             <CandidatePanel
               title="Flights"
               icon={<Plane className="w-3.5 h-3.5 text-ds-accent" />}
@@ -2147,8 +2179,10 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                 return nodes;
               })()}
             </CandidatePanel>
+            </div>
 
             {/* Hotels section */}
+            <div ref={hotelPanelRef}>
             <CandidatePanel
               title="Hotels"
               icon={<Hotel className="w-3.5 h-3.5 text-ds-accent" />}
@@ -2189,6 +2223,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                 ));
               })()}
             </CandidatePanel>
+            </div>
 
             {/* ── Explore: List / Map / Group toggle ────────────────────── */}
             <div className="flex items-center justify-between px-1 pt-1">
@@ -2239,6 +2274,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
               /* ── List view ─────────────────────────────────────────────── */
               <>
                 {/* Attractions section */}
+                <div ref={attractionPanelRef}>
                 <CandidatePanel
                   title="Attractions"
                   icon={<Sparkles className="w-3.5 h-3.5 text-ds-accent" />}
@@ -2314,8 +2350,10 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                     })()
                   )}
                 </CandidatePanel>
+                </div>
 
                 {/* Restaurants section */}
+                <div ref={restaurantPanelRef}>
                 <CandidatePanel
                   title="Restaurants"
                   icon={<UtensilsCrossed className="w-3.5 h-3.5 text-ds-accent" />}
@@ -2401,6 +2439,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                     })()
                   )}
                 </CandidatePanel>
+                </div>
               </>
             )}
 

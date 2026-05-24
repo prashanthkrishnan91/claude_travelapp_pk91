@@ -222,7 +222,71 @@ test("jd-day-add-btn and jd-vertical-target have reduced-motion guards", () => {
   assert.match(section, /jd-vertical-target/);
 });
 
-// ── 10. Desktop coherence — no double-render of day detail ──────────────────
+// ── 10. Vertical threading — selected vertical opens matching Build section ───
+
+test("page stores buildFocusVertical state", () => {
+  assert.match(page, /const \[buildFocusVertical,\s*setBuildFocusVertical\]/);
+});
+
+test("handleAddToDaySelectVertical accepts vertical argument and stores it", () => {
+  // The handler must call setBuildFocusVertical with the chosen vertical.
+  assert.match(page, /function handleAddToDaySelectVertical\(vertical/);
+  assert.match(page, /setBuildFocusVertical\(vertical\)/);
+});
+
+test("page passes focusVertical={buildFocusVertical} to TripBuilder", () => {
+  assert.match(page, /focusVertical=\{buildFocusVertical\}/);
+});
+
+test("return banner handler clears buildFocusVertical on return", () => {
+  assert.match(page, /setBuildFocusVertical\(null\)/);
+});
+
+test("TripBuilder accepts focusVertical prop", () => {
+  assert.match(builder, /focusVertical\?: string \| null/);
+});
+
+test("TripBuilder has panel-level refs for all four verticals", () => {
+  assert.match(builder, /flightPanelRef\s*=\s*useRef/);
+  assert.match(builder, /hotelPanelRef\s*=\s*useRef/);
+  assert.match(builder, /attractionPanelRef\s*=\s*useRef/);
+  assert.match(builder, /restaurantPanelRef\s*=\s*useRef/);
+});
+
+test("TripBuilder useEffect opens Flights panel when focusVertical is 'flight'", () => {
+  assert.match(builder, /focusVertical === "flight"/);
+  assert.match(builder, /setFlightPanelOpen\(true\)/);
+  assert.match(builder, /flightPanelRef\.current\?\.scrollIntoView/);
+});
+
+test("TripBuilder useEffect opens Hotels panel when focusVertical is 'hotel'", () => {
+  assert.match(builder, /focusVertical === "hotel"/);
+  assert.match(builder, /setHotelPanelOpen\(true\)/);
+  assert.match(builder, /hotelPanelRef\.current\?\.scrollIntoView/);
+});
+
+test("TripBuilder useEffect switches to list view and opens Attractions panel when focusVertical is 'attraction'", () => {
+  assert.match(builder, /focusVertical === "attraction"/);
+  assert.match(builder, /setAttractionPanelOpen\(true\)/);
+  assert.match(builder, /attractionPanelRef\.current\?\.scrollIntoView/);
+});
+
+test("TripBuilder useEffect switches to list view and opens Restaurants panel when focusVertical is 'restaurant'", () => {
+  assert.match(builder, /focusVertical === "restaurant"/);
+  assert.match(builder, /setRestaurantPanelOpen\(true\)/);
+  assert.match(builder, /restaurantPanelRef\.current\?\.scrollIntoView/);
+});
+
+test("TripBuilder vertical-focus useEffect switches to list view for attraction/restaurant (panels live in list branch)", () => {
+  // viewMode must be set to "list" for attraction and restaurant since their
+  // CandidatePanels only render in the list view branch.
+  const effectStart = builder.indexOf('focusVertical === "attraction"');
+  const effectEnd = builder.indexOf('focusVertical === "restaurant"') + 200;
+  const effectSlice = builder.slice(effectStart, effectEnd);
+  assert.match(effectSlice, /setViewMode\("list"\)/);
+});
+
+// ── 11. Desktop coherence — no double-render of day detail ──────────────────
 
 test("Desktop coherence: ExpandedDayPanel appears only once in page source (via inlineDayPanel)", () => {
   // Count occurrences of <ExpandedDayPanel in page.tsx — should be exactly 1

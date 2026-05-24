@@ -18,6 +18,7 @@ import { TripBrief } from "@/components/trips/TripBrief";
 import { Dayboard } from "@/components/trips/Dayboard";
 import { ExpandedDayPanel } from "@/components/trips/ExpandedDayPanel";
 import { AddToDayDrawer } from "@/components/trips/AddToDayDrawer";
+import type { AddToDayVertical } from "@/components/trips/AddToDayDrawer";
 import { IdeasTray } from "@/components/trips/IdeasTray";
 import { MapFoldOut } from "@/components/trips/MapFoldOut";
 import { TripReadinessCockpit } from "@/components/trips/TripReadinessCockpit";
@@ -95,9 +96,10 @@ export default function TripDetailPage() {
   const [tripIdeasKey,  setTripIdeasKey]  = useState(0);
   const [activeMobileWorkspace, setActiveMobileWorkspace] = useState<MobileWorkspace>("brief");
   // Add-to-Day flow: drawer state + which day + which Build vertical to focus
-  const [addToDayOpen,    setAddToDayOpen]    = useState(false);
-  const [addToDayDayId,   setAddToDayDayId]   = useState<string | null>(null);
-  const [buildFocusDayId, setBuildFocusDayId] = useState<string | null>(null);
+  const [addToDayOpen,       setAddToDayOpen]       = useState(false);
+  const [addToDayDayId,      setAddToDayDayId]      = useState<string | null>(null);
+  const [buildFocusDayId,    setBuildFocusDayId]    = useState<string | null>(null);
+  const [buildFocusVertical, setBuildFocusVertical] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -190,9 +192,10 @@ export default function TripDetailPage() {
     setAddToDayOpen(true);
   }
 
-  function handleAddToDaySelectVertical() {
+  function handleAddToDaySelectVertical(vertical: AddToDayVertical) {
     setAddToDayOpen(false);
     setBuildFocusDayId(addToDayDayId);
+    setBuildFocusVertical(vertical);
     setActiveMobileWorkspace("build");
   }
 
@@ -615,6 +618,7 @@ export default function TripDetailPage() {
                   onClick={() => {
                     setActiveMobileWorkspace("brief");
                     setBuildFocusDayId(null);
+                    setBuildFocusVertical(null);
                   }}
                   className="text-xs font-medium text-ds-marine-ink hover:text-ds-marine-soft transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
                 >
@@ -636,6 +640,7 @@ export default function TripDetailPage() {
             ideasRefreshKey={tripIdeasKey}
             mobileWorkspace={activeMobileWorkspace === "brief" ? null : activeMobileWorkspace}
             focusDayId={buildFocusDayId}
+            focusVertical={buildFocusVertical}
             onIdeaAssigned={() => {
               const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
                 ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;
