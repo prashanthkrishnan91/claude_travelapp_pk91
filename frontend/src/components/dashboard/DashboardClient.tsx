@@ -526,10 +526,12 @@ export function DashboardClient() {
           </div>
         </div>
 
-        {/* ── Cinematic shelf of rooms ─────────────────────────────── */}
-        <FolioReveal stagger={4}>
-          <AtelierPlanningStrip world={world} />
-        </FolioReveal>
+        {/* ── Cinematic shelf of rooms — desktop only (hidden on mobile) ─── */}
+        <div className="hidden md:block">
+          <FolioReveal stagger={4}>
+            <AtelierPlanningStrip world={world} />
+          </FolioReveal>
+        </div>
 
         {/* ── Travel archive (physical shelf of vertical folio spines) */}
         {hasTrips && (

@@ -349,4 +349,26 @@ describe("Home Folio: behavior preservation", () => {
   test("40. editorial-scene preserved on root wrapper", () => {
     assert.match(dashboardClient, /editorial-scene/);
   });
+
+  test("41. AtelierPlanningStrip is wrapped in hidden md:block — absent on mobile, visible on desktop", () => {
+    // Find the render body (main return statement of DashboardClient)
+    const ret = dashboardClient.slice(dashboardClient.lastIndexOf("return ("));
+    const stripIdx = ret.indexOf("AtelierPlanningStrip");
+    assert.ok(stripIdx !== -1, "AtelierPlanningStrip must appear in the render body");
+    // The wrapper div immediately preceding AtelierPlanningStrip must carry hidden md:block
+    const before = ret.slice(0, stripIdx).slice(-300);
+    assert.ok(
+      before.includes("hidden md:block"),
+      "AtelierPlanningStrip must be wrapped in hidden md:block so 'Rooms in this house' is absent on mobile",
+    );
+  });
+
+  test("42. AtelierPlanningStrip testid and WorldRoomSwitcher contract unchanged inside the component", () => {
+    // The component definition itself is unchanged — only the call-site wrapper changed.
+    const start = dashboardClient.indexOf("function AtelierPlanningStrip");
+    const end = dashboardClient.indexOf("// ── Main component");
+    const block = dashboardClient.slice(start, end);
+    assert.ok(block.includes("atelier-planning-strip"), "AtelierPlanningStrip testid must remain in the component");
+    assert.ok(block.includes("WorldRoomSwitcher"), "AtelierPlanningStrip must still mount WorldRoomSwitcher");
+  });
 });

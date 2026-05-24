@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-24 (Journey Desk mobile IA closeout PR 1 — inline day expansion + Add-to-Day drawer; current branch)
+Last updated: 2026-05-24 (Home mobile IA cleanup — hide "Rooms in this house" on mobile; current branch)
 
 ## Purpose
 
@@ -8,9 +8,16 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). **Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) is the current branch.**
+**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) merged #478. **Home mobile IA cleanup (hide "Rooms in this house" on mobile) is the current branch.**
 
-### Journey Desk mobile IA closeout PR 1 — inline day expansion + Add-to-Day drawer (current branch)
+### Home mobile IA cleanup — hide "Rooms in this house" on mobile (current branch)
+
+Removes the `AtelierPlanningStrip` ("Rooms in this house" / `WorldRoomSwitcher`) from the mobile Home view. All four rooms are reachable from bottom nav and the hero CTA, so the shelf is duplicate on mobile. Desktop behavior unchanged. **Frontend-only; 2 files changed; no SQL, backend, provider, route, ROOM_CATALOGUE, nav, hero CTA, Travel Shelf, My Trips, Concierge, Explore, Saved, or Journey Desk change.**
+- **Change:** `DashboardClient.tsx` wraps the `<FolioReveal stagger={4}><AtelierPlanningStrip /></FolioReveal>` in `<div className="hidden md:block">` — absent on mobile (`<768px`), visible on desktop.
+- **Unchanged:** `AtelierPlanningStrip` component definition, `WorldRoomSwitcher`, `ROOM_CATALOGUE` hrefs, bottom nav, hero CTA, Travel Shelf, My Trips, trip creation, Concierge, Explore, Saved, Journey Desk.
+- **Tests:** 2 new assertions in `tests/home-mobile-folio-redesign.test.mjs` (tests 41, 42): wrapper has `hidden md:block`; `AtelierPlanningStrip` testid and `WorldRoomSwitcher` intact inside the component. 3327 total tests, 3315 pass, 12 PRE-EXISTING failures (vs baseline 3325/3313/12 before this branch — 2 new tests, both pass, 0 new failures).
+
+### Journey Desk mobile IA closeout PR 1 — inline day expansion + Add-to-Day drawer (merged #478)
 
 Fixes two mobile planning breaks: Day N detail was rendered after the entire day list (unusable for longer trips), and there was no way to add items to a specific day without switching to Build. **Frontend-only; no SQL, backend, provider/search changes, no fake data, no MapTiler/round-trip/CityAutocomplete/ROOM_CATALOGUE changes.**
 - **Inline day expansion:** `Dayboard` now accepts `inlineDayPanel: ReactNode` + `onAddToDay?: (day) => void`. The `<ExpandedDayPanel>` is passed as `inlineDayPanel` (computed via `expandedDay = selectedDayId ? itineraryDays.find(...)`) and renders inside the `<ul>` directly under the selected day's `<li>` — Day 10 detail appears immediately without scrolling past all other cards.
