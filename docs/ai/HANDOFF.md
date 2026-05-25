@@ -340,7 +340,7 @@ Two Level 2 user-visible regressions fixed after PR #460 merged:
 **3139 frontend tests, 0 failures.** No backend suite run (no pytest in this environment); tsc/next build not run locally (node_modules absent) — CI `certify` validates.
 
 ### Next step
-**Ideas tab polish** is the current branch (PR open). After merge: decide whether to fold/demote the legacy Ideas tab now that the Ideas tab is a full management surface and the IdeasTray is placement-first only. Deferred: full desktop three-zone, consolidate the day-part classifier (mirrored in `lib/dayParts.ts` + `ItineraryDayColumn`). Visual Itinerary Map v1C (pin-visibility hide/show) waits for a durable preference/status contract. Placement stays day-level (`assignIdeaToDay`); no slot-level persistence.
+**Ideas tab polish** is the current branch (PR open). After merge: keep the Ideas tab as the canonical management surface. Continue with either Ideas tab QA/polish follow-up if preview reveals issues, or Itinerary parity planning. Do not demote or remove the Ideas tab; do not overload IdeasTray with management features. Deferred: full desktop three-zone, consolidate the day-part classifier (mirrored in `lib/dayParts.ts` + `ItineraryDayColumn`). Visual Itinerary Map v1C (pin-visibility hide/show) waits for a durable preference/status contract. Placement stays day-level (`assignIdeaToDay`); no slot-level persistence.
 
 ## Current architecture / runtime state
 
