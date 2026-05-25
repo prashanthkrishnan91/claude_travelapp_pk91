@@ -551,7 +551,7 @@ export default function TripDetailPage() {
           trip={trip}
           days={itineraryDays}
           ideas={tripIdeas}
-          onReview={() => setIdeasTrayOpen(true)}
+          onReview={() => setActiveMobileWorkspace("ideas")}
         />
       )}
 

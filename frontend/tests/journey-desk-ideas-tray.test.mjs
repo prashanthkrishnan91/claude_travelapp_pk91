@@ -1,12 +1,17 @@
 /**
- * Journey Desk v1B — Ideas Tray + Notes.
+ * Journey Desk v1B — Ideas Tray (placement-first, IA pivot).
  *
- * Turns Trip Ideas into the placement-first tray from the approved v2 prototype:
+ * The Ideas Tray is a lightweight quick-placement overlay only:
  * mobile bottom sheet / desktop right drawer, one bold primary action per card,
- * the typed note hierarchy, and contextual secondary actions — all wired only to
- * real durable writes (day-level assignIdeaToDay, status/note updateIdeaMeta,
- * deleteItem). No slot-level persistence exists, so placement is honestly
- * day-level ("Add to Day…") and never labels a fabricated slot.
+ * note preview (read-only), contextual secondary actions — all wired to real
+ * durable writes (day-level assignIdeaToDay, status/note updateIdeaMeta,
+ * deleteItem). Note editing and status management belong in the Ideas tab, not
+ * the tray.
+ *
+ * IA contract (post-pivot):
+ *   - Brief "Review ideas" → switches to Ideas tab workspace (setActiveMobileWorkspace("ideas"))
+ *   - ExpandedDayPanel "Add from Ideas" → opens IdeasTray for quick placement
+ *   - IdeasTray has NO note editor and NO status chip row
  *
  * Source-scan contract tests (no DOM/browser in this environment).
  */
@@ -49,7 +54,6 @@ test("each card offers a quiet fallback to the legacy Ideas workspace", () => {
   assert.match(tray, /data-testid="ideas-tray-manage-link"/);
   assert.match(tray, /Manage in Ideas/);
   assert.match(tray, /onManage/);
-  // Note editing is now inline; "Edit note in Ideas" label removed to avoid confusion
   assert.doesNotMatch(tray, /Edit note in Ideas/);
 });
 
@@ -85,8 +89,7 @@ test("placement is wired to the real day-level write via onAssign(day.id)", () =
   assert.match(tray, /const dayAssignable = days\.length > 0/);
 });
 
-test("no fabricated slot label — placement never claims a Dinner/Morning/etc. slot", () => {
-  assert.doesNotMatch(tray, /Dinner/i);
+test("no fabricated slot label — placement never claims a slot", () => {
   assert.doesNotMatch(tray, /·\s*(Morning|Afternoon|Evening)/i);
   assert.doesNotMatch(tray, /Add to Day \d+ ·/);
 });
@@ -99,7 +102,7 @@ test("primary action uses marine ink; it is the one bold action per card", () =>
   assert.match(tray, /data-testid="ideas-tray-primary-action"[\s\S]{0,400}bg-ds-marine-ink/);
 });
 
-// ── Note hierarchy ─────────────────────────────────────────────────────────────
+// ── Note preview (read-only) — no editor in tray ─────────────────────────────
 
 test("private marginalia reads the saved user note (carryover preserved)", () => {
   assert.match(tray, /x\.userNote \?\? x\.user_note/);
@@ -133,6 +136,27 @@ test("tray fabricates no prices/weather", () => {
   assert.doesNotMatch(tray, /\$\d|weather|°|sunny|rain/i);
 });
 
+// ── Tray does NOT contain note editor or status chip row (IA pivot) ───────────
+
+test("tray has no inline note editor — editing belongs in the Ideas tab", () => {
+  assert.doesNotMatch(tray, /data-testid="ideas-tray-note-editor"/);
+  assert.doesNotMatch(tray, /data-testid="ideas-tray-note-textarea"/);
+  assert.doesNotMatch(tray, /data-testid="ideas-tray-note-save"/);
+  assert.doesNotMatch(tray, /data-testid="ideas-tray-note-cancel"/);
+  assert.doesNotMatch(tray, /data-testid="ideas-tray-note-edit-btn"/);
+});
+
+test("tray has no status chip row — Must-do/Maybe/Skip management belongs in the Ideas tab", () => {
+  assert.doesNotMatch(tray, /data-testid="ideas-tray-status-chips"/);
+  assert.doesNotMatch(tray, /IDEA_STATUS_OPTIONS/);
+  assert.doesNotMatch(tray, /onUpdateStatus/);
+});
+
+test("note preview still renders in collapsed state (private marginalia)", () => {
+  assert.match(tray, /data-testid="ideas-tray-note-private"/);
+  assert.match(tray, /jd-note-private/);
+});
+
 // ── Contextual secondary actions (quiet links) ────────────────────────────────
 
 test("secondary actions are contextual to real data (map link, flight booking)", () => {
@@ -146,22 +170,30 @@ test("tray closes on Escape and on scrim/close click", () => {
   assert.match(tray, /aria-label="Close ideas tray"/);
 });
 
-// ── Page integration with v1A ─────────────────────────────────────────────────
+// ── Page integration — corrected IA (Brief → Ideas tab; ExpandedDayPanel → Tray) ──
 
 test("page imports and renders the Ideas Tray", () => {
   assert.match(page, /import \{ IdeasTray \} from "@\/components\/trips\/IdeasTray"/);
   assert.match(page, /<IdeasTray/);
 });
 
-test("the v1A Brief 'Review ideas' opens the tray (not a legacy tab)", () => {
-  assert.match(page, /onReview=\{\(\) => setIdeasTrayOpen\(true\)\}/);
+test("the v1A Brief 'Review ideas' switches to the Ideas tab workspace (not open tray)", () => {
+  // Brief's onReview routes to the Ideas tab, not the placement overlay.
+  assert.match(page, /onReview=\{\(\) => setActiveMobileWorkspace\("ideas"\)\}/);
+  // ideasTrayOpen state is still used by ExpandedDayPanel's Add from Ideas entry point.
   assert.match(page, /const \[ideasTrayOpen, setIdeasTrayOpen\] = useState\(false\)/);
 });
 
-test("the Journey Desk overview has exactly one tray entry point (Brief 'Review ideas', no duplicate launcher pill)", () => {
-  // Brief "Review ideas" is the single primary launcher (tied to "N still to decide").
-  assert.match(page, /onReview=\{\(\) => setIdeasTrayOpen\(true\)\}/);
-  // The separate "Ideas tray N" launcher pill was removed — no duplicate CTA.
+test("Brief 'Review ideas' does NOT open IdeasTray directly", () => {
+  // The Brief onReview must not call setIdeasTrayOpen(true).
+  assert.doesNotMatch(page, /onReview=\{\(\) => setIdeasTrayOpen\(true\)\}/);
+});
+
+test("ExpandedDayPanel 'Add from Ideas' still opens IdeasTray for quick day-specific placement", () => {
+  assert.match(page, /onAddFromIdeas=\{\(\) => setIdeasTrayOpen\(true\)\}/);
+});
+
+test("the Journey Desk has no duplicate launcher pill", () => {
   assert.doesNotMatch(page, /journey-desk-ideas-launcher/);
 });
 
@@ -196,79 +228,4 @@ test("tray paper surfaces and brass note hairline are defined with tokens", () =
 
 test("tray entrance animation is reduced-motion guarded", () => {
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]{0,120}\.jd-tray-enter \{ animation: none/);
-});
-
-// ── Note editing (IdeasTray parity PR 1) ──────────────────────────────────────
-
-test("note edit affordance renders on each card — add or edit", () => {
-  assert.match(tray, /data-testid="ideas-tray-note-edit-btn"/);
-  // Shows "+ Add note" when no note, "Edit note" when note exists
-  assert.match(tray, /\+ Add note/);
-  assert.match(tray, /Edit note/);
-});
-
-test("existing note preview still renders in collapsed state (private marginalia)", () => {
-  assert.match(tray, /data-testid="ideas-tray-note-private"/);
-  assert.match(tray, /jd-note-private/);
-});
-
-test("note editor shows textarea and save/cancel controls", () => {
-  assert.match(tray, /data-testid="ideas-tray-note-editor"/);
-  assert.match(tray, /data-testid="ideas-tray-note-textarea"/);
-  assert.match(tray, /data-testid="ideas-tray-note-save"/);
-  assert.match(tray, /data-testid="ideas-tray-note-cancel"/);
-});
-
-test("saving note calls onSaveNote with noteText.trim() — routes to onUpdateMeta with userNote patch", () => {
-  // onSaveNote prop is bound to onUpdateMeta with { userNote: note }
-  assert.match(tray, /onSaveNote\(noteText\.trim\(\)\)/);
-  assert.match(tray, /userNote: note/);
-  assert.match(tray, /onSaveNote/);
-});
-
-test("cancelling note edit does not call save (no accidental write)", () => {
-  assert.match(tray, /function cancelNote\(\)/);
-  assert.match(tray, /setEditingNote\(false\)/);
-  // cancelNote must not call onSaveNote
-  assert.doesNotMatch(tray, /cancelNote[\s\S]{0,60}onSaveNote/);
-});
-
-// ── Status controls (IdeasTray parity PR 1) ───────────────────────────────────
-
-test("status chips row is present on each card with Must-do / Maybe / Skip", () => {
-  assert.match(tray, /data-testid="ideas-tray-status-chips"/);
-  // Chip testids are rendered via template literal: `ideas-tray-status-${opt.value}`
-  assert.match(tray, /data-testid=\{`ideas-tray-status-\$\{opt\.value\}`\}/);
-  // Must-do / Maybe / Skip values defined in IDEA_STATUS_OPTIONS
-  assert.match(tray, /IDEA_STATUS_OPTIONS/);
-  assert.match(tray, /"must_do"/);
-  assert.match(tray, /"maybe"/);
-  assert.match(tray, /"skipped"/);
-});
-
-test("status chip click calls onUpdateStatus with the chip value — routes to onUpdateMeta with ideaStatus patch", () => {
-  assert.match(tray, /onUpdateStatus\(opt\.value\)/);
-  assert.match(tray, /ideaStatus: status/);
-});
-
-test("Skip chip does not call onRemove — Skip sets status, never deletes", () => {
-  // Status chip onClick calls onUpdateStatus, not onRemove
-  assert.match(tray, /onClick=\{\(\) => onUpdateStatus\(opt\.value\)\}/);
-  // onUpdateStatus handler in the chip invocation uses ideaStatus, not deleteItem
-  assert.doesNotMatch(tray, /onUpdateStatus\(opt\.value\)[\s\S]{0,60}onRemove/);
-  // onRemove is only wired to the Remove button
-  assert.match(tray, /data-testid="ideas-tray-remove"[\s\S]{0,60}onRemove/);
-});
-
-test("Add-to-Day path still calls onAssign handler — placement not regressed", () => {
-  assert.match(tray, /onAssign\(day\.id\)/);
-  assert.match(tray, /const dayAssignable = days\.length > 0/);
-});
-
-test("status constants match TripIdeasPanel values exactly (must_do / maybe / skipped)", () => {
-  assert.match(tray, /value: "must_do"/);
-  assert.match(tray, /value: "maybe"/);
-  assert.match(tray, /value: "skipped"/);
-  // statusOf reads ideaStatus ?? idea_status — same dual-key pattern as TripIdeasPanel
-  assert.match(tray, /x\.ideaStatus \?\? x\.idea_status/);
 });

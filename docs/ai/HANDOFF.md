@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-25 (IdeasTray parity PR 1 — note editing + full status controls; current branch)
+Last updated: 2026-05-25 (IdeasTray IA pivot — placement-first only; Brief → Ideas tab; current branch)
 
 ## Purpose
 
@@ -10,16 +10,22 @@ This file is **current operational state**, not a historical log. It must stay c
 
 **Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) merged #478. **Home mobile IA cleanup (hide "Rooms in this house" on mobile) is the current branch.**
 
-### IdeasTray parity PR 1 — note editing + full status controls (current branch)
+### IdeasTray IA pivot — placement-first only (current branch, PR #481)
 
-Closes the highest-value Journey Desk parity gap: the legacy Ideas tab uniquely supported editing private notes and marking ideas Must-do / Maybe / Skip. IdeasTray now provides both inline, so the legacy tab is fully demoted to fallback. **Frontend-only; 2 files changed (IdeasTray.tsx, journey-desk-ideas-tray.test.mjs); no backend, SQL, provider, route, map, MapTiler, search, or TripIdeasPanel change.**
-- **Note editing:** each card shows a private-marginalia preview (existing `jd-note-private` style, italic serif + brass hairline) and an "+ Add note" / "Edit note" toggle. Clicking opens a compact textarea (compact inline, not admin-like) with explicit Save / Cancel. Save calls `onSaveNote(noteText.trim())` → `onUpdateMeta(item.id, d(item), { userNote: note })`. Cancel clears edit mode without writing. Carryover preserved — reads `x.userNote ?? x.user_note` same as before.
-- **Status controls:** a compact chip row (Must-do / Maybe / Skip) renders on every card below the primary action. Active chip uses inline `style` with ds tokens (avoids unmapped Tailwind class risk). Chip click calls `onUpdateStatus(status)` → `onUpdateMeta(item.id, d(item), { ideaStatus: status })`. Status values mirror TripIdeasPanel exactly (`must_do` / `maybe` / `skipped`). Skip is wired to status update, never to `onRemove` / `deleteItem`.
-- **"Keep as Maybe" cleanup:** the secondary "Keep as Maybe" text link (duplicate of Maybe chip) is removed. The primary "Keep as Maybe" button (no-days path) is retained.
-- **"Edit note in Ideas" label removed:** manage link is now always "Manage in Ideas" since note editing is inline.
-- **Unchanged:** Add to Day, day picker, kind chips, Map/Google Flights links, Remove, mobile/desktop tray shell, filter chips, all other props/handlers, legacy Ideas tab, `onManage` fallback.
-- **Tests:** `journey-desk-ideas-tray.test.mjs` — 27 → 37 tests. Updated: manage-link test no longer requires "Edit note in Ideas". New: note edit affordance, textarea/save/cancel controls, `onSaveNote` routes to `onUpdateMeta` with `userNote`, cancel does not call save, status chips row, Skip routes to `onUpdateStatus` not `onRemove`, Add-to-Day not regressed, status constants match TripIdeasPanel. **37/37 pass, 0 new failures. Pre-existing failures identical (14 files, same as before this branch).**
-- **Readiness patch (2):** restored `## SQL / env / providers / UI` section header (Check B requires this literal string); failure-seam evidence table already in body satisfies Check E.
+Corrects IdeasTray's IA direction. The tray is a quick-placement overlay, not a duplicate of the Ideas tab. Note editing and status management belong in the Ideas tab.
+
+**IA contract after this PR:**
+- Brief "Review ideas" → `setActiveMobileWorkspace("ideas")` (switches to Ideas tab, not opens tray)
+- ExpandedDayPanel "Add from Ideas" → `setIdeasTrayOpen(true)` (day-specific quick placement, unchanged)
+- IdeasTray: Add to Day, note preview (read-only), Map/Google Flights, Manage in Ideas, Remove — no editor, no status chips
+
+**Reverted:** inline note editor (textarea + Save/Cancel + `onSaveNote`), Must-do/Maybe/Skip status chip row (`IDEA_STATUS_OPTIONS`, `onUpdateStatus`).
+
+**Retained:** note preview-only (`jd-note-private`, italic serif + brass hairline), concierge reason, "Keep as Maybe" primary button (no-days path), all placement flows.
+
+**Frontend-only; 3 files changed** (`IdeasTray.tsx`, `journey-desk-ideas-tray.test.mjs`, `page.tsx` one line); no backend, SQL, provider, route, map, MapTiler, search, or TripIdeasPanel change.
+
+**Tests:** 37 → 32 tests (removed 10 note-editor + status-chip tests; added 5 IA-contract tests: Brief routes to workspace, Brief does NOT open tray, ExpandedDayPanel still opens tray, no note editor, no status chips). **32/32 pass.**
 
 ### Desktop nav label cleanup — "Home" + "Discover" consistency (merged, PR pending)
 
