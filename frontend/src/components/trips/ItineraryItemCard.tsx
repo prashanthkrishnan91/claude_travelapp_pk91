@@ -202,8 +202,8 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
     setTimelineOpen(false);
     const d = (item.details ?? {}) as Record<string, unknown>;
     if (item.itemType === "hotel") {
-      setCheckInInput(((d.checkIn ?? d.check_in ?? "") as string));
-      setCheckOutInput(((d.checkOut ?? d.check_out ?? "") as string));
+      setCheckInInput(((d.checkIn ?? d.check_in ?? d.check_in_date ?? d.checkInDate ?? "") as string));
+      setCheckOutInput(((d.checkOut ?? d.check_out ?? d.check_out_date ?? d.checkOutDate ?? "") as string));
     } else if (item.itemType === "meal") {
       setReservationTimeInput(((d.reservationTime ?? "") as string));
     } else if (item.itemType === "activity") {

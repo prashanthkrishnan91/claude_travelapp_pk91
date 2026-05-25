@@ -499,6 +499,22 @@ test("handleOpenMetaEditor sets timelineOpen to false before opening meta editor
   );
 });
 
+test("handleOpenMetaEditor uses full check-in fallback chain (check_in_date + checkInDate)", () => {
+  const idx = itemCard.indexOf("handleOpenMetaEditor");
+  assert.ok(idx >= 0, "handleOpenMetaEditor must exist");
+  const fnBlock = itemCard.slice(idx, idx + 600);
+  assert.match(fnBlock, /check_in_date/, "handleOpenMetaEditor must include check_in_date fallback");
+  assert.match(fnBlock, /checkInDate/, "handleOpenMetaEditor must include checkInDate fallback");
+});
+
+test("handleOpenMetaEditor uses full check-out fallback chain (check_out_date + checkOutDate)", () => {
+  const idx = itemCard.indexOf("handleOpenMetaEditor");
+  assert.ok(idx >= 0, "handleOpenMetaEditor must exist");
+  const fnBlock = itemCard.slice(idx, idx + 600);
+  assert.match(fnBlock, /check_out_date/, "handleOpenMetaEditor must include check_out_date fallback");
+  assert.match(fnBlock, /checkOutDate/, "handleOpenMetaEditor must include checkOutDate fallback");
+});
+
 // ── handleOpenTimeline closes meta editor ─────────────────────────────────────
 
 test("handleOpenTimeline sets metaEditorOpen to false before opening timeline", () => {
