@@ -16,6 +16,8 @@ Update via `.claude/skills/build-queue-update/SKILL.md` after meaningful roadmap
 
 ## Completed
 
+- **Journey Desk Itinerary parity Slice 1 — Per-item Back to Ideas + Remove from trip (2026-05-25, merged PR #484).** `ExpandedDayPanel` gains a MoreHorizontal kebab per placed item: "Back to Ideas" calls `unplaceItemToIdeas` (non-destructive, corrected path — never legacy `moveIdeaToTripIdeas`); "Remove from trip" requires explicit confirm step before calling `deleteItem`. Panel-level `openItemId`/`confirmItemId` state, `showActions` gate, `text-ds-warning` confirm UI. Page wires `onUnplace={handleItemUnplace}` + `onRemoveItem={handleIdeaRemove}`. 11 new source-scan contract tests. No IdeasTray, Brief, Build, backend, SQL, provider, or search API changes. **Next: Slice 2 — ExpandedDay read-only travel hints (reuse `lib/travelHints`, omit when no location).**
+
 - **Stage 3.5 Slice 3 — Paper Planning Objects (2026-05-18, merged PR #436).** `ItineraryItemCard`, `TripBuilderForm`, `OptimizeTripModal`, `DayPlanModal` converted from dark boutique to paper world (`folio-paper-panel/item/header`, `bg-ds-bone/linen`, `border-ds-hairline`, `text-ds-folio-ink*`, `btn-marine`, `btn-folio-ghost`). New `.folio-paper-item`, `.btn-folio-ghost`, `--ds-paper-elevation-1/2` in `globals.css`. 46 new contract tests. **2510 total tests, 0 failures.** No backend/SQL/provider/env/behavior changes.
 
 - **Stage 3.5 Phase 2B — Concierge shared helpers + trip-context polish (2026-05-16, merged PR #399).** `cardHelpers.ts` created (shared `hasClosedSignal`/`canShowGoogleVerifiedBadge`/`pickCardMeta`, 12-field scan including `card.raw`). `AIConciergePanel` uses `Card.Identity`/`Card.Trust`/`Card.Why` named slots, 44px touch targets, full ds-token palette. 953 tests, 950 pass.
