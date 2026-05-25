@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-25 (Itinerary card action normalization + fixed Move to Ideas path; current branch)
+Last updated: 2026-05-25 (Stay-span + reservation metadata contract v1 — card display + inline edit; current branch)
 
 ## Purpose
 
@@ -8,9 +8,23 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) merged #478. Ideas tab polished as the canonical management workspace (#482). Journey Desk Itinerary parity plan (docs-only) #483. Journey Desk Itinerary parity Slice 1 (ExpandedDay per-item actions) merged #485. **Itinerary card action normalization is the current branch.**
+**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) merged #478. Ideas tab polished as the canonical management workspace (#482). Journey Desk Itinerary parity plan (docs-only) #483. Journey Desk Itinerary parity Slice 1 (ExpandedDay per-item actions) merged #485. Itinerary card action normalization PR #486 merged. **Stay-span + reservation metadata contract v1 is the current branch.**
 
-### Itinerary card action normalization + fixed Move to Ideas path (current PR)
+### Stay-span + reservation metadata contract v1 (current PR)
+
+Adds hotel check-in/out canonical key priority (camelCase first after API normalization, snake_case fallbacks), `Reservation · HH:mm AM/PM` display for meals, `Entry · HH:mm AM/PM` for activities, and an inline metadata editor accessible from the overflow menu. **Frontend-only; no SQL, backend, provider, search, map, AddToDayDrawer, or TripBrief change.**
+
+**What changed:**
+- `ItineraryItemCard.tsx`: hotel `checkIn/checkOut` now reads `d.checkIn` first (camelCase, from `toCamel` API normalization), then falls through `check_in → check_in_date → checkInDate` snake/camel variants; `formatClock` extended to handle plain `HH:mm` strings (for `reservationTime`/`entryTime`); meal block adds `Reservation · {formattedReservation}` (`data-testid="meal-reservation-fact"`) when `reservationTime` is present; activity block adds `Entry · {formattedEntryTime}` (`data-testid="activity-entry-fact"`) when `entryTime` is present; `hasAny` guard updated to include the new fields; inline meta-editor (`data-testid="itinerary-item-meta-editor"`) opened via "Edit stay dates / Edit reservation / Edit entry time" in the desktop overflow menu and mobile tray — hotels get two `type="date"` inputs (`itinerary-meta-check-in`, `itinerary-meta-check-out`), meals get one `type="time"` (`itinerary-meta-reservation-time`), activities get one `type="time"` (`itinerary-meta-entry-time`); save button (`itinerary-meta-save`).
+- `api.ts`: new `updateItemMetadata(itemId, currentDetails, patch)` after `updateItemTimeline` — spreads `currentDetails`, merges/deletes specific keys (`checkIn/checkOut/reservationTime/entryTime`), calls `updateItem` (routes through `toSnake` on write). Empty string → `undefined` clears the key; existing snake_case variants removed on clear.
+- `package.json`: `tests/stay-span-metadata-contract-v1.test.mjs` added to the explicit test list.
+- `tests/itinerary-card-finalized-display.test.mjs`: updated `indexOf('item.itemType === "meal"')` to `indexOf('item.itemType === "meal" && (() => {')` and same for `activity` — discriminates the JSX render blocks from the `handleOpenMetaEditor` handler code introduced in this PR.
+
+**Contracts preserved:** `addHotelToTrip` safely skips check-in/out date copy (ResearchResult.metadata has no typed date fields). `dayPart`/`timeLabel` fields not reused for the new fact displays. Brief = read-only. IdeasTray IA = placement-first (unchanged). TripBuilder = no `moveIdeaToTripIdeas` call for this path.
+
+**Tests:** 3603 total; 3590 pass; 13 PRE-EXISTING failures (identical to baseline — verified).
+
+### Itinerary card action normalization + fixed Move to Ideas path (PR #486)
 
 Fixes the root cause of orphaned items after "Move to Ideas" in the legacy Itinerary tab (`ItineraryItemCard`), and normalizes the entire action surface (Move/Back to Ideas + Remove) into a unified overflow menu pattern. **Frontend-only; no SQL, backend, provider, map, search, or routing change. No legacy tabs touched.**
 
@@ -26,8 +40,6 @@ Fixes the root cause of orphaned items after "Move to Ideas" in the legacy Itine
 **IA contract preserved:** Brief = read-only · IdeasTray = placement-first only · Ideas tab = canonical management · Itinerary tab = retained · `moveIdeaToTripIdeas` NOT called for this flow.
 
 **Tests:** 3548 total; 3535 pass; 13 PRE-EXISTING failures (verified identical baseline via git stash — none introduced).
-
-**Next:** Slice 2 — ExpandedDay read-only travel hints (reuse `lib/travelHints`, omit when no coords).
 
 ### Journey Desk — Ideas tab polish (merged, PR #482)
 
@@ -376,7 +388,8 @@ Two Level 2 user-visible regressions fixed after PR #460 merged:
 
 ## Recent meaningful PRs
 
-- 2026-05-25 — **PR open (current branch)** — Itinerary card action normalization: `onUnplace` prop, overflow menu, `moveIdeaToTripIdeas` removed from this path, orphan-items root cause fixed. 17 new tests. 3548 total, 3535 pass, 13 PRE-EXISTING failures.
+- 2026-05-25 — **PR open (current branch)** — Stay-span + reservation metadata contract v1: canonical `checkIn/checkOut` key priority, `Reservation·` / `Entry·` fact display, inline metadata editor, `updateItemMetadata` API helper. 55 new tests. 3603 total, 3590 pass, 13 PRE-EXISTING failures.
+- 2026-05-25 — **PR #486 MERGED** — Itinerary card action normalization: `onUnplace` prop, overflow menu, `moveIdeaToTripIdeas` removed from this path, orphan-items root cause fixed. 17 new tests. 3548 total, 3535 pass, 13 PRE-EXISTING failures.
 - 2026-05-25 — **PR #485 MERGED** — Journey Desk Itinerary parity Slice 1: ExpandedDay per-item Back to Ideas + Remove from trip. 11 new tests.
 - 2026-05-25 — **PR #483 MERGED** — Journey Desk Itinerary parity plan (docs-only).
 - 2026-05-25 — **PR #482 MERGED** — Journey Desk Ideas tab polish: serif heading, workspace identity, filter/sort/status controls, note editing, polished empty/loading/no-results states. 29 new tests.
