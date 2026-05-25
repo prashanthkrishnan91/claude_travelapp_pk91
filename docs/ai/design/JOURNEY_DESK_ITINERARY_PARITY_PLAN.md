@@ -1,5 +1,6 @@
 # Journey Desk — Itinerary Parity Plan
 
+**Last updated:** 2026-05-25 · tracking PR #483.
 **Status:** Plan / audit only. No behavior change is authorized by this doc.
 **Purpose:** Prove parity *before* any legacy-tab cleanup. The legacy **Itinerary** and legacy **Ideas** tabs MUST NOT be removed, hidden, renamed, or demoted until every capability below has a proven Journey Desk destination.
 **Source-inspected:** `frontend/src/app/trips/[id]/page.tsx`, `TripBuilder.tsx`, `ItineraryDayColumn.tsx`, `ExpandedDayPanel.tsx`, `Dayboard.tsx`, `TripBrief.tsx`, `AddToDayDrawer.tsx`, `TripIdeasPanel.tsx`, `IdeasTray.tsx` (+ `lib/dayParts.ts`, `lib/travelHints.ts`, `lib/api.ts`).
