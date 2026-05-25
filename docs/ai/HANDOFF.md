@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-24 (Home mobile IA cleanup — hide "Rooms in this house" on mobile; current branch)
+Last updated: 2026-05-25 (Desktop nav label cleanup — "Home" + "Discover" consistency; current branch)
 
 ## Purpose
 
@@ -10,7 +10,13 @@ This file is **current operational state**, not a historical log. It must stay c
 
 **Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) merged #478. **Home mobile IA cleanup (hide "Rooms in this house" on mobile) is the current branch.**
 
-### Home mobile IA cleanup — hide "Rooms in this house" on mobile (current branch)
+### Desktop nav label cleanup — "Home" + "Discover" consistency (current branch)
+
+Standardizes desktop nav labels to match mobile bottom nav. `Sidebar.tsx` and `AtelierNavArtifact.tsx` `primaryLinks` array: "Dashboard" → "Home" for `/`; "Explore" → "Discover" for `/explore`. **Frontend-only; 2 files, 4 string constants; no route, href, icon, layout, CSS, mobile nav, or backend change.**
+- **Unchanged:** all hrefs (`/`, `/explore`), all icons, mobile bottom nav and drawer, active-state logic, AtelierNavArtifact open/close/auth behavior, Sidebar auth behavior.
+- **Tests:** no test asserted the old label strings for these routes. 2 targeted suites run: 57/57 + 46/46 pass. 0 new failures.
+
+### Home mobile IA cleanup — hide "Rooms in this house" on mobile (merged #479)
 
 Removes the `AtelierPlanningStrip` ("Rooms in this house" / `WorldRoomSwitcher`) from the mobile Home view. All four rooms are reachable from bottom nav and the hero CTA, so the shelf is duplicate on mobile. Desktop behavior unchanged. **Frontend-only; 2 files changed; no SQL, backend, provider, route, ROOM_CATALOGUE, nav, hero CTA, Travel Shelf, My Trips, Concierge, Explore, Saved, or Journey Desk change.**
 - **Change:** `DashboardClient.tsx` wraps the `<FolioReveal stagger={4}><AtelierPlanningStrip /></FolioReveal>` in `<div className="hidden md:block">` — absent on mobile (`<768px`), visible on desktop.

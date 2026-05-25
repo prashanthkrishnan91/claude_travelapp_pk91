@@ -26,8 +26,8 @@ interface NavLink {
 }
 
 const primaryLinks: NavLink[] = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Explore", href: "/explore", icon: Compass },
+  { label: "Home", href: "/", icon: LayoutDashboard },
+  { label: "Discover", href: "/explore", icon: Compass },
   { label: "Concierge", href: "/concierge", icon: Sparkles },
   { label: "Saved", href: "/saved", icon: Bookmark },
   { label: "My Trips", href: "/trips", icon: Map },
