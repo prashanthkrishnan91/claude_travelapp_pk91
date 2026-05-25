@@ -366,7 +366,7 @@ test('TripIdeasPanel renders search input and filter/sort controls', () => {
 test('TripIdeasPanel has hasActiveFilters guard and handleReset function for clear action', () => {
   assert.match(tripIdeasPanel, /hasActiveFilters/, 'hasActiveFilters derived value must exist');
   assert.match(tripIdeasPanel, /handleReset/, 'handleReset function must exist');
-  assert.match(tripIdeasPanel, /Clear ×/, 'Clear button label must appear in UI');
+  assert.match(tripIdeasPanel, /Reset/, 'Reset/clear button label must appear in UI');
   assert.match(tripIdeasPanel, /setSearchQuery\(""\)/, 'handleReset must clear search query');
   assert.match(tripIdeasPanel, /setStatusFilter\("active"\)/, 'handleReset must reset status filter to active');
   assert.match(tripIdeasPanel, /setSortBy\("priority"\)/, 'handleReset must reset sort to priority');
@@ -377,19 +377,26 @@ test('TripIdeasPanel has hasActiveFilters guard and handleReset function for cle
 // ---------------------------------------------------------------------------
 
 test('TripIdeasPanel shows different empty states for no ideas and no filter match', () => {
+  // No-ideas state: bookmark icon + helpful onboarding copy
   assert.match(
     tripIdeasPanel,
-    /Save recommendations from AI Concierge and schedule them later\./,
-    'Must show onboarding empty state when no ideas exist',
+    /No ideas yet/,
+    'Must show "No ideas yet" heading when no ideas exist',
   );
   assert.match(
     tripIdeasPanel,
-    /No ideas match your current filters\./,
+    /Save recommendations from AI Concierge or Explore/,
+    'Must show onboarding guidance mentioning real idea sources',
+  );
+  // No-results state: search icon + "No matching ideas" heading
+  assert.match(
+    tripIdeasPanel,
+    /No matching ideas/,
     'Must show filter-empty state when ideas exist but none match current filters',
   );
   // The two empty states must be in different branches (ideas.length === 0 vs filteredAndSorted.length === 0)
-  const noIdeasIdx = tripIdeasPanel.indexOf('Save recommendations from AI Concierge');
-  const noMatchIdx = tripIdeasPanel.indexOf('No ideas match your current filters');
+  const noIdeasIdx = tripIdeasPanel.indexOf('No ideas yet');
+  const noMatchIdx = tripIdeasPanel.indexOf('No matching ideas');
   assert.notEqual(noIdeasIdx, -1, 'Onboarding empty state must exist');
   assert.notEqual(noMatchIdx, -1, 'Filter-empty state must exist');
   assert.notEqual(noIdeasIdx, noMatchIdx, 'The two empty states must be at different locations in the source');

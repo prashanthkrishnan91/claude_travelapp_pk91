@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Bookmark, ChevronDown, Loader2, Plane, Hotel, Sparkles, UtensilsCrossed, Search, X } from "lucide-react";
+import { Bookmark, ChevronDown, Loader2, Pencil, Plane, Hotel, Sparkles, UtensilsCrossed, Search, X } from "lucide-react";
 import { fetchTripIdeas, assignIdeaToDay, deleteItem, updateIdeaMeta } from "@/lib/api";
 import type { ItemType, ItineraryDay, ItineraryItem } from "@/types";
 import { FolioButton, FolioCard, FolioPanel } from "@/components/ui/Folio";
@@ -226,36 +226,37 @@ function IdeaCard({
       </div>
 
       {/* Priority / status row */}
-      <div className="mt-2 flex items-center gap-1">
-        {STATUS_OPTIONS.map((opt) => (
-          <button
-            type="button"
-            key={opt.value}
-            onClick={() => handleStatusChange(opt.value)}
-            disabled={savingMeta}
-            className="group min-h-[44px] flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-          >
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 transition ${
+      <div className="mt-2.5" data-testid="ideas-tab-status-chips">
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-ds-folio-ink-mist">Priority</p>
+        <div className="flex items-center gap-1">
+          {STATUS_OPTIONS.map((opt) => (
+            <button
+              type="button"
+              key={opt.value}
+              onClick={() => handleStatusChange(opt.value)}
+              disabled={savingMeta}
+              aria-pressed={status === opt.value}
+              className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 disabled:opacity-50 ${
                 status === opt.value
                   ? opt.activeClass
-                  : "text-ds-folio-ink-soft ring-ds-hairline group-hover:text-ds-folio-ink group-hover:ring-ds-folio-ink-mist"
+                  : "text-ds-folio-ink-soft ring-ds-hairline hover:text-ds-folio-ink hover:ring-ds-folio-ink-mist"
               }`}
               style={status === opt.value && opt.value !== "skipped"
                 ? { backgroundColor: "var(--ds-accent-subtle)" }
                 : undefined}
             >
               {opt.label}
-            </span>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setNoteOpen((v) => !v)}
+            className="ml-auto inline-flex items-center gap-1 min-h-[44px] px-1.5 text-[11px] text-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded"
+          >
+            <Pencil className="h-3 w-3" aria-hidden="true" />
+            {note ? "Edit note" : "Add note"}
           </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => setNoteOpen((v) => !v)}
-          className="ml-auto min-h-[44px] min-w-[44px] flex items-center justify-center px-1 text-[10px] text-ds-folio-ink-mist hover:text-ds-folio-ink transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-        >
-          {note ? "note ✎" : "+ note"}
-        </button>
+        </div>
       </div>
 
       {/* Inline note textarea */}
@@ -263,9 +264,10 @@ function IdeaCard({
         <textarea
           value={note}
           onChange={(e) => handleNoteChange(e.target.value)}
-          placeholder="Add a note…"
+          placeholder="Add a private note…"
           rows={2}
-          className="mt-1.5 w-full resize-none rounded-lg border border-ds-hairline bg-ds-bone px-2 py-1.5 text-xs text-ds-folio-ink placeholder-ds-folio-ink-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+          data-testid="ideas-tab-note-textarea"
+          className="mt-2 w-full resize-none rounded-lg border border-ds-hairline bg-ds-bone px-2.5 py-2 text-xs text-ds-folio-ink placeholder-ds-folio-ink-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
         />
       )}
 
@@ -388,36 +390,55 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
 
   return (
     <FolioPanel data-testid="trip-ideas-panel-root">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-3.5 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded-2xl"
-      >
-        <div className="flex items-center gap-2">
-          <Bookmark className="h-3.5 w-3.5 text-ds-accent" />
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold text-ds-folio-ink">Trip Ideas</span>
-            <span className="text-[10px] text-ds-folio-ink-mist">Saved from AI Concierge · add to a day when ready</span>
+      {/* Workspace header — identifies this as the Ideas management surface */}
+      <div className="jd-ideas-workspace-header flex items-start justify-between px-3.5 pt-3.5 pb-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="font-serif text-lg font-semibold leading-tight text-ds-folio-ink">Ideas</h2>
+            {activeCount > 0 && (
+              <span
+                className="inline-flex items-center rounded-full border border-ds-hairline px-1.5 py-0.5 text-[10px] font-semibold text-ds-accent"
+                style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+              >
+                {activeCount}
+              </span>
+            )}
           </div>
-          {activeCount > 0 && (
-            <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-ds-accent border border-ds-hairline"
-              style={{ backgroundColor: "var(--ds-accent-subtle)" }}>
-              {activeCount}
-            </span>
-          )}
+          <p className="mt-0.5 text-[11px] text-ds-folio-ink-mist">
+            {ideas.length === 0
+              ? "Save ideas from AI Concierge or Explore"
+              : "Set priority · add notes · schedule to a day"}
+          </p>
         </div>
-        <ChevronDown className={`h-4 w-4 text-ds-folio-ink-mist transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-label={open ? "Collapse ideas list" : "Expand ideas list"}
+          className="flex-shrink-0 flex items-center justify-center min-h-[44px] min-w-[44px] rounded text-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+        >
+          <ChevronDown
+            className={`h-4 w-4 transition-transform duration-[120ms] ${open ? "rotate-180" : ""}`}
+            aria-hidden="true"
+          />
+        </button>
+      </div>
 
       {open && (
         <div className="border-t border-ds-hairline px-3.5 pb-3.5 pt-3">
           {loading ? (
-            <div className="flex items-center gap-2 py-2 text-xs text-ds-folio-ink-mist">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Loading ideas…
+            <div className="flex items-center justify-center gap-2 py-10 text-ds-folio-ink-mist">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              <span className="text-xs italic">Preparing your ideas…</span>
             </div>
           ) : ideas.length === 0 ? (
-            <p className="py-2 text-xs text-ds-folio-ink-mist">Save recommendations from AI Concierge and schedule them later.</p>
+            <div className="py-10 text-center">
+              <Bookmark className="mx-auto h-8 w-8 opacity-40 text-ds-folio-ink-mist mb-3" aria-hidden="true" />
+              <p className="text-sm font-medium text-ds-folio-ink-soft">No ideas yet</p>
+              <p className="mt-1.5 text-xs leading-relaxed text-ds-folio-ink-mist">
+                Save recommendations from AI Concierge or Explore, then set priority and schedule them here.
+              </p>
+            </div>
           ) : (
             <>
               {/* Compact filter / search / sort controls */}
@@ -433,52 +454,64 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                     className="w-full rounded-lg border border-ds-hairline bg-ds-bone py-1.5 pl-7 pr-2 text-xs text-ds-folio-ink placeholder-ds-folio-ink-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
                   />
                 </div>
-                <div className="flex flex-wrap items-center gap-1">
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
+                  <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-ds-folio-ink-mist">
+                    Show
+                  </span>
                   {STATUS_FILTER_OPTIONS.map((opt) => (
                     <button
                       type="button"
                       key={opt.value}
                       onClick={() => setStatusFilter(opt.value)}
                       aria-pressed={statusFilter === opt.value}
-                      className="group min-h-[44px] flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                      className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 ${
+                        statusFilter === opt.value
+                          ? "border-ds-marine-ink/30 text-ds-marine-ink"
+                          : "border-ds-hairline text-ds-folio-ink-soft hover:border-ds-folio-ink-mist hover:text-ds-folio-ink"
+                      }`}
+                      style={statusFilter === opt.value ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
                     >
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 transition ${
-                          statusFilter === opt.value
-                            ? "text-ds-accent ring-ds-accent/40"
-                            : "text-ds-folio-ink-mist ring-ds-hairline group-hover:text-ds-folio-ink group-hover:ring-ds-accent/30"
-                        }`}
-                        style={statusFilter === opt.value ? { backgroundColor: "var(--ds-accent-subtle)" } : undefined}
-                      >
-                        {opt.label}
-                      </span>
+                      {opt.label}
                     </button>
                   ))}
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as SortOption)}
-                    aria-label="Sort ideas"
-                    className="ml-auto min-h-[44px] rounded-lg border border-ds-hairline bg-ds-bone px-2 py-1 text-[10px] text-ds-folio-ink-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-                  >
-                    {SORT_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                  {hasActiveFilters && (
-                    <button
-                      type="button"
-                      onClick={handleReset}
-                      aria-label="Reset filters"
-                      className="min-h-[44px] min-w-[44px] flex items-center justify-center px-1 text-[10px] text-ds-folio-ink-mist hover:text-ds-folio-ink transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as SortOption)}
+                      aria-label="Sort ideas"
+                      className="rounded-lg border border-ds-hairline bg-ds-bone px-2 py-1 text-[10px] text-ds-folio-ink-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[36px]"
                     >
-                      Clear ×
-                    </button>
-                  )}
+                      {SORT_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    {hasActiveFilters && (
+                      <button
+                        type="button"
+                        onClick={handleReset}
+                        aria-label="Reset filters"
+                        className="inline-flex items-center rounded-lg border border-ds-hairline px-2.5 py-1 text-[10px] font-medium text-ds-folio-ink-mist hover:border-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 min-h-[36px]"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
               {filteredAndSorted.length === 0 ? (
-                <p className="py-2 text-xs text-ds-folio-ink-mist">No ideas match your current filters.</p>
+                <div className="py-8 text-center">
+                  <Search className="mx-auto h-7 w-7 opacity-40 text-ds-folio-ink-mist mb-3" aria-hidden="true" />
+                  <p className="text-sm font-medium text-ds-folio-ink-soft">No matching ideas</p>
+                  <p className="mt-1 text-xs text-ds-folio-ink-mist">Try a different filter or search term.</p>
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="mt-3 inline-flex items-center justify-center rounded-lg border border-ds-hairline px-3 py-1.5 text-xs font-medium text-ds-folio-ink-soft hover:border-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+                  >
+                    Reset filters
+                  </button>
+                </div>
               ) : (
                 <div className="space-y-3">
                   {groupIdeasByVertical(filteredAndSorted).map((group) => {
