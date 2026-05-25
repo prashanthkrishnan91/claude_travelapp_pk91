@@ -47,9 +47,10 @@ test("tray header communicates purpose — placement, not a duplicate Ideas page
 
 test("each card offers a quiet fallback to the legacy Ideas workspace", () => {
   assert.match(tray, /data-testid="ideas-tray-manage-link"/);
-  assert.match(tray, /Edit note in Ideas/);
   assert.match(tray, /Manage in Ideas/);
   assert.match(tray, /onManage/);
+  // Note editing is now inline; "Edit note in Ideas" label removed to avoid confusion
+  assert.doesNotMatch(tray, /Edit note in Ideas/);
 });
 
 test("tray shows the real candidate count from the ideas array", () => {
@@ -195,4 +196,79 @@ test("tray paper surfaces and brass note hairline are defined with tokens", () =
 
 test("tray entrance animation is reduced-motion guarded", () => {
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]{0,120}\.jd-tray-enter \{ animation: none/);
+});
+
+// ── Note editing (IdeasTray parity PR 1) ──────────────────────────────────────
+
+test("note edit affordance renders on each card — add or edit", () => {
+  assert.match(tray, /data-testid="ideas-tray-note-edit-btn"/);
+  // Shows "+ Add note" when no note, "Edit note" when note exists
+  assert.match(tray, /\+ Add note/);
+  assert.match(tray, /Edit note/);
+});
+
+test("existing note preview still renders in collapsed state (private marginalia)", () => {
+  assert.match(tray, /data-testid="ideas-tray-note-private"/);
+  assert.match(tray, /jd-note-private/);
+});
+
+test("note editor shows textarea and save/cancel controls", () => {
+  assert.match(tray, /data-testid="ideas-tray-note-editor"/);
+  assert.match(tray, /data-testid="ideas-tray-note-textarea"/);
+  assert.match(tray, /data-testid="ideas-tray-note-save"/);
+  assert.match(tray, /data-testid="ideas-tray-note-cancel"/);
+});
+
+test("saving note calls onSaveNote with noteText.trim() — routes to onUpdateMeta with userNote patch", () => {
+  // onSaveNote prop is bound to onUpdateMeta with { userNote: note }
+  assert.match(tray, /onSaveNote\(noteText\.trim\(\)\)/);
+  assert.match(tray, /userNote: note/);
+  assert.match(tray, /onSaveNote/);
+});
+
+test("cancelling note edit does not call save (no accidental write)", () => {
+  assert.match(tray, /function cancelNote\(\)/);
+  assert.match(tray, /setEditingNote\(false\)/);
+  // cancelNote must not call onSaveNote
+  assert.doesNotMatch(tray, /cancelNote[\s\S]{0,60}onSaveNote/);
+});
+
+// ── Status controls (IdeasTray parity PR 1) ───────────────────────────────────
+
+test("status chips row is present on each card with Must-do / Maybe / Skip", () => {
+  assert.match(tray, /data-testid="ideas-tray-status-chips"/);
+  // Chip testids are rendered via template literal: `ideas-tray-status-${opt.value}`
+  assert.match(tray, /data-testid=\{`ideas-tray-status-\$\{opt\.value\}`\}/);
+  // Must-do / Maybe / Skip values defined in IDEA_STATUS_OPTIONS
+  assert.match(tray, /IDEA_STATUS_OPTIONS/);
+  assert.match(tray, /"must_do"/);
+  assert.match(tray, /"maybe"/);
+  assert.match(tray, /"skipped"/);
+});
+
+test("status chip click calls onUpdateStatus with the chip value — routes to onUpdateMeta with ideaStatus patch", () => {
+  assert.match(tray, /onUpdateStatus\(opt\.value\)/);
+  assert.match(tray, /ideaStatus: status/);
+});
+
+test("Skip chip does not call onRemove — Skip sets status, never deletes", () => {
+  // Status chip onClick calls onUpdateStatus, not onRemove
+  assert.match(tray, /onClick=\{\(\) => onUpdateStatus\(opt\.value\)\}/);
+  // onUpdateStatus handler in the chip invocation uses ideaStatus, not deleteItem
+  assert.doesNotMatch(tray, /onUpdateStatus\(opt\.value\)[\s\S]{0,60}onRemove/);
+  // onRemove is only wired to the Remove button
+  assert.match(tray, /data-testid="ideas-tray-remove"[\s\S]{0,60}onRemove/);
+});
+
+test("Add-to-Day path still calls onAssign handler — placement not regressed", () => {
+  assert.match(tray, /onAssign\(day\.id\)/);
+  assert.match(tray, /const dayAssignable = days\.length > 0/);
+});
+
+test("status constants match TripIdeasPanel values exactly (must_do / maybe / skipped)", () => {
+  assert.match(tray, /value: "must_do"/);
+  assert.match(tray, /value: "maybe"/);
+  assert.match(tray, /value: "skipped"/);
+  // statusOf reads ideaStatus ?? idea_status — same dual-key pattern as TripIdeasPanel
+  assert.match(tray, /x\.ideaStatus \?\? x\.idea_status/);
 });

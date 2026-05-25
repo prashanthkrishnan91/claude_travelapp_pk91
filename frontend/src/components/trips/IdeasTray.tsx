@@ -44,6 +44,44 @@ function ratingOf(item: ItineraryItem): string | null {
   return rc ? `${r.toFixed(1)} (${Number(rc).toLocaleString()})` : r.toFixed(1);
 }
 
+// ── Status constants — mirror TripIdeasPanel values exactly ──────────────────
+
+export const IDEA_STATUS_OPTIONS = [
+  { value: "must_do", label: "Must-do" },
+  { value: "maybe",   label: "Maybe" },
+  { value: "skipped", label: "Skip" },
+] as const;
+type IdeaStatus = "must_do" | "maybe" | "skipped";
+
+function statusOf(item: ItineraryItem): IdeaStatus {
+  const x = d(item);
+  const s = (x.ideaStatus ?? x.idea_status) as string | undefined;
+  if (s === "must_do" || s === "maybe" || s === "skipped") return s;
+  return "maybe";
+}
+
+// Inline styles for active status chip — avoids relying on unmapped Tailwind classes.
+function activeChipStyle(value: string): React.CSSProperties {
+  if (value === "must_do")
+    return {
+      color: "var(--ds-trust-verified)",
+      backgroundColor: "var(--ds-accent-subtle)",
+      borderColor: "color-mix(in srgb, var(--ds-trust-verified) 40%, transparent)",
+    };
+  if (value === "maybe")
+    return {
+      color: "var(--ds-caution)",
+      backgroundColor: "var(--ds-accent-subtle)",
+      borderColor: "color-mix(in srgb, var(--ds-caution) 40%, transparent)",
+    };
+  // skipped
+  return {
+    color: "var(--ds-folio-ink-soft)",
+    backgroundColor: "var(--ds-bone)",
+    borderColor: "color-mix(in srgb, var(--ds-folio-ink-soft) 40%, transparent)",
+  };
+}
+
 const KIND_META: Record<string, { label: string; Icon: typeof Hotel }> = {
   hotel:    { label: "Hotel",  Icon: Hotel },
   flight:   { label: "Flight", Icon: Plane },
@@ -76,17 +114,16 @@ export interface IdeasTrayProps {
     patch: { ideaStatus?: string; userNote?: string },
   ) => Promise<void>;
   onRemove: (itemId: string) => Promise<void>;
-  /** Open the legacy Ideas workspace for fuller management / note editing. */
+  /** Open the legacy Ideas workspace for fuller management. */
   onManage: () => void;
 }
 
 // ── Tray ────────────────────────────────────────────────────────────────────
 //
-// The Ideas Tray exists to *place* candidates, not to list them. Mobile = bottom
-// sheet; desktop = right-docked drawer (the responsive adaptation of the v2
-// prototype's right rail — a permanent rail would fight the existing TripBuilder
-// columns, so v1B docks a drawer instead). Every action maps to a real durable
-// write; placement is day-level only (no fabricated slot like "· Dinner").
+// The Ideas Tray exists to *place* candidates. Mobile = bottom sheet; desktop =
+// right-docked drawer. Every action maps to a real durable write; placement is
+// day-level only (no fabricated slot label). Status and note writes go through
+// onUpdateMeta — the same path as TripIdeasPanel.
 
 export function IdeasTray({ open, onClose, days, ideas, onAssign, onUpdateMeta, onRemove, onManage }: IdeasTrayProps) {
   const [filter, setFilter] = useState<string>("all");
@@ -203,6 +240,8 @@ export function IdeasTray({ open, onClose, days, ideas, onAssign, onUpdateMeta, 
                 busy={busyId === item.id}
                 onAssign={(dayId) => run(item.id, () => onAssign(item.id, dayId))}
                 onKeepMaybe={() => run(item.id, () => onUpdateMeta(item.id, d(item), { ideaStatus: "maybe" }))}
+                onUpdateStatus={(status) => run(item.id, () => onUpdateMeta(item.id, d(item), { ideaStatus: status }))}
+                onSaveNote={(note) => onUpdateMeta(item.id, d(item), { userNote: note })}
                 onRemove={() => run(item.id, () => onRemove(item.id))}
                 onManage={onManage}
               />
@@ -214,7 +253,7 @@ export function IdeasTray({ open, onClose, days, ideas, onAssign, onUpdateMeta, 
   );
 }
 
-// ── Card — placement-first, one bold primary action ───────────────────────────
+// ── Card — placement-first, status controls, inline note editing ──────────────
 
 function IdeasTrayCard({
   item,
@@ -222,6 +261,8 @@ function IdeasTrayCard({
   busy,
   onAssign,
   onKeepMaybe,
+  onUpdateStatus,
+  onSaveNote,
   onRemove,
   onManage,
 }: {
@@ -230,10 +271,17 @@ function IdeasTrayCard({
   busy: boolean;
   onAssign: (dayId: string) => void;
   onKeepMaybe: () => void;
+  onUpdateStatus: (status: string) => void;
+  onSaveNote: (note: string) => Promise<void>;
   onRemove: () => void;
   onManage: () => void;
 }) {
   const [pickDay, setPickDay] = useState(false);
+  const [editingNote, setEditingNote] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
+
+  const currentStatus = statusOf(item);
   const kind = KIND_META[item.itemType] ?? { label: "Idea", Icon: Sparkles };
   const KindIcon = kind.Icon;
   const note = userNoteOf(item);
@@ -243,6 +291,27 @@ function IdeasTrayCard({
   const bookingUrl = bookingUrlOf(item);
   const location = item.location && item.location !== item.title ? item.location : "";
   const dayAssignable = days.length > 0;
+
+  function startEditNote() {
+    setNoteText(note);
+    setEditingNote(true);
+  }
+
+  async function saveNote() {
+    if (noteBusy) return;
+    setNoteBusy(true);
+    try {
+      await onSaveNote(noteText.trim());
+      setEditingNote(false);
+    } finally {
+      setNoteBusy(false);
+    }
+  }
+
+  function cancelNote() {
+    setEditingNote(false);
+    setNoteText("");
+  }
 
   const SECONDARY_LINK =
     "text-xs font-medium text-ds-folio-ink-soft hover:text-ds-marine-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded";
@@ -271,15 +340,60 @@ function IdeasTrayCard({
         </p>
       )}
 
-      {/* Note hierarchy — private marginalia, then a distinct concierge reason */}
-      {note && (
-        <p
-          data-testid="ideas-tray-note-private"
-          className="jd-note-private mt-2 font-serif italic text-sm text-ds-folio-ink line-clamp-1"
-        >
-          {note}
-        </p>
+      {/* Note — private marginalia preview or inline editor */}
+      {editingNote ? (
+        <div className="mt-2" data-testid="ideas-tray-note-editor">
+          <textarea
+            autoFocus
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            placeholder="Your private note for this idea…"
+            rows={2}
+            data-testid="ideas-tray-note-textarea"
+            className="w-full resize-none rounded-lg border border-ds-hairline bg-ds-warm-paper px-2.5 py-2 text-sm font-serif italic text-ds-folio-ink placeholder-ds-folio-ink-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+          />
+          <div className="mt-1.5 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={saveNote}
+              disabled={noteBusy}
+              data-testid="ideas-tray-note-save"
+              className="text-xs font-medium text-ds-marine-ink hover:text-ds-marine-soft disabled:opacity-50 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
+            >
+              {noteBusy ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={cancelNote}
+              data-testid="ideas-tray-note-cancel"
+              className="text-xs text-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-2">
+          {note && (
+            <p
+              data-testid="ideas-tray-note-private"
+              className="jd-note-private font-serif italic text-sm text-ds-folio-ink line-clamp-1"
+            >
+              {note}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={startEditNote}
+            data-testid="ideas-tray-note-edit-btn"
+            className={`${SECONDARY_LINK} mt-1`}
+          >
+            {note ? "Edit note" : "+ Add note"}
+          </button>
+        </div>
       )}
+
+      {/* Concierge reason — distinct muted helper, only when real and different from user note */}
       {reason && reason !== note && (
         <p
           data-testid="ideas-tray-note-concierge"
@@ -340,8 +454,37 @@ function IdeasTrayCard({
         )}
       </div>
 
+      {/* Status controls — Must-do / Maybe / Skip. Uses onUpdateMeta via onUpdateStatus; Skip ≠ delete. */}
+      <div className="mt-2.5 flex items-center gap-0.5" data-testid="ideas-tray-status-chips">
+        {IDEA_STATUS_OPTIONS.map((opt) => {
+          const isActive = currentStatus === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onUpdateStatus(opt.value)}
+              disabled={busy}
+              data-testid={`ideas-tray-status-${opt.value}`}
+              aria-pressed={isActive}
+              className="min-h-[44px] flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+            >
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold border transition-colors duration-[120ms] ${
+                  isActive
+                    ? ""
+                    : "text-ds-folio-ink-soft border-ds-hairline hover:text-ds-folio-ink hover:border-ds-folio-ink-mist"
+                }`}
+                style={isActive ? activeChipStyle(opt.value) : undefined}
+              >
+                {opt.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Secondary actions — quiet text links, contextual to real data */}
-      <div className="mt-2.5 flex items-center flex-wrap gap-x-4 gap-y-1">
+      <div className="mt-1.5 flex items-center flex-wrap gap-x-4 gap-y-1">
         {mapsUrl && (
           <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className={SECONDARY_LINK}>
             Map
@@ -352,21 +495,22 @@ function IdeasTrayCard({
             Google Flights
           </a>
         )}
-        {dayAssignable && (
-          <button type="button" onClick={onKeepMaybe} disabled={busy} className={SECONDARY_LINK}>
-            Keep as Maybe
-          </button>
-        )}
-        {/* Quiet fallback to the fuller legacy Ideas workspace (note editing etc.) */}
+        {/* Manage in Ideas — always available as the deeper management fallback */}
         <button
           type="button"
           onClick={onManage}
           data-testid="ideas-tray-manage-link"
           className={SECONDARY_LINK}
         >
-          {note ? "Edit note in Ideas" : "Manage in Ideas"}
+          Manage in Ideas
         </button>
-        <button type="button" onClick={onRemove} disabled={busy} className={`${SECONDARY_LINK} ml-auto`}>
+        <button
+          type="button"
+          data-testid="ideas-tray-remove"
+          onClick={onRemove}
+          disabled={busy}
+          className={`${SECONDARY_LINK} ml-auto`}
+        >
           Remove
         </button>
       </div>

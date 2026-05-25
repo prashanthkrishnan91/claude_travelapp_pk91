@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-25 (Desktop nav label cleanup — "Home" + "Discover" consistency; current branch)
+Last updated: 2026-05-25 (IdeasTray parity PR 1 — note editing + full status controls; current branch)
 
 ## Purpose
 
@@ -10,7 +10,17 @@ This file is **current operational state**, not a historical log. It must stay c
 
 **Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) merged #478. **Home mobile IA cleanup (hide "Rooms in this house" on mobile) is the current branch.**
 
-### Desktop nav label cleanup — "Home" + "Discover" consistency (current branch)
+### IdeasTray parity PR 1 — note editing + full status controls (current branch)
+
+Closes the highest-value Journey Desk parity gap: the legacy Ideas tab uniquely supported editing private notes and marking ideas Must-do / Maybe / Skip. IdeasTray now provides both inline, so the legacy tab is fully demoted to fallback. **Frontend-only; 2 files changed (IdeasTray.tsx, journey-desk-ideas-tray.test.mjs); no backend, SQL, provider, route, map, MapTiler, search, or TripIdeasPanel change.**
+- **Note editing:** each card shows a private-marginalia preview (existing `jd-note-private` style, italic serif + brass hairline) and an "+ Add note" / "Edit note" toggle. Clicking opens a compact textarea (compact inline, not admin-like) with explicit Save / Cancel. Save calls `onSaveNote(noteText.trim())` → `onUpdateMeta(item.id, d(item), { userNote: note })`. Cancel clears edit mode without writing. Carryover preserved — reads `x.userNote ?? x.user_note` same as before.
+- **Status controls:** a compact chip row (Must-do / Maybe / Skip) renders on every card below the primary action. Active chip uses inline `style` with ds tokens (avoids unmapped Tailwind class risk). Chip click calls `onUpdateStatus(status)` → `onUpdateMeta(item.id, d(item), { ideaStatus: status })`. Status values mirror TripIdeasPanel exactly (`must_do` / `maybe` / `skipped`). Skip is wired to status update, never to `onRemove` / `deleteItem`.
+- **"Keep as Maybe" cleanup:** the secondary "Keep as Maybe" text link (duplicate of Maybe chip) is removed. The primary "Keep as Maybe" button (no-days path) is retained.
+- **"Edit note in Ideas" label removed:** manage link is now always "Manage in Ideas" since note editing is inline.
+- **Unchanged:** Add to Day, day picker, kind chips, Map/Google Flights links, Remove, mobile/desktop tray shell, filter chips, all other props/handlers, legacy Ideas tab, `onManage` fallback.
+- **Tests:** `journey-desk-ideas-tray.test.mjs` — 27 → 37 tests. Updated: manage-link test no longer requires "Edit note in Ideas". New: note edit affordance, textarea/save/cancel controls, `onSaveNote` routes to `onUpdateMeta` with `userNote`, cancel does not call save, status chips row, Skip routes to `onUpdateStatus` not `onRemove`, Add-to-Day not regressed, status constants match TripIdeasPanel. **37/37 pass, 0 new failures. Pre-existing failures identical (14 files, same as before this branch).**
+
+### Desktop nav label cleanup — "Home" + "Discover" consistency (merged, PR pending)
 
 Standardizes desktop nav labels to match mobile bottom nav. `Sidebar.tsx` and `AtelierNavArtifact.tsx` `primaryLinks` array: "Dashboard" → "Home" for `/`; "Explore" → "Discover" for `/explore`. **Frontend-only; 2 files, 4 string constants; no route, href, icon, layout, CSS, mobile nav, or backend change.**
 - **Unchanged:** all hrefs (`/`, `/explore`), all icons, mobile bottom nav and drawer, active-state logic, AtelierNavArtifact open/close/auth behavior, Sidebar auth behavior.
@@ -306,7 +316,7 @@ Two Level 2 user-visible regressions fixed after PR #460 merged:
 **3139 frontend tests, 0 failures.** No backend suite run (no pytest in this environment); tsc/next build not run locally (node_modules absent) — CI `certify` validates.
 
 ### Next step
-**Journey Desk mobile IA closeout PR 1** (inline day expansion + Add-to-Day drawer) is the current branch. After merge: PR 2 closeout (polish, keyboard/focus, potentially Add-to-Day vertical search integration in Build). Deferred: full desktop three-zone, fold/remove the standalone legacy Ideas tab once parity holds, consolidate the day-part classifier (mirrored in `lib/dayParts.ts` + `ItineraryDayColumn`). Visual Itinerary Map v1C (pin-visibility hide/show) waits for a durable preference/status contract. Placement stays day-level (`assignIdeaToDay`); no slot-level persistence.
+**IdeasTray parity PR 1** (note editing + status controls) is the current branch. After merge: IdeasTray parity PR 2 (decide whether to fold/demote the legacy Ideas tab once adoption is confirmed). Deferred: full desktop three-zone, consolidate the day-part classifier (mirrored in `lib/dayParts.ts` + `ItineraryDayColumn`). Visual Itinerary Map v1C (pin-visibility hide/show) waits for a durable preference/status contract. Placement stays day-level (`assignIdeaToDay`); no slot-level persistence.
 
 ## Current architecture / runtime state
 
