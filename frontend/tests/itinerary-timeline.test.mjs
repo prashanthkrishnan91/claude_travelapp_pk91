@@ -109,22 +109,25 @@ test('ItineraryDayColumn still uses SortableContext and useDroppable for drag/dr
 });
 
 // ---------------------------------------------------------------------------
-// 9. Move-to-ideas action: only shows for concierge items (source_kind check)
+// 9. Move-to-ideas: normalized — uses onUnplace, not source_kind gate
 // ---------------------------------------------------------------------------
 
-test('ItineraryItemCard only shows Move to Ideas for source_kind=concierge_idea items', () => {
-  assert.match(itemCard, /source_kind.*concierge_idea|concierge_idea.*source_kind/, 'source_kind guard must exist');
-  assert.match(itemCard, /showMoveToIdeasAction/, 'showMoveToIdeasAction guard must exist');
-  assert.match(itemCard, /Move to Ideas/, 'Move to Ideas button must exist');
+test('ItineraryItemCard uses onUnplace prop for Move to Ideas (no source_kind gate)', () => {
+  assert.match(itemCard, /onUnplace/, 'onUnplace prop must exist');
+  assert.match(itemCard, /Move to Ideas/, 'Move to Ideas label must exist in action menu');
+  assert.doesNotMatch(itemCard, /showMoveToIdeasAction/, 'old showMoveToIdeasAction gate must be removed');
+  assert.doesNotMatch(itemCard, /isConciergeIdea/, 'isConciergeIdea source_kind gate must be removed');
 });
 
 // ---------------------------------------------------------------------------
-// 10. No duplicate action: Move to Ideas button is conditional
+// 10. Move to Ideas is inside the overflow/action menu, not standalone
 // ---------------------------------------------------------------------------
 
-test('ItineraryItemCard Move to Ideas button is conditionally rendered (no duplicates)', () => {
-  // The button must be inside a conditional render (showMoveToIdeasAction && ...)
-  assert.match(itemCard, /showMoveToIdeasAction.*&&|{showMoveToIdeasAction/, 'button must be conditional');
+test('ItineraryItemCard Move to Ideas is inside the overflow action menu (not standalone)', () => {
+  // Must NOT be in a standalone always-visible block before the title
+  assert.doesNotMatch(itemCard, /showMoveToIdeasAction\s*&&/, 'standalone showMoveToIdeasAction block must be gone');
+  // onUnplace must be called with item.id AND details (current details preserved)
+  assert.match(itemCard, /onUnplace\(item\.id,\s*details\)/, 'onUnplace must receive item.id and details');
 });
 
 // ---------------------------------------------------------------------------
@@ -136,11 +139,13 @@ test('ItineraryDayColumn renders travel connectors via computeAdjacentHints from
 });
 
 // ---------------------------------------------------------------------------
-// 12. Trip Ideas assignment behavior: onMoveItemToIdeas prop threaded through
+// 12. ItineraryDayColumn threads onMoveItemToIdeas (new signature: currentDetails) to cards
 // ---------------------------------------------------------------------------
 
-test('ItineraryDayColumn threads onMoveItemToIdeas to TimelineSections', () => {
+test('ItineraryDayColumn threads onMoveItemToIdeas with currentDetails signature to ItineraryItemCard', () => {
   assert.match(dayColumn, /onMoveItemToIdeas/, 'onMoveItemToIdeas must be passed through');
+  assert.match(dayColumn, /currentDetails/, 'signature must carry currentDetails, not dayId');
+  assert.match(dayColumn, /onUnplace=\{onMoveItemToIdeas\}/, 'ItineraryItemCard must receive onUnplace mapped from onMoveItemToIdeas');
 });
 
 // ---------------------------------------------------------------------------

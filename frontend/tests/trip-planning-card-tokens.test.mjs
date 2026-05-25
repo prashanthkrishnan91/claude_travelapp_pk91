@@ -290,11 +290,10 @@ test('ItineraryItemCard: timeline day-part buttons use min-h-[44px] compliant pa
   assert.ok(itineraryCardSrc.includes('min-h-[44px]'), 'ItineraryItemCard must have min-h-[44px] on interactive controls');
 });
 
-test('ItineraryItemCard: Move-to-Ideas button has 44px hit area', () => {
-  assert.ok(
-    itineraryCardSrc.includes('min-h-[44px]') && itineraryCardSrc.includes('Move to Ideas'),
-    'Move to Ideas button must have min-h-[44px]'
-  );
+test('ItineraryItemCard: Move-to-Ideas action is in the overflow menu and card has 44px touch targets', () => {
+  assert.ok(itineraryCardSrc.includes('Move to Ideas'), 'Move to Ideas label must exist in the card');
+  assert.ok(itineraryCardSrc.includes('onUnplace'), 'Move to Ideas must use onUnplace handler');
+  assert.ok(itineraryCardSrc.includes('min-h-[44px]'), 'Card overflow tray must have min-h-[44px] touch targets');
 });
 
 test('ItineraryItemCard: Google Flights links have invisible-padding touch target', () => {

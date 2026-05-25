@@ -92,7 +92,7 @@ const TYPE_LABELS: Record<ItemType, string> = {
 interface ItineraryItemCardProps {
   item: ItineraryItem;
   onRemove: (itemId: string) => void;
-  onMoveToIdeas?: (itemId: string) => void;
+  onUnplace?: (itemId: string, currentDetails: Record<string, unknown>) => void;
   onToggleCompare?: (item: ItineraryItem) => void;
   isComparing?: boolean;
   onTimelineUpdated?: (updatedItem: ItineraryItem) => void;
@@ -124,13 +124,15 @@ function formatClock(value?: string): string | null {
   return value;
 }
 
-export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompare, isComparing, onTimelineUpdated }: ItineraryItemCardProps) {
+export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, isComparing, onTimelineUpdated }: ItineraryItemCardProps) {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [selectedPart, setSelectedPart] = useState<string>("unscheduled");
   const [timeLabelInput, setTimeLabelInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [mobileOverflowOpen, setMobileOverflowOpen] = useState(false);
+  const [desktopMenuOpen, setDesktopMenuOpen] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const {
     attributes,
@@ -151,8 +153,6 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
 
   const config = typeConfig[item.itemType];
   const details = (item.details ?? {}) as Record<string, unknown>;
-  const isConciergeIdea = details.sourceKind === "concierge_idea" || details.source_kind === "concierge_idea";
-  const showMoveToIdeasAction = isConciergeIdea && !!onMoveToIdeas;
   // Normalize to typed strings before any JSX use — avoids unknown→ReactNode error in strict builds
   const dayPartValue = typeof details.dayPart === "string" ? details.dayPart : "";
   const timeLabelValue = typeof details.timeLabel === "string" ? details.timeLabel : "";
@@ -282,15 +282,79 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                   <Ticket className="w-3 h-3" />
                 </span>
               </button>
-              <button
-                onClick={() => onRemove(item.id)}
-                className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
-                aria-label={`Remove ${item.title}`}
-              >
-                <span className="w-5 h-5 rounded-md opacity-0 group-hover:opacity-100 bg-ds-linen text-ds-folio-ink-mist group-hover:text-ds-warning flex items-center justify-center transition-all">
-                  <X className="w-3 h-3" />
-                </span>
-              </button>
+              {/* Overflow dropdown — Move to Ideas (non-destructive) + Remove from trip (confirm-gated) */}
+              <div className="relative">
+                <button
+                  type="button"
+                  data-testid="itinerary-item-desktop-overflow-toggle"
+                  onClick={(e) => { e.stopPropagation(); if (desktopMenuOpen) setConfirmRemove(false); setDesktopMenuOpen((v) => !v); }}
+                  aria-label={`More actions for ${item.title}`}
+                  aria-expanded={desktopMenuOpen}
+                  aria-haspopup="menu"
+                  className="group flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+                >
+                  <span className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${desktopMenuOpen ? "bg-ds-marine-ink text-ds-paper" : "opacity-0 group-hover:opacity-100 bg-ds-linen text-ds-folio-ink-mist"}`}>
+                    <MoreHorizontal className="w-3 h-3" />
+                  </span>
+                </button>
+                {desktopMenuOpen && (
+                  <>
+                    <button type="button" aria-hidden tabIndex={-1} onClick={() => { setDesktopMenuOpen(false); setConfirmRemove(false); }} className="fixed inset-0 z-10 cursor-default" />
+                    <div
+                      role="menu"
+                      data-testid="itinerary-item-desktop-overflow-actions"
+                      className="absolute right-0 top-full z-20 mt-1 min-w-[200px] rounded-lg border border-ds-hairline bg-ds-paper p-1 shadow-[var(--ds-paper-elevation-2)]"
+                    >
+                      {confirmRemove ? (
+                        <div className="p-2" data-testid="itinerary-item-remove-confirm">
+                          <p className="px-1 pb-2 text-xs text-ds-folio-ink-soft leading-snug">
+                            Remove this item from the trip permanently?
+                          </p>
+                          <button
+                            type="button"
+                            data-testid="itinerary-item-remove-confirm-yes"
+                            onClick={() => { onRemove(item.id); setDesktopMenuOpen(false); setConfirmRemove(false); }}
+                            className="w-full inline-flex items-center justify-center min-h-[36px] rounded-md text-sm font-semibold text-ds-warning ring-1 ring-ds-warning/40 hover:bg-ds-warning/10 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-warning focus-visible:outline-offset-2"
+                          >
+                            Confirm remove from trip
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmRemove(false)}
+                            className="w-full mt-1 inline-flex items-center justify-center min-h-[36px] rounded-md text-xs text-ds-folio-ink-soft hover:text-ds-folio-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          {onUnplace && (
+                            <button
+                              type="button"
+                              role="menuitem"
+                              data-testid="itinerary-item-move-to-ideas"
+                              onClick={() => { onUnplace(item.id, details); setDesktopMenuOpen(false); }}
+                              title="Move back to your Ideas (keeps all details)"
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ds-folio-ink-soft hover:text-ds-folio-ink hover:bg-ds-linen rounded-md transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+                            >
+                              Move to Ideas
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            role="menuitem"
+                            data-testid="itinerary-item-remove"
+                            onClick={() => setConfirmRemove(true)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ds-warning hover:bg-ds-warning/10 rounded-md transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-warning focus-visible:outline-offset-2"
+                          >
+                            Remove from trip
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Mobile overflow toggle — quiet single tap for all secondary actions */}
@@ -298,7 +362,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                setMobileOverflowOpen((v) => !v);
+                setMobileOverflowOpen((v) => { if (v) setConfirmRemove(false); return !v; });
               }}
               className="lg:hidden flex-shrink-0 -m-3 p-3 flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
               aria-label={`Actions for ${item.title}`}
@@ -314,19 +378,6 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
             </button>
           </div>
         </div>
-
-        {/* Concierge idea return action — standalone always-visible (only when applicable) */}
-        {showMoveToIdeasAction && (
-          <div className="mb-1.5">
-            <button
-              onClick={() => onMoveToIdeas(item.id)}
-              className="flex-shrink-0 min-h-[44px] inline-flex items-center justify-center rounded-md border border-ds-hairline px-1.5 text-[10px] font-medium text-ds-folio-ink-soft hover:border-ds-marine-ink hover:text-ds-marine-ink transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
-              aria-label={`Move ${item.title} back to Trip Ideas`}
-            >
-              Move to Ideas
-            </button>
-          </div>
-        )}
 
         {/* Entry headline — chapter-entry title */}
         <p
@@ -753,6 +804,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                   onClick={() => {
                     onToggleCompare(item);
                     setMobileOverflowOpen(false);
+                    setConfirmRemove(false);
                   }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-medium transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 ${
                     isComparing
@@ -772,6 +824,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                   e.stopPropagation();
                   if (!timelineOpen) handleOpenTimeline();
                   setMobileOverflowOpen(false);
+                  setConfirmRemove(false);
                 }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ds-hairline text-[10px] font-medium text-ds-folio-ink-soft hover:border-ds-marine-ink hover:text-ds-marine-ink transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
                 aria-label={`Schedule ${item.title}`}
@@ -784,6 +837,7 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                 onClick={() => {
                   setBookingOpen(true);
                   setMobileOverflowOpen(false);
+                  setConfirmRemove(false);
                 }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ds-hairline text-[10px] font-medium text-ds-folio-ink-mist hover:border-ds-linen hover:text-ds-folio-ink-soft transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
                 aria-label={`Book ${item.title}`}
@@ -791,18 +845,56 @@ export function ItineraryItemCard({ item, onRemove, onMoveToIdeas, onToggleCompa
                 <Ticket className="w-3 h-3" />
                 Book
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onRemove(item.id);
-                  setMobileOverflowOpen(false);
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ds-hairline text-[10px] font-medium text-ds-folio-ink-mist hover:border-ds-warning hover:text-ds-warning transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
-                aria-label={`Remove ${item.title}`}
-              >
-                <X className="w-3 h-3" />
-                Remove
-              </button>
+              {/* Non-destructive: Move to Ideas (corrected unplaceItemToIdeas path, all details preserved) */}
+              {onUnplace && !confirmRemove && (
+                <button
+                  type="button"
+                  data-testid="itinerary-item-mobile-move-to-ideas"
+                  onClick={() => {
+                    onUnplace(item.id, details);
+                    setMobileOverflowOpen(false);
+                    setConfirmRemove(false);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ds-hairline text-[10px] font-medium text-ds-folio-ink-soft hover:border-ds-marine-ink hover:text-ds-marine-ink transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+                  aria-label={`Move ${item.title} back to Ideas`}
+                >
+                  Move to Ideas
+                </button>
+              )}
+              {/* Destructive: Remove from trip — confirm-gated, two-step */}
+              {!confirmRemove ? (
+                <button
+                  type="button"
+                  data-testid="itinerary-item-mobile-remove"
+                  onClick={() => setConfirmRemove(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ds-hairline text-[10px] font-medium text-ds-folio-ink-mist hover:border-ds-warning hover:text-ds-warning transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+                  aria-label={`Remove ${item.title} from trip`}
+                >
+                  <X className="w-3 h-3" />
+                  Remove from trip
+                </button>
+              ) : (
+                <div className="w-full pt-1.5 border-t border-ds-hairline" data-testid="itinerary-item-mobile-remove-confirm">
+                  <p className="text-xs text-ds-folio-ink-soft mb-1.5 leading-snug">Remove this item from the trip permanently?</p>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      data-testid="itinerary-item-mobile-remove-confirm-yes"
+                      onClick={() => { onRemove(item.id); setMobileOverflowOpen(false); setConfirmRemove(false); }}
+                      className="flex-1 inline-flex items-center justify-center min-h-[36px] rounded-md text-xs font-semibold text-ds-warning ring-1 ring-ds-warning/40 hover:bg-ds-warning/10 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-warning focus-visible:outline-offset-2"
+                    >
+                      Confirm remove
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmRemove(false)}
+                      className="flex-1 inline-flex items-center justify-center min-h-[36px] rounded-md text-xs text-ds-folio-ink-soft hover:text-ds-folio-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

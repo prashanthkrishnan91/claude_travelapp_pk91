@@ -229,26 +229,23 @@ test('TripIdeasPanel has Must-do, Maybe, and Skip priority buttons', () => {
   assert.match(tripIdeasPanel, /skipped/, 'skipped value must be present for filtering');
 });
 
-test('ItineraryItemCard renders Move to Ideas action only for concierge ideas', () => {
-  assert.match(itineraryItemCard, /isConciergeIdea/, 'Card must derive concierge marker from details');
+test('ItineraryItemCard renders Move to Ideas inside the action menu for any placed card (no source_kind gate)', () => {
+  assert.match(itineraryItemCard, /onUnplace/, 'Card must use onUnplace prop');
   assert.match(itineraryItemCard, /Move to Ideas/, 'Card must render Move to Ideas action');
-  assert.match(itineraryItemCard, /showMoveToIdeasAction/, 'Move action should be gated to concierge ideas only');
+  assert.doesNotMatch(itineraryItemCard, /isConciergeIdea/, 'source_kind gate must be removed');
+  assert.doesNotMatch(itineraryItemCard, /showMoveToIdeasAction/, 'old showMoveToIdeasAction gate must be removed');
 });
 
-test('ItineraryItemCard contains exactly one Move to Ideas label and one concierge gate', () => {
-  const moveLabelCount = (itineraryItemCard.match(/Move to Ideas/g) ?? []).length;
-  const gateCount = (itineraryItemCard.match(/showMoveToIdeasAction/g) ?? []).length;
-  assert.equal(moveLabelCount, 1, 'There must be exactly one visible Move to Ideas action label in the card renderer');
-  assert.equal(gateCount, 2, 'Gate should be defined once and rendered once in one canonical location');
+test('ItineraryItemCard Move to Ideas passes item.id and details to onUnplace', () => {
+  assert.match(itineraryItemCard, /onUnplace\(item\.id,\s*details\)/, 'onUnplace must receive item.id and details');
 });
 
-test('ItineraryItemCard invokes move-back handler exactly once from one action button', () => {
-  const moveHandlerCallCount = (itineraryItemCard.match(/onMoveToIdeas\(item.id\)/g) ?? []).length;
-  assert.equal(moveHandlerCallCount, 1, 'Move-back handler should be wired to exactly one UI action');
+test('ItineraryItemCard has no standalone always-visible Move to Ideas button outside the overflow menu', () => {
+  // The standalone button block (before the title) should be gone
   assert.doesNotMatch(
     itineraryItemCard,
-    /mt-1 rounded-md border border-amber-300\/35 bg-amber-300\/10 px-2 py-1 text-\[11px\]/,
-    'Secondary inline/details Move to Ideas button must not be rendered'
+    /showMoveToIdeasAction\s*&&/,
+    'standalone showMoveToIdeasAction block must be gone'
   );
 });
 

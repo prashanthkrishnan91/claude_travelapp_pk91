@@ -212,13 +212,14 @@ test('ItineraryItemCard: compare action preserved with onToggleCompare and isCom
   assert.match(src, /isComparing/, 'isComparing state must be preserved');
 });
 
-test('ItineraryItemCard: move-to-ideas action preserved', () => {
-  assert.match(src, /Move to Ideas/, 'Move to Ideas button text must be preserved');
-  assert.match(src, /onMoveToIdeas/, 'onMoveToIdeas prop must be preserved');
+test('ItineraryItemCard: move-to-ideas action normalized to onUnplace in overflow menu', () => {
+  assert.match(src, /Move to Ideas/, 'Move to Ideas label must be preserved');
+  assert.match(src, /onUnplace/, 'onUnplace handler must replace onMoveToIdeas');
 });
 
-test('ItineraryItemCard: move-to-ideas button is conditionally rendered', () => {
-  assert.match(src, /showMoveToIdeasAction.*&&|{showMoveToIdeasAction/, 'Move to Ideas button must be conditional');
+test('ItineraryItemCard: Move to Ideas is in the overflow action menu (not a standalone button)', () => {
+  assert.doesNotMatch(src, /showMoveToIdeasAction/, 'showMoveToIdeasAction standalone gate must be removed');
+  assert.match(src, /onUnplace\(item\.id/, 'onUnplace must be called with item.id in the overflow menu');
 });
 
 test('ItineraryItemCard: booking checklist action preserved', () => {
