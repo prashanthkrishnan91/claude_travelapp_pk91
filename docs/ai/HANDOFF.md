@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-25 (Desktop nav label cleanup — "Home" + "Discover" consistency; current branch)
+Last updated: 2026-05-25 (IdeasTray IA pivot — placement-first only; Brief → Ideas tab; current branch)
 
 ## Purpose
 
@@ -10,7 +10,24 @@ This file is **current operational state**, not a historical log. It must stay c
 
 **Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) merged #478. **Home mobile IA cleanup (hide "Rooms in this house" on mobile) is the current branch.**
 
-### Desktop nav label cleanup — "Home" + "Discover" consistency (current branch)
+### IdeasTray IA pivot — placement-first only (current branch, PR #481)
+
+Corrects IdeasTray's IA direction. The tray is a quick-placement overlay, not a duplicate of the Ideas tab. Note editing and status management belong in the Ideas tab.
+
+**IA contract after this PR:**
+- Brief "Review ideas" → `setActiveMobileWorkspace("ideas")` (switches to Ideas tab, not opens tray)
+- ExpandedDayPanel "Add from Ideas" → `setIdeasTrayOpen(true)` (day-specific quick placement, unchanged)
+- IdeasTray: Add to Day, note preview (read-only), Map/Google Flights, Manage in Ideas, Remove — no editor, no status chips
+
+**Reverted:** inline note editor (textarea + Save/Cancel + `onSaveNote`), Must-do/Maybe/Skip status chip row (`IDEA_STATUS_OPTIONS`, `onUpdateStatus`).
+
+**Retained:** note preview-only (`jd-note-private`, italic serif + brass hairline), concierge reason, "Keep as Maybe" primary button (no-days path), all placement flows.
+
+**Frontend-only; 3 files changed** (`IdeasTray.tsx`, `journey-desk-ideas-tray.test.mjs`, `page.tsx` one line); no backend, SQL, provider, route, map, MapTiler, search, or TripIdeasPanel change.
+
+**Tests:** 37 → 32 tests (removed 10 note-editor + status-chip tests; added 5 IA-contract tests: Brief routes to workspace, Brief does NOT open tray, ExpandedDayPanel still opens tray, no note editor, no status chips). **32/32 pass.**
+
+### Desktop nav label cleanup — "Home" + "Discover" consistency (merged, PR pending)
 
 Standardizes desktop nav labels to match mobile bottom nav. `Sidebar.tsx` and `AtelierNavArtifact.tsx` `primaryLinks` array: "Dashboard" → "Home" for `/`; "Explore" → "Discover" for `/explore`. **Frontend-only; 2 files, 4 string constants; no route, href, icon, layout, CSS, mobile nav, or backend change.**
 - **Unchanged:** all hrefs (`/`, `/explore`), all icons, mobile bottom nav and drawer, active-state logic, AtelierNavArtifact open/close/auth behavior, Sidebar auth behavior.
@@ -306,7 +323,7 @@ Two Level 2 user-visible regressions fixed after PR #460 merged:
 **3139 frontend tests, 0 failures.** No backend suite run (no pytest in this environment); tsc/next build not run locally (node_modules absent) — CI `certify` validates.
 
 ### Next step
-**Journey Desk mobile IA closeout PR 1** (inline day expansion + Add-to-Day drawer) is the current branch. After merge: PR 2 closeout (polish, keyboard/focus, potentially Add-to-Day vertical search integration in Build). Deferred: full desktop three-zone, fold/remove the standalone legacy Ideas tab once parity holds, consolidate the day-part classifier (mirrored in `lib/dayParts.ts` + `ItineraryDayColumn`). Visual Itinerary Map v1C (pin-visibility hide/show) waits for a durable preference/status contract. Placement stays day-level (`assignIdeaToDay`); no slot-level persistence.
+**IdeasTray parity PR 1** (note editing + status controls) is the current branch. After merge: IdeasTray parity PR 2 (decide whether to fold/demote the legacy Ideas tab once adoption is confirmed). Deferred: full desktop three-zone, consolidate the day-part classifier (mirrored in `lib/dayParts.ts` + `ItineraryDayColumn`). Visual Itinerary Map v1C (pin-visibility hide/show) waits for a durable preference/status contract. Placement stays day-level (`assignIdeaToDay`); no slot-level persistence.
 
 ## Current architecture / runtime state
 

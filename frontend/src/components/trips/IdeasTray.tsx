@@ -69,24 +69,21 @@ export interface IdeasTrayProps {
   ideas: ItineraryItem[];
   /** Durable day-level placement write. */
   onAssign: (itemId: string, dayId: string) => Promise<void>;
-  /** Durable status/note write (updateIdeaMeta). */
+  /** Durable status write (updateIdeaMeta) — used for "Keep as Maybe" on no-days trips. */
   onUpdateMeta: (
     itemId: string,
     currentDetails: Record<string, unknown>,
     patch: { ideaStatus?: string; userNote?: string },
   ) => Promise<void>;
   onRemove: (itemId: string) => Promise<void>;
-  /** Open the legacy Ideas workspace for fuller management / note editing. */
+  /** Open the legacy Ideas workspace for fuller management. */
   onManage: () => void;
 }
 
 // ── Tray ────────────────────────────────────────────────────────────────────
 //
-// The Ideas Tray exists to *place* candidates, not to list them. Mobile = bottom
-// sheet; desktop = right-docked drawer (the responsive adaptation of the v2
-// prototype's right rail — a permanent rail would fight the existing TripBuilder
-// columns, so v1B docks a drawer instead). Every action maps to a real durable
-// write; placement is day-level only (no fabricated slot like "· Dinner").
+// Placement-first quick-placement overlay. Mobile = bottom sheet; desktop =
+// right-docked drawer. Note editing and status management belong in the Ideas tab.
 
 export function IdeasTray({ open, onClose, days, ideas, onAssign, onUpdateMeta, onRemove, onManage }: IdeasTrayProps) {
   const [filter, setFilter] = useState<string>("all");
@@ -214,7 +211,7 @@ export function IdeasTray({ open, onClose, days, ideas, onAssign, onUpdateMeta, 
   );
 }
 
-// ── Card — placement-first, one bold primary action ───────────────────────────
+// ── Card — placement-first, note preview only ─────────────────────────────────
 
 function IdeasTrayCard({
   item,
@@ -234,6 +231,7 @@ function IdeasTrayCard({
   onManage: () => void;
 }) {
   const [pickDay, setPickDay] = useState(false);
+
   const kind = KIND_META[item.itemType] ?? { label: "Idea", Icon: Sparkles };
   const KindIcon = kind.Icon;
   const note = userNoteOf(item);
@@ -271,15 +269,17 @@ function IdeasTrayCard({
         </p>
       )}
 
-      {/* Note hierarchy — private marginalia, then a distinct concierge reason */}
+      {/* Private marginalia — note preview only; editing belongs in the Ideas tab */}
       {note && (
         <p
           data-testid="ideas-tray-note-private"
-          className="jd-note-private mt-2 font-serif italic text-sm text-ds-folio-ink line-clamp-1"
+          className="jd-note-private mt-2 font-serif italic text-sm text-ds-folio-ink line-clamp-2"
         >
           {note}
         </p>
       )}
+
+      {/* Concierge reason — distinct muted helper, only when real and different from user note */}
       {reason && reason !== note && (
         <p
           data-testid="ideas-tray-note-concierge"
@@ -352,21 +352,22 @@ function IdeasTrayCard({
             Google Flights
           </a>
         )}
-        {dayAssignable && (
-          <button type="button" onClick={onKeepMaybe} disabled={busy} className={SECONDARY_LINK}>
-            Keep as Maybe
-          </button>
-        )}
-        {/* Quiet fallback to the fuller legacy Ideas workspace (note editing etc.) */}
+        {/* Manage in Ideas — always available as the deeper management fallback */}
         <button
           type="button"
           onClick={onManage}
           data-testid="ideas-tray-manage-link"
           className={SECONDARY_LINK}
         >
-          {note ? "Edit note in Ideas" : "Manage in Ideas"}
+          Manage in Ideas
         </button>
-        <button type="button" onClick={onRemove} disabled={busy} className={`${SECONDARY_LINK} ml-auto`}>
+        <button
+          type="button"
+          data-testid="ideas-tray-remove"
+          onClick={onRemove}
+          disabled={busy}
+          className={`${SECONDARY_LINK} ml-auto`}
+        >
           Remove
         </button>
       </div>
