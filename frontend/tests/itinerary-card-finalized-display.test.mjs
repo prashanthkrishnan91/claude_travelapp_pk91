@@ -163,8 +163,8 @@ test('ItineraryItemCard: activity block reads d.category', () => {
 test('ItineraryItemCard: activity block reads d.tags for tag pills', () => {
   // The meal block also reads d.tags, so confirm item.itemType === "activity" block
   // contains a tags reference.
-  const activityIdx = itemCard.indexOf('item.itemType === "activity"');
-  const mealIdx = itemCard.indexOf('item.itemType === "meal"');
+  const activityIdx = itemCard.indexOf('item.itemType === "activity" && (() => {');
+  const mealIdx = itemCard.indexOf('item.itemType === "meal" && (() => {');
   assert.ok(activityIdx >= 0, 'activity block must exist');
   // Extract the activity block source up to the meal block
   const activityBlock = itemCard.slice(activityIdx, mealIdx > activityIdx ? mealIdx : undefined);
@@ -172,8 +172,8 @@ test('ItineraryItemCard: activity block reads d.tags for tag pills', () => {
 });
 
 test('ItineraryItemCard: activity block shows maps link when google_maps_uri or placeId present', () => {
-  const activityIdx = itemCard.indexOf('item.itemType === "activity"');
-  const mealIdx = itemCard.indexOf('item.itemType === "meal"');
+  const activityIdx = itemCard.indexOf('item.itemType === "activity" && (() => {');
+  const mealIdx = itemCard.indexOf('item.itemType === "meal" && (() => {');
   const activityBlock = itemCard.slice(activityIdx, mealIdx > activityIdx ? mealIdx : undefined);
   assert.match(activityBlock, /google_maps_uri|placeId|place_id/, 'Activity block must use google_maps_uri or placeId to build map link');
   assert.match(activityBlock, /ExternalLink/, 'Activity block must use ExternalLink icon for the map action');
@@ -190,14 +190,14 @@ test('ItineraryItemCard: meal block exists with item.itemType check', () => {
 });
 
 test('ItineraryItemCard: meal block reads d.cuisine', () => {
-  const mealIdx = itemCard.indexOf('item.itemType === "meal"');
+  const mealIdx = itemCard.indexOf('item.itemType === "meal" && (() => {');
   assert.ok(mealIdx >= 0, 'meal block must exist');
   const mealBlock = itemCard.slice(mealIdx, mealIdx + 2000);
   assert.match(mealBlock, /d\.cuisine/, 'Meal block must read d.cuisine from stored details');
 });
 
 test('ItineraryItemCard: meal block renders priceLevel as $ symbols', () => {
-  const mealIdx = itemCard.indexOf('item.itemType === "meal"');
+  const mealIdx = itemCard.indexOf('item.itemType === "meal" && (() => {');
   const mealBlock = itemCard.slice(mealIdx, mealIdx + 2000);
   assert.match(
     mealBlock,
@@ -212,7 +212,7 @@ test('ItineraryItemCard: meal block renders priceLevel as $ symbols', () => {
 });
 
 test('ItineraryItemCard: meal block reads d.tags for pill display', () => {
-  const mealIdx = itemCard.indexOf('item.itemType === "meal"');
+  const mealIdx = itemCard.indexOf('item.itemType === "meal" && (() => {');
   const mealBlock = itemCard.slice(mealIdx, mealIdx + 2000);
   assert.match(mealBlock, /d\.tags/, 'Meal block must read d.tags for tag pills');
 });

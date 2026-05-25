@@ -25,7 +25,7 @@ import {
 import { ItineraryItem, ItemType } from "@/types";
 import { BookingChecklistModal } from "./BookingChecklistModal";
 import { RewardsIntelligencePanel } from "./RewardsIntelligencePanel";
-import { updateItemTimeline } from "@/lib/api";
+import { updateItemTimeline, updateItemMetadata } from "@/lib/api";
 
 // ─── URL-aware description renderer ──────────────────────────────────────────
 
@@ -109,10 +109,20 @@ const typeConfig: Record<ItemType, { icon: React.ReactNode }> = {
 
 function formatClock(value?: string): string | null {
   if (!value) return null;
+  // ISO datetime: …T{HH}:{mm}…
   const hhmm = value.match(/T(\d{2}):(\d{2})/);
   if (hhmm) {
     const hour24 = Number(hhmm[1]);
     const minute = hhmm[2];
+    const hour12 = ((hour24 + 11) % 12) + 1;
+    const ampm = hour24 >= 12 ? "PM" : "AM";
+    return `${hour12}:${minute} ${ampm}`;
+  }
+  // Plain HH:mm or H:mm reservation/entry time strings
+  const plain = value.match(/^(\d{1,2}):(\d{2})$/);
+  if (plain) {
+    const hour24 = Number(plain[1]);
+    const minute = plain[2];
     const hour12 = ((hour24 + 11) % 12) + 1;
     const ampm = hour24 >= 12 ? "PM" : "AM";
     return `${hour12}:${minute} ${ampm}`;
@@ -133,6 +143,12 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
   const [mobileOverflowOpen, setMobileOverflowOpen] = useState(false);
   const [desktopMenuOpen, setDesktopMenuOpen] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [metaEditorOpen, setMetaEditorOpen] = useState(false);
+  const [metaSaving, setMetaSaving] = useState(false);
+  const [checkInInput, setCheckInInput] = useState("");
+  const [checkOutInput, setCheckOutInput] = useState("");
+  const [reservationTimeInput, setReservationTimeInput] = useState("");
+  const [entryTimeInput, setEntryTimeInput] = useState("");
 
   const {
     attributes,
@@ -161,6 +177,7 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
   const handleOpenTimeline = () => {
     setSelectedPart(dayPartValue || "unscheduled");
     setTimeLabelInput(timeLabelValue);
+    setMetaEditorOpen(false);
     setTimelineOpen(true);
   };
 
@@ -178,6 +195,42 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
       console.error("[timeline] save failed:", err);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleOpenMetaEditor = () => {
+    setTimelineOpen(false);
+    const d = (item.details ?? {}) as Record<string, unknown>;
+    if (item.itemType === "hotel") {
+      setCheckInInput(((d.checkIn ?? d.check_in ?? "") as string));
+      setCheckOutInput(((d.checkOut ?? d.check_out ?? "") as string));
+    } else if (item.itemType === "meal") {
+      setReservationTimeInput(((d.reservationTime ?? "") as string));
+    } else if (item.itemType === "activity") {
+      setEntryTimeInput(((d.entryTime ?? "") as string));
+    }
+    setMetaEditorOpen(true);
+  };
+
+  const handleSaveMetadata = async () => {
+    setMetaSaving(true);
+    try {
+      const currentDetails = (item.details ?? {}) as Record<string, unknown>;
+      let patch: { checkIn?: string; checkOut?: string; reservationTime?: string; entryTime?: string } = {};
+      if (item.itemType === "hotel") {
+        patch = { checkIn: checkInInput || undefined, checkOut: checkOutInput || undefined };
+      } else if (item.itemType === "meal") {
+        patch = { reservationTime: reservationTimeInput || undefined };
+      } else if (item.itemType === "activity") {
+        patch = { entryTime: entryTimeInput || undefined };
+      }
+      const updated = await updateItemMetadata(item.id, currentDetails, patch);
+      onTimelineUpdated?.(updated);
+      setMetaEditorOpen(false);
+    } catch (err) {
+      console.error("[metadata] save failed:", err);
+    } finally {
+      setMetaSaving(false);
     }
   };
 
@@ -328,6 +381,17 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
                         </div>
                       ) : (
                         <>
+                          {(item.itemType === "hotel" || item.itemType === "meal" || item.itemType === "activity") && (
+                            <button
+                              type="button"
+                              role="menuitem"
+                              data-testid="itinerary-item-edit-metadata"
+                              onClick={() => { handleOpenMetaEditor(); setDesktopMenuOpen(false); }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ds-folio-ink-soft hover:text-ds-folio-ink hover:bg-ds-linen rounded-md transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+                            >
+                              {item.itemType === "hotel" ? "Edit stay dates" : item.itemType === "meal" ? "Edit reservation" : "Edit entry time"}
+                            </button>
+                          )}
                           {onUnplace && (
                             <button
                               type="button"
@@ -545,11 +609,14 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
             in the main location line below — don't duplicate it here. */}
         {item.itemType === "hotel" && (() => {
           const d = (item.details ?? {}) as Record<string, unknown>;
-          // Backend stores check_in / check_out (ISO date strings).
-          const checkIn  = (d.check_in  as string | undefined)
+          // Canonical camelCase keys (after toCamel normalization) take priority;
+          // snake_case variants remain as tolerant fallbacks for legacy/mixed shapes.
+          const checkIn  = (d.checkIn as string | undefined)
+                        ?? (d.check_in  as string | undefined)
                         ?? (d.check_in_date  as string | undefined)
                         ?? (d.checkInDate  as string | undefined);
-          const checkOut = (d.check_out as string | undefined)
+          const checkOut = (d.checkOut as string | undefined)
+                        ?? (d.check_out as string | undefined)
                         ?? (d.check_out_date as string | undefined)
                         ?? (d.checkOutDate as string | undefined);
           const rating = (d.rating as number | undefined) ?? undefined;
@@ -599,7 +666,7 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
           );
         })()}
 
-        {/* Attraction (activity) vertical details: rating, category, tags, map link */}
+        {/* Attraction (activity) vertical details: rating, category, tags, map link, entry time */}
         {item.itemType === "activity" && (() => {
           const d = (item.details ?? {}) as Record<string, unknown>;
           const rating = typeof d.rating === "number" ? (d.rating as number) : undefined;
@@ -609,7 +676,9 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
           const mapsUri = (d.googleMapsUri as string | undefined) ?? (d.google_maps_uri as string | undefined);
           const placeId = (d.placeId as string | undefined) ?? (d.place_id as string | undefined);
           const mapsLink = mapsUri ?? (placeId ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(placeId)}` : null);
-          if (!rating && !category && tags.length === 0) return null;
+          const entryTime = typeof d.entryTime === "string" ? d.entryTime : undefined;
+          const formattedEntryTime = entryTime ? formatClock(entryTime) : null;
+          if (!rating && !category && tags.length === 0 && !formattedEntryTime) return null;
           return (
             <div className="mt-1 space-y-0.5 pt-1 border-t border-ds-hairline">
               <div className="flex items-center gap-2 flex-wrap">
@@ -646,11 +715,14 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
                   ))}
                 </div>
               )}
+              {formattedEntryTime && (
+                <p className="text-[11px] text-ds-folio-ink-mist" data-testid="activity-entry-fact">Entry · {formattedEntryTime}</p>
+              )}
             </div>
           );
         })()}
 
-        {/* Restaurant (meal) vertical details: cuisine, rating, price level, tags */}
+        {/* Restaurant (meal) vertical details: cuisine, rating, price level, tags, reservation time */}
         {item.itemType === "meal" && (() => {
           const d = (item.details ?? {}) as Record<string, unknown>;
           const rating = typeof d.rating === "number" ? (d.rating as number) : undefined;
@@ -659,7 +731,9 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
           const priceLevel = typeof d.priceLevel === "number" ? (d.priceLevel as number) : typeof d.price_level === "number" ? (d.price_level as number) : undefined;
           const tags = Array.isArray(d.tags) ? (d.tags as string[]).slice(0, 3) : [];
           const priceLevelStr = priceLevel != null ? "$".repeat(Math.min(4, Math.max(1, Math.round(priceLevel)))) : null;
-          if (!rating && !cuisine && !priceLevelStr && tags.length === 0) return null;
+          const reservationTime = typeof d.reservationTime === "string" ? d.reservationTime : undefined;
+          const formattedReservation = reservationTime ? formatClock(reservationTime) : null;
+          if (!rating && !cuisine && !priceLevelStr && tags.length === 0 && !formattedReservation) return null;
           return (
             <div className="mt-1 space-y-0.5 pt-1 border-t border-ds-hairline">
               <div className="flex items-center gap-2 flex-wrap">
@@ -683,6 +757,9 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
                     <span key={tag} className="px-1.5 py-0 text-[10px] rounded-full bg-ds-linen text-ds-folio-ink-mist border border-ds-hairline">{tag}</span>
                   ))}
                 </div>
+              )}
+              {formattedReservation && (
+                <p className="text-[11px] text-ds-folio-ink-mist" data-testid="meal-reservation-fact">Reservation · {formattedReservation}</p>
               )}
             </div>
           );
@@ -791,6 +868,77 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
           </div>
         )}
 
+        {/* Inline metadata editor — stay dates (hotel), reservation time (meal), entry time (activity) */}
+        {metaEditorOpen && (item.itemType === "hotel" || item.itemType === "meal" || item.itemType === "activity") && (
+          <div className="mt-2 pt-2 border-t border-ds-hairline" data-testid="itinerary-item-meta-editor">
+            {item.itemType === "hotel" && (
+              <>
+                <div className="flex items-center gap-1 mb-1">
+                  <label className="text-[10px] text-ds-folio-ink-mist w-16 flex-shrink-0">Check-in</label>
+                  <input
+                    type="date"
+                    value={checkInInput}
+                    onChange={(e) => setCheckInInput(e.target.value)}
+                    className="folio-input flex-1 min-w-0 text-[10px] py-1 px-1.5"
+                    data-testid="itinerary-meta-check-in"
+                  />
+                </div>
+                <div className="flex items-center gap-1 mb-1.5">
+                  <label className="text-[10px] text-ds-folio-ink-mist w-16 flex-shrink-0">Check-out</label>
+                  <input
+                    type="date"
+                    value={checkOutInput}
+                    onChange={(e) => setCheckOutInput(e.target.value)}
+                    className="folio-input flex-1 min-w-0 text-[10px] py-1 px-1.5"
+                    data-testid="itinerary-meta-check-out"
+                  />
+                </div>
+              </>
+            )}
+            {item.itemType === "meal" && (
+              <div className="flex items-center gap-1 mb-1.5">
+                <label className="text-[10px] text-ds-folio-ink-mist w-20 flex-shrink-0">Reservation</label>
+                <input
+                  type="time"
+                  value={reservationTimeInput}
+                  onChange={(e) => setReservationTimeInput(e.target.value)}
+                  className="folio-input flex-1 min-w-0 text-[10px] py-1 px-1.5"
+                  data-testid="itinerary-meta-reservation-time"
+                />
+              </div>
+            )}
+            {item.itemType === "activity" && (
+              <div className="flex items-center gap-1 mb-1.5">
+                <label className="text-[10px] text-ds-folio-ink-mist w-16 flex-shrink-0">Entry</label>
+                <input
+                  type="time"
+                  value={entryTimeInput}
+                  onChange={(e) => setEntryTimeInput(e.target.value)}
+                  className="folio-input flex-1 min-w-0 text-[10px] py-1 px-1.5"
+                  data-testid="itinerary-meta-entry-time"
+                />
+              </div>
+            )}
+            <div className="flex gap-1">
+              <button
+                onClick={handleSaveMetadata}
+                disabled={metaSaving}
+                data-testid="itinerary-meta-save"
+                className="flex-shrink-0 min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2 rounded text-[10px] font-medium text-ds-marine-ink border border-ds-hairline hover:border-ds-marine-ink transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+                style={{ backgroundColor: "color-mix(in srgb, var(--ds-marine-ink) 10%, transparent)" }}
+              >
+                {metaSaving ? "…" : "Save"}
+              </button>
+              <button
+                onClick={() => setMetaEditorOpen(false)}
+                className="flex-shrink-0 min-h-[44px] inline-flex items-center justify-center px-2 rounded text-[10px] text-ds-folio-ink-soft hover:text-ds-folio-ink hover:bg-ds-linen transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Mobile overflow actions tray — all secondary actions accessible on phone */}
         {mobileOverflowOpen && (
           <div
@@ -845,6 +993,21 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
                 <Ticket className="w-3 h-3" />
                 Book
               </button>
+              {(item.itemType === "hotel" || item.itemType === "meal" || item.itemType === "activity") && !confirmRemove && (
+                <button
+                  type="button"
+                  data-testid="itinerary-item-mobile-edit-metadata"
+                  onClick={() => {
+                    handleOpenMetaEditor();
+                    setMobileOverflowOpen(false);
+                    setConfirmRemove(false);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ds-hairline text-[10px] font-medium text-ds-folio-ink-soft hover:border-ds-marine-ink hover:text-ds-marine-ink transition-colors min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+                  aria-label={item.itemType === "hotel" ? "Edit stay dates" : item.itemType === "meal" ? "Edit reservation time" : "Edit entry time"}
+                >
+                  {item.itemType === "hotel" ? "Edit stay dates" : item.itemType === "meal" ? "Edit reservation" : "Edit entry time"}
+                </button>
+              )}
               {/* Non-destructive: Move to Ideas (corrected unplaceItemToIdeas path, all details preserved) */}
               {onUnplace && !confirmRemove && (
                 <button

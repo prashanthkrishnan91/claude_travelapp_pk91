@@ -2400,6 +2400,43 @@ export async function updateItemTimeline(
   return updateItem(itemId, { details: merged as ItineraryItem["details"] });
 }
 
+export async function updateItemMetadata(
+  itemId: string,
+  currentDetails: Record<string, unknown>,
+  patch: { checkIn?: string; checkOut?: string; reservationTime?: string; entryTime?: string }
+): Promise<ItineraryItem> {
+  const merged: Record<string, unknown> = { ...currentDetails };
+  if ("checkIn" in patch) {
+    if (patch.checkIn) {
+      merged.checkIn = patch.checkIn;
+    } else {
+      delete merged.checkIn;
+      delete merged.check_in;
+      delete merged.check_in_date;
+      delete merged.checkInDate;
+    }
+  }
+  if ("checkOut" in patch) {
+    if (patch.checkOut) {
+      merged.checkOut = patch.checkOut;
+    } else {
+      delete merged.checkOut;
+      delete merged.check_out;
+      delete merged.check_out_date;
+      delete merged.checkOutDate;
+    }
+  }
+  if ("reservationTime" in patch) {
+    if (patch.reservationTime) merged.reservationTime = patch.reservationTime;
+    else delete merged.reservationTime;
+  }
+  if ("entryTime" in patch) {
+    if (patch.entryTime) merged.entryTime = patch.entryTime;
+    else delete merged.entryTime;
+  }
+  return updateItem(itemId, { details: merged as ItineraryItem["details"] });
+}
+
 // ─── Smart Day Timeline AI Planning ──────────────────────────────────────────
 
 export interface TimelineSuggestion {
