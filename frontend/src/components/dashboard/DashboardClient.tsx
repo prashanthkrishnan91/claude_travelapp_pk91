@@ -336,7 +336,7 @@ function JourneyShelfTeaser({ trips }: { trips: Trip[] }) {
               </span>
             ))}
           </div>
-          <div className="atelier-archive-plate">
+          <div className="atelier-archive-plate hidden md:block">
             <p className="folio-serial atelier-archive-serial">
               ARCHIVE · {count} {count !== 1 ? "ENTRIES" : "ENTRY"}
             </p>
@@ -526,10 +526,12 @@ export function DashboardClient() {
           </div>
         </div>
 
-        {/* ── Cinematic shelf of rooms ─────────────────────────────── */}
-        <FolioReveal stagger={4}>
-          <AtelierPlanningStrip world={world} />
-        </FolioReveal>
+        {/* ── Cinematic shelf of rooms — desktop only (hidden on mobile) ─── */}
+        <div className="hidden md:block">
+          <FolioReveal stagger={4}>
+            <AtelierPlanningStrip world={world} />
+          </FolioReveal>
+        </div>
 
         {/* ── Travel archive (physical shelf of vertical folio spines) */}
         {hasTrips && (

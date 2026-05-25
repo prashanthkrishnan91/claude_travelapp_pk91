@@ -349,4 +349,65 @@ describe("Home Folio: behavior preservation", () => {
   test("40. editorial-scene preserved on root wrapper", () => {
     assert.match(dashboardClient, /editorial-scene/);
   });
+
+  test("41. AtelierPlanningStrip is wrapped in hidden md:block — absent on mobile, visible on desktop", () => {
+    // Find the render body (main return statement of DashboardClient)
+    const ret = dashboardClient.slice(dashboardClient.lastIndexOf("return ("));
+    const stripIdx = ret.indexOf("AtelierPlanningStrip");
+    assert.ok(stripIdx !== -1, "AtelierPlanningStrip must appear in the render body");
+    // The wrapper div immediately preceding AtelierPlanningStrip must carry hidden md:block
+    const before = ret.slice(0, stripIdx).slice(-300);
+    assert.ok(
+      before.includes("hidden md:block"),
+      "AtelierPlanningStrip must be wrapped in hidden md:block so 'Rooms in this house' is absent on mobile",
+    );
+  });
+
+  test("42. AtelierPlanningStrip testid and WorldRoomSwitcher contract unchanged inside the component", () => {
+    // The component definition itself is unchanged — only the call-site wrapper changed.
+    const start = dashboardClient.indexOf("function AtelierPlanningStrip");
+    const end = dashboardClient.indexOf("// ── Main component");
+    const block = dashboardClient.slice(start, end);
+    assert.ok(block.includes("atelier-planning-strip"), "AtelierPlanningStrip testid must remain in the component");
+    assert.ok(block.includes("WorldRoomSwitcher"), "AtelierPlanningStrip must still mount WorldRoomSwitcher");
+  });
+
+  test("43. atelier-archive-plate carries hidden md:block — decorative 'folios on the shelf / Open the cabinet' CTA absent on mobile", () => {
+    const start = dashboardClient.indexOf("function JourneyShelfTeaser");
+    const end = dashboardClient.indexOf("// ── Empty atelier");
+    const block = dashboardClient.slice(start, end);
+    const plateIdx = block.indexOf("atelier-archive-plate");
+    assert.ok(plateIdx !== -1, "atelier-archive-plate must exist in JourneyShelfTeaser");
+    // The plate class string must include hidden md:block so the decorative
+    // "ARCHIVE / 3 folios on the shelf / Open the cabinet" CTA is absent on mobile.
+    const classCtx = block.slice(plateIdx, plateIdx + 100);
+    assert.ok(
+      classCtx.includes("hidden md:block"),
+      "atelier-archive-plate must carry hidden md:block — decorative Archive CTA text is absent on mobile",
+    );
+  });
+
+  test("44. Trip card spines and atelier-archive-head remain visible on mobile (only plate hidden)", () => {
+    const start = dashboardClient.indexOf("function JourneyShelfTeaser");
+    const end = dashboardClient.indexOf("// ── Empty atelier");
+    const block = dashboardClient.slice(start, end);
+    // atelier-archive-head (New trip + View all) must NOT carry hidden md:block
+    const headIdx = block.indexOf("atelier-archive-head");
+    assert.ok(headIdx !== -1, "atelier-archive-head must exist");
+    const headCtx = block.slice(headIdx, headIdx + 200);
+    assert.ok(
+      !headCtx.includes("hidden md:block"),
+      "atelier-archive-head must NOT carry hidden md:block — New trip and View all stay visible on mobile",
+    );
+    // atelier-archive-link (contains trip card spines) must NOT carry hidden md:block
+    const linkIdx = block.indexOf("atelier-archive-link");
+    assert.ok(linkIdx !== -1, "atelier-archive-link must exist");
+    const linkClassCtx = block.slice(linkIdx, linkIdx + 200);
+    assert.ok(
+      !linkClassCtx.includes("hidden md:block"),
+      "atelier-archive-link must NOT carry hidden md:block — trip card spines stay visible on mobile",
+    );
+    // atelier-archive-spines must be present (trip cards)
+    assert.ok(block.includes("atelier-archive-spines"), "atelier-archive-spines must remain in the component");
+  });
 });
