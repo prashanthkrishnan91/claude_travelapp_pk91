@@ -308,7 +308,7 @@ function JourneyShelfTeaser({ trips }: { trips: Trip[] }) {
       </div>
       <Link
         href="/trips"
-        className="atelier-archive-link folio-paper-card atelier-curio-shelf block focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-ember-brass focus-visible:outline-offset-4 !bg-transparent !border-0 !shadow-none !p-0"
+        className="atelier-archive-link folio-paper-card atelier-curio-shelf hidden md:block focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-ember-brass focus-visible:outline-offset-4 !bg-transparent !border-0 !shadow-none !p-0"
         aria-label="Open your travel shelf"
       >
         <div className="atelier-archive-open" data-folio-count={count}>

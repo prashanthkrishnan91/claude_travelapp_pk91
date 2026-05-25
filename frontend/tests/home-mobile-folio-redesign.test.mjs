@@ -371,4 +371,38 @@ describe("Home Folio: behavior preservation", () => {
     assert.ok(block.includes("atelier-planning-strip"), "AtelierPlanningStrip testid must remain in the component");
     assert.ok(block.includes("WorldRoomSwitcher"), "AtelierPlanningStrip must still mount WorldRoomSwitcher");
   });
+
+  test("43. atelier-archive-link carries hidden md:block — decorative Archive CTA absent on mobile, visible on desktop", () => {
+    const start = dashboardClient.indexOf("function JourneyShelfTeaser");
+    const end = dashboardClient.indexOf("// ── Empty atelier");
+    const block = dashboardClient.slice(start, end);
+    const linkIdx = block.indexOf("atelier-archive-link");
+    assert.ok(linkIdx !== -1, "atelier-archive-link must exist in JourneyShelfTeaser");
+    // The archive link class string must include hidden md:block so the decorative
+    // "Open the cabinet" block is absent on mobile (duplicate of bottom-nav My Trips).
+    const classCtx = block.slice(linkIdx, linkIdx + 300);
+    assert.ok(
+      classCtx.includes("hidden md:block"),
+      "atelier-archive-link must carry hidden md:block — decorative Archive CTA is absent on mobile",
+    );
+  });
+
+  test("44. atelier-archive-head (New trip + View all) is NOT hidden on mobile", () => {
+    const start = dashboardClient.indexOf("function JourneyShelfTeaser");
+    const end = dashboardClient.indexOf("// ── Empty atelier");
+    const block = dashboardClient.slice(start, end);
+    // The head section (containing home-new-trip-action and View all links) must
+    // NOT carry hidden md:block — these actions remain visible on mobile.
+    const headIdx = block.indexOf("atelier-archive-head");
+    assert.ok(headIdx !== -1, "atelier-archive-head must exist in JourneyShelfTeaser");
+    const headCtx = block.slice(headIdx, headIdx + 500);
+    assert.ok(
+      headCtx.includes("home-new-trip-action"),
+      "atelier-archive-head must contain home-new-trip-action — New trip stays visible on mobile",
+    );
+    assert.ok(
+      !headCtx.slice(0, headCtx.indexOf("atelier-archive-link") === -1 ? headCtx.length : headCtx.indexOf("atelier-archive-link")).includes("hidden md:block"),
+      "atelier-archive-head must NOT carry hidden md:block — New trip and View all stay visible on mobile",
+    );
+  });
 });
