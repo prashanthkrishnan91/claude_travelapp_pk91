@@ -96,7 +96,11 @@ test("decision strip renders with a calm brass dot and honest, trip-level summar
 });
 
 test("decision strip is calm paper, never a red/alert banner", () => {
-  assert.doesNotMatch(panel, /ds-warning|bg-red|alert|urgent/i);
+  // Check only the decision-strip JSX region (not the whole panel, which now has a
+  // legitimate text-ds-warning on the Remove confirm button for the destructive action).
+  const stripRegion = panel.match(/data-testid="jd-decision-strip"[\s\S]{0,500}/)?.[0] ?? "";
+  assert.ok(stripRegion.length > 0, "jd-decision-strip must be present");
+  assert.doesNotMatch(stripRegion, /ds-warning|bg-red|alert|urgent/i);
   const idx = css.indexOf(".jd-decision-strip {");
   assert.ok(idx !== -1, ".jd-decision-strip must be defined");
   assert.doesNotMatch(css.slice(idx, idx + 220), /--ds-warning|--ds-whisper-coral/);
@@ -163,4 +167,79 @@ test("v1A/v1B surfaces are not regressed (cover, Brief, Dayboard, Ideas Tray pre
 test("expanded day + item surfaces are token-built paper", () => {
   assert.match(css, /\.journey-desk-day \{/);
   assert.match(css, /\.jd-day-item \{/);
+});
+
+// ── Slice 1: per-item actions — Back to Ideas + Remove from trip ──────────────
+
+test("ExpandedDayPanel renders a per-item action toggle (MoreHorizontal kebab)", () => {
+  assert.match(panel, /data-testid="jd-item-action-toggle"/);
+  assert.match(panel, /MoreHorizontal/);
+  assert.match(panel, /aria-label="Item actions"/);
+  assert.match(panel, /aria-haspopup="menu"/);
+});
+
+test("item action menu has Back to Ideas and Remove from trip labels", () => {
+  assert.match(panel, /data-testid="jd-item-back-to-ideas"/);
+  assert.match(panel, /Back to Ideas/);
+  assert.match(panel, /data-testid="jd-item-remove"/);
+  assert.match(panel, /Remove from trip/);
+});
+
+test("Back to Ideas calls onUnplace with item.id and current details — never moveIdeaToTripIdeas", () => {
+  // Must invoke the corrected unplace prop
+  assert.match(panel, /onUnplace\?\.\(item\.id/);
+  // Must never import or invoke the legacy orphan-gap path
+  assert.doesNotMatch(panel, /moveIdeaToTripIdeas/);
+});
+
+test("Back to Ideas is non-destructive — never calls onRemoveItem", () => {
+  // handleBackToIdeas calls onUnplace, not onRemoveItem
+  assert.match(panel, /function handleBackToIdeas/);
+  assert.doesNotMatch(panel, /onRemoveItem\?\.\([\s\S]{0,40}handleBackToIdeas/);
+});
+
+test("Remove from trip requires confirm before calling onRemoveItem (two-step)", () => {
+  // First click arms the confirm step; only onConfirmRemove calls onRemoveItem
+  assert.match(panel, /confirmItemId/);
+  assert.match(panel, /handleRequestRemove/);
+  assert.match(panel, /handleConfirmRemove/);
+  assert.match(panel, /data-testid="jd-item-remove-confirm"/);
+  assert.match(panel, /data-testid="jd-item-remove-confirm-yes"/);
+  assert.match(panel, /data-testid="jd-item-remove-cancel"/);
+});
+
+test("onRemoveItem is not called without the confirm step", () => {
+  // onRequestRemove only sets confirmItemId; onRemoveItem is called in handleConfirmRemove only
+  assert.match(panel, /function handleRequestRemove\(itemId: string\) \{[\s\S]{0,60}setConfirmItemId\(itemId\)/);
+  assert.match(panel, /function handleConfirmRemove\(itemId: string\) \{[\s\S]{0,80}onRemoveItem\?\.\(itemId\)/);
+});
+
+test("ExpandedDayPanel never imports or calls deleteItem directly", () => {
+  assert.doesNotMatch(panel, /deleteItem/);
+});
+
+test("page wires onUnplace to handleItemUnplace for ExpandedDayPanel", () => {
+  assert.match(page, /onUnplace=\{handleItemUnplace\}/);
+});
+
+test("page wires onRemoveItem to handleIdeaRemove for ExpandedDayPanel", () => {
+  assert.match(page, /onRemoveItem=\{handleIdeaRemove\}/);
+});
+
+test("Brief (TripBrief) stays read-only — no unplace or remove handlers", () => {
+  const brief = readFileSync(
+    new URL("../src/components/trips/TripBrief.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(brief, /onUnplace|onRemoveItem|deleteItem/);
+});
+
+test("IdeasTray is untouched — no unplace or remove-item wiring added", () => {
+  const tray = readFileSync(
+    new URL("../src/components/trips/IdeasTray.tsx", import.meta.url),
+    "utf8",
+  );
+  // IdeasTray should not have been modified: no onUnplace prop, no jd-item-action-toggle
+  assert.doesNotMatch(tray, /jd-item-action-toggle/);
+  assert.doesNotMatch(tray, /jd-item-remove-confirm/);
 });

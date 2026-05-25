@@ -572,6 +572,8 @@ export default function TripDetailPage() {
                 ideasCount={tripIdeas.length}
                 onAddFromIdeas={() => setIdeasTrayOpen(true)}
                 onEditInItinerary={() => setActiveMobileWorkspace("itinerary")}
+                onUnplace={handleItemUnplace}
+                onRemoveItem={handleIdeaRemove}
               />
             ) : null}
           />

@@ -1,6 +1,7 @@
 "use client";
 
-import { Sparkles, Star } from "lucide-react";
+import { useState } from "react";
+import { MoreHorizontal, Sparkles, Star } from "lucide-react";
 import type { ItineraryDay, ItineraryItem } from "@/types";
 import { groupJourneyDeskDay } from "@/lib/dayParts";
 
@@ -76,6 +77,11 @@ export interface ExpandedDayPanelProps {
   onEditInItinerary?: () => void;
   /** Opens the Add-to-Day vertical picker for this day (day-scoped add flow). */
   onAddToDay?: () => void;
+  /** Non-destructive unplace: removes from the day, keeps it as an idea.
+   *  Must use the corrected unplaceItemToIdeas path (via page handleItemUnplace). */
+  onUnplace?: (itemId: string, currentDetails: Record<string, unknown>) => void;
+  /** Destructive delete — called only after the user confirms the confirm step. */
+  onRemoveItem?: (itemId: string) => void;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -86,7 +92,15 @@ export interface ExpandedDayPanelProps {
 // decision strip summarizes open decisions honestly and opens the Ideas Tray.
 // Read-only except for that existing tray placement flow.
 
-export function ExpandedDayPanel({ day, ideasCount, onAddFromIdeas, onEditInItinerary, onAddToDay }: ExpandedDayPanelProps) {
+export function ExpandedDayPanel({
+  day,
+  ideasCount,
+  onAddFromIdeas,
+  onEditInItinerary,
+  onAddToDay,
+  onUnplace,
+  onRemoveItem,
+}: ExpandedDayPanelProps) {
   const groups = groupJourneyDeskDay(day.items ?? []);
   const hasItems = (day.items ?? []).length > 0;
   const whereLine = day.title || day.summary || "";
@@ -101,6 +115,41 @@ export function ExpandedDayPanel({ day, ideasCount, onAddFromIdeas, onEditInItin
   else if (ideasCount > 0) decision = ideaPhrase;
   else decision = "No open decisions";
   const showAddFromIdeas = ideasCount > 0;
+
+  // Per-item action state — only one item's menu open / pending confirm at a time.
+  const [openItemId,   setOpenItemId]   = useState<string | null>(null);
+  const [confirmItemId, setConfirmItemId] = useState<string | null>(null);
+  const hasItemActions = !!(onUnplace || onRemoveItem);
+
+  function handleToggleMenu(itemId: string) {
+    if (openItemId === itemId) {
+      setOpenItemId(null);
+      setConfirmItemId(null);
+    } else {
+      setOpenItemId(itemId);
+      setConfirmItemId(null);
+    }
+  }
+
+  function handleBackToIdeas(item: ItineraryItem) {
+    setOpenItemId(null);
+    setConfirmItemId(null);
+    onUnplace?.(item.id, (item.details ?? {}) as Record<string, unknown>);
+  }
+
+  function handleRequestRemove(itemId: string) {
+    setConfirmItemId(itemId);
+  }
+
+  function handleConfirmRemove(itemId: string) {
+    setOpenItemId(null);
+    setConfirmItemId(null);
+    onRemoveItem?.(itemId);
+  }
+
+  function handleCancelRemove() {
+    setConfirmItemId(null);
+  }
 
   return (
     <section
@@ -173,7 +222,18 @@ export function ExpandedDayPanel({ day, ideasCount, onAddFromIdeas, onEditInItin
               </p>
               <ul className="flex flex-col gap-2">
                 {group.items.map((item) => (
-                  <ExpandedDayItemCard key={item.id} item={item} />
+                  <ExpandedDayItemCard
+                    key={item.id}
+                    item={item}
+                    menuOpen={openItemId === item.id}
+                    confirmPending={confirmItemId === item.id}
+                    onToggleMenu={() => handleToggleMenu(item.id)}
+                    onBackToIdeas={() => handleBackToIdeas(item)}
+                    onRequestRemove={() => handleRequestRemove(item.id)}
+                    onConfirmRemove={() => handleConfirmRemove(item.id)}
+                    onCancelRemove={handleCancelRemove}
+                    showActions={hasItemActions}
+                  />
                 ))}
               </ul>
             </div>
@@ -184,9 +244,31 @@ export function ExpandedDayPanel({ day, ideasCount, onAddFromIdeas, onEditInItin
   );
 }
 
-// ── Read-only placed-item card ────────────────────────────────────────────────
+// ── Placed-item card — read-only display + optional per-item actions ──────────
 
-function ExpandedDayItemCard({ item }: { item: ItineraryItem }) {
+interface ItemCardProps {
+  item: ItineraryItem;
+  menuOpen: boolean;
+  confirmPending: boolean;
+  onToggleMenu: () => void;
+  onBackToIdeas: () => void;
+  onRequestRemove: () => void;
+  onConfirmRemove: () => void;
+  onCancelRemove: () => void;
+  showActions: boolean;
+}
+
+function ExpandedDayItemCard({
+  item,
+  menuOpen,
+  confirmPending,
+  onToggleMenu,
+  onBackToIdeas,
+  onRequestRemove,
+  onConfirmRemove,
+  onCancelRemove,
+  showActions,
+}: ItemCardProps) {
   const note = userNoteOf(item);
   const reason = reasonOf(item);
   const rating = ratingOf(item);
@@ -200,11 +282,98 @@ function ExpandedDayItemCard({ item }: { item: ItineraryItem }) {
 
   return (
     <li className="jd-day-item p-3" data-testid="jd-day-item">
-      <div className="flex items-baseline gap-2.5">
-        {time && (
-          <span className="flex-shrink-0 font-serif italic text-sm text-ds-folio-ink-mist tabular-nums">{time}</span>
+      {/* Title row: time + title + optional action toggle */}
+      <div className="flex items-start gap-2.5">
+        <div className="flex-1 flex items-baseline gap-2.5 min-w-0">
+          {time && (
+            <span className="flex-shrink-0 font-serif italic text-sm text-ds-folio-ink-mist tabular-nums">{time}</span>
+          )}
+          <h4 className="font-serif text-sm font-semibold text-ds-folio-ink leading-snug">{item.title}</h4>
+        </div>
+
+        {/* Per-item overflow — Back to Ideas + Remove from trip (Slice 1) */}
+        {showActions && (
+          <div className="relative flex-shrink-0">
+            <button
+              type="button"
+              data-testid="jd-item-action-toggle"
+              onClick={onToggleMenu}
+              aria-label="Item actions"
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              className="flex items-center justify-center w-7 h-7 rounded text-ds-folio-ink-mist hover:text-ds-folio-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+            >
+              <MoreHorizontal className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+
+            {menuOpen && (
+              <>
+                {/* Tap-away dismiss */}
+                <button
+                  type="button"
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  onClick={onToggleMenu}
+                  className="fixed inset-0 z-10 cursor-default"
+                />
+                <div
+                  role="menu"
+                  data-testid="jd-item-actions"
+                  className="absolute right-0 top-full z-20 mt-1 min-w-[200px] rounded-lg border border-ds-hairline bg-ds-paper p-1 shadow-[var(--ds-paper-elevation-2)]"
+                >
+                  {confirmPending ? (
+                    /* Two-step confirm for Remove — never destructive on first click */
+                    <div className="p-2" data-testid="jd-item-remove-confirm">
+                      <p className="px-1 pb-2 text-xs text-ds-folio-ink-soft leading-snug">
+                        Remove this item from the trip permanently?
+                      </p>
+                      <button
+                        type="button"
+                        data-testid="jd-item-remove-confirm-yes"
+                        onClick={onConfirmRemove}
+                        className="w-full inline-flex items-center justify-center min-h-[36px] rounded-md text-sm font-semibold text-ds-warning ring-1 ring-ds-warning/40 hover:bg-ds-warning/10 transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-warning focus-visible:outline-offset-2"
+                      >
+                        Confirm remove from trip
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="jd-item-remove-cancel"
+                        onClick={onCancelRemove}
+                        className="w-full mt-1 inline-flex items-center justify-center min-h-[36px] rounded-md text-xs text-ds-folio-ink-soft hover:text-ds-folio-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Non-destructive: unplace back to Ideas (corrected unplaceItemToIdeas path) */}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-testid="jd-item-back-to-ideas"
+                        onClick={onBackToIdeas}
+                        title="Move back to your Ideas (keeps all details)"
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ds-folio-ink-soft hover:text-ds-folio-ink hover:bg-ds-linen rounded-md transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+                      >
+                        Back to Ideas
+                      </button>
+                      {/* Destructive: Remove from trip — first click arms the confirm step */}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-testid="jd-item-remove"
+                        onClick={onRequestRemove}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ds-warning hover:bg-ds-warning/10 rounded-md transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-warning focus-visible:outline-offset-2"
+                      >
+                        Remove from trip
+                      </button>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         )}
-        <h4 className="font-serif text-sm font-semibold text-ds-folio-ink leading-snug">{item.title}</h4>
       </div>
 
       {(rating || location) && (
