@@ -73,7 +73,6 @@ import {
   addAttractionToDay,
   addRestaurantToDay,
   addHotelToDay,
-  moveIdeaToTripIdeas,
   fetchExploreSnapshot,
 } from "@/lib/api";
 import { buildTripCandidateBuckets, mergePersistedWithSnapshot } from "@/lib/tripCandidates";
@@ -1254,11 +1253,14 @@ interface TripBuilderProps {
   /** Called after any successful persisted add so the parent (page.tsx) can refresh
    *  its own itineraryDays / tripIdeas state. NOT fired on failed adds. */
   onItineraryChanged?: () => void;
+  /** Durable unplace handler from page.tsx (unplaceItemToIdeas → PATCH day_id:null +
+   *  curated source_kind, all details preserved). Never calls deleteItem. */
+  onUnplace?: (itemId: string, currentDetails: Record<string, unknown>) => void;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned, mobileWorkspace, focusDayId, focusVertical, onAddToDay, onItineraryChanged }: TripBuilderProps) {
+export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned, mobileWorkspace, focusDayId, focusVertical, onAddToDay, onItineraryChanged, onUnplace }: TripBuilderProps) {
   const [days,           setDays]          = useState<ItineraryDay[]>(
     [...initialDays].sort((a, b) => a.dayNumber - b.dayNumber)
   );
@@ -1317,7 +1319,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const [compareOpen,    setCompareOpen]    = useState(false);
   const [compareResults, setCompareResults] = useState<CompareResult[]>([]);
   const [compareLoading, setCompareLoading] = useState(false);
-  const [ideasRefreshNonce, setIdeasRefreshNonce] = useState(0);
+  const [ideasRefreshNonce] = useState(0);
   const compareDataRef = useRef<Map<string, { name: string; itemType: string; cashPrice: number; pointsCost: number; rating?: number; lat?: number; lng?: number }>>(new Map());
 
   const sensors = useSensors(
@@ -1744,21 +1746,11 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     try { await deleteItem(itemId); } catch { /* silently ignore */ }
   }, []);
 
-  const handleMoveItemToIdeas = useCallback(async (itemId: string, dayId: string) => {
-    setDays((prev) =>
-      prev.map((d) =>
-        d.id === dayId
-          ? { ...d, items: d.items.filter((i) => i.id !== itemId).map((i, idx) => ({ ...i, position: idx })) }
-          : d
-      )
-    );
-    try {
-      await moveIdeaToTripIdeas(itemId);
-      setIdeasRefreshNonce((k) => k + 1);
-    } catch {
-      showToast("Failed to move idea back to Trip Ideas");
+  const handleMoveItemToIdeas = useCallback(async (itemId: string, currentDetails: Record<string, unknown>) => {
+    if (onUnplace) {
+      await onUnplace(itemId, currentDetails);
     }
-  }, [showToast]);
+  }, [onUnplace]);
 
   // ── Add empty note to a day ──────────────────────────────────────────────────
 

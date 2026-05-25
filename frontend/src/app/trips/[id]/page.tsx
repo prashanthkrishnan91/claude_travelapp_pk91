@@ -658,6 +658,7 @@ export default function TripDetailPage() {
             focusVertical={buildFocusVertical}
             onAddToDay={handleOpenAddToDay}
             onItineraryChanged={refreshParentItinerary}
+            onUnplace={handleItemUnplace}
             onIdeaAssigned={() => {
               const startDate = (trip as (Trip & { start_date?: string }) | null)?.startDate
                 ?? (trip as (Trip & { start_date?: string }) | null)?.start_date;

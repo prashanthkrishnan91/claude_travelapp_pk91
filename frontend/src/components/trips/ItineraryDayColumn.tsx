@@ -103,7 +103,7 @@ interface TimelineSectionsProps {
   items: ItineraryItem[];
   dayId: string;
   onRemoveItem: (itemId: string, dayId: string) => void;
-  onMoveItemToIdeas?: (itemId: string, dayId: string) => void;
+  onMoveItemToIdeas?: (itemId: string, currentDetails: Record<string, unknown>) => void;
   onToggleCompare?: (item: ItineraryItem) => void;
   compareSet?: Set<string>;
   onUpdateTimeline?: (updatedItem: ItineraryItem) => void;
@@ -113,7 +113,7 @@ function renderItemsWithConnectors(
   items: ItineraryItem[],
   dayId: string,
   onRemoveItem: (itemId: string, dayId: string) => void,
-  onMoveItemToIdeas?: (itemId: string, dayId: string) => void,
+  onMoveItemToIdeas?: (itemId: string, currentDetails: Record<string, unknown>) => void,
   onToggleCompare?: (item: ItineraryItem) => void,
   compareSet?: Set<string>,
   onUpdateTimeline?: (updatedItem: ItineraryItem) => void,
@@ -125,7 +125,7 @@ function renderItemsWithConnectors(
         key={item.id}
         item={item}
         onRemove={(itemId) => onRemoveItem(itemId, dayId)}
-        onMoveToIdeas={onMoveItemToIdeas ? (itemId) => onMoveItemToIdeas(itemId, dayId) : undefined}
+        onUnplace={onMoveItemToIdeas}
         onToggleCompare={onToggleCompare}
         isComparing={compareSet?.has(item.id)}
         onTimelineUpdated={onUpdateTimeline}
@@ -362,7 +362,7 @@ interface ItineraryDayColumnProps {
   isExpanded?: boolean;
   onToggleExpanded?: (dayNumber: number) => void;
   onRemoveItem: (itemId: string, dayId: string) => void;
-  onMoveItemToIdeas?: (itemId: string, dayId: string) => void;
+  onMoveItemToIdeas?: (itemId: string, currentDetails: Record<string, unknown>) => void;
   onAddItem: (dayId: string) => void;
   onToggleCompare?: (item: ItineraryItem) => void;
   compareSet?: Set<string>;

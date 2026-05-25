@@ -362,8 +362,8 @@ describe("Phase 8L: existing critical testids and behavior preserved", () => {
     assert.ok(itemCardSrc.includes("onRemove"), "onRemove must be preserved in ItineraryItemCard");
   });
 
-  it("onMoveToIdeas handler preserved in ItineraryItemCard", () => {
-    assert.ok(itemCardSrc.includes("onMoveToIdeas"), "onMoveToIdeas must be preserved in ItineraryItemCard");
+  it("onUnplace handler present in ItineraryItemCard (normalized from onMoveToIdeas)", () => {
+    assert.ok(itemCardSrc.includes("onUnplace"), "onUnplace must be present in ItineraryItemCard");
   });
 
   it("onToggleCompare handler preserved in ItineraryItemCard", () => {

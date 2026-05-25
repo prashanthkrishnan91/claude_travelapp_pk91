@@ -347,8 +347,8 @@ test('Phase 8D: onMoveItemToIdeas prop threading preserved', () => {
   assert.ok(src.includes('onMoveItemToIdeas'), 'onMoveItemToIdeas prop threading missing');
 });
 
-test('Phase 8D: onMoveToIdeas passed to ItineraryItemCard', () => {
-  assert.ok(src.includes('onMoveToIdeas={'), 'onMoveToIdeas prop not passed to ItineraryItemCard');
+test('Phase 8D: onUnplace passed to ItineraryItemCard (normalized from onMoveToIdeas)', () => {
+  assert.ok(src.includes('onUnplace={'), 'onUnplace prop must be passed to ItineraryItemCard');
 });
 
 test('Phase 8D: onRemoveItem passed to ItineraryItemCard', () => {
