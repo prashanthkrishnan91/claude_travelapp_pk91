@@ -9416,6 +9416,16 @@
     .jd-vertical-target:hover { box-shadow: var(--ds-paper-elevation-1); }
   }
 
+  /* ── Journey Desk — Ideas Tab polish ─────────────────────────────────────────
+     Ideas tab is the canonical "manage ideas" workspace: review, search/filter/
+     sort, set priority (Must-do/Maybe/Skip), and edit notes. Paper world; brass
+     accent; marine ink on the active filter chip. */
+
+  /* Workspace header hairline — visually anchors the Ideas panel header */
+  .jd-ideas-workspace-header {
+    border-bottom: 1px solid color-mix(in srgb, var(--ds-hairline) 70%, transparent);
+  }
+
   /* ── Journey Desk v2C — real Trip Lens pin map ─────────────────────────────
      A premium "folded atlas" surface: warm paper frame around a muted OSM tile
      layer, paper-styled Leaflet controls, and brass-rimmed marine stamps. Pins

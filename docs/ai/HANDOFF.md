@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-25 (IdeasTray IA pivot — placement-first only; Brief → Ideas tab; current branch)
+Last updated: 2026-05-25 (Journey Desk Ideas tab polish — management workspace; current branch)
 
 ## Purpose
 
@@ -10,7 +10,24 @@ This file is **current operational state**, not a historical log. It must stay c
 
 **Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) merged #478. **Home mobile IA cleanup (hide "Rooms in this house" on mobile) is the current branch.**
 
-### IdeasTray IA pivot — placement-first only (current branch, PR #481)
+### Journey Desk — Ideas tab polish (current branch)
+
+Polishes `TripIdeasPanel` as the canonical "manage ideas" workspace within the Private Travel Atelier design direction. Establishes clear IA split: IdeasTray = placement-first overlay; Ideas tab = full management surface.
+
+**What changed (frontend-only):**
+- `TripIdeasPanel.tsx`: serif `<h2>` "Ideas" heading + adaptive subtitle; `.jd-ideas-workspace-header` workspace identity block; "Show" label + direct inline-flex filter chips; labeled "Priority" section with `data-testid="ideas-tab-status-chips"`, `aria-pressed`, `ring-1 ring-ds-hairline` paper-world tokens; Pencil icon for note toggle (no emoji), `"Edit note" : "Add note"` copy, `data-testid="ideas-tab-note-textarea"`, placeholder "Add a private note…"; "No ideas yet" + Bookmark icon + real sources empty state; "No matching ideas" + Reset filters no-results state; "Preparing your ideas…" loading state.
+- `globals.css`: `.jd-ideas-workspace-header` CSS primitive (hairline `border-bottom`, `@layer components`).
+- New `tests/journey-desk-ideas-tab-polish.test.mjs` (29 source-scan tests): all pass.
+- Updated `tests/trip-ideas.test.mjs`: "Clear ×" → "Reset"; empty/no-results copy assertions updated.
+
+**IA contract preserved:**
+- Brief "Review ideas" → `setActiveMobileWorkspace("ideas")` (Ideas tab)
+- ExpandedDayPanel "Add from Ideas" → `setIdeasTrayOpen(true)` (IdeasTray)
+- IdeasTray: no note editor, no status chips (placement-first only)
+
+**Tests:** 3835 total; 3815 pass; 20 PRE-EXISTING failures (verified identical to baseline via git stash). 29/29 new tab-polish tests pass; 57/57 unified-arch tests pass.
+
+### IdeasTray IA pivot — placement-first only (merged, PR #481)
 
 Corrects IdeasTray's IA direction. The tray is a quick-placement overlay, not a duplicate of the Ideas tab. Note editing and status management belong in the Ideas tab.
 
@@ -25,7 +42,7 @@ Corrects IdeasTray's IA direction. The tray is a quick-placement overlay, not a 
 
 **Frontend-only; 3 files changed** (`IdeasTray.tsx`, `journey-desk-ideas-tray.test.mjs`, `page.tsx` one line); no backend, SQL, provider, route, map, MapTiler, search, or TripIdeasPanel change.
 
-**Tests:** 37 → 32 tests (removed 10 note-editor + status-chip tests; added 5 IA-contract tests: Brief routes to workspace, Brief does NOT open tray, ExpandedDayPanel still opens tray, no note editor, no status chips). **32/32 pass.**
+**Tests:** 37 → 32 tests (removed 10 note-editor + status-chip tests; added 5 IA-contract tests). **32/32 pass.**
 
 ### Desktop nav label cleanup — "Home" + "Discover" consistency (merged, PR pending)
 
@@ -323,7 +340,7 @@ Two Level 2 user-visible regressions fixed after PR #460 merged:
 **3139 frontend tests, 0 failures.** No backend suite run (no pytest in this environment); tsc/next build not run locally (node_modules absent) — CI `certify` validates.
 
 ### Next step
-**IdeasTray parity PR 1** (note editing + status controls) is the current branch. After merge: IdeasTray parity PR 2 (decide whether to fold/demote the legacy Ideas tab once adoption is confirmed). Deferred: full desktop three-zone, consolidate the day-part classifier (mirrored in `lib/dayParts.ts` + `ItineraryDayColumn`). Visual Itinerary Map v1C (pin-visibility hide/show) waits for a durable preference/status contract. Placement stays day-level (`assignIdeaToDay`); no slot-level persistence.
+**Ideas tab polish** is the current branch (PR open). After merge: decide whether to fold/demote the legacy Ideas tab now that the Ideas tab is a full management surface and the IdeasTray is placement-first only. Deferred: full desktop three-zone, consolidate the day-part classifier (mirrored in `lib/dayParts.ts` + `ItineraryDayColumn`). Visual Itinerary Map v1C (pin-visibility hide/show) waits for a durable preference/status contract. Placement stays day-level (`assignIdeaToDay`); no slot-level persistence.
 
 ## Current architecture / runtime state
 
@@ -340,7 +357,9 @@ Two Level 2 user-visible regressions fixed after PR #460 merged:
 
 ## Recent meaningful PRs
 
-- 2026-05-24 — **PR open (current branch)** — Journey Desk mobile IA closeout PR 1: inline day expansion + Add-to-Day drawer. 35 new tests. 3315 pass, 10 PRE-EXISTING failures.
+- 2026-05-25 — **PR open (current branch)** — Journey Desk Ideas tab polish: serif heading, workspace identity, filter/sort/status controls, note editing, polished empty/loading/no-results states. 29 new tests. 3835 total, 3815 pass, 20 PRE-EXISTING failures.
+- 2026-05-25 — **PR #481 MERGED** — IdeasTray IA pivot: placement-first only; Brief → Ideas tab; ExpandedDayPanel → IdeasTray. 32/32 tests.
+- 2026-05-24 — **PR #480 MERGED** — Journey Desk mobile IA closeout PR 1: inline day expansion + Add-to-Day drawer. 35 new tests. 3315 pass, 10 PRE-EXISTING failures.
 - 2026-05-23 — **PR #477 MERGED** — Visual Itinerary Map v1B: safe map management + planned pin actions (hybrid Map/Move/More row, Back to Ideas unplace, destructive safety, selection sync). 106 targeted tests green.
 - 2026-05-21 — **PR open (current branch)** — Explore regression fixes: hotel compare dates + flights per-offer prices. 2 backend tests, 10 frontend tests added, 2 pre-existing test failures fixed. 3134 tests, 0 failures.
 - 2026-05-21 — **PR #460 MERGED** — Explore Observatory v1 (/explore premium reskin). 3065 tests, 0 failures.
