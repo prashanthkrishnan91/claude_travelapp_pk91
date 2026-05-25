@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-24 (Home mobile IA cleanup — hide "Rooms in this house" on mobile; current branch)
+Last updated: 2026-05-25 (Home mobile IA cleanup — PR #479 merged)
 
 ## Purpose
 
@@ -8,14 +8,15 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) merged #478. **Home mobile IA cleanup (hide "Rooms in this house" on mobile) is the current branch.**
+**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 #478 (inline day expansion + Add-to-Day drawer) merged. **Home mobile IA cleanup PR #479 merged — mobile Home IA is now clean.**
 
-### Home mobile IA cleanup — hide "Rooms in this house" on mobile (current branch)
+### Home mobile IA cleanup (merged, PR #479)
 
-Removes the `AtelierPlanningStrip` ("Rooms in this house" / `WorldRoomSwitcher`) from the mobile Home view. All four rooms are reachable from bottom nav and the hero CTA, so the shelf is duplicate on mobile. Desktop behavior unchanged. **Frontend-only; 2 files changed; no SQL, backend, provider, route, ROOM_CATALOGUE, nav, hero CTA, Travel Shelf, My Trips, Concierge, Explore, Saved, or Journey Desk change.**
-- **Change:** `DashboardClient.tsx` wraps the `<FolioReveal stagger={4}><AtelierPlanningStrip /></FolioReveal>` in `<div className="hidden md:block">` — absent on mobile (`<768px`), visible on desktop.
-- **Unchanged:** `AtelierPlanningStrip` component definition, `WorldRoomSwitcher`, `ROOM_CATALOGUE` hrefs, bottom nav, hero CTA, Travel Shelf, My Trips, trip creation, Concierge, Explore, Saved, Journey Desk.
-- **Tests:** 2 new assertions in `tests/home-mobile-folio-redesign.test.mjs` (tests 41, 42): wrapper has `hidden md:block`; `AtelierPlanningStrip` testid and `WorldRoomSwitcher` intact inside the component. 3327 total tests, 3315 pass, 12 PRE-EXISTING failures (vs baseline 3325/3313/12 before this branch — 2 new tests, both pass, 0 new failures).
+Removed two duplicate decorative nav layers from mobile Home. Desktop behavior unchanged. **Frontend-only; no SQL, backend, provider, route, ROOM_CATALOGUE, nav, hero CTA, Travel Shelf, My Trips, Concierge, Explore, Saved, or Journey Desk change.**
+- **"Rooms in this house" hidden on mobile:** `DashboardClient.tsx` wraps the `<FolioReveal><AtelierPlanningStrip /></FolioReveal>` in `<div className="hidden md:block">`. All four rooms reachable via bottom nav and hero CTA.
+- **Archive CTA plate hidden on mobile:** `atelier-archive-plate` div gains `hidden md:block` — the "ARCHIVE / N folios on the shelf / Open the cabinet" CTA text is gone on mobile. Trip card spines (`atelier-archive-spines`) and archive head (New trip + View all) stay visible.
+- **Mobile Home hierarchy (final):** Hero / "Step into the salon" → active trip folio or empty-state → Travel Shelf head (New trip, View all) + trip card spines → Bottom nav.
+- **Tests:** 4 new source-scan assertions in `tests/home-mobile-folio-redesign.test.mjs` (tests 41–44). 3329 total, 3317 pass, 12 pre-existing failures (0 new).
 
 ### Journey Desk mobile IA closeout PR 1 — inline day expansion + Add-to-Day drawer (merged #478)
 
