@@ -40,6 +40,7 @@ Use this file before non-trivial implementation, review, or follow-up prompts. A
 - PR body section headers must use `## SectionName` markdown headers exactly. Using `**SectionName:**` bold inline fails the substring gate even when the content is correct.
 - **Always start from `.github/pull_request_template.md` verbatim — never compose a PR body from scratch.** Composing from scratch reliably omits required anchors (`## Severity`, `## Validation`, `SQL / env / providers / UI`) and causes CI hard-failures. This miss occurred twice (PR #394 and PR #397). The local checker silently skips section checks when no `--pr-body-file` is given, giving a false PASS that CI then rejects.
 - PR body updates via the GitHub API after a push do NOT affect already-queued CI runs. The body in `GITHUB_EVENT_PATH` is snapshot at trigger time. Body must be correct before the triggering push, or a new commit is required to re-trigger CI with the updated body.
+- **Never rename the `SQL / env / providers / UI` section header to avoid triggering `RUNTIME_RE`.** The header is a required literal (Check B). The word "providers" in it triggers Check E (runtime gate), but `has_evidence` uses the ORIGINAL body — adding a `Failure seam` / `failure-seam` keyword anywhere in the body is sufficient. Renaming the header breaks Check B instead. Fix: keep the required header literal AND add the evidence keyword.
 
 ## Validation failures
 

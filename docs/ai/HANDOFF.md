@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-25 (IdeasTray IA pivot — placement-first only; Brief → Ideas tab; current branch)
+Last updated: 2026-05-25 (IdeasTray IA pivot merged #481 — placement-first only; Brief → Ideas tab)
 
 ## Purpose
 
@@ -10,7 +10,7 @@ This file is **current operational state**, not a historical log. It must stay c
 
 **Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) merged #478. **Home mobile IA cleanup (hide "Rooms in this house" on mobile) is the current branch.**
 
-### IdeasTray IA pivot — placement-first only (current branch, PR #481)
+### IdeasTray IA pivot — placement-first only (merged #481)
 
 Corrects IdeasTray's IA direction. The tray is a quick-placement overlay, not a duplicate of the Ideas tab. Note editing and status management belong in the Ideas tab.
 
@@ -26,6 +26,8 @@ Corrects IdeasTray's IA direction. The tray is a quick-placement overlay, not a 
 **Frontend-only; 3 files changed** (`IdeasTray.tsx`, `journey-desk-ideas-tray.test.mjs`, `page.tsx` one line); no backend, SQL, provider, route, map, MapTiler, search, or TripIdeasPanel change.
 
 **Tests:** 37 → 32 tests (removed 10 note-editor + status-chip tests; added 5 IA-contract tests: Brief routes to workspace, Brief does NOT open tray, ExpandedDayPanel still opens tray, no note editor, no status chips). **32/32 pass.**
+
+**IdeasTray IA contract (durable — enforce in future sessions):** IdeasTray = placement + preview only. Note editing and status management (Must-do/Maybe/Skip) belong in the Ideas tab (`TripIdeasPanel`). Do not add management controls to IdeasTray.
 
 ### Desktop nav label cleanup — "Home" + "Discover" consistency (merged, PR pending)
 
