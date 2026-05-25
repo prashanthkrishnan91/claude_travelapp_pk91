@@ -1319,7 +1319,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const [compareOpen,    setCompareOpen]    = useState(false);
   const [compareResults, setCompareResults] = useState<CompareResult[]>([]);
   const [compareLoading, setCompareLoading] = useState(false);
-  const [ideasRefreshNonce, setIdeasRefreshNonce] = useState(0);
+  const [ideasRefreshNonce] = useState(0);
   const compareDataRef = useRef<Map<string, { name: string; itemType: string; cashPrice: number; pointsCost: number; rating?: number; lat?: number; lng?: number }>>(new Map());
 
   const sensors = useSensors(
