@@ -19,7 +19,7 @@ Closes the highest-value Journey Desk parity gap: the legacy Ideas tab uniquely 
 - **"Edit note in Ideas" label removed:** manage link is now always "Manage in Ideas" since note editing is inline.
 - **Unchanged:** Add to Day, day picker, kind chips, Map/Google Flights links, Remove, mobile/desktop tray shell, filter chips, all other props/handlers, legacy Ideas tab, `onManage` fallback.
 - **Tests:** `journey-desk-ideas-tray.test.mjs` — 27 → 37 tests. Updated: manage-link test no longer requires "Edit note in Ideas". New: note edit affordance, textarea/save/cancel controls, `onSaveNote` routes to `onUpdateMeta` with `userNote`, cancel does not call save, status chips row, Skip routes to `onUpdateStatus` not `onRemove`, Add-to-Day not regressed, status constants match TripIdeasPanel. **37/37 pass, 0 new failures. Pre-existing failures identical (14 files, same as before this branch).**
-- **Readiness patch:** PR body updated with failure-seam evidence table, manual visual validation checklist, and reviewer note to satisfy AI PR Readiness Check gate (Check E runtime evidence + UI warning + Level 2 reviewer warning).
+- **Readiness patch (2):** restored `## SQL / env / providers / UI` section header (Check B requires this literal string); failure-seam evidence table already in body satisfies Check E.
 
 ### Desktop nav label cleanup — "Home" + "Discover" consistency (merged, PR pending)
 
