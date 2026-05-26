@@ -167,3 +167,75 @@ export function deriveTripBriefFacts(days: ItineraryDay[]): ScheduledFact[] {
   facts.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
   return facts;
 }
+
+// ── Grouped summary ───────────────────────────────────────────────────────────
+
+export interface FlightSummaryRow {
+  title: string;
+  dayNumber: number;
+  date: string | null;
+  time: string | null;
+}
+
+export interface StaySummaryRow {
+  title: string;
+  checkInDay: number | null;
+  checkInDate: string | null;
+  checkOutDay: number | null;
+  checkOutDate: string | null;
+}
+
+export interface TripBriefSummary {
+  flights: FlightSummaryRow[];
+  stays: StaySummaryRow[];
+  reservationCount: number;
+  entryCount: number;
+  allFacts: ScheduledFact[];
+}
+
+/**
+ * Derives a compact grouped summary for the Brief UI:
+ * - flights: one row per placed flight
+ * - stays: one range row per hotel (check-in + check-out combined)
+ * - reservationCount / entryCount: scalar counts for timed plans
+ * - allFacts: full chronological list for the disclosure panel
+ */
+export function deriveTripBriefSummary(days: ItineraryDay[]): TripBriefSummary {
+  const allFacts = deriveTripBriefFacts(days);
+
+  const flights: FlightSummaryRow[] = allFacts
+    .filter((f) => f.type === "flight")
+    .map((f) => ({ title: f.title, dayNumber: f.dayNumber, date: f.date, time: f.time }));
+
+  // Combine hotel-checkin/hotel-checkout pairs by title into one StaySummaryRow.
+  // hotel-stay (no dates) gets a row with null check-in/out values.
+  const stayMap = new Map<string, StaySummaryRow>();
+  for (const f of allFacts) {
+    if (f.type === "hotel-checkin" || f.type === "hotel-checkout" || f.type === "hotel-stay") {
+      if (!stayMap.has(f.title)) {
+        stayMap.set(f.title, {
+          title: f.title,
+          checkInDay: null,
+          checkInDate: null,
+          checkOutDay: null,
+          checkOutDate: null,
+        });
+      }
+      const stay = stayMap.get(f.title)!;
+      if (f.type === "hotel-checkin") {
+        stay.checkInDay = f.dayNumber;
+        stay.checkInDate = f.date;
+      } else if (f.type === "hotel-checkout") {
+        stay.checkOutDay = f.dayNumber;
+        stay.checkOutDate = f.date;
+      }
+      // hotel-stay: no real check-in/out dates — checkIn/checkOut remain null
+    }
+  }
+  const stays = Array.from(stayMap.values());
+
+  const reservationCount = allFacts.filter((f) => f.type === "meal-reservation").length;
+  const entryCount = allFacts.filter((f) => f.type === "activity-entry").length;
+
+  return { flights, stays, reservationCount, entryCount, allFacts };
+}

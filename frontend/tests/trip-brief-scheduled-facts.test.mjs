@@ -1,5 +1,5 @@
 /**
- * Trip Brief — Scheduled Facts v1
+ * Trip Brief — Scheduled Facts v1 (Phase 2: grouped summary)
  *
  * Guards:
  *  1. deriveTripBriefFacts includes placed flights
@@ -13,9 +13,9 @@
  *  9. formatBriefTime converts HH:mm to H:MM AM/PM
  * 10. formatBriefTime extracts time from ISO datetime strings
  * 11. formatBriefTime returns null for unparseable input
- * 12. TripBrief imports deriveTripBriefFacts and renders jd-brief-scheduled-fact
- * 13. TripBrief caps visible facts and shows overflow line
- * 14. TripBrief has no edit/menu/drag controls for scheduled facts
+ * 12. TripBrief imports deriveTripBriefSummary and renders grouped sections
+ * 13. TripBrief renders disclosure toggle (jd-brief-view-details) and details list
+ * 14. TripBrief detail item rows carry no interactive controls
  * 15. TripBrief Review ideas behavior remains wired
  * 16. TripBrief pending lines (missing flight/stay) remain
  * 17. tripBriefFacts.ts imports readHotelCheckIn/readHotelCheckOut from hotelStaySpans
@@ -24,7 +24,11 @@
  * 20. Hotel duplicate (same title+dates) emits only one check-in and one check-out
  * 21. Two distinct hotels each emit their own check-in/check-out facts
  * 22. Flight startTime / endTime formatted when present
- * 23. Scheduled fact rows carry no buttons or interactive controls
+ * 23. deriveTripBriefSummary maps flights to FlightSummaryRow
+ * 24. deriveTripBriefSummary combines hotel check-in/out into one StaySummaryRow
+ * 25. deriveTripBriefSummary hotel without dates gives null checkIn/checkOut day
+ * 26. deriveTripBriefSummary counts reservationCount and entryCount
+ * 27. deriveTripBriefSummary allFacts is sorted chronological full list
  */
 
 import test from "node:test";
@@ -203,6 +207,44 @@ function deriveTripBriefFacts(days) {
 
   facts.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
   return facts;
+}
+
+function deriveTripBriefSummary(days) {
+  const allFacts = deriveTripBriefFacts(days);
+
+  const flights = allFacts
+    .filter((f) => f.type === "flight")
+    .map((f) => ({ title: f.title, dayNumber: f.dayNumber, date: f.date, time: f.time }));
+
+  const stayMap = new Map();
+  for (const f of allFacts) {
+    if (f.type === "hotel-checkin" || f.type === "hotel-checkout" || f.type === "hotel-stay") {
+      if (!stayMap.has(f.title)) {
+        stayMap.set(f.title, {
+          title: f.title,
+          checkInDay: null,
+          checkInDate: null,
+          checkOutDay: null,
+          checkOutDate: null,
+        });
+      }
+      const stay = stayMap.get(f.title);
+      if (f.type === "hotel-checkin") {
+        stay.checkInDay = f.dayNumber;
+        stay.checkInDate = f.date;
+      } else if (f.type === "hotel-checkout") {
+        stay.checkOutDay = f.dayNumber;
+        stay.checkOutDate = f.date;
+      }
+      // hotel-stay: checkIn/checkOut remain null
+    }
+  }
+  const stays = Array.from(stayMap.values());
+
+  const reservationCount = allFacts.filter((f) => f.type === "meal-reservation").length;
+  const entryCount = allFacts.filter((f) => f.type === "activity-entry").length;
+
+  return { flights, stays, reservationCount, entryCount, allFacts };
 }
 
 // ── Helper fixtures ───────────────────────────────────────────────────────────
@@ -431,32 +473,114 @@ test("formatBriefTime returns null for unparseable input", () => {
   assert.equal(formatBriefTime(1234), null);
 });
 
+// ── Unit tests: deriveTripBriefSummary ────────────────────────────────────────
+
+test("deriveTripBriefSummary maps flights to FlightSummaryRow", () => {
+  const days = [makeDay(1, "2026-06-01", [makeFlight("f1", "JFK → CDG", "2026-06-01T08:30:00Z")])];
+  const { flights } = deriveTripBriefSummary(days);
+  assert.equal(flights.length, 1);
+  assert.equal(flights[0].title, "JFK → CDG");
+  assert.equal(flights[0].dayNumber, 1);
+  assert.equal(flights[0].time, "8:30 AM");
+});
+
+test("deriveTripBriefSummary combines hotel check-in/out into one StaySummaryRow", () => {
+  const hotel = makeHotel("h1", "Grand Hotel", "2026-06-02", "2026-06-05");
+  const days = [
+    makeDay(1, "2026-06-01", []),
+    makeDay(2, "2026-06-02", [hotel]),
+    makeDay(5, "2026-06-05", []),
+  ];
+  const { stays } = deriveTripBriefSummary(days);
+  assert.equal(stays.length, 1, "one StaySummaryRow per hotel");
+  assert.equal(stays[0].title, "Grand Hotel");
+  assert.equal(stays[0].checkInDay, 2);
+  assert.equal(stays[0].checkOutDay, 5);
+});
+
+test("deriveTripBriefSummary hotel without dates gives null checkIn/checkOut day", () => {
+  const hotel = makeHotel("h1", "Mystery Inn", null, null);
+  const days = [makeDay(1, "2026-06-01", [hotel])];
+  const { stays } = deriveTripBriefSummary(days);
+  assert.equal(stays.length, 1);
+  assert.equal(stays[0].title, "Mystery Inn");
+  assert.equal(stays[0].checkInDay, null, "no-date hotel must have null checkInDay");
+  assert.equal(stays[0].checkOutDay, null, "no-date hotel must have null checkOutDay");
+});
+
+test("deriveTripBriefSummary counts reservationCount and entryCount", () => {
+  const days = [
+    makeDay(1, "2026-06-01", [
+      makeMeal("m1", "Le Bernardin", "19:30"),
+      makeMeal("m2", "Café de Flore", "09:00"),
+      makeActivity("a1", "Eiffel Tower", "10:00"),
+    ]),
+  ];
+  const { reservationCount, entryCount } = deriveTripBriefSummary(days);
+  assert.equal(reservationCount, 2);
+  assert.equal(entryCount, 1);
+});
+
+test("deriveTripBriefSummary allFacts is sorted chronological full list", () => {
+  const days = [
+    makeDay(1, "2026-06-01", [makeFlight("f1", "JFK → CDG")]),
+    makeDay(2, "2026-06-02", [makeMeal("m1", "Bistro", "19:30")]),
+  ];
+  const { allFacts } = deriveTripBriefSummary(days);
+  assert.equal(allFacts.length, 2);
+  assert.equal(allFacts[0].type, "flight");
+  assert.equal(allFacts[1].type, "meal-reservation");
+});
+
 // ── Source-scan: TripBrief component ─────────────────────────────────────────
 
-test("TripBrief imports deriveTripBriefFacts from the helper", () => {
-  assert.match(briefSrc, /import[\s\S]{0,100}deriveTripBriefFacts[\s\S]{0,50}tripBriefFacts/);
+test("TripBrief imports deriveTripBriefSummary from the helper", () => {
+  assert.match(briefSrc, /import[\s\S]{0,100}deriveTripBriefSummary[\s\S]{0,120}tripBriefFacts/);
 });
 
-test("TripBrief renders jd-brief-scheduled-fact testid for each visible fact", () => {
-  assert.match(briefSrc, /data-testid="jd-brief-scheduled-fact"/);
+test("TripBrief renders grouped sections: flights, stays, timed", () => {
+  assert.match(briefSrc, /jd-brief-section-flights/);
+  assert.match(briefSrc, /jd-brief-section-stays/);
+  assert.match(briefSrc, /jd-brief-section-timed/);
 });
 
-test("TripBrief caps visible facts and shows overflow line", () => {
-  assert.match(briefSrc, /FACTS_CAP/);
-  assert.match(briefSrc, /jd-brief-more-fixed/);
-  assert.match(briefSrc, /more fixed/);
+test("TripBrief renders jd-brief-flight-row and jd-brief-stay-row testids", () => {
+  assert.match(briefSrc, /jd-brief-flight-row/);
+  assert.match(briefSrc, /jd-brief-stay-row/);
 });
 
-test("TripBrief scheduled fact rows carry no buttons, menus, or drag controls", () => {
-  // Extract the scheduled-fact JSX block to check it has no interactive controls.
-  // We confirm: no button, no DropdownMenu, no drag handle inside the fact block.
-  const factBlock = briefSrc.slice(
-    briefSrc.indexOf('data-testid="jd-brief-scheduled-fact"'),
-    briefSrc.indexOf('data-testid="jd-brief-scheduled-fact"') + 400
+test("TripBrief renders jd-brief-timed-summary testid", () => {
+  assert.match(briefSrc, /jd-brief-timed-summary/);
+});
+
+test("TripBrief has jd-brief-view-details disclosure toggle", () => {
+  assert.match(briefSrc, /jd-brief-view-details/);
+  assert.match(briefSrc, /View all fixed details/);
+});
+
+test("TripBrief renders jd-brief-details-list and jd-brief-detail-item", () => {
+  assert.match(briefSrc, /jd-brief-details-list/);
+  assert.match(briefSrc, /jd-brief-detail-item/);
+});
+
+test("TripBrief does not use FACTS_CAP or jd-brief-more-fixed", () => {
+  assert.doesNotMatch(briefSrc, /FACTS_CAP/);
+  assert.doesNotMatch(briefSrc, /jd-brief-more-fixed/);
+});
+
+test("TripBrief detail list has no overflow-y scroll styling", () => {
+  assert.doesNotMatch(briefSrc, /overflow-y:\s*(auto|scroll)/);
+  assert.doesNotMatch(briefSrc, /overflow-y-auto|overflow-y-scroll/);
+});
+
+test("TripBrief detail item rows carry no buttons, menus, or drag controls", () => {
+  const detailItemBlock = briefSrc.slice(
+    briefSrc.indexOf('data-testid="jd-brief-detail-item"'),
+    briefSrc.indexOf('data-testid="jd-brief-detail-item"') + 400
   );
-  assert.ok(factBlock.length > 20, "fact block must exist");
-  assert.doesNotMatch(factBlock, /<button/i);
-  assert.doesNotMatch(factBlock, /DropdownMenu|MoreHorizontal|GripVertical/);
+  assert.ok(detailItemBlock.length > 20, "detail item block must exist");
+  assert.doesNotMatch(detailItemBlock, /<button/i);
+  assert.doesNotMatch(detailItemBlock, /DropdownMenu|MoreHorizontal|GripVertical/);
 });
 
 test("TripBrief Review ideas behavior remains wired", () => {
@@ -496,6 +620,16 @@ test("tripBriefFacts.ts imports readHotelCheckIn and readHotelCheckOut from hote
 
 test("tripBriefFacts.ts exports deriveTripBriefFacts as the main entry point", () => {
   assert.match(factsSrc, /export function deriveTripBriefFacts/);
+});
+
+test("tripBriefFacts.ts exports deriveTripBriefSummary", () => {
+  assert.match(factsSrc, /export function deriveTripBriefSummary/);
+});
+
+test("tripBriefFacts.ts exports FlightSummaryRow StaySummaryRow TripBriefSummary interfaces", () => {
+  assert.match(factsSrc, /export interface FlightSummaryRow/);
+  assert.match(factsSrc, /export interface StaySummaryRow/);
+  assert.match(factsSrc, /export interface TripBriefSummary/);
 });
 
 test("tripBriefFacts.ts handles meal reservationTime gate", () => {
@@ -541,7 +675,6 @@ test("tripBriefFacts.ts does not reference AddToDayDrawer or IdeasTray", () => {
 });
 
 test("AddToDayDrawer is unchanged by this slice (source scan sanity)", () => {
-  // Brief scheduled-facts changes must not modify AddToDayDrawer.
   assert.match(addToDaySrc, /AddToDayDrawer/);
   assert.doesNotMatch(addToDaySrc, /jd-brief-scheduled-fact/);
 });
