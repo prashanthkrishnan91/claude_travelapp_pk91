@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-26 (Hotel Stay Span v1 — canonical check-in card + read-only derived stay lines + move-on-date-edit; current branch)
+Last updated: 2026-05-26 (Hotel Stay Span v1 merged — #488; no current branch)
 
 ## Purpose
 
@@ -8,9 +8,9 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) merged #478. Ideas tab polished as the canonical management workspace (#482). Journey Desk Itinerary parity plan (docs-only) #483. Journey Desk Itinerary parity Slice 1 (ExpandedDay per-item actions) merged #485. Itinerary card action normalization PR #486 merged. Stay-span + reservation metadata contract v1 #487 merged. **Hotel Stay Span v1 is the current branch.**
+**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) merged #478. Ideas tab polished as the canonical management workspace (#482). Journey Desk Itinerary parity plan (docs-only) #483. Journey Desk Itinerary parity Slice 1 (ExpandedDay per-item actions) merged #485. Itinerary card action normalization PR #486 merged. Stay-span + reservation metadata contract v1 #487 merged. **Hotel Stay Span v1 #488 merged.**
 
-### Hotel Stay Span v1 (current PR)
+### Hotel Stay Span v1 (merged, PR #488)
 
 One canonical editable hotel card anchored to check-in day; intermediate days show "Staying at {hotel}" markers; checkout day shows "Check out · {hotel}" marker. Move-on-date-edit: editing checkIn date moves the card to the new day in one PATCH. **Frontend-only; no SQL, backend, provider, search, map, AddToDayDrawer, or TripBrief change.**
 
