@@ -6,8 +6,9 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Info, Loader2, MapPin, MoreHorizontal, Plus, Sparkles, X } from "lucide-react";
+import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Hotel, Info, Loader2, MapPin, MoreHorizontal, Plus, Sparkles, X } from "lucide-react";
 import { ItineraryDay, ItineraryItem } from "@/types";
+import type { StayMarker } from "@/lib/hotelStaySpans";
 import { FolioCard } from "@/components/ui/Folio";
 import { ItineraryItemCard } from "./ItineraryItemCard";
 import { computeAdjacentHints, summarizeHints } from "@/lib/travelHints";
@@ -107,6 +108,7 @@ interface TimelineSectionsProps {
   onToggleCompare?: (item: ItineraryItem) => void;
   compareSet?: Set<string>;
   onUpdateTimeline?: (updatedItem: ItineraryItem) => void;
+  onSaveHotelDates?: (itemId: string, currentDetails: Record<string, unknown>, patch: { checkIn?: string; checkOut?: string }) => Promise<ItineraryItem>;
 }
 
 function renderItemsWithConnectors(
@@ -117,6 +119,7 @@ function renderItemsWithConnectors(
   onToggleCompare?: (item: ItineraryItem) => void,
   compareSet?: Set<string>,
   onUpdateTimeline?: (updatedItem: ItineraryItem) => void,
+  onSaveHotelDates?: (itemId: string, currentDetails: Record<string, unknown>, patch: { checkIn?: string; checkOut?: string }) => Promise<ItineraryItem>,
 ) {
   const hints = computeAdjacentHints(items);
   return items.flatMap((item, idx) => {
@@ -129,6 +132,7 @@ function renderItemsWithConnectors(
         onToggleCompare={onToggleCompare}
         isComparing={compareSet?.has(item.id)}
         onTimelineUpdated={onUpdateTimeline}
+        onSaveHotelDates={onSaveHotelDates}
       />
     );
     if (idx >= items.length - 1) return [card];
@@ -191,6 +195,7 @@ function TimelineSections({
   onToggleCompare,
   compareSet,
   onUpdateTimeline,
+  onSaveHotelDates,
 }: TimelineSectionsProps) {
   const grouped = groupByDayPart(items);
   const hasTimedItems =
@@ -211,7 +216,7 @@ function TimelineSections({
           </span>
         </div>
         <div className="space-y-2">
-          {renderItemsWithConnectors(items, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet, onUpdateTimeline)}
+          {renderItemsWithConnectors(items, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet, onUpdateTimeline, onSaveHotelDates)}
         </div>
       </div>
     );
@@ -242,7 +247,7 @@ function TimelineSections({
               <span className="text-[10px] text-ds-folio-ink-mist italic">{meta.timeHint}</span>
             </div>
             <div className="space-y-2">
-              {renderItemsWithConnectors(sectionItems, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet, onUpdateTimeline)}
+              {renderItemsWithConnectors(sectionItems, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet, onUpdateTimeline, onSaveHotelDates)}
             </div>
           </div>
         );
@@ -371,6 +376,9 @@ interface ItineraryDayColumnProps {
   onUpdateTimeline?: (updatedItem: ItineraryItem) => void;
   /** Opens the Add-to-Day vertical picker for this day. */
   onAddToDay?: (day: ItineraryDay) => void;
+  stayMarkers?: StayMarker[];
+  suppressedHotelItemIds?: Set<string>;
+  onSaveHotelDates?: (itemId: string, currentDetails: Record<string, unknown>, patch: { checkIn?: string; checkOut?: string }) => Promise<ItineraryItem>;
 }
 
 function formatDate(dateStr: string): string {
@@ -402,6 +410,9 @@ export function ItineraryDayColumn({
   planDayLoading,
   onUpdateTimeline,
   onAddToDay,
+  stayMarkers,
+  suppressedHotelItemIds,
+  onSaveHotelDates,
 }: ItineraryDayColumnProps) {
   const [expandedItemDays, setExpandedItemDays] = useState<Record<number, boolean>>({});
   // Local overrides for optimistic timeline updates — item moves to correct section immediately
@@ -472,10 +483,11 @@ export function ItineraryDayColumn({
   const visibleItems = useMemo(
     () => {
       const items = showAllItems ? day.items : day.items.slice(0, PREVIEW_ITEM_LIMIT);
-      // Apply optimistic timeline overrides so moved items appear in the correct section immediately
-      return items.map((item) => itemOverrides[item.id] ?? item);
+      return items
+        .filter((item) => !suppressedHotelItemIds?.has(item.id))
+        .map((item) => itemOverrides[item.id] ?? item);
     },
-    [day.items, showAllItems, itemOverrides]
+    [day.items, showAllItems, itemOverrides, suppressedHotelItemIds]
   );
   const itemIds = visibleItems.map((item: ItineraryItem) => item.id);
   const hiddenItemsCount = Math.max(day.items.length - 1, 0);
@@ -731,6 +743,24 @@ export function ItineraryDayColumn({
             />
           )}
 
+          {stayMarkers && stayMarkers.length > 0 && (
+            <div className="space-y-1 mb-1" data-testid="stay-markers">
+              {stayMarkers.map((marker) => (
+                <div
+                  key={`${marker.kind}-${marker.itemId}`}
+                  className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-ds-linen border border-ds-hairline"
+                  data-testid={`stay-marker-${marker.kind}`}
+                >
+                  <Hotel className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" aria-hidden="true" />
+                  <span className="text-[11px] text-ds-folio-ink-soft">
+                    {marker.kind === "checkout"
+                      ? `Check out · ${marker.hotelTitle}`
+                      : `Staying at ${marker.hotelTitle}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
             <div
               data-testid="itinerary-day-mobile-timeline"
@@ -751,6 +781,7 @@ export function ItineraryDayColumn({
                 onToggleCompare={onToggleCompare}
                 compareSet={compareSet}
                 onUpdateTimeline={handleTimelineUpdated}
+                onSaveHotelDates={onSaveHotelDates}
               />
               {!showAllItems && hasHiddenItems && (
                 <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-14 bg-gradient-to-b from-transparent to-ds-bone" />

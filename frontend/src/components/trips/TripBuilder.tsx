@@ -64,6 +64,7 @@ import {
   deleteItem,
   createItem,
   updateItem,
+  updateItemMetadata,
   compareItems,
   fetchTripItems,
   ensureTripDays,
@@ -75,6 +76,7 @@ import {
   addHotelToDay,
   fetchExploreSnapshot,
 } from "@/lib/api";
+import { deriveHotelStayDisplay, readHotelCheckOut } from "@/lib/hotelStaySpans";
 import { buildTripCandidateBuckets, mergePersistedWithSnapshot } from "@/lib/tripCandidates";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
@@ -1359,6 +1361,50 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     [days, canonicalStartDate]
   );
 
+  const hotelStayDisplayMap = useMemo(
+    () => deriveHotelStayDisplay(displayDays),
+    [displayDays]
+  );
+
+  const handleSaveHotelDates = useCallback(
+    async (
+      itemId: string,
+      currentDetails: Record<string, unknown>,
+      patch: { checkIn?: string; checkOut?: string }
+    ): Promise<import("@/types").ItineraryItem> => {
+      const newCheckIn = patch.checkIn;
+      let newDayId: string | undefined;
+      if (newCheckIn) {
+        const targetDay = displayDays.find((dy) => dy.date === newCheckIn);
+        if (targetDay) newDayId = targetDay.id;
+      }
+      const updated = await updateItemMetadata(itemId, currentDetails, patch, newDayId);
+      setDays((prev) => {
+        if (!newDayId) {
+          return prev.map((day) => ({
+            ...day,
+            items: day.items.map((item) => (item.id === itemId ? updated : item)),
+          }));
+        }
+        return prev.map((day) => {
+          const hasItem = day.items.some((i) => i.id === itemId);
+          if (day.id === newDayId && hasItem) {
+            return { ...day, items: day.items.map((i) => (i.id === itemId ? updated : i)) };
+          }
+          if (day.id === newDayId) {
+            return { ...day, items: [...day.items, updated] };
+          }
+          if (hasItem) {
+            return { ...day, items: day.items.filter((i) => i.id !== itemId) };
+          }
+          return day;
+        });
+      });
+      return updated;
+    },
+    [displayDays]
+  );
+
   // Canonical trip-candidate hydration — Level 3 Trip Data Contract Rescue.
   //
   // Single source of truth: persisted itinerary_items (day_id IS NULL) returned
@@ -1530,12 +1576,40 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         return;
       }
 
+      const resolvedDay = targetDay;
       let newItem: ItineraryItem;
       if (item.itemType === "flight") {
         newItem = await addOneWayFlightToDay(tripId, targetDay.id, item, targetDay.items.length);
       } else if (item.itemType === "hotel") {
-        // Preserve all hotel details (stars, rating, amenities, area_label, etc.)
-        newItem = await addHotelToDay(tripId, targetDay.id, item, targetDay.items.length);
+        // Seed canonical dates from the selected target day — candidate placeholder checkIn
+        // (full-trip default) must not override the user's chosen day.
+        const rawDetails = (item.details ?? {}) as Record<string, unknown>;
+        const checkIn = targetDay.date;
+
+        const targetDayIndex = displayDays.findIndex((dy) => dy.id === targetDay.id);
+        const nextDay = targetDayIndex >= 0 ? displayDays[targetDayIndex + 1] : undefined;
+        let checkOut: string | undefined;
+        if (nextDay?.date) {
+          checkOut = nextDay.date;
+        } else {
+          const existingCheckOut = readHotelCheckOut(rawDetails);
+          if (existingCheckOut && checkIn && existingCheckOut > checkIn) {
+            checkOut = existingCheckOut;
+          }
+        }
+
+        // Strip all date keys (canonical + fallback); re-add only seeded canonical dates
+        const seededDetails: Record<string, unknown> = Object.fromEntries(
+          Object.entries(rawDetails).filter(
+            ([k]) => !["checkIn","checkOut","check_in","check_in_date","checkInDate",
+                       "check_out","check_out_date","checkOutDate"].includes(k)
+          )
+        );
+        if (checkIn) seededDetails.checkIn = checkIn;
+        if (checkOut) seededDetails.checkOut = checkOut;
+
+        const seededItem: ItineraryItem = { ...item, details: seededDetails as ItineraryItem["details"] };
+        newItem = await addHotelToDay(tripId, targetDay.id, seededItem, targetDay.items.length);
       } else {
         newItem = await createItem(tripId, targetDay.id, {
           itemType: item.itemType as ItemType,
@@ -1548,17 +1622,17 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
       setDays((prev) =>
         prev.map((d) =>
-          d.id === targetDay.id ? { ...d, items: [...d.items, newItem] } : d
+          d.id === resolvedDay.id ? { ...d, items: [...d.items, newItem] } : d
         )
       );
-      showToast(`${item.itemType === "flight" ? "Flight" : "Hotel"} added to Day ${targetDay.dayNumber}`);
+      showToast(`${item.itemType === "flight" ? "Flight" : "Hotel"} added to Day ${resolvedDay.dayNumber}`);
       onItineraryChanged?.();
     } catch {
       showToast("Failed to add — please try again");
     } finally {
       setAddingId(null);
     }
-  }, [days, selectedDayId, tripId, showToast, onItineraryChanged]);
+  }, [days, displayDays, selectedDayId, tripId, showToast, onItineraryChanged]);
 
   // ── Add attraction to selected itinerary day ─────────────────────────────────
 
@@ -2553,6 +2627,9 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                     onPlanDay={handlePlanDay}
                     planDayLoading={dayPlanLoading && dayPlanTargetDayId === day.id}
                     onAddToDay={onAddToDay}
+                    stayMarkers={hotelStayDisplayMap.get(day.id)?.stayMarkers}
+                    suppressedHotelItemIds={hotelStayDisplayMap.get(day.id)?.suppressedHotelItemIds}
+                    onSaveHotelDates={handleSaveHotelDates}
                   />
                 ))}
               </SortableContext>

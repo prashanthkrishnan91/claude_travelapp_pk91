@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-25 (Stay-span + reservation metadata contract v1 — card display + inline edit; current branch)
+Last updated: 2026-05-26 (Hotel Stay Span v1 — canonical check-in card + read-only derived stay lines + move-on-date-edit; current branch)
 
 ## Purpose
 
@@ -8,9 +8,26 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) merged #478. Ideas tab polished as the canonical management workspace (#482). Journey Desk Itinerary parity plan (docs-only) #483. Journey Desk Itinerary parity Slice 1 (ExpandedDay per-item actions) merged #485. Itinerary card action normalization PR #486 merged. **Stay-span + reservation metadata contract v1 is the current branch.**
+**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) merged #478. Ideas tab polished as the canonical management workspace (#482). Journey Desk Itinerary parity plan (docs-only) #483. Journey Desk Itinerary parity Slice 1 (ExpandedDay per-item actions) merged #485. Itinerary card action normalization PR #486 merged. Stay-span + reservation metadata contract v1 #487 merged. **Hotel Stay Span v1 is the current branch.**
 
-### Stay-span + reservation metadata contract v1 (current PR)
+### Hotel Stay Span v1 (current PR)
+
+One canonical editable hotel card anchored to check-in day; intermediate days show "Staying at {hotel}" markers; checkout day shows "Check out · {hotel}" marker. Move-on-date-edit: editing checkIn date moves the card to the new day in one PATCH. **Frontend-only; no SQL, backend, provider, search, map, AddToDayDrawer, or TripBrief change.**
+
+**What changed:**
+- `src/lib/hotelStaySpans.ts` (new): pure helper — `readHotelCheckIn`/`readHotelCheckOut` (camelCase-first fallback chain with UTC-safe `Date.UTC` parsing), `deriveHotelStayDisplay(displayDays)` → `Map<dayId, { suppressedHotelItemIds, stayMarkers }>`. Deduplicates only by same logical stay key: hotel identity (`placeId`/Google Maps URI when present, otherwise normalized title + location) plus `checkIn` + `checkOut`. Different hotels with the same dates are not suppressed. Non-canonical duplicates (same stay key) prefer item physically on checkIn day, else lowest position. Covered days `(checkIn, checkOut)` get "staying" markers; checkOut day gets "checkout" marker.
+- `api.ts`: `updateItemMetadata` extended with optional 4th param `newDayId?: string` — when present, includes `dayId: newDayId` in the `updateItem` PATCH (single request, no separate move call). All existing tests pass; patch type/spread/delete behavior unchanged.
+- `ItineraryItemCard.tsx`: added `onSaveHotelDates?` prop — when provided for hotel saves, routes through callback (move-aware) and returns early; non-hotel types still call `updateItemMetadata` directly. All existing contract tests pass.
+- `ItineraryDayColumn.tsx`: new props `stayMarkers`, `suppressedHotelItemIds`, `onSaveHotelDates`; `visibleItems` useMemo filters suppressed hotel items; stay markers rendered above `SortableContext` as read-only pills (`data-testid="stay-markers"`, `stay-marker-${kind}`); `Hotel` icon imported for markers; `onSaveHotelDates` threaded through `renderItemsWithConnectors` → `TimelineSections` → `ItineraryItemCard`.
+- `TripBuilder.tsx`: imports `deriveHotelStayDisplay` + `readHotelCheckIn` + `updateItemMetadata`; adds `hotelStayDisplayMap` useMemo from `displayDays`; adds `handleSaveHotelDates` useCallback (resolves newDayId from displayDays, calls updateItemMetadata, updates local `days` state); passes `stayMarkers`, `suppressedHotelItemIds`, `onSaveHotelDates` to each `ItineraryDayColumn`. Build-added dated hotels anchor to the matching check-in day when that date maps to a trip day; otherwise fall back to the selected day.
+- `tests/hotel-stay-span-v1.test.mjs` (new, 50 tests): unit tests on inline pure logic + source-scan contract tests. All pass.
+- `frontend/package.json`: new test added to the explicit test list.
+
+**Contracts preserved:** Brief = read-only · IdeasTray = placement-first · AddToDayDrawer = untouched · TripBrief = untouched · no item create/delete for derived markers · existing snake/camel fallback keys still work · all 57 stay-span-metadata-contract-v1 tests pass.
+
+**Tests:** 3656 total; 3643 pass; 13 PRE-EXISTING failures (verified identical to baseline).
+
+### Stay-span + reservation metadata contract v1 (merged, PR #487)
 
 Adds hotel check-in/out canonical key priority (camelCase first after API normalization, snake_case fallbacks), `Reservation · HH:mm AM/PM` display for meals, `Entry · HH:mm AM/PM` for activities, and an inline metadata editor accessible from the overflow menu. **Frontend-only; no SQL, backend, provider, search, map, AddToDayDrawer, or TripBrief change.**
 
