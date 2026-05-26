@@ -9712,10 +9712,12 @@
   }
 
   /* trips-shelf-stage: Floating curated paper shelf for the /trips route.
-     Centers and constrains the content stage; adds warm paper surface,
-     brass-tinted hairline border, and layered shadow to lift off the page. */
+     Fills the AppShell content width (capped by the parent max-w-7xl box) so
+     the shelf uses the desktop canvas instead of reading as a narrow column.
+     Warm paper surface, brass-tinted hairline border, and layered shadow lift
+     it off the page like a folio resting on a desk. */
   .trips-shelf-stage {
-    max-width: 52rem;
+    max-width: 100%;
     margin-inline: auto;
     background:
       radial-gradient(90% 30% at 50% 0%,
@@ -9760,6 +9762,21 @@
       color-mix(in srgb, var(--ds-linen) 52%, var(--ds-warm-paper)) 0%,
       var(--ds-warm-paper) 62%
     );
+  }
+
+  /* trips-featured-aside: Actions + controls rail of the featured volume.
+     Stacks below the editorial content on mobile (top hairline); becomes a
+     fixed-width right rail with a left hairline on desktop, giving the current
+     volume a deliberate two-zone composition instead of one flat beige card. */
+  .trips-featured-aside {
+    border-top: 1px solid var(--ds-hairline);
+    background: color-mix(in srgb, var(--ds-warm-paper) 55%, var(--ds-bone));
+  }
+  @media (min-width: 1024px) {
+    .trips-featured-aside {
+      border-top: none;
+      border-left: 1px solid var(--ds-hairline);
+    }
   }
 
   /* trips-hero-destination: Larger editorial serif title for the featured volume.

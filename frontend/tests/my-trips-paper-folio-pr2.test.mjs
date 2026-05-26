@@ -5,8 +5,10 @@
  * What this file proves:
  *  - My Trips route adopts the Paper Folio shelf composition (floating stage, masthead, body)
  *  - Editorial serif primitives adopted on page, hero, and cards
- *  - ContinuePlanningHero is the featured volume (trips-featured-volume + trips-hero-destination)
- *  - JourneyCard uses trips-volume-cover body gradient for volume-cover rhythm
+ *  - Stage fills the desktop canvas (wide shelf, not a narrow 52rem column)
+ *  - ContinuePlanningHero is a two-zone featured volume (content + actions rail)
+ *  - JourneyCard leads with the destination; noisy serial-code labels removed
+ *  - Cards sit in a responsive grid (sm:grid-cols-2 lg:grid-cols-3)
  *  - PlanningToolsStrip is the integrated shelf rail (trips-tools-shelf)
  *  - JourneyCard keeps edit/delete controls wired but visually demoted
  *  - ContinuePlanningHero still uses existing selection/action logic
@@ -66,7 +68,7 @@ test("trips-shelf-stage is present in both loading and loaded states", () => {
   );
 });
 
-test("globals.css defines trips-shelf-stage with max-width (floating shelf constraint)", () => {
+test("globals.css trips-shelf-stage fills the desktop canvas (not a narrow 52rem column)", () => {
   assert.ok(
     globalsCss.includes(".trips-shelf-stage"),
     "globals.css must define .trips-shelf-stage",
@@ -77,11 +79,18 @@ test("globals.css defines trips-shelf-stage with max-width (floating shelf const
   );
   assert.ok(
     block.includes("max-width"),
-    "trips-shelf-stage must have max-width to constrain the shelf stage",
+    "trips-shelf-stage must declare a max-width",
+  );
+  // Composition correction: the stage must use the full AppShell width
+  // (capped by the parent max-w-7xl), not the old narrow 52rem column that
+  // left a large blank gap on desktop.
+  assert.ok(
+    !/max-width:\s*52rem/.test(block),
+    "trips-shelf-stage must NOT be capped at the old narrow 52rem width",
   );
   assert.ok(
-    block.includes("margin-inline"),
-    "trips-shelf-stage must have margin-inline: auto to center the shelf",
+    /max-width:\s*100%/.test(block),
+    "trips-shelf-stage must fill the available width (max-width: 100%)",
   );
 });
 
@@ -189,6 +198,55 @@ test("globals.css defines trips-volume-cover (card body gradient)", () => {
   );
 });
 
+test("globals.css defines trips-featured-aside (featured volume actions rail)", () => {
+  assert.ok(
+    globalsCss.includes(".trips-featured-aside"),
+    "globals.css must define .trips-featured-aside",
+  );
+  const block = globalsCss.slice(
+    globalsCss.indexOf(".trips-featured-aside"),
+    globalsCss.indexOf(".trips-featured-aside") + 400,
+  );
+  assert.ok(
+    block.includes("border-top") || block.includes("border-left"),
+    "trips-featured-aside must use a hairline border to separate it as a distinct zone",
+  );
+});
+
+// ── Responsive card shelf — desktop canvas use ────────────────────────────────
+
+test("TripSection renders cards in a responsive grid that uses the desktop canvas", () => {
+  const sectionScope = tripsPage.slice(
+    tripsPage.indexOf("function TripSection"),
+    tripsPage.indexOf("function PlanningToolsStrip"),
+  );
+  // Composition correction: cards must scale to 3 columns on wide screens so
+  // they do not look like tiny boxes floating in a large blank stage.
+  assert.ok(
+    sectionScope.includes("journey-card-grid"),
+    "TripSection must wrap cards in a grid (journey-card-grid)",
+  );
+  assert.ok(
+    /sm:grid-cols-2/.test(sectionScope) && /lg:grid-cols-3/.test(sectionScope),
+    "TripSection grid must be responsive (sm:grid-cols-2 lg:grid-cols-3)",
+  );
+});
+
+test("trips page no longer derives or renders serial-code labels (noise removed)", () => {
+  assert.ok(
+    !tripsPage.includes("deriveSerialCode"),
+    "deriveSerialCode helper must be removed — serial codes are no longer rendered",
+  );
+  assert.ok(
+    !tripsPage.includes("Current Journey"),
+    "the 'CHI · Current Journey' serial label must be removed",
+  );
+  assert.ok(
+    !tripsPage.includes("folio-serial"),
+    "no folio-serial code labels should remain on the trips page",
+  );
+});
+
 // ── Planning tools shelf rail ─────────────────────────────────────────────────
 
 test("PlanningToolsStrip uses trips-tools-shelf (integrated shelf rail)", () => {
@@ -291,14 +349,25 @@ test("JourneyCard uses folio-journey-entry class (binding-stripe enhancement)", 
   );
 });
 
-test("JourneyCard uses folio-serial for quiet brass metadata", () => {
+test("JourneyCard leads with the destination as the visual hero, not a serial code", () => {
   const cardSection = tripsPage.slice(
     tripsPage.indexOf("function JourneyCard"),
     tripsPage.indexOf("function TripSection"),
   );
+  // Composition correction: noisy CHI/NEW serial labels are removed; the
+  // destination (trips-volume-destination) is the card's primary element.
   assert.ok(
-    cardSection.includes("folio-serial"),
-    "JourneyCard must render a folio-serial element for quiet brass volume metadata",
+    cardSection.includes("trips-volume-destination"),
+    "JourneyCard must present the destination as the visual hero",
+  );
+  assert.ok(
+    !cardSection.includes("folio-serial"),
+    "JourneyCard must NOT use folio-serial code labels (removed as noise)",
+  );
+  // Status is still shown, but as a subtle badge rather than a serial prefix.
+  assert.ok(
+    cardSection.includes("TripStatusBadge"),
+    "JourneyCard must show status via TripStatusBadge",
   );
 });
 
@@ -417,14 +486,31 @@ test("ContinuePlanningHero uses trips-volume-destination editorial serif", () =>
   );
 });
 
-test("ContinuePlanningHero uses folio-serial for volume marker", () => {
+test("ContinuePlanningHero uses a two-zone composition (editorial content + actions rail)", () => {
   const heroSection = tripsPage.slice(
     tripsPage.indexOf("function ContinuePlanningHero"),
     tripsPage.indexOf("function JourneyCard"),
   );
+  // Composition correction: the featured volume is no longer one flat beige
+  // column. It splits into a left content zone and a right actions/controls
+  // rail (trips-featured-aside) that stacks on mobile and sits beside on desktop.
   assert.ok(
-    heroSection.includes("folio-serial"),
-    "ContinuePlanningHero must render a folio-serial element",
+    heroSection.includes("trips-featured-aside"),
+    "ContinuePlanningHero must use trips-featured-aside for the right actions rail",
+  );
+  assert.ok(
+    heroSection.includes("lg:flex-row"),
+    "ContinuePlanningHero must use a responsive lg:flex-row two-zone layout",
+  );
+  assert.ok(
+    heroSection.includes("continue-planning-main") &&
+      heroSection.includes("continue-planning-aside"),
+    "ContinuePlanningHero must mark both the content zone and the actions rail",
+  );
+  // The noisy serial code marker is removed.
+  assert.ok(
+    !heroSection.includes("folio-serial"),
+    "ContinuePlanningHero must NOT use folio-serial code labels (removed as noise)",
   );
 });
 
@@ -628,7 +714,7 @@ test("globals.css new trips primitives have a prefers-reduced-motion guard", () 
   // Check the MY TRIPS section has a reduced-motion block (wide window — section grew)
   const myTripsSection = globalsCss.slice(
     globalsCss.indexOf("MY TRIPS"),
-    globalsCss.indexOf("MY TRIPS") + 5000,
+    globalsCss.indexOf("MY TRIPS") + 6000,
   );
   assert.ok(
     myTripsSection.includes("prefers-reduced-motion"),
