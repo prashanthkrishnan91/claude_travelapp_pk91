@@ -96,6 +96,7 @@ interface ItineraryItemCardProps {
   onToggleCompare?: (item: ItineraryItem) => void;
   isComparing?: boolean;
   onTimelineUpdated?: (updatedItem: ItineraryItem) => void;
+  onSaveHotelDates?: (itemId: string, currentDetails: Record<string, unknown>, patch: { checkIn?: string; checkOut?: string }) => Promise<ItineraryItem>;
 }
 
 const typeConfig: Record<ItemType, { icon: React.ReactNode }> = {
@@ -134,7 +135,7 @@ function formatClock(value?: string): string | null {
   return value;
 }
 
-export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, isComparing, onTimelineUpdated }: ItineraryItemCardProps) {
+export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, isComparing, onTimelineUpdated, onSaveHotelDates }: ItineraryItemCardProps) {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [selectedPart, setSelectedPart] = useState<string>("unscheduled");
@@ -219,6 +220,12 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
       let patch: { checkIn?: string; checkOut?: string; reservationTime?: string; entryTime?: string } = {};
       if (item.itemType === "hotel") {
         patch = { checkIn: checkInInput || undefined, checkOut: checkOutInput || undefined };
+        if (onSaveHotelDates) {
+          const updated = await onSaveHotelDates(item.id, currentDetails, patch);
+          onTimelineUpdated?.(updated);
+          setMetaEditorOpen(false);
+          return;
+        }
       } else if (item.itemType === "meal") {
         patch = { reservationTime: reservationTimeInput || undefined };
       } else if (item.itemType === "activity") {

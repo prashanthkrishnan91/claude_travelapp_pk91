@@ -64,6 +64,7 @@ import {
   deleteItem,
   createItem,
   updateItem,
+  updateItemMetadata,
   compareItems,
   fetchTripItems,
   ensureTripDays,
@@ -75,6 +76,7 @@ import {
   addHotelToDay,
   fetchExploreSnapshot,
 } from "@/lib/api";
+import { deriveHotelStayDisplay } from "@/lib/hotelStaySpans";
 import { buildTripCandidateBuckets, mergePersistedWithSnapshot } from "@/lib/tripCandidates";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
@@ -1359,6 +1361,50 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     [days, canonicalStartDate]
   );
 
+  const hotelStayDisplayMap = useMemo(
+    () => deriveHotelStayDisplay(displayDays),
+    [displayDays]
+  );
+
+  const handleSaveHotelDates = useCallback(
+    async (
+      itemId: string,
+      currentDetails: Record<string, unknown>,
+      patch: { checkIn?: string; checkOut?: string }
+    ): Promise<import("@/types").ItineraryItem> => {
+      const newCheckIn = patch.checkIn;
+      let newDayId: string | undefined;
+      if (newCheckIn) {
+        const targetDay = displayDays.find((dy) => dy.date === newCheckIn);
+        if (targetDay) newDayId = targetDay.id;
+      }
+      const updated = await updateItemMetadata(itemId, currentDetails, patch, newDayId);
+      setDays((prev) => {
+        if (!newDayId) {
+          return prev.map((day) => ({
+            ...day,
+            items: day.items.map((item) => (item.id === itemId ? updated : item)),
+          }));
+        }
+        return prev.map((day) => {
+          const hasItem = day.items.some((i) => i.id === itemId);
+          if (day.id === newDayId && hasItem) {
+            return { ...day, items: day.items.map((i) => (i.id === itemId ? updated : i)) };
+          }
+          if (day.id === newDayId) {
+            return { ...day, items: [...day.items, updated] };
+          }
+          if (hasItem) {
+            return { ...day, items: day.items.filter((i) => i.id !== itemId) };
+          }
+          return day;
+        });
+      });
+      return updated;
+    },
+    [displayDays]
+  );
+
   // Canonical trip-candidate hydration — Level 3 Trip Data Contract Rescue.
   //
   // Single source of truth: persisted itinerary_items (day_id IS NULL) returned
@@ -2553,6 +2599,9 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                     onPlanDay={handlePlanDay}
                     planDayLoading={dayPlanLoading && dayPlanTargetDayId === day.id}
                     onAddToDay={onAddToDay}
+                    stayMarkers={hotelStayDisplayMap.get(day.id)?.stayMarkers}
+                    suppressedHotelItemIds={hotelStayDisplayMap.get(day.id)?.suppressedHotelItemIds}
+                    onSaveHotelDates={handleSaveHotelDates}
                   />
                 ))}
               </SortableContext>
