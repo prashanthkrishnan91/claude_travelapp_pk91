@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-26 (Hotel Stay Span v1 merged — #488; no current branch)
+Last updated: 2026-05-26 (Brief Fixed Scheduled Facts v1 — open PR on branch `claude/brief-scheduled-facts-T4lEw`)
 
 ## Purpose
 
@@ -8,7 +8,22 @@ This file is **current operational state**, not a historical log. It must stay c
 
 ## Current product stage
 
-**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) merged #478. Ideas tab polished as the canonical management workspace (#482). Journey Desk Itinerary parity plan (docs-only) #483. Journey Desk Itinerary parity Slice 1 (ExpandedDay per-item actions) merged #485. Itinerary card action normalization PR #486 merged. Stay-span + reservation metadata contract v1 #487 merged. **Hotel Stay Span v1 #488 merged.**
+**Stage 3.5 — design adoption across the Atelier rooms.** Stage 3 exit completed earlier (2026-05-14). The outside-trip Concierge (`/concierge`) is the dark Private Travel Salon. The outside-trip Explore (`/explore`) is the dark **Observatory**. Saved (`/saved`) is now the **Private Folio** — the deliberately *light* paper room (the third sibling). Trip detail (`/trips/[id]`) is the **Journey Desk** — v1A #467 (cover + Brief + Dayboard); v1B #468 (Ideas Tray + Notes); v1C #469 (Expanded Day + Decision Strip); v1D #470 (consolidation + polish) — **v1 complete**; v2A #471 (Map Fold-Out, Trip Lens); v2B #472 (Map Coordinate Contract foundation); v2C #473 (real plotted Trip Lens pin map). Map System: v1 #474 (MapTiler provider registry + shared basemap/visual system); v1B #475 (shared marker + popup visual polish). Visual Itinerary Map: v1A #476 (Day Lens + Ideas Lens + map-based add-to-day); v1B #477 (safe map management + planned pin actions — merged). Journey Desk mobile IA closeout PR 1 (inline day expansion + Add-to-Day drawer) merged #478. Ideas tab polished as the canonical management workspace (#482). Journey Desk Itinerary parity plan (docs-only) #483. Journey Desk Itinerary parity Slice 1 (ExpandedDay per-item actions) merged #485. Itinerary card action normalization PR #486 merged. Stay-span + reservation metadata contract v1 #487 merged. **Hotel Stay Span v1 #488 merged.** **Brief Fixed Scheduled Facts v1 — open PR.**
+
+### Brief Fixed Scheduled Facts v1 (open PR, branch `claude/brief-scheduled-facts-T4lEw`)
+
+`TripBrief` now summarizes all fixed scheduled facts from real placed itinerary data — flights, hotel check-in/checkout dates, restaurant reservation times, and activity entry times. Previously Brief only showed the first flight and first hotel. **Frontend-only; no SQL, backend, provider, search, map, AddToDayDrawer, or IdeasTray change. Brief remains read-only.**
+
+**What changed:**
+- `src/lib/tripBriefFacts.ts` (new): pure helper — `formatBriefTime` (formats `HH:mm` and ISO datetime to `H:MM AM/PM`), `deriveTripBriefFacts(days)` → `ScheduledFact[]`. Uses `readHotelCheckIn`/`readHotelCheckOut` from `hotelStaySpans.ts`. Hotels with dates emit check-in + check-out facts placed on the correct day. Hotels without dates emit a simple stay anchor. Meals without `reservationTime` excluded; activities without `entryTime` excluded. Deduplicates hotel stays by `title::checkIn::checkOut` key. Sorts chronologically by `sortKey = paddedDay:HH:MM` (untimed items sort last within day). Side-effect-free, deterministic.
+- `TripBrief.tsx`: replaces the old `fixedLines` (first flight + first hotel only) with `deriveTripBriefFacts(days)` results. Renders `data-testid="jd-brief-scheduled-fact"` rows (icon + label · title + day/time). Cap = 5 visible facts; overflow shown as `data-testid="jd-brief-more-fixed"` `+ N more fixed` line. Pending lines (`hasFlight`/`hasHotel` checks for "still to choose") preserved. Review ideas action (`jd-brief-review-action`) unchanged. No edit/menu/drag controls added. `Check` icon removed; type-specific icons used (Plane / Hotel / Utensils / Clock).
+- `tests/trip-brief-scheduled-facts.test.mjs` (new, 37 tests): inline unit tests for `deriveTripBriefFacts` + `formatBriefTime`, source-scan contract tests for TripBrief and helper purity, mutation-path guards. All pass.
+- `tests/journey-desk-v1.test.mjs`: one test updated — "Brief shows fixed scheduled facts only for real placed data" now checks `deriveTripBriefFacts`/`jd-brief-scheduled-fact` instead of the removed `fixedLines.push` pattern.
+- `frontend/package.json`: `trip-brief-scheduled-facts.test.mjs` added to explicit test list.
+
+**Contracts preserved:** Brief = read-only · IdeasTray = placement-first (unchanged) · AddToDayDrawer = untouched · no SQL, no backend routes, no providers, no search/map changes · `deriveHotelStayDisplay` Itinerary behavior (#488) untouched · existing snake/camel fallback keys via `readHotelCheckIn`/`readHotelCheckOut` still work.
+
+**Tests:** 3702 total; 3689 pass; 13 PRE-EXISTING failures (verified identical to #488 baseline).
 
 ### Hotel Stay Span v1 (merged, PR #488)
 

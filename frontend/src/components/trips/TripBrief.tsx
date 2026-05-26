@@ -1,8 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { Plane, Hotel, Check, ArrowRight } from "lucide-react";
+import { Plane, Hotel, ArrowRight, Utensils, Clock } from "lucide-react";
 import type { Trip, ItineraryDay, ItineraryItem } from "@/types";
+import {
+  deriveTripBriefFacts,
+  type ScheduledFactType,
+} from "@/lib/tripBriefFacts";
+
+// Maximum scheduled facts shown before "+ N more fixed" overflow line.
+const FACTS_CAP = 5;
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -13,6 +20,16 @@ export interface TripBriefProps {
   ideas: ItineraryItem[];
   /** Open the placement surface (Ideas Tray / Ideas workspace on mobile). */
   onReview: () => void;
+}
+
+// ── Icon per scheduled fact type ─────────────────────────────────────────────
+
+function FactIcon({ type }: { type: ScheduledFactType }) {
+  const cls = "w-3.5 h-3.5 flex-shrink-0 text-ds-folio-ink-mist";
+  if (type === "flight") return <Plane className={cls} aria-hidden="true" />;
+  if (type === "meal-reservation") return <Utensils className={cls} aria-hidden="true" />;
+  if (type === "activity-entry") return <Clock className={cls} aria-hidden="true" />;
+  return <Hotel className={cls} aria-hidden="true" />;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -33,14 +50,12 @@ export function TripBrief({ days, ideas, onReview }: TripBriefProps) {
   const hasFlight = !!firstFlight;
   const hasHotel = !!firstHotel;
 
-  // Fixed lines — anchors already placed. Shown only for what really exists.
-  const fixedLines: { label: string; value: string }[] = [];
-  if (hasFlight) fixedLines.push({ label: "Flights", value: firstFlight!.title });
-  if (hasHotel) fixedLines.push({ label: "Stay", value: firstHotel!.title });
+  // Scheduled facts — fixed anchors derived from real placed data.
+  const allFacts = deriveTripBriefFacts(days);
+  const visibleFacts = allFacts.slice(0, FACTS_CAP);
+  const hiddenFactsCount = allFacts.length - visibleFacts.length;
 
-  // Pending lines — the essential anchors still missing. Honest, never faked:
-  // a missing flight and a missing stay each get their own "still to choose"
-  // line so the Brief never contradicts the readiness notes below it.
+  // Pending lines — essential anchors still missing. Honest, never faked.
   const pendingLines: { label: string; Icon: typeof Plane }[] = [];
   if (!hasFlight) pendingLines.push({ label: "Flights", Icon: Plane });
   if (!hasHotel) pendingLines.push({ label: "Stay", Icon: Hotel });
@@ -64,20 +79,35 @@ export function TripBrief({ days, ideas, onReview }: TripBriefProps) {
       </div>
 
       <div className="px-5 pb-3.5">
-        {/* Fixed — anchors already set */}
-        {fixedLines.map((line) => (
+        {/* Scheduled facts — read-only fixed trip anchors */}
+        {visibleFacts.map((fact, i) => (
           <div
-            key={line.label}
-            data-testid="jd-brief-fixed"
+            key={`${fact.type}-${fact.title}-${i}`}
+            data-testid="jd-brief-scheduled-fact"
             className="jd-brief-row flex items-center gap-2.5 py-2"
           >
-            <Check className="w-3.5 h-3.5 flex-shrink-0 text-ds-trust" aria-hidden="true" />
-            <span className="text-sm text-ds-folio-ink">
-              <span className="font-semibold">{line.label}</span>
-              <span className="text-ds-folio-ink-soft"> · {line.value}</span>
+            <FactIcon type={fact.type} />
+            <span className="text-sm text-ds-folio-ink flex-1 min-w-0 truncate">
+              <span className="font-semibold">{fact.label}</span>
+              <span className="text-ds-folio-ink-soft"> · {fact.title}</span>
             </span>
+            {(fact.time ?? fact.date) && (
+              <span className="text-xs text-ds-folio-ink-mist flex-shrink-0 ml-auto pl-2">
+                {fact.time
+                  ? `Day ${fact.dayNumber} · ${fact.time}`
+                  : `Day ${fact.dayNumber}`}
+              </span>
+            )}
           </div>
         ))}
+        {hiddenFactsCount > 0 && (
+          <p
+            data-testid="jd-brief-more-fixed"
+            className="text-xs text-ds-folio-ink-mist py-1 pl-7"
+          >
+            + {hiddenFactsCount} more fixed
+          </p>
+        )}
 
         {/* Pending — essential anchors still to choose (one line each) */}
         {pendingLines.map((line) => (
