@@ -207,29 +207,29 @@ export function deriveTripBriefSummary(days: ItineraryDay[]): TripBriefSummary {
     .filter((f) => f.type === "flight")
     .map((f) => ({ title: f.title, dayNumber: f.dayNumber, date: f.date, time: f.time }));
 
-  // Combine hotel-checkin/hotel-checkout pairs by title into one StaySummaryRow.
-  // hotel-stay (no dates) gets a row with null check-in/out values.
+  // Build one StaySummaryRow per unique stay identity (title::checkIn::checkOut).
+  // Iterating days directly (not allFacts) so two same-name hotels with different
+  // dates get distinct rows — keying by title alone would collapse them.
   const stayMap = new Map<string, StaySummaryRow>();
-  for (const f of allFacts) {
-    if (f.type === "hotel-checkin" || f.type === "hotel-checkout" || f.type === "hotel-stay") {
-      if (!stayMap.has(f.title)) {
-        stayMap.set(f.title, {
-          title: f.title,
-          checkInDay: null,
-          checkInDate: null,
-          checkOutDay: null,
-          checkOutDate: null,
-        });
-      }
-      const stay = stayMap.get(f.title)!;
-      if (f.type === "hotel-checkin") {
-        stay.checkInDay = f.dayNumber;
-        stay.checkInDate = f.date;
-      } else if (f.type === "hotel-checkout") {
-        stay.checkOutDay = f.dayNumber;
-        stay.checkOutDate = f.date;
-      }
-      // hotel-stay: no real check-in/out dates — checkIn/checkOut remain null
+  const emittedStayKeys = new Set<string>();
+  for (const day of days) {
+    for (const item of day.items ?? []) {
+      if (item.itemType !== "hotel") continue;
+      const d = (item.details ?? {}) as Record<string, unknown>;
+      const checkIn = readHotelCheckIn(d);
+      const checkOut = readHotelCheckOut(d);
+      const stayKey = `${item.title}::${checkIn ?? ""}::${checkOut ?? ""}`;
+      if (emittedStayKeys.has(stayKey)) continue;
+      emittedStayKeys.add(stayKey);
+      const checkInDay = checkIn ? (days.find((d2) => d2.date === checkIn) ?? day).dayNumber : null;
+      const checkOutDay = checkOut ? (days.find((d2) => d2.date === checkOut) ?? day).dayNumber : null;
+      stayMap.set(stayKey, {
+        title: item.title,
+        checkInDay,
+        checkInDate: checkIn ?? null,
+        checkOutDay,
+        checkOutDate: checkOut ?? null,
+      });
     }
   }
   const stays = Array.from(stayMap.values());

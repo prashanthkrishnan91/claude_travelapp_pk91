@@ -216,27 +216,27 @@ function deriveTripBriefSummary(days) {
     .filter((f) => f.type === "flight")
     .map((f) => ({ title: f.title, dayNumber: f.dayNumber, date: f.date, time: f.time }));
 
+  // Key by title::checkIn::checkOut so same-name hotels with different dates stay separate.
   const stayMap = new Map();
-  for (const f of allFacts) {
-    if (f.type === "hotel-checkin" || f.type === "hotel-checkout" || f.type === "hotel-stay") {
-      if (!stayMap.has(f.title)) {
-        stayMap.set(f.title, {
-          title: f.title,
-          checkInDay: null,
-          checkInDate: null,
-          checkOutDay: null,
-          checkOutDate: null,
-        });
-      }
-      const stay = stayMap.get(f.title);
-      if (f.type === "hotel-checkin") {
-        stay.checkInDay = f.dayNumber;
-        stay.checkInDate = f.date;
-      } else if (f.type === "hotel-checkout") {
-        stay.checkOutDay = f.dayNumber;
-        stay.checkOutDate = f.date;
-      }
-      // hotel-stay: checkIn/checkOut remain null
+  const emittedStayKeys = new Set();
+  for (const day of days) {
+    for (const item of (day.items ?? [])) {
+      if (item.itemType !== "hotel") continue;
+      const d = item.details ?? {};
+      const checkIn = readHotelCheckIn(d);
+      const checkOut = readHotelCheckOut(d);
+      const stayKey = `${item.title}::${checkIn ?? ""}::${checkOut ?? ""}`;
+      if (emittedStayKeys.has(stayKey)) continue;
+      emittedStayKeys.add(stayKey);
+      const checkInDay = checkIn ? ((days.find((d2) => d2.date === checkIn) ?? day).dayNumber) : null;
+      const checkOutDay = checkOut ? ((days.find((d2) => d2.date === checkOut) ?? day).dayNumber) : null;
+      stayMap.set(stayKey, {
+        title: item.title,
+        checkInDay,
+        checkInDate: checkIn ?? null,
+        checkOutDay,
+        checkOutDate: checkOut ?? null,
+      });
     }
   }
   const stays = Array.from(stayMap.values());
@@ -530,6 +530,36 @@ test("deriveTripBriefSummary allFacts is sorted chronological full list", () => 
   assert.equal(allFacts.length, 2);
   assert.equal(allFacts[0].type, "flight");
   assert.equal(allFacts[1].type, "meal-reservation");
+});
+
+test("deriveTripBriefSummary same hotel title with different dates creates two stay rows", () => {
+  const hotel1 = makeHotel("h1", "Grand Hotel", "2026-06-02", "2026-06-05");
+  const hotel2 = makeHotel("h2", "Grand Hotel", "2026-06-10", "2026-06-14");
+  const days = [
+    makeDay(1, "2026-06-01", []),
+    makeDay(2, "2026-06-02", [hotel1]),
+    makeDay(5, "2026-06-05", []),
+    makeDay(10, "2026-06-10", [hotel2]),
+    makeDay(14, "2026-06-14", []),
+  ];
+  const { stays } = deriveTripBriefSummary(days);
+  assert.equal(stays.length, 2, "same hotel name with different dates must produce two stay rows");
+  const checkIns = stays.map((s) => s.checkInDate);
+  assert.ok(checkIns.includes("2026-06-02"), "first stay check-in must be present");
+  assert.ok(checkIns.includes("2026-06-10"), "second stay check-in must be present");
+});
+
+test("deriveTripBriefSummary true duplicate same-title same-dates collapses to one stay row", () => {
+  const hotel1 = makeHotel("h1", "Grand Hotel", "2026-06-02", "2026-06-05");
+  const hotel2 = makeHotel("h2", "Grand Hotel", "2026-06-02", "2026-06-05");
+  const days = [
+    makeDay(2, "2026-06-02", [hotel1, hotel2]),
+    makeDay(5, "2026-06-05", []),
+  ];
+  const { stays } = deriveTripBriefSummary(days);
+  assert.equal(stays.length, 1, "true duplicate same-title same-dates must collapse to one stay row");
+  assert.equal(stays[0].checkInDay, 2);
+  assert.equal(stays[0].checkOutDay, 5);
 });
 
 // ── Source-scan: TripBrief component ─────────────────────────────────────────
