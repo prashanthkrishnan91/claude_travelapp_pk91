@@ -76,7 +76,7 @@ import {
   addHotelToDay,
   fetchExploreSnapshot,
 } from "@/lib/api";
-import { deriveHotelStayDisplay, readHotelCheckIn } from "@/lib/hotelStaySpans";
+import { deriveHotelStayDisplay, readHotelCheckOut } from "@/lib/hotelStaySpans";
 import { buildTripCandidateBuckets, mergePersistedWithSnapshot } from "@/lib/tripCandidates";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
@@ -1581,11 +1581,35 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       if (item.itemType === "flight") {
         newItem = await addOneWayFlightToDay(tripId, targetDay.id, item, targetDay.items.length);
       } else if (item.itemType === "hotel") {
-        // Anchor to the check-in day when the hotel has a valid checkIn matching a trip day
-        const hotelCheckIn = readHotelCheckIn((item.details ?? {}) as Record<string, unknown>);
-        const checkInDay = hotelCheckIn ? displayDays.find((dy) => dy.date === hotelCheckIn) : null;
-        if (checkInDay) resolvedDay = checkInDay;
-        newItem = await addHotelToDay(tripId, resolvedDay.id, item, resolvedDay.items.length);
+        // Seed canonical dates from the selected target day — candidate placeholder checkIn
+        // (full-trip default) must not override the user's chosen day.
+        const rawDetails = (item.details ?? {}) as Record<string, unknown>;
+        const checkIn = targetDay.date;
+
+        const targetDayIndex = displayDays.findIndex((dy) => dy.id === targetDay.id);
+        const nextDay = targetDayIndex >= 0 ? displayDays[targetDayIndex + 1] : undefined;
+        let checkOut: string | undefined;
+        if (nextDay?.date) {
+          checkOut = nextDay.date;
+        } else {
+          const existingCheckOut = readHotelCheckOut(rawDetails);
+          if (existingCheckOut && checkIn && existingCheckOut > checkIn) {
+            checkOut = existingCheckOut;
+          }
+        }
+
+        // Strip all date keys (canonical + fallback); re-add only seeded canonical dates
+        const seededDetails: Record<string, unknown> = Object.fromEntries(
+          Object.entries(rawDetails).filter(
+            ([k]) => !["checkIn","checkOut","check_in","check_in_date","checkInDate",
+                       "check_out","check_out_date","checkOutDate"].includes(k)
+          )
+        );
+        if (checkIn) seededDetails.checkIn = checkIn;
+        if (checkOut) seededDetails.checkOut = checkOut;
+
+        const seededItem: ItineraryItem = { ...item, details: seededDetails as ItineraryItem["details"] };
+        newItem = await addHotelToDay(tripId, targetDay.id, seededItem, targetDay.items.length);
       } else {
         newItem = await createItem(tripId, targetDay.id, {
           itemType: item.itemType as ItemType,

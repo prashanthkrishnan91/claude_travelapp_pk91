@@ -524,21 +524,37 @@ test("true duplicate — same placeId, same dates on two days: non-checkIn copy 
   assert.ok(!map.get("d1")?.suppressedHotelItemIds.has("hA"), "Canonical must not be suppressed");
 });
 
-// ── 17. TripBuilder Build-add anchoring contracts ─────────────────────────────
+// ── 17. TripBuilder Build-add date seeding contracts ─────────────────────────
 
-test("TripBuilder imports readHotelCheckIn from hotelStaySpans", () => {
+test("TripBuilder imports readHotelCheckOut from hotelStaySpans for Build-add checkout fallback", () => {
   assert.match(
     tripBuilderSrc,
-    /import.*readHotelCheckIn.*from.*hotelStaySpans/,
-    "TripBuilder must import readHotelCheckIn for Build-add anchoring"
+    /import.*readHotelCheckOut.*from.*hotelStaySpans/,
+    "TripBuilder must import readHotelCheckOut for Build-add checkout fallback"
   );
 });
 
-test("TripBuilder handleAddCandidateToItinerary resolves checkInDay from displayDays for hotel", () => {
+test("TripBuilder Build-add seeds hotel checkIn from targetDay.date (not candidate placeholder)", () => {
   assert.match(
     tripBuilderSrc,
-    /readHotelCheckIn[\s\S]{0,500}displayDays\.find/,
-    "handleAddCandidateToItinerary must find check-in day from displayDays"
+    /targetDay\.date/,
+    "handleAddCandidateToItinerary must seed checkIn from targetDay.date"
+  );
+});
+
+test("TripBuilder Build-add uses displayDays.findIndex for next-day checkout default", () => {
+  assert.match(
+    tripBuilderSrc,
+    /displayDays\.findIndex/,
+    "handleAddCandidateToItinerary must use displayDays.findIndex to find next day for checkout"
+  );
+});
+
+test("TripBuilder Build-add builds seededDetails stripping all old date keys", () => {
+  assert.match(
+    tripBuilderSrc,
+    /seededDetails/,
+    "handleAddCandidateToItinerary must build seededDetails stripping old date keys"
   );
 });
 
@@ -548,4 +564,84 @@ test("TripBuilder handleAddCandidateToItinerary uses resolvedDay for hotel state
     /resolvedDay/,
     "handleAddCandidateToItinerary must use resolvedDay to anchor hotel to correct day"
   );
+});
+
+// ── 18. Build hotel date seeding (inline pure logic) ─────────────────────────
+
+function seedHotelDetailsForAdd(rawDetails, targetDayDate, nextDayDate) {
+  const checkIn = targetDayDate;
+  let checkOut;
+  if (nextDayDate) {
+    checkOut = nextDayDate;
+  } else {
+    const existingCheckOut = readHotelCheckOut(rawDetails);
+    if (existingCheckOut && checkIn && existingCheckOut > checkIn) {
+      checkOut = existingCheckOut;
+    }
+  }
+  const seededDetails = Object.fromEntries(
+    Object.entries(rawDetails).filter(
+      ([k]) => !["checkIn","checkOut","check_in","check_in_date","checkInDate",
+                 "check_out","check_out_date","checkOutDate"].includes(k)
+    )
+  );
+  if (checkIn) seededDetails.checkIn = checkIn;
+  if (checkOut) seededDetails.checkOut = checkOut;
+  return seededDetails;
+}
+
+test("Build-add seeds checkIn to target day date, ignoring candidate placeholder", () => {
+  // Candidate has full-trip placeholder dates (Day 1 to last day)
+  const raw = { checkIn: "2025-07-01", checkOut: "2025-07-15", rating: 4.5, stars: 5 };
+  const result = seedHotelDetailsForAdd(raw, "2025-07-03", "2025-07-04");
+  assert.equal(result.checkIn, "2025-07-03", "checkIn must be the target day's date, not candidate's");
+  assert.equal(result.checkOut, "2025-07-04", "checkOut must be the next trip day");
+});
+
+test("Build-add preserves unrelated hotel details (rating, stars, amenities, coordinates)", () => {
+  const raw = { checkIn: "2025-07-01", checkOut: "2025-07-15", rating: 4.5, stars: 5, amenities: ["pool"], lat: 35.6 };
+  const result = seedHotelDetailsForAdd(raw, "2025-07-03", "2025-07-04");
+  assert.equal(result.rating, 4.5);
+  assert.equal(result.stars, 5);
+  assert.deepEqual(result.amenities, ["pool"]);
+  assert.equal(result.lat, 35.6);
+});
+
+test("Build-add strips all conflicting snake/fallback date keys", () => {
+  const raw = { check_in: "2025-07-01", check_in_date: "2025-07-01", checkInDate: "2025-07-01",
+                check_out: "2025-07-15", check_out_date: "2025-07-15", checkOutDate: "2025-07-15", rating: 4.0 };
+  const result = seedHotelDetailsForAdd(raw, "2025-07-03", "2025-07-04");
+  assert.equal(result.check_in, undefined);
+  assert.equal(result.check_in_date, undefined);
+  assert.equal(result.checkInDate, undefined);
+  assert.equal(result.check_out, undefined);
+  assert.equal(result.check_out_date, undefined);
+  assert.equal(result.checkOutDate, undefined);
+  assert.equal(result.checkIn, "2025-07-03");
+  assert.equal(result.checkOut, "2025-07-04");
+});
+
+test("Build-add checkout defaults to next trip day when available", () => {
+  const raw = { rating: 4.0 };
+  const result = seedHotelDetailsForAdd(raw, "2025-07-10", "2025-07-11");
+  assert.equal(result.checkOut, "2025-07-11");
+});
+
+test("Build-add checkout falls back to valid existing checkOut when no next day", () => {
+  const raw = { checkOut: "2025-07-20", rating: 4.0 };
+  const result = seedHotelDetailsForAdd(raw, "2025-07-10", null);
+  assert.equal(result.checkOut, "2025-07-20", "valid existing checkOut preserved when after new checkIn");
+});
+
+test("Build-add omits checkOut when no next day and existing checkOut predates new checkIn", () => {
+  // Stale checkout (trip-start placeholder) is before the chosen checkIn
+  const raw = { checkOut: "2025-07-05" };
+  const result = seedHotelDetailsForAdd(raw, "2025-07-10", null);
+  assert.equal(result.checkOut, undefined, "stale checkOut before new checkIn must be omitted");
+});
+
+test("Build-add omits checkIn when targetDay has no date (undated trip, fail-closed)", () => {
+  const raw = { checkIn: "2025-07-01", rating: 4.0 };
+  const result = seedHotelDetailsForAdd(raw, undefined, "2025-07-02");
+  assert.equal(result.checkIn, undefined, "checkIn not seeded when targetDay has no date");
 });
