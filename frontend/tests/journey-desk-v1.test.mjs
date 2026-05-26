@@ -112,9 +112,10 @@ test("Brief shows a pending line for each missing essential anchor (flight + sta
   assert.match(brief, /if \(!hasHotel\) pendingLines\.push/);
 });
 
-test("Brief shows fixed lines only for anchors that really exist (omit, never placeholder)", () => {
-  assert.match(brief, /if \(hasFlight\) fixedLines\.push/);
-  assert.match(brief, /if \(hasHotel\) fixedLines\.push/);
+test("Brief shows fixed scheduled facts only for real placed data (omit, never placeholder)", () => {
+  // Fixed facts are derived from real placed data via the pure helper — never fabricated.
+  assert.match(brief, /deriveTripBriefSummary/);
+  assert.match(brief, /jd-brief-section-flights|jd-brief-section-stays|jd-brief-section-timed/);
 });
 
 test("empty-trip Brief is honest and does not contradict the readiness notes", () => {

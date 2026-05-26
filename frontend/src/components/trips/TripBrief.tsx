@@ -1,8 +1,22 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Plane, Hotel, Check, ArrowRight } from "lucide-react";
+import {
+  Plane,
+  Hotel,
+  ArrowRight,
+  Utensils,
+  Clock,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import type { Trip, ItineraryDay, ItineraryItem } from "@/types";
+import {
+  deriveTripBriefSummary,
+  type StaySummaryRow,
+  type ScheduledFactType,
+} from "@/lib/tripBriefFacts";
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -15,14 +29,42 @@ export interface TripBriefProps {
   onReview: () => void;
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatStayRange(s: StaySummaryRow): string {
+  if (s.checkInDay !== null && s.checkOutDay !== null)
+    return `Day ${s.checkInDay} → Day ${s.checkOutDay}`;
+  if (s.checkInDay !== null) return `From Day ${s.checkInDay}`;
+  if (s.checkOutDay !== null) return `To Day ${s.checkOutDay}`;
+  return "Stay";
+}
+
+function FactIcon({ type }: { type: ScheduledFactType }) {
+  const cls = "w-3.5 h-3.5 flex-shrink-0 text-ds-folio-ink-mist";
+  if (type === "flight") return <Plane className={cls} aria-hidden="true" />;
+  if (type === "meal-reservation") return <Utensils className={cls} aria-hidden="true" />;
+  if (type === "activity-entry") return <Clock className={cls} aria-hidden="true" />;
+  return <Hotel className={cls} aria-hidden="true" />;
+}
+
+function factLabel(type: ScheduledFactType): string {
+  if (type === "flight") return "Flight";
+  if (type === "hotel-checkin") return "Check in";
+  if (type === "hotel-checkout") return "Check out";
+  if (type === "hotel-stay") return "Stay";
+  if (type === "meal-reservation") return "Reservation";
+  return "Entry";
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 //
 // The Brief is the calm, at-a-glance answer that opens Journey Desk: where the
 // trip is, what is already fixed, and what still needs choosing. Every value is
 // derived from real trip / itinerary / Trip Ideas data — never fabricated.
-// "Anchors" and "Open Decisions" are merged into these few lines (blueprint §5).
 
 export function TripBrief({ days, ideas, onReview }: TripBriefProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
   const placedItems: ItineraryItem[] = days.flatMap((d) => d.items ?? []);
   const placedCount = placedItems.length;
   const ideasCount = ideas.length;
@@ -33,14 +75,25 @@ export function TripBrief({ days, ideas, onReview }: TripBriefProps) {
   const hasFlight = !!firstFlight;
   const hasHotel = !!firstHotel;
 
-  // Fixed lines — anchors already placed. Shown only for what really exists.
-  const fixedLines: { label: string; value: string }[] = [];
-  if (hasFlight) fixedLines.push({ label: "Flights", value: firstFlight!.title });
-  if (hasHotel) fixedLines.push({ label: "Stay", value: firstHotel!.title });
+  const { flights, stays, reservationCount, entryCount, allFacts } =
+    deriveTripBriefSummary(days);
 
-  // Pending lines — the essential anchors still missing. Honest, never faked:
-  // a missing flight and a missing stay each get their own "still to choose"
-  // line so the Brief never contradicts the readiness notes below it.
+  const timedLabel = [
+    reservationCount > 0
+      ? `${reservationCount} ${reservationCount === 1 ? "reservation" : "reservations"}`
+      : "",
+    entryCount > 0
+      ? `${entryCount} ${entryCount === 1 ? "entry time" : "entry times"}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const nextTimed = allFacts.find(
+    (f) => f.type === "meal-reservation" || f.type === "activity-entry",
+  );
+
+  // Pending lines — essential anchors still missing. Honest, never faked.
   const pendingLines: { label: string; Icon: typeof Plane }[] = [];
   if (!hasFlight) pendingLines.push({ label: "Flights", Icon: Plane });
   if (!hasHotel) pendingLines.push({ label: "Stay", Icon: Hotel });
@@ -64,20 +117,121 @@ export function TripBrief({ days, ideas, onReview }: TripBriefProps) {
       </div>
 
       <div className="px-5 pb-3.5">
-        {/* Fixed — anchors already set */}
-        {fixedLines.map((line) => (
-          <div
-            key={line.label}
-            data-testid="jd-brief-fixed"
-            className="jd-brief-row flex items-center gap-2.5 py-2"
-          >
-            <Check className="w-3.5 h-3.5 flex-shrink-0 text-ds-trust" aria-hidden="true" />
-            <span className="text-sm text-ds-folio-ink">
-              <span className="font-semibold">{line.label}</span>
-              <span className="text-ds-folio-ink-soft"> · {line.value}</span>
-            </span>
+        {/* Flights section */}
+        {flights.length > 0 && (
+          <div data-testid="jd-brief-section-flights">
+            {flights.map((f, i) => (
+              <div
+                key={`flight-${i}`}
+                data-testid="jd-brief-flight-row"
+                className="jd-brief-row flex items-center gap-2.5 py-2"
+              >
+                <Plane
+                  className="w-3.5 h-3.5 flex-shrink-0 text-ds-folio-ink-mist"
+                  aria-hidden="true"
+                />
+                <span className="text-sm text-ds-folio-ink flex-1 min-w-0 truncate">
+                  {f.title}
+                </span>
+                <span className="text-xs text-ds-folio-ink-mist flex-shrink-0 ml-auto pl-2">
+                  {f.time ? `Day ${f.dayNumber} · ${f.time}` : `Day ${f.dayNumber}`}
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
+
+        {/* Stays section */}
+        {stays.length > 0 && (
+          <div data-testid="jd-brief-section-stays">
+            {stays.map((s, i) => (
+              <div
+                key={`stay-${i}`}
+                data-testid="jd-brief-stay-row"
+                className="jd-brief-row flex items-center gap-2.5 py-2"
+              >
+                <Hotel
+                  className="w-3.5 h-3.5 flex-shrink-0 text-ds-folio-ink-mist"
+                  aria-hidden="true"
+                />
+                <span className="text-sm text-ds-folio-ink flex-1 min-w-0 truncate">
+                  {s.title}
+                </span>
+                <span className="text-xs text-ds-folio-ink-mist flex-shrink-0 ml-auto pl-2">
+                  {formatStayRange(s)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Timed plans section */}
+        {(reservationCount > 0 || entryCount > 0) && (
+          <div data-testid="jd-brief-section-timed">
+            <div
+              data-testid="jd-brief-timed-summary"
+              className="jd-brief-row flex items-center gap-2.5 py-2"
+            >
+              <Utensils
+                className="w-3.5 h-3.5 flex-shrink-0 text-ds-folio-ink-mist"
+                aria-hidden="true"
+              />
+              <span className="text-sm text-ds-folio-ink">{timedLabel}</span>
+            </div>
+            {nextTimed && (
+              <div
+                data-testid="jd-brief-next-timed"
+                className="pl-7 text-xs text-ds-folio-ink-mist pb-1"
+              >
+                {`Next: ${nextTimed.title}${nextTimed.time ? ` · Day ${nextTimed.dayNumber} · ${nextTimed.time}` : ""}`}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Disclosure toggle — expands full chronological fact list */}
+        {allFacts.length > 0 && (
+          <>
+            <button
+              type="button"
+              data-testid="jd-brief-view-details"
+              onClick={() => setDetailsOpen((o) => !o)}
+              aria-expanded={detailsOpen}
+              className="inline-flex items-center gap-1 text-xs text-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
+            >
+              {detailsOpen ? "Hide details" : "View all fixed details"}
+              {detailsOpen ? (
+                <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+              )}
+            </button>
+            {detailsOpen && (
+              <div data-testid="jd-brief-details-list" className="mt-1">
+                {allFacts.map((fact, i) => (
+                  <div
+                    key={`detail-${i}`}
+                    data-testid="jd-brief-detail-item"
+                    className="flex items-center gap-2.5 py-1.5 text-xs text-ds-folio-ink-soft"
+                  >
+                    <FactIcon type={fact.type} />
+                    <span className="flex-1 min-w-0 truncate">
+                      <span className="font-medium">{factLabel(fact.type)}</span>
+                      <span className="text-ds-folio-ink-mist"> · {fact.title}</span>
+                    </span>
+                    {(fact.time ?? fact.date) && (
+                      <span className="flex-shrink-0 ml-auto pl-2 text-ds-folio-ink-mist">
+                        {fact.time
+                          ? `Day ${fact.dayNumber} · ${fact.time}`
+                          : `Day ${fact.dayNumber}`}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
 
         {/* Pending — essential anchors still to choose (one line each) */}
         {pendingLines.map((line) => (
@@ -87,7 +241,10 @@ export function TripBrief({ days, ideas, onReview }: TripBriefProps) {
             className="jd-brief-row flex items-center justify-between gap-3 py-2"
           >
             <span className="inline-flex items-center gap-2.5 text-sm text-ds-folio-ink">
-              <line.Icon className="w-3.5 h-3.5 flex-shrink-0 text-ds-folio-ink-mist" aria-hidden="true" />
+              <line.Icon
+                className="w-3.5 h-3.5 flex-shrink-0 text-ds-folio-ink-mist"
+                aria-hidden="true"
+              />
               <span>
                 <span className="font-semibold">{line.label}</span>
                 <span className="text-ds-folio-ink-soft"> · still to choose</span>
