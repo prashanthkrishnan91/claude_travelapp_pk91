@@ -1,4 +1,4 @@
-import type { ItineraryDay, ItineraryItem } from "@/types";
+import type { ItineraryDay } from "@/types";
 
 export type StayMarkerKind = "staying" | "checkout";
 
