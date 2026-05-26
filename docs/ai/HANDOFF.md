@@ -15,17 +15,17 @@ This file is **current operational state**, not a historical log. It must stay c
 One canonical editable hotel card anchored to check-in day; intermediate days show "Staying at {hotel}" markers; checkout day shows "Check out · {hotel}" marker. Move-on-date-edit: editing checkIn date moves the card to the new day in one PATCH. **Frontend-only; no SQL, backend, provider, search, map, AddToDayDrawer, or TripBrief change.**
 
 **What changed:**
-- `src/lib/hotelStaySpans.ts` (new): pure helper — `readHotelCheckIn`/`readHotelCheckOut` (camelCase-first fallback chain with UTC-safe `Date.UTC` parsing), `deriveHotelStayDisplay(displayDays)` → `Map<dayId, { suppressedHotelItemIds, stayMarkers }>`. Deduplicates by checkIn date (prefer item physically on checkIn day, else lowest position). Non-canonical duplicates suppressed. Covered days `(checkIn, checkOut)` get "staying" markers; checkOut day gets "checkout" marker.
+- `src/lib/hotelStaySpans.ts` (new): pure helper — `readHotelCheckIn`/`readHotelCheckOut` (camelCase-first fallback chain with UTC-safe `Date.UTC` parsing), `deriveHotelStayDisplay(displayDays)` → `Map<dayId, { suppressedHotelItemIds, stayMarkers }>`. Deduplicates only by same logical stay key: hotel identity (`placeId`/Google Maps URI when present, otherwise normalized title + location) plus `checkIn` + `checkOut`. Different hotels with the same dates are not suppressed. Non-canonical duplicates (same stay key) prefer item physically on checkIn day, else lowest position. Covered days `(checkIn, checkOut)` get "staying" markers; checkOut day gets "checkout" marker.
 - `api.ts`: `updateItemMetadata` extended with optional 4th param `newDayId?: string` — when present, includes `dayId: newDayId` in the `updateItem` PATCH (single request, no separate move call). All existing tests pass; patch type/spread/delete behavior unchanged.
 - `ItineraryItemCard.tsx`: added `onSaveHotelDates?` prop — when provided for hotel saves, routes through callback (move-aware) and returns early; non-hotel types still call `updateItemMetadata` directly. All existing contract tests pass.
 - `ItineraryDayColumn.tsx`: new props `stayMarkers`, `suppressedHotelItemIds`, `onSaveHotelDates`; `visibleItems` useMemo filters suppressed hotel items; stay markers rendered above `SortableContext` as read-only pills (`data-testid="stay-markers"`, `stay-marker-${kind}`); `Hotel` icon imported for markers; `onSaveHotelDates` threaded through `renderItemsWithConnectors` → `TimelineSections` → `ItineraryItemCard`.
-- `TripBuilder.tsx`: imports `deriveHotelStayDisplay` + `updateItemMetadata`; adds `hotelStayDisplayMap` useMemo from `displayDays`; adds `handleSaveHotelDates` useCallback (resolves newDayId from displayDays, calls updateItemMetadata, updates local `days` state); passes `stayMarkers`, `suppressedHotelItemIds`, `onSaveHotelDates` to each `ItineraryDayColumn`.
-- `tests/hotel-stay-span-v1.test.mjs` (new, 43 tests): unit tests on inline pure logic + source-scan contract tests. All pass.
+- `TripBuilder.tsx`: imports `deriveHotelStayDisplay` + `readHotelCheckIn` + `updateItemMetadata`; adds `hotelStayDisplayMap` useMemo from `displayDays`; adds `handleSaveHotelDates` useCallback (resolves newDayId from displayDays, calls updateItemMetadata, updates local `days` state); passes `stayMarkers`, `suppressedHotelItemIds`, `onSaveHotelDates` to each `ItineraryDayColumn`. Build-added dated hotels anchor to the matching check-in day when that date maps to a trip day; otherwise fall back to the selected day.
+- `tests/hotel-stay-span-v1.test.mjs` (new, 50 tests): unit tests on inline pure logic + source-scan contract tests. All pass.
 - `frontend/package.json`: new test added to the explicit test list.
 
 **Contracts preserved:** Brief = read-only · IdeasTray = placement-first · AddToDayDrawer = untouched · TripBrief = untouched · no item create/delete for derived markers · existing snake/camel fallback keys still work · all 57 stay-span-metadata-contract-v1 tests pass.
 
-**Tests:** 3648 total; 3635 pass; 13 PRE-EXISTING failures (verified identical to baseline via git stash).
+**Tests:** 3656 total; 3643 pass; 13 PRE-EXISTING failures (verified identical to baseline).
 
 ### Stay-span + reservation metadata contract v1 (merged, PR #487)
 
