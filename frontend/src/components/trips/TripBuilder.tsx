@@ -76,7 +76,7 @@ import {
   addHotelToDay,
   fetchExploreSnapshot,
 } from "@/lib/api";
-import { deriveHotelStayDisplay } from "@/lib/hotelStaySpans";
+import { deriveHotelStayDisplay, readHotelCheckIn } from "@/lib/hotelStaySpans";
 import { buildTripCandidateBuckets, mergePersistedWithSnapshot } from "@/lib/tripCandidates";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
@@ -1576,12 +1576,16 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         return;
       }
 
+      let resolvedDay = targetDay;
       let newItem: ItineraryItem;
       if (item.itemType === "flight") {
         newItem = await addOneWayFlightToDay(tripId, targetDay.id, item, targetDay.items.length);
       } else if (item.itemType === "hotel") {
-        // Preserve all hotel details (stars, rating, amenities, area_label, etc.)
-        newItem = await addHotelToDay(tripId, targetDay.id, item, targetDay.items.length);
+        // Anchor to the check-in day when the hotel has a valid checkIn matching a trip day
+        const hotelCheckIn = readHotelCheckIn((item.details ?? {}) as Record<string, unknown>);
+        const checkInDay = hotelCheckIn ? displayDays.find((dy) => dy.date === hotelCheckIn) : null;
+        if (checkInDay) resolvedDay = checkInDay;
+        newItem = await addHotelToDay(tripId, resolvedDay.id, item, resolvedDay.items.length);
       } else {
         newItem = await createItem(tripId, targetDay.id, {
           itemType: item.itemType as ItemType,
@@ -1594,17 +1598,17 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
       setDays((prev) =>
         prev.map((d) =>
-          d.id === targetDay.id ? { ...d, items: [...d.items, newItem] } : d
+          d.id === resolvedDay.id ? { ...d, items: [...d.items, newItem] } : d
         )
       );
-      showToast(`${item.itemType === "flight" ? "Flight" : "Hotel"} added to Day ${targetDay.dayNumber}`);
+      showToast(`${item.itemType === "flight" ? "Flight" : "Hotel"} added to Day ${resolvedDay.dayNumber}`);
       onItineraryChanged?.();
     } catch {
       showToast("Failed to add — please try again");
     } finally {
       setAddingId(null);
     }
-  }, [days, selectedDayId, tripId, showToast, onItineraryChanged]);
+  }, [days, displayDays, selectedDayId, tripId, showToast, onItineraryChanged]);
 
   // ── Add attraction to selected itinerary day ─────────────────────────────────
 

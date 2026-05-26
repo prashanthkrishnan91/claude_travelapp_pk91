@@ -66,6 +66,18 @@ function readHotelCheckOut(d) {
   return parseHotelDate(d.checkOut ?? d.check_out ?? d.check_out_date ?? d.checkOutDate);
 }
 
+function hotelIdentityKey(d, title, location) {
+  const placeId =
+    (typeof d.placeId === "string" && d.placeId) ||
+    (typeof d.place_id === "string" && d.place_id) ||
+    (typeof d.googlePlaceId === "string" && d.googlePlaceId) ||
+    (typeof d.google_place_id === "string" && d.google_place_id) ||
+    (typeof d.googleMapsUri === "string" && d.googleMapsUri) ||
+    (typeof d.google_maps_uri === "string" && d.google_maps_uri);
+  if (placeId) return placeId;
+  return `${title.toLowerCase().trim()}::${typeof location === "string" ? location.toLowerCase().trim() : ""}`;
+}
+
 function deriveHotelStayDisplay(displayDays) {
   const result = new Map();
   for (const day of displayDays) {
@@ -86,16 +98,17 @@ function deriveHotelStayDisplay(displayDays) {
         physicalDayId: day.id,
         physicalDayDate: day.date ?? null,
         position: item.position,
+        stayKey: `${hotelIdentityKey(d, item.title, item.location)}::${checkIn}::${checkOut}`,
       });
     }
   }
-  const byCheckIn = new Map();
+  const byStayKey = new Map();
   for (const span of spans) {
-    const arr = byCheckIn.get(span.checkIn) ?? [];
+    const arr = byStayKey.get(span.stayKey) ?? [];
     arr.push(span);
-    byCheckIn.set(span.checkIn, arr);
+    byStayKey.set(span.stayKey, arr);
   }
-  for (const [, group] of byCheckIn) {
+  for (const [, group] of byStayKey) {
     const onCheckInDay = group.filter((s) => s.physicalDayDate === s.checkIn);
     const canonical = onCheckInDay.length > 0
       ? onCheckInDay.reduce((a, b) => a.position <= b.position ? a : b)
@@ -124,8 +137,26 @@ function makeDay(id, date, items = []) {
   return { id, date, dayNumber: 1, title: `Day`, items };
 }
 
-function makeHotelItem(id, checkIn, checkOut, position = 0) {
-  return { id, itemType: "hotel", title: `Hotel-${id}`, position, details: { checkIn, checkOut } };
+function makeHotelItem(id, checkIn, checkOut, position = 0, title, location) {
+  return {
+    id,
+    itemType: "hotel",
+    title: title ?? `Hotel-${id}`,
+    location: location ?? null,
+    position,
+    details: { checkIn, checkOut },
+  };
+}
+
+function makeHotelItemWithPlaceId(id, checkIn, checkOut, placeId, position = 0) {
+  return {
+    id,
+    itemType: "hotel",
+    title: `Hotel-${id}`,
+    location: null,
+    position,
+    details: { checkIn, checkOut, placeId },
+  };
 }
 
 // ── 1. Intermediate staying markers ──────────────────────────────────────────
@@ -218,10 +249,11 @@ test("hotel with invalid date string produces no markers", () => {
 // ── 6. Duplicate records prefer check-in-day item ────────────────────────────
 
 test("duplicate hotel records with same checkIn prefer item physically on checkIn day", () => {
+  // Same hotel (same title + location) placed on two different days — simulate accidental duplicate
   // h1 is on Day 2 (not checkIn day), h2 is on Day 1 (the checkIn day)
   const days = [
-    makeDay("d1", "2025-06-01", [makeHotelItem("h2", "2025-06-01", "2025-06-04", 0)]),
-    makeDay("d2", "2025-06-02", [makeHotelItem("h1", "2025-06-01", "2025-06-04", 0)]),
+    makeDay("d1", "2025-06-01", [makeHotelItem("h2", "2025-06-01", "2025-06-04", 0, "Hilton Tokyo", "Tokyo")]),
+    makeDay("d2", "2025-06-02", [makeHotelItem("h1", "2025-06-01", "2025-06-04", 0, "Hilton Tokyo", "Tokyo")]),
     makeDay("d3", "2025-06-03"),
     makeDay("d4", "2025-06-04"),
   ];
@@ -406,6 +438,11 @@ test("hotelStaySpans.ts uses UTC-safe date parsing (Date.UTC)", () => {
   assert.match(spansSrc, /Date\.UTC/, "hotelStaySpans must use Date.UTC for UTC-safe date parsing");
 });
 
+test("hotelStaySpans.ts groups by stayKey not checkIn (regression guard)", () => {
+  assert.match(spansSrc, /byStayKey/, "hotelStaySpans must group by stayKey to avoid cross-hotel suppression");
+  assert.doesNotMatch(spansSrc, /byCheckIn/, "hotelStaySpans must not group by checkIn alone");
+});
+
 test("TripBuilder handleSaveHotelDates resolves newDayId from displayDays", () => {
   assert.match(
     tripBuilderSrc,
@@ -427,5 +464,88 @@ test("TripBuilder imports updateItemMetadata from api", () => {
     tripBuilderSrc,
     /updateItemMetadata/,
     "TripBuilder must import and use updateItemMetadata"
+  );
+});
+
+// ── 16. Different hotels with same checkIn/checkOut are NOT suppressed ────────
+
+test("two different hotels (by title) with same checkIn/checkOut are both visible", () => {
+  // Both hotels check in and check out on the same dates but have different titles
+  const days = [
+    makeDay("d1", "2025-07-01", [
+      makeHotelItem("hA", "2025-07-01", "2025-07-04", 0, "Grand Hyatt", "Tokyo"),
+      makeHotelItem("hB", "2025-07-01", "2025-07-04", 1, "Mandarin Oriental", "Tokyo"),
+    ]),
+    makeDay("d2", "2025-07-02"),
+    makeDay("d3", "2025-07-03"),
+    makeDay("d4", "2025-07-04"),
+  ];
+  const map = deriveHotelStayDisplay(days);
+  // Neither hotel should be suppressed — they have different titles so different stayKeys
+  assert.ok(!map.get("d1")?.suppressedHotelItemIds.has("hA"), "Hotel A must not be suppressed");
+  assert.ok(!map.get("d1")?.suppressedHotelItemIds.has("hB"), "Hotel B must not be suppressed");
+});
+
+test("two different hotels with same checkIn/checkOut but different placeIds are both visible", () => {
+  const days = [
+    makeDay("d1", "2025-07-01", [
+      makeHotelItemWithPlaceId("hA", "2025-07-01", "2025-07-04", "place-001"),
+      makeHotelItemWithPlaceId("hB", "2025-07-01", "2025-07-04", "place-002"),
+    ]),
+    makeDay("d2", "2025-07-02"),
+  ];
+  const map = deriveHotelStayDisplay(days);
+  assert.ok(!map.get("d1")?.suppressedHotelItemIds.has("hA"), "Hotel A (place-001) must not be suppressed");
+  assert.ok(!map.get("d1")?.suppressedHotelItemIds.has("hB"), "Hotel B (place-002) must not be suppressed");
+});
+
+test("true duplicate — same hotel (same title+location, same dates) on two days: non-checkIn copy suppressed", () => {
+  // Same logical hotel placed on two different days (data error / copy-paste)
+  const days = [
+    makeDay("d1", "2025-07-01", [makeHotelItem("hA", "2025-07-01", "2025-07-04", 0, "Grand Hyatt", "Tokyo")]),
+    makeDay("d2", "2025-07-02", [makeHotelItem("hB", "2025-07-01", "2025-07-04", 0, "Grand Hyatt", "Tokyo")]),
+    makeDay("d3", "2025-07-03"),
+    makeDay("d4", "2025-07-04"),
+  ];
+  const map = deriveHotelStayDisplay(days);
+  // hB is on Day 2 (not the checkIn day), same hotel → must be suppressed
+  assert.ok(map.get("d2")?.suppressedHotelItemIds.has("hB"), "True duplicate on non-checkIn day must be suppressed");
+  assert.ok(!map.get("d1")?.suppressedHotelItemIds.has("hA"), "Canonical (on checkIn day) must not be suppressed");
+});
+
+test("true duplicate — same placeId, same dates on two days: non-checkIn copy suppressed", () => {
+  const days = [
+    makeDay("d1", "2025-07-01", [makeHotelItemWithPlaceId("hA", "2025-07-01", "2025-07-04", "place-abc")]),
+    makeDay("d2", "2025-07-02", [makeHotelItemWithPlaceId("hB", "2025-07-01", "2025-07-04", "place-abc")]),
+    makeDay("d3", "2025-07-03"),
+  ];
+  const map = deriveHotelStayDisplay(days);
+  assert.ok(map.get("d2")?.suppressedHotelItemIds.has("hB"), "Same placeId duplicate must be suppressed");
+  assert.ok(!map.get("d1")?.suppressedHotelItemIds.has("hA"), "Canonical must not be suppressed");
+});
+
+// ── 17. TripBuilder Build-add anchoring contracts ─────────────────────────────
+
+test("TripBuilder imports readHotelCheckIn from hotelStaySpans", () => {
+  assert.match(
+    tripBuilderSrc,
+    /import.*readHotelCheckIn.*from.*hotelStaySpans/,
+    "TripBuilder must import readHotelCheckIn for Build-add anchoring"
+  );
+});
+
+test("TripBuilder handleAddCandidateToItinerary resolves checkInDay from displayDays for hotel", () => {
+  assert.match(
+    tripBuilderSrc,
+    /readHotelCheckIn[\s\S]{0,500}displayDays\.find/,
+    "handleAddCandidateToItinerary must find check-in day from displayDays"
+  );
+});
+
+test("TripBuilder handleAddCandidateToItinerary uses resolvedDay for hotel state update", () => {
+  assert.match(
+    tripBuilderSrc,
+    /resolvedDay/,
+    "handleAddCandidateToItinerary must use resolvedDay to anchor hotel to correct day"
   );
 });

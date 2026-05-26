@@ -39,6 +39,19 @@ interface HotelSpan {
   physicalDayId: string;
   physicalDayDate: string | null;
   position: number;
+  stayKey: string;
+}
+
+function hotelIdentityKey(d: Record<string, unknown>, title: string, location: unknown): string {
+  const placeId =
+    (typeof d.placeId === "string" && d.placeId) ||
+    (typeof d.place_id === "string" && d.place_id) ||
+    (typeof d.googlePlaceId === "string" && d.googlePlaceId) ||
+    (typeof d.google_place_id === "string" && d.google_place_id) ||
+    (typeof d.googleMapsUri === "string" && d.googleMapsUri) ||
+    (typeof d.google_maps_uri === "string" && d.google_maps_uri);
+  if (placeId) return placeId;
+  return `${title.toLowerCase().trim()}::${typeof location === "string" ? location.toLowerCase().trim() : ""}`;
 }
 
 export function deriveHotelStayDisplay(
@@ -66,18 +79,19 @@ export function deriveHotelStayDisplay(
         physicalDayId: day.id,
         physicalDayDate: day.date ?? null,
         position: item.position,
+        stayKey: `${hotelIdentityKey(d, item.title, item.location)}::${checkIn}::${checkOut}`,
       });
     }
   }
 
-  const byCheckIn = new Map<string, HotelSpan[]>();
+  const byStayKey = new Map<string, HotelSpan[]>();
   for (const span of spans) {
-    const arr = byCheckIn.get(span.checkIn) ?? [];
+    const arr = byStayKey.get(span.stayKey) ?? [];
     arr.push(span);
-    byCheckIn.set(span.checkIn, arr);
+    byStayKey.set(span.stayKey, arr);
   }
 
-  for (const [, group] of byCheckIn) {
+  for (const [, group] of byStayKey) {
     const onCheckInDay = group.filter((s) => s.physicalDayDate === s.checkIn);
     const canonical =
       onCheckInDay.length > 0

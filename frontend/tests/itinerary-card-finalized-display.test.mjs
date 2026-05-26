@@ -333,7 +333,7 @@ test('TripBuilder imports addHotelToDay from api', () => {
 test('TripBuilder calls addHotelToDay when item.itemType === "hotel"', () => {
   assert.match(
     tripBuilderSrc,
-    /item\.itemType === "hotel"[\s\S]{0,200}addHotelToDay/,
+    /item\.itemType === "hotel"[\s\S]{0,600}addHotelToDay/,
     'TripBuilder must call addHotelToDay in the hotel branch of handleAddCandidateToItinerary',
   );
 });
