@@ -101,8 +101,8 @@ function DashboardSkeleton() {
         <Skeleton variant="button" className="w-32" />
       </div>
       <Skeleton variant="card" className="h-48 w-full" />
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {[1, 2, 3].map((i) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {[1, 2].map((i) => (
           <Skeleton key={i} variant="card" className="h-52" />
         ))}
       </div>
@@ -116,7 +116,7 @@ function EmptyDashboard() {
   return (
     <div className="space-y-8" data-testid="trips-empty-state">
       {/* Editorial hero */}
-      <div className="text-center py-12 px-4">
+      <div className="text-center py-10 px-4">
         <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-ds-accent-subtle border border-ds-hairline text-ds-accent mx-auto mb-6">
           <Map className="w-8 h-8" />
         </div>
@@ -194,7 +194,7 @@ function EmptyDashboard() {
   );
 }
 
-// ── Continue planning hero ────────────────────────────────────────────────────
+// ── Continue planning hero — featured current volume ──────────────────────────
 
 interface ContinuePlanningHeroProps {
   trip: Trip;
@@ -220,31 +220,16 @@ function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroPr
         {/* Folio cover tab — restrained brass detail at very top */}
         <div className="folio-cover-tab" aria-hidden="true" />
 
-        {/* Header zone */}
-        <div className="p-6 folio-paper-header">
-          <div className="flex items-start justify-between gap-2 mb-3">
-            <div className="min-w-0 flex-1">
-              {/* Folio serial — quiet volume identifier */}
-              <p
-                className="folio-serial mb-1.5"
-                data-testid="continue-planning-serial"
-              >
-                {serialCode} · Current Journey
-              </p>
-              {/* Destination as editorial volume title */}
-              <p
-                className="trips-volume-destination"
-                data-testid="continue-planning-destination"
-              >
-                {trip.destination}
-              </p>
-              <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                <h2 className="text-sm text-ds-folio-ink-soft leading-snug">
-                  {trip.title}
-                </h2>
-                <TripStatusBadge status={getDisplayTripStatus(trip)} />
-              </div>
-            </div>
+        {/* Featured volume cover zone — warm gradient, richer editorial depth */}
+        <div className="trips-featured-volume px-6 pt-5 pb-4">
+          {/* Serial + edit/delete row */}
+          <div className="flex items-start justify-between gap-2 mb-4">
+            <p
+              className="folio-serial"
+              data-testid="continue-planning-serial"
+            >
+              {serialCode} · Current Journey
+            </p>
             {/* Edit/delete — accessible, visually secondary */}
             <div className="flex items-center gap-0.5 shrink-0">
               <button
@@ -264,7 +249,23 @@ function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroPr
             </div>
           </div>
 
-          {/* Folio caption — date range + travelers + budget as one italic metadata line */}
+          {/* Volume title — destination as the editorial focal point */}
+          <div className="mb-3">
+            <p
+              className="trips-volume-destination trips-hero-destination"
+              data-testid="continue-planning-destination"
+            >
+              {trip.destination}
+            </p>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <h2 className="text-sm font-medium text-ds-folio-ink-soft leading-snug">
+                {trip.title}
+              </h2>
+              <TripStatusBadge status={getDisplayTripStatus(trip)} />
+            </div>
+          </div>
+
+          {/* Folio caption — dates + travelers + budget as one italic metadata line */}
           <p className="folio-caption" data-testid="continue-planning-metadata">
             {formatDateRange(trip.startDate, trip.endDate)}
             {trip.travelers
@@ -277,7 +278,7 @@ function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroPr
         </div>
 
         {/* Action footer — unchanged behavior */}
-        <div className="px-6 py-4 flex flex-wrap gap-2 bg-ds-warm-paper">
+        <div className="px-6 py-4 flex flex-wrap gap-2 bg-ds-warm-paper border-t border-ds-hairline">
           <Link
             href={`/trips/${trip.id}`}
             className="btn-marine inline-flex items-center"
@@ -298,7 +299,7 @@ function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroPr
   );
 }
 
-// ── Journey card — travel volume cover ────────────────────────────────────────
+// ── Journey card — personal travel volume ─────────────────────────────────────
 
 interface JourneyCardProps {
   trip: Trip;
@@ -317,8 +318,8 @@ function JourneyCard({ trip, onEdit, onDelete }: JourneyCardProps) {
       {/* Folio cover tab — restrained brass detail */}
       <div className="folio-cover-tab" aria-hidden="true" />
 
-      {/* Volume body */}
-      <div className="flex-1 p-5 pb-3 flex flex-col gap-2">
+      {/* Volume cover body — warm paper-to-bone gradient */}
+      <div className="trips-volume-cover flex-1 p-5 pb-3 flex flex-col gap-2">
         {/* Folio serial + status badge */}
         <div className="flex items-center justify-between gap-2">
           <p className="folio-serial" data-testid="journey-card-serial">
@@ -353,7 +354,7 @@ function JourneyCard({ trip, onEdit, onDelete }: JourneyCardProps) {
         </div>
       </div>
 
-      {/* Footer — travelers + visually demoted edit/delete + open link */}
+      {/* Volume footer — travelers, edit/delete, open link */}
       <div
         className="px-5 py-3 border-t border-ds-hairline flex items-center justify-between gap-2 bg-ds-bone"
       >
@@ -404,7 +405,7 @@ function TripSection({ label, trips, onEdit, onDelete }: TripSectionProps) {
   return (
     <section aria-label={`${label} journeys`}>
       <Overline>{label} journeys</Overline>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {trips.map((trip) => (
           <JourneyCard
             key={trip.id}
@@ -418,11 +419,15 @@ function TripSection({ label, trips, onEdit, onDelete }: TripSectionProps) {
   );
 }
 
-// ── Planning tools strip ──────────────────────────────────────────────────────
+// ── Planning tools strip — integrated shelf rail ──────────────────────────────
 
 function PlanningToolsStrip() {
   return (
-    <section aria-label="Planning tools" data-testid="planning-tools-strip">
+    <section
+      aria-label="Planning tools"
+      data-testid="planning-tools-strip"
+      className="trips-tools-shelf"
+    >
       <Overline>Planning tools</Overline>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Link
@@ -694,16 +699,19 @@ export default function TripsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-8">
-        {/* Header skeleton */}
-        <div className="flex items-start justify-between gap-4 mb-8">
-          <div className="space-y-2">
-            <Skeleton className="h-8 w-44" />
-            <Skeleton className="h-4 w-32" />
+      <div className="trips-shelf-stage" data-testid="trips-shelf-stage">
+        <div className="trips-shelf-masthead">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-44" />
+              <Skeleton className="h-4 w-32" />
+            </div>
+            <Skeleton variant="button" className="w-32" />
           </div>
-          <Skeleton variant="button" className="w-32" />
         </div>
-        <DashboardSkeleton />
+        <div className="trips-shelf-body">
+          <DashboardSkeleton />
+        </div>
       </div>
     );
   }
@@ -722,7 +730,7 @@ export default function TripsPage() {
 
   return (
     <>
-      {/* Toast */}
+      {/* Toast — fixed, outside the shelf stage */}
       {toast && (
         <div
           role="status"
@@ -734,7 +742,7 @@ export default function TripsPage() {
         </div>
       )}
 
-      {/* Edit modal */}
+      {/* Edit modal — fixed, outside the shelf stage */}
       {editingTrip && (
         <EditModal
           trip={editingTrip}
@@ -746,7 +754,7 @@ export default function TripsPage() {
         />
       )}
 
-      {/* Delete modal */}
+      {/* Delete modal — fixed, outside the shelf stage */}
       {confirmDeleteId && (
         <DeleteModal
           tripId={confirmDeleteId}
@@ -755,74 +763,81 @@ export default function TripsPage() {
         />
       )}
 
-      {/* Page header — editorial shelf masthead */}
-      <div
-        className="flex items-start justify-between gap-4 mb-8"
-        data-testid="my-trips-page-header"
-      >
-        <div className="min-w-0 flex-1">
-          <p
-            className="folio-issue-eyebrow mb-2"
-            data-testid="trips-shelf-eyebrow"
-          >
-            Your Travel Shelf
-          </p>
-          <h1
-            className="trips-shelf-heading"
-            data-testid="trips-shelf-heading"
-          >
-            My Journeys
-          </h1>
-          {hasAny && (
-            <p className="mt-1 text-sm text-ds-folio-ink-mist">{tripLabel}</p>
-          )}
+      {/* Floating paper shelf stage — the containing travel shelf */}
+      <div className="trips-shelf-stage" data-testid="trips-shelf-stage">
+        {/* Shelf masthead — linen-tinted header zone with bottom hairline */}
+        <div
+          className="trips-shelf-masthead"
+          data-testid="my-trips-page-header"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <p
+                className="folio-issue-eyebrow mb-2"
+                data-testid="trips-shelf-eyebrow"
+              >
+                Your Travel Shelf
+              </p>
+              <h1
+                className="trips-shelf-heading"
+                data-testid="trips-shelf-heading"
+              >
+                My Journeys
+              </h1>
+              {hasAny && (
+                <p className="mt-1 text-sm text-ds-folio-ink-mist">{tripLabel}</p>
+              )}
+            </div>
+            <div className="shrink-0 pt-1">
+              <Link
+                href="/trips/new"
+                className="btn-marine inline-flex items-center"
+                data-testid="trips-new-trip-action"
+              >
+                <PlusCircle className="w-4 h-4" aria-hidden="true" />
+                Plan a Trip
+              </Link>
+            </div>
+          </div>
         </div>
-        <div className="shrink-0">
-          <Link
-            href="/trips/new"
-            className="btn-marine inline-flex items-center"
-            data-testid="trips-new-trip-action"
-          >
-            <PlusCircle className="w-4 h-4" aria-hidden="true" />
-            Plan a Trip
-          </Link>
+
+        {/* Shelf body — volume content zone */}
+        <div className="trips-shelf-body">
+          {!hasAny ? (
+            <EmptyDashboard />
+          ) : (
+            <div className="space-y-8">
+              {/* Featured current volume */}
+              {continuePlanning && (
+                <ContinuePlanningHero
+                  trip={continuePlanning}
+                  onEdit={openEdit}
+                  onDelete={(id) => setConfirmDeleteId(id)}
+                />
+              )}
+
+              {/* Active journeys grid */}
+              <TripSection
+                label="Active"
+                trips={activeTrips}
+                onEdit={openEdit}
+                onDelete={(id) => setConfirmDeleteId(id)}
+              />
+
+              {/* Past journeys grid */}
+              <TripSection
+                label="Past"
+                trips={pastTrips}
+                onEdit={openEdit}
+                onDelete={(id) => setConfirmDeleteId(id)}
+              />
+
+              {/* Planning tools — integrated shelf rail */}
+              <PlanningToolsStrip />
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Body */}
-      {!hasAny ? (
-        <EmptyDashboard />
-      ) : (
-        <div className="space-y-8 editorial-scene">
-          {/* Continue planning hero */}
-          {continuePlanning && (
-            <ContinuePlanningHero
-              trip={continuePlanning}
-              onEdit={openEdit}
-              onDelete={(id) => setConfirmDeleteId(id)}
-            />
-          )}
-
-          {/* Active journeys grid (excluding the hero trip) */}
-          <TripSection
-            label="Active"
-            trips={activeTrips}
-            onEdit={openEdit}
-            onDelete={(id) => setConfirmDeleteId(id)}
-          />
-
-          {/* Past journeys grid */}
-          <TripSection
-            label="Past"
-            trips={pastTrips}
-            onEdit={openEdit}
-            onDelete={(id) => setConfirmDeleteId(id)}
-          />
-
-          {/* Planning tools */}
-          <PlanningToolsStrip />
-        </div>
-      )}
     </>
   );
 }

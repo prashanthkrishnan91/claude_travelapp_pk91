@@ -1,10 +1,13 @@
 /**
- * My Trips — Paper Folio visual refresh (PR 2)
+ * My Trips — Paper Folio visual refresh (PR 2 + shelf composition patch)
  * Source-scan contract tests for trips/page.tsx and globals.css.
  *
  * What this file proves:
- *  - My Trips route adopts Paper Folio visual primitives / editorial hierarchy
- *  - At least one editorial serif element exists on screen
+ *  - My Trips route adopts the Paper Folio shelf composition (floating stage, masthead, body)
+ *  - Editorial serif primitives adopted on page, hero, and cards
+ *  - ContinuePlanningHero is the featured volume (trips-featured-volume + trips-hero-destination)
+ *  - JourneyCard uses trips-volume-cover body gradient for volume-cover rhythm
+ *  - PlanningToolsStrip is the integrated shelf rail (trips-tools-shelf)
  *  - JourneyCard keeps edit/delete controls wired but visually demoted
  *  - ContinuePlanningHero still uses existing selection/action logic
  *  - Active/past grouping logic is not changed
@@ -31,6 +34,188 @@ const handoff = readFileSync(
   new URL("../../docs/ai/HANDOFF.md", import.meta.url),
   "utf8",
 );
+
+// ── Shelf composition — floating paper stage ──────────────────────────────────
+
+test("trips page uses trips-shelf-stage (floating shelf composition stage)", () => {
+  assert.ok(
+    tripsPage.includes("trips-shelf-stage"),
+    "trips/page.tsx must use trips-shelf-stage to create the floating curated paper shelf",
+  );
+});
+
+test("trips page uses trips-shelf-masthead (linen-tinted header zone)", () => {
+  assert.ok(
+    tripsPage.includes("trips-shelf-masthead"),
+    "trips/page.tsx must use trips-shelf-masthead for the header zone inside the stage",
+  );
+});
+
+test("trips page uses trips-shelf-body (content zone inside the stage)", () => {
+  assert.ok(
+    tripsPage.includes("trips-shelf-body"),
+    "trips/page.tsx must use trips-shelf-body for the main content zone",
+  );
+});
+
+test("trips-shelf-stage is present in both loading and loaded states", () => {
+  const stageCount = (tripsPage.match(/trips-shelf-stage/g) || []).length;
+  assert.ok(
+    stageCount >= 2,
+    "trips-shelf-stage must appear in both the loading skeleton and the main render",
+  );
+});
+
+test("globals.css defines trips-shelf-stage with max-width (floating shelf constraint)", () => {
+  assert.ok(
+    globalsCss.includes(".trips-shelf-stage"),
+    "globals.css must define .trips-shelf-stage",
+  );
+  const block = globalsCss.slice(
+    globalsCss.indexOf(".trips-shelf-stage"),
+    globalsCss.indexOf(".trips-shelf-stage") + 400,
+  );
+  assert.ok(
+    block.includes("max-width"),
+    "trips-shelf-stage must have max-width to constrain the shelf stage",
+  );
+  assert.ok(
+    block.includes("margin-inline"),
+    "trips-shelf-stage must have margin-inline: auto to center the shelf",
+  );
+});
+
+test("globals.css defines trips-shelf-masthead with bottom border (masthead anchor)", () => {
+  assert.ok(
+    globalsCss.includes(".trips-shelf-masthead"),
+    "globals.css must define .trips-shelf-masthead",
+  );
+  const block = globalsCss.slice(
+    globalsCss.indexOf(".trips-shelf-masthead"),
+    globalsCss.indexOf(".trips-shelf-masthead") + 200,
+  );
+  assert.ok(
+    block.includes("border-bottom"),
+    "trips-shelf-masthead must have a bottom border (hairline separator)",
+  );
+});
+
+test("globals.css defines trips-shelf-body", () => {
+  assert.ok(
+    globalsCss.includes(".trips-shelf-body"),
+    "globals.css must define .trips-shelf-body",
+  );
+});
+
+// ── Featured volume — ContinuePlanningHero composition ───────────────────────
+
+test("ContinuePlanningHero uses trips-featured-volume (featured volume gradient)", () => {
+  const heroSection = tripsPage.slice(
+    tripsPage.indexOf("function ContinuePlanningHero"),
+    tripsPage.indexOf("function JourneyCard"),
+  );
+  assert.ok(
+    heroSection.includes("trips-featured-volume"),
+    "ContinuePlanningHero must use trips-featured-volume for the warm gradient cover zone",
+  );
+});
+
+test("ContinuePlanningHero uses trips-hero-destination (larger editorial serif for featured title)", () => {
+  const heroSection = tripsPage.slice(
+    tripsPage.indexOf("function ContinuePlanningHero"),
+    tripsPage.indexOf("function JourneyCard"),
+  );
+  assert.ok(
+    heroSection.includes("trips-hero-destination"),
+    "ContinuePlanningHero must use trips-hero-destination to make the destination a stronger editorial focal point",
+  );
+});
+
+test("globals.css defines trips-featured-volume (hero gradient)", () => {
+  assert.ok(
+    globalsCss.includes(".trips-featured-volume"),
+    "globals.css must define .trips-featured-volume",
+  );
+  const block = globalsCss.slice(
+    globalsCss.indexOf(".trips-featured-volume"),
+    globalsCss.indexOf(".trips-featured-volume") + 200,
+  );
+  assert.ok(
+    block.includes("background"),
+    "trips-featured-volume must define a background (gradient or color)",
+  );
+});
+
+test("globals.css defines trips-hero-destination (larger editorial serif)", () => {
+  assert.ok(
+    globalsCss.includes(".trips-hero-destination"),
+    "globals.css must define .trips-hero-destination",
+  );
+  const block = globalsCss.slice(
+    globalsCss.indexOf(".trips-hero-destination"),
+    globalsCss.indexOf(".trips-hero-destination") + 150,
+  );
+  assert.ok(
+    block.includes("font-size"),
+    "trips-hero-destination must define font-size larger than trips-volume-destination",
+  );
+});
+
+// ── JourneyCard volume cover ──────────────────────────────────────────────────
+
+test("JourneyCard uses trips-volume-cover (warm gradient body zone)", () => {
+  const cardSection = tripsPage.slice(
+    tripsPage.indexOf("function JourneyCard"),
+    tripsPage.indexOf("function TripSection"),
+  );
+  assert.ok(
+    cardSection.includes("trips-volume-cover"),
+    "JourneyCard body must use trips-volume-cover for the warm paper-to-bone gradient",
+  );
+});
+
+test("globals.css defines trips-volume-cover (card body gradient)", () => {
+  assert.ok(
+    globalsCss.includes(".trips-volume-cover"),
+    "globals.css must define .trips-volume-cover",
+  );
+  const block = globalsCss.slice(
+    globalsCss.indexOf(".trips-volume-cover"),
+    globalsCss.indexOf(".trips-volume-cover") + 200,
+  );
+  assert.ok(
+    block.includes("background"),
+    "trips-volume-cover must define a background gradient",
+  );
+});
+
+// ── Planning tools shelf rail ─────────────────────────────────────────────────
+
+test("PlanningToolsStrip uses trips-tools-shelf (integrated shelf rail)", () => {
+  const stripSection = tripsPage.slice(
+    tripsPage.indexOf("function PlanningToolsStrip"),
+    tripsPage.indexOf("function EditModal"),
+  );
+  assert.ok(
+    stripSection.includes("trips-tools-shelf"),
+    "PlanningToolsStrip must use trips-tools-shelf to integrate into the shelf bottom rail",
+  );
+});
+
+test("globals.css defines trips-tools-shelf (integrated shelf bottom rail)", () => {
+  assert.ok(
+    globalsCss.includes(".trips-tools-shelf"),
+    "globals.css must define .trips-tools-shelf",
+  );
+  const block = globalsCss.slice(
+    globalsCss.indexOf(".trips-tools-shelf"),
+    globalsCss.indexOf(".trips-tools-shelf") + 200,
+  );
+  assert.ok(
+    block.includes("border-top"),
+    "trips-tools-shelf must have a border-top to anchor it as the shelf bottom rail",
+  );
+});
 
 // ── Editorial serif primitives ────────────────────────────────────────────────
 
@@ -193,7 +378,6 @@ test("JourneyCard edit/delete controls are in the card footer (visually demoted)
     tripsPage.indexOf("function JourneyCard"),
     tripsPage.indexOf("function TripSection"),
   );
-  // Controls are inside journey-card-edit-controls testid, which is in the footer div
   assert.ok(
     cardSection.includes("journey-card-edit-controls"),
     "JourneyCard edit/delete must be inside the footer (journey-card-edit-controls container)",
@@ -356,7 +540,7 @@ test("empty state action cards and links preserved (behavior unchanged)", () => 
   assert.match(tripsPage, /href="\/saved"/);
 });
 
-// ── Planning tools strip — unchanged ──────────────────────────────────────────
+// ── Planning tools strip — present with all three links ───────────────────────
 
 test("PlanningToolsStrip still present with all three tool links", () => {
   assert.ok(tripsPage.includes("planning-tools-strip"));
@@ -401,9 +585,6 @@ test("no SQL, backend routes, or provider calls introduced", () => {
 // ── HANDOFF truth-state ────────────────────────────────────────────────────────
 
 test("HANDOFF no longer says #490 is open or in progress", () => {
-  // The old wording was "Brief Fixed Scheduled Facts v1 — open PR (Phase 2..."
-  // or the section header "Brief Fixed Scheduled Facts v1 (open PR, branch..."
-  // Both forms are gone; #490 is now marked merged.
   assert.doesNotMatch(
     handoff,
     /Brief Fixed Scheduled Facts v1\s*[—-]\s*open PR/i,
@@ -414,7 +595,6 @@ test("HANDOFF no longer says #490 is open or in progress", () => {
     /Brief Fixed Scheduled Facts v1\s*\(\s*open PR/i,
     "HANDOFF must not use the old '(open PR, branch' wording for #490",
   );
-  // Confirm merged truth-state is present
   assert.ok(
     handoff.includes("Brief Fixed Scheduled Facts v1 merged (#490)") ||
       handoff.includes("Brief Fixed Scheduled Facts v1 (merged"),
@@ -429,21 +609,29 @@ test("HANDOFF references My Trips Paper Folio PR 2 as current direction", () => 
   );
 });
 
+test("HANDOFF does not reference the feature branch by name (merge-safe wording)", () => {
+  assert.doesNotMatch(
+    handoff,
+    /claude\/happy-heisenberg-AFcOV/,
+    "HANDOFF must not reference the feature branch name — should be merge-safe",
+  );
+});
+
 // ── Reduced-motion gate ────────────────────────────────────────────────────────
 
 test("globals.css new trips primitives have a prefers-reduced-motion guard", () => {
   assert.ok(
     globalsCss.includes("trips-shelf-heading") &&
       globalsCss.includes("trips-volume-destination"),
-    "Both new trips primitives must be defined in globals.css",
+    "Both editorial serif primitives must be defined in globals.css",
   );
-  // Check the MY TRIPS section has a reduced-motion block
+  // Check the MY TRIPS section has a reduced-motion block (wide window — section grew)
   const myTripsSection = globalsCss.slice(
     globalsCss.indexOf("MY TRIPS"),
-    globalsCss.indexOf("MY TRIPS") + 1200,
+    globalsCss.indexOf("MY TRIPS") + 5000,
   );
   assert.ok(
     myTripsSection.includes("prefers-reduced-motion"),
-    "New MY TRIPS CSS section must include a prefers-reduced-motion guard",
+    "MY TRIPS CSS section must include a prefers-reduced-motion guard",
   );
 });

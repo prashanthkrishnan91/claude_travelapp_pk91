@@ -9685,7 +9685,6 @@
   /* ═══════════════════════════════════════════════════════════════════
      MY TRIPS — PAPER FOLIO (Paper Folio PR 2)
      Signature editorial primitives for the trip shelf (/trips route).
-     Both classes are visibly adopted in trips/page.tsx in this PR.
      ═══════════════════════════════════════════════════════════════════ */
 
   /* trips-shelf-heading: editorial serif italic page-level masthead.
@@ -9701,8 +9700,7 @@
   }
 
   /* trips-volume-destination: editorial serif italic for the trip destination
-     rendered as the "volume title" hero on journey cards and the hero panel.
-     18px Fraunces italic — makes the destination the editorial focal point. */
+     rendered as the volume title on journey cards (18px). */
   .trips-volume-destination {
     font-family: var(--ds-font-editorial);
     font-style: italic;
@@ -9713,9 +9711,101 @@
     font-weight: 400;
   }
 
+  /* trips-shelf-stage: Floating curated paper shelf for the /trips route.
+     Centers and constrains the content stage; adds warm paper surface,
+     brass-tinted hairline border, and layered shadow to lift off the page. */
+  .trips-shelf-stage {
+    max-width: 52rem;
+    margin-inline: auto;
+    background:
+      radial-gradient(90% 30% at 50% 0%,
+        color-mix(in srgb, white 55%, transparent) 0%,
+        transparent 100%),
+      var(--ds-warm-paper);
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 22%, var(--ds-hairline));
+    border-radius: 20px;
+    box-shadow:
+      0 12px 56px -14px color-mix(in srgb, var(--ds-folio-ink) 14%, transparent),
+      0 3px 12px -4px  color-mix(in srgb, var(--ds-folio-ink) 8%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.90);
+    overflow: hidden;
+  }
+
+  /* trips-shelf-masthead: Masthead zone inside the shelf stage.
+     Linen-tinted header with bottom hairline — anchors the shelf label
+     above the volumes, like a bookcase plate above the row of books. */
+  .trips-shelf-masthead {
+    padding: 2rem 2rem 1.5rem;
+    background: color-mix(in srgb, var(--ds-linen) 28%, var(--ds-warm-paper));
+    border-bottom: 1px solid var(--ds-hairline);
+  }
+  @media (max-width: 639px) {
+    .trips-shelf-masthead { padding: 1.25rem 1.25rem 1rem; }
+  }
+
+  /* trips-shelf-body: Main content zone inside the shelf stage. */
+  .trips-shelf-body {
+    padding: 1.75rem 2rem 2.25rem;
+  }
+  @media (max-width: 639px) {
+    .trips-shelf-body { padding: 1.25rem 1.25rem 1.75rem; }
+  }
+
+  /* trips-featured-volume: Cover zone of the featured/current travel volume.
+     Warm linen-to-paper gradient inside ContinuePlanningHero — makes the
+     featured volume feel richer and more intentionally composed than the grid. */
+  .trips-featured-volume {
+    background: linear-gradient(
+      155deg,
+      color-mix(in srgb, var(--ds-linen) 52%, var(--ds-warm-paper)) 0%,
+      var(--ds-warm-paper) 62%
+    );
+  }
+
+  /* trips-hero-destination: Larger editorial serif title for the featured volume.
+     Apply alongside trips-volume-destination to scale up the hero destination.
+     Overrides font-size to make the current journey's destination the editorial
+     focal point — the "volume title" on the desk. */
+  .trips-hero-destination {
+    font-size: 1.75rem;
+    line-height: 1.2;
+    letter-spacing: -0.025em;
+  }
+  @media (max-width: 639px) {
+    .trips-hero-destination { font-size: 1.375rem; }
+  }
+
+  /* trips-volume-cover: Body cover zone of a JourneyCard.
+     Warm paper-to-bone gradient wash gives the card body a "printed travel
+     pages" quality — differentiating the cover from the bone footer. */
+  .trips-volume-cover {
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--ds-warm-paper) 50%, var(--ds-bone)) 0%,
+      var(--ds-bone) 100%
+    );
+  }
+
+  /* trips-tools-shelf: Bottom shelf rail for the planning tools strip.
+     Linen-tinted inset zone — integrated visually into the shelf floor,
+     not a floating generic button row. */
+  .trips-tools-shelf {
+    border-top: 1px solid var(--ds-hairline);
+    background: color-mix(in srgb, var(--ds-linen) 18%, var(--ds-warm-paper));
+    margin-top: 0.25rem;
+    padding-top: 1.5rem;
+    margin-inline: -2rem;
+    padding-inline: 2rem;
+    padding-bottom: 0.25rem;
+  }
+  @media (max-width: 639px) {
+    .trips-tools-shelf { margin-inline: -1.25rem; padding-inline: 1.25rem; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .trips-shelf-heading,
-    .trips-volume-destination { transition: none; }
+    .trips-volume-destination,
+    .trips-hero-destination { transition: none; }
   }
 
 }
