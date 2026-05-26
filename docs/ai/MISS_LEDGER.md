@@ -21,6 +21,23 @@ Follow-up needed:
 
 ---
 
+### 2026-05-26 — PR #488: Next.js ESLint prefer-const / no-unused-vars caught only by Vercel, not local tsc
+
+Repo: claude_travelapp_pk91
+Area: Build discipline / ESLint pre-push discipline
+Severity: Level 1 (Vercel build red; fixed with one-line patch; no production impact)
+Miss: Two separate Vercel build failures on PR #488 caused by Next.js ESLint rules that local `tsc --noEmit` does not enforce: (1) `no-unused-vars` on an unused `ItineraryItem` import in `hotelStaySpans.ts`; (2) `prefer-const` on a `let resolvedDay` that was never reassigned after a prior patch removed the reassignment. Both were single-line fixes, but each required an extra push + CI cycle.
+Impact: Two unnecessary follow-up commits; Vercel remained red until patched.
+What caught it: Vercel build log after each push.
+Root cause: In this repo environment, `node_modules` are absent locally so `npm run lint` / `next build` cannot run. Only `tsc --noEmit` is available, which enforces type errors but not ESLint rules. Next.js enforces `prefer-const` and `no-unused-vars` via its build-time ESLint step — these are invisible locally.
+What should catch it next time: Before pushing any TypeScript change, grep the touched files for: (a) `let <var>` where the variable is never reassigned — flag as prefer-const candidate; (b) imported symbols that do not appear after the import line — flag as no-unused-vars candidate. Both checks are trivial one-liners and cost nothing.
+One-off or repeated: **Repeated** — this is the third PR where a Vercel-only ESLint failure required a follow-up commit. The pattern is stable and cheap to pre-empt.
+Promotion target: `docs/ai/KNOWN_FAILURE_MODES.md` — add "let-never-reassigned / unused-import → Vercel ESLint fail" as a named failure mode with the two grep checks.
+Action taken: Fixed both on separate follow-up commits; CI passed after each.
+Follow-up needed: Promote to KNOWN_FAILURE_MODES.md.
+
+---
+
 ### 2026-05-18 — PR #436: empty trigger commit not pushed before session ended
 
 Repo: claude_travelapp_pk91

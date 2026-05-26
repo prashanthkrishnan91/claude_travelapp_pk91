@@ -41,6 +41,12 @@ Use this file before non-trivial implementation, review, or follow-up prompts. A
 - **Always start from `.github/pull_request_template.md` verbatim — never compose a PR body from scratch.** Composing from scratch reliably omits required anchors (`## Severity`, `## Validation`, `SQL / env / providers / UI`) and causes CI hard-failures. This miss occurred twice (PR #394 and PR #397). The local checker silently skips section checks when no `--pr-body-file` is given, giving a false PASS that CI then rejects.
 - PR body updates via the GitHub API after a push do NOT affect already-queued CI runs. The body in `GITHUB_EVENT_PATH` is snapshot at trigger time. Body must be correct before the triggering push, or a new commit is required to re-trigger CI with the updated body.
 
+## Build / ESLint failures (Vercel-only)
+
+- **`prefer-const`**: Next.js ESLint enforces `prefer-const` at build time; `tsc --noEmit` does not. Before pushing any TypeScript change, grep touched files for `let <var>` where the variable is never reassigned — these will fail Vercel build silently locally.
+- **`no-unused-vars` / `@typescript-eslint/no-unused-vars`**: Next.js ESLint enforces this on imports; `tsc --noEmit` does not catch unused type imports. Before pushing, grep touched files for imported symbols that do not appear after the import line.
+- Both checks are one-liners. This miss caused Vercel build failures on at least three PRs (#488 twice, others). Pre-push grep is the fix.
+
 ## Validation failures
 
 - UI validation is not required after every backend sub-PR. Use tests/telemetry until visible product behavior meaningfully changes.
