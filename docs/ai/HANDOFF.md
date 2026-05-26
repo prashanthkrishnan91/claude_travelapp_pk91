@@ -1,6 +1,10 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-26 (Brief Fixed Scheduled Facts v1 Phase 2 — grouped summary — open PR on branch `claude/brief-scheduled-facts-T4lEw`)
+Last updated: 2026-05-26 (Journey Desk closeout + My Trips visual plan — docs-only PR on branch `claude/dazzling-clarke-FiRA8`)
+
+## Next planned direction
+
+After the Journey Desk cleanup closeout, the next visual work is **My Trips / trip-detail visual modernization (Paper Folio)** — the trip shelf is the plainest, oldest-feeling surface (Folio Slice 2 paper only, no signature primitives). Governed by `docs/ai/design/JOURNEY_DESK_CLOSEOUT_AND_MY_TRIPS_VISUAL_PLAN.md` (PR sequence: docs cleanup → My Trips list refresh → continue-planning cinema moment → legacy TripBuilder paper-correctness). No legacy surface is removed/hidden; legacy-tab removal stays gated to parity-plan Slice 6.
 
 ## Purpose
 

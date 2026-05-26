@@ -57,7 +57,7 @@ Owner = where it lives today. "JD?" = does a Journey Desk surface (Brief/Dayboar
 
 Ordered cheapest/safest first. Each is a **future** PR (not this one). Principle: surface read-only/honest reads and writes that *reuse durable handlers already wired at page level*, before touching dnd/position or AI-timing apply. **Legacy removal is the LAST step and is not authorized until Slices 1–5 prove parity.**
 
-**Slice 1 — ExpandedDay per-item Remove + Back-to-Ideas (smallest next PR).**
+**Slice 1 — ExpandedDay per-item Remove + Back-to-Ideas. ✅ MERGED (#485).**
 - Outcome: ExpandedDay items get a quiet overflow with two-step-confirm **Remove from trip** and non-destructive **Back to Ideas**, matching MapFoldOut's tone.
 - Files: `ExpandedDayPanel.tsx`, `page.tsx` (pass existing `deleteItem` + `handleItemUnplace`/`unplaceItemToIdeas` handlers), `tests/journey-desk-expanded-day.test.mjs`.
 - Risks: destructive delete must be confirm-gated; MUST reuse `unplaceItemToIdeas` (not legacy `moveIdeaToTripIdeas`) to avoid the orphan gap; honest copy ("Back to Ideas" ≠ "Remove").
