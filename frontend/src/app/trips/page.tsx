@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   PlusCircle,
-  Calendar,
   Users,
   Map,
   Pencil,
@@ -62,6 +61,13 @@ function pickContinuePlanning(trips: Trip[]): Trip | null {
   )[0];
 }
 
+// Derive a short folio serial code from the trip destination (first 3 letters)
+function deriveSerialCode(destination?: string): string {
+  if (!destination) return "---";
+  const clean = destination.replace(/[^a-zA-Z]/g, "");
+  return clean.substring(0, 3).toUpperCase() || "---";
+}
+
 interface EditForm {
   title: string;
   startDate: string;
@@ -114,7 +120,10 @@ function EmptyDashboard() {
         <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-ds-accent-subtle border border-ds-hairline text-ds-accent mx-auto mb-6">
           <Map className="w-8 h-8" />
         </div>
-        <h2 className="text-2xl font-semibold text-ds-folio-ink tracking-tight mb-2">
+        <h2
+          className="trips-shelf-heading text-center mb-2"
+          data-testid="empty-state-heading"
+        >
           Your journey starts here.
         </h2>
         <p className="text-ds-folio-ink-mist max-w-sm mx-auto leading-relaxed text-sm">
@@ -194,29 +203,49 @@ interface ContinuePlanningHeroProps {
 }
 
 function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroProps) {
+  const serialCode = deriveSerialCode(trip.destination);
+
   return (
     <section aria-label="Continue planning your trip">
-      <Overline>Continue planning</Overline>
+      <p
+        className="folio-issue-eyebrow mb-3"
+        data-testid="continue-planning-eyebrow"
+      >
+        Continue planning
+      </p>
       <article
-        className="folio-paper-panel transition-shadow duration-200"
+        className="folio-paper-panel folio-journey-entry transition-shadow duration-200"
         data-testid="continue-planning-hero"
       >
         {/* Folio cover tab — restrained brass detail at very top */}
         <div className="folio-cover-tab" aria-hidden="true" />
+
         {/* Header zone */}
         <div className="p-6 folio-paper-header">
-          <div className="flex items-start justify-between gap-2 mb-4">
+          <div className="flex items-start justify-between gap-2 mb-3">
             <div className="min-w-0 flex-1">
-              <p className="folio-muted-label mb-1.5">
+              {/* Folio serial — quiet volume identifier */}
+              <p
+                className="folio-serial mb-1.5"
+                data-testid="continue-planning-serial"
+              >
+                {serialCode} · Current Journey
+              </p>
+              {/* Destination as editorial volume title */}
+              <p
+                className="trips-volume-destination"
+                data-testid="continue-planning-destination"
+              >
                 {trip.destination}
               </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-semibold text-ds-folio-ink leading-snug">
+              <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                <h2 className="text-sm text-ds-folio-ink-soft leading-snug">
                   {trip.title}
                 </h2>
                 <TripStatusBadge status={getDisplayTripStatus(trip)} />
               </div>
             </div>
+            {/* Edit/delete — accessible, visually secondary */}
             <div className="flex items-center gap-0.5 shrink-0">
               <button
                 onClick={() => onEdit(trip)}
@@ -235,29 +264,19 @@ function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroPr
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-4 text-xs text-ds-folio-ink-mist">
-            <span className="flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
-              {formatDateRange(trip.startDate, trip.endDate)}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5" aria-hidden="true" />
-              {trip.travelers}{" "}
-              {trip.travelers === 1 ? "traveler" : "travelers"}
-            </span>
-            {trip.budgetCash && (
-              <span className="text-ds-marine-ink font-medium">
-                {formatBudget(
-                  Number(trip.budgetCash),
-                  trip.budgetCurrency,
-                )}{" "}
-                budget
-              </span>
-            )}
-          </div>
+          {/* Folio caption — date range + travelers + budget as one italic metadata line */}
+          <p className="folio-caption" data-testid="continue-planning-metadata">
+            {formatDateRange(trip.startDate, trip.endDate)}
+            {trip.travelers
+              ? ` · ${trip.travelers} ${trip.travelers === 1 ? "traveler" : "travelers"}`
+              : ""}
+            {trip.budgetCash
+              ? ` · ${formatBudget(Number(trip.budgetCash), trip.budgetCurrency)}`
+              : ""}
+          </p>
         </div>
 
-        {/* Action footer */}
+        {/* Action footer — unchanged behavior */}
         <div className="px-6 py-4 flex flex-wrap gap-2 bg-ds-warm-paper">
           <Link
             href={`/trips/${trip.id}`}
@@ -288,42 +307,35 @@ interface JourneyCardProps {
 }
 
 function JourneyCard({ trip, onEdit, onDelete }: JourneyCardProps) {
+  const serialCode = deriveSerialCode(trip.destination);
+
   return (
     <article
-      className="folio-paper-card flex flex-col transition-shadow duration-200"
+      className="folio-paper-card folio-journey-entry flex flex-col transition-shadow duration-200"
       data-testid="journey-card"
     >
       {/* Folio cover tab — restrained brass detail */}
       <div className="folio-cover-tab" aria-hidden="true" />
-      {/* Volume cover — destination as hero */}
-      <div className="flex-1 p-5 pb-4 flex flex-col gap-3">
-        {/* Status marker + edit/delete controls */}
-        <div className="flex items-start justify-between gap-2">
+
+      {/* Volume body */}
+      <div className="flex-1 p-5 pb-3 flex flex-col gap-2">
+        {/* Folio serial + status badge */}
+        <div className="flex items-center justify-between gap-2">
+          <p className="folio-serial" data-testid="journey-card-serial">
+            {serialCode} · {getDisplayTripStatus(trip)}
+          </p>
           <TripStatusBadge status={getDisplayTripStatus(trip)} />
-          <div className="flex items-center gap-0.5 shrink-0">
-            <button
-              onClick={() => onEdit(trip)}
-              className="p-1.5 rounded-lg hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink transition min-h-[44px] min-w-[44px] flex items-center justify-center"
-              aria-label={`Edit ${trip.title}`}
-            >
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => onDelete(trip.id)}
-              className="p-1.5 rounded-lg hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-warning transition min-h-[44px] min-w-[44px] flex items-center justify-center"
-              aria-label={`Delete ${trip.title}`}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
         </div>
 
-        {/* Destination as editorial volume title */}
-        <div className="flex-1">
-          <p className="text-lg font-semibold text-ds-folio-ink leading-snug tracking-tight">
+        {/* Destination as editorial volume title — the card hero */}
+        <div className="flex-1 mt-1">
+          <p
+            className="trips-volume-destination"
+            data-testid="journey-card-destination"
+          >
             {trip.destination}
           </p>
-          <h3 className="text-sm text-ds-folio-ink-soft mt-0.5">
+          <h3 className="text-sm text-ds-folio-ink-soft mt-0.5 leading-snug">
             <Link
               href={`/trips/${trip.id}`}
               className="hover:text-ds-marine-ink transition"
@@ -331,20 +343,41 @@ function JourneyCard({ trip, onEdit, onDelete }: JourneyCardProps) {
               {trip.title}
             </Link>
           </h3>
+          {/* Editorial caption — date range in italic Fraunces */}
+          <p
+            className="folio-caption mt-1.5"
+            data-testid="journey-card-date-caption"
+          >
+            {formatDateRange(trip.startDate, trip.endDate)}
+          </p>
         </div>
       </div>
 
-      {/* Footer — dates and open action */}
-      <div className="px-5 py-3 border-t border-ds-hairline flex items-center justify-between gap-2 bg-ds-bone">
-        <div className="flex flex-wrap items-center gap-3 text-xs text-ds-folio-ink-mist">
-          <span className="flex items-center gap-1">
-            <Calendar className="w-3 h-3" aria-hidden="true" />
-            {formatDateRange(trip.startDate, trip.endDate)}
-          </span>
-          <span className="flex items-center gap-1">
+      {/* Footer — travelers + visually demoted edit/delete + open link */}
+      <div
+        className="px-5 py-3 border-t border-ds-hairline flex items-center justify-between gap-2 bg-ds-bone"
+      >
+        <div className="flex items-center gap-1" data-testid="journey-card-edit-controls">
+          <span className="flex items-center gap-1 text-xs text-ds-folio-ink-mist mr-1">
             <Users className="w-3 h-3" aria-hidden="true" />
-            {trip.travelers} {trip.travelers === 1 ? "traveler" : "travelers"}
+            {trip.travelers}{" "}
+            {trip.travelers === 1 ? "traveler" : "travelers"}
           </span>
+          {/* Edit/delete demoted to secondary footer position */}
+          <button
+            onClick={() => onEdit(trip)}
+            className="p-1 rounded hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label={`Edit ${trip.title}`}
+          >
+            <Pencil className="w-3 h-3" />
+          </button>
+          <button
+            onClick={() => onDelete(trip.id)}
+            className="p-1 rounded hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-warning transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label={`Delete ${trip.title}`}
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
         </div>
         <Link
           href={`/trips/${trip.id}`}
@@ -722,13 +755,24 @@ export default function TripsPage() {
         />
       )}
 
-      {/* Page header — editorial shelf heading */}
-      <div className="flex items-start justify-between gap-4 mb-8" data-testid="my-trips-page-header">
+      {/* Page header — editorial shelf masthead */}
+      <div
+        className="flex items-start justify-between gap-4 mb-8"
+        data-testid="my-trips-page-header"
+      >
         <div className="min-w-0 flex-1">
-          <p className="folio-muted-label mb-1">
+          <p
+            className="folio-issue-eyebrow mb-2"
+            data-testid="trips-shelf-eyebrow"
+          >
             Your Travel Shelf
           </p>
-          <h1 className="text-2xl font-semibold text-ds-folio-ink">My Journeys</h1>
+          <h1
+            className="trips-shelf-heading"
+            data-testid="trips-shelf-heading"
+          >
+            My Journeys
+          </h1>
           {hasAny && (
             <p className="mt-1 text-sm text-ds-folio-ink-mist">{tripLabel}</p>
           )}

@@ -9682,6 +9682,42 @@
     .atlas-map-marker--active .atlas-map-marker-dot { transform: none; }
   }
 
+  /* ═══════════════════════════════════════════════════════════════════
+     MY TRIPS — PAPER FOLIO (Paper Folio PR 2)
+     Signature editorial primitives for the trip shelf (/trips route).
+     Both classes are visibly adopted in trips/page.tsx in this PR.
+     ═══════════════════════════════════════════════════════════════════ */
+
+  /* trips-shelf-heading: editorial serif italic page-level masthead.
+     Used for: "My Journeys" h1 and empty-state h2 on the /trips route. */
+  .trips-shelf-heading {
+    font-family: var(--ds-font-editorial);
+    font-style: italic;
+    font-size: 1.75rem;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    color: var(--ds-folio-ink);
+    font-weight: 400;
+  }
+
+  /* trips-volume-destination: editorial serif italic for the trip destination
+     rendered as the "volume title" hero on journey cards and the hero panel.
+     18px Fraunces italic — makes the destination the editorial focal point. */
+  .trips-volume-destination {
+    font-family: var(--ds-font-editorial);
+    font-style: italic;
+    font-size: 1.125rem;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    color: var(--ds-folio-ink);
+    font-weight: 400;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .trips-shelf-heading,
+    .trips-volume-destination { transition: none; }
+  }
+
 }
 
 /* ── Map System v1 — shared Leaflet atlas skin (UNLAYERED on purpose) ─────────
