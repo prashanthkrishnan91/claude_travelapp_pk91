@@ -1576,7 +1576,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         return;
       }
 
-      let resolvedDay = targetDay;
+      const resolvedDay = targetDay;
       let newItem: ItineraryItem;
       if (item.itemType === "flight") {
         newItem = await addOneWayFlightToDay(tripId, targetDay.id, item, targetDay.items.length);
