@@ -308,10 +308,10 @@ test("globals.css trips-volume-status is small-caps text (no pill background/bor
 
 // ── Reference drawer — Elsewhere in the house ─────────────────────────────────
 
-test("planning tools render as the 'Elsewhere in the house' reference drawer", () => {
+test("planning tools render as the compact 'Elsewhere in the house' reference rail", () => {
   assert.ok(tripsPage.includes("planning-tools-strip"));
   assert.ok(tripsPage.includes("Elsewhere in the house"));
-  assert.ok(tripsPage.includes("trips-tools-shelf"));
+  assert.ok(tripsPage.includes("trips-reference-rail"), "drawer uses the compact integrated rail");
   assert.ok(tripsPage.includes("trips-tool-panel"));
 });
 
@@ -325,21 +325,34 @@ test("reference drawer preserves all three routes", () => {
   assert.match(strip, /href="\/explore"/);
 });
 
-test("reference drawer is pulled above the fold on desktop, stacked on mobile", () => {
-  // The drawer wrapper carries lg:order-2 so on desktop it sits above the
-  // volume grids (visible in the first screen). Its default order keeps it last
-  // on mobile (single-column drawer below the volumes).
-  assert.ok(tripsPage.includes('data-testid="trips-reference-drawer"'));
-  assert.match(
-    tripsPage,
-    /trips-reference-drawer"[\s\S]{0,40}|order-4 lg:order-2/,
+test("reference drawer is integrated into the current-edition right column (above the fold)", () => {
+  // The drawer is rendered inside the current edition's right column (under the
+  // monogram plate) — not as a separate full-width chapter between sections.
+  const hero = tripsPage.slice(
+    tripsPage.indexOf("function ContinuePlanningHero"),
+    tripsPage.indexOf("function JourneyCard"),
   );
-  assert.ok(tripsPage.includes("lg:order-2"), "drawer is reordered above the volumes on desktop");
-  // The volume sections are pushed below the drawer on desktop (lg:order-3/4).
-  assert.ok(tripsPage.includes("lg:order-3"), "active volumes sit after the drawer on desktop");
-  assert.ok(tripsPage.includes("lg:order-4"), "bound volumes sit after the drawer on desktop");
-  // The body is a flex column so the order reflow works (mobile stays natural).
-  assert.ok(tripsPage.includes("flex flex-col gap-9"), "body uses a flex column for the order reflow");
+  assert.ok(hero.includes("trips-edition-aside"), "current edition has a right-column aside");
+  assert.ok(hero.includes("<PlanningToolsStrip"), "reference drawer is rendered inside the current edition");
+  assert.ok(hero.includes('data-testid="trips-reference-drawer"'));
+  assert.ok(globalsCss.includes(".trips-edition-aside"), "aside column primitive defined");
+});
+
+test("lower shelf is a balanced two-column desktop layout (single column on mobile)", () => {
+  // When both shelves have volumes, On the table | Bound sit side-by-side on
+  // desktop (lg:grid-cols-2) so a small count does not strand one card.
+  assert.ok(tripsPage.includes('data-testid="trips-lower-shelf"'));
+  assert.ok(tripsPage.includes("lg:grid-cols-2"), "two-column lower shelf on desktop");
+  assert.ok(tripsPage.includes("lowerTwoCol"), "two-column shelf gated on both shelves having volumes");
+  // dense sections stack 1-up (mobile + half-width column), 2-up only at xl.
+  assert.ok(tripsPage.includes("xl:grid-cols-2"), "dense shelf cards stay 1-up until xl");
+  assert.ok(tripsPage.includes("grid-cols-1"), "mobile/shelf base is single column");
+});
+
+test("vertical rhythm is tightened (body gap reduced, no full-width drawer chapter)", () => {
+  assert.ok(tripsPage.includes("flex flex-col gap-7"), "body uses a tighter flex column gap");
+  // The reference drawer is no longer a separate full-width chapter section.
+  assert.ok(!tripsPage.includes("trips-tools-shelf"), "old full-width tools shelf removed");
 });
 
 // ── Empty state — empty shelf concept ─────────────────────────────────────────
@@ -470,7 +483,7 @@ test("no Journey Desk / TripBuilder / Trip Detail imports in trips page", () => 
 test("MY TRIPS CSS section includes a prefers-reduced-motion guard", () => {
   const section = globalsCss.slice(
     globalsCss.indexOf("MY TRIPS"),
-    globalsCss.indexOf("MY TRIPS") + 12000,
+    globalsCss.indexOf("MY TRIPS") + 16000,
   );
   assert.ok(section.includes("prefers-reduced-motion"));
 });
