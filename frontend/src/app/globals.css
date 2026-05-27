@@ -9734,15 +9734,16 @@
   }
 
   /* trips-shelf-masthead: Masthead zone inside the shelf stage.
-     Linen-tinted header with bottom hairline — anchors the shelf label
-     above the volumes, like a bookcase plate above the row of books. */
+     Linen-tinted header — anchors the shelf label above the volumes.
+     Softened hairline divider so the masthead blends into the shelf rather
+     than creating a hard panel edge. */
   .trips-shelf-masthead {
-    padding: 2rem 2rem 1.5rem;
-    background: color-mix(in srgb, var(--ds-linen) 28%, var(--ds-warm-paper));
-    border-bottom: 1px solid var(--ds-hairline);
+    padding: 2.25rem 2rem 1.75rem;
+    background: color-mix(in srgb, var(--ds-linen) 22%, var(--ds-warm-paper));
+    border-bottom: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
   }
   @media (max-width: 639px) {
-    .trips-shelf-masthead { padding: 1.25rem 1.25rem 1rem; }
+    .trips-shelf-masthead { padding: 1.5rem 1.25rem 1.25rem; }
   }
 
   /* trips-shelf-body: Main content zone inside the shelf stage. */
@@ -9754,28 +9755,28 @@
   }
 
   /* trips-featured-volume: Cover zone of the featured/current travel volume.
-     Warm linen-to-paper gradient inside ContinuePlanningHero — makes the
-     featured volume feel richer and more intentionally composed than the grid. */
+     Deeper linen-to-warm-paper gradient — the editorial content zone of the
+     featured volume should feel warmer and richer than the card grid below. */
   .trips-featured-volume {
     background: linear-gradient(
       155deg,
-      color-mix(in srgb, var(--ds-linen) 52%, var(--ds-warm-paper)) 0%,
-      var(--ds-warm-paper) 62%
+      color-mix(in srgb, var(--ds-linen) 72%, var(--ds-warm-paper)) 0%,
+      var(--ds-warm-paper) 55%
     );
   }
 
   /* trips-featured-aside: Actions + controls rail of the featured volume.
-     Stacks below the editorial content on mobile (top hairline); becomes a
-     fixed-width right rail with a left hairline on desktop, giving the current
-     volume a deliberate two-zone composition instead of one flat beige card. */
+     Shares the same linen warmth as the content zone so the two zones read
+     as one cohesive folio page; the hairline divider between them is softened
+     to avoid a hard panel edge. */
   .trips-featured-aside {
-    border-top: 1px solid var(--ds-hairline);
-    background: color-mix(in srgb, var(--ds-warm-paper) 55%, var(--ds-bone));
+    border-top: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
+    background: color-mix(in srgb, var(--ds-linen) 32%, var(--ds-warm-paper));
   }
   @media (min-width: 1024px) {
     .trips-featured-aside {
       border-top: none;
-      border-left: 1px solid var(--ds-hairline);
+      border-left: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
     }
   }
 
@@ -9793,30 +9794,40 @@
   }
 
   /* trips-volume-cover: Body cover zone of a JourneyCard.
-     Warm paper-to-bone gradient wash gives the card body a "printed travel
-     pages" quality — differentiating the cover from the bone footer. */
+     Linen-to-bone gradient gives the card body a warm "printed travel pages"
+     quality — more distinct from the bone footer than pure paper-to-bone. */
   .trips-volume-cover {
     background: linear-gradient(
-      to bottom,
-      color-mix(in srgb, var(--ds-warm-paper) 50%, var(--ds-bone)) 0%,
-      var(--ds-bone) 100%
+      160deg,
+      color-mix(in srgb, var(--ds-linen) 42%, var(--ds-warm-paper)) 0%,
+      color-mix(in srgb, var(--ds-bone) 88%, var(--ds-warm-paper)) 100%
     );
   }
 
   /* trips-tools-shelf: Bottom shelf rail for the planning tools strip.
-     Linen-tinted inset zone — integrated visually into the shelf floor,
-     not a floating generic button row. */
+     Softer border and linen wash — the tools sit on the shelf floor as
+     companion instruments, not as a separate visual panel. */
   .trips-tools-shelf {
-    border-top: 1px solid var(--ds-hairline);
-    background: color-mix(in srgb, var(--ds-linen) 18%, var(--ds-warm-paper));
-    margin-top: 0.25rem;
+    border-top: 1px solid color-mix(in srgb, var(--ds-hairline) 50%, transparent);
+    background: color-mix(in srgb, var(--ds-linen) 14%, var(--ds-warm-paper));
+    margin-top: 0.5rem;
     padding-top: 1.5rem;
     margin-inline: -2rem;
     padding-inline: 2rem;
-    padding-bottom: 0.25rem;
+    padding-bottom: 0.5rem;
   }
   @media (max-width: 639px) {
     .trips-tools-shelf { margin-inline: -1.25rem; padding-inline: 1.25rem; }
+  }
+
+  /* trips-tool-panel: Unified instrument panel containing the three tool links.
+     A single bordered container with divide lines — three instruments in one
+     atelier rail, not three separate CTA cards. */
+  .trips-tool-panel {
+    overflow: hidden;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--ds-hairline) 80%, transparent);
+    background: var(--ds-warm-paper);
   }
 
   @media (prefers-reduced-motion: reduce) {

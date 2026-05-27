@@ -247,7 +247,7 @@ function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroPr
 
           {/* Right zone — actions + quiet controls rail */}
           <div
-            className="trips-featured-aside flex flex-col gap-2.5 px-6 py-5 lg:px-6 lg:py-8 lg:w-60 shrink-0"
+            className="trips-featured-aside flex flex-col gap-3 px-6 py-6 lg:px-8 lg:py-10 lg:w-64 shrink-0"
             data-testid="continue-planning-aside"
           >
             <Link
@@ -413,69 +413,72 @@ function PlanningToolsStrip() {
       className="trips-tools-shelf"
     >
       <Overline>Planning tools</Overline>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Link
-          href="/concierge"
-          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-hairline bg-ds-bone hover:border-ds-marine-ink/40 transition-all duration-200"
-        >
-          <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0">
-            <Sparkles className="w-4 h-4" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-marine-ink transition">
-              AI Concierge
-            </p>
-            <p className="text-xs text-ds-folio-ink-mist truncate">
-              Personalised recommendations
-            </p>
-          </div>
-          <ChevronRight
-            className="w-4 h-4 text-ds-folio-ink-mist shrink-0 ml-auto"
-            aria-hidden="true"
-          />
-        </Link>
+      {/* Unified instrument panel — one contained rail, not three separate cards */}
+      <div className="trips-tool-panel">
+        <div className="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-ds-hairline">
+          <Link
+            href="/concierge"
+            className="group flex items-center gap-3 px-5 py-4 flex-1 hover:bg-ds-linen transition-colors duration-150"
+          >
+            <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0">
+              <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-marine-ink transition-colors">
+                AI Concierge
+              </p>
+              <p className="text-xs text-ds-folio-ink-mist truncate">
+                Personalised recommendations
+              </p>
+            </div>
+            <ChevronRight
+              className="w-3.5 h-3.5 text-ds-folio-ink-mist shrink-0 group-hover:text-ds-marine-ink transition-colors"
+              aria-hidden="true"
+            />
+          </Link>
 
-        <Link
-          href="/saved"
-          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-hairline bg-ds-bone hover:border-ds-marine-ink/40 transition-all duration-200"
-        >
-          <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0">
-            <BookmarkCheck className="w-4 h-4" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-marine-ink transition">
-              Saved Ideas
-            </p>
-            <p className="text-xs text-ds-folio-ink-mist truncate">
-              Your travel scrapbook
-            </p>
-          </div>
-          <ChevronRight
-            className="w-4 h-4 text-ds-folio-ink-mist shrink-0 ml-auto"
-            aria-hidden="true"
-          />
-        </Link>
+          <Link
+            href="/saved"
+            className="group flex items-center gap-3 px-5 py-4 flex-1 hover:bg-ds-linen transition-colors duration-150"
+          >
+            <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0">
+              <BookmarkCheck className="w-3.5 h-3.5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-marine-ink transition-colors">
+                Saved Ideas
+              </p>
+              <p className="text-xs text-ds-folio-ink-mist truncate">
+                Your travel scrapbook
+              </p>
+            </div>
+            <ChevronRight
+              className="w-3.5 h-3.5 text-ds-folio-ink-mist shrink-0 group-hover:text-ds-marine-ink transition-colors"
+              aria-hidden="true"
+            />
+          </Link>
 
-        <Link
-          href="/explore"
-          className="group flex items-center gap-3 p-4 rounded-xl border border-ds-hairline bg-ds-bone hover:border-ds-marine-ink/40 transition-all duration-200"
-        >
-          <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0">
-            <Compass className="w-4 h-4" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-marine-ink transition">
-              Explore
-            </p>
-            <p className="text-xs text-ds-folio-ink-mist truncate">
-              Hotels, restaurants &amp; more
-            </p>
-          </div>
-          <ChevronRight
-            className="w-4 h-4 text-ds-folio-ink-mist shrink-0 ml-auto"
-            aria-hidden="true"
-          />
-        </Link>
+          <Link
+            href="/explore"
+            className="group flex items-center gap-3 px-5 py-4 flex-1 hover:bg-ds-linen transition-colors duration-150"
+          >
+            <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0">
+              <Compass className="w-3.5 h-3.5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-marine-ink transition-colors">
+                Explore
+              </p>
+              <p className="text-xs text-ds-folio-ink-mist truncate">
+                Hotels, restaurants &amp; more
+              </p>
+            </div>
+            <ChevronRight
+              className="w-3.5 h-3.5 text-ds-folio-ink-mist shrink-0 group-hover:text-ds-marine-ink transition-colors"
+              aria-hidden="true"
+            />
+          </Link>
+        </div>
       </div>
     </section>
   );
@@ -769,7 +772,7 @@ export default function TripsPage() {
                 My Journeys
               </h1>
               {hasAny && (
-                <p className="mt-1 text-sm text-ds-folio-ink-mist">{tripLabel}</p>
+                <p className="folio-caption mt-2">{tripLabel}</p>
               )}
             </div>
             <div className="shrink-0 pt-1">
