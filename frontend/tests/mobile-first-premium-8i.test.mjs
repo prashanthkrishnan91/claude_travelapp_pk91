@@ -86,12 +86,16 @@ test('TripBuilder uses flex flex-col for base mobile layout', () => {
     'TripBuilder must start as flex-col and switch to flex-row at lg breakpoint');
 });
 
-test('TripBuilder candidate panel uses lg:w-80 (full-width on mobile)', () => {
-  assert.ok(tripBuilder.includes('lg:w-80'), 'Candidate panel must use lg:w-80 so it is full-width on mobile');
+test('TripBuilder candidate panel is full-width on mobile, centered add canvas on desktop', () => {
+  // Journey Desk PR 2: Build is no longer a 320px side column. In add mode it is
+  // a full-width panel on mobile (w-full) and a centered, comfortably-wide add
+  // canvas on desktop (lg:max-w-3xl lg:mx-auto) — using the Working Surface width.
+  assert.ok(tripBuilder.includes('lg:max-w-3xl lg:mx-auto'), 'add canvas must be a centered comfortable width on desktop');
+  assert.ok(!tripBuilder.includes('lg:w-80'), 'Build is no longer a fixed 320px side column');
 });
 
-test('TripBuilder candidate panel uses lg:flex-shrink-0 (not bare flex-shrink-0)', () => {
-  assert.ok(tripBuilder.includes('lg:flex-shrink-0'), 'Candidate panel must use lg:flex-shrink-0');
+test('TripBuilder candidate panel is mobile-safe (full-width base, no bare w-80)', () => {
+  assert.ok(tripBuilder.includes('w-full flex flex-col gap-3 overflow-y-auto'), 'candidate panel base must be w-full (full-width on mobile)');
   assert.ok(!tripBuilder.includes('"w-80 flex-shrink-0'), 'Must not use bare w-80 flex-shrink-0 without lg prefix');
 });
 

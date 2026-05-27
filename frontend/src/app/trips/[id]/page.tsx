@@ -663,18 +663,29 @@ export default function TripDetailPage() {
             </div>
           )}
 
-          {/* "Back to Day N" return affordance — shown when arriving from the
-              Add-to-Day flow (mobile and desktop) so there is always a path back
-              to the itinerary while Build is the active working surface. */}
+          {/* Add-mode masthead — shown when arriving from the Add-to-Day flow
+              (mobile + desktop). Clearly states "Adding to Day N" and gives a
+              Done / Back path back to the selected itinerary day. Aligned to the
+              centered add canvas width on desktop (lg:max-w-3xl lg:mx-auto). */}
           {activeMobileWorkspace === "build" && buildFocusDayId && (() => {
             const focusedDay = itineraryDays.find((d) => d.id === buildFocusDayId);
             return focusedDay ? (
               <div
                 data-testid="jd-build-return-banner"
-                className="mb-3 flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border border-ds-marine-ink/20 bg-ds-bone"
+                className="mb-4 lg:max-w-3xl lg:mx-auto flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-ds-marine-ink/20 bg-ds-bone"
               >
-                <span className="text-xs text-ds-folio-ink-soft italic">
-                  Adding to <span className="font-semibold not-italic text-ds-marine-ink">Day {focusedDay.dayNumber}</span>
+                <span className="inline-flex items-center gap-2.5 min-w-0">
+                  <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-ds-marine-ink/10 text-ds-marine-ink shrink-0">
+                    <Plus className="w-4 h-4" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-ds-folio-ink-mist">
+                      Add mode
+                    </span>
+                    <span className="block text-sm font-semibold text-ds-folio-ink leading-tight">
+                      Adding to Day {focusedDay.dayNumber}
+                    </span>
+                  </span>
                 </span>
                 <button
                   type="button"
@@ -684,9 +695,10 @@ export default function TripDetailPage() {
                     setBuildFocusDayId(null);
                     setBuildFocusVertical(null);
                   }}
-                  className="text-xs font-medium text-ds-marine-ink hover:text-ds-marine-soft transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-lg text-xs font-semibold text-ds-marine-ink hover:bg-ds-linen transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
                 >
-                  ← Done · Back to Day {focusedDay.dayNumber}
+                  <ChevronLeft className="w-3.5 h-3.5" aria-hidden="true" />
+                  Done · Back to Day {focusedDay.dayNumber}
                 </button>
               </div>
             ) : null;

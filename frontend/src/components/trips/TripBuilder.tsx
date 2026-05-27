@@ -2154,10 +2154,12 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
           {/* ── Left Panel: AI-ranked candidates (Build) ──────────────────────
               Build is an internal add/search utility, not a primary desk column.
               It is hidden until the workspace is "build" (entered via the
-              Add-to-Day flow) on every breakpoint — no permanent desktop column. */}
+              Add-to-Day flow). In add mode it fills the Working Surface as a
+              centered, comfortably-wide add canvas (lg:max-w-3xl lg:mx-auto) —
+              not a fixed 320px column stranded beside an empty surface. */}
           <div
             data-testid="trip-mobile-panel-build"
-            className={`w-full flex flex-col gap-3 overflow-y-auto pr-0.5 lg:w-80 lg:flex-shrink-0 ${
+            className={`w-full flex flex-col gap-3 overflow-y-auto pr-0.5 lg:max-w-3xl lg:mx-auto ${
               mobileWorkspace === "build" ? "" : "hidden"
             }`}
           >

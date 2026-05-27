@@ -169,6 +169,24 @@ test("Build is hidden unless its workspace is active — never a permanent deskt
   assert.doesNotMatch(builder, /trip-mobile-panel-build[\s\S]{0,260}hidden lg:flex/);
 });
 
+test("add mode is a centered, comfortably-wide add canvas (not a 320px stranded column)", () => {
+  // Journey Desk PR 2: in add mode the Build panel fills the Working Surface as a
+  // centered canvas, not a fixed lg:w-80 column beside an empty surface.
+  assert.match(builder, /trip-mobile-panel-build[\s\S]{0,260}lg:max-w-3xl lg:mx-auto/);
+  assert.doesNotMatch(builder, /trip-mobile-panel-build[\s\S]{0,260}lg:w-80/);
+});
+
+test("add mode shows a clear 'Adding to Day N' masthead with a Done/Back action", () => {
+  assert.match(page, /data-testid="jd-build-return-banner"/);
+  assert.match(page, /Adding to Day \{focusedDay\.dayNumber\}/);
+  assert.match(page, /data-testid="jd-build-return-btn"/);
+  assert.match(page, /Done · Back to Day \{focusedDay\.dayNumber\}/);
+  // Masthead aligns to the centered add canvas width on desktop.
+  assert.match(page, /jd-build-return-banner"[\s\S]{0,120}lg:max-w-3xl lg:mx-auto/);
+  // Done returns to the selected itinerary day (active-day sync intact).
+  assert.match(page, /setActiveMobileWorkspace\("itinerary"\)[\s\S]{0,80}setBuildFocusDayId\(null\)/);
+});
+
 test("a clear 'Add to Day' entry opens the existing add/build flow (not Ideas-only)", () => {
   // The desktop Working Surface header has a prominent Add-to-Day button that
   // opens the existing AddToDayDrawer → 4-vertical → Build flow.
