@@ -37,6 +37,40 @@ const handoff = readFileSync(
   "utf8",
 );
 
+const appShell = readFileSync(
+  new URL("../src/components/layout/AppShell.tsx", import.meta.url),
+  "utf8",
+);
+
+// ── Existing immersive page-room shell reuse (floating sidebar pattern) ───────
+// /trips must adopt the SAME shell pattern the stronger pages already use
+// (Home/Concierge/Explore/Saved): SaaS sidebar CSS-suppressed, floating
+// AtelierNavArtifact nav, edge-to-edge home-edge-bleed canvas. We reuse the
+// existing mechanism — we do NOT invent a new sidebar system.
+
+test("AppShell makes /trips an immersive Reading Room (reuses the existing shell pattern)", () => {
+  assert.match(appShell, /isMyTripsRoute = pathname === "\/trips"/);
+  // Appended to the existing immersive-room set (not a new system).
+  assert.match(appShell, /isImmersiveRoom = isHomePage \|\| isSalonRoute \|\| isExploreRoute \|\| isSavedRoute \|\| isMyTripsRoute/);
+});
+
+test("AppShell sets data-atelier-shell='trips' and renders the floating AtelierNavArtifact", () => {
+  assert.match(appShell, /isMyTripsRoute \? "trips"/);
+  assert.match(appShell, /isMyTripsRoute && <AtelierNavArtifact/);
+});
+
+test("globals.css suppresses the SaaS sidebar on the trips shell (same as the other rooms)", () => {
+  assert.match(globalsCss, /\[data-atelier-shell="trips"\] \.folio-sidebar/);
+});
+
+test("AppShell preserves the existing shell contracts (8J/atrium) — no nav redesign", () => {
+  // Home sidebar ternary + the centered max-w-7xl branch for non-immersive
+  // routes must stay intact (we only added /trips to the immersive set).
+  assert.match(appShell, /isHomePage \? null : <Sidebar \/>/);
+  assert.match(appShell, /max-w-7xl mx-auto px-4 sm:px-6 lg:px-8/);
+  assert.match(appShell, /home-edge-bleed/);
+});
+
 // ── The room — floating paper shelf stage ─────────────────────────────────────
 
 test("trips page uses trips-shelf-stage (the Reading Room stage)", () => {
@@ -53,15 +87,39 @@ test("trips page uses trips-shelf-masthead and trips-shelf-body zones", () => {
   assert.ok(tripsPage.includes("trips-shelf-body"));
 });
 
-test("globals.css trips-shelf-stage fills the canvas (not a narrow 52rem column)", () => {
+test("globals.css trips-shelf-stage is a wide staged folio (matches stronger pages, not a narrow column)", () => {
   assert.ok(globalsCss.includes(".trips-shelf-stage"));
   const block = globalsCss.slice(
-    globalsCss.indexOf(".trips-shelf-stage"),
-    globalsCss.indexOf(".trips-shelf-stage") + 400,
+    globalsCss.indexOf(".trips-shelf-stage {"),
+    globalsCss.indexOf(".trips-shelf-stage {") + 800,
   );
   assert.ok(block.includes("max-width"));
-  assert.ok(!/max-width:\s*52rem/.test(block), "stage must not be capped at 52rem");
-  assert.ok(/max-width:\s*100%/.test(block), "stage must fill available width");
+  assert.ok(!/max-width:\s*52rem/.test(block), "stage must not be capped at a narrow 52rem column");
+  // Wide, staged, centered — same width family as the Saved Private Folio (78rem).
+  assert.ok(/max-width:\s*78rem/.test(block), "stage must use the wide staged max-width (78rem)");
+  assert.ok(block.includes("margin-inline: auto") || block.includes("margin: 0 auto"), "stage is centered on the desk");
+});
+
+test("globals.css gives the Reading Room mood: a warm floating desk + lifted paper stage", () => {
+  // The room canvas is a full-bleed warm desk with quiet radial ambient depth.
+  assert.ok(globalsCss.includes(".trips-room-canvas"));
+  const canvas = globalsCss.slice(
+    globalsCss.indexOf(".trips-room-canvas {"),
+    globalsCss.indexOf(".trips-room-canvas {") + 700,
+  );
+  assert.ok(canvas.includes("min-height: 100svh"), "desk fills the immersive page height");
+  assert.ok(canvas.includes("radial-gradient"), "desk carries quiet radial ambient warmth");
+  // The stage lifts off the desk with a deep layered shadow (floating, not a flat box).
+  const stage = globalsCss.slice(
+    globalsCss.indexOf(".trips-shelf-stage {"),
+    globalsCss.indexOf(".trips-shelf-stage {") + 800,
+  );
+  assert.ok(stage.includes("box-shadow"), "stage has a layered lift shadow");
+});
+
+test("trips page wraps the stage in the trips-room-canvas desk (loading + loaded)", () => {
+  const count = (tripsPage.match(/trips-room-canvas/g) || []).length;
+  assert.ok(count >= 2, "both the skeleton and the main render sit on the room canvas");
 });
 
 test("globals.css defines trips-shelf-masthead with a bottom hairline", () => {
@@ -265,6 +323,23 @@ test("reference drawer preserves all three routes", () => {
   assert.match(strip, /href="\/concierge"/);
   assert.match(strip, /href="\/saved"/);
   assert.match(strip, /href="\/explore"/);
+});
+
+test("reference drawer is pulled above the fold on desktop, stacked on mobile", () => {
+  // The drawer wrapper carries lg:order-2 so on desktop it sits above the
+  // volume grids (visible in the first screen). Its default order keeps it last
+  // on mobile (single-column drawer below the volumes).
+  assert.ok(tripsPage.includes('data-testid="trips-reference-drawer"'));
+  assert.match(
+    tripsPage,
+    /trips-reference-drawer"[\s\S]{0,40}|order-4 lg:order-2/,
+  );
+  assert.ok(tripsPage.includes("lg:order-2"), "drawer is reordered above the volumes on desktop");
+  // The volume sections are pushed below the drawer on desktop (lg:order-3/4).
+  assert.ok(tripsPage.includes("lg:order-3"), "active volumes sit after the drawer on desktop");
+  assert.ok(tripsPage.includes("lg:order-4"), "bound volumes sit after the drawer on desktop");
+  // The body is a flex column so the order reflow works (mobile stays natural).
+  assert.ok(tripsPage.includes("flex flex-col gap-9"), "body uses a flex column for the order reflow");
 });
 
 // ── Empty state — empty shelf concept ─────────────────────────────────────────

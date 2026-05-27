@@ -673,18 +673,20 @@ export default function TripsPage() {
 
   if (loading) {
     return (
-      <div className="trips-shelf-stage" data-testid="trips-shelf-stage">
-        <div className="trips-shelf-masthead">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-2">
-              <Skeleton className="h-8 w-44" />
-              <Skeleton className="h-4 w-32" />
+      <div className="trips-room-canvas">
+        <div className="trips-shelf-stage" data-testid="trips-shelf-stage">
+          <div className="trips-shelf-masthead">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-44" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+              <Skeleton variant="button" className="w-32" />
             </div>
-            <Skeleton variant="button" className="w-32" />
           </div>
-        </div>
-        <div className="trips-shelf-body">
-          <DashboardSkeleton />
+          <div className="trips-shelf-body">
+            <DashboardSkeleton />
+          </div>
         </div>
       </div>
     );
@@ -739,7 +741,8 @@ export default function TripsPage() {
         />
       )}
 
-      {/* The Reading Room — a floating paper folio library */}
+      {/* The Reading Room — a floating paper folio library on a warm canvas */}
+      <div className="trips-room-canvas">
       <div className="trips-shelf-stage" data-testid="trips-shelf-stage">
         {/* Masthead — the library line */}
         <div className="trips-shelf-masthead" data-testid="my-trips-page-header">
@@ -771,10 +774,14 @@ export default function TripsPage() {
           {!hasAny ? (
             <EmptyDashboard />
           ) : (
-            <div className="space-y-9">
+            // Flex + responsive order: on desktop the reference drawer is pulled
+            // up beside/under the current edition (above the fold); DOM order
+            // stays natural (drawer last) so mobile + screen readers read the
+            // volumes before the reference rail.
+            <div className="flex flex-col gap-9">
               {/* The current edition — open on the desk */}
               {continuePlanning && (
-                <div>
+                <div className="order-1">
                   <Chapter title="The current edition" />
                   <ContinuePlanningHero
                     trip={continuePlanning}
@@ -785,27 +792,40 @@ export default function TripsPage() {
               )}
 
               {/* On the table — active volumes */}
-              <TripSection
-                title="On the table"
-                trips={activeTrips}
-                onEdit={openEdit}
-                onDelete={(id) => setConfirmDeleteId(id)}
-              />
+              {activeTrips.length > 0 && (
+                <div className="order-2 lg:order-3">
+                  <TripSection
+                    title="On the table"
+                    trips={activeTrips}
+                    onEdit={openEdit}
+                    onDelete={(id) => setConfirmDeleteId(id)}
+                  />
+                </div>
+              )}
 
               {/* Bound — past volumes, quieter */}
-              <TripSection
-                title="Bound"
-                trips={pastTrips}
-                onEdit={openEdit}
-                onDelete={(id) => setConfirmDeleteId(id)}
-                past
-              />
+              {pastTrips.length > 0 && (
+                <div className="order-3 lg:order-4">
+                  <TripSection
+                    title="Bound"
+                    trips={pastTrips}
+                    onEdit={openEdit}
+                    onDelete={(id) => setConfirmDeleteId(id)}
+                    past
+                  />
+                </div>
+              )}
 
-              {/* Elsewhere in the house — quiet reference drawer */}
-              <PlanningToolsStrip />
+              {/* Elsewhere in the house — quiet reference drawer.
+                  Desktop: order-2 (above the volumes, in the first screen).
+                  Mobile: stays last (single-column drawer). */}
+              <div className="order-4 lg:order-2" data-testid="trips-reference-drawer">
+                <PlanningToolsStrip />
+              </div>
             </div>
           )}
         </div>
+      </div>
       </div>
     </>
   );

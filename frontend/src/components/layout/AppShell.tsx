@@ -79,7 +79,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // branch stay intact for the 8J/atrium contracts.
   const isSavedRoute = pathname === "/saved";
 
-  const isImmersiveRoom = isHomePage || isSalonRoute || isExploreRoute || isSavedRoute;
+  // My Journeys ("The Reading Room") is the fourth outside-trip Atelier room and,
+  // like Saved, a PAPER world. It adopts the same immersive shell as the other
+  // strong pages: SaaS sidebar CSS-suppressed via data-atelier-shell="trips",
+  // floating AtelierNavArtifact nav, and the edge-to-edge home-edge-bleed wrapper —
+  // so /trips reads as a wide, staged folio library, not a narrow centered card on
+  // the legacy padded shell. The isHomePage ternary + max-w-7xl branch stay intact
+  // for the 8J/atrium contracts. (Trip detail /trips/[id] is NOT immersive.)
+  const isMyTripsRoute = pathname === "/trips";
+
+  const isImmersiveRoom = isHomePage || isSalonRoute || isExploreRoute || isSavedRoute || isMyTripsRoute;
 
   return (
     <>
@@ -90,7 +99,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div
         className="atelier-atmosphere-root flex h-full min-h-screen"
         data-testid="atelier-atmosphere-root"
-        data-atelier-shell={isSalonRoute ? "salon" : isExploreRoute ? "explore" : isSavedRoute ? "saved" : undefined}
+        data-atelier-shell={isSalonRoute ? "salon" : isExploreRoute ? "explore" : isSavedRoute ? "saved" : isMyTripsRoute ? "trips" : undefined}
       >
         {/* SaaS sidebar — hidden on the immersive Home shell, present on every
             other route so navigation, account, sign-out stay in place. The
@@ -102,6 +111,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {isSalonRoute && <AtelierNavArtifact />}
         {isExploreRoute && <AtelierNavArtifact />}
         {isSavedRoute && <AtelierNavArtifact />}
+        {isMyTripsRoute && <AtelierNavArtifact />}
         <main className="flex-1 overflow-y-auto overflow-x-hidden" data-testid="reduced-motion-safe-atmosphere">
           {isImmersiveRoom ? (
             <div

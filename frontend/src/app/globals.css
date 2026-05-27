@@ -7105,6 +7105,13 @@
     display: none !important;
   }
 
+  /* My Journeys (Reading Room) route — immersive paper room; hide the SaaS
+     sidebar so the folio library owns the full page (floating Atelier nav
+     takes over), matching Home/Saved/Concierge/Explore. */
+  .atelier-atmosphere-root[data-atelier-shell="trips"] .folio-sidebar {
+    display: none !important;
+  }
+
   /* Salon page room — warm paper surface with destination-aware background.
      Uses --world-surface (a warm linen tone injected by worldStyleVars) as
      the room backdrop. Dark cinema surfaces (result cards, sticky composer)
@@ -9711,26 +9718,58 @@
     font-weight: 400;
   }
 
-  /* trips-shelf-stage: Floating curated paper shelf for the /trips route.
-     Fills the AppShell content width (capped by the parent max-w-7xl box) so
-     the shelf uses the desktop canvas instead of reading as a narrow column.
-     Warm paper surface, brass-tinted hairline border, and layered shadow lift
-     it off the page like a folio resting on a desk. */
+  /* trips-room-canvas: the warm desk the Reading Room sits on. Mirrors the
+     Saved Private Folio desk pattern (folio-private-desk) so /trips adopts the
+     same immersive page-room treatment as the stronger pages: a full-bleed warm
+     linen field with quiet radial ambient depth (no dark takeover, no noisy
+     texture). The floating paper stage rests on top of it. */
+  .trips-room-canvas {
+    position: relative;
+    min-height: 100svh;
+    padding: clamp(16px, 3.5vw, 56px) clamp(14px, 3.5vw, 56px) clamp(96px, 14vh, 120px);
+    background-color: color-mix(in srgb, var(--ds-linen) 80%, var(--ds-warm-paper));
+    background-image:
+      radial-gradient(ellipse 82% 48% at 50% -8%,
+        color-mix(in srgb, var(--ds-sandstone-gold) 20%, transparent) 0%, transparent 60%),
+      radial-gradient(ellipse 66% 44% at 92% 104%,
+        color-mix(in srgb, var(--ds-ember-brass) 13%, transparent) 0%, transparent 60%);
+    isolation: isolate;
+  }
+
+  /* trips-shelf-stage: the floating paper folio — the Reading Room itself.
+     Mirrors folio-private-folio: a wide, staged max-width centered on the desk
+     (matches the stronger pages; not a narrow column), warm paper surface, a
+     softened brass-tinted hairline, and a deep layered warm shadow + inner
+     highlight so it lifts off the desk like a folio resting on a table. The wide
+     max-width stays correct once the floating sidebar layout takes over. */
   .trips-shelf-stage {
-    max-width: 100%;
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 78rem;
     margin-inline: auto;
     background:
-      radial-gradient(90% 30% at 50% 0%,
-        color-mix(in srgb, white 55%, transparent) 0%,
-        transparent 100%),
+      radial-gradient(120% 80% at 18% 0%,
+        color-mix(in srgb, var(--ds-warm-paper) 92%, white), transparent 60%),
+      radial-gradient(120% 90% at 100% 100%,
+        color-mix(in srgb, var(--ds-linen) 60%, var(--ds-bone)), transparent 55%),
       var(--ds-warm-paper);
-    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 22%, var(--ds-hairline));
-    border-radius: 20px;
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 24%, var(--ds-hairline));
+    border-radius: 24px;
     box-shadow:
-      0 12px 56px -14px color-mix(in srgb, var(--ds-folio-ink) 14%, transparent),
-      0 3px 12px -4px  color-mix(in srgb, var(--ds-folio-ink) 8%, transparent),
-      inset 0 1px 0 rgba(255, 255, 255, 0.90);
+      0 36px 72px -30px color-mix(in srgb, var(--ds-folio-ink) 34%, transparent),
+      0 12px 28px -16px color-mix(in srgb, var(--ds-folio-ink) 16%, transparent),
+      inset 0 1px 0 color-mix(in srgb, white 62%, transparent);
     overflow: hidden;
+  }
+  /* Soft warm inner lining so the stage edge reads as deckled paper, not a hard box. */
+  .trips-shelf-stage::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: 24px;
+    box-shadow: inset 0 0 44px 2px color-mix(in srgb, var(--ds-ember-brass) 12%, transparent);
   }
 
   /* trips-shelf-masthead: Masthead zone inside the shelf stage.
