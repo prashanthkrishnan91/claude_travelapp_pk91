@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Journey Desk — Trip Detail direction prototype v1</title>
+<!--
+  Journey Desk (Trip Detail / /trips/[id]) direction prototype.
+  Distinct from My Journeys "The Reading Room" (PR #492).
+
+  Reading Room = a bound LIBRARY of many trips (shelf of volumes, restful browsing).
+  Journey Desk  = a working DRAFTING DESK for ONE trip (present-tense, a plan laid out
+                  on a paper desk blotter: cover plate → plan rail → working surface).
+
+  This file is a visual reference only. Hexes approximate the --ds-* tokens; the real
+  implementation must use the design tokens in frontend/src/app/globals.css.
+  Open in a browser; resize across 1024px to see desktop vs mobile composition.
+-->
+<style>
+  :root{
+    /* approximations of --ds-* tokens — DO NOT copy hexes into the app */
+    --linen:#E6DECB; --warm-paper:#FAF7F0; --bone:#F1ECE0;
+    --hairline:#D9D2C2; --ink:#1E1A14; --ink-soft:#4A4338; --ink-mist:#7A6E5C;
+    --marine:#1F4256; --marine-soft:#2A5870; --sandstone:#E0B888; --brass:#C5944D;
+    --cinema-deep:#14110B; --carbon:#221A11; --pearl:#F2E7CC;
+    --serif:Georgia,'Times New Roman',serif;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:var(--sans);color:var(--ink);background:#cfc7b4;}
+  .frame-label{font-family:var(--sans);font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+    color:#5a513f;font-weight:700;padding:22px 24px 8px;}
+  .frame-note{font-size:13px;color:#5a513f;padding:0 24px 14px;max-width:70ch;line-height:1.5;}
+
+  /* ── The Desk canvas (immersive room; floating nav lives outside in app) ── */
+  .jd-room-canvas{
+    position:relative;padding:clamp(16px,2.5vw,44px) clamp(12px,2vw,36px) 64px;
+    /* Marine-cool ambient distinguishes the working DESK from the Reading Room's
+       pure brass-warm reading mood. Same paper world, different temperature. */
+    background-color:color-mix(in srgb,var(--linen) 82%,var(--warm-paper));
+    background-image:
+      radial-gradient(ellipse 80% 46% at 50% -8%, color-mix(in srgb,var(--marine) 14%,transparent) 0%, transparent 60%),
+      radial-gradient(ellipse 64% 42% at 94% 104%, color-mix(in srgb,var(--brass) 12%,transparent) 0%, transparent 60%);
+    isolation:isolate;
+  }
+  /* ── The floating paper folio desk (wide — holds the working surface) ── */
+  .jd-stage{
+    position:relative;z-index:1;width:100%;max-width:94rem;margin-inline:auto;
+    background:
+      radial-gradient(120% 80% at 16% 0%, color-mix(in srgb,var(--warm-paper) 92%,white), transparent 60%),
+      var(--warm-paper);
+    border:1px solid color-mix(in srgb,var(--brass) 22%,var(--hairline));
+    border-radius:24px;overflow:hidden;
+    box-shadow:0 36px 72px -30px rgba(30,26,20,.34),0 12px 28px -16px rgba(30,26,20,.16),inset 0 1px 0 rgba(255,255,255,.6);
+  }
+
+  /* ── Zone A: Cover band (the ONE cinematic punctuation) ── */
+  .jd-cover{
+    position:relative;isolation:isolate;overflow:hidden;color:var(--pearl);
+    background-color:var(--cinema-deep);
+    background-image:
+      radial-gradient(ellipse 70% 60% at 16% -10%, rgba(224,184,136,.16) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 70% at 100% 120%, rgba(31,66,86,.28) 0%, transparent 60%);
+    padding:18px clamp(20px,3vw,40px) 22px;
+    border-bottom:1px solid rgba(197,148,77,.18);
+  }
+  .jd-cover::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+    background:radial-gradient(ellipse 120% 100% at 50% 35%, transparent 52%, rgba(0,0,0,.45) 100%);}
+  .jd-back{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#cdbfa0;text-decoration:none;margin-bottom:12px;}
+  .jd-overline{font-size:10px;letter-spacing:.2em;text-transform:uppercase;font-weight:700;color:var(--sandstone);margin:0 0 6px;}
+  .jd-dest{font-family:var(--serif);font-weight:700;letter-spacing:-.02em;font-size:34px;line-height:1.05;margin:0;}
+  .jd-title{font-size:15px;color:#d9cdb2;margin:4px 0 0;}
+  .jd-vibe{font-family:var(--serif);font-style:italic;font-size:14px;color:#cdbfa0;margin:8px 0 0;}
+  .jd-meta{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:12px;color:#cdbfa0;}
+  .jd-cover-actions{display:flex;align-items:center;gap:8px;margin-top:16px;}
+  .jd-btn-primary{display:inline-flex;align-items:center;gap:6px;background:var(--sandstone);color:#241c0e;
+    border:none;border-radius:6px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;min-height:40px;}
+  .jd-cover-divider{width:1px;height:20px;background:rgba(224,184,136,.25);}
+  .jd-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:8px;
+    background:transparent;border:1px solid rgba(224,184,136,.2);color:#cdbfa0;cursor:pointer;font-size:14px;}
+  .jd-cover-mapline{margin-left:auto;font-size:12px;color:#cdbfa0;text-decoration:underline;text-underline-offset:3px;cursor:pointer;}
+
+  /* ── Zone B: the planning desk (two-zone working layout on desktop) ── */
+  .jd-desk{display:flex;flex-direction:column;}
+  @media(min-width:1024px){
+    .jd-desk{display:grid;grid-template-columns:21rem minmax(0,1fr);align-items:start;}
+  }
+
+  /* Left = the PLAN RAIL (read-only Brief + Dayboard day spine) — sticky */
+  .jd-plan-rail{padding:22px 20px;border-bottom:1px solid color-mix(in srgb,var(--hairline) 55%,transparent);}
+  @media(min-width:1024px){
+    .jd-plan-rail{border-bottom:none;border-right:1px solid color-mix(in srgb,var(--hairline) 55%,transparent);
+      position:sticky;top:0;align-self:stretch;background:color-mix(in srgb,var(--linen) 22%,var(--warm-paper));}
+  }
+  .jd-section-eyebrow{font-size:10px;letter-spacing:.2em;text-transform:uppercase;font-weight:700;color:var(--brass);margin:0 0 10px;}
+
+  /* The Brief — read-only summary card */
+  .jd-brief{background:var(--bone);border:1px solid var(--hairline);border-radius:12px;padding:4px 14px;margin-bottom:20px;}
+  .jd-brief-row{display:flex;align-items:center;gap:10px;padding:9px 0;font-size:13.5px;color:var(--ink);}
+  .jd-brief-row+.jd-brief-row{border-top:1px solid color-mix(in srgb,var(--hairline) 70%,transparent);}
+  .jd-brief-when{margin-left:auto;font-size:12px;color:var(--ink-mist);}
+  .jd-glyph{width:14px;height:14px;color:var(--ink-mist);flex:0 0 auto;}
+  .jd-decide{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;}
+  .jd-review{display:inline-flex;align-items:center;gap:6px;background:var(--marine);color:#fff;border:none;border-radius:8px;
+    padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;min-height:40px;}
+
+  /* The Dayboard — day spine (collapsed cards), the day index/navigation */
+  .jd-day-spine{display:flex;flex-direction:column;gap:8px;}
+  .jd-day-card{display:flex;align-items:center;gap:14px;background:var(--bone);border:1px solid var(--hairline);
+    border-radius:12px;padding:10px 14px;min-height:52px;cursor:pointer;text-align:left;width:100%;}
+  .jd-day-card.is-selected{box-shadow:inset 0 0 0 1px var(--marine);border-color:var(--marine);}
+  .jd-day-num{font-family:var(--serif);font-style:italic;font-size:26px;line-height:1;color:rgba(30,26,20,.9);width:30px;text-align:center;flex:0 0 auto;}
+  .jd-day-body{flex:1;min-width:0;}
+  .jd-day-date{font-size:13px;font-weight:600;color:var(--ink);}
+  .jd-day-where{font-family:var(--serif);font-style:italic;font-size:12px;color:var(--ink-mist);}
+  .jd-day-state{font-size:12px;color:var(--ink-mist);flex:0 0 auto;}
+  .jd-dot{width:6px;height:6px;border-radius:50%;background:var(--brass);box-shadow:0 0 0 3px rgba(197,148,77,.18);display:inline-block;}
+
+  /* Right = the WORKING SURFACE (Itinerary editing; Build/Ideas as utilities) */
+  .jd-surface{padding:22px clamp(16px,2.2vw,28px);min-width:0;}
+  .jd-surface-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap;}
+  .jd-surface-tabs{display:inline-flex;gap:2px;background:var(--linen);border:1px solid var(--hairline);border-radius:10px;padding:3px;}
+  .jd-surface-tab{font-size:12px;font-weight:600;color:var(--ink-mist);padding:6px 12px;border-radius:8px;border:none;background:transparent;cursor:pointer;}
+  .jd-surface-tab.is-active{background:var(--warm-paper);color:var(--marine);box-shadow:0 1px 2px rgba(0,0,0,.06);}
+  .jd-add-utility{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink-soft);
+    border:1px solid var(--hairline);background:var(--warm-paper);border-radius:8px;padding:7px 11px;cursor:pointer;min-height:40px;}
+
+  /* Itinerary day (the working surface content) */
+  .jd-itin-day{background:var(--bone);border:1px solid var(--hairline);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
+  .jd-itin-day-head{display:flex;align-items:baseline;gap:10px;margin-bottom:10px;}
+  .jd-itin-day-num{font-family:var(--serif);font-style:italic;font-size:22px;color:var(--ink);}
+  .jd-itin-day-date{font-size:12px;color:var(--ink-mist);}
+  .jd-itin-rule{flex:1;height:1px;background:color-mix(in srgb,var(--hairline) 70%,transparent);}
+  .jd-itin-item{display:flex;gap:12px;padding:10px 0;border-top:1px dashed color-mix(in srgb,var(--hairline) 85%,transparent);}
+  .jd-itin-item:first-of-type{border-top:none;}
+  .jd-itin-time{font-family:var(--serif);font-style:italic;font-size:13px;color:var(--ink-soft);width:64px;flex:0 0 auto;}
+  .jd-itin-name{font-size:14px;color:var(--ink);font-weight:500;}
+  .jd-itin-cap{font-family:var(--serif);font-style:italic;font-size:12px;color:var(--ink-mist);margin-top:2px;}
+  .jd-itin-actions{margin-left:auto;color:var(--ink-mist);font-size:13px;}
+
+  /* ── Mobile frame ── */
+  .phone{max-width:390px;margin:0 auto;}
+  .jd-mobile-tabs{display:flex;border:1px solid var(--hairline);background:var(--bone);border-radius:12px;overflow:hidden;margin:0 0 14px;}
+  .jd-mobile-tab{flex:1;text-align:center;padding:11px 0;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-mist);border:none;background:transparent;cursor:pointer;position:relative;}
+  .jd-mobile-tab.is-active{color:var(--marine);}
+  .jd-mobile-tab.is-active::after{content:"";position:absolute;bottom:0;left:8px;right:8px;height:2px;background:var(--marine);border-radius:2px;}
+
+  .legend{max-width:94rem;margin:0 auto;padding:18px 24px 40px;color:#5a513f;font-size:13px;line-height:1.6;}
+  .legend code{background:#fff;border:1px solid var(--hairline);border-radius:4px;padding:1px 5px;font-size:12px;}
+  .pill{display:inline-block;background:#fff;border:1px solid var(--hairline);border-radius:999px;padding:2px 9px;font-size:11px;margin:2px 4px 2px 0;}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════ DESKTOP FRAME (≥1024px) ════════════════════ -->
+<div class="frame-label">Frame 1 — Desktop Journey Desk (≥1024px · floating sidebar lives left of this in-app)</div>
+<div class="frame-note">
+  Edge-to-edge warm desk canvas → one wide floating paper folio. Cover band (cinematic, full width) →
+  two-zone planning desk: sticky <b>Plan Rail</b> (read-only Brief + Dayboard day spine) on the left,
+  wide <b>Working Surface</b> (Itinerary editing) on the right. Build &amp; Ideas are utilities, not columns.
+</div>
+
+<div class="jd-room-canvas">
+  <div class="jd-stage">
+
+    <!-- Zone A: Cover band -->
+    <div class="jd-cover">
+      <a class="jd-back" href="#">‹ My Journeys</a>
+      <p class="jd-overline">Travel Chapter</p>
+      <h1 class="jd-dest">Amalfi Coast</h1>
+      <p class="jd-title">Anniversary, slowly</p>
+      <p class="jd-vibe">Lemon terraces and long lunches · Spring 2026</p>
+      <div class="jd-meta"><span>📅 May 12 – May 19, 2026</span><span>8 days</span><span>2 travelers</span></div>
+      <div class="jd-cover-actions">
+        <button class="jd-btn-primary">✦ AI Concierge</button>
+        <span class="jd-cover-divider"></span>
+        <button class="jd-icon-btn" title="Optimize">⚡</button>
+        <button class="jd-icon-btn" title="Edit">✎</button>
+        <button class="jd-icon-btn" title="Delete">🗑</button>
+        <span class="jd-cover-mapline">Trip map</span>
+      </div>
+    </div>
+
+    <!-- Zone B: planning desk -->
+    <div class="jd-desk">
+
+      <!-- Left: Plan Rail -->
+      <aside class="jd-plan-rail">
+        <p class="jd-section-eyebrow">The Brief</p>
+        <div class="jd-brief">
+          <div class="jd-brief-row"><span class="jd-glyph">✈</span> JFK → Naples <span class="jd-brief-when">Day 1 · 8:40 AM</span></div>
+          <div class="jd-brief-row"><span class="jd-glyph">🏨</span> Hotel Marincanto <span class="jd-brief-when">Day 1 → Day 7</span></div>
+          <div class="jd-brief-row"><span class="jd-glyph">🍽</span> 2 reservations · 1 entry time</div>
+          <div class="jd-brief-row"><span class="jd-glyph">🏨</span> <b>Stay</b> · still to choose <span class="jd-brief-when">Choose</span></div>
+          <div class="jd-decide">
+            <span><b>4</b> still to decide</span>
+            <button class="jd-review">Review ideas →</button>
+          </div>
+        </div>
+
+        <p class="jd-section-eyebrow">The Dayboard · 5 of 8 days planned</p>
+        <div class="jd-day-spine">
+          <button class="jd-day-card is-selected">
+            <span class="jd-day-num">1</span>
+            <span class="jd-day-body"><span class="jd-day-date">Mon, May 12</span><br><span class="jd-day-where">Arrival in Positano</span></span>
+            <span class="jd-day-state">3 placed</span>
+          </button>
+          <button class="jd-day-card">
+            <span class="jd-day-num">2</span>
+            <span class="jd-day-body"><span class="jd-day-date">Tue, May 13</span><br><span class="jd-day-where">Path of the Gods</span></span>
+            <span class="jd-day-state">2 placed</span>
+          </button>
+          <button class="jd-day-card">
+            <span class="jd-day-num">3</span>
+            <span class="jd-day-body"><span class="jd-day-date">Wed, May 14</span></span>
+            <span class="jd-day-state"><span class="jd-dot"></span> Still deciding</span>
+          </button>
+          <button class="jd-day-card">
+            <span class="jd-day-num">4</span>
+            <span class="jd-day-body"><span class="jd-day-date">Thu, May 15</span><br><span class="jd-day-where">Ravello gardens</span></span>
+            <span class="jd-day-state">1 placed</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- Right: Working Surface -->
+      <section class="jd-surface">
+        <div class="jd-surface-head">
+          <div class="jd-surface-tabs">
+            <button class="jd-surface-tab is-active">Itinerary</button>
+            <button class="jd-surface-tab">Ideas</button>
+          </div>
+          <button class="jd-add-utility">＋ Add to Day 1</button>
+        </div>
+
+        <div class="jd-itin-day">
+          <div class="jd-itin-day-head">
+            <span class="jd-itin-day-num">Day 1</span><span class="jd-itin-day-date">Mon, May 12 · Positano</span>
+            <span class="jd-itin-rule"></span>
+          </div>
+          <div class="jd-itin-item">
+            <span class="jd-itin-time">8:40 AM</span>
+            <span><span class="jd-itin-name">Flight JFK → Naples</span><br><span class="jd-itin-cap">Nonstop · arrives 10:55 PM local</span></span>
+            <span class="jd-itin-actions">⋯</span>
+          </div>
+          <div class="jd-itin-item">
+            <span class="jd-itin-time">Check-in</span>
+            <span><span class="jd-itin-name">Hotel Marincanto</span><br><span class="jd-itin-cap">Sea-view room · 7 nights</span></span>
+            <span class="jd-itin-actions">⋯</span>
+          </div>
+          <div class="jd-itin-item">
+            <span class="jd-itin-time">8:00 PM</span>
+            <span><span class="jd-itin-name">La Sponda</span><br><span class="jd-itin-cap">Candlelit terrace · reservation held</span></span>
+            <span class="jd-itin-actions">⋯</span>
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--ink-mist);font-style:italic;font-family:var(--serif);">
+          Editing, day placement, reorder and removal all live here — the working surface owns the plan.
+        </p>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ MOBILE FRAME (<1024px) ════════════════════ -->
+<div class="frame-label">Frame 2 — Mobile Journey Desk (&lt;1024px)</div>
+<div class="frame-note">
+  Same paper stage, single column. Compact cover → existing 3-tab IA (Brief · Itinerary · Ideas).
+  No Trip Readiness, no duplicate sections. Brief tab = read-only summary + Dayboard spine; Itinerary
+  tab owns editing; Ideas tab is canonical idea management. IdeasTray (quick placement) and Add-to-Day
+  drawer slide up from the bottom.
+</div>
+
+<div class="jd-room-canvas">
+  <div class="jd-stage phone">
+    <div class="jd-cover" style="padding:16px 18px 18px;">
+      <a class="jd-back" href="#">‹ My Journeys</a>
+      <p class="jd-overline">Travel Chapter</p>
+      <h1 class="jd-dest" style="font-size:26px;">Amalfi Coast</h1>
+      <p class="jd-vibe">Lemon terraces and long lunches</p>
+      <div class="jd-meta"><span>📅 May 12 – 19</span><span>8 days</span></div>
+      <div class="jd-cover-actions"><button class="jd-btn-primary">✦ AI Concierge</button>
+        <button class="jd-icon-btn" title="Edit">✎</button><span class="jd-cover-mapline">Trip map</span></div>
+    </div>
+    <div style="padding:16px;">
+      <div class="jd-mobile-tabs">
+        <button class="jd-mobile-tab is-active">Brief</button>
+        <button class="jd-mobile-tab">Itinerary</button>
+        <button class="jd-mobile-tab">Ideas</button>
+      </div>
+      <p class="jd-section-eyebrow">The Brief</p>
+      <div class="jd-brief">
+        <div class="jd-brief-row"><span class="jd-glyph">✈</span> JFK → Naples <span class="jd-brief-when">Day 1 · 8:40 AM</span></div>
+        <div class="jd-brief-row"><span class="jd-glyph">🏨</span> Hotel Marincanto <span class="jd-brief-when">Day 1 → 7</span></div>
+        <div class="jd-decide"><span><b>4</b> still to decide</span><button class="jd-review">Review ideas →</button></div>
+      </div>
+      <p class="jd-section-eyebrow">The Dayboard</p>
+      <div class="jd-day-spine">
+        <button class="jd-day-card is-selected"><span class="jd-day-num">1</span>
+          <span class="jd-day-body"><span class="jd-day-date">Mon, May 12</span><br><span class="jd-day-where">Positano</span></span>
+          <span class="jd-day-state">3 placed</span></button>
+        <button class="jd-day-card"><span class="jd-day-num">2</span>
+          <span class="jd-day-body"><span class="jd-day-date">Tue, May 13</span></span>
+          <span class="jd-day-state"><span class="jd-dot"></span> Deciding</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ LEGEND ════════════════════ -->
+<div class="legend">
+  <p><b>Mood — Journey Desk ≠ Reading Room.</b> Reading Room is a bound library of many trips (brass-warm, restful).
+  Journey Desk is a working drafting desk for one trip: cooler <b>marine-tinted ambient</b>, a full-width cinematic
+  <b>cover band</b> (not a small monogram plate), and a two-zone <b>plan rail + working surface</b> (not a shelf of volumes).</p>
+  <p><b>Functional ownership (unchanged):</b>
+    <span class="pill">Cover = identity + global actions</span>
+    <span class="pill">Brief = read-only summary</span>
+    <span class="pill">Itinerary = editing / day placement</span>
+    <span class="pill">Ideas = canonical idea management</span>
+    <span class="pill">IdeasTray = quick placement</span>
+    <span class="pill">Build = internal add/search utility</span>
+  </p>
+  <p><b>Removed:</b> <code>TripReadinessCockpit</code> "Trip readiness · concierge notes" disclosure — redundant with the
+  Brief (fixed/pending facts) and Dayboard (N of M days planned), and noisy on mobile. Concierge stays reachable from the
+  cover's AI Concierge primary. No fabricated "notes" artifact is introduced (no durable notes data source yet).</p>
+</div>
+
+</body>
+</html>
