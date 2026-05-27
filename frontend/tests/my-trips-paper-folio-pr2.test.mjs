@@ -95,8 +95,9 @@ test("globals.css trips-shelf-stage is a wide staged folio (matches stronger pag
   );
   assert.ok(block.includes("max-width"));
   assert.ok(!/max-width:\s*52rem/.test(block), "stage must not be capped at a narrow 52rem column");
-  // Wide, staged, centered — same width family as the Saved Private Folio (78rem).
-  assert.ok(/max-width:\s*78rem/.test(block), "stage must use the wide staged max-width (78rem)");
+  // Wide, staged, centered — uses most of the laptop/desktop canvas (90rem),
+  // not a small centered room. Must be clearly wider than the old narrow column.
+  assert.ok(/max-width:\s*90rem/.test(block), "stage must use the wide staged max-width (90rem)");
   assert.ok(block.includes("margin-inline: auto") || block.includes("margin: 0 auto"), "stage is centered on the desk");
 });
 
@@ -375,8 +376,13 @@ test("lower shelf is a balanced two-column desktop layout (single column on mobi
   assert.ok(tripsPage.includes('data-testid="trips-lower-shelf"'));
   assert.ok(tripsPage.includes("lg:grid-cols-2"), "two-column lower shelf on desktop");
   assert.ok(tripsPage.includes("lowerTwoCol"), "two-column shelf gated on both shelves having volumes");
-  // dense sections stack 1-up (mobile + half-width column), 2-up only at xl.
-  assert.ok(tripsPage.includes("xl:grid-cols-2"), "dense shelf cards stay 1-up until xl");
+  // Dense shelf cards fill their section column (grid-cols-1) so a single card
+  // is not stranded at half width with its footer action clipped.
+  const section = tripsPage.slice(
+    tripsPage.indexOf("function TripSection"),
+    tripsPage.indexOf("function PlanningToolsStrip"),
+  );
+  assert.ok(section.includes('"grid grid-cols-1 gap-5"'), "dense cards fill the section column (1-up)");
   assert.ok(tripsPage.includes("grid-cols-1"), "mobile/shelf base is single column");
 });
 

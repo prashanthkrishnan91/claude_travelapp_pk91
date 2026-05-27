@@ -9726,7 +9726,7 @@
   .trips-room-canvas {
     position: relative;
     min-height: 100svh;
-    padding: clamp(16px, 3.5vw, 56px) clamp(14px, 3.5vw, 56px) clamp(96px, 14vh, 120px);
+    padding: clamp(16px, 2.5vw, 44px) clamp(12px, 2vw, 36px) clamp(80px, 12vh, 112px);
     background-color: color-mix(in srgb, var(--ds-linen) 80%, var(--ds-warm-paper));
     background-image:
       radial-gradient(ellipse 82% 48% at 50% -8%,
@@ -9746,7 +9746,7 @@
     position: relative;
     z-index: 1;
     width: 100%;
-    max-width: 78rem;
+    max-width: 90rem;
     margin-inline: auto;
     background:
       radial-gradient(120% 80% at 18% 0%,

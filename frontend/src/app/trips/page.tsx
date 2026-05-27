@@ -326,11 +326,11 @@ function JourneyCard({ trip, onEdit, onDelete, past = false }: JourneyCardProps)
       {/* Volume footer — travelers, quiet edit/delete, open link */}
       <div className="px-5 py-3 border-t border-ds-hairline bg-ds-bone flex items-center justify-between gap-2">
         <div
-          className="flex items-center gap-1"
+          className="flex items-center gap-1 min-w-0"
           data-testid="journey-card-edit-controls"
         >
-          <span className="flex items-center gap-1 text-xs text-ds-folio-ink-mist mr-1">
-            <Users className="w-3 h-3" aria-hidden="true" />
+          <span className="flex items-center gap-1 text-xs text-ds-folio-ink-mist mr-1 whitespace-nowrap">
+            <Users className="w-3 h-3 shrink-0" aria-hidden="true" />
             {trip.travelers} {trip.travelers === 1 ? "traveler" : "travelers"}
           </span>
           {/* Quiet on desktop (hover/focus-revealed), always accessible on mobile */}
@@ -351,9 +351,9 @@ function JourneyCard({ trip, onEdit, onDelete, past = false }: JourneyCardProps)
         </div>
         <Link
           href={`/trips/${trip.id}`}
-          className="flex items-center gap-1 text-xs font-semibold text-ds-marine-ink hover:text-ds-marine-soft transition min-h-[44px]"
+          className="flex items-center gap-1 text-xs font-semibold text-ds-marine-ink hover:text-ds-marine-soft transition min-h-[44px] shrink-0 whitespace-nowrap"
         >
-          {past ? "Revisit" : "Open"} <ArrowRight className="w-3 h-3" aria-hidden="true" />
+          {past ? "Revisit" : "Open"} <ArrowRight className="w-3 h-3 shrink-0" aria-hidden="true" />
         </Link>
       </div>
     </FolioCard>
@@ -381,7 +381,7 @@ function TripSection({ title, trips, onEdit, onDelete, past = false, dense = fal
       <div
         className={
           dense
-            ? "grid grid-cols-1 xl:grid-cols-2 gap-5"
+            ? "grid grid-cols-1 gap-5"
             : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
         }
         data-testid="journey-card-grid"
