@@ -229,11 +229,15 @@ test("TripBuilder Round-Trip card no longer uses invisible cream-on-paper text",
   assert.match(tb, /text-ds-folio-ink leading-tight">Round-Trip</);
 });
 
-test("TripBuilder Add-to day selector is no longer an orphan dark pill on paper", () => {
+test("TripBuilder Add-to day selector is removed (canonical active day owns the target)", () => {
   const tb = read("src/components/trips/TripBuilder.tsx");
-  // The target day selector ("Add to Day 1 · 2026-05-21") was bg-ds-carbon /
-  // border-ds-pen-stroke / text-ds-text — fully dark on paper. Now paper.
-  assert.match(tb, /bg-ds-linen rounded-xl border border-ds-hairline px-3[^"]*"[\s\S]{0,400}Add to/);
+  // The target-day dropdown ("Add to Day 1 · 2026-05-21") is gone in the Journey
+  // Desk patch — the Dayboard/itinerary active day is the single source, used by
+  // the "Add to Day X" button. No orphan dark pill (and no dropdown) on paper.
+  assert.ok(
+    !tb.includes('focus-within:outline-ds-accent'),
+    "the redundant Add-to target-day dropdown wrapper must be removed",
+  );
 });
 
 test("TripBuilder Sort pills are paper-world chips (not orphan dark)", () => {

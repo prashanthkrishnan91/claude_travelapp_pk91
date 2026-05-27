@@ -181,10 +181,21 @@ test("a clear 'Add to Day' entry opens the existing add/build flow (not Ideas-on
   assert.match(page, /onSelectVertical=\{handleAddToDaySelectVertical\}/);
 });
 
-test("selecting a day focuses the itinerary working surface (orientation preserved)", () => {
-  // The rail day-spine selection drives TripBuilder's focus so the itinerary
-  // highlights/targets the chosen day — clicking a day is not inert on desktop.
+test("there is ONE canonical active day — no competing dropdown selector", () => {
+  // The redundant "Add to" target-day dropdown is removed; Dayboard + itinerary
+  // own day selection and the single Add-to-Day button uses the active day.
+  assert.doesNotMatch(builder, /focus-within:outline-ds-accent/);
+});
+
+test("active-day stays in sync across Dayboard, itinerary, and the Add-to-Day label", () => {
+  // Parent → child: the canonical active day drives TripBuilder focus.
   assert.match(page, /focusDayId=\{buildFocusDayId \?\? selectedDayId\}/);
+  // Child → parent: an itinerary day-header click reports the active day back so
+  // the Dayboard highlight + "Add to Day X" label update.
+  assert.match(page, /onActiveDayChange=\{\(dayId\) => setSelectedDayId\(dayId\)\}/);
+  assert.match(builder, /onSelect=\{\(id\) => \{ setSelectedDayId\(id\); onActiveDayChange\?\.\(id\); \}\}/);
+  // The active day also expands in the itinerary (focus), via the focusDayId effect.
+  assert.match(builder, /if \(focusDayId && days\.some[\s\S]{0,160}setExpandedDayNumber\(dn\)/);
 });
 
 // ── Functional ownership preserved (no behavior change) ───────────────────────

@@ -705,6 +705,7 @@ export default function TripDetailPage() {
             mobileWorkspace={activeMobileWorkspace === "brief" ? null : activeMobileWorkspace}
             focusDayId={buildFocusDayId ?? selectedDayId}
             focusVertical={buildFocusVertical}
+            onActiveDayChange={(dayId) => setSelectedDayId(dayId)}
             onAddToDay={handleOpenAddToDay}
             onItineraryChanged={refreshParentItinerary}
             onUnplace={handleItemUnplace}
