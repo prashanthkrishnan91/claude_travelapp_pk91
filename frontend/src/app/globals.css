@@ -9682,6 +9682,160 @@
     .atlas-map-marker--active .atlas-map-marker-dot { transform: none; }
   }
 
+  /* ═══════════════════════════════════════════════════════════════════
+     MY TRIPS — PAPER FOLIO (Paper Folio PR 2)
+     Signature editorial primitives for the trip shelf (/trips route).
+     ═══════════════════════════════════════════════════════════════════ */
+
+  /* trips-shelf-heading: editorial serif italic page-level masthead.
+     Used for: "My Journeys" h1 and empty-state h2 on the /trips route. */
+  .trips-shelf-heading {
+    font-family: var(--ds-font-editorial);
+    font-style: italic;
+    font-size: 1.75rem;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    color: var(--ds-folio-ink);
+    font-weight: 400;
+  }
+
+  /* trips-volume-destination: editorial serif italic for the trip destination
+     rendered as the volume title on journey cards (18px). */
+  .trips-volume-destination {
+    font-family: var(--ds-font-editorial);
+    font-style: italic;
+    font-size: 1.125rem;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    color: var(--ds-folio-ink);
+    font-weight: 400;
+  }
+
+  /* trips-shelf-stage: Floating curated paper shelf for the /trips route.
+     Fills the AppShell content width (capped by the parent max-w-7xl box) so
+     the shelf uses the desktop canvas instead of reading as a narrow column.
+     Warm paper surface, brass-tinted hairline border, and layered shadow lift
+     it off the page like a folio resting on a desk. */
+  .trips-shelf-stage {
+    max-width: 100%;
+    margin-inline: auto;
+    background:
+      radial-gradient(90% 30% at 50% 0%,
+        color-mix(in srgb, white 55%, transparent) 0%,
+        transparent 100%),
+      var(--ds-warm-paper);
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 22%, var(--ds-hairline));
+    border-radius: 20px;
+    box-shadow:
+      0 12px 56px -14px color-mix(in srgb, var(--ds-folio-ink) 14%, transparent),
+      0 3px 12px -4px  color-mix(in srgb, var(--ds-folio-ink) 8%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.90);
+    overflow: hidden;
+  }
+
+  /* trips-shelf-masthead: Masthead zone inside the shelf stage.
+     Linen-tinted header — anchors the shelf label above the volumes.
+     Softened hairline divider so the masthead blends into the shelf rather
+     than creating a hard panel edge. */
+  .trips-shelf-masthead {
+    padding: 2.25rem 2rem 1.75rem;
+    background: color-mix(in srgb, var(--ds-linen) 22%, var(--ds-warm-paper));
+    border-bottom: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
+  }
+  @media (max-width: 639px) {
+    .trips-shelf-masthead { padding: 1.5rem 1.25rem 1.25rem; }
+  }
+
+  /* trips-shelf-body: Main content zone inside the shelf stage. */
+  .trips-shelf-body {
+    padding: 1.75rem 2rem 2.25rem;
+  }
+  @media (max-width: 639px) {
+    .trips-shelf-body { padding: 1.25rem 1.25rem 1.75rem; }
+  }
+
+  /* trips-featured-volume: Cover zone of the featured/current travel volume.
+     Deeper linen-to-warm-paper gradient — the editorial content zone of the
+     featured volume should feel warmer and richer than the card grid below. */
+  .trips-featured-volume {
+    background: linear-gradient(
+      155deg,
+      color-mix(in srgb, var(--ds-linen) 72%, var(--ds-warm-paper)) 0%,
+      var(--ds-warm-paper) 55%
+    );
+  }
+
+  /* trips-featured-aside: Actions + controls rail of the featured volume.
+     Shares the same linen warmth as the content zone so the two zones read
+     as one cohesive folio page; the hairline divider between them is softened
+     to avoid a hard panel edge. */
+  .trips-featured-aside {
+    border-top: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
+    background: color-mix(in srgb, var(--ds-linen) 32%, var(--ds-warm-paper));
+  }
+  @media (min-width: 1024px) {
+    .trips-featured-aside {
+      border-top: none;
+      border-left: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
+    }
+  }
+
+  /* trips-hero-destination: Larger editorial serif title for the featured volume.
+     Apply alongside trips-volume-destination to scale up the hero destination.
+     Overrides font-size to make the current journey's destination the editorial
+     focal point — the "volume title" on the desk. */
+  .trips-hero-destination {
+    font-size: 1.75rem;
+    line-height: 1.2;
+    letter-spacing: -0.025em;
+  }
+  @media (max-width: 639px) {
+    .trips-hero-destination { font-size: 1.375rem; }
+  }
+
+  /* trips-volume-cover: Body cover zone of a JourneyCard.
+     Linen-to-bone gradient gives the card body a warm "printed travel pages"
+     quality — more distinct from the bone footer than pure paper-to-bone. */
+  .trips-volume-cover {
+    background: linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--ds-linen) 42%, var(--ds-warm-paper)) 0%,
+      color-mix(in srgb, var(--ds-bone) 88%, var(--ds-warm-paper)) 100%
+    );
+  }
+
+  /* trips-tools-shelf: Bottom shelf rail for the planning tools strip.
+     Softer border and linen wash — the tools sit on the shelf floor as
+     companion instruments, not as a separate visual panel. */
+  .trips-tools-shelf {
+    border-top: 1px solid color-mix(in srgb, var(--ds-hairline) 50%, transparent);
+    background: color-mix(in srgb, var(--ds-linen) 14%, var(--ds-warm-paper));
+    margin-top: 0.5rem;
+    padding-top: 1.5rem;
+    margin-inline: -2rem;
+    padding-inline: 2rem;
+    padding-bottom: 0.5rem;
+  }
+  @media (max-width: 639px) {
+    .trips-tools-shelf { margin-inline: -1.25rem; padding-inline: 1.25rem; }
+  }
+
+  /* trips-tool-panel: Unified instrument panel containing the three tool links.
+     A single bordered container with divide lines — three instruments in one
+     atelier rail, not three separate CTA cards. */
+  .trips-tool-panel {
+    overflow: hidden;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--ds-hairline) 80%, transparent);
+    background: var(--ds-warm-paper);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .trips-shelf-heading,
+    .trips-volume-destination,
+    .trips-hero-destination { transition: none; }
+  }
+
 }
 
 /* ── Map System v1 — shared Leaflet atlas skin (UNLAYERED on purpose) ─────────
