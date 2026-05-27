@@ -150,8 +150,10 @@ test("TripBuilder syncs selectedDayId to focusDayId via useEffect (no remount ne
   assert.match(builder, /setSelectedDayId\(focusDayId\)/);
 });
 
-test("page passes focusDayId={buildFocusDayId} to TripBuilder", () => {
-  assert.match(page, /focusDayId=\{buildFocusDayId\}/);
+test("page passes the Add-to-Day focus day (with rail selection fallback) to TripBuilder", () => {
+  // Add-to-Day still drives focus (buildFocusDayId); the rail day-spine selection
+  // (selectedDayId) is the fallback so clicking a day focuses the itinerary.
+  assert.match(page, /focusDayId=\{buildFocusDayId \?\? selectedDayId\}/);
 });
 
 test("page stores addToDayOpen and addToDayDayId state for the drawer", () => {

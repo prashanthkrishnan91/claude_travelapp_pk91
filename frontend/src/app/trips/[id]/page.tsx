@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ChevronLeft,
   Pencil,
+  Plus,
   Sparkles,
   Trash2,
   X,
@@ -603,11 +604,12 @@ export default function TripDetailPage() {
             Add-to-Day flow). Hidden on mobile when the Brief tab is active. ─── */}
         <div className={`journey-desk-surface ${activeMobileWorkspace === "brief" ? "hidden lg:block" : ""}`}>
 
-          {/* Desktop working-surface tabs — Itinerary | Ideas. Mobile uses the top
-              tab bar instead (hidden lg:flex). Hidden while Build is active (the
-              return banner takes over). Build stays an add utility, never a tab. */}
+          {/* Desktop working-surface header — Itinerary | Ideas tabs + a clear
+              "Add to Day" entry. Mobile uses the top tab bar + per-day buttons
+              (hidden lg:flex). Hidden while Build is active (return banner takes
+              over). Build stays an add utility reached through Add to Day. */}
           {activeMobileWorkspace !== "build" && (
-            <div className="hidden lg:flex items-center gap-2 mb-5">
+            <div className="hidden lg:flex items-center justify-between gap-3 mb-5">
               <div
                 role="tablist"
                 aria-label="Working surface"
@@ -638,6 +640,26 @@ export default function TripDetailPage() {
                   );
                 })}
               </div>
+
+              {/* Add to Day — opens the existing add/build flow (AddToDayDrawer →
+                  flights / stays / dining / things to do → Build search). The one
+                  prominent desktop entry into Build; per-day "Add to this day"
+                  buttons in the itinerary remain. Shown for the Itinerary view. */}
+              {activeMobileWorkspace !== "ideas" && itineraryDays.length > 0 && (() => {
+                const targetDay =
+                  itineraryDays.find((d) => d.id === selectedDayId) ?? itineraryDays[0];
+                return targetDay ? (
+                  <button
+                    type="button"
+                    data-testid="jd-surface-add-to-day"
+                    onClick={() => handleOpenAddToDay(targetDay)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[40px] rounded-lg text-xs font-semibold bg-ds-marine-ink text-ds-paper hover:bg-ds-marine-soft transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+                  >
+                    <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                    Add to Day {targetDay.dayNumber}
+                  </button>
+                ) : null;
+              })()}
             </div>
           )}
 
@@ -681,7 +703,7 @@ export default function TripDetailPage() {
             initialResults={[]}
             ideasRefreshKey={tripIdeasKey}
             mobileWorkspace={activeMobileWorkspace === "brief" ? null : activeMobileWorkspace}
-            focusDayId={buildFocusDayId}
+            focusDayId={buildFocusDayId ?? selectedDayId}
             focusVertical={buildFocusVertical}
             onAddToDay={handleOpenAddToDay}
             onItineraryChanged={refreshParentItinerary}

@@ -169,6 +169,24 @@ test("Build is hidden unless its workspace is active — never a permanent deskt
   assert.doesNotMatch(builder, /trip-mobile-panel-build[\s\S]{0,260}hidden lg:flex/);
 });
 
+test("a clear 'Add to Day' entry opens the existing add/build flow (not Ideas-only)", () => {
+  // The desktop Working Surface header has a prominent Add-to-Day button that
+  // opens the existing AddToDayDrawer → 4-vertical → Build flow.
+  assert.match(page, /data-testid="jd-surface-add-to-day"/);
+  assert.match(page, /onClick=\{\(\) => handleOpenAddToDay\(targetDay\)\}/);
+  // The per-day "Add to this day" entry in the itinerary is preserved too.
+  assert.match(builder, /onAddToDay=\{onAddToDay\}/);
+  // The 4-vertical add drawer is still wired (flights/stays/dining/things to do).
+  assert.match(page, /<AddToDayDrawer/);
+  assert.match(page, /onSelectVertical=\{handleAddToDaySelectVertical\}/);
+});
+
+test("selecting a day focuses the itinerary working surface (orientation preserved)", () => {
+  // The rail day-spine selection drives TripBuilder's focus so the itinerary
+  // highlights/targets the chosen day — clicking a day is not inert on desktop.
+  assert.match(page, /focusDayId=\{buildFocusDayId \?\? selectedDayId\}/);
+});
+
 // ── Functional ownership preserved (no behavior change) ───────────────────────
 
 test("all functional surfaces remain mounted (ownership unchanged)", () => {
