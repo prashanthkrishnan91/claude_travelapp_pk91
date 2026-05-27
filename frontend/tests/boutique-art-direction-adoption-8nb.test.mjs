@@ -447,13 +447,17 @@ describe("Phase 8N-B: CSS source-order and inset highlights", () => {
 // ── 41–45. Additional adoption checks ───────────────────────────────────────
 
 describe("Phase 8N-B: Additional adoption and cleanup checks", () => {
-  it("41. trips/page applies folio-paper-card or FolioCard primitive to empty-state action cards (Slice 2 paper conversion)", () => {
+  it("41. trips/page applies paper surfaces to multiple surfaces (volumes + hero/modals)", () => {
+    // Reading Room: volumes use folio-paper-card; the current edition and the
+    // edit/delete modals use folio-paper-panel. The empty state is the empty
+    // shelf (no action cards), so paper adoption is counted across surfaces.
     const count =
       (tripsPage.match(/folio-paper-card/g) || []).length +
+      (tripsPage.match(/folio-paper-panel/g) || []).length +
       (tripsPage.match(/<FolioCard\b/g) || []).length;
     assert.ok(
       count >= 2,
-      "trips/page must apply folio-paper-card (literal) or FolioCard primitive to multiple surfaces (JourneyCard + empty state cards)"
+      "trips/page must apply folio paper surfaces (card/panel) to multiple surfaces"
     );
   });
 

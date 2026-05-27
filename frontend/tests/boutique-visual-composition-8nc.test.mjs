@@ -342,10 +342,12 @@ describe("Phase 8N-C: SavedShell visual composition", () => {
 // ── 30–35. trips/page visual composition ──────────────────────────────────────
 
 describe("Phase 8N-C: trips/page visual composition", () => {
-  it("30. trips/page JourneyCard has folio-cover-tab element", () => {
+  it("30. trips/page JourneyCard has a brass binding spine (folio-journey-entry)", () => {
+    // Reading Room: bound volumes carry a brass spine via folio-journey-entry
+    // (the left binding stripe), which replaces the old top folio-cover-tab.
     assert.ok(
-      tripsPage.includes("folio-cover-tab"),
-      "trips/page JourneyCard must have folio-cover-tab for visible brass top accent"
+      tripsPage.includes("folio-journey-entry"),
+      "trips/page JourneyCard must have the folio-journey-entry brass binding spine"
     );
   });
 
@@ -356,17 +358,22 @@ describe("Phase 8N-C: trips/page visual composition", () => {
     );
   });
 
-  it("32. trips/page ContinuePlanningHero has folio-paper-header zone (Slice 2 paper conversion)", () => {
+  it("32. trips/page current edition is a two-zone spread (trips-edition)", () => {
+    // Reading Room: the current edition splits into an editorial spread + the
+    // cinematic plate (trips-edition / trips-edition-spread), which replaces the
+    // old folio-paper-header band.
     assert.ok(
-      tripsPage.includes("folio-paper-header"),
-      "trips/page ContinuePlanningHero must have folio-paper-header zone (replaced concierge-desk-header in Slice 2)"
+      tripsPage.includes("trips-edition-spread"),
+      "trips/page current edition must use the trips-edition-spread editorial zone"
     );
   });
 
-  it("33. trips/page uses editorial-scene on body content", () => {
+  it("33. trips/page frames content in the shelf body / room stage", () => {
+    // Reading Room: the room stage (trips-shelf-stage) + trips-shelf-body frame
+    // the page canvas, replacing the old editorial-scene wrapper.
     assert.ok(
-      tripsPage.includes("editorial-scene"),
-      "trips/page body content must use editorial-scene for page canvas framing"
+      tripsPage.includes("trips-shelf-body") && tripsPage.includes("trips-shelf-stage"),
+      "trips/page must frame content in the trips-shelf-stage room + trips-shelf-body"
     );
   });
 

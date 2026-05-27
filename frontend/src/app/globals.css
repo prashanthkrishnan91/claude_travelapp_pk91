@@ -9754,54 +9754,209 @@
     .trips-shelf-body { padding: 1.25rem 1.25rem 1.75rem; }
   }
 
-  /* trips-featured-volume: Cover zone of the featured/current travel volume.
-     Deeper linen-to-warm-paper gradient — the editorial content zone of the
-     featured volume should feel warmer and richer than the card grid below. */
-  .trips-featured-volume {
-    background: linear-gradient(
-      155deg,
-      color-mix(in srgb, var(--ds-linen) 72%, var(--ds-warm-paper)) 0%,
-      var(--ds-warm-paper) 55%
-    );
+  /* trips-chapter: editorial section rule — a serif chapter label, a hairline
+     rule that fills the line, and an optional small-caps count. Reads like a
+     chapter opener in a bound volume, not a tab or a labelled box. */
+  .trips-chapter {
+    display: flex;
+    align-items: baseline;
+    gap: 0.875rem;
+    margin-bottom: 1.25rem;
+  }
+  .trips-chapter-title {
+    font-family: var(--ds-font-editorial);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 1.3125rem;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    color: var(--ds-folio-ink);
+    margin: 0;
+    flex-shrink: 0;
+  }
+  .trips-chapter-rule {
+    flex: 1;
+    height: 1px;
+    background: color-mix(in srgb, var(--ds-hairline) 70%, transparent);
   }
 
-  /* trips-featured-aside: Actions + controls rail of the featured volume.
-     Shares the same linen warmth as the content zone so the two zones read
-     as one cohesive folio page; the hairline divider between them is softened
-     to avoid a hard panel edge. */
-  .trips-featured-aside {
-    border-top: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
-    background: color-mix(in srgb, var(--ds-linen) 32%, var(--ds-warm-paper));
-  }
-  @media (min-width: 1024px) {
-    .trips-featured-aside {
-      border-top: none;
-      border-left: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
-    }
-  }
-
-  /* trips-hero-destination: Larger editorial serif title for the featured volume.
-     Apply alongside trips-volume-destination to scale up the hero destination.
-     Overrides font-size to make the current journey's destination the editorial
-     focal point — the "volume title" on the desk. */
+  /* trips-hero-destination: Larger editorial serif title for the current edition.
+     Apply alongside trips-volume-destination to scale up the hero destination —
+     the "volume title" on the open page. */
   .trips-hero-destination {
-    font-size: 1.75rem;
-    line-height: 1.2;
+    font-size: 1.875rem;
+    line-height: 1.16;
     letter-spacing: -0.025em;
   }
   @media (max-width: 639px) {
-    .trips-hero-destination { font-size: 1.375rem; }
+    .trips-hero-destination { font-size: 1.5rem; }
   }
 
-  /* trips-volume-cover: Body cover zone of a JourneyCard.
-     Linen-to-bone gradient gives the card body a warm "printed travel pages"
-     quality — more distinct from the bone footer than pure paper-to-bone. */
+  /* trips-edition: the current edition — the open volume on the desk. A
+     two-zone folio page: editorial spread + the single cinematic plate. */
+  .trips-edition {
+    overflow: hidden;
+  }
+  .trips-edition-spread {
+    padding: 2rem 2.25rem 1.75rem;
+  }
+  @media (max-width: 639px) {
+    .trips-edition-spread { padding: 1.5rem 1.375rem 1.375rem; }
+  }
+  .trips-edition-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+
+  /* trips-edition-plate: the ONE cinematic punctuation on a filled page. A
+     warm-dark velvet plate with a typeset monogram drawn from the real trip
+     destination — never a stock photo. Pearl text is correct here (cinema
+     surface), not the paper world. */
+  .trips-edition-plate {
+    position: relative;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 200px;
+    padding: 1.75rem 1.875rem;
+    color: var(--ds-pearl-cream);
+    background:
+      radial-gradient(ellipse 120% 90% at 30% 16%,
+        color-mix(in srgb, var(--ds-ember-brass) 26%, transparent) 0%,
+        transparent 62%),
+      linear-gradient(158deg, var(--ds-carbon-mist) 0%, var(--ds-cinema-deep) 70%);
+    box-shadow: inset 0 1px 0 rgba(255, 248, 235, 0.06);
+  }
+  .trips-edition-plate::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-shadow: inset 0 0 110px 18px rgba(0, 0, 0, 0.42);
+  }
+  @media (min-width: 1024px) {
+    .trips-edition-plate { width: 19rem; min-height: 0; }
+  }
+  .trips-edition-plate-label {
+    position: relative;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--ds-sandstone-gold);
+  }
+  .trips-edition-plate-monogram {
+    position: relative;
+    font-family: var(--ds-font-editorial);
+    font-weight: 300;
+    font-size: 6.5rem;
+    line-height: 0.8;
+    letter-spacing: -0.03em;
+    color: var(--ds-pearl-cream);
+    align-self: flex-start;
+  }
+  .trips-edition-plate-bar {
+    position: relative;
+    width: 34px;
+    height: 2px;
+    background: var(--ds-ember-brass);
+  }
+
+  /* trips-volume: a bound travel volume on the shelf. The folio-journey-entry
+     left stripe reads as the volume's brass binding/spine. */
+  .trips-volume {
+    min-height: 12rem;
+  }
+
+  /* trips-volume-cover: body cover zone of a volume — warm "printed pages". */
   .trips-volume-cover {
     background: linear-gradient(
       160deg,
       color-mix(in srgb, var(--ds-linen) 42%, var(--ds-warm-paper)) 0%,
       color-mix(in srgb, var(--ds-bone) 88%, var(--ds-warm-paper)) 100%
     );
+  }
+
+  /* trips-volume-status: status as small-caps editorial text, never a pill. */
+  .trips-volume-status {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--ds-marine-soft);
+    flex-shrink: 0;
+    padding-top: 0.2rem;
+  }
+  .trips-volume-status-past {
+    color: var(--ds-folio-ink-mist);
+  }
+
+  /* trips-volume-past: bound back-issues read quieter than active volumes. */
+  .trips-volume-past .trips-volume-destination {
+    color: var(--ds-folio-ink-soft);
+  }
+
+  /* trips-volume-manage: edit/delete stay quiet on desktop (revealed on hover
+     or keyboard focus) but remain fully present and accessible on touch. */
+  @media (min-width: 1024px) and (hover: hover) {
+    .trips-volume-manage {
+      opacity: 0;
+      transition: opacity var(--ds-duration-standard, 200ms) ease;
+    }
+    .group:hover .trips-volume-manage,
+    .group:focus-within .trips-volume-manage {
+      opacity: 1;
+    }
+  }
+
+  /* trips-empty-shelf: an empty shelf, waiting for its first volume. */
+  .trips-empty-shelf {
+    max-width: 34rem;
+    margin: 0 auto;
+    padding: 3.5rem 1.5rem 4rem;
+    text-align: center;
+  }
+  .trips-empty-plate {
+    position: relative;
+    width: 4.5rem;
+    height: 6rem;
+    margin: 0 auto 1.75rem;
+    border-radius: 5px;
+    background: linear-gradient(158deg, var(--ds-carbon-mist), var(--ds-cinema-deep));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 248, 235, 0.06),
+      0 18px 40px -22px rgba(0, 0, 0, 0.5);
+  }
+  .trips-empty-plate::before {
+    content: '';
+    position: absolute;
+    top: 0.625rem;
+    bottom: 0.625rem;
+    left: 0.45rem;
+    width: 3px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, var(--ds-sandstone-gold), var(--ds-ember-brass));
+    opacity: 0.75;
+  }
+  .trips-empty-lede {
+    margin: 0.75rem auto 1.5rem;
+    max-width: 36ch;
+    color: var(--ds-folio-ink-mist);
+    font-size: 0.9375rem;
+    line-height: 1.6;
+  }
+  .trips-empty-actions {
+    display: flex;
+    justify-content: center;
+  }
+  .trips-empty-aside {
+    margin-top: 1.5rem;
+    font-size: 0.8125rem;
+    color: var(--ds-folio-ink-mist);
   }
 
   /* trips-tools-shelf: Bottom shelf rail for the planning tools strip.
@@ -9833,7 +9988,9 @@
   @media (prefers-reduced-motion: reduce) {
     .trips-shelf-heading,
     .trips-volume-destination,
-    .trips-hero-destination { transition: none; }
+    .trips-hero-destination,
+    .trips-volume-manage { transition: none; }
+    .trips-volume-manage { opacity: 1; }
   }
 
 }

@@ -187,18 +187,22 @@ describe("Trips page — paper card surfaces", () => {
     assert.ok(block.includes("btn-marine"), "ContinuePlanningHero must use btn-marine for primary Open Trip CTA");
   });
 
-  it("ContinuePlanningHero uses folio-paper-header zone", () => {
+  it("ContinuePlanningHero is a two-zone current edition (trips-edition-spread)", () => {
     const idx = page.indexOf("continue-planning-hero");
     const block = page.slice(idx - 200, idx + 5000);
-    assert.ok(block.includes("folio-paper-header"), "ContinuePlanningHero header must use folio-paper-header");
+    // Reading Room: the current edition uses the trips-edition spread + plate,
+    // replacing the old folio-paper-header band.
+    assert.ok(block.includes("trips-edition-spread"), "current edition must use trips-edition-spread");
   });
 
-  it("EmptyDashboard action cards use folio-paper-card or FolioCard primitive", () => {
+  it("EmptyDashboard uses the empty-shelf concept (bound-spine plate motif)", () => {
     const idx = page.indexOf("trips-empty-state");
     const block = page.slice(idx - 100, idx + 2000);
+    // Reading Room empty state is the empty shelf (one primary + quiet links),
+    // not a pair of folio-paper-card action cards.
     assert.ok(
-      block.includes("folio-paper-card") || block.includes("<FolioCard"),
-      "EmptyDashboard action cards must use folio-paper-card (literal) or FolioCard primitive"
+      block.includes("trips-empty-plate"),
+      "EmptyDashboard must show the empty-shelf bound-spine plate motif"
     );
   });
 

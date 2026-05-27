@@ -341,12 +341,16 @@ test("TripBuilder adopts FolioPanel on the Activities/research panel", () => {
   assert.match(src, /<FolioPanel\b[^>]*trip-build-activities-panel/);
 });
 
-test("trips/page.tsx EmptyDashboard adopts FolioCard on both action cards", () => {
+test("trips/page.tsx adopts the FolioCard primitive on the bound-volume card", () => {
+  // Reading Room: the bound-volume JourneyCard is the canonical paper card of
+  // My Journeys and is composed from the FolioCard primitive (real adoption on
+  // the most screenshot-visible, repeated paper surface). The empty state is the
+  // empty shelf (one primary + quiet links), so it no longer holds action cards.
   const src = read("src/app/trips/page.tsx");
   const matches = src.match(/<FolioCard\b/g) || [];
   assert.ok(
-    matches.length >= 2,
-    `trips/page.tsx must adopt FolioCard on at least 2 EmptyDashboard action cards. Found ${matches.length}.`,
+    matches.length >= 1,
+    `trips/page.tsx must adopt the FolioCard primitive on the bound-volume card. Found ${matches.length}.`,
   );
 });
 

@@ -249,7 +249,8 @@ test("trips page JourneyCard shows destination as large editorial hero text", ()
     tripsPage.indexOf("function TripSection"),
   );
   assert.match(cardSection, /trip\.destination/);
-  assert.match(cardSection, /text-lg|text-xl/);
+  // Reading Room: the destination is the editorial-serif volume title.
+  assert.match(cardSection, /trips-volume-destination/);
 });
 
 test("trips page JourneyCard trip title is a semantic Link (not only div with onClick)", () => {
@@ -285,13 +286,16 @@ test("trips page ContinuePlanningHero uses destination as editorial overline", (
   );
   assert.match(heroSection, /trip\.destination/);
   assert.ok(
-    /tracking-\[0\.1em\]/.test(heroSection) || heroSection.includes("folio-muted-label") || heroSection.includes("Overline"),
-    "hero section must use Overline tracking (direct class, folio-muted-label, or Overline component)"
+    /tracking-\[0\.1em\]/.test(heroSection) ||
+      heroSection.includes("folio-muted-label") ||
+      heroSection.includes("folio-issue-eyebrow") ||
+      heroSection.includes("Overline"),
+    "hero section must use an editorial overline (folio-issue-eyebrow / tracking / folio-muted-label / Overline)"
   );
 });
 
-test("trips page has editorial 'Your Travel Shelf' overline in page header", () => {
-  assert.match(tripsPage, /Your Travel Shelf/);
+test("trips page has the editorial 'The Folio Library' line in page header", () => {
+  assert.match(tripsPage, /The Folio Library/);
 });
 
 test("trips page h1 still reads My Journeys (semantic heading preserved)", () => {

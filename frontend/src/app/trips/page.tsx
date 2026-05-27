@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   PlusCircle,
   Users,
-  Map,
   Pencil,
   Trash2,
   X,
@@ -16,7 +15,6 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { TripStatusBadge } from "@/components/ui/TripStatusBadge";
 import { fetchTrips, updateTrip, deleteTrip } from "@/lib/api";
 import { getDisplayTripStatus, getTripStatusGroup } from "@/lib/tripStatus";
 import { FolioCard } from "@/components/ui/Folio";
@@ -52,6 +50,17 @@ const STATUS_PRIORITY: Record<TripStatus, number> = {
   archived: 5,
 };
 
+// Status rendered as quiet small-caps text (not a colored pill) — the Reading
+// Room reads as an editorial library, not a dashboard of status chips.
+const STATUS_LABEL: Record<TripStatus, string> = {
+  draft: "Draft",
+  researching: "Researching",
+  planned: "Planned",
+  booked: "Booked",
+  completed: "Completed",
+  archived: "Archived",
+};
+
 function pickContinuePlanning(trips: Trip[]): Trip | null {
   const active = trips.filter((t) => getTripStatusGroup(t) === "Active");
   if (!active.length) return null;
@@ -67,13 +76,46 @@ interface EditForm {
   endDate: string;
 }
 
-// ── Overline label ────────────────────────────────────────────────────────────
+// ── Status text — small-caps editorial label, never a colored pill ────────────
 
-function Overline({ children }: { children: React.ReactNode }) {
+function StatusText({
+  status,
+  past = false,
+}: {
+  status: TripStatus;
+  past?: boolean;
+}) {
   return (
-    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-folio-ink-mist mb-3">
-      {children}
-    </p>
+    <span
+      className={
+        past ? "trips-volume-status trips-volume-status-past" : "trips-volume-status"
+      }
+      data-testid="trip-status-text"
+    >
+      {STATUS_LABEL[status] ?? STATUS_LABEL.draft}
+    </span>
+  );
+}
+
+// ── Chapter header — editorial section rule (not a tab or labelled box) ───────
+
+function Chapter({
+  title,
+  count,
+}: {
+  title: string;
+  count?: string;
+}) {
+  return (
+    <div className="trips-chapter" data-testid="trips-chapter">
+      <h3 className="trips-chapter-title">{title}</h3>
+      <span className="trips-chapter-rule" aria-hidden="true" />
+      {count ? (
+        <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-folio-ink-mist shrink-0">
+          {count}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -86,108 +128,77 @@ function DashboardSkeleton() {
       aria-busy="true"
       aria-label="Loading your journeys"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-44" />
-          <Skeleton className="h-4 w-32" />
-        </div>
-        <Skeleton variant="button" className="w-32" />
-      </div>
-      <Skeleton variant="card" className="h-48 w-full" />
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {[1, 2].map((i) => (
-          <Skeleton key={i} variant="card" className="h-52" />
+      <Skeleton variant="card" className="h-56 w-full" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} variant="card" className="h-48" />
         ))}
       </div>
     </div>
   );
 }
 
-// ── Empty state ───────────────────────────────────────────────────────────────
+// ── Empty state — an empty shelf, waiting for its first volume ────────────────
 
 function EmptyDashboard() {
   return (
-    <div className="space-y-8" data-testid="trips-empty-state">
-      {/* Editorial hero */}
-      <div className="text-center py-10 px-4">
-        <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-ds-accent-subtle border border-ds-hairline text-ds-accent mx-auto mb-6">
-          <Map className="w-8 h-8" />
-        </div>
-        <h2
-          className="trips-shelf-heading text-center mb-2"
-          data-testid="empty-state-heading"
+    <div className="trips-empty-shelf" data-testid="trips-empty-state">
+      {/* A single bound-spine / plate motif — the first volume, not yet written */}
+      <div className="trips-empty-plate" aria-hidden="true" />
+      <h2 className="trips-shelf-heading text-center" data-testid="empty-state-heading">
+        An empty shelf, waiting for its first volume.
+      </h2>
+      <p className="trips-empty-lede">
+        Your journey starts here — name a destination and the concierge will help
+        you bind the first edition: flights, stays, tables, and the moments in
+        between.
+      </p>
+      <div className="trips-empty-actions">
+        <Link
+          href="/trips/new"
+          className="btn-marine inline-flex items-center"
+          data-testid="trips-empty-action-plan"
         >
-          Your journey starts here.
-        </h2>
-        <p className="text-ds-folio-ink-mist max-w-sm mx-auto leading-relaxed text-sm">
-          Plan your first trip with an AI travel concierge that thinks about
-          every detail — flights, stays, restaurants, and the moments in
-          between.
-        </p>
+          <PlusCircle className="w-4 h-4" />
+          Begin your first journey
+        </Link>
       </div>
-
-      {/* Action cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FolioCard className="p-6 flex flex-col gap-4 transition-shadow duration-200" data-testid="trips-empty-action-plan">
-          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-ds-accent-subtle text-ds-accent">
-            <PlusCircle className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-ds-folio-ink mb-1">
-              Plan a Trip
-            </h3>
-            <p className="text-sm text-ds-folio-ink-mist leading-relaxed">
-              Name your destination, set dates, and let the planning canvas
-              help you build a complete itinerary.
-            </p>
-          </div>
-          <div className="mt-auto">
-            <Link href="/trips/new" className="btn-marine inline-flex items-center">
-              <PlusCircle className="w-4 h-4" />
-              New Trip
-            </Link>
-          </div>
-        </FolioCard>
-
-        <FolioCard className="p-6 flex flex-col gap-4 transition-shadow duration-200" data-testid="trips-empty-action-concierge">
-          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-ds-accent-subtle text-ds-accent">
-            <Sparkles className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-ds-folio-ink mb-1">
-              Ask the AI Concierge
-            </h3>
-            <p className="text-sm text-ds-folio-ink-mist leading-relaxed">
-              Get personalised recommendations for hotels, restaurants, and
-              activities — anywhere in the world.
-            </p>
-          </div>
-          <div className="mt-auto">
-            <Link
-              href="/concierge"
-              className="inline-flex items-center gap-2 min-h-[44px] text-sm font-semibold text-ds-marine-ink hover:text-ds-marine-soft transition"
-            >
-              Open Concierge <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </FolioCard>
-      </div>
-
-      {/* Saved ideas nudge */}
-      <p className="text-center text-sm text-ds-folio-ink-mist">
-        Have places in mind?{" "}
+      <p className="trips-empty-aside">
+        Already have places in mind?{" "}
         <Link
           href="/saved"
-          className="text-ds-accent hover:text-ds-accent-muted font-medium transition"
+          className="text-ds-marine-ink hover:text-ds-marine-soft font-medium transition"
         >
-          Browse your saved ideas →
+          Open your saved ideas
         </Link>
+        , or{" "}
+        <Link
+          href="/concierge"
+          className="text-ds-marine-ink hover:text-ds-marine-soft font-medium transition"
+          data-testid="trips-empty-action-concierge"
+        >
+          Ask the AI Concierge
+        </Link>
+        .
       </p>
     </div>
   );
 }
 
-// ── Continue planning hero — featured current volume ──────────────────────────
+// ── Edition plate — the single cinematic moment (typeset monogram, no photo) ──
+
+function EditionPlate({ trip }: { trip: Trip }) {
+  const monogram = (trip.destination || trip.title || "·").trim().charAt(0).toUpperCase();
+  return (
+    <div className="trips-edition-plate" data-testid="trips-edition-plate" aria-hidden="true">
+      <span className="trips-edition-plate-label">Current edition</span>
+      <span className="trips-edition-plate-monogram">{monogram}</span>
+      <span className="trips-edition-plate-bar" />
+    </div>
+  );
+}
+
+// ── Current edition — the open volume on the desk ─────────────────────────────
 
 interface ContinuePlanningHeroProps {
   trip: Trip;
@@ -198,56 +209,39 @@ interface ContinuePlanningHeroProps {
 function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroProps) {
   return (
     <section aria-label="Continue planning your trip">
-      <p
-        className="folio-issue-eyebrow mb-3"
-        data-testid="continue-planning-eyebrow"
-      >
-        Continue planning
-      </p>
       <article
-        className="folio-paper-panel folio-journey-entry transition-shadow duration-200"
+        className="folio-paper-panel folio-journey-entry trips-edition flex flex-col lg:flex-row"
         data-testid="continue-planning-hero"
       >
-        {/* Folio cover tab — restrained brass detail at very top */}
-        <div className="folio-cover-tab" aria-hidden="true" />
-
-        {/* Featured volume — two-zone composition: editorial content + actions rail */}
-        <div className="trips-featured-volume flex flex-col lg:flex-row">
-          {/* Left zone — editorial content (destination, title, dates, travelers) */}
-          <div
-            className="flex-1 min-w-0 px-6 py-6 lg:px-8 lg:py-8"
-            data-testid="continue-planning-main"
+        {/* Left spread — the editorial page */}
+        <div
+          className="trips-edition-spread flex-1 min-w-0"
+          data-testid="continue-planning-main"
+        >
+          <p className="folio-issue-eyebrow mb-3" data-testid="continue-planning-eyebrow">
+            Continue planning
+          </p>
+          <p
+            className="trips-volume-destination trips-hero-destination"
+            data-testid="continue-planning-destination"
           >
-            <div className="mb-4">
-              <TripStatusBadge status={getDisplayTripStatus(trip)} />
-            </div>
-            <p
-              className="trips-volume-destination trips-hero-destination"
-              data-testid="continue-planning-destination"
-            >
-              {trip.destination}
-            </p>
-            <h2 className="text-base font-medium text-ds-folio-ink-soft mt-2 leading-snug">
-              {trip.title}
-            </h2>
-            {/* Folio caption — dates + travelers + budget as one italic metadata line */}
-            <p
-              className="folio-caption mt-4"
-              data-testid="continue-planning-metadata"
-            >
-              {formatDateRange(trip.startDate, trip.endDate)}
-              {trip.travelers
-                ? ` · ${trip.travelers} ${trip.travelers === 1 ? "traveler" : "travelers"}`
-                : ""}
-              {trip.budgetCash
-                ? ` · ${formatBudget(Number(trip.budgetCash), trip.budgetCurrency)}`
-                : ""}
-            </p>
-          </div>
+            {trip.destination}
+          </p>
+          <h2 className="text-base font-medium text-ds-folio-ink-soft mt-2 leading-snug">
+            {trip.title}
+          </h2>
+          <p className="folio-caption mt-4" data-testid="continue-planning-metadata">
+            {formatDateRange(trip.startDate, trip.endDate)}
+            {trip.travelers
+              ? ` · ${trip.travelers} ${trip.travelers === 1 ? "traveler" : "travelers"}`
+              : ""}
+            {trip.budgetCash
+              ? ` · ${formatBudget(Number(trip.budgetCash), trip.budgetCurrency)}`
+              : ""}
+          </p>
 
-          {/* Right zone — actions + quiet controls rail */}
           <div
-            className="trips-featured-aside flex flex-col gap-3 px-6 py-6 lg:px-8 lg:py-10 lg:w-64 shrink-0"
+            className="trips-edition-actions flex flex-wrap gap-2 items-center"
             data-testid="continue-planning-aside"
           >
             <Link
@@ -264,8 +258,8 @@ function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroPr
               <Sparkles className="w-4 h-4" aria-hidden="true" />
               AI Concierge
             </Link>
-            {/* Edit/delete — quiet, secondary, pushed to the bottom of the rail */}
-            <div className="flex items-center gap-0.5 mt-auto pt-1">
+            {/* Edit/delete — quiet, secondary, pushed to the end of the row */}
+            <div className="flex items-center gap-0.5 sm:ml-auto">
               <button
                 onClick={() => onEdit(trip)}
                 className="p-1.5 rounded-lg hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink transition min-h-[44px] min-w-[44px] flex items-center justify-center"
@@ -283,79 +277,72 @@ function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroPr
             </div>
           </div>
         </div>
+
+        {/* Right zone — the single cinematic plate */}
+        <EditionPlate trip={trip} />
       </article>
     </section>
   );
 }
 
-// ── Journey card — personal travel volume ─────────────────────────────────────
+// ── Journey volume — a bound travel volume on the shelf ───────────────────────
 
 interface JourneyCardProps {
   trip: Trip;
   onEdit: (trip: Trip) => void;
   onDelete: (id: string) => void;
+  past?: boolean;
 }
 
-function JourneyCard({ trip, onEdit, onDelete }: JourneyCardProps) {
+function JourneyCard({ trip, onEdit, onDelete, past = false }: JourneyCardProps) {
   return (
-    <article
-      className="folio-paper-card folio-journey-entry flex flex-col transition-shadow duration-200"
+    <FolioCard
+      className={`group folio-paper-card folio-journey-entry trips-volume flex flex-col transition-shadow duration-200${
+        past ? " trips-volume-past" : ""
+      }`}
       data-testid="journey-card"
     >
-      {/* Folio cover tab — restrained brass detail */}
-      <div className="folio-cover-tab" aria-hidden="true" />
-
-      {/* Volume cover body — destination as the visual hero, status as a subtle badge */}
+      {/* Volume cover body — destination as the visual hero */}
       <div className="trips-volume-cover flex-1 p-5 pb-3 flex flex-col gap-1.5">
         <div className="flex items-start justify-between gap-3">
-          <p
-            className="trips-volume-destination flex-1 min-w-0"
-            data-testid="journey-card-destination"
-          >
-            {trip.destination}
-          </p>
-          <span className="shrink-0">
-            <TripStatusBadge status={getDisplayTripStatus(trip)} />
-          </span>
+          <h3 className="trips-volume-destination flex-1 min-w-0" data-testid="journey-card-destination">
+            <Link
+              href={`/trips/${trip.id}`}
+              className="hover:text-ds-marine-ink transition"
+            >
+              {trip.destination}
+            </Link>
+          </h3>
+          <StatusText status={getDisplayTripStatus(trip)} past={past} />
         </div>
-        <h3 className="text-sm text-ds-folio-ink-soft leading-snug">
-          <Link
-            href={`/trips/${trip.id}`}
-            className="hover:text-ds-marine-ink transition"
-          >
-            {trip.title}
-          </Link>
-        </h3>
-        {/* Editorial caption — date range in italic Fraunces */}
-        <p
-          className="folio-caption mt-auto pt-1.5"
-          data-testid="journey-card-date-caption"
-        >
+        <p className="text-sm text-ds-folio-ink-soft leading-snug">{trip.title}</p>
+        {/* Editorial caption — date range in italic editorial serif (real data) */}
+        <p className="folio-caption mt-auto pt-1.5" data-testid="journey-card-date-caption">
           {formatDateRange(trip.startDate, trip.endDate)}
         </p>
       </div>
 
-      {/* Volume footer — travelers, edit/delete, open link */}
-      <div
-        className="px-5 py-3 border-t border-ds-hairline flex items-center justify-between gap-2 bg-ds-bone"
-      >
-        <div className="flex items-center gap-1" data-testid="journey-card-edit-controls">
+      {/* Volume footer — travelers, quiet edit/delete, open link */}
+      <div className="px-5 py-3 border-t border-ds-hairline bg-ds-bone flex items-center justify-between gap-2">
+        <div
+          className="flex items-center gap-1"
+          data-testid="journey-card-edit-controls"
+        >
           <span className="flex items-center gap-1 text-xs text-ds-folio-ink-mist mr-1">
             <Users className="w-3 h-3" aria-hidden="true" />
-            {trip.travelers}{" "}
-            {trip.travelers === 1 ? "traveler" : "travelers"}
+            {trip.travelers} {trip.travelers === 1 ? "traveler" : "travelers"}
           </span>
-          {/* Edit/delete demoted to secondary footer position */}
+          {/* Quiet on desktop (hover/focus-revealed), always accessible on mobile */}
           <button
             onClick={() => onEdit(trip)}
-            className="p-1 rounded hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+            className="trips-volume-manage p-1 rounded hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink transition min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label={`Edit ${trip.title}`}
           >
             <Pencil className="w-3 h-3" />
           </button>
           <button
             onClick={() => onDelete(trip.id)}
-            className="p-1 rounded hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-warning transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+            className="trips-volume-manage p-1 rounded hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-warning transition min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label={`Delete ${trip.title}`}
           >
             <Trash2 className="w-3 h-3" />
@@ -365,29 +352,31 @@ function JourneyCard({ trip, onEdit, onDelete }: JourneyCardProps) {
           href={`/trips/${trip.id}`}
           className="flex items-center gap-1 text-xs font-semibold text-ds-marine-ink hover:text-ds-marine-soft transition min-h-[44px]"
         >
-          Open <ArrowRight className="w-3 h-3" aria-hidden="true" />
+          {past ? "Revisit" : "Open"} <ArrowRight className="w-3 h-3" aria-hidden="true" />
         </Link>
       </div>
-    </article>
+    </FolioCard>
   );
 }
 
-// ── Trip section ──────────────────────────────────────────────────────────────
+// ── Trip section — a chapter of volumes ───────────────────────────────────────
 
 interface TripSectionProps {
-  label: string;
+  title: string;
   trips: Trip[];
   onEdit: (trip: Trip) => void;
   onDelete: (id: string) => void;
+  past?: boolean;
 }
 
-function TripSection({ label, trips, onEdit, onDelete }: TripSectionProps) {
+function TripSection({ title, trips, onEdit, onDelete, past = false }: TripSectionProps) {
   if (!trips.length) return null;
+  const count = `${trips.length} ${past ? "completed" : "in progress"}`;
   return (
-    <section aria-label={`${label} journeys`}>
-      <Overline>{label} journeys</Overline>
+    <section aria-label={`${title} journeys`}>
+      <Chapter title={title} count={count} />
       <div
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
         data-testid="journey-card-grid"
       >
         {trips.map((trip) => (
@@ -396,6 +385,7 @@ function TripSection({ label, trips, onEdit, onDelete }: TripSectionProps) {
             trip={trip}
             onEdit={onEdit}
             onDelete={onDelete}
+            past={past}
           />
         ))}
       </div>
@@ -403,7 +393,7 @@ function TripSection({ label, trips, onEdit, onDelete }: TripSectionProps) {
   );
 }
 
-// ── Planning tools strip — integrated shelf rail ──────────────────────────────
+// ── Reference drawer — "Elsewhere in the house" (quiet shelf rail) ────────────
 
 function PlanningToolsStrip() {
   return (
@@ -412,23 +402,22 @@ function PlanningToolsStrip() {
       data-testid="planning-tools-strip"
       className="trips-tools-shelf"
     >
-      <Overline>Planning tools</Overline>
-      {/* Unified instrument panel — one contained rail, not three separate cards */}
-      <div className="trips-tool-panel">
+      <Chapter title="Elsewhere in the house" />
+      <div className="trips-tool-panel bg-ds-bone">
         <div className="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-ds-hairline">
           <Link
             href="/concierge"
-            className="group flex items-center gap-3 px-5 py-4 flex-1 hover:bg-ds-linen transition-colors duration-150"
+            className="group flex items-center gap-3 px-5 py-4 flex-1 hover:bg-ds-linen transition-colors duration-150 min-h-[44px]"
           >
             <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0">
               <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-ds-folio-ink group-hover:text-ds-marine-ink transition-colors">
-                AI Concierge
+                The Concierge
               </p>
               <p className="text-xs text-ds-folio-ink-mist truncate">
-                Personalised recommendations
+                A composed second opinion
               </p>
             </div>
             <ChevronRight
@@ -439,7 +428,7 @@ function PlanningToolsStrip() {
 
           <Link
             href="/saved"
-            className="group flex items-center gap-3 px-5 py-4 flex-1 hover:bg-ds-linen transition-colors duration-150"
+            className="group flex items-center gap-3 px-5 py-4 flex-1 hover:bg-ds-linen transition-colors duration-150 min-h-[44px]"
           >
             <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0">
               <BookmarkCheck className="w-3.5 h-3.5" aria-hidden="true" />
@@ -449,7 +438,7 @@ function PlanningToolsStrip() {
                 Saved Ideas
               </p>
               <p className="text-xs text-ds-folio-ink-mist truncate">
-                Your travel scrapbook
+                Loose clippings, kept
               </p>
             </div>
             <ChevronRight
@@ -460,7 +449,7 @@ function PlanningToolsStrip() {
 
           <Link
             href="/explore"
-            className="group flex items-center gap-3 px-5 py-4 flex-1 hover:bg-ds-linen transition-colors duration-150"
+            className="group flex items-center gap-3 px-5 py-4 flex-1 hover:bg-ds-linen transition-colors duration-150 min-h-[44px]"
           >
             <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-ds-accent-subtle text-ds-accent shrink-0">
               <Compass className="w-3.5 h-3.5" aria-hidden="true" />
@@ -470,7 +459,7 @@ function PlanningToolsStrip() {
                 Explore
               </p>
               <p className="text-xs text-ds-folio-ink-mist truncate">
-                Hotels, restaurants &amp; more
+                Hotels, tables &amp; more
               </p>
             </div>
             <ChevronRight
@@ -538,9 +527,7 @@ function EditModal({ trip, form, saving, onChange, onSave, onClose }: EditModalP
               type="date"
               className="folio-input"
               value={form.startDate}
-              onChange={(e) =>
-                onChange({ ...form, startDate: e.target.value })
-              }
+              onChange={(e) => onChange({ ...form, startDate: e.target.value })}
             />
           </div>
           <div>
@@ -707,13 +694,15 @@ export default function TripsPage() {
   const continuePlanningId = continuePlanning?.id ?? null;
 
   const activeTrips = trips.filter(
-    (t) =>
-      getTripStatusGroup(t) === "Active" && t.id !== continuePlanningId,
+    (t) => getTripStatusGroup(t) === "Active" && t.id !== continuePlanningId,
   );
   const pastTrips = trips.filter((t) => getTripStatusGroup(t) === "Past");
 
   const hasAny = trips.length > 0;
-  const tripLabel = `${trips.length} trip${trips.length !== 1 ? "s" : ""}`;
+  const activeCount = trips.filter((t) => getTripStatusGroup(t) === "Active").length;
+  const roomSub = `${trips.length} ${trips.length === 1 ? "volume" : "volumes"} on the shelf${
+    activeCount ? ` · ${activeCount} in progress` : ""
+  }`;
 
   return (
     <>
@@ -750,30 +739,19 @@ export default function TripsPage() {
         />
       )}
 
-      {/* Floating paper shelf stage — the containing travel shelf */}
+      {/* The Reading Room — a floating paper folio library */}
       <div className="trips-shelf-stage" data-testid="trips-shelf-stage">
-        {/* Shelf masthead — linen-tinted header zone with bottom hairline */}
-        <div
-          className="trips-shelf-masthead"
-          data-testid="my-trips-page-header"
-        >
+        {/* Masthead — the library line */}
+        <div className="trips-shelf-masthead" data-testid="my-trips-page-header">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
-              <p
-                className="folio-issue-eyebrow mb-2"
-                data-testid="trips-shelf-eyebrow"
-              >
-                Your Travel Shelf
+              <p className="folio-issue-eyebrow mb-2" data-testid="trips-shelf-eyebrow">
+                The Folio Library
               </p>
-              <h1
-                className="trips-shelf-heading"
-                data-testid="trips-shelf-heading"
-              >
+              <h1 className="trips-shelf-heading" data-testid="trips-shelf-heading">
                 My Journeys
               </h1>
-              {hasAny && (
-                <p className="folio-caption mt-2">{tripLabel}</p>
-              )}
+              {hasAny && <p className="folio-caption mt-2">{roomSub}</p>}
             </div>
             <div className="shrink-0 pt-1">
               <Link
@@ -788,38 +766,42 @@ export default function TripsPage() {
           </div>
         </div>
 
-        {/* Shelf body — volume content zone */}
+        {/* Shelf body */}
         <div className="trips-shelf-body">
           {!hasAny ? (
             <EmptyDashboard />
           ) : (
-            <div className="space-y-8">
-              {/* Featured current volume */}
+            <div className="space-y-9">
+              {/* The current edition — open on the desk */}
               {continuePlanning && (
-                <ContinuePlanningHero
-                  trip={continuePlanning}
-                  onEdit={openEdit}
-                  onDelete={(id) => setConfirmDeleteId(id)}
-                />
+                <div>
+                  <Chapter title="The current edition" />
+                  <ContinuePlanningHero
+                    trip={continuePlanning}
+                    onEdit={openEdit}
+                    onDelete={(id) => setConfirmDeleteId(id)}
+                  />
+                </div>
               )}
 
-              {/* Active journeys grid */}
+              {/* On the table — active volumes */}
               <TripSection
-                label="Active"
+                title="On the table"
                 trips={activeTrips}
                 onEdit={openEdit}
                 onDelete={(id) => setConfirmDeleteId(id)}
               />
 
-              {/* Past journeys grid */}
+              {/* Bound — past volumes, quieter */}
               <TripSection
-                label="Past"
+                title="Bound"
                 trips={pastTrips}
                 onEdit={openEdit}
                 onDelete={(id) => setConfirmDeleteId(id)}
+                past
               />
 
-              {/* Planning tools — integrated shelf rail */}
+              {/* Elsewhere in the house — quiet reference drawer */}
               <PlanningToolsStrip />
             </div>
           )}
