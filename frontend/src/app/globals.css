@@ -7112,6 +7112,13 @@
     display: none !important;
   }
 
+  /* Trip Detail (The Journey Desk) route — immersive paper working desk; hide the
+     SaaS sidebar so the planning desk owns the full page (floating Atelier nav
+     takes over), matching Home/Saved/Concierge/Explore/My Journeys. */
+  .atelier-atmosphere-root[data-atelier-shell="journey-desk"] .folio-sidebar {
+    display: none !important;
+  }
+
   /* Salon page room — warm paper surface with destination-aware background.
      Uses --world-surface (a warm linen tone injected by worldStyleVars) as
      the room backdrop. Dark cinema surfaces (result cards, sticky composer)
@@ -9274,6 +9281,106 @@
     z-index: -1;
     pointer-events: none;
     background: radial-gradient(ellipse 120% 90% at 50% 35%, transparent 55%, rgba(0, 0, 0, 0.42) 100%);
+  }
+
+  /* ── The Journey Desk page shell ───────────────────────────────────────────
+     Trip Detail (/trips/[id]) is the working DRAFTING DESK for one trip — the
+     immersive sibling to My Journeys' Reading Room shelf. Same Folio paper
+     world, but a COOLER (marine-tinted) ambient signals an active work surface,
+     a full-width cinematic cover band sits atop a WIDE floating paper folio, and
+     a two-zone plan-rail + working-surface composition replaces the old narrow
+     centered stack. Distinct from .trips-room-canvas / .trips-shelf-stage. */
+
+  /* The warm desk the planning folio rests on — mirrors .trips-room-canvas but
+     the top ambient is marine-cool (work surface), not sandstone-warm (reading). */
+  .journey-desk-room-canvas {
+    position: relative;
+    min-height: 100svh;
+    padding: clamp(16px, 2.5vw, 44px) clamp(12px, 2vw, 36px) clamp(80px, 12vh, 112px);
+    background-color: color-mix(in srgb, var(--ds-linen) 82%, var(--ds-warm-paper));
+    background-image:
+      radial-gradient(ellipse 80% 46% at 50% -8%,
+        color-mix(in srgb, var(--ds-marine-ink) 14%, transparent) 0%, transparent 60%),
+      radial-gradient(ellipse 64% 42% at 94% 104%,
+        color-mix(in srgb, var(--ds-ember-brass) 12%, transparent) 0%, transparent 60%);
+    isolation: isolate;
+  }
+
+  /* The floating paper folio — WIDE (holds a working surface), warm paper, brass
+     hairline, deep layered warm shadow. Mirrors .trips-shelf-stage at 94rem. */
+  .journey-desk-stage {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 94rem;
+    margin-inline: auto;
+    background:
+      radial-gradient(120% 80% at 16% 0%,
+        color-mix(in srgb, var(--ds-warm-paper) 92%, white), transparent 60%),
+      radial-gradient(120% 90% at 100% 100%,
+        color-mix(in srgb, var(--ds-linen) 60%, var(--ds-bone)), transparent 55%),
+      var(--ds-warm-paper);
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 24%, var(--ds-hairline));
+    border-radius: 24px;
+    box-shadow:
+      0 36px 72px -30px color-mix(in srgb, var(--ds-folio-ink) 34%, transparent),
+      0 12px 28px -16px color-mix(in srgb, var(--ds-folio-ink) 16%, transparent),
+      inset 0 1px 0 color-mix(in srgb, white 62%, transparent);
+    overflow: hidden;
+  }
+
+  /* Cover band — the cinematic cover flush to the stage top (the stage's
+     overflow:hidden clips its top corners). Drops the standalone-card radius/
+     shadow and adds a brass-tinted hairline seam to the planning desk below. */
+  .journey-desk-cover-band {
+    border-radius: 0;
+    border: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--ds-ember-brass) 22%, var(--ds-hairline));
+    box-shadow: none;
+  }
+
+  /* Two-zone planning desk: single column on mobile; on desktop a sticky Plan
+     Rail (read-only Brief + Dayboard) beside a wide Working Surface (itinerary). */
+  .journey-desk-layout {
+    display: flex;
+    flex-direction: column;
+  }
+  @media (min-width: 1024px) {
+    .journey-desk-layout {
+      display: grid;
+      grid-template-columns: 21rem minmax(0, 1fr);
+      align-items: start;
+    }
+  }
+
+  /* Plan Rail — recessed linen tone, hairline seam from the working surface;
+     sticky on desktop so the Brief + day spine stay in view like a briefing rail. */
+  .journey-desk-plan-rail {
+    padding: 1.75rem 1.5rem 2rem;
+    background: color-mix(in srgb, var(--ds-linen) 22%, var(--ds-warm-paper));
+    border-bottom: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
+  }
+  @media (max-width: 639px) {
+    .journey-desk-plan-rail { padding: 1.25rem 1.25rem 1.5rem; }
+  }
+  @media (min-width: 1024px) {
+    .journey-desk-plan-rail {
+      border-bottom: none;
+      border-right: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
+      position: sticky;
+      top: 0;
+      align-self: stretch;
+    }
+  }
+
+  /* Working Surface — the wide right zone that hosts the itinerary/editing
+     workspace. min-width:0 lets the grid track shrink instead of overflowing. */
+  .journey-desk-surface {
+    min-width: 0;
+    padding: 1.75rem clamp(1rem, 2.2vw, 1.75rem) 2rem;
+  }
+  @media (max-width: 639px) {
+    .journey-desk-surface { padding: 1.25rem 1.25rem 1.75rem; }
   }
 
   /* Calm Brief — warm paper panel under the cover. Answers, in one glance:

@@ -278,39 +278,19 @@ test("uses honest fallback copy for missing items (Still needs…)", () => {
 });
 
 // ── Page integration ─────────────────────────────────────────────────────────
+// Journey Desk PR 1 removed the readiness cockpit from the trip detail page (the
+// component file remains in the repo, unused, and is still covered above). The
+// readiness actions (Concierge / Optimize / Edit) live on the cover action row.
 
-test("trip detail page imports TripReadinessCockpit", () => {
-  assert.match(tripDetailPage, /from "@\/components\/trips\/TripReadinessCockpit"/);
-  assert.match(tripDetailPage, /TripReadinessCockpit/);
+test("trip detail page no longer imports or renders TripReadinessCockpit", () => {
+  assert.doesNotMatch(tripDetailPage, /from "@\/components\/trips\/TripReadinessCockpit"/);
+  assert.doesNotMatch(tripDetailPage, /TripReadinessCockpit/);
 });
 
-test("trip detail page renders TripReadinessCockpit with trip prop", () => {
-  assert.match(tripDetailPage, /trip={trip}/);
-});
-
-test("trip detail page renders TripReadinessCockpit with itineraryDays prop", () => {
-  assert.match(tripDetailPage, /itineraryDays={itineraryDays}/);
-});
-
-test("trip detail page wires onOpenConcierge to setConciergeOpen", () => {
-  assert.match(tripDetailPage, /onOpenConcierge=\{\(\) => setConciergeOpen\(true\)\}/);
-});
-
-test("trip detail page wires onOpenOptimize to setOptimizeOpen", () => {
-  assert.match(tripDetailPage, /onOpenOptimize=\{\(\) => setOptimizeOpen\(true\)\}/);
-});
-
-test("trip detail page wires onOpenEdit to openEdit", () => {
-  assert.match(tripDetailPage, /onOpenEdit={openEdit}/);
-});
-
-test("trip detail page guards cockpit behind trip availability check", () => {
-  // Must check that trip is non-null before rendering the cockpit
-  const cockpitSection = tripDetailPage.slice(
-    tripDetailPage.indexOf("TripReadinessCockpit"),
-    tripDetailPage.indexOf("TripReadinessCockpit") + 400,
-  );
-  assert.match(cockpitSection, /trip/);
+test("readiness actions remain reachable from the cover (Concierge / Optimize / Edit)", () => {
+  assert.match(tripDetailPage, /data-testid="chapter-action-concierge"/);
+  assert.match(tripDetailPage, /data-testid="chapter-action-optimize"/);
+  assert.match(tripDetailPage, /data-testid="chapter-action-edit"/);
 });
 
 // ── Behavior preservation (TripBuilder unchanged) ────────────────────────────

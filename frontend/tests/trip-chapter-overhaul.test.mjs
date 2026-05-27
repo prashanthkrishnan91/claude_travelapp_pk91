@@ -256,9 +256,11 @@ test("page does not import from provider or backend paths", () => {
 
 // ── Preserved behaviors ───────────────────────────────────────────────────────
 
-test("page still imports and renders TripReadinessCockpit", () => {
-  assert.match(tripDetailPage, /from "@\/components\/trips\/TripReadinessCockpit"/);
-  assert.match(tripDetailPage, /TripReadinessCockpit/);
+// Journey Desk PR 1 removed the readiness cockpit from the page (the component
+// file remains in the repo, unused). See blueprint §4.
+test("page no longer imports or renders TripReadinessCockpit", () => {
+  assert.doesNotMatch(tripDetailPage, /from "@\/components\/trips\/TripReadinessCockpit"/);
+  assert.doesNotMatch(tripDetailPage, /TripReadinessCockpit/);
 });
 
 test("page still imports and renders TripBuilder", () => {
@@ -276,24 +278,17 @@ test("page still imports and renders OptimizeTripModal", () => {
   assert.match(tripDetailPage, /OptimizeTripModal/);
 });
 
-test("page wires TripReadinessCockpit with trip prop", () => {
+test("page wires TripBrief with the trip prop", () => {
   assert.match(tripDetailPage, /trip={trip}/);
 });
 
-test("page wires TripReadinessCockpit with itineraryDays prop", () => {
+test("page still passes itineraryDays to a trip surface (OptimizeTripModal)", () => {
   assert.match(tripDetailPage, /itineraryDays={itineraryDays}/);
 });
 
-test("page wires onOpenConcierge to setConciergeOpen", () => {
-  assert.match(tripDetailPage, /onOpenConcierge=\{\(\) => setConciergeOpen\(true\)\}/);
-});
-
-test("page wires onOpenOptimize to setOptimizeOpen", () => {
-  assert.match(tripDetailPage, /onOpenOptimize=\{\(\) => setOptimizeOpen\(true\)\}/);
-});
-
-test("page wires onOpenEdit to openEdit", () => {
-  assert.match(tripDetailPage, /onOpenEdit={openEdit}/);
+test("Concierge still opens from the cover action (not the removed cockpit)", () => {
+  assert.match(tripDetailPage, /data-testid="chapter-action-concierge"/);
+  assert.match(tripDetailPage, /setConciergeOpen\(true\)/);
 });
 
 test("TripBuilder has key prop for forced remount on update", () => {
@@ -306,17 +301,16 @@ test("TripBuilder receives destination, startDate, endDate props from real trip 
   assert.match(tripDetailPage, /endDate={trip\?\.endDate}/);
 });
 
-test("chapter cover appears before TripReadinessCockpit JSX in page", () => {
+test("chapter cover appears before the Brief JSX in page", () => {
   const coverPos = tripDetailPage.indexOf('data-testid="trip-chapter-cover"');
-  // Check JSX element position, not import position (import comes before all JSX)
-  const cockpitJsxPos = tripDetailPage.indexOf("<TripReadinessCockpit");
-  assert.ok(coverPos < cockpitJsxPos, "Chapter cover should appear before TripReadinessCockpit JSX element");
+  const briefJsxPos = tripDetailPage.indexOf("<TripBrief");
+  assert.ok(coverPos < briefJsxPos, "Chapter cover should appear before the Brief JSX element");
 });
 
-test("TripReadinessCockpit appears before TripBuilder in page", () => {
-  const cockpitPos = tripDetailPage.indexOf("TripReadinessCockpit");
+test("Brief (Plan Rail) appears before TripBuilder (Working Surface) in page", () => {
+  const briefPos = tripDetailPage.indexOf("<TripBrief");
   const builderPos = tripDetailPage.indexOf("<TripBuilder");
-  assert.ok(cockpitPos < builderPos, "TripReadinessCockpit should appear before TripBuilder");
+  assert.ok(briefPos < builderPos, "Brief should appear before TripBuilder");
 });
 
 test("page preserves handleDelete → router.push to /trips", () => {

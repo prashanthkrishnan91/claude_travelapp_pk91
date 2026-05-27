@@ -43,13 +43,15 @@ const conciergePanelSrc = readSrc("components/trips/AIConciergePanel.tsx");
 
 // ── 1. Four workspace tabs in page source ─────────────────────────────────────
 
-describe("Phase 8K: four workspace tabs exist in trip detail page", () => {
+describe("Phase 8K: workspace tabs exist in trip detail page", () => {
   it("Brief tab has data-testid trip-mobile-tab-brief", () => {
     assert.match(pageSrc, /trip-mobile-tab-brief/, "Brief tab testid must be present");
   });
 
-  it("Build tab has data-testid trip-mobile-tab-build", () => {
-    assert.match(pageSrc, /trip-mobile-tab-build/, "Build tab testid must be present");
+  // Build is no longer a mobile tab — it was removed from the mobile nav in
+  // #478 and is reached via the Add-to-Day handoff from the Itinerary tab.
+  it("Build is not a mobile tab (reached via Add-to-Day handoff, PR #478)", () => {
+    assert.doesNotMatch(pageSrc, /trip-mobile-tab-build/, "Build tab testid must not be present");
   });
 
   it("Itinerary tab has data-testid trip-mobile-tab-itinerary", () => {

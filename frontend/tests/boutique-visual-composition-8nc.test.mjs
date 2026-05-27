@@ -558,10 +558,16 @@ describe("Phase 8N-C patch: Trip Detail composition adoption", () => {
     );
   });
 
-  it("54. Trip Detail has editorial-section-rule between chapter cover and briefing", () => {
+  it("54. Trip Detail composes a two-zone planning desk (Journey Desk PR 1)", () => {
+    // The old cover→readiness divider was removed with the readiness cockpit; the
+    // cover band now seams directly into the Plan Rail / Working Surface layout.
     assert.ok(
-      tripDetailPage.includes("editorial-section-rule"),
-      "trips/[id]/page must have editorial-section-rule divider between chapter cover and briefing"
+      tripDetailPage.includes("journey-desk-layout"),
+      "trips/[id]/page must compose the journey-desk two-zone planning layout"
+    );
+    assert.ok(
+      tripDetailPage.includes("journey-desk-plan-rail"),
+      "trips/[id]/page must use the journey-desk Plan Rail"
     );
   });
 

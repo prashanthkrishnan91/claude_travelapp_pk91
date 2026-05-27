@@ -57,8 +57,8 @@ test("Brief receives real trip, days and ideas (no fabricated props)", () => {
   assert.match(page, /<TripBrief[\s\S]{0,160}days=\{itineraryDays\}[\s\S]{0,80}ideas=\{tripIdeas\}/);
 });
 
-test("Brief review action opens the Ideas Tray (placement surface)", () => {
-  assert.match(page, /onReview=\{\(\) => setIdeasTrayOpen\(true\)\}/);
+test("Brief review action switches to the canonical Ideas tab (IA pivot, PR #481)", () => {
+  assert.match(page, /onReview=\{\(\) => setActiveMobileWorkspace\("ideas"\)\}/);
 });
 
 test("Dayboard selecting a day selects it for the expanded day panel", () => {
@@ -69,20 +69,21 @@ test("ideas state refreshes when an idea is assigned or saved", () => {
   assert.match(page, /refreshIdeas\(\)/);
 });
 
-test("cover → Brief → Dayboard → cockpit order is preserved", () => {
+// Journey Desk PR 1 reframes the page as a two-zone planning desk: cover band →
+// Plan Rail (Brief + Dayboard) → Working Surface (TripBuilder). The legacy
+// readiness cockpit is removed from the page (see journey-desk-shell suite).
+test("cover → Brief → Dayboard → Working Surface order is preserved", () => {
   const cover = page.indexOf('data-testid="trip-chapter-cover"');
   const b = page.indexOf("<TripBrief");
   const d = page.indexOf("<Dayboard");
-  const cockpit = page.indexOf("<TripReadinessCockpit");
-  assert.ok(cover < b && b < d && d < cockpit, "expected cover < Brief < Dayboard < cockpit");
+  const builder = page.indexOf("<TripBuilder");
+  assert.ok(cover < b && b < d && d < builder, "expected cover < Brief < Dayboard < TripBuilder");
 });
 
 // ── Regression: existing trip-detail contracts preserved ──────────────────────
 
-test("page preserves cover testid, section rule, cockpit, builder and cover tab", () => {
+test("page preserves cover testid, builder and cover tab", () => {
   assert.match(page, /data-testid="trip-chapter-cover"/);
-  assert.match(page, /editorial-section-rule/);
-  assert.match(page, /<TripReadinessCockpit/);
   assert.match(page, /<TripBuilder/);
   assert.match(page, /folio-cover-tab/);
 });
@@ -181,7 +182,8 @@ test("Dayboard returns null when there are no days (no empty scaffold)", () => {
 });
 
 test("Dayboard fabricates no weather", () => {
-  assert.doesNotMatch(dayboard, /weather|°|sunny|rain/i);
+  // Flag fabricated weather VALUES — not the documented "No weather" non-goal note.
+  assert.doesNotMatch(dayboard, /°|\bsunny\b|\brainy?\b|\bforecast\b|\btemp(?:erature)?\b/i);
 });
 
 // ── CSS — cinematic cover + paper Brief/Dayboard, reduced-motion guarded ──────

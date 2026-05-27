@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   CalendarDays,
-  ChevronDown,
   ChevronLeft,
   Pencil,
   Sparkles,
@@ -21,7 +20,6 @@ import { AddToDayDrawer } from "@/components/trips/AddToDayDrawer";
 import type { AddToDayVertical } from "@/components/trips/AddToDayDrawer";
 import { IdeasTray } from "@/components/trips/IdeasTray";
 import { MapFoldOut } from "@/components/trips/MapFoldOut";
-import { TripReadinessCockpit } from "@/components/trips/TripReadinessCockpit";
 import { OptimizeTripModal } from "@/components/trips/OptimizeTripModal";
 import { AIConciergePanel } from "@/components/trips/AIConciergePanel";
 import {
@@ -91,7 +89,6 @@ export default function TripDetailPage() {
   const [conciergeOpen, setConciergeOpen] = useState(false);
   const [ideasTrayOpen, setIdeasTrayOpen] = useState(false);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
-  const [cockpitOpen,   setCockpitOpen]   = useState(false);
   const [mapOpen,       setMapOpen]       = useState(false);
   const [tripBuilderKey, setTripBuilderKey] = useState(0);
   const [tripIdeasKey,  setTripIdeasKey]  = useState(0);
@@ -261,22 +258,27 @@ export default function TripDetailPage() {
 
   if (loading) {
     return (
-      <>
-        <div className="mb-4">
-          <Link
-            href="/trips"
-            className="inline-flex items-center gap-1.5 text-xs text-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-          >
-            <ChevronLeft className="w-3.5 h-3.5" aria-hidden="true" />
-            My Journeys
-          </Link>
+      <div className="journey-desk-room-canvas">
+        <div className="journey-desk-stage">
+          <div className="journey-desk-cover journey-desk-cover-band px-4 py-5 sm:px-6 sm:py-6">
+            <Link
+              href="/trips"
+              className="inline-flex items-center gap-1.5 text-xs text-ds-text-secondary hover:text-ds-text transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" aria-hidden="true" />
+              My Journeys
+            </Link>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ds-accent mt-3 mb-2">
+              Travel Chapter
+            </p>
+            <div className="h-7 w-48 rounded bg-ds-pen-stroke/40 animate-pulse" />
+          </div>
+          <div className="journey-desk-plan-rail animate-pulse">
+            <div className="h-4 w-24 rounded bg-ds-linen mb-3" />
+            <div className="h-24 w-full rounded-xl bg-ds-linen" />
+          </div>
         </div>
-        <div className="mb-8 folio-paper-panel p-6 animate-pulse">
-          <p className="folio-muted-label mb-2">Travel Chapter</p>
-          <div className="h-7 w-48 rounded bg-ds-linen mb-2" />
-          <div className="h-4 w-32 rounded bg-ds-linen" />
-        </div>
-      </>
+      </div>
     );
   }
 
@@ -379,53 +381,19 @@ export default function TripDetailPage() {
         </div>
       )}
 
-      {/* ── Mobile workspace shell ─────────────────────────────────────────── */}
-      <div data-testid="trip-mobile-workspace" className="editorial-scene">
+      {/* ── The Journey Desk — immersive working desk for one trip ─────────────
+          Edge-to-edge warm desk canvas → one wide floating paper folio. The
+          cinematic cover is a full-width band atop a two-zone planning desk
+          (sticky Plan Rail + wide Working Surface). Distinct from My Journeys'
+          Reading Room shelf. */}
+      <div className="journey-desk-room-canvas">
+      <div data-testid="trip-mobile-workspace" className="journey-desk-stage editorial-scene">
 
-        {/* Mobile-only workspace switcher */}
-        <nav
-          data-testid="trip-mobile-workspace-switcher"
-          aria-label="Trip workspace"
-          className="lg:hidden flex items-stretch mb-4 rounded-xl border border-ds-hairline bg-ds-bone overflow-hidden"
-        >
-          {WORKSPACE_TABS.map((tab) => {
-            const isActive = activeMobileWorkspace === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                data-testid={tab.testId}
-                aria-pressed={isActive}
-                onClick={() => setActiveMobileWorkspace(tab.id)}
-                className={`flex-1 flex flex-col items-center justify-center min-h-[44px] py-2.5 gap-0.5 relative text-[10px] font-semibold uppercase tracking-[0.1em] transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 ${
-                  isActive
-                    ? "text-ds-marine-ink"
-                    : "text-ds-folio-ink-mist hover:text-ds-folio-ink-soft"
-                }`}
-              >
-                {tab.label}
-                {isActive && (
-                  <span
-                    className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-ds-marine-ink"
-                    aria-hidden="true"
-                  />
-                )}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Brief panel — trip chapter cover + readiness (mobile: brief only; desktop: always) */}
-        <div
-          data-testid="trip-mobile-panel-brief"
-          className={`${activeMobileWorkspace !== "brief" ? "hidden lg:block" : ""} lg:max-w-4xl lg:mx-auto`}
-        >
-
-      {/* ── Trip Chapter Cover ─────────────────────────────────────────────── */}
+      {/* ── Trip Chapter Cover — full-width cinematic identity band ─────────── */}
       <section
         data-testid="trip-chapter-cover"
         aria-labelledby="chapter-destination-heading"
-        className="mb-4 sm:mb-6 journey-desk-cover"
+        className="journey-desk-cover journey-desk-cover-band"
       >
         <div className="folio-cover-tab" aria-hidden="true" />
         {/* Back navigation */}
@@ -545,6 +513,50 @@ export default function TripDetailPage() {
         </div>
       </section>
 
+      {/* ── Mobile workspace switcher — padded; hidden on the desktop two-zone desk ── */}
+      <div className="lg:hidden px-4 pt-4 sm:px-6">
+        <nav
+          data-testid="trip-mobile-workspace-switcher"
+          aria-label="Trip workspace"
+          className="flex items-stretch rounded-xl border border-ds-hairline bg-ds-bone overflow-hidden"
+        >
+          {WORKSPACE_TABS.map((tab) => {
+            const isActive = activeMobileWorkspace === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                data-testid={tab.testId}
+                aria-pressed={isActive}
+                onClick={() => setActiveMobileWorkspace(tab.id)}
+                className={`flex-1 flex flex-col items-center justify-center min-h-[44px] py-2.5 gap-0.5 relative text-[10px] font-semibold uppercase tracking-[0.1em] transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 ${
+                  isActive
+                    ? "text-ds-marine-ink"
+                    : "text-ds-folio-ink-mist hover:text-ds-folio-ink-soft"
+                }`}
+              >
+                {tab.label}
+                {isActive && (
+                  <span
+                    className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-ds-marine-ink"
+                    aria-hidden="true"
+                  />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* ── Two-zone planning desk — Plan Rail | Working Surface ───────────── */}
+      <div className="journey-desk-layout">
+
+      {/* ── Plan Rail — read-only Brief + Dayboard day spine (mobile: Brief tab) ── */}
+      <div
+        data-testid="trip-mobile-panel-brief"
+        className={`journey-desk-plan-rail ${activeMobileWorkspace !== "brief" ? "hidden lg:block" : ""}`}
+      >
+
       {/* ── The Brief — where · what is fixed · what still needs choosing ──── */}
       {trip && (
         <TripBrief
@@ -580,40 +592,11 @@ export default function TripDetailPage() {
         );
       })()}
 
-      <div className="editorial-section-rule mb-4" aria-hidden="true" />
+        </div>{/* end Plan Rail (trip-mobile-panel-brief) */}
 
-      {/* ── Trip readiness — demoted below Journey Desk to a quiet, collapsed
-            secondary disclosure (the Brief above is the primary at-a-glance). ── */}
-      {trip && (
-        <div data-testid="trip-readiness-section" className="mb-2">
-          <button
-            type="button"
-            onClick={() => setCockpitOpen((v) => !v)}
-            aria-expanded={cockpitOpen}
-            data-testid="trip-readiness-toggle"
-            className="flex w-full items-center justify-between gap-2 min-h-[44px] px-1 text-left text-xs font-semibold uppercase tracking-[0.12em] text-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 rounded"
-          >
-            <span>Trip readiness · concierge notes</span>
-            <ChevronDown className={`w-4 h-4 transition-transform duration-[120ms] ${cockpitOpen ? "rotate-180" : ""}`} aria-hidden="true" />
-          </button>
-          {cockpitOpen && (
-            <div className="mt-2">
-              <TripReadinessCockpit
-                trip={trip}
-                itineraryDays={itineraryDays}
-                onOpenConcierge={() => setConciergeOpen(true)}
-                onOpenOptimize={() => setOptimizeOpen(true)}
-                onOpenEdit={openEdit}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-        </div>{/* end trip-mobile-panel-brief */}
-
-        {/* Build / Itinerary / Ideas workspaces — hidden on mobile when brief is active */}
-        <div className={activeMobileWorkspace === "brief" ? "hidden lg:block" : ""}>
+        {/* ── Working Surface — Build / Itinerary / Ideas; the wide right zone.
+            Hidden on mobile when the Brief tab is active. ─────────────────── */}
+        <div className={`journey-desk-surface ${activeMobileWorkspace === "brief" ? "hidden lg:block" : ""}`}>
 
           {/* "Back to Day N" return affordance — shown on mobile when arriving from
               the Add-to-Day drawer so the user always has a clear path back. */}
@@ -672,9 +655,11 @@ export default function TripDetailPage() {
               });
             }}
           />
-        </div>
+        </div>{/* end Working Surface */}
 
-      </div>{/* end trip-mobile-workspace */}
+      </div>{/* end journey-desk-layout */}
+      </div>{/* end stage (trip-mobile-workspace) */}
+      </div>{/* end journey-desk-room-canvas */}
 
       {/* ── Map Fold-Out — Trip Lens (mobile sheet · desktop right drawer) ───── */}
       <MapFoldOut

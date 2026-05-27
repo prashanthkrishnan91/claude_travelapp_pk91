@@ -1,0 +1,151 @@
+/**
+ * Journey Desk PR 1 — Trip Detail immersive shell + mood + desktop plan-desk.
+ *
+ * Implements docs/ai/design/JOURNEY_DESK_PAGE_DIRECTION_AND_BLUEPRINT.md:
+ *   - /trips/[id] joins the immersive floating-sidebar shell (data-atelier-shell
+ *     "journey-desk"), distinct from My Journeys' Reading Room (/trips).
+ *   - A marine-cool warm desk canvas hosts one WIDE floating paper folio.
+ *   - The cinematic cover is a full-width band atop a two-zone planning desk:
+ *     a sticky Plan Rail (read-only Brief + Dayboard) + a wide Working Surface.
+ *   - The legacy Trip Readiness / "concierge notes" disclosure is removed.
+ *   - Mobile tab IA (Brief · Itinerary · Ideas) and functional ownership preserved.
+ *
+ * Source-scan contract tests (no DOM/browser in this environment).
+ */
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const appShell = readFileSync(
+  new URL("../src/components/layout/AppShell.tsx", import.meta.url),
+  "utf8",
+);
+const css = readFileSync(
+  new URL("../src/app/globals.css", import.meta.url),
+  "utf8",
+);
+const page = readFileSync(
+  new URL("../src/app/trips/[id]/page.tsx", import.meta.url),
+  "utf8",
+);
+
+// ── AppShell — Trip Detail is an immersive floating-sidebar room ───────────────
+
+test("AppShell matches /trips/[id] but not the /trips index", () => {
+  assert.match(
+    appShell,
+    /const isTripDetailRoute = pathname\.startsWith\("\/trips\/"\) && pathname !== "\/trips"/,
+  );
+});
+
+test("AppShell includes Trip Detail in the immersive-room set", () => {
+  assert.match(appShell, /const isImmersiveRoom =[^;]*isTripDetailRoute/);
+});
+
+test("AppShell tags the Trip Detail shell as data-atelier-shell=journey-desk", () => {
+  assert.match(appShell, /isTripDetailRoute \? "journey-desk"/);
+});
+
+test("AppShell renders the floating AtelierNavArtifact on Trip Detail", () => {
+  assert.match(appShell, /\{isTripDetailRoute && <AtelierNavArtifact \/>\}/);
+});
+
+// ── globals.css — the Journey Desk shell primitives ───────────────────────────
+
+test("CSS suppresses the SaaS sidebar on the journey-desk shell", () => {
+  assert.match(
+    css,
+    /\.atelier-atmosphere-root\[data-atelier-shell="journey-desk"\] \.folio-sidebar \{\s*display: none !important;/,
+  );
+});
+
+test("journey-desk-room-canvas exists and uses a marine-cool ambient (not Reading Room sandstone)", () => {
+  const idx = css.indexOf(".journey-desk-room-canvas {");
+  assert.ok(idx !== -1, ".journey-desk-room-canvas must be defined");
+  const block = css.slice(idx, idx + 600);
+  // The cool work-surface tint distinguishes it from .trips-room-canvas (sandstone).
+  assert.match(block, /--ds-marine-ink/);
+});
+
+test("journey-desk-stage is a WIDE floating folio (max-width 94rem)", () => {
+  const idx = css.indexOf(".journey-desk-stage {");
+  assert.ok(idx !== -1, ".journey-desk-stage must be defined");
+  const block = css.slice(idx, idx + 1100);
+  assert.match(block, /max-width:\s*94rem/);
+  assert.match(block, /overflow:\s*hidden/);
+});
+
+test("journey-desk-layout is a two-zone grid on desktop (21rem + 1fr)", () => {
+  assert.match(css, /\.journey-desk-layout \{/);
+  assert.match(css, /grid-template-columns:\s*21rem minmax\(0, 1fr\)/);
+});
+
+test("journey-desk-plan-rail is sticky on desktop", () => {
+  const idx = css.indexOf(".journey-desk-plan-rail {");
+  assert.ok(idx !== -1, ".journey-desk-plan-rail must be defined");
+  const block = css.slice(idx, idx + 700);
+  assert.match(block, /position:\s*sticky/);
+});
+
+test("journey-desk-surface and cover-band primitives exist", () => {
+  assert.match(css, /\.journey-desk-surface \{/);
+  assert.match(css, /\.journey-desk-cover-band \{/);
+});
+
+// ── page.tsx — composition ─────────────────────────────────────────────────────
+
+test("page wraps the body in the room canvas → wide paper stage", () => {
+  assert.match(page, /className="journey-desk-room-canvas"/);
+  assert.match(page, /data-testid="trip-mobile-workspace" className="journey-desk-stage/);
+});
+
+test("cover is a full-width band atop the stage (no narrow max-w-4xl cap)", () => {
+  assert.match(page, /data-testid="trip-chapter-cover"[\s\S]{0,200}journey-desk-cover journey-desk-cover-band/);
+  assert.doesNotMatch(page, /lg:max-w-4xl/);
+});
+
+test("desktop two-zone layout: Plan Rail (Brief + Dayboard) | Working Surface (TripBuilder)", () => {
+  assert.match(page, /className="journey-desk-layout"/);
+  // Plan Rail hosts the read-only Brief + Dayboard.
+  assert.match(page, /trip-mobile-panel-brief[\s\S]{0,160}journey-desk-plan-rail/);
+  const rail = page.indexOf("journey-desk-plan-rail");
+  const brief = page.indexOf("<TripBrief");
+  const dayboard = page.indexOf("<Dayboard");
+  const surface = page.indexOf("journey-desk-surface");
+  const builder = page.indexOf("<TripBuilder");
+  assert.ok(rail < brief && brief < dayboard, "Plan Rail wraps Brief then Dayboard");
+  assert.ok(dayboard < surface && surface < builder, "Working Surface (TripBuilder) follows the Plan Rail");
+});
+
+// ── Trip Readiness / concierge-notes disclosure removed ───────────────────────
+
+test("the Trip Readiness / concierge-notes disclosure is fully removed", () => {
+  assert.doesNotMatch(page, /TripReadinessCockpit/);
+  assert.doesNotMatch(page, /cockpitOpen/);
+  assert.doesNotMatch(page, /trip-readiness-toggle/);
+  assert.doesNotMatch(page, /Trip readiness · concierge notes/);
+});
+
+// ── Mobile tab IA preserved (Brief · Itinerary · Ideas) ───────────────────────
+
+test("mobile 3-tab workspace IA is preserved", () => {
+  assert.match(page, /data-testid="trip-mobile-workspace-switcher"/);
+  assert.match(page, /trip-mobile-tab-brief/);
+  assert.match(page, /trip-mobile-tab-itinerary/);
+  assert.match(page, /trip-mobile-tab-ideas/);
+  // The switcher is hidden on the desktop two-zone desk.
+  assert.match(page, /lg:hidden[\s\S]{0,120}data-testid="trip-mobile-workspace-switcher"/);
+});
+
+// ── Functional ownership preserved (no behavior change) ───────────────────────
+
+test("all functional surfaces remain mounted (ownership unchanged)", () => {
+  assert.match(page, /<TripBrief/);          // read-only summary
+  assert.match(page, /<Dayboard/);            // day spine
+  assert.match(page, /<TripBuilder/);         // Build + Itinerary working surface
+  assert.match(page, /<IdeasTray/);           // quick placement
+  assert.match(page, /<AddToDayDrawer/);      // day-scoped add
+  assert.match(page, /<MapFoldOut/);          // trip map
+  assert.match(page, /<AIConciergePanel/);    // concierge
+  assert.match(page, /onReview=\{\(\) => setActiveMobileWorkspace\("ideas"\)\}/); // Brief → Ideas tab
+});
