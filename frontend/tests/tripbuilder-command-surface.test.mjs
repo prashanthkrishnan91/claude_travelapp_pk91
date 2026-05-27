@@ -188,17 +188,13 @@ test('TripBuilder: CandidatePanel component exported/defined', () => {
 
 // ── Touch targets and focus rings — hardening ─────────────────────────────────
 
-test('TripBuilder: target-day selector wrapper has min-h-[44px] touch target', () => {
-  const labelIdx = src.indexOf('focus-within:outline-ds-accent');
-  assert.ok(labelIdx !== -1, 'missing focus-within:outline-ds-accent on target-day wrapper');
-  const ctx = src.slice(Math.max(0, labelIdx - 200), labelIdx + 50);
-  assert.ok(ctx.includes('min-h-[44px]'), 'target-day selector wrapper missing min-h-[44px]');
-});
-
-test('TripBuilder: target-day selector uses focus-within ring on wrapper (not focus-visible:outline-none on select)', () => {
-  assert.ok(src.includes('focus-within:outline-ds-accent'), 'missing focus-within:outline-ds-accent on target-day label wrapper');
-  const selectIdx = src.indexOf('focus-visible:outline-none cursor-pointer');
-  assert.ok(selectIdx !== -1, 'select should suppress its own outline in favour of the label wrapper ring');
+// The redundant "Add to" target-day dropdown was removed in the Journey Desk
+// patch: the Dayboard row / itinerary day selection is the single canonical
+// active day, and the "Add to Day X" button uses it. (See journey-desk-shell
+// + journey-desk-mobile-ia-closeout for the active-day sync contract.)
+test('TripBuilder: the redundant target-day dropdown selector is removed', () => {
+  assert.ok(!src.includes('focus-within:outline-ds-accent'), 'target-day dropdown wrapper should be gone');
+  assert.ok(!src.includes('focus-visible:outline-none cursor-pointer'), 'target-day <select> should be gone');
 });
 
 test('TripBuilder: List/Map toggle buttons have min-h-[44px] touch target', () => {

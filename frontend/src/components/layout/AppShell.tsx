@@ -85,10 +85,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // floating AtelierNavArtifact nav, and the edge-to-edge home-edge-bleed wrapper —
   // so /trips reads as a wide, staged folio library, not a narrow centered card on
   // the legacy padded shell. The isHomePage ternary + max-w-7xl branch stay intact
-  // for the 8J/atrium contracts. (Trip detail /trips/[id] is NOT immersive.)
+  // for the 8J/atrium contracts.
   const isMyTripsRoute = pathname === "/trips";
 
-  const isImmersiveRoom = isHomePage || isSalonRoute || isExploreRoute || isSavedRoute || isMyTripsRoute;
+  // Trip Detail ("The Journey Desk") is the fifth immersive room — a PAPER world
+  // working desk for a single trip. It shares the immersive shell: SaaS sidebar
+  // CSS-suppressed via data-atelier-shell="journey-desk", floating
+  // AtelierNavArtifact nav, and the edge-to-edge home-edge-bleed wrapper — so
+  // /trips/[id] reads as a wide planning desk, not a narrow centered card on the
+  // legacy padded shell. Match any /trips/<id> route but NOT the /trips index
+  // (which stays the Reading Room).
+  const isTripDetailRoute = pathname.startsWith("/trips/") && pathname !== "/trips";
+
+  const isImmersiveRoom = isHomePage || isSalonRoute || isExploreRoute || isSavedRoute || isMyTripsRoute || isTripDetailRoute;
 
   return (
     <>
@@ -99,7 +108,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div
         className="atelier-atmosphere-root flex h-full min-h-screen"
         data-testid="atelier-atmosphere-root"
-        data-atelier-shell={isSalonRoute ? "salon" : isExploreRoute ? "explore" : isSavedRoute ? "saved" : isMyTripsRoute ? "trips" : undefined}
+        data-atelier-shell={isSalonRoute ? "salon" : isExploreRoute ? "explore" : isSavedRoute ? "saved" : isMyTripsRoute ? "trips" : isTripDetailRoute ? "journey-desk" : undefined}
       >
         {/* SaaS sidebar — hidden on the immersive Home shell, present on every
             other route so navigation, account, sign-out stay in place. The
@@ -112,6 +121,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {isExploreRoute && <AtelierNavArtifact />}
         {isSavedRoute && <AtelierNavArtifact />}
         {isMyTripsRoute && <AtelierNavArtifact />}
+        {isTripDetailRoute && <AtelierNavArtifact />}
         <main className="flex-1 overflow-y-auto overflow-x-hidden" data-testid="reduced-motion-safe-atmosphere">
           {isImmersiveRoom ? (
             <div

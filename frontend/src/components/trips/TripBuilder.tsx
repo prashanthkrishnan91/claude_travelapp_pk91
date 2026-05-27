@@ -1244,9 +1244,14 @@ interface TripBuilderProps {
   /** Mobile workspace IA — controls which panel is visible on mobile.
    *  null (or omitted) = show all panels (desktop behaviour). */
   mobileWorkspace?: "build" | "itinerary" | "ideas" | null;
-  /** Pre-select a day when arriving from the Add-to-Day flow (Journey Desk handoff).
-   *  Updates the day selector without resetting any other Build state. */
+  /** Pre-select a day when arriving from the Add-to-Day flow (Journey Desk handoff)
+   *  OR from a Dayboard row selection. This is the canonical active day driven by
+   *  the parent; it syncs the internal selectedDayId + expands the matching day. */
   focusDayId?: string | null;
+  /** Notifies the parent (page.tsx) when the active itinerary day changes from a
+   *  day-header click, so the canonical active day (Dayboard highlight + Add-to-Day
+   *  label) stays in sync with itinerary selection. */
+  onActiveDayChange?: (dayId: string) => void;
   /** Open and scroll to the matching CandidatePanel when arriving from the Add-to-Day drawer.
    *  "flight" | "hotel" | "restaurant" | "attraction" — maps to the four existing panels. */
   focusVertical?: string | null;
@@ -1262,7 +1267,7 @@ interface TripBuilderProps {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned, mobileWorkspace, focusDayId, focusVertical, onAddToDay, onItineraryChanged, onUnplace }: TripBuilderProps) {
+export function TripBuilder({ tripId, destination, startDate, endDate, initialDays, initialResults, ideasRefreshKey, onIdeaAssigned, mobileWorkspace, focusDayId, focusVertical, onAddToDay, onItineraryChanged, onUnplace, onActiveDayChange }: TripBuilderProps) {
   const [days,           setDays]          = useState<ItineraryDay[]>(
     [...initialDays].sort((a, b) => a.dayNumber - b.dayNumber)
   );
@@ -1522,10 +1527,16 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     });
   }, [days]);
 
-  // Add-to-Day handoff: sync the Build day selector to the Journey Desk choice.
+  // Canonical active-day sync: the parent drives the active day (Add-to-Day handoff
+  // OR a Dayboard row click). Syncing the internal selectedDayId highlights the day
+  // and makes it the add target; expanding the matching day focuses it in the
+  // itinerary. This effect only runs when focusDayId actually changes, so clicking
+  // an already-active day header to collapse it is not fought by a re-expand.
   useEffect(() => {
     if (focusDayId && days.some((d) => d.id === focusDayId)) {
       setSelectedDayId(focusDayId);
+      const dn = days.find((d) => d.id === focusDayId)?.dayNumber;
+      if (dn != null) setExpandedDayNumber(dn);
     }
   }, [focusDayId, days]);
 
@@ -2140,11 +2151,14 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       >
         <div className="flex flex-col gap-4 min-h-[500px] lg:flex-row lg:items-start">
 
-          {/* ── Left Panel: AI-ranked candidates ──────────────────────────── */}
+          {/* ── Left Panel: AI-ranked candidates (Build) ──────────────────────
+              Build is an internal add/search utility, not a primary desk column.
+              It is hidden until the workspace is "build" (entered via the
+              Add-to-Day flow) on every breakpoint — no permanent desktop column. */}
           <div
             data-testid="trip-mobile-panel-build"
             className={`w-full flex flex-col gap-3 overflow-y-auto pr-0.5 lg:w-80 lg:flex-shrink-0 ${
-              mobileWorkspace != null && mobileWorkspace !== "build" ? "hidden lg:flex" : ""
+              mobileWorkspace === "build" ? "" : "hidden"
             }`}
           >
 
@@ -2542,14 +2556,16 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
             )}
           </div>
 
-          {/* ── Right Panel: Itinerary Timeline ───────────────────────────── */}
+          {/* ── Right Panel: Itinerary Timeline (the Working Surface) ─────────
+              Single-panel at every breakpoint so the desk stays two-zone: this
+              container is hidden only while Build is active (Build replaces it). */}
           <div className={`flex-1 flex flex-col gap-3 overflow-visible ${
-            mobileWorkspace === "build" ? "hidden lg:flex" : ""
+            mobileWorkspace === "build" ? "hidden" : ""
           }`}>
             <div
               data-testid="trip-mobile-itinerary-chrome"
               className={`flex items-center justify-between gap-2 flex-wrap ${
-                mobileWorkspace === "ideas" ? "hidden lg:flex" : ""
+                mobileWorkspace === "ideas" ? "hidden" : ""
               }`}
             >
               <div className="flex flex-col gap-0.5">
@@ -2559,23 +2575,10 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {/* Target day selector — left-panel "+" buttons add to this day */}
-                {days.length > 0 && (
-                  <label className="flex items-center gap-2 bg-ds-linen rounded-xl border border-ds-hairline px-3 min-h-[44px] cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-ds-accent focus-within:outline-offset-2 transition-colors">
-                    <span className="text-[10px] font-semibold text-ds-folio-ink-mist uppercase tracking-[0.1em] whitespace-nowrap">Add to</span>
-                    <select
-                      value={selectedDayId ?? ""}
-                      onChange={(e) => setSelectedDayId(e.target.value || null)}
-                      className="text-xs font-semibold text-ds-folio-ink bg-ds-linen border-none outline-none focus:outline-none focus-visible:outline-none cursor-pointer py-0"
-                    >
-                      {displayDays.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          Day {d.dayNumber}{d.date ? ` · ${d.date}` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
+                {/* The Add-to-Day target is the canonical active day (set by the
+                    Dayboard row / itinerary day selection). The old redundant
+                    "Add to" day dropdown is removed — Dayboard + itinerary own
+                    day selection, and the single "Add to Day X" button uses it. */}
                 {/* "Add Day" only shown when days are not auto-derived from trip dates */}
                 {canManuallyAddExpectedDay && (
                   <button
@@ -2592,7 +2595,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
             <div
               data-testid="trip-mobile-panel-ideas"
-              className={mobileWorkspace != null && mobileWorkspace !== "ideas" ? "hidden lg:block" : ""}
+              className={mobileWorkspace === "ideas" ? "" : "hidden"}
             >
               <TripIdeasPanel
                 tripId={tripId}
@@ -2605,7 +2608,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
             <div
               data-testid="trip-mobile-panel-itinerary"
               className={`flex flex-col gap-3 pr-0.5 overflow-visible ${
-                mobileWorkspace != null && mobileWorkspace !== "itinerary" ? "hidden lg:flex" : ""
+                mobileWorkspace === "ideas" ? "hidden" : ""
               }`}
             >
               <SortableContext items={days.map((d) => d.id)} strategy={verticalListSortingStrategy}>
@@ -2615,7 +2618,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
                     day={day}
                     isSelected={day.id === selectedDayId}
                     isExpanded={expandedDayNumber === day.dayNumber}
-                    onSelect={setSelectedDayId}
+                    onSelect={(id) => { setSelectedDayId(id); onActiveDayChange?.(id); }}
                     onToggleExpanded={(dayNumber) =>
                       setExpandedDayNumber((prev) => (prev === dayNumber ? null : dayNumber))
                     }
