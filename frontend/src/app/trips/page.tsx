@@ -279,12 +279,8 @@ function ContinuePlanningHero({ trip, onEdit, onDelete }: ContinuePlanningHeroPr
           </div>
         </div>
 
-        {/* Right column — the single cinematic plate + the compact reference
-            drawer stacked beneath it (integrated into the current edition). */}
-        <div className="trips-edition-aside" data-testid="trips-reference-drawer">
-          <EditionPlate trip={trip} />
-          <PlanningToolsStrip />
-        </div>
+        {/* Right zone — the single cinematic plate (current trip only) */}
+        <EditionPlate trip={trip} />
       </article>
     </section>
   );
@@ -446,9 +442,12 @@ function PlanningToolsStrip() {
     <section
       aria-label="Planning tools"
       data-testid="planning-tools-strip"
-      className="trips-reference-rail"
+      className="trips-side-panel-inner"
     >
-      <p className="folio-muted-label trips-reference-label">Elsewhere in the house</p>
+      <p className="folio-issue-eyebrow trips-side-panel-eyebrow">Elsewhere in the house</p>
+      <p className="folio-caption trips-side-panel-note">
+        The rooms next door — kept just outside your folio.
+      </p>
       <div className="trips-tool-panel bg-ds-bone">
         <div className="flex flex-col divide-y divide-ds-hairline">
           <ReferenceLink href="/concierge" label="The Concierge" hint="A composed second opinion">
@@ -740,97 +739,106 @@ export default function TripsPage() {
       {/* The Reading Room — a floating paper folio library on a warm canvas */}
       <div className="trips-room-canvas">
       <div className="trips-shelf-stage" data-testid="trips-shelf-stage">
-        {/* Masthead — the library line */}
-        <div className="trips-shelf-masthead" data-testid="my-trips-page-header">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <p className="folio-issue-eyebrow mb-2" data-testid="trips-shelf-eyebrow">
-                The Folio Library
-              </p>
-              <h1 className="trips-shelf-heading" data-testid="trips-shelf-heading">
-                My Journeys
-              </h1>
-              {hasAny && <p className="folio-caption mt-2">{roomSub}</p>}
+        {/* Two-zone Reading Room: wide main reading column + page-level side
+            panel. The side panel is a room-level reference rail (not part of any
+            single trip card). On mobile the grid collapses and the panel stacks
+            below the main content. */}
+        <div className="trips-reading-layout">
+          {/* ── Main reading column ───────────────────────────────────── */}
+          <div className="trips-main-col">
+            {/* Masthead — the library line */}
+            <div className="trips-shelf-masthead" data-testid="my-trips-page-header">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="folio-issue-eyebrow mb-2" data-testid="trips-shelf-eyebrow">
+                    The Folio Library
+                  </p>
+                  <h1 className="trips-shelf-heading" data-testid="trips-shelf-heading">
+                    My Journeys
+                  </h1>
+                  {hasAny && <p className="folio-caption mt-2">{roomSub}</p>}
+                </div>
+                <div className="shrink-0 pt-1">
+                  <Link
+                    href="/trips/new"
+                    className="btn-marine inline-flex items-center"
+                    data-testid="trips-new-trip-action"
+                  >
+                    <PlusCircle className="w-4 h-4" aria-hidden="true" />
+                    Plan a Trip
+                  </Link>
+                </div>
+              </div>
             </div>
-            <div className="shrink-0 pt-1">
-              <Link
-                href="/trips/new"
-                className="btn-marine inline-flex items-center"
-                data-testid="trips-new-trip-action"
-              >
-                <PlusCircle className="w-4 h-4" aria-hidden="true" />
-                Plan a Trip
-              </Link>
+
+            {/* Shelf body — current edition + trip volumes only */}
+            <div className="trips-shelf-body">
+              {!hasAny ? (
+                <EmptyDashboard />
+              ) : (
+                <div className="flex flex-col gap-7">
+                  {/* The current edition — open on the desk (current trip only) */}
+                  {continuePlanning && (
+                    <div>
+                      <Chapter title="The current edition" />
+                      <ContinuePlanningHero
+                        trip={continuePlanning}
+                        onEdit={openEdit}
+                        onDelete={(id) => setConfirmDeleteId(id)}
+                      />
+                    </div>
+                  )}
+
+                  {/* Lower shelves — balanced two-column on desktop when both
+                      have volumes; otherwise a single full-width shelf. Single
+                      column on mobile either way. */}
+                  {lowerTwoCol ? (
+                    <div
+                      className="grid grid-cols-1 lg:grid-cols-2 gap-7 lg:gap-8"
+                      data-testid="trips-lower-shelf"
+                    >
+                      <TripSection
+                        title="On the table"
+                        trips={activeTrips}
+                        onEdit={openEdit}
+                        onDelete={(id) => setConfirmDeleteId(id)}
+                        dense
+                      />
+                      <TripSection
+                        title="Bound"
+                        trips={pastTrips}
+                        onEdit={openEdit}
+                        onDelete={(id) => setConfirmDeleteId(id)}
+                        past
+                        dense
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <TripSection
+                        title="On the table"
+                        trips={activeTrips}
+                        onEdit={openEdit}
+                        onDelete={(id) => setConfirmDeleteId(id)}
+                      />
+                      <TripSection
+                        title="Bound"
+                        trips={pastTrips}
+                        onEdit={openEdit}
+                        onDelete={(id) => setConfirmDeleteId(id)}
+                        past
+                      />
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
-        </div>
 
-        {/* Shelf body */}
-        <div className="trips-shelf-body">
-          {!hasAny ? (
-            <EmptyDashboard />
-          ) : (
-            <div className="flex flex-col gap-7">
-              {/* The current edition — open on the desk, with the reference
-                  drawer integrated into its right column (above the fold). */}
-              {continuePlanning && (
-                <div>
-                  <Chapter title="The current edition" />
-                  <ContinuePlanningHero
-                    trip={continuePlanning}
-                    onEdit={openEdit}
-                    onDelete={(id) => setConfirmDeleteId(id)}
-                  />
-                </div>
-              )}
-
-              {/* Fallback: no current edition (e.g. only past trips) — surface
-                  the reference drawer on its own so the routes stay reachable. */}
-              {!continuePlanning && <PlanningToolsStrip />}
-
-              {/* Lower shelves — balanced two-column on desktop when both have
-                  volumes; otherwise a single full-width shelf. Single column on
-                  mobile either way. */}
-              {lowerTwoCol ? (
-                <div
-                  className="grid grid-cols-1 lg:grid-cols-2 gap-7 lg:gap-8"
-                  data-testid="trips-lower-shelf"
-                >
-                  <TripSection
-                    title="On the table"
-                    trips={activeTrips}
-                    onEdit={openEdit}
-                    onDelete={(id) => setConfirmDeleteId(id)}
-                    dense
-                  />
-                  <TripSection
-                    title="Bound"
-                    trips={pastTrips}
-                    onEdit={openEdit}
-                    onDelete={(id) => setConfirmDeleteId(id)}
-                    past
-                    dense
-                  />
-                </div>
-              ) : (
-                <>
-                  <TripSection
-                    title="On the table"
-                    trips={activeTrips}
-                    onEdit={openEdit}
-                    onDelete={(id) => setConfirmDeleteId(id)}
-                  />
-                  <TripSection
-                    title="Bound"
-                    trips={pastTrips}
-                    onEdit={openEdit}
-                    onDelete={(id) => setConfirmDeleteId(id)}
-                    past
-                  />
-                </>
-              )}
-            </div>
-          )}
+          {/* ── Page-level side panel — the Reading Room reference rail ──── */}
+          <aside className="trips-side-panel" data-testid="trips-reference-drawer">
+            <PlanningToolsStrip />
+          </aside>
         </div>
       </div>
       </div>

@@ -9877,29 +9877,55 @@
     pointer-events: none;
     box-shadow: inset 0 0 110px 18px rgba(0, 0, 0, 0.42);
   }
-  /* trips-edition-aside: the current edition's right column on desktop — the
-     monogram plate stacked over a compact reference drawer. Below the spread on
-     mobile (the hero stacks). */
-  .trips-edition-aside {
+  @media (min-width: 1024px) {
+    .trips-edition-plate { width: 18rem; flex-shrink: 0; min-height: 0; }
+  }
+
+  /* trips-reading-layout: the two-zone Reading Room — a wide main reading column
+     and a page-level side panel (the reference rail). On mobile it is a single
+     column (main content, then the panel stacks below). */
+  .trips-reading-layout {
     display: flex;
     flex-direction: column;
   }
   @media (min-width: 1024px) {
-    .trips-edition-aside { width: 18.5rem; flex-shrink: 0; }
-    .trips-edition-plate { flex-grow: 1; min-height: 168px; }
+    .trips-reading-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 19.5rem;
+      align-items: start;
+    }
   }
 
-  /* trips-reference-rail: the compact "Elsewhere in the house" drawer, sized to
-     sit under the plate inside the current-edition column (not a full-width
-     chapter). Stacked links. */
-  .trips-reference-rail {
-    padding: 0.875rem 0.875rem 0.875rem;
-    background: color-mix(in srgb, var(--ds-linen) 16%, var(--ds-warm-paper));
+  /* trips-side-panel: page-level reference rail (room-level, not part of any
+     trip card). Recessed paper tone + a hairline seam from the main column;
+     sticky on desktop so it stays in view like a briefing rail. */
+  .trips-side-panel {
     border-top: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
+    background: color-mix(in srgb, var(--ds-linen) 26%, var(--ds-warm-paper));
   }
-  .trips-reference-label {
+  @media (min-width: 1024px) {
+    .trips-side-panel {
+      border-top: none;
+      border-left: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
+      position: sticky;
+      top: 0;
+      align-self: stretch;
+    }
+  }
+  .trips-side-panel-inner {
+    padding: 1.75rem 1.5rem 2rem;
+  }
+  @media (max-width: 639px) {
+    .trips-side-panel-inner { padding: 1.5rem 1.25rem 1.75rem; }
+  }
+  .trips-side-panel-eyebrow {
     margin-bottom: 0.5rem;
   }
+  .trips-side-panel-note {
+    margin-bottom: 1rem;
+    max-width: 30ch;
+  }
+
   .trips-edition-plate-label {
     position: relative;
     font-size: 10px;

@@ -308,11 +308,13 @@ test("globals.css trips-volume-status is small-caps text (no pill background/bor
 
 // ── Reference drawer — Elsewhere in the house ─────────────────────────────────
 
-test("planning tools render as the compact 'Elsewhere in the house' reference rail", () => {
+test("'Elsewhere in the house' renders as a page-level side panel (not a CTA strip)", () => {
   assert.ok(tripsPage.includes("planning-tools-strip"));
   assert.ok(tripsPage.includes("Elsewhere in the house"));
-  assert.ok(tripsPage.includes("trips-reference-rail"), "drawer uses the compact integrated rail");
+  assert.ok(tripsPage.includes("trips-side-panel"), "reference rail uses the page-level side panel");
   assert.ok(tripsPage.includes("trips-tool-panel"));
+  assert.ok(globalsCss.includes(".trips-side-panel"), "side panel primitive defined");
+  assert.ok(globalsCss.includes(".trips-reading-layout"), "two-zone reading layout primitive defined");
 });
 
 test("reference drawer preserves all three routes", () => {
@@ -325,17 +327,46 @@ test("reference drawer preserves all three routes", () => {
   assert.match(strip, /href="\/explore"/);
 });
 
-test("reference drawer is integrated into the current-edition right column (above the fold)", () => {
-  // The drawer is rendered inside the current edition's right column (under the
-  // monogram plate) — not as a separate full-width chapter between sections.
+test("the side panel is page-level (an <aside>), not nested in the current edition card", () => {
+  // The reference rail lives in a page-level <aside class="trips-side-panel">
+  // inside the two-zone reading layout — NOT inside the current edition card.
+  assert.match(
+    tripsPage,
+    /<aside className="trips-side-panel" data-testid="trips-reference-drawer">/,
+  );
+  // The current edition (ContinuePlanningHero) must contain only current-trip
+  // content — no global tools drawer.
   const hero = tripsPage.slice(
     tripsPage.indexOf("function ContinuePlanningHero"),
     tripsPage.indexOf("function JourneyCard"),
   );
-  assert.ok(hero.includes("trips-edition-aside"), "current edition has a right-column aside");
-  assert.ok(hero.includes("<PlanningToolsStrip"), "reference drawer is rendered inside the current edition");
-  assert.ok(hero.includes('data-testid="trips-reference-drawer"'));
-  assert.ok(globalsCss.includes(".trips-edition-aside"), "aside column primitive defined");
+  assert.ok(!hero.includes("PlanningToolsStrip"), "current edition must NOT contain the global tools drawer");
+  assert.ok(!hero.includes("Elsewhere in the house"), "current edition must NOT contain the room-level rail");
+  assert.ok(!hero.includes("trips-edition-aside"), "the in-card aside is removed");
+});
+
+test("desktop is a two-zone layout (wide main column + side panel), main column wide", () => {
+  assert.ok(tripsPage.includes("trips-reading-layout"));
+  assert.ok(tripsPage.includes("trips-main-col"), "main reading column present");
+  // Desktop grid: a wide 1fr main column + a fixed side panel; not vertically stacked.
+  const layout = globalsCss.slice(
+    globalsCss.indexOf(".trips-reading-layout {"),
+    globalsCss.indexOf(".trips-reading-layout {") + 500,
+  );
+  assert.ok(/grid-template-columns:\s*minmax\(0,\s*1fr\)/.test(layout), "main column takes the remaining width");
+  // The masthead + volumes live in the main column (not the side panel).
+  assert.match(tripsPage, /trips-main-col[\s\S]{0,400}trips-shelf-masthead/);
+});
+
+test("side panel stacks below the main content on mobile (grid collapses cleanly)", () => {
+  // The side panel <aside> is the last child of the reading layout, so on mobile
+  // (flex-column) it stacks after the main column; on desktop it is the right grid cell.
+  assert.match(tripsPage, /trips-main-col[\s\S]*?trips-side-panel/);
+  const panel = globalsCss.slice(
+    globalsCss.indexOf(".trips-side-panel {"),
+    globalsCss.indexOf(".trips-side-panel {") + 300,
+  );
+  assert.ok(panel.includes("border-top"), "mobile: panel separated by a top hairline when stacked");
 });
 
 test("lower shelf is a balanced two-column desktop layout (single column on mobile)", () => {
