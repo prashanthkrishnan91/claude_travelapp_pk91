@@ -137,6 +137,38 @@ test("mobile 3-tab workspace IA is preserved", () => {
   assert.match(page, /lg:hidden[\s\S]{0,120}data-testid="trip-mobile-workspace-switcher"/);
 });
 
+// ── Desktop two-zone discipline (Plan Rail summary + Itinerary Working Surface) ─
+
+const builder = readFileSync(
+  new URL("../src/components/trips/TripBuilder.tsx", import.meta.url),
+  "utf8",
+);
+
+test("Working Surface exposes Itinerary | Ideas tabs on desktop (Build is not a tab)", () => {
+  assert.match(page, /data-testid="jd-surface-tabs"/);
+  assert.match(page, /hidden lg:flex/);               // the tab strip is desktop-only
+  assert.match(page, /jd-surface-tab-\$\{t\.id\}/);    // per-tab testid (templated)
+  assert.match(page, /id: "itinerary"[\s\S]{0,40}label: "Itinerary"/);
+  assert.match(page, /id: "ideas"[\s\S]{0,40}label: "Ideas"/);
+  assert.doesNotMatch(page, /jd-surface-tab-build/);
+});
+
+test("the expanded selected-day detail is mobile-only in the Plan Rail (lg:hidden)", () => {
+  // It duplicates the Itinerary Working Surface on desktop, so the rail hides it.
+  assert.match(page, /lg:hidden">\s*<ExpandedDayPanel/);
+});
+
+test("the Add-to-Day return banner is available on desktop (no lg:hidden)", () => {
+  assert.match(page, /data-testid="jd-build-return-banner"/);
+  assert.doesNotMatch(page, /lg:hidden[^"]*"\s*\n?\s*>[\s\S]{0,40}jd-build-return-banner/);
+});
+
+test("Build is hidden unless its workspace is active — never a permanent desktop column", () => {
+  assert.match(builder, /trip-mobile-panel-build[\s\S]{0,260}mobileWorkspace === "build" \? "" : "hidden"/);
+  // No lg: desktop re-show that would force Build visible beside the itinerary.
+  assert.doesNotMatch(builder, /trip-mobile-panel-build[\s\S]{0,260}hidden lg:flex/);
+});
+
 // ── Functional ownership preserved (no behavior change) ───────────────────────
 
 test("all functional surfaces remain mounted (ownership unchanged)", () => {

@@ -567,9 +567,11 @@ export default function TripDetailPage() {
         />
       )}
 
-      {/* ── Dayboard — collapsed day cards (the 10-second read) ────────────── */}
-      {/* Expanded day panel renders INLINE under the selected day card so Day 10
-          detail is immediately visible without scrolling past the full list. */}
+      {/* ── Dayboard — a compact day spine / day selector in the Plan Rail ──── */}
+      {/* The inline expanded-day detail is mobile-only (lg:hidden): on desktop it
+          would duplicate the Itinerary Working Surface, so the rail stays a calm
+          summary + day selector. On mobile (Brief tab) it remains the way to read
+          a day without leaving the tab. */}
       {(() => {
         const expandedDay = selectedDayId ? itineraryDays.find((d) => d.id === selectedDayId) : null;
         return (
@@ -579,14 +581,16 @@ export default function TripDetailPage() {
             onSelectDay={(day) => setSelectedDayId(day.id)}
             onOpenMap={() => setMapOpen(true)}
             inlineDayPanel={expandedDay ? (
-              <ExpandedDayPanel
-                day={expandedDay}
-                ideasCount={tripIdeas.length}
-                onAddFromIdeas={() => setIdeasTrayOpen(true)}
-                onEditInItinerary={() => setActiveMobileWorkspace("itinerary")}
-                onUnplace={handleItemUnplace}
-                onRemoveItem={handleIdeaRemove}
-              />
+              <div className="lg:hidden">
+                <ExpandedDayPanel
+                  day={expandedDay}
+                  ideasCount={tripIdeas.length}
+                  onAddFromIdeas={() => setIdeasTrayOpen(true)}
+                  onEditInItinerary={() => setActiveMobileWorkspace("itinerary")}
+                  onUnplace={handleItemUnplace}
+                  onRemoveItem={handleIdeaRemove}
+                />
+              </div>
             ) : null}
           />
         );
@@ -594,18 +598,58 @@ export default function TripDetailPage() {
 
         </div>{/* end Plan Rail (trip-mobile-panel-brief) */}
 
-        {/* ── Working Surface — Build / Itinerary / Ideas; the wide right zone.
-            Hidden on mobile when the Brief tab is active. ─────────────────── */}
+        {/* ── Working Surface — the wide right zone. Shows ONE panel at a time:
+            Itinerary (default), Ideas (via the tabs below), or Build (via the
+            Add-to-Day flow). Hidden on mobile when the Brief tab is active. ─── */}
         <div className={`journey-desk-surface ${activeMobileWorkspace === "brief" ? "hidden lg:block" : ""}`}>
 
-          {/* "Back to Day N" return affordance — shown on mobile when arriving from
-              the Add-to-Day drawer so the user always has a clear path back. */}
+          {/* Desktop working-surface tabs — Itinerary | Ideas. Mobile uses the top
+              tab bar instead (hidden lg:flex). Hidden while Build is active (the
+              return banner takes over). Build stays an add utility, never a tab. */}
+          {activeMobileWorkspace !== "build" && (
+            <div className="hidden lg:flex items-center gap-2 mb-5">
+              <div
+                role="tablist"
+                aria-label="Working surface"
+                data-testid="jd-surface-tabs"
+                className="inline-flex gap-1 rounded-xl border border-ds-hairline bg-ds-linen p-1"
+              >
+                {([
+                  { id: "itinerary" as MobileWorkspace, label: "Itinerary" },
+                  { id: "ideas" as MobileWorkspace, label: "Ideas" },
+                ]).map((t) => {
+                  const active = t.id === "ideas" ? activeMobileWorkspace === "ideas" : activeMobileWorkspace !== "ideas";
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      data-testid={`jd-surface-tab-${t.id}`}
+                      onClick={() => setActiveMobileWorkspace(t.id)}
+                      className={`px-3.5 py-1.5 min-h-[40px] rounded-lg text-xs font-semibold transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 ${
+                        active
+                          ? "bg-ds-warm-paper text-ds-marine-ink shadow-[var(--ds-paper-elevation-1)]"
+                          : "text-ds-folio-ink-mist hover:text-ds-folio-ink"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* "Back to Day N" return affordance — shown when arriving from the
+              Add-to-Day flow (mobile and desktop) so there is always a path back
+              to the itinerary while Build is the active working surface. */}
           {activeMobileWorkspace === "build" && buildFocusDayId && (() => {
             const focusedDay = itineraryDays.find((d) => d.id === buildFocusDayId);
             return focusedDay ? (
               <div
                 data-testid="jd-build-return-banner"
-                className="lg:hidden mb-3 flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border border-ds-marine-ink/20 bg-ds-bone"
+                className="mb-3 flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border border-ds-marine-ink/20 bg-ds-bone"
               >
                 <span className="text-xs text-ds-folio-ink-soft italic">
                   Adding to <span className="font-semibold not-italic text-ds-marine-ink">Day {focusedDay.dayNumber}</span>

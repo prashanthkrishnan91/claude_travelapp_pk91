@@ -181,12 +181,14 @@ test("page shows 'Back to Day N' return banner in Build workspace when coming fr
   assert.match(page, /setActiveMobileWorkspace\("itinerary"\)[\s\S]{0,60}setBuildFocusDayId\(null\)/);
 });
 
-test("return banner is mobile-only (lg:hidden)", () => {
-  // The return banner must not appear on desktop where both panels are visible.
+test("return banner is available on desktop too (Journey Desk two-zone single-panel)", () => {
+  // The Working Surface is single-panel on desktop now (Build replaces the
+  // itinerary), so the return banner must NOT be mobile-only — it is the path
+  // back to the itinerary on every breakpoint.
   const bannerIdx = page.indexOf('data-testid="jd-build-return-banner"');
   assert.ok(bannerIdx !== -1, "banner must exist");
   const surrounding = page.slice(Math.max(0, bannerIdx - 200), bannerIdx + 200);
-  assert.match(surrounding, /lg:hidden/);
+  assert.doesNotMatch(surrounding, /lg:hidden/);
 });
 
 // ── 7. No fabricated data ────────────────────────────────────────────────────

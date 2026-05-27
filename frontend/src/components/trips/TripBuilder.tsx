@@ -2140,11 +2140,14 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       >
         <div className="flex flex-col gap-4 min-h-[500px] lg:flex-row lg:items-start">
 
-          {/* ── Left Panel: AI-ranked candidates ──────────────────────────── */}
+          {/* ── Left Panel: AI-ranked candidates (Build) ──────────────────────
+              Build is an internal add/search utility, not a primary desk column.
+              It is hidden until the workspace is "build" (entered via the
+              Add-to-Day flow) on every breakpoint — no permanent desktop column. */}
           <div
             data-testid="trip-mobile-panel-build"
             className={`w-full flex flex-col gap-3 overflow-y-auto pr-0.5 lg:w-80 lg:flex-shrink-0 ${
-              mobileWorkspace != null && mobileWorkspace !== "build" ? "hidden lg:flex" : ""
+              mobileWorkspace === "build" ? "" : "hidden"
             }`}
           >
 
@@ -2542,14 +2545,16 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
             )}
           </div>
 
-          {/* ── Right Panel: Itinerary Timeline ───────────────────────────── */}
+          {/* ── Right Panel: Itinerary Timeline (the Working Surface) ─────────
+              Single-panel at every breakpoint so the desk stays two-zone: this
+              container is hidden only while Build is active (Build replaces it). */}
           <div className={`flex-1 flex flex-col gap-3 overflow-visible ${
-            mobileWorkspace === "build" ? "hidden lg:flex" : ""
+            mobileWorkspace === "build" ? "hidden" : ""
           }`}>
             <div
               data-testid="trip-mobile-itinerary-chrome"
               className={`flex items-center justify-between gap-2 flex-wrap ${
-                mobileWorkspace === "ideas" ? "hidden lg:flex" : ""
+                mobileWorkspace === "ideas" ? "hidden" : ""
               }`}
             >
               <div className="flex flex-col gap-0.5">
@@ -2592,7 +2597,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
             <div
               data-testid="trip-mobile-panel-ideas"
-              className={mobileWorkspace != null && mobileWorkspace !== "ideas" ? "hidden lg:block" : ""}
+              className={mobileWorkspace === "ideas" ? "" : "hidden"}
             >
               <TripIdeasPanel
                 tripId={tripId}
@@ -2605,7 +2610,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
             <div
               data-testid="trip-mobile-panel-itinerary"
               className={`flex flex-col gap-3 pr-0.5 overflow-visible ${
-                mobileWorkspace != null && mobileWorkspace !== "itinerary" ? "hidden lg:flex" : ""
+                mobileWorkspace === "ideas" ? "hidden" : ""
               }`}
             >
               <SortableContext items={days.map((d) => d.id)} strategy={verticalListSortingStrategy}>

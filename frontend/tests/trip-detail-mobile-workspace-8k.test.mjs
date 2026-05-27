@@ -151,31 +151,44 @@ describe("Phase 8K: all four workspace panel data-testids are present", () => {
   });
 });
 
-// ── 5. Desktop layout is preserved — not replaced by mobile tab model ─────────
+// ── 5. Desktop Working Surface shows ONE panel (Journey Desk two-zone desk) ────
+// Journey Desk PR 1 patch: the desktop Working Surface is single-panel (Itinerary
+// by default; Ideas via the surface tabs; Build only via the Add-to-Day flow), so
+// Build is no longer a permanent desktop column and the desk stays two-zone. The
+// panels therefore obey mobileWorkspace at every breakpoint (no lg: re-show).
 
-describe("Phase 8K: desktop layout preserved — lg: overrides keep all panels visible", () => {
-  it("left (build) panel uses lg:flex to restore display on desktop", () => {
+describe("Phase 8K: desktop Working Surface is single-panel (no permanent Build/Ideas columns)", () => {
+  it("Build (left) panel is hidden unless the build workspace is active", () => {
     assert.match(
       tripBuilderSrc,
-      /hidden lg:flex/,
-      "TripBuilder left panel must use hidden lg:flex for desktop visibility",
+      /trip-mobile-panel-build[\s\S]{0,260}mobileWorkspace === "build" \? "" : "hidden"/,
+      "Build panel must be hidden unless workspace==='build' (no lg: desktop re-show)",
     );
   });
 
-  it("right panel container uses lg:flex to restore on desktop when build is active", () => {
+  it("right (itinerary) container is hidden only while Build is active", () => {
     assert.match(
       tripBuilderSrc,
-      /hidden lg:flex/,
-      "TripBuilder right panel must use hidden lg:flex for desktop visibility",
+      /mobileWorkspace === "build" \? "hidden" : ""/,
+      "right container must hide (all breakpoints) only when build is active",
     );
   });
 
-  it("ideas panel wrapper uses hidden lg:block for desktop override", () => {
+  it("ideas panel is hidden unless the ideas workspace is active", () => {
     assert.match(
       tripBuilderSrc,
-      /hidden lg:block/,
-      "TripIdeasPanel wrapper must use hidden lg:block for desktop visibility",
+      /trip-mobile-panel-ideas[\s\S]{0,140}mobileWorkspace === "ideas" \? "" : "hidden"/,
+      "ideas panel must be hidden unless workspace==='ideas' (no lg: desktop re-show)",
     );
+  });
+
+  it("desktop Working Surface exposes Itinerary | Ideas tabs (not a Build column)", () => {
+    assert.match(pageSrc, /data-testid="jd-surface-tabs"/);
+    assert.match(pageSrc, /jd-surface-tab-\$\{t\.id\}/); // per-tab testid (templated)
+    assert.match(pageSrc, /label: "Itinerary"/);
+    assert.match(pageSrc, /label: "Ideas"/);
+    // Build is reached via the Add-to-Day flow, never a surface tab.
+    assert.doesNotMatch(pageSrc, /jd-surface-tab-build/);
   });
 
   it("workspace switcher nav is lg:hidden (mobile-only)", () => {
@@ -387,17 +400,18 @@ describe("Phase 8K: itinerary chrome hidden when Ideas workspace is active on mo
     );
   });
 
-  it("itinerary chrome uses hidden lg:flex when mobileWorkspace is ideas", () => {
+  it("itinerary chrome is hidden when mobileWorkspace is ideas (all breakpoints)", () => {
+    // Journey Desk PR 1 patch: single-panel Working Surface — chrome hides whenever
+    // Ideas is active, with no lg: re-show, so the desk never stacks chrome+ideas.
     assert.match(
       tripBuilderSrc,
-      /mobileWorkspace === "ideas".*hidden lg:flex|hidden lg:flex.*mobileWorkspace === "ideas"/,
-      "itinerary chrome must use hidden lg:flex when ideas workspace is active",
+      /mobileWorkspace === "ideas".*\? "hidden" : ""|hidden.*mobileWorkspace === "ideas"/,
+      "itinerary chrome must hide (no lg re-show) when ideas workspace is active",
     );
   });
 
-  it("itinerary chrome does NOT unconditionally hide when mobileWorkspace is itinerary", () => {
-    // The condition must only apply to "ideas", so the chrome is visible for itinerary/null.
-    // Verify the guard is specifically for "ideas" and not a blanket hide.
+  it("itinerary chrome hide condition is specifically for the ideas workspace", () => {
+    // The guard must only apply to "ideas", so the chrome is visible for itinerary/null.
     assert.match(
       tripBuilderSrc,
       /mobileWorkspace === "ideas"/,
@@ -405,12 +419,12 @@ describe("Phase 8K: itinerary chrome hidden when Ideas workspace is active on mo
     );
   });
 
-  it("desktop always restores itinerary chrome via lg:flex override", () => {
-    // hidden lg:flex pattern ensures desktop shows the chrome regardless of mobileWorkspace.
-    assert.match(
+  it("itinerary chrome is shown for the default/itinerary workspace (single-panel desk)", () => {
+    // No blanket lg:flex re-show: chrome obeys the workspace at every breakpoint.
+    assert.doesNotMatch(
       tripBuilderSrc,
-      /hidden lg:flex/,
-      "hidden lg:flex must be present to restore chrome on desktop",
+      /trip-mobile-itinerary-chrome[\s\S]{0,160}hidden lg:flex/,
+      "itinerary chrome must NOT use a hidden lg:flex desktop override anymore",
     );
   });
 
