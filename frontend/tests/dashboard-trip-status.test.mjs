@@ -16,7 +16,10 @@ test('RecentTrips uses shared getDisplayTripStatus helper', () => {
   assert.match(recentTrips, /TripStatusBadge[^\n]*status=\{getDisplayTripStatus\(trip\)\}/);
 });
 
-test('/trips page groups by getTripStatusGroup and displays computed badge status', () => {
+test('/trips page groups by getTripStatusGroup and displays computed status', () => {
   assert.match(tripsPage, /getTripStatusGroup\(t\)/);
-  assert.match(tripsPage, /TripStatusBadge status=\{getDisplayTripStatus\(trip\)\}/);
+  // Reading Room renders status as small-caps text via StatusText, still
+  // derived from getDisplayTripStatus (the computed status value).
+  assert.match(tripsPage, /getDisplayTripStatus\(trip\)/);
+  assert.match(tripsPage, /StatusText/);
 });

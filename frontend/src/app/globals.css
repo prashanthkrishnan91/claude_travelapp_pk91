@@ -7105,6 +7105,13 @@
     display: none !important;
   }
 
+  /* My Journeys (Reading Room) route — immersive paper room; hide the SaaS
+     sidebar so the folio library owns the full page (floating Atelier nav
+     takes over), matching Home/Saved/Concierge/Explore. */
+  .atelier-atmosphere-root[data-atelier-shell="trips"] .folio-sidebar {
+    display: none !important;
+  }
+
   /* Salon page room — warm paper surface with destination-aware background.
      Uses --world-surface (a warm linen tone injected by worldStyleVars) as
      the room backdrop. Dark cinema surfaces (result cards, sticky composer)
@@ -9711,26 +9718,58 @@
     font-weight: 400;
   }
 
-  /* trips-shelf-stage: Floating curated paper shelf for the /trips route.
-     Fills the AppShell content width (capped by the parent max-w-7xl box) so
-     the shelf uses the desktop canvas instead of reading as a narrow column.
-     Warm paper surface, brass-tinted hairline border, and layered shadow lift
-     it off the page like a folio resting on a desk. */
+  /* trips-room-canvas: the warm desk the Reading Room sits on. Mirrors the
+     Saved Private Folio desk pattern (folio-private-desk) so /trips adopts the
+     same immersive page-room treatment as the stronger pages: a full-bleed warm
+     linen field with quiet radial ambient depth (no dark takeover, no noisy
+     texture). The floating paper stage rests on top of it. */
+  .trips-room-canvas {
+    position: relative;
+    min-height: 100svh;
+    padding: clamp(16px, 2.5vw, 44px) clamp(12px, 2vw, 36px) clamp(80px, 12vh, 112px);
+    background-color: color-mix(in srgb, var(--ds-linen) 80%, var(--ds-warm-paper));
+    background-image:
+      radial-gradient(ellipse 82% 48% at 50% -8%,
+        color-mix(in srgb, var(--ds-sandstone-gold) 20%, transparent) 0%, transparent 60%),
+      radial-gradient(ellipse 66% 44% at 92% 104%,
+        color-mix(in srgb, var(--ds-ember-brass) 13%, transparent) 0%, transparent 60%);
+    isolation: isolate;
+  }
+
+  /* trips-shelf-stage: the floating paper folio — the Reading Room itself.
+     Mirrors folio-private-folio: a wide, staged max-width centered on the desk
+     (matches the stronger pages; not a narrow column), warm paper surface, a
+     softened brass-tinted hairline, and a deep layered warm shadow + inner
+     highlight so it lifts off the desk like a folio resting on a table. The wide
+     max-width stays correct once the floating sidebar layout takes over. */
   .trips-shelf-stage {
-    max-width: 100%;
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 90rem;
     margin-inline: auto;
     background:
-      radial-gradient(90% 30% at 50% 0%,
-        color-mix(in srgb, white 55%, transparent) 0%,
-        transparent 100%),
+      radial-gradient(120% 80% at 18% 0%,
+        color-mix(in srgb, var(--ds-warm-paper) 92%, white), transparent 60%),
+      radial-gradient(120% 90% at 100% 100%,
+        color-mix(in srgb, var(--ds-linen) 60%, var(--ds-bone)), transparent 55%),
       var(--ds-warm-paper);
-    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 22%, var(--ds-hairline));
-    border-radius: 20px;
+    border: 1px solid color-mix(in srgb, var(--ds-ember-brass) 24%, var(--ds-hairline));
+    border-radius: 24px;
     box-shadow:
-      0 12px 56px -14px color-mix(in srgb, var(--ds-folio-ink) 14%, transparent),
-      0 3px 12px -4px  color-mix(in srgb, var(--ds-folio-ink) 8%, transparent),
-      inset 0 1px 0 rgba(255, 255, 255, 0.90);
+      0 36px 72px -30px color-mix(in srgb, var(--ds-folio-ink) 34%, transparent),
+      0 12px 28px -16px color-mix(in srgb, var(--ds-folio-ink) 16%, transparent),
+      inset 0 1px 0 color-mix(in srgb, white 62%, transparent);
     overflow: hidden;
+  }
+  /* Soft warm inner lining so the stage edge reads as deckled paper, not a hard box. */
+  .trips-shelf-stage::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: 24px;
+    box-shadow: inset 0 0 44px 2px color-mix(in srgb, var(--ds-ember-brass) 12%, transparent);
   }
 
   /* trips-shelf-masthead: Masthead zone inside the shelf stage.
@@ -9738,7 +9777,7 @@
      Softened hairline divider so the masthead blends into the shelf rather
      than creating a hard panel edge. */
   .trips-shelf-masthead {
-    padding: 2.25rem 2rem 1.75rem;
+    padding: 1.75rem 2rem 1.5rem;
     background: color-mix(in srgb, var(--ds-linen) 22%, var(--ds-warm-paper));
     border-bottom: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
   }
@@ -9754,54 +9793,268 @@
     .trips-shelf-body { padding: 1.25rem 1.25rem 1.75rem; }
   }
 
-  /* trips-featured-volume: Cover zone of the featured/current travel volume.
-     Deeper linen-to-warm-paper gradient — the editorial content zone of the
-     featured volume should feel warmer and richer than the card grid below. */
-  .trips-featured-volume {
-    background: linear-gradient(
-      155deg,
-      color-mix(in srgb, var(--ds-linen) 72%, var(--ds-warm-paper)) 0%,
-      var(--ds-warm-paper) 55%
-    );
+  /* trips-chapter: editorial section rule — a serif chapter label, a hairline
+     rule that fills the line, and an optional small-caps count. Reads like a
+     chapter opener in a bound volume, not a tab or a labelled box. */
+  .trips-chapter {
+    display: flex;
+    align-items: baseline;
+    gap: 0.875rem;
+    margin-bottom: 0.875rem;
+  }
+  .trips-chapter-title {
+    font-family: var(--ds-font-editorial);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 1.3125rem;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    color: var(--ds-folio-ink);
+    margin: 0;
+    flex-shrink: 0;
+  }
+  .trips-chapter-rule {
+    flex: 1;
+    height: 1px;
+    background: color-mix(in srgb, var(--ds-hairline) 70%, transparent);
   }
 
-  /* trips-featured-aside: Actions + controls rail of the featured volume.
-     Shares the same linen warmth as the content zone so the two zones read
-     as one cohesive folio page; the hairline divider between them is softened
-     to avoid a hard panel edge. */
-  .trips-featured-aside {
-    border-top: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
-    background: color-mix(in srgb, var(--ds-linen) 32%, var(--ds-warm-paper));
-  }
-  @media (min-width: 1024px) {
-    .trips-featured-aside {
-      border-top: none;
-      border-left: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
-    }
-  }
-
-  /* trips-hero-destination: Larger editorial serif title for the featured volume.
-     Apply alongside trips-volume-destination to scale up the hero destination.
-     Overrides font-size to make the current journey's destination the editorial
-     focal point — the "volume title" on the desk. */
+  /* trips-hero-destination: Larger editorial serif title for the current edition.
+     Apply alongside trips-volume-destination to scale up the hero destination —
+     the "volume title" on the open page. */
   .trips-hero-destination {
-    font-size: 1.75rem;
-    line-height: 1.2;
+    font-size: 1.875rem;
+    line-height: 1.16;
     letter-spacing: -0.025em;
   }
   @media (max-width: 639px) {
-    .trips-hero-destination { font-size: 1.375rem; }
+    .trips-hero-destination { font-size: 1.5rem; }
   }
 
-  /* trips-volume-cover: Body cover zone of a JourneyCard.
-     Linen-to-bone gradient gives the card body a warm "printed travel pages"
-     quality — more distinct from the bone footer than pure paper-to-bone. */
+  /* trips-edition: the current edition — the open volume on the desk. A
+     two-zone folio page: editorial spread + the single cinematic plate. */
+  .trips-edition {
+    overflow: hidden;
+  }
+  .trips-edition-spread {
+    padding: 2rem 2.25rem 1.75rem;
+  }
+  @media (max-width: 639px) {
+    .trips-edition-spread { padding: 1.5rem 1.375rem 1.375rem; }
+  }
+  .trips-edition-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+
+  /* trips-edition-plate: the ONE cinematic punctuation on a filled page. A
+     warm-dark velvet plate with a typeset monogram drawn from the real trip
+     destination — never a stock photo. Pearl text is correct here (cinema
+     surface), not the paper world. */
+  .trips-edition-plate {
+    position: relative;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 200px;
+    padding: 1.75rem 1.875rem;
+    color: var(--ds-pearl-cream);
+    background:
+      radial-gradient(ellipse 120% 90% at 30% 16%,
+        color-mix(in srgb, var(--ds-ember-brass) 26%, transparent) 0%,
+        transparent 62%),
+      linear-gradient(158deg, var(--ds-carbon-mist) 0%, var(--ds-cinema-deep) 70%);
+    box-shadow: inset 0 1px 0 rgba(255, 248, 235, 0.06);
+  }
+  .trips-edition-plate::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-shadow: inset 0 0 110px 18px rgba(0, 0, 0, 0.42);
+  }
+  @media (min-width: 1024px) {
+    .trips-edition-plate { width: 18rem; flex-shrink: 0; min-height: 0; }
+  }
+
+  /* trips-reading-layout: the two-zone Reading Room — a wide main reading column
+     and a page-level side panel (the reference rail). On mobile it is a single
+     column (main content, then the panel stacks below). */
+  .trips-reading-layout {
+    display: flex;
+    flex-direction: column;
+  }
+  @media (min-width: 1024px) {
+    .trips-reading-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 19.5rem;
+      align-items: start;
+    }
+  }
+
+  /* trips-side-panel: page-level reference rail (room-level, not part of any
+     trip card). Recessed paper tone + a hairline seam from the main column;
+     sticky on desktop so it stays in view like a briefing rail. */
+  .trips-side-panel {
+    border-top: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
+    background: color-mix(in srgb, var(--ds-linen) 26%, var(--ds-warm-paper));
+  }
+  @media (min-width: 1024px) {
+    .trips-side-panel {
+      border-top: none;
+      border-left: 1px solid color-mix(in srgb, var(--ds-hairline) 55%, transparent);
+      position: sticky;
+      top: 0;
+      align-self: stretch;
+    }
+  }
+  .trips-side-panel-inner {
+    padding: 1.75rem 1.5rem 2rem;
+  }
+  @media (max-width: 639px) {
+    .trips-side-panel-inner { padding: 1.5rem 1.25rem 1.75rem; }
+  }
+  .trips-side-panel-eyebrow {
+    margin-bottom: 0.5rem;
+  }
+  .trips-side-panel-note {
+    margin-bottom: 1rem;
+    max-width: 30ch;
+  }
+
+  .trips-edition-plate-label {
+    position: relative;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--ds-sandstone-gold);
+  }
+  .trips-edition-plate-monogram {
+    position: relative;
+    font-family: var(--ds-font-editorial);
+    font-weight: 300;
+    font-size: 6.5rem;
+    line-height: 0.8;
+    letter-spacing: -0.03em;
+    color: var(--ds-pearl-cream);
+    align-self: flex-start;
+  }
+  .trips-edition-plate-bar {
+    position: relative;
+    width: 34px;
+    height: 2px;
+    background: var(--ds-ember-brass);
+  }
+
+  /* trips-volume: a bound travel volume on the shelf. The folio-journey-entry
+     left stripe reads as the volume's brass binding/spine. min-height is a
+     floor only — cards grow with their content, never a fixed height that clips. */
+  .trips-volume {
+    min-height: 12rem;
+  }
+
+  /* trips-volume-grid: shelf grid for the dense two-column lower shelves. Uses
+     auto-fit + minmax so it scales like a real folio shelf: a single volume
+     fills the section width (no half-width stranding), and many volumes wrap
+     into as many columns as fit and flow into new rows. No fixed height and no
+     overflow — the shelves grow naturally with page scroll for 10+ trips. */
+  .trips-volume-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 1.25rem;
+    align-items: stretch;
+  }
+
+  /* trips-volume-cover: body cover zone of a volume — warm "printed pages". */
   .trips-volume-cover {
     background: linear-gradient(
       160deg,
       color-mix(in srgb, var(--ds-linen) 42%, var(--ds-warm-paper)) 0%,
       color-mix(in srgb, var(--ds-bone) 88%, var(--ds-warm-paper)) 100%
     );
+  }
+
+  /* trips-volume-status: status as small-caps editorial text, never a pill. */
+  .trips-volume-status {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--ds-marine-soft);
+    flex-shrink: 0;
+    padding-top: 0.2rem;
+  }
+  .trips-volume-status-past {
+    color: var(--ds-folio-ink-mist);
+  }
+
+  /* trips-volume-past: bound back-issues read quieter than active volumes. */
+  .trips-volume-past .trips-volume-destination {
+    color: var(--ds-folio-ink-soft);
+  }
+
+  /* trips-volume-manage: edit/delete stay quiet on desktop (revealed on hover
+     or keyboard focus) but remain fully present and accessible on touch. */
+  @media (min-width: 1024px) and (hover: hover) {
+    .trips-volume-manage {
+      opacity: 0;
+      transition: opacity var(--ds-duration-standard, 200ms) ease;
+    }
+    .group:hover .trips-volume-manage,
+    .group:focus-within .trips-volume-manage {
+      opacity: 1;
+    }
+  }
+
+  /* trips-empty-shelf: an empty shelf, waiting for its first volume. */
+  .trips-empty-shelf {
+    max-width: 34rem;
+    margin: 0 auto;
+    padding: 3.5rem 1.5rem 4rem;
+    text-align: center;
+  }
+  .trips-empty-plate {
+    position: relative;
+    width: 4.5rem;
+    height: 6rem;
+    margin: 0 auto 1.75rem;
+    border-radius: 5px;
+    background: linear-gradient(158deg, var(--ds-carbon-mist), var(--ds-cinema-deep));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 248, 235, 0.06),
+      0 18px 40px -22px rgba(0, 0, 0, 0.5);
+  }
+  .trips-empty-plate::before {
+    content: '';
+    position: absolute;
+    top: 0.625rem;
+    bottom: 0.625rem;
+    left: 0.45rem;
+    width: 3px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, var(--ds-sandstone-gold), var(--ds-ember-brass));
+    opacity: 0.75;
+  }
+  .trips-empty-lede {
+    margin: 0.75rem auto 1.5rem;
+    max-width: 36ch;
+    color: var(--ds-folio-ink-mist);
+    font-size: 0.9375rem;
+    line-height: 1.6;
+  }
+  .trips-empty-actions {
+    display: flex;
+    justify-content: center;
+  }
+  .trips-empty-aside {
+    margin-top: 1.5rem;
+    font-size: 0.8125rem;
+    color: var(--ds-folio-ink-mist);
   }
 
   /* trips-tools-shelf: Bottom shelf rail for the planning tools strip.
@@ -9833,7 +10086,9 @@
   @media (prefers-reduced-motion: reduce) {
     .trips-shelf-heading,
     .trips-volume-destination,
-    .trips-hero-destination { transition: none; }
+    .trips-hero-destination,
+    .trips-volume-manage { transition: none; }
+    .trips-volume-manage { opacity: 1; }
   }
 
 }

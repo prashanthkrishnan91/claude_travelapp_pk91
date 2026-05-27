@@ -200,8 +200,13 @@ test("trips page groups trips with getTripStatusGroup", () => {
   assert.match(tripsPage, /getTripStatusGroup/);
 });
 
-test("trips page TripStatusBadge uses getDisplayTripStatus", () => {
-  assert.match(tripsPage, /TripStatusBadge status=\{getDisplayTripStatus\(trip\)\}/);
+test("trips page derives status text via getDisplayTripStatus (Reading Room: text, not a pill)", () => {
+  // The Reading Room renders status as quiet small-caps text, not a colored
+  // TripStatusBadge pill, but the status value is still derived from
+  // getDisplayTripStatus (data path unchanged).
+  assert.match(tripsPage, /getDisplayTripStatus\(trip\)/);
+  assert.ok(tripsPage.includes("StatusText"));
+  assert.ok(!tripsPage.includes("TripStatusBadge"));
 });
 
 test("trips page edit modal uses folio-paper-panel (Slice 2 paper conversion)", () => {
